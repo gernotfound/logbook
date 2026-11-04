@@ -10,7 +10,7 @@
 - [Archivio e cifratura](secure-storage.md): vault device, ADK cloud, ciphertext e provisioning.
 - [Bozze e stato device](device-drafts.md): workout, timer, testimoni, concorrenza editor e background.
 - [Ciclo account](account-lifecycle.md) e [Consenso salute](health-consent.md): identità, guest, revisioni, logout e cancellazioni.
-- [Portabilità](backup-and-portability.md): backup/import/export; [Telemetria](telemetry-and-privacy.md): coda diagnostica cifrata.
+- [Portabilità](backup-and-portability.md): backup/import/export; [Privacy tecnica](telemetry-and-privacy.md): nessun invio automatico di errori.
 - [Crash consistency](crash-consistency.md), [Causal GC](causal-gc.md), [Domain Operations](domain-operations.md): specifiche di commit/ACK e protocollo.
 
 ## Stati di durabilità e relative prove
@@ -33,7 +33,7 @@ L'app utilizza quattro livelli di storage con ruoli distinti:
 |---|---|---|---|
 | **Stato operativo** | Zustand (`useAppStore`) | Stato in memoria, single source of truth per i componenti React | Tutto `UserData`, `localWorkout`, `syncing`, `saveError`, `compatibilityStatus` |
 | **Persistenza locale principale** | IndexedDB (`idb-keyval`) | Copia locale transazionale asincrona dell'envelope dati V5 | Chiave `logbook:v2:${owner}`; `v2` è namespace storage storico e NON è la versione dell'envelope |
-| **Persistenza sincrona** | `localStorage` | Dati che richiedono salvataggio sincrono, preferenze e code boundary-specific | Namespace owner-scoped `logbook:v2:${owner}:*`, flag auth/guest, workout/timer, bozze e telemetria queued |
+| **Persistenza sincrona** | `localStorage` | Dati che richiedono salvataggio sincrono, preferenze e code boundary-specific | Namespace owner-scoped `logbook:v2:${owner}:*`, flag auth/guest, workout/timer e bozze |
 | **Replica remota** | Firestore | Sincronizzazione cloud e condivisione cross-device | Documento utente + subcollection mensilizzate |
 
 **MUST:** offline, l'app deve avviarsi e operare dai dati locali (IndexedDB + storage sincrono pertinente).
@@ -52,9 +52,7 @@ L'app utilizza quattro livelli di storage con ruoli distinti:
 
 **MUST (CRITICAL, device senza vault):** in assenza di un controllo vault `active`, `readDeviceValueStrict` e `writeDeviceValue` non forniscono fallback plaintext e non possono creare, cancellare o sostituire alcuna copia: le letture rigorose del namespace vecchio e `sealed:` identificano errori di storage e byte orfani senza modificarli. Anche la mancanza di entrambi i record è un errore di vault, non un permesso a salvare in chiaro. Un errore di lettura del browser non autorizza una conclusione «assenza di dati». Le letture best-effort restano riservate a preferenze e suggerimenti non distruttivi.
 
-**MAY:** preferenze, hint e code telemetriche possono restare best-effort quando il loro contratto non influenza l'integrità dei dati business.
-
-La semantica best-effort delle code diagnostiche non autorizza plaintext: seguire il contratto [Telemetria e privacy](telemetry-and-privacy.md). Timer/workout e code specializzate possono avere gateway propri; distinguere sempre assenza ed errore secondo il boundary.
+**MAY:** soltanto preferenze e hint non critici possono restare best-effort quando il loro contratto non influenza l'integrità dei dati business. Non sono più presenti code diagnostiche di errore; timer/workout e code specializzate conservano i rispettivi gateway strict.
 
 ## Versioni indipendenti e Schema Evolution
 

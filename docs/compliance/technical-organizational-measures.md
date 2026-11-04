@@ -14,8 +14,8 @@
 | Cache Firestore | Cache locale persistente Firebase non usata; runtime memory-only | Implementato |
 | Sync | Local durability prima della replica cloud; recovery lost-ack | Implementato/testato |
 | Validazione | Gateway Zod ai boundary persistiti | Implementato |
-| Telemetria | Sanitizzazione dei report locali; verso Sentry soltanto classificazioni ammesse e messaggi tecnici fissi, senza testi/stack originali; coda locale owner-scoped AEAD dopo sblocco del vault (solo RAM prima), massimo 50 report e scadenza logica a sette giorni | Implementato e testato nel repository; comportamento autenticato Production da verificare |
-| Analytics di utilizzo | Google Analytics 4/Firebase Analytics e Vercel Analytics/Speed Insights dismessi; Firebase scollegato da GA4 e variabile Measurement ID eliminata; Sentry resta error monitoring tecnico | Codice verificato su GitHub; dismissione esterna confermata dal product owner |
+| Errori client | Nessuna raccolta o trasmissione automatica di report diagnostici; percorsi di recovery e marker locali preservati | Codice aggiornato; CI e comportamento Production da verificare |
+| Analytics di utilizzo | GA4/Firebase Analytics, Vercel Analytics e Speed Insights dismessi; nessun monitoraggio esterno degli errori client | Codice aggiornato; configurazioni provider da verificare |
 | Account deletion | Workflow server-mediated, idempotente, Auth cancellata per ultima | Implementato/testato |
 | Segreti | Firebase Admin, cron e `CLOUD_ACCOUNT_KEK_V1` server-only, esclusi dal bundle; KEK preservata e ruotata solo con processo versionato di rewrap | Contratto repository |
 | HTTP | CSP, frame denial, referrer/permissions policies e cache policy app-shell/SW | `firebase.json` + smoke Firebase Hosting |

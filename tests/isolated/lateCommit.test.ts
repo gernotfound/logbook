@@ -22,7 +22,6 @@ vi.mock('../../src/lib/healthConsent', async () => {
         getVerifiedHealthConsentRevision: () => 1,
     };
 });
-vi.mock('../../src/lib/telemetryHub', () => ({ telemetryHub: { trackEvent: vi.fn(), trackError: vi.fn() } }));
 vi.mock('../../src/lib/catalog/catalogService', () => ({ getCachedCatalog: catalogReader.read }));
 vi.mock('../../src/lib/sync/transactionWriter', () => ({ applyDocumentChanges: remote.apply }));
 // Delayed-ACK tests use the real journal but isolate the independent online key transport.
@@ -47,7 +46,7 @@ const catalog: CachedGlobalCatalog = {
         itemCounts: { exercises: 0, foods: 0 } },
     exercises: [], foods: [], cachedAt: 0,
 };
-const data = (height: number) => UserDataSchema.parse({ profile: { height: String(height) }, legalConsent: { hasAcceptedTerms: true, hasAcceptedHealthData: true, acceptedAt: '2026-10-11T10:00:00.000Z', privacyVersion: '1.3.4', termsVersion: '1.2.1' } }) as unknown as UserData;
+const data = (height: number) => UserDataSchema.parse({ profile: { height: String(height) }, legalConsent: { hasAcceptedTerms: true, hasAcceptedHealthData: true, acceptedAt: '2026-10-11T10:00:00.000Z', privacyVersion: '1.3.5', termsVersion: '1.2.1' } }) as unknown as UserData;
 const deferred = <T>() => { let resolve!: (value: T) => void; let reject!: (err: any) => void; const promise = new Promise<T>((res, rej) => { resolve = res; reject = rej; }); return { promise, resolve, reject }; };
 
 beforeEach(async () => {

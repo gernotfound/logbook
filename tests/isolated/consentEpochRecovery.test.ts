@@ -25,7 +25,7 @@ function state(height: string, acceptedAt?: string): UserData {
     profile: { height },
     ...(acceptedAt ? { legalConsent: {
       hasAcceptedHealthData: true, hasAcceptedTerms: true, acceptedAt,
-      privacyVersion: '1.3.4', termsVersion: '1.2.1',
+      privacyVersion: '1.3.5', termsVersion: '1.2.1',
     } } : {}),
   }) as unknown as UserData;
 }

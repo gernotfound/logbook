@@ -7,7 +7,6 @@ import {
     safeBoolean,
     safeOptionalBoolean,
     safeOptionalNullableNumber,
-    reportZodSchemaFallback 
 } from './schema_utils';
 import { normalizeBusinessId } from '../businessIdentity';
 import { MAX_EDITABLE_CYCLE_WEEKS, MAX_CYCLE_SESSIONS_PER_WEEK } from '../calc/cycleLimits';
@@ -31,12 +30,7 @@ export const ExerciseSchema = z.object({
     isDefault: safeOptionalBoolean(),
     isBodyweight: safeOptionalBoolean(),
     equipmentWeight: safeOptionalNumber(),
-}).passthrough().catch((ctx) => {
-    reportZodSchemaFallback({
-        schema: 'ExerciseSchema',
-        fallbackUsed: 'default_empty_exercise',
-        error: ctx?.error,
-    });
+}).passthrough().catch(() => {
     return { id: '', name: '', setsCount: 0, muscles: [], secondaryMuscles: [], sets: [] };
 }).default({ id: '', name: '', setsCount: 0, muscles: [], secondaryMuscles: [], sets: [] });
 
@@ -82,7 +76,6 @@ export const RoutineExerciseSchema = z.object({
 function sanitizeRoutineExercises(value: unknown): unknown[] {
     if (value === undefined) return [];
     if (!Array.isArray(value)) {
-        reportZodSchemaFallback({ schema: 'WorkoutRoutineSchema', field: 'exercises', fallbackUsed: 'empty_collection', issueCode: 'invalid_type' });
         return [];
     }
     const result: unknown[] = [];
@@ -90,13 +83,6 @@ function sanitizeRoutineExercises(value: unknown): unknown[] {
     for (const raw of value) {
         const parsed = RoutineExerciseSchema.safeParse(raw);
         if (!parsed.success || seen.has(parsed.data.exId)) {
-            reportZodSchemaFallback({
-                schema: 'RoutineExerciseSchema',
-                field: 'exId',
-                fallbackUsed: 'record_quarantined',
-                issueCode: parsed.success ? 'duplicate_id' : 'invalid_record',
-                error: parsed.success ? undefined : parsed.error,
-            });
             continue;
         }
         seen.add(parsed.data.exId);
@@ -109,12 +95,7 @@ export const WorkoutRoutineSchema = z.object({
     id: safeString(''),
     name: safeString(''),
     exercises: z.preprocess(sanitizeRoutineExercises, z.array(RoutineExerciseSchema)).default([]),
-}).passthrough().catch((ctx) => {
-    reportZodSchemaFallback({
-        schema: 'WorkoutRoutineSchema',
-        fallbackUsed: 'default_empty_routine',
-        error: ctx?.error,
-    });
+}).passthrough().catch(() => {
     return { id: '', name: '', exercises: [] };
 }).default({ id: '', name: '', exercises: [] });
 
@@ -137,13 +118,6 @@ function sanitizeSetSegments(value: unknown): unknown[] {
     for (const raw of value) {
         const parsed = SessionSetSegmentSchema.safeParse(raw);
         if (!parsed.success || seen.has(parsed.data.id)) {
-            reportZodSchemaFallback({
-                schema: 'SessionSetSegmentSchema',
-                field: 'id',
-                fallbackUsed: 'record_quarantined',
-                issueCode: parsed.success ? 'duplicate_id' : 'invalid_record',
-                error: parsed.success ? undefined : parsed.error,
-            });
             continue;
         }
         seen.add(parsed.data.id);
@@ -223,12 +197,7 @@ export const WorkoutSessionSchema = z.object({
     isEditingHistory: safeOptionalBoolean(),
     originalHistoryId: safeOptionalString(),
     pains: z.array(safeString('')).optional().catch([]).default([]),
-}).passthrough().transform(({ endTime: _retiredEndTime, ...session }) => session).catch((ctx) => {
-    reportZodSchemaFallback({
-        schema: 'WorkoutSessionSchema',
-        fallbackUsed: 'default_empty_session',
-        error: ctx?.error,
-    });
+}).passthrough().transform(({ endTime: _retiredEndTime, ...session }) => session).catch(() => {
     return { exercises: [], pains: [] };
 }).default({ exercises: [], pains: [] });
 
@@ -240,7 +209,6 @@ export const TrainingCycleRoutineItemSchema = z.object({
 function sanitizeTrainingCycleRoutines(value: unknown): unknown[] {
     if (value === undefined) return [];
     if (!Array.isArray(value)) {
-        reportZodSchemaFallback({ schema: 'TrainingCycleSchema', field: 'routines', fallbackUsed: 'empty_collection', issueCode: 'invalid_type' });
         return [];
     }
     const result: unknown[] = [];
@@ -248,13 +216,6 @@ function sanitizeTrainingCycleRoutines(value: unknown): unknown[] {
     for (const raw of value) {
         const parsed = TrainingCycleRoutineItemSchema.safeParse(raw);
         if (!parsed.success || seen.has(parsed.data.routineId)) {
-            reportZodSchemaFallback({
-                schema: 'TrainingCycleRoutineItemSchema',
-                field: 'routineId',
-                fallbackUsed: 'record_quarantined',
-                issueCode: parsed.success ? 'duplicate_id' : 'invalid_record',
-                error: parsed.success ? undefined : parsed.error,
-            });
             continue;
         }
         seen.add(parsed.data.routineId);
@@ -276,12 +237,7 @@ export const TrainingCycleSchema = z.object({
     routines: z.preprocess(sanitizeTrainingCycleRoutines, z.array(TrainingCycleRoutineItemSchema)).default([]),
     createdAt: safeOptionalNumber(),
     isActive: safeOptionalBoolean(),
-}).passthrough().catch((ctx) => {
-    reportZodSchemaFallback({
-        schema: 'TrainingCycleSchema',
-        fallbackUsed: 'default_empty_cycle',
-        error: ctx?.error,
-    });
+}).passthrough().catch(() => {
     return { id: '', name: '', durationWeeks: 4, routines: [] };
 }).default({ id: '', name: '', durationWeeks: 4, routines: [] });
 

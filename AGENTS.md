@@ -39,7 +39,7 @@ I sottofile **non sono caricati automaticamente** in tutti gli ambienti: aprirli
 | Auth, guest→account, logout e cancellazione account | [Ciclo account](.agents/rules/account-lifecycle.md) | Storage, consenso, cifratura, Firebase |
 | Consenso salute, offline, diritti e cancellazione soli dati | [Consenso salute](.agents/rules/health-consent.md) | Account, storage, backup, Firebase |
 | Firebase env, App Check, Rules/indici, domini e CSP | [Configurazione Firebase](.agents/rules/firebase-config.md) | Cifratura, consenso, CI, servizi esterni |
-| Sentry, code diagnostiche e privacy tecnica | [Telemetria e privacy](.agents/rules/telemetry-and-privacy.md) | Cifratura, consenso, servizi esterni |
+| Gestione degli errori client e privacy tecnica | [Telemetria e privacy](.agents/rules/telemetry-and-privacy.md) | Cifratura, consenso, servizi esterni |
 | Commit, lost ack, crash e session fencing | [Crash consistency](.agents/rules/crash-consistency.md) | Storage, Domain Operations |
 | Tombstone, vector clock, checkpoint e retirement | [Causal GC](.agents/rules/causal-gc.md) | Storage, crash consistency, Rules |
 | Test generativi distribuiti e convergenza | [Distributed fuzz](.agents/rules/distributed-fuzz.md) | Causal GC, CI |
@@ -103,7 +103,7 @@ Frontend React/Vite/TypeScript, stato Zustand, Zod, CSS nativo con token semanti
 - **MUST:** `localWorkout` device e `activeWorkout` cloud sono distinti; il fetch remoto non sovrascrive una sessione locale attiva. Timer basati su timestamp/delta; date business `YYYY-MM-DD` locali tramite helper canonico, istanti evento UTC/epoch.
 - **MUST:** tutti gli ingressi persistiti attraversano formato/versioni e gateway Zod applicabili. Nessun `undefined` Firestore, identità inventata o normalizzazione con perdita risigillata come autorevole.
 - **MUST:** reload/update passa dalla barriera di persistenza di ogni scheda. Stato RAM senza envelope leggibile blocca il reload; nessuna navigazione automatica dal solo cambio Service Worker.
-- **MUST:** il boundary di telemetria esterna invia soltanto categorie tecniche autorizzate, senza dati salute liberi, UID deliberato o credenziali. La policy completa (stack, Replay, tracing e coda) è in [Telemetria e privacy](.agents/rules/telemetry-and-privacy.md).
+- **MUST:** nessun monitoraggio automatico degli errori client verso servizi esterni, né SDK, code di invio o secret build dedicati; mantenere separati i controlli di integrità e recupero da qualunque report diagnostico. Il contratto è in [Telemetria e privacy](.agents/rules/telemetry-and-privacy.md).
 - **MUST:** UI leggibile in system/light/dark, mobile e safe area; dialoghi tramite `GlobalDialog`/`useDialogStore`. Selettori Zustand stabili e nessuna mutazione dello store globale durante render/recovery React; `useRef(initialValue)` non è lazy initialization.
 - **MUST:** catalogo pubblico in sola lettura client; pubblicazioni reali richiedono input validi e conferma esplicita, senza automatismi legati alla release PWA. Fallback e rollback sono nel [Catalogo](.agents/rules/catalog-operations.md).
 

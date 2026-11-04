@@ -1,8 +1,8 @@
-# LIA — telemetria tecnica TheLogBook
+# LIA — modello condizionale, trattamento non attivo
 
-> Template di Legitimate Interests Assessment. Compilare e far validare se la telemetria tecnica continua a basarsi sull'Art. 6(1)(f) GDPR.
+> Il monitoraggio automatico degli errori client è ritirato. Questo modello non descrive un trattamento attualmente attivo: usarlo soltanto se una futura finalità richiederà un'autonoma valutazione dell'Art. 6(1)(f) GDPR.
 
-Per la descrizione tecnica corrente usare [Telemetria e privacy](../../.agents/rules/telemetry-and-privacy.md); campi giuridici, bilanciamento ed esito restano da compilare e approvare.
+Per verificare l'assenza del monitoraggio esterno usare [Telemetria e privacy](../../.agents/rules/telemetry-and-privacy.md). Le restanti voci sono uno schema storico/condizionale e richiedono una riscrittura prima di qualunque nuova integrazione.
 
 ## 1. Interesse perseguito
 

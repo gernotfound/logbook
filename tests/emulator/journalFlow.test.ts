@@ -26,7 +26,6 @@ vi.mock('../../src/lib/sync/cloudAccountKeyAccess', () => ({
     requireCloudAccountDataKey: vi.fn(async () => new Uint8Array(32).fill(18)),
     requireRightsExportAccountDataKey: vi.fn(async () => new Uint8Array(32).fill(18)),
 }));
-vi.mock('../../src/lib/telemetryHub', () => ({ telemetryHub: { trackEvent: vi.fn(), trackError: vi.fn() } }));
 import { DB as RealDB } from '../../src/lib/db';
 import { adoptReplicaCheckpoint, advanceLocalConsentRevisionIfClean, readLocal, initializeLocal, commitLocal } from '../../src/lib/sync/localRepository';
 import { seedTrustedConsent, registerReplica } from './replicaHarness';
@@ -41,7 +40,7 @@ import { UserDataSchema } from '../../src/lib/schema';
 import { projectDocuments } from '../../src/lib/sync/documentProjection';
 import type { UserData, CachedGlobalCatalog } from '../../src/types';
 const catalog = { exercises: [], foods: [] } as unknown as CachedGlobalCatalog;
-const data = (input: Partial<UserData> = {}) => UserDataSchema.parse({ legalConsent: { hasAcceptedTerms: true, hasAcceptedHealthData: true, acceptedAt: '2026-10-11T10:00:00.000Z', privacyVersion: '1.3.4', termsVersion: '1.2.1' }, ...input }) as unknown as UserData;
+const data = (input: Partial<UserData> = {}) => UserDataSchema.parse({ legalConsent: { hasAcceptedTerms: true, hasAcceptedHealthData: true, acceptedAt: '2026-10-11T10:00:00.000Z', privacyVersion: '1.3.5', termsVersion: '1.2.1' }, ...input }) as unknown as UserData;
 let env: RulesTestEnvironment;
 beforeAll(async () => {
     if (process.env.FIRESTORE_EMULATOR_HOST !== '127.0.0.1:8080') throw new Error('Only the local emulator is allowed');

@@ -83,7 +83,8 @@ export function classifyRecoveryFailure(operation: RecoveryOperation, error: unk
 }
 
 /**
- * Reports bounded technical summaries, never raw exceptions or owner identifiers.
+ * Emits only bounded, owner-free summaries to the caller's local observer.
+ * No external error transport is registered by account deletion recovery.
  * Transient failures are surfaced on the third consecutive occurrence and then
  * every tenth; recovery resets that streak. Integrity failures are immediate.
  */

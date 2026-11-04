@@ -31,7 +31,7 @@
 2. Leakage fra account sullo stesso dispositivo.
 3. Corruzione/perdita dei dati offline o durante sync.
 4. Cancellazione incompleta tra dispositivo, Firestore e Auth.
-5. Telemetria che incorpori accidentalmente contenuto personale.
+5. Log tecnici dei fornitori Firebase/Vercel che incorporino accidentalmente contenuti personali.
 6. Configurazioni esterne non allineate al codice (Rules/App Check/segreti).
 7. Revoca del consenso salute senza reale cessazione del trattamento.
 8. Trasferimenti o subprocessori non documentati.
@@ -44,17 +44,17 @@
 - persistenza locale owner-scoped cifrata con vault e recovery fail-closed; la coda diagnostica usa AEAD solo dopo sblocco, altrimenti RAM best-effort;
 - chiave cloud per-account indipendente dal vault device, custodia server-only e verifica esterna del backup/ripristino KEK secondo [Cifratura](../../.agents/rules/secure-storage.md); questo documento non attesta tali prove;
 - cache Firestore runtime solo in memoria;
-- sanitizzazione/allowlist della telemetria, isolamento owner, limite locale di 50 report e sette giorni applicato al successivo accesso;
+- nessun monitoraggio automatico degli errori client; isolamento owner dei marker e controlli di recovery preservati;
 - account deletion server-mediated e tombstone recovery;
 - CI exact-SHA e branch protection workflow;
-- nessuna integrazione di analytics di utilizzo né consenso GA4 nel frontend; Sentry limitato alla telemetria tecnica;
+- nessuna integrazione di analytics o Error Monitoring nel frontend;
 - CSP e security headers;
 - segreti server fuori dal bundle client.
 
 ## Blocker noti per lo screening
 
 - `[ ]` revoca consenso salute: implementazione e regressioni integrate; completare collaudo autenticato multi-dispositivo e validazione legale pre-pilot;
-- `[ ]` retention telemetria: distinguere coda locale (sette giorni logici, pruning al successivo accesso), Firestore legacy (30 giorni) e Sentry (configurazione esterna ancora da verificare);
+- `[ ]` verificare cancellazione dei dati Sentry storici, retention Firestore legacy e log di servizio Firebase/Vercel;
 - `[ ]` stato live di App Check/Rules/API restrictions verificato;
 - `[ ]` restore/backup policy decisa;
 - `[ ]` ruoli provider/palestra firmati;

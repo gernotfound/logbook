@@ -6,7 +6,7 @@ export async function seedTrustedConsent(env: RulesTestEnvironment, uid = 'a', r
     await env.withSecurityRulesDisabled(async context => {
         await setDoc(doc(asModularFirestore(context.firestore()), `health_consent_withdrawals/${uid}`), {
             uid, status: 'active', revision,
-            privacyVersion: '1.3.4', termsVersion: '1.2.1',
+            privacyVersion: '1.3.5', termsVersion: '1.2.1',
             acceptedAt: '2026-10-13T00:00:00.000Z',
         });
     });

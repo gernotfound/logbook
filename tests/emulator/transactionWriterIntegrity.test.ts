@@ -7,8 +7,6 @@ vi.mock('../../src/lib/healthConsent', async () => ({
     ...(await vi.importActual<typeof import('../../src/lib/healthConsent')>('../../src/lib/healthConsent')),
     getVerifiedHealthConsentRevision: () => 1,
 }));
-vi.mock('../../src/lib/telemetryHub', () => ({ telemetryHub: { trackEvent: vi.fn(), trackError: vi.fn() } }));
-
 import { applyDocumentChanges, CloudDataIntegrityError } from '../../src/lib/sync/transactionWriter';
 import { sealCloudDocument, openCloudDocument } from '../../src/lib/sync/cloudDocumentCipher';
 import type { SemanticOperation } from '../../src/lib/sync/semanticProjection';

@@ -21,7 +21,7 @@ La selezione completa dei contratti resta in [AGENTS](../AGENTS.md). Qui si indi
 | Workout, editor e copie indipendenti | [Bozze e stato device](../.agents/rules/device-drafts.md) |
 | Backup, import e CSV | [Portabilità](../.agents/rules/backup-and-portability.md) |
 | Consenso, diritti e cancellazione soli dati | [Consenso salute](../.agents/rules/health-consent.md) |
-| Sentry e code diagnostiche | [Telemetria e privacy](../.agents/rules/telemetry-and-privacy.md) |
+| Gestione errori client e assenza di monitoraggio esterno | [Telemetria e privacy](../.agents/rules/telemetry-and-privacy.md) |
 | CI e collaudi | [Verifica CI](../.agents/rules/ci-verification.md) |
 
 ## Architettura
@@ -35,7 +35,7 @@ La selezione completa dei contratti resta in [AGENTS](../AGENTS.md). Qui si indi
 
 | Documento | Stato | Per quale attività |
 |---|---|---|
-| [Registro servizi esterni](operations/external-services-register.md) | Registro operativo; riscontri live necessari | Firebase, Vercel, Sentry, GitHub e servizi ritirati |
+| [Registro servizi esterni](operations/external-services-register.md) | Registro operativo; riscontri live necessari | Firebase, Vercel, GitHub e servizi ritirati |
 | [Collaudi E2E e affidabilità](operations/e2e-reliability.md) | Guida corrente sui limiti delle prove; collaudi live separati | CI sintetica, dispositivi reali e perimetro Production |
 | [Cutover Firebase Hosting](operations/firebase-hosting-cutover.md) | STORICO completato il 2 ottobre 2026 | Decisioni e rollback storici, non procedura di deploy corrente |
 
@@ -44,7 +44,6 @@ La selezione completa dei contratti resta in [AGENTS](../AGENTS.md). Qui si indi
 | Documento | Stato | Per quale attività |
 |---|---|---|
 | [Debug Background Sync](BACKGROUND_SYNC_DEBUG.md) | Guida diagnostica da verificare sul codice corrente | Replay journal, online/foreground, compatibilità browser |
-| [Guida Sentry](telemetry-sentry-guide.md) | Guida operativa da verificare sul provider | Error monitoring, privacy, source map e retention |
 
 ## Privacy, dati salute e rapporti con le palestre
 
@@ -65,7 +64,7 @@ Il [pacchetto compliance](compliance/README.md) contiene le decisioni aperte e l
 | [Consenso salute: decisione e gate](compliance/health-consent-release-gate.md) | Decisione UX approvata; gate legale/manuale aperto | Revoca, diritti ed eventuale riaccettazione |
 | [Consenso salute: protocollo](compliance/health-consent-technical-protocol.md) | Comportamento tecnico descritto; verifica pre-pilot aperta | Fence, journal, offline e cross-device |
 | [Runbook incidenti / breach](compliance/incident-breach-runbook.md) | Procedura da assegnare e provare | Gestione, escalation e notifiche |
-| [LIA telemetria](compliance/legitimate-interest-assessment-template.md) | Template condizionale | Valutazione dell'interesse legittimo |
+| [LIA condizionale](compliance/legitimate-interest-assessment-template.md) | Template non richiesto dalla dismessa telemetria client | Eventuali futuri trattamenti fondati sul legittimo interesse |
 | [Registro trattamenti](compliance/processing-record-template.md) | Template Art. 30 da completare | Attività e finalità del trattamento |
 | [Retention schedule](compliance/retention-schedule.md) | Policy da approvare e verificare | Conservazione e cancellazioni |
 | [Accordo SaaS palestra](compliance/saas-agreement-template.md) | Bozza non firmata | Contratto commerciale |

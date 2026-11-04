@@ -1,10 +1,6 @@
 import 'fake-indexeddb/auto';
 import { clear, get, set } from 'idb-keyval';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
-
-vi.mock('../src/lib/telemetryHub', () => ({
-    telemetryHub: { trackError: vi.fn() },
-}));
+import { beforeEach, describe, expect, it } from 'vitest';
 
 import type { CachedGlobalCatalog, UserData, WorkoutSession } from '../src/types';
 import { DomainParsers, UserDataSchema } from '../src/lib/schema';

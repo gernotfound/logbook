@@ -44,17 +44,16 @@
 | Retention | Finché l'account è attivo; cancellazione tramite workflow account deletion, salvo record tecnici di recovery limitati |
 | Misure | Auth Firebase, Security Rules, App Check lato client; enforcement live da verificare |
 
-## Attività 3 — Telemetria tecnica propria
+## Attività 3 — Gestione locale degli errori (nessun monitoraggio esterno)
 
 | Campo | Contenuto da validare |
 |---|---|
-| Finalità | Sicurezza, affidabilità, diagnosi errori, integrità/recovery |
-| Dati | Session ID tecnico, versione/release/build SHA, piattaforma derivata, stato online; nei report locali possono esserci messaggi/stack sanitizzati, mentre verso Sentry passano solo classificazioni ammesse e messaggi tecnici fissi, senza testi/stack originali; la coda locale può contenere UID per isolamento owner, ma nessun Firebase UID/email è deliberatamente allegato a Sentry |
-| Esclusioni | Nessun tracking proprietario di avvio/salvataggio workout o funnel installazione PWA; niente Replay, tracing, logging o Application Metrics Sentry |
-| Base | Legittimo interesse dichiarato nell'informativa corrente; eseguire/archiviare LIA prima del pilot |
-| Retention | Coda locale: massimo sette giorni per report e 50 elementi, con pruning al successivo accesso; Sentry: configurazione/piano da verificare; legacy Firestore: 30 giorni. Vedi `retention-schedule.md` |
-| Destinatari | Sentry / personale autorizzato strettamente necessario; Firestore solo per cleanup legacy |
-| Misure | Sanitizzazione locale e minimizzazione remota per allowlist con esclusione dei testi/stack originali, `beforeSend` restrittivo, deduplica/rate limit; coda locale owner-scoped con AEAD dopo sblocco del vault, sola RAM prima dello sblocco e isolamento fra account; data scrubbing Sentry da verificare esternamente; raccolte Firestore legacy senza accesso client, mantenute solo per cleanup Admin |
+| Finalità | Stabilità, diagnosi sul dispositivo e recupero da errori di avvio e persistenza |
+| Dati | Marker locali di integrità owner-scoped, senza code di errori o identificativi di sessione per invio diagnostico |
+| Destinatari | Nessun fornitore esterno di Error Monitoring per il client; i log Firebase/Vercel costituiscono trattamenti di servizio separati |
+| Base | Nessuna base dichiarata per telemetria esterna ormai ritirata; per i log provider verificare le rispettive finalità e basi |
+| Retention | Marker locali legati al lifecycle; retention dei log dei servizi esterni da verificare nei provider |
+| Misure | Nessun trasporto o SDK diagnostico, isolamento owner, schermate d'errore e protezioni sui dati conservate |
 
 ## Attività 4 — Account deletion e recovery
 

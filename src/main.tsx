@@ -24,9 +24,6 @@ import {
   updateStorageMarker,
   diagnoseStorageState,
 } from './lib/storageTelemetry';
-import { telemetryHub } from './lib/telemetryHub';
-import { createReactRootTelemetryOptions } from './lib/reactRootTelemetry';
-import { initSentry } from './lib/sentryClient';
 import { markTabSnapshotClean } from './lib/sync/tabSnapshotCausality';
 import { isUpdateRequiredError } from './lib/schemaEvolution';
 import ReloadPrompt from './components/UI/ReloadPrompt';
@@ -88,13 +85,6 @@ export const initApp = async () => {
     console.warn('Bootstrap bloccato: ownership storage non leggibile.', error);
     renderStorageUnavailable(rootElement);
     return;
-  }
-
-  try {
-    initSentry();
-    telemetryHub.init();
-  } catch (err) {
-    console.warn('[TelemetryHub] Inizializzazione fallita (non bloccante):', err);
   }
 
   if (typeof navigator !== 'undefined') {
@@ -192,7 +182,7 @@ export const initApp = async () => {
   }
 
   if (rootElement) {
-    createRoot(rootElement, createReactRootTelemetryOptions()).render(
+    createRoot(rootElement).render(
       <StrictMode>
         <ErrorBoundary>
           <AuthProvider>

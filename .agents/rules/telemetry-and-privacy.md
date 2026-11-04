@@ -1,42 +1,35 @@
-# Telemetria tecnica e privacy — TheLogBook
+# Gestione errori e privacy tecnica — TheLogBook
 
-**Quando leggere:** Sentry, coda diagnostica, sanitizzazione, retention e source map.
-**Non inferire:** eleggibilità locale e accettazione dello SDK non provano consegna remota; i filtri testuali non eliminano ogni dato sanitario.
+**Quando leggere:** error handling, fallback Zod, controlli di storage, possibili report esterni e rimozione di servizi diagnostici.
+**Non inferire:** il ritiro dell'SDK di monitoraggio errori non elimina i log tecnici generati dai servizi Firebase e Vercel per le richieste necessarie all'app.
 
-**Autorità:** [`AGENTS.md`](../../AGENTS.md). Questo contratto ne specializza gli invarianti; non amplia autorizzazioni o perimetro.
+**Autorità:** [`AGENTS.md`](../../AGENTS.md). Questo contratto specializza i suoi invarianti senza ampliare autorizzazioni.
 
-## Destinazione e minimizzazione
+## Nessuna raccolta automatica esterna degli errori client
 
-Il client corrente usa **Sentry Error Monitoring** come destinazione esterna per errori e anomalie tecniche in Production. Il Firebase UID può essere usato localmente per stabilire l'eleggibilità all'invio, ma non viene deliberatamente inserito nel payload Sentry. Messaggi e stack locali attraversano i sanitizzatori, ma i filtri per pattern non riconoscono ogni nota sanitaria libera. **MUST:** al boundary Sentry inviare soltanto classificazioni di errore/origine da allowlist e messaggi tecnici fissi, mai messaggi, stack o component stack originali anche se sanitizzati. Il client non abilita PII di default, disattiva le integrazioni automatiche e `beforeSend` rimuove `user`, `request`, breadcrumb, transaction, extra e valori/stacktrace originali delle eccezioni. Replay, tracing, logging e metriche non sono abilitati.
+**MUST:** il frontend non include SDK o trasporti di Error Monitoring di terze parti, né invia errori React/JavaScript, messaggi, stack, identificativi di sessione o anomalie locali a servizi diagnostici esterni. Non implementare tracker, replay di sessione, tracing, analytics comportamentali, code diagnostiche persistenti, invio differito o upload automatico di source map.
 
-Configurazione client/build:
+- `src/main.tsx` non registra listener globali destinati alla telemetria e usa il normale root React.
+- `src/components/UI/ErrorBoundary.tsx` mantiene le schermate di errore e i percorsi di recupero sicuro: rimuovere il monitoraggio **non** consente reset, reload, commit o purge che violano il contratto storage.
+- `src/lib/storageTelemetry.ts` conserva soltanto i marker e la classificazione locale dello stato di IndexedDB; nessuna anomalìa viene inviata all'esterno.
+- `src/lib/errorHandler.ts` conserva il mapping dei codici Firebase per l'interfaccia.
+- I fallback Zod mantengono la logica di validazione e recupero prevista dagli schemi, senza callback o emissioni diagnostiche.
 
-- `VITE_SENTRY_DSN`: DSN pubblico del progetto Sentry, incluso nel bundle Production;
-- `SENTRY_AUTH_TOKEN`: segreto build-only con scope CI per upload source map/release;
-- `SENTRY_ORG` e `SENTRY_PROJECT`: identificatori build-time;
-- `LOGBOOK_BUILD_SHA`: SHA exact-main passato dal workflow Firebase Hosting Production; `EXPECTED_SHA`/`GITHUB_SHA` restano fallback verificabili.
+**MUST:** `firebase.json` non autorizza endpoint esterni di monitoraggio degli errori in `connect-src`; il workflow Firebase Hosting non richiede DSN, token, organization/project o upload di source map. `scripts/check-production-build-secrets.mjs` impedisce la reintroduzione accidentale di variabili di monitoraggio nel workflow.
 
-**MUST:** `SENTRY_AUTH_TOKEN` resta server/build-only, senza prefisso `VITE_`, e non deve comparire in bundle, log, Markdown o fixture. Le source map Production vengono caricate a Sentry e rimosse dagli asset pubblici dopo l'upload.
+## Servizi tecnici necessari e residui pre-lancio
 
-Le collection `users/{uid}/telemetry_errors`, `telemetry_events` e `telemetry_anomalies` sono contratti pre-lancio ritirati: il client corrente invia esclusivamente diagnostica tecnica a Sentry e non le legge né scrive. Il fresh start esclude il supporto dei client precedenti: le Security Rules non accordano più accesso client a queste collection, nemmeno al proprietario con consenso attivo. Non restano parser payload, retry o upgrade `expireAt` per quei client. Questa chiusura del boundary non cancella documenti e non certifica l'assenza di dati live: retention nominale 30 giorni, maintenance cron e cancellazione account/health-data restano operativi attraverso Admin SDK per eventuali record residui. Il loro ritiro backend completo richiede verifica separata del provider e del contenuto; non rimuovere tali tutele come side effect del clean-cut client.
+Firebase Hosting, Authentication, Firestore, App Check e le API Vercel restano operativi e possono elaborare metadati di rete/log tecnici secondo i rispettivi servizi. La documentazione legale deve distinguerli dall'assenza di reporting automatico di errori client.
 
-## Coda cifrata owner-scoped
+Le collection `users/{uid}/telemetry_errors`, `telemetry_events` e `telemetry_anomalies` sono pre-lancio e **non** ricevono scritture client. Security Rules ne negano l'accesso client. I percorsi server Admin di retention a 30 giorni, cancellazione account e cancellazione dati salute continuano a proteggere eventuali record residui: non eliminarli senza verifica del dataset live e del recovery. Il ritiro del monitoraggio esterno non è prova della cancellazione di dati già presenti presso il provider: registrare e verificare separatamente la dismissione esterna.
 
-**MUST:** errori, stack, session ID e UID sono potenzialmente sensibili. I nuovi report vengono persistiti soltanto con AEAD owner-scoped e vault sbloccato; prima dello sblocco restano in RAM e possono andare persi alla chiusura della scheda. Nessun fallback plaintext. Le code plaintext pre-lancio non vengono lette, adottate, convertite o cancellate automaticamente; ciphertext illeggibili non vengono sovrascritti. Un guest senza UID autenticato non autorizza invio Sentry né trasferimento dei report al login successivo.
+Google Analytics/Firebase Analytics, Vercel Analytics e Speed Insights restano dismessi. Nessuna integrazione di analytics comportamentali è autorizzata.
 
-**MUST (retention e capacità):** massimo 50 report e sette giorni da `queuedAt` numerico valido. Valori assenti, malformati o implausibilmente futuri sono esclusi senza usare il timestamp dell'errore come fallback. Voci scadute non sono restituite né inviate e il replay non le reintroduce; il pruning fisico avviene al successivo accesso alla coda. Questa durata è distinta dalla retention Firestore pre-lancio di 30 giorni e da Sentry Production.
+## Verifica e conformità
 
-**MUST (concorrenza fra schede):** una cache in RAM o già persistita non attesta il ciphertext corrente. Con vault disponibile, ricaricare la coda protetta dello stesso owner prima di lettura/nuovo enqueue e riconciliare gli eventi RAM non persistiti. Gli aggiornamenti differiti dei conteggi d'errore modificano soltanto ID ancora presenti; non possono reintrodurre report consegnati/rimossi o cancellare nuovi report di un'altra scheda. La ripresa non deve reinserire report che un'altra scheda ha già rimosso. `localStorage` non offre CAS atomico cross-tab: un conflitto non autorizza sovrascritture di ciphertext illeggibile.
+- Cercare import dei pacchetti di monitoraggio, variabili di build, chiamate outbound, code residue, CSP, test/fixture e riferimenti documentali.
+- Mantenere regressioni per marker, blocco dell'avvio non sicuro, errore React e fallimenti di salvataggio/sync, anche se il precedente test includeva uno spy del trasporto esterno.
+- Le modifiche materiali dell'informativa incrementano `LEGAL_VERSIONS.privacy`, indipendente dalla versione della PWA.
+- I valori/configurazioni eventualmente presenti in GitHub o nel vecchio provider non dimostrano che il client li usi; la cancellazione dei dati storici e la chiusura del provider richiedono verifica separata.
 
-
-## Analytics ritirati
-
-Google Analytics/Firebase Analytics, Vercel Analytics e Speed Insights sono fuori dal runtime. Nessun SDK `firebase/analytics`, Measurement ID, evento comportamentale o consenso GA4 da reintrodurre. Il fresh start non richiede cleanup di vecchie preferenze GA4. Storia delle dismissioni e verifiche provider restano nel [registro esterno](../../docs/operations/external-services-register.md), senza dedurre assenza di dati live.
-
-## Privacy e verifica
-
-- Non promettere anonimato in presenza di identificativi tecnici; nessun payload salute libero, UID deliberato o credenziale nel servizio esterno.
-- Le modifiche materiali alla Privacy Policy usano `LEGAL_VERSIONS.privacy`, indipendente dalla release PWA.
-- Testare il vero boundary di `src/lib/sentryClient.ts`, non soltanto i sanitizzatori locali.
-- Code diagnostiche, Sentry Production e raccolte Firestore ritirate hanno retention distinte; configurazioni Data Scrubbing, quote e retention Sentry sono stato provider da leggere direttamente.
-- [Guida Sentry](../../docs/telemetry-sentry-guide.md): quota/deduplica, best-effort delivery e source map. [Servizi esterni](external-services.md) e [Verifica CI](ci-verification.md): custodia secret, build e prove separate.
+Collegamenti: [Servizi esterni](external-services.md), [Verifica CI](ci-verification.md), [Storage e sync](storage-and-sync.md), [Registro servizi](../../docs/operations/external-services-register.md).

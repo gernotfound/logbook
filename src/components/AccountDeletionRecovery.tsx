@@ -13,7 +13,6 @@ import {
     DeletionRecoveryFinalizationError,
     recoverDeletedAccountOnThisDevice,
 } from '../lib/deletionDeviceRecovery';
-import { reportError } from '../lib/errorHandler';
 import { RecoveryDiagnosticTracker } from '../lib/deletionRecoveryDiagnostics';
 
 export const DEVICE_RECOVERY_RECHECK_INTERVAL_MS = 5 * 1000;
@@ -63,14 +62,11 @@ export function AccountDeletionRecovery() {
             const now = Date.now();
             if (now - (lastAlertAt.get(category) ?? -Infinity) < 60_000) return;
             lastAlertAt.set(category, now);
-            if (!disposed) void useDialogStore.getState().showAlert(message).catch(error => {
-                reportError(error, { source: 'account_deletion_recovery_dialog' });
-            });
+            if (!disposed) void useDialogStore.getState().showAlert(message).catch(() => undefined);
         };
 
         const recordFailure = (operation: 'routine-check' | 'pending-deletion' | 'local-finalization', error: unknown) =>
-            diagnostics.recordFailure(operation, error, (summary, source) => {
-                reportError(summary, { source });
+            diagnostics.recordFailure(operation, error, (summary) => {
                 console.warn('Diagnostica tecnica recupero account:', summary.message);
             });
 

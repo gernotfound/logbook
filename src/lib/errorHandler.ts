@@ -3,7 +3,6 @@
  * Conforms to Italian Sentence case and AGENTS.md guidelines.
  */
 
-import { telemetryHub } from './telemetryHub';
 
 type ErrorCategory =
   | 'network'
@@ -299,64 +298,4 @@ export function mapFirebaseErrorCode(error: unknown): FormattedSyncError {
     isOfflineSafe: false,
     canRetry: false,
   };
-}
-
-export function formatAppCheckTelemetryMessage(error: unknown): string | undefined {
-  const seen = new Set<unknown>();
-  const codes: string[] = [];
-  let current: unknown = error;
-  let appCheck = false;
-  let providerCode: string | undefined;
-  let status: number | undefined;
-  let phase: string | undefined;
-  let retryable: boolean | undefined;
-
-  for (let depth = 0; depth < 6 && current != null && !seen.has(current); depth += 1) {
-    seen.add(current);
-    if (typeof current !== 'object') break;
-    const item = current as Record<string, unknown>;
-    const itemCode = typeof item.code === 'string' ? item.code : undefined;
-    const itemProviderCode = typeof item.firebaseCode === 'string' ? item.firebaseCode : undefined;
-    const itemName = typeof item.name === 'string' ? item.name : '';
-    if (itemCode) codes.push(itemCode);
-    if (
-      itemCode?.toLowerCase().includes('app-check')
-      || itemCode?.toLowerCase().includes('appcheck')
-      || itemProviderCode?.toLowerCase().includes('appcheck')
-      || itemName.toLowerCase().includes('appcheck')
-    ) appCheck = true;
-    if (!providerCode && itemProviderCode) providerCode = itemProviderCode;
-    if (status === undefined && typeof item.status === 'number') status = item.status;
-    if (!phase && typeof item.phase === 'string') phase = item.phase;
-    if (retryable === undefined && typeof item.retryable === 'boolean') retryable = item.retryable;
-    current = 'cause' in item ? item.cause : null;
-  }
-
-  if (!appCheck) return undefined;
-  const sdkCode = providerCode
-    ?? codes.find(value => value.toLowerCase().startsWith('appcheck/'))
-    ?? codes[0]
-    ?? 'unknown';
-  return [
-    'App Check failure',
-    'code=' + sdkCode,
-    'status=' + (status ?? 'n/a'),
-    'phase=' + (phase ?? 'n/a'),
-    'retryable=' + (retryable ?? 'n/a'),
-  ].join('; ');
-}
-
-/**
- * Non-blocking helper to report errors to the Telemetry Hub without throwing or leaking PII.
- */
-export function reportError(
-  error: unknown,
-  options: { source?: string; customMessage?: string; componentStack?: string } = {}
-): void {
-  try {
-    const appCheckMessage = options.customMessage ? undefined : formatAppCheckTelemetryMessage(error);
-    telemetryHub.trackError(error, appCheckMessage ? { ...options, customMessage: appCheckMessage } : options);
-  } catch {
-    // Non-blocking safe fail-through
-  }
 }

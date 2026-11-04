@@ -19,7 +19,7 @@ La fonte di verità tecnica resta il repository corrente. Le configurazioni este
 - TheLogBook resta destinato a maggiorenni.
 - Google Analytics 4/Firebase Analytics è dismesso: integrazione e preferenza rimosse dal client, Firebase scollegato dalla proprietà e configurazione GitHub Analytics ritirata. Restano i servizi Firebase necessari e Sentry Error Monitoring.
 - Vercel Analytics e Speed Insights sono ritirati dal frontend Production.
-- Sentry è usato esclusivamente per errori/anomalie tecniche sanitizzati; la telemetria tecnica non viene usata per misurare il comportamento di allenamento o il funnel PWA.
+- Il client non trasmette automaticamente errori ad alcun fornitore esterno: Sentry e le code diagnostiche sono ritirati dal codice. Restano da verificare i log dei servizi Firebase/Vercel e la cancellazione degli eventi pregressi presso Sentry.
 
 Queste assunzioni devono essere riconfermate nella documentazione firmata; se cambiano, vanno rivalutati ruoli privacy, contratti, informativa e DPIA.
 
@@ -34,7 +34,7 @@ Queste assunzioni devono essere riconfermate nella documentazione firmata; se ca
 | [`incident-breach-runbook.md`](incident-breach-runbook.md) | Gestione incidenti e data breach | Assegnare contatti e provare il flusso |
 | [`vendor-transfer-register.md`](vendor-transfer-register.md) | Fornitori, subprocessori e trasferimenti | Verificare contratti e localizzazioni |
 | [`technical-organizational-measures.md`](technical-organizational-measures.md) | TOM / misure Art. 32 | Verificare elementi esterni |
-| [`legitimate-interest-assessment-template.md`](legitimate-interest-assessment-template.md) | LIA della telemetria tecnica | Compilare se si mantiene Art. 6(1)(f) |
+| [`legitimate-interest-assessment-template.md`](legitimate-interest-assessment-template.md) | LIA condizionale, non attiva per telemetria client ritirata | Solo per eventuali futuri trattamenti ai sensi dell'Art. 6(1)(f) |
 | [`dpo-assessment-template.md`](dpo-assessment-template.md) | Valutazione obbligo DPO | Compilare e riesaminare su aumento scala |
 | [`data-subject-rights-procedure.md`](data-subject-rights-procedure.md) | Accesso, rettifica, portabilità, cancellazione, revoche | Assegnare canale privacy |
 | [`health-consent-release-gate.md`](health-consent-release-gate.md) | Specifica CRITICAL soluzione A approvata dal product owner; revoca salute e percorso di sospensione | Implementazione e regressioni integrate con PR #366; collaudo autenticato multi-dispositivo e validazione legale pre-pilot aperti |

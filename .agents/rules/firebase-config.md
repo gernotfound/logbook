@@ -51,9 +51,9 @@ I precedenti alias `VITE_RECAPTCHA_V3_SITE_KEY` e `VITE_RECAPTCHA_SITE_KEY` non 
 
 **MUST:** nel percorso sync, un `permission-denied` osservato da `replicateJournal` resta `rejected` e non va mascherato. Retry bootstrap è accettabile solo quando la causa transitoria è identificata.
 
-## Cifratura, consenso e telemetria
+## Cifratura, consenso e privacy tecnica
 
-Leggere [Archivio e cifratura](secure-storage.md) per ADK, `CLOUD_ACCOUNT_KEK_V1`, envelope cloud e limiti della custodia; [Consenso salute](health-consent.md) per registro trusted, diritti e generazioni; [Telemetria e privacy](telemetry-and-privacy.md) per Sentry/source map e raccolte Firestore ritirate. Analytics non fa parte del runtime.
+Leggere [Archivio e cifratura](secure-storage.md) per ADK, `CLOUD_ACCOUNT_KEK_V1`, envelope cloud e limiti della custodia; [Consenso salute](health-consent.md) per registro trusted, diritti e generazioni; [Telemetria e privacy](telemetry-and-privacy.md) per assenza di monitoraggio esterno e raccolte Firestore ritirate. Analytics non fa parte del runtime.
 
 ## Server trusted — Firebase Admin
 
@@ -81,7 +81,6 @@ La private key supporta newline escaped (`\\n`) e viene normalizzata server-side
 
 - configurazione client Firebase/App Check (`VITE_*`);
 - nomi delle env server trusted (`FIREBASE_ADMIN_*`, `CRON_SECRET`, `PUBLIC_APP_ORIGIN`, `CLOUD_ACCOUNT_KEK_V1`);
-- configurazione Sentry browser/build descritta nel contratto di telemetria.
 
 La KEK è obbligatoria per il boundary cloud cifrato corrente, non per l'avvio locale del client. Un commento template non certifica provisioning o recuperabilità del secret.
 
@@ -151,7 +150,7 @@ La CSP e gli header del frontend Firebase Hosting sono configurati in `firebase.
 
 Prima di modificarli:
 1. leggere `firebase.json`;
-2. **MUST:** mantenere l'allowlist minima necessaria a Firebase/Auth/App Check, Firebase Installations, Sentry e backend Vercel; le API Google usate dal runtime sono elencate esplicitamente, senza `*.googleapis.com`;
+2. **MUST:** mantenere l'allowlist minima necessaria a Firebase/Auth/App Check, Firebase Installations e backend Vercel; le API Google usate dal runtime sono elencate esplicitamente, senza `*.googleapis.com`;
 3. **MUST:** non introdurre wildcard `script-src`, `connect-src` Google API o CORS `*`;
 4. verificare login popup/redirect, sync, App Check, assenza di richieste GA4, account deletion e PWA.
 

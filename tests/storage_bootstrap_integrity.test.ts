@@ -6,12 +6,9 @@ import { useAppStore } from '../src/store/useAppStore';
 import {
   getStorageMarker,
   updateStorageMarker,
-  isAnomalyAlreadyReported,
 } from '../src/lib/storageTelemetry';
-import * as storageTelemetryModule from '../src/lib/storageTelemetry';
 import { CURRENT_DATA_SCHEMA, CURRENT_LOCAL_ENVELOPE, CURRENT_SYNC_PROTOCOL } from '../src/lib/schemaEvolution';
 import { localStorageMock } from './setup';
-import { telemetryHub } from '../src/lib/telemetryHub';
 
 vi.mock('react-dom/client', () => ({
   createRoot: vi.fn(() => ({
@@ -20,7 +17,7 @@ vi.mock('react-dom/client', () => ({
   })),
 }));
 
-describe('Storage Bootstrap & Telemetry Integration Flow', () => {
+describe('Storage bootstrap and owner integrity checks', () => {
   beforeEach(() => {
     localStorage.clear();
     localStorage.setItem('logbook_authenticated_owner', 'user:test-user-id');
@@ -67,26 +64,6 @@ describe('Storage Bootstrap & Telemetry Integration Flow', () => {
     expect(rendered.props.children.props.role).toBe('alert');
   });
 
-  it('continues startup when technical error-monitoring initialization fails', async () => {
-    localStorage.setItem('unrelated_preference', 'keep');
-    const report = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    const telemetryFailure = new Error('synthetic telemetry init failure');
-    vi.spyOn(telemetryHub, 'init').mockImplementationOnce(() => {
-      throw telemetryFailure;
-    });
-    vi.spyOn(idbKeyval, 'get').mockResolvedValue(null);
-
-    await initApp();
-
-    expect(report).toHaveBeenCalledWith(
-      '[TelemetryHub] Inizializzazione fallita (non bloccante):',
-      telemetryFailure,
-    );
-    expect(localStorage.getItem('unrelated_preference')).toBe('keep');
-    expect(createRoot).toHaveBeenCalledTimes(1);
-    expect(useAppStore.getState().localPersistenceBlocked).toBe(false);
-  });
-
   it('Flow 1: unverified owner hint cannot expose health data from IndexedDB', async () => {
     const validData = {
       profile: { height: '180' },
@@ -105,7 +82,6 @@ describe('Storage Bootstrap & Telemetry Integration Flow', () => {
       actorId: 'actor', actorSeq: 0, clock: {}, data: validData, baseline: validData,
       pending: [], syncMetaByDocument: {}, completeMonths: [], revision: 0
     } : undefined);
-    const dispatchSpy = vi.spyOn(storageTelemetryModule, 'dispatchStorageRecoveryAnomaly');
     const ownerRead = vi.spyOn(idbKeyval, 'get');
 
     await initApp();
@@ -115,20 +91,17 @@ describe('Storage Bootstrap & Telemetry Integration Flow', () => {
     expect(window.__INITIAL_USER_DATA__).toBeNull();
     expect(useAppStore.getState().userData).toBeNull();
     expect(getStorageMarker()).toBeNull();
-    expect(dispatchSpy).not.toHaveBeenCalled();
   });
 
   it('Flow 2: do not read account IndexedDB merely because an owner hint exists', async () => {
     updateStorageMarker(1000)!;
     vi.spyOn(idbKeyval, 'get').mockRejectedValue(new Error('IndexedDB blocked'));
-    const dispatchSpy = vi.spyOn(storageTelemetryModule, 'dispatchStorageRecoveryAnomaly');
 
     await initApp();
 
     expect(window.__INITIAL_USER_DATA__).toBeNull();
     expect(vi.mocked(idbKeyval.get).mock.calls.some(([key]) => key === 'logbook:v2:user:test-user-id')).toBe(false);
     expect(getStorageMarker()?.timestamp).toBe(1000);
-    expect(dispatchSpy).not.toHaveBeenCalled();
     expect(useAppStore.getState().localPersistenceBlocked).toBe(false);
     expect(useAppStore.getState().syncHealth).toBe('synced');
     expect(useAppStore.getState().saveError).toBeNull();
@@ -150,48 +123,24 @@ describe('Storage Bootstrap & Telemetry Integration Flow', () => {
     expect(createRoot).toHaveBeenCalledTimes(1);
   });
 
-  it('Flow 3: Invalid cache does NOT update marker and does NOT dispatch anomaly', async () => {
+  it('Flow 3: An invalid cache does not update the marker', async () => {
     updateStorageMarker(1000)!;
     vi.spyOn(idbKeyval, 'get').mockResolvedValue('corrupted string payload' as any);
-    const dispatchSpy = vi.spyOn(storageTelemetryModule, 'dispatchStorageRecoveryAnomaly');
 
     await initApp();
 
     expect(window.__INITIAL_USER_DATA__).toBeNull();
     expect(getStorageMarker()?.timestamp).toBe(1000);
-    expect(dispatchSpy).not.toHaveBeenCalled();
   });
 
-  it('Flow 4: First launch or clean state (no marker, missing cache) does NOT dispatch anomaly', async () => {
+  it('Flow 4: First launch without a marker or cache remains empty', async () => {
     vi.spyOn(idbKeyval, 'get').mockResolvedValue(null);
-    const dispatchSpy = vi.spyOn(storageTelemetryModule, 'dispatchStorageRecoveryAnomaly');
 
     await initApp();
 
     expect(window.__INITIAL_USER_DATA__).toBeNull();
     expect(getStorageMarker()).toBeNull();
-    expect(dispatchSpy).not.toHaveBeenCalled();
   });
 
-  it('Flow 5: owner-bound missing-cache telemetry must wait for Firebase identity', async () => {
-    vi.useFakeTimers();
-    const markerTime = 1000000;
-    const bootTime = 1005000;
 
-    vi.setSystemTime(markerTime);
-    const marker = updateStorageMarker(markerTime)!;
-
-    vi.setSystemTime(bootTime);
-    vi.spyOn(idbKeyval, 'get').mockResolvedValue(null);
-    const dispatchSpy = vi.spyOn(storageTelemetryModule, 'dispatchStorageRecoveryAnomaly').mockResolvedValue(true);
-
-    await initApp();
-
-    expect(window.__INITIAL_USER_DATA__).toBeNull();
-    expect(dispatchSpy).not.toHaveBeenCalled();
-    expect(getStorageMarker()?.timestamp).toBe(markerTime);
-    expect(isAnomalyAlreadyReported(marker)).toBe(false);
-    await initApp();
-    expect(dispatchSpy).not.toHaveBeenCalled();
-  });
 });

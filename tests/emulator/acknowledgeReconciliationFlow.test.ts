@@ -53,7 +53,6 @@ vi.mock('../../src/lib/sync/cloudAccountKeyAccess', () => ({
     requireCloudAccountDataKey: vi.fn(async () => new Uint8Array(32).fill(18)),
     requireRightsExportAccountDataKey: vi.fn(async () => new Uint8Array(32).fill(18)),
 }));
-vi.mock('../../src/lib/telemetryHub', () => ({ telemetryHub: { trackEvent: vi.fn(), trackError: vi.fn() } }));
 vi.mock('../../src/lib/catalog/catalogService', () => ({ getCachedCatalog: async () => catalog }));
 vi.mock('../../src/lib/sync/localRepository', async () => {
     const actual = await vi.importActual<typeof import('../../src/lib/sync/localRepository')>('../../src/lib/sync/localRepository');
@@ -103,7 +102,7 @@ function data(height: number, name?: string): UserData {
             height: String(height),
             ...(name ? { name } : {}),
         },
-        legalConsent: { hasAcceptedTerms: true, hasAcceptedHealthData: true, acceptedAt: '2026-10-11T10:00:00.000Z', privacyVersion: '1.3.4', termsVersion: '1.2.1' },
+        legalConsent: { hasAcceptedTerms: true, hasAcceptedHealthData: true, acceptedAt: '2026-10-11T10:00:00.000Z', privacyVersion: '1.3.5', termsVersion: '1.2.1' },
     }) as unknown as UserData;
 }
 

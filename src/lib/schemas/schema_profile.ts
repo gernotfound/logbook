@@ -3,7 +3,6 @@ import {
     safeOptionalString, 
     safeBoolean, 
     safeString,
-    reportZodSchemaFallback 
 } from './schema_utils';
 
 const PROFILE_STRING_MAX_LENGTH = 128;
@@ -21,12 +20,7 @@ export const UserProfileSchema = z.object({
     biceps: safeOptionalString(PROFILE_STRING_MAX_LENGTH),
     thighs: safeOptionalString(PROFILE_STRING_MAX_LENGTH),
     calves: safeOptionalString(PROFILE_STRING_MAX_LENGTH),
-}).passthrough().transform(({ hips: _unsupportedHips, ...profile }) => profile).catch((ctx) => {
-    reportZodSchemaFallback({
-        schema: 'UserProfileSchema',
-        fallbackUsed: 'default_empty_profile',
-        error: ctx?.error,
-    });
+}).passthrough().transform(({ hips: _unsupportedHips, ...profile }) => profile).catch(() => {
     return {};
 }).default({});
 

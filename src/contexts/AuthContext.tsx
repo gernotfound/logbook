@@ -28,7 +28,6 @@ import { useUnverifiedLocalContinuation } from './auth/useUnverifiedLocalContinu
 import { bootstrapAuthenticatedSession } from './auth/bootstrapAuthenticatedSession';
 import { watchDeletionRecoveryDeviceRegistration } from '../lib/deletionDeviceRecovery';
 import { RecoveryDiagnosticTracker } from '../lib/deletionRecoveryDiagnostics';
-import { reportError } from '../lib/errorHandler';
 import { clearAuthenticatedOwnerHint } from '../lib/sync/authOwnerHint';
 import { cancelLocalVaultReadiness } from '../lib/sync/secureArchiveUnlockFlow';
 import { lockVault } from '../lib/sync/secureArchiveSession';
@@ -136,8 +135,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         return watchDeletionRecoveryDeviceRegistration(
             currentUser,
             error => {
-                diagnostics.recordFailure('device-registration', error, (summary, source) => {
-                    reportError(summary, { source });
+                diagnostics.recordFailure('device-registration', error, (summary) => {
                     console.warn('Registrazione recovery device: diagnostica tecnica:', summary.message);
                 });
             },

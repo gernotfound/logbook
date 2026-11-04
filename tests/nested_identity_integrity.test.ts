@@ -1,8 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
-
-vi.mock('../src/lib/telemetryHub', () => ({
-    telemetryHub: { trackError: vi.fn() },
-}));
+import { describe, expect, it } from 'vitest';
 
 import type { UserData } from '../src/types';
 import { DomainParsers, UserDataSchema } from '../src/lib/schema';

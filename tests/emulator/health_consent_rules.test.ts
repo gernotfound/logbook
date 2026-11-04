@@ -7,7 +7,7 @@ let env: RulesTestEnvironment;
 const proof = (uid: string, revision: number) => ({
   uid, status: 'active' as const, revision,
   acceptedAt: '2026-10-13T10:00:00.000Z',
-  privacyVersion: '1.3.4', termsVersion: '1.2.1',
+  privacyVersion: '1.3.5', termsVersion: '1.2.1',
 });
 const mark = (status: 'active' | 'withdrawn') => ({
   ...(status === 'active' ? proof('u', 1) : { uid: 'u', status, revision: 1, withdrawnAt: new Date() }),

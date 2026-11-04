@@ -4,7 +4,7 @@
 export function createIsolatedE2eEnvironment(source) {
   const isolated = {};
   for (const [key, value] of Object.entries(source)) {
-    if (/^(VITE_|SENTRY_|FIREBASE_ADMIN_)/.test(key)) continue;
+    if (/^(VITE_|FIREBASE_ADMIN_)/.test(key)) continue;
     if ([
       'FIREBASE_HOSTING_DEPLOY', 'CRON_SECRET', 'PUBLIC_APP_ORIGIN',
       'GOOGLE_APPLICATION_CREDENTIALS', 'FIREBASE_CONFIG', 'GCLOUD_PROJECT',

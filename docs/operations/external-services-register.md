@@ -32,7 +32,7 @@ I contratti correnti sono governati da [AGENTS](../../AGENTS.md): [Cifratura](..
 | Vercel Functions / Cron | ACTIVE | backend trusted lifecycle, consenso/diritti, chiave cloud, cron e redirect del vecchio root verso Firebase | Vercel + `vercel.json` |
 | Vercel Analytics / Speed Insights | RITIRATO | non fanno più parte del frontend Production | codice + cronologia cutover |
 | Google Analytics / GA4 | DISMESSO | Nessuna dipendenza runtime; integrazione e preferenza client rimosse, collegamento Firebase sciolto e proprietà dismessa | PR #320 + operazioni Google/Firebase/GitHub confermate dal product owner |
-| Sentry | ACTIVE | error monitoring tecnico Production e source map del frontend Firebase Hosting | Sentry + build Firebase Hosting |
+| Sentry | RETIRED-CODE / VERIFY-LIVE | SDK, invii client e upload source map rimossi nel candidato; segreti e dati storici ancora da verificare presso i provider | GitHub / Sentry |
 | GitHub Actions / CodeQL / ruleset | ACTIVE | repository pubblico, PR, CI e SAST canonico | GitHub |
 | Snyk | OPTIONAL | controllo security supplementare | integrazione Snyk esterna |
 | Google Search Console | EXTERNAL-ONLY | verifica proprietà, sitemap e indicizzazione | Search Console + asset SEO repo |
@@ -113,7 +113,7 @@ Il runtime non importa Firebase Realtime Database e `VITE_FIREBASE_DATABASE_URL`
 
 Analogamente, il runtime non importa Firebase Storage né Firebase Cloud Messaging e le vecchie env `VITE_FIREBASE_STORAGE_BUCKET` / `VITE_FIREBASE_MESSAGING_SENDER_ID` sono state ritirate dal contratto client.
 
-Le collection Firestore `telemetry_errors`, `telemetry_events` e `telemetry_anomalies` sono fuori dal contratto client: le Rules negano ogni lettura/write anche all'owner verificato. Il client invia soltanto diagnostica tecnica a Sentry. Account/health-data deletion e maintenance cron Admin restano per eventuali residui, senza supporto dei client pre-lancio né prova documentale che il dataset live sia vuoto.
+Le collection Firestore `telemetry_errors`, `telemetry_events` e `telemetry_anomalies` sono fuori dal contratto client: le Rules negano ogni lettura/write anche all'owner verificato. Il client non invia più diagnostica tecnica a fornitori esterni. Account/health-data deletion e maintenance cron Admin restano per eventuali residui, senza supporto dei client pre-lancio né prova documentale che il dataset live sia vuoto.
 
 **Retention legacy e indici (verifica Production 2026-10-10):** le tre query collection-group per `expireAt` richiedono ciascuna un indice single-field `COLLECTION_GROUP/ASCENDING` (in `firestore.indexes.json`, oltre ai modi `COLLECTION` preesistenti). Gli indici compositi `expireAt + __name__` della PR #309 sono stati rifiutati da Firestore (HTTP 400); la PR #311 li ha sostituiti con i field override corretti. La PR #312 ha corretto il verificatore per leggere la struttura annidata degli indici restituita dalle API Firestore, senza alterare Rules o indici. **Entrambe le correzioni sono su `main`**.
 
@@ -123,7 +123,7 @@ La riconciliazione Firebase Firestore Production sul commit `28c852cdf11ef9ea541
 
 **Verifica runtime ancora aperta (ricognizione documentale 2026-10-11):** la prima finestra cron successiva al rilascio del nuovo backend era prevista per l'11 ottobre 2026 alle 03:00–04:00 UTC (Vercel Hobby) ed è trascorsa. Il tentativo di leggere direttamente i log storici via API Vercel durante la revisione dell'11 ottobre 2026 ha restituito HTTP 400: il piano Hobby non conserva più la finestra richiesta (retention dei runtime log di circa un'ora). Non è quindi possibile attestare retroattivamente da quei log se l'esecuzione sia riuscita o fallita; una verifica osservabile deve avvenire durante una finestra successiva ancora compresa nella retention. Quando disponibile, la prova richiede il log `[account-deletion-cron] completed` e i contatori `telemetryDocumentsScanned`, `telemetryPurged`, `telemetryUnexpectedDocuments`, `telemetryCycleCompleted` nel provider competente. Anche una scansione vuota riuscita non prova una delete reale né una race concorrente; queste condizioni hanno regressioni automatizzate, non prove runtime con dati Production.
 
-**Confronto documentale Privacy:** la sorgente `src/pages/PrivacyPolicy.tsx` inclusa nel rilascio Hosting dello stesso SHA descrive 30 giorni per le collection legacy, cleanup server progressivo e tombstone post-cancellazione programmato a 30 giorni: non emerge una contraddizione con la retention implementata. Il periodo Sentry è dichiarato dipendente dal servizio, senza durata numerica pubblicata; la retention effettiva Sentry e l'approvazione legale complessiva restano da verificare prima del pilot. Non è stata modificata l'informativa né la versione del consenso.
+**Confronto documentale Privacy:** la sorgente `src/pages/PrivacyPolicy.tsx` inclusa nel rilascio Hosting dello stesso SHA descrive 30 giorni per le collection legacy, cleanup server progressivo e tombstone post-cancellazione programmato a 30 giorni: non emerge una contraddizione con la retention implementata. Quel checkpoint riportava la retention Sentry come dipendente dal fornitore; dopo la dismissione vanno verificate l'eventuale cancellazione dei dati storici e l'approvazione legale complessiva pre-pilot. Non è stata modificata l'informativa né la versione del consenso.
 
 Verifica live 2026-10-02 del database `(default)`: Firestore Native Standard in regione `europe-west12`, free tier attivo, PITR disabilitato e **delete protection abilitata** per impedire la cancellazione accidentale del database. PITR/backup gestiti non vengono attivati sul piano Spark perché richiedono fatturazione.
 
@@ -188,14 +188,14 @@ Ricognizione diretta dei **soli nomi, target e tipi** delle env del progetto Ver
 | **CANDIDATE ALLA RIMOZIONE — 4, legacy** | `PUBLIC_APP_LEGACY_ORIGIN`, `VITE_FIREBASE_DATABASE_URL`, `VITE_FIREBASE_STORAGE_BUCKET`, `VITE_FIREBASE_MESSAGING_SENDER_ID` | Nessun uso eseguibile nel backend attuale; l'origin legacy è ritirato e Realtime Database/Storage/Messaging non sono parte del runtime client |
 | **CANDIDATE ALLA RIMOZIONE SOLO DA VERCEL — 9** | `VITE_FIREBASE_API_KEY`, `VITE_FIREBASE_AUTH_DOMAIN`, `VITE_FIREBASE_PROJECT_ID`, `VITE_FIREBASE_APP_ID`, `VITE_RECAPTCHA_ENTERPRISE_SITE_KEY`, `VITE_SENTRY_DSN`, `SENTRY_AUTH_TOKEN`, `SENTRY_ORG`, `SENTRY_PROJECT` | Servono al frontend Firebase Hosting o alle source map caricate dal relativo workflow GitHub Actions, non alla build backend-only Vercel |
 
-Le quattro variabili Firebase Web core sono presenti su Vercel per Production **e** Preview; le altre nove candidate sono configurate per Production. I quattro valori Firebase Web core, la site key Enterprise, il DSN Sentry e le tre impostazioni Sentry per le source map **non devono essere eliminati dal loro ambiente GitHub Actions/Firebase Hosting**: eliminare le copie Vercel non equivale a dismettere queste funzioni. `VITE_ACCOUNT_DELETION_API_ORIGIN` è presente nel contratto del frontend GitHub ma **non** nell'inventario Vercel.
+**STORICO 2026-10-16:** quattro variabili Firebase Web core risultavano presenti su Vercel Production e Preview, e le altre nove candidate su Production. La precedente raccomandazione di conservare i valori Sentry nel workflow Hosting è stata superata dalla decisione di dismissione. Eventuali rimozioni di variabili live richiedono inventario corrente e verifica separata. `VITE_ACCOUNT_DELETION_API_ORIGIN` era presente nel contratto frontend GitHub ma non nell'inventario Vercel.
 
 **Procedura necessaria prima di un'eventuale rimozione live, separata da questa PR:**
 
 1. Ricontrollare inventario e `main` correnti, output e build command effettivi del deployment Vercel Production e disponibilità delle configurazioni del workflow Firebase Hosting; non basarsi soltanto sui file o su vecchie build. Confermare che non sia in corso una migrazione/rollback che richieda una ricostruzione storica del frontend su Vercel.
 2. Preservare un meccanismo di ripristino **fuori dal repository** per eventuali valori critici senza stamparli nei log o nei report; l'eliminazione delle env dal provider non viene annullata da un revert Git e potrebbe influire sui prossimi deploy.
 3. Solo con autorizzazione esplicita per le impostazioni live, rimuovere da Vercel prima le 4 env legacy, quindi le 9 copie frontend, rispettandone gli scope Production/Preview. **Non** toccare le 5 env runtime backend, le repository variables/secrets di GitHub, il provider Firebase o l'autenticazione App Check.
-4. Dopo la modifica e al successivo deploy backend legittimo da `main`, controllare gli endpoint consenso, sessioni, cancellazione/recovery e cron con richieste sicure, oltre a redirect HTTP 301 e Service Worker di ritiro. Verificare separatamente il successivo workflow Firebase Hosting e Sentry source map; la sola CI verde non prova questo comportamento live.
+4. Dopo la modifica e al successivo deploy backend legittimo da `main`, controllare gli endpoint consenso, sessioni, cancellazione/recovery e cron con richieste sicure, oltre a redirect HTTP 301 e Service Worker di ritiro. Verificare separatamente il successivo workflow Firebase Hosting e l'assenza di richieste diagnostiche; la sola CI verde non prova il comportamento live.
 
 **Stato dell'inventario:** prima di seguire questa procedura, verificare lo stato attuale del provider. La cancellazione live delle env non è rappresentabile da un commit Git.
 
@@ -206,10 +206,9 @@ La configurazione pubblica del frontend Production viene fornita al workflow Git
 
 - quattro env Firebase Web core: `VITE_FIREBASE_API_KEY`, `VITE_FIREBASE_AUTH_DOMAIN`, `VITE_FIREBASE_PROJECT_ID`, `VITE_FIREBASE_APP_ID`;
 - `VITE_RECAPTCHA_ENTERPRISE_SITE_KEY`;
-- `VITE_ACCOUNT_DELETION_API_ORIGIN`, che punta al backend trusted Vercel;
-- `VITE_SENTRY_DSN`.
+- `VITE_ACCOUNT_DELETION_API_ORIGIN`, che punta al backend trusted Vercel.
 
-`SENTRY_AUTH_TOKEN`, `SENTRY_ORG` e `SENTRY_PROJECT` sono build-only nel workflow Firebase Hosting Production per release/source map. Il token non entra nel bundle client.
+Il workflow Firebase Hosting Production non richiede più credenziali Sentry, non carica source map a fornitori diagnostici e non abilita la relativa configurazione nel browser.
 
 Realtime Database, Firebase Storage e Cloud Messaging non fanno parte del runtime corrente; le relative vecchie env client sono ritirate. La configurazione Production non viene duplicata in un file `.env.production` versionato; `.env.example` documenta solo il contratto e CI/E2E usa valori sintetici.
 
@@ -217,35 +216,19 @@ Realtime Database, Firebase Storage e Cloud Messaging non fanno parte del runtim
 
 Google Analytics 4/Firebase Analytics non è più usato da TheLogBook. La PR #320 ha rimosso SDK, avvio, consenso e toggle GA4, Measurement ID dal build e domini Analytics dalla Content Security Policy. Il product owner ha successivamente confermato lo scollegamento Google Analytics dal progetto Firebase, la dismissione della proprietà Analytics e la rimozione della repository variable `VITE_FIREBASE_MEASUREMENT_ID`.
 
-**Servizi invariati:** Firebase Hosting, Authentication, Firestore, App Check e Sentry Error Monitoring non dipendono da Analytics e rimangono parte dell'architettura. La configurazione originaria e le decisioni del cutover sono consultabili nella cronologia Git, non nel runbook operativo corrente.
+**Servizi invariati:** Firebase Hosting, Authentication, Firestore e App Check non dipendono da Analytics e rimangono parte dell'architettura. Sentry è stato ritirato successivamente. La configurazione originaria e le decisioni del cutover sono consultabili nella cronologia Git, non nel runbook operativo corrente.
 
 ## Vercel Analytics / Speed Insights
 
 Sono ritirati dal frontend Production dopo il cutover Firebase Hosting. Non esiste più alcun consenso GA4 nell'app.
 
-## Sentry
+## Sentry — ritirato dal codice, provider da verificare
 
-Sentry sostituisce Firestore come destinazione corrente per errori/anomalie tecniche.
+Il 4 novembre 2026 il branch di dismissione elimina SDK, trasporti, code diagnostiche, DSN browser e upload di source map dal frontend. **Questo cambiamento non dimostra da solo il rilascio in Production**, l'assenza di richieste da build ancora pubblicate o la cancellazione dei dati storici eventualmente acquisiti.
 
-Configurazione deliberata:
+**VERIFY-LIVE:** prima di attestare la dismissione completa, inventariare nel provider Sentry eventuali eventi ancora conservati, retention e progetto; controllare inoltre vecchie repository variables/secrets GitHub e variabili Vercel. L'eventuale eliminazione di dati storici o del progetto è un'operazione separata, non eseguita dal commit, da autorizzare e verificare.
 
-- Error Monitoring: **ON**;
-- Data Scrubbing: **ON**;
-- Default Scrubbers: **ON**;
-- IP scrubbing: **ON**;
-- Spike Protection: **ON**;
-- Session Replay: **OFF**;
-- Tracing: **OFF**;
-- Logging: **OFF**;
-- Application Metrics: **OFF**.
-
-La motivazione iniziale era ottenere diagnostica e release utili senza consumare la quota Firestore o raccogliere eventi comportamentali. Il boundary corrente trasmette classificazioni allowlisted e messaggi fissi, non stack o messaggi originali anche se sanitizzati: distinguere report locali, artefatti source-map e payload Sentry.
-
-La scelta iniziale è stata fatta per restare sul piano gratuito: Spike Protection e deduplica client di 15 minuti per fingerprint riducono il rischio che un errore in loop consumi rapidamente il volume disponibile. **VERIFY-LIVE:** limiti, pricing e retention del piano Sentry sono configurazione commerciale esterna e possono cambiare; verificarli prima di aumentare volume, sampling o funzionalità.
-
-Il primo errore controllato è stato ricevuto correttamente da Sentry il 2026-09-30 con environment Production e release Git SHA. Questa osservazione è storica: la verifica attuale deve distinguere upload source-map da payload diagnostico intenzionalmente privo di stack originale; non usare il vecchio criterio come motivo per riabilitare testi o frame sensibili.
-
-Verifica live 2026-10-03: in Project Settings → Client Security, `Allowed Domains` conteneva `https://thelogbook.web.app` e il legacy `https://logbook-gnf.vercel.app`. Il dominio Vercel è stato rimosso dalla allowlist; resta autorizzato soltanto il frontend Production Firebase `https://thelogbook.web.app`. Le altre opzioni della sezione non sono state modificate.
+**STORICO:** il 30 settembre 2026 un errore controllato risultò ricevuto da Sentry, in una configurazione allora attiva con misure di scrubbing e domini consentiti. Quelle verifiche non descrivono il runtime desiderato dopo la dismissione.
 
 ## GitHub, Actions e CodeQL
 
@@ -310,7 +293,7 @@ Pulizia esterna completata/verificata il 2026-09-30:
 4. verificare env Vercel per nome/scope senza esportarne i valori;
 5. verificare cron e Functions;
 6. verificare GitHub ruleset/required check;
-7. verificare Sentry privacy, Spike Protection e feature non richieste ancora disattivate;
+7. verificare che il frontend non effettui richieste a Sentry e documentare separatamente il ritiro di progetto, credenziali e dati storici;
 8. verificare Snyk come supplementare e CodeQL come gate;
 9. verificare Search Console, sitemap, robots e canonical Production URL;
 10. rimuovere origin, chiavi e integrazioni legacy non più necessarie.

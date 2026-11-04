@@ -8,10 +8,7 @@ describe('E2E runner isolation', () => {
       CI: 'true',
       VITE_FIREBASE_PROJECT_ID: 'production-project',
       VITE_ACCOUNT_DELETION_API_ORIGIN: 'https://production.example',
-      VITE_SENTRY_DSN: 'https://sentry.example/1',
       VITE_EXTRA_FUTURE_ENDPOINT: 'https://production.example',
-      SENTRY_AUTH_TOKEN: 'secret',
-      SENTRY_ORG: 'production',
       FIREBASE_HOSTING_DEPLOY: 'production',
       FIREBASE_ADMIN_PRIVATE_KEY: 'private',
       GOOGLE_APPLICATION_CREDENTIALS: '/secrets/service-account.json',
@@ -23,9 +20,7 @@ describe('E2E runner isolation', () => {
     expect(safe.CI).toBe('true');
     expect(safe.VITE_FIREBASE_PROJECT_ID).toBe('demo-logbook-audit');
     expect(safe.VITE_ACCOUNT_DELETION_API_ORIGIN).toBe('http://127.0.0.1:9');
-    expect(safe.VITE_SENTRY_DSN).toBeUndefined();
     expect(safe.VITE_EXTRA_FUTURE_ENDPOINT).toBeUndefined();
-    expect(safe.SENTRY_AUTH_TOKEN).toBeUndefined();
     expect(safe.FIREBASE_HOSTING_DEPLOY).toBeUndefined();
     expect(safe.FIREBASE_ADMIN_PRIVATE_KEY).toBeUndefined();
     expect(safe.GOOGLE_APPLICATION_CREDENTIALS).toBeUndefined();

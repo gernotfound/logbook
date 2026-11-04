@@ -41,7 +41,6 @@ vi.mock('../../src/lib/healthConsent', async () => {
         getVerifiedHealthConsentRevision: () => 0,
     };
 });
-vi.mock('../../src/lib/telemetryHub', () => ({ telemetryHub: { trackEvent: vi.fn(), trackError: vi.fn() } }));
 vi.mock('../../src/lib/catalog/catalogService', () => ({ getCachedCatalog: async () => catalog }));
 vi.mock('../../src/lib/sync/transactionWriter', () => ({ applyDocumentChanges: remote.apply }));
 // Real local journal and crash-recovery remain under test; the independent
@@ -79,7 +78,7 @@ import {
 } from '../../src/lib/sync/semanticProjection';
 
 const owner = 'user:a';
-const data = (height: number) => UserDataSchema.parse({ profile: { height: String(height) }, legalConsent: { hasAcceptedTerms: true, hasAcceptedHealthData: true, acceptedAt: '2026-10-11T10:00:00.000Z', privacyVersion: '1.3.4', termsVersion: '1.2.1' } }) as unknown as UserData;
+const data = (height: number) => UserDataSchema.parse({ profile: { height: String(height) }, legalConsent: { hasAcceptedTerms: true, hasAcceptedHealthData: true, acceptedAt: '2026-10-11T10:00:00.000Z', privacyVersion: '1.3.5', termsVersion: '1.2.1' } }) as unknown as UserData;
 
 let cloudDocuments: Map<string, DocumentData>;
 let cloudSyncMeta: Record<string, SyncMeta>;

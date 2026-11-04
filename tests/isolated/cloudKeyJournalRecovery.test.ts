@@ -23,7 +23,6 @@ vi.mock('../../src/lib/healthConsent', async () => {
         getVerifiedHealthConsentRevision: () => 1,
     };
 });
-vi.mock('../../src/lib/telemetryHub', () => ({ telemetryHub: { trackEvent: vi.fn(), trackError: vi.fn() } }));
 vi.mock('../../src/lib/sync/transactionWriter', () => ({ applyDocumentChanges: remote.apply }));
 
 import { getSeedCatalog } from '../../src/lib/catalog/catalogService';
@@ -42,7 +41,7 @@ const data = (height: number) => UserDataSchema.parse({
     profile: { height: String(height) },
     legalConsent: {
         hasAcceptedTerms: true, hasAcceptedHealthData: true, acceptedAt: '2026-10-11T10:00:00.000Z',
-        privacyVersion: '1.3.4', termsVersion: '1.2.1',
+        privacyVersion: '1.3.5', termsVersion: '1.2.1',
     },
 }) as unknown as UserData;
 const keyPayload = {

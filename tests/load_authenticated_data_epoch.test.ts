@@ -93,15 +93,13 @@ describe('authenticated hydration session fencing', () => {
         lockAllVaults();
     });
 
-    it('reports an authenticated missing local envelope without creating a replacement journal', async () => {
+    it('preserves a missing authenticated envelope without fabricating a replacement journal', async () => {
         await clear();
         const { loadAuthenticatedData, readLocal, invalidateSession } = await loadModules();
         const storageTelemetry = await import('../src/lib/storageTelemetry');
-        const sentryClient = await import('../src/lib/sentryClient');
         invalidateSession();
         storeState.current = { userData: null, localWorkout: null, localPersistenceBlocked: false };
-        const marker = storageTelemetry.updateStorageMarker(12345, undefined, 'user:user-a')!;
-        const sendSpy = vi.spyOn(sentryClient, 'sendTelemetryToSentry').mockResolvedValue(true);
+        storageTelemetry.updateStorageMarker(12345, undefined, 'user:user-a');
         dbState.loadCloudPayload.mockRejectedValueOnce(Object.assign(new Error('Cloud unavailable'), { code: 'unavailable' }));
 
         const result = await loadAuthenticatedData({
@@ -114,10 +112,6 @@ describe('authenticated hydration session fencing', () => {
 
         expect(result).toBe('blocked');
         expect(dbState.loadCloudPayload).toHaveBeenCalledOnce();
-        await vi.waitFor(() => expect(sendSpy).toHaveBeenCalledWith(
-            'storage-anomaly', expect.objectContaining({ type: 'storage_recovery_anomaly' }),
-        ));
-        await vi.waitFor(() => expect(storageTelemetry.isAnomalyAlreadyReported(marker, undefined, 'user:user-a')).toBe(true));
         expect(await readLocal('user:user-a')).toBeUndefined();
         expect(await get('logbook:v2:user:user-a')).toBeUndefined();
         expect(storeState.current.userData).toBeNull();
