@@ -9,7 +9,6 @@ import { readLocal } from '../lib/sync/localRepository';
 import { auth } from '../lib/firebase';
 import { isAccountDeletionPending } from '../lib/sync/accountGate';
 import { isSensitiveReauthCancellation, reauthenticateForSensitiveAction } from '../lib/auth/recentAuth';
-import { reportError } from '../lib/errorHandler';
 import { revokeSessionsOnServer } from '../lib/auth/revokeSessions';
 
 type AccountActionsAuth = Pick<ReturnType<typeof useAuth>, 'currentUser' | 'isGuest' | 'logout'>;
@@ -206,9 +205,6 @@ export function useSettingsAccountActions({ currentUser, isGuest, logout }: Acco
             if (isSensitiveReauthCancellation(error)) return;
             const code = (error as { code?: unknown } | null)?.code;
             const isCredentialMistake = code === 'auth/wrong-password' || code === 'auth/invalid-credential';
-            if (!isCredentialMistake) {
-                reportError(error, { source: 'account_deletion' });
-            }
             const message = isCredentialMistake
                 ? 'Password attuale non corretta.'
                 : error instanceof Error ? error.message : 'Cancellazione non riuscita.';

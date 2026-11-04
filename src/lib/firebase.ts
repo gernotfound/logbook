@@ -91,9 +91,6 @@ export const ensureAppCheck = (): Promise<AppCheckResult> => {
             const disabledOutsideProduction = result.disabled === true && !import.meta.env.PROD;
             if (!result.success && !disabledOutsideProduction) {
                 const error = new AppCheckUnavailableError(result);
-                void import('./errorHandler')
-                    .then(({ reportError }) => reportError(error, { source: 'app_check_readiness' }))
-                    .catch(() => {});
                 console.warn("App Check non pronto per il cloud:", result.reason ?? result.tokenError ?? result.phase);
                 throw error;
             }

@@ -36,9 +36,6 @@ jobs:
       VITE_FIREBASE_APP_ID: ${{ vars.VITE_FIREBASE_APP_ID }}
       VITE_ACCOUNT_DELETION_API_ORIGIN: ${{ vars.VITE_ACCOUNT_DELETION_API_ORIGIN }}
       VITE_RECAPTCHA_ENTERPRISE_SITE_KEY: ${{ vars.VITE_RECAPTCHA_ENTERPRISE_SITE_KEY }}
-      VITE_SENTRY_DSN: ${{ vars.VITE_SENTRY_DSN }}
-      SENTRY_ORG: ${{ vars.SENTRY_ORG }}
-      SENTRY_PROJECT: ${{ vars.SENTRY_PROJECT }}
 
     steps:
       - name: Checkout exact verified main SHA
@@ -64,8 +61,6 @@ jobs:
           fi
 
       - name: Require production build configuration
-        env:
-          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
         shell: bash
         run: |
           set -euo pipefail
@@ -78,10 +73,6 @@ jobs:
             VITE_FIREBASE_APP_ID
             VITE_ACCOUNT_DELETION_API_ORIGIN
             VITE_RECAPTCHA_ENTERPRISE_SITE_KEY
-            VITE_SENTRY_DSN
-            SENTRY_AUTH_TOKEN
-            SENTRY_ORG
-            SENTRY_PROJECT
           )
           missing=()
           for name in "${required[@]}"; do
@@ -131,8 +122,6 @@ jobs:
         run: npm ci
 
       - name: Build exact production frontend
-        env:
-          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
         run: npm run build
 
       - name: Deploy Firebase Hosting only

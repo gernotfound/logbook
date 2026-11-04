@@ -1,13 +1,6 @@
-import { auth, onAuthStateChanged } from './firebase';
 import { UserDataSchema } from './schema';
-import { getStorageDiagnosticData } from './storageStatus';
-import { sendTelemetryToSentry } from './sentryClient';
 import { deviceKey } from './sync/deviceStorage';
 import { storageOwner } from './sync/session';
-import { detectDerivedPlatform, isStandaloneMode, type DerivedPlatform } from './telemetrySanitizer';
-
-export { detectDerivedPlatform, isStandaloneMode };
-export type { DerivedPlatform };
 
 export type StorageReadStatus =
   | 'valid'
@@ -29,34 +22,11 @@ export interface StorageDiagnosticContext {
   isGuest?: boolean;
 }
 
-export interface StorageRecoveryAnomalyPayload {
-  type: 'storage_recovery_anomaly';
-  reason: string;
-  timestamp: number;
-  elapsedMs: number;
-  platform: DerivedPlatform;
-  standalone: boolean;
-  persisted: boolean | null;
-}
-
-export interface CreateAnomalyPayloadOptions {
-  marker: StorageMarker;
-  timestamp?: number;
-  reason?: string;
-  persisted?: boolean | null;
-  nav?: Navigator;
-  win?: Window;
-}
-
 // Diagnostic state is owner-scoped. Pre-launch global markers are ignored.
 export const STORAGE_MARKER_VERSION = 1;
 
 export function getStorageMarkerKey(owner?: string): string {
   return deviceKey('storage_marker', owner ?? storageOwner());
-}
-
-export function getStorageAnomalyReportedKey(owner?: string): string {
-  return deviceKey('storage_anomaly_reported', owner ?? storageOwner());
 }
 
 /**
@@ -112,65 +82,16 @@ export function updateStorageMarker(timestamp: number = Date.now(), customStorag
 }
 
 /**
- * Clears the storage marker and reporting deduplication flags (e.g. on logout or cache deletion).
+ * Clears the owner-scoped storage marker (e.g. on logout or cache deletion).
  */
 export function clearStorageMarker(customStorage?: Storage, owner?: string): void {
   try {
     const storage = customStorage ?? (typeof localStorage !== 'undefined' ? localStorage : null);
     if (!storage) return;
     storage.removeItem(getStorageMarkerKey(owner));
-    storage.removeItem(getStorageAnomalyReportedKey(owner));
   } catch {
     // Ignore removal errors
   }
-}
-
-/**
- * Checks whether an anomaly for the given marker has already been reported.
- */
-export function isAnomalyAlreadyReported(marker: StorageMarker, customStorage?: Storage, owner?: string): boolean {
-  try {
-    if (!marker || typeof marker.timestamp !== 'number' || !Number.isFinite(marker.timestamp)) {
-      return false;
-    }
-    const storage = customStorage ?? (typeof localStorage !== 'undefined' ? localStorage : null);
-    if (!storage) return false;
-    const reportedVal = storage.getItem(getStorageAnomalyReportedKey(owner));
-    return reportedVal === String(marker.timestamp);
-  } catch {
-    return false;
-  }
-}
-
-/**
- * Marks the anomaly for the given marker as reported to prevent duplicate telemetry sends.
- */
-export function markAnomalyReported(marker: StorageMarker, customStorage?: Storage, owner?: string): void {
-  try {
-    if (!marker || typeof marker.timestamp !== 'number' || !Number.isFinite(marker.timestamp)) {
-      return;
-    }
-    const storage = customStorage ?? (typeof localStorage !== 'undefined' ? localStorage : null);
-    if (!storage) return;
-    storage.setItem(getStorageAnomalyReportedKey(owner), String(marker.timestamp));
-  } catch {
-    // Ignore storage errors
-  }
-}
-
-/**
- * Deterministically calculates the elapsed duration in milliseconds between current time and marker timestamp.
- */
-export function calculateElapsedMs(currentTimestamp: number, markerTimestamp: number): number {
-  if (
-    typeof currentTimestamp !== 'number' ||
-    typeof markerTimestamp !== 'number' ||
-    !Number.isFinite(currentTimestamp) ||
-    !Number.isFinite(markerTimestamp)
-  ) {
-    return 0;
-  }
-  return Math.max(0, Math.floor(currentTimestamp - markerTimestamp));
 }
 
 /**
@@ -219,157 +140,5 @@ export function diagnoseStorageState(ctx: StorageDiagnosticContext): StorageRead
     return 'valid';
   } catch {
     return 'invalid';
-  }
-}
-
-/**
- * Determines if a storage recovery anomaly should be generated and reported.
- * Only generates an event when a previously valid marker exists in localStorage,
- * but the cache in IndexedDB is actually missing ('missing').
- */
-export function shouldReportAnomaly(status: StorageReadStatus, marker: StorageMarker | null): boolean {
-  return status === 'missing' && marker !== null && typeof marker.timestamp === 'number' && Number.isFinite(marker.timestamp);
-}
-
-/**
- * Constructs the privacy-minimized telemetry payload for storage recovery anomalies.
- */
-export function createStorageRecoveryAnomalyPayload({
-  marker,
-  timestamp = Date.now(),
-  reason = 'indexeddb_cache_missing_with_valid_marker',
-  persisted = null,
-  nav,
-  win,
-}: CreateAnomalyPayloadOptions): StorageRecoveryAnomalyPayload {
-  const safeTimestamp = typeof timestamp === 'number' && Number.isFinite(timestamp) ? timestamp : Date.now();
-  const safeMarkerTimestamp = marker && typeof marker.timestamp === 'number' && Number.isFinite(marker.timestamp) ? marker.timestamp : safeTimestamp;
-  const elapsedMs = calculateElapsedMs(safeTimestamp, safeMarkerTimestamp);
-  const platform = detectDerivedPlatform(nav);
-  const standalone = isStandaloneMode(win);
-
-  return {
-    type: 'storage_recovery_anomaly',
-    reason,
-    timestamp: safeTimestamp,
-    elapsedMs,
-    platform,
-    standalone,
-    persisted: persisted !== undefined ? persisted : null,
-  };
-}
-
-/**
- * Report a missing owner envelope only after Firebase Auth has established this
- * owner and the authenticated vault read has successfully returned no record.
- * Callers must enforce verified consent and must never invoke this on read errors.
- * Technical telemetry is best-effort and never authorizes creating an empty archive.
- */
-export function reportMissingAuthenticatedStorage(
-  owner: string,
-  uid: string,
-  isCurrent: () => boolean,
-): void {
-  if (owner !== `user:${uid}` || !uid || !isCurrent() || auth.currentUser?.uid !== uid) return;
-  const marker = getStorageMarker(undefined, owner);
-  if (!marker || !shouldReportAnomaly('missing', marker)
-    || isAnomalyAlreadyReported(marker, undefined, owner)) return;
-
-  const payload = createStorageRecoveryAnomalyPayload({ marker });
-  void dispatchStorageRecoveryAnomaly(payload, uid).then(accepted => {
-    // An asynchronous Sentry success from an expired owner/session must not
-    // create a new local marker in another authenticated session.
-    if (accepted && isCurrent() && auth.currentUser?.uid === uid) {
-      markAnomalyReported(marker, undefined, owner);
-    }
-  }).catch(() => {
-    // A rejected diagnostic dispatch must remain retryable.
-  });
-}
-
-/**
- * Dispatches the anomaly to Sentry in a fire-and-forget, non-blocking manner.
- * The authenticated UID is used only as a local eligibility gate and is never sent to Sentry.
- */
-export async function dispatchStorageRecoveryAnomaly(
-  payload: StorageRecoveryAnomalyPayload,
-  providedUid?: string | null
-): Promise<boolean> {
-  try {
-    // Dynamically resolve persisted status if not yet determined at sync creation time
-    if (payload.persisted === null) {
-      if (typeof navigator !== 'undefined' && navigator.storage?.persisted) {
-        try {
-          payload.persisted = await navigator.storage.persisted();
-        } catch {
-          // Ignore
-        }
-      }
-      if (payload.persisted === null) {
-        const diag = getStorageDiagnosticData();
-        if (diag && typeof diag.persistent === 'boolean') {
-          payload.persisted = diag.persistent;
-        }
-      }
-    }
-
-    let uid = providedUid !== undefined ? providedUid : null;
-    if (uid === null && typeof auth !== 'undefined' && auth) {
-      if (auth.currentUser) {
-        uid = auth.currentUser.uid;
-      } else {
-        uid = await new Promise<string | null>((resolve) => {
-          let timer: any = null;
-          let unsub: (() => void) | null = null;
-          let resolved = false;
-
-          const cleanup = () => {
-            if (timer) clearTimeout(timer);
-            if (unsub) {
-              try {
-                unsub();
-              } catch {
-                // Ignore
-              }
-              unsub = null;
-            }
-          };
-
-          try {
-            unsub = onAuthStateChanged(auth, (user) => {
-              if (resolved) return;
-              resolved = true;
-              cleanup();
-              resolve(user ? user.uid : null);
-            });
-          } catch {
-            resolve(null);
-            return;
-          }
-
-          if (resolved) {
-            cleanup();
-          } else {
-            timer = setTimeout(() => {
-              if (!resolved) {
-                resolved = true;
-                cleanup();
-                resolve(null);
-              }
-            }, 2500);
-          }
-        });
-      }
-    }
-
-    // Auth may change while persisted() or onAuthStateChanged is pending. In
-    // particular, never attribute a boot-time guest/old-owner anomaly to a new account.
-    if (!uid || uid !== auth.currentUser?.uid) return false;
-
-    // The UID is an eligibility check only; it is not included in the Sentry payload.
-    return await sendTelemetryToSentry('storage-anomaly', payload);
-  } catch (err) {
-    console.warn("Invio anomalia storage a Sentry non riuscito (non bloccante):", err);
-    return false;
   }
 }

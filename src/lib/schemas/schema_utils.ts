@@ -1,6 +1,5 @@
 import { z } from '../zod';
 import { formatSleepTime } from '../utils/date';
-import { telemetryHub } from '../telemetryHub';
 
 export interface ZodFallbackContext {
     schema: string;
@@ -21,61 +20,13 @@ export function setSchemaFallbackListener(listener: SchemaFallbackListener | nul
 
 export function reportZodSchemaFallback(ctx: ZodFallbackContext): void {
     try {
-        if (customFallbackListener) {
-            try {
-                const completed = (customFallbackListener as (context: ZodFallbackContext) => unknown)(ctx);
-                if (completed && typeof (completed as { then?: unknown }).then === 'function') {
-                    // Parsing remains synchronous even when a diagnostic listener rejects.
-                    void Promise.resolve(completed).catch(() => undefined);
-                }
-            } catch {
-                // Safe fail-through
-            }
-        }
-
-        if (typeof telemetryHub === 'undefined' || !telemetryHub) return;
-
-        let expectedType = ctx.expectedType;
-        let receivedType = ctx.receivedType;
-        let issueCode = ctx.issueCode;
-        let fieldPath = ctx.field;
-
-        if (ctx.error && typeof ctx.error === 'object' && 'issues' in (ctx.error as any)) {
-            const issues = (ctx.error as any).issues;
-            if (Array.isArray(issues) && issues.length > 0) {
-                const first = issues[0];
-                if (first) {
-                    if (!issueCode) issueCode = first.code || 'validation_error';
-                    if (!fieldPath && Array.isArray(first.path) && first.path.length > 0) {
-                        fieldPath = first.path.join('.');
-                    }
-                    if (!expectedType && 'expected' in first && first.expected !== undefined) {
-                        expectedType = String(first.expected);
-                    }
-                    if (!receivedType && 'received' in first && first.received !== undefined) {
-                        receivedType = String(first.received);
-                    }
-                }
-            }
-        }
-
-        const safeIssueCode = issueCode || 'validation_fallback';
-        const safeField = fieldPath || 'root';
-
-        const typeInfo = (expectedType && receivedType) ? ` (expected ${expectedType}, received ${receivedType})` : '';
-        const syntheticMessage = `Zod fallback in ${ctx.schema} [${safeField}]: ${safeIssueCode}${typeInfo}`;
-
-        // Dispatch one deduplicated external error.
-        if (typeof telemetryHub.trackError === 'function') {
-            const fallbackError = new Error(syntheticMessage);
-            fallbackError.name = 'ZodSchemaFallbackError';
-            telemetryHub.trackError(fallbackError, {
-                source: 'zod_schema_fallback',
-                customMessage: syntheticMessage,
-            });
+        const completed = (customFallbackListener as ((context: ZodFallbackContext) => unknown) | null)?.(ctx);
+        if (completed && typeof (completed as { then?: unknown }).then === 'function') {
+            // Parsing remains synchronous if a local observer rejects.
+            void Promise.resolve(completed).catch(() => undefined);
         }
     } catch {
-        // Safe non-blocking guarantee: schema parsing must never fail because of telemetry
+        // A local observer must not affect schema fallback decisions.
     }
 }
 

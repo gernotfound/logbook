@@ -16,7 +16,6 @@ import {
 import { getInitialLocalWorkout } from '../../store/slices/createWorkoutSlice';
 import { markTabSnapshotClean } from '../../lib/sync/tabSnapshotCausality';
 import { recoverWorkoutDeviceIntent } from '../../lib/sync/workoutDeviceIntent';
-import { reportMissingAuthenticatedStorage } from '../../lib/storageTelemetry';
 
 type LoadAuthenticatedDataOptions = {
     user: User;
@@ -77,12 +76,6 @@ export async function loadAuthenticatedData({
         const localEnvelope = await readLocal(expectedOwner);
         if (!isCurrent()) return 'blocked';
 
-        if (!localEnvelope && isHealthConsentCloudWritable(expectedOwner)) {
-            // Unlike the pre-auth entrypoint, this is an authenticated, owner-bound
-            // IndexedDB read. A previous durable marker with no envelope is an
-            // observable storage anomaly, not permission to seed an empty copy.
-            reportMissingAuthenticatedStorage(expectedOwner, user.uid, isCurrent);
-        }
 
         if (localEnvelope) {
             const localWorkout = getInitialLocalWorkout(expectedOwner, localEnvelope.data.activeWorkout ?? null, localEnvelope.data.history, localEnvelope.lastClosedWorkoutId, localEnvelope.closedWorkoutIds, localEnvelope.consentRevision);

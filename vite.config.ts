@@ -3,16 +3,12 @@ import { defineConfig } from 'vitest/config'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
 import { visualizer } from 'rollup-plugin-visualizer'
-import { sentryVitePlugin } from '@sentry/vite-plugin'
 
 // Frontend production is Firebase Hosting at the root path.
 
 const appVersion = process.env.npm_package_version || '0.0.0-dev'
 const buildSha = process.env.LOGBOOK_BUILD_SHA || process.env.EXPECTED_SHA || process.env.GITHUB_SHA || process.env.VERCEL_GIT_COMMIT_SHA || 'dev'
 const buildHash = buildSha.slice(0, 7)
-const sentryBuildEnabled =
-  process.env.FIREBASE_HOSTING_DEPLOY === 'production' &&
-  Boolean(process.env.SENTRY_AUTH_TOKEN && process.env.SENTRY_ORG && process.env.SENTRY_PROJECT)
 const buildTime = new Date().toISOString()
 
 const basePath = '/'
@@ -106,18 +102,6 @@ export default defineConfig({
         ]
       }
     }),
-    sentryBuildEnabled && sentryVitePlugin({
-      org: process.env.SENTRY_ORG,
-      project: process.env.SENTRY_PROJECT,
-      authToken: process.env.SENTRY_AUTH_TOKEN,
-      telemetry: false,
-      release: {
-        name: buildSha,
-      },
-      sourcemaps: {
-        filesToDeleteAfterUpload: ['./dist/**/*.map'],
-      },
-    }),
     process.env.npm_lifecycle_event === 'analyze' && visualizer({
       open: true,
       filename: 'bundle-stats.html',
@@ -127,7 +111,7 @@ export default defineConfig({
   ],
   build: {
     modulePreload: false,
-    sourcemap: sentryBuildEnabled ? 'hidden' : false,
+    sourcemap: false,
     chunkSizeWarningLimit: 600,
     rollupOptions: {
       output: {
