@@ -1,5 +1,4 @@
 import { useCallback, useState } from 'react';
-import { Logic } from '../../lib/logic';
 import { readLocal } from '../../lib/sync/localRepository';
 import { readDeviceValueStrict, writeDeviceValue } from '../../lib/sync/deviceStorage';
 import { captureSession, isCurrentSession } from '../../lib/sync/session';
