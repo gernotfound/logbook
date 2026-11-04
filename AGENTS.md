@@ -119,7 +119,7 @@ Il bump applicativo non modifica schema/protocollo, catalogo o `LEGAL_VERSIONS`.
 
 ## Validazione, rilascio e conclusione
 
-Il gate canonico è `npm run verify:m8`; l'equivalente GitHub è `Milestone Verification` sullo SHA esatto con tutti gli shard, E2E, CodeQL e `Canonical Verification` verdi. I dettagli eseguibili e le protezioni sono in [Verifica CI](.agents/rules/ci-verification.md).
+Il gate canonico locale è `npm run verify:m8`. **Sulle PR** l'equivalente GitHub è `Milestone Verification` sullo SHA esatto con shard, E2E, CodeQL e `Canonical Verification` verdi. **Sui push a `main`**, il workflow non riesegue la suite PR: richiede `Main Release Gate`, che attesta PR integrata, base, identità del tree e CI sul candidato, ed esegue CodeQL sullo SHA di `main`. Il gate riuscito è prerequisito dei workflow Firebase. I dettagli normativi ed eseguibili sono in [Verifica CI](.agents/rules/ci-verification.md).
 
 - **MUST:** registrare l'HEAD candidato prima delle verifiche. Ogni nuovo commit invalida test e review del vecchio SHA; subset diagnostici non sostituiscono il gate.
 - **MUST:** non indebolire suite/no-skips, oracle, Emulator, lint/warning baseline, security check, workflow o protezioni GitHub.

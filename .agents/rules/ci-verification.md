@@ -11,13 +11,13 @@ Questa regola disciplina il gate canonico di verifica automatica corrente dopo M
 
 Gerarchia corrente:
 
-- **workflow GitHub Actions:** `Milestone Verification` (`.github/workflows/verification.yml`);
-- **check aggregato stabile:** `Canonical Verification`;
+- **workflow GitHub Actions:** `Milestone Verification` (`.github/workflows/verification.yml`): suite completa sulle PR, attestazione dell'integrazione + CodeQL sui push a `main`;
+- **check aggregato stabile della PR:** `Canonical Verification`; dopo lo squash merge il check di rilascio è `Main Release Gate` sul nuovo SHA di `main`;
 - **analisi SAST richiesta:** job `Security / CodeQL` su JavaScript/TypeScript con query `security-extended`, aggregato dentro `Canonical Verification`;
 - **comando repository umbrella:** `npm run verify:m8`;
 - **orchestrazione CI:** matrice di shard exact-SHA per i leaf generalisti + job E2E exact-SHA isolato nel container Playwright ufficiale, verificati da `scripts/check-ci-contract.mjs`.
 
-La parallelizzazione riguarda l'orchestrazione, non la semantica del gate. Unit, integration, isolated, fuzz, recovery, GC, hardening, stress, Firestore Rules emulator, Playwright, build e controlli M7/M8 restano obbligatori.
+La parallelizzazione riguarda l'orchestrazione, non la semantica del gate **sulle PR**. Unit, integration, isolated, fuzz, recovery, GC, hardening, stress, Firestore Rules emulator, Playwright, build e controlli M7/M8 restano obbligatori sullo SHA candidato prima del merge. Il push di `main` riutilizza tali verifiche solo quando `scripts/verify-main-release.mjs` dimostra l'identità esatta del tree PR → squash commit, della base e della CI trusted già completata prima del merge; una prova incompleta fallisce chiusa. CodeQL viene eseguito anche sul branch predefinito.
 
 **MUST:** le suite Node di `tests/isolated/**/*.test.ts` girano con `vitest.isolated.config.ts`; le suite React `tests/isolated/**/*.test.tsx` girano con il runner Vitest standard in `jsdom`, inclusi i suoi setup Auth/storage. Escludere l'intera directory `tests/isolated/**` dal runner standard lascerebbe i test TSX presenti ma mai eseguiti, senza fallire la CI. Ogni nuova suite va verificata anche per discovery reale del runner.
 
@@ -106,7 +106,7 @@ Il gate verifica il candidato del branch; non autorizza merge o deploy. Se l'ute
 ## Trigger
 
 - MUST: il workflow parte per PR verso `main`.
-- MUST: il workflow parte sui push a `main`.
+- MUST: il workflow parte sui push a `main`, con `Main Release Gate` read-only e CodeQL, senza ripetere shard/E2E già attestati sulla PR. Il Release Gate deve verificare commit single-parent, una sola PR merge associata, target e base SHA, identità del tree candidato/`main`, check `Canonical Verification` del run trusted GitHub sullo SHA della PR e `main` ancora corrente. Se manca una prova, il deployment non procede.
 - MUST NOT: branch milestone ritirati, incluso `feat/m8-domain-operations-v4`, restano trigger push del workflow canonico.
 - SHOULD: run obsolete della stessa PR/ref vengono cancellate tramite `concurrency`.
 
@@ -138,7 +138,7 @@ set -o pipefail
 ${{ matrix.command }} 2>&1 | tee "verification-${{ matrix.id }}.log"
 ```
 
-`pipefail` preserva il codice di uscita non-zero del leaf chain; `2>&1` unisce stdout e stderr nel log. La matrice e il job E2E non usano `continue-on-error`. Il job `Canonical Verification` usa `needs: shards`, `needs: e2e` e `needs: codeql` e fallisce se uno qualunque dei tre risultati non è `success`.
+`pipefail` preserva il codice di uscita non-zero del leaf chain; `2>&1` unisce stdout e stderr nel log. La matrice e il job E2E non usano `continue-on-error`. Il job `Canonical Verification` **sulle PR** usa `needs: shards`, `needs: e2e` e `needs: codeql` e fallisce se uno qualunque dei tre risultati non è `success`. Sui push a `main`, la verifica distinta `Main Release Gate` attesta le prove della PR senza eseguire né dichiarare rieseguiti quei test; CodeQL controlla nuovamente il branch predefinito.
 
 - MUST: il check aggregato resta denominato esattamente `Canonical Verification` finché required checks/Vercel esterni dipendono da quel nome.
 - MUST: nessun documento può affermare che “qualsiasi stderr” è automaticamente bloccante finché tale controllo non viene implementato.
