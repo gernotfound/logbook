@@ -98,8 +98,9 @@ export default function CustomFoodForm({
             
             <div className="input-row" style={{ marginBottom: '10px' }}>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                    <label className="text-muted text-xs block mb-4">Unità di misura</label>
+                    <label className="text-muted text-xs block mb-4" htmlFor="cf-unit">Unità di misura</label>
                     <select 
+                    id="cf-unit"
                     disabled={saving}
                         value={cfData.unit || 'g'} 
                         onChange={e => setCfData({...cfData, unit: e.target.value})} 

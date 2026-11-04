@@ -7,6 +7,7 @@ import { Logic } from '../../lib/logic';
 import { createFoodSearcher } from '../../lib/calc/nutrition';
 import CustomFoodForm from './CustomFoodForm';
 import { FoodArchiveSearch } from './archive/FoodArchiveSearch';
+import { createLoggedMealItem } from '../../lib/nutrition/createLoggedMealItem';
 import { FoodItemRow } from './archive/FoodItemRow';
 
 const MEAL_TYPES = ['Colazione', 'Pranzo', 'Cena', 'Spuntini'];
@@ -119,22 +120,8 @@ export default function NutritionFoodArchive({ onEditFood }: NutritionFoodArchiv
     const handleQuickAddToMeal = async (food: any, mealType: string) => {
         const todayDateStr = Logic.getLocalDateString();
 
-        const addedItem = {
-            id: Logic.generateId('meal'),
-            foodId: food.id,
-            name: food.name,
-            meal: mealType,
-            quantity: food.baseQty || 100,
-            baseQty: food.baseQty || 100,
-            unit: food.unit || 'g',
-            kcal: food.kcal || 0,
-            carbs: food.carbs || 0,
-            pro: food.pro || 0,
-            fat: food.fat || 0,
-            time: new Date().getTime()
-        };
-
         try {
+            const addedItem = createLoggedMealItem(food, mealType, Logic.generateId('meal'), Date.now());
             await dispatchDurableOperation(dispatchDomainOperation, { type: 'nutrition-meal.upsert', date: todayDateStr, meal: addedItem });
         } catch {
             await showAlert("Errore durante l'aggiunta dell'alimento.");
