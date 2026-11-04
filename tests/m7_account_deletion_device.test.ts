@@ -156,14 +156,14 @@ describe('M7 account deletion recovery device registry', () => {
   it('retains existing recovery proof but forbids new hashes or recency updates after deletion starts', async () => {
     const original = token('A');
     await registerDeletionRecoveryDevice('user-a', original);
-    const snapshotBefore = structuredClone(state.registry);
+    const snapshotBefore = state.registry;
     state.deletionJobUid = 'user-a';
 
     await expect(registerDeletionRecoveryDevice('user-a', token('B')))
       .rejects.toBeInstanceOf(DeletionRecoveryConflictError);
     await expect(registerDeletionRecoveryDevice('user-a', original))
       .rejects.toBeInstanceOf(DeletionRecoveryConflictError);
-    expect(state.registry).toEqual(snapshotBefore);
+    expect(state.registry).toBe(snapshotBefore);
     expect(await verifyDeletionRecoveryDevice('user-a', original)).toBe(true);
     expect(await verifyDeletionRecoveryDevice('user-a', token('B'))).toBe(false);
   });
