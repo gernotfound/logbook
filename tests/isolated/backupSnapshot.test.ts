@@ -17,7 +17,6 @@ vi.mock('../../src/lib/sync/cloudAccountKeyAccess', () => ({
     requireCloudAccountDataKey: async () => new Uint8Array(32).fill(18),
     requireRightsExportAccountDataKey: async () => new Uint8Array(32).fill(18),
 }));
-vi.mock('../../src/lib/telemetryHub', () => ({ telemetryHub: { trackEvent: vi.fn(), trackError: vi.fn() } }));
 vi.mock('firebase/firestore', () => ({
     doc: (_db: unknown, ...path: string[]) => path.join('/'), collection: (_db: unknown, ...path: string[]) => path.join('/'),
     documentId: () => 'id', orderBy: () => ({}), limit: (count: number) => ({ count }), startAfter: (item: { id: string }) => ({ after: item.id }),
