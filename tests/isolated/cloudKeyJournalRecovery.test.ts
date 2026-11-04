@@ -23,7 +23,6 @@ vi.mock('../../src/lib/healthConsent', async () => {
         getVerifiedHealthConsentRevision: () => 1,
     };
 });
-vi.mock('../../src/lib/telemetryHub', () => ({ telemetryHub: { trackEvent: vi.fn(), trackError: vi.fn() } }));
 vi.mock('../../src/lib/sync/transactionWriter', () => ({ applyDocumentChanges: remote.apply }));
 
 import { getSeedCatalog } from '../../src/lib/catalog/catalogService';

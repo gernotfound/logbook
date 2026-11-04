@@ -2,10 +2,6 @@ import 'fake-indexeddb/auto';
 import { clear, get } from 'idb-keyval';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 
-vi.mock('../../src/lib/telemetryHub', () => ({
-    telemetryHub: { trackError: vi.fn() },
-}));
-
 import { prepareImport } from '../../src/lib/backup';
 import { UserDataSchema } from '../../src/lib/schema';
 import { commitLocal, initializeLocal, readLocal } from '../../src/lib/sync/localRepository';
