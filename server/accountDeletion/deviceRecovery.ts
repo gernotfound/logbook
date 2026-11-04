@@ -22,6 +22,13 @@ export class DeletionRecoveryInputError extends Error {
   }
 }
 
+export class DeletionRecoveryConflictError extends Error {
+  constructor() {
+    super('Registrazione dispositivo non consentita: cancellazione account già avviata.');
+    this.name = 'DeletionRecoveryConflictError';
+  }
+}
+
 function validateToken(value: unknown): string {
   if (typeof value !== 'string' || !TOKEN_PATTERN.test(value)) {
     throw new DeletionRecoveryInputError('Credenziale device non valida.');
@@ -60,9 +67,16 @@ export async function registerDeletionRecoveryDevice(uidValue: string, tokenValu
   const token = validateToken(tokenValue);
   const tokenHash = hashToken(token);
   const ref = registryRef(uid);
+  const deletionRef = adminDb().collection('account_deletions').doc(uid);
 
   await adminDb().runTransaction(async (transaction: Transaction) => {
-    const snapshot = await transaction.get(ref);
+    // Reading the job in the same transaction fences a credential request
+    // authorized before account deletion but committed after it began.
+    const [deletion, snapshot] = await Promise.all([
+      transaction.get(deletionRef),
+      transaction.get(ref),
+    ]);
+    if (deletion.exists) throw new DeletionRecoveryConflictError();
     const now = Timestamp.now();
 
     if (!snapshot.exists) {
