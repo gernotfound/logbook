@@ -6,7 +6,7 @@ import type { ResolveNutritionConflictInput, SyncResult, UserData } from '../../
 import type { AppState } from '../useAppStore';
 import { getNutritionConflictFingerprint } from '../../lib/utils/object';
 
-import { updateStorageMarker, clearStorageMarker } from '../../lib/storageTelemetry';
+import { updateStorageMarker, clearStorageMarker } from '../../lib/storageIntegrity';
 import { commitLocal, initializeLocal, clearNutritionConflict, readLocal, StaleLocalRevisionError } from '../../lib/sync/localRepository';
 import { persistPlainWorkoutSnapshot } from '../../lib/sync/workoutDeviceIntent';
 import { readVaultControl } from '../../lib/sync/secureArchiveSession';

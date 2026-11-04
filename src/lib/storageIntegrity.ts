@@ -22,7 +22,7 @@ export interface StorageDiagnosticContext {
   isGuest?: boolean;
 }
 
-// Diagnostic state is owner-scoped. Pre-launch global markers are ignored.
+// Owner-scoped integrity markers are independent of external error reporting.
 export const STORAGE_MARKER_VERSION = 1;
 
 export function getStorageMarkerKey(owner?: string): string {

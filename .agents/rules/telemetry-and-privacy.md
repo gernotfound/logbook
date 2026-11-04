@@ -11,7 +11,7 @@
 
 - `src/main.tsx` non registra listener globali destinati alla telemetria e usa il normale root React.
 - `src/components/UI/ErrorBoundary.tsx` mantiene le schermate di errore e i percorsi di recupero sicuro: rimuovere il monitoraggio **non** consente reset, reload, commit o purge che violano il contratto storage.
-- `src/lib/storageTelemetry.ts` conserva soltanto i marker e la classificazione locale dello stato di IndexedDB; nessuna anomalìa viene inviata all'esterno.
+- `src/lib/storageIntegrity.ts` conserva soltanto i marker e la classificazione locale dello stato di IndexedDB; nessuna anomalìa viene inviata all'esterno.
 - `src/lib/errorHandler.ts` conserva il mapping dei codici Firebase per l'interfaccia.
 - I fallback Zod mantengono la logica di validazione e recupero prevista dagli schemi, senza callback o emissioni diagnostiche.
 

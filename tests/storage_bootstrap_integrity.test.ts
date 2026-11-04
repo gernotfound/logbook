@@ -6,7 +6,7 @@ import { useAppStore } from '../src/store/useAppStore';
 import {
   getStorageMarker,
   updateStorageMarker,
-} from '../src/lib/storageTelemetry';
+} from '../src/lib/storageIntegrity';
 import { CURRENT_DATA_SCHEMA, CURRENT_LOCAL_ENVELOPE, CURRENT_SYNC_PROTOCOL } from '../src/lib/schemaEvolution';
 import { localStorageMock } from './setup';
 
