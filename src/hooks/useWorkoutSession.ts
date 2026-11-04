@@ -45,7 +45,11 @@ export function useWorkoutSession() {
     const pump = activeWorkout?.pumpRating !== undefined && activeWorkout.pumpRating !== null ? activeWorkout.pumpRating.toString() : '';
     const fatigue = activeWorkout?.fatigueRating !== undefined && activeWorkout.fatigueRating !== null ? activeWorkout.fatigueRating.toString() : '';
     const water = activeWorkout?.waterLiters !== undefined && activeWorkout.waterLiters !== null ? activeWorkout.waterLiters.toString() : '';
-    const manualDuration = activeWorkout ? Logic.normalizeDuration(activeWorkout.manualDurationStr || activeWorkout.globalDurationStr || '00:00:00') : '00:00:00';
+    const manualDuration = activeWorkout
+        ? (activeWorkout.isEditingHistory
+            ? (activeWorkout.manualDurationStr ?? activeWorkout.globalDurationStr ?? '00:00:00')
+            : Logic.normalizeDuration(activeWorkout.manualDurationStr || activeWorkout.globalDurationStr || '00:00:00'))
+        : '00:00:00';
     const pains = (activeWorkout?.pains && Array.isArray(activeWorkout.pains)) ? activeWorkout.pains : [];
 
     const setMood = useCallback((val: string) => {

@@ -148,6 +148,34 @@ export function formatDuration(secondsOrMs: number, isMs = false): string {
     return `${p(h)}:${p(m)}:${p(s)}`;
 }
 
+/** Strict boundary for user-edited workout duration; unlike legacy normalization, invalid input stays invalid. */
+export function parseManualDuration(input: string | undefined | null): string | null {
+    const cleaned = input?.trim() ?? '';
+    if (!cleaned) return '00:00:00';
+
+    let totalSeconds: number;
+    const minutesMatch = /^(\\d+)\\s*min$/i.exec(cleaned);
+    if (minutesMatch) {
+        const minutes = Number(minutesMatch[1]);
+        if (!Number.isSafeInteger(minutes)) return null;
+        totalSeconds = minutes * 60;
+    } else {
+        if (!/^\\d+(?::\\d+){0,2}$/.test(cleaned)) return null;
+        const parts = cleaned.split(':').map(Number);
+        if (parts.some(value => !Number.isSafeInteger(value))) return null;
+        if (parts.length === 3) {
+            if (parts[1] >= 60 || parts[2] >= 60) return null;
+            totalSeconds = parts[0] * 3600 + parts[1] * 60 + parts[2];
+        } else if (parts.length === 2) {
+            if (parts[1] >= 60) return null;
+            totalSeconds = parts[0] * 60 + parts[1];
+        } else {
+            totalSeconds = parts[0] * 60;
+        }
+    }
+    return Number.isSafeInteger(totalSeconds) ? formatDuration(totalSeconds) : null;
+}
+
 export function normalizeDuration(input: string | undefined | null): string {
     if (!input || typeof input !== 'string' || !input.trim()) return '00:00:00';
     const cleaned = input.trim();

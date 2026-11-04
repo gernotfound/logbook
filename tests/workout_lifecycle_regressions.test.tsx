@@ -576,6 +576,34 @@ describe('Workout lifecycle durable recovery regressions', () => {
         expect(localStorage.getItem(deviceKey('history-editor-context', owner))).toBeNull();
     });
 
+    it('rejects invalid history duration before any durable history operation', async () => {
+        const historical = workout('invalid-duration', true);
+        const editor = {
+            ...historical, isEditingHistory: true, originalHistoryId: historical.id,
+            manualDurationStr: '00:90:00', globalDurationStr: '00:45:00',
+        };
+        const originalDispatch = useAppStore.getState().dispatchDomainOperation;
+        const dispatch = vi.fn().mockResolvedValue({ ok: true, status: 'synced' });
+        useAppStore.setState({
+            userData: userData({ history: [historical] }),
+            localWorkout: editor,
+            dispatchDomainOperation: dispatch,
+        });
+        vi.mocked(useDialogStore.getState().showAlert).mockResolvedValue(undefined);
+        try {
+            const { result } = renderHook(() => useWorkoutSession());
+            expect(result.current.manualDuration).toBe('00:90:00');
+            let saved = true;
+            await act(async () => { saved = await result.current.saveHistoryEdit(); });
+            expect(saved).toBe(false);
+            expect(dispatch).not.toHaveBeenCalled();
+            expect(useDialogStore.getState().showAlert).toHaveBeenCalledWith(expect.stringContaining('Durata non valida'));
+            expect(useAppStore.getState().localWorkout?.manualDurationStr).toBe('00:90:00');
+        } finally {
+            useAppStore.setState({ dispatchDomainOperation: originalDispatch });
+        }
+    });
+
     it('keeps edits made during a pending history commit and refuses a concurrent cancel', async () => {
         const historical = workout('history-edit-target', true);
         const editor: WorkoutSession & { id: string } = { ...historical, isEditingHistory: true, originalHistoryId: historical.id };

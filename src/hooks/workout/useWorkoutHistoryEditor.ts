@@ -9,6 +9,7 @@ import { useAppStore } from '../../store/useAppStore';
 import { useDialogStore } from '../../store/useDialogStore';
 import { assertHistoryEditorContextEpoch, claimHistorySave, HISTORY_EDITOR_CONTEXT, isHistorySavePending, releaseHistorySave, restoreSessionAfterHistoryEdit } from './historyEditorContext';
 import { prepareHistoricalWorkoutForEditing, prepareHistoricalWorkoutForSave } from './workoutSessionPreparation';
+import { parseManualDuration } from '../../lib/utils/date';
 
 type EditorDependencies = {
     setLocalWorkout: ReturnType<typeof useAppStore.getState>['setLocalWorkout'];
@@ -107,6 +108,11 @@ export function useWorkoutHistoryEditor({
             if (!editor?.isEditingHistory) return false;
             const targetId = editor.originalHistoryId || editor.id;
             if (!targetId) return false;
+            const duration = parseManualDuration(editor.manualDurationStr || editor.globalDurationStr || '00:00:00');
+            if (duration === null) {
+                await showAlert('Durata non valida. Usa HH:MM:SS, MM:SS oppure il numero di minuti.');
+                return false;
+            }
             const snapshot = JSON.stringify(editor);
             const updatedWorkout = prepareHistoricalWorkoutForSave(
                 editor, targetId,
@@ -116,7 +122,7 @@ export function useWorkoutHistoryEditor({
                     fatigue: editor.fatigueRating == null ? '' : String(editor.fatigueRating),
                 },
                 editor.waterLiters == null ? '' : String(editor.waterLiters),
-                Logic.normalizeDuration(editor.manualDurationStr || editor.globalDurationStr || '00:00:00'),
+                duration,
             );
             if (!isCurrentSession(session) || !useAppStore.getState().userData) return false;
             const result = await dispatchDomainOperation({ type: 'history.upsert', workout: updatedWorkout });
