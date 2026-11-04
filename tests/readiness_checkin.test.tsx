@@ -23,8 +23,6 @@ const renderOwnedWorkoutSession = () => render(
     </AuthContext.Provider>,
 );
 
-vi.mock('../src/lib/telemetryHub', () => ({ telemetryHub: { trackError: vi.fn() } }));
-
 const parseUserData = (value: unknown) => UserDataSchema.parse(value) as unknown as UserData;
 
 function session(readiness?: WorkoutSession['readiness']): WorkoutSession {

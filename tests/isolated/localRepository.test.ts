@@ -1,7 +1,6 @@
 import 'fake-indexeddb/auto';
 import { clear, del, get, set } from 'idb-keyval';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-vi.mock('../../src/lib/telemetryHub', () => ({ telemetryHub: { trackError: vi.fn() } }));
 import { UserDataSchema } from '../../src/lib/schema';
 import { validateLocalEnvelope } from '../../src/lib/sync/localEnvelopeValidation';
 import { fenceCloudIntegrity } from '../../src/lib/sync/localCloudIntegrity';
