@@ -4,7 +4,7 @@
 > Ultimo aggiornamento tecnico: 13 ottobre 2026.
 > Questo pacchetto non certifica conformità GDPR e non sostituisce consulenza legale, privacy o fiscale.
 >
-> Navigazione: [indice documentazione](../README.md). I contratti AI restano in [`AGENTS.md`](../../AGENTS.md) e [`.agents/rules/`](../../.agents/rules/).
+> Navigazione: [indice documentazione](../README.md). I contratti AI restano in [`AGENTS.md`](../../AGENTS.md) e i relativi contratti specialistici: [Consenso salute](../../.agents/rules/health-consent.md), [Portabilità](../../.agents/rules/backup-and-portability.md), [Ciclo account](../../.agents/rules/account-lifecycle.md), [Cifratura](../../.agents/rules/secure-storage.md) e [Telemetria](../../.agents/rules/telemetry-and-privacy.md).
 
 ## Obiettivo
 

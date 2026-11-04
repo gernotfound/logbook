@@ -1,309 +1,139 @@
 # TheLogBook — istruzioni operative per agenti AI
 
-Ambito: soltanto la PWA TheLogBook (`gernotfound/logbook`). Questo file è la mappa dei vincoli trasversali, non una fotografia completa del runtime. Le specifiche sono in `.agents/rules/`, le versioni effettive nei manifest eseguibili.
+Ambito: soltanto la PWA TheLogBook (`gernotfound/logbook`). Il product owner decide prodotto e priorità; l'agente risolve autonomamente le questioni tecniche dimostrabili e comunica in italiano comprensibile anche a chi non programma.
 
-## Convenzioni
+## Autorità e convenzioni
 
-Ogni regola in questo documento è classificata:
+**Questo è il file comandante del contesto repository.** Definisce autorizzazioni, processo e invarianti trasversali. I contratti in [`.agents/rules/`](.agents/rules/) lo specializzano; non possono allargare il mandato o contraddirlo. Le istruzioni applicabili dell'ambiente e i limiti espliciti della richiesta restano prioritari.
 
-- **MUST:** requisito non negoziabile. Violarlo può causare bug, perdita dati o problemi di sicurezza.
-- **SHOULD:** preferenza forte. Derogare solo con motivazione tecnica esplicita.
-- **VERIFY:** controllare codice, test o dashboard prima di assumere che sia vero.
-- **NOTE:** contesto storico o informativo, non istruzione esecutiva.
+- **MUST / MUST NOT:** obbligo / divieto.
+- **SHOULD:** preferenza forte; una deroga richiede motivazione tecnica esplicita.
+- **MAY:** possibilità ammessa entro il contratto, non autorizzazione a cambiare dati o provider.
+- **VERIFY:** acquisire evidenze prima di affermare il fatto.
+- **NOTE:** contesto informativo o storico, non ordine esecutivo.
 
-Un `MUST` è un contratto da rispettare, non prova che codice o Production lo soddisfino già. Se codice, test e documentazione divergono, raccogliere evidenze prima di decidere quale fonte riallineare.
+Una regola descrive il comportamento richiesto, non prova che sia implementato o distribuito. Codice, test, commenti e documentazione possono divergere: indagare prima di riallinearli. Non modificare il codice alla cieca per soddisfare una regola obsoleta.
 
-## Nuova baseline di lancio — fresh start (decisione del product owner, 21/10/2026)
+## Prima di ogni task
 
-**MUST (perimetro supportato):** il product owner dichiara che **non esistono dati, account, copie browser o backup di utenti, sviluppo o testing da recuperare**. A partire da questa decisione, il prodotto non supporta PWA e formati storage/backup pre-lancio: **non sviluppare conversioni, fallback, recovery, export o UX dedicati a dati legacy ipotetici**. Usare soltanto il formato e i namespace correnti indicati dal codice e dai manifest effettivi. Le versioni storiche già dismesse rimangono fuori contratto; i quattro contatori di schema/protocollo restano indipendenti dalla release applicativa.
+1. **MUST:** leggere su GitHub l'HEAD reale di `main` e registrarne lo SHA. Leggere questo file, i contratti pertinenti sotto e implementazione, chiamanti, tipi, test, workflow e configurazioni coinvolti.
+2. **MUST:** verificare se esistono già branch o PR del task; riprendere il lavoro coerente dopo aver confrontato SHA e diff, evitando duplicati.
+3. **MUST:** distinguere lo SHA di `main`, lo SHA candidato del branch e lo stato dei provider. Un clone, una chat precedente o una nota datata non certificano lo stato remoto.
+4. **MUST:** se `main` avanza, esaminare il delta e valutarne l'impatto prima di proseguire o dichiarare valido il candidato. Non sovrascrivere lavori concorrenti né integrare automaticamente modifiche estranee.
+5. **MUST:** verificare direttamente i provider pertinenti quando il task riguarda configurazioni live o rilascio; se l'accesso manca, dichiarare precisamente quale prova manca.
 
-**MUST (nuovi dati e protezione continuativa):** il fresh start non autorizza la perdita di dati **creati da ora in avanti**, né elimina i requisiti di isolamento account/guest, cifratura e chiavi, journal/consenso, conflitti fra schede della versione corrente, Web Locks, logout, eliminazione account, export/import nel formato supportato, ripresa dopo crash e fail-closed su storage corrotto o di versione futura. Il purge corrente elimina esclusivamente i dati dell'owner verificato e i marker guest/Auth che gli appartengono; non adotta né elimina chiavi business globali/IDB pre-lancio senza owner. Non eseguire reset di Firebase/Firestore/Auth, eliminazioni di dati live o bypass di CI/Rules sulla sola base di questa dichiarazione. L'asserita assenza di dati è un'informazione fornita dal product owner, **non una verifica indipendente dei provider**.
+Versioni dipendenze/runtime, comandi, formati persistiti, token CSS e nomi delle variabili hanno fonte nei file eseguibili. Evitare copie di questi valori nel contesto quando basta un riferimento.
 
-**SHOULD:** rimuovere codice e test destinati esclusivamente alla compatibilità pre-lancio quando non servono ai dati e alla ripresa della release supportata; aggiornare la documentazione collegata nella stessa PR. Nessun obbligo di offrire una procedura manuale di recupero/retirement pre-lancio senza evidenze di un caso reale.
+## Mappa dei contratti
 
-## Fonte di verità e gestione del drift
+I sottofile **non sono caricati automaticamente** in tutti gli ambienti: aprirli esplicitamente. Se il task attraversa più aree, leggere l'unione dei contratti. I rimandi non limitano la ricerca del codice.
 
-1. Il repository GitHub `gernotfound/logbook`, al commit realmente letto, è la fonte di verità tecnica.
-2. Prima di analizzare o modificare: controllare l'HEAD reale di `main`, leggere questo file, leggere le regole pertinenti in `.agents/rules/`, quindi cercare implementazione, chiamanti, tipi, test e configurazioni correlate.
-3. `AGENTS.md` contiene gli invarianti trasversali; `.agents/rules/` contiene i contratti specialistici.
-4. Se documentazione e codice divergono, non modificare il codice per farlo aderire alla cieca a una regola obsoleta. Discriminare il comportamento corretto con codice, test, history e configurazione; correggere la fonte normativa nello stesso task quando necessario.
-5. Una regola documentale obsoleta non deve bloccare un upgrade tecnicamente corretto: va aggiornata o rimossa con evidenza e regressioni adeguate.
-6. **MUST:** quando un refactor rimuove o rinomina funzioni/contratti o cambia i gate di CI, cercare i riferimenti normativi collegati in `AGENTS.md`, `.agents/rules/` e nella documentazione operativa; riallinearli nello stesso task. Descrivere prioritariamente gli invarianti, senza citare come esistenti helper rimossi o classificare advisory verifiche realmente bloccanti.
-7. **MUST:** non dichiarare mai letto, testato, deployato o verificato ciò che non è stato realmente osservato.
-8. **MUST:** distinguere contratti vigenti, motivazioni storiche e osservazioni live. Date e SHA di baseline non dimostrano l'assenza attuale di dati/utenti o la configurazione corrente dei provider.
-9. **MUST:** `.agents/rules/*.md` contiene documenti **da aprire esplicitamente** secondo il task: non presumere che ogni agente o connettore li carichi automaticamente. Leggere regole, implementazione, chiamanti, test e configurazioni sullo SHA corrente.
-
-## Quali documenti leggere
-
-- **Ogni task:** questo file, HEAD GitHub di `main`, regole pertinenti e codice/test coinvolti.
-- **Archivio locale, journal, replica e workout:** `.agents/rules/storage-and-sync.md`; integrare `.agents/rules/crash-consistency.md`, `.agents/rules/causal-gc.md`, `.agents/rules/domain-operations.md` dove pertinenti.
-- **Modello dati, proiezioni, nuove mutazioni:** `.agents/rules/data-model-and-zod.md`, `.agents/rules/domain-operations.md`.
-- **Backup, import/export, guest, consenso, Auth, logout, cancellazione:** `.agents/rules/account-lifecycle.md`; integrare `.agents/rules/storage-and-sync.md` e `.agents/rules/firebase-config.md`.
-- **Firestore Rules, App Check e servizi/deploy:** `.agents/rules/firebase-config.md`, `.agents/rules/external-services.md`, `.agents/rules/ci-verification.md`.
-- **UI, temi, PWA, Service Worker, accessibilità:** `.agents/rules/design-system.md`; per update/reload anche `.agents/rules/storage-and-sync.md`, `.agents/rules/account-lifecycle.md`.
-- **Catalogo e seeding:** `.agents/rules/catalog-operations.md`; per custom item `.agents/rules/data-model-and-zod.md`.
-- **CI, oracle, fuzz:** `.agents/rules/ci-verification.md`, `.agents/rules/verification-hardening.md`, `.agents/rules/distributed-fuzz.md` secondo il cambiamento.
-
-Se la modifica attraversa più boundary, leggere **l'unione** dei contratti pertinenti. L'indice non è un'allowlist di file da ignorare.
-
-Per specifiche, guide operative, compliance e storico consultare l'[indice `docs/`](docs/README.md), che distingue stato e ambito. **Non** leggere automaticamente tutti i documenti né considerare proposte o checklist storiche come contratti attivi.
-
-## Classificazione del rischio
-
-Classificare internamente ogni task almeno come STANDARD, SENSITIVE o CRITICAL.
-
-Sono **CRITICAL** almeno: dati utente, IndexedDB/persistenza, sincronizzazione, Firestore e Security Rules, autenticazione, guest→account, schema/migrazioni, import/export, cancellazione account, PWA update/reload e qualunque percorso con rischio di perdita/corruzione dati o sicurezza.
-
-- **MUST:** maggiore è il rischio, maggiore è la profondità di ricerca, test e review.
-- **MUST:** risolvere la root cause, non applicare workaround locali che lasciano invarianti incoerenti.
-- **MUST:** mantenere il diff minimo rispetto all'obiettivo e aggiungere test di regressione quando appropriato.
-- **MUST:** analisi in sola lettura = nessuna modifica. Un incarico operativo non autorizza cancellazioni irreversibili di dati reali, bypass di protezioni o modifiche IAM/secret live estranee.
-- **MUST:** non confondere la decisione fresh start con una verifica live di provider/browser; i nuovi dati e i percorsi correnti rimangono protetti anche quando vecchie versioni non sono più supportate.
-
-## Diagnosi e audit
-
-- **MUST:** non fermarsi al primo finding. Completare il perimetro pertinente distinguendo sintomo, causa immediata e root cause; seguire chiamanti, stato, persistenza, UI/runtime, test, workflow e configurazioni quando influiscono sulla diagnosi.
-- **MUST:** cercare evidenze contrarie, cause concorrenti e pattern analoghi prima di chiudere un audit. Per i percorsi CRITICAL includere failure path, recovery e invarianti di integrità dei dati.
-
-## Autonomia operativa
-
-Quando il product owner autorizza a procedere, risolvere o completare un task, l'autorizzazione copre l'intero normale ciclo tecnico pertinente: analisi → root cause → branch → implementazione → test → commit → PR → correzione CI → review → merge → verifica post-merge → verifica Firebase Hosting e Vercel runtime.
-
-Non richiedere una nuova approvazione per scelte di implementazione, test falliti, CI rossa, conflitti tecnici o correzioni necessarie lungo quel ciclo. Fermarsi solo se serve una vera decisione di prodotto/UX non deducibile, un'azione distruttiva/irreversibile sui dati utente non già autorizzata, oppure mancano permessi/strumenti indispensabili.
-
-**MUST:** la delega tecnica non supera restrizioni esplicite sui connettori o autorizzazioni specifiche della chat. Non usare strumenti disabilitati per default senza consenso operativo esplicito e non aggirare un rifiuto di sicurezza cambiando canale.
-
-Per task strutturali o CRITICAL preparare un piano di lavoro prima delle modifiche. Il piano può vivere nel reasoning, nella descrizione PR o temporaneamente nel branch; non richiede una seconda autorizzazione dopo un mandato generale a procedere. Eventuali `implementation_plan*.md` task-specific sono artefatti temporanei e **MUST** essere rimossi prima del candidato finale, in accordo con `.agents/rules/ci-verification.md`.
-
-## Stack e runtime correnti
-
-**Architettura:** frontend React/Vite/TypeScript, stato Zustand, validazione Zod, PWA offline-first, IndexedDB/localStorage e replica Firestore. Versioni delle librerie e dei runtime si verificano nei manifest/configurazioni eseguibili, non in un elenco duplicato qui.
-
-- **Nome pubblico:** TheLogBook. Namespace tecnici e persistiti storici (`logbook:*`, package e chiavi storage) non cambiano senza migrazione esplicita.
-- **Hosting:** frontend Firebase Hosting alla radice `/`; backend trusted con Functions native Vercel in `/api/` e Firebase Admin soltanto server-side. Non spostare un boundary per comodità.
-- **UI:** CSS nativo e token semantici; **MUST:** niente Tailwind. Seguire `.agents/rules/design-system.md`.
-- **Telemetria:** solo monitoraggio errori tecnici Sentry. Non reintrodurre Analytics comportamentali ritirati.
-- **Toolchain e test:** `package.json`, `.node-version`, workflow e `.agents/rules/ci-verification.md` sono le fonti da consultare per versioni e comandi.
-
-## Avvio locale
-
-- **Requisiti:** Node.js 24.x e npm; Java è necessario per i test Firebase Emulator.
-- **Installazione:** eseguire `npm ci`, copiare `.env.example` in `.env`, configurare i valori locali richiesti e avviare con `npm run dev`.
-- **Verifica finale:** `npm run verify:m8`; i comandi `lint`, `test` e `build` da soli sono soltanto diagnostici.
-- **Segreti:** `.env.example` contiene nomi e placeholder. Non versionare credenziali reali, `.env` o configurazioni private Production.
-
-## File canonici del modello dati
-
-**MUST:** classificare ogni dato come effimero, device-local, cloud-root o mensilizzato prima di modificarlo; `UserData` non coincide automaticamente con il documento root Firestore.
-
-**MUST:** per una nuova chiave cloud-root verificare congiuntamente tipi, gateway Zod, proiezione, Domain Operations, hydration/merge, Rules, backup e regressioni. La matrice di file e responsabilità vive in `.agents/rules/data-model-and-zod.md`.
-
-## Storage, persistenza e sincronizzazione
-
-| Livello | Ruolo |
-|---|---|
-| **Zustand** | Stato operativo in memoria, source of truth per React |
-| **IndexedDB** | Persistenza locale principale: Local Envelope V5 + journal semantico |
-| **`localStorage`** | Persistenza sincrona/device-critical, preferenze e code boundary-specific |
-| **Firestore** | Replica remota e sincronizzazione cloud |
-
-Le versioni persistite sono quattro dimensioni indipendenti con fonte eseguibile in `src/lib/schemaEvolution.ts`. Il bump della PWA non le incrementa: modificarle soltanto con la specifica migrazione e le verifiche di compatibilità.
-
-- **MUST:** offline l'app deve potersi avviare e operare dai dati locali.
-- **MUST:** le normali mutazioni business UI/hook attraversano Domain Operations. Snapshot-save è riservato ai boundary bulk/compatibility allowlisted.
-- **MUST:** IndexedDB e journal vengono aggiornati atomicamente prima della replica cloud.
-- **MUST:** una write Firestore rifiutata non deve essere esposta come confermata.
-- **MUST:** le Promise di persistenza critica rigettano in caso di failure; vietato trasformare un errore critico in successo silenzioso.
-- **MUST:** il reload barrier è fail-safe: dati in memoria senza envelope leggibile = sessione unsafe, quindi niente reload automatico.
-- **MUST:** una conferma cloud o lost-ack non può eliminare/sovrascrivere operazioni locali ancora pending. `local-pending` richiede prova dell'intero batch integro nel journal. Sequenze, causal context e recovery sono definiti in `.agents/rules/crash-consistency.md` e `.agents/rules/storage-and-sync.md`.
-
-### Protezione automatica dell'archivio locale (CRITICAL)
-
-- **MUST:** nessuna passphrase/PIN/codice di recupero aggiuntivo nella UX ordinaria; la PWA usa l'identità Firebase Auth confermata o una generazione guest valida per inizializzare il vault cifrato automaticamente, anche offline dove la sessione è già disponibile.
-- **MUST:** UID, token e API key Firebase non sono segreti crittografici. Ogni owner ha DEK casuale, wrappata da un `CryptoKey` AES-GCM-256 **non esportabile** conservato in IndexedDB con namespace owner; la DEK non va persistita in chiaro.
-- **MUST:** cifratura AEAD sincrona dei record nel **medesimo** `idb-keyval.update` e salvataggi device-critical sincroni, con owner/AAD autenticati e fail-closed se storage/key/ciphertext non sono leggibili.
-- **MUST:** migrazione interrompibile/riprendibile, key control versionati, purge key soltanto dopo eliminazione verificata delle copie cifrate. Perdere la chiave non equivale ad avere l'archivio vuoto; conservare ciphertext offline non recuperabile.
-- **VERIFY:** una chiave non esportabile dentro lo *stesso profilo browser* non protegge dal furto dell'intero profilo o da XSS. Non è crittografia end-to-end né sblocco mediante hardware remoto.
-- **MUST:** una sessione autenticata già verificata può operare **solo localmente** offline con la generazione di consenso attivo in cache.
-- **MUST:** dopo una revoca locale offline l'accesso fitness resta sospeso. Eccezione: la persona presta **esplicitamente** un nuovo consenso valido per il solo dispositivo **e** la revisione precedente è già attestata dal server; l'intento di revoca precedente rimane durevole.
-- **MUST:** il primo accesso senza consenso verificato resta bloccato.
-- **MUST:** il primo `online`/foreground deve interrogare e riconciliare il consenso server **prima** di letture/write cloud, checkpoint o journal. Una revoca remota più recente blocca le attività e preserva il journal locale senza upload.
-- **MUST:** nessun cache marker locale autorizza replica/cloud. Una nuova revisione dopo riaccettazione non può ri-etichettare pending del consenso precedente senza recupero separato ed esplicito.
-- **MUST:** documentazione completa e limiti nel file `docs/architecture/secure-local-archive-design.md`.
-
-### Accesso browser storage
-
-`src/lib/sync/browserStorage.ts` distingue accessi strict e best-effort.
-
-- **MUST:** gate di sicurezza/lifecycle che devono distinguere “chiave assente” da “storage illeggibile” usano il boundary strict e propagano/classificano l'errore.
-- **MAY:** hint, preferenze e code best-effort possono degradare in modo conservativo secondo il loro contratto.
-- **MUST:** non estendere automaticamente la semantica best-effort a logout, account deletion, reload barrier, ownership o altre invarianti CRITICAL.
-
-→ Dettagli: `.agents/rules/storage-and-sync.md`, `.agents/rules/domain-operations.md`, `.agents/rules/crash-consistency.md`.
-
-## Hydration e merge guest→account
-
-- `window`: startup/foreground con root + finestra mensile; preservare i mesi locali non caricati.
-- `all`: scansione completa per guest→account/operazioni complete; l'assenza remota diventa autorevole per i mesi coperti, quindi le pending locali vengono poi rigiocate.
-- **MUST:** non trattare una hydration `all` come finestra parziale.
-- **MUST:** il merge guest/cloud passa da `UserDataSchema.parse()` prima della persistenza.
-- Array con ID: unione deduplicata con priorità guest in collisione; record per data: merge per data e ID; scalari business: guest se valorizzato. **Eccezione di sicurezza:** `legalConsent` non segue la priorità guest: il consenso della sessione ospite non si trasferisce automaticamente all'account.
-- **NOTE:** “guest wins” non equivale a “dato più recente”. Leggere implementazione e test prima di alterare questa policy.
-
-## Workout, timer e date
-
-### `localWorkout` vs `activeWorkout`
-
-| Campo | Storage | Scopo |
+| Area del task | Contratto da leggere | Integrare quando pertinente |
 |---|---|---|
-| `localWorkout` | `localStorage` owner-scoped + Zustand | Sessione in corso del dispositivo |
-| `activeWorkout` | Firestore | Snapshot cloud del workout attivo |
+| Storage, journal, hydration, replica, update/reload | [Storage e sync](.agents/rules/storage-and-sync.md) | Crash consistency, cifratura, bozze, account, consenso |
+| Vault device, chiavi cloud, ciphertext e provisioning | [Archivio e cifratura](.agents/rules/secure-storage.md) | Storage, account, consenso, Firebase |
+| Workout/timer, editor, bozze e testimoni fra schede | [Bozze e stato device](.agents/rules/device-drafts.md) | Storage, cifratura, modello dati, consenso |
+| Nuovi campi, Zod, root e shard mensili | [Modello dati](.agents/rules/data-model-and-zod.md) | Domain Operations, storage, backup, Rules |
+| Mutazioni business, reducer e compiler | [Domain Operations](.agents/rules/domain-operations.md) | Modello dati, crash consistency |
+| Backup JSON, import/restore, share e CSV | [Portabilità](.agents/rules/backup-and-portability.md) | Storage, cifratura, bozze, consenso |
+| Auth, guest→account, logout e cancellazione account | [Ciclo account](.agents/rules/account-lifecycle.md) | Storage, consenso, cifratura, Firebase |
+| Consenso salute, offline, diritti e cancellazione soli dati | [Consenso salute](.agents/rules/health-consent.md) | Account, storage, backup, Firebase |
+| Firebase env, App Check, Rules/indici, domini e CSP | [Configurazione Firebase](.agents/rules/firebase-config.md) | Cifratura, consenso, CI, servizi esterni |
+| Sentry, code diagnostiche e privacy tecnica | [Telemetria e privacy](.agents/rules/telemetry-and-privacy.md) | Cifratura, consenso, servizi esterni |
+| Commit, lost ack, crash e session fencing | [Crash consistency](.agents/rules/crash-consistency.md) | Storage, Domain Operations |
+| Tombstone, vector clock, checkpoint e retirement | [Causal GC](.agents/rules/causal-gc.md) | Storage, crash consistency, Rules |
+| Test generativi distribuiti e convergenza | [Distributed fuzz](.agents/rules/distributed-fuzz.md) | Causal GC, CI |
+| Test normativi, fixture, mock e oracle | [Verification hardening](.agents/rules/verification-hardening.md) | Contratti dei boundary testati, CI |
+| CI, gate canonico, sicurezza workflow e release | [Verifica CI](.agents/rules/ci-verification.md) | Servizi esterni, Firebase |
+| Catalogo globale, cache e seeding | [Catalogo](.agents/rules/catalog-operations.md) | Modello dati, Firebase |
+| Provider, IAM, quote, segreti e dismissioni | [Servizi esterni](.agents/rules/external-services.md) | Firebase, CI, registro operativo |
+| UI, temi, accessibilità, brand e icone | [Design system](.agents/rules/design-system.md) | Bozze/storage per editor e reload |
 
-- **MUST:** un fetch cloud non sovrascrive un `localWorkout` attivo.
-- **MUST:** su `visibilitychange === 'hidden'`, salvare i dati device-critical sincronicamente e in modo protetto.
-- **MUST:** il timer usa timestamp e ricalcolo del delta; non affidarsi a un `setInterval` puro per il tempo reale in background.
-- **MUST:** date giornaliere utente in `YYYY-MM-DD` locale tramite l'helper canonico; non usare `toISOString().slice(0, 10)` per rappresentare una data locale.
-- Timestamp evento/audit: UTC/epoch; shard mensile derivato dalla data locale business.
+L'[indice `docs/`](docs/README.md) distingue guide stabili, registri, specifiche, proposte, template e storico. Non leggere automaticamente tutto `docs/` e non trasformare una proposta o checklist storica in un requisito corrente.
 
-## Dati e Zod
+## Perimetro supportato e fresh start
 
-- **MUST:** i dati in ingresso da boundary persistiti vengono prima normalizzati/migrati e poi validati dal gateway Zod applicabile.
-- **MUST:** nessun `undefined` nei payload Firestore.
-- **MUST:** elementi collezione privi dell'identità business richiesta vengono scartati; non creare “ghost record” assegnando identità fittizie per farli passare.
-- **MAY:** campi non-identità corrotti possono essere sanitizzati dai sub-schema solo secondo i fallback esplicitamente modellati.
-- **MUST:** una versione futura sconosciuta è fail-closed / `update-required`; non riscrivere dati futuri con la versione corrente.
+**Decisione di prodotto pre-lancio (21/10/2026, ribadita dal product owner):** non progettare supporto per installazioni, account, storage o backup pre-lancio da recuperare. Usare i formati correnti; non introdurre conversioni, fallback, export o UX per legacy ipotetici.
 
-→ Dettagli: `.agents/rules/data-model-and-zod.md`.
+- **MUST:** proteggere tutti i dati creati nella baseline supportata: isolamento owner/guest, cifratura, consenso, journal, concorrenza, crash recovery, logout, account deletion, import/export e update sicuro.
+- **MUST:** dati corrotti, ciphertext orfano e versioni sconosciute non sono archivi vuoti. Preservare gli originali e fallire chiuso secondo il boundary; non inventare identità, consenso o causalità.
+- **MUST:** il purge agisce soltanto sull'owner verificato e sui marker che gli appartengono. Non adotta né elimina chiavi business globali/IndexedDB pre-lancio senza owner.
+- **SHOULD:** rimuovere codice e test esclusivamente legacy quando non proteggono i dati correnti; ripulire insieme riferimenti e test della funzione eliminata.
+- **MUST:** la dichiarazione del product owner non è un censimento live permanente e non autorizza reset Firebase/Auth, eliminazioni di dati reali o bypass delle protezioni.
+- **MUST:** per futuri cambi a formati effettivamente usati dalla baseline supportata valutare compatibilità e migrazioni necessarie. La release PWA e le quattro dimensioni di `src/lib/schemaEvolution.ts` restano indipendenti.
 
-## Sicurezza e configurazione Firebase
+## Rischio, analisi e implementazione
 
-**Tre boundary:** client Firebase (`VITE_FIREBASE_*`), App Check client (`VITE_RECAPTCHA_ENTERPRISE_SITE_KEY`), backend trusted (`FIREBASE_ADMIN_*` e `CRON_SECRET`). Mai esporre credenziali server con prefisso `VITE_`, né versionare segreti reali.
+Classificare il task come **STANDARD**, **SENSITIVE** o **CRITICAL** e motivare la scelta nelle evidenze. La documentazione normativa su un boundary critico richiede la stessa attenzione ai suoi invarianti anche quando il diff non cambia il runtime.
 
-- **MUST:** rispettare bootstrap App Check e token limited-use/anti-replay per endpoint sensibili. Un `permission-denied` resta rifiuto finché la causa non è diagnosticata, non un salvataggio riuscito.
-- **MUST:** Firestore Rules richiedono test Emulator, gate canonico e workflow Production dedicato. Deployment Hosting e Firestore hanno identità WIF separate e devono rispettare l'ordine sicuro client/Rules.
-- **MUST:** verificare dal provider stato live di Auth, IAM, env, domini, App Check, Rules e deployment.
+Sono CRITICAL almeno: dati utente, IndexedDB/persistenza, sync, Firestore/Rules, Auth, guest→account, schema/migrazioni, import/export, cancellazione, update/reload, sicurezza e rischio di perdita/corruzione dati.
 
-→ Contratti: `.agents/rules/firebase-config.md` e `.agents/rules/external-services.md`.
+- **MUST:** preparare un piano per lavori strutturali o CRITICAL; può restare nel reasoning o nella PR, senza una nuova approvazione per scelte tecniche ordinarie.
+- **MUST:** completare il perimetro pertinente, senza fermarsi al primo finding. Distinguere sintomo, causa immediata e root cause; cercare evidenze contrarie, cause concorrenti e pattern analoghi.
+- **MUST:** seguire stato, chiamanti, persistenza/backend, UI, tipi, test e configurazioni. Per i percorsi critici includere fallimenti, recovery, concorrenza e integrità.
+- **MUST:** correggere la causa con il diff più semplice e coerente; evitare workaround fragili, refactor estranei e funzionalità speculative.
+- **MUST:** aggiungere regressioni quando appropriate. Mock e fixture rispettano i contratti production; test verdi da soli non provano correttezza.
+- **MUST:** commentare motivazioni, invarianti e casi limite non deducibili dal codice, vicino al boundary; aggiornare o eliminare commenti superati.
 
-## Servizi esterni e configurazione fuori repository
+## Mandato e strumenti
 
-Repository e provider esterni sono fonti distinte. GitHub ruleset, Firebase/Google Cloud, Vercel, Sentry, Snyk e Search Console possono differire dalla configurazione nel codice.
+Un incarico operativo copre il normale ciclo tecnico pertinente fino a review, merge e verifiche post-merge **solo entro i limiti espressi dall'utente**.
 
-- **MUST:** verificare direttamente provider, quote, domini, enforcement e runtime pertinenti prima di affermare lo stato live; non pubblicare credenziali o dati personali.
-- **MUST:** aggiornare il registro operativo solo per cambi materiali verificati, distinguendo stato osservato, decisione e fatto storico.
+- **MUST:** sola analisi autorizza soltanto letture. Un mandato limitato al branch o un divieto di merge/deploy ferma la pipeline a quel punto; non abilitare auto-merge.
+- **MUST:** non chiedere nuove approvazioni per decisioni tecniche ordinarie, CI rossa, conflitti o correzioni intermedie. Chiedere solo decisioni reali di prodotto/UX non deducibili, permessi per azioni distruttive non autorizzate o aiuto per blocchi esterni indispensabili.
+- **MUST:** Remote Desktop Commander e Firecrawl sono disabilitati per default; richiedono autorizzazione operativa esplicita nella chat corrente. Autorizzazioni di altre chat e richieste generiche di procedere non bastano.
+- **MUST:** preferire il connettore competente e minimizzare operazioni e polling. Non aggirare un rifiuto di sicurezza cambiando canale.
+- **MUST:** GitHub certifica SHA, branch, PR, CI e merge; i provider certificano i rispettivi runtime. Senza lavoro locale disponibile/autorizzato, usare GitHub nei limiti consentiti e dichiarare i test locali non eseguiti.
+- **MUST:** mantenere il checkout principale pulito e su `main`; quando si lavora localmente, sviluppare in worktree isolati dal vero main remoto e pulire a fine task solo risorse temporanee proprie. Preservare il branch remoto richiesto o necessario al seguito.
 
-→ `.agents/rules/external-services.md` e `docs/operations/external-services-register.md`.
+## Architettura e invarianti trasversali
 
-## Account lifecycle e cancellazione account
+Frontend React/Vite/TypeScript, stato Zustand, Zod, CSS nativo con token semantici (**niente Tailwind**). Frontend/PWA alla radice `/` su Firebase Hosting; backend trusted in `api/` e `server/` su Vercel, con Firebase Admin solo server-side. Firestore è la replica cloud; la cache Firestore resta memory-only.
 
-**CRITICAL:** cancellazione account server-mediated; il client non elimina direttamente `/users/{uid}`.
+- **MUST:** il nome pubblico è TheLogBook; non rinominare namespace tecnici/persistiti storici per uniformarli al marchio senza un cambiamento di contratto esplicito.
+- **MUST:** offline operare solo dalla copia locale e dalla sessione/consenso già autorizzati. L'assenza del backend non autorizza downgrade plaintext, primo consenso implicito o ACK inventati.
+- **MUST:** le normali mutazioni UI/hook attraversano Domain Operations. Business state e journal diventano durevoli nello stesso commit IndexedDB prima della replica; snapshot-save solo nei boundary bulk/recovery espliciti.
+- **MUST:** owner, epoch Auth, generazione guest e revisione consenso sono prove distinte. Ricontrollare i guard dopo le attese e **dentro** le callback transazionali critiche; lo stesso UID dopo A→B→A non prova continuità.
+- **MUST:** nessuna Promise critica fallisce silenziosamente. Rifiuto remoto, esito ambiguo e conferma locale/cloud restano distinguibili; lost ack è recuperabile solo con prova durevole dell'intero batch.
+- **MUST:** vault device e chiave cloud sono indipendenti, casuali e owner-scoped. Nessuna password/PIN/codice di recupero aggiuntivo nella UX ordinaria; UID, token e API key non sono chiavi crittografiche. Non promettere E2EE o recupero di copie solo offline dopo perdita totale del profilo.
+- **MUST:** il consenso guest non si trasferisce all'account. Revoca sospende il fitness e preserva i percorsi diritti; riaccettazione locale offline non autorizza il cloud né rietichetta il journal precedente.
+- **MUST:** logout/purge preservano i gate di integrità e i dati di altri owner; cancellazione account è server-mediated, Firebase Auth viene eliminata per ultima e la pulizia locale richiede prova server `complete`.
+- **MUST:** `localWorkout` device e `activeWorkout` cloud sono distinti; il fetch remoto non sovrascrive una sessione locale attiva. Timer basati su timestamp/delta; date business `YYYY-MM-DD` locali tramite helper canonico, istanti evento UTC/epoch.
+- **MUST:** tutti gli ingressi persistiti attraversano formato/versioni e gateway Zod applicabili. Nessun `undefined` Firestore, identità inventata o normalizzazione con perdita risigillata come autorevole.
+- **MUST:** reload/update passa dalla barriera di persistenza di ogni scheda. Stato RAM senza envelope leggibile blocca il reload; nessuna navigazione automatica dal solo cambio Service Worker.
+- **MUST:** Sentry riceve soltanto classificazioni tecniche ammesse; nessun testo/stack business originale, UID deliberato, token o evento comportamentale. Niente Replay, tracing, logging, metriche o Analytics.
+- **MUST:** UI leggibile in system/light/dark, mobile e safe area; dialoghi tramite `GlobalDialog`/`useDialogStore`. Selettori Zustand stabili e nessuna mutazione dello store globale durante render/recovery React; `useRef(initialValue)` non è lazy initialization.
+- **MUST:** catalogo pubblico read-only per client; seeding reale con input esterni validi/non vuoti, progetto e conferma espliciti. Il bump PWA non pubblica il catalogo.
 
-- **MUST:** Functions Vercel autenticano la richiesta, Firebase Admin gestisce il job, elimina i dati privati e cancella Firebase Auth **per ultima**. `account_deletions/{uid}` è un marker server-only cross-device.
-- **MUST:** la copia locale resta fino alla prova di completamento server. Timeout, risposta assente, Auth mancante o tombstone scaduto non sono prova sufficiente.
-- **MUST:** il tombstone tecnico server-only viene conservato fino a 30 giorni; il cron autenticato esegue il cleanup senza indebolire i percorsi di recovery.
-- **MUST:** consenso revocato, email non verificata, guest→account, logout e cancellazione hanno failure path distinti e non devono essere confusi.
+## Branch, versione e PR
 
-→ Dettagli: `.agents/rules/account-lifecycle.md`, `.agents/rules/storage-and-sync.md`.
+1. **MUST:** branch dedicato dal main GitHub verificato; mai push diretto a `main` o bypass di protezioni. Controllare che i branch non-main non generino deploy Vercel.
+2. **MUST:** aprire una PR draft quando esiste un insieme coerente da verificare; mantenerla draft durante sviluppo, CI e correzioni. Renderla pronta solo dopo la validazione finale e nei limiti del mandato.
+3. **MUST:** prima del candidato finale includere il bump applicativo previsto per lo squash merge: da `MAJOR.MINOR.PATCH` a `MAJOR.(MINOR+1).0`, con i due campi root di `package-lock.json` coerenti. Calcolarlo dal vero main remoto; non incrementare per ogni commit intermedio.
+4. **MUST:** un merge concorrente richiede controllo del delta, ricalcolo della versione e rivalidazione del nuovo SHA. Non applicare bump dopo CI/review né introdurre commit automatici su main.
+5. **MUST:** rivedere il diff completo, risolvere blocker e conversazioni aperte sul candidato esatto. Squash merge autonomo solo quando autorizzato, con gate e review richiesti soddisfatti; non indebolire il ruleset.
 
-## Telemetria tecnica e privacy
+Il bump applicativo non modifica schema/protocollo, catalogo o `LEGAL_VERSIONS`. I manifest package sono anche input del selettore backend Vercel: perfino un bump può richiedere deploy dopo il merge.
 
-**MUST:** Sentry resta limitato a errori/anomalie tecniche sanitizzati, minimizzati e autorizzati: non inviare intenzionalmente UID, dati salute, token o eventi comportamentali; non attivare Replay, tracing, logging, metriche o Analytics.
+## Validazione, rilascio e conclusione
 
-- **MUST:** code diagnostiche persistenti soltanto con AEAD owner-scoped e vault disponibile; in caso contrario usare il fallback in memoria previsto, senza creare nuove copie plaintext. Mantenere i limiti di capacità e la retention dei report correnti, senza importare o cancellare code globali pre-lancio. Una cache di telemetria già persistita non è prova della versione cifrata più recente: prima di riutilizzarla per lettura/nuovo enqueue, ricaricare la coda protetta per lo stesso owner quando il vault è disponibile; se esistono eventi RAM non ancora persistiti, preservarli e riconciliarli senza sovrascrivere ciphertext illeggibile. Gli aggiornamenti differiti dei conteggi d'errore sono patch applicate soltanto agli ID ancora presenti nella copia cifrata corrente: non devono reinserire report già consegnati né cancellare nuovi report di un'altra scheda. La ripresa non deve reintrodurre report che un'altra scheda ha già rimosso. Questo non rappresenta un CAS atomico fra schede.
-- **MUST:** source map e token di upload restano nel processo build Production, non negli asset pubblici.
-- **MUST:** non promettere anonimato quando esistono identificativi tecnici. Le modifiche materiali alla Privacy Policy seguono `LEGAL_VERSIONS.privacy`, indipendente dalla versione PWA.
+Il gate canonico è `npm run verify:m8`; l'equivalente GitHub è `Milestone Verification` sullo SHA esatto con tutti gli shard, E2E, CodeQL e `Canonical Verification` verdi. I dettagli eseguibili e le protezioni sono in [Verifica CI](.agents/rules/ci-verification.md).
 
-→ `.agents/rules/firebase-config.md`, `.agents/rules/storage-and-sync.md`, `docs/telemetry-sentry-guide.md`.
+- **MUST:** registrare l'HEAD candidato prima delle verifiche. Ogni nuovo commit invalida test e review del vecchio SHA; subset diagnostici non sostituiscono il gate.
+- **MUST:** non indebolire suite/no-skips, oracle, Emulator, lint/warning baseline, security check, workflow o protezioni GitHub.
+- **MUST:** i test normativi attraversano boundary reali e oracle indipendenti. Il consenso fra agenti non sostituisce evidenze eseguibili.
+- **MUST:** dopo un merge autorizzato verificare SHA remoto di `main` e CI post-merge sullo stesso SHA. Poi verificare separatamente Firestore Rules/indici, Firebase Hosting e Vercel Production secondo il diff, con smoke pertinenti. Per Vercel controllare deploy backend richiesto oppure skip giustificato.
+- **MUST:** non usare Production come sandbox distruttiva. L'ambiente Firebase/Vercel Test separato è dismesso; restano fixture locali, emulatori e CI. Verifiche UI richiedono temi, viewport, overlay e dispositivi pertinenti oppure una limitazione esplicita.
+- **MUST:** distinguere risultato osservato, ipotesi, test locali, CI PR, merge, CI main, deploy, runtime, configurazioni esterne e rischi residui. Non dichiarare letto, testato o verificato ciò che non è stato osservato.
+- **MUST:** dichiarare COMPLETATO rispetto al perimetro autorizzato solo con analisi, soluzione, regressioni appropriate, gate/review necessari e nessun blocker noto. Se è richiesto il rilascio, servono anche merge, CI main e verifiche Production/runtime applicabili. Se il mandato termina al branch, dichiarare esplicitamente che non è integrato né rilasciato.
+- **MUST:** per blocchi o passaggio di chat preparare un HANDOFF con obiettivo, SHA main/branch, PR, diff, contratti, prove, ipotesi escluse e attività residue; non chiedere all'utente di ricostruire informazioni già disponibili. Un gate obbligatorio bloccato lascia il task PARZIALE/BLOCCATO e il branch preservato.
 
-## PWA, Service Worker e icone
+## Manutenzione del contesto
 
-- `vite-plugin-pwa` usa manifest e service worker alla radice `/`.
-- La sorgente vettoriale approvata `assets/brand/thelogbook-icon-master.svg` è canonica; `scripts/resize_icons.mjs` pubblica la copia scalabile `public/icon.svg` e genera direttamente dal master favicon, Apple touch, PNG PWA, variante maskable e card social PNG lossless. Quando cambia l'artwork, i riferimenti HTML/manifest devono cambiare revisione per invalidare le cache degli icon consumer.
-- Il manifest deve mantenere gli asset PNG standard 192×192 e 512×512 richiesti per la compatibilità/installabilità, la copia SVG scalabile `icon.svg` con `sizes: any` e il dedicato `icon-maskable-512.png` per `purpose: maskable`; evitare duplicati semantici oltre queste varianti necessarie.
-- **MUST:** una modifica all'icon pipeline va verificata attraverso build/gate, non solo guardando il file sorgente.
-- **MUST:** il reload/update della PWA rispetta il reload barrier di persistenza prima di applicare una nuova versione.
-
-## Design system e UX
-
-**MUST:** temi system/light/dark, bootstrap senza flash e UX leggibile su mobile. Valori CSS e scala tipografica hanno fonte in `src/styles/tokens.css` e `.agents/rules/design-system.md`, non in numeri duplicati qui.
-
-- **MUST:** dialoghi tramite `GlobalDialog`/`useDialogStore`, non `window.alert`/`window.confirm`. Preferire superfici inline/full-screen per editor mobili complessi.
-- **MUST:** input anti-zoom iOS, target touch e safe area accessibili; verificare light/dark, viewport, overlay e comportamento su dispositivi quando pertinente.
-- **MUST:** non creare nuove referenze a ogni render nei selettori Zustand. Nelle schede mantenute vive sotto `Suspense`, non usare l'attributo HTML `hidden` come meccanismo di tab visibility: preservare il pattern `style={{ display: ... }}` salvo migrazione esplicitamente testata.
-- **MUST:** recovery e render React non mutano lo store globale. `useRef(initialValue)` non è lazy initialization: preservare owner/session fencing e commit React per bozze device-critical.
-
-→ Specifiche: `.agents/rules/design-system.md`.
-
-## Processo Git e branch
-
-Per modifiche non banali:
-
-- **MUST:** lavorare su branch dedicato, non direttamente su `main`.
-- **MUST:** mantenere la PR draft durante sviluppo/correzioni e renderla pronta solo quando il candidato finale è verificato.
-- **MUST:** prima di ogni validazione candidata registrare l'esatto HEAD; dopo un nuovo commit, le verifiche sul vecchio SHA non certificano più il nuovo candidato.
-- **MUST:** eseguire review finale del diff ed evitare refactor/formattazioni non pertinenti.
-- **MUST:** dopo autorizzazione generale il merge può avvenire autonomamente quando gate e review sono verdi e non restano blocker.
-
-### Versionamento della PWA
-
-- **MUST (decisione prodotto):** a ogni commit che entra in `main` tramite normale squash merge incrementare di uno la componente minor della versione applicativa in `package.json` e azzerare la patch (da `MAJOR.MINOR.PATCH` a `MAJOR.(MINOR+1).0`). Calcolare il numero dal vero HEAD remoto di `main`, non dalla versione iniziale del branch; in caso di merge concorrente riallineare e rivalidare.
-- **MUST:** includere il bump e la sincronizzazione dei due campi root in `package-lock.json` nel candidato PR **prima** della CI exact-SHA e review. `test:version-bump` ne controlla la transizione in sola lettura rispetto alla base Git appropriata; non sostituisce il riallineamento dopo merge concorrenti. Non introdurre bump post-verifica, commit CI automatici o push diretti a `main` e non incrementare per commit intermedi del branch.
-- **MUST:** non duplicare la versione pubblica in `AGENTS.md`. Il bump non modifica automaticamente Data Schema, Sync Protocol, Local Envelope, Backup Schema, manifest catalogo o versioni dei documenti legali.
-- **VERIFY:** i manifest package sono input del selettore Vercel backend; anche un bump senza modifiche di codice può provocare un deploy. Verificarne l'esito senza indebolire il rilevamento dei cambi alle dipendenze server.
-
-## Test e CI
-
-Il gate canonico locale è `npm run verify:m8`. Su GitHub l'equivalente richiede `Milestone Verification` sullo SHA esatto: tutti gli shard, E2E, CodeQL e `Canonical Verification` verdi.
-
-- **MUST:** i subset `lint`, `test`, `build`, `test:e2e` sono diagnostici, non sostituti del gate finale.
-- **MUST:** ogni nuovo commit invalida le verifiche relative allo SHA precedente.
-- **MUST:** non indebolire test/no-skips, sicurezza, baseline warning, Emulator o protezioni GitHub per ottenere CI verde.
-- **MUST:** i test normativi attraversano il boundary reale e hanno oracle indipendenti; un mock che replica la logica testata non è una prova sufficiente.
-- **MUST:** distinguere test locale, CI PR, merge, CI post-merge, deploy e stato runtime; dichiarare esplicitamente ogni verifica mancante.
-
-→ `.agents/rules/ci-verification.md`, `.agents/rules/verification-hardening.md`.
-
-## Vercel e deployment
-
-`vercel.json` definisce il backend trusted; il frontend Production è Firebase Hosting.
-
-- **MUST:** `main` è l'unico branch con deploy Vercel; niente Preview dei branch di sviluppo come sostituto del gate.
-- **MUST:** `ignoreCommand` salta soltanto modifiche dimostrabilmente non pertinenti al backend. Se SHA precedente o diff non sono attendibili, **deploy fail-open**, mai skip arbitrario.
-- **MUST:** dopo il merge verificare SHA e CI su `main`, Hosting e Vercel separatamente; Vercel deve deployare se il diff è backend-relevant, altrimenti va verificato lo skip.
-
-→ `.agents/rules/external-services.md` e `.agents/rules/firebase-config.md`.
-
-## Catalogo globale
-
-`global_catalog` è pubblico in lettura e non scrivibile dal client; i seed bundled sono intenzionalmente vuoti.
-
-- **MUST:** una pubblicazione reale richiede file esterni validati/non vuoti, progetto esplicito e conferma; il dry-run resta non distruttivo.
-- **MUST:** la versione del catalogo è distinta dalla versione pubblica della PWA. Un bump PWA non deve causare il seeding del catalogo.
-
-→ `.agents/rules/catalog-operations.md`.
-
-## Repository hygiene ed encoding
-
-- **MUST:** documenti task-specific (`implementation_plan*.md`, report audit/remediation generati, directory legacy di report) non restano nel candidato finale salvo che siano deliberatamente documentazione stabile nel path canonico.
-- Istruzioni normative: `AGENTS.md` + `.agents/rules/`; guide stabili e registri operativi: `docs/`. Audit e report di una singola revisione restano nella cronologia Git/PR; conservarne copie in `docs/audits/` solo quando servono ancora come evidenze storiche datate, chiaramente separate dallo stato corrente.
-- **MUST:** Markdown e sorgenti UTF-8 senza BOM; non introdurre mojibake.
-
-## Riferimenti normativi
-
-I sottofile non sono caricati automaticamente in ogni ambiente; i loro dettagli, eccezioni e failure path devono essere consultati e confrontati con il codice corrente prima di apportare modifiche.
-
-| Documento | Contenuto |
-|---|---|
-| [`.agents/rules/storage-and-sync.md`](.agents/rules/storage-and-sync.md) | Storage, versioni, hydration, offline-first e sync |
-| [`.agents/rules/domain-operations.md`](.agents/rules/domain-operations.md) | Domain Operations V4 e mutation boundary |
-| [`.agents/rules/data-model-and-zod.md`](.agents/rules/data-model-and-zod.md) | `UserData`, Zod, root, shard e local-only |
-| [`.agents/rules/account-lifecycle.md`](.agents/rules/account-lifecycle.md) | Backup/import, deletion, logout, guest e PWA update |
-| [`.agents/rules/firebase-config.md`](.agents/rules/firebase-config.md) | Env client/server, App Check, Rules, CSP e domini |
-| [`.agents/rules/ci-verification.md`](.agents/rules/ci-verification.md) | Gate canonico, exact-head e CI contract |
-| [`.agents/rules/crash-consistency.md`](.agents/rules/crash-consistency.md) | Commit atomico, lost ack, replay e recovery |
-| [`.agents/rules/causal-gc.md`](.agents/rules/causal-gc.md) | Tombstone/vector-clock GC e stable frontier |
-| [`.agents/rules/distributed-fuzz.md`](.agents/rules/distributed-fuzz.md) | Fuzz distribuito e convergenza causale |
-| [`.agents/rules/verification-hardening.md`](.agents/rules/verification-hardening.md) | Qualità dei test normativi e production boundaries |
-| [`.agents/rules/catalog-operations.md`](.agents/rules/catalog-operations.md) | Catalogo globale, seeding e recovery |
-| [`.agents/rules/external-services.md`](.agents/rules/external-services.md) | Configurazioni esterne, segreti e verifica live |
-| [`.agents/rules/design-system.md`](.agents/rules/design-system.md) | Tema, CSS, tipografia e UX |
+- **MUST:** tenere qui i vincoli trasversali e l'unica mappa dei contratti; dettagli, eccezioni e failure path vivono nel relativo specialista. I sottofile rimandano qui per autorizzazioni e processo.
+- **MUST:** quando cambia o scompare un helper/contratto, cercare tutti i riferimenti in `AGENTS.md`, regole, guide, test, workflow e template. Aggiornare nello stesso task; non lasciare test della funzione rimossa.
+- **MUST:** prima di spostare o dividere un documento, leggere ogni voce, conservarne gli invarianti ancora validi, verificare codice/evidenze per modifiche sostanziali e aggiornare link e indice. Evitare nuove copie dello stesso contratto.
+- **MUST:** separare decisioni, contratto corrente e osservazioni storiche datate; SHA e run passati non certificano configurazioni live.
+- **MUST:** report audit, `implementation_plan*.md` e altri artefatti task-specific restano nella cronologia Git/PR, salvo documentazione stabile deliberata nel path canonico. Le guide vivono in `docs/`, eventuali evidenze storiche utili in `docs/audits/`.
+- **MUST:** sorgenti e Markdown UTF-8 senza BOM e senza mojibake. L'eccezione BOM per CSV è nel contratto di portabilità.
+- **MUST:** il repository pubblico non contiene credenziali, token, dati salute reali o informazioni private; `.env.example` documenta nomi/placeholder, i valori restano nei provider.

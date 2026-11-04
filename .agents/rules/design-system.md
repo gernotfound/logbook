@@ -3,7 +3,7 @@
 **Quando leggere:** tema, CSS/token, bootstrap iniziale, viewport, focus e accessibilità.
 **Non inferire:** un test WebKit non certifica una PWA installata su iPhone reale.
 
-> Stato: normativo | Ricognizione originaria: 2026-09-21; verificare i token CSS attuali | File allora verificati: `src/styles/global.css`, `src/styles/tokens.css`, `public/appearance.js`, `public/appearance.css`, `index.html`
+**Autorità:** [`AGENTS.md`](../../AGENTS.md). Questo contratto ne specializza gli invarianti; non amplia autorizzazioni o perimetro.
 
 ## Tema adattivo
 
@@ -47,6 +47,20 @@ Valori numerici in forte evidenza e timer possono usare soltanto i token display
 - **SHOULD:** usare classi e token per gli stili statici; lasciare inline solo valori realmente dinamici o codice legacy non ancora migrato. Preferire `rem` per le dimensioni che devono seguire le preferenze di carattere; il valore di 16 px degli input è un'eccezione intenzionale.
 - **SHOULD:** applicare `min-width: 0` ai figli di layout flex/grid soggetti a overflow e controllare le viewport da 320 px in su.
 - **MUST:** testo rivolto all'utente in sentence case italiano, salvo sigle, nomi propri, marchi e il wordmark maiuscolo della splash di caricamento. Icone UI `lucide-react` di norma da 20 o 24 px.
+
+## Stato React, dialoghi e schede mantenute vive
+
+- **MUST:** dialoghi tramite `GlobalDialog`/`useDialogStore`, senza `window.alert`/`window.confirm`; preferire superfici inline/full-screen per editor mobili complessi.
+- **MUST:** i selettori Zustand non creano nuove referenze a ogni render. Nelle schede mantenute vive sotto `Suspense`, preservare `style={{ display: ... }}`; l'attributo HTML `hidden` richiede una migrazione esplicitamente testata.
+- **MUST:** recovery e render React non mutano lo store globale. `useRef(initialValue)` non è lazy initialization: preservare owner/session fencing e commit React per bozze device-critical.
+
+## PWA, Service Worker e icone
+
+- `vite-plugin-pwa` usa manifest e service worker alla radice `/`.
+- La sorgente vettoriale approvata `assets/brand/thelogbook-icon-master.svg` è canonica; `scripts/resize_icons.mjs` pubblica la copia scalabile `public/icon.svg` e genera direttamente dal master favicon, Apple touch, PNG PWA, variante maskable e card social PNG lossless. Quando cambia l'artwork, i riferimenti HTML/manifest devono cambiare revisione per invalidare le cache degli icon consumer.
+- Il manifest deve mantenere gli asset PNG standard 192×192 e 512×512 richiesti per la compatibilità/installabilità, la copia SVG scalabile `icon.svg` con `sizes: any` e il dedicato `icon-maskable-512.png` per `purpose: maskable`; evitare duplicati semantici oltre queste varianti necessarie.
+- **MUST:** una modifica all'icon pipeline va verificata attraverso build/gate, non solo guardando il file sorgente.
+- **MUST:** il reload/update della PWA rispetta il reload barrier di persistenza prima di applicare una nuova versione.
 
 ## Verifica
 

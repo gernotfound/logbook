@@ -1,5 +1,7 @@
 # Revoca consenso salute — protocollo tecnico distribuito, gate legale pre-pilot aperto
 
+**Fonte normativa tecnica:** [AGENTS](../../AGENTS.md) e [Consenso salute](../../.agents/rules/health-consent.md). Le prove delle PR storiche citate sotto non attestano la release attuale; l'indice compliance mantiene separate approvazione legale e verifiche tecniche.
+
 Decisione UX del product owner (12 ottobre 2026): dopo la revoca nessuna funzione fitness è accessibile. La schermata di servizio sospeso consente informativa, diritti, esportazione, cancellazione account e nuova accettazione separata ed esplicita. Dopo la nuova accettazione, tutte le funzioni possono riattivarsi. Non esiste una modalità fitness ridotta.
 
 ## Confine autorevole
@@ -24,11 +26,11 @@ Il parser dei metadati cloud accetta e valida `_sync.writer.consentRevision` opz
 
 Le regole di accesso e il fence delle revisioni sono stati integrati con la PR #366. CI e deploy sono completati. Il collaudo con un account reale, la revisione giuridica e la retention postrevoca restano ancora da validare prima del pilot.
 
-## Cancellazione esplicita dei dati, con account conservato (implementazione candidata)
+## Cancellazione esplicita dei dati, con account conservato (presente nel codice; runtime da verificare)
 
 Dopo revoca confermata, il nuovo comando `Elimina definitivamente i miei dati` è separato dalla revoca e dalla cancellazione account. Richiede due conferme, autenticazione recente e controllo App Check trusted; usa `api/health-data-erasure` e un job `health_data_erasures/{uid}` che elimina root e collection private e può riprendere in GET/cron. L'eliminazione di Firebase Auth è esplicitamente vietata in questo percorso. Durante il job non sono consentite nuove accettazioni; il server aggiorna `revision` e `erasedBeforeRevision` del record consenso solo dopo verifica di assenza di residui.
 
-La ricevuta completa non basta a garantire la cancellazione di copie su dispositivi offline: il client richiedente esegue il purge owner-scoped e lo sign-out solo dopo conferma `complete`. Il GET trusted del consenso espone anche `erasedBeforeRevision`: un archivio con journal pendente della generazione cancellata non può essere reinviato nel recupero post-consenso e viene lasciato intatto, esportabile ma non riapplicabile automaticamente. Il job parziale o una pulizia locale fallita sono comunicati come tali. La retention della ricevuta server completa è 30 giorni con sweep cron; il marcatore minimo di consenso rimane per la protezione dagli epoch vecchi. Smoke su browser, account Firebase reale di test, dispositivi multipli e revisione legale restano richiesti prima di attestare Production.
+La ricevuta completa non basta a garantire la cancellazione di copie su dispositivi offline: il client richiedente esegue il purge owner-scoped e lo sign-out solo dopo conferma `complete`. Il GET trusted del consenso espone anche `erasedBeforeRevision`: un archivio con journal pendente della generazione cancellata non può essere reinviato nel recupero post-consenso e viene lasciato intatto, esportabile ma non riapplicabile automaticamente. Il job parziale o una pulizia locale fallita sono comunicati come tali. La retention della ricevuta server completa è 30 giorni con sweep cron; il marcatore minimo di consenso rimane per la protezione dagli epoch vecchi. Il collaudo autenticato e multi-dispositivo resta distinto dalla CI; la revisione legale resta aperta. Non esiste un cloud Test isolato: rispettare [limiti e perimetro dei collaudi](../operations/e2e-reliability.md), senza usare Production come sandbox distruttiva.
 
 ## Fence delle generazioni di consenso
 

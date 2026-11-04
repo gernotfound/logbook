@@ -1,13 +1,13 @@
-# Configurazione Firebase — TheLogBook
+# Configurazione Firebase e backend trusted — TheLogBook
 
-**Quando leggere:** Firebase Auth, App Check, Firestore Rules/indici, WIF, CSP e deployment.
-**Non inferire:** `permission-denied` non discrimina da solo Auth, Rules o App Check; Emulator e Production sono prove differenti.
+**Quando leggere:** env client/server, App Check, Firestore Rules/indici, WIF, CSP, domini e deployment.
+**Non inferire:** permission-denied non discrimina Auth, Rules o App Check; Emulator, provider live e Production sono prove distinte.
 
-> Stato: normativo | Ricognizione originaria: 2026-09-30; stato live da verificare nel provider | File allora verificati: `src/lib/firebase.ts`, `src/lib/appCheck.ts`, `server/accountDeletion/firebaseAdmin.ts`, `api/account-deletion-cron.ts`, `firestore.rules`, `firebase.json`, `.firebaserc`, `vercel.json`, `.env.example`
+**Autorità:** [`AGENTS.md`](../../AGENTS.md). Questo contratto ne specializza gli invarianti; non amplia autorizzazioni o perimetro.
 
 ## Tre contratti di configurazione distinti
 
-Non trattare tutte le variabili Firebase/App Check/Admin come un unico blocco obbligatorio. Esistono tre boundary differenti: client Firebase, App Check client e server trusted M7.
+Non trattare tutte le variabili Firebase/App Check/Admin come un unico blocco obbligatorio. Esistono tre boundary differenti: client Firebase, App Check client e server trusted.
 
 ### Client Firebase — fail-fast minimo
 
@@ -34,26 +34,28 @@ Google Cloud può presentare reCAPTCHA Enterprise dentro il prodotto più ampio 
 
 - **Provider:** `ReCaptchaEnterpriseProvider` (NON `ReCaptchaV3Provider`).
 - **Bootstrap provider:** `src/lib/firebase.ts` inizializza il provider App Check prima di inizializzare Firestore. L'acquisizione del token resta asincrona e distinta dal bootstrap del provider.
-- **Stato:** `src/lib/appCheck.ts` distingue provider non inizializzato, disabled, unsupported, provider-ready, token-ready, token-error ed errore di inizializzazione. Un provider senza token non è considerato App Check attivo.
+- **Stato:** `src/lib/appCheck.ts` distingue provider non inizializzato, disabled, unsupported, provider-ready, token-ready, token-error ed errore di inizializzazione.
+
+Un provider senza token non è considerato App Check attivo.
 - **Support check:** manuale su runtime browser (`window.crypto`, `window.fetch`).
 - **Site key canonica:** `VITE_RECAPTCHA_ENTERPRISE_SITE_KEY`.
-- **Compatibilità storica:** il cutover Production alla variabile canonica `VITE_RECAPTCHA_ENTERPRISE_SITE_KEY` risultava verificato il 2026-09-30; lo stato odierno va controllato nel provider. I precedenti alias `VITE_RECAPTCHA_V3_SITE_KEY` e `VITE_RECAPTCHA_SITE_KEY` non fanno più parte del contratto runtime e non devono essere reintrodotti.
+- **Compatibilità storica:** il cutover Production alla variabile canonica `VITE_RECAPTCHA_ENTERPRISE_SITE_KEY` risultava verificato il 2026-09-30; lo stato odierno va controllato nel provider.
+
+I precedenti alias `VITE_RECAPTCHA_V3_SITE_KEY` e `VITE_RECAPTCHA_SITE_KEY` non fanno più parte del contratto runtime e non devono essere reintrodotti.
 - **Semantica se manca la site key:** App Check entra in stato `disabled/fallback`; questa condizione **non** fa parte del fail-fast delle quattro env Firebase core e non impedisce `initializeApp` né il funzionamento locale/offline.
 - **Token iniziale:** un failure di acquisizione porta a `token-error/fallback` e non viene dichiarato healthy. Non trasformare genericamente ogni `permission-denied` Firestore in “normale bootstrap noise”.
 
-**MUST:** le richieste sensibili al backend custom Vercel (`account-deletion` e recovery device/status) usano token App Check limited-use; il server li verifica con `consume: true` e rifiuta token già consumati. I token standard restano appropriati per i servizi Firebase gestiti.
+**MUST:** le richieste sensibili al backend custom Vercel (cancellazione/recovery, consenso/diritti, revoca sessioni e chiave cloud) usano token App Check limited-use; il server li verifica con `consume: true` e rifiuta token già consumati. I token standard restano appropriati per i servizi Firebase gestiti.
 
 **VERIFY:** registrazione della site key, enforcement App Check e stato della configurazione in Firebase/Google Cloud sono esterni al repository e devono essere verificati in console quando rilevanti. Il service account Firebase Admin usato da Vercel deve avere l'autorizzazione necessaria a consumare token App Check; verificare IAM live prima del cutover.
 
 **MUST:** nel percorso sync, un `permission-denied` osservato da `replicateJournal` resta `rejected` e non va mascherato. Retry bootstrap è accettabile solo quando la causa transitoria è identificata.
 
-## Analytics di utilizzo — integrazione ritirata
+## Cifratura, consenso e telemetria
 
-Google Analytics 4/Firebase Analytics non fa parte del runtime corrente. Nessun SDK `firebase/analytics`, Measurement ID, toggle GA4, consenso GA4 o script di tracciamento deve essere caricato. Firebase Authentication, Firestore, Hosting, Installations e App Check restano invariati e operativi. Il fresh start non supporta schede di build pre-lancio: la vecchia preferenza browser GA4 non richiede cleanup all'avvio.
+Leggere [Archivio e cifratura](secure-storage.md) per ADK, `CLOUD_ACCOUNT_KEK_V1`, envelope cloud e limiti della custodia; [Consenso salute](health-consent.md) per registro trusted, diritti e generazioni; [Telemetria e privacy](telemetry-and-privacy.md) per Sentry/source map e raccolte Firestore ritirate. Analytics non fa parte del runtime.
 
-Il product owner ha confermato lo scollegamento della proprietà Analytics dal progetto Firebase, la dismissione della proprietà e la rimozione della variabile GitHub del Measurement ID. Queste operazioni esterne sono distinte dalla rimozione dell'SDK attestata dalla PR #320; il progetto Firebase e i suoi servizi attivi non sono stati eliminati.
-
-## Server trusted M7 — Firebase Admin
+## Server trusted — Firebase Admin
 
 `server/accountDeletion/firebaseAdmin.ts` richiede queste tre env quando inizializza Firebase Admin:
 
@@ -73,26 +75,15 @@ La private key supporta newline escaped (`\\n`) e viene normalizzata server-side
 
 **VERIFY:** il repository prova i nomi richiesti dal codice, non che i valori siano effettivamente provisionati in ogni environment Vercel né quali ruoli IAM siano assegnati al service account. In particolare, la replay protection App Check del backend richiede il permesso `firebaseappcheck.appCheckTokens.verify` sull'identità Admin usata da Vercel; `roles/firebaseappcheck.tokenVerifier` è il ruolo minimo da preferire se quel permesso deve essere aggiunto, ma un ruolo già assegnato che lo includa è sufficiente. Verificarlo direttamente in Google Cloud/Firebase.
 
-### Cifratura cloud TheLogBook 2.0.0 (PR #621 integrata — contratto corrente, €0 vincolante)
-
-**Decisione di prodotto 24/10/2026:** nessun servizio a pagamento, nessuna nuova billing account, nessun upgrade Firebase Spark→Blaze. La precedente proposta Cloud KMS è stata **ritirata**, incluso il progetto GCP separato fatturato. Il modello resta Firebase Spark + backend Vercel **solo nei limiti gratuiti Hobby** (il piano Hobby è utilizzabile esclusivamente per progetti personali/non commerciali; superati i limiti può interrompersi il servizio). Nessuna promessa di disponibilità illimitata a €0.
-
-L'Account Data Key (ADK) resta una chiave casuale distinta per UID; `server/cloudKeys/accountKeyEnvelope.ts` usa AES-256-GCM di Node.js per cifrare **soltanto la ADK**, con nonce casuale, AAD legato all'UID e envelope stretto/versionato in `user_data_keys/{uid}`. La chiave globale wrapping `CLOUD_ACCOUNT_KEK_V1` è un secret server-only Vercel di **32 byte casuali in base64 canonico**. Non è derivata da UID, password, token Firebase o chiave Firebase Admin; nessuna chiave business/ADK è committata. Il backend è trusted e può materialmente recuperare la ADK: **non è zero-knowledge E2EE**.
-
-**MUST operativo continuo:** il segreto deve essere generato e provisionato senza inserirlo in repository, CI, issue, chat, log o bundle browser; custodire una copia identica indipendente da Vercel, verificarne il ripristino in ambiente isolato, proteggere l'accesso alle variabili e assicurare che una modifica/redeploy non lo rigeneri. La perdita del segreto senza copia rende irrecuperabili tutti i documenti cloud cifrati dagli account protetti. `CLOUD_ACCOUNT_KEK_V1` mancante, malformato o diverso deve causare **fail-closed** senza creare un'altra ADK sopra documenti esistenti. Mai ruotare questa chiave senza un processo versionato che riavvolga e verifichi **tutti** gli envelope account prima di dismettere la vecchia. Il nome della variabile contiene `V1` proprio per impedire sostituzioni silenziose.
-
-Il browser acquisisce la ADK per una singola operazione **online** autenticata da Firebase ID token + App Check limited-use; non la persiste in IndexedDB. Offline funziona il vault locale indipendente già esistente. **Nel codice corrente su `main`** la ADK è richiesta prima dei caricamenti root/mensili autenticati, della migrazione guest→account, del drain del journal e del backup normale/rights-only; il writer transazionale cifra business e metadati causali riservati, e le Rules cloud rifiutano documenti business in chiaro. La PR #621 è stata integrata il 25/10/2026; le verifiche di Hosting/Firestore Production e Vercel del 31/10/2026 sono distinte dal collaudo autenticato multi-dispositivo e dalla prova di custodia/ripristino indipendente della KEK. Queste ultime non vanno dedotte dalla presenza della variabile server.
-
-La richiesta normale `POST /api/cloud-key` richiede Firebase ID token verificato e non revocato, claim email verificata, App Check limited-use consumabile, origin HTTPS allowlisted, consenso trusted `active` e assenza di deletion/erasure in corso. Il solo `POST /api/cloud-key?purpose=rights-export` recupera una **chiave già esistente** durante consenso `withdrawn`, senza abilitarne la creazione o la sincronizzazione; l'esportazione trusted verifica la generazione prima e dopo le pagine e il browser decifra il documento autenticato prima di creare il backup. L'identità arriva **esclusivamente** dal token Firebase; le chiavi sono server-only in `user_data_keys/{uid}` e non accessibili alle Security Rules client; il vecchio formato cloud non deve essere convertito o sovrascritto dalla sola presenza di una nuova chiave. La cancellazione account ora cancella e verifica il record della chiave nel job trusted. La cancellazione dei soli dati sanitari conserva la chiave durante retry e pagine non ancora verificate; la rimuove atomicamente nel commit finale della cancellazione completa e controlla che manchi prima di autorizzare il purge locale.
-
-**MUST per ogni modifica futura al contratto cifrato:** verificare insieme lettura/scrittura root e shard, backup/esportazione diritti dopo revoca, Firestore Rules restrittive, recovery PWA, `verify:m8`/CI equivalente exact-SHA, review e deploy/smoke pertinenti. Il merge #621 e la CI non dimostrano da soli recuperabilità indipendente delle chiavi, assenza di errori nei flussi autenticati reali o garanzie di riservatezza ulteriori rispetto al modello di minaccia documentato.
-
 ## Contratto `.env.example`
 
-`.env.example` documenta entrambi i boundary usando **solo placeholder non sensibili**:
+`.env.example` documenta i boundary usando **solo placeholder non sensibili**:
 
 - configurazione client Firebase/App Check (`VITE_*`);
-- nomi delle env server trusted (`FIREBASE_ADMIN_*`, `CRON_SECRET`).
+- nomi delle env server trusted (`FIREBASE_ADMIN_*`, `CRON_SECRET`, `PUBLIC_APP_ORIGIN`, `CLOUD_ACCOUNT_KEK_V1`);
+- configurazione Sentry browser/build descritta nel contratto di telemetria.
+
+La KEK è obbligatoria per il boundary cloud cifrato corrente, non per l'avvio locale del client. Un commento template non certifica provisioning o recuperabilità del secret.
 
 **MUST:** il template non contiene chiavi private, token, email reali, project identifier privati o altri valori di produzione. La presenza dei nomi server nel template serve soltanto a rendere esplicito il contratto runtime; i valori reali restano in Vercel/secret storage.
 
@@ -121,29 +112,12 @@ I file `firebase.json`, `.firebaserc` e `firestore.indexes.json` definiscono il 
 ### Account deletion
 
 - **MUST:** il client non può eliminare direttamente `/users/{uid}`. Il root utente viene eliminato dal backend trusted del job account-deletion dopo la bonifica delle raccolte private e prima della cancellazione finale di Firebase Auth.
-- Le sottocollezioni private mantengono `delete` owner-scoped per le normali operazioni di dominio dove previste; questa capacità non autorizza il client a bypassare il workflow di cancellazione account.
+- **MUST:** il client non elimina fisicamente root, shard mensili o `sync_control/state`; le cancellazioni business usano tombstone e, dopo GC, empty shell cifrati/fenced. La telemetria Firestore ritirata nega tutto l'accesso client. Il cleanup fisico è riservato ai job trusted Admin.
 - `account_deletions/{uid}` resta server-only e costituisce la barriera cross-device durante una cancellazione in corso.
-
-### Telemetria tecnica — Sentry e legacy Firestore
-
-Il client corrente usa **Sentry Error Monitoring** come destinazione esterna per errori e anomalie tecniche in Production. Il Firebase UID può essere usato localmente per stabilire l'eleggibilità all'invio, ma non viene deliberatamente inserito nel payload Sentry. Prima del boundary esterno, messaggi e stack attraversano i sanitizzatori TheLogBook; il client non abilita l'invio PII di default, disattiva le integrazioni automatiche e il `beforeSend` elimina `user`, `request`, breadcrumb, transaction ed extra. Replay, tracing, logging e metriche non sono abilitati.
-
-Configurazione client/build:
-
-- `VITE_SENTRY_DSN`: DSN pubblico del progetto Sentry, incluso nel bundle Production;
-- `SENTRY_AUTH_TOKEN`: segreto build-only con scope CI per upload source map/release;
-- `SENTRY_ORG` e `SENTRY_PROJECT`: identificatori build-time;
-- `LOGBOOK_BUILD_SHA`: SHA exact-main passato dal workflow Firebase Hosting Production; `EXPECTED_SHA`/`GITHUB_SHA` restano fallback verificabili.
-
-**MUST:** `SENTRY_AUTH_TOKEN` resta server/build-only, senza prefisso `VITE_`, e non deve comparire in bundle, log, Markdown o fixture. Le source map Production vengono caricate a Sentry e rimosse dagli asset pubblici dopo l'upload.
-
-Le collection `users/{uid}/telemetry_errors`, `telemetry_events` e `telemetry_anomalies` sono contratti pre-lancio ritirati: il client corrente invia esclusivamente diagnostica tecnica a Sentry e non le legge né scrive. Il fresh start esclude il supporto dei client precedenti: le Security Rules non accordano più accesso client a queste collection, nemmeno al proprietario con consenso attivo. Non restano parser payload, retry o upgrade `expireAt` per quei client. Questa chiusura del boundary non cancella documenti e non certifica l'assenza di dati live: retention nominale 30 giorni, maintenance cron e cancellazione account/health-data restano operativi attraverso Admin SDK per eventuali record residui. Il loro ritiro backend completo richiede verifica separata del provider e del contenuto; non rimuovere tali tutele come side effect del clean-cut client.
 
 ### Primo consenso sanitario trusted
 
-**MUST:** le Rules negano l'accesso business finché manca `health_consent_withdrawals/{uid}`, `status: active`, `revision >= 1`, `uid` corrispondente al proprietario e la presenza dei campi `acceptedAt`, `privacyVersion`, `termsVersion`. Per rispettare il limite di 1.000 espressioni delle transazioni Protocol 3, la validazione semantica dei campi (timestamp ISO valido e versioni non vuote) è obbligatoria nel GET trusted e nel client, non attribuita alle Rules. Il record rimane server-only e la risposta invalida non può autorizzare la PWA. Il backend trusted registra il primo consenso esplicito tramite `POST /api/health-consent` (`accept-initial`, revision attesa zero, Firebase Auth + App Check limited-use). Il client verifica il contratto GET v2 e la sua epoch prima di qualsiasi lettura/scrittura cloud. L'assenza del record non è un consenso implicito; `legalConsent` sul root client non costituisce prova trusted. Registro repliche e `_sync.writer` richiedono `consentRevision` coerente; le collection telemetriche pre-lancio non accordano alcun accesso client.
-
-**MUST:** l'accesso locale offline è consentito soltanto a una generazione già verificata e riaperta dal vault sicuro; la cache locale non può autorizzare un primo consenso o cloud I/O. Le revisioni ritardate/revocate non possono essere rietichettate o caricate silenziosamente. Il flusso guest→account preserva intenzioni e dati, e la prima accettazione viene salvata una sola volta sul server prima del cutover client/Rules coordinato.
+Le Rules negano l'accesso business senza il record server-only attivo e la revisione corrente. Il contratto completo e la distinzione fra validazione Rules e GET trusted sono in [Consenso salute](health-consent.md); non attribuire alle Rules la validazione del business cifrato.
 
 ### Metadati `_sync`
 
@@ -151,7 +125,11 @@ Gli shard mensili correnti contengono il business dentro `_sealed`: le Firestore
 
 Il Protocol 3 ammette nei causal clock cloud solo le 16 chiavi di slot replica `s00`–`s15`; le Rules rifiutano actor ID arbitrari e validano anche la coordinata dell'attuale writer come intero non negativo entro il safe integer. Il limite di 1000 espressioni delle Rules impedisce di validare nello stesso boundary tutte e 16 le coordinate senza bloccare write lecite: la validazione completa resta obbligatoria nel parser TypeScript prima di hydration e replay. Questa protezione riguarda i **metadati causali**; non verifica i valori di ogni stamp né gli identificativi business dinamici dei documenti mensili, che restano gestiti dai gateway applicativi.
 
-Le Rules verificano gli invarianti top-level del protocollo che appartengono al boundary di autorizzazione. Sync Protocol 3 è la baseline del primo account reale: Protocol 1/2 non sono più accettati né migrati. Non esiste un percorso bootstrap Firestore business privo di causal metadata: prima di qualsiasi write business il client crea `users/{uid}/sync_control/state`; ogni documento root/mensile deve contenere `_schemaVersion: 1`, `_sync` Protocol 3 e `_sync.writer` (`slot`, `replicaId`, `generation`, `seq`) coerente con la replica attiva e con l'avanzamento atomico di `lastSeq`. Ogni transazione business aggiorna anche `sync_control/state` con un `mutation.batchId` distinto per ogni `advance`, verificato da Rules tramite `get()`/`getAfter()`: il replay idempotente può ripetere `lastSeq` ma non riutilizzare `batchId`. Un documento persistito privo dei marker correnti è incompatibile e viene rifiutato fail-closed, mentre un documento realmente assente è una normale baseline vuota. Le delete fisiche client-side dei documenti mensili sono sempre negate; la cancellazione fisica resta nel backend trusted di account deletion. `request.time` è la prova autorevole della lease; la validazione completa di Vector Clock/`FieldStamp` e la completezza del full checkpoint restano nel protocollo TypeScript e nei relativi test.
+Le Rules verificano gli invarianti top-level del protocollo che appartengono al boundary di autorizzazione. Sync Protocol 3 è la baseline del primo account reale: Protocol 1/2 non sono più accettati né migrati. Non esiste un percorso bootstrap Firestore business privo di causal metadata: prima di qualsiasi write business il client crea `users/{uid}/sync_control/state`; ogni documento root/mensile deve contenere `_schemaVersion: 1`, `_sync` Protocol 3 e `_sync.writer` (`slot`, `replicaId`, `generation`, `seq`) coerente con la replica attiva e con l'avanzamento atomico di `lastSeq`.
+
+Ogni transazione business aggiorna anche `sync_control/state` con un `mutation.batchId` distinto per ogni `advance`, verificato da Rules tramite `get()`/`getAfter()`: il replay idempotente può ripetere `lastSeq` ma non riutilizzare `batchId`. Un documento persistito privo dei marker correnti è incompatibile e viene rifiutato fail-closed, mentre un documento realmente assente è una normale baseline vuota.
+
+Le delete fisiche client-side dei documenti mensili sono sempre negate; la cancellazione fisica resta nel backend trusted di account deletion. `request.time` è la prova autorevole della lease; la validazione completa di Vector Clock/`FieldStamp` e la completezza del full checkpoint restano nel protocollo TypeScript e nei relativi test.
 
 ### Sintomo di Rules/Auth/App Check
 
@@ -179,7 +157,13 @@ Prima di modificarli:
 
 Il workflow `.github/workflows/firebase-hosting-production.yml` deploya Hosting soltanto dopo che `Firebase Firestore Production` ha completato con successo la riconciliazione dello stesso exact SHA di `main`; questo serializza i cutover che cambiano contemporaneamente client e Rules. Ricontrolla l'exact SHA e usa Workload Identity Federation. Il deploy resta limitato a `--only hosting`.
 
-Il workflow separato `.github/workflows/firebase-firestore-production.yml` gestisce esclusivamente Firestore Rules/indici. Dopo ogni gate canonico verde sul push a `main`, ricontrolla l'exact SHA e riconcilia lo stato desiderato di quello SHA con il provider live: se le Rules differiscono o manca un indice desiderato esegue il deploy, se gli indici desiderati o le exemption single-field sono già in una Long Running Operation coerente col target attende e verifica senza rilanciare mutazioni ridondanti, se Rules e indici sono già allineati termina senza mutazioni. Il read-back delle exemption esplicite usa la lista database-wide `collectionGroups/-/fields` con il filtro canonico `indexConfig.usesAncestorConfig=false OR ttlConfig:*`, perché le wildcard collection-level `*` non vanno inferite da una scansione per singolo collection group. Poiché il JSON protobuf può omettere i booleani output-only quando valgono `false`, un override esatto con `indexes: []` è considerato esplicito se `usesAncestorConfig` non è `true`; richiedere che il campo `false` sia materialmente presente nel JSON produrrebbe un falso drift permanente. Le operation di rimozione degli indici single-field vengono riconosciute solo quando il provider espone una `FieldOperationMetadata` attiva sul campo esatto con soli delta `REMOVE`; uno stato diverso resta drift e fallisce chiuso. Il confronto con il solo commit padre non è una baseline valida perché può perdere una modifica approvata ma non ancora distribuita. Il workflow usa una identità WIF dedicata, non usa `--force` e fallisce chiuso se non riesce a determinare lo stato live. La verifica finale legge nuovamente Rules, indici e operation dal provider; le Rules devono coincidere con la sorgente dell'exact SHA, gli indici compositi desiderati devono essere `READY` e le exemption devono essere effettivamente applicate. La finestra di convergenza del job è bounded a 35 minuti dentro il timeout complessivo di 45 minuti.
+Il workflow separato `.github/workflows/firebase-firestore-production.yml` gestisce esclusivamente Firestore Rules/indici. Dopo ogni gate canonico verde sul push a `main`, ricontrolla l'exact SHA e riconcilia lo stato desiderato di quello SHA con il provider live: se le Rules differiscono o manca un indice desiderato esegue il deploy, se gli indici desiderati o le exemption single-field sono già in una Long Running Operation coerente col target attende e verifica senza rilanciare mutazioni ridondanti, se Rules e indici sono già allineati termina senza mutazioni.
+
+Il read-back delle exemption esplicite usa la lista database-wide `collectionGroups/-/fields` con il filtro canonico `indexConfig.usesAncestorConfig=false OR ttlConfig:*`, perché le wildcard collection-level `*` non vanno inferite da una scansione per singolo collection group. Poiché il JSON protobuf può omettere i booleani output-only quando valgono `false`, un override esatto con `indexes: []` è considerato esplicito se `usesAncestorConfig` non è `true`; richiedere che il campo `false` sia materialmente presente nel JSON produrrebbe un falso drift permanente.
+
+Le operation di rimozione degli indici single-field vengono riconosciute solo quando il provider espone una `FieldOperationMetadata` attiva sul campo esatto con soli delta `REMOVE`; uno stato diverso resta drift e fallisce chiuso. Il confronto con il solo commit padre non è una baseline valida perché può perdere una modifica approvata ma non ancora distribuita. Il workflow usa una identità WIF dedicata, non usa `--force` e fallisce chiuso se non riesce a determinare lo stato live.
+
+La verifica finale legge nuovamente Rules, indici e operation dal provider; le Rules devono coincidere con la sorgente dell'exact SHA, gli indici compositi desiderati devono essere `READY` e le exemption devono essere effettivamente applicate. La finestra di convergenza del job è bounded a 35 minuti dentro il timeout complessivo di 45 minuti.
 
 Root app shell, `index.html`, manifest, service worker e Workbox devono essere esplicitamente revalidati/no-store; soltanto gli asset fingerprinted sotto `/assets/` sono immutable.
 

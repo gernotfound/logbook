@@ -7,6 +7,8 @@ Questa regola disciplina i sistemi esterni la cui configurazione effettiva non �
 
 Il registro decisionale stabile e leggibile anche fuori dal codice è `docs/operations/external-services-register.md`.
 
+**Autorità:** [`AGENTS.md`](../../AGENTS.md). Questo contratto ne specializza gli invarianti; non amplia autorizzazioni o perimetro.
+
 ## Fonte di verità
 
 - **MUST:** codice/config repository e stato del provider esterno sono fonti di verità separate. Non dedurre la configurazione live dal solo repository.
@@ -66,14 +68,14 @@ Firebase Hosting, Firebase Authentication, Firestore, Firebase Admin e App Check
 
 - Google Analytics 4/Firebase Analytics, Vercel Analytics e Speed Insights non fanno parte del runtime corrente.
 - **MUST:** non inviare page view, eventi di utilizzo o dati sanitari a servizi analytics; mantenere separata la telemetria tecnica Sentry.
-- **NOTE:** il product owner ha confermato lo scollegamento GA4 dal progetto Firebase, la dismissione della proprietà Google Analytics e la rimozione della variabile GitHub del Measurement ID. La PR #320 attesta separatamente la rimozione dal codice e dai workflow. Non permane alcuna configurazione Analytics corrente da gestire.
+- **NOTE:** il product owner ha confermato lo scollegamento GA4 dal progetto Firebase, la dismissione della proprietà Google Analytics e la rimozione della variabile GitHub del Measurement ID. La PR #320 attesta separatamente la rimozione dal codice e dai workflow. La decisione di dismissione non certifica oggi lo stato delle console o la cancellazione di dati presso i provider.
 
 ### Sentry
 
 - Sentry resta Error Monitoring soltanto, salvo futura decisione esplicita di prodotto.
 - Non attivare accidentalmente Session Replay, tracing, logging o Application Metrics seguendo wizard/onboarding.
 - I token auth Sentry sono segreti build-only; il DSN browser è configurazione runtime pubblica ma non va duplicato inutilmente.
-- Seguire `docs/telemetry-sentry-guide.md` per minimizzazione payload e source map.
+- Seguire [Telemetria e privacy](telemetry-and-privacy.md) per il contratto di minimizzazione e coda, e `docs/telemetry-sentry-guide.md` per la guida operativa.
 
 ### Google Search Console
 

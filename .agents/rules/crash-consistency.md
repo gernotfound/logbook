@@ -3,7 +3,7 @@
 **Quando leggere:** commit locale, replay, lost acknowledgement, interruzioni e concorrenza remote-to-ack.
 **Non inferire:** esito remoto ambiguo non è né ack certo né prova di fallimento: preservare e verificare il journal.
 
-> Stato: normativo da M3 | Baseline: `17fa94ce2c7b436b4b382f88acf05eddcb624efc`
+**Autorità:** [`AGENTS.md`](../../AGENTS.md). Questo contratto ne specializza gli invarianti; non amplia autorizzazioni o perimetro.
 
 ## Obiettivo
 
@@ -106,4 +106,4 @@ npm run verify:m3
 
 Include integralmente i gate precedenti e aggiunge `npm run test:recovery` e `npm run test:e2e`. Per M3 questa formulazione supersedeva i vecchi gate minimi M0/M1.
 
-Nel repository corrente `verify:m3` resta una componente storica/transitiva; il gate umbrella canonico è `npm run verify:m8` come definito in `.agents/rules/ci-verification.md`. Un sottoinsieme verde non equivale al superamento del gate corrente completo.
+Nel repository corrente `verify:m3` resta un sottogate storico; l'umbrella ricompone le suite richieste attraverso `verify:m5`, senza dover invocare ogni vecchio comando. Il gate umbrella canonico è `npm run verify:m8` come definito in `.agents/rules/ci-verification.md`. Un sottoinsieme verde non equivale al superamento del gate corrente completo.

@@ -10,6 +10,6 @@ Supporta backup, importazione ed esportazione dei dati.
 
 **Apri la PWA:** https://thelogbook.web.app/
 
-**Documentazione:** [Indice completo](docs/README.md) · [Regole AI](AGENTS.md) · [Contratti specialistici](.agents/rules/)
+**Documentazione:** [Indice completo](docs/README.md) · [AGENTS.md, punto di ingresso per agenti](AGENTS.md). La mappa in AGENTS indica quali contratti specialistici aprire per ogni task.
 
 **Lavori da pianificare e seguire:** [GitHub Issues](https://github.com/gernotfound/logbook/issues). I collaudi automatici si svolgono con fixture locali, emulatori e CI; non è configurato un ambiente Firebase/Vercel Test separato.

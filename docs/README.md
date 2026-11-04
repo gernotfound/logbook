@@ -1,28 +1,42 @@
 # TheLogBook — indice documentazione
 
-Questo file è la **mappa dei documenti**; non è un contratto di esecuzione né una prova dello stato Production. Tutti i percorsi esistenti sono mantenuti per preservare riferimenti e compatibilità.
+Questo file è la **mappa dei documenti**; non è un contratto di esecuzione né una prova dello stato Production. I contratti operativi hanno un solo punto di ingresso in AGENTS; le guide sotto non ne ampliano il mandato.
 
 ## Gerarchia e uso corretto
 
-1. **Istruzioni per agenti:** [`AGENTS.md`](../AGENTS.md) e i [13 contratti specialistici](../.agents/rules/) definiscono obblighi e vincoli.
+1. **Istruzioni per agenti:** [`AGENTS.md`](../AGENTS.md) è il file comandante e contiene la mappa dei [contratti specialistici](../.agents/rules/), da aprire esplicitamente secondo il task. I sottofile specializzano, senza contraddire o ampliare il mandato.
 2. **Implementazione:** codice, tipi, test e workflow al vero HEAD GitHub di `main` definiscono il comportamento verificabile; indagare divergenze con le istruzioni, non ignorarle.
 3. **Provider esterni:** stato live di Firebase, Google Cloud, Vercel, GitHub e altri va verificato nel provider, mai dedotto dai documenti.
 4. **Questa cartella:** contiene decisioni di prodotto, guide, registri, documenti legali incompleti, proposte e storico. Le etichette qui descrivono *lo stato del documento*, non certificano runtime, privacy o conformità legale.
 
 Leggere **solo ciò che riguarda il task**; per cambi trasversali consultare tutti i riferimenti pertinenti. Una **PROPOSTA NON IMPLEMENTATA** non diventa un requisito corrente; uno **STORICO** non è una checklist per il prossimo deploy; un **template** non è approvato né firmato.
 
+## Contratti e guide: quale fonte usare
+
+La selezione completa dei contratti resta in [AGENTS](../AGENTS.md). Qui si indicano solo le relazioni fra guida e fonte normativa.
+
+| Guida o attività | Contratto normativo |
+|---|---|
+| Archivio device e chiave cloud | [Archivio e cifratura](../.agents/rules/secure-storage.md) |
+| Workout, editor e copie indipendenti | [Bozze e stato device](../.agents/rules/device-drafts.md) |
+| Backup, import e CSV | [Portabilità](../.agents/rules/backup-and-portability.md) |
+| Consenso, diritti e cancellazione soli dati | [Consenso salute](../.agents/rules/health-consent.md) |
+| Sentry e code diagnostiche | [Telemetria e privacy](../.agents/rules/telemetry-and-privacy.md) |
+| CI e collaudi | [Verifica CI](../.agents/rules/ci-verification.md) |
+
 ## Architettura
 
 | Documento | Stato | Per quale attività |
 |---|---|---|
 | [Archivio locale cifrato](architecture/secure-local-archive-design.md) | Specifica approvata e rilasciata; smoke reali separati | Cifratura, migrazione, recovery, modello di minaccia |
-| [Gateway cloud trusted](architecture/trusted-sync-gateway-design.md) | PROPOSTA NON IMPLEMENTATA | Valutare alternative e costi prima di eventuale decisione |
+| [Gateway cloud trusted](architecture/trusted-sync-gateway-design.md) | PROPOSTA NON IMPLEMENTATA su baseline storica precedente al cloud cifrato | Rivalutare prima di ogni eventuale incarico; non attivare le fasi dal solo documento |
 
 ## Operazioni e configurazioni esterne
 
 | Documento | Stato | Per quale attività |
 |---|---|---|
 | [Registro servizi esterni](operations/external-services-register.md) | Registro operativo; riscontri live necessari | Firebase, Vercel, Sentry, GitHub e servizi ritirati |
+| [Collaudi E2E e affidabilità](operations/e2e-reliability.md) | Guida corrente sui limiti delle prove; collaudi live separati | CI sintetica, dispositivi reali e perimetro Production |
 | [Cutover Firebase Hosting](operations/firebase-hosting-cutover.md) | STORICO completato il 2 ottobre 2026 | Decisioni e rollback storici, non procedura di deploy corrente |
 
 ## Diagnostica
@@ -58,6 +72,10 @@ Il [pacchetto compliance](compliance/README.md) contiene le decisioni aperte e l
 | [Supporto e SLA](compliance/support-sla-policy-template.md) | Template da approvare | Impegni di servizio sostenibili |
 | [Misure tecniche/organizzative](compliance/technical-organizational-measures.md) | Scheda da verificare sul live | Sicurezza tecnica vs provider |
 | [Fornitori e trasferimenti](compliance/vendor-transfer-register.md) | Registro da validare | Ruoli fornitori e trasferimenti |
+
+## Guide delle suite
+
+Le guide [tests/README.md](../tests/README.md), [fuzz](../tests/fuzz/README.md), [recovery](../tests/recovery/README.md), [GC](../tests/gc/README.md) e [hardening](../tests/hardening/README.md) spiegano suite e oracle. I comandi `verify:m2`–`verify:m5` descrivono sottogate storici; il candidato corrente richiede `verify:m8` o CI equivalente exact-SHA.
 
 ## Regole per la manutenzione
 

@@ -2,15 +2,17 @@
 
 > **STATO: PROPOSTA ARCHITETTURALE, NON IMPLEMENTATA E NON IN ESECUZIONE.** Baseline verificata direttamente su GitHub: gernotfound/logbook, main SHA 7617a226201d81824785580ef87164f2a7705ffb (14 ottobre 2026). Dal 18 ottobre 2026 l'ambiente separato Firebase/Vercel Test è stato dismesso su decisione del product owner; le fasi di sperimentazione cloud live qui descritte sono **sospese** e non autorizzano a ricrearlo o a sperimentare su Production. La presenza di questa specifica non certifica nuovi endpoint, migrazioni, costi, test runtime o Security Rules. Rispettare AGENTS.md e i contratti specialistici.
 
-## 1. Problema e perimetro
+**Drift noto rispetto alla baseline originale:** il cloud corrente usa `_sealed` e ADK, con Rules che non possono ispezionare il business cifrato. I limiti plaintext e le valutazioni del problema nella sezione 1 descrivono il 14 ottobre, non il comportamento attuale. Prima di usare questa proposta occorre rivalutare accesso alle chiavi nel server, validazione, costi, minacce e rollout contro il codice corrente. Nessun lavoro qui elencato è autorizzato dal solo documento; i contratti vigenti sono [Archivio e cifratura](../../.agents/rules/secure-storage.md), [Storage](../../.agents/rules/storage-and-sync.md) e AGENTS.
 
-**Confermato dal codice:** attualmente il client autenticato può scrivere direttamente il documento root users/{uid}, gli shard history_months/{YYYY-MM} e nutrition_months/{YYYY-MM}, oltre al registro sync_control/state. Le Firestore Rules richiedono owner e consenso attivo trusted, Sync Protocol 3, fencing replica, limiti strutturali e cardinalità mensili (256 allenamenti, 31 giornate), nonché actor causali s00–s15. Non applicano a ogni record business dinamico l'intera validazione dello schema applicativo.
+## 1. Problema e perimetro della baseline storica
+
+**Osservato nella baseline storica del 14 ottobre 2026:** il client autenticato può scrivere direttamente il documento root users/{uid}, gli shard history_months/{YYYY-MM} e nutrition_months/{YYYY-MM}, oltre al registro sync_control/state. Le Firestore Rules richiedono owner e consenso attivo trusted, Sync Protocol 3, fencing replica, limiti strutturali e cardinalità mensili (256 allenamenti, 31 giornate), nonché actor causali s00–s15. Non applicano a ogni record business dinamico l'intera validazione dello schema applicativo.
 
 Un client modificato intenzionalmente dall'owner può quindi tentare un payload business incoerente pur superando diversi controlli Firestore. Non è stata dimostrata una violazione cross-UID, né perdita di dati reali. L'owner autorizzato può sempre scegliere misure soggettivamente false: qui la garanzia ottenibile riguarda coerenza strutturale e semantica, non la verità materiale delle annotazioni.
 
-**Difesa esistente:** transactionWriter.ts normalizza, verifica identità/date mensili, usa UserDataSchema, merger causale e confronto lossless dei dati remoti. La correzione delle proprietà dinamiche delle PR #385 e #387 e l'hardening delle Rules nelle PR #378 e #386 sono già parte della baseline. Non chiamare una nuova allowlist parziale o un trigger di pulizia post-write una validazione completa.
+**Difesa descritta in quella baseline:** transactionWriter.ts normalizza, verifica identità/date mensili, usa UserDataSchema, merger causale e confronto lossless dei dati remoti. La correzione delle proprietà dinamiche delle PR #385 e #387 e l'hardening delle Rules nelle PR #378 e #386 sono già parte della baseline. Non chiamare una nuova allowlist parziale o un trigger di pulizia post-write una validazione completa.
 
-## 2. Invarianti del percorso attuale
+## 2. Invarianti assunti dalla proposta (da rivalidare)
 
 1. La UI invia Domain Operations, che passano da commitDomainOperations in localRepository.ts: stato business + SemanticOperation/journal vengono persistiti atomicamente nel medesimo update IndexedDB dell'archivio cifrato per owner.
 2. replicateJournal.ts lavora **dopo** il commit locale; controlla sessione, consenso legale e sanitario, App Check e replica. Rete o backend indisponibile non possono annullare il salvataggio locale.

@@ -3,7 +3,7 @@
 **Quando leggere:** mutazioni UI/hook, reducer, compiler, identità e commit di dominio.
 **Non inferire:** Domain Operations è un layer di intento locale, non un nuovo sync protocol persistito.
 
-> Stato: normativo da M8 | Baseline M7: `4d6b5d1f306587c16ee15e3ddb7386a63c5b94bd`
+**Autorità:** [`AGENTS.md`](../../AGENTS.md). Questo contratto ne specializza gli invarianti; non amplia autorizzazioni o perimetro.
 
 ## Obiettivo
 
@@ -11,16 +11,10 @@ M8 rende esplicito l'intento delle mutazioni business senza introdurre un second
 
 Il percorso normativo per una normale azione utente è:
 
-```text
-UI / hook
-→ DomainOperation tipizzata
-→ reducer business puro
-→ commit IndexedDB atomico
-→ SemanticOperation esistenti
-→ journal LocalEnvelope V5
-→ transactionWriter
-→ Firestore
-```
+1. UI/hook produce una `DomainOperation` tipizzata.
+2. Il reducer puro calcola lo stato e il compiler genera `SemanticOperation`.
+3. Il commit IndexedDB rende durevoli insieme business state e journal nell'envelope corrente.
+4. `transactionWriter` consegna il journal a Firestore dopo i gate di replica.
 
 `DomainOperation` è un contratto di authoring locale. Non è un formato cloud, non è un nuovo sync protocol e non viene persistita come nuova coda.
 
@@ -28,7 +22,7 @@ UI / hook
 
 M8 non ha introdotto nuove versioni persistite. La fonte eseguibile attuale è `src/lib/schemaEvolution.ts` con `CURRENT_DATA_SCHEMA`, `CURRENT_SYNC_PROTOCOL`, `CURRENT_LOCAL_ENVELOPE` e `CURRENT_BACKUP_SCHEMA`: non derivare questi numeri dalla versione PWA né da questa nota storica.
 
-La sigla “V4” di Domain Operations indica che il layer opera sopra il journal/envelope V5 corrente. Le DomainOperation vengono compilate in `SemanticOperation` prima della persistenza del journal.
+“Domain Operations V4” è il nome storico del layer di intenti, non una relazione numerica con l'envelope né una quinta versione persistita. Le DomainOperation vengono compilate in `SemanticOperation` prima della persistenza del journal.
 
 ## Boundary normativo
 
@@ -52,7 +46,7 @@ Il percorso snapshot `saveUserData` / `updateUserData` / `commitLocal` resta amm
 - hydration cloud;
 - guest → account merge;
 - import/restore di backup o share;
-- recovery e compatibility boundary;
+- recovery dei formati supportati;
 - implementazione interna del sync/store necessaria a questi flussi.
 
 **MUST NOT:** aggiungere nuovi consumer ordinari snapshot-based per comodità.
@@ -67,7 +61,7 @@ Le operazioni su collezioni keyed richiedono una identità stabile e valida.
 
 **MUST NOT:** una DomainOperation deve degradare automaticamente in una write atomica dell'intero array quando non riesce a risolvere l'identità.
 
-Il fallback atomico storico di `diffDocuments()` resta disponibile esclusivamente per i boundary snapshot legacy/bulk.
+Il fallback atomico storico di `diffDocuments()` resta disponibile esclusivamente per i boundary snapshot bulk esplicitamente consentiti, nel formato supportato.
 
 Identità correnti:
 
@@ -174,4 +168,4 @@ npm run verify:m8
 
 `verify:m8` include integralmente `verify:m7`, poi aggiunge i test Domain Operations e il domain-boundary checker.
 
-Un subset verde non equivale al superamento di M8.
+Un subset verde non equivale al gate canonico. Vedere [Verifica CI](ci-verification.md).

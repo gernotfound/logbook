@@ -3,7 +3,7 @@
 **Quando leggere:** test causali distribuiti, seed riproducibili, oracle e convergenza.
 **Non inferire:** uguale stato business finale non implica stato causale equivalente.
 
-> Stato: normativo | Milestone: M2 | Baseline: M1 `1c3dce06745327d0622ab606afbb21ea0de906ad`
+**Autorità:** [`AGENTS.md`](../../AGENTS.md). Questo contratto ne specializza gli invarianti; non amplia autorizzazioni o perimetro.
 
 ## Scopo
 
@@ -51,7 +51,7 @@ Quando più operation sullo stesso field vengono risolte nello stesso batch, il 
 
 ## Gate
 
-Il gate M2 completo è:
+Il sottogate storico M2 è:
 
 ```bash
 npm run verify:m2
@@ -59,7 +59,7 @@ npm run verify:m2
 
 Include, nell'ordine: lint, suite base, isolated, fuzz, stress/challenger, emulator/rules, no-skips e build TypeScript/Vite.
 
-`npm run verify:m0` resta disponibile come regression gate storico, ma non è sufficiente per approvare M2.
+Il gate canonico corrente è `npm run verify:m8` o la CI equivalente exact-SHA in [Verifica CI](ci-verification.md). `verify:m0` e `verify:m2` sono subset/storico e non certificano il candidato attuale.
 
 ## Politica sui failure
 

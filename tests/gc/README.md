@@ -1,5 +1,7 @@
 # M4 Causal Metadata / Tombstone-Subtree GC
 
+**Contesto:** [AGENTS.md](../../AGENTS.md) governa processo e autorizzazioni; [Verifica CI](../../.agents/rules/ci-verification.md) definisce il gate canonico corrente `npm run verify:m8` o CI equivalente exact-SHA. I comandi delle milestone sotto sono subset diagnostici, non il gate finale.
+
 M4 reduces sync metadata without inventing a time-based safety rule.
 
 Run the dedicated suite:
@@ -16,7 +18,7 @@ npm run verify:m4
 
 ## What is collected
 
-A deleted ancestor field is a hierarchical causal barrier. Under Sync Protocol 3, a descendant `FieldStamp` may be removed only when the ancestor's persisted delete barrier (`deleteClock`, or the legacy tombstone event clock during migration) componentwise covers the descendant stamp and every hidden candidate clock.
+A deleted ancestor field is a hierarchical causal barrier. Under Sync Protocol 3, a descendant `FieldStamp` may be removed only when the ancestor's persisted delete barrier (`deleteClock`, or the terminal tombstone event clock) componentwise covers the descendant stamp and every hidden candidate clock.
 
 `FieldStamp.clock` is the immutable event clock of the winner. A blocked contender advances only the cumulative document frontier `SyncMeta.clock`; it must not mutate the ancestor winner clock and thereby manufacture a false proof of subtree subsumption. Recreation can change the visible winner while the remove-wins delete barrier remains available for future arbitration.
 
@@ -24,11 +26,11 @@ Compaction is deterministic and idempotent. Zero-valued vector entries are canon
 
 ## Terminal GC under Protocol 3
 
-M4's age-based prohibitions remain unchanged: terminal tombstones are never collected because they are old. Protocol 3 can retire them only when the stable frontier — the componentwise minimum of every active replica checkpoint — covers the winner, delete barrier, legacy context and hidden candidates.
+M4's age-based prohibitions remain unchanged: terminal tombstones are never collected because they are old. Protocol 3 can retire them only when the stable frontier — the componentwise minimum of every active replica checkpoint — covers the winner, delete barrier and hidden candidates.
 
 Replica membership is bounded to 16 slots. Expired/retired generations are fenced; slot reuse increments generation and continues the slot sequence. This is what makes removal of a stable terminal barrier safe against a stale device returning later.
 
-With Protocol 3 as the first-account baseline, a client never turns terminal GC into a physical Firestore delete. If the last field disappears, the writer persists an empty `_schemaVersion` + `_sync.writer` shell so the transition remains attributable to the active replica generation.
+With Protocol 3 as the first-account baseline, a client never turns terminal GC into a physical Firestore delete. If the last field disappears, the writer persists an empty business shell in the current `_sealed` format, with `_schemaVersion` + `_sync.writer` so the transition remains attributable to the active replica generation.
 ## Required properties
 
 The M4 suite checks:

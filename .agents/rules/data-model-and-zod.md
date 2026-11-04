@@ -3,7 +3,7 @@
 **Quando leggere:** nuove chiavi, identità business, UserData, Zod, proiezioni Firestore e shard mensili.
 **Non inferire:** record remoto invalido non equivale a cancellazione business; sanitizzazione parziale non dimostra completezza del mese.
 
-> Stato: normativo | Ricognizione originaria: 2026-09-20; rivalidare implementazione e contratti all'HEAD attuale | File allora verificati: `src/types.ts`, `src/lib/schema.ts`, `src/lib/schemas/*.ts`, `src/lib/merge.ts`, `src/lib/db.ts`, `src/lib/sync/documentProjection.ts`, `src/lib/sync/domainOperations.ts`, `firestore.rules`
+**Autorità:** [`AGENTS.md`](../../AGENTS.md). Questo contratto ne specializza gli invarianti; non amplia autorizzazioni o perimetro.
 
 ## Quattro piani distinti
 
@@ -26,7 +26,11 @@ Le cinque durate del sonno di `NutritionDay` (`sleepHours`, `sleepDeep`, `sleepL
 
 Le misurazioni corporee non sono un array root `bodyMeasurements`: peso, BF, provenienza BF, circonferenze e sonno sono campi di `NutritionDay`, quindi seguono la persistenza mensilizzata di `nutrition`. La circonferenza fianchi usa solo `hip` in `UserProfile` e `NutritionDay`; l'alias `hips` pre-lancio non viene più importato, promosso durante merge o conservato dalla normalizzazione Zod. I campi addizionali distinti restano governati da `.passthrough()`.
 
-La pianificazione nutrizionale usa `avgMacros`, `onBoost`, `onMacros`, `offMacros` e i target attualmente consumati da UI e calcoli. Le proprietà pre-lancio `lockedMacro`, `chartPeriod` e i rapporti macro duplicati di primo livello (`carbsPerKg`, `proPerKg`, `fatPerKg`) e il totale derivato persistito `totalKcal` non sono più campi di dominio: la normalizzazione Zod le rimuove sia dai piani attivi sia dai conflitti pendenti. I rapporti annidati nei target correnti e i campi forward-compatible distinti rimangono preservati. Il fingerprint di confronto dei conflitti è `v4` e considera i soli campi correnti mappati. Il confronto UI dei piani ricava le calorie da peso e `avgMacros` tramite lo stesso calcolo dell'editor; non usa il totale pre-lancio. La baseline corrente assegna esplicitamente `nutritionPlanningOrigin` (`generated-default` per bootstrap, `user-edited` dopo interventi utente). In un merge guest→account un piano con origine assente **non** viene classificato come default per somiglianza ai valori iniziali: viene considerato `user-edited`, conservando eventuale conflitto guest senza fondere silenziosamente i piani. `hasUserData` considera tale piano dato da preservare se contiene valori. L'assenza di entrambi i piani rimane innocua. Conservare la verifica CAS in archivio cifrato e il controllo sessione prima di risolvere un conflitto.
+La pianificazione nutrizionale usa `avgMacros`, `onBoost`, `onMacros`, `offMacros` e i target attualmente consumati da UI e calcoli. Le proprietà pre-lancio `lockedMacro`, `chartPeriod` e i rapporti macro duplicati di primo livello (`carbsPerKg`, `proPerKg`, `fatPerKg`) e il totale derivato persistito `totalKcal` non sono più campi di dominio: la normalizzazione Zod le rimuove sia dai piani attivi sia dai conflitti pendenti. I rapporti annidati nei target correnti e i campi forward-compatible distinti rimangono preservati. Il fingerprint di confronto dei conflitti è `v4` e considera i soli campi correnti mappati.
+
+Il confronto UI dei piani ricava le calorie da peso e `avgMacros` tramite lo stesso calcolo dell'editor; non usa il totale pre-lancio. La baseline corrente assegna esplicitamente `nutritionPlanningOrigin` (`generated-default` per bootstrap, `user-edited` dopo interventi utente). In un merge guest→account un piano con origine assente **non** viene classificato come default per somiglianza ai valori iniziali: viene considerato `user-edited`, conservando eventuale conflitto guest senza fondere silenziosamente i piani. `hasUserData` considera tale piano dato da preservare se contiene valori. L'assenza di entrambi i piani rimane innocua.
+
+Conservare la verifica CAS in archivio cifrato e il controllo sessione prima di risolvere un conflitto.
 
 Il formato supportato delle continuazioni di serie workout è soltanto `SessionExerciseSet.segments`, con la tecnica sul segmento. I writer di sessione/routine, l'editor, il recupero, i calcoli, il CSV e il backup/import usano questa struttura. Gli array pre-lancio `dropsets` e `isometrics` non vengono più letti né convertiti: il gateway Zod li esclude dal modello senza mutare l'input, preservando gli altri campi addizionali. La tecnica routine `defaultTechnique: 'isometrics'` resta invece un'impostazione corrente: genera segmenti `technique: 'isometry'`, non un array storico. Restano obbligatori identificativi stabili dei segmenti, callback indirizzati per ID, protezione delle bozze e controllo di integrità cloud contro normalizzazioni lossy.
 
@@ -34,7 +38,7 @@ Il termine temporale di una sessione usa soltanto `globalEndTime`; `globalStartT
 
 ## Zod Gateway — difesa runtime
 
-Tutti i dati in ingresso dai boundary persistiti **DEVONO** essere normalizzati secondo la versione applicabile e poi transitare attraverso `UserDataSchema.parse()` prima di diventare stato business corrente.
+Tutti i dati in ingresso dai boundary persistiti **DEVONO** attraversare decifratura autenticata e formato/versione applicabili, poi il gateway Zod pertinente (`UserDataSchema.parse()` per lo stato applicativo) prima di diventare business state corrente. Non passare ciphertext o metadati di protocollo come se fossero `UserData`.
 
 ### Perché è cruciale
 
@@ -74,8 +78,12 @@ Questa distinzione è già applicata alle collezioni che hanno ricevuto hardenin
 
 - **Cache corrotta:** non reinterpretare bytes/versioni incompatibili come dati correnti; preservare il dato recuperabile quando previsto dal boundary.
 - **Dati cloud critici invalidi:** non sovrascrivere il cloud con default inventati; propagare/classificare l'errore.
-- **MUST:** prima di considerare autorevole un documento root letto dal cloud, confrontare i campi business originali con la normalizzazione Zod/root proiettata usando `assertCloudBusinessPreserved()`; un campo perso, una collezione scartata o un valore sostituito da fallback blocca hydration/checkpoint/guest merge senza modificare la copia cloud o il journal locale. Il controllo è condiviso con `transactionWriter.ts`, che lo applica prima delle write semantiche. Le conversioni scalari comprovabilmente reversibili restano consentite.
-- **MUST:** dopo il merge semantico, `transactionWriter` verifica nuovamente con `assertCloudBusinessPreserved()` che la normalizzazione finale non perda o sostituisca valori business. Validare il remoto iniziale non prova la validità del risultato delle operazioni. Un fallimento impedisce l'intero commit business/control; il journal locale non viene acknowledged. Le conversioni scalari reversibili restano consentite.
+- **MUST:** prima di considerare autorevole un documento root letto dal cloud, confrontare i campi business originali con la normalizzazione Zod/root proiettata usando `assertCloudBusinessPreserved()`; un campo perso, una collezione scartata o un valore sostituito da fallback blocca hydration/checkpoint/guest merge senza modificare la copia cloud o il journal locale.
+
+Il controllo è condiviso con `transactionWriter.ts`, che lo applica prima delle write semantiche. Le conversioni scalari comprovabilmente reversibili restano consentite.
+- **MUST:** dopo il merge semantico, `transactionWriter` verifica nuovamente con `assertCloudBusinessPreserved()` che la normalizzazione finale non perda o sostituisca valori business. Validare il remoto iniziale non prova la validità del risultato delle operazioni. Un fallimento impedisce l'intero commit business/control; il journal locale non viene acknowledged.
+
+Le conversioni scalari reversibili restano consentite.
 - **MUST:** `TransactionOutcome.documents` contiene esattamente il business normalizzato cifrato e scritto nella transazione, insieme ai metadati causali scritti. Lo snapshot precedente alla normalizzazione non è una prova valida per l'ACK.
 - **MUST:** un `activeWorkout` cloud non nullo ma privo di identità valida è un errore di integrità, mai un'autorizzazione a cancellare la sessione corrente.
 - **Versioni future:** fail-closed / `update-required` secondo `storage-and-sync.md`.
@@ -125,19 +133,29 @@ Il mese deriva dalla data locale della registrazione. Hydration parziale/complet
 `src/lib/sync/monthlyIntegrity.ts` è il boundary condiviso dalla scansione completa in `src/lib/db.ts` e dalle letture per finestra in `src/lib/db/db_training.ts` e `src/lib/db/db_nutrition.ts`.
 
 - **MUST:** normalizzare ogni shard con `normalizeCloudDocument()` prima di interpretarne i dati business. Versioni future o incompatibili falliscono chiuse, non diventano mesi vuoti.
-- **MUST:** `sanitizeHistoryMonthDocument()` ammette solo record con chiave e ID business validi/coerenti e data canonica appartenente al mese richiesto; `sanitizeNutritionMonthDocument()` ammette solo giornate con chiave data canonica del mese e `day.date` identica alla chiave. Le voci invalide sono scartate, senza inventare identità o spostare silenziosamente dati tra mesi.
-- **MUST:** una lettura cloud ordinaria, una scansione integrale (`allMonths`) o un backup completo che incontrano record mensili scartabili devono fallire prima di pubblicare uno shard incompleto: i sanitizzatori tolleranti restano per recovery/quarantena esplicita, non per attestare che il mese remoto è completo. Nessun record invalido può diventare una cancellazione implicita. I messaggi diagnostici indicano mese e chiave (mai il payload salute). Conservare nel `cloudDocuments` i metadati causali `_sync` dei documenti validi; `assertHistoryMonthDocument()` e `assertNutritionMonthDocument()` proteggono i percorsi di scrittura.
-- **MUST:** anche dopo la verifica di completezza, confrontare i record mensili raw con quelli normalizzati usando `assertCloudBusinessPreserved()`; date/ID integri non bastano se un valore business annidato viene silenziosamente sostituito o perso. Applicare lo stesso contratto alla finestra mensile e a `allMonths`, prima di pubblicare qualsiasi snapshot autorevole.
+- **MUST:** `sanitizeHistoryMonthDocument()` ammette solo record con chiave e ID business validi/coerenti e data canonica appartenente al mese richiesto; `sanitizeNutritionMonthDocument()` ammette solo giornate con chiave data canonica del mese e `day.date` identica alla chiave.
+
+Le voci invalide sono scartate, senza inventare identità o spostare silenziosamente dati tra mesi.
+- **MUST:** una lettura cloud ordinaria, una scansione integrale (`allMonths`) o un backup completo che incontrano record mensili scartabili devono fallire prima di pubblicare uno shard incompleto: i sanitizzatori tolleranti restano per recovery/quarantena esplicita, non per attestare che il mese remoto è completo. Nessun record invalido può diventare una cancellazione implicita. I messaggi diagnostici indicano mese e chiave (mai il payload salute).
+
+Conservare nel `cloudDocuments` i metadati causali `_sync` dei documenti validi; `assertHistoryMonthDocument()` e `assertNutritionMonthDocument()` proteggono i percorsi di scrittura.
+- **MUST:** anche dopo la verifica di completezza, confrontare i record mensili raw con quelli normalizzati usando `assertCloudBusinessPreserved()`; date/ID integri non bastano se un valore business annidato viene silenziosamente sostituito o perso.
+
+Applicare lo stesso contratto alla finestra mensile e a `allMonths`, prima di pubblicare qualsiasi snapshot autorevole.
 - **MUST:** preservare la validazione finale `DomainParsers.parseHistory()` e `DomainParsers.parseNutrition()` nel caricamento cloud, oltre al gateway `UserDataSchema` nell'hydration/commit locale. Gli oggetti Firestore intermedi restano non attendibili anche se hanno tipi TypeScript.
 
 **MUST:** un mese non caricato, un documento assente e una voce scartata per integrità sono casi distinti; nessuno giustifica da solo una cancellazione cloud o la sostituzione distruttiva di mesi locali. Rimangono obbligatori la copertura `window`/`all`, il journal e il replay causale. Ogni modifica di questi boundary richiede regressioni per dati incompleti, date/mese incoerenti, versioni future, fallimenti e retry.
 
 ## Domain Operations
 
-La classificazione storage non cambia il mutation boundary M8. Le normali mutazioni business UI/hook devono usare Domain Operations; snapshot-save resta confinato ai boundary bulk/compatibility allowlisted in `.agents/rules/domain-operations.md`.
+La classificazione storage non cambia il mutation boundary M8. Le normali mutazioni business UI/hook devono usare Domain Operations; snapshot-save resta confinato ai boundary bulk/recovery supportati e allowlisted in `.agents/rules/domain-operations.md`.
 
 ## Limiti dei cicli di allenamento
 
 La forma persistita `TrainingCycleSchema` resta tollerante per leggere e conservare cicli importati o già presenti senza eliminarli a causa di un solo numero fuori limite. Le nuove scritture tramite `training-cycle.upsert` validano invece **prima di qualsiasi fallback** settimane intere fra 1 e 52 e sedute settimanali intere fra 1 e 14, con `TrainingCycleWriteSchema` e un controllo dell'input raw in `domainOperations/reducer.ts`. Non trasformare un valore invalido in una correzione silenziosa durante il commit.
 
 Le anteprime dell'editor hanno gli stessi limiti di lavoro ma lasciano visibile l'input originale finché non viene corretto. `calculateCycleSchedule`, `calculateCycleTimeline` e `getNextScheduledRoutine` non elaborano quantità malformate o superiori a 104 settimane/14 sedute; il limite storico di 104 conserva la possibilità di leggere cicli di 100 settimane già coperti dai test. In caso di dati non sicuri, evitare di generare sessioni; non cancellare o riscrivere il ciclo persistito. Ogni modifica a queste soglie richiede test di lettura, scrittura, import ed editor.
+
+## Nuove scritture di alimenti custom
+
+Il boundary `validateCustomFood` in `src/lib/calc/nutrition.ts`, usato dal flusso `useNutritionMeals`, valida gli input raw prima della write durevole: numeri richiesti interamente interpretabili e finiti, nutrienti non negativi e quantità base positiva. Un prefisso numerico seguito da testo non è un numero valido; la virgola decimale UI è normalizzata. Per unità a pezzo (`pezzo`/`pcs`) serve il peso reale positivo del pezzo, senza inventare una conversione. Input non valido lascia il form e non invia Domain Operations; i test devono provare anche questo boundary, non soltanto il calcolo successivo.
