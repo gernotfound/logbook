@@ -21,7 +21,7 @@ vi.mock('../../src/lib/healthConsent', async () => {
         getVerifiedHealthConsentRevision: () => 1,
     };
 });
-vi.mock('../../src/lib/storageTelemetry', () => ({ updateStorageMarker: vi.fn(), clearStorageMarker: vi.fn() }));
+vi.mock('../../src/lib/storageIntegrity', () => ({ updateStorageMarker: vi.fn(), clearStorageMarker: vi.fn() }));
 import { createDataSlice } from '../../src/store/slices/createDataSlice';
 import { createWorkoutSlice } from '../../src/store/slices/createWorkoutSlice';
 import { createSyncSlice } from '../../src/store/slices/createSyncSlice';

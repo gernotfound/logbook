@@ -19,13 +19,13 @@ import { stableStorageKeyInventory } from './stableStorageKeyInventory';
 const SAFE_PLAINTEXT_NAMES = new Set([
     'health-consent-withdrawal', 'health-consent-generation', 'health-consent-last-active',
     'account-deletion', 'secure-vault-control',
-    'storage_marker', 'storage_anomaly_reported',
+    'storage_marker',
     ...OWNER_UI_PREFERENCES.map(preference => 'ui:' + preference),
 ]);
 
 /** Reject pre-launch unsealed device copies without adopting or deleting their bytes. */
 function isSensitiveDeviceName(name: string): boolean {
-    return name === 'telemetry_queue' || name === 'workout' || /^workout-intent:[a-f0-9]{32}$/.test(name)
+    return name === 'workout' || /^workout-intent:[a-f0-9]{32}$/.test(name)
         || name === 'timer' || name === 'draft_exercise'
         || name === 'draft_routine' || name === 'history-editor-context'
         || (name.startsWith('draft:') && name.length > 'draft:'.length);
