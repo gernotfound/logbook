@@ -154,13 +154,13 @@ export function parseManualDuration(input: string | undefined | null): string | 
     if (!cleaned) return '00:00:00';
 
     let totalSeconds: number;
-    const minutesMatch = /^(\\d+)\\s*min$/i.exec(cleaned);
+    const minutesMatch = /^(\d+)\s*min$/i.exec(cleaned);
     if (minutesMatch) {
         const minutes = Number(minutesMatch[1]);
         if (!Number.isSafeInteger(minutes)) return null;
         totalSeconds = minutes * 60;
     } else {
-        if (!/^\\d+(?::\\d+){0,2}$/.test(cleaned)) return null;
+        if (!/^\d+(?::\d+){0,2}$/.test(cleaned)) return null;
         const parts = cleaned.split(':').map(Number);
         if (parts.some(value => !Number.isSafeInteger(value))) return null;
         if (parts.length === 3) {
