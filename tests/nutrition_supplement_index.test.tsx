@@ -1,9 +1,12 @@
 import React from 'react';
-import { act, render, renderHook, screen } from '@testing-library/react';
+import { act, fireEvent, render, renderHook, screen, waitFor } from '@testing-library/react';
 import { applyDomainOperations } from '../src/lib/sync/domainOperations';
 import { UserDataSchema } from '../src/lib/schema';
 import { describe, expect, it, vi } from 'vitest';
 import { NutritionSupplementIntakes } from '../src/components/Nutrition/meals/NutritionSupplementIntakes';
+import NutritionSupplements from '../src/components/Nutrition/NutritionSupplements';
+import { useDialogStore } from '../src/store/useDialogStore';
+import { storageOwner } from '../src/lib/sync/session';
 import { useSupplements } from '../src/hooks/useSupplements';
 import { useAppStore } from '../src/store/useAppStore';
 import { emptyUserData } from './setup';
@@ -89,6 +92,47 @@ describe('supplement intake catalogue lookups', () => {
                 date: '2026-09-14',
                 intake: { id: 'i', supplementId: 's', amount, time: 1 },
             })).toThrow(/quantit/i);
+        }
+    });
+
+    it('keeps the supplement form open on a rejected device commit', async () => {
+        const previous = useAppStore.getState();
+        const dispatch = vi.fn().mockResolvedValue({ ok: false, status: 'failed', error: new Error('storage unavailable') });
+        useAppStore.setState({ userData: { ...emptyUserData, supplements: [] }, dataOwner: storageOwner(), dispatchDomainOperation: dispatch });
+        vi.mocked(useDialogStore.getState().showAlert).mockClear();
+        try {
+            render(<NutritionSupplements selectedDate="2026-09-14" />);
+            fireEvent.click(screen.getByRole('button', { name: /Nuovo integratore/ }));
+            fireEvent.change(screen.getByLabelText('Nome integratore'), { target: { value: 'Creatina' } });
+            fireEvent.change(screen.getByLabelText('Dose target giornaliera'), { target: { value: '5' } });
+            fireEvent.click(screen.getByRole('button', { name: 'Salva' }));
+            await waitFor(() => expect(useDialogStore.getState().showAlert).toHaveBeenCalled());
+            expect(screen.getByRole('heading', { name: 'Crea nuovo integratore' })).toBeDefined();
+            expect((screen.getByLabelText('Nome integratore') as HTMLInputElement).value).toBe('Creatina');
+            expect(dispatch).toHaveBeenCalledTimes(1);
+        } finally {
+            useAppStore.setState({ userData: previous.userData, dataOwner: previous.dataOwner, dispatchDomainOperation: previous.dispatchDomainOperation });
+        }
+    });
+
+    it('retains a quick intake amount when its durable operation is rejected', async () => {
+        const previous = useAppStore.getState();
+        const dispatch = vi.fn().mockResolvedValue({ ok: false, status: 'failed', error: new Error('storage unavailable') });
+        useAppStore.setState({
+            userData: { ...emptyUserData, supplements: [{ id: 'creatine', name: 'Creatina', unit: 'g', portion: 5 }] },
+            dataOwner: storageOwner(), dispatchDomainOperation: dispatch,
+        });
+        vi.mocked(useDialogStore.getState().showAlert).mockClear();
+        try {
+            render(<NutritionSupplements selectedDate="2026-09-14" />);
+            const input = screen.getByRole('spinbutton', { name: 'Quantità assunzione Creatina' }) as HTMLInputElement;
+            fireEvent.change(input, { target: { value: '3' } });
+            fireEvent.click(screen.getByRole('button', { name: /Aggiungi/ }));
+            await waitFor(() => expect(useDialogStore.getState().showAlert).toHaveBeenCalled());
+            expect(input.value).toBe('3');
+            expect(dispatch).toHaveBeenCalledTimes(1);
+        } finally {
+            useAppStore.setState({ userData: previous.userData, dataOwner: previous.dataOwner, dispatchDomainOperation: previous.dispatchDomainOperation });
         }
     });
 
