@@ -67,7 +67,7 @@ export function AccountDeletionRecovery() {
 
         const recordFailure = (operation: 'routine-check' | 'pending-deletion' | 'local-finalization', error: unknown) =>
             diagnostics.recordFailure(operation, error, (summary) => {
-                console.warn('Diagnostica tecnica recupero account:', summary.message);
+                console.warn('Diagnostica tecnica recupero account:', summary);
             });
 
         const reconcile = async (forceDeviceRecovery = false) => {
