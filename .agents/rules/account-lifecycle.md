@@ -95,7 +95,7 @@ Una registrazione riuscita rende la credenziale la più recente; se il registro 
 Il client considera la registrazione riuscita soltanto dopo HTTP 200 e risposta JSON valida con `registered: true`, letta entro la stessa deadline complessiva di 7,5 secondi; risposte mancanti, false o corrotte mantengono la credenziale locale e abilitano nuovi tentativi.
 
 **Diagnostica recovery:** le verifiche periodiche di credenziali device, la loro registrazione e la riconciliazione di marker di cancellazione restano operazioni distinte. I timeout e gli errori transitori di routine non attestano una cancellazione e vengono segnalati solo se ripetuti (terzo fallimento consecutivo e poi ogni decimo, con reset dopo un controllo riuscito).
-Le violazioni di integrità, gli stati cloud `failed` e i fallimenti di pulizia locale successivi a prova `complete` restano immediatamente visibili. La diagnostica invia soltanto categoria, fase, stato HTTP e conteggio, mai eccezioni grezze, UID o credenziali. Il throttling diagnostico non modifica timeout, marker, retry e protezioni del recupero.
+Le violazioni di integrità, gli stati cloud `failed` e i fallimenti di pulizia locale successivi a prova `complete` restano immediatamente visibili. L'osservatore locale riceve soltanto un riepilogo testuale con operazione, fase, categoria, stato HTTP e conteggio, mai eccezioni grezze, stack, UID o credenziali; non esiste un trasporto diagnostico esterno. Il throttling diagnostico non modifica timeout, marker, retry e protezioni del recupero.
 
 Flusso normativo:
 

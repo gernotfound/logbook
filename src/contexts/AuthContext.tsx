@@ -136,7 +136,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             currentUser,
             error => {
                 diagnostics.recordFailure('device-registration', error, (summary) => {
-                    console.warn('Registrazione recovery device: diagnostica tecnica:', summary.message);
+                    console.warn('Registrazione recovery device: diagnostica tecnica:', summary);
                 });
             },
             () => diagnostics.recordSuccess('device-registration'),
