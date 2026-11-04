@@ -1,4 +1,5 @@
 import type { NutritionDay, WorkoutSession } from '../../types';
+import { getWorkoutDurationSeconds } from './workoutDuration';
 import {
     computeProgressionEngine,
     type DensityProgressionAnalysis,
@@ -53,20 +54,6 @@ export interface WorkoutReport {
 
 export interface WorkoutReportContext extends ProgressionBodyweightContext {
     nutrition?: Record<string, NutritionDay>;
-}
-
-function durationSeconds(workout: WorkoutSession): number {
-    const durationStr = workout.globalDurationStr || workout.manualDurationStr;
-    if (durationStr) {
-        const parts = durationStr.split(':').map(part => Number.parseInt(part, 10));
-        if (parts.length === 3 && parts.every(part => Number.isFinite(part))) {
-            return parts[0] * 3600 + parts[1] * 60 + parts[2];
-        }
-    }
-    if (workout.globalStartTime && workout.globalEndTime && workout.globalEndTime >= workout.globalStartTime) {
-        return Math.floor((workout.globalEndTime - workout.globalStartTime) / 1000);
-    }
-    return 0;
 }
 
 function averageObservedWeight(exposure: ExerciseProgressionAnalysis['current']): number {
@@ -176,7 +163,7 @@ export function computeWorkoutReport(
         workoutId: currentWorkout.id || '',
         workoutName: currentWorkout.routineName || 'Sessione',
         date: currentWorkout.date || '',
-        durationSeconds: durationSeconds(currentWorkout),
+        durationSeconds: getWorkoutDurationSeconds(currentWorkout) ?? 0,
         totalVolume,
         totalVolumeIsComplete,
         exerciseComparisons,

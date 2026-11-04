@@ -12,6 +12,7 @@ import type {
     WorkoutSession,
 } from '../../types';
 import { getSetSegments, getSetTechnique } from '../advancedSets';
+import { getWorkoutDurationSeconds } from './workoutDuration';
 import { compareSessionChronology, isSessionEarlier, orderedEarlierSessions } from './progressionHistory';
 
 export type ProgressionExerciseRef = Pick<Exercise, 'id' | 'name' | 'trackingType' | 'isBodyweight' | 'equipmentWeight' | 'muscles' | 'secondaryMuscles'>;
@@ -619,13 +620,6 @@ function observedSessionWorkSets(
     }, 0);
 }
 
-function durationSeconds(session: WorkoutSession): number | undefined {
-    if (session.globalStartTime && session.globalEndTime && session.globalEndTime >= session.globalStartTime) {
-        return Math.floor((session.globalEndTime - session.globalStartTime) / 1000);
-    }
-    return parseTimeSeconds(session.globalDurationStr || session.manualDurationStr);
-}
-
 function densityAnalysis(
     current: WorkoutSession,
     history: WorkoutSession[],
@@ -633,7 +627,7 @@ function densityAnalysis(
     context: ProgressionBodyweightContext,
 ): DensityProgressionAnalysis | undefined {
     if (current.cycleStrategy?.progressionFocus !== 'density') return undefined;
-    const currentDuration = durationSeconds(current);
+    const currentDuration = getWorkoutDurationSeconds(current);
     const previous = [...history]
         .filter(item => (
             item.id !== current.id
@@ -643,7 +637,7 @@ function densityAnalysis(
             && (!current.cycleId || item.cycleId === current.cycleId)
         ))
         .sort((a, b) => compareSessionChronology(b, a))[0];
-    const previousDuration = previous ? durationSeconds(previous) : undefined;
+    const previousDuration = previous ? getWorkoutDurationSeconds(previous) : undefined;
     if (!previous || currentDuration === undefined || previousDuration === undefined) {
         return { quality: 'limited', headline: 'Confronto densità limitato', detail: 'Serve la durata di due sessioni della stessa scheda; non vengono inventati tempi per esercizio.' };
     }

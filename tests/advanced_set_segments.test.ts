@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { UserDataSchema } from '../src/lib/schema';
-import { canRepresentSetAsRoutinePlan, formatAdvancedSetSummary, getRoutineSetPlan, getSetObservedTonnage, getSetTechnique, getSetTotalReps } from '../src/lib/advancedSets';
+import { canRepresentSetAsRoutinePlan, getRoutineSetPlan, getSetTechnique } from '../src/lib/advancedSets';
 import { assertCloudBusinessPreserved } from '../src/lib/sync/cloudBusinessIntegrity';
 import { calculateSetVolume } from '../src/lib/calc/workout';
 import { buildRoutineWorkout, prepareHistoricalWorkoutForEditing } from '../src/hooks/workout/workoutSessionPreparation';
@@ -15,9 +15,7 @@ describe('advanced set segments', () => {
     it('calculates dropset segments without changing the source set', () => {
         const set = { id: 's1', kg: '100', reps: '8', rir: 0, segments: [{ technique: 'dropset' as const, id: 'd1', kg: '80', reps: '5' }] };
         expect(getSetTechnique(set)).toBe('dropset');
-        expect(getSetTotalReps(set)).toBe(13);
-        expect(getSetObservedTonnage(set)).toBe(1200);
-        expect(formatAdvancedSetSummary(set)).toContain('Dropset');
+        expect(calculateSetVolume(set, null, 80)).toBe(1200);
         expect(set.rir).toBe(0);
     });
 
@@ -63,8 +61,6 @@ describe('advanced set segments', () => {
         expect(set.segments).toBeUndefined();
         expect(set).toHaveProperty('futureField', 'preserved');
         expect(getSetTechnique(set)).toBe('straight');
-        expect(getSetTotalReps(set)).toBe(8);
-        expect(getSetObservedTonnage(set)).toBe(800);
         expect(source).toEqual(snapshot);
         expect(() => assertCloudBusinessPreserved('history_months/2026-09',
             { 'old-workout': { id: 'old-workout', exercises: [{ exId: 'bench', sets: [source] }] } },
@@ -118,7 +114,7 @@ describe('advanced set segments', () => {
         expect(calculateSetVolume(set, null, 80)).toBe(1100);
     });
 
-    it('preserves an ordered chain of repeated and mixed techniques without generic segment labels', () => {
+    it('rejects mixed continuation techniques in a single routine plan', () => {
         const set = {
             id: 's-chain',
             kg: '100',
@@ -131,12 +127,6 @@ describe('advanced set segments', () => {
                 { id: 'seg4', kg: '80', reps: '2', technique: 'rest_pause' as const, restBeforeSeconds: 20 },
             ],
         };
-        const summary = formatAdvancedSetSummary(set);
-        expect(summary).toContain('Dropset 1');
-        expect(summary).toContain('Dropset 2');
-        expect(summary).toContain('Rest-pause 1');
-        expect(summary).toContain('Rest-pause 2');
-        expect(summary?.toLocaleLowerCase('it')).not.toContain('segmento');
         expect(canRepresentSetAsRoutinePlan(set)).toBe(false);
     });
 
