@@ -54,7 +54,7 @@ export async function loadAuthenticatedData({
 
     const preserveUnsafeCloud = async (): Promise<boolean> => {
         try {
-            await markCloudIntegrityBlocked(expectedOwner);
+            await markCloudIntegrityBlocked(expectedOwner, isCurrent);
         } catch (error) {
             console.error('Impossibile registrare la barriera cloud sul dispositivo:', error);
             if (isCurrent()) useAppStore.setState({ localPersistenceBlocked: true, syncHealth: 'failed',
@@ -211,7 +211,7 @@ export async function loadAuthenticatedData({
                     // Requiring a new checkpoint stops old journal replay while
                     // leaving backup/logout policy tied to actual integrity.
                     if (durableBeforeCloud?.replica) {
-                        await markReplicaCheckpointRequired(expectedOwner, durableBeforeCloud.replica);
+                        await markReplicaCheckpointRequired(expectedOwner, durableBeforeCloud.replica, isCurrent);
                     }
                     if (!cloudAllowed()) return 'blocked';
                     setSaveError(mergeError instanceof Error ? mergeError.message : 'Checkpoint cloud non completato. Riprova.');

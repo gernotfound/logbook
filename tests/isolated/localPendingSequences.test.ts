@@ -82,6 +82,21 @@ describe('bounded pending journal compaction', () => {
         expect(await readLocal('a')).toEqual(after);
     });
 
+    it('rejects a stale session at the atomic resequencing boundary without touching encrypted pending work', async () => {
+        const before = await installOversizedJournal('a');
+        const encrypted = await get(storageKey('a'));
+        let checks = 0;
+        await expect(ensureBoundedPendingSequences('a', 's00', () => ++checks === 1))
+            .rejects.toThrow('Sequenze journal invalidate dal cambio sessione');
+        expect(checks).toBe(2);
+        expect(await get(storageKey('a'))).toBe(encrypted);
+        expect(await readLocal('a')).toEqual(before);
+
+        const recovered = await ensureBoundedPendingSequences('a', 's00', () => true);
+        expect(recovered?.pending.length).toBe(before.pending.length);
+        expect(recovered?.revision).toBe(before.revision + 1);
+    });
+
     it('is idempotent once bounded, preserving the durable envelope and revision', async () => {
         await installOversizedJournal('a');
         const first = await ensureBoundedPendingSequences('a', 's00');
