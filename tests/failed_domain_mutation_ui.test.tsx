@@ -115,4 +115,41 @@ describe('failed domain result preserves user edits', () => {
         expect(dialog).toHaveBeenCalledTimes(2);
         expect((screen.getByLabelText('Nome ciclo') as HTMLInputElement).value).toBe('Ciclo B');
     });
+    it('cancels sleep and cardio edits only after the device draft is cleared', async () => {
+        const sleep = renderHook(() => useSleepMeasurements());
+        act(() => sleep.result.current.setEditingDate(DAY));
+        act(() => sleep.result.current.setSleepHours('07:30'));
+        const owner = storageOwner();
+        const sleepKey = protectedDeviceKey('draft:sleep:' + DAY, owner);
+        const beforeSleep = localStorage.getItem(sleepKey);
+        expect(beforeSleep).toMatch(/^tlb-sealed:v1:/);
+        const originalSetItem = vi.mocked(localStorage.setItem).getMockImplementation()!;
+        vi.mocked(localStorage.setItem).mockImplementation((key, value) => {
+            if (key === sleepKey) throw new Error('quota');
+            originalSetItem(key, value);
+        });
+        act(() => { expect(sleep.result.current.cancelEdit()).toBe(false); });
+        expect(sleep.result.current.editingDate).toBe(DAY);
+        expect(localStorage.getItem(sleepKey)).toBe(beforeSleep);
+        vi.mocked(localStorage.setItem).mockImplementation(originalSetItem);
+        act(() => { expect(sleep.result.current.cancelEdit()).toBe(true); });
+        expect(sleep.result.current.editingDate).toBeNull();
+        expect(readDeviceValueStrict('draft:sleep:' + DAY, owner)).toContain('"values":null');
+
+        const activity = renderHook(() => useActivityTracking());
+        act(() => activity.result.current.startNewCardio());
+        act(() => activity.result.current.setCardioField('modality', 'bike'));
+        const cardioKey = protectedDeviceKey('draft:activity-cardio-/new:' + activity.result.current.selectedDate, owner);
+        expect(localStorage.getItem(cardioKey)).toMatch(/^tlb-sealed:v1:/);
+        vi.mocked(localStorage.setItem).mockImplementation((key, value) => {
+            if (key === cardioKey) throw new Error('quota');
+            originalSetItem(key, value);
+        });
+        act(() => { expect(activity.result.current.cancelCardio()).toBe(false); });
+        expect(activity.result.current.editingCardioId).toBe('/new');
+        vi.mocked(localStorage.setItem).mockImplementation(originalSetItem);
+        act(() => { expect(activity.result.current.cancelCardio()).toBe(true); });
+        expect(activity.result.current.editingCardioId).toBeNull();
+    });
+
 });

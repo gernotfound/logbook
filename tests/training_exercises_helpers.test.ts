@@ -10,6 +10,7 @@ describe('Training exercise muscle helpers', () => {
     it('preserves Italian muscle stem normalization used by search', () => {
         expect(normalizeStem('deltoidi laterali e pettorali')).toBe('deltoid lateral e petto');
         expect(normalizeStem('bicipiti tricipiti quadricipiti')).toBe('bicipit tricipit quadricipit');
+        expect(normalizeStem('DELTOIDI e PETTORALI')).toBe('deltoid e petto');
     });
 
     it('keeps exact/base matches first and caps fuzzy results at ten', () => {

@@ -28,6 +28,15 @@ export function useSleepMeasurements() {
     });
     const { sleepHours, sleepDeep, sleepLight, sleepRem, sleepAwake } = draft.values;
     const saving = useRef(false);
+    const cancelEdit = (): boolean => {
+        try {
+            if (!draft.clear()) return false;
+            setEditingDate(null);
+            return true;
+        } catch {
+            return false;
+        }
+    };
     const saveSleep = async (e?: { preventDefault(): void }) => {
         if (e) e.preventDefault();
         if (saving.current) return false;
@@ -95,6 +104,7 @@ export function useSleepMeasurements() {
     return {
         editingDate,
         setEditingDate,
+        cancelEdit,
         selectedDate: targetDate,
         setSelectedDate,
         sleepHours, setSleepHours: (value: string) => draft.setField('sleepHours', value),

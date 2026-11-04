@@ -248,6 +248,28 @@ describe('Empirical Challenger Focus & Scroll Suite', () => {
                 block: 'nearest',
                 behavior: 'smooth'
             });
+            const activeId = input.getAttribute('aria-activedescendant');
+            expect(activeId).toBeTruthy();
+            expect(document.getElementById(activeId!)?.getAttribute('role')).toBe('option');
         });
+        it('uses distinct listbox references for two mounted search controls', () => {
+            const mockExercises: ExerciseLibraryItem[] = [{ id: '1', name: 'Squat', muscles: ['quads'], setsCount: 3, sets: [] }];
+            render(<>
+                <ExerciseSearchDropdown library={mockExercises} onSelectExercise={vi.fn()} placeholder="Cerca uno" />
+                <ExerciseSearchDropdown library={mockExercises} onSelectExercise={vi.fn()} placeholder="Cerca due" />
+            </>);
+            const first = screen.getByPlaceholderText('Cerca uno');
+            const second = screen.getByPlaceholderText('Cerca due');
+            fireEvent.focus(first);
+            fireEvent.focus(second);
+            const firstId = first.getAttribute('aria-controls');
+            const secondId = second.getAttribute('aria-controls');
+            expect(firstId).toBeTruthy();
+            expect(secondId).toBeTruthy();
+            expect(firstId).not.toBe(secondId);
+            expect(document.getElementById(firstId!)?.getAttribute('role')).toBe('listbox');
+            expect(document.getElementById(secondId!)?.getAttribute('role')).toBe('listbox');
+        });
+
     });
 });

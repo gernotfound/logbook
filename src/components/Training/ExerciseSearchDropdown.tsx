@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useMemo, useCallback, useId } from 'react';
 import { X, Plus, Search, Activity, Timer } from 'lucide-react';
 import { ExerciseLibraryItem } from '../../types';
 import { getDetailedMuscleCategory } from '../../lib/logic';
@@ -26,6 +26,7 @@ export const ExerciseSearchDropdown: React.FC<ExerciseSearchDropdownProps> = ({
     const [searchTerm, setSearchTerm] = useState('');
     const [isOpen, setIsOpen] = useState(false);
     const [highlightedIndex, setHighlightedIndex] = useState(-1);
+    const listboxId = useId();
 
     const containerRef = useRef<HTMLDivElement>(null);
     const inputRef = useRef<HTMLInputElement>(null);
@@ -181,7 +182,8 @@ export const ExerciseSearchDropdown: React.FC<ExerciseSearchDropdownProps> = ({
                     role="combobox"
                     aria-expanded={isOpen}
                     aria-autocomplete="list"
-                    aria-controls="exercise-dropdown-list"
+                    aria-controls={isOpen ? listboxId : undefined}
+                    aria-activedescendant={isOpen && highlightedIndex >= 0 && highlightedIndex < filteredExercises.length ? `${listboxId}-option-${highlightedIndex}` : undefined}
                     value={searchTerm}
                     placeholder={placeholder}
                     autoFocus={autoFocus}
@@ -249,7 +251,7 @@ export const ExerciseSearchDropdown: React.FC<ExerciseSearchDropdownProps> = ({
             {isOpen && (
                 <div
                     ref={dropdownRef}
-                    id="exercise-dropdown-list"
+                    id={listboxId}
                     role="listbox"
                     style={{
                         position: 'absolute',
@@ -288,6 +290,7 @@ export const ExerciseSearchDropdown: React.FC<ExerciseSearchDropdownProps> = ({
                                 <div
                                     key={ex.id || idx}
                                     role="option"
+                                    id={`${listboxId}-option-${idx}`}
                                     aria-selected={isHighlighted}
                                     className="exercise-dropdown-item"
                                     onClick={() => handleSelect(ex.id)}

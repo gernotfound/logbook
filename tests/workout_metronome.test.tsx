@@ -102,6 +102,9 @@ describe('Workout metronome', () => {
         fireEvent.change(bpmInput, { target: { value: '999' } });
         fireEvent.blur(bpmInput);
         expect(bpmInput.value).toBe('240');
+        fireEvent.change(bpmInput, { target: { value: '' } });
+        fireEvent.blur(bpmInput);
+        expect(bpmInput.value).toBe('240');
 
         fireEvent.click(screen.getByRole('button', { name: 'Opzioni timer' }));
         fireEvent.click(screen.getByRole('menuitem', { name: 'Chiudi metronomo' }));

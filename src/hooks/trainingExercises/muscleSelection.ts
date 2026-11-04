@@ -1,38 +1,10 @@
 import Fuse from 'fuse.js';
 import { Logic } from '../../lib/logic';
+import { normalizeStem } from '../../lib/calc/workout';
+export { normalizeStem } from '../../lib/calc/workout';
 import type { MuscleDef } from '../../lib/constants/muscles';
 
 type MuscleRef = Pick<MuscleDef, 'id'>;
-
-export const normalizeStem = (str: string): string => {
-    return str
-        .replace(/\bdeltoidi\b/g, 'deltoid')
-        .replace(/\bdeltoide\b/g, 'deltoid')
-        .replace(/\bfrontali\b/g, 'anterior')
-        .replace(/\bfrontale\b/g, 'anterior')
-        .replace(/\banteriori\b/g, 'anterior')
-        .replace(/\banteriore\b/g, 'anterior')
-        .replace(/\blaterali\b/g, 'lateral')
-        .replace(/\blaterale\b/g, 'lateral')
-        .replace(/\bposteriori\b/g, 'posterior')
-        .replace(/\bposteriore\b/g, 'posterior')
-        .replace(/\btrapezi\b/g, 'trapez')
-        .replace(/\btrapezio\b/g, 'trapez')
-        .replace(/\bpettorali\b/g, 'petto')
-        .replace(/\bpettorale\b/g, 'petto')
-        .replace(/\bbicipiti\b/g, 'bicipit')
-        .replace(/\bbicipite\b/g, 'bicipit')
-        .replace(/\btricipiti\b/g, 'tricipit')
-        .replace(/\btricipite\b/g, 'tricipit')
-        .replace(/\bquadricipiti\b/g, 'quadricipit')
-        .replace(/\bquadricipite\b/g, 'quadricipit')
-        .replace(/\bfemorali\b/g, 'femoral')
-        .replace(/\bfemorale\b/g, 'femoral')
-        .replace(/\bpolpacci\b/g, 'polpacc')
-        .replace(/\bpolpaccio\b/g, 'polpacc')
-        .replace(/\baddominali\b/g, 'addom')
-        .replace(/\baddominale\b/g, 'addom');
-};
 
 const PREPARED_MUSCLES = Logic.MUSCLES.map((muscle) => ({
     ...muscle,
