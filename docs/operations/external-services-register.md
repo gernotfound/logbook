@@ -32,7 +32,7 @@ I contratti correnti sono governati da [AGENTS](../../AGENTS.md): [Cifratura](..
 | Vercel Functions / Cron | ACTIVE | backend trusted lifecycle, consenso/diritti, chiave cloud, cron e redirect del vecchio root verso Firebase | Vercel + `vercel.json` |
 | Vercel Analytics / Speed Insights | RITIRATO | non fanno più parte del frontend Production | codice + cronologia cutover |
 | Google Analytics / GA4 | DISMESSO | Nessuna dipendenza runtime; integrazione e preferenza client rimosse, collegamento Firebase sciolto e proprietà dismessa | PR #320 + operazioni Google/Firebase/GitHub confermate dal product owner |
-| Sentry | RETIRED-CODE / VERIFY-LIVE | SDK, invii client e upload source map rimossi nel candidato; segreti e dati storici ancora da verificare presso i provider | GitHub / Sentry |
+| Sentry | RETIRED / VERIFY-PROVIDER | SDK, invii client e upload source map rimossi e distribuiti su Firebase Hosting; il progetto Sentry e i dati storici restano da verificare | GitHub / Firebase Hosting / Sentry |
 | GitHub Actions / CodeQL / ruleset | ACTIVE | repository pubblico, PR, CI e SAST canonico | GitHub |
 | Snyk | OPTIONAL | controllo security supplementare | integrazione Snyk esterna |
 | Google Search Console | EXTERNAL-ONLY | verifica proprietà, sitemap e indicizzazione | Search Console + asset SEO repo |
@@ -224,9 +224,11 @@ Sono ritirati dal frontend Production dopo il cutover Firebase Hosting. Non esis
 
 ## Sentry — ritirato dal codice, provider da verificare
 
-Il 4 novembre 2026 il branch di dismissione elimina SDK, trasporti, code diagnostiche, DSN browser e upload di source map dal frontend. **Questo cambiamento non dimostra da solo il rilascio in Production**, l'assenza di richieste da build ancora pubblicate o la cancellazione dei dati storici eventualmente acquisiti.
+Il 4 novembre 2026 la PR #804 ha eliminato SDK, trasporti, code diagnostiche, DSN browser e upload di source map. La CI su PR (run 41859370102), il Main Release Gate/CodeQL (run 41860623425), la riconciliazione Firestore (run 41861026631) e il deploy Firebase Hosting (run 41861085922) sono stati verificati sullo SHA `d5f5d4d33f8abbd11290b4b0891b71d8161fac2b`. Il deploy Hosting comprende lo smoke HTTP e la cache policy; non costituisce un collaudo indipendente del traffico browser in ogni percorso né prova la cancellazione dei dati storici Sentry.
 
-**VERIFY-LIVE:** prima di attestare la dismissione completa, inventariare nel provider Sentry eventuali eventi ancora conservati, retention e progetto; controllare inoltre vecchie repository variables/secrets GitHub e variabili Vercel. L'eventuale eliminazione di dati storici o del progetto è un'operazione separata, non eseguita dal commit, da autorizzare e verificare.
+**Verifica Vercel Production, 4 novembre 2026 (solo nomi/scope):** risultano ancora configurate `VITE_SENTRY_DSN`, `SENTRY_ORG`, `SENTRY_PROJECT` e `SENTRY_AUTH_TOKEN`, tutte con target Production. Il codice e il processo di build attuali non le richiedono; la loro presenza nel provider non dimostra invii Sentry. Non sono state cancellate o decifrate.
+
+**VERIFY-LIVE:** inventariare nel provider Sentry eventuali eventi ancora conservati, retention e progetto; controllare separatamente le repository variables/secrets GitHub (inventario non accessibile in questa verifica). Le eliminazioni di secret, dati storici o progetto sono operazioni esterne da autorizzare e verificare, non eseguite dal commit.
 
 **STORICO:** il 30 settembre 2026 un errore controllato risultò ricevuto da Sentry, in una configurazione allora attiva con misure di scrubbing e domini consentiti. Quelle verifiche non descrivono il runtime desiderato dopo la dismissione.
 

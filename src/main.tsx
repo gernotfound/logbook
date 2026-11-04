@@ -23,7 +23,7 @@ import {
   getStorageMarker,
   updateStorageMarker,
   diagnoseStorageState,
-} from './lib/storageTelemetry';
+} from './lib/storageIntegrity';
 import { markTabSnapshotClean } from './lib/sync/tabSnapshotCausality';
 import { isUpdateRequiredError } from './lib/schemaEvolution';
 import ReloadPrompt from './components/UI/ReloadPrompt';

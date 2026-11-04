@@ -96,10 +96,10 @@ describe('authenticated hydration session fencing', () => {
     it('preserves a missing authenticated envelope without fabricating a replacement journal', async () => {
         await clear();
         const { loadAuthenticatedData, readLocal, invalidateSession } = await loadModules();
-        const storageTelemetry = await import('../src/lib/storageTelemetry');
+        const storageIntegrity = await import('../src/lib/storageIntegrity');
         invalidateSession();
         storeState.current = { userData: null, localWorkout: null, localPersistenceBlocked: false };
-        storageTelemetry.updateStorageMarker(12345, undefined, 'user:user-a');
+        storageIntegrity.updateStorageMarker(12345, undefined, 'user:user-a');
         dbState.loadCloudPayload.mockRejectedValueOnce(Object.assign(new Error('Cloud unavailable'), { code: 'unavailable' }));
 
         const result = await loadAuthenticatedData({

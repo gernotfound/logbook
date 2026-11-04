@@ -404,7 +404,6 @@ it('exports only allowlisted recovery device data and excludes account-deletion 
         ['draft:measurement:2026-10-04', '{"weight":"80"}'],
         ['history-editor-context', '{"version":1,"editorId":"e1"}'],
         ['workout-intent:' + 'a'.repeat(32), '{"__logbookWorkoutIntent":1}'],
-        ['telemetry_queue', '[{"event":"x"}]'],
     ];
     for (const [name, value] of deviceRecords) writeDeviceValue(name, value, 'user:a');
     expect(localStorage.getItem('logbook:v2:user:a:workout')).toBeNull();
@@ -424,7 +423,6 @@ it('exports only allowlisted recovery device data and excludes account-deletion 
     });
     expect(JSON.stringify(backup.recovery)).not.toContain('super-secret-receipt');
     expect(backup.recovery.device).not.toHaveProperty('account-deletion');
-    expect(backup.recovery.device).not.toHaveProperty('telemetry_queue');
     expect(backup.recovery.device).not.toHaveProperty('storage_marker');
 });
 
@@ -508,13 +506,13 @@ it('aborts if a witness disappears during collection instead of reporting a comp
 
 
 it('refuses a false no-source result when a concurrent tab shifts the localStorage key indexes', async () => {
-    const unrelated = 'logbook:v2:user:a:telemetry_queue';
+    const unrelated = 'logbook:v2:user:a:storage_marker';
     const name = 'workout-intent:' + 'f'.repeat(32);
     const witness = 'logbook:v2:user:a:sealed:' + name;
     const original = '{"__logbookWorkoutIntent":1,"sequence":1}';
     await createAndMigrateVault('user:a');
     writeDeviceValue(name, original, 'user:a');
-    const values = new Map<string, string>([[unrelated, '[]'], ...copyDeviceStorage()]);
+    const values = new Map<string, string>([[unrelated, '{"version":1,"timestamp":1}'], ...copyDeviceStorage()]);
     const ciphertext = values.get(witness);
     expect(ciphertext?.startsWith(SEALED_LOCAL_PREFIX)).toBe(true);
     let shifted = false;
