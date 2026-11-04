@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formatAppCheckTelemetryMessage, mapFirebaseErrorCode } from '../src/lib/errorHandler';
+import { mapFirebaseErrorCode } from '../src/lib/errorHandler';
 import { AppCheckLimitedUseTokenError } from '../src/lib/appCheck';
 import { classifySyncFailure } from '../src/lib/sync/syncFailure';
 
@@ -141,24 +141,6 @@ describe('Audit 21 App Check and rejected-sync semantics', () => {
             code: 'ERR_APP_CHECK_BLOCKED',
             category: 'app_check',
         });
-    });
-
-    it('builds privacy-safe App Check telemetry from a wrapped provider cause', () => {
-        const provider = Object.assign(new Error('provider detail that must not be copied'), {
-            code: 'appCheck/recaptcha-error',
-            status: 403,
-        });
-        const wrapped = Object.assign(new Error('Verifica App Check non disponibile.'), {
-            code: 'app-check-unavailable',
-            phase: 'token-error',
-            retryable: false,
-            cause: provider,
-        });
-
-        expect(formatAppCheckTelemetryMessage(wrapped)).toBe(
-            'App Check failure; code=appCheck/recaptcha-error; status=403; phase=token-error; retryable=false',
-        );
-        expect(formatAppCheckTelemetryMessage(new Error('ordinary failure'))).toBeUndefined();
     });
 
     it('keeps unknown cloud failures fail-closed in presentation', () => {

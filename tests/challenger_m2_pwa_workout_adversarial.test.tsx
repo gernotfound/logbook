@@ -1,8 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import * as sentryClient from '../src/lib/sentryClient';
 import { renderHook, act, render, screen, fireEvent } from '@testing-library/react';
 import React from 'react';
-import { telemetryHub } from '../src/lib/telemetryHub';
 import { UserDataSchema } from '../src/lib/schema';
 import { usePWAInstall } from '../src/hooks/usePWAInstall';
 import { useWorkoutSession } from '../src/hooks/useWorkoutSession';
@@ -16,16 +14,12 @@ import { prepareUnlockedTestArchive } from './secureVaultFixture';
 import { emptyUserData, idbStore } from './setup';
 
 describe('Milestone 2 Challenger Suite: PWA and Offline Workout Stress Tests', () => {
-  let mockSetDoc: any;
-
   beforeEach(() => {
     localStorage.clear();
     sessionStorage.clear();
     vi.clearAllMocks();
     vi.useRealTimers();
     useAppStore.getState().resetStore();
-
-    mockSetDoc = vi.spyOn(sentryClient, 'sendTelemetryToSentry').mockResolvedValue(true);
 
     Object.defineProperty(navigator, 'onLine', { value: true, configurable: true });
 
@@ -34,7 +28,6 @@ describe('Milestone 2 Challenger Suite: PWA and Offline Workout Stress Tests', (
       showAlert: vi.fn().mockResolvedValue(undefined),
     });
 
-    telemetryHub.reset();
     window.dispatchEvent(new Event('appinstalled'));
   });
 
@@ -45,7 +38,6 @@ describe('Milestone 2 Challenger Suite: PWA and Offline Workout Stress Tests', (
     vi.useRealTimers();
 
     Object.defineProperty(navigator, 'onLine', { value: true, configurable: true });
-    telemetryHub.reset();
   });
 
   // =========================================================================
@@ -53,8 +45,6 @@ describe('Milestone 2 Challenger Suite: PWA and Offline Workout Stress Tests', (
   // =========================================================================
   describe('1. PWA Install Funnel Stress & Unusual Events', () => {
     it('handles beforeinstallprompt event where prompt() throws synchronously', async () => {
-      telemetryHub.init();
-      telemetryHub.setUserId('user_prompt_sync_err');
 
       const { result } = renderHook(() => usePWAInstall());
 
@@ -81,8 +71,6 @@ describe('Milestone 2 Challenger Suite: PWA and Offline Workout Stress Tests', (
     });
 
     it('handles fast double-clicks on promptInstall without firing prompt() twice', async () => {
-      telemetryHub.init();
-      telemetryHub.setUserId('user_double_click');
 
       const { result } = renderHook(() => usePWAInstall());
 
@@ -128,8 +116,6 @@ describe('Milestone 2 Challenger Suite: PWA and Offline Workout Stress Tests', (
     });
 
     it('handles userChoice resolving to null, undefined, or unexpected shapes gracefully', async () => {
-      telemetryHub.init();
-      telemetryHub.setUserId('user_weird_choice');
 
       const { result } = renderHook(() => usePWAInstall());
 
@@ -149,12 +135,9 @@ describe('Milestone 2 Challenger Suite: PWA and Offline Workout Stress Tests', (
 
       expect(result.current.isInstallable).toBe(false);
       await new Promise(resolve => setTimeout(resolve, 0));
-      expect(mockSetDoc.mock.calls.some((c: any) => c[1].type === 'pwa_install_prompt_outcome')).toBe(false);
     });
 
     it('handles multiple rapid beforeinstallprompt events and appinstalled sequence', async () => {
-      telemetryHub.init();
-      telemetryHub.setUserId('user_rapid_pwa');
 
       const { result } = renderHook(() => usePWAInstall());
 
@@ -179,7 +162,6 @@ describe('Milestone 2 Challenger Suite: PWA and Offline Workout Stress Tests', (
       expect(result.current.isInstallable).toBe(false);
 
       await new Promise(resolve => setTimeout(resolve, 0));
-      expect(mockSetDoc.mock.calls.some((c: any) => c[1].type === 'pwa_appinstalled')).toBe(false);
     });
   });
 
@@ -190,8 +172,6 @@ describe('Milestone 2 Challenger Suite: PWA and Offline Workout Stress Tests', (
     it('handles starting and saving a workout with 0 exercises without throwing or crashing', async () => {
       const ownerForConsent = captureSession().owner;
       if (ownerForConsent.startsWith('user:')) localStorage.setItem(`logbook:v2:${ownerForConsent}:health-consent-generation`, '1');
-      telemetryHub.init();
-      telemetryHub.setUserId('user_empty_workout');
 
       const emptyRoutineUserData: UserData = {
         ...emptyUserData,
@@ -239,13 +219,10 @@ describe('Milestone 2 Challenger Suite: PWA and Offline Workout Stress Tests', (
       expect(idbStore['logbook:v2:' + owner]).toMatch(/^tlb-sealed:v1:/);
 
       await new Promise(resolve => setTimeout(resolve, 0));
-      expect(mockSetDoc.mock.calls.some((c: any) => c[1].type === 'workout_saved')).toBe(false);
     });
 
     it('handles ending a workout with corrupted/missing exercises array (null/undefined)', async () => {
       await prepareUnlockedTestArchive(captureSession().owner);
-      telemetryHub.init();
-      telemetryHub.setUserId('user_corrupted_ex');
 
       const baseUserData: UserData = {
         profile: { name: 'Corrupt Workout User' },
@@ -277,15 +254,12 @@ describe('Milestone 2 Challenger Suite: PWA and Offline Workout Stress Tests', (
       expect(useAppStore.getState().localWorkout).toBeNull();
 
       await new Promise(resolve => setTimeout(resolve, 0));
-      expect(mockSetDoc.mock.calls.some((c: any) => c[1].type === 'workout_saved')).toBe(false);
     });
 
     it('handles workout with invalid ratings and non-numeric water values safely', async () => {
       const ownerForConsent = captureSession().owner;
       if (ownerForConsent.startsWith('user:')) localStorage.setItem(`logbook:v2:${ownerForConsent}:health-consent-generation`, '1');
       await prepareUnlockedTestArchive(captureSession().owner);
-      telemetryHub.init();
-      telemetryHub.setUserId('user_bad_ratings');
 
       const currentSession = {
         id: 'w_bad_ratings',
@@ -461,21 +435,6 @@ describe('Milestone 2 Challenger Suite: PWA and Offline Workout Stress Tests', (
       expect(useDialogStore.getState().showAlert).toHaveBeenCalled();
 
       unmount();
-    });
-
-    it('handles localStorage throwing QuotaExceededError during offline telemetry queueing without crashing', () => {
-      Object.defineProperty(navigator, 'onLine', { value: false, configurable: true });
-      telemetryHub.init();
-
-      const setItemSpy = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
-        throw new DOMException('Quota exceeded', 'QuotaExceededError');
-      });
-
-      expect(() => {
-        telemetryHub.trackError(new Error('offline_overflow_diagnostic'));
-      }).not.toThrow();
-
-      setItemSpy.mockRestore();
     });
 
     it('handles missing window.matchMedia and navigator properties in SSR/worker context without crashing', () => {
