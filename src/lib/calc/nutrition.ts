@@ -37,6 +37,11 @@ export function calculateTDEE(nutritionHistoryList: { date?: string; weight?: st
     if (!Number.isFinite(avgKcal) || !Number.isFinite(weightDiff) || !Number.isFinite(dailySurplusKcal) || !Number.isFinite(estimatedTDEE)) {
         return { error: true, message: "Dati non validi" };
     }
+    // Rapid water-weight changes can invalidate the energy-balance estimate.
+    // Never present a zero or negative expenditure as a physiological target.
+    if (Math.round(estimatedTDEE) <= 0) {
+        return { error: true, message: "Stima non attendibile: verifica peso e calorie registrate." };
+    }
     return {
         error: false,
         tdee: Math.round(estimatedTDEE),

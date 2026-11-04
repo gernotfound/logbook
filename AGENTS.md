@@ -66,6 +66,8 @@ L'[indice `docs/`](docs/README.md) distingue guide stabili, registri, specifiche
 
 Classificare il task come **STANDARD**, **SENSITIVE** o **CRITICAL** e motivare la scelta nelle evidenze. La documentazione normativa su un boundary critico richiede la stessa attenzione ai suoi invarianti anche quando il diff non cambia il runtime.
 
+**MUST:** aumentare profondità di analisi, test e review in proporzione al rischio del task e dei boundary coinvolti.
+
 Sono CRITICAL almeno: dati utente, IndexedDB/persistenza, sync, Firestore/Rules, Auth, guest→account, schema/migrazioni, import/export, cancellazione, update/reload, sicurezza e rischio di perdita/corruzione dati.
 
 - **MUST:** preparare un piano per lavori strutturali o CRITICAL; può restare nel reasoning o nella PR, senza una nuova approvazione per scelte tecniche ordinarie.

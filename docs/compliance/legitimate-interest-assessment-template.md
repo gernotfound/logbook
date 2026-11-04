@@ -2,6 +2,8 @@
 
 > Template di Legitimate Interests Assessment. Compilare e far validare se la telemetria tecnica continua a basarsi sull'Art. 6(1)(f) GDPR.
 
+Per la descrizione tecnica corrente usare [Telemetria e privacy](../../.agents/rules/telemetry-and-privacy.md); campi giuridici, bilanciamento ed esito restano da compilare e approvare.
+
 ## 1. Interesse perseguito
 
 - Interesse: sicurezza, affidabilità, diagnosi degli errori, integrità e recovery del servizio.
@@ -41,10 +43,10 @@ Valutare:
 ## 4. Misure di salvaguardia
 
 - sanitizzazione email, IP, token, API key e path riconosciuti;
-- stack troncati;
+- distinguere messaggi/stack sanitizzati nella coda locale dalle sole classificazioni e messaggi fissi inviati a Sentry; nessun testo/stack originale al provider, anche se troncato o sanitizzato;
 - allowlist dettagli evento;
 - nessun testo business libero intenzionale;
-- collection owner-scoped;
+- coda locale cifrata owner-scoped, senza upload dei report guest dopo cambio identità; nessun accesso client alle collection Firestore telemetriche ritirate;
 - queue offline bounded;
 - retention breve `[TARGET]` con enforcement da verificare;
 - accesso amministrativo limitato;

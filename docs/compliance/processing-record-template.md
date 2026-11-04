@@ -2,6 +2,8 @@
 
 > Template di lavoro Art. 30 GDPR. Compilare in base al ruolo effettivo e far validare prima del pilot.
 
+**Allineamento tecnico:** [AGENTS](../../AGENTS.md), [Telemetria](../../.agents/rules/telemetry-and-privacy.md), [Cifratura](../../.agents/rules/secure-storage.md) e [Consenso](../../.agents/rules/health-consent.md). L'aggiornamento della descrizione tecnica non approva basi giuridiche, retention o ruoli.
+
 ## Intestazione
 
 - Organizzazione: `[PROVIDER_LEGAL_NAME]`
@@ -47,12 +49,12 @@
 | Campo | Contenuto da validare |
 |---|---|
 | Finalità | Sicurezza, affidabilità, diagnosi errori, integrità/recovery |
-| Dati | Session ID tecnico, versione/release/build SHA, piattaforma derivata, stato online, errori/stack sanitizzati e anomalie tecniche bounded; la coda locale può contenere UID per isolamento owner, ma nessun Firebase UID/email è deliberatamente allegato a Sentry |
+| Dati | Session ID tecnico, versione/release/build SHA, piattaforma derivata, stato online; nei report locali possono esserci messaggi/stack sanitizzati, mentre verso Sentry passano solo classificazioni ammesse e messaggi tecnici fissi, senza testi/stack originali; la coda locale può contenere UID per isolamento owner, ma nessun Firebase UID/email è deliberatamente allegato a Sentry |
 | Esclusioni | Nessun tracking proprietario di avvio/salvataggio workout o funnel installazione PWA; niente Replay, tracing, logging o Application Metrics Sentry |
 | Base | Legittimo interesse dichiarato nell'informativa corrente; eseguire/archiviare LIA prima del pilot |
 | Retention | Coda locale: massimo sette giorni per report e 50 elementi, con pruning al successivo accesso; Sentry: configurazione/piano da verificare; legacy Firestore: 30 giorni. Vedi `retention-schedule.md` |
 | Destinatari | Sentry / personale autorizzato strettamente necessario; Firestore solo per cleanup legacy |
-| Misure | Sanitizzazione PII client, `beforeSend` restrittivo, deduplica/rate limit; coda locale owner-scoped con AEAD dopo sblocco del vault, sola RAM prima dello sblocco e isolamento fra account; data scrubbing Sentry da verificare esternamente; legacy Firestore owner-scoped |
+| Misure | Sanitizzazione locale e minimizzazione remota per allowlist con esclusione dei testi/stack originali, `beforeSend` restrittivo, deduplica/rate limit; coda locale owner-scoped con AEAD dopo sblocco del vault, sola RAM prima dello sblocco e isolamento fra account; data scrubbing Sentry da verificare esternamente; raccolte Firestore legacy senza accesso client, mantenute solo per cleanup Admin |
 
 ## Attività 4 — Account deletion e recovery
 

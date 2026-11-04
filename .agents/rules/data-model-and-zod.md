@@ -36,6 +36,16 @@ Il formato supportato delle continuazioni di serie workout è soltanto `SessionE
 
 Il termine temporale di una sessione usa soltanto `globalEndTime`; `globalStartTime`, data business e durate testuali restano i campi correnti per i rispettivi scopi. L'alias `endTime` pre-lancio non è letto da Home, analytics, suggerimenti, progressione, stima durata o CSV e viene escluso dal gateway Zod senza promozione al timestamp canonico.
 
+## Date business e istanti
+
+**MUST:** i giorni business usano `YYYY-MM-DD` nel fuso locale tramite `getLocalDateString()` in `src/lib/utils/date.ts`; non usare `toISOString().slice(0, 10)` per una data locale, perché la conversione UTC può cambiare giorno. Gli istanti evento/audit restano UTC/epoch e lo shard mensile deriva dal giorno business locale.
+
+L'helper di formattazione non valida input persistiti: i gateway devono rifiutare date non canoniche o incoerenti, senza convertirle implicitamente in oggi. Le regole dei calendari e del parsing UI sopra non autorizzano migrazioni dei dati pre-lancio.
+
+## Durata manuale del workout storico
+
+L'input manuale dello storico attraversa `parseManualDuration()` in `src/lib/utils/date.ts` prima della Domain Operation. Un input invalido resta visibile e non viene trasformato dal blur o dal salvataggio in una durata valida inventata; `null` dal parser interrompe il salvataggio prima del commit business durevole. La normalizzazione tollerante usata in altri contesti non sostituisce questo boundary UI strict. Conservare la bozza, la sessione sospesa e i guard del commit come definiti in [Bozze e stato device](device-drafts.md).
+
 ## Zod Gateway — difesa runtime
 
 Tutti i dati in ingresso dai boundary persistiti **DEVONO** attraversare decifratura autenticata e formato/versione applicabili, poi il gateway Zod pertinente (`UserDataSchema.parse()` per lo stato applicativo) prima di diventare business state corrente. Non passare ciphertext o metadati di protocollo come se fossero `UserData`.

@@ -68,7 +68,7 @@ Se il provider agisce come responsabile per uno specifico trattamento, notificar
 
 ## 6. Contenimento e recovery
 
-- revoca/rotazione credenziali se coinvolte;
+- revoca/rotazione delle credenziali coinvolte; per una chiave di cifratura non sovrascrivere o dismettere l'unica chiave esistente: preservare materiale ed evidenze, contenere gli accessi e seguire il processo versionato di rewrap/verifica di [Cifratura](../../.agents/rules/secure-storage.md); la rotazione di credenziali Auth non equivale alla rotazione di `CLOUD_ACCOUNT_KEK_V1`;
 - chiusura accessi non necessari;
 - correzione root cause via branch/PR/CI, senza bypass dei guardrail;
 - verifica post-fix su GitHub, Vercel e Firebase/Google Cloud pertinenti;

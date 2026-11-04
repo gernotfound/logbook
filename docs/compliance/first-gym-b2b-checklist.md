@@ -2,12 +2,14 @@
 
 > Nessuna consegna reale finché i gate applicabili non sono chiusi e le evidenze sono archiviate.
 
+I collaudi sono requisiti di evidenza, non autorizzazioni a creare un ambiente Test o ad avviare operazioni distruttive in Production. Il cloud Test separato è dismesso: gli scenari distruttivi restano pendenti finché non viene definito un perimetro di prova esplicitamente autorizzato e isolato, secondo [E2E e Production](../operations/e2e-reliability.md) e [AGENTS](../../AGENTS.md).
+
 ## Gate tecnico
 
 - `[ ]` Production deriva da `main`.
 - `[ ]` Canonical Verification è verde sullo SHA effettivo di Production.
 - `[ ]` Firebase Hosting Production è sulla release derivata dallo stesso `main` verificato.
-- `[ ]` Vercel backend Production è READY sullo stesso stato.
+- `[ ]` Vercel backend Production deriva da main: deployment pertinente READY oppure skip verificato per assenza di delta backend. Registrare lo SHA effettivamente distribuito separatamente da Hosting; non richiedere un redeploy di un diff irrilevante.
 - `[ ]` Smoke home/API pertinenti sono verdi.
 - `[ ]` Security Rules Firestore live corrispondono alla sorgente approvata.
 - `[ ]` App Check enforcement live è verificato sui servizi applicabili.

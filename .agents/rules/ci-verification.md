@@ -21,6 +21,10 @@ La parallelizzazione riguarda l'orchestrazione, non la semantica del gate. Unit,
 
 **MUST:** le suite Node di `tests/isolated/**/*.test.ts` girano con `vitest.isolated.config.ts`; le suite React `tests/isolated/**/*.test.tsx` girano con il runner Vitest standard in `jsdom`, inclusi i suoi setup Auth/storage. Escludere l'intera directory `tests/isolated/**` dal runner standard lascerebbe i test TSX presenti ma mai eseguiti, senza fallire la CI. Ogni nuova suite va verificata anche per discovery reale del runner.
 
+## Avvio locale diagnostico
+
+Solo quando il lavoro locale è disponibile e autorizzato: leggere `package.json`, `.node-version` e i workflow per Node/npm e Java richiesti dall'Emulator; eseguire `npm ci`, predisporre `.env` da `.env.example` con configurazione locale appropriata e avviare con `npm run dev`. Non copiare credenziali Production o secret server nel bundle client, né avviare le suite contro i provider reali. Il setup/dev server non costituisce validazione: il gate finale resta `verify:m8` o CI equivalente sullo SHA esatto.
+
 ## Limiti del mandato
 
 Il gate verifica il candidato del branch; non autorizza merge o deploy. Se l'utente richiede soltanto aggiornamenti sul branch, mantenere la PR draft e auto-merge disabilitato dopo le verifiche, come prescritto da AGENTS. Il bump previsto per la CI non prova prenotazione della prossima versione: un futuro avanzamento di main richiede riallineamento e nuova validazione.

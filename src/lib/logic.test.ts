@@ -74,6 +74,29 @@ describe('Logic Library Tests', () => {
         expect(Number(tdee.weightDiff)).toBe(0);
     });
 
+    it('calculateTDEE: never returns zero or negative daily energy expenditure', () => {
+        const records = Array.from({ length: 7 }, (_, index) => ({
+            date: `2026-10-${String(index + 1).padStart(2, '0')}`,
+            weight: 80 + index / 3,
+            kcal: 2000,
+        }));
+        // A 2 kg gain over 6 days is compatible with substantial water-weight
+        // fluctuation, not with a physiologically meaningful negative TDEE.
+        const estimated = Logic.calculateTDEE(records);
+        expect(estimated.error).toBe(true);
+        expect(estimated.message).toContain('Stima non attendibile');
+        expect(estimated).not.toHaveProperty('tdee');
+
+        const nutrition = Object.fromEntries(records.map(day => [day.date, {
+            weight: day.weight, kcal: day.kcal, meals: [],
+        }]));
+        const summary = Logic.calculateTDEEAndMacros({
+            nutrition,
+            nutritionPlanning: { weight: 80, normocalorica: { kcal: 2400 } },
+        } as any);
+        expect(summary.tdee).toBe(2400);
+    });
+
     it('calculateTDEE: estimates TDEE correctly when gaining weight', () => {
         const chronoData = [];
         for (let i = 0; i < 14; i++) {

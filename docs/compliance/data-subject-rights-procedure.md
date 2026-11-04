@@ -6,7 +6,7 @@
 
 - Privacy: `[PRIVACY_EMAIL]`
 - Supporto: `[SUPPORT_EMAIL]`
-- Capacità già disponibili in app: backup JSON/esportazioni, rettifica dei dati editabili e account deletion.
+- Capacità tecniche in app: backup JSON/esportazioni, rettifica, revoca/riaccettazione del consenso, cancellazione account e cancellazione separata dei soli dati dopo revoca server confermata. Per contratti e limiti usare [Consenso](../../.agents/rules/health-consent.md), [Ciclo account](../../.agents/rules/account-lifecycle.md) e [Portabilità](../../.agents/rules/backup-and-portability.md); questa procedura non certifica collaudi live.
 
 ## Apertura del caso
 
@@ -35,7 +35,7 @@ Usare come riferimento l'Art. 12 GDPR: risposta senza ingiustificato ritardo e, 
 |---|---|
 | Accesso | Informazioni sul trattamento + raccolta dei dati applicabili; usare export quando adeguato alla richiesta concreta |
 | Rettifica | Funzioni di modifica in app; intervento documentato se un dato non è editabile direttamente |
-| Cancellazione | Workflow server-mediated `Elimina account`; verificare completion cloud e successivo cleanup locale |
+| Cancellazione | Distinguere `Elimina account` dalla cancellazione dei soli dati dopo revoca server confermata, che conserva Firebase Auth; in entrambi verificare lo specifico job trusted completo e il cleanup locale autorizzato |
 | Portabilità | Backup JSON / export CSV; verificare che il formato copra il perimetro richiesto |
 | Limitazione | `[DEFINE_IF_REQUIRED]`; non esiste oggi un flag generico di restriction |
 | Opposizione | Valutare per i trattamenti basati sul legittimo interesse, inclusa telemetria tecnica |
@@ -47,7 +47,7 @@ Usare come riferimento l'Art. 12 GDPR: risposta senza ingiustificato ritardo e, 
 Il product owner ha scelto la **soluzione A** (sospensione di tutte le funzioni fitness, con accesso a diritti, esportazione, cancellazione account e facoltà di accettare nuovamente in modo esplicito). Il protocollo tecnico autorevole e le regressioni sono integrati con PR #366; prima del pilot restano il collaudo autenticato multi-dispositivo e la validazione legale, come specificato in `health-consent-release-gate.md`. In particolare occorre confermare con evidenza runtime e definire sul piano giuridico:
 
 1. da quale momento cessano i trattamenti che dipendono dal consenso Art. 9;
-2. che le sole funzionalità rimaste disponibili siano informativa, gestione dei diritti, esportazione e cancellazione account (soluzione A);
+2. che restino solo informativa, gestione dei diritti/esportazione, cancellazioni distinte e nuova accettazione esplicita, senza funzioni fitness durante la sospensione (soluzione A);
 3. quali dati già raccolti devono essere cancellati, quali possono eventualmente essere conservati, per quale altra base giuridica e per quanto tempo: nessuna conservazione indefinita motivata dal consenso già ritirato;
 4. rapporto tra revoca, export e cancellazione account;
 5. comportamento offline e sincronizzazione multi-dispositivo;
