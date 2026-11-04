@@ -4,7 +4,7 @@ import { prepareUnlockedTestArchive } from './secureVaultFixture';
 import React from 'react';
 import { describe, test, expect, beforeEach } from 'vitest';
 import { screen, act, fireEvent } from '@testing-library/react';
-import { renderWithProviders, emptyUserData } from './setup';
+import { renderWithProviders, renderWithAuthenticatedTestOwner, emptyUserData } from './setup';
 import { Logic } from '../src/lib/logic';
 import { parseManualDuration } from '../src/lib/utils/date';
 import TrainingSession from '../src/components/Training/TrainingSession';
@@ -199,14 +199,18 @@ describe('Workout Improvements & History Edit Suite', () => {
     });
 
     test('history duration input preserves the draft while editing and on invalid blur', async () => {
-      await prepareUnlockedTestArchive();
+      const owner = captureSession().owner;
+      if (owner.startsWith('user:')) {
+        localStorage.setItem(`logbook:v2:${owner}:health-consent-generation`, '1');
+      }
+      await prepareUnlockedTestArchive(owner);
       const editingSession = {
         id: 'duration-draft', originalHistoryId: 'duration-draft', isEditingHistory: true,
         date: '2026-08-01', routineName: 'Durata',
         globalDurationStr: '00:45:00', manualDurationStr: '00:45:00', exercises: [],
       } as WorkoutSession;
-      const { container } = renderWithProviders(<TrainingSession />, {
-        localWorkout: editingSession, userData: { ...emptyUserData } as any,
+      const { container } = renderWithAuthenticatedTestOwner(<TrainingSession />, {
+        localWorkout: editingSession, userData: { ...emptyUserData } as any, dataOwner: owner,
       });
       const input = container.querySelector('#workout-manual-duration') as HTMLInputElement;
       act(() => { fireEvent.change(input, { target: { value: '00:90:00' } }); });
