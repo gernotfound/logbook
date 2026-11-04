@@ -13,7 +13,7 @@
 - `src/components/UI/ErrorBoundary.tsx` mantiene le schermate di errore e i percorsi di recupero sicuro: rimuovere il monitoraggio **non** consente reset, reload, commit o purge che violano il contratto storage.
 - `src/lib/storageTelemetry.ts` conserva soltanto i marker e la classificazione locale dello stato di IndexedDB; nessuna anomalìa viene inviata all'esterno.
 - `src/lib/errorHandler.ts` conserva il mapping dei codici Firebase per l'interfaccia.
-- Gli observer opzionali di fallback Zod sono locali e non trasmettono eventi. Non devono introdurre effetti collaterali nel parsing né persistenza di diagnostica personale.
+- I fallback Zod mantengono la logica di validazione e recupero prevista dagli schemi, senza callback o emissioni diagnostiche.
 
 **MUST:** `firebase.json` non autorizza endpoint esterni di monitoraggio degli errori in `connect-src`; il workflow Firebase Hosting non richiede DSN, token, organization/project o upload di source map. `scripts/check-production-build-secrets.mjs` impedisce la reintroduzione accidentale di variabili di monitoraggio nel workflow.
 

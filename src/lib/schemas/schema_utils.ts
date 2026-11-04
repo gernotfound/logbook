@@ -1,35 +1,6 @@
 import { z } from '../zod';
 import { formatSleepTime } from '../utils/date';
 
-export interface ZodFallbackContext {
-    schema: string;
-    field?: string;
-    fallbackUsed?: string;
-    expectedType?: string;
-    receivedType?: string;
-    issueCode?: string;
-    error?: unknown;
-}
-
-export type SchemaFallbackListener = (context: ZodFallbackContext) => void;
-let customFallbackListener: SchemaFallbackListener | null = null;
-
-export function setSchemaFallbackListener(listener: SchemaFallbackListener | null): void {
-    customFallbackListener = listener;
-}
-
-export function reportZodSchemaFallback(ctx: ZodFallbackContext): void {
-    try {
-        const completed = (customFallbackListener as ((context: ZodFallbackContext) => unknown) | null)?.(ctx);
-        if (completed && typeof (completed as { then?: unknown }).then === 'function') {
-            // Parsing remains synchronous if a local observer rejects.
-            void Promise.resolve(completed).catch(() => undefined);
-        }
-    } catch {
-        // A local observer must not affect schema fallback decisions.
-    }
-}
-
 // Defensive conversion helpers for robust runtime sanitization
 export const safeOptionalSleepTime = () =>
     z.string().transform(v => {
