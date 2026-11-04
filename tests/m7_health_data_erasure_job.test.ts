@@ -242,7 +242,7 @@ describe('trusted data-only erasure worker', () => {
     expect(await purgeExpiredCompletedHealthErasures(Date.now() + 30_000)).toBe(0);
     expect(fixture.records.has(markerPath('zz-valid'))).toBe(true);
     expect(fixture.records.get(markerPath('invalid-000'))?.status).toBe('complete');
-    expect((fixture.records.get(markerPath('invalid-000'))?.purgeAfter as Timestamp).toMillis())
+    expect((fixture.records.get(markerPath('invalid-000'))!.purgeAfter as Timestamp).toMillis())
       .toBeGreaterThan(Date.now() + 6 * 24 * 60 * 60 * 1000);
     expect(fixture.records.get(markerPath('invalid-200'))?.purgeAfter).toEqual(expired);
 
