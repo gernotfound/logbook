@@ -6,7 +6,7 @@ import { useAppStore } from '../store/useAppStore';
 import { useDialogStore } from '../store/useDialogStore';
 import { captureSession, isCurrentSession } from '../lib/sync/session';
 import { Logic } from '../lib/logic';
-import { localDateTimeToTimestamp, timestampToLocalTime } from '../lib/activity';
+import { cardioDraftKind, localDateTimeToTimestamp, timestampToLocalTime } from '../lib/activity';
 import { computeWeeklyActivitySeries, computeWeeklyTrainingActivityContext } from '../lib/calc/analytics';
 import type { CardioSession, NutritionDay, WorkoutSession, Exercise } from '../types';
 
@@ -56,7 +56,7 @@ export function useActivityTracking() {
         notes: editingCardio.notes ?? '',
         startTime: timestampToLocalTime(editingCardio.startedAt),
     } : EMPTY_CARDIO_DRAFT;
-    const cardioDraft = useDatedDraft(`activity-cardio-${editingCardioId ?? 'idle'}`, selectedDate, cardioSource);
+    const cardioDraft = useDatedDraft(cardioDraftKind(editingCardioId, isCreatingCardio), selectedDate, cardioSource);
     const savingSteps = useRef(false);
     const savingCardio = useRef(false);
 

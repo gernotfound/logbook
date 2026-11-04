@@ -10,6 +10,7 @@ import { useDialogStore } from '../src/store/useDialogStore';
 import { useNutritionMeasurements } from '../src/hooks/useNutritionMeasurements';
 import { useSleepMeasurements } from '../src/hooks/useSleepMeasurements';
 import { useActivityTracking } from '../src/hooks/useActivityTracking';
+import { cardioDraftKind } from '../src/lib/activity';
 import { useTrainingRoutines } from '../src/hooks/useTrainingRoutines';
 import TrainingPlanning from '../src/components/Training/planning/TrainingPlanning';
 
@@ -144,7 +145,7 @@ describe('failed domain result preserves user edits', () => {
         act(() => activity.result.current.setSelectedDate(DAY));
         act(() => activity.result.current.startNewCardio());
         act(() => activity.result.current.setCardioField('modality', 'bike'));
-        const name = 'draft:activity-cardio-/new:' + DAY;
+        const name = 'draft:' + cardioDraftKind('/new', true) + ':' + DAY;
         const cardioKey = protectedDeviceKey(name, owner);
         const before = localStorage.getItem(cardioKey);
         expect(before).toMatch(/^tlb-sealed:v1:/);
@@ -161,6 +162,34 @@ describe('failed domain result preserves user edits', () => {
         vi.mocked(localStorage.setItem).mockImplementation(originalSetItem);
         act(() => { expect(activity.result.current.cancelCardio()).toBe(true); });
         expect(activity.result.current.editingCardioId).toBeNull();
+        expect(readDeviceValueStrict(name, owner)).toContain('"values":null');
+    });
+
+    it('persists edits to an existing cardio record with a generated underscore ID', () => {
+        const id = 'cardio_12345678-1234-1234-1234-123456789abc';
+        const owner = storageOwner();
+        useAppStore.setState({
+            userData: UserDataSchema.parse({
+                nutrition: {
+                    [DAY]: {
+                        date: DAY,
+                        cardioSessions: [{
+                            id, modality: 'bike', durationMinutes: 30,
+                            intensity: 'moderate', source: 'manual',
+                        }],
+                    },
+                },
+            }) as any,
+            dataOwner: owner,
+        });
+        const activity = renderHook(() => useActivityTracking());
+        act(() => activity.result.current.setSelectedDate(DAY));
+        act(() => activity.result.current.editCardio(id));
+        act(() => activity.result.current.setCardioField('notes', 'Nuove note cardio'));
+        const name = 'draft:' + cardioDraftKind(id, false) + ':' + DAY;
+        expect(readDeviceValueStrict(name, owner)).toContain('Nuove note cardio');
+        expect(localStorage.getItem(protectedDeviceKey(name, owner))).toMatch(/^tlb-sealed:v1:/);
+        act(() => { expect(activity.result.current.cancelCardio()).toBe(true); });
         expect(readDeviceValueStrict(name, owner)).toContain('"values":null');
     });
 
