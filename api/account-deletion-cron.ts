@@ -154,6 +154,12 @@ export async function GET(request: Request): Promise<Response> {
   return Response.json({
     scanned: jobs.length,
     processed: results.length,
+    // Aggregate counters only; no health-erasure owner IDs are returned.
+    // "Processed" counts non-throwing worker invocations, including busy/pending.
+    erasureScanned,
+    erasureProcessed,
+    erasureErrors,
+    erasureReceiptsPurged,
     recoveryErrors,
     retentionErrors,
     purged,

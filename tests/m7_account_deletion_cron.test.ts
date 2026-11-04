@@ -69,6 +69,13 @@ describe('M7 daily account deletion recovery cron', () => {
       expect(healthErasure.processHealthDataErasure).toHaveBeenCalledTimes(2);
       expect(store.listRecoverableDeletionJobs).toHaveBeenCalledTimes(1);
       expect(runner.processAccountDeletion).toHaveBeenCalledTimes(2);
+      expect(await response.json()).toMatchObject({
+        erasureScanned: 2,
+        erasureProcessed: 1,
+        erasureErrors: 1,
+        erasureReceiptsPurged: 0,
+        processed: 2,
+      });
     } finally { logger.mockRestore(); }
   });
 
@@ -84,6 +91,7 @@ describe('M7 daily account deletion recovery cron', () => {
     process.env.CRON_SECRET = 'expected-secret';
     const response = await GET(request('wrong-secret'));
     expect(response.status).toBe(401);
+    expect(await response.json()).toEqual({ error: 'Non autorizzato.' });
     expect(store.listRecoverableDeletionJobs).not.toHaveBeenCalled();
     expect(retention.purgeExpiredCompletedDeletionJobs).not.toHaveBeenCalled();
     expect(telemetryRetention.purgeExpiredTelemetry).not.toHaveBeenCalled();
@@ -104,6 +112,10 @@ describe('M7 daily account deletion recovery cron', () => {
     expect(await response.json()).toMatchObject({
       scanned: 2,
       processed: 2,
+      erasureScanned: 0,
+      erasureProcessed: 0,
+      erasureErrors: 0,
+      erasureReceiptsPurged: 0,
       recoveryErrors: 0,
       retentionErrors: 0,
       purged: 0,
@@ -128,6 +140,49 @@ describe('M7 daily account deletion recovery cron', () => {
       telemetryCycleCompleted: true,
     });
     info.mockRestore();
+  });
+
+  it('reports busy/pending health attempts separately from completed receipt purges', async () => {
+    process.env.CRON_SECRET = 'test-secret';
+    healthErasure.listRecoverableHealthErasures.mockResolvedValue(['health-1', 'health-2']);
+    healthErasure.processHealthDataErasure
+      .mockResolvedValueOnce('busy').mockResolvedValueOnce('pending');
+    healthErasure.purgeExpiredCompletedHealthErasures.mockResolvedValue(3);
+
+    const response = await GET(request('test-secret'));
+    expect(response.status).toBe(200);
+    expect(healthErasure.processHealthDataErasure).toHaveBeenCalledTimes(2);
+    expect(healthErasure.purgeExpiredCompletedHealthErasures).toHaveBeenCalledOnce();
+    const body = await response.json();
+    expect(body).toMatchObject({
+      erasureScanned: 2,
+      erasureProcessed: 2,
+      erasureErrors: 0,
+      erasureReceiptsPurged: 3,
+      processed: 2,
+    });
+    expect(JSON.stringify(body)).not.toContain('health-1');
+    expect(JSON.stringify(body)).not.toContain('health-2');
+  });
+
+  it('reports independent health query and receipt-retention failures without stopping account recovery', async () => {
+    process.env.CRON_SECRET = 'test-secret';
+    healthErasure.listRecoverableHealthErasures.mockRejectedValue(new Error('query unavailable'));
+    healthErasure.purgeExpiredCompletedHealthErasures.mockRejectedValue(new Error('retention unavailable'));
+    const log = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    try {
+      const response = await GET(request('test-secret'));
+      expect(response.status).toBe(200);
+      expect(await response.json()).toMatchObject({
+        erasureScanned: 0,
+        erasureProcessed: 0,
+        erasureErrors: 2,
+        erasureReceiptsPurged: 0,
+        processed: 2,
+      });
+      expect(runner.processAccountDeletion).toHaveBeenCalledTimes(2);
+      expect(telemetryRetention.purgeExpiredTelemetry).toHaveBeenCalledOnce();
+    } finally { log.mockRestore(); }
   });
 
   it('keeps account deletion recovery successful when telemetry retention fails', async () => {
