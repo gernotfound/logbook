@@ -67,7 +67,7 @@ Firebase Hosting, Firebase Authentication, Firestore, Firebase Admin e App Check
 ### Analytics di utilizzo ritirati
 
 - Google Analytics 4/Firebase Analytics, Vercel Analytics e Speed Insights non fanno parte del runtime corrente.
-- **MUST:** non inviare page view, eventi di utilizzo o dati sanitari a servizi analytics; mantenere separata la telemetria tecnica Sentry.
+- **MUST:** non inviare page view, eventi di utilizzo, dati sanitari o report automatici degli errori client a fornitori esterni di analytics o monitoraggio. I log necessari ai servizi Firebase/Vercel costituiscono un trattamento distinto, da verificare nei rispettivi provider.
 - **NOTE:** il product owner ha confermato lo scollegamento GA4 dal progetto Firebase, la dismissione della proprietà Google Analytics e la rimozione della variabile GitHub del Measurement ID. La PR #320 attesta separatamente la rimozione dal codice e dai workflow. La decisione di dismissione non certifica oggi lo stato delle console o la cancellazione di dati presso i provider.
 
 ### Monitoraggio errori esterno ritirato

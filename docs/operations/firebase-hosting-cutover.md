@@ -1,6 +1,6 @@
 # Cutover Firebase Hosting Spark + Vercel backend
 
-Stato: cutover Production completato il 2026-10-02. Le voci esterne non direttamente osservabili dal repository restano soggette a verifica nel provider competente.
+Stato: cutover Production completato il 2026-10-02. Questo documento conserva il checkpoint storico: le indicazioni su Sentry (inclusi DSN, token, source map e smoke) descrivono soltanto la configurazione del cutover, **non** il contratto corrente dopo la decisione di dismissione del 4 novembre 2026. Per lo stato desiderato consultare [Gestione errori e privacy](../../.agents/rules/telemetry-and-privacy.md) e [Registro servizi](external-services-register.md). Le voci esterne non direttamente osservabili dal repository restano soggette a verifica nel provider competente.
 
 ## Target
 
