@@ -201,6 +201,8 @@ describe('trusted data-only erasure worker', () => {
     expect(await purgeExpiredCompletedHealthErasures(Date.now() + 30000)).toBe(0);
     expect(fixture.records.has(markerPath('a'))).toBe(true);
     fixture.records.get(consentPath('a'))!.erasedBeforeRevision = 3;
+    // The blocked receipt is retried only after its deferred purge window.
+    job.purgeAfter = Timestamp.fromMillis(Date.now() - 1);
     expect(await purgeExpiredCompletedHealthErasures(Date.now() + 30000)).toBe(1);
     expect(fixture.records.has(markerPath('a'))).toBe(false);
     expect(fixture.records.has(consentPath('a'))).toBe(true);
