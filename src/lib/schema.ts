@@ -83,7 +83,6 @@ export const defaultUserDataFallback: UserData = {
 function sanitizeTopLevelIdentityCollection(
     value: unknown,
     schema: { safeParse: (input: unknown) => { success: boolean; data?: any; error?: unknown } },
-    collection: string,
 ): unknown[] {
     if (value === undefined) return [];
     if (!Array.isArray(value)) {
@@ -105,16 +104,16 @@ function sanitizeTopLevelIdentityCollection(
 
 export const UserDataSchema = z.object({
     profile: UserProfileSchema.optional().catch({}).default({}),
-    library: z.preprocess(value => sanitizeTopLevelIdentityCollection(value, ExerciseSchema, 'library'), z.array(ExerciseSchema)).default([]),
-    routines: z.preprocess(value => sanitizeTopLevelIdentityCollection(value, WorkoutRoutineSchema, 'routines'), z.array(WorkoutRoutineSchema)).default([]),
+    library: z.preprocess(value => sanitizeTopLevelIdentityCollection(value, ExerciseSchema), z.array(ExerciseSchema)).default([]),
+    routines: z.preprocess(value => sanitizeTopLevelIdentityCollection(value, WorkoutRoutineSchema), z.array(WorkoutRoutineSchema)).default([]),
     history: WorkoutHistorySchema, // Actually stored in history_months in Firebase
     nutrition: z.record(z.string(), NutritionDaySchema).optional().catch({}).default({}), // nutrition_months
-    customFoods: z.preprocess(value => sanitizeTopLevelIdentityCollection(value, FoodSchema, 'customFoods'), z.array(FoodSchema)).default([]),
+    customFoods: z.preprocess(value => sanitizeTopLevelIdentityCollection(value, FoodSchema), z.array(FoodSchema)).default([]),
     activeWorkout: PersistedActiveWorkoutSchema,
     nutritionPlanning: NutritionPlanningSchema.optional().catch(undefined),
-    trainingCycles: z.preprocess(value => sanitizeTopLevelIdentityCollection(value, TrainingCycleSchema, 'trainingCycles'), z.array(TrainingCycleSchema)).default([]),
+    trainingCycles: z.preprocess(value => sanitizeTopLevelIdentityCollection(value, TrainingCycleSchema), z.array(TrainingCycleSchema)).default([]),
     activeCycleId: z.union([z.string(), z.null()]).optional().catch(null).default(null),
-    supplements: z.preprocess(value => sanitizeTopLevelIdentityCollection(value, SupplementSchema, 'supplements'), z.array(SupplementSchema)).default([]),
+    supplements: z.preprocess(value => sanitizeTopLevelIdentityCollection(value, SupplementSchema), z.array(SupplementSchema)).default([]),
     activePains: z.array(safeString('')).optional().catch([]).default([]),
     catalogOverrides: CatalogOverridesSchema.optional().catch({ exercises: {}, foods: {}, hiddenExerciseIds: [], hiddenFoodIds: [] }).default({ exercises: {}, foods: {}, hiddenExerciseIds: [], hiddenFoodIds: [] }),
     legalConsent: LegalConsentSchema,
