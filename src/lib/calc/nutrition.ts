@@ -25,7 +25,14 @@ export function calculateTDEE(nutritionHistoryList: { date?: string; weight?: st
     if (sortedValidDays.length < 7) {
         return { error: true, message: `Raccolta dati in corso... (${sortedValidDays.length}/7 giorni richiesti)` };
     }
-    const recentDays = sortedValidDays.slice(-14);
+    // A sample of the last 14 *entries* can span months when logging is sparse.
+    // Require at least seven recorded days within 14 calendar days ending on
+    // the latest recorded date, rather than treating missing days as observed.
+    const latestDay = dayOrdinal(sortedValidDays[sortedValidDays.length - 1].date);
+    const recentDays = sortedValidDays.filter(d => dayOrdinal(d.date) >= latestDay - 13).slice(-14);
+    if (recentDays.length < 7) {
+        return { error: true, message: `Dati insufficienti: ${recentDays.length}/7 giornate valide negli ultimi 14 giorni.` };
+    }
     const wFirst = parseFloat(String(recentDays[0].weight).replace(',', '.'));
     const wLast = parseFloat(String(recentDays[recentDays.length - 1].weight).replace(',', '.'));
     const diffDays = Math.abs(dayOrdinal(recentDays[recentDays.length - 1].date) - dayOrdinal(recentDays[0].date));
