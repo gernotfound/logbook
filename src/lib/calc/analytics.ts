@@ -163,6 +163,13 @@ export function generateWeekIntervals(
 
 type WeeklyVolumeResult = { points: WeeklyVolumePoint[]; stats: WeeklyVolumeStats };
 
+// Each source may be finite while its sum is not. Never publish non-finite
+// tonnage to charts or correlation statistics.
+function addFiniteVolume(total: number, value: number): number {
+    const next = total + value;
+    return Number.isFinite(next) ? next : total;
+}
+
 function* computeWeeklyVolumeSteps(
     history: WorkoutSession[] | null | undefined = [],
     library: Exercise[] | null | undefined = [],
@@ -202,7 +209,7 @@ function* computeWeeklyVolumeSteps(
             else if (dateStr > interval.weekEnd) low = mid + 1;
             else {
                 const volume = calculateWorkoutVolume(session, libraryLookup, safeUserWeight);
-                weeks[mid].push({ session, volume: isNaN(volume) ? 0 : volume });
+                weeks[mid].push({ session, volume: Number.isFinite(volume) ? volume : 0 });
                 break;
             }
         }
@@ -211,7 +218,7 @@ function* computeWeeklyVolumeSteps(
     const points: WeeklyVolumePoint[] = intervals.map((interval, idx) => {
         const matching = weeks[idx];
 
-        const volumeKg = Math.round(matching.reduce((acc, curr) => acc + curr.volume, 0));
+        const volumeKg = Math.round(matching.reduce((acc, curr) => addFiniteVolume(acc, curr.volume), 0));
         const volumeTon = Math.round((volumeKg / 1000) * 100) / 100;
         const sessionIds = matching.map(m => m.session.id || '').filter(Boolean);
 
@@ -228,7 +235,7 @@ function* computeWeeklyVolumeSteps(
     });
 
     const activePoints = points.filter(p => p.volumeKg > 0);
-    const totalVolumeKg = points.reduce((sum, p) => sum + p.volumeKg, 0);
+    const totalVolumeKg = points.reduce((sum, p) => addFiniteVolume(sum, p.volumeKg), 0);
     const totalWorkouts = points.reduce((sum, p) => sum + p.workoutCount, 0);
     const avgWeeklyVolumeKg = points.length > 0 ? Math.round(totalVolumeKg / points.length) : 0;
     const peakWeekVolumeKg = points.reduce((max, p) => Math.max(max, p.volumeKg), 0);
@@ -238,7 +245,8 @@ function* computeWeeklyVolumeSteps(
 
     let percentageChange: number | null = null;
     if (previousWeekVolumeKg > 0) {
-        percentageChange = Math.round(((currentWeekVolumeKg - previousWeekVolumeKg) / previousWeekVolumeKg) * 1000) / 10;
+        const change = Math.round(((currentWeekVolumeKg - previousWeekVolumeKg) / previousWeekVolumeKg) * 1000) / 10;
+        percentageChange = Number.isFinite(change) ? change : null;
     }
 
     const stats: WeeklyVolumeStats = {
@@ -655,7 +663,7 @@ function correlateVolumeAndNutrition(
         correlationInsight = 'Servono almeno 3 settimane confrontabili con allenamento e nutrizione registrati per stimare l\'associazione lineare.';
     }
 
-    const totalVol = points.reduce((sum, p) => sum + p.volumeKg, 0);
+    const totalVol = points.reduce((sum, p) => addFiniteVolume(sum, p.volumeKg), 0);
     const avgWeeklyVolumeKg = points.length > 0 ? Math.round(totalVol / points.length) : 0;
 
     const loggedKcalPoints = points.filter(p => p.avgDailyKcal > 0);

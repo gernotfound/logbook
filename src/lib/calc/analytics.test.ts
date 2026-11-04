@@ -411,6 +411,56 @@ describe('Analytics Engine 4-Tier Test Suite (src/lib/calc/analytics.ts)', () =>
             });
         });
 
+        it('T2.9b: omits overflowing set volume while retaining valid sessions and worker parity', async () => {
+            const history: WorkoutSession[] = [
+                { id: 'overflow', date: '2026-08-18', exercises: [{
+                    exId: 'ex_bench', sessionNote: '', sets: [{ id: 's1', kg: '1e308', reps: '10' }],
+                }] },
+                { id: 'valid', date: '2026-08-18', exercises: [{
+                    exId: 'ex_bench', sessionNote: '', sets: [{ id: 's2', kg: '80', reps: '10' }],
+                }] },
+            ];
+            // Do not change the low-level calculator's existing mathematical contract.
+            expect(calculateWorkoutVolume(history[0], mockLibrary, 80)).toBe(Infinity);
+            const result = computeWeeklyVolumeSeries(history, mockLibrary, 80, 4, '2026-08-22');
+            expect(result.points.at(-1)).toMatchObject({
+                volumeKg: 800, workoutCount: 2, sessionIds: ['overflow', 'valid'],
+            });
+            expect(result.stats.totalVolumeKg).toBe(800);
+            expect(result.stats.avgWeeklyVolumeKg).toBe(200);
+            expect(await computeWeeklyVolumeSeriesCooperative(history, mockLibrary, 80, 4, '2026-08-22'))
+                .toEqual(result);
+
+            const nutrition: Record<string, NutritionDay> = {
+                '2026-08-18': { date: '2026-08-18', kcal: 2400, carbs: 300, pro: 150, fat: 70 },
+            };
+            const correlation = computeVolumeCaloriesCorrelation(history, nutrition, mockLibrary, 80, 4, '2026-08-22');
+            expect(correlation.points.at(-1)?.volumeKg).toBe(800);
+            expect(Number.isFinite(correlation.stats.avgWeeklyVolumeKg)).toBe(true);
+        });
+
+        it('T2.9c: bounds weekly and cross-week sums when finite inputs would overflow', () => {
+            const bigSession = (id: string, date: string): WorkoutSession => ({
+                id, date, exercises: [{
+                    exId: 'ex_bench', sessionNote: '', sets: [{ id: `set-${id}`, kg: '1e307', reps: '10' }],
+                }],
+            });
+            const sameWeek = computeWeeklyVolumeSeries([
+                bigSession('a', '2026-08-18'), bigSession('b', '2026-08-19'),
+            ], mockLibrary, 80, 4, '2026-08-22');
+            expect(Number.isFinite(sameWeek.points.at(-1)!.volumeKg)).toBe(true);
+            expect(sameWeek.points.at(-1)!.workoutCount).toBe(2);
+            expect(Number.isFinite(sameWeek.stats.totalVolumeKg)).toBe(true);
+
+            const acrossWeeks = computeWeeklyVolumeSeries([
+                bigSession('a', '2026-08-11'), bigSession('b', '2026-08-18'),
+            ], mockLibrary, 80, 4, '2026-08-22');
+            expect(acrossWeeks.points.every(p => Number.isFinite(p.volumeKg) && Number.isFinite(p.volumeTon)))
+                .toBe(true);
+            expect(Number.isFinite(acrossWeeks.stats.totalVolumeKg)).toBe(true);
+            expect(Number.isFinite(acrossWeeks.stats.avgWeeklyVolumeKg)).toBe(true);
+        });
+
         describe('2.3 Dropsets Accumulation', () => {
             it('T2.10_single_dropset: adds single dropset volume to main set volume', () => {
                 const history: WorkoutSession[] = [{
