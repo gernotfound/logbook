@@ -33,9 +33,9 @@ void test('rejects an unexpected Firebase deploy identity in either workflow', (
 
 function* clientSources(directory) {
   for (const entry of readdirSync(directory, { withFileTypes: true })) {
-    const path = `${directory}/${entry.name}`;
+    const path = directory + '/' + entry.name;
     if (entry.isDirectory()) yield* clientSources(path);
-    else if (entry.isFile() && /\\.(?:[cm]?js|jsx|[cm]?ts|tsx)$/.test(entry.name)) yield path;
+    else if (entry.isFile() && /\.(?:[cm]?js|jsx|[cm]?ts|tsx)$/.test(entry.name)) yield path;
   }
 }
 
@@ -47,14 +47,14 @@ void test('client and production CSP cannot silently restore an external Sentry 
     dependencies: manifest.dependencies ?? {},
     devDependencies: manifest.devDependencies ?? {},
   })) {
-    assert.deepEqual(Object.keys(packages).filter(name => /sentry/i.test(name)), [], `Unexpected ${type} Sentry packages`);
+    assert.deepEqual(Object.keys(packages).filter(name => /sentry/i.test(name)), [], 'Unexpected ' + type + ' Sentry packages');
   }
-  assert.deepEqual(Object.keys(lock.packages).filter(name => /(?:^|\\/)node_modules\\/@sentry\\//i.test(name)), [],
+  assert.deepEqual(Object.keys(lock.packages).filter(name => /(?:^|\/)node_modules\/@sentry\//i.test(name)), [],
     'No Sentry packages should remain in the npm lockfile');
 
-  const forbidden = /\\bSentry\\b|@sentry\\/|sentry\\.io|VITE_SENTRY_/i;
+  const forbidden = /\bSentry\b|@sentry\/|sentry\.io|VITE_SENTRY_/i;
   for (const source of clientSources('src')) {
-    assert.doesNotMatch(readFileSync(source, 'utf8'), forbidden, `External diagnostic integration in ${source}`);
+    assert.doesNotMatch(readFileSync(source, 'utf8'), forbidden, 'External diagnostic integration in ' + source);
   }
   assert.doesNotMatch(readFileSync('firebase.json', 'utf8'), forbidden,
     'Firebase Hosting CSP must not allow Sentry ingestion');
