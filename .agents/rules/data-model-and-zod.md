@@ -105,14 +105,23 @@ Ogni boundary di projection deve produrre una rappresentazione coerente:
 Per ogni nuovo campo business del root cifrato Firestore verificare e aggiornare, dove applicabile:
 
 1. `src/types.ts` — tipo applicativo;
+
 2. `src/lib/schema.ts` / `src/lib/schemas/*.ts` — Zod;
+
 3. `src/lib/sync/documentProjection.ts` — `rootKeys`, projection e hydration root;
+
 4. `src/contexts/AuthContext.tsx` — bootstrap/hydration/merge quando il campo partecipa a quei flussi;
+
 5. `src/lib/db.ts` e moduli DB correlati — boundary Firestore;
+
 6. `firestore.rules` — verificare soltanto eventuali effetti sui vincoli **esterni al ciphertext** (shape `_sealed`, `_sync` pubblico, owner/consenso, versione); non aggiungere validazione del campo business invisibile alle Rules;
+
 7. `tests/firestore_security_rules.test.ts` — testare l'envelope e i confini di autorizzazione, insieme ai test Zod/projection/integrità per il nuovo campo business;
+
 8. merge/import/export e backup (`src/lib/merge.ts`, `src/lib/export.ts` e moduli correlati);
+
 9. semantic projection/path ownership se il campo è mutabile tramite Domain Operations;
+
 10. controlli di dimensione del documento e test di regressione pertinenti.
 
 **MUST:** non assumere che aggiungere un campo a `UserDataSchema` lo renda automaticamente cloud-root. Se manca da `rootKeys`, non verrà proiettato nel documento root dalle semantic write correnti.

@@ -96,10 +96,15 @@ Un documento Firestore presente senza marker data/sync correnti è incompatibile
 La pipeline V4 mantiene debounce e protocollo causale delle milestone precedenti, ma M8 rende esplicito l'intento business:
 
 1. Le normali azioni UI/hook invocano `dispatchDomainOperation()` con una `DomainOperation` tipizzata.
+
 2. Il reducer puro calcola il nuovo `UserData`; `commitDomainOperations()` compila soltanto lo scope dichiarato in `SemanticOperation` e persiste business state + journal nello stesso update IndexedDB.
+
 3. `documentProjection.ts` proietta `UserData` in root + shard mensili; `semanticProjection.ts` è la fonte di merge policy, Vector Clock, tombstone, `$order` e active-workout guard.
+
 4. `transactionWriter.ts` legge i documenti Firestore toccati, normalizza data schema + sync protocol, valida `_sync`, confronta `FieldStamp` remoto e operation locale, quindi esegue al massimo una write per documento toccato.
+
 5. `replicateJournal.ts` drena lo stesso journal Envelope V5 verso Firestore in gruppi causali completi e bounded. In assenza di rete o dopo timeout sicuro, le operation restano durevoli nel journal.
+
 6. `hydrateLocal()` assorbe il causal context remoto senza modificare gli stamp delle pending già esistenti e riproduce il journal localmente.
 
 **MUST:** una singola transazione sync può toccare al massimo 8 documenti business oltre a `sync_control/state`. Il limite è intenzionalmente conservativo rispetto al tetto Firestore di 10 MiB e al guardrail per-documento da 950.000 byte.

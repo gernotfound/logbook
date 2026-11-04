@@ -124,13 +124,18 @@ La persistenza indipendente protegge contro la perdita di una copia nella race c
 ## Editor storico e chiusura del workout
 
 - L'editor dello storico usa `history-editor-context` owner-scoped per conservare la sessione device-local sospesa: modifica e annullamento dello storico non eliminano `activeWorkout` né resettano il timer attivo. Il contesto è scritto prima di pubblicare l'editor; al termine la sessione sospesa viene ripristinata prima del cleanup della chiave. Le chiavi owner-scoped vengono eliminate dal purge tramite il prefisso completo `logbook:v2:${owner}:`.
-- Durante il salvataggio dello storico, l'editor resta operativo fino alla conferma locale; una modifica successiva non deve essere scartata al completamento di una write precedente.
 
-Il ripristino della sessione sospesa verifica la chiusura durevole (ledger in IndexedDB) per impedire la riapertura dopo cancellazione/completamento in un'altra scheda.
+- Durante il salvataggio dello storico, l'editor resta operativo fino alla conferma locale; una modifica successiva non deve essere scartata al completamento di una write precedente. Il ripristino della sessione sospesa verifica la chiusura durevole (ledger in IndexedDB) per impedire la riapertura dopo cancellazione/completamento in un'altra scheda.
+
 - L'avvio workout verifica la scrivibilità del timer senza azzerarlo; il reset avviene soltanto dopo verifica dell'avvio durevole in IndexedDB.
+
 - **MUST:** il commit IndexedDB di completamento o cancellazione del workout conserva `lastClosedWorkoutId` nell'envelope locale owner-scoped insieme allo stato business; ogni nuova chiusura incorpora anche il precedente `lastClosedWorkoutId` nel registro additivo `closedWorkoutIds` per preservare la protezione dei vecchi envelope V5; il bootstrap usa queste evidenze, lo storico e il registro per non ripristinare uno snapshot `localStorage` obsoleto (anche quando una tab sospesa riscrive un vecchio workout dopo successive chiusure).
 
-Un cleanup device-critical fallito non può essere presentato come errore del commit già durevole. I commit locali e le Domain Operations rifiutano il ripristino di un'identità già chiusa, anche se una tab sospesa tenta una nuova scrittura; un retry di `workout.complete` già durevole ritenta il delivery del journal senza riscrivere lo storico. I metadati opzionali restano device-local e non vengono replicati in Firestore.
+  Un cleanup device-critical fallito non può essere presentato come errore del commit già durevole.
+
+  I commit locali e le Domain Operations rifiutano il ripristino di un'identità già chiusa, anche se una tab sospesa tenta una nuova scrittura; un retry di `workout.complete` già durevole ritenta il delivery del journal senza riscrivere lo storico.
+
+  I metadati opzionali restano device-local e non vengono replicati in Firestore.
 
 ## Background e update
 

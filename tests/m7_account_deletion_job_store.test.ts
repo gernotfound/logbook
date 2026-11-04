@@ -160,6 +160,51 @@ describe('M7 native deletion job store', () => {
     state.revokeRefreshTokens.mockResolvedValue(undefined);
   });
 
+  it('serializes an in-flight health erasure before acquiring the account deletion lease', async () => {
+    state.docs.add('health_data_erasures/u');
+    await createOrRefreshDeletionJob('u', 'A'.repeat(43));
+
+    for (const healthJob of [
+      { uid: 'u', status: 'requested' },
+      { uid: 'u', status: 'deleting' },
+      { uid: 'u', status: 'verifying' },
+      { uid: 'u', status: 'failed', retryable: true },
+    ]) {
+      state.jobData.set('health_data_erasures/u', healthJob);
+      expect(await acquireDeletionLease('u', 'account-worker', Date.now() + 60_000)).toBe(false);
+      expect(state.jobData.get('account_deletions/u')).toMatchObject({ status: 'requested' });
+      expect(state.jobUpdates).toHaveLength(0);
+    }
+
+    state.jobData.set('health_data_erasures/u', { uid: 'u', status: 'complete' });
+    expect(await acquireDeletionLease('u', 'account-worker', Date.now() + 60_000)).toBe(true);
+    expect(state.jobData.get('account_deletions/u')).toMatchObject({
+      status: 'deleting', leaseOwner: 'account-worker',
+    });
+  });
+
+  it('allows account deletion after a non-retryable erasure failure, without blocking other owners', async () => {
+    state.docs.add('health_data_erasures/another-owner');
+    state.jobData.set('health_data_erasures/another-owner', { uid: 'another-owner', status: 'deleting' });
+    await createOrRefreshDeletionJob('u', 'A'.repeat(43));
+    expect(await acquireDeletionLease('u', 'account-worker', Date.now() + 60_000)).toBe(true);
+
+    await createOrRefreshDeletionJob('other', 'B'.repeat(43));
+    state.docs.add('health_data_erasures/other');
+    state.jobData.set('health_data_erasures/other', { uid: 'other', status: 'failed', retryable: false });
+    expect(await acquireDeletionLease('other', 'other-worker', Date.now() + 60_000)).toBe(true);
+  });
+
+  it('fails closed when a same-owner erasure receipt has an unrecognized identity or status', async () => {
+    await createOrRefreshDeletionJob('u', 'A'.repeat(43));
+    state.docs.add('health_data_erasures/u');
+    state.jobData.set('health_data_erasures/u', { uid: 'different', status: 'complete' });
+    expect(await acquireDeletionLease('u', 'worker', Date.now() + 60_000)).toBe(false);
+    state.jobData.set('health_data_erasures/u', { uid: 'u', status: 'unknown' });
+    expect(await acquireDeletionLease('u', 'worker', Date.now() + 60_000)).toBe(false);
+    expect(state.jobUpdates).toHaveLength(0);
+  });
+
   it('drains arbitrarily large collections by repeatedly deleting at most 400 documents', async () => {
     state.docs.add('account_deletions/u');
     for (let i = 0; i < 950; i++) state.docs.add(`users/u/history_months/doc-${i}`);

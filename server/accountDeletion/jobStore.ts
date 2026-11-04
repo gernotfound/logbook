@@ -164,10 +164,21 @@ export async function acquireDeletionLease(uidValue: string, leaseOwner: string,
   const uid = validateUid(uidValue);
   const ref = jobRef(uid);
   return adminDb().runTransaction(async (transaction: Transaction) => {
-    const snapshot = await transaction.get(ref);
+    const [snapshot, erasure] = await Promise.all([
+      transaction.get(ref),
+      transaction.get(adminDb().collection('health_data_erasures').doc(uid)),
+    ]);
     if (!snapshot.exists) return false;
     const current = snapshot.data() as AccountDeletionJob;
     if (current.status === 'complete' || (current.status === 'failed' && current.retryable === false)) return false;
+
+    // Both deletion workers purge the same shards but have independent leases.
+    // Never start account deletion while the data-only erasure can still resume.
+    if (erasure.exists) {
+      const healthJob = erasure.data();
+      if (healthJob?.uid !== uid || (healthJob.status !== 'complete'
+          && !(healthJob.status === 'failed' && healthJob.retryable === false))) return false;
+    }
 
     const nowMs = Date.now();
     const currentLeaseUntil = timestampMillis(current.leaseUntil) ?? 0;

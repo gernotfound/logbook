@@ -87,20 +87,19 @@ Le violazioni di integrità, gli stati cloud `failed` e i fallimenti di pulizia 
 Flusso normativo:
 
 1. Il client attende journal e scritture Firestore già pendenti, ottiene App Check, crea una receipt casuale da 256 bit e la salva nel marker locale persistente prima della richiesta. La receipt in chiaro resta sul dispositivo; il server salva solo SHA-256.
+
 2. `POST /api/account-deletion` verifica Firebase ID token, UID derivato esclusivamente dal token, revoca, autenticazione recente e App Check; crea o aggiorna idempotentemente il job e avvia subito il cleanup nella stessa invocazione.
-3. Il job revoca i refresh token e acquisisce un lease breve.
 
-POST, polling GET e cron possono tentare recovery, ma un solo worker per UID esegue operazioni distruttive alla volta; un lease scaduto è riprendibile.
+3. Il job revoca i refresh token e acquisisce un lease breve. POST, polling GET e cron possono tentare recovery, ma un solo worker per UID esegue operazioni distruttive alla volta, considerando **anche** il job separato di cancellazione dei dati sanitari. L'acquisizione del lease account aspetta che un job sanitario sia `complete` oppure `failed` non recuperabile: i due lease indipendenti non possono operare contemporaneamente sulle stesse raccolte. Un lease scaduto è riprendibile.
+
 4. Il server elimina pagine da massimo 400 documenti dalle sei raccolte private correnti: `history_months`, `nutrition_months`, `sync_control`, `telemetry_errors`, `telemetry_events`, `telemetry_anomalies`. Dopo ogni batch il retry riparte dalla prima pagina; il cursor è telemetria/progresso e non è una dipendenza di correttezza.
-5.
 
-Se il budget della Function si avvicina al limite, il job salva uno stato riprendibile e termina senza dichiarare successo. `GET /api/account-deletion` può far avanzare un job incompleto durante il polling. Il cron giornaliero `/api/account-deletion-cron` è soltanto una rete di sicurezza per job rimasti incompleti.
-6. Dopo le raccolte note il server elimina `/users/{uid}` e i marker amministrativi (incluso `health_consent_withdrawals/{uid}`) nella stessa transazione protetta dal lease, **conservando temporaneamente `user_data_keys/{uid}`**.
+5. Se il budget della Function si avvicina al limite, il job salva uno stato riprendibile e termina senza dichiarare successo. `GET /api/account-deletion` può far avanzare un job incompleto durante il polling. Il cron giornaliero `/api/account-deletion-cron` è soltanto una rete di sicurezza per job rimasti incompleti.
 
-Verifica quindi che non restino root, raccolte private (anche inattese) o marker amministrativi; solo dopo una verifica riuscita ritira la chiave sotto il lease e ripete la verifica completa. Un errore prima del ritiro preserva la chiave, così i dati cifrati eventualmente residui non diventano irrecuperabili. Solo dopo la verifica finale elimina Firebase Auth; `auth/user-not-found` in un retry è successo idempotente.
-7. Il client elimina la copia locale e la receipt solo dopo stato server `complete`.
+6. Dopo le raccolte note il server elimina `/users/{uid}` e i marker amministrativi (incluso `health_consent_withdrawals/{uid}`) nella stessa transazione protetta dal lease, **conservando temporaneamente `user_data_keys/{uid}`**. Verifica quindi che non restino root, raccolte private (anche inattese) o marker amministrativi; solo dopo una verifica riuscita ritira la chiave sotto il lease e ripete la verifica completa. Un errore prima del ritiro preserva la chiave, così i dati cifrati eventualmente residui non diventano irrecuperabili. Solo dopo la verifica finale elimina Firebase Auth; `auth/user-not-found` in un retry è successo idempotente.
 
-Se Auth è già sparita, bootstrap e `AccountDeletionRecovery` preservano l'envelope dell'owner e interrogano lo stato tramite UID + receipt + App Check senza richiedere un ID token ancora valido.
+7. Il client elimina la copia locale e la receipt solo dopo stato server `complete`. Se Auth è già sparita, bootstrap e `AccountDeletionRecovery` preservano l'envelope dell'owner e interrogano lo stato tramite UID + receipt + App Check senza richiedere un ID token ancora valido.
+
 8. Quando il job diventa `complete`, il server assegna `purgeAfter` a 30 giorni dal completamento. Il cron giornaliero dà priorità ai job ancora recuperabili e usa soltanto il budget residuo per eliminare i tombstone `complete` scaduti. Il record tecnico di recovery non contiene i dati fitness/nutrizione cancellati; conserva l'identificativo tecnico del job, stato/timestamp e hash della receipt necessari alla riconciliazione.
 
 **MUST:** Firebase Auth è sempre l'ultima risorsa cloud eliminata. Un errore di query, batch, verifica, backend o stato non autorizza il purge locale né una dichiarazione di successo.
