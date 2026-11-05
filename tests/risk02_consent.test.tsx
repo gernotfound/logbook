@@ -35,9 +35,12 @@ describe('RISK-02: Legal Consent Lifecycle', () => {
     };
 
     it('richiede un nuovo consenso quando una versione legale precedente non coincide', () => {
-        expect(LEGAL_VERSIONS.privacy).toBe('1.3.5');
+        expect(LEGAL_VERSIONS.privacy).toBe('1.3.8');
+        expect(needsLegalUpdate({ ...mockConsent, privacyVersion: '1.3.7' })).toBe(true);
         expect(needsLegalUpdate({ ...mockConsent, privacyVersion: '1.3.3' })).toBe(true);
-        expect(LEGAL_VERSIONS.terms).toBe('1.2.1');
+        expect(LEGAL_VERSIONS.terms).toBe('1.2.4');
+        expect(needsLegalUpdate({ ...mockConsent, termsVersion: '1.2.3' })).toBe(true);
+        expect(needsLegalUpdate({ ...mockConsent, termsVersion: '1.2.1' })).toBe(true);
         expect(needsLegalUpdate({
             ...mockConsent,
             privacyVersion: '1.2.1'
@@ -123,6 +126,7 @@ import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { ConsentOverlay } from '../src/components/UI/ConsentOverlay';
 import { PrivacyPolicy } from '../src/pages/PrivacyPolicy';
+import { TermsAndConditions } from '../src/pages/TermsAndConditions';
 import { useDialogStore } from '../src/store/useDialogStore';
 
 vi.mock('../src/hooks/useAuth', () => ({
@@ -181,14 +185,14 @@ describe('RISK-02: ConsentOverlay UI Behavior', () => {
         expect(screen.getByRole('button', { name: /Backup JSON dei tuoi dati/i })).toBeDefined();
     });
 
-    it('chiarisce che una palestra non riceve automaticamente accesso ai dati degli iscritti', () => {
+    it('chiarisce che altre persone e palestre non accedono ai dati dell’account', () => {
         render(<PrivacyPolicy onClose={vi.fn()} />);
-        expect(screen.getByText(/non riceve per questo motivo accesso ai loro dati in TheLogBook/i)).toBeDefined();
+        expect(screen.getByText(/Nessun altro utente, palestra o allenatore dispone nell'app di un accesso ai dati del tuo account/)).toBeDefined();
     });
 
     it('descrive la rimozione di GA4 e la data dell’informativa aggiornata', () => {
         render(<PrivacyPolicy onClose={vi.fn()} />);
-        expect(screen.getByText('Aggiornata al 4 novembre 2026')).toBeDefined();
+        expect(screen.getByText('Aggiornata al 5 novembre 2026')).toBeDefined();
         expect(screen.getByText(/non integra Google Analytics 4/i)).toBeDefined();
         expect(screen.queryByText(/cookie first-party tecnici\/analitici/i)).toBeNull();
     });
@@ -202,13 +206,31 @@ describe('RISK-02: ConsentOverlay UI Behavior', () => {
         expect(screen.getByText(/non costituisce cifratura end-to-end/)).toBeDefined();
     });
 
-    it('documenta l’effetto della revoca e lascia identificabili i dati legali non ancora definiti', () => {
+    it('documenta revoca, diritti e titolare senza segnaposto di lavorazione', () => {
         render(<PrivacyPolicy onClose={vi.fn()} />);
         expect(screen.getByText('Revoca del consenso per i dati salute')).toBeDefined();
         expect(screen.getByText(/non puoi utilizzare le funzioni di allenamento/)).toBeDefined();
-        expect(screen.getByText(/DA DEFINIRE E VALIDARE: FINALITÀ RESIDUE/)).toBeDefined();
-        expect(screen.getByText(/DA VALIDARE: BASI GIURIDICHE PER CIASCUNA FINALITÀ/)).toBeDefined();
-        expect(screen.getAllByText('[EMAIL PRIVACY]').length).toBeGreaterThan(0);
+        expect(screen.queryByText(/DA DEFINIRE E VALIDARE/)).toBeNull();
+        expect(screen.getByText(/dopo che il server ha confermato la revoca/)).toBeDefined();
+        expect(screen.getByText(/inclusi allenamenti, nutrizione, misurazioni, routine e profilo applicativo/)).toBeDefined();
+        expect(screen.getByText(/i dati già salvati non vengono cancellati automaticamente/)).toBeDefined();
+        expect(screen.getByText(/possono utilizzare propri identificatori tecnici/)).toBeDefined();
+        expect(screen.getByText(/Firebase Authentication elabora i dati di accesso negli Stati Uniti/)).toBeDefined();
+        expect(screen.getByText(/data di nascita, altezza, genere e misure corporee/)).toBeDefined();
+        expect(screen.getByText(/stress, energia, umore, recupero/)).toBeDefined();
+        expect(screen.queryByText(/DA VALIDARE/)).toBeNull();
+        expect(screen.queryByText(/pilot gratuito/)).toBeNull();
+        expect(screen.getByRole('dialog', { name: 'Informativa sulla privacy' }).textContent).not.toMatch(/\[DA VALIDARE|\[DA DEFINIRE|pilot gratuito|prima che il servizio venga utilizzato/i);
+        expect(screen.getByText('Gerardo Califano')).toBeDefined();
+        expect(screen.getAllByRole('link', { name: 'thelogbook.privacy@gmail.com' }).length).toBe(2);
+    });
+
+    it('identifica il gestore e il contatto privacy nei termini aggiornati', () => {
+        render(<TermsAndConditions onClose={vi.fn()} />);
+        expect(screen.getByText('Aggiornati al 5 novembre 2026')).toBeDefined();
+        expect(screen.getByText('Gerardo Califano')).toBeDefined();
+        expect(screen.getByRole('link', { name: 'thelogbook.privacy@gmail.com' }).getAttribute('href')).toBe('mailto:thelogbook.privacy@gmail.com');
+        expect(screen.getByText(/cancellare i dati applicativi dell'account/)).toBeDefined();
     });
 
     it('Pulsante disabilitato se consenso incompleto', () => {

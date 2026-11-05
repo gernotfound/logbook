@@ -48,7 +48,7 @@ export const TermsAndConditions: React.FC<{ onClose: () => void }> = ({ onClose 
               Termini e condizioni
             </h2>
             <p style={{ margin: '4px 0 0', fontSize: 'var(--font-size-meta)', color: 'var(--text-muted)' }}>
-              Aggiornati al 15 ottobre 2026
+              Aggiornati al 5 novembre 2026
             </p>
           </div>
           <button
@@ -89,7 +89,7 @@ export const TermsAndConditions: React.FC<{ onClose: () => void }> = ({ onClose 
 
           <Section title="3. Disponibilità del software">
             <p>
-              TheLogBook è un software indipendente che può essere fornito direttamente oppure tramite organizzazioni partner, incluse palestre. Salvo eventuali livelli di servizio concordati separatamente, l'Applicazione viene resa disponibile senza garanzia di continuità assoluta o di uno specifico livello di uptime. Restano ferme le garanzie e le responsabilità che non possono essere escluse o limitate dalla legge applicabile.
+              TheLogBook è un progetto amatoriale messo a disposizione gratuitamente da una persona fisica. L'Applicazione viene resa disponibile senza garanzia di continuità assoluta o di uno specifico livello di uptime. Restano ferme le garanzie e le responsabilità che non possono essere escluse o limitate dalla legge applicabile.
             </p>
             <p style={{ marginTop: '8px' }}>
               Il titolare può modificare, sospendere o interrompere funzionalità nei limiti consentiti dalla legge e degli eventuali accordi applicabili. Il salvataggio locale è automatico e, per gli account, i dati supportati vengono sincronizzati con il cloud quando connessione e autorizzazioni lo consentono. Le esportazioni JSON e CSV sono facoltative e producono file non cifrati; dati ospite e modifiche non ancora sincronizzate potrebbero andare persi se l'archivio del dispositivo viene eliminato.
@@ -125,10 +125,10 @@ export const TermsAndConditions: React.FC<{ onClose: () => void }> = ({ onClose 
               TheLogBook richiede un consenso separato ed esplicito per i trattamenti dei dati relativi alla salute. Puoi revocarlo da Impostazioni → Privacy. In tal caso tutte le funzioni fitness, inclusi allenamento, nutrizione e diario, rimangono sospese; non è disponibile una modalità di utilizzo ridotta.
             </p>
             <p>
-              Durante la sospensione restano disponibili informativa, esercizio dei diritti applicabili, esportazione JSON e cancellazione dell'account. La revoca non elimina automaticamente i dati; una nuova accettazione esplicita può consentire la riattivazione. Le modifiche offline precedenti non vengono ripristinate o inviate automaticamente. Le condizioni di conservazione postrevoca sono indicate nell'informativa privacy, con gli elementi ancora da definire espressamente segnalati tramite segnaposto.
+              Durante la sospensione restano disponibili informativa, esercizio dei diritti applicabili, esportazione JSON e cancellazione dell'account. Dopo la revoca confermata sul server, puoi inoltre cancellare i dati applicativi dell'account, inclusi profilo, allenamenti, nutrizione e misurazioni, mantenendo l'identità di accesso ma disconnettendo il dispositivo. La revoca non elimina automaticamente i dati; una nuova accettazione esplicita può consentire la riattivazione. Le modifiche offline precedenti non vengono ripristinate o inviate automaticamente.
             </p>
             <p>
-              <strong>[DA COMPLETARE: IDENTITÀ E CONTATTI DEL SOGGETTO CHE EROGA IL SERVIZIO]</strong>. L'uso per un eventuale pilot con utenti reali richiede la definizione delle informazioni legali mancanti.
+              TheLogBook è gestito da <strong>Gerardo Califano</strong>, persona fisica. Per richieste sulla privacy: <a href="mailto:thelogbook.privacy@gmail.com">thelogbook.privacy@gmail.com</a>. Gli ulteriori dettagli sul trattamento e sui diritti sono riportati nell'informativa privacy.
             </p>
           </Section>
 

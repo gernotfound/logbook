@@ -1,3 +1,4 @@
+import { LEGAL_VERSIONS } from '../../src/lib/legalVersions';
 import 'fake-indexeddb/auto';
 import { clear, get } from 'idb-keyval';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
@@ -41,7 +42,7 @@ const data = (height: number) => UserDataSchema.parse({
     profile: { height: String(height) },
     legalConsent: {
         hasAcceptedTerms: true, hasAcceptedHealthData: true, acceptedAt: '2026-10-11T10:00:00.000Z',
-        privacyVersion: '1.3.5', termsVersion: '1.2.1',
+        privacyVersion: LEGAL_VERSIONS.privacy, termsVersion: LEGAL_VERSIONS.terms,
     },
 }) as unknown as UserData;
 const keyPayload = {

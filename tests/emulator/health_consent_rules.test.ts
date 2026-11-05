@@ -1,3 +1,4 @@
+import { LEGAL_VERSIONS } from '../../src/lib/legalVersions';
 import { readFileSync } from 'node:fs';
 import { beforeAll, afterAll, beforeEach, it } from 'vitest';
 import { assertFails, assertSucceeds, initializeTestEnvironment, type RulesTestEnvironment } from '@firebase/rules-unit-testing';
@@ -7,7 +8,7 @@ let env: RulesTestEnvironment;
 const proof = (uid: string, revision: number) => ({
   uid, status: 'active' as const, revision,
   acceptedAt: '2026-10-13T10:00:00.000Z',
-  privacyVersion: '1.3.5', termsVersion: '1.2.1',
+  privacyVersion: LEGAL_VERSIONS.privacy, termsVersion: LEGAL_VERSIONS.terms,
 });
 const mark = (status: 'active' | 'withdrawn') => ({
   ...(status === 'active' ? proof('u', 1) : { uid: 'u', status, revision: 1, withdrawnAt: new Date() }),

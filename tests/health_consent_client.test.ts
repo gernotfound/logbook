@@ -1,3 +1,4 @@
+import { LEGAL_VERSIONS } from '../src/lib/legalVersions';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'idb-keyval';
 import { auth } from '../src/lib/firebase';
@@ -26,7 +27,7 @@ import {
 
 const user = (uid: string) => ({ uid, getIdToken: vi.fn(async () => 'id-token') }) as any;
 const key = (uid: string) => `logbook:v2:user:${uid}:health-consent-withdrawal`;
-const accepted = { acceptedTerms: true as const, acceptedHealthData: true as const, privacyVersion: '1.3.5', termsVersion: '1.2.1' };
+const accepted = { acceptedTerms: true as const, acceptedHealthData: true as const, privacyVersion: LEGAL_VERSIONS.privacy, termsVersion: LEGAL_VERSIONS.terms };
 // A trusted GET has complete acceptance evidence. Keep the fixture realistic
 // rather than silently teaching the client that active/revision alone is proof.
 const trustedConsentResponse = (payload: Record<string, unknown>, init?: ResponseInit): Response => {
@@ -775,7 +776,7 @@ describe('account offline withdrawal and explicit local-only reacceptance', () =
       expect(isHealthConsentLocalOnly(uid)).toBe(true);
       expect(isHealthConsentWritable('user:' + uid)).toBe(true);
       expect(isHealthConsentCloudWritable('user:' + uid)).toBe(false);
-      expect(localStorage.getItem(key(uid))).toBe('offline-reaccepted:1:1.3.5:1.2.1');
+      expect(localStorage.getItem(key(uid))).toBe(`offline-reaccepted:1:${LEGAL_VERSIONS.privacy}:${LEGAL_VERSIONS.terms}`);
 
       beginHealthConsentVerification(uid);
       expect(await refreshHealthConsent(actor)).toBe('active');
@@ -801,7 +802,7 @@ describe('account offline withdrawal and explicit local-only reacceptance', () =
     await createAndMigrateVault('user:' + uid);
     const actor = user(uid);
     (auth as { currentUser: unknown }).currentUser = actor;
-    localStorage.setItem(key(uid), 'offline-reaccepted:1:1.3.5:1.2.1');
+    localStorage.setItem(key(uid), `offline-reaccepted:1:${LEGAL_VERSIONS.privacy}:${LEGAL_VERSIONS.terms}`);
     localStorage.setItem('logbook:v2:user:' + uid + ':health-consent-generation', '3');
     localStorage.setItem('logbook:v2:user:' + uid + ':health-consent-last-active', '1');
     const fetchMock = vi.fn(async () => trustedConsentResponse({
