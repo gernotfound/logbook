@@ -264,7 +264,7 @@ export function HealthConsentSuspended({ status, user }: { status: HealthConsent
           <button type="button" className="btn" onClick={releasePreparedBackup}>Elimina il download preparato</button>
         </>}
         {user !== null && status === 'withdrawn' && <>
-          <p>Puoi eliminare dal database operativo i tuoi dati fitness e nutrizione mantenendo il tuo account. Servono Internet, verifica dell’identità e due conferme. Copie offline, backup esportati e backup tecnici del fornitore potrebbero permanere secondo le rispettive politiche di conservazione.</p>
+          <p>Puoi eliminare i dati applicativi dell'account (inclusi profilo, misurazioni, allenamenti, nutrizione e schede) dal database operativo mantenendo il tuo account di accesso; verrai disconnesso al termine. Servono Internet, verifica dell’identità e due conferme. Copie offline, backup esportati e backup tecnici del fornitore potrebbero permanere secondo le rispettive politiche di conservazione.</p>
           <button type="button" className="btn" disabled={busy || exportingData || erasingHealthData || offline}
             onClick={() => { void handleDeleteHealthData(); }}>
             {erasingHealthData ? 'Cancellazione in corso…' : 'Elimina definitivamente i miei dati'}

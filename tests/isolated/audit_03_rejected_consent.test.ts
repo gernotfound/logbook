@@ -1,3 +1,4 @@
+import { LEGAL_VERSIONS } from '../../src/lib/legalVersions';
 import 'fake-indexeddb/auto';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { clear, get } from 'idb-keyval';
@@ -28,8 +29,8 @@ const consent = (acceptedAt: string): LegalConsent => ({
     hasAcceptedTerms: true,
     hasAcceptedHealthData: true,
     acceptedAt,
-    privacyVersion: '1.3.5',
-    termsVersion: '1.2.1',
+    privacyVersion: LEGAL_VERSIONS.privacy,
+    termsVersion: LEGAL_VERSIONS.terms,
 });
 
 describe('rejected legal-consent durable compensation', () => {

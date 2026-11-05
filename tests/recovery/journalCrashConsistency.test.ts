@@ -1,3 +1,4 @@
+import { LEGAL_VERSIONS } from '../../src/lib/legalVersions';
 import 'fake-indexeddb/auto';
 import { clear, del, get } from 'idb-keyval';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -77,7 +78,7 @@ import {
 } from '../../src/lib/sync/semanticProjection';
 
 const owner = 'user:a';
-const data = (height: number) => UserDataSchema.parse({ profile: { height: String(height) }, legalConsent: { hasAcceptedTerms: true, hasAcceptedHealthData: true, acceptedAt: '2026-10-11T10:00:00.000Z', privacyVersion: '1.3.5', termsVersion: '1.2.1' } }) as unknown as UserData;
+const data = (height: number) => UserDataSchema.parse({ profile: { height: String(height) }, legalConsent: { hasAcceptedTerms: true, hasAcceptedHealthData: true, acceptedAt: '2026-10-11T10:00:00.000Z', privacyVersion: LEGAL_VERSIONS.privacy, termsVersion: LEGAL_VERSIONS.terms } }) as unknown as UserData;
 
 let cloudDocuments: Map<string, DocumentData>;
 let cloudSyncMeta: Record<string, SyncMeta>;

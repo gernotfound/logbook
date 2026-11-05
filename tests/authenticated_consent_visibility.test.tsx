@@ -14,6 +14,10 @@ import { useAppStore } from '../src/store/useAppStore';
 import { initializeLocal, commitLocal, readLocal } from '../src/lib/sync/localRepository';
 import { prepareUnlockedTestArchive } from './secureVaultFixture';
 
+vi.mock('../src/lib/appCheck', async importOriginal => ({
+  ...await importOriginal<typeof import('../src/lib/appCheck')>(),
+  getLimitedUseAppCheckToken: vi.fn(async () => 'synthetic-limited-use-token'),
+}));
 vi.unmock('../src/lib/healthConsent');
 import {
   beginHealthConsentVerification, refreshHealthConsent,
@@ -66,7 +70,7 @@ it('removes an authenticated fitness view on another tab withdrawal before the t
     </AuthContext.Provider>,
   );
   fireEvent.click(await screen.findByRole('tab', { name: 'Biometria' }));
-  expect((await screen.findByLabelText('Altezza')).getAttribute('value')).toBe('183');
+  expect((await screen.findByLabelText(/Altezza/) as HTMLInputElement).value).toBe('183');
 
   let releaseCloud!: (payload: Awaited<ReturnType<typeof DB.loadCloudPayload>>) => void;
   vi.mocked(DB.loadCloudPayload).mockReturnValueOnce(new Promise(resolve => { releaseCloud = resolve; }));
@@ -89,7 +93,7 @@ it('removes an authenticated fitness view on another tab withdrawal before the t
   });
   await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
   await screen.findByRole('heading', { name: 'Accesso a TheLogBook sospeso' });
-  expect(screen.queryByLabelText('Altezza')).toBeNull();
+  expect(screen.queryByLabelText(/Altezza/)).toBeNull();
   expect(screen.queryByRole('button', { name: 'Salva profilo biometrico' })).toBeNull();
   expect(isHealthConsentWritable(owner)).toBe(false);
   expect(isHealthConsentCloudWritable(owner)).toBe(false);

@@ -1,3 +1,4 @@
+import { LEGAL_VERSIONS } from '../src/lib/legalVersions';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 type Stored = Record<string, unknown>;
@@ -61,7 +62,7 @@ function req(method: 'GET' | 'POST' | 'OPTIONS', body?: unknown, origin = 'https
 
 const acceptance = {
   acceptedTerms: true as const, acceptedHealthData: true as const,
-  privacyVersion: '1.3.5', termsVersion: '1.2.1',
+  privacyVersion: LEGAL_VERSIONS.privacy, termsVersion: LEGAL_VERSIONS.terms,
 };
 
 describe('trusted health consent boundary', () => {

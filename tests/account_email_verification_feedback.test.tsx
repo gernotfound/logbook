@@ -33,13 +33,14 @@ import { auth } from '../src/lib/firebase';
 import { invalidateSession } from '../src/lib/sync/session';
 import { AccountCard } from '../src/components/UI/AccountCard';
 
-describe('email verification feedback privacy', () => {
-  beforeEach(() => {
+beforeEach(() => {
     vi.clearAllMocks();
     (auth as { currentUser: unknown }).currentUser = authState.user;
     invalidateSession();
     authState.showAlert.mockResolvedValue(undefined);
   });
+
+describe('email verification feedback privacy', () => {
 
   it('does not reveal raw Firebase exceptions after verification refresh fails', async () => {
     authState.refreshEmailVerification.mockRejectedValueOnce(new Error('PRIVATE_AUTH_PROVIDER_DETAILS'));

@@ -1,3 +1,4 @@
+import { LEGAL_VERSIONS } from '../../src/lib/legalVersions';
 import 'fake-indexeddb/auto';
 import { clear } from 'idb-keyval';
 import { readFileSync } from 'node:fs';
@@ -102,7 +103,7 @@ function data(height: number, name?: string): UserData {
             height: String(height),
             ...(name ? { name } : {}),
         },
-        legalConsent: { hasAcceptedTerms: true, hasAcceptedHealthData: true, acceptedAt: '2026-10-11T10:00:00.000Z', privacyVersion: '1.3.5', termsVersion: '1.2.1' },
+        legalConsent: { hasAcceptedTerms: true, hasAcceptedHealthData: true, acceptedAt: '2026-10-11T10:00:00.000Z', privacyVersion: LEGAL_VERSIONS.privacy, termsVersion: LEGAL_VERSIONS.terms },
     }) as unknown as UserData;
 }
 

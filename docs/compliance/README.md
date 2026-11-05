@@ -1,7 +1,7 @@
-# TheLogBook — pacchetto compliance per il primo pilot
+# TheLogBook — compliance per i primi utenti esterni e per un eventuale futuro pilot B2B
 
-> Stato: struttura operativa da completare e far revisionare professionalmente prima della prima palestra.
-> Ultimo aggiornamento tecnico: 4 novembre 2026.
+> Stato: struttura operativa per eventuali utenti esterni, da completare e far revisionare prima del loro primo utilizzo reale.
+> Ultimo aggiornamento tecnico: 5 novembre 2026.
 > Questo pacchetto non certifica conformità GDPR e non sostituisce consulenza legale, privacy o fiscale.
 >
 > Navigazione: [indice documentazione](../README.md). I contratti AI restano in [`AGENTS.md`](../../AGENTS.md) e i relativi contratti specialistici: [Consenso salute](../../.agents/rules/health-consent.md), [Portabilità](../../.agents/rules/backup-and-portability.md), [Ciclo account](../../.agents/rules/account-lifecycle.md), [Cifratura](../../.agents/rules/secure-storage.md) e [Telemetria](../../.agents/rules/telemetry-and-privacy.md).
@@ -12,9 +12,41 @@ Questa cartella raccoglie i documenti operativi che servono per trasformare le s
 
 La fonte di verità tecnica resta il repository corrente. Le configurazioni esterne — Firebase/Google Cloud, Vercel, GitHub e relativi account amministrativi — devono essere verificate direttamente prima del pilot e non vanno dedotte da questi template.
 
-## Assunzioni correnti del pilot
+## Modello di utilizzo deciso dal product owner — 5 novembre 2026
 
-- La palestra paga tramite rapporto commerciale esterno alla PWA.
+TheLogBook è, allo stato dichiarato, un **progetto amatoriale**, non erogato attraverso un'impresa o società. Il product owner **intende permettere anche ad altre persone di creare un account e registrare i propri dati**, senza che ciò implichi una distribuzione commerciale o un accordo con palestre. Questa è una decisione per l'utilizzo previsto, **non una prova che altri utenti siano già iscritti**. Non attribuire al progetto ragione sociale, partita IVA, forma societaria, contratti palestra o finalità commerciali inesistenti. Le sezioni B2B sotto descrivono **uno scenario futuro**.
+
+**Identità e contatto comunicati dal product owner:** Gerardo Califano (persona fisica), thelogbook.privacy@gmail.com. **Il product owner ha confermato il 5 novembre 2026 che la casella funziona**; questa è un'attestazione dell'interessato, non un test indipendente né una verifica del suo monitoraggio continuativo. Rimane da valutare un recapito postale appropriato, se richiesto per il modello di comunicazione adottato.
+
+La natura amatoriale o gratuita **non determina un'esenzione GDPR**: l'art. 2, par. 2, lett. c e il considerando 18 delimitano l'eccezione alle attività esclusivamente personali o domestiche. **Dato il previsto accesso di utenti esterni, non assumere l'applicabilità di tale eccezione per erogare la PWA**. Una persona fisica può essere titolare del trattamento anche senza società, ma identità, recapiti, basi giuridiche, misure e obblighi applicabili devono essere determinati prima di acquisire dati reali di altri utenti. Riferimenti: [Regolamento UE 2016/679, art. 2 e considerando 18](https://eur-lex.europa.eu/legal-content/IT/TXT/?uri=CELEX:32016R0679) e [Commissione europea — ambito di applicazione del GDPR](https://commission.europa.eu/law/law-topic/data-protection/information-business-and-organisations/application-gdpr_en).
+
+**Decisione di prodotto presa:** consentire in prospettiva la registrazione di persone diverse dall'autore, in una fase amatoriale senza accordo con palestre. **Stato di rilascio per utenti esterni: NO-GO** fino alla chiusura documentata dei punti del gate seguente, incluse verifiche legali e tecniche. Questa decisione non costituisce autorizzazione a iscrivere utenti reali né cambia configurazioni, accessi, registrazioni, consent gate o deployment Production.
+
+## Gate legale prima del primo utilizzatore esterno
+
+**Stato: NON PRONTO per trattare dati reali di terzi.** Questo gate riguarda anche un pilot gratuito con una sola persona e non nasce soltanto al momento della vendita a una palestra. L'uso personale del product owner non dimostra che siano soddisfatti gli obblighi applicabili a un servizio offerto ad altre persone.
+
+La PWA gestisce dati potenzialmente rientranti nelle categorie particolari dell'art. 9 GDPR. Il codice prova alcuni comportamenti tecnici; l'identità del titolare e il recapito email sono ora dichiarati dal product owner, mentre le basi giuridiche, le condizioni di conservazione dopo la revoca e gli obblighi contrattuali restano da accertare. Non rimuovere i segnaposto pubblici sostituendoli con dati presunti e non definire una policy legale sulla sola base dei test.
+
+| Blocco | Fonte interna | Evidenza necessaria per la chiusura |
+|---|---|---|
+| Identità e recapiti del soggetto che eroga il servizio | `src/pages/PrivacyPolicy.tsx`, `src/pages/TermsAndConditions.tsx` | Il titolare persona fisica è identificato dal product owner come **Gerardo Califano**, con contatto dichiarato **thelogbook.privacy@gmail.com**. Ricezione email confermata dal product owner il 5 novembre 2026; restano da verificare monitoraggio operativo, eventuale recapito postale appropriato, ruolo e informazioni obbligatorie |
+| Finalità e basi giuridiche per ogni trattamento, inclusi dati salute | `processing-record-template.md`, `health-consent-release-gate.md` | Valutazione documentata artt. 6 e 9, consenso esplicito dove necessario e testi pubblici coerenti, validati da professionista competente |
+| Dati trattenuti dopo revoca del consenso | `retention-schedule.md`, `data-subject-rights-procedure.md` | Per ogni categoria: finalità residua, eventuale base autonoma già individuata, termine e meccanismo di cancellazione; se manca una base valida, definire adeguamento effettivo del comportamento tecnico |
+| Periodi di conservazione, log e copie dei fornitori | `retention-schedule.md`, `vendor-transfer-register.md` | Durate reali, configurazioni, eventuali backup, localizzazioni e limiti delle cancellazioni verificati nei provider |
+| Ruoli, fornitori e trasferimenti internazionali | `controller-role-decision.md`, `vendor-transfer-register.md` | Identificazione dei ruoli fattuali, DPA quando richiesti, elenco fornitori e verifica dei meccanismi applicabili ai trasferimenti |
+| Valutazioni e procedure organizzative | `dpia-screening-template.md`, `dpo-assessment-template.md`, `incident-breach-runbook.md` | Screening DPIA e DPO documentati, eventuali ulteriori adempimenti eseguiti, canale diritti e gestione incidenti assegnati |
+| Consegna tecnica a utenti reali | `first-gym-b2b-checklist.md`, `../operations/e2e-reliability.md` | Collaudi mirati autorizzati, esiti Production separati dai test, decisione di rilascio documentata |
+
+**Regola di chiusura:** i segnaposto e le annotazioni di lavoro restano nella documentazione interna, non nei testi pubblicati nella PWA. Prima dei primi utenti esterni completare e validare tutte le informazioni mancanti, adeguare il comportamento tecnico dove necessario e incrementare le versioni legali applicabili in `src/lib/legalVersions.ts`. La rimozione dei segnaposto pubblici non rende conforme il trattamento né sana una retention priva di giustificazione. La decisione GO/NO-GO per terzi va registrata con chi l'ha approvata e le prove pertinenti. Per la revoca vedi [issue #824](https://github.com/gernotfound/logbook/issues/824).
+
+**Fonti istituzionali per la revisione:** [GDPR, artt. 6, 7, 9, 13, 17 e 35 (EUR-Lex)](https://eur-lex.europa.eu/legal-content/IT/TXT/?uri=CELEX:32016R0679), [Garante — informativa agli interessati](https://www.garanteprivacy.it/web/guest/home/docweb/-/docweb-display/docweb/8981258), [EDPB — Linee guida 05/2020 sul consenso](https://www.edpb.europa.eu/documents/guideline/guidelines-052020-on-consent-under-regulation-2016679_it).
+
+## Scenario B2B futuro — non parte dell'attuale utilizzo amatoriale
+
+Le seguenti assunzioni sono riferite soltanto all'eventuale futura distribuzione tramite palestre; non descrivono una collaborazione o un rapporto commerciale oggi esistente.
+
+- Se previsto in futuro, il pagamento palestra → fornitore avviene tramite rapporto commerciale esterno alla PWA.
 - La palestra rende TheLogBook disponibile agli iscritti ma, nell'architettura attuale, non dispone di ruoli gym/coach/admin e non accede ai dati TheLogBook degli utenti.
 - TheLogBook resta destinato a maggiorenni.
 - Google Analytics 4/Firebase Analytics è dismesso: integrazione e preferenza rimosse dal client, Firebase scollegato dalla proprietà e configurazione GitHub Analytics ritirata. Restano operativi i servizi Firebase necessari al funzionamento.
@@ -53,7 +85,7 @@ Non inserire dati personali o fiscali reali finché non serve alla release contr
 - `[PROVIDER_LEGAL_NAME]`
 - `[PROVIDER_LEGAL_FORM]`
 - `[PROVIDER_ADDRESS]`
-- `[PRIVACY_EMAIL]`
+- `[PRIVACY_EMAIL]` (solo template per futuri contratti; il contatto corrente è già definito)
 - `[SUPPORT_EMAIL]`
 - `[TAX_DETAILS]`
 - `[GYM_LEGAL_NAME]`

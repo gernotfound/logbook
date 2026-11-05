@@ -1,3 +1,4 @@
+import { LEGAL_VERSIONS } from '../../src/lib/legalVersions';
 import 'fake-indexeddb/auto';
 import { clear, get } from 'idb-keyval';
 import { readFileSync } from 'node:fs';
@@ -31,7 +32,6 @@ import { adoptReplicaCheckpoint, advanceLocalConsentRevisionIfClean, readLocal, 
 import { seedTrustedConsent, registerReplica } from './replicaHarness';
 import { createAndMigrateVault } from '../../src/lib/sync/secureArchiveMigration';
 import { lockAllVaults } from '../../src/lib/sync/secureArchiveSession';
-import { LEGAL_VERSIONS } from '../../src/lib/legalVersions';
 import { CURRENT_SYNC_PROTOCOL } from '../../src/lib/schemaEvolution';
 import { sealCloudDocument, openCloudDocument } from '../../src/lib/sync/cloudDocumentCipher';
 const DB = {
