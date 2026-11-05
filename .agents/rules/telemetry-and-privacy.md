@@ -21,7 +21,7 @@
 
 Firebase Hosting, Authentication, Firestore, App Check e le API Vercel restano operativi e possono elaborare metadati di rete/log tecnici secondo i rispettivi servizi. La documentazione legale deve distinguerli dall'assenza di reporting automatico di errori client.
 
-Le collection `users/{uid}/telemetry_errors`, `telemetry_events` e `telemetry_anomalies` sono pre-lancio e **non** ricevono scritture client. Security Rules ne negano l'accesso client. I percorsi server Admin di retention a 30 giorni, cancellazione account e cancellazione dati salute continuano a proteggere eventuali record residui: non eliminarli senza verifica del dataset live e del recovery. Il ritiro del monitoraggio esterno non è prova della cancellazione di dati già presenti presso il provider: registrare e verificare separatamente la dismissione esterna.
+Le collection `users/{uid}/telemetry_errors`, `telemetry_events` e `telemetry_anomalies` sono pre-lancio e **non** ricevono scritture client. Security Rules ne negano l'accesso client. I percorsi server Admin di retention a 30 giorni, cancellazione account e cancellazione dati salute continuano a proteggere eventuali record residui: non eliminarli senza verifica del dataset live e del recovery. Il ritiro del monitoraggio esterno non elimina i dati storici dei provider. Il progetto Sentry `logbook-sentry` è mantenuto per scelta del product owner come archivio, non come integrazione runtime; non cancellarlo o eliminare gli eventi. La retention del provider rimane da verificare.
 
 Google Analytics/Firebase Analytics, Vercel Analytics e Speed Insights restano dismessi. Nessuna integrazione di analytics comportamentali è autorizzata.
 

@@ -19,7 +19,7 @@ La fonte di verità tecnica resta il repository corrente. Le configurazioni este
 - TheLogBook resta destinato a maggiorenni.
 - Google Analytics 4/Firebase Analytics è dismesso: integrazione e preferenza rimosse dal client, Firebase scollegato dalla proprietà e configurazione GitHub Analytics ritirata. Restano operativi i servizi Firebase necessari al funzionamento.
 - Vercel Analytics e Speed Insights sono ritirati dal frontend Production.
-- Il client non trasmette automaticamente errori ad alcun fornitore esterno: Sentry e le code diagnostiche sono ritirati dal codice. Restano da verificare i log dei servizi Firebase/Vercel e la cancellazione degli eventi pregressi presso Sentry.
+- Il client non trasmette automaticamente errori ad alcun fornitore esterno: Sentry e le code diagnostiche sono ritirati dal codice. Il progetto Sentry continua intenzionalmente come archivio di errori storici, senza richiesta di cancellazione; la sua retention e i log Firebase/Vercel sono verifiche esterne separate.
 
 Queste assunzioni devono essere riconfermate nella documentazione firmata; se cambiano, vanno rivalutati ruoli privacy, contratti, informativa e DPIA.
 
