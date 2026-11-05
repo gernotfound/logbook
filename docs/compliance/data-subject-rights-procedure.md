@@ -4,7 +4,7 @@
 
 ## Canali
 
-- Privacy: `[PRIVACY_EMAIL]`
+- Privacy: `thelogbook.privacy@gmail.com` (indicato dal titolare; ricezione e monitoraggio ancora da verificare prima dell'apertura a utenti esterni)
 - Supporto: `[SUPPORT_EMAIL]`
 - Capacità tecniche in app: backup JSON/esportazioni, rettifica, revoca/riaccettazione del consenso, cancellazione account e cancellazione separata dei soli dati dopo revoca server confermata. Per contratti e limiti usare [Consenso](../../.agents/rules/health-consent.md), [Ciclo account](../../.agents/rules/account-lifecycle.md) e [Portabilità](../../.agents/rules/backup-and-portability.md); questa procedura non certifica collaudi live.
 

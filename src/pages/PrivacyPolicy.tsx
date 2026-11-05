@@ -73,8 +73,8 @@ export const PrivacyPolicy: React.FC<{ onClose: () => void }> = ({ onClose }) =>
         }}>
           <Section title="Titolare del trattamento">
             <p>
-              I dati identificativi e i recapiti del titolare restano da completare: <strong style={{ color: 'var(--text-main)' }}>[NOME / RAGIONE SOCIALE]</strong>, <strong style={{ color: 'var(--text-main)' }}>[INDIRIZZO]</strong>, <strong style={{ color: 'var(--text-main)' }}>[EMAIL PRIVACY]</strong>.
-              Se TheLogBook viene fornito tramite una palestra, i ruoli privacy tra le parti dipendono dalle finalità e dai mezzi effettivamente determinati da ciascuna parte e devono essere definiti nella documentazione contrattuale.
+              Il titolare del trattamento è <strong style={{ color: 'var(--text-main)' }}>Gerardo Califano</strong>, persona fisica che gestisce TheLogBook come progetto amatoriale. Per richieste relative alla privacy puoi scrivere a <a href="mailto:thelogbook.privacy@gmail.com">thelogbook.privacy@gmail.com</a>. Il funzionamento effettivo di questo recapito deve essere verificato prima dell'apertura agli utenti esterni; un eventuale recapito postale appropriato resta da valutare.
+              Un'eventuale futura distribuzione tramite palestre richiederebbe una valutazione specifica dei ruoli privacy tra le parti e della relativa documentazione contrattuale.
             </p>
             <p>
               Il trattamento avviene nel rispetto del Regolamento Generale sulla Protezione dei Dati dell'Unione Europea (GDPR, Regolamento UE 2016/679) e della normativa nazionale applicabile.
@@ -202,7 +202,7 @@ export const PrivacyPolicy: React.FC<{ onClose: () => void }> = ({ onClose }) =>
               <li><strong style={{ color: 'var(--text-main)' }}>Limitazione/opposizione</strong>: quando applicabile rispetto alla specifica base giuridica e al trattamento interessato.</li>
             </ul>
             <p>
-              Per richieste che non possono essere gestite direttamente dall'app utilizza il contatto privacy <strong style={{ color: 'var(--text-main)' }}>[EMAIL PRIVACY]</strong>. Hai inoltre il diritto di proporre reclamo al Garante per la protezione dei dati personali.
+              Per richieste che non possono essere gestite direttamente dall'app utilizza il contatto privacy <a href="mailto:thelogbook.privacy@gmail.com">thelogbook.privacy@gmail.com</a>. Hai inoltre il diritto di proporre reclamo al Garante per la protezione dei dati personali.
             </p>
           </Section>
 

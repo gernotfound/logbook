@@ -37,7 +37,8 @@ describe('RISK-02: Legal Consent Lifecycle', () => {
     it('richiede un nuovo consenso quando una versione legale precedente non coincide', () => {
         expect(LEGAL_VERSIONS.privacy).toBe('1.3.6');
         expect(needsLegalUpdate({ ...mockConsent, privacyVersion: '1.3.3' })).toBe(true);
-        expect(LEGAL_VERSIONS.terms).toBe('1.2.1');
+        expect(LEGAL_VERSIONS.terms).toBe('1.2.2');
+        expect(needsLegalUpdate({ ...mockConsent, termsVersion: '1.2.1' })).toBe(true);
         expect(needsLegalUpdate({
             ...mockConsent,
             privacyVersion: '1.2.1'
@@ -123,6 +124,7 @@ import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { ConsentOverlay } from '../src/components/UI/ConsentOverlay';
 import { PrivacyPolicy } from '../src/pages/PrivacyPolicy';
+import { TermsAndConditions } from '../src/pages/TermsAndConditions';
 import { useDialogStore } from '../src/store/useDialogStore';
 
 vi.mock('../src/hooks/useAuth', () => ({
@@ -208,7 +210,15 @@ describe('RISK-02: ConsentOverlay UI Behavior', () => {
         expect(screen.getByText(/non puoi utilizzare le funzioni di allenamento/)).toBeDefined();
         expect(screen.getByText(/DA DEFINIRE E VALIDARE: FINALITÀ RESIDUE/)).toBeDefined();
         expect(screen.getByText(/DA VALIDARE: BASI GIURIDICHE PER CIASCUNA FINALITÀ/)).toBeDefined();
-        expect(screen.getAllByText('[EMAIL PRIVACY]').length).toBeGreaterThan(0);
+        expect(screen.getByText('Gerardo Califano')).toBeDefined();
+        expect(screen.getAllByRole('link', { name: 'thelogbook.privacy@gmail.com' }).length).toBe(2);
+    });
+
+    it('identifica il gestore e il contatto privacy nei termini aggiornati', () => {
+        render(<TermsAndConditions onClose={vi.fn()} />);
+        expect(screen.getByText('Aggiornati al 5 novembre 2026')).toBeDefined();
+        expect(screen.getByText('Gerardo Califano')).toBeDefined();
+        expect(screen.getByRole('link', { name: 'thelogbook.privacy@gmail.com' }).getAttribute('href')).toBe('mailto:thelogbook.privacy@gmail.com');
     });
 
     it('Pulsante disabilitato se consenso incompleto', () => {
