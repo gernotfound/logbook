@@ -215,6 +215,7 @@ describe('RISK-02: ConsentOverlay UI Behavior', () => {
         expect(screen.getByText(/inclusi allenamenti, nutrizione, misurazioni, routine e profilo applicativo/)).toBeDefined();
         expect(screen.getByText(/i dati già salvati non vengono cancellati automaticamente/)).toBeDefined();
         expect(screen.getByText(/possono utilizzare propri identificatori tecnici/)).toBeDefined();
+        expect(screen.getByText(/Firebase Authentication elabora i dati di accesso negli Stati Uniti/)).toBeDefined();
         expect(screen.getByText(/data di nascita, altezza, genere e misure corporee/)).toBeDefined();
         expect(screen.getByText(/stress, energia, umore, recupero/)).toBeDefined();
         expect(screen.queryByText(/DA VALIDARE/)).toBeNull();

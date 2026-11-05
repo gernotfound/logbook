@@ -191,7 +191,7 @@ export const PrivacyPolicy: React.FC<{ onClose: () => void }> = ({ onClose }) =>
           <Section title="Fornitori e trasferimento dei dati">
             <p>I servizi cloud dell'app si appoggiano principalmente ai seguenti fornitori:</p>
             <ul style={ulStyle}>
-              <li><strong style={{ color: 'var(--text-main)' }}>Google / Firebase</strong> — Authentication, Firestore, Firebase Hosting e App Check/reCAPTCHA Enterprise. Nessun SDK Google Analytics è integrato nel client corrente.</li>
+              <li><strong style={{ color: 'var(--text-main)' }}>Google / Firebase</strong> — Authentication, Firestore, Firebase Hosting e App Check/reCAPTCHA Enterprise. Firebase Authentication elabora i dati di accesso negli Stati Uniti; gli indirizzi IP registrati per l'autenticazione sono conservati per alcune settimane. Dopo la cancellazione di un account, Google indica un termine massimo di 180 giorni per rimuovere le altre informazioni di autenticazione dai sistemi attivi e di backup. Nessun SDK Google Analytics è integrato nel client corrente.</li>
               <li><strong style={{ color: 'var(--text-main)' }}>Vercel</strong> — sole funzioni server trusted e manutenzione giornaliera; il frontend/PWA è servito da Firebase Hosting.</li>
             </ul>
             <p>

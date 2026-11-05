@@ -20,6 +20,8 @@ Per la revoca esplicita dei dati salute, la UI non cancella automaticamente gli 
 | Deletion job/tombstone | Firestore server-only | Richiesta cancellazione | 30 giorni dopo completion | Cron giornaliero | Contratto implementato; runtime cron da verificare periodicamente |
 | Log Vercel | Vercel | Request/function event | `[VERIFY_PLAN_AND_CONFIGURATION]` | Policy Vercel | Esterno da verificare |
 | Log Firebase/Google Cloud | Google | Evento servizi | `[VERIFY_SERVICE_CONFIGURATION]` | Policy servizio | Esterno da verificare |
+| Firebase Authentication — dati identificativi | Google | Registrazione/login | Dati dell'utente fino a cancellazione account; secondo [Google](https://firebase.google.com/support/privacy/) eliminati da sistemi live/backup entro 180 giorni dall'istruzione | Flusso account deletion + policy provider | Documentazione fornitore verificata, esito singola cancellazione non osservato |
+| Firebase Authentication — IP di sicurezza | Google | Autenticazione | Alcune settimane, secondo [Google](https://firebase.google.com/support/privacy/) | Policy servizio | Durata esatta/configurazione del tenant non verificata |
 | Backup Firestore | `[NONE / PITR / SCHEDULED]` | `[TO_DECIDE]` | `[TO_DECIDE]` | `[TO_DECIDE]` | Decisione esterna pendente |
 | Richieste privacy/supporto | Sistema/canale adottato | Apertura caso | `[DEFINE_AND_VALIDATE]` | Cancellazione/archiviazione case file | Organizzativo |
 
