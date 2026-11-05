@@ -46,6 +46,42 @@ if (!existsSync('config/lint-warning-baseline.json')) {
   failures.push('lint warning baseline: missing config/lint-warning-baseline.json');
 }
 
+// The umbrella gate partitions these files: dedicated suites retain their
+// runtime/worker settings; the general and isolated runners must not repeat them.
+const dedicatedUnitFiles = [
+  "logout_protection",
+  "guest_bootstrap_lifecycle",
+  "guest_account_migration_v3",
+  "catalog_resolution_pipeline",
+  "hardening/nutrition_guest_flow",
+  "m7_account_deletion_job_store",
+  "m7_account_deletion_fairness",
+  "m7_account_deletion_retention",
+  "m7_account_deletion_runner",
+  "m7_account_deletion_api",
+  "m7_account_deletion_http_auth",
+  "m7_account_deletion_device",
+  "m7_account_deletion_cron",
+  "m8_domain_operations"
+];
+const expectedUnitTest = `vitest run --exclude "tests/{${dedicatedUnitFiles.join(',')}}.test.{ts,tsx}"`;
+if (packageJson.scripts?.test !== expectedUnitTest) {
+  failures.push('test: default Vitest runner must exclude precisely the dedicated hardening, M7 and M8 files');
+}
+if (packageJson.scripts?.['test:isolated'] !== 'vitest run --config vitest.isolated.config.ts --exclude "tests/isolated/m8_domain_commit.test.ts"') {
+  failures.push('test:isolated must defer m8_domain_commit to the dedicated M8 gate');
+}
+for (const name of dedicatedUnitFiles.filter(name => name.startsWith('m7_account_deletion_'))) {
+  if (!packageJson.scripts?.['test:m7']?.includes(`tests/${name}.test.ts`)) {
+    failures.push(`test:m7: missing dedicated file ${name}`);
+  }
+}
+for (const name of ['m8_domain_operations', 'm8_domain_commit']) {
+  if (!packageJson.scripts?.['test:m8']?.includes(name)) {
+    failures.push(`test:m8: missing dedicated file ${name}`);
+  }
+}
+
 function requirePattern(label, source, pattern) {
   if (!pattern.test(source)) failures.push(`${label}: missing structure matching ${pattern}`);
 }
@@ -147,7 +183,10 @@ requirePattern('Temurin distribution', workflow, /^          distribution: temur
 requirePattern('Java 21 runtime', workflow, /^          java-version: ['"]?21['"]?\s*$/m);
 requirePattern('dedicated Playwright E2E job', workflow, /^  e2e:\s*$/m);
 requirePattern('Playwright container IPC sharing', workflow, /^      options: --ipc=host\s*$/m);
-requirePattern('Playwright E2E execution', workflow, /^          npm run test:e2e 2>&1 \| tee "verification-e2e\.log"\s*$/m);
+requirePattern('E2E matrix exhaustiveness and isolation', workflow, /^  e2e:\n    if: github\.event_name == 'pull_request'\n    name: "Verification \/ Playwright E2E \$\{\{ matrix\.shard \}\}\/4"\n    runs-on: ubuntu-24\.04\n    timeout-minutes: 30\n    strategy:\n      fail-fast: false\n      matrix:\n        shard: \[1, 2, 3, 4\]\s*$/m);
+requirePattern('Playwright E2E sharded execution', workflow, /^          npm run test:e2e -- --shard=\$\{\{ matrix\.shard \}\}\/4 2>&1 \| tee "verification-e2e-\$\{\{ matrix\.shard \}\}\.log"\s*$/m);
+requirePattern('Playwright unique shard artifacts', workflow, /^          name: verification-e2e-\$\{\{ matrix\.shard \}\}-\$\{\{ env\.EXPECTED_SHA \}\}\s*$/m);
+requirePattern('Playwright shard log retained', workflow, /^            verification-e2e-\$\{\{ matrix\.shard \}\}\.log\s*$/m);
 forbidPattern('host Playwright dependency install', workflow, /playwright install --with-deps/);
 const playwrightImageMatch = workflow.match(/^      image: mcr\.microsoft\.com\/playwright:v([0-9]+\.[0-9]+\.[0-9]+)-noble\s*$/m);
 if (!playwrightImageMatch) {
@@ -308,4 +347,4 @@ if (failures.length > 0) {
   process.exit(1);
 }
 
-console.log('M8 CI contract OK: exact-SHA matrix shards plus the pinned Playwright container are leaf-equivalent to verify:m8, CodeQL plus the supplemental static-security gate are required, specialized dependencies stay isolated, and Canonical Verification remains the single aggregate gate.');
+console.log('M8 CI contract OK: exact-SHA verification and four Playwright shards are leaf-equivalent to verify:m8, dedicated Vitest files are partitioned without reexecution, CodeQL remains required, and Canonical Verification remains the aggregate gate.');
