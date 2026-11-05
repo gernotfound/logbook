@@ -1,10 +1,9 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 
 const fixture = vi.hoisted(() => ({
     owner: 'user:a',
     current: true,
-    consent: 'active',
     dataOwner: 'user:a' as string | null,
     inspect: vi.fn(),
     inspectDated: vi.fn(),
@@ -15,11 +14,13 @@ vi.mock('../../src/lib/sync/session', () => ({
         fixture.current && session.owner === fixture.owner,
     isActiveGuestSession: () => true,
 }));
-vi.mock('../../src/lib/healthConsent', () => ({
-    currentHealthConsentStatus: () => fixture.consent,
-    getGuestHealthConsentStatus: () => fixture.consent,
-    subscribeHealthConsent: () => () => {},
-}));
+// Consent notifications are part of the boundary under test, including the
+// event that clears previews before a later acceptance can reveal them again.
+vi.unmock('../../src/lib/healthConsent');
+import {
+    beginGuestHealthReacceptance, completeGuestHealthReacceptance,
+    refreshHealthConsentFromStorage, withdrawGuestHealthConsent,
+} from '../../src/lib/healthConsent';
 vi.mock('../../src/store/useAppStore', () => ({
     useAppStore: Object.assign(
         (selector: (state: { dataOwner: string | null }) => unknown) =>
@@ -38,7 +39,6 @@ import { BufferedRecoveryInspector } from '../../src/components/Settings/Buffere
 beforeEach(() => {
     fixture.owner = 'user:a';
     fixture.current = true;
-    fixture.consent = 'active';
     fixture.dataOwner = 'user:a';
     fixture.inspectDated.mockReset().mockReturnValue([]);
     fixture.inspect.mockReset().mockReturnValue([
@@ -66,10 +66,78 @@ it('shows evidence only after explicit request and can hide it again', () => {
 });
 
 it('does not open the archive when health consent is withdrawn', () => {
-    fixture.consent = 'withdrawn';
+    localStorage.setItem('logbook:v2:user:a:health-consent-withdrawal', 'withdrawn');
     render(<BufferedRecoveryInspector />);
     expect(screen.getByRole('button', { name: /Esamina copie sul dispositivo/ }).hasAttribute('disabled')).toBe(true);
     expect(fixture.inspect).not.toHaveBeenCalled();
+});
+
+it.each(['user:a', 'guest'])('closes visible copies immediately on %s consent withdrawal and requires a new inspection after acceptance', owner => {
+    fixture.owner = owner;
+    fixture.dataOwner = owner;
+    if (owner === 'guest') {
+        fixture.inspect.mockReturnValue([
+            { name: 'draft:buffered-intent:a', draftName: 'draft:buffered:textarea:workout-1:notes',
+                value: 'Older sensitive note', consentRevision: null, provenance: 'guest' },
+            { name: 'draft:buffered-intent:b', draftName: 'draft:buffered:textarea:workout-1:notes',
+                value: 'Newer sensitive note', consentRevision: null, provenance: 'guest' },
+        ]);
+    }
+    fixture.inspectDated.mockReturnValue([
+        { name: 'draft:dated-intent:abc', draftName: 'draft:measurement:2026-10-20',
+            value: '{"weight":"75"}', consentRevision: owner === 'guest' ? null : 3,
+            provenance: owner === 'guest' ? 'guest' : 'current' },
+    ]);
+    render(<BufferedRecoveryInspector />);
+    const inspectButton = screen.getByRole('button', { name: /Esamina copie sul dispositivo/ });
+    fireEvent.click(inspectButton);
+    fireEvent.click(screen.getByText(/workout-1:notes — 2 copie/));
+    fireEvent.click(screen.getByText(/draft:measurement:2026-10-20 — 1 copia/));
+    expect(screen.getByDisplayValue('Older sensitive note')).toBeTruthy();
+    expect(screen.getByDisplayValue('Newer sensitive note')).toBeTruthy();
+    expect(screen.getByDisplayValue('{"weight":"75"}')).toBeTruthy();
+
+    act(() => {
+        if (owner === 'guest') {
+            withdrawGuestHealthConsent();
+        } else {
+            // Another realm changes the durable marker; the production
+            // storage bridge notifies subscribers without a parent rerender.
+            localStorage.setItem('logbook:v2:user:a:health-consent-withdrawal', 'withdrawn');
+            refreshHealthConsentFromStorage();
+        }
+    });
+    expect(inspectButton.hasAttribute('disabled')).toBe(true);
+    expect(screen.queryByRole('region', { name: 'Copie di recupero' })).toBeNull();
+    expect(screen.queryByDisplayValue('Older sensitive note')).toBeNull();
+    expect(screen.queryByDisplayValue('Newer sensitive note')).toBeNull();
+    expect(screen.queryByDisplayValue('{"weight":"75"}')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Nascondi copie' })).toBeNull();
+
+    act(() => {
+        if (owner === 'guest') {
+            beginGuestHealthReacceptance();
+            completeGuestHealthReacceptance(true);
+        } else {
+            localStorage.removeItem('logbook:v2:user:a:health-consent-withdrawal');
+            refreshHealthConsentFromStorage();
+        }
+    });
+    expect(inspectButton.hasAttribute('disabled')).toBe(false);
+    expect(screen.queryByRole('region', { name: 'Copie di recupero' })).toBeNull();
+    expect(screen.queryByDisplayValue('Older sensitive note')).toBeNull();
+    expect(screen.queryByDisplayValue('Newer sensitive note')).toBeNull();
+    expect(screen.queryByDisplayValue('{"weight":"75"}')).toBeNull();
+    expect(fixture.inspect).toHaveBeenCalledExactlyOnceWith(owner);
+    expect(fixture.inspectDated).toHaveBeenCalledExactlyOnceWith(owner);
+
+    fixture.inspect.mockReturnValue([]);
+    fixture.inspectDated.mockReturnValue([]);
+    fireEvent.click(inspectButton);
+    expect(fixture.inspect).toHaveBeenCalledTimes(2);
+    expect(fixture.inspectDated).toHaveBeenCalledTimes(2);
+    expect(screen.getByText('Nessuna testimonianza indipendente disponibile. Le altre bozze non vengono esaminate qui.')).toBeTruthy();
+    expect(screen.queryByDisplayValue('Newer sensitive note')).toBeNull();
 });
 
 it('hides plaintext on visibility change and fails closed on storage read error', () => {
