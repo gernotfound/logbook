@@ -48,7 +48,7 @@ export const PrivacyPolicy: React.FC<{ onClose: () => void }> = ({ onClose }) =>
               Informativa sulla privacy
             </h2>
             <p style={{ margin: '4px 0 0', fontSize: 'var(--font-size-meta)', color: 'var(--text-muted)' }}>
-              Aggiornata al 4 novembre 2026
+              Aggiornata al 5 novembre 2026
             </p>
           </div>
           <button
@@ -104,7 +104,7 @@ export const PrivacyPolicy: React.FC<{ onClose: () => void }> = ({ onClose }) =>
               Se scegli di creare o collegare un account, i dati applicativi vengono sincronizzati su Firebase Firestore. A seconda del metodo di autenticazione possono essere trattati l'identificativo Firebase dell'account, l'indirizzo email e gli eventuali dati di profilo restituiti dal provider di autenticazione.
             </p>
             <ul style={ulStyle}>
-              <li>Dati di allenamento: routine, sessioni, esercizi, serie, carichi, ripetizioni, RPE e informazioni correlate.</li>
+              <li>Dati di allenamento: routine, sessioni, esercizi, serie, carichi, ripetizioni, RIR (ripetizioni in riserva) e informazioni correlate.</li>
               <li>Dati di nutrizione: pianificazioni, alimenti, macro, diario e integrazione.</li>
               <li><strong style={{ color: 'var(--primary-color)' }}>Dati relativi alla salute (Art. 9 GDPR):</strong> peso, composizione corporea, circonferenze, sonno, fatica/dolori e altre misurazioni o annotazioni di salute inserite nell'app.</li>
               <li>Metadati tecnici necessari a sincronizzazione, versioning, recovery, consenso legale e gestione del ciclo di vita dell'account.</li>
@@ -188,7 +188,7 @@ export const PrivacyPolicy: React.FC<{ onClose: () => void }> = ({ onClose }) =>
               <li><strong style={{ color: 'var(--text-main)' }}>Vercel</strong> — sole funzioni server trusted e manutenzione giornaliera; il frontend/PWA è servito da Firebase Hosting.</li>
             </ul>
             <p>
-              Prima della distribuzione commerciale devono essere verificati e pubblicati l'elenco aggiornato dei fornitori/sub-responsabili, le localizzazioni effettive del trattamento e, per eventuali trasferimenti fuori dallo SEE, il meccanismo applicabile (ad esempio decisione di adeguatezza o clausole contrattuali standard).
+              Prima che il servizio venga utilizzato da altre persone, anche durante un pilot gratuito, devono essere verificati e pubblicati l'elenco aggiornato dei fornitori/sub-responsabili, le localizzazioni effettive del trattamento e, per eventuali trasferimenti fuori dallo SEE, il meccanismo applicabile (ad esempio decisione di adeguatezza o clausole contrattuali standard).
             </p>
           </Section>
 
