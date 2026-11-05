@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import {
   classifyFieldOverride,
+  findUnexpectedFieldOverrides,
   FIELD_OVERRIDE_LIST_FILTER,
   fieldOverrideListParent,
   normalizeFieldIndexModes,
@@ -177,12 +178,11 @@ for (const [collectionGroup, desiredIndexes] of desiredByGroup) {
 const activeOperations = desiredFieldOverrides.length > 0
   ? await loadActiveFirestoreOperations()
   : [];
-const liveFieldOverrides = desiredFieldOverrides.length > 0
-  ? await loadLiveFieldOverrides()
-  : [];
+const liveFieldOverrides = await loadLiveFieldOverrides();
 const fieldOverrideStatuses = desiredFieldOverrides.map(desired =>
   classifyFieldOverride(desired, liveFieldOverrides, activeOperations)
 );
+const unexpectedFieldOverrides = findUnexpectedFieldOverrides(desiredFieldOverrides, liveFieldOverrides);
 
 const rulesMatch = normalizeText(liveRulesFile.content) === normalizeText(rulesSource);
 const missingIndexes = indexStatuses.filter(status => !status.found);
@@ -198,6 +198,9 @@ if (mode === 'preflight') {
   for (const status of indexStatuses) {
     console.log(`- ${status.collectionGroup}: ${status.found ? status.state : 'MISSING'}`);
   }
+  for (const unexpected of unexpectedFieldOverrides) {
+    console.log(`- unconfigured field override: ${unexpected.collectionGroup}/${unexpected.fieldPath}`);
+  }
   for (const status of fieldOverrideStatuses) {
     const state = status.matchesDesired
       ? (status.indexesDisabled ? 'EXEMPT' : 'READY')
@@ -210,13 +213,16 @@ if (mode === 'preflight') {
 }
 
 if (mode === 'status') {
-  if (!rulesMatch || missingIndexes.length || mismatchedFieldOverrides.length) {
+  if (!rulesMatch || missingIndexes.length || mismatchedFieldOverrides.length || unexpectedFieldOverrides.length) {
     if (!rulesMatch) console.log('Firestore reconciliation required: live Rules differ from firestore.rules.');
     for (const status of missingIndexes) {
       console.log(`Firestore reconciliation required: missing desired index ${status.collectionGroup}.`);
     }
     for (const status of mismatchedFieldOverrides) {
       console.log(`Firestore reconciliation required: field index override ${status.collectionGroup}/${status.fieldPath} differs from source.`);
+    }
+    for (const unexpected of unexpectedFieldOverrides) {
+      console.log(`Firestore reconciliation required: unexpected field index override ${unexpected.collectionGroup}/${unexpected.fieldPath}.`);
     }
     process.exit(10);
   }
@@ -238,6 +244,11 @@ if (mode === 'status') {
 
 if (!rulesMatch) {
   throw new Error('Live Cloud Firestore rules do not match firestore.rules from the deployed SHA');
+}
+if (unexpectedFieldOverrides.length) {
+  throw new Error(
+    `Firestore has explicit field index overrides not present in the desired configuration: ${unexpectedFieldOverrides.map(item => `${item.collectionGroup}/${item.fieldPath}`).join(', ')}`,
+  );
 }
 if (mismatchedFieldOverrides.length) {
   throw new Error(

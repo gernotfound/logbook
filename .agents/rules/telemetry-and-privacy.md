@@ -17,13 +17,11 @@
 
 **MUST:** `firebase.json` non autorizza endpoint esterni di monitoraggio degli errori in `connect-src`; il workflow Firebase Hosting non richiede DSN, token, organization/project o upload di source map. `scripts/check-production-build-secrets.mjs` impedisce la reintroduzione accidentale di variabili di monitoraggio nel workflow.
 
-## Servizi tecnici necessari e residui pre-lancio
+## Servizi tecnici necessari
 
-Firebase Hosting, Authentication, Firestore, App Check e le API Vercel restano operativi e possono elaborare metadati di rete/log tecnici secondo i rispettivi servizi. La documentazione legale deve distinguerli dall'assenza di reporting automatico di errori client.
+Firebase Hosting, Authentication, Firestore, App Check e le API Vercel restano operativi e possono elaborare metadati di rete e log tecnici necessari al servizio. La documentazione legale li distingue dall'assenza di reporting automatico degli errori client.
 
-Le collection `users/{uid}/telemetry_errors`, `telemetry_events` e `telemetry_anomalies` sono pre-lancio e **non** ricevono scritture client. Security Rules ne negano l'accesso client. I percorsi server Admin di retention a 30 giorni, cancellazione account e cancellazione dati salute continuano a proteggere eventuali record residui: non eliminarli senza verifica del dataset live e del recovery. Il ritiro del monitoraggio esterno non elimina i dati storici dei provider. Il progetto Sentry `logbook-sentry` è mantenuto per scelta del product owner come archivio, non come integrazione runtime; non cancellarlo o eliminare gli eventi. La retention del provider rimane da verificare.
-
-Google Analytics/Firebase Analytics, Vercel Analytics e Speed Insights restano dismessi. Nessuna integrazione di analytics comportamentali è autorizzata.
+Il client non scrive raccolte diagnostiche e il backend non ha più processi di retention dedicati a diagnostica pre-lancio. Le Security Rules negano per impostazione predefinita gli accessi a raccolte non previste. Cancellazione account, erasure dei dati salute, isolamento owner e verifica fail-closed delle sottoraccolte inattese restano invariati.
 
 ## Verifica e conformità
 

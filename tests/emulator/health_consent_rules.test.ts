@@ -46,12 +46,8 @@ it('denies all direct fitness reads and writes after withdrawal', async () => {
   });
   const db = env.authenticatedContext('u', { email_verified: true }).firestore();
   await assertFails(getDoc(doc(db, 'users/u')));
-  await assertFails(deleteDoc(doc(db, 'users/u/telemetry_events/one')));
-  await assertFails(setDoc(doc(db, 'users/u/telemetry_events/one'), {
-    timestamp: Date.now(), type: 'workout_started', userId: 'u', sessionId: 's',
-    context: { appVersion: '1.0', platform: 'other', displayMode: 'browser', online: true },
-    expireAt: new Date(Date.now() + 86400000),
-  }));
+  await assertFails(deleteDoc(doc(db, 'users/u/unrecognized_records/one')));
+  await assertFails(setDoc(doc(db, 'users/u/unrecognized_records/one'), { value: true }));
 });
 
 // An active account retains ordinary reads: only the withdrawn state has the server-export gate.
@@ -112,7 +108,7 @@ it('rejects active consent records missing owner-matched evidence fields', async
   await assertSucceeds(getDoc(doc(db, 'users/u')));
 });
 
-it('rejects private shards, telemetry and replica-control reads during withdrawal', async () => {
+it('rejects private shards and replica-control reads during withdrawal', async () => {
   await env.withSecurityRulesDisabled(async context => {
     await setDoc(doc(context.firestore(), 'health_consent_withdrawals/u'), mark('withdrawn'));
     await setDoc(doc(context.firestore(), 'users/u'), { profile: { name: 'Retained' } });
@@ -122,22 +118,16 @@ it('rejects private shards, telemetry and replica-control reads during withdrawa
     'users/u/history_months/2026-09',
     'users/u/nutrition_months/2026-09',
     'users/u/sync_control/state',
-    'users/u/telemetry_errors/one',
-    'users/u/telemetry_events/one',
-    'users/u/telemetry_anomalies/one',
+    'users/u/unrecognized_records/one',
   ]) await assertFails(getDoc(doc(db, path)));
 });
 
-it('rejects legacy telemetry without consent epoch even after a new explicit acceptance', async () => {
+it('rejects unrecognized private collection writes even after explicit acceptance', async () => {
   await env.withSecurityRulesDisabled(async context => {
     await setDoc(doc(context.firestore(), 'health_consent_withdrawals/u'), proof('u', 2));
   });
   const db = env.authenticatedContext('u', { email_verified: true }).firestore();
-  await assertFails(setDoc(doc(db, 'users/u/telemetry_events/obsolete'), {
-    timestamp: Date.now(), type: 'workout_saved', userId: 'u', sessionId: 'old-client',
-    context: { appVersion: '1.0', platform: 'other', displayMode: 'browser', online: true },
-    expireAt: new Date(Date.now() + 86400000),
-  }));
+  await assertFails(setDoc(doc(db, 'users/u/unrecognized_records/one'), { value: true }));
 });
 
 it('rejects revoked Firebase sessions immediately in every private collection while permitting a new login', async () => {
@@ -156,7 +146,7 @@ it('rejects revoked Firebase sessions immediately in every private collection wh
   await assertFails(getDoc(doc(prior, 'users/u')));
   await assertFails(getDoc(doc(prior, 'users/u/history_months/2026-10')));
   await assertFails(getDoc(doc(prior, 'users/u/sync_control/state')));
-  await assertFails(getDoc(doc(prior, 'users/u/telemetry_events/one')));
+  await assertFails(getDoc(doc(prior, 'users/u/unrecognized_records/one')));
 
   const equalSecond = env.authenticatedContext('u', { email_verified: true, auth_time: 120 }).firestore();
   await assertFails(getDoc(doc(equalSecond, 'users/u')));

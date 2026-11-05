@@ -64,7 +64,6 @@ Il [pacchetto compliance](compliance/README.md) contiene le decisioni aperte e l
 | [Consenso salute: decisione e gate](compliance/health-consent-release-gate.md) | Decisione UX approvata; gate legale/manuale aperto | Revoca, diritti ed eventuale riaccettazione |
 | [Consenso salute: protocollo](compliance/health-consent-technical-protocol.md) | Comportamento tecnico descritto; verifica pre-pilot aperta | Fence, journal, offline e cross-device |
 | [Runbook incidenti / breach](compliance/incident-breach-runbook.md) | Procedura da assegnare e provare | Gestione, escalation e notifiche |
-| [LIA condizionale](compliance/legitimate-interest-assessment-template.md) | Template non richiesto dalla dismessa telemetria client | Eventuali futuri trattamenti fondati sul legittimo interesse |
 | [Registro trattamenti](compliance/processing-record-template.md) | Template Art. 30 da completare | Attività e finalità del trattamento |
 | [Retention schedule](compliance/retention-schedule.md) | Policy da approvare e verificare | Conservazione e cancellazioni |
 | [Accordo SaaS palestra](compliance/saas-agreement-template.md) | Bozza non firmata | Contratto commerciale |

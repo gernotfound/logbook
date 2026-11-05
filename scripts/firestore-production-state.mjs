@@ -32,6 +32,23 @@ export function parseFieldResource(resourceName) {
   };
 }
 
+// Field overrides omitted from firestore.indexes.json must not remain silently
+// active: a successful reconciliation has to verify removals as well as additions.
+// TTL-only fields and inherited index configurations are not explicit overrides.
+export function findUnexpectedFieldOverrides(desired, liveFields) {
+  const known = new Set(desired.map(field => `${field.collectionGroup}/${field.fieldPath}`));
+  const unexpected = [];
+  for (const field of liveFields) {
+    const config = field?.indexConfig;
+    if (!config || config.usesAncestorConfig === true || !Array.isArray(config.indexes)) continue;
+    const resource = parseFieldResource(field.name);
+    if (!resource) throw new Error('Invalid explicit Firestore field resource');
+    if (resource.collectionGroup === '__default__') continue;
+    if (!known.has(`${resource.collectionGroup}/${resource.fieldPath}`)) unexpected.push(resource);
+  }
+  return unexpected;
+}
+
 export function normalizeFieldIndexModes(indexes) {
   if (!Array.isArray(indexes)) throw new Error('Field override indexes must be an array');
   const modes = indexes.map(index => {

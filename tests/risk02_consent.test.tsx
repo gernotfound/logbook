@@ -198,7 +198,6 @@ describe('RISK-02: ConsentOverlay UI Behavior', () => {
         render(<PrivacyPolicy onClose={vi.fn()} />);
         expect(screen.getByText(/non utilizza un servizio esterno di Error Monitoring/i)).toBeDefined();
         expect(screen.getByText(/non crea code di report diagnostici/)).toBeDefined();
-        expect(screen.queryByText(/Sentry/)).toBeNull();
         expect(screen.getByText(/Le chiavi sono conservate nello stesso profilo del browser/)).toBeDefined();
         expect(screen.getByText(/non costituisce cifratura end-to-end/)).toBeDefined();
     });

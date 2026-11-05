@@ -131,7 +131,6 @@ beforeEach(() => {
   fixture.records.set('users/a/history_months/2026-09', { history: [1] });
   fixture.records.set('users/a/nutrition_months/2026-09', { nutrition: [2] });
   fixture.records.set('users/a/sync_control/state', { replicas: {} });
-  fixture.records.set('users/a/telemetry_errors/error-1', { reason: 'private' });
   // KMS only wraps a per-owner key. The envelope is server-owned and must
   // survive partial page failures, then be destroyed on completed erasure.
   fixture.records.set('user_data_keys/a', { uid: 'a', format: 'thelogbook-wrapped-account-key', version: 1, ciphertext: 'wrapped-a' });
@@ -157,6 +156,18 @@ describe('trusted data-only erasure worker', () => {
     await createHealthDataErasureJob('a');
     expect(await readHealthDataErasureStatus('a')).toMatchObject({ complete: true });
     expect(fixture.records.get(consentPath('a'))?.revision).toBe(4);
+  });
+
+  it('fails closed on an unknown nested collection and preserves the wrapped key', async () => {
+    fixture.records.set('users/a/unrecognized_records/one', { data: 'unexpected' });
+    await createHealthDataErasureJob('a');
+    expect(await processHealthDataErasure('a', Date.now() + 30000)).toBe('failed');
+    expect(await readHealthDataErasureStatus('a')).toMatchObject({
+      status: 'failed', complete: false, localPurgeAuthorized: false,
+    });
+    expect(fixture.records.has('users/a/unrecognized_records/one')).toBe(true);
+    expect(fixture.records.has('user_data_keys/a')).toBe(true);
+    expect(fixture.records.get(consentPath('a'))).toMatchObject({ status: 'withdrawn', revision: 3 });
   });
 
   it('keeps local purge blocked when a completed erasure still has an unexpected ADK residue', async () => {

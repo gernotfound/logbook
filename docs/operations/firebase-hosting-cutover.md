@@ -1,12 +1,12 @@
 # Cutover Firebase Hosting Spark + Vercel backend
 
-Stato: cutover Production completato il 2026-10-02. Questo documento conserva il checkpoint storico: le indicazioni su Sentry (inclusi DSN, token, source map e smoke) descrivono soltanto la configurazione del cutover, **non** il contratto corrente dopo la decisione di dismissione del 4 novembre 2026. Per lo stato desiderato consultare [Gestione errori e privacy](../../.agents/rules/telemetry-and-privacy.md) e [Registro servizi](external-services-register.md). Le voci esterne non direttamente osservabili dal repository restano soggette a verifica nel provider competente.
+Stato: cutover Production completato il 2026-10-02. Questo documento conserva la cronologia del passaggio a Firebase Hosting, non il contratto attuale delle integrazioni ritirate. Per il monitoraggio esterno valgono [Gestione errori e privacy](../../.agents/rules/telemetry-and-privacy.md) e [Registro servizi](external-services-register.md); lo stato live dei provider va verificato separatamente.
 
 ## Target
 
 - Frontend/PWA: Firebase Hosting, site `thelogbook`, Firebase Spark.
 - Firestore, Authentication e App Check/reCAPTCHA Enterprise restano Firebase.
-- GA4/Firebase Analytics è dismesso sia nel frontend sia nel collegamento al progetto Firebase; Sentry resta Error Monitoring.
+- GA4/Firebase Analytics e gli strumenti di monitoraggio esterno sono stati successivamente ritirati dal runtime client.
 - Trusted backend e cron giornaliero: Vercel Hobby.
 - Production deriva esclusivamente da `main`.
 
@@ -18,7 +18,7 @@ Stato: cutover Production completato il 2026-10-02. Questo documento conserva il
 4. Firestore: deployare `firestore.indexes.json` e attendere che gli indici risultino pronti prima di attivare il nuovo backend. Checkpoint 2026-10-02: entrambi gli indici compositi richiesti da `account_deletions` risultano Abilitati.
 5. Vercel Production: verificare che il deployment applichi `framework: null` (preset Other/backend-only) e `fluid: true` dal `vercel.json`, evitando una build frontend Vite su Vercel e preservando il runtime delle funzioni; verificare inoltre il permesso effettivo `firebaseappcheck.appCheckTokens.verify` sul service account Firebase Admin usato dal backend, necessario alla consumazione dei token limited-use; mantenere `FIREBASE_ADMIN_PROJECT_ID`, `FIREBASE_ADMIN_CLIENT_EMAIL`, `FIREBASE_ADMIN_PRIVATE_KEY`, `CRON_SECRET` e `PUBLIC_APP_ORIGIN=https://thelogbook.web.app`. Il bridge CORS verso il vecchio frontend Vercel è ritirato dopo gli smoke verdi; eventuali env provider residue con il vecchio nome non fanno più parte del contratto runtime. Non sostituire queste credenziali runtime con la WIF del deploy Hosting.
 6. GitHub Actions: configurare Workload Identity Federation verso un service account dedicato al deploy. Mappare `google.subject=assertion.sub`, `attribute.repository_id=assertion.repository_id` e `attribute.repository_owner_id=assertion.repository_owner_id`; applicare al provider una condition sugli ID immutabili del repository e dell'owner di `gernotfound/logbook`, quindi autorizzare all'impersonation (`roles/iam.workloadIdentityUser` sul service account) soltanto il principal del repository, non il pool intero. Sul progetto Firebase assegnare al deployer soltanto `roles/firebasehosting.admin` e `roles/serviceusage.apiKeysViewer`, necessari al deploy Hosting via Firebase CLI. Non assegnare ruoli Functions/Cloud Run/Firestore a questa identità Hosting. Checkpoint 2026-10-02: pool/provider/deployer e binding risultano configurati senza chiavi private JSON.
-7. Repository variables richieste: `GCP_WORKLOAD_IDENTITY_PROVIDER`, `GCP_FIREBASE_DEPLOY_SERVICE_ACCOUNT`, `VITE_FIREBASE_API_KEY`, `VITE_FIREBASE_AUTH_DOMAIN` (esattamente `thelogbook.web.app` in Production), `VITE_FIREBASE_PROJECT_ID`, `VITE_FIREBASE_APP_ID`, `VITE_ACCOUNT_DELETION_API_ORIGIN`, `VITE_RECAPTCHA_ENTERPRISE_SITE_KEY`, `VITE_SENTRY_DSN`, `SENTRY_ORG`, `SENTRY_PROJECT`. Secret: `SENTRY_AUTH_TOKEN`.
+7. Repository variables richieste per il frontend: `GCP_WORKLOAD_IDENTITY_PROVIDER`, `GCP_FIREBASE_DEPLOY_SERVICE_ACCOUNT`, `VITE_FIREBASE_API_KEY`, `VITE_FIREBASE_AUTH_DOMAIN` (Production: `thelogbook.web.app`), `VITE_FIREBASE_PROJECT_ID`, `VITE_FIREBASE_APP_ID`, `VITE_ACCOUNT_DELETION_API_ORIGIN`, `VITE_RECAPTCHA_ENTERPRISE_SITE_KEY`.
 8. Verificare Auth Authorized domains, OAuth origin/redirect, App Check/reCAPTCHA Enterprise per `https://thelogbook.web.app`.
 9. Non rimuovere ancora il vecchio origin Vercel dalle allowlist esterne.
 
@@ -33,7 +33,6 @@ Completato e verificato prima del merge:
 - WIF GitHub Actions + deployer Hosting least-privilege configurati; repository variables e secret del workflow provisionati;
 - preflight read-only WIF riuscito: GitHub Actions ha impersonato il deployer e letto il sito Hosting `thelogbook` senza creare versioni, release o canali; il workflow diagnostico temporaneo è rimosso dall'HEAD candidato;
 - Vercel Production predisposta per il nuovo origin; il bridge legacy usato nella finestra di cutover è stato successivamente ritirato dal contratto applicativo;
-- Sentry CI token configurato, Allowed Domains ristretto ai due frontend del cutover e Project Security Token ruotato dopo esposizione durante la configurazione.
 
 Completamento 2026-10-02: PR #191 squash-merged; `main` = `edf164e3e410a650d1390b9cbe92344fa1fb9501`; Milestone Verification post-merge #1123 verde; Vercel Production READY sullo stesso SHA; Firebase Hosting Production run `36992998590` verde con prima release del site `thelogbook`; smoke automatici shell/SW verdi; login Google reale riuscito sul nuovo origin e registrazione recovery device osservata con risposte 200/204 dal backend.
 
@@ -48,20 +47,19 @@ Completamento 2026-10-02: PR #191 squash-merged; `main` = `edf164e3e410a650d1390
 
 ## Smoke obbligatori
 
-- `https://thelogbook.web.app/`: 200, canonical/asset corretti, `Cache-Control: no-cache, no-store, must-revalidate` sull'app shell, nessun errore console bloccante; la CSP non deve generare violazioni per Firestore, Auth, App Check, Firebase Installations, Sentry o backend Vercel.
+- `https://thelogbook.web.app/`: 200, canonical/asset corretti, `Cache-Control: no-cache, no-store, must-revalidate` sull'app shell, nessun errore console bloccante; la CSP non deve generare violazioni per Firestore, Auth, App Check, Firebase Installations o backend Vercel.
 - `sw.js`: no-cache/no-store/must-revalidate; PWA installabile e avvio offline.
 - Google popup + redirect `/__/auth/handler`; email/password.
 - Firestore read/write e sync local-first con App Check.
 - CORS Vercel dal nuovo origin, mai wildcard.
 - Account deletion con autenticazione recente, polling, recovery device, offline/multi-device; ripetere intenzionalmente una richiesta con lo stesso token App Check deve essere rifiutato come replay.
 - Analytics di utilizzo: zero richieste ai domini GA4/Google Tag Manager e nessun toggle GA4 nel frontend corrente.
-- Sentry: solo Error Monitoring e release uguale allo SHA di `main`.
 - robots, sitemap, Open Graph, favicon.
 - Runtime Vercel senza nuovi errori; verificare inoltre che le funzioni account-deletion e cron risultino configurate con durata massima 300s sotto Fluid Compute.
 
 ## Chiusura
 
-Questa è la **chiusura storica del cutover**, non una checklist ancora aperta. Dopo gli smoke iniziali è stato ritirato il supporto CORS legacy del backend. Il 2026-10-02 il vecchio origin Vercel è stato rimosso da Firebase Auth Authorized domains, Browser API key e reCAPTCHA Enterprise e App Check è stato portato in enforcement su Firestore/Auth/RTDB. Le verifiche successive del 2026-10-03, registrate in `docs/operations/external-services-register.md`, attestano l'assenza di origin/redirect Vercel nel Web OAuth client, la rimozione del dominio da Sentry Allowed Domains e la configurazione Search Console del nuovo origin con **Cambio di indirizzo avviato**, non attestato come concluso. Il dominio Firebase predefinito resta necessario alle email action finché il provider rifiuta il cambio callback con `EMAIL_TEMPLATE_UPDATE_NOT_ALLOWED`. Per lo stato live successivo usare il provider competente, non questo checkpoint.
+Questa è la **chiusura storica del cutover**, non una checklist ancora aperta. Dopo gli smoke iniziali è stato ritirato il supporto CORS legacy del backend. Il 2026-10-02 il vecchio origin Vercel è stato rimosso da Firebase Auth Authorized domains, Browser API key e reCAPTCHA Enterprise e App Check è stato portato in enforcement su Firestore/Auth/RTDB. Le verifiche successive del 2026-10-03, registrate in `docs/operations/external-services-register.md`, attestano l'assenza di origin/redirect Vercel nel Web OAuth client, la configurazione Search Console del nuovo origin con **Cambio di indirizzo avviato**, non attestato come concluso. Il dominio Firebase predefinito resta necessario alle email action finché il provider rifiuta il cambio callback con `EMAIL_TEMPLATE_UPDATE_NOT_ALLOWED`. Per lo stato live successivo usare il provider competente, non questo checkpoint.
 
 ## GO / NO-GO
 

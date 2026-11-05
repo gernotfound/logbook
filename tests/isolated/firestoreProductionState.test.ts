@@ -3,6 +3,7 @@ import {
   classifyFieldOverride,
   FIELD_OVERRIDE_LIST_FILTER,
   fieldOverrideListParent,
+  findUnexpectedFieldOverrides,
   isActiveFieldIndexAddition,
   isActiveFieldIndexRemoval,
   normalizeFieldIndexModes,
@@ -18,6 +19,27 @@ describe('Firestore Production field exemption convergence', () => {
     expect(fieldOverrideListParent('p')).toBe('projects/p/databases/(default)/collectionGroups/-');
     expect(FIELD_OVERRIDE_LIST_FILTER).toBe('indexConfig.usesAncestorConfig=false OR ttlConfig:*');
     expect(() => fieldOverrideListParent('')).toThrow('Firestore project id is required');
+  });
+
+  it('detects undesired explicit index overrides without treating TTL-only or inherited fields as overrides', () => {
+    const unexpectedName = 'projects/p/databases/(default)/collectionGroups/sample_records/fields/createdAt';
+    const live = [
+      { name: fieldName, indexConfig: { indexes: [] } },
+      { name: unexpectedName, indexConfig: { indexes: [{ queryScope: 'COLLECTION', fields: [{ fieldPath: 'createdAt', order: 'ASCENDING' }], state: 'READY' }] } },
+      { name: 'projects/p/databases/(default)/collectionGroups/ttl_only/fields/expireAt', ttlConfig: { state: 'ACTIVE' } },
+      { name: 'projects/p/databases/(default)/collectionGroups/inherited/fields/createdAt',
+        indexConfig: { usesAncestorConfig: true, indexes: [] } },
+    ];
+    expect(findUnexpectedFieldOverrides([{ ...desired, indexes: [] }], live)).toEqual([
+      { collectionGroup: 'sample_records', fieldPath: 'createdAt' },
+    ]);
+    expect(findUnexpectedFieldOverrides([{ ...desired, indexes: [] }], live.filter(field => field.name !== unexpectedName))).toEqual([]);
+  });
+
+  it('rejects a malformed explicit field resource instead of silently passing reconciliation', () => {
+    expect(() => findUnexpectedFieldOverrides([], [{
+      name: 'not-a-firestore-resource', indexConfig: { indexes: [] },
+    }])).toThrow('Invalid explicit Firestore field resource');
   });
 
   it('parses wildcard field resources without confusing them with literal field names', () => {
@@ -121,7 +143,7 @@ describe('Firestore Production field exemption convergence', () => {
 
   it('validates exact single-field group indexes while retaining all default collection modes', () => {
     const desiredGroup = {
-      collectionGroup: 'telemetry_errors',
+      collectionGroup: 'sample_records',
       fieldPath: 'expireAt',
       indexes: [
         { queryScope: 'COLLECTION', order: 'ASCENDING' },
@@ -130,7 +152,7 @@ describe('Firestore Production field exemption convergence', () => {
         { queryScope: 'COLLECTION_GROUP', order: 'ASCENDING' },
       ],
     };
-    const field = 'projects/p/databases/(default)/collectionGroups/telemetry_errors/fields/expireAt';
+    const field = 'projects/p/databases/(default)/collectionGroups/sample_records/fields/expireAt';
     const liveIndexes = desiredGroup.indexes.map(index => ({
       queryScope: index.queryScope,
       fields: [{

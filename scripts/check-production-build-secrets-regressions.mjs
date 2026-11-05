@@ -10,14 +10,16 @@ void test('hosting and firestore use independent WIF identities with no external
   assert.deepEqual(checkProductionBuildSecrets(hosting, firestore), []);
 });
 
-void test('rejects the reintroduction of an external error-monitoring credential', () => {
-  const altered = hosting.replace('      FIREBASE_HOSTING_DEPLOY:', '      SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}\n      FIREBASE_HOSTING_DEPLOY:');
+void test('rejects an unreviewed diagnostic credential in the production build', () => {
+  const altered = hosting.replace('      FIREBASE_HOSTING_DEPLOY:',
+    '      ERROR_MONITOR_AUTH_TOKEN: ${{ secrets.ERROR_MONITOR_AUTH_TOKEN }}\n      FIREBASE_HOSTING_DEPLOY:');
   assert.notEqual(altered, hosting);
   assert.match(checkProductionBuildSecrets(altered, firestore).join('; '), /external error monitoring/);
 });
 
-void test('rejects the reintroduction of the browser Sentry DSN', () => {
-  const altered = hosting.replace('      FIREBASE_HOSTING_DEPLOY:', '      VITE_SENTRY_DSN: ${{ vars.VITE_SENTRY_DSN }}\n      FIREBASE_HOSTING_DEPLOY:');
+void test('rejects an unreviewed browser diagnostic DSN', () => {
+  const altered = hosting.replace('      FIREBASE_HOSTING_DEPLOY:',
+    '      VITE_DIAGNOSTIC_DSN: ${{ vars.VITE_DIAGNOSTIC_DSN }}\n      FIREBASE_HOSTING_DEPLOY:');
   assert.notEqual(altered, hosting);
   assert.match(checkProductionBuildSecrets(altered, firestore).join('; '), /external error monitoring/);
 });
@@ -39,23 +41,21 @@ function* clientSources(directory) {
   }
 }
 
-void test('client and production CSP cannot silently restore an external Sentry transport', () => {
+void test('client and production CSP do not contain diagnostic transport markers', () => {
   const manifest = JSON.parse(readFileSync('package.json', 'utf8'));
   const lock = JSON.parse(readFileSync('package-lock.json', 'utf8'));
-
-  for (const [type, packages] of Object.entries({
-    dependencies: manifest.dependencies ?? {},
-    devDependencies: manifest.devDependencies ?? {},
-  })) {
-    assert.deepEqual(Object.keys(packages).filter(name => /sentry/i.test(name)), [], 'Unexpected ' + type + ' Sentry packages');
+  const diagnosticPackage = /(?:error[-_]?monitor|exception[-_]?track|crash[-_]?report|session[-_]?replay)/i;
+  for (const packages of [
+    manifest.dependencies ?? {}, manifest.devDependencies ?? {},
+  ]) {
+    assert.deepEqual(Object.keys(packages).filter(name => diagnosticPackage.test(name)), []);
   }
-  assert.deepEqual(Object.keys(lock.packages).filter(name => /(?:^|\/)node_modules\/@sentry\//i.test(name)), [],
-    'No Sentry packages should remain in the npm lockfile');
+  assert.deepEqual(Object.keys(lock.packages).filter(name => diagnosticPackage.test(name)), []);
 
-  const forbidden = /\bSentry\b|@sentry\/|sentry\.io|VITE_SENTRY_/i;
+  const forbidden = /\b(?:VITE_[A-Z0-9_]*(?:_DSN|_MONITOR_[A-Z0-9_]+)|captureException\s*\(|sendDiagnosticReport\s*\()|(?:ingest|envelope)\.error-monitor\./i;
   for (const source of clientSources('src')) {
-    assert.doesNotMatch(readFileSync(source, 'utf8'), forbidden, 'External diagnostic integration in ' + source);
+    assert.doesNotMatch(readFileSync(source, 'utf8'), forbidden, 'Unexpected diagnostic transport in ' + source);
   }
   assert.doesNotMatch(readFileSync('firebase.json', 'utf8'), forbidden,
-    'Firebase Hosting CSP must not allow Sentry ingestion');
+    'Firebase Hosting CSP must not allow external diagnostic ingestion');
 });

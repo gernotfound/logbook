@@ -246,7 +246,7 @@ it('rejects Protocol 1/2 writes even before the account creates its Protocol 3 c
 
 it.each(['anonymous', 'b'])('denies %s all operations on another user and their private collections', async identity => {
     const db = identity === 'anonymous' ? asModularFirestore(env.unauthenticatedContext().firestore()) : asModularFirestore(env.authenticatedContext(identity, { email_verified: true }).firestore());
-    for (const path of ['users/a', 'users/a/history_months/2026-09', 'users/a/nutrition_months/2026-09', 'users/a/telemetry_events/e', 'users/a/telemetry_errors/e', 'users/a/telemetry_anomalies/e']) {
+    for (const path of ['users/a', 'users/a/history_months/2026-09', 'users/a/nutrition_months/2026-09', 'users/a/unrecognized_records/e']) {
         const ref = doc(db, path);
         await assertFails(getDoc(ref));
         await assertFails(setDoc(ref, {}));
@@ -274,9 +274,7 @@ it('makes account_deletions server-only and immediately blocks the owner on ever
         'users/a',
         'users/a/history_months/2026-09',
         'users/a/nutrition_months/2026-09',
-        'users/a/telemetry_events/e',
-        'users/a/telemetry_errors/e',
-        'users/a/telemetry_anomalies/e',
+        'users/a/unrecognized_records/e',
     ];
 
     await assertFails(getDoc(doc(ownerDb, 'account_deletions/a')));
@@ -287,9 +285,7 @@ it('makes account_deletions server-only and immediately blocks the owner on ever
         await setDoc(doc(adminDb, 'users/a'), { profile: { name: 'before barrier' } });
         await setDoc(doc(adminDb, 'users/a/history_months/2026-09'), { value: true });
         await setDoc(doc(adminDb, 'users/a/nutrition_months/2026-09'), { value: true });
-        await setDoc(doc(adminDb, 'users/a/telemetry_events/e'), { type: 'x' });
-        await setDoc(doc(adminDb, 'users/a/telemetry_errors/e'), { type: 'x' });
-        await setDoc(doc(adminDb, 'users/a/telemetry_anomalies/e'), { type: 'x' });
+        await setDoc(doc(adminDb, 'users/a/unrecognized_records/e'), { type: 'x' });
         await setDoc(doc(adminDb, 'account_deletions/a'), { uid: 'a', status: 'requested', attempts: 0 });
     });
 
