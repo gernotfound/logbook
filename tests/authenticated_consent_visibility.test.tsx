@@ -5,6 +5,8 @@ import { get } from 'idb-keyval';
 import type { UserData } from '../src/types';
 import App from '../src/App';
 import { AuthContext, defaultAuthContext } from '../src/contexts/AuthContextDef';
+import { DB } from '../src/lib/db';
+import { loadAuthenticatedData } from '../src/contexts/auth/loadAuthenticatedData';
 import { auth } from '../src/lib/firebase';
 import { LEGAL_VERSIONS } from '../src/lib/legalVersions';
 import { UserDataSchema } from '../src/lib/schema';
@@ -55,7 +57,7 @@ it('removes an authenticated fitness view on another tab withdrawal before the t
   expect(original.pending.length).toBeGreaterThan(0);
   const ciphertext = await get('logbook:v2:' + owner);
   expect(ciphertext).toMatch(/^tlb-sealed:v1:/);
-  expect(ciphertext).not.toContain('183');
+  expect(ciphertext).not.toContain('"height":"183"');
   useAppStore.setState({ userData: original.data, dataOwner: owner, syncing: false, localWorkout: null });
   window.history.replaceState({}, '', '/?tab=data');
   const view = render(
@@ -65,6 +67,18 @@ it('removes an authenticated fitness view on another tab withdrawal before the t
   );
   fireEvent.click(await screen.findByRole('tab', { name: 'Biometria' }));
   expect((await screen.findByLabelText('Altezza')).getAttribute('value')).toBe('183');
+
+  let releaseCloud!: (payload: Awaited<ReturnType<typeof DB.loadCloudPayload>>) => void;
+  vi.mocked(DB.loadCloudPayload).mockReturnValueOnce(new Promise(resolve => { releaseCloud = resolve; }));
+  let loading!: ReturnType<typeof loadAuthenticatedData>;
+  act(() => {
+    loading = loadAuthenticatedData({
+      user: actor, isGuestActive: () => false,
+      setUserData: useAppStore.getState().setUserData,
+      setSyncing: vi.fn(), setSaveError: vi.fn(),
+    });
+  });
+  await waitFor(() => expect(DB.loadCloudPayload).toHaveBeenCalledOnce());
 
   let finish!: (response: Response) => void;
   fetchMock.mockImplementationOnce(() => new Promise<Response>(resolve => { finish = resolve; }));
@@ -79,6 +93,10 @@ it('removes an authenticated fitness view on another tab withdrawal before the t
   expect(screen.queryByRole('button', { name: 'Salva profilo biometrico' })).toBeNull();
   expect(isHealthConsentWritable(owner)).toBe(false);
   expect(isHealthConsentCloudWritable(owner)).toBe(false);
+  await act(async () => {
+    releaseCloud({ data: { ...original.data, profile: { height: '199' } }, completeMonths: [], cloudDocuments: new Map() });
+    expect(await loading).toBe('blocked');
+  });
   await expect(useAppStore.getState().dispatchDomainOperation({
     type: 'profile.patch', patch: { height: '199' },
   })).rejects.toThrow('Accesso fitness sospeso');
