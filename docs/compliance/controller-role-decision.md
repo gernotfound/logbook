@@ -1,14 +1,15 @@
-# Decisione sui ruoli privacy — provider TheLogBook e palestra
+# Decisione sui ruoli privacy — uso amatoriale corrente ed eventuale palestra
 
 > Documento di accountability. I ruoli GDPR dipendono dai fatti, non dall'etichetta contrattuale. Validare con un professionista prima della firma.
 
-## Modello prodotto attuale
+## Modello di utilizzo corrente e previsto
 
-- Il pagamento palestra → provider avviene fuori dalla PWA.
-- La palestra può distribuire il link/servizio ai propri iscritti.
-- La palestra non ha un tenant TheLogBook, non ha account coach/admin e non vede i dati degli utenti.
-- L'utente inserisce direttamente i propri dati in TheLogBook.
-- Non esiste attualmente una funzione di reporting dell'utente verso la palestra.
+- TheLogBook è un progetto amatoriale gratuito gestito da Gerardo Califano, persona fisica (dichiarazione del product owner del 5 novembre 2026).
+- È previsto l'accesso di altri utenti maggiorenni che creano un account e inseriscono autonomamente i loro dati. Non è documentata una collaborazione commerciale o un pagamento con palestre.
+- Non esistono oggi ruoli applicativi palestra/coach/admin con accesso ai dati degli utenti; non esiste una funzione di reporting verso una palestra.
+- La qualificazione del ruolo di titolare dipende dalle finalità e dai mezzi effettivi: la dichiarazione personale non sostituisce la valutazione giuridica.
+
+Il modello con palestre descritto sotto è **uno scenario futuro**, non il modello corrente.
 
 ## Domande decisive
 
@@ -26,7 +27,7 @@
 
 ### Scenario A — palestra distributore/cliente commerciale senza accesso dati
 
-È il modello prodotto corrente. Non presumere automaticamente un rapporto Art. 28: verificare chi determina finalità e mezzi del trattamento TheLogBook. Il contratto deve chiarire che l'acquisto/distribuzione non attribuisce alla palestra accesso ai dati dell'utente.
+È uno scenario futuro, non quello operativo corrente. Non presumere automaticamente un rapporto Art. 28: verificare chi determina finalità e mezzi del trattamento TheLogBook. Il contratto deve chiarire che l'acquisto/distribuzione non attribuisce alla palestra accesso ai dati dell'utente.
 
 ### Scenario B — palestra impartisce istruzioni e TheLogBook tratta dati per suo conto
 

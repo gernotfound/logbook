@@ -16,7 +16,7 @@ La fonte di verità tecnica resta il repository corrente. Le configurazioni este
 
 TheLogBook è, allo stato dichiarato, un **progetto amatoriale**, non erogato attraverso un'impresa o società. Il product owner **intende permettere anche ad altre persone di creare un account e registrare i propri dati**, senza che ciò implichi una distribuzione commerciale o un accordo con palestre. Questa è una decisione per l'utilizzo previsto, **non una prova che altri utenti siano già iscritti**. Non attribuire al progetto ragione sociale, partita IVA, forma societaria, contratti palestra o finalità commerciali inesistenti. Le sezioni B2B sotto descrivono **uno scenario futuro**.
 
-**Contatto dichiarato dal product owner:** Gerardo Califano (persona fisica), thelogbook.privacy@gmail.com. Non è stata verificata tecnicamente l'esistenza/ricezione della casella: non dichiararla funzionante finché non viene provata.
+**Identità e contatto comunicati dal product owner:** Gerardo Califano (persona fisica), thelogbook.privacy@gmail.com. **Il product owner ha confermato il 5 novembre 2026 che la casella funziona**; questa è un'attestazione dell'interessato, non un test indipendente né una verifica del suo monitoraggio continuativo. Rimane da valutare un recapito postale appropriato, se richiesto per il modello di comunicazione adottato.
 
 La natura amatoriale o gratuita **non determina un'esenzione GDPR**: l'art. 2, par. 2, lett. c e il considerando 18 delimitano l'eccezione alle attività esclusivamente personali o domestiche. **Dato il previsto accesso di utenti esterni, non assumere l'applicabilità di tale eccezione per erogare la PWA**. Una persona fisica può essere titolare del trattamento anche senza società, ma identità, recapiti, basi giuridiche, misure e obblighi applicabili devono essere determinati prima di acquisire dati reali di altri utenti. Riferimenti: [Regolamento UE 2016/679, art. 2 e considerando 18](https://eur-lex.europa.eu/legal-content/IT/TXT/?uri=CELEX:32016R0679) e [Commissione europea — ambito di applicazione del GDPR](https://commission.europa.eu/law/law-topic/data-protection/information-business-and-organisations/application-gdpr_en).
 
@@ -26,11 +26,11 @@ La natura amatoriale o gratuita **non determina un'esenzione GDPR**: l'art. 2, p
 
 **Stato: NON PRONTO per trattare dati reali di terzi.** Questo gate riguarda anche un pilot gratuito con una sola persona e non nasce soltanto al momento della vendita a una palestra. L'uso personale del product owner non dimostra che siano soddisfatti gli obblighi applicabili a un servizio offerto ad altre persone.
 
-La PWA gestisce dati potenzialmente rientranti nelle categorie particolari dell'art. 9 GDPR. Il codice prova alcuni comportamenti tecnici, ma non determina l'identità del titolare, le basi giuridiche, le condizioni di conservazione dopo la revoca o gli obblighi contrattuali. Non rimuovere i segnaposto pubblici sostituendoli con dati presunti e non definire una policy legale sulla sola base dei test.
+La PWA gestisce dati potenzialmente rientranti nelle categorie particolari dell'art. 9 GDPR. Il codice prova alcuni comportamenti tecnici; l'identità del titolare e il recapito email sono ora dichiarati dal product owner, mentre le basi giuridiche, le condizioni di conservazione dopo la revoca e gli obblighi contrattuali restano da accertare. Non rimuovere i segnaposto pubblici sostituendoli con dati presunti e non definire una policy legale sulla sola base dei test.
 
 | Blocco | Fonte interna | Evidenza necessaria per la chiusura |
 |---|---|---|
-| Identità e recapiti del soggetto che eroga il servizio | `src/pages/PrivacyPolicy.tsx`, `src/pages/TermsAndConditions.tsx` | Il titolare persona fisica è identificato dal product owner come **Gerardo Califano**, con contatto dichiarato **thelogbook.privacy@gmail.com**. Prima dell'apertura ai terzi: verificare che l'indirizzo riceva messaggi, valutare un recapito postale appropriato e validare ruolo e informazioni obbligatorie |
+| Identità e recapiti del soggetto che eroga il servizio | `src/pages/PrivacyPolicy.tsx`, `src/pages/TermsAndConditions.tsx` | Il titolare persona fisica è identificato dal product owner come **Gerardo Califano**, con contatto dichiarato **thelogbook.privacy@gmail.com**. Ricezione email confermata dal product owner il 5 novembre 2026; restano da verificare monitoraggio operativo, eventuale recapito postale appropriato, ruolo e informazioni obbligatorie |
 | Finalità e basi giuridiche per ogni trattamento, inclusi dati salute | `processing-record-template.md`, `health-consent-release-gate.md` | Valutazione documentata artt. 6 e 9, consenso esplicito dove necessario e testi pubblici coerenti, validati da professionista competente |
 | Dati trattenuti dopo revoca del consenso | `retention-schedule.md`, `data-subject-rights-procedure.md` | Per ogni categoria: finalità residua, eventuale base autonoma già individuata, termine e meccanismo di cancellazione; se manca una base valida, definire adeguamento effettivo del comportamento tecnico |
 | Periodi di conservazione, log e copie dei fornitori | `retention-schedule.md`, `vendor-transfer-register.md` | Durate reali, configurazioni, eventuali backup, localizzazioni e limiti delle cancellazioni verificati nei provider |
@@ -85,7 +85,7 @@ Non inserire dati personali o fiscali reali finché non serve alla release contr
 - `[PROVIDER_LEGAL_NAME]`
 - `[PROVIDER_LEGAL_FORM]`
 - `[PROVIDER_ADDRESS]`
-- `[PRIVACY_EMAIL]`
+- `[PRIVACY_EMAIL]` (solo template per futuri contratti; il contatto corrente è già definito)
 - `[SUPPORT_EMAIL]`
 - `[TAX_DETAILS]`
 - `[GYM_LEGAL_NAME]`

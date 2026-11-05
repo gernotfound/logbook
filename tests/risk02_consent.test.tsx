@@ -35,9 +35,11 @@ describe('RISK-02: Legal Consent Lifecycle', () => {
     };
 
     it('richiede un nuovo consenso quando una versione legale precedente non coincide', () => {
-        expect(LEGAL_VERSIONS.privacy).toBe('1.3.6');
+        expect(LEGAL_VERSIONS.privacy).toBe('1.3.7');
+        expect(needsLegalUpdate({ ...mockConsent, privacyVersion: '1.3.6' })).toBe(true);
         expect(needsLegalUpdate({ ...mockConsent, privacyVersion: '1.3.3' })).toBe(true);
-        expect(LEGAL_VERSIONS.terms).toBe('1.2.2');
+        expect(LEGAL_VERSIONS.terms).toBe('1.2.3');
+        expect(needsLegalUpdate({ ...mockConsent, termsVersion: '1.2.2' })).toBe(true);
         expect(needsLegalUpdate({ ...mockConsent, termsVersion: '1.2.1' })).toBe(true);
         expect(needsLegalUpdate({
             ...mockConsent,
@@ -209,6 +211,9 @@ describe('RISK-02: ConsentOverlay UI Behavior', () => {
         expect(screen.getByText('Revoca del consenso per i dati salute')).toBeDefined();
         expect(screen.getByText(/non puoi utilizzare le funzioni di allenamento/)).toBeDefined();
         expect(screen.getByText(/DA DEFINIRE E VALIDARE: FINALITÀ RESIDUE/)).toBeDefined();
+        expect(screen.getByText(/dopo che il server ha confermato la revoca/)).toBeDefined();
+        expect(screen.getByText(/La disponibilità tecnica dei dati non autorizza/)).toBeDefined();
+        expect(screen.getByText(/possono utilizzare propri identificatori tecnici/)).toBeDefined();
         expect(screen.getByText(/DA VALIDARE: BASI GIURIDICHE PER CIASCUNA FINALITÀ/)).toBeDefined();
         expect(screen.getByText('Gerardo Califano')).toBeDefined();
         expect(screen.getAllByRole('link', { name: 'thelogbook.privacy@gmail.com' }).length).toBe(2);
@@ -219,6 +224,7 @@ describe('RISK-02: ConsentOverlay UI Behavior', () => {
         expect(screen.getByText('Aggiornati al 5 novembre 2026')).toBeDefined();
         expect(screen.getByText('Gerardo Califano')).toBeDefined();
         expect(screen.getByRole('link', { name: 'thelogbook.privacy@gmail.com' }).getAttribute('href')).toBe('mailto:thelogbook.privacy@gmail.com');
+        expect(screen.getByText(/cancellazione separata dei soli dati fitness e nutrizione/)).toBeDefined();
     });
 
     it('Pulsante disabilitato se consenso incompleto', () => {

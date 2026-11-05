@@ -9,7 +9,7 @@
 - Titolare dichiarato: Gerardo Califano
 - Forma di gestione corrente: persona fisica, progetto amatoriale (non una società)
 - Eventuale recapito postale: `[DA VALUTARE/DEFINIRE PRIMA DEL PRIMO UTENTE ESTERNO]`
-- Contatto privacy: `thelogbook.privacy@gmail.com` (ricezione non ancora verificata)
+- Contatto privacy: `thelogbook.privacy@gmail.com` (funzionamento confermato dal product owner il 5 novembre 2026; monitoraggio periodico da organizzare)
 - DPO, se applicabile: `[DPO_OR_NOT_APPLICABLE]`
 - Versione registro: `[VERSION]`
 - Data approvazione: `[DATE]`
@@ -73,7 +73,7 @@
 | Dati | Identità/contatto del richiedente, contenuto della richiesta, evidenze minime, esito |
 | Base | Obbligo legale / gestione rapporto secondo il caso |
 | Retention | `[DEFINE_CASE_FILE_RETENTION]` |
-| Canale | `thelogbook.privacy@gmail.com` (da verificare) / `[SUPPORT_EMAIL]` se verrà attivato un supporto separato |
+| Canale | `thelogbook.privacy@gmail.com` (funzionamento dichiarato verificato dal product owner) / `[SUPPORT_EMAIL]` se verrà attivato un supporto separato |
 
 ## Registro modifiche
 

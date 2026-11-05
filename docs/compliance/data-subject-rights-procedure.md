@@ -1,10 +1,10 @@
 # Procedura diritti interessati — TheLogBook
 
-> Procedura interna. Definire il canale privacy reale prima del pilot e mantenerla coerente con le capacità tecniche effettive.
+> Procedura interna. Il canale privacy è indicato sotto; prima dell'apertura a terzi organizzare il monitoraggio e mantenere la procedura coerente con le capacità tecniche effettive.
 
 ## Canali
 
-- Privacy: `thelogbook.privacy@gmail.com` (indicato dal titolare; ricezione e monitoraggio ancora da verificare prima dell'apertura a utenti esterni)
+- Privacy: `thelogbook.privacy@gmail.com` (recapito dichiarato, funzionamento confermato dal product owner il 5 novembre 2026; organizzare controllo periodico della casella e registrazione delle richieste)
 - Supporto: `[SUPPORT_EMAIL]`
 - Capacità tecniche in app: backup JSON/esportazioni, rettifica, revoca/riaccettazione del consenso, cancellazione account e cancellazione separata dei soli dati dopo revoca server confermata. Per contratti e limiti usare [Consenso](../../.agents/rules/health-consent.md), [Ciclo account](../../.agents/rules/account-lifecycle.md) e [Portabilità](../../.agents/rules/backup-and-portability.md); questa procedura non certifica collaudi live.
 
