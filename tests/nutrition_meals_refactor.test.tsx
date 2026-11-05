@@ -69,7 +69,7 @@ describe('NutritionMeals decomposition parity', () => {
         expect(weightLookup).not.toHaveBeenCalled();
         weightLookup.mockRestore();
 
-        fireEvent.click(screen.getByRole('button', { name: 'Giorno precedente' }));
+        fireEvent.click(screen.getByRole('button', { name: 'Prec. Giorno precedente' }));
         expect(setSelectedDate).toHaveBeenCalledWith('2026-08-15');
 
         fireEvent.change(screen.getByPlaceholderText(/Cerca alimento/i), { target: { value: 'pollo' } });
@@ -109,7 +109,7 @@ describe('NutritionMeals decomposition parity', () => {
             renderWithProviders(<Harness />);
             fireEvent.click(screen.getByTitle('Torna a oggi'));
             expect(screen.getByTestId('chosen-day').textContent).toBe('2026-10-20');
-            fireEvent.click(screen.getByRole('button', { name: 'Giorno precedente' }));
+            fireEvent.click(screen.getByRole('button', { name: 'Prec. Giorno precedente' }));
             expect(screen.getByTestId('chosen-day').textContent).toBe('2026-10-19');
             fireEvent.click(screen.getByTitle('Torna a oggi'));
             expect(screen.getByTestId('chosen-day').textContent).toBe('2026-10-20');

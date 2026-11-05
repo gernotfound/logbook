@@ -65,7 +65,6 @@ const TrainingRoutines: React.FC = () => {
                         className="btn btn-primary routine-create-button"
                         onClick={() => setIsCreating(true)}
                         aria-label="Crea scheda"
-                        aria-controls="routine-creation-form"
                         disabled={isSaving}
                     >
                         <Plus size={18} aria-hidden="true" />
