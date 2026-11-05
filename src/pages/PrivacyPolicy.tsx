@@ -104,7 +104,8 @@ export const PrivacyPolicy: React.FC<{ onClose: () => void }> = ({ onClose }) =>
               Se scegli di creare o collegare un account, i dati applicativi vengono sincronizzati su Firebase Firestore. A seconda del metodo di autenticazione possono essere trattati l'identificativo Firebase dell'account, l'indirizzo email e gli eventuali dati di profilo restituiti dal provider di autenticazione.
             </p>
             <ul style={ulStyle}>
-              <li>Dati di allenamento: routine, sessioni, esercizi, serie, carichi, ripetizioni, RIR (ripetizioni in riserva) e informazioni correlate.</li>
+              <li>Dati di profilo inseriti volontariamente: data di nascita, altezza, genere e misure corporee.</li>
+              <li>Dati di allenamento: routine, sessioni, esercizi, serie, carichi, ripetizioni, RIR (ripetizioni in riserva), valutazioni pre-sessione (stress, energia, umore, recupero) e informazioni correlate.</li>
               <li>Dati di nutrizione: pianificazioni, alimenti, macro, diario e integrazione.</li>
               <li><strong style={{ color: 'var(--primary-color)' }}>Dati che possono rientrare nelle categorie particolari (art. 9 GDPR):</strong> peso, composizione corporea, circonferenze, sonno, fatica/dolori e altre misurazioni o annotazioni che, per contenuto e contesto, rivelano informazioni sulla salute.</li>
               <li>Metadati tecnici necessari a sincronizzazione, versioning, recovery, consenso legale e gestione del ciclo di vita dell'account.</li>

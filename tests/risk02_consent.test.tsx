@@ -215,6 +215,8 @@ describe('RISK-02: ConsentOverlay UI Behavior', () => {
         expect(screen.getByText(/inclusi allenamenti, nutrizione, misurazioni, routine e profilo applicativo/)).toBeDefined();
         expect(screen.getByText(/La disponibilità tecnica dei dati non autorizza/)).toBeDefined();
         expect(screen.getByText(/possono utilizzare propri identificatori tecnici/)).toBeDefined();
+        expect(screen.getByText(/data di nascita, altezza, genere e misure corporee/)).toBeDefined();
+        expect(screen.getByText(/stress, energia, umore, recupero/)).toBeDefined();
         expect(screen.getByText(/DA VALIDARE: BASI GIURIDICHE PER CIASCUNA FINALITÀ/)).toBeDefined();
         expect(screen.getByText('Gerardo Califano')).toBeDefined();
         expect(screen.getAllByRole('link', { name: 'thelogbook.privacy@gmail.com' }).length).toBe(2);
