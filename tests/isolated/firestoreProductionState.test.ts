@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest';
+import { readFileSync } from 'node:fs';
 import {
   classifyFieldOverride,
   FIELD_OVERRIDE_LIST_FILTER,
   fieldOverrideListParent,
   findUnexpectedFieldOverrides,
+  planRetiredFieldOverrides,
   isActiveFieldIndexAddition,
   isActiveFieldIndexRemoval,
   normalizeFieldIndexModes,
@@ -15,6 +17,16 @@ const desired = { collectionGroup: 'history_months', fieldPath: '*' };
 const fieldName = 'projects/p/databases/(default)/collectionGroups/history_months/fields/*';
 
 describe('Firestore Production field exemption convergence', () => {
+  it('retires omitted overrides before noninteractive index deployment without using force', () => {
+    const workflow = readFileSync('.github/workflows/firebase-firestore-production.yml', 'utf8');
+    const retired = workflow.indexOf('node scripts/retire-firestore-field-overrides.mjs');
+    const deploy = workflow.indexOf('npx --yes firebase-tools@15.30.2 deploy');
+    expect(retired).toBeGreaterThan(0);
+    expect(deploy).toBeGreaterThan(retired);
+    expect(workflow).not.toContain('--force');
+    expect(workflow).toContain('fetch-depth: 0');
+  });
+
   it('uses the database-wide explicit-override list scope used by firebase-tools', () => {
     expect(fieldOverrideListParent('p')).toBe('projects/p/databases/(default)/collectionGroups/-');
     expect(FIELD_OVERRIDE_LIST_FILTER).toBe('indexConfig.usesAncestorConfig=false OR ttlConfig:*');
@@ -42,6 +54,32 @@ describe('Firestore Production field exemption convergence', () => {
     }])).toThrow('Invalid explicit Firestore field resource');
   });
 
+  it('only plans removal of a field explicitly retired by this release', () => {
+    const former = { collectionGroup: 'sample_records', fieldPath: 'expireAt', indexes: [
+      { queryScope: 'COLLECTION_GROUP', order: 'ASCENDING' },
+    ] };
+    const live = [{
+      name: 'projects/p/databases/(default)/collectionGroups/sample_records/fields/expireAt',
+      indexConfig: { indexes: [{ queryScope: 'COLLECTION_GROUP',
+        fields: [{ fieldPath: 'expireAt', order: 'ASCENDING' }], state: 'READY' }] },
+    }];
+    expect(planRetiredFieldOverrides([former], [], live)).toEqual([
+      { collectionGroup: 'sample_records', fieldPath: 'expireAt', reverting: false },
+    ]);
+    expect(planRetiredFieldOverrides([former], [], [])).toEqual([]);
+    expect(planRetiredFieldOverrides([former], [former], live)).toEqual([]);
+    expect(() => planRetiredFieldOverrides([], [], live)).toThrow('Undeclared Firestore field override');
+    expect(() => planRetiredFieldOverrides([former], [], [{ ...live[0],
+      indexConfig: { indexes: [{ queryScope: 'COLLECTION',
+        fields: [{ fieldPath: 'expireAt', order: 'ASCENDING' }], state: 'READY' }] },
+    }])).toThrow('Live Firestore index modes changed');
+    expect(() => planRetiredFieldOverrides([former], [], [{ ...live[0],
+      ttlConfig: { state: 'ACTIVE' },
+    }])).toThrow('Unsafe live Firestore field override');
+    expect(planRetiredFieldOverrides([former], [], [{ ...live[0],
+      indexConfig: { ...live[0].indexConfig, reverting: true },
+    }])).toMatchObject([{ reverting: true }]);
+  });
   it('parses wildcard field resources without confusing them with literal field names', () => {
     expect(parseFieldResource(fieldName)).toEqual(desired);
     expect(parseFieldResource('invalid')).toBeNull();
