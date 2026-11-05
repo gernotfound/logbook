@@ -157,6 +157,7 @@ describe('isolated foreground redirect recovery', () => {
             });
             const reload = vi.fn(async () => {});
             const setSaveError = vi.fn();
+            const getRedirect = vi.fn(() => pending);
             const detach = attachAuthRedirectRecovery({
                 awaitingRedirectKey: AWAITING_REDIRECT_KEY,
                 redirectLaunchFailedRef: { current: false }, setSaveError,
@@ -165,9 +166,10 @@ describe('isolated foreground redirect recovery', () => {
                 listen: handler => { foreground = handler; return () => {}; },
                 read: () => marker,
                 readAttempt: () => attempt,
-                remove, reload, getRedirect: () => pending,
+                remove, reload, getRedirect,
             });
             detachAll.push(detach);
+            expect(getRedirect).toHaveBeenCalledOnce();
             attempt = 'attempt-p1';
             marker = 'true';
             foreground();

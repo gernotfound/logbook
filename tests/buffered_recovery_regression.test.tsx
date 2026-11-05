@@ -283,7 +283,7 @@ describe.each(['input', 'textarea'] as const)('owner-scoped buffered %s recovery
         view.unmount();
     });
 
-    it('blocks persistence on a device write failure and refuses unsafe update recovery', async () => {
+    it.each(['canonical-only', 'all-storage'] as const)('blocks persistence and unsafe update recovery after %s quota failure', async failure => {
         const owner = captureSession().owner;
         localStorage.setItem(deviceKey('health-consent-generation', owner), '1');
         await prepareUnlockedTestArchive(owner);
@@ -292,7 +292,7 @@ describe.each(['input', 'textarea'] as const)('owner-scoped buffered %s recovery
         const onChange = vi.fn();
         const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
         localStorageMock.setItem.mockImplementation((writtenKey: string, value: string) => {
-            if (writtenKey === key) throw new DOMException('full', 'QuotaExceededError');
+            if (failure === 'all-storage' || writtenKey === key) throw new DOMException('full', 'QuotaExceededError');
             return initialSetItem(writtenKey, value);
         });
 
@@ -303,10 +303,17 @@ describe.each(['input', 'textarea'] as const)('owner-scoped buffered %s recovery
         expect(useAppStore.getState().syncHealth).toBe('failed');
         expect(localStorage.getItem(key)).toBeNull();
         expect(localStorage.getItem(deviceKey(name, owner))).toBeNull();
-        const [witness] = readBufferedWriterEvidence(owner, name);
-        expect(witness.value).toBe('Bozza nuova');
-        expect(localStorage.getItem(protectedDeviceKey(witness.name, owner))).toMatch(/^tlb-sealed:v1:/);
-        expect(localStorage.getItem(deviceKey(witness.name, owner))).toBeNull();
+        const witnesses = readBufferedWriterEvidence(owner, name);
+        if (failure === 'all-storage') {
+            expect(witnesses).toEqual([]);
+            expect(editor().value).toBe('Bozza nuova');
+        } else {
+            expect(witnesses).toHaveLength(1);
+            const [witness] = witnesses;
+            expect(witness.value).toBe('Bozza nuova');
+            expect(localStorage.getItem(protectedDeviceKey(witness.name, owner))).toMatch(/^tlb-sealed:v1:/);
+            expect(localStorage.getItem(deviceKey(witness.name, owner))).toBeNull();
+        }
         expect(onChange).not.toHaveBeenCalled();
         expect(() => requiredUpdateRecoveryRegistry.captureAll()).toThrow(AggregateError);
         expect(consoleError).toHaveBeenCalled();

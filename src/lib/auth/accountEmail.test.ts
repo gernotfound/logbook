@@ -46,6 +46,17 @@ describe('account email operations', () => {
         expect(mockedReload).toHaveBeenCalledWith(user);
     });
 
+    it('keeps a confirmed remote link distinct from a failed local refresh', async () => {
+        const user = { uid: 'u1', getIdToken: vi.fn().mockResolvedValue('fresh-id-token') } as any;
+        vi.mocked(fetch).mockResolvedValueOnce(new Response(JSON.stringify({ localId: 'u1' }), { status: 200 }));
+        mockedReload.mockRejectedValueOnce(new Error('local refresh offline'));
+
+        await expect(linkEmailPasswordWithEnumerationProtection(user, 'user@example.com', 'Secret1!'))
+            .resolves.toBe('refresh-pending');
+        expect(fetch).toHaveBeenCalledTimes(1);
+        expect(mockedReload).toHaveBeenCalledExactlyOnceWith(user);
+    });
+
     it.each([
         ['EMAIL_EXISTS', 'auth/email-already-in-use'],
         ['INVALID_EMAIL', 'auth/invalid-email'],

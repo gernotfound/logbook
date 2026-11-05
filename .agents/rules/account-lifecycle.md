@@ -34,6 +34,8 @@ L'accesso account/cloud richiede che Firebase Auth riporti `emailVerified === tr
 
 La verifica email dei singoli endpoint trusted segue [Consenso salute](health-consent.md) e [Configurazione Firebase](firebase-config.md): alcuni diritti restano disponibili anche senza claim email verificata, senza autorizzare accesso fitness.
 
+Il collegamento email/password confermato da Identity Toolkit con il medesimo UID è distinto dal successivo `reload(user)`. Se il refresh locale fallisce, comunicare il collegamento già riuscito, ritirare il form di creazione password per quell’UID e usare soltanto il reload protetto; non invitare a ripetere la mutazione remota. Errori HTTP o risposte prive dell’UID atteso restano esiti non confermati.
+
 ## Google redirect: proprietà della scheda e del tentativo
 
 **MUST:** il marker Google `logbook_awaiting_redirect` vive esclusivamente nel `sessionStorage` della scheda che ha avviato il redirect: un'altra scheda non può leggerlo, eliminarlo o usarlo per un reload. Il risultato SDK del redirect resta l'unica prova Auth valida. Il purge dell'archivio non gestisce i marker Auth `true`/`failed`; il flusso Auth li riconcilia esclusivamente nella scheda d'origine. **MUST (tentativi successivi nella stessa scheda):** ogni nuovo fallback Google redirect assegna un ID casuale al proprio tentativo nel `sessionStorage` della stessa scheda prima di pubblicare il marker `true`.

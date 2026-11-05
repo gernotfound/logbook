@@ -17,6 +17,11 @@ for (const theme of ['light', 'dark'] as const) {
   test(`guest consent withdrawal suspends every fitness view and survives reload in ${theme} theme`, async ({ page, context }) => {
     await page.emulateMedia({ colorScheme: theme });
     await enterGuestMode(page);
+    await page.getByRole('button', { name: 'Dati e statistiche', exact: true }).click();
+    await page.getByRole('tab', { name: 'Biometria', exact: true }).click();
+    await page.locator('#biometry-height').fill('183');
+    await page.getByRole('button', { name: 'Salva profilo biometrico' }).click();
+    await expect(page.locator('#biometry-height')).toHaveValue('183');
     const secondTab = await context.newPage();
     await secondTab.goto('/');
     await expect(secondTab.locator('.guest-banner')).toBeVisible();
@@ -40,6 +45,11 @@ for (const theme of ['light', 'dark'] as const) {
     expect(frame!.x + frame!.width).toBeLessThanOrEqual(321);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1)).toBe(true);
 
+    for (const tab of ['data', 'training', 'nutrition']) {
+      await page.goto('/?tab=' + tab);
+      await expect(heading).toBeVisible();
+      await expect(page.locator('#biometry-height, #measure-weight, #view-training, #view-nutrition')).toHaveCount(0);
+    }
     await page.reload();
     await expect(heading).toBeVisible();
     const checks = page.locator('#auth-overlay input[type="checkbox"]');
@@ -49,5 +59,8 @@ for (const theme of ['light', 'dark'] as const) {
     await page.getByRole('button', { name: 'Presta un nuovo consenso' }).click();
     await expect(page.locator('.guest-banner')).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Accesso a TheLogBook sospeso' })).toHaveCount(0);
+    await page.getByRole('button', { name: 'Dati e statistiche', exact: true }).click();
+    await page.getByRole('tab', { name: 'Biometria', exact: true }).click();
+    await expect(page.locator('#biometry-height')).toHaveValue('183');
   });
 }

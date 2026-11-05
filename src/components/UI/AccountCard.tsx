@@ -23,13 +23,16 @@ export const AccountCard = () => {
     const [showCurrentPassword, setShowCurrentPassword] = useState(false);
     const [showNewPassword, setShowNewPassword] = useState(false);
 
+    const [passwordLinkedFor, setPasswordLinkedFor] = useState<string | null>(null);
+
     const providers = useMemo(() => {
         if (!currentUser) return [];
         return (currentUser.providerData || []).map(p => p.providerId);
     }, [currentUser]);
 
     const hasGoogle = providers.includes('google.com');
-    const hasPassword = providers.includes('password');
+    const hasPassword = providers.includes('password')
+        || (currentUser != null && passwordLinkedFor === currentUser.uid);
 
     const reloadAfterAccountChange = async () => {
         try {
@@ -109,11 +112,15 @@ export const AccountCard = () => {
                         return;
                     }
                     try {
-                        await linkEmailPasswordWithEnumerationProtection(currentUser, currentUser.email, newPasswordInput);
-                        await showAlert("Email e password collegate con successo.");
+                        const outcome = await linkEmailPasswordWithEnumerationProtection(currentUser, currentUser.email, newPasswordInput);
+                        setPasswordLinkedFor(currentUser.uid);
+                        await showAlert(outcome === 'refresh-pending'
+                            ? 'Email e password collegate. L’aggiornamento locale dell’account non è riuscito: il collegamento è già completato e non va ripetuto.'
+                            : 'Email e password collegate con successo.');
                     } catch (linkError: any) {
                         if (linkError.code === 'auth/credential-already-in-use' || linkError.code === 'auth/email-already-in-use') {
                             await showAlert("Questa email è già associata a un altro account.");
+                            return;
                         } else {
                             throw linkError;
                         }

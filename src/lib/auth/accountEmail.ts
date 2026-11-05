@@ -29,7 +29,7 @@ export async function linkEmailPasswordWithEnumerationProtection(
     user: User,
     email: string,
     password: string,
-): Promise<void> {
+): Promise<'linked' | 'refresh-pending'> {
     const apiKey = firebaseApp.options.apiKey;
     if (!apiKey) throw new Error('Configurazione Firebase incompleta: API key non disponibile.');
 
@@ -65,5 +65,12 @@ export async function linkEmailPasswordWithEnumerationProtection(
         throw authError('Identity Toolkit response missing the matching account identity');
     }
 
-    await reload(user);
+    // The matching response already confirms the remote mutation. A failed
+    // local refresh must not invite a second credential-linking request.
+    try {
+        await reload(user);
+        return 'linked';
+    } catch {
+        return 'refresh-pending';
+    }
 }

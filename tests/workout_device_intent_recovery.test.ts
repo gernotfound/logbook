@@ -30,6 +30,31 @@ async function prepareAccountWorkoutArchive(account: string): Promise<void> {
     await prepareUnlockedTestArchive(account);
 }
 
+
+// Inject at the storage boundary rather than relying on how often recovery
+// calls its session guard. The production transformation stays synchronous.
+function injectAtArchiveUpdate(account: string, phase: 'before-transform' | 'after-commit', inject: () => void) {
+    const original = vi.mocked(idbUpdate).getMockImplementation()!;
+    let injected = false;
+    vi.mocked(idbUpdate).mockImplementation(async (key, transform, store) => {
+        await original(key, value => {
+            if (!injected && key === 'logbook:v2:' + account && phase === 'before-transform') {
+                injected = true;
+                inject();
+            }
+            return transform(value);
+        }, store);
+        if (!injected && key === 'logbook:v2:' + account && phase === 'after-commit') {
+            injected = true;
+            inject();
+        }
+    });
+    return {
+        didInject: () => injected,
+        restore: () => { vi.mocked(idbUpdate).mockImplementation(original); },
+    };
+}
+
 describe('authenticated device-intent replay into semantic journal', () => {
     beforeEach(() => { vi.clearAllMocks(); });
 
@@ -467,20 +492,14 @@ describe('authenticated device-intent replay into semantic journal', () => {
         const competing = { ...original, intentId: 'd'.repeat(32), workout: workout('60') };
         const before = await readLocal(scopedOwner);
         const originalRaw = readDeviceValueStrict('workout-intent:' + original.intentId, scopedOwner);
-        let guardCalls = 0;
-        const guard = () => {
-            // Two calls validate session/owner before the async catalog read.
-            // The third is invoked in the IndexedDB update transaction.
-            if (++guardCalls === 3) {
-                writeDeviceValue('workout-intent:' + competing.intentId,
-                    JSON.stringify(competing), scopedOwner);
-            }
-            return true;
-        };
-
-        await expect(recoverWorkoutDeviceIntent(scopedOwner, guard))
-            .rejects.toThrow('Copie workout cambiate prima del commit locale');
-        expect(guardCalls).toBeGreaterThanOrEqual(3);
+        const injection = injectAtArchiveUpdate(scopedOwner, 'before-transform', () => {
+            writeDeviceValue('workout-intent:' + competing.intentId, JSON.stringify(competing), scopedOwner);
+        });
+        try {
+            await expect(recoverWorkoutDeviceIntent(scopedOwner, () => true))
+                .rejects.toThrow('Copie workout cambiate prima del commit locale');
+        } finally { injection.restore(); }
+        expect(injection.didInject()).toBe(true);
         expect(await readLocal(scopedOwner)).toEqual(before);
         expect(readDeviceValueStrict('workout-intent:' + original.intentId, scopedOwner))
             .toBe(originalRaw);
@@ -500,15 +519,14 @@ describe('authenticated device-intent replay into semantic journal', () => {
             workout('55'), initial.activeWorkout ?? null);
         const witness = readDeviceValueStrict('workout-intent:' + original.intentId, scopedOwner);
         const before = await readLocal(scopedOwner);
-        let guardCalls = 0;
-        const guard = () => {
-            if (++guardCalls === 3) {
-                writeDeviceValue('workout', JSON.stringify({ ...original, workout: workout('60') }), scopedOwner);
-            }
-            return true;
-        };
-        await expect(recoverWorkoutDeviceIntent(scopedOwner, guard))
-            .rejects.toThrow('Copie workout cambiate prima del commit locale');
+        const injection = injectAtArchiveUpdate(scopedOwner, 'before-transform', () => {
+            writeDeviceValue('workout', JSON.stringify({ ...original, workout: workout('60') }), scopedOwner);
+        });
+        try {
+            await expect(recoverWorkoutDeviceIntent(scopedOwner, () => true))
+                .rejects.toThrow('Copie workout cambiate prima del commit locale');
+        } finally { injection.restore(); }
+        expect(injection.didInject()).toBe(true);
         expect(await readLocal(scopedOwner)).toEqual(before);
         expect(readDeviceValueStrict('workout-intent:' + original.intentId, scopedOwner)).toBe(witness);
         expect(readDeviceValueStrict('workout', scopedOwner))
@@ -522,23 +540,19 @@ describe('authenticated device-intent replay into semantic journal', () => {
         await initializeLocal(account, initial);
         const candidate = saveWorkoutDeviceIntent(account, initial.activeWorkout ?? null,
             workout('55'), initial.activeWorkout ?? null);
-        let guardCalls = 0;
         let draftRaw: string | null = null;
-        const guard = () => {
-            if (++guardCalls === 4) {
-                // A different tab publishes its only plain device copy after
-                // the IndexedDB commit, but before the replay repair.
-                persistPlainWorkoutSnapshot(workout('60'), account);
-                draftRaw = readDeviceValueStrict('workout', account);
-            }
-            return true;
-        };
-        await expect(recoverWorkoutDeviceIntent(account, guard))
-            .rejects.toThrow('Snapshot workout concorrente senza intento');
+        const injection = injectAtArchiveUpdate(account, 'after-commit', () => {
+            persistPlainWorkoutSnapshot(workout('60'), account);
+            draftRaw = readDeviceValueStrict('workout', account);
+        });
+        try {
+            await expect(recoverWorkoutDeviceIntent(account, () => true))
+                .rejects.toThrow('Snapshot workout concorrente senza intento');
+        } finally { injection.restore(); }
+        expect(injection.didInject()).toBe(true);
         const committed = await readLocal(account);
         expect(committed?.data.activeWorkout?.exercises[0].sets[0].kg).toBe('55');
         expect(committed?.pending.length).toBeGreaterThan(0);
-        expect(guardCalls).toBe(4);
         expect(readDeviceValueStrict('workout', account)).toBe(draftRaw);
         expect(readDeviceValueStrict('workout-intent:' + candidate.intentId, account))
             .toBe(JSON.stringify(candidate));
@@ -556,12 +570,14 @@ describe('authenticated device-intent replay into semantic journal', () => {
         saveWorkoutDeviceIntent(account, first.workout, workout('60'), first.baseline);
         const legacy = { ...first, intentId: undefined, workout: workout('65') };
         const rawLegacy = JSON.stringify(legacy);
-        let calls = 0;
-        await expect(recoverWorkoutDeviceIntent(account, () => {
-            if (++calls === 4) writeDeviceValue('workout', rawLegacy, account);
-            return true;
-        })).rejects.toThrow('identificativo verificabile');
-        expect(calls).toBe(4);
+        const injection = injectAtArchiveUpdate(account, 'after-commit', () => {
+            writeDeviceValue('workout', rawLegacy, account);
+        });
+        try {
+            await expect(recoverWorkoutDeviceIntent(account, () => true))
+                .rejects.toThrow('identificativo verificabile');
+        } finally { injection.restore(); }
+        expect(injection.didInject()).toBe(true);
         expect((await readLocal(account))?.data.activeWorkout?.exercises[0].sets[0].kg).toBe('60');
         expect(readDeviceValueStrict('workout', account)).toBe(rawLegacy);
         expect(readDeviceValueStrict('workout-intent:' + first.intentId, account))

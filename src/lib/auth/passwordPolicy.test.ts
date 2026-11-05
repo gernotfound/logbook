@@ -51,6 +51,26 @@ describe('password policy', () => {
         await expect(validatePasswordAgainstPolicy('SecurePassword123!')).resolves.toContain('almeno 20 caratteri');
     });
 
+    it.each([null, undefined, {}])('fails closed on an incomplete provider response (%s)', async response => {
+        mockedValidatePassword.mockResolvedValueOnce(response as any);
+        await expect(validatePasswordAgainstPolicy('SecurePassword123!')).rejects.toThrow();
+    });
+
+    it('propagates a provider outage instead of authorizing a password locally', async () => {
+        const offline = new Error('password policy unavailable');
+        mockedValidatePassword.mockRejectedValueOnce(offline);
+        await expect(validatePasswordAgainstPolicy('SecurePassword123!')).rejects.toBe(offline);
+        mockedValidatePassword.mockRejectedValueOnce(offline);
+        await expect(loadPasswordRuleConfig()).rejects.toBe(offline);
+    });
+
+    it('keeps the local baseline when Firebase returns no advisory policy', async () => {
+        mockedValidatePassword.mockResolvedValueOnce({ isValid: false } as any);
+        const config = await loadPasswordRuleConfig();
+        expect(getPasswordRequirements('weak', config).filter(rule => !rule.met).map(rule => rule.label))
+            .toEqual(['Almeno 8 caratteri', 'Una lettera maiuscola', 'Un numero', 'Un carattere speciale']);
+    });
+
     it('maps Firebase-only requirement failures', async () => {
         mockedValidatePassword.mockResolvedValueOnce({
             isValid: false, meetsMaxPasswordLength: false, passwordPolicy: policy,
