@@ -1,4 +1,5 @@
 import { expect, test, type Page } from './fixtures';
+import { pauseStorageWrite } from './storage-write-barrier';
 
 async function enterGuest(page: Page) {
   await page.goto('/');
@@ -18,101 +19,139 @@ async function openRecoveryInspector(page: Page) {
   await page.getByRole('button', { name: 'Esamina copie sul dispositivo' }).click();
 }
 
-test('two real guest tabs preserve independent encrypted edits and expose both for read-only comparison', async ({ page, context }) => {
-  await enterGuest(page);
-  await page.getByRole('button', { name: 'Allenamento', exact: true }).click();
-  await page.getByRole('tab', { name: 'Esercizi', exact: true }).click();
-  await page.getByRole('button', { name: 'Crea esercizio' }).click();
-  const exercise = 'Testimone browser isolato';
-  await page.locator('#exercise-name').fill(exercise);
-  await page.locator('#exercise-creation-form').getByRole('button', { name: 'Salva', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Crea esercizio' })).toBeVisible();
+for (const field of ['note', 'setup'] as const) {
+  for (const interleaving of ['stale', 'collision'] as const) {
+    test(`two real guest tabs preserve encrypted ${field} edits after a ${interleaving} write and expose both read-only`, async ({ page, context }) => {
+      await enterGuest(page);
+      await page.getByRole('button', { name: 'Allenamento', exact: true }).click();
+      await page.getByRole('tab', { name: 'Esercizi', exact: true }).click();
+      await page.getByRole('button', { name: 'Crea esercizio' }).click();
+      const exercise = 'Testimone browser isolato';
+      await page.locator('#exercise-name').fill(exercise);
+      await page.locator('#exercise-creation-form').getByRole('button', { name: 'Salva', exact: true }).click();
+      await expect(page.getByRole('button', { name: 'Crea esercizio' })).toBeVisible();
 
-  await page.getByRole('tab', { name: 'Sessione', exact: true }).click();
-  await page.getByRole('button', { name: 'Allenamento libero' }).click();
-  await page.getByRole('button', { name: 'Salta check-in e inizia' }).click();
-  await expect(page.getByRole('button', { name: 'Termina allenamento' })).toBeVisible();
-  await page.getByPlaceholder('Cerca esercizio per nome...').fill(exercise);
-  await page.getByRole('option', { name: new RegExp(exercise) }).click();
-  await page.locator('.session-exercise-summary').click();
-  await expect(page.locator('.session-exercise-summary')).toHaveAttribute('aria-expanded', 'true');
-  await page.getByRole('button', { name: 'Aggiungi nota per la prossima volta' }).click();
-  const first = page.getByPlaceholder('Note per la prossima volta (dolori, feedback)...');
-  await expect(first).toBeVisible();
+      await page.getByRole('tab', { name: 'Sessione', exact: true }).click();
+      await page.getByRole('button', { name: 'Allenamento libero' }).click();
+      await page.getByRole('button', { name: 'Salta check-in e inizia' }).click();
+      await expect(page.getByRole('button', { name: 'Termina allenamento' })).toBeVisible();
+      await page.getByPlaceholder('Cerca esercizio per nome...').fill(exercise);
+      await page.getByRole('option', { name: new RegExp(exercise) }).click();
+      await page.locator('.session-exercise-summary').click();
+      await expect(page.locator('.session-exercise-summary')).toHaveAttribute('aria-expanded', 'true');
+      const placeholder = field === 'note'
+        ? 'Note per la prossima volta (dolori, feedback)...' : 'Es. altezza sedile abituale';
+      const openEditor = field === 'note' ? 'Aggiungi nota per la prossima volta' : 'Setup';
+      await page.getByRole('button', { name: openEditor, exact: true }).click();
+      const first = page.getByPlaceholder(placeholder);
+      await expect(first).toBeVisible();
 
-  // Open the second independent JS realm before either editor changes the field.
-  const second = await context.newPage();
-  await second.goto('/?tab=training');
-  await expect(second.getByRole('button', { name: 'Termina allenamento' })).toBeVisible();
-  await second.locator('.session-exercise-summary').click();
-  await expect(second.locator('.session-exercise-summary')).toHaveAttribute('aria-expanded', 'true');
-  await second.getByRole('button', { name: 'Aggiungi nota per la prossima volta' }).click();
-  const secondEditor = second.getByPlaceholder('Note per la prossima volta (dolori, feedback)...');
-  await expect(secondEditor).toBeVisible();
+      // Open the second independent JS realm before either editor changes the field.
+      const second = await context.newPage();
+      await second.goto('/?tab=training');
+      await expect(second.getByRole('button', { name: 'Termina allenamento' })).toBeVisible();
+      await second.locator('.session-exercise-summary').click();
+      await expect(second.locator('.session-exercise-summary')).toHaveAttribute('aria-expanded', 'true');
+      await second.getByRole('button', { name: openEditor, exact: true }).click();
+      const secondEditor = second.getByPlaceholder(placeholder);
+      await expect(secondEditor).toBeVisible();
 
-  const a = 'Prima scheda: copia privata non confermata';
-  const b = 'Seconda scheda: valore concorrente non confermato';
-  await first.fill(a);
-  const canonicalPrefix = 'logbook:v2:guest:sealed:draft:buffered:textarea:';
-  const firstCanonical = await page.evaluate(p => Object.fromEntries(
-    Object.entries(localStorage).filter(([key]) => key.startsWith(p))
-  ), canonicalPrefix);
-  expect(Object.keys(firstCanonical)).toHaveLength(1);
-  expect(Object.values(firstCanonical).every(raw => raw.startsWith('tlb-sealed:v1:') && !raw.includes(a))).toBe(true);
-  await secondEditor.fill(b);
-  expect(await second.evaluate(p => Object.fromEntries(
-    Object.entries(localStorage).filter(([key]) => key.startsWith(p))
-  ), canonicalPrefix)).toEqual(firstCanonical);
+      const a = 'Prima scheda: copia privata non confermata';
+      const b = 'Seconda scheda: valore concorrente non confermato';
+      const canonicalPrefix = `logbook:v2:guest:sealed:draft:buffered:${field === 'note' ? 'textarea' : 'input'}:`;
+      if (interleaving === 'collision') {
+        const firstBarrier = await pauseStorageWrite(page, canonicalPrefix);
+        const secondBarrier = await pauseStorageWrite(second, canonicalPrefix);
+        const firstEdit = first.fill(a);
+        const secondEdit = secondEditor.fill(b);
+        // Observe rejections immediately while the protocol boundary is paused.
+        const edits = Promise.allSettled([firstEdit, secondEdit]);
+        try {
+          const [left, right] = await Promise.all([firstBarrier.wait(), secondBarrier.wait()]);
+          expect(left.key).toBe(right.key);
+          expect(left.previous).toBeNull();
+          expect(right.previous).toBeNull();
+          expect(left.value).not.toBe(right.value);
+          expect([left.value, right.value].every(raw => raw.startsWith('tlb-sealed:v1:')
+            && !raw.includes(a) && !raw.includes(b))).toBe(true);
+          // Both read/check/seal sequences have finished on the same absent
+          // canonical version. Resume in a known order: the second native write
+          // really overwrites the first, rather than failing a stale preflight.
+          await firstBarrier.release();
+          await firstEdit;
+          await secondBarrier.release();
+          await secondEdit;
+          expect(await second.evaluate(key => localStorage.getItem(key), right.key)).toBe(right.value);
+        } finally {
+          await Promise.all([firstBarrier.dispose(), secondBarrier.dispose()]);
+          await edits;
+        }
+        const results = await edits;
+        for (const result of results) if (result.status === 'rejected') throw result.reason;
+      } else {
+        await first.fill(a);
+        const firstCanonical = await page.evaluate(p => Object.fromEntries(
+          Object.entries(localStorage).filter(([key]) => key.startsWith(p))
+        ), canonicalPrefix);
+        expect(Object.keys(firstCanonical)).toHaveLength(1);
+        expect(Object.values(firstCanonical).every(raw => raw.startsWith('tlb-sealed:v1:') && !raw.includes(a))).toBe(true);
+        await secondEditor.fill(b);
+        expect(await second.evaluate(p => Object.fromEntries(
+          Object.entries(localStorage).filter(([key]) => key.startsWith(p))
+        ), canonicalPrefix)).toEqual(firstCanonical);
+      }
 
-  // The second writer cannot CAS the shared canonical key, but its own AEAD
-  // witness must have been synchronously persisted first.
-  const prefix = 'logbook:v2:guest:sealed:draft:buffered-intent:';
-  const saved = await page.evaluate((p) => Object.fromEntries(
-    Object.entries(localStorage).filter(([key]) => key.startsWith(p))
-  ), prefix);
-  expect(Object.keys(saved)).toHaveLength(2);
-  expect(Object.values(saved).every(raw => typeof raw === 'string' && !raw.includes(a) && !raw.includes(b))).toBe(true);
+      // Both the rejected stale writer and the overwritten concurrent writer
+      // retain their own AEAD witness, synchronously persisted before the shared key.
+      const prefix = 'logbook:v2:guest:sealed:draft:buffered-intent:';
+      const saved = await page.evaluate((p) => Object.fromEntries(
+        Object.entries(localStorage).filter(([key]) => key.startsWith(p))
+      ), prefix);
+      expect(Object.keys(saved)).toHaveLength(2);
+      expect(Object.values(saved).every(raw => typeof raw === 'string' && !raw.includes(a) && !raw.includes(b))).toBe(true);
 
-  // A third fresh tab must be able to compare values without overwriting
-  // either original. This is not a recovery replay or a winning-value choice.
-  const viewer = await context.newPage();
-  await openRecoveryInspector(viewer);
-  await expect(viewer.getByText('2 copie conservate in 1 campo.')).toBeVisible();
-  await viewer.locator('.settings-recovery-group summary').first().click();
-  const displayedValues = viewer.locator('.settings-recovery-entry textarea[readonly]');
-  await expect(displayedValues).toHaveCount(2);
-  expect((await displayedValues.evaluateAll(elements =>
-    elements.map(element => (element as HTMLTextAreaElement).value)
-  )).sort()).toEqual([a, b].sort());
-  expect(await viewer.evaluate((p) => Object.fromEntries(
-    Object.entries(localStorage).filter(([key]) => key.startsWith(p))
-  ), prefix)).toEqual(saved);
+      // A third fresh tab must be able to compare values without overwriting
+      // either original. This is not a recovery replay or a winning-value choice.
+      const viewer = await context.newPage();
+      await openRecoveryInspector(viewer);
+      await expect(viewer.getByText('2 copie conservate in 1 campo.')).toBeVisible();
+      await viewer.locator('.settings-recovery-group summary').first().click();
+      const displayedValues = viewer.locator('.settings-recovery-entry textarea[readonly]');
+      await expect(displayedValues).toHaveCount(2);
+      expect((await displayedValues.evaluateAll(elements =>
+        elements.map(element => (element as HTMLTextAreaElement).value)
+      )).sort()).toEqual([a, b].sort());
+      expect(await viewer.evaluate((p) => Object.fromEntries(
+        Object.entries(localStorage).filter(([key]) => key.startsWith(p))
+      ), prefix)).toEqual(saved);
 
-  await viewer.getByRole('button', { name: 'Nascondi copie' }).click();
-  await expect(displayedValues).toHaveCount(0);
-  expect(await viewer.evaluate((p) => Object.fromEntries(
-    Object.entries(localStorage).filter(([key]) => key.startsWith(p))
-  ), prefix)).toEqual(saved);
+      await viewer.getByRole('button', { name: 'Nascondi copie' }).click();
+      await expect(displayedValues).toHaveCount(0);
+      expect(await viewer.evaluate((p) => Object.fromEntries(
+        Object.entries(localStorage).filter(([key]) => key.startsWith(p))
+      ), prefix)).toEqual(saved);
 
-  // Destroy and reconstruct the inspector document/JS realm while both
-  // editors remain unacknowledged. A normal editor pagehide can legitimately
-  // flush and acknowledge its own witness, so it is not a stable two-witness
-  // oracle. The fresh reader must re-open the real encrypted device archive.
-  await viewer.goto('/?tab=settings');
-  await expect(viewer.getByRole('heading', { name: 'Impostazioni', exact: true })).toBeVisible();
-  await viewer.locator('.settings-menu').getByRole('button', { name: /Dati e backup/ }).click();
-  await viewer.getByRole('button', { name: 'Esamina copie sul dispositivo' }).click();
-  await expect(viewer.getByText('2 copie conservate in 1 campo.')).toBeVisible();
-  await viewer.locator('.settings-recovery-group summary').first().click();
-  const afterReloadValues = viewer.locator('.settings-recovery-entry textarea[readonly]');
-  await expect(afterReloadValues).toHaveCount(2);
-  expect((await afterReloadValues.evaluateAll(elements =>
-    elements.map(element => (element as HTMLTextAreaElement).value)
-  )).sort()).toEqual([a, b].sort());
-  expect(await viewer.evaluate((p) => Object.fromEntries(
-    Object.entries(localStorage).filter(([key]) => key.startsWith(p))
-  ), prefix)).toEqual(saved);
-});
+      // Destroy and reconstruct the inspector document/JS realm while both
+      // editors remain unacknowledged. A normal editor pagehide can legitimately
+      // flush and acknowledge its own witness, so it is not a stable two-witness
+      // oracle. The fresh reader must re-open the real encrypted device archive.
+      await viewer.goto('/?tab=settings');
+      await expect(viewer.getByRole('heading', { name: 'Impostazioni', exact: true })).toBeVisible();
+      await viewer.locator('.settings-menu').getByRole('button', { name: /Dati e backup/ }).click();
+      await viewer.getByRole('button', { name: 'Esamina copie sul dispositivo' }).click();
+      await expect(viewer.getByText('2 copie conservate in 1 campo.')).toBeVisible();
+      await viewer.locator('.settings-recovery-group summary').first().click();
+      const afterReloadValues = viewer.locator('.settings-recovery-entry textarea[readonly]');
+      await expect(afterReloadValues).toHaveCount(2);
+      expect((await afterReloadValues.evaluateAll(elements =>
+        elements.map(element => (element as HTMLTextAreaElement).value)
+      )).sort()).toEqual([a, b].sort());
+      expect(await viewer.evaluate((p) => Object.fromEntries(
+        Object.entries(localStorage).filter(([key]) => key.startsWith(p))
+      ), prefix)).toEqual(saved);
+    });
+  }
+}
 
 for (const theme of ['light', 'dark'] as const) {
   test(`guest recovery inspector remains usable at 320px in ${theme} theme without exposing data on mount`, async ({ page }) => {

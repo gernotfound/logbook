@@ -13,6 +13,8 @@ describe('E2E runner isolation', () => {
       FIREBASE_ADMIN_PRIVATE_KEY: 'private',
       GOOGLE_APPLICATION_CREDENTIALS: '/secrets/service-account.json',
       CRON_SECRET: 'secret',
+      LOGBOOK_E2E_NEXT_URL: 'https://production.example',
+      LOGBOOK_E2E_NEXT_VERSION: 'inherited',
       LOGBOOK_TEST_URL: 'https://thelogbook.web.app',
     };
     const safe = createIsolatedE2eEnvironment(inherited);
@@ -26,6 +28,8 @@ describe('E2E runner isolation', () => {
     expect(safe.GOOGLE_APPLICATION_CREDENTIALS).toBeUndefined();
     expect(safe.CRON_SECRET).toBeUndefined();
     expect(safe.LOGBOOK_TEST_URL).toBeUndefined();
+    expect(safe.LOGBOOK_E2E_NEXT_URL).toBeUndefined();
+    expect(safe.LOGBOOK_E2E_NEXT_VERSION).toBeUndefined();
     expect(inherited.VITE_FIREBASE_PROJECT_ID).toBe('production-project');
   });
 

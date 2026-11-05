@@ -1,12 +1,11 @@
 import { test as base, expect } from '@playwright/test';
 import { assertLoopbackE2eUrl } from '../scripts/e2e-environment.mjs';
 
-const allowedOrigin = assertLoopbackE2eUrl(process.env.LOGBOOK_TEST_URL || 'http://127.0.0.1:4173');
-
 // Network requests from pages must stay on the local preview origin. A service
 // worker can bypass Playwright routing; the build also uses synthetic endpoints.
 export const test = base.extend({
-  context: async ({ context }, provideContext) => {
+  context: async ({ context, baseURL }, provideContext) => {
+    const allowedOrigin = assertLoopbackE2eUrl(baseURL || process.env.LOGBOOK_TEST_URL || 'http://127.0.0.1:4173');
     await context.route('**/*', route => {
       try {
         if (new URL(route.request().url()).origin === allowedOrigin) {
