@@ -145,7 +145,7 @@ for (const phase of ['migrating', 'active'] as const) {
   });
 }
 
-test('closing a real Google guest-intent lock owner lets a queued tab reserve its own attempt without changing guest data', async ({ page, context }) => {
+test('a queued Google guest action reports an interrupted published reservation without replacing it or changing guest data', async ({ page, context }) => {
   await page.goto('/');
   await page.getByRole('button', { name: 'Continua senza account' }).click();
   await expect(page.getByText('Aggiornamento Termini e Privacy')).toBeVisible();
@@ -173,11 +173,12 @@ test('closing a real Google guest-intent lock owner lets a queued tab reserve it
   const intentKey = 'guest_migration_intent_v1';
   expect(await observer.evaluate(key => localStorage.getItem(key), intentKey)).toBeNull();
 
+  const pageErrors: string[] = [];
+  next.on('pageerror', error => { pageErrors.push(error.message); });
   let popups = 0;
   page.on('popup', () => { popups++; });
   next.on('popup', () => { popups++; });
   const firstBarrier = await pauseStorageWrite(page, intentKey);
-  const nextBarrier = await pauseStorageWrite(next, intentKey);
   const starting = Promise.allSettled([
     page.getByRole('button', { name: 'Crea account con Google', exact: true }).click(),
   ]);
@@ -187,6 +188,8 @@ test('closing a real Google guest-intent lock owner lets a queued tab reserve it
     expect(abandoned).toMatchObject({ method: 'google', policy: 'merge' });
     expect(abandoned.id).toBeTruthy();
     expect(first.previous).toBeNull();
+    await firstBarrier.publishAndPause();
+    expect(await observer.evaluate(key => localStorage.getItem(key), intentKey)).toBe(first.value);
     await next.getByRole('button', { name: 'Crea account con Google', exact: true }).click();
     await expect.poll(() => observer.evaluate(async () => {
       const { held = [], pending = [] } = await navigator.locks.query();
@@ -202,25 +205,25 @@ test('closing a real Google guest-intent lock owner lets a queued tab reserve it
     })).toEqual({ lifecycle: 1, intent: 1, queued: 1, sameHolder: true, separateContender: true });
 
     await page.close();
-    const successor = await nextBarrier.wait();
-    const reserved = JSON.parse(successor.value) as { id: string; method: string; policy: string };
-    expect(reserved).toMatchObject({ method: 'google', policy: 'merge' });
-    expect(reserved.id).not.toBe(abandoned.id);
-    // The first closed realm never published its reservation; the contender
-    // reached the production write with its own distinct tab receipt/attempt.
-    expect(successor.previous).toBeNull();
-    expect(await observer.evaluate(key => localStorage.getItem(key), intentKey)).toBeNull();
+    await expect(next.getByRole('alertdialog')).toContainText('Impossibile avviare l’accesso Google');
+    expect(pageErrors).toEqual([]);
+    expect(await observer.evaluate(key => localStorage.getItem(key), intentKey)).toBe(first.value);
+    expect(await next.evaluate(() => sessionStorage.getItem('logbook:guest-auth-attempt'))).toBeNull();
     expect(await readVaultState(observer)).toEqual(before);
-    await next.close();
+    await next.getByRole('alertdialog').getByRole('button', { name: 'OK', exact: true }).click();
+    await expect(next.getByRole('button', { name: 'Crea account con Google', exact: true })).toBeEnabled();
+    // An interrupted reservation is evidence, never permission for the other
+    // tab to replace it or start a provider login with the old tab's choice.
+    expect(JSON.parse((await observer.evaluate(key => localStorage.getItem(key), intentKey))!)).toEqual(abandoned);
   } finally {
-    // Neither action is resumed past the reservation boundary into Firebase.
-    // Closing the targets also disposes their CDP sessions and native locks.
+    // The original action remains paused before Auth handoff. The contender
+    // is rejected by the real reservation guard; neither starts a popup.
     if (!page.isClosed()) await page.close();
     if (!next.isClosed()) await next.close();
     await starting;
   }
   expect(popups).toBe(0);
-  expect(await observer.evaluate(key => localStorage.getItem(key), intentKey)).toBeNull();
+  expect(await observer.evaluate(key => localStorage.getItem(key), intentKey)).not.toBeNull();
   expect(await observer.evaluate(() => localStorage.getItem('logbook_guest_session_id_v1'))).toBe(generation);
 
   const fresh = await context.newPage();

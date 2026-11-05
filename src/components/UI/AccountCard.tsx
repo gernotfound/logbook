@@ -169,6 +169,18 @@ export const AccountCard = () => {
         }
     };
 
+    const onGuestGoogle = async () => {
+        setLoadingAction('guestGoogle');
+        try {
+            await linkGoogleAccount('merge');
+        } catch {
+            // Coordination can reject before AuthContext maps provider errors.
+            await showAlert('Impossibile avviare l’accesso Google. Completa eventuali tentativi già aperti e riprova. I dati locali sono conservati.');
+        } finally {
+            setLoadingAction(null);
+        }
+    };
+
     const onGuestRegister = async () => {
         const weakError = await validatePasswordAgainstPolicy(newPasswordInput);
         if (weakError) {
@@ -186,8 +198,8 @@ export const AccountCard = () => {
             // reload è consentito solo dopo che la barriera ha verificato la copia locale.
             await reloadAfterAccountChange();
         } catch {
-            // Errori gestiti da AuthContext (handleAuthError)
-            console.error('Registrazione guest non riuscita.');
+            // The reservation can fail before the provider error mapper runs.
+            await showAlert('Impossibile completare la registrazione. Completa eventuali tentativi già aperti e riprova. I dati locali sono conservati.');
         } finally {
             setLoadingAction(null);
         }
@@ -201,7 +213,7 @@ export const AccountCard = () => {
                     Stai usando TheLogBook senza un account. I tuoi dati sono salvati solo su questo dispositivo.
                 </p>
                 <div style={{ display: "flex", flexDirection: "column", gap: "0.625rem" }}>
-                    <button className="btn btn-primary" onClick={() => { void linkGoogleAccount('merge'); }}>
+                    <button className="btn btn-primary" onClick={onGuestGoogle} disabled={loadingAction === 'guestGoogle'}>
                         Crea account con Google
                     </button>
                     <button className="btn ui-account-card-3"  onClick={() => setShowReauthModal('guestRegister')}>
