@@ -19,6 +19,20 @@ describe('account deletion recovery diagnostics', () => {
         }))).toMatchObject({ phase: 'storage', kind: 'integrity', transient: false });
     });
 
+    it('treats an absent trusted backend as a configuration failure, not a transient outage', () => {
+        const error = new DeletionDeviceOperationError('routine-check', 'http', 'configuration');
+        expect(classifyRecoveryFailure('routine-check', error)).toMatchObject({
+            operation: 'routine-check',
+            phase: 'http',
+            kind: 'configuration',
+            transient: false,
+        });
+        const report = vi.fn();
+        const tracker = new RecoveryDiagnosticTracker();
+        tracker.recordFailure('routine-check', error, report);
+        expect(report).toHaveBeenCalledWith(expect.stringContaining('kind=configuration'));
+    });
+
     it('aggregates transients by phase, resets on success and keeps different operations independent', () => {
         const tracker = new RecoveryDiagnosticTracker();
         const emit = vi.fn();

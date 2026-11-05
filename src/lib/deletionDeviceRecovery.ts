@@ -81,7 +81,7 @@ async function appToken(signal:AbortSignal){
 }
 
 export async function registerDeletionRecoveryDevice(user:User):Promise<void>{
- if(!API)throw new DeletionDeviceOperationError('device-registration','http','unknown');
+ if(!API)throw new DeletionDeviceOperationError('device-registration','http','configuration');
  if(!navigator.onLine)throw new DeletionDeviceOperationError('device-registration','http','transport');
  const cred=await getOrCreateCredential(user.uid);
  let phase:RecoveryPhase='auth-token';
@@ -134,10 +134,14 @@ export function watchDeletionRecoveryDeviceRegistration(
 type LocalDeletionCompletion={status:'complete'}|{status:'pending';message:string};
 export type DeviceDeletionRecoveryOutcome={status:'none'}|LocalDeletionCompletion;
 export async function recoverDeletedAccountOnThisDevice(finalize:(uid:string)=>Promise<LocalDeletionCompletion>):Promise<DeviceDeletionRecoveryOutcome>{
- if(!API||!navigator.onLine)return{status:'none'};
+ if(!navigator.onLine)return{status:'none'};
+ const credentials=readAll();
+ if(credentials.length===0)return{status:'none'};
+ // Missing backend configuration must not masquerade as a successful proof check.
+ if(!API)throw new DeletionDeviceOperationError('routine-check','http','configuration');
  let pendingMessage:string|undefined;let completed=false;let firstRequestError:Error|undefined;
  let firstFinalizationError:DeletionRecoveryFinalizationError|undefined;
- for(const cred of readAll()){
+ for(const cred of credentials){
    let phase:RecoveryPhase='app-check';
    let status:number;
    let body:unknown;

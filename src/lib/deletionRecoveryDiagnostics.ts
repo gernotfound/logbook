@@ -2,7 +2,7 @@ import { DeletionDeadlineExceededError } from './deletionDeadline';
 
 export type RecoveryOperation = 'routine-check' | 'device-registration' | 'pending-deletion' | 'local-finalization';
 export type RecoveryPhase = 'auth-token' | 'app-check' | 'http' | 'response-body' | 'server-status' | 'storage' | 'local-finalization' | 'unknown';
-export type RecoveryKind = 'timeout' | 'transport' | 'provider' | 'server' | 'rejected' | 'invalid-response' | 'remote-failed' | 'integrity' | 'stale-session' | 'unknown';
+export type RecoveryKind = 'timeout' | 'transport' | 'provider' | 'server' | 'rejected' | 'invalid-response' | 'remote-failed' | 'integrity' | 'stale-session' | 'configuration' | 'unknown';
 
 export class DeletionDeviceOperationError extends Error {
     readonly code = 'account-deletion-device-operation-failed';
@@ -19,7 +19,9 @@ export class DeletionDeviceOperationError extends Error {
             ? 'Cancellazione cloud non completata: alcuni dati potrebbero essere già stati eliminati. La copia locale rimane conservata.'
             : kind === 'invalid-response'
                 ? 'Risposta del servizio di recupero non valida. La copia locale rimane conservata.'
-                : phase === 'app-check'
+                : kind === 'configuration'
+                    ? 'Servizio di recupero account non configurato. La copia locale resta conservata.'
+                    : phase === 'app-check'
                     ? 'Verifica di sicurezza temporaneamente non disponibile. La copia locale resta conservata; il controllo verrà ripetuto automaticamente.'
                     : operation === 'device-registration'
                         ? 'Registrazione recovery device non riuscita' + detail
