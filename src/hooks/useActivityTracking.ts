@@ -6,7 +6,7 @@ import { useAppStore } from '../store/useAppStore';
 import { useDialogStore } from '../store/useDialogStore';
 import { captureSession, isCurrentSession } from '../lib/sync/session';
 import { Logic } from '../lib/logic';
-import { localDateTimeToTimestamp, timestampToLocalTime } from '../lib/activity';
+import { cardioDraftKind, localDateTimeToTimestamp, timestampToLocalTime } from '../lib/activity';
 import { computeWeeklyActivitySeries, computeWeeklyTrainingActivityContext } from '../lib/calc/analytics';
 import type { CardioSession, NutritionDay, WorkoutSession, Exercise } from '../types';
 
@@ -56,7 +56,7 @@ export function useActivityTracking() {
         notes: editingCardio.notes ?? '',
         startTime: timestampToLocalTime(editingCardio.startedAt),
     } : EMPTY_CARDIO_DRAFT;
-    const cardioDraft = useDatedDraft(`activity-cardio-${editingCardioId ?? 'idle'}`, selectedDate, cardioSource);
+    const cardioDraft = useDatedDraft(cardioDraftKind(editingCardioId, isCreatingCardio), selectedDate, cardioSource);
     const savingSteps = useRef(false);
     const savingCardio = useRef(false);
 
@@ -124,9 +124,14 @@ export function useActivityTracking() {
 
     const startNewCardio = () => setEditingCardioId(NEW_CARDIO_ID);
     const editCardio = (id: string) => setEditingCardioId(id);
-    const cancelCardio = () => {
-        try { cardioDraft.clear(); } catch { /* L'errore bozza è già visibile nello stato sync. */ }
-        setEditingCardioId(null);
+    const cancelCardio = (): boolean => {
+        try {
+            if (!cardioDraft.clear()) return false;
+            setEditingCardioId(null);
+            return true;
+        } catch {
+            return false;
+        }
     };
 
     const saveCardio = async () => {
@@ -158,7 +163,7 @@ export function useActivityTracking() {
         }
         const existing = editingCardio;
         if (editingCardioId && !isCreatingCardio && !existing) {
-            await showAlert('La sessione cardio da modificare non ? pi? disponibile per questo giorno.');
+            await showAlert('La sessione cardio da modificare non è più disponibile per questo giorno.');
             return false;
         }
         const cardioSession: CardioSession = {

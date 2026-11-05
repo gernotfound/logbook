@@ -240,4 +240,14 @@ describe('R2: Workout Report Volume & PR Calculation (FNC-REPORT-01)', () => {
         expect(report.volumeDeltaPercent).toBe(0);
     });
 
+    it('uses the same edited historical duration as the density progression input', () => {
+        const workout: WorkoutSession = {
+            id: 'duration-1', date: '2026-09-24', routineId: 'r-duration',
+            globalStartTime: 1000, globalEndTime: 2401000,
+            globalDurationStr: '00:40:00', manualDurationStr: '00:45:00',
+            exercises: [],
+        };
+        expect(computeWorkoutReport(workout, [], libraryMap, userWeight).durationSeconds).toBe(2700);
+    });
+
 });

@@ -7,7 +7,7 @@ import type { useSleepMeasurements } from '../../hooks/useSleepMeasurements';
 interface DataSleepProps {
     // The view consumes only this subset; navigation belongs to DataView.
     sleepHook: Pick<ReturnType<typeof useSleepMeasurements>,
-        | 'editingDate' | 'setEditingDate' | 'saveSleep'
+        | 'editingDate' | 'setEditingDate' | 'cancelEdit' | 'saveSleep'
         | 'sleepHours' | 'setSleepHours'
         | 'sleepDeep' | 'setSleepDeep'
         | 'sleepLight' | 'setSleepLight'
@@ -126,7 +126,7 @@ const DataSleep: React.FC<DataSleepProps> = ({ sleepHook, selectedDate, setSelec
 
                 <div className="data-action-row">
                     {isEditing && (
-                        <button type="button" className="btn" onClick={() => sleepHook.setEditingDate(null)}>
+                        <button type="button" className="btn" onClick={() => { sleepHook.cancelEdit(); }}>
                             Annulla
                         </button>
                     )}

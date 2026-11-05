@@ -1,4 +1,5 @@
-import { useRef, useState } from 'react';
+import { useId, useRef, useState } from 'react';
+import { getLoggedMealPortion } from '../../lib/nutrition/calculateLoggedMealTotals';
 import { Pencil, Trash2, Save } from 'lucide-react';
 import type { LoggedMealItem } from '../../types';
 
@@ -12,16 +13,16 @@ interface EditMealItemModalProps {
 const MEAL_TYPES = ['Colazione', 'Pranzo', 'Cena', 'Spuntini'];
 
 export default function EditMealItemModal({ item, onClose, onSave, onDelete }: EditMealItemModalProps) {
-    const [quantity, setQuantity] = useState<number | string>(item.quantity ?? item.baseQty ?? 100);
+    const inputId = useId();
+    const [quantity, setQuantity] = useState<number | string>(getLoggedMealPortion(item).quantity);
     const [meal, setMeal] = useState<string>(item.meal || 'Colazione');
     const [saving, setSaving] = useState(false);
     const submitting = useRef(false);
 
-    const base = item.baseQty ?? 100;
     const parsedQty = Number(quantity);
     const validQty = quantity !== '' && Number.isFinite(parsedQty) && parsedQty >= 0;
     const numQty = validQty ? parsedQty : 0;
-    const ratio = base > 0 ? numQty / base : 1;
+    const { ratio } = getLoggedMealPortion({ ...item, quantity: numQty });
 
     const currentKcal = Math.round((Number(item.kcal) || 0) * ratio);
     const currentCarbs = Math.round((Number(item.carbs) || 0) * ratio * 10) / 10;
@@ -94,8 +95,9 @@ export default function EditMealItemModal({ item, onClose, onSave, onDelete }: E
             </div>
 
             <div className="mb-15">
-                <label className="text-muted text-xs block mb-4">Pasto</label>
+                <label className="text-muted text-xs block mb-4" htmlFor={`${inputId}-meal`}>Pasto</label>
                 <select 
+                    id={`${inputId}-meal`}
                     value={meal} 
                     onChange={e => setMeal(e.target.value)}
                     disabled={saving}
@@ -109,10 +111,11 @@ export default function EditMealItemModal({ item, onClose, onSave, onDelete }: E
             </div>
 
             <div className="mb-15">
-                <label className="text-muted text-xs block mb-4">
+                <label className="text-muted text-xs block mb-4" htmlFor={`${inputId}-quantity`}>
                     Quantità ({item.unit || 'g'})
                 </label>
                 <input 
+                    id={`${inputId}-quantity`}
                     type="number" 
                     step="1"
                     min="0"

@@ -49,7 +49,7 @@ export default function WorkoutMetronome() {
                         step={1}
                         value={bpmInput}
                         onChange={event => handleInputChange(event.target.value)}
-                        onBlur={() => applyBpm(Number(bpmInput))}
+                        onBlur={() => applyBpm(bpmInput.trim() === '' ? bpm : Number(bpmInput))}
                         onKeyDown={event => {
                             if (event.key === 'Enter') event.currentTarget.blur();
                         }}

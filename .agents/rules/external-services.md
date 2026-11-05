@@ -56,7 +56,7 @@ Firebase Hosting, Firebase Authentication, Firestore, Firebase Admin e App Check
 - `main` resta l'unico branch abilitato al deployment salvo cambio deliberato del contratto repository.
 - Le credenziali server-only non devono mai avere prefisso `VITE_`.
 - Un deployment Vercel verde non prova la CI GitHub; la CI verde non prova il deployment Production.
-- **VERIFY:** `scripts/vercel-ignore-build.mjs` include `package.json` e `package-lock.json` fra gli input del backend. Il solo bump versione PWA può pertanto rendere eleggibile un deploy Vercel. Non escludere indiscriminatamente questi manifest: contengono anche modifiche reali delle dipendenze server.
+- **VERIFY:** `scripts/vercel-ignore-build.mjs` controlla sempre `package.json` e `package-lock.json`, ignorando esclusivamente i campi root del numero di versione PWA quando entrambi i manifest sono coerenti. Qualsiasi modifica a dipendenze, script, lockfile non relativa a questi campi, file server o impossibilità di verificare la cronologia Git deve mantenere il deploy Vercel. I test di regressione canonici sono in `scripts/vercel-ignore-build-regressions.mjs`.
 
 ### GitHub / CodeQL / Snyk
 

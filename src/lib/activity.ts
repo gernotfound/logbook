@@ -32,6 +32,21 @@ export function cardioIntensityLabel(value: CardioIntensity | undefined): string
     return CARDIO_INTENSITIES.find(item => item.value === value)?.label ?? null;
 }
 
+/**
+ * Dated-draft witness names admit only lowercase alphanumerics and hyphens.
+ * Encode all UTF-16 code units, not a lossy slug: distinct valid business IDs
+ * (including "new", underscores and accents) must never share a recovery slot.
+ */
+export function cardioDraftKind(id: string | null, isCreating: boolean): string {
+    if (isCreating) return 'activity-cardio-create';
+    if (id === null) return 'activity-cardio-idle';
+    let encoded = '';
+    for (let i = 0; i < id.length; i++) {
+        encoded += id.charCodeAt(i).toString(16).padStart(4, '0');
+    }
+    return 'activity-cardio-edit-' + encoded;
+}
+
 export function localDateTimeToTimestamp(date: string, time: string): number | undefined {
     const validDate = parseDateInput(date);
     if (!validDate || !/^([01]\d|2[0-3]):[0-5]\d$/.test(time)) return undefined;

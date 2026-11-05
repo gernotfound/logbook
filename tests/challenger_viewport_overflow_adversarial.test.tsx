@@ -308,6 +308,7 @@ describe('EMPIRICAL CHALLENGER: Viewport & Overflow Adversarial Stress Suite (m2
                     sleepHook={{
                         editingDate: null,
                         setEditingDate: vi.fn(),
+                    cancelEdit: vi.fn(() => true),
                         saveSleep: vi.fn(),
                         sleepHours: '07:30',
                         setSleepHours: vi.fn(),

@@ -5,7 +5,9 @@ import { newWriterRevisionId, type WriterLineageReference } from './writerLineag
 
 const PREFIX = 'draft:dated-intent:';
 const ID = /^[a-f0-9]{32}$/;
-const DATED_KEY = /^draft:[a-z0-9-]{1,100}:\d{4}-\d{2}-\d{2}$/;
+// 160 UTF-16 code units of a valid business ID become at most 640 hex chars,
+// plus the stable cardio editor prefix. Remain bounded and path-safe.
+const DATED_KEY = /^draft:[a-z0-9-]{1,700}:\d{4}-\d{2}-\d{2}$/;
 const MAX_WRITERS_PER_FIELD = 64;
 const MAX_INSPECTED_WRITERS = 1024;
 const MAX_VALUES_LENGTH = 100_000;

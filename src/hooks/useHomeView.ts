@@ -4,6 +4,7 @@ import { useAppStore } from '../store/useAppStore';
 import { Logic } from '../lib/logic';
 import { computeWeeklyWeightSeries } from '../lib/calc/analytics';
 import { parseDateInput } from '../lib/utils/date';
+import { parsePositiveWeight } from '../lib/calc/workout';
 
 const HOME_CLOCK_REFRESH_MS = 60 * 1000;
 
@@ -212,8 +213,8 @@ export function useHomeView(isActive = true): HomeViewState {
         let bfDay: (typeof nutrition)[string] | undefined;
         for (const [, day] of days) {
             if (weight === undefined && day?.weight !== undefined && day?.weight !== null && day?.weight !== '') {
-                const candidate = Number.parseFloat(String(day.weight).trim().replace(',', '.'));
-                if (Number.isFinite(candidate) && candidate > 0) weight = candidate;
+                const candidate = parsePositiveWeight(day.weight);
+                if (candidate !== null) weight = candidate;
             }
             if (!bfDay && day?.bf !== undefined && day?.bf !== null && day?.bf !== '') bfDay = day;
             if (weight !== undefined && bfDay) break;
@@ -244,8 +245,8 @@ export function useHomeView(isActive = true): HomeViewState {
 
         dateRange.forEach(d => {
             const w = nutrition[d]?.weight;
-            if (w !== undefined && w !== null && w !== '' && !isNaN(parseFloat(String(w)))) {
-                const parsedWeight = parseFloat(String(w));
+            const parsedWeight = parsePositiveWeight(w);
+            if (parsedWeight !== null) {
                 points.push(parsedWeight);
                 validWeights.push(parsedWeight);
             } else {
@@ -287,15 +288,10 @@ export function useHomeView(isActive = true): HomeViewState {
                 {
                     label: 'Peso corporeo (kg)',
                     data: points,
-                    borderColor: '#0ea5e9',
-                    backgroundColor: 'rgba(14, 165, 233, 0.12)',
-                    fill: true,
                     tension: 0.35,
                     borderWidth: 2.5,
                     pointRadius: numDays <= 7 ? 5 : (numDays <= 30 ? 4 : (numDays <= 180 ? 3 : 2)),
                     pointHoverRadius: 7,
-                    pointBackgroundColor: '#ffffff',
-                    pointBorderColor: '#0284c7',
                     pointBorderWidth: 2,
                     pointHoverBackgroundColor: '#ffffff',
                     pointHoverBorderColor: '#38bdf8',

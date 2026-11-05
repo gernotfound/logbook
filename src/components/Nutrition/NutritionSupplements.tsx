@@ -1,5 +1,5 @@
 import { dispatchDurableOperation } from '../../lib/sync/dispatchDurableOperation';
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { shiftDateString } from '../../lib/utils/date';
 import { useAppStore } from '../../store/useAppStore';
 import { useSupplements } from '../../hooks/useSupplements';
@@ -7,6 +7,9 @@ import { Logic } from '../../lib/logic';
 import { ContextMenu } from '../UI/ContextMenu';
 import { Pencil, Copy, Trash2 } from 'lucide-react';
 import { useDialogStore } from '../../store/useDialogStore';
+import { captureSession, isCurrentSession } from '../../lib/sync/session';
+import { NutritionDateNavigator } from './meals/NutritionDateNavigator';
+import type { Supplement } from '../../types';
 
 interface NutritionSupplementsProps {
     selectedDate?: string;
@@ -28,6 +31,9 @@ export default function NutritionSupplements({ selectedDate, setSelectedDate }: 
     const [showSuppModal, setShowSuppModal] = useState(false);
     const [editingSuppId, setEditingSuppId] = useState<string | null>(null);
     const [suppForm, setSuppForm] = useState({ name: '', unit: 'g', target: '', portion: '' });
+    const [savingSupplement, setSavingSupplement] = useState(false);
+    const savingSupplementRef = useRef(false);
+    const pendingIntakes = useRef(new Set<string>());
 
     // Stato per gli input inline di assunzione rapida
     const [quickInputs, setQuickInputs] = useState<Record<string, string>>({});
@@ -61,33 +67,45 @@ export default function NutritionSupplements({ selectedDate, setSelectedDate }: 
         if (setSelectedDate) setSelectedDate(Logic.getLocalDateString());
     };
 
+    const parseOptionalDose = (raw: string): number | null | undefined => {
+        if (!raw.trim()) return undefined;
+        const value = Number(raw.trim().replace(',', '.'));
+        return Number.isFinite(value) && value > 0 ? value : null;
+    };
+
     const handleSaveSupplement = async () => {
-        if (!suppForm.name.trim()) {
-            await showAlert("Inserisci il nome dell'integratore.");
+        if (savingSupplementRef.current) return;
+        if (!suppForm.name.trim() || !suppForm.unit.trim()) {
+            await showAlert("Inserisci il nome e l'unità dell'integratore.");
             return;
         }
-        
-        const payload: any = {
+        const target = parseOptionalDose(suppForm.target);
+        const portion = parseOptionalDose(suppForm.portion);
+        if (target === null || portion === null) {
+            await showAlert('Le dosi devono essere numeri positivi validi.');
+            return;
+        }
+        const payload: Omit<Supplement, 'id'> = {
             name: suppForm.name.trim(),
-            unit: suppForm.unit
+            unit: suppForm.unit.trim(),
+            ...(target !== undefined ? { target } : {}),
+            ...(portion !== undefined ? { portion } : {}),
         };
-        
-        if (suppForm.target) {
-            payload.target = parseFloat(suppForm.target);
-        } else {
-            payload.target = null;
+        const session = captureSession();
+        savingSupplementRef.current = true;
+        setSavingSupplement(true);
+        try {
+            await saveSupplementToLibrary(payload, editingSuppId || undefined);
+            if (!isCurrentSession(session)) return;
+            setShowSuppModal(false);
+            setEditingSuppId(null);
+            setSuppForm({ name: '', unit: 'g', target: '', portion: '' });
+        } catch {
+            if (isCurrentSession(session)) await showAlert("Errore durante il salvataggio dell'integratore.");
+        } finally {
+            savingSupplementRef.current = false;
+            setSavingSupplement(false);
         }
-        if (suppForm.portion) {
-            payload.portion = parseFloat(suppForm.portion);
-        } else {
-            payload.portion = null;
-        }
-        
-        await saveSupplementToLibrary(payload, editingSuppId || undefined);
-        
-        setShowSuppModal(false);
-        setEditingSuppId(null);
-        setSuppForm({ name: '', unit: 'g', target: '', portion: '' });
     };
 
     const handleEditSupplement = (supp: any) => {
@@ -124,24 +142,16 @@ export default function NutritionSupplements({ selectedDate, setSelectedDate }: 
 
 
 
-    const renderDateNavigator = () => (
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
-            <button className="btn btn-small" onClick={handlePrevDay} style={{ background: 'var(--surface-light)', color: 'var(--text-main)' }}>◀ Prec.</button>
-            <div style={{ textAlign: 'center', flex: 1, margin: '0 10px', cursor: 'pointer' }} onClick={handleToday} title="Torna a oggi">
-                <div style={{ fontWeight: 'bold', fontSize: 'var(--font-size-section)' }}>
-                    {Logic.formatItalianDate ? Logic.formatItalianDate(targetDateStr || '') : targetDateStr}
-                </div>
-                {targetDateStr === Logic.getLocalDateString() && (
-                    <div style={{ fontSize: 'var(--font-size-micro)', color: 'var(--primary-color)' }}>OGGI</div>
-                )}
-            </div>
-            <button className="btn btn-small" onClick={handleNextDay} disabled={targetDateStr === Logic.getLocalDateString()} style={{ background: 'var(--surface-light)', color: 'var(--text-main)', opacity: targetDateStr === Logic.getLocalDateString() ? 0.3 : 1 }}>Succ. ▶</button>
-        </div>
-    );
-
     return (
         <div>
-            {setSelectedDate && renderDateNavigator()}
+            {setSelectedDate && (
+                <NutritionDateNavigator
+                    targetDateStr={targetDateStr}
+                    onPrevious={handlePrevDay}
+                    onNext={handleNextDay}
+                    onToday={handleToday}
+                />
+            )}
 
             {!showSuppModal ? (
                 <button 
@@ -162,11 +172,13 @@ export default function NutritionSupplements({ selectedDate, setSelectedDate }: 
                     </h2>
                     
                     <div className="form-group">
-                        <label>Nome integratore</label>
+                        <label htmlFor="supp-name">Nome integratore</label>
                         <input 
                             type="text" 
-                            placeholder="es. Creatina, EAA, Caffeina" 
-                            value={suppForm.name} 
+                            id="supp-name"
+                                placeholder="es. Creatina, EAA, Caffeina" 
+                            value={suppForm.name}
+                                disabled={savingSupplement} 
                             onChange={e => setSuppForm({...suppForm, name: e.target.value})}
                             style={{ width: '100%', boxSizing: 'border-box' }}
                         />
@@ -174,33 +186,39 @@ export default function NutritionSupplements({ selectedDate, setSelectedDate }: 
                     
                     <div style={{ display: 'flex', gap: '15px' }}>
                         <div className="form-group" style={{ flex: 1, minWidth: 0 }}>
-                            <label>Dose target giornaliera</label>
+                            <label htmlFor="supp-target">Dose target giornaliera</label>
                             <input 
                                 type="number" 
                                 inputMode="decimal"
+                                id="supp-target"
                                 placeholder="Opzionale (es. 5)" 
-                                value={suppForm.target} 
+                                value={suppForm.target}
+                                disabled={savingSupplement} 
                                 onChange={e => setSuppForm({...suppForm, target: e.target.value})}
                                 style={{ width: '100%', boxSizing: 'border-box', appearance: 'none' }}
                             />
                         </div>
                         <div className="form-group" style={{ flex: 1, minWidth: 0 }}>
-                            <label>Dose singola (opzionale)</label>
+                            <label htmlFor="supp-portion">Dose singola (opzionale)</label>
                             <input 
                                 type="number" 
                                 inputMode="decimal"
+                                id="supp-portion"
                                 placeholder="es. 20" 
-                                value={suppForm.portion} 
+                                value={suppForm.portion}
+                                disabled={savingSupplement} 
                                 onChange={e => setSuppForm({...suppForm, portion: e.target.value})}
                                 style={{ width: '100%', boxSizing: 'border-box', appearance: 'none' }}
                             />
                         </div>
                         <div className="form-group" style={{ flex: 1, minWidth: 0 }}>
-                            <label>Unità di misura</label>
+                            <label htmlFor="supp-unit">Unità di misura</label>
                             <input 
                                 type="text" 
+                                id="supp-unit"
                                 placeholder="es. g, mg, cp" 
-                                value={suppForm.unit} 
+                                value={suppForm.unit}
+                                disabled={savingSupplement} 
                                 onChange={e => setSuppForm({...suppForm, unit: e.target.value})}
                                 style={{ width: '100%', boxSizing: 'border-box' }}
                             />
@@ -211,8 +229,8 @@ export default function NutritionSupplements({ selectedDate, setSelectedDate }: 
                         <button className="btn" onClick={() => {
                             setShowSuppModal(false);
                             setEditingSuppId(null);
-                        }}>Annulla</button>
-                        <button className="btn btn-primary" onClick={handleSaveSupplement}>Salva</button>
+                        }} disabled={savingSupplement}>Annulla</button>
+                        <button className="btn btn-primary" onClick={() => { void handleSaveSupplement(); }} disabled={savingSupplement}>Salva</button>
                     </div>
                 </div>
             )}
@@ -223,7 +241,8 @@ export default function NutritionSupplements({ selectedDate, setSelectedDate }: 
                 sortedSupplements.map((supp) => {
                     const suppIntakes = intakesBySupplement.get(supp.id) || [];
                     const totalAssunto = suppIntakes.reduce((acc, curr) => acc + curr.amount, 0);
-                    const progressPercent = supp.target ? Math.min((totalAssunto / supp.target) * 100, 100) : 0;
+                    const hasTarget = typeof supp.target === 'number' && Number.isFinite(supp.target) && supp.target > 0;
+                    const progressPercent = hasTarget ? Math.min(Math.max((totalAssunto / supp.target!) * 100, 0), 100) : 0;
                     
                     return (
                         <div key={supp.id} className="card mb-15">
@@ -232,7 +251,7 @@ export default function NutritionSupplements({ selectedDate, setSelectedDate }: 
                                     <div style={{ fontWeight: 'bold', fontSize: 'var(--font-size-control)', color: 'var(--text-main)' }}>{supp.name}</div>
                                     <div style={{ fontSize: 'var(--font-size-meta)', color: 'var(--text-muted)' }}>
                                         Assunto: <strong style={{ color: 'var(--text-main)' }}>{Math.round(totalAssunto * 10) / 10}</strong> {supp.unit} 
-                                        {supp.target ? ` / ${supp.target} ${supp.unit}` : ''}
+                                        {hasTarget ? ` / ${supp.target} ${supp.unit}` : ''}
                                     </div>
                                 </div>
                                 <div style={{ display: 'flex', gap: '5px' }}>
@@ -259,7 +278,7 @@ export default function NutritionSupplements({ selectedDate, setSelectedDate }: 
                                 </div>
                             </div>
 
-                            {supp.target && (
+                            {hasTarget && (
                                 <div className="progress-bg" style={{ height: '6px', marginBottom: '15px' }}>
                                     <div 
                                         className="progress-fill" 
@@ -276,6 +295,7 @@ export default function NutritionSupplements({ selectedDate, setSelectedDate }: 
                                     type="number" 
                                     inputMode="decimal"
                                     placeholder={`Quantità (${supp.unit})`}
+                                    aria-label={`Quantità assunzione ${supp.name}`}
                                     value={quickInputs[supp.id] !== undefined ? quickInputs[supp.id] : (supp.portion ? String(supp.portion) : '')}
                                     onChange={e => setQuickInputs({ ...quickInputs, [supp.id]: e.target.value })}
                                     onFocus={e => e.target.select()}
@@ -285,30 +305,29 @@ export default function NutritionSupplements({ selectedDate, setSelectedDate }: 
                                     className="btn btn-primary" 
                                     style={{ margin: 0, whiteSpace: 'nowrap', flex: 1 }}
                                     onClick={async () => {
+                                        if (pendingIntakes.current.has(supp.id)) return;
+                                        let valStr = quickInputs[supp.id];
+                                        if (valStr === undefined) valStr = supp.portion ? String(supp.portion) : '';
+                                        const amount = Number(valStr.trim().replace(',', '.'));
+                                        if (!valStr.trim() || !Number.isFinite(amount) || amount <= 0) {
+                                            await showAlert('Inserisci una quantità valida da assumere.');
+                                            return;
+                                        }
+                                        pendingIntakes.current.add(supp.id);
                                         try {
-                                            let valStr = quickInputs[supp.id];
-                                            if (valStr === undefined) {
-                                                valStr = supp.portion ? String(supp.portion) : '';
-                                            }
-                                            const valNum = parseFloat(valStr.replace(',', '.'));
-                                            
-                                            if (!valStr || isNaN(valNum) || valNum <= 0) {
-                                                await showAlert("Inserisci una quantità valida da assumere.");
-                                                return;
-                                            }
-                                            
-                                            await addIntake(supp.id, valNum);
-                                            
+                                            await addIntake(supp.id, amount);
                                             setQuickInputs(prev => {
+                                                if (prev[supp.id] !== undefined && prev[supp.id] !== valStr) return prev;
                                                 const next = { ...prev };
                                                 delete next[supp.id];
                                                 return next;
                                             });
-                                        } catch (e: any) {
-                                            await showAlert("Errore durante l'aggiunta: " + (e.message || String(e)));
+                                        } catch {
+                                            await showAlert("Errore durante l'aggiunta dell'assunzione.");
+                                        } finally {
+                                            pendingIntakes.current.delete(supp.id);
                                         }
                                     }}
-                                    disabled={false}
                                 >
                                     + Aggiungi
                                 </button>

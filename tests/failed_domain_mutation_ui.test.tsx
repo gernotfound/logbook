@@ -10,6 +10,7 @@ import { useDialogStore } from '../src/store/useDialogStore';
 import { useNutritionMeasurements } from '../src/hooks/useNutritionMeasurements';
 import { useSleepMeasurements } from '../src/hooks/useSleepMeasurements';
 import { useActivityTracking } from '../src/hooks/useActivityTracking';
+import { cardioDraftKind } from '../src/lib/activity';
 import { useTrainingRoutines } from '../src/hooks/useTrainingRoutines';
 import TrainingPlanning from '../src/components/Training/planning/TrainingPlanning';
 
@@ -115,4 +116,81 @@ describe('failed domain result preserves user edits', () => {
         expect(dialog).toHaveBeenCalledTimes(2);
         expect((screen.getByLabelText('Nome ciclo') as HTMLInputElement).value).toBe('Ciclo B');
     });
+    it('cancels sleep and cardio edits only after the device draft is cleared', async () => {
+        const sleep = renderHook(() => useSleepMeasurements());
+        act(() => sleep.result.current.setEditingDate(DAY));
+        act(() => sleep.result.current.setSleepHours('07:30'));
+        const owner = storageOwner();
+        const sleepKey = protectedDeviceKey('draft:sleep:' + DAY, owner);
+        const beforeSleep = localStorage.getItem(sleepKey);
+        expect(beforeSleep).toMatch(/^tlb-sealed:v1:/);
+        const originalSetItem = vi.mocked(localStorage.setItem).getMockImplementation()!;
+        vi.mocked(localStorage.setItem).mockImplementation((key, value) => {
+            if (key === sleepKey) throw new Error('quota');
+            originalSetItem(key, value);
+        });
+        act(() => { expect(sleep.result.current.cancelEdit()).toBe(false); });
+        expect(sleep.result.current.editingDate).toBe(DAY);
+        expect(localStorage.getItem(sleepKey)).toBe(beforeSleep);
+        vi.mocked(localStorage.setItem).mockImplementation(originalSetItem);
+        act(() => { expect(sleep.result.current.cancelEdit()).toBe(true); });
+        expect(sleep.result.current.editingDate).toBeNull();
+        expect(readDeviceValueStrict('draft:sleep:' + DAY, owner)).toContain('"values":null');
+
+    });
+
+    it('retains the cardio editor after a failed durable draft clear, and closes it after retry', () => {
+        const owner = storageOwner();
+        const activity = renderHook(() => useActivityTracking());
+        act(() => activity.result.current.setSelectedDate(DAY));
+        act(() => activity.result.current.startNewCardio());
+        act(() => activity.result.current.setCardioField('modality', 'bike'));
+        const name = 'draft:' + cardioDraftKind('/new', true) + ':' + DAY;
+        const cardioKey = protectedDeviceKey(name, owner);
+        const before = localStorage.getItem(cardioKey);
+        expect(before).toMatch(/^tlb-sealed:v1:/);
+
+        const originalSetItem = vi.mocked(localStorage.setItem).getMockImplementation()!;
+        vi.mocked(localStorage.setItem).mockImplementation((key, value) => {
+            if (key === cardioKey) throw new Error('quota');
+            originalSetItem(key, value);
+        });
+        act(() => { expect(activity.result.current.cancelCardio()).toBe(false); });
+        expect(activity.result.current.editingCardioId).toBe('/new');
+        expect(localStorage.getItem(cardioKey)).toBe(before);
+
+        vi.mocked(localStorage.setItem).mockImplementation(originalSetItem);
+        act(() => { expect(activity.result.current.cancelCardio()).toBe(true); });
+        expect(activity.result.current.editingCardioId).toBeNull();
+        expect(readDeviceValueStrict(name, owner)).toContain('"values":null');
+    });
+
+    it('persists edits to an existing cardio record with a generated underscore ID', () => {
+        const id = 'cardio_12345678-1234-1234-1234-123456789abc';
+        const owner = storageOwner();
+        useAppStore.setState({
+            userData: UserDataSchema.parse({
+                nutrition: {
+                    [DAY]: {
+                        date: DAY,
+                        cardioSessions: [{
+                            id, modality: 'bike', durationMinutes: 30,
+                            intensity: 'moderate', source: 'manual',
+                        }],
+                    },
+                },
+            }) as any,
+            dataOwner: owner,
+        });
+        const activity = renderHook(() => useActivityTracking());
+        act(() => activity.result.current.setSelectedDate(DAY));
+        act(() => activity.result.current.editCardio(id));
+        act(() => activity.result.current.setCardioField('notes', 'Nuove note cardio'));
+        const name = 'draft:' + cardioDraftKind(id, false) + ':' + DAY;
+        expect(readDeviceValueStrict(name, owner)).toContain('Nuove note cardio');
+        expect(localStorage.getItem(protectedDeviceKey(name, owner))).toMatch(/^tlb-sealed:v1:/);
+        act(() => { expect(activity.result.current.cancelCardio()).toBe(true); });
+        expect(readDeviceValueStrict(name, owner)).toContain('"values":null');
+    });
+
 });

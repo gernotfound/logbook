@@ -3,7 +3,7 @@ import { useAppStore } from '../store/useAppStore';
 import { useDialogStore } from '../store/useDialogStore';
 import { Logic } from '../lib/logic';
 import type { NutritionPlanning } from '../types';
-import { normalizeOnDaysCount } from '../lib/nutritionDefaults';
+import { createDefaultNutritionPlanning, normalizeOnDaysCount } from '../lib/nutritionDefaults';
 
 // Form inputs have intermediate strings (including an empty field), while only
 // normalized numeric values may enter the persisted NutritionPlanning schema.
@@ -63,13 +63,7 @@ export function useNutritionPlanning() {
     // Use the shared parser to handle decimal commas and invalid measurements.
     const latestWeight = useMemo(() => Logic.getLatestUserWeight(nutritionMap), [nutritionMap]);
 
-    const defaultPlanning: NutritionPlanningDraft = {
-        weight: latestWeight,
-        onDaysCount: 4,
-        avgMacros: { carbsPerKg: 3.5, proPerKg: 2.0, fatPerKg: 1.0 },
-        onBoost: { carbsPercent: 20, proPercent: 0, fatPercent: 0 },
-        normocalorica: { kcal: 2500, carbs: 300, pro: 160, fat: 70 }
-    };
+    const defaultPlanning: NutritionPlanningDraft = { ...createDefaultNutritionPlanning(), weight: latestWeight };
 
     const basePlanning = localPlanning ?? storePlanning ?? defaultPlanning;
     const planning: NutritionPlanningDraft = {

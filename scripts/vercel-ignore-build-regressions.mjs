@@ -24,10 +24,13 @@ await test('Vercel skips only frontend-only commits relative to the last success
   const cwd = mkdtempSync(join(tmpdir(), 'logbook-vercel-ignore-'));
   try {
     git(cwd, 'init', '--quiet');
-    function commit(path, content) {
+    function put(path, content) {
       const target = join(cwd, path);
       mkdirSync(dirname(target), { recursive: true });
       writeFileSync(target, content);
+    }
+    function commit(path, content) {
+      put(path, content);
       git(cwd, 'add', '--all');
       git(cwd, '-c', 'user.name=CI Test', '-c', 'user.email=ci@example.invalid', 'commit', '--quiet', '-m', path);
       return git(cwd, 'rev-parse', 'HEAD');
@@ -40,6 +43,16 @@ await test('Vercel skips only frontend-only commits relative to the last success
       });
     }
 
+    const initialPackage = { name: 'logbook', version: '2.169.0', scripts: { build: 'build' }, dependencies: { firebase: '13.1.0' } };
+    const initialLock = {
+      name: 'logbook', version: '2.169.0', lockfileVersion: 3,
+      packages: {
+        '': { name: 'logbook', version: '2.169.0', dependencies: { firebase: '13.1.0' } },
+        'node_modules/firebase': { version: '13.1.0' },
+      },
+    };
+    put('package.json', JSON.stringify(initialPackage));
+    put('package-lock.json', JSON.stringify(initialLock));
     const deployed = commit('src/components/view.tsx', 'original frontend');
     const frontendOnly = commit('src/components/view.tsx', 'new frontend');
     assert.equal(evaluate(deployed, frontendOnly).status, 0, 'frontend-only changes should skip');
@@ -52,8 +65,30 @@ await test('Vercel skips only frontend-only commits relative to the last success
     const legal = commit('src/lib/legalVersions.ts', 'new shared legal contract');
     assert.equal(evaluate(backend, legal).status, 1, 'shared legal versions used by the server must deploy');
 
-    const manifest = commit('package.json', '{"version":"2.0.0"}');
-    assert.equal(evaluate(legal, manifest).status, 1, 'dependency/runtime changes must deploy');
+    put('package.json', JSON.stringify({ ...initialPackage, version: '2.170.0' }));
+    const releaseBump = commit('package-lock.json', JSON.stringify({
+      ...initialLock, version: '2.170.0',
+      packages: { ...initialLock.packages, '': { ...initialLock.packages[''], version: '2.170.0' } },
+    }));
+    assert.equal(evaluate(legal, releaseBump).status, 0, 'PWA version-only bump must not redeploy the backend');
+
+    const changedScript = commit('package.json', JSON.stringify({
+      ...initialPackage, version: '2.170.0', scripts: { build: 'vite build' },
+    }));
+    assert.equal(evaluate(releaseBump, changedScript).status, 1, 'changing package scripts must deploy');
+
+    const changedDependency = commit('package-lock.json', JSON.stringify({
+      ...initialLock, version: '2.170.0',
+      packages: {
+        ...initialLock.packages,
+        '': { ...initialLock.packages[''], version: '2.170.0' },
+        'node_modules/firebase': { version: '13.2.0' },
+      },
+    }));
+    assert.equal(evaluate(changedScript, changedDependency).status, 1, 'changing lockfile dependencies must deploy');
+
+    const manifest = commit('package.json', '{"version":"2.170.0"}');
+    assert.equal(evaluate(changedDependency, manifest).status, 1, 'inconsistent package contents must deploy');
 
     assert.equal(evaluate('', manifest).status, 1, 'missing deployment baseline must fail open to deploy');
     assert.equal(evaluate('not-a-git-object', manifest).status, 1, 'unreadable git history must fail open to deploy');

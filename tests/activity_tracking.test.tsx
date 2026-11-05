@@ -8,7 +8,7 @@ import { projectDocuments } from '../src/lib/sync/documentProjection';
 import { mergeNutrition } from '../src/lib/merge';
 import { createBackup, decodeImport, prepareImport } from '../src/lib/backup';
 import { computeWeeklyActivitySeries } from '../src/lib/calc/analytics';
-import { localDateTimeToTimestamp } from '../src/lib/activity';
+import { cardioDraftKind, localDateTimeToTimestamp } from '../src/lib/activity';
 import { Logic } from '../src/lib/logic';
 import { Exporter } from '../src/lib/export';
 import { useDialogStore } from '../src/store/useDialogStore';
@@ -39,6 +39,21 @@ beforeEach(() => {
     useAppStore.setState({ userData: parse({}), dataOwner: storageOwner() });
 });
 afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks(); });
+
+describe('cardio device-draft identity', () => {
+    it('does not collide between a new session and an existing ID "new"', () => {
+        expect(cardioDraftKind('/new', true)).toBe('activity-cardio-create');
+        expect(cardioDraftKind('new', false)).not.toBe(cardioDraftKind('/new', true));
+        expect(cardioDraftKind(null, false)).toBe('activity-cardio-idle');
+    });
+
+    it('preserves unusual and maximum-length valid business IDs injectively', () => {
+        const ids = ['cardio_a', 'cardio-a', 'new', 'é', 'e', 'é', 'a:b', 'a'.repeat(160)];
+        const scoped = ids.map(id => 'draft:' + cardioDraftKind(id, false) + ':2026-09-24');
+        expect(new Set(scoped).size).toBe(ids.length);
+        expect(scoped.every(name => /^draft:[a-z0-9-]{1,700}:\d{4}-\d{2}-\d{2}$/.test(name))).toBe(true);
+    });
+});
 
 describe('activity data model and domain operations', () => {
     it('stores zero steps as a real value and keeps missing steps undefined', () => {

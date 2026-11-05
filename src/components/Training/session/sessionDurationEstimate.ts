@@ -1,27 +1,9 @@
 import type { WorkoutSession } from '../../../types';
+import { getWorkoutDurationSeconds } from '../../../lib/calc/workoutDuration';
 
 export interface RoutineDurationEstimate {
     minutes: number;
     sampleSize: number;
-}
-
-function workoutDurationSeconds(workout: WorkoutSession): number | null {
-    if (
-        typeof workout.globalStartTime === 'number'
-        && typeof workout.globalEndTime === 'number'
-        && workout.globalEndTime > workout.globalStartTime
-    ) {
-        return Math.round((workout.globalEndTime - workout.globalStartTime) / 1000);
-    }
-
-    const duration = workout.globalDurationStr || workout.manualDurationStr;
-    if (!duration) return null;
-
-    const parts = duration.split(':').map(Number);
-    if (parts.some(part => !Number.isFinite(part) || part < 0)) return null;
-    if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2];
-    if (parts.length === 2) return parts[0] * 60 + parts[1];
-    return null;
 }
 
 export function getRoutineDurationEstimate(
@@ -31,7 +13,7 @@ export function getRoutineDurationEstimate(
     const samples = history
         .filter(workout => workout.routineId === routineId)
         .map(workout => ({
-            seconds: workoutDurationSeconds(workout),
+            seconds: getWorkoutDurationSeconds(workout) ?? null,
             timestamp: workout.globalEndTime ?? workout.globalStartTime ?? 0,
         }))
         .filter((sample): sample is { seconds: number; timestamp: number } => (

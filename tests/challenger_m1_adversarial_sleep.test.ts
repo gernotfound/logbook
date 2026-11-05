@@ -407,6 +407,7 @@ describe('Empirical Challenger: Sleep Format HH:MM Adversarial Stress Test Suite
             const mockHook = {
                 editingDate: null,
                 setEditingDate: vi.fn(),
+                    cancelEdit: vi.fn(() => true),
                 sleepHours: '08:00',
                 setSleepHours: vi.fn(),
                 sleepDeep: '01:30',

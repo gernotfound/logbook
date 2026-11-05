@@ -5,6 +5,7 @@ import { useAppStore } from '../store/useAppStore';
 import { useDialogStore } from '../store/useDialogStore';
 import { Logic } from '../lib/logic';
 import type { LoggedMealItem } from '../types';
+import { createLoggedMealItem } from '../lib/nutrition/createLoggedMealItem';
 
 const EMPTY_FOODS: any[] = [];
 const DEFAULT_NUTRITION = { kcal: 0, carbs: 0, pro: 0, fat: 0, meals: [] };
@@ -124,22 +125,8 @@ export function useNutritionMeals(dateStr?: string) {
     const handleSearch = (query: string) => setSearchQuery(query);
 
     const addFood = async (food: any, mealType: string) => {
-        const addedItem: LoggedMealItem = {
-            id: Logic.generateId('meal'),
-            foodId: food.id,
-            name: food.name,
-            meal: mealType,
-            quantity: food.baseQty || 100,
-            baseQty: food.baseQty || 100,
-            unit: food.unit || 'g',
-            kcal: food.kcal || 0,
-            carbs: food.carbs || 0,
-            pro: food.pro || 0,
-            fat: food.fat || 0,
-            time: new Date().getTime()
-        };
-
         try {
+            const addedItem = createLoggedMealItem(food, mealType, Logic.generateId('meal'), Date.now());
             await saveMeal(addedItem);
             setSearchQuery('');
         } catch {

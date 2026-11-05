@@ -1,4 +1,5 @@
 import { spawnSync } from 'node:child_process';
+import { isDeepStrictEqual } from 'node:util';
 
 const previousSha = process.env.VERCEL_GIT_PREVIOUS_SHA;
 const currentSha = process.env.VERCEL_GIT_COMMIT_SHA || 'HEAD';
@@ -22,21 +23,59 @@ if (!previousSha) {
   process.exit(1);
 }
 
+// Release policy bumps the PWA version on every PR; this alone does not change
+// the backend. All other package and lockfile changes still force a deployment.
+const versionFiles = ['package.json', 'package-lock.json'];
 const result = spawnSync(
   'git',
-  ['diff', '--quiet', previousSha, currentSha, '--', ...backendPaths],
+  ['diff', '--quiet', previousSha, currentSha, '--', ...backendPaths.filter(path => !versionFiles.includes(path))],
   { stdio: 'inherit' },
 );
 
-if (result.status === 0) {
-  console.log('No backend-relevant changes since the previous successful Vercel deployment; skip deployment.');
-  process.exit(0);
-}
-
-if (result.status === 1) {
-  console.log('Backend-relevant changes detected; continue Vercel deployment.');
+if (result.status !== 0) {
+  console.log('Backend path changed or its Git diff cannot be verified; continue Vercel deployment.');
   process.exit(1);
 }
 
-console.warn('Unable to evaluate backend diff safely; continue Vercel deployment.');
+function readPackageAt(commitSha, filePath) {
+  const git = spawnSync('git', ['show', `${commitSha}:${filePath}`], {
+    encoding: 'utf8', maxBuffer: 16 * 1024 * 1024,
+  });
+  if (git.status !== 0) throw new Error(`Cannot inspect ${filePath} at ${commitSha}`);
+  const parsed = JSON.parse(git.stdout);
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    throw new Error(`Invalid ${filePath} at ${commitSha}`);
+  }
+  return parsed;
+}
+
+function semanticPackagePair(commitSha) {
+  const pkg = readPackageAt(commitSha, 'package.json');
+  const lock = readPackageAt(commitSha, 'package-lock.json');
+  const root = lock.packages?.[''];
+  if (typeof pkg.version !== 'string' || !pkg.version
+      || pkg.version !== lock.version || pkg.version !== root?.version) {
+    throw new Error('Inconsistent root release versions');
+  }
+
+  const { version: _packageVersion, ...semanticPackage } = pkg;
+  const { version: _lockVersion, packages, ...otherLock } = lock;
+  const { version: _rootVersion, ...semanticRoot } = root;
+  return {
+    pkg: semanticPackage,
+    lock: { ...otherLock, packages: { ...packages, '': semanticRoot } },
+  };
+}
+
+try {
+  const previous = semanticPackagePair(previousSha);
+  const current = semanticPackagePair(currentSha);
+  if (isDeepStrictEqual(previous, current)) {
+    console.log('Only the PWA release version changed; skip Vercel backend deployment.');
+    process.exit(0);
+  }
+  console.log('Package dependencies, scripts or lockfile content changed; continue backend deployment.');
+} catch (error) {
+  console.warn('Cannot prove package changes are version-only; continue backend deployment.', error.message);
+}
 process.exit(1);
