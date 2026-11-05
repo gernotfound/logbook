@@ -1,4 +1,4 @@
-# TheLogBook — pacchetto compliance per il primo pilot
+# TheLogBook — compliance per i primi utenti esterni e per un eventuale futuro pilot B2B
 
 > Stato: struttura operativa per eventuali utenti esterni, da completare e far revisionare prima del loro primo utilizzo reale.
 > Ultimo aggiornamento tecnico: 5 novembre 2026.
@@ -12,13 +12,13 @@ Questa cartella raccoglie i documenti operativi che servono per trasformare le s
 
 La fonte di verità tecnica resta il repository corrente. Le configurazioni esterne — Firebase/Google Cloud, Vercel, GitHub e relativi account amministrativi — devono essere verificate direttamente prima del pilot e non vanno dedotte da questi template.
 
-## Situazione attuale dichiarata dal product owner — 5 novembre 2026
+## Modello di utilizzo deciso dal product owner — 5 novembre 2026
 
-TheLogBook è, allo stato dichiarato, un **progetto personale amatoriale**, non erogato attraverso un'impresa o società. Non attribuire al progetto una ragione sociale, una partita IVA, una forma societaria, un contratto palestra o finalità commerciali che non esistono. Le sezioni B2B sotto descrivono **uno scenario futuro**, non il modello operativo già avviato.
+TheLogBook è, allo stato dichiarato, un **progetto amatoriale**, non erogato attraverso un'impresa o società. Il product owner **intende permettere anche ad altre persone di creare un account e registrare i propri dati**, senza che ciò implichi una distribuzione commerciale o un accordo con palestre. Questa è una decisione per l'utilizzo previsto, **non una prova che altri utenti siano già iscritti**. Non attribuire al progetto ragione sociale, partita IVA, forma societaria, contratti palestra o finalità commerciali inesistenti. Le sezioni B2B sotto descrivono **uno scenario futuro**.
 
-La natura amatoriale, da sola, **non determina un'esenzione GDPR**: l'art. 2, par. 2, lett. c e il considerando 18 distinguono il trattamento strettamente personale o domestico dalle attività rivolte all'esterno. Se la PWA è utilizzata esclusivamente dal suo autore per dati propri, l'eccezione personale/domestica può essere pertinente, da valutare sui fatti. La disponibilità gratuita a terzi, anche senza impresa, non autorizza a presumere l'eccezione. In tale scenario il titolare può anche essere una **persona fisica**, purché ruoli, contatti e obblighi applicabili siano determinati correttamente. Riferimenti: [Regolamento UE 2016/679, art. 2 e considerando 18](https://eur-lex.europa.eu/legal-content/IT/TXT/?uri=CELEX:32016R0679) e [Commissione europea — ambito di applicazione del GDPR](https://commission.europa.eu/law/law-topic/data-protection/information-business-and-organisations/application-gdpr_en).
+La natura amatoriale o gratuita **non determina un'esenzione GDPR**: l'art. 2, par. 2, lett. c e il considerando 18 delimitano l'eccezione alle attività esclusivamente personali o domestiche. **Dato il previsto accesso di utenti esterni, non assumere l'applicabilità di tale eccezione per erogare la PWA**. Una persona fisica può essere titolare del trattamento anche senza società, ma identità, recapiti, basi giuridiche, misure e obblighi applicabili devono essere determinati prima di acquisire dati reali di altri utenti. Riferimenti: [Regolamento UE 2016/679, art. 2 e considerando 18](https://eur-lex.europa.eu/legal-content/IT/TXT/?uri=CELEX:32016R0679) e [Commissione europea — ambito di applicazione del GDPR](https://commission.europa.eu/law/law-topic/data-protection/information-business-and-organisations/application-gdpr_en).
 
-**Decisione ancora necessaria:** definire esplicitamente se il primo utilizzo sarà riservato all'autore oppure se altre persone potranno registrarsi e inserire dati reali. Fino a tale decisione, il gate per utenti esterni resta aperto. La modifica di questo documento non rilascia il servizio, non compila informazioni legali mancanti e non cambia configurazioni o accessi Production.
+**Decisione di prodotto presa:** consentire in prospettiva la registrazione di persone diverse dall'autore, in una fase amatoriale senza accordo con palestre. **Stato di rilascio per utenti esterni: NO-GO** fino alla chiusura documentata dei punti del gate seguente, incluse verifiche legali e tecniche. Questa decisione non costituisce autorizzazione a iscrivere utenti reali né cambia configurazioni, accessi, registrazioni, consent gate o deployment Production.
 
 ## Gate legale prima del primo utilizzatore esterno
 
@@ -40,9 +40,11 @@ La PWA gestisce dati potenzialmente rientranti nelle categorie particolari dell'
 
 **Fonti istituzionali per la revisione:** [GDPR, artt. 6, 7, 9, 13, 17 e 35 (EUR-Lex)](https://eur-lex.europa.eu/legal-content/IT/TXT/?uri=CELEX:32016R0679), [Garante — informativa agli interessati](https://www.garanteprivacy.it/web/guest/home/docweb/-/docweb-display/docweb/8981258), [EDPB — Linee guida 05/2020 sul consenso](https://www.edpb.europa.eu/documents/guideline/guidelines-052020-on-consent-under-regulation-2016679_it).
 
-## Assunzioni correnti del pilot
+## Scenario B2B futuro — non parte dell'attuale utilizzo amatoriale
 
-- La palestra paga tramite rapporto commerciale esterno alla PWA.
+Le seguenti assunzioni sono riferite soltanto all'eventuale futura distribuzione tramite palestre; non descrivono una collaborazione o un rapporto commerciale oggi esistente.
+
+- Se previsto in futuro, il pagamento palestra → fornitore avviene tramite rapporto commerciale esterno alla PWA.
 - La palestra rende TheLogBook disponibile agli iscritti ma, nell'architettura attuale, non dispone di ruoli gym/coach/admin e non accede ai dati TheLogBook degli utenti.
 - TheLogBook resta destinato a maggiorenni.
 - Google Analytics 4/Firebase Analytics è dismesso: integrazione e preferenza rimosse dal client, Firebase scollegato dalla proprietà e configurazione GitHub Analytics ritirata. Restano operativi i servizi Firebase necessari al funzionamento.
