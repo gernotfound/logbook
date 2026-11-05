@@ -24,6 +24,13 @@ void test('rejects an unreviewed browser diagnostic DSN', () => {
   assert.match(checkProductionBuildSecrets(altered, firestore).join('; '), /external error monitoring/);
 });
 
+void test('rejects diagnostic secrets introduced in an action step outside the job env', () => {
+  const altered = hosting.replace('      - name: Build exact production frontend',
+    '      - name: Build exact production frontend\n        env:\n          ERROR_MONITOR_KEY: ${{ secrets.ERROR_MONITOR_KEY }}');
+  assert.notEqual(altered, hosting);
+  assert.match(checkProductionBuildSecrets(altered, firestore).join('; '), /unreviewed GitHub variable or secret binding/);
+});
+
 void test('rejects an unexpected Firebase deploy identity in either workflow', () => {
   const altered = hosting.replace('service_account: ${{ env.GCP_FIREBASE_DEPLOY_SERVICE_ACCOUNT }}', 'service_account: ${{ env.GCP_FIRESTORE_DEPLOY_SERVICE_ACCOUNT }}');
   assert.notEqual(altered, hosting);
