@@ -1,3 +1,4 @@
+import { LEGAL_VERSIONS } from '../../src/lib/legalVersions';
 import 'fake-indexeddb/auto';
 import { clear, get } from 'idb-keyval';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -25,7 +26,7 @@ function state(height: string, acceptedAt?: string): UserData {
     profile: { height },
     ...(acceptedAt ? { legalConsent: {
       hasAcceptedHealthData: true, hasAcceptedTerms: true, acceptedAt,
-      privacyVersion: '1.3.5', termsVersion: '1.2.1',
+      privacyVersion: LEGAL_VERSIONS.privacy, termsVersion: LEGAL_VERSIONS.terms,
     } } : {}),
   }) as unknown as UserData;
 }

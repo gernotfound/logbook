@@ -1,3 +1,4 @@
+import { LEGAL_VERSIONS } from '../src/lib/legalVersions';
 import { DB as RealDB } from '../src/lib/db';
 import { auth as __testAuth } from '../src/lib/firebase';
 import { openCloudDocument } from '../src/lib/sync/cloudDocumentCipher';
@@ -53,8 +54,8 @@ export const ConsentedTestDB = {
                 hasAcceptedTerms: true,
                 hasAcceptedHealthData: true,
                 acceptedAt: '2026-10-11T10:00:00.000Z',
-                privacyVersion: '1.3.5',
-                termsVersion: '1.2.1',
+                privacyVersion: LEGAL_VERSIONS.privacy,
+                termsVersion: LEGAL_VERSIONS.terms,
             },
     }, revision),
 };
