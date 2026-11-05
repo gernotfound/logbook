@@ -1,8 +1,9 @@
+import { useSyncExternalStore } from 'react';
 import { HardDrive } from 'lucide-react';
-import { getStorageDiagnosticData } from '../../lib/storageStatus';
+import { getStorageDiagnosticData, subscribeStorageDiagnosticData } from '../../lib/storageStatus';
 
 export function StorageDiagnostics() {
-    const storageDiag = getStorageDiagnosticData();
+    const storageDiag = useSyncExternalStore(subscribeStorageDiagnosticData, getStorageDiagnosticData);
     return (
         <div className="settings-detail-card">
             <h2><HardDrive size={20} aria-hidden="true" /> Diagnostica archiviazione</h2>

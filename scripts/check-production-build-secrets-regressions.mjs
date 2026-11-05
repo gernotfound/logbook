@@ -40,6 +40,37 @@ void test('rejects an unexpected Firebase deploy identity in either workflow', (
   assert.match(checkProductionBuildSecrets(hosting, other).join('; '), /Firestore: unexpected WIF/);
 });
 
+void test('direct dependencies require explicit review before a new runtime or build SDK can be installed', () => {
+  const manifest = JSON.parse(readFileSync('package.json', 'utf8'));
+  const lockRoot = JSON.parse(readFileSync('package-lock.json', 'utf8')).packages[''];
+  const approvedRuntime = new Set([
+    '@noble/ciphers', 'chart.js', 'date-fns', 'fast-deep-equal', 'firebase',
+    'firebase-admin', 'fuse.js', 'idb-keyval', 'lucide-react', 'react',
+    'react-chartjs-2', 'react-dom', 'vite-plugin-pwa', 'zod', 'zustand',
+  ]);
+  const approvedDev = new Set([
+    '@axe-core/playwright', '@babel/parser', '@firebase/rules-unit-testing',
+    '@playwright/test', '@testing-library/dom', '@testing-library/react',
+    '@types/react', '@types/react-dom', '@vitejs/plugin-react',
+    '@vitest/coverage-v8', '@vitest/ui', 'fake-indexeddb', 'jsdom',
+    'knip', 'oxlint', 'oxlint-tsgolint', 'rollup-plugin-visualizer',
+    'sharp', 'typescript', 'vite', 'vitest', 'workbox-core',
+    'workbox-precaching', 'workbox-routing',
+  ]);
+  for (const [group, approved] of [
+    ['dependencies', approvedRuntime], ['devDependencies', approvedDev],
+  ]) {
+    const direct = manifest[group] ?? {};
+    assert.deepEqual(Object.keys(direct).filter(name => !approved.has(name)), [],
+      'Unreviewed direct ' + group + ' require an explicit allowlist change');
+    const byName = ([a], [b]) => a.localeCompare(b);
+    assert.deepEqual(Object.entries(lockRoot[group] ?? {}).sort(byName), Object.entries(direct).sort(byName),
+      'Lockfile direct dependencies must match package.json');
+    assert.deepEqual(Object.entries(direct).filter(([, spec]) => /^npm:/i.test(spec)), [],
+      'Unreviewed dependency aliases are not permitted');
+  }
+});
+
 function* clientSources(directory) {
   for (const entry of readdirSync(directory, { withFileTypes: true })) {
     const path = directory + '/' + entry.name;
@@ -60,9 +91,14 @@ void test('client and production CSP do not contain diagnostic transport markers
   assert.deepEqual(Object.keys(lock.packages).filter(name => diagnosticPackage.test(name)), []);
 
   const forbidden = /\b(?:VITE_[A-Z0-9_]*(?:_DSN|_MONITOR_[A-Z0-9_]+)|captureException\s*\(|sendDiagnosticReport\s*\()|(?:ingest|envelope)\.error-monitor\./i;
-  for (const source of clientSources('src')) {
+  for (const source of [...clientSources('src'), ...clientSources('public')]) {
     assert.doesNotMatch(readFileSync(source, 'utf8'), forbidden, 'Unexpected diagnostic transport in ' + source);
   }
+  // The bootstrap script runs before React and must never acquire a network transport.
+  assert.match(readFileSync('index.html', 'utf8'), /appearance\.js/);
+  assert.doesNotMatch(readFileSync('public/appearance.js', 'utf8'),
+    /\b(?:fetch|XMLHttpRequest|WebSocket|EventSource|sendBeacon|importScripts)\s*\(/,
+    'The standalone appearance bootstrap must remain network-free');
   assert.doesNotMatch(readFileSync('firebase.json', 'utf8'), forbidden,
     'Firebase Hosting CSP must not allow external diagnostic ingestion');
 });

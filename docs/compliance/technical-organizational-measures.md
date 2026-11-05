@@ -14,7 +14,7 @@
 | Cache Firestore | Cache locale persistente Firebase non usata; runtime memory-only | Implementato |
 | Sync | Local durability prima della replica cloud; recovery lost-ack | Implementato/testato |
 | Validazione | Gateway Zod ai boundary persistiti | Implementato |
-| Errori client | Nessuna raccolta o trasmissione automatica di report diagnostici; percorsi di recovery e marker locali preservati | Codice e CI exact-SHA verificati nella PR #804; Firebase Hosting Production distribuito, smoke HTTP/cache superati; traffico browser reale non collaudato |
+| Errori client | Nessuna raccolta o trasmissione automatica di report diagnostici; percorsi di recovery e marker locali preservati | Dismissione consolidata nelle PR #804, #816 e #817; CI exact-SHA e Hosting Production verificati al 5 novembre 2026; traffico browser reale non collaudato |
 | Analytics di utilizzo | GA4/Firebase Analytics, Vercel Analytics e Speed Insights dismessi; nessun monitoraggio esterno degli errori client | Codice aggiornato; configurazioni provider da verificare |
 | Account deletion | Workflow server-mediated, idempotente, Auth cancellata per ultima | Implementato/testato |
 | Segreti | Firebase Admin, cron e `CLOUD_ACCOUNT_KEK_V1` server-only, esclusi dal bundle; KEK preservata e ruotata solo con processo versionato di rewrap | Contratto repository |

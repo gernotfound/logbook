@@ -112,7 +112,7 @@ Il runtime non importa Firebase Realtime Database e `VITE_FIREBASE_DATABASE_URL`
 
 Analogamente, il runtime non importa Firebase Storage né Firebase Cloud Messaging e le vecchie env `VITE_FIREBASE_STORAGE_BUCKET` / `VITE_FIREBASE_MESSAGING_SENDER_ID` sono state ritirate dal contratto client.
 
-Le raccolte private attuali sono `history_months`, `nutrition_months` e `sync_control`. I job trusted di cancellazione account e cancellazione dati salute rifiutano sottoraccolte inattese, senza considerarle eliminate implicitamente. Non sono più presenti job Admin dedicati alla retention diagnostica pre-lancio; l'eventuale presenza di dati di test non inventariati in Production richiede verifica o bonifica separata prima di attestare il dataset vuoto.
+Le raccolte private attuali sono `history_months`, `nutrition_months` e `sync_control`. I job trusted di cancellazione account e cancellazione dati salute rifiutano sottoraccolte inattese, senza considerarle eliminate implicitamente. Non sono più presenti job Admin dedicati alla retention diagnostica pre-lancio. Il 5 novembre 2026 il product owner ha eseguito tre conteggi Firestore `COUNT` senza filtri e con `allDescendants: true` sulle collection group diagnostiche ritirate: tutti hanno restituito zero documenti. La prova manuale è nella issue #809 e vale per l'istante del controllo, non come attestazione permanente dell'intero database; nessun reset generalizzato è stato eseguito.
 
 Verifica live 2026-10-02 del database `(default)`: Firestore Native Standard in regione `europe-west12`, free tier attivo, PITR disabilitato e **delete protection abilitata** per impedire la cancellazione accidentale del database. PITR/backup gestiti non vengono attivati sul piano Spark perché richiedono fatturazione.
 
