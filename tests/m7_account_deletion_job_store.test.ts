@@ -231,9 +231,6 @@ describe('M7 native deletion job store', () => {
     expect(state.projectedQueries).toContain('users/u/history_months');
     expect(state.projectedQueries).toContain('users/u/nutrition_months');
     expect(state.projectedQueries).toContain('users/u/sync_control');
-    expect(state.projectedQueries).toContain('users/u/telemetry_errors');
-    expect(state.projectedQueries).toContain('users/u/telemetry_events');
-    expect(state.projectedQueries).toContain('users/u/telemetry_anomalies');
   });
 
   it('removes the server-only session marker under the deletion lease', async () => {

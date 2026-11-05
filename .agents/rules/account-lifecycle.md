@@ -107,7 +107,7 @@ Flusso normativo:
 
 3. Il job revoca i refresh token e acquisisce un lease breve. POST, polling GET e cron possono tentare recovery, ma un solo worker per UID esegue operazioni distruttive alla volta, considerando **anche** il job separato di cancellazione dei dati sanitari. L'acquisizione del lease account aspetta che un job sanitario sia `complete` oppure `failed` non recuperabile: i due lease indipendenti non possono operare contemporaneamente sulle stesse raccolte. Un lease scaduto è riprendibile.
 
-4. Il server elimina pagine da massimo 400 documenti dalle sei raccolte private correnti: `history_months`, `nutrition_months`, `sync_control`, `telemetry_errors`, `telemetry_events`, `telemetry_anomalies`. Dopo ogni batch il retry riparte dalla prima pagina; il cursor è telemetria/progresso e non è una dipendenza di correttezza.
+4. Il server elimina pagine da massimo 400 documenti dalle tre raccolte private correnti: `history_months`, `nutrition_months`, `sync_control`. Dopo ogni batch il retry riparte dalla prima pagina; il cursor è telemetria/progresso e non è una dipendenza di correttezza.
 
 5. Se il budget della Function si avvicina al limite, il job salva uno stato riprendibile e termina senza dichiarare successo. `GET /api/account-deletion` può far avanzare un job incompleto durante il polling. Il cron giornaliero `/api/account-deletion-cron` è soltanto una rete di sicurezza per job rimasti incompleti.
 
@@ -143,7 +143,7 @@ Non introdurre Nitro, Workflow, `waitUntil` come sostituto di durability, o una 
 
 **MUST:** il purge di un tombstone scaduto e del corrispondente registro delle credenziali device usa una singola transazione Firestore; un errore non può eliminare solo uno dei due record. Le fasi indipendenti del cron devono proseguire se una query o una manutenzione fallisce, conservando log aggregati privi di dati personali.
 
-**MUST:** il cron preserva una finestra temporale dedicata alla retention telemetrica legacy quando i job di cancellazione occupano il budget, senza interrompere deliberatamente una transazione Firestore in corso.
+**MUST:** il cron mantiene un budget limitato e un margine di sicurezza per job di cancellazione account, erasure sanitaria e retention delle ricevute, senza interrompere deliberatamente una transazione Firestore in corso.
 
 ## Logout e pulizia locale
 

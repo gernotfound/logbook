@@ -428,9 +428,6 @@ service cloud.firestore {
         allow delete: if false;
       }
 
-      // Pre-launch Firestore telemetry is not a supported client boundary.
-      // The default deny rule applies. Trusted retention and account deletion
-      // may still process residual records through the Admin SDK.
     }
   }
 }
