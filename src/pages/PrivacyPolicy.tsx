@@ -114,7 +114,7 @@ export const PrivacyPolicy: React.FC<{ onClose: () => void }> = ({ onClose }) =>
               I dati cloud sono conservati nell'area privata associata all'account e sono protetti dalle regole di sicurezza applicative. I dati business sincronizzati sono cifrati, ma questa protezione non è end-to-end: i servizi server autorizzati possono gestire le chiavi necessarie a recovery, esportazione e cancellazione. L'account richiede la verifica dell'indirizzo email prima dell'accesso ai dati cloud. Le capacità amministrative tecniche non sono destinate a profilazione commerciale dei dati fitness.
             </p>
             <p>
-              Nell'architettura attuale TheLogBook non prevede ruoli palestra, coach o amministratore con accesso ai dati degli iscritti: una palestra che rende disponibile il servizio ai propri iscritti non riceve per questo motivo accesso ai loro dati in TheLogBook. Qualsiasi futura funzione di condivisione richiederà una specifica modifica del prodotto e della relativa informativa.
+              Nessun altro utente, palestra o allenatore dispone nell'app di un accesso ai dati del tuo account. I servizi tecnici autorizzati possono intervenire per la gestione e la sicurezza del servizio.
             </p>
 
             <h3 style={h3Style}>Gestione tecnica degli errori</h3>
@@ -128,7 +128,7 @@ export const PrivacyPolicy: React.FC<{ onClose: () => void }> = ({ onClose }) =>
 
           <Section title="Base giuridica del trattamento">
             <p>
-              <strong style={{ color: 'var(--text-main)' }}>[DA VALIDARE: BASI GIURIDICHE PER CIASCUNA FINALITÀ AI SENSI DEGLI ARTT. 6 E 9 GDPR]</strong>. Le indicazioni seguenti descrivono le basi previste nel progetto e richiedono una verifica legale prima del pilot con utenti reali; non sono una valutazione di conformità già conclusa.
+              Per fornire le funzioni richieste e gestire l'account, TheLogBook tratta i dati necessari all'esecuzione del servizio (art. 6, par. 1, lett. b GDPR). Per le informazioni che rivelano dati sulla salute, l'app richiede inoltre il consenso esplicito dell'interessato (art. 9, par. 2, lett. a GDPR). Il consenso può essere revocato dalle impostazioni in qualsiasi momento.
             </p>
             <ul style={ulStyle}>
               <li><strong style={{ color: 'var(--text-main)' }}>Esecuzione del servizio</strong> (art. 6, par. 1, lett. b GDPR): per autenticazione, sincronizzazione, backup/recovery e funzionalità richieste dall'utente.</li>
@@ -166,7 +166,7 @@ export const PrivacyPolicy: React.FC<{ onClose: () => void }> = ({ onClose }) =>
               In modalità ospite la revoca riguarda i dati locali del dispositivo e non richiede un account. Puoi eliminare i dati ospite localmente. Per un account, dopo che il server ha confermato la revoca, puoi richiedere separatamente la cancellazione dei dati applicativi dell'account (inclusi allenamenti, nutrizione, misurazioni, routine e profilo applicativo), mantenendo l'account Firebase Authentication: servono connessione, verifica dell'identità e due conferme. Dopo il completamento verrai disconnesso. Puoi anche eliminare l'intero account. Per riattivare le funzioni devi prestare una nuova accettazione esplicita dei documenti correnti; nessun consenso viene ricostruito automaticamente da una vecchia copia o da un backup.
             </p>
             <p>
-              La revoca da sola non esegue una cancellazione automatica dei dati precedentemente conservati. <strong style={{ color: 'var(--text-main)' }}>[DA DEFINIRE E VALIDARE: FINALITÀ RESIDUE, BASE GIURIDICA EVENTUALMENTE APPLICABILE, CATEGORIE DI DATI CONSERVABILI E TERMINE DI CANCELLAZIONE DOPO LA REVOCA]</strong>. Il consenso ritirato non costituisce, di per sé, una base per continuare la conservazione.
+              La revoca sospende l'uso dei dati per le funzioni fitness, ma da sola non elimina gli archivi già presenti. Puoi esportare i tuoi dati e, dopo la conferma della revoca sul server, richiedere la cancellazione dei dati applicativi senza eliminare l'identità di accesso, oppure cancellare l'intero account.
             </p>
           </Section>
 
@@ -175,7 +175,7 @@ export const PrivacyPolicy: React.FC<{ onClose: () => void }> = ({ onClose }) =>
               I dati locali in modalità ospite rimangono sul dispositivo finché non vengono eliminati dall'utente, rimossi dal browser/sistema oppure migrati secondo i flussi previsti dall'app.
             </p>
             <p>
-              I dati applicativi cloud associati all'account sono utilizzati per fornire il servizio quando il consenso richiesto è attivo. In caso di revoca, l'accesso fitness viene sospeso e i dati cloud non sono cancellati automaticamente: restano tecnicamente accessibili attraverso gli strumenti autenticati di esportazione e cancellazione. <strong style={{ color: 'var(--text-main)' }}>[DA VALIDARE: TEMPI E BASE GIURIDICA DELL'EVENTUALE CONSERVAZIONE POSTREVOCA; DEFINIRE IL PERCORSO DI CANCELLAZIONE APPLICABILE]</strong>. La disponibilità tecnica dei dati non autorizza una conservazione senza base giuridica valida. TheLogBook offre backup JSON per esportare i dati disponibili e file CSV per le informazioni supportate; queste copie esportate sono gestite dall'utente.
+              I dati applicativi cloud associati all'account sono conservati mentre l'account è attivo e per le funzioni richieste. Dopo la revoca del consenso l'accesso fitness è sospeso, ma i dati già salvati non vengono cancellati automaticamente. Puoi utilizzare gli strumenti autenticati per esportarli o chiederne la cancellazione. TheLogBook offre backup JSON per esportare i dati disponibili e file CSV per le informazioni supportate; i file scaricati sono gestiti da te.
             </p>
             <p>
               La funzione <strong style={{ color: 'var(--text-main)' }}>Elimina account</strong> avvia un workflow server-side che rimuove le raccolte private previste, i dati applicativi cloud e infine l'account Firebase Authentication. Il dispositivo conserva la propria copia locale finché non ha prova che il workflow cloud sia completato, per evitare cancellazioni locali premature in caso di rete instabile.
@@ -195,7 +195,7 @@ export const PrivacyPolicy: React.FC<{ onClose: () => void }> = ({ onClose }) =>
               <li><strong style={{ color: 'var(--text-main)' }}>Vercel</strong> — sole funzioni server trusted e manutenzione giornaliera; il frontend/PWA è servito da Firebase Hosting.</li>
             </ul>
             <p>
-              Prima che il servizio venga utilizzato da altre persone, anche durante un pilot gratuito, devono essere verificati e pubblicati l'elenco aggiornato dei fornitori/sub-responsabili, le localizzazioni effettive del trattamento e, per eventuali trasferimenti fuori dallo SEE, il meccanismo applicabile (ad esempio decisione di adeguatezza o clausole contrattuali standard).
+              I fornitori possono trattare alcuni dati tecnici o personali anche al di fuori dello Spazio economico europeo. Per conoscere ulteriori dettagli sulle destinazioni dei trasferimenti e sulle garanzie adottate, puoi scrivere al recapito privacy indicato in questa informativa.
             </p>
           </Section>
 
