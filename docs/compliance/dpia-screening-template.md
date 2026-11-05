@@ -41,7 +41,7 @@
 ## Misure già presenti da verificare
 
 - owner scoping Firestore e test Security Rules;
-- persistenza locale owner-scoped cifrata con vault e recovery fail-closed; la coda diagnostica usa AEAD solo dopo sblocco, altrimenti RAM best-effort;
+- persistenza locale owner-scoped cifrata con vault e recovery fail-closed; i marker locali di integrità non costituiscono una coda diagnostica né inviano report esterni;
 - chiave cloud per-account indipendente dal vault device, custodia server-only e verifica esterna del backup/ripristino KEK secondo [Cifratura](../../.agents/rules/secure-storage.md); questo documento non attesta tali prove;
 - cache Firestore runtime solo in memoria;
 - nessun monitoraggio automatico degli errori client; isolamento owner dei marker e controlli di recovery preservati;

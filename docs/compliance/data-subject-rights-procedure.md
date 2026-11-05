@@ -38,7 +38,7 @@ Usare come riferimento l'Art. 12 GDPR: risposta senza ingiustificato ritardo e, 
 | Cancellazione | Distinguere `Elimina account` dalla cancellazione dei soli dati dopo revoca server confermata, che conserva Firebase Auth; in entrambi verificare lo specifico job trusted completo e il cleanup locale autorizzato |
 | Portabilità | Backup JSON / export CSV; verificare che il formato copra il perimetro richiesto |
 | Limitazione | `[DEFINE_IF_REQUIRED]`; non esiste oggi un flag generico di restriction |
-| Opposizione | Valutare per i trattamenti basati sul legittimo interesse, inclusa telemetria tecnica |
+| Opposizione | Valutare i trattamenti effettivamente basati sul legittimo interesse, inclusi eventuali log tecnici dei fornitori se questa è la base giuridica applicabile; non presumere un servizio di telemetria applicativa |
 | Revoca consenso dati salute | **Soluzione A decisa (9 ottobre 2026): sospensione completa delle funzioni fitness, accesso a esportazione/diritti/account deletion e nuova accettazione esplicita possibile (decisione aggiornata il 12 ottobre).** Implementazione tecnica e regressioni integrate con PR #366; collaudo autenticato multi-dispositivo e valutazione delle basi giuridiche, dei contatti e della retention **ancora bloccanti prima del pilot con utenti reali**; vedi `health-consent-release-gate.md`. |
 | Reclamo | Informare del diritto di rivolgersi all'autorità di controllo competente |
 
@@ -60,7 +60,7 @@ Distinguere implementazione e regressioni nel repository dalla prova runtime aut
 
 1. Ricevere e classificare la richiesta.
 2. Verificare l'identità in modo proporzionato.
-3. Identificare tutti i sistemi pertinenti: dispositivo, Firestore/Auth, telemetria, eventuali log/provider e case file.
+3. Identificare tutti i sistemi pertinenti: dispositivo, Firestore/Auth, eventuali log tecnici presso i fornitori e case file; non attribuire alla PWA code diagnostiche applicative non più presenti.
 4. Eseguire le azioni consentite dagli strumenti correnti.
 5. Se un sistema richiede un intervento manuale, registrare chi lo ha eseguito e l'evidenza minima.
 6. Controllare che l'esito sia coerente su tutti i sistemi interessati.

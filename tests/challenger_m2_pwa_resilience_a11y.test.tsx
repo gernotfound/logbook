@@ -169,9 +169,15 @@ describe('Empirical Challenger: PWA Resilience & Accessibility Stress Suite', ()
             expect(log).toHaveBeenCalledWith('Errore durante la richiesta di storage persistente:', error);
 
             const estimate = vi.fn().mockRejectedValue(error);
-            setStorage({ persisted: vi.fn().mockResolvedValue(true), persist: vi.fn(), estimate });
-            await expect(requestDurableStorage()).resolves.toEqual({ supported: true, persistent: false });
+            const persistent = vi.fn().mockResolvedValue(true);
+            const persist = vi.fn();
+            setStorage({ persisted: persistent, persist, estimate });
+            await expect(requestDurableStorage()).resolves.toEqual({
+                supported: true, persistent: true, usage: undefined, quota: undefined,
+            });
             expect(estimate).toHaveBeenCalledOnce();
+            expect(persistent).toHaveBeenCalledOnce();
+            expect(persist).not.toHaveBeenCalled();
         });
     });
 
