@@ -85,6 +85,7 @@ describe('suspended health-consent screen', () => {
     rerender(<HealthConsentSuspended status="withdrawn" user={account} />);
     expect(screen.getByRole('status').textContent).toContain('Revoca confermata sul server');
     expect(screen.getByRole('button', { name: 'Elimina definitivamente i miei dati' })).toBeDefined();
+     expect(screen.getByText(/inclusi profilo, misurazioni, allenamenti, nutrizione e schede/)).toBeDefined();
     const [enabledTerms, enabledHealth] = checkboxInputs();
     const enabledSubmit = reacceptButton();
     expect(enabledTerms.disabled).toBe(false);

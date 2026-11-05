@@ -41,7 +41,7 @@ export function useSettingsHealthDataDeletion(beginDeletion: () => boolean, endD
             ))) return;
             assertCurrent();
             if (!(await showConfirm(
-                'ULTIMA CONFERMA: tutti i dati fitness e nutrizione salvati saranno eliminati senza possibilità di recuperarli tramite TheLogBook. L’operazione cloud può impiegare tempo e non potrà essere annullata una volta avviata. Confermi?'
+                'ULTIMA CONFERMA: tutti i dati applicativi dell’account (profilo, allenamenti, nutrizione, misurazioni e schede) saranno eliminati senza possibilità di recuperarli tramite TheLogBook. L’operazione cloud può impiegare tempo e non potrà essere annullata una volta avviata. Confermi?'
             ))) return;
             assertCurrent();
             let reauth = await reauthenticateForSensitiveAction(user);

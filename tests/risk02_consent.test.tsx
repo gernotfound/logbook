@@ -212,6 +212,7 @@ describe('RISK-02: ConsentOverlay UI Behavior', () => {
         expect(screen.getByText(/non puoi utilizzare le funzioni di allenamento/)).toBeDefined();
         expect(screen.getByText(/DA DEFINIRE E VALIDARE: FINALITÀ RESIDUE/)).toBeDefined();
         expect(screen.getByText(/dopo che il server ha confermato la revoca/)).toBeDefined();
+        expect(screen.getByText(/inclusi allenamenti, nutrizione, misurazioni, routine e profilo applicativo/)).toBeDefined();
         expect(screen.getByText(/La disponibilità tecnica dei dati non autorizza/)).toBeDefined();
         expect(screen.getByText(/possono utilizzare propri identificatori tecnici/)).toBeDefined();
         expect(screen.getByText(/DA VALIDARE: BASI GIURIDICHE PER CIASCUNA FINALITÀ/)).toBeDefined();
@@ -224,7 +225,7 @@ describe('RISK-02: ConsentOverlay UI Behavior', () => {
         expect(screen.getByText('Aggiornati al 5 novembre 2026')).toBeDefined();
         expect(screen.getByText('Gerardo Califano')).toBeDefined();
         expect(screen.getByRole('link', { name: 'thelogbook.privacy@gmail.com' }).getAttribute('href')).toBe('mailto:thelogbook.privacy@gmail.com');
-        expect(screen.getByText(/cancellazione separata dei soli dati fitness e nutrizione/)).toBeDefined();
+        expect(screen.getByText(/cancellazione separata dei dati applicativi dell'account/)).toBeDefined();
     });
 
     it('Pulsante disabilitato se consenso incompleto', () => {
