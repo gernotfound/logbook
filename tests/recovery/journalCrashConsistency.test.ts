@@ -25,9 +25,8 @@ vi.mock('../../src/lib/firebase', () => ({
     ensureAppCheck: async () => {},
     waitForPendingWrites: async () => {},
 }));
-// This crash-consistency suite models a user whose initial (revision-zero)
-// health consent has already been verified. Consent epoch handling is tested
-// separately with the real policy and Firestore Rules.
+// Supply the already verified first account consent (revision 1). The real
+// consent authentication/epoch policy and Firestore Rules have separate suites.
 vi.mock('../../src/lib/healthConsent', async () => {
     const actual = await vi.importActual<typeof import('../../src/lib/healthConsent')>('../../src/lib/healthConsent');
     const writable = (owner: string) => owner === 'user:' + remote.auth.currentUser?.uid;
@@ -38,7 +37,7 @@ vi.mock('../../src/lib/healthConsent', async () => {
         requireHealthConsentWritable: (owner: string) => {
             if (!writable(owner)) throw new Error('Utente non autorizzato dal consenso');
         },
-        getVerifiedHealthConsentRevision: () => 0,
+        getVerifiedHealthConsentRevision: () => 1,
     };
 });
 vi.mock('../../src/lib/catalog/catalogService', () => ({ getCachedCatalog: async () => catalog }));
@@ -114,9 +113,29 @@ function cloudSnapshot(): string {
     return JSON.stringify({ documents, sync });
 }
 
+// Arm only after the remote adapter has committed the delivered batch.
+// The journal's exact owner/key selects the ACK write; unrelated IDB writes
+// and harmless changes to the preparation path cannot consume this fault.
+function failNextOwnerEnvelopeWrite() {
+    const nativePut = IDBObjectStore.prototype.put;
+    let hit = false;
+    const put = vi.spyOn(IDBObjectStore.prototype, 'put').mockImplementation(function (
+        this: IDBObjectStore, value: unknown, key?: IDBValidKey,
+    ) {
+        if (!hit && this.name === 'keyval' && key === 'logbook:v2:' + owner
+            && this.transaction.mode === 'readwrite') {
+            hit = true;
+            throw new DOMException('Injected acknowledgement failure', 'UnknownError');
+        }
+        return nativePut.call(this, value, key);
+    });
+    return { get hit() { return hit; }, restore: () => { put.mockRestore(); } };
+}
+
 beforeEach(async () => {
     lockAllVaults();
     localStorage.clear();
+    localStorage.setItem('logbook:v2:' + owner + ':health-consent-generation', '1');
     await clear();
     invalidateSession();
     vi.stubGlobal('navigator', { onLine: true, locks: {
@@ -135,6 +154,7 @@ beforeEach(async () => {
         },
         baseSeq: 0,
     }, { clock: {}, syncMetaByDocument: {} });
+    expect((await readLocal(owner))?.consentRevision).toBe(1);
     cloudDocuments = projectDocuments(data(170), catalog);
     cloudSyncMeta = {};
 });
@@ -251,18 +271,21 @@ describe('M3 journal crash consistency', () => {
 
     it('retains and idempotently replays the journal when remote commit succeeds but local acknowledgement fails', async () => {
         await commitLocal(owner, data(171), data(170));
-        installReplaySafeRemote();
+        let fault: ReturnType<typeof failNextOwnerEnvelopeWrite> | undefined;
+        installReplaySafeRemote(() => { fault ??= failNextOwnerEnvelopeWrite(); });
 
-        const put = vi.spyOn(IDBObjectStore.prototype, 'put').mockImplementationOnce(() => {
-            throw new DOMException('Injected acknowledgement failure', 'UnknownError');
-        });
-
-        const first = await replicateJournal();
-        expect(first).toMatchObject({ ok: false, status: 'local-pending' });
-        await waitForJournalIdle(owner);
-        expect((await readLocal(owner))?.pending.length).toBeGreaterThan(0);
+        try {
+            const first = await replicateJournal();
+            expect(first).toMatchObject({ ok: false, status: 'local-pending' });
+            await waitForJournalIdle(owner);
+            expect(fault?.hit).toBe(true);
+            expect((await readLocal(owner))?.pending.length).toBeGreaterThan(0);
+            expect((await readLocal(owner))?.baseline.profile?.height).toBe('170');
+            expect(currentCloudData().profile?.height).toBe('171');
+        } finally {
+            fault?.restore();
+        }
         const committedCloud = cloudSnapshot();
-        put.mockRestore();
 
         invalidateSession();
         const retry = await replicateJournal();
@@ -344,8 +367,9 @@ describe('M3 journal crash consistency', () => {
         expect(await get('logbook:v2:' + owner)).toEqual(encrypted);
     });
 
-    it('hard-fails a lost acknowledgement when the retained operation payload changed', async () => {
+    it('rejects an acknowledgement whose durable operation payload no longer matches the delivered batch', async () => {
         await commitLocal(owner, data(171), data(170));
+        let changedCiphertext: unknown;
         installReplaySafeRemote(async () => {
             await updateArchiveRecord<LocalEnvelope>(owner, current => {
                 if (!current) throw new Error('Expected durable journal');
@@ -353,23 +377,25 @@ describe('M3 journal crash consistency', () => {
                 changed.pending[0] = { ...changed.pending[0], value: 'corrupted-after-delivery' };
                 return changed;
             });
+            changedCiphertext = await get('logbook:v2:' + owner);
         });
 
-        const originalPut = IDBObjectStore.prototype.put;
-        let putCount = 0;
-        const put = vi.spyOn(IDBObjectStore.prototype, 'put').mockImplementation(function (this: IDBObjectStore, ...args: any[]) {
-            putCount += 1;
-            if (putCount === 2) throw new DOMException('Injected acknowledgement failure', 'UnknownError');
-            return (originalPut as any).apply(this, args);
-        } as any);
-
         const result = await replicateJournal();
-        put.mockRestore();
 
-        expect(result.status).toBe('failed');
+        expect(result).toMatchObject({
+            ok: false, status: 'failed',
+            error: {
+                name: 'UnsafeDeliveredBatchError',
+                cause: { message: 'Acknowledgement invalidato: replica o batch locale cambiati; journal preservato.' },
+            },
+        });
+        expect(changedCiphertext).toMatch(/^tlb-sealed:v1:/);
+        expect(await get('logbook:v2:' + owner)).toBe(changedCiphertext);
         const retained = await readLocal(owner);
         expect(retained?.pending).toHaveLength(1);
         expect(retained?.pending[0].value).toBe('corrupted-after-delivery');
+        expect(retained?.baseline.profile?.height).toBe('170');
+        expect(retained?.data.profile?.height).toBe('171');
         expect(currentCloudData().profile?.height).toBe('171');
     });
 
@@ -393,15 +419,18 @@ describe('M3 journal crash consistency', () => {
 
     it('rehydrates safely after remote commit with a lost acknowledgement, then clears the replayed journal', async () => {
         await commitLocal(owner, data(171), data(170));
-        installReplaySafeRemote();
-
-        const put = vi.spyOn(IDBObjectStore.prototype, 'put').mockImplementationOnce(() => {
-            throw new DOMException('Injected acknowledgement failure', 'UnknownError');
-        });
-        const first = await replicateJournal();
-        expect(first).toMatchObject({ ok: false, status: 'local-pending' });
-        await waitForJournalIdle(owner);
-        put.mockRestore();
+        let fault: ReturnType<typeof failNextOwnerEnvelopeWrite> | undefined;
+        installReplaySafeRemote(() => { fault ??= failNextOwnerEnvelopeWrite(); });
+        try {
+            const first = await replicateJournal();
+            expect(first).toMatchObject({ ok: false, status: 'local-pending' });
+            await waitForJournalIdle(owner);
+            expect(fault?.hit).toBe(true);
+            expect(currentCloudData().profile?.height).toBe('171');
+            expect((await readLocal(owner))?.baseline.profile?.height).toBe('170');
+        } finally {
+            fault?.restore();
+        }
 
         const committedCloud = cloudSnapshot();
         invalidateSession();
