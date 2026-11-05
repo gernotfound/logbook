@@ -46,40 +46,57 @@ if (!existsSync('config/lint-warning-baseline.json')) {
   failures.push('lint warning baseline: missing config/lint-warning-baseline.json');
 }
 
-// The umbrella gate partitions these files: dedicated suites retain their
-// runtime/worker settings; the general and isolated runners must not repeat them.
+// The umbrella gate retains its leaf commands but partitions their discovery.
+// Focused test:m7, test:m8 and test:hardening must still execute the dedicated files.
 const dedicatedUnitFiles = [
-  "logout_protection",
-  "guest_bootstrap_lifecycle",
-  "guest_account_migration_v3",
-  "catalog_resolution_pipeline",
-  "hardening/nutrition_guest_flow",
-  "m7_account_deletion_job_store",
-  "m7_account_deletion_fairness",
-  "m7_account_deletion_retention",
-  "m7_account_deletion_runner",
-  "m7_account_deletion_api",
-  "m7_account_deletion_http_auth",
-  "m7_account_deletion_device",
-  "m7_account_deletion_cron",
-  "m8_domain_operations"
+  "tests/logout_protection.test.ts",
+  "tests/guest_bootstrap_lifecycle.test.tsx",
+  "tests/guest_account_migration_v3.test.tsx",
+  "tests/catalog_resolution_pipeline.test.ts",
+  "tests/hardening/nutrition_guest_flow.test.tsx",
+  "tests/m7_account_deletion_job_store.test.ts",
+  "tests/m7_account_deletion_fairness.test.ts",
+  "tests/m7_account_deletion_retention.test.ts",
+  "tests/m7_account_deletion_runner.test.ts",
+  "tests/m7_account_deletion_api.test.ts",
+  "tests/m7_account_deletion_http_auth.test.ts",
+  "tests/m7_account_deletion_device.test.ts",
+  "tests/m7_account_deletion_cron.test.ts",
+  "tests/m8_domain_operations.test.ts"
 ];
-const expectedUnitTest = `vitest run --exclude "tests/{${dedicatedUnitFiles.join(',')}}.test.{ts,tsx}"`;
-if (packageJson.scripts?.test !== expectedUnitTest) {
-  failures.push('test: default Vitest runner must exclude precisely the dedicated hardening, M7 and M8 files');
+const standardVitest = readFileSync('vitest.config.ts', 'utf8');
+const isolatedVitest = readFileSync('vitest.isolated.config.ts', 'utf8');
+const dedicatedBlock = standardVitest.match(/const dedicatedSuiteExclusions = process\.env\.npm_lifecycle_event === 'test' \? \[([\s\S]*?)\] : \[\];/);
+const actualDedicated = dedicatedBlock ? [...dedicatedBlock[1].matchAll(/'([^']+)'/g)].map(match => match[1]) : [];
+if (JSON.stringify(actualDedicated) !== JSON.stringify(dedicatedUnitFiles)
+  || !standardVitest.includes('...dedicatedSuiteExclusions')) {
+  failures.push('vitest default: dedicated M5/M7/M8 files must be excluded only from npm run test');
 }
-if (packageJson.scripts?.['test:isolated'] !== 'vitest run --config vitest.isolated.config.ts --exclude "tests/isolated/m8_domain_commit.test.ts"') {
-  failures.push('test:isolated must defer m8_domain_commit to the dedicated M8 gate');
+if (packageJson.scripts?.test !== 'vitest run') {
+  failures.push('test: canonical general Vitest leaf must remain unmodified');
 }
-for (const name of dedicatedUnitFiles.filter(name => name.startsWith('m7_account_deletion_'))) {
-  if (!packageJson.scripts?.['test:m7']?.includes(`tests/${name}.test.ts`)) {
-    failures.push(`test:m7: missing dedicated file ${name}`);
+if (packageJson.scripts?.['test:isolated'] !== 'vitest run --config vitest.isolated.config.ts') {
+  failures.push('test:isolated canonical leaf must remain unmodified');
+}
+if (!isolatedVitest.includes("exclude: process.env.npm_lifecycle_event === 'test:isolated' ? ['tests/isolated/m8_domain_commit.test.ts'] : []")) {
+  failures.push('vitest isolated: m8_domain_commit must run only in dedicated M8 gate');
+}
+for (const file of dedicatedUnitFiles.filter(path => path.startsWith('tests/m7_account_deletion_'))) {
+  if (!packageJson.scripts?.['test:m7']?.includes(file)) {
+    failures.push(`test:m7: missing dedicated file ${file}`);
   }
 }
 for (const name of ['m8_domain_operations', 'm8_domain_commit']) {
   if (!packageJson.scripts?.['test:m8']?.includes(name)) {
     failures.push(`test:m8: missing dedicated file ${name}`);
   }
+}
+const hardeningConfig = readFileSync('vitest.hardening.config.ts', 'utf8');
+for (const file of dedicatedUnitFiles.filter(path => !path.startsWith('tests/m7_') && !path.startsWith('tests/m8_') && !path.startsWith('tests/hardening/'))) {
+  if (!hardeningConfig.includes(`'${file}'`)) failures.push(`test:hardening: missing dedicated file ${file}`);
+}
+if (!hardeningConfig.includes("'tests/hardening/**/*.test.{ts,tsx}'")) {
+  failures.push('test:hardening: missing dedicated nutrition guest flow discovery');
 }
 
 function requirePattern(label, source, pattern) {
