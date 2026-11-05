@@ -200,8 +200,8 @@ requirePattern('Temurin distribution', workflow, /^          distribution: temur
 requirePattern('Java 21 runtime', workflow, /^          java-version: ['"]?21['"]?\s*$/m);
 requirePattern('dedicated Playwright E2E job', workflow, /^  e2e:\s*$/m);
 requirePattern('Playwright container IPC sharing', workflow, /^      options: --ipc=host\s*$/m);
-requirePattern('E2E matrix exhaustiveness and isolation', workflow, /^  e2e:\n    if: github\.event_name == 'pull_request'\n    name: "Verification \/ Playwright E2E \$\{\{ matrix\.shard \}\}\/4"\n    runs-on: ubuntu-24\.04\n    timeout-minutes: 30\n    strategy:\n      fail-fast: false\n      matrix:\n        shard: \[1, 2, 3, 4\]\s*$/m);
-requirePattern('Playwright E2E sharded execution', workflow, /^          npm run test:e2e -- --shard=\$\{\{ matrix\.shard \}\}\/4 2>&1 \| tee "verification-e2e-\$\{\{ matrix\.shard \}\}\.log"\s*$/m);
+requirePattern('E2E matrix exhaustiveness and isolation', workflow, /^  e2e:\n    if: github\.event_name == 'pull_request'\n    name: "Verification \/ Playwright E2E \$\{\{ matrix\.shard \}\}\/6"\n    runs-on: ubuntu-24\.04\n    timeout-minutes: 30\n    strategy:\n      fail-fast: false\n      matrix:\n        shard: \[1, 2, 3, 4, 5, 6\]\s*$/m);
+requirePattern('Playwright E2E sharded execution', workflow, /^          npm run test:e2e -- --shard=\$\{\{ matrix\.shard \}\}\/6 2>&1 \| tee "verification-e2e-\$\{\{ matrix\.shard \}\}\.log"\s*$/m);
 requirePattern('Playwright unique shard artifacts', workflow, /^          name: verification-e2e-\$\{\{ matrix\.shard \}\}-\$\{\{ env\.EXPECTED_SHA \}\}\s*$/m);
 requirePattern('Playwright shard log retained', workflow, /^            verification-e2e-\$\{\{ matrix\.shard \}\}\.log\s*$/m);
 forbidPattern('host Playwright dependency install', workflow, /playwright install --with-deps/);
@@ -364,4 +364,4 @@ if (failures.length > 0) {
   process.exit(1);
 }
 
-console.log('M8 CI contract OK: exact-SHA verification and four Playwright shards are leaf-equivalent to verify:m8, dedicated Vitest files are partitioned without reexecution, CodeQL remains required, and Canonical Verification remains the aggregate gate.');
+console.log('M8 CI contract OK: exact-SHA verification and six Playwright shards are leaf-equivalent to verify:m8, dedicated Vitest files are partitioned without reexecution, CodeQL remains required, and Canonical Verification remains the aggregate gate.');
