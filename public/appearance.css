@@ -183,7 +183,9 @@ body:has(.brand-loading-screen) {
 }
 
 .brand-loading-screen__mascot {
-  width: min(88vw, 28.75rem);
+  /* Keep the wordmark, gap, padding and optical offset inside short screens.
+     Both variants share this base size before the content group's scale. */
+  width: min(100%, 88vw, 28.75rem, max(1rem, calc(100dvh - 9rem)));
   aspect-ratio: 1;
   display: block;
   object-fit: contain;
