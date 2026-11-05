@@ -106,6 +106,20 @@ describe('account deletion recovery foreground lifecycle', () => {
         expect(boundary.showAlert).not.toHaveBeenCalled();
     });
 
+    it('alerts when configured recovery cannot run despite saved device credentials', async () => {
+        boundary.recoverByDevice.mockRejectedValueOnce(
+            new DeletionDeviceOperationError('routine-check', 'http', 'configuration'),
+        );
+
+        render(<AccountDeletionRecovery />);
+        await settle();
+
+        expect(recoveryWarnings()).toContain(expect.stringContaining('kind=configuration'));
+        expect(boundary.showAlert).toHaveBeenCalledWith(
+            expect.stringContaining('Impossibile verificare ora la cancellazione account'),
+        );
+    });
+
     it('still surfaces local-finalization failure after a verified remote deletion', async () => {
         const finalizationError = new DeletionRecoveryFinalizationError('Pulizia locale incompleta');
         boundary.recoverByDevice.mockRejectedValueOnce(finalizationError);
