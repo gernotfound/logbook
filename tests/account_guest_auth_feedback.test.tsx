@@ -46,7 +46,7 @@ describe('guest account actions surface pre-provider coordination failures', () 
     await waitFor(() => expect(fixture.showAlert).toHaveBeenCalledWith(expect.stringContaining('Impossibile avviare l’accesso Google')));
     await waitFor(() => expect(button.hasAttribute('disabled')).toBe(false));
     expect(JSON.stringify(fixture.showAlert.mock.calls)).not.toContain('PRIVATE_AUTH_COORDINATION_DETAILS');
-    expect(screen.getByText('Modalità locale')).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Modalità locale' })).toBeTruthy();
 
     fireEvent.click(button);
     await waitFor(() => expect(button.hasAttribute('disabled')).toBe(false));
@@ -59,7 +59,7 @@ describe('guest account actions surface pre-provider coordination failures', () 
     fireEvent.click(screen.getByRole('button', { name: 'Crea account con Email e Password' }));
     fireEvent.change(screen.getByPlaceholderText('La tua Email'), { target: { value: 'guest@example.test' } });
     fireEvent.change(screen.getByPlaceholderText('Nuova Password'), { target: { value: 'SyntheticPassword123!' } });
-    const submit = screen.getByRole('button', { name: 'Registrati', exact: true });
+    const submit = screen.getByRole('button', { name: 'Registrati' });
     fireEvent.click(submit);
 
     await waitFor(() => expect(fixture.registerWithEmail).toHaveBeenCalledExactlyOnceWith(
