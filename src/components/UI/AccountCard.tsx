@@ -192,10 +192,13 @@ export const AccountCard = () => {
     };
 
     const onGuestGoogle = async () => {
+        let stillOriginalAttempt = () => true;
         setLoadingAction('guestGoogle');
         try {
+            stillOriginalAttempt = captureAuthAttemptGuard(true);
             await linkGoogleAccount('merge');
         } catch {
+            if (!stillOriginalAttempt()) return;
             // Coordination can reject before AuthContext maps provider errors.
             await showAlert('Impossibile avviare l’accesso Google. Completa eventuali tentativi già aperti e riprova. I dati locali sono conservati.');
         } finally {

@@ -109,3 +109,20 @@ it('does not register from an old guest generation after password policy returns
   expect(fixture.showAlert).not.toHaveBeenCalled();
   expect(safeHardReload).not.toHaveBeenCalled();
 });
+
+it.each(['auth-owner', 'guest-generation'] as const)(
+  'does not expose an old guest Google failure after %s changes', async boundary => {
+    let fail!: (error: unknown) => void;
+    fixture.linkGoogleAccount.mockImplementationOnce(() => new Promise<void>((_resolve, reject) => { fail = reject; }));
+    render(<AccountCard />);
+    fireEvent.click(screen.getByRole('button', { name: 'Crea account con Google' }));
+    expect(fixture.linkGoogleAccount).toHaveBeenCalledOnce();
+    if (boundary === 'auth-owner') (auth as { currentUser: unknown }).currentUser = { uid: 'next-account' };
+    else {
+      localStorage.setItem(GUEST_SESSION_KEY, 'next-guest-generation');
+      activateGuestSession('next-guest-generation');
+    }
+    await act(async () => { fail(new Error('obsolete reservation failure')); });
+    expect(fixture.showAlert).not.toHaveBeenCalled();
+  },
+);
