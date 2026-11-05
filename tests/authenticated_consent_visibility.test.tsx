@@ -3,37 +3,43 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { get } from 'idb-keyval';
 import type { UserData } from '../src/types';
-import App from '../src/App';
-import { AuthContext, defaultAuthContext } from '../src/contexts/AuthContextDef';
-import { DB } from '../src/lib/db';
-import { loadAuthenticatedData } from '../src/contexts/auth/loadAuthenticatedData';
-import { auth } from '../src/lib/firebase';
-import { LEGAL_VERSIONS } from '../src/lib/legalVersions';
-import { UserDataSchema } from '../src/lib/schema';
-import { useAppStore } from '../src/store/useAppStore';
-import { initializeLocal, commitLocal, readLocal } from '../src/lib/sync/localRepository';
-import { prepareUnlockedTestArchive } from './secureVaultFixture';
-
 vi.mock('../src/lib/appCheck', async importOriginal => ({
   ...await importOriginal<typeof import('../src/lib/appCheck')>(),
   getLimitedUseAppCheckToken: vi.fn(async () => 'synthetic-limited-use-token'),
 }));
 vi.unmock('../src/lib/healthConsent');
-import {
-  beginHealthConsentVerification, refreshHealthConsent,
-  isHealthConsentWritable, isHealthConsentCloudWritable, subscribeHealthConsent,
-} from '../src/lib/healthConsent';
-
 beforeEach(() => {
   vi.clearAllMocks();
   localStorage.clear();
-  useAppStore.getState().resetStore({ force: true });
 });
 afterEach(() => { window.history.replaceState({}, '', '/'); });
 
 it('removes an authenticated fitness view on another tab withdrawal before the trusted GET returns, preserving ciphertext and pending', async () => {
   // Real App + consent policy + encrypted repository. Firebase identity, trusted
   // HTTP and the browser storage-event delivery are simulated in this realm.
+  // The shared setup eagerly imports the nominal store with a mocked consent
+  // guard. Reacquire the complete source graph after unmocking, or the store
+  // retains that no-op guard even while App observes the real policy.
+  vi.resetModules();
+  const [
+    { default: App }, { AuthContext, defaultAuthContext }, { DB },
+    { loadAuthenticatedData }, { auth }, { LEGAL_VERSIONS }, { UserDataSchema },
+    { useAppStore }, { initializeLocal, commitLocal, readLocal },
+    { prepareUnlockedTestArchive }, policy,
+  ] = await Promise.all([
+    import('../src/App'), import('../src/contexts/AuthContextDef'),
+    import('../src/lib/db'), import('../src/contexts/auth/loadAuthenticatedData'),
+    import('../src/lib/firebase'), import('../src/lib/legalVersions'),
+    import('../src/lib/schema'), import('../src/store/useAppStore'),
+    import('../src/lib/sync/localRepository'), import('./secureVaultFixture'),
+    import('../src/lib/healthConsent'),
+  ]);
+  const {
+    beginHealthConsentVerification, refreshHealthConsent,
+    isHealthConsentWritable, isHealthConsentCloudWritable, subscribeHealthConsent,
+  } = policy;
+  expect(vi.isMockFunction(policy.requireHealthConsentWritable)).toBe(false);
+  useAppStore.getState().resetStore({ force: true });
   const actor = auth.currentUser!;
   const owner = 'user:' + actor.uid;
   await prepareUnlockedTestArchive(owner);
