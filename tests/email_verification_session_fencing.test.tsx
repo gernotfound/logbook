@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { User } from 'firebase/auth';
 import { AuthProvider } from '../src/contexts/AuthContext';
 import { useAuth } from '../src/hooks/useAuth';
-import { auth, onAuthStateChanged, reload, sendEmailVerification } from '../src/lib/firebase';
+import { auth, onAuthStateChanged, reload, sendEmailVerification, signInWithPopup, signInWithRedirect, signInWithEmailAndPassword, createUserWithEmailAndPassword } from '../src/lib/firebase';
 import { DB } from '../src/lib/db';
 import { draftRegistry } from '../src/lib/utils/draftRegistry';
 import { idbStore } from './setup';
@@ -111,4 +111,39 @@ describe('email verification actions across actual AuthProvider callbacks (SDK s
       expect(idbStore['logbook:v2:user:verification-a']).toBe(preserved);
     },
   );
+});
+
+describe('login failures cannot restart or overwrite a later Auth session', () => {
+  it.each(['login', 'linkGoogleAccount', 'loginWithEmail', 'registerWithEmail'] as const)(
+    'ignores an obsolete %s failure after A-B-A', async action => {
+      const { result, transition, preserved } = await start();
+      const sdk = action === 'login' || action === 'linkGoogleAccount' ? signInWithPopup
+        : action === 'loginWithEmail' ? signInWithEmailAndPassword : createUserWithEmailAndPassword;
+      let fail!: (error: unknown) => void;
+      vi.mocked(sdk).mockImplementationOnce(() => new Promise((_resolve, reject) => { fail = reject; }));
+      let pending!: Promise<void>;
+      act(() => {
+        pending = action === 'loginWithEmail' || action === 'registerWithEmail'
+          ? result.current[action]('a@example.test', 'SyntheticPassword123!')
+          : result.current[action]();
+      });
+      await waitFor(() => expect(sdk).toHaveBeenCalledOnce());
+      await transition('A-B-A');
+      await act(async () => { fail(Object.assign(new Error('obsolete provider failure'), { code: 'auth/popup-blocked' })); await pending; });
+      expect(signInWithRedirect).not.toHaveBeenCalled();
+      expect(useAppStore.getState().saveError).toBeNull();
+      expect(idbStore['logbook:v2:user:verification-a']).toBe(preserved);
+      expect(DB.purgeAllLocalUserData).not.toHaveBeenCalled();
+    },
+  );
+
+  it('still permits a popup-to-redirect fallback from an unauthenticated login screen', async () => {
+    (auth as { currentUser: unknown }).currentUser = null;
+    const { result } = renderHook(() => useAuth(), { wrapper });
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    vi.mocked(signInWithPopup).mockRejectedValueOnce(Object.assign(new Error('blocked popup'), { code: 'auth/popup-blocked' }));
+    await act(async () => { await result.current.login(); });
+    expect(signInWithRedirect).toHaveBeenCalledOnce();
+    expect(useAppStore.getState().saveError).toBeNull();
+  });
 });

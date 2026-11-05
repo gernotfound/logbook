@@ -5,6 +5,7 @@ import { captureSession, isCurrentSession } from '../../lib/sync/session';
 import { validatePasswordAgainstPolicy } from '../../lib/auth/passwordPolicy';
 import { describeEmailAuthError } from '../../lib/auth/emailAuthError';
 import { beginGuestMigrationIntent, clearGuestMigrationIntent, confirmGuestMigrationCredential, rejectGuestMigrationAuthWaiters } from '../../lib/auth/guestMigrationIntent';
+import { captureAuthAttemptGuard } from '../../lib/auth/authAttemptGuard';
 import { safeHardReload } from '../../lib/sync/safeReload';
 import type { UserData } from '../../types';
 import type { GuestMigrationPolicy } from '../AuthContextDef';
@@ -35,6 +36,7 @@ export function useEmailAuthActions({
 
     const loginWithEmail = useCallback(async (email: string, pass: string, guestPolicy?: GuestMigrationPolicy) => {
         setSaveError(null);
+        const stillOriginalAttempt = captureAuthAttemptGuard(isGuestActiveStrict());
         let intentId: string | null = null;
         if (isGuestActiveStrict()) {
             if (!guestPolicy) throw new Error('Scelta di trasferimento guest richiesta.');
@@ -48,22 +50,27 @@ export function useEmailAuthActions({
             credential = await signInWithEmailAndPassword(auth, email, pass);
         } catch (error) {
             await abandonOwnGuestIntent(intentId);
+            if (!stillOriginalAttempt()) return;
             return handleAuthError(error);
         }
+        const resultSession = captureAuthAttemptGuard(false);
+        const resultIsCurrent = () => auth.currentUser?.uid === credential.user.uid && resultSession();
         if (intentId) {
             try {
                 await confirmGuestMigrationCredential(intentId, credential);
             } catch (error) {
                 rejectGuestMigrationAuthWaiters(intentId, 'Risultato di questo accesso email non verificabile.');
                 console.error('Prova dell’accesso email non confermata:', error);
-                setSaveError('Accesso effettuato, ma trasferimento guest non autorizzato. I dati locali sono conservati: riprova scegliendo come gestirli.');
+                if (resultIsCurrent()) setSaveError('Accesso effettuato, ma trasferimento guest non autorizzato. I dati locali sono conservati: riprova scegliendo come gestirli.');
             }
         }
     }, [handleAuthError, isGuestActiveStrict, setSaveError]);
 
     const registerWithEmail = useCallback(async (email: string, pass: string, guestPolicy?: GuestMigrationPolicy) => {
         setSaveError(null);
+        const stillOriginalAttempt = captureAuthAttemptGuard(isGuestActiveStrict());
         const weakError = await validatePasswordAgainstPolicy(pass);
+        if (!stillOriginalAttempt()) return;
         if (weakError) {
             const error = Object.assign(new Error(weakError), { code: 'auth/weak-password' });
             handleAuthError(error);
@@ -85,10 +92,13 @@ export function useEmailAuthActions({
             credential = await createUserWithEmailAndPassword(auth, email, pass);
         } catch (error) {
             await abandonOwnGuestIntent(intentId);
+            if (!stillOriginalAttempt()) return;
             handleAuthError(error);
             return;
         }
 
+        const resultSession = captureAuthAttemptGuard(false);
+        const resultIsCurrent = () => auth.currentUser?.uid === credential.user.uid && resultSession();
         let proofFailed = false;
         if (intentId) {
             try {
@@ -97,17 +107,19 @@ export function useEmailAuthActions({
                 proofFailed = true;
                 rejectGuestMigrationAuthWaiters(intentId, 'Risultato della registrazione email non verificabile.');
                 console.error('Prova della registrazione email non confermata:', error);
-                setSaveError('Registrazione effettuata, ma trasferimento guest non autorizzato. I dati locali sono conservati: riprova dopo la verifica.');
+                if (resultIsCurrent()) setSaveError('Registrazione effettuata, ma trasferimento guest non autorizzato. I dati locali sono conservati: riprova dopo la verifica.');
             }
         }
 
-        if (!credential.user.emailVerified) {
+        if (resultIsCurrent() && !credential.user.emailVerified) {
             try {
                 await sendEmailVerification(credential.user);
+                if (!resultIsCurrent()) return;
                 setSaveError(proofFailed
                     ? 'Verifica la tua email. I dati guest sono conservati: dopo la verifica conferma nuovamente la scelta di trasferimento.'
                     : 'Verifica la tua email per completare l’accesso. Ti abbiamo inviato un link di conferma.');
             } catch (error) {
+                if (!resultIsCurrent()) return;
                 console.error('Invio verifica email fallito:', error);
                 setSaveError('Account creato, ma non è stato possibile inviare la verifica email. Usa “Invia di nuovo” e riprova.');
             }

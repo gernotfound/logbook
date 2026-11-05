@@ -6,7 +6,7 @@ import { initializeTestEnvironment, type RulesTestEnvironment } from '@firebase/
 import { doc, getDoc, setDoc, waitForPendingWrites } from 'firebase/firestore';
 const sdk = vi.hoisted(() => ({ db: null as any, auth: { currentUser: { uid: 'a' } } }));
 vi.mock('../../src/lib/firebase', () => ({ auth: sdk.auth, getDb: () => sdk.db, ensureAppCheck: async () => {}, waitForPendingWrites: (db: any) => waitForPendingWrites(db) }));
-// This suite exercises legacy sync/reconciliation under an already-authorized
+// This suite exercises journal replication/reconciliation under an already-authorized
 // authenticated account (server revision 1). Consent revocation and epoch
 // enforcement are tested separately with the real policy and emulator Rules.
 vi.mock('../../src/lib/healthConsent', async () => {
@@ -31,6 +31,7 @@ import { adoptReplicaCheckpoint, advanceLocalConsentRevisionIfClean, readLocal, 
 import { seedTrustedConsent, registerReplica } from './replicaHarness';
 import { createAndMigrateVault } from '../../src/lib/sync/secureArchiveMigration';
 import { lockAllVaults } from '../../src/lib/sync/secureArchiveSession';
+import { LEGAL_VERSIONS } from '../../src/lib/legalVersions';
 import { CURRENT_SYNC_PROTOCOL } from '../../src/lib/schemaEvolution';
 import { sealCloudDocument, openCloudDocument } from '../../src/lib/sync/cloudDocumentCipher';
 const DB = {
@@ -40,7 +41,7 @@ import { UserDataSchema } from '../../src/lib/schema';
 import { projectDocuments } from '../../src/lib/sync/documentProjection';
 import type { UserData, CachedGlobalCatalog } from '../../src/types';
 const catalog = { exercises: [], foods: [] } as unknown as CachedGlobalCatalog;
-const data = (input: Partial<UserData> = {}) => UserDataSchema.parse({ legalConsent: { hasAcceptedTerms: true, hasAcceptedHealthData: true, acceptedAt: '2026-10-11T10:00:00.000Z', privacyVersion: '1.3.5', termsVersion: '1.2.1' }, ...input }) as unknown as UserData;
+const data = (input: Partial<UserData> = {}) => UserDataSchema.parse({ legalConsent: { hasAcceptedTerms: true, hasAcceptedHealthData: true, acceptedAt: '2026-10-11T10:00:00.000Z', privacyVersion: LEGAL_VERSIONS.privacy, termsVersion: LEGAL_VERSIONS.terms }, ...input }) as unknown as UserData;
 let env: RulesTestEnvironment;
 beforeAll(async () => {
     if (process.env.FIRESTORE_EMULATOR_HOST !== '127.0.0.1:8080') throw new Error('Only the local emulator is allowed');
