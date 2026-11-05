@@ -219,6 +219,7 @@ describe('RISK-02: ConsentOverlay UI Behavior', () => {
         expect(screen.getByText(/stress, energia, umore, recupero/)).toBeDefined();
         expect(screen.queryByText(/DA VALIDARE/)).toBeNull();
         expect(screen.queryByText(/pilot gratuito/)).toBeNull();
+        expect(screen.getByRole('dialog', { name: 'Informativa sulla privacy' }).textContent).not.toMatch(/\[DA VALIDARE|\[DA DEFINIRE|pilot gratuito|prima che il servizio venga utilizzato/i);
         expect(screen.getByText('Gerardo Califano')).toBeDefined();
         expect(screen.getAllByRole('link', { name: 'thelogbook.privacy@gmail.com' }).length).toBe(2);
     });
