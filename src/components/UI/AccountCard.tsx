@@ -9,6 +9,7 @@ import { captureSession, isCurrentSession } from '../../lib/sync/session';
 import { Eye, EyeOff } from 'lucide-react';
 import { validatePasswordAgainstPolicy } from '../../lib/auth/passwordPolicy';
 import { linkEmailPasswordWithEnumerationProtection, requestVerifiedEmailChange } from '../../lib/auth/accountEmail';
+import { captureAuthAttemptGuard } from '../../lib/auth/authAttemptGuard';
 import { classifyGooglePopupFailure } from '../../contexts/auth/googlePopup';
 
 export const AccountCard = () => {
@@ -41,7 +42,7 @@ export const AccountCard = () => {
         return () => user !== null && auth.currentUser?.uid === user.uid && isCurrentSession(session);
     };
 
-    const reloadAfterAccountChange = async (stillCurrent: () => boolean = () => true) => {
+    const reloadAfterAccountChange = async (stillCurrent: () => boolean) => {
         if (!stillCurrent()) return;
         try {
             await safeHardReload();
@@ -203,23 +204,26 @@ export const AccountCard = () => {
     };
 
     const onGuestRegister = async () => {
-        const weakError = await validatePasswordAgainstPolicy(newPasswordInput);
-        if (weakError) {
-            await showAlert(weakError);
-            return;
-        }
-        if (!newEmailInput || !newEmailInput.includes('@')) {
-            await showAlert("Email non valida.");
-            return;
-        }
-        setLoadingAction('guestRegister');
+        let stillOriginalAttempt = () => true;
         try {
+            stillOriginalAttempt = captureAuthAttemptGuard(true);
+            const weakError = await validatePasswordAgainstPolicy(newPasswordInput);
+            if (!stillOriginalAttempt()) return;
+            if (weakError) {
+                await showAlert(weakError);
+                return;
+            }
+            if (!newEmailInput || !newEmailInput.includes('@')) {
+                await showAlert("Email non valida.");
+                return;
+            }
+            setLoadingAction('guestRegister');
             await registerWithEmail(newEmailInput, newPasswordInput, 'merge');
-            // La migrazione avviene automaticamente in onAuthStateChanged. Un hard
-            // reload è consentito solo dopo che la barriera ha verificato la copia locale.
-            await reloadAfterAccountChange();
+            // AuthProvider owns verification and the later guest handoff. A
+            // registration result (including an obsolete attempt) must not
+            // trigger navigation from the old guest component.
         } catch {
-            // The reservation can fail before the provider error mapper runs.
+            if (!stillOriginalAttempt()) return;
             await showAlert('Impossibile completare la registrazione. Completa eventuali tentativi già aperti e riprova. I dati locali sono conservati.');
         } finally {
             setLoadingAction(null);
