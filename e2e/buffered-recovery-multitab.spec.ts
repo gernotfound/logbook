@@ -53,7 +53,16 @@ test('two real guest tabs preserve independent encrypted edits and expose both f
   const a = 'Prima scheda: copia privata non confermata';
   const b = 'Seconda scheda: valore concorrente non confermato';
   await first.fill(a);
+  const canonicalPrefix = 'logbook:v2:guest:sealed:draft:buffered:textarea:';
+  const firstCanonical = await page.evaluate(p => Object.fromEntries(
+    Object.entries(localStorage).filter(([key]) => key.startsWith(p))
+  ), canonicalPrefix);
+  expect(Object.keys(firstCanonical)).toHaveLength(1);
+  expect(Object.values(firstCanonical).every(raw => raw.startsWith('tlb-sealed:v1:') && !raw.includes(a))).toBe(true);
   await secondEditor.fill(b);
+  expect(await second.evaluate(p => Object.fromEntries(
+    Object.entries(localStorage).filter(([key]) => key.startsWith(p))
+  ), canonicalPrefix)).toEqual(firstCanonical);
 
   // The second writer cannot CAS the shared canonical key, but its own AEAD
   // witness must have been synchronously persisted first.
