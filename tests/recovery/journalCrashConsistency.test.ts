@@ -25,9 +25,8 @@ vi.mock('../../src/lib/firebase', () => ({
     ensureAppCheck: async () => {},
     waitForPendingWrites: async () => {},
 }));
-// This crash-consistency suite models a user whose initial (revision-zero)
-// health consent has already been verified. Consent epoch handling is tested
-// separately with the real policy and Firestore Rules.
+// Supply the already verified first account consent (revision 1). The real
+// consent authentication/epoch policy and Firestore Rules have separate suites.
 vi.mock('../../src/lib/healthConsent', async () => {
     const actual = await vi.importActual<typeof import('../../src/lib/healthConsent')>('../../src/lib/healthConsent');
     const writable = (owner: string) => owner === 'user:' + remote.auth.currentUser?.uid;
@@ -38,7 +37,7 @@ vi.mock('../../src/lib/healthConsent', async () => {
         requireHealthConsentWritable: (owner: string) => {
             if (!writable(owner)) throw new Error('Utente non autorizzato dal consenso');
         },
-        getVerifiedHealthConsentRevision: () => 0,
+        getVerifiedHealthConsentRevision: () => 1,
     };
 });
 vi.mock('../../src/lib/catalog/catalogService', () => ({ getCachedCatalog: async () => catalog }));
@@ -136,6 +135,7 @@ function failNextOwnerEnvelopeWrite() {
 beforeEach(async () => {
     lockAllVaults();
     localStorage.clear();
+    localStorage.setItem('logbook:v2:' + owner + ':health-consent-generation', '1');
     await clear();
     invalidateSession();
     vi.stubGlobal('navigator', { onLine: true, locks: {
@@ -154,6 +154,7 @@ beforeEach(async () => {
         },
         baseSeq: 0,
     }, { clock: {}, syncMetaByDocument: {} });
+    expect((await readLocal(owner))?.consentRevision).toBe(1);
     cloudDocuments = projectDocuments(data(170), catalog);
     cloudSyncMeta = {};
 });
