@@ -12,6 +12,26 @@ Questa cartella raccoglie i documenti operativi che servono per trasformare le s
 
 La fonte di verità tecnica resta il repository corrente. Le configurazioni esterne — Firebase/Google Cloud, Vercel, GitHub e relativi account amministrativi — devono essere verificate direttamente prima del pilot e non vanno dedotte da questi template.
 
+## Gate legale prima del primo utilizzatore esterno
+
+**Stato: NON PRONTO per trattare dati reali di terzi.** Questo gate riguarda anche un pilot gratuito con una sola persona e non nasce soltanto al momento della vendita a una palestra. L'uso personale del product owner non dimostra che siano soddisfatti gli obblighi applicabili a un servizio offerto ad altre persone.
+
+La PWA gestisce dati potenzialmente rientranti nelle categorie particolari dell'art. 9 GDPR. Il codice prova alcuni comportamenti tecnici, ma non determina l'identità del titolare, le basi giuridiche, le condizioni di conservazione dopo la revoca o gli obblighi contrattuali. Non rimuovere i segnaposto pubblici sostituendoli con dati presunti e non definire una policy legale sulla sola base dei test.
+
+| Blocco | Fonte interna | Evidenza necessaria per la chiusura |
+|---|---|---|
+| Identità e recapiti del soggetto che eroga il servizio | `src/pages/PrivacyPolicy.tsx`, `src/pages/TermsAndConditions.tsx` | Denominazione/forma effettiva, indirizzo, contatto privacy funzionante e ruolo del titolare verificati |
+| Finalità e basi giuridiche per ogni trattamento, inclusi dati salute | `processing-record-template.md`, `health-consent-release-gate.md` | Valutazione documentata artt. 6 e 9, consenso esplicito dove necessario e testi pubblici coerenti, validati da professionista competente |
+| Dati trattenuti dopo revoca del consenso | `retention-schedule.md`, `data-subject-rights-procedure.md` | Per ogni categoria: finalità residua, eventuale base autonoma già individuata, termine e meccanismo di cancellazione; se manca una base valida, definire adeguamento effettivo del comportamento tecnico |
+| Periodi di conservazione, log e copie dei fornitori | `retention-schedule.md`, `vendor-transfer-register.md` | Durate reali, configurazioni, eventuali backup, localizzazioni e limiti delle cancellazioni verificati nei provider |
+| Ruoli, fornitori e trasferimenti internazionali | `controller-role-decision.md`, `vendor-transfer-register.md` | Identificazione dei ruoli fattuali, DPA quando richiesti, elenco fornitori e verifica dei meccanismi applicabili ai trasferimenti |
+| Valutazioni e procedure organizzative | `dpia-screening-template.md`, `dpo-assessment-template.md`, `incident-breach-runbook.md` | Screening DPIA e DPO documentati, eventuali ulteriori adempimenti eseguiti, canale diritti e gestione incidenti assegnati |
+| Consegna tecnica a utenti reali | `first-gym-b2b-checklist.md`, `../operations/e2e-reliability.md` | Collaudi mirati autorizzati, esiti Production separati dai test, decisione di rilascio documentata |
+
+**Regola di chiusura:** solo dopo questi accertamenti aggiornare l'informativa e i termini effettivamente mostrati nell'app, adeguare il codice se la policy approvata diverge dal runtime e incrementare le versioni applicabili in `src/lib/legalVersions.ts`. Un mero cambio di testo non può sanare una conservazione non giustificata o una cancellazione tecnicamente assente. La decisione GO/NO-GO per terzi va registrata con chi l'ha approvata e le prove pertinenti.
+
+**Fonti istituzionali per la revisione:** [GDPR, artt. 6, 7, 9, 13, 17 e 35 (EUR-Lex)](https://eur-lex.europa.eu/legal-content/IT/TXT/?uri=CELEX:32016R0679), [Garante — informativa agli interessati](https://www.garanteprivacy.it/web/guest/home/docweb/-/docweb-display/docweb/8981258), [EDPB — Linee guida 05/2020 sul consenso](https://www.edpb.europa.eu/documents/guideline/guidelines-052020-on-consent-under-regulation-2016679_it).
+
 ## Assunzioni correnti del pilot
 
 - La palestra paga tramite rapporto commerciale esterno alla PWA.
