@@ -339,8 +339,11 @@ export const AccountCard = () => {
                                 type="button"
                                 disabled={!!loadingAction}
                                 onClick={async () => {
-                                    setLoadingAction('verifyEmail');
+                                    let stillCurrent = () => true;
                                     try {
+                                        stillCurrent = captureAccountAction();
+                                        if (!stillCurrent()) return;
+                                        setLoadingAction('verifyEmail');
                                         await resendEmailVerification();
                                         if (!stillCurrent()) return;
                                         await showAlert('Email di verifica inviata. Controlla anche la cartella spam.');
