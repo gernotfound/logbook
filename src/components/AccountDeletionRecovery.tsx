@@ -122,7 +122,7 @@ export function AccountDeletionRecovery() {
                         showPending(deviceError.message, 'local-finalization-error');
                     } else if (failure.kind === 'remote-failed') {
                         showPending('La cancellazione cloud non è stata completata. Alcuni dati potrebbero già essere stati eliminati; la copia locale è conservata. Riprova dalle impostazioni.', 'cloud-deletion-failed');
-                    } else if (failure.kind === 'integrity' || failure.kind === 'invalid-response'
+                    } else if (failure.kind === 'configuration' || failure.kind === 'integrity' || failure.kind === 'invalid-response'
                         || (pendingDeletion && !markerError && !failure.transient)) {
                         showPending(UNKNOWN_RECOVERY_MESSAGE, 'device-recovery-error');
                     }
