@@ -73,7 +73,8 @@ Firebase Hosting, Firebase Authentication, Firestore, Firebase Admin e App Check
 ### Monitoraggio errori esterno ritirato
 
 - Sentry è ritirato dal codice e dalla build del frontend; non ripristinare SDK, variabili client o source-map upload senza una nuova decisione di prodotto.
-- La rimozione dei dati già acquisiti, dei secret e del progetto nel provider non deriva dal commit: richiede verifiche e operazioni separate documentate nel registro servizi esterni.
+- Il progetto Sentry `logbook-sentry` e gli eventi storici rimangono intenzionalmente come archivio, per scelta del product owner del 5 novembre 2026; non cancellare progetto o eventi. La retention del provider non è stata verificata.
+- L'app GitHub Sentry resta installata per altri progetti: il product owner ha confermato di aver escluso `gernotfound/logbook` il 5 novembre 2026. Non trattare questa conferma manuale come verifica amministrativa indipendente.
 - Seguire [Telemetria e privacy](telemetry-and-privacy.md) per il contratto senza raccolta automatica.
 
 ### Google Search Console

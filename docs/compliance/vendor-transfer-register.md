@@ -15,9 +15,9 @@
 | Vercel Functions / Cron | API trusted per lifecycle, consenso/diritti, custodia chiave cloud e manutenzione | Request metadata; payload API minimi; ADK accessibile al server trusted tramite KEK protetta; log tecnici minimizzati, mai chiavi/token/dati salute liberi | `[VERIFY_DPA]` | `[VERIFY]` | `[VERIFY]` | `[VERIFY_PLAN]` | Aperto |
 | GitHub | Repository e CI | Codice, metadati dev, log CI; nessun dato utente intenzionale | `[VERIFY]` | `[VERIFY]` | `[VERIFY]` | `[VERIFY]` | Dev-only |
 
-Google Analytics 4/Firebase Analytics è dismesso e non è un fornitore runtime corrente: integrazione client e collegamento Firebase rimossi, proprietà Analytics dismessa e variabile di build eliminata, secondo le operazioni confermate dal product owner. Anche Vercel Analytics e Speed Insights restano ritirati. Sentry non è più una dipendenza di runtime/build client; l'eventuale presenza di eventi e configurazioni storiche presso il fornitore non è stata verificata. Le configurazioni storiche restano rintracciabili nella cronologia Git.
+Google Analytics 4/Firebase Analytics è dismesso e non è un fornitore runtime corrente: integrazione client e collegamento Firebase rimossi, proprietà Analytics dismessa e variabile di build eliminata, secondo le operazioni confermate dal product owner. Anche Vercel Analytics e Speed Insights restano ritirati. Sentry non è più una dipendenza runtime/build di TheLogBook: il progetto `logbook-sentry` continua a esistere come archivio storico, verificato nella console dal product owner il 5 novembre 2026. La retention effettiva è da verificare.
 
-**Sentry ritirato dal codice:** la rimozione del trasporto client non cancella automaticamente eventi già inviati. Verificare la retention storica, l'eventuale eliminazione dei dati e la chiusura del progetto presso il provider prima di attestare la dismissione completa.
+**Sentry ritirato dal codice, archivio conservato:** la disconnessione della PWA non cancella gli eventi storici. Il product owner ha scelto di mantenere progetto ed errori per verifiche future, senza nuovi invii automatici. Non pianificare cancellazioni o chiusura del progetto. Restano da valutare la retention effettiva e gli obblighi contrattuali e di conformità del provider.
 
 ## Checklist per ogni fornitore
 
