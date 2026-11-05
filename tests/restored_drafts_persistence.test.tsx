@@ -13,8 +13,11 @@ import { initializeLocal, readLocal } from '../src/lib/sync/localRepository';
 import type { UserData } from '../src/types';
 import { storageOwner } from '../src/lib/sync/session';
 
+const initialStorageWrite = localStorageMock.setItem.getMockImplementation()!;
+
 describe('restored owner-scoped drafts', () => {
     beforeEach(async () => {
+        localStorageMock.setItem.mockImplementation(initialStorageWrite);
         localStorage.clear();
         await prepareUnlockedTestArchive(storageOwner());
         localStorage.setItem(`logbook:v2:${storageOwner()}:health-consent-generation`, '3');

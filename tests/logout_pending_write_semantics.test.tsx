@@ -12,7 +12,11 @@ import { useDialogStore } from '../src/store/useDialogStore';
 import { createAndMigrateVault } from '../src/lib/sync/secureArchiveMigration';
 import { lockAllVaults } from '../src/lib/sync/secureArchiveSession';
 
-const user = { uid: 'pending-write-user', email: 'sync@example.com' } as any;
+const user = {
+    uid: 'pending-write-user', email: 'sync@example.com', emailVerified: true,
+    providerData: [{ providerId: 'password' }],
+    getIdToken: vi.fn(async () => 'synthetic-token'),
+} as any;
 const wrapper = ({ children }: { children: React.ReactNode }) => React.createElement(AuthProvider, null, children);
 
 beforeEach(async () => {
@@ -28,6 +32,7 @@ beforeEach(async () => {
     vi.mocked(DB.secureLogOut).mockResolvedValue(undefined);
     await createAndMigrateVault('user:pending-write-user');
     useAppStore.setState({
+        dataOwner: 'user:pending-write-user',
         userData: UserDataSchema.parse({ profile: { height: '180' } }) as any,
         localWorkout: null,
         syncing: false,

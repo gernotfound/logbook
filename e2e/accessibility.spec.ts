@@ -29,7 +29,9 @@ async function continueAsGuest(page: Page) {
   await expect(page.locator('#volume-calories-correlation-card')).toHaveAttribute('aria-busy', 'false');
 }
 
-test('representative guest surfaces have no serious automated accessibility violations', async ({ page }) => {
+for (const theme of ['light', 'dark'] as const) {
+test(`representative guest surfaces have no serious automated accessibility violations in ${theme}`, async ({ page }) => {
+  await page.emulateMedia({ colorScheme: theme });
   await page.goto('/');
   await expect(page.getByRole('heading', { name: 'TheLogBook' })).toBeVisible();
   const blocking = await collectBlockingAccessibilityViolations(page, 'login');
@@ -41,9 +43,24 @@ test('representative guest surfaces have no serious automated accessibility viol
   await expect(page.locator('#view-data')).toBeVisible();
   blocking.push(...await collectBlockingAccessibilityViolations(page, 'data'));
 
+  await page.getByRole('button', { name: 'Allenamento', exact: true }).click();
+  await page.getByRole('tab', { name: 'Schede', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Crea scheda' })).toBeVisible();
+  blocking.push(...await collectBlockingAccessibilityViolations(page, 'training-routines'));
+
+  await page.getByRole('button', { name: 'Nutrizione', exact: true }).click();
+  await expect(page.getByRole('searchbox', { name: 'Cerca alimento' })).toBeVisible();
+  blocking.push(...await collectBlockingAccessibilityViolations(page, 'nutrition'));
+
+  await page.goto('/?tab=settings');
+  await expect(page.getByRole('heading', { name: 'Impostazioni', exact: true })).toBeVisible();
+  blocking.push(...await collectBlockingAccessibilityViolations(page, 'settings'));
+
   expect(blocking, 'axe found critical/serious WCAG violations').toEqual([]);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
 });
+
+}
 
 test('keyboard-opened routine menu retains focus and fits a narrow real viewport', async ({ page }) => {
   await page.setViewportSize({ width: 320, height: 850 });

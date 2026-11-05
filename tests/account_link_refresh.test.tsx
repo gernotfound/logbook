@@ -1,7 +1,7 @@
 import React from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { reload } from '../src/lib/firebase';
+import { firebaseApp, reload } from '../src/lib/firebase';
 import { safeHardReload } from '../src/lib/sync/safeReload';
 
 const fixture = vi.hoisted(() => ({
@@ -33,6 +33,7 @@ import { AccountCard } from '../src/components/UI/AccountCard';
 
 beforeEach(() => {
     vi.clearAllMocks();
+    (firebaseApp as any).options = { apiKey: 'synthetic-api-key' };
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(
         new Response(JSON.stringify({ localId: fixture.user.uid }), { status: 200 }),
     ));
