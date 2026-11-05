@@ -45,6 +45,7 @@ describe('account deletion recovery device registration retries', () => {
   afterEach(() => {
     firebase.auth.currentUser = null;
     vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
   });
 
   it('registers the authenticated device immediately with a limited-use App Check token', async () => {
@@ -147,6 +148,57 @@ describe('account deletion recovery device registration retries', () => {
 
     expect(fetchMock).not.toHaveBeenCalled();
     dispose();
+  });
+
+  it('does not report a missing backend as successful recovery when a device proof exists', async () => {
+    vi.stubEnv('VITE_ACCOUNT_DELETION_API_ORIGIN', '');
+    const { recoverDeletedAccountOnThisDevice, registerDeletionRecoveryDevice } = await loadSubject();
+    const raw = JSON.stringify([{ uid: 'user-a', token: 'A'.repeat(43) }]);
+    localStorage.setItem('logbook_deletion_recovery_devices_v1', raw);
+    const network = vi.fn();
+    vi.stubGlobal('fetch', network);
+    const finalize = vi.fn();
+
+    await expect(recoverDeletedAccountOnThisDevice(finalize)).rejects.toMatchObject({
+      operation: 'routine-check', phase: 'http', kind: 'configuration',
+    });
+    expect(localStorage.getItem('logbook_deletion_recovery_devices_v1')).toBe(raw);
+    expect(finalize).not.toHaveBeenCalled();
+    expect(network).not.toHaveBeenCalled();
+
+    const current = user('user-a');
+    firebase.auth.currentUser = current;
+    await expect(registerDeletionRecoveryDevice(current)).rejects.toMatchObject({
+      operation: 'device-registration', phase: 'http', kind: 'configuration',
+    });
+    expect(localStorage.getItem('logbook_deletion_recovery_devices_v1')).toBe(raw);
+  });
+
+  it('has no device proof to check when the backend is absent and storage is empty', async () => {
+    vi.stubEnv('VITE_ACCOUNT_DELETION_API_ORIGIN', '');
+    const { recoverDeletedAccountOnThisDevice } = await loadSubject();
+    await expect(recoverDeletedAccountOnThisDevice(vi.fn())).resolves.toEqual({ status: 'none' });
+  });
+
+  it('preserves a device proof after a fetch failure and retries the same proof on recovery', async () => {
+    const { recoverDeletedAccountOnThisDevice } = await loadSubject();
+    const raw = JSON.stringify([{ uid: 'user-a', token: 'A'.repeat(43) }]);
+    localStorage.setItem('logbook_deletion_recovery_devices_v1', raw);
+    const network = vi.fn()
+      .mockRejectedValueOnce(new TypeError('Failed to fetch'))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ uid: 'user-a', status: 'complete' }), { status: 200 }));
+    vi.stubGlobal('fetch', network);
+    const finalize = vi.fn(async () => ({ status: 'complete' as const }));
+
+    await expect(recoverDeletedAccountOnThisDevice(finalize)).rejects.toMatchObject({
+      operation: 'routine-check', phase: 'http', kind: 'transport',
+    });
+    expect(localStorage.getItem('logbook_deletion_recovery_devices_v1')).toBe(raw);
+    expect(finalize).not.toHaveBeenCalled();
+
+    await expect(recoverDeletedAccountOnThisDevice(finalize)).resolves.toEqual({ status: 'complete' });
+    expect(finalize).toHaveBeenCalledExactlyOnceWith('user-a');
+    expect(network).toHaveBeenCalledTimes(2);
   });
 
   it('routes a completed device proof through the caller finalizer even while another account is authenticated', async () => {
