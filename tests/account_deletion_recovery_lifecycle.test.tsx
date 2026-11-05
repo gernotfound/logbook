@@ -114,7 +114,7 @@ describe('account deletion recovery foreground lifecycle', () => {
         render(<AccountDeletionRecovery />);
         await settle();
 
-        expect(recoveryWarnings()).toContain(expect.stringContaining('kind=configuration'));
+        expect(recoveryWarnings().some(message => message.includes('kind=configuration'))).toBe(true);
         expect(boundary.showAlert).toHaveBeenCalledWith(
             expect.stringContaining('Impossibile verificare ora la cancellazione account'),
         );
