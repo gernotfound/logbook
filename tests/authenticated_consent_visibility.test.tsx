@@ -64,6 +64,9 @@ it('removes an authenticated fitness view on another tab withdrawal before the t
   expect(ciphertext).not.toContain('"height":"183"');
   useAppStore.setState({ userData: original.data, dataOwner: owner, syncing: false, localWorkout: null });
   window.history.replaceState({}, '', '/?tab=data');
+  // This scenario targets consent while data is already visible. Resolve the
+  // real lazy view before mounting, independently of CI module-transform time.
+  await import('../src/components/Data/DataView');
   const view = render(
     <AuthContext.Provider value={{ ...defaultAuthContext, currentUser: actor, loading: false }}>
       <App />
