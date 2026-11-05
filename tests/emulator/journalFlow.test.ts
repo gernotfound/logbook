@@ -112,3 +112,42 @@ it('adopts independent remote fields without overwriting them with the old local
     expect((await readLocal('user:a'))?.data.profile).toMatchObject({ height: '171', gender: 'F' });
     expect((await readLocal('user:a'))?.pending).toEqual([]);
 });
+
+it('preserves a journal denied by remote withdrawal and does not authorize it under a newer consent revision', async () => {
+    // The client deliberately keeps stale revision-1 approval here: only real
+    // emulator Rules can stop this transport. This is not an Auth Emulator login.
+    const base = data({});
+    await initializeLocal('user:a', base);
+    await prepareReplica();
+    const desired = data({ profile: { height: '182' } });
+    await commitLocal('user:a', desired, base);
+    const original = (await readLocal('user:a'))!;
+    const ciphertext = await get('logbook:v2:user:a');
+    expect(original.consentRevision).toBe(1);
+    expect(original.pending.length).toBeGreaterThan(0);
+    const controlBefore = (await getDoc(doc(sdk.db, 'users/a/sync_control/state'))).data();
+
+    await env.withSecurityRulesDisabled(async context => {
+        await setDoc(doc(context.firestore(), 'health_consent_withdrawals/a'), {
+            uid: 'a', status: 'withdrawn', revision: 2,
+            withdrawnAt: '2026-11-05T10:00:00.000Z',
+        });
+    });
+    expect((await DB.saveUserData(desired)).status).toBe('rejected');
+    expect(await get('logbook:v2:user:a')).toBe(ciphertext);
+    expect(await readLocal('user:a')).toEqual(original);
+    await env.withSecurityRulesDisabled(async context => {
+        expect((await getDoc(doc(context.firestore(), 'users/a'))).exists()).toBe(false);
+        expect((await getDoc(doc(context.firestore(), 'users/a/sync_control/state'))).data()).toEqual(controlBefore);
+    });
+
+    // A newer trusted consent must not make the old revision-1 journal valid.
+    await seedTrustedConsent(env, 'a', 3);
+    expect((await DB.saveUserData(desired)).status).toBe('rejected');
+    expect(await get('logbook:v2:user:a')).toBe(ciphertext);
+    expect(await readLocal('user:a')).toEqual(original);
+    expect(await advanceLocalConsentRevisionIfClean('user:a', 3)).toBe(false);
+    expect(await readLocal('user:a')).toEqual(original);
+    expect((await getDoc(doc(sdk.db, 'users/a'))).exists()).toBe(false);
+    expect((await getDoc(doc(sdk.db, 'users/a/sync_control/state'))).data()).toEqual(controlBefore);
+});

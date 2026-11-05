@@ -117,23 +117,41 @@ export function useEmailAuthActions({
     const resendEmailVerification = useCallback(async () => {
         const user = auth.currentUser;
         if (!user || user.emailVerified) return;
-        await sendEmailVerification(user);
-        setSaveError('Email di verifica inviata. Controlla anche la cartella spam.');
+        const session = captureSession();
+        const stillCurrent = () => auth.currentUser === user && isCurrentSession(session);
+        try {
+            await sendEmailVerification(user);
+        } catch (error) {
+            if (stillCurrent()) throw error;
+            return;
+        }
+        if (stillCurrent()) setSaveError('Email di verifica inviata. Controlla anche la cartella spam.');
     }, [setSaveError]);
 
     const refreshEmailVerification = useCallback(async () => {
         const user = auth.currentUser;
         if (!user) throw new Error('Sessione non disponibile.');
-        await reload(user);
-        if (!user.emailVerified) {
-            setEmailVerificationRequired(true);
-            setSaveError('Email non ancora verificata. Apri il link ricevuto e riprova.');
-            return;
+        // A delayed SDK result belongs to this Auth epoch, including when the
+        // same UID signs in again. It cannot change the next account's UI or
+        // start a reload barrier for data it did not verify.
+        const session = captureSession();
+        const stillCurrent = () => auth.currentUser === user && isCurrentSession(session);
+        try {
+            await reload(user);
+            if (!stillCurrent()) return;
+            if (!user.emailVerified) {
+                setEmailVerificationRequired(true);
+                setSaveError('Email non ancora verificata. Apri il link ricevuto e riprova.');
+                return;
+            }
+            // Firebase's ID token may still contain email_verified=false after reload().
+            // Refresh its claims before resuming any owner-scoped cloud operation.
+            await user.getIdToken(true);
+            if (!stillCurrent()) return;
+            await safeHardReload();
+        } catch (error) {
+            if (stillCurrent()) throw error;
         }
-        // Firebase's ID token may still contain email_verified=false after reload().
-        // Refresh its claims before resuming any owner-scoped cloud operation.
-        await user.getIdToken(true);
-        await safeHardReload();
     }, [setEmailVerificationRequired, setSaveError]);
 
     return { loginWithEmail, registerWithEmail, resendEmailVerification, refreshEmailVerification };

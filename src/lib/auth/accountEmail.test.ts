@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { firebaseApp, reload, verifyBeforeUpdateEmail } from '../firebase';
+import { auth, firebaseApp, reload, verifyBeforeUpdateEmail } from '../firebase';
+import { invalidateSession } from '../sync/session';
 import { linkEmailPasswordWithEnumerationProtection, requestVerifiedEmailChange } from './accountEmail';
 
 const mockedReload = vi.mocked(reload);
@@ -8,6 +9,9 @@ const mockedVerifyBeforeUpdateEmail = vi.mocked(verifyBeforeUpdateEmail);
 describe('account email operations', () => {
     beforeEach(() => {
         vi.clearAllMocks();
+        localStorage.clear();
+        (auth as { currentUser: unknown }).currentUser = { uid: 'u1' };
+        invalidateSession();
         (firebaseApp as any).options = { apiKey: 'test-api-key' };
         vi.stubGlobal('fetch', vi.fn());
     });
@@ -121,6 +125,34 @@ describe('account email operations', () => {
         await expect(linkEmailPasswordWithEnumerationProtection(user, 'user@example.com', 'Secret1!'))
             .rejects.toThrow('offline');
         expect(mockedReload).not.toHaveBeenCalled();
+    });
+
+    it('does not submit a credential after A-B-A during token acquisition', async () => {
+        let finish!: (token: string) => void;
+        const user = { uid: 'u1', getIdToken: vi.fn(() => new Promise<string>(resolve => { finish = resolve; })) } as any;
+        const pending = linkEmailPasswordWithEnumerationProtection(user, 'user@example.test', 'Secret1!');
+        expect(user.getIdToken).toHaveBeenCalledOnce();
+        (auth as { currentUser: unknown }).currentUser = { uid: 'u2' };
+        invalidateSession();
+        (auth as { currentUser: unknown }).currentUser = { uid: 'u1' };
+        invalidateSession();
+        finish('old-token');
+        await expect(pending).rejects.toThrow('Sessione cambiata');
+        expect(fetch).not.toHaveBeenCalled();
+        expect(mockedReload).not.toHaveBeenCalled();
+    });
+
+    it('preserves confirmed remote success without refreshing a replaced session', async () => {
+        let finish!: (response: Response) => void;
+        const user = { uid: 'u1', getIdToken: vi.fn(async () => 'synthetic-token') } as any;
+        vi.mocked(fetch).mockImplementationOnce(() => new Promise<Response>(resolve => { finish = resolve; }));
+        const pending = linkEmailPasswordWithEnumerationProtection(user, 'user@example.test', 'Secret1!');
+        await vi.waitFor(() => expect(fetch).toHaveBeenCalledOnce());
+        invalidateSession();
+        finish(Response.json({ localId: 'u1' }));
+        await expect(pending).resolves.toBe('refresh-pending');
+        expect(mockedReload).not.toHaveBeenCalled();
+        expect(fetch).toHaveBeenCalledTimes(1);
     });
 
     it('does not reload the user when Identity Toolkit rejects the link', async () => {

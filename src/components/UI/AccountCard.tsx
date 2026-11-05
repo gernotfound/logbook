@@ -2,9 +2,10 @@ import { useState, useMemo } from 'react';
 import { useAuth } from '../../hooks/useAuth';
 import { useSettings } from '../../hooks/useSettings';
 import { useDialogStore } from '../../store/useDialogStore';
-import { provider, linkWithPopup, linkWithRedirect, updatePassword } from '../../lib/firebase';
+import { auth, provider, linkWithPopup, linkWithRedirect, updatePassword } from '../../lib/firebase';
 import { isSensitiveReauthCancellation, reauthenticateForSensitiveAction } from '../../lib/auth/recentAuth';
 import { safeHardReload } from '../../lib/sync/safeReload';
+import { captureSession, isCurrentSession } from '../../lib/sync/session';
 import { Eye, EyeOff } from 'lucide-react';
 import { validatePasswordAgainstPolicy } from '../../lib/auth/passwordPolicy';
 import { linkEmailPasswordWithEnumerationProtection, requestVerifiedEmailChange } from '../../lib/auth/accountEmail';
@@ -34,16 +35,24 @@ export const AccountCard = () => {
     const hasPassword = providers.includes('password')
         || (currentUser != null && passwordLinkedFor === currentUser.uid);
 
-    const reloadAfterAccountChange = async () => {
+    const captureAccountAction = () => {
+        const user = currentUser;
+        const session = captureSession();
+        return () => user !== null && auth.currentUser?.uid === user.uid && isCurrentSession(session);
+    };
+
+    const reloadAfterAccountChange = async (stillCurrent: () => boolean = () => true) => {
+        if (!stillCurrent()) return;
         try {
             await safeHardReload();
         } catch (error) {
+            if (!stillCurrent()) return;
             console.error('Reload account bloccato dalla barriera di persistenza:', error);
             await showAlert('Operazione completata, ma TheLogBook non verrà ricaricato finché le modifiche locali non sono state salvate in sicurezza. Riprova tra poco.');
         }
     };
 
-    const handleReauthenticate = async () => {
+    const handleReauthenticate = async (stillCurrent: () => boolean) => {
         if (!currentUser) return false;
         try {
             if (hasPassword && !currentPasswordInput) {
@@ -54,6 +63,7 @@ export const AccountCard = () => {
                 currentUser,
                 hasPassword ? currentPasswordInput : undefined,
             );
+            if (!stillCurrent()) return false;
             if (outcome === 'reauthenticated') return true;
             if (outcome === 'redirect-started') {
                 await showAlert('Verifica Google avviata. Completa il passaggio con Google e poi ripeti l’operazione.');
@@ -66,7 +76,7 @@ export const AccountCard = () => {
             await showAlert("Metodo di autenticazione non supportato per questa operazione.");
             return false;
         } catch (error: any) {
-            if (isSensitiveReauthCancellation(error)) return false;
+            if (!stillCurrent() || isSensitiveReauthCancellation(error)) return false;
             console.error('Reautenticazione non riuscita.');
             await showAlert("Autenticazione fallita. Controlla le credenziali e riprova.");
             return false;
@@ -75,15 +85,13 @@ export const AccountCard = () => {
 
     const submitReauth = async () => {
         if (!currentUser) return;
-        setLoadingAction('reauth');
-        
-        const isReauthSuccess = await handleReauthenticate();
-        if (!isReauthSuccess) {
-            setLoadingAction(null);
-            return;
-        }
-
+        let stillCurrent = () => true;
         try {
+            stillCurrent = captureAccountAction();
+            if (!stillCurrent()) return;
+            setLoadingAction('reauth');
+            const isReauthSuccess = await handleReauthenticate(stillCurrent);
+            if (!isReauthSuccess || !stillCurrent()) return;
             let shouldReload = true;
             if (showReauthModal === 'email') {
                 if (!newEmailInput || !newEmailInput.includes('@')) {
@@ -92,10 +100,12 @@ export const AccountCard = () => {
                     return;
                 }
                 await requestVerifiedEmailChange(currentUser, newEmailInput);
+                if (!stillCurrent()) return;
                 shouldReload = false;
                 await showAlert("Ti abbiamo inviato un link al nuovo indirizzo. L’email dell’account cambierà solo dopo la verifica.");
             } else if (showReauthModal === 'password' || showReauthModal === 'linkEmail') {
                 const weakError = await validatePasswordAgainstPolicy(newPasswordInput);
+                if (!stillCurrent()) return;
                 if (weakError) {
                     await showAlert(weakError);
                     setLoadingAction(null);
@@ -104,6 +114,7 @@ export const AccountCard = () => {
                 
                 if (showReauthModal === 'password') {
                     await updatePassword(currentUser, newPasswordInput);
+                    if (!stillCurrent()) return;
                     await showAlert("Password aggiornata con successo.");
                 } else {
                     if (!currentUser.email) {
@@ -113,11 +124,13 @@ export const AccountCard = () => {
                     }
                     try {
                         const outcome = await linkEmailPasswordWithEnumerationProtection(currentUser, currentUser.email, newPasswordInput);
+                        if (!stillCurrent()) return;
                         setPasswordLinkedFor(currentUser.uid);
                         await showAlert(outcome === 'refresh-pending'
                             ? 'Email e password collegate. L’aggiornamento locale dell’account non è riuscito: il collegamento è già completato e non va ripetuto.'
                             : 'Email e password collegate con successo.');
                     } catch (linkError: any) {
+                        if (!stillCurrent()) return;
                         if (linkError.code === 'auth/credential-already-in-use' || linkError.code === 'auth/email-already-in-use') {
                             await showAlert("Questa email è già associata a un altro account.");
                             return;
@@ -127,14 +140,16 @@ export const AccountCard = () => {
                     }
                 }
             }
+            if (!stillCurrent()) return;
             setShowReauthModal(null);
             setCurrentPasswordInput('');
             setNewEmailInput('');
             setNewPasswordInput('');
             setShowCurrentPassword(false);
             setShowNewPassword(false);
-            if (shouldReload) await reloadAfterAccountChange();
+            if (shouldReload) await reloadAfterAccountChange(stillCurrent);
         } catch {
+            if (!stillCurrent()) return;
             console.error('Operazione account non riuscita.');
             await showAlert('Operazione account non riuscita. Riprova.');
         } finally {
@@ -144,11 +159,15 @@ export const AccountCard = () => {
 
     const onLinkGoogle = async () => {
         if (!currentUser) return;
+        let stillCurrent = () => true;
         try {
+            stillCurrent = captureAccountAction();
+            if (!stillCurrent()) return;
             setLoadingAction('linkGoogle');
             try {
                 await linkWithPopup(currentUser, provider);
             } catch (error) {
+                if (!stillCurrent()) return;
                 const failure = classifyGooglePopupFailure(error);
                 if (failure === 'redirect') {
                     await linkWithRedirect(currentUser, provider);
@@ -156,9 +175,11 @@ export const AccountCard = () => {
                 }
                 throw error;
             }
+            if (!stillCurrent()) return;
             await showAlert("Account Google collegato con successo!");
-            await reloadAfterAccountChange();
+            await reloadAfterAccountChange(stillCurrent);
         } catch (error: any) {
+            if (!stillCurrent()) return;
             if (error.code === 'auth/credential-already-in-use') {
                 await showAlert("Questo account Google è già collegato a un altro utente.");
             } else if (!isSensitiveReauthCancellation(error)) {
@@ -298,11 +319,14 @@ export const AccountCard = () => {
                                 type="button"
                                 disabled={!!loadingAction}
                                 onClick={async () => {
-                                    setLoadingAction('verifyEmail');
+                                    let stillCurrent = () => true;
                                     try {
+                                        stillCurrent = captureAccountAction();
+                                        if (!stillCurrent()) return;
+                                        setLoadingAction('verifyEmail');
                                         await refreshEmailVerification();
                                     } catch {
-                                        await showAlert('Verifica email non riuscita. Riprova.');
+                                        if (stillCurrent()) await showAlert('Verifica email non riuscita. Riprova.');
                                     } finally {
                                         setLoadingAction(null);
                                     }
@@ -318,9 +342,10 @@ export const AccountCard = () => {
                                     setLoadingAction('verifyEmail');
                                     try {
                                         await resendEmailVerification();
+                                        if (!stillCurrent()) return;
                                         await showAlert('Email di verifica inviata. Controlla anche la cartella spam.');
                                     } catch {
-                                        await showAlert('Invio email non riuscito. Riprova.');
+                                        if (stillCurrent()) await showAlert('Invio email non riuscito. Riprova.');
                                     } finally {
                                         setLoadingAction(null);
                                     }

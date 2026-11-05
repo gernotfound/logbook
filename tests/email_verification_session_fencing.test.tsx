@@ -77,7 +77,7 @@ describe('email verification actions across actual AuthProvider callbacks (SDK s
       const gate = new Promise<void>(resolve => { finish = resolve; });
       vi.mocked(reload).mockImplementationOnce(async () => {
         if (boundary === 'reload') await gate;
-        first.emailVerified = true;
+        Object.assign(first, { emailVerified: true });
       });
       if (boundary === 'token') first.getIdToken.mockImplementationOnce(async () => { await gate; return 'old-token'; });
       const flush = vi.spyOn(draftRegistry, 'flushAll');
