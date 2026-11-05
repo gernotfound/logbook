@@ -1,7 +1,7 @@
 # TheLogBook — pacchetto compliance per il primo pilot
 
-> Stato: struttura operativa da completare e far revisionare professionalmente prima della prima palestra.
-> Ultimo aggiornamento tecnico: 4 novembre 2026.
+> Stato: struttura operativa per eventuali utenti esterni, da completare e far revisionare prima del loro primo utilizzo reale.
+> Ultimo aggiornamento tecnico: 5 novembre 2026.
 > Questo pacchetto non certifica conformità GDPR e non sostituisce consulenza legale, privacy o fiscale.
 >
 > Navigazione: [indice documentazione](../README.md). I contratti AI restano in [`AGENTS.md`](../../AGENTS.md) e i relativi contratti specialistici: [Consenso salute](../../.agents/rules/health-consent.md), [Portabilità](../../.agents/rules/backup-and-portability.md), [Ciclo account](../../.agents/rules/account-lifecycle.md), [Cifratura](../../.agents/rules/secure-storage.md) e [Telemetria](../../.agents/rules/telemetry-and-privacy.md).
@@ -11,6 +11,14 @@
 Questa cartella raccoglie i documenti operativi che servono per trasformare le scelte tecniche di TheLogBook in un processo dimostrabile: registro dei trattamenti, screening DPIA, retention, incident response, fornitori/trasferimenti, misure tecniche e organizzative, gestione dei diritti e documentazione B2B.
 
 La fonte di verità tecnica resta il repository corrente. Le configurazioni esterne — Firebase/Google Cloud, Vercel, GitHub e relativi account amministrativi — devono essere verificate direttamente prima del pilot e non vanno dedotte da questi template.
+
+## Situazione attuale dichiarata dal product owner — 5 novembre 2026
+
+TheLogBook è, allo stato dichiarato, un **progetto personale amatoriale**, non erogato attraverso un'impresa o società. Non attribuire al progetto una ragione sociale, una partita IVA, una forma societaria, un contratto palestra o finalità commerciali che non esistono. Le sezioni B2B sotto descrivono **uno scenario futuro**, non il modello operativo già avviato.
+
+La natura amatoriale, da sola, **non determina un'esenzione GDPR**: l'art. 2, par. 2, lett. c e il considerando 18 distinguono il trattamento strettamente personale o domestico dalle attività rivolte all'esterno. Se la PWA è utilizzata esclusivamente dal suo autore per dati propri, l'eccezione personale/domestica può essere pertinente, da valutare sui fatti. La disponibilità gratuita a terzi, anche senza impresa, non autorizza a presumere l'eccezione. In tale scenario il titolare può anche essere una **persona fisica**, purché ruoli, contatti e obblighi applicabili siano determinati correttamente. Riferimenti: [Regolamento UE 2016/679, art. 2 e considerando 18](https://eur-lex.europa.eu/legal-content/IT/TXT/?uri=CELEX:32016R0679) e [Commissione europea — ambito di applicazione del GDPR](https://commission.europa.eu/law/law-topic/data-protection/information-business-and-organisations/application-gdpr_en).
+
+**Decisione ancora necessaria:** definire esplicitamente se il primo utilizzo sarà riservato all'autore oppure se altre persone potranno registrarsi e inserire dati reali. Fino a tale decisione, il gate per utenti esterni resta aperto. La modifica di questo documento non rilascia il servizio, non compila informazioni legali mancanti e non cambia configurazioni o accessi Production.
 
 ## Gate legale prima del primo utilizzatore esterno
 
