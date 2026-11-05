@@ -53,7 +53,7 @@ I precedenti alias `VITE_RECAPTCHA_V3_SITE_KEY` e `VITE_RECAPTCHA_SITE_KEY` non 
 
 ## Cifratura, consenso e privacy tecnica
 
-Leggere [Archivio e cifratura](secure-storage.md) per ADK, `CLOUD_ACCOUNT_KEK_V1`, envelope cloud e limiti della custodia; [Consenso salute](health-consent.md) per registro trusted, diritti e generazioni; [Telemetria e privacy](telemetry-and-privacy.md) per assenza di monitoraggio esterno e raccolte Firestore ritirate. Analytics non fa parte del runtime.
+Leggere [Archivio e cifratura](secure-storage.md) per ADK, `CLOUD_ACCOUNT_KEK_V1`, envelope cloud e limiti della custodia; [Consenso salute](health-consent.md) per registro trusted, diritti e generazioni; [Telemetria e privacy](telemetry-and-privacy.md) per assenza di monitoraggio esterno degli errori client. Analytics non fa parte del runtime.
 
 ## Server trusted — Firebase Admin
 
@@ -111,7 +111,7 @@ I file `firebase.json`, `.firebaserc` e `firestore.indexes.json` definiscono il 
 ### Account deletion
 
 - **MUST:** il client non può eliminare direttamente `/users/{uid}`. Il root utente viene eliminato dal backend trusted del job account-deletion dopo la bonifica delle raccolte private e prima della cancellazione finale di Firebase Auth.
-- **MUST:** il client non elimina fisicamente root, shard mensili o `sync_control/state`; le cancellazioni business usano tombstone e, dopo GC, empty shell cifrati/fenced. La telemetria Firestore ritirata nega tutto l'accesso client. Il cleanup fisico è riservato ai job trusted Admin.
+- **MUST:** il client non elimina fisicamente root, shard mensili o `sync_control/state`; le cancellazioni business usano tombstone e, dopo GC, empty shell cifrati/fenced. Le raccolte sconosciute restano negate ai client per default. Il cleanup fisico delle raccolte supportate è riservato ai job trusted Admin.
 - `account_deletions/{uid}` resta server-only e costituisce la barriera cross-device durante una cancellazione in corso.
 
 ### Primo consenso sanitario trusted

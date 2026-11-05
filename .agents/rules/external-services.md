@@ -1,6 +1,6 @@
 # Servizi esterni e configurazione fuori repository
 
-**Quando leggere:** GitHub/ruleset, Firebase, Google Cloud, Vercel, Sentry, Snyk, IAM, domini e dismissioni.
+**Quando leggere:** GitHub/ruleset, Firebase, Google Cloud, Vercel, Snyk, IAM, domini e dismissioni.
 **Non inferire:** configurazione nel repository, CI e deploy riusciti non certificano da soli quote, permessi o stato runtime del provider.
 
 Questa regola disciplina i sistemi esterni la cui configurazione effettiva non è rappresentata integralmente dal repository Git.
@@ -12,7 +12,7 @@ Il registro decisionale stabile e leggibile anche fuori dal codice è `docs/oper
 ## Fonte di verità
 
 - **MUST:** codice/config repository e stato del provider esterno sono fonti di verità separate. Non dedurre la configurazione live dal solo repository.
-- **MUST:** prima di cambiare un'integrazione esterna, verificare quando possibile lo stato live nel sistema competente: GitHub, Vercel, Firebase/Google Cloud, Sentry, Snyk o Google Search Console.
+- **MUST:** prima di cambiare un'integrazione esterna, verificare quando possibile lo stato live nel sistema competente: GitHub, Vercel, Firebase/Google Cloud, Snyk o Google Search Console.
 - **MUST:** quando cambia materialmente un'impostazione esterna, aggiornare nello stesso task il registro dei servizi oppure indicare esplicitamente perché non può ancora essere aggiornato.
 - **MUST:** distinguere gli stati `ACTIVE`, `LEGACY`, `OPTIONAL`, `EXTERNAL-ONLY` e `VERIFY-LIVE`. Un'impostazione riportata storicamente non prova lo stato runtime corrente.
 
@@ -70,11 +70,9 @@ Firebase Hosting, Firebase Authentication, Firestore, Firebase Admin e App Check
 - **MUST:** non inviare page view, eventi di utilizzo, dati sanitari o report automatici degli errori client a fornitori esterni di analytics o monitoraggio. I log necessari ai servizi Firebase/Vercel costituiscono un trattamento distinto, da verificare nei rispettivi provider.
 - **NOTE:** il product owner ha confermato lo scollegamento GA4 dal progetto Firebase, la dismissione della proprietà Google Analytics e la rimozione della variabile GitHub del Measurement ID. La PR #320 attesta separatamente la rimozione dal codice e dai workflow. La decisione di dismissione non certifica oggi lo stato delle console o la cancellazione di dati presso i provider.
 
-### Monitoraggio errori esterno ritirato
+### Monitoraggio errori esterno
 
-- Sentry è ritirato dal codice e dalla build del frontend; non ripristinare SDK, variabili client o source-map upload senza una nuova decisione di prodotto.
-- La rimozione dei dati già acquisiti, dei secret e del progetto nel provider non deriva dal commit: richiede verifiche e operazioni separate documentate nel registro servizi esterni.
-- Seguire [Telemetria e privacy](telemetry-and-privacy.md) per il contratto senza raccolta automatica.
+Non esistono dipendenze di Error Monitoring nel runtime o nella build frontend. Non reintrodurre SDK, invii client, credenziali dedicate o caricamenti automatici di source map senza nuova decisione di prodotto. I controlli tecnici di integrità, gestione errori e recupero restano locali oppure propri dei servizi infrastrutturali necessari.
 
 ### Google Search Console
 

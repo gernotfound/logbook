@@ -120,6 +120,22 @@ test('real browser retains non-exportable guest device key across a new document
   // Deliberately lose ONLY the synchronous control. A new JS realm must
   // reconstruct precisely the same wrapped DEK from IndexedDB, not provision
   // an empty competing vault. This is exercised in Chromium and WebKit.
+  const coordinator = await context.newPage();
+  await coordinator.goto('/');
+  await expect(coordinator.locator('.guest-banner')).toBeVisible();
+  // Hold the actual outer production lock from a third realm. Both startup
+  // requests must be visible in the browser lock manager before either runs.
+  await coordinator.evaluate(() => {
+    const gate = new Promise<void>(resolve => {
+      window.addEventListener('test:release-vault-lock', () => resolve(), { once: true });
+    });
+    void navigator.locks.request('thelogbook:guest-lifecycle', { mode: 'exclusive' }, async () => {
+      document.documentElement.dataset.vaultLockHeld = 'true';
+      await gate;
+    });
+  });
+  await expect(coordinator.locator('html')).toHaveAttribute('data-vault-lock-held', 'true');
+
   const originalControl = await page.evaluate(() => {
     const key = 'logbook:v2:guest:secure-vault-control';
     const value = localStorage.getItem(key);
@@ -130,7 +146,19 @@ test('real browser retains non-exportable guest device key across a new document
   // Two real document realms recover the missing synchronous control at once.
   // Web Locks must reuse the same IndexedDB mirror and non-exportable key.
   const peer = await context.newPage();
-  await Promise.all([page.reload(), peer.goto('/')]);
+  const restarting = Promise.all([page.reload(), peer.goto('/')]);
+  try {
+    await expect.poll(() => coordinator.evaluate(async () => {
+      const locks = await navigator.locks.query();
+      return new Set(locks.pending?.filter(lock => lock.name === 'thelogbook:guest-lifecycle')
+        .map(lock => lock.clientId)).size;
+    })).toBe(2);
+    expect(await coordinator.evaluate(() => localStorage.getItem('logbook:v2:guest:secure-vault-control'))).toBeNull();
+  } finally {
+    await coordinator.evaluate(() => window.dispatchEvent(new Event('test:release-vault-lock')));
+  }
+  await restarting;
+  await coordinator.close();
   await expect(page.locator('.guest-banner')).toBeVisible();
   await expect(peer.locator('.guest-banner')).toBeVisible();
   expect(await inspectPersistedGuestKey(peer)).toEqual(before);

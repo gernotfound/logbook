@@ -34,6 +34,8 @@ L'accesso account/cloud richiede che Firebase Auth riporti `emailVerified === tr
 
 La verifica email dei singoli endpoint trusted segue [Consenso salute](health-consent.md) e [Configurazione Firebase](firebase-config.md): alcuni diritti restano disponibili anche senza claim email verificata, senza autorizzare accesso fitness.
 
+Il collegamento email/password confermato da Identity Toolkit con il medesimo UID è distinto dal successivo `reload(user)`. Se il refresh locale fallisce, comunicare il collegamento già riuscito, ritirare il form di creazione password per quell’UID e usare soltanto il reload protetto; non invitare a ripetere la mutazione remota. Errori HTTP o risposte prive dell’UID atteso restano esiti non confermati.
+
 ## Google redirect: proprietà della scheda e del tentativo
 
 **MUST:** il marker Google `logbook_awaiting_redirect` vive esclusivamente nel `sessionStorage` della scheda che ha avviato il redirect: un'altra scheda non può leggerlo, eliminarlo o usarlo per un reload. Il risultato SDK del redirect resta l'unica prova Auth valida. Il purge dell'archivio non gestisce i marker Auth `true`/`failed`; il flusso Auth li riconcilia esclusivamente nella scheda d'origine. **MUST (tentativi successivi nella stessa scheda):** ogni nuovo fallback Google redirect assegna un ID casuale al proprio tentativo nel `sessionStorage` della stessa scheda prima di pubblicare il marker `true`.
@@ -95,7 +97,7 @@ Una registrazione riuscita rende la credenziale la più recente; se il registro 
 Il client considera la registrazione riuscita soltanto dopo HTTP 200 e risposta JSON valida con `registered: true`, letta entro la stessa deadline complessiva di 7,5 secondi; risposte mancanti, false o corrotte mantengono la credenziale locale e abilitano nuovi tentativi.
 
 **Diagnostica recovery:** le verifiche periodiche di credenziali device, la loro registrazione e la riconciliazione di marker di cancellazione restano operazioni distinte. I timeout e gli errori transitori di routine non attestano una cancellazione e vengono segnalati solo se ripetuti (terzo fallimento consecutivo e poi ogni decimo, con reset dopo un controllo riuscito).
-Le violazioni di integrità, gli stati cloud `failed` e i fallimenti di pulizia locale successivi a prova `complete` restano immediatamente visibili. La diagnostica invia soltanto categoria, fase, stato HTTP e conteggio, mai eccezioni grezze, UID o credenziali. Il throttling diagnostico non modifica timeout, marker, retry e protezioni del recupero.
+Le violazioni di integrità, gli stati cloud `failed` e i fallimenti di pulizia locale successivi a prova `complete` restano immediatamente visibili. L'osservatore locale riceve soltanto un riepilogo testuale con operazione, fase, categoria, stato HTTP e conteggio, mai eccezioni grezze, stack, UID o credenziali; non esiste un trasporto diagnostico esterno. Il throttling diagnostico non modifica timeout, marker, retry e protezioni del recupero.
 
 Flusso normativo:
 
@@ -105,7 +107,7 @@ Flusso normativo:
 
 3. Il job revoca i refresh token e acquisisce un lease breve. POST, polling GET e cron possono tentare recovery, ma un solo worker per UID esegue operazioni distruttive alla volta, considerando **anche** il job separato di cancellazione dei dati sanitari. L'acquisizione del lease account aspetta che un job sanitario sia `complete` oppure `failed` non recuperabile: i due lease indipendenti non possono operare contemporaneamente sulle stesse raccolte. Un lease scaduto è riprendibile.
 
-4. Il server elimina pagine da massimo 400 documenti dalle sei raccolte private correnti: `history_months`, `nutrition_months`, `sync_control`, `telemetry_errors`, `telemetry_events`, `telemetry_anomalies`. Dopo ogni batch il retry riparte dalla prima pagina; il cursor è telemetria/progresso e non è una dipendenza di correttezza.
+4. Il server elimina pagine da massimo 400 documenti dalle tre raccolte private correnti: `history_months`, `nutrition_months`, `sync_control`. Dopo ogni batch il retry riparte dalla prima pagina; il cursor è telemetria/progresso e non è una dipendenza di correttezza.
 
 5. Se il budget della Function si avvicina al limite, il job salva uno stato riprendibile e termina senza dichiarare successo. `GET /api/account-deletion` può far avanzare un job incompleto durante il polling. Il cron giornaliero `/api/account-deletion-cron` è soltanto una rete di sicurezza per job rimasti incompleti.
 
@@ -141,7 +143,7 @@ Non introdurre Nitro, Workflow, `waitUntil` come sostituto di durability, o una 
 
 **MUST:** il purge di un tombstone scaduto e del corrispondente registro delle credenziali device usa una singola transazione Firestore; un errore non può eliminare solo uno dei due record. Le fasi indipendenti del cron devono proseguire se una query o una manutenzione fallisce, conservando log aggregati privi di dati personali.
 
-**MUST:** il cron preserva una finestra temporale dedicata alla retention telemetrica legacy quando i job di cancellazione occupano il budget, senza interrompere deliberatamente una transazione Firestore in corso.
+**MUST:** il cron mantiene un budget limitato e un margine di sicurezza per job di cancellazione account, erasure sanitaria e retention delle ricevute, senza interrompere deliberatamente una transazione Firestore in corso.
 
 ## Logout e pulizia locale
 

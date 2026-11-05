@@ -29,16 +29,21 @@ describe('account deletion recovery diagnostics', () => {
         tracker.recordFailure('routine-check', failure, emit);
         expect(emit).toHaveBeenCalledTimes(1);
         expect(emit).toHaveBeenCalledWith(
-            expect.objectContaining({ message: expect.stringContaining('consecutive=3') }),
-            'account_deletion_routine_check',
+            expect.stringContaining('consecutive=3'),
         );
+
+        for (let occurrence = 4; occurrence <= 10; occurrence++) {
+            tracker.recordFailure('routine-check', failure, emit);
+        }
+        expect(emit).toHaveBeenCalledTimes(2);
+        expect(emit.mock.calls[1]).toEqual([expect.stringContaining('consecutive=10')]);
 
         tracker.recordSuccess('routine-check');
         tracker.recordFailure('routine-check', failure, emit);
-        expect(emit).toHaveBeenCalledTimes(1);
-        tracker.recordFailure('pending-deletion', new Error('unrecognized failure'), emit);
         expect(emit).toHaveBeenCalledTimes(2);
-        expect(emit.mock.calls[1][1]).toBe('account_deletion_pending_deletion');
+        tracker.recordFailure('pending-deletion', new Error('unrecognized failure'), emit);
+        expect(emit).toHaveBeenCalledTimes(3);
+        expect(emit.mock.calls[2]).toEqual([expect.stringContaining('operation=pending-deletion')]);
     });
 
     it('does not emit raw error messages, UID or credentials in the technical summary', () => {
@@ -49,11 +54,10 @@ describe('account deletion recovery diagnostics', () => {
             new Error('Bearer private-secret user uid-abc'),
         );
         for (let i = 0; i < 3; i++) tracker.recordFailure('routine-check', error, emit);
-        const summary = emit.mock.calls[0]?.[0] as Error;
-        expect(summary.message).toContain('http=503');
-        expect(summary.message).not.toContain('private-secret');
-        expect(summary.message).not.toContain('uid-abc');
-        expect(summary.cause).toBeUndefined();
+        expect(emit).toHaveBeenCalledTimes(1);
+        expect(emit.mock.calls[0]).toEqual([
+            'operation=routine-check; phase=http; kind=server; http=503; consecutive=3',
+        ]);
     });
 
     it('does not report stale session races as service outages', () => {

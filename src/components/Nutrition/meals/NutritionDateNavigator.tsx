@@ -19,7 +19,7 @@ export function NutritionDateNavigator({
 
     return (
         <div className="tracking-day">
-            <button type="button" className="btn btn-secondary tracking-day-arrow" onClick={onPrevious} aria-label="Giorno precedente">‹ <span>Prec.</span></button>
+            <button type="button" className="btn btn-secondary tracking-day-arrow" onClick={onPrevious} aria-label="Prec. Giorno precedente"><span aria-hidden="true">‹</span> <span>Prec.</span></button>
             <button type="button" className="tracking-day-current" onClick={onToday} title="Torna a oggi">
                 <strong>
                     {formattedDate}
@@ -28,7 +28,7 @@ export function NutritionDateNavigator({
                     <span className="text-sm tracking-accent">Oggi</span>
                 )}
             </button>
-            <button type="button" className="btn btn-secondary tracking-day-arrow" onClick={onNext} disabled={nextDisabled} aria-label="Giorno successivo"><span>Succ.</span> ›</button>
+            <button type="button" className="btn btn-secondary tracking-day-arrow" onClick={onNext} disabled={nextDisabled} aria-label="Succ. Giorno successivo"><span>Succ.</span> <span aria-hidden="true">›</span></button>
         </div>
     );
 }

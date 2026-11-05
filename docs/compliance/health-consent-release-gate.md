@@ -3,7 +3,7 @@
 > Stato aggiornato il **12 ottobre 2026**: soluzione A approvata dal product owner; implementazione della [PR #366](https://github.com/gernotfound/logbook/pull/366) **integrata** il 12 ottobre 2026. Il successivo rilascio dell'archivio cifrato ([PR #369](https://github.com/gernotfound/logbook/pull/369)) è in Production sul commit `5d21dc0b32a12676e1a08cc35611d96e5b18c3f3`. Restano separati il collaudo autenticato multi-dispositivo e i gate legali pre-pilot. Il gate automatizzato e la verifica giuridica/runtime sono evidenze distinte.
 > La fotografia di partenza seguente riguarda la baseline storica `main` `5a9394649977cae4e2261e530312f5121818ce12` (9 ottobre 2026), **non descrive lo stato distribuito corrente**.
 > Questo documento non costituisce un parere legale, una DPIA conclusa o una prova di collaudo autenticato multi-dispositivo.
-> Non certifica configurazioni Firebase/Vercel Production né la cancellazione dei dati Sentry pregressi.
+> Non certifica configurazioni Firebase/Vercel Production o il trattamento dei log tecnici dei fornitori.
 
 **Fonte tecnica corrente:** [AGENTS](../../AGENTS.md), [Consenso salute](../../.agents/rules/health-consent.md) e [protocollo tecnico](health-consent-technical-protocol.md). Le autorizzazioni e i checkpoint di rilascio del 12 ottobre sono storici e non autorizzano merge, deploy o collaudi di un task corrente. Per i limiti dei collaudi seguire [E2E e Production](../operations/e2e-reliability.md).
 

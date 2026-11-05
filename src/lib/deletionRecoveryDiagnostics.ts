@@ -83,7 +83,7 @@ export function classifyRecoveryFailure(operation: RecoveryOperation, error: unk
 }
 
 /**
- * Emits only bounded, owner-free summaries to the caller's local observer.
+ * Emits only bounded, owner-free text summaries to the caller's local observer.
  * No external error transport is registered by account deletion recovery.
  * Transient failures are surfaced on the third consecutive occurrence and then
  * every tenth; recovery resets that streak. Integrity failures are immediate.
@@ -94,7 +94,7 @@ export class RecoveryDiagnosticTracker {
     recordFailure(
         operation: RecoveryOperation,
         error: unknown,
-        report: (summary: Error, source: string) => void,
+        report: (summary: string) => void,
     ): RecoveryFailure {
         const failure = classifyRecoveryFailure(operation, error);
         if (failure.kind === 'stale-session') return failure;
@@ -103,11 +103,9 @@ export class RecoveryDiagnosticTracker {
         const count = previous?.key === key ? previous.count + 1 : 1;
         this.streaks.set(failure.operation, { key, count });
         if ((!failure.transient && count === 1) || (failure.transient && count === 3) || count % 10 === 0) {
-            const summary = new Error(
+            report(
                 `operation=${failure.operation}; phase=${failure.phase}; kind=${failure.kind}; http=${failure.httpStatus ?? 'none'}; consecutive=${count}`,
             );
-            summary.name = 'AccountDeletionRecoveryDiagnostic';
-            report(summary, `account_deletion_${failure.operation.replaceAll('-', '_')}`);
         }
         return failure;
     }

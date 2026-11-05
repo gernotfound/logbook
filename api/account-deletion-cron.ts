@@ -4,15 +4,12 @@ import {
   purgeExpiredCompletedDeletionJobs,
 } from '../server/accountDeletion/retention.js';
 import { processAccountDeletion } from '../server/accountDeletion/runner.js';
-import { purgeExpiredTelemetry } from '../server/telemetryRetention.js';
 import { listRecoverableHealthErasures, processHealthDataErasure, purgeExpiredCompletedHealthErasures } from '../server/healthConsent/erasure.js';
 
 export const maxDuration = 300;
 
 const CRON_BUDGET_MS = 270_000;
 const SAFETY_BUFFER_MS = 10_000;
-// Keep a dedicated window for legacy telemetry retention even when deletion jobs are busy.
-const TELEMETRY_RESERVE_MS = 30_000;
 
 function authorized(request: Request): boolean {
   const secret = process.env.CRON_SECRET;
@@ -28,8 +25,7 @@ export async function GET(request: Request): Promise<Response> {
     return Response.json({ error: 'Non autorizzato.' }, { status: 401 });
   }
 
-  const deadlineMs = Date.now() + CRON_BUDGET_MS;
-  const deletionDeadlineMs = deadlineMs - TELEMETRY_RESERVE_MS;
+  const deletionDeadlineMs = Date.now() + CRON_BUDGET_MS;
   let jobs: Awaited<ReturnType<typeof listRecoverableDeletionJobs>> = [];
   const results: Array<{ uid: string; result: string }> = [];
   let recoveryErrors = 0;
@@ -44,7 +40,7 @@ export async function GET(request: Request): Promise<Response> {
   let erasureReceiptsPurged = 0;
 
   // Prioritize a bounded slice of requested health-data erasures without
-  // starving account deletion or the reserved telemetry retention window.
+  // starving account deletion recovery.
   try {
     const erasureUids = await listRecoverableHealthErasures(8);
     erasureScanned = erasureUids.length;
@@ -116,30 +112,13 @@ export async function GET(request: Request): Promise<Response> {
     }
   }
 
-  // Receipt retention is independent from both account-deletion and telemetry.
-  // Never spend the last telemetry-reserved window on this maintenance step.
+  // Receipt retention is independent of account deletion recovery.
   if (Date.now() + SAFETY_BUFFER_MS < deletionDeadlineMs) {
     try {
       erasureReceiptsPurged = await purgeExpiredCompletedHealthErasures(deletionDeadlineMs);
     } catch (error) {
       erasureErrors++;
       console.error('[account-deletion-cron] erasure receipt retention failed', {
-        kind: error instanceof Error ? error.name : typeof error,
-      });
-    }
-  }
-
-  let telemetryRetention = {
-    documentsScanned: 0,
-    documentsDeleted: 0,
-    unexpectedDocuments: 0,
-    completedCycle: false,
-  };
-  if (Date.now() + SAFETY_BUFFER_MS < deadlineMs) {
-    try {
-      telemetryRetention = await purgeExpiredTelemetry(deadlineMs);
-    } catch (error) {
-      console.error('[account-deletion-cron] telemetry retention failed', {
         kind: error instanceof Error ? error.name : typeof error,
       });
     }
@@ -159,10 +138,6 @@ export async function GET(request: Request): Promise<Response> {
     recoveryErrors,
     retentionErrors,
     purged,
-    telemetryDocumentsScanned: telemetryRetention.documentsScanned,
-    telemetryPurged: telemetryRetention.documentsDeleted,
-    telemetryUnexpectedDocuments: telemetryRetention.unexpectedDocuments,
-    telemetryCycleCompleted: telemetryRetention.completedCycle,
   });
 
   return Response.json({
@@ -182,10 +157,6 @@ export async function GET(request: Request): Promise<Response> {
     recoveryErrors,
     retentionErrors,
     purged,
-    telemetryDocumentsScanned: telemetryRetention.documentsScanned,
-    telemetryPurged: telemetryRetention.documentsDeleted,
-    telemetryUnexpectedDocuments: telemetryRetention.unexpectedDocuments,
-    telemetryCycleCompleted: telemetryRetention.completedCycle,
     results,
   });
 }

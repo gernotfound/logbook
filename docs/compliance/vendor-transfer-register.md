@@ -9,15 +9,13 @@
 | Fornitore/servizio | Funzione | Dati potenzialmente trattati | Ruolo contrattuale | Localizzazione | Trasferimento extra SEE / garanzia | Retention | Stato |
 |---|---|---|---|---|---|---|---|
 | Google / Firebase Authentication | Login/account | UID, email, dati provider auth | `[VERIFY_DPA]` | `[VERIFY]` | `[VERIFY]` | `[VERIFY]` | Aperto |
-| Google / Cloud Firestore | Replica cloud cifrata utenti, registri tecnici server-only ed eventuali residui telemetrici pre-lancio | Ciphertext business/salute, metadati causali pubblici, dati amministrativi minimi; nessun nuovo invio telemetrico client a Firestore | `[VERIFY_DPA]` | Database: `[VERIFY_LIVE]` | `[VERIFY]` | App + servizio | Aperto |
+| Google / Cloud Firestore | Replica cloud cifrata utenti e registri tecnici server-only | Ciphertext business/salute, metadati causali pubblici e dati amministrativi minimi | `[VERIFY_DPA]` | Database: `[VERIFY_LIVE]` | `[VERIFY]` | App + servizio | Aperto |
 | Google / reCAPTCHA Enterprise / App Check | Anti-abuse/attestazione | Dati tecnici dispositivo/rete secondo servizio | `[VERIFY]` | `[VERIFY]` | `[VERIFY]` | `[VERIFY]` | Aperto |
 | Google / Firebase Hosting | Hosting statico frontend/PWA | Request metadata e asset pubblici; nessun dato business utente intenzionale | `[VERIFY_DPA]` | `[VERIFY]` | `[VERIFY]` | `[VERIFY]` | Aperto |
 | Vercel Functions / Cron | API trusted per lifecycle, consenso/diritti, custodia chiave cloud e manutenzione | Request metadata; payload API minimi; ADK accessibile al server trusted tramite KEK protetta; log tecnici minimizzati, mai chiavi/token/dati salute liberi | `[VERIFY_DPA]` | `[VERIFY]` | `[VERIFY]` | `[VERIFY_PLAN]` | Aperto |
 | GitHub | Repository e CI | Codice, metadati dev, log CI; nessun dato utente intenzionale | `[VERIFY]` | `[VERIFY]` | `[VERIFY]` | `[VERIFY]` | Dev-only |
 
-Google Analytics 4/Firebase Analytics è dismesso e non è un fornitore runtime corrente: integrazione client e collegamento Firebase rimossi, proprietà Analytics dismessa e variabile di build eliminata, secondo le operazioni confermate dal product owner. Anche Vercel Analytics e Speed Insights restano ritirati. Sentry non è più una dipendenza di runtime/build client; l'eventuale presenza di eventi e configurazioni storiche presso il fornitore non è stata verificata. Le configurazioni storiche restano rintracciabili nella cronologia Git.
-
-**Sentry ritirato dal codice:** la rimozione del trasporto client non cancella automaticamente eventi già inviati. Verificare la retention storica, l'eventuale eliminazione dei dati e la chiusura del progetto presso il provider prima di attestare la dismissione completa.
+Google Analytics 4/Firebase Analytics, Vercel Analytics e Speed Insights sono dismessi dal runtime. Le configurazioni storiche ritirate rimangono rintracciabili nella cronologia Git, non nel contratto dei fornitori operativi.
 
 ## Checklist per ogni fornitore
 

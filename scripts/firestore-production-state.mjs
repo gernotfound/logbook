@@ -32,6 +32,63 @@ export function parseFieldResource(resourceName) {
   };
 }
 
+// Field overrides omitted from firestore.indexes.json must not remain silently
+// active: a successful reconciliation has to verify removals as well as additions.
+// TTL-only fields and inherited index configurations are not explicit overrides.
+export function findUnexpectedFieldOverrides(desired, liveFields) {
+  const known = new Set(desired.map(field => `${field.collectionGroup}/${field.fieldPath}`));
+  const unexpected = [];
+  for (const field of liveFields) {
+    const config = field?.indexConfig;
+    if (!config || config.usesAncestorConfig === true) continue;
+    if (config.indexes !== undefined && !Array.isArray(config.indexes)) {
+      throw new Error('Invalid explicit Firestore field indexes');
+    }
+    const resource = parseFieldResource(field.name);
+    if (!resource) throw new Error('Invalid explicit Firestore field resource');
+    if (resource.collectionGroup === '__default__') continue;
+    if (!known.has(`${resource.collectionGroup}/${resource.fieldPath}`)) unexpected.push(resource);
+  }
+  return unexpected;
+}
+
+// Only field overrides deleted from the immediately preceding version may be
+// retired automatically. A mismatched live override could have been changed by
+// another administrator; it must not be overwritten by this release.
+export function planRetiredFieldOverrides(previous, desired, liveFields) {
+  const keyOf = field => `${field.collectionGroup}/${field.fieldPath}`;
+  const desiredKeys = new Set(desired.map(keyOf));
+  const retired = previous.filter(field => !desiredKeys.has(keyOf(field)));
+  const retiredByKey = new Map(retired.map(field => [keyOf(field), field]));
+  if (retiredByKey.size !== retired.length) throw new Error('Duplicate retired Firestore override');
+  const unexpected = findUnexpectedFieldOverrides(desired, liveFields);
+  const operations = [];
+  for (const field of unexpected) {
+    const previousField = retiredByKey.get(keyOf(field));
+    if (!previousField) throw new Error(`Undeclared Firestore field override: ${keyOf(field)}`);
+    if (!/^[A-Za-z0-9_]+$/.test(field.collectionGroup) ||
+        !/^[A-Za-z0-9_]+$/.test(field.fieldPath)) {
+      throw new Error('Unsupported retired Firestore field path');
+    }
+    const live = liveFields.find(item => {
+      const parsed = parseFieldResource(item?.name);
+      return parsed?.collectionGroup === field.collectionGroup && parsed.fieldPath === field.fieldPath;
+    });
+    if (!live || !live.indexConfig || live.ttlConfig) {
+      throw new Error(`Unsafe live Firestore field override: ${keyOf(field)}`);
+    }
+    if (live.indexConfig.reverting !== true) {
+      const oldModes = normalizeFieldIndexModes(previousField.indexes);
+      const liveModes = normalizeLiveFieldIndexModes(live.indexConfig.indexes ?? [], field.fieldPath);
+      if (JSON.stringify(oldModes) !== JSON.stringify(liveModes)) {
+        throw new Error(`Live Firestore index modes changed: ${keyOf(field)}`);
+      }
+    }
+    operations.push({ collectionGroup: field.collectionGroup, fieldPath: field.fieldPath,
+      reverting: live.indexConfig.reverting === true });
+  }
+  return operations;
+}
 export function normalizeFieldIndexModes(indexes) {
   if (!Array.isArray(indexes)) throw new Error('Field override indexes must be an array');
   const modes = indexes.map(index => {

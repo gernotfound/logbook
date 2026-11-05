@@ -54,7 +54,7 @@
 ## Blocker noti per lo screening
 
 - `[ ]` revoca consenso salute: implementazione e regressioni integrate; completare collaudo autenticato multi-dispositivo e validazione legale pre-pilot;
-- `[ ]` verificare cancellazione dei dati Sentry storici, retention Firestore legacy e log di servizio Firebase/Vercel;
+- `[ ]` verificare retention e trattamento dei log tecnici dei servizi Firebase/Vercel;
 - `[ ]` stato live di App Check/Rules/API restrictions verificato;
 - `[ ]` restore/backup policy decisa;
 - `[ ]` ruoli provider/palestra firmati;

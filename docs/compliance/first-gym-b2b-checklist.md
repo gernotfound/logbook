@@ -18,7 +18,7 @@ I collaudi sono requisiti di evidenza, non autorizzazioni a creare un ambiente T
 - `[ ]` Account deletion E2E reale arriva a completion anche attraverso il recovery path.
 - `[ ]` Il cron di recovery/cancellazione è stato osservato in un'esecuzione reale recente.
 - `[ ]` Backup/PITR ha una decisione documentata; se abilitato, il restore è stato provato.
-- `[ ]` La retention dei log Firebase/Vercel e la cancellazione degli eventi Sentry storici sono verificate nei provider.
+- `[ ]` La retention dei log di servizio Firebase/Vercel è verificata presso i rispettivi provider.
 - `[ ]` Test installazione/uso su iPhone PWA, Android PWA e browser pertinenti sono completati.
 - `[ ]` Audit accessibilità automatico e manuale pertinente è completato.
 - `[ ]` Accessi amministrativi e MFA sono verificati per i sistemi critici.

@@ -37,6 +37,16 @@ test('history detail exposes scrollable geometry and a reachable close action on
   const scrollArea = dialog.locator('.data-detail-scroll');
   await expect(dialog).toBeVisible();
   await expect(scrollArea).toBeVisible();
+  for (const [label, value] of [
+    ['Peso', '81,4 kg'], ['BF · manuale', '16,7%'], ['Vita', '84,2 cm'],
+    ['Collo', '38 cm'], ['Torace', '101 cm'], ['Spalle', '118 cm'],
+    ['Braccia', '37,5 cm'], ['Cosce', '59 cm'], ['Polpacci', '38,5 cm'],
+  ]) {
+    const cell = dialog.locator('.data-detail-grid > div').filter({
+      has: page.getByText(label, { exact: true }),
+    });
+    await expect(cell.locator('strong')).toHaveText(value);
+  }
 
   const metrics = await scrollArea.evaluate(element => {
     const style = getComputedStyle(element);
