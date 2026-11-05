@@ -63,18 +63,16 @@ for (const scenario of cases) {
     await page.setViewportSize({ width: scenario.width, height: scenario.height });
     await page.emulateMedia({ colorScheme: scenario.system, reducedMotion: scenario.motion });
     await page.addInitScript(preference => localStorage.setItem('logbook:appearance:v1', preference), scenario.preference);
-    let releaseEntry!: () => void;
     let releaseData!: () => void;
-    const entryGate = new Promise<void>(resolve => { releaseEntry = resolve; });
     const dataGate = new Promise<void>(resolve => { releaseData = resolve; });
-    let entryHeld = false;
+    let entryBlocked = false;
     let dataHeld = false;
-    // Both screens are real production renders, observed at native request
-    // boundaries instead of keeping them alive with fake markup or CSS.
+    // Finish a real first document without the app entry so WebKit can paint
+    // and capture it. Only this request is aborted: HTML, theme script, CSS and
+    // artwork remain real. The next document loads the real app normally.
     await page.route('**/assets/index-*.js', async route => {
-      entryHeld = true;
-      await entryGate;
-      await route.continue();
+      entryBlocked = true;
+      await route.abort('blockedbyclient');
     });
     await page.route('**/assets/DataView-*.js', async route => {
       dataHeld = true;
@@ -82,8 +80,8 @@ for (const scenario of cases) {
       await route.continue();
     });
     try {
-      await page.goto('/', { waitUntil: 'commit' });
-      await expect.poll(() => entryHeld).toBe(true);
+      await page.goto('/');
+      expect(entryBlocked).toBe(true);
       const initial = page.locator('#initial-loader');
       await expect(initial).toBeVisible();
       await expect(initial).toHaveCSS('position', 'fixed');
@@ -108,7 +106,8 @@ for (const scenario of cases) {
         expect(bootstrap.timing).toBe('linear');
       }
       await testInfo.attach('bootstrap-loader', { body: await page.screenshot({ animations: 'disabled' }), contentType: 'image/png' });
-      releaseEntry();
+      await page.unroute('**/assets/index-*.js');
+      await page.reload();
 
       await page.getByRole('button', { name: 'Continua senza account' }).click();
       await expect(page.getByText('Aggiornamento Termini e Privacy')).toBeVisible();
@@ -145,9 +144,8 @@ for (const scenario of cases) {
       await expect(page.getByRole('tab', { name: 'Misurazioni', exact: true })).toBeVisible();
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     } finally {
-      releaseEntry();
       releaseData();
-      await page.unrouteAll({ behavior: 'wait' });
+      if (!page.isClosed()) await page.unrouteAll({ behavior: 'wait' });
     }
   });
 }
