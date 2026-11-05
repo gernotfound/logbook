@@ -36,6 +36,21 @@ describe('mergeArrayById', () => {
         expect(merged[0].sets[0].timestamp).toBe(200);
     });
 
+    it('quarantines invalid IDs and deduplicates each source before applying guest priority', () => {
+        const invalid = [' ', '$order', 'null', 'undefined', 'a/b', 'x'.repeat(161), NaN, Infinity];
+        const cloud = [
+            ...invalid.map(id => ({ id, name: 'invalid' })),
+            { id: 'same', name: 'first cloud' }, { id: 'same', name: 'duplicate cloud' },
+            { id: 0, name: 'numeric zero' },
+        ];
+        const guest = [{ id: 'same', name: 'first guest' }, { id: 'same', name: 'duplicate guest' }];
+        const before = structuredClone({ cloud, guest });
+        expect(mergeArrayById(cloud, guest)).toEqual([
+            { id: 'same', name: 'first guest' }, { id: 0, name: 'numeric zero' },
+        ]);
+        expect({ cloud, guest }).toEqual(before);
+    });
+
     it('should quarantine items without valid IDs', () => {
         const cloud = [{ name: 'No ID 1' }, { id: '1', name: 'Cloud 1' }] as any[];
         const guest = [{ name: 'No ID 2' }, { id: '1', name: 'Guest 1' }] as any[];
@@ -47,6 +62,33 @@ describe('mergeArrayById', () => {
 });
 
 describe('mergeNutrition', () => {
+    it('keeps explicit zero steps and BF provenance with the chosen values while merging supplement IDs', () => {
+        const date = '2026-11-05';
+        const cloud = { [date]: {
+            date, steps: 9000, stepsSource: 'imported', stepsCapturedAt: 10,
+            bf: '20', bfProvenance: { method: 'us_navy' },
+            supplementsIntake: [{ id: 'i1', supplementId: 's1', quantity: 1 }],
+            cardioSessions: [{ id: 'c1', durationMinutes: 20 }],
+        } } as any;
+        const guest = { [date]: {
+            date, steps: 0, bf: '19', bfProvenance: { method: 'manual' }, isDayOn: false,
+            supplementsIntake: [
+                { id: 'i1', supplementId: 's1', quantity: 2 },
+                { id: 'i2', supplementId: 's2', quantity: 3 },
+            ],
+            cardioSessions: [{ id: 'c1', durationMinutes: 25 }, { id: 'c2', durationMinutes: 30 }],
+        } } as any;
+        const merged = mergeNutrition(cloud, guest)[date];
+        expect(merged).toMatchObject({ steps: 0, bf: '19', bfProvenance: { method: 'manual' }, isDayOn: false });
+        expect(merged.stepsSource).toBeUndefined();
+        expect(merged.stepsCapturedAt).toBeUndefined();
+        expect(merged.supplementsIntake).toEqual(guest[date].supplementsIntake);
+        expect(merged.cardioSessions).toEqual(guest[date].cardioSessions);
+
+        delete guest[date].bfProvenance;
+        expect(mergeNutrition(cloud, guest)[date].bfProvenance).toBeUndefined();
+    });
+
     it('should merge nested meals prioritizing guest by ID', () => {
         const cloud = {
             '2025-01-01': {

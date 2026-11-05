@@ -2,6 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { User } from 'firebase/auth';
 import { auth } from '../src/lib/firebase';
 import { invalidateSession } from '../src/lib/sync/session';
+import { refreshHealthConsent } from '../src/lib/healthConsent';
+import { prepareUnlockedTestArchive } from './secureVaultFixture';
 import { createAuthConsentLifecycleHandlers } from '../src/contexts/auth/consentLifecycle';
 
 const registered: Array<(event: Event) => void> = [];
@@ -21,8 +23,10 @@ function start(loadData: (user: User) => Promise<void>, isBootstrapInFlight = ()
   return { setLoading, setSaveError, handlers };
 }
 
-beforeEach(() => {
+beforeEach(async () => {
+  vi.clearAllMocks();
   localStorage.clear();
+  await prepareUnlockedTestArchive('user:' + auth.currentUser!.uid);
 });
 
 afterEach(() => {
@@ -32,6 +36,22 @@ afterEach(() => {
 });
 
 describe('consent reactivation lifecycle owner fencing', () => {
+  it.each(['withdrawn', 'error'] as const)('awaits the whole reconnect handler without hydrating after %s consent', async status => {
+    let finish!: (value: typeof status) => void;
+    vi.mocked(refreshHealthConsent).mockImplementationOnce(
+      () => new Promise(resolve => { finish = resolve; }),
+    );
+    const loadData = vi.fn(async () => {});
+    const { handlers } = start(loadData);
+    const reconnect = handlers.handleVisibilityChange(new Event('online'));
+    expect(refreshHealthConsent).toHaveBeenCalledOnce();
+    expect(loadData).not.toHaveBeenCalled();
+
+    finish(status);
+    await reconnect;
+    expect(loadData).not.toHaveBeenCalled();
+  });
+
   it('does not supersede a bootstrap verification on focus', async () => {
     const loadData = vi.fn(async () => {});
     const isBootstrapInFlight = vi.fn(() => true);

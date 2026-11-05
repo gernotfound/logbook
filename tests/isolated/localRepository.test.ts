@@ -342,6 +342,8 @@ describe('durable owner-scoped journal', () => {
     });
 
     it.each([
+        ['root fallback for null data', (record: any) => ({ ...record, data: null })],
+        ['root fallback for primitive baseline', (record: any) => ({ ...record, baseline: 'corrupt' })],
         ['unknown root business field', (record: any) => ({ ...record, data: { ...record.data, futureRootValue: { protected: 17 } } })],
         ['nested Zod fallback', (record: any) => ({ ...record, data: { ...record.data, profile: { ...record.data.profile, height: { invalid: true } } } })],
         ['unknown baseline business field', (record: any) => ({ ...record, baseline: { ...record.baseline, futureRootValue: { protected: 18 } } })],

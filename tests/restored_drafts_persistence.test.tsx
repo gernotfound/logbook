@@ -8,6 +8,9 @@ import { prepareUnlockedTestArchive } from './secureVaultFixture';
 import { localStorageMock } from './setup';
 import { useAppStore } from '../src/store/useAppStore';
 import { useDialogStore } from '../src/store/useDialogStore';
+import { UserDataSchema } from '../src/lib/schema';
+import { initializeLocal, readLocal } from '../src/lib/sync/localRepository';
+import type { UserData } from '../src/types';
 import { storageOwner } from '../src/lib/sync/session';
 
 describe('restored owner-scoped drafts', () => {
@@ -15,7 +18,12 @@ describe('restored owner-scoped drafts', () => {
         localStorage.clear();
         await prepareUnlockedTestArchive(storageOwner());
         localStorage.setItem(`logbook:v2:${storageOwner()}:health-consent-generation`, '3');
-        useAppStore.setState({ localPersistenceBlocked: false, syncHealth: 'synced', saveError: null });
+        const initial = UserDataSchema.parse({}) as UserData;
+        await initializeLocal(storageOwner(), initial);
+        useAppStore.setState({
+            userData: initial, dataOwner: storageOwner(),
+            localPersistenceBlocked: false, syncHealth: 'synced', saveError: null,
+        });
     });
     afterEach(() => vi.restoreAllMocks());
 
@@ -64,6 +72,71 @@ describe('restored owner-scoped drafts', () => {
             remove.mockRestore();
         }
     });
+    it('retains the last sealed exercise draft and refuses business save when a later physical write fails', async () => {
+        const owner = storageOwner();
+        writeWorkoutRecoveryDraft('draft_exercise', owner, { name: 'Recovered exercise', notes: 'Last durable note' });
+        const hook = renderHook(() => useTrainingExercises());
+        const key = protectedDeviceKey('draft_exercise', owner);
+        const before = localStorage.getItem(key);
+        const originalSet = localStorageMock.setItem.getMockImplementation()!;
+        const dispatch = vi.spyOn(useAppStore.getState(), 'dispatchDomainOperation');
+        vi.spyOn(useDialogStore.getState(), 'showAlert').mockResolvedValue(undefined);
+        vi.spyOn(localStorageMock, 'setItem').mockImplementation((name, value) => {
+            if (name === key) throw new DOMException('storage full', 'QuotaExceededError');
+            originalSet(name, value);
+        });
+
+        act(() => hook.result.current.setExNotes('Only in memory'));
+        expect(hook.result.current.exNotes).toBe('Only in memory');
+        expect(useAppStore.getState().localPersistenceBlocked).toBe(true);
+        expect(localStorage.getItem(key)).toBe(before);
+        await act(async () => { expect(await hook.result.current.handleSaveExercise()).toBe(false); });
+        expect(dispatch).not.toHaveBeenCalled();
+        expect((await readLocal(owner))?.data.library).toEqual([]);
+        expect(localStorage.getItem(key)).toBe(before);
+        hook.unmount();
+    });
+
+    it('commits an edited restored exercise through the durable domain boundary before clearing its draft', async () => {
+        const owner = storageOwner();
+        writeWorkoutRecoveryDraft('draft_exercise', owner, {
+            name: 'Recovered exercise', notes: 'Recovered note',
+            trackingType: 'weight_reps', selectedMuscles: [], secondaryMuscles: [],
+            isBodyweight: false, equipmentWeight: '20',
+        });
+        const hook = renderHook(() => useTrainingExercises());
+        expect(hook.result.current.exName).toBe('Recovered exercise');
+        act(() => hook.result.current.setExNotes('Edited after recovery'));
+        await act(async () => { expect(await hook.result.current.handleSaveExercise()).toBe(true); });
+
+        const durable = await readLocal(owner);
+        expect(durable?.data.library).toEqual([
+            expect.objectContaining({ name: 'Recovered exercise', notes: 'Edited after recovery', equipmentWeight: 20 }),
+        ]);
+        expect(durable?.pending.length).toBeGreaterThan(0);
+        expect(readDeviceValueStrict('draft_exercise', owner)).toBeNull();
+        expect(hook.result.current.exName).toBe('');
+        hook.unmount();
+    });
+
+    it('commits an edited restored routine before clearing its temporary copy', async () => {
+        const owner = storageOwner();
+        writeWorkoutRecoveryDraft('draft_routine', owner, { name: 'Recovered routine', exercises: [] });
+        const hook = renderHook(() => useTrainingRoutines());
+        expect(hook.result.current.routineName).toBe('Recovered routine');
+        act(() => hook.result.current.setRoutineName('Edited recovered routine'));
+        await act(async () => { expect(await hook.result.current.handleSave()).toBe(true); });
+
+        const durable = await readLocal(owner);
+        expect(durable?.data.routines).toEqual([
+            expect.objectContaining({ name: 'Edited recovered routine', exercises: [] }),
+        ]);
+        expect(durable?.pending.length).toBeGreaterThan(0);
+        expect(readDeviceValueStrict('draft_routine', owner)).toBeNull();
+        expect(hook.result.current.routineName).toBe('');
+        hook.unmount();
+    });
+
     it('quarantines old exercise and routine drafts before hydration or mount cleanup', async () => {
         const owner = storageOwner();
         const marker = `logbook:v2:${owner}:health-consent-generation`;
