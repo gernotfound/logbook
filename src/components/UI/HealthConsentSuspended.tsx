@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useAppStore } from '../../store/useAppStore';
 import type { User } from 'firebase/auth';
 import { useSettings } from '../../hooks/useSettings';
@@ -54,7 +54,7 @@ export function HealthConsentSuspended({ status, user }: { status: HealthConsent
   const [terms, setTerms] = useState(false);
   const [erasureProgress, setErasureProgress] = useState<HealthDataErasureOutcome | null>(null);
   const [checkingErasure, setCheckingErasure] = useState(false);
-  const [localReady, setLocalReady] = useState(false);
+  const [localReadyUid, setLocalReadyUid] = useState<string | null>(null);
   const checkingErasureRef = useRef(false);
   const [offline, setOffline] = useState(() => typeof navigator !== 'undefined' && navigator.onLine === false);
   useEffect(() => {
@@ -76,10 +76,10 @@ export function HealthConsentSuspended({ status, user }: { status: HealthConsent
     };
   }, []);
   const initialAcceptance = status === 'unregistered' && user !== null;
-  const canReaccept = user !== null && localReady && (status === 'withdrawn' || status === 'reaccepting');
+  const canReaccept = user !== null && localReadyUid === user.uid && (status === 'withdrawn' || status === 'reaccepting');
   const showReacceptForm = initialAcceptance || canReaccept;
 
-  const verifyAutomaticErasure = async () => {
+  const verifyAutomaticErasure = useCallback(async () => {
     if (!user || status !== 'withdrawn' || offline || checkingErasureRef.current
         || auth.currentUser?.uid !== user.uid) return;
     checkingErasureRef.current = true;
@@ -107,7 +107,7 @@ export function HealthConsentSuspended({ status, user }: { status: HealthConsent
       const hasLocalData = envelope !== undefined || hasDeviceRecoveryBackupSource(owner)
         || (app.dataOwner === owner && app.userData !== null);
       if (!hasLocalData) {
-        setLocalReady(true);
+        setLocalReadyUid(uid);
         return;
       }
       await purgeCompletedHealthDataLocal(owner);
@@ -126,11 +126,14 @@ export function HealthConsentSuspended({ status, user }: { status: HealthConsent
       checkingErasureRef.current = false;
       setCheckingErasure(false);
     }
-  };
+  }, [user, status, offline]);
   useEffect(() => {
-    if (status === 'withdrawn' && user !== null && !offline) void verifyAutomaticErasure();
-    // The owner and consent status are the boundaries of this verification.
-  }, [status, user?.uid, offline]);
+    if (status === 'withdrawn' && user !== null && !offline) {
+      // Defer state changes beyond the effect setup; avoid redundant work on
+      // the same owner when the component rerenders with progress feedback.
+      void Promise.resolve().then(verifyAutomaticErasure);
+    }
+  }, [status, user, offline, verifyAutomaticErasure]);
 
   const acceptInitial = async () => {
     if (!user || !initialAcceptance || busy) return;
@@ -237,7 +240,7 @@ export function HealthConsentSuspended({ status, user }: { status: HealthConsent
       {user !== null && status === 'withdrawn' && (
         <section aria-label="Cancellazione automatica dei dati">
           <p>La revoca avvia automaticamente la cancellazione dei dati applicativi, mantenendo l'account. Le copie su dispositivi offline, file esportati e backup tecnici dei fornitori hanno limiti di eliminazione separati.</p>
-          <p role="status">{localReady
+          <p role="status">{localReadyUid === user.uid
             ? 'Cancellazione cloud completata e nessun archivio locale precedente rilevato. Puoi iniziare con un nuovo consenso.'
             : checkingErasure
               ? 'Verifica della cancellazione in corso…'
