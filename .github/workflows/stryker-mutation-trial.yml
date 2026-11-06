@@ -1,0 +1,92 @@
+name: Stryker Mutation Trial (branch-only)
+
+on:
+  push:
+    branches:
+      - experiment/stryker-vitest-20261106
+
+permissions:
+  contents: read
+
+concurrency:
+  group: stryker-trial-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  mutation:
+    name: Experimental mutation test (Vitest)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      EXPECTED_SHA: ${{ github.sha }}
+
+    steps:
+      - name: Checkout exact branch SHA
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Verify exact SHA
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+
+      - name: Setup Node 24
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: '24'
+          cache: npm
+
+      - name: Verify npm and approved project install scripts
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$(npm --version)" == 11.* ]]
+          node scripts/check-install-scripts.mjs
+
+      - name: Install project dependencies
+        run: npm ci
+
+      - name: Add pinned experimental Stryker tools without changing the lockfile
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install --no-save --package-lock=false --ignore-scripts --no-audit --no-fund \
+            @stryker-mutator/core@10.1.1 @stryker-mutator/vitest-runner@10.1.1
+          git diff --exit-code -- package.json package-lock.json
+          node -e "for (const n of ['@stryker-mutator/core','@stryker-mutator/vitest-runner']) { const p = require(n + '/package.json'); if (p.version !== '10.1.1') process.exit(1); }"
+
+      - name: Run diagnostic mutations against production CSV formatter
+        shell: bash
+        run: |
+          set -o pipefail
+          ./node_modules/.bin/stryker run stryker.trial.config.mjs 2>&1 | tee stryker-trial.log
+
+      - name: Verify runner actually detects mutations
+        shell: bash
+        run: |
+          node --input-type=module <<'NODE'
+          import { readFileSync } from 'node:fs';
+          const result = JSON.parse(readFileSync('coverage/mutation-trial/mutation.json', 'utf8'));
+          const mutants = Object.values(result.files ?? {}).flatMap(file => file.mutants ?? []);
+          const killed = mutants.filter(m => m.status === 'Killed').length;
+          const survived = mutants.filter(m => m.status === 'Survived').length;
+          if (killed < 2) {
+            throw new Error('Vitest 5 runner is untrusted: fewer than two killed mutants in a well-covered formatter');
+          }
+          console.log(JSON.stringify({ mutants: mutants.length, killed, survived }));
+          NODE
+
+      - name: Preserve diagnostic evidence
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: stryker-trial-${{ env.EXPECTED_SHA }}
+          if-no-files-found: ignore
+          retention-days: 7
+          path: |
+            stryker-trial.log
+            coverage/mutation-trial/
