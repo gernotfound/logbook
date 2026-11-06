@@ -24,19 +24,26 @@ vi.mock('../src/lib/sync/session', () => ({
   userOwner: (uid: string) => 'user:' + uid,
 }));
 
-import { watchAuthenticatedAccountActivity } from '../src/lib/accountActivity';
-
 const user = () => ({
   uid: 'a',
   getIdToken: vi.fn(async () => 'id-token'),
 });
+
+// Import after setting the flag: Vite may resolve import.meta.env while
+// transforming a module, before per-test stubs would take effect.
+async function observe(account: ReturnType<typeof user>) {
+  const { watchAuthenticatedAccountActivity } = await import('../src/lib/accountActivity');
+  return watchAuthenticatedAccountActivity(account as never);
+}
 
 describe('foreground activity observer (browser boundary)', () => {
   let stop: () => void = () => {};
   let fetchMock: ReturnType<typeof vi.fn>;
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.resetModules();
     vi.stubEnv('VITE_ACCOUNT_INACTIVITY_TRACKING', 'true');
+    vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(true);
     vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('visible');
     mocks.currentUser = null;
     mocks.isCurrentSession.mockReturnValue(true);
@@ -52,11 +59,11 @@ describe('foreground activity observer (browser boundary)', () => {
     vi.restoreAllMocks();
   });
 
-  it('is completely inert without explicit frontend rollout', () => {
+  it('is completely inert without explicit frontend rollout', async () => {
     vi.stubEnv('VITE_ACCOUNT_INACTIVITY_TRACKING', 'false');
     const account = user();
     mocks.currentUser = account;
-    stop = watchAuthenticatedAccountActivity(account as never);
+    stop = await observe(account);
     window.dispatchEvent(new Event('focus'));
     expect(fetchMock).not.toHaveBeenCalled();
   });
@@ -66,7 +73,7 @@ describe('foreground activity observer (browser boundary)', () => {
     visibility.mockReturnValue('hidden');
     const account = user();
     mocks.currentUser = account;
-    stop = watchAuthenticatedAccountActivity(account as never);
+    stop = await observe(account);
     window.dispatchEvent(new Event('focus'));
     expect(fetchMock).not.toHaveBeenCalled();
     visibility.mockReturnValue('visible');
@@ -77,7 +84,7 @@ describe('foreground activity observer (browser boundary)', () => {
   it('counts visible read-only sessions without exporting business data or user-controlled time', async () => {
     const account = user();
     mocks.currentUser = account;
-    stop = watchAuthenticatedAccountActivity(account as never);
+    stop = await observe(account);
     await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
     const [url, options] = fetchMock.mock.calls[0];
     expect(url).toBe('https://backend.example/api/account-activity');
@@ -97,7 +104,7 @@ describe('foreground activity observer (browser boundary)', () => {
     const account = user();
     mocks.currentUser = account;
     mocks.isCurrentSession.mockReturnValue(false);
-    stop = watchAuthenticatedAccountActivity(account as never);
+    stop = await observe(account);
     window.dispatchEvent(new Event('keydown'));
     await Promise.resolve();
     expect(fetchMock).not.toHaveBeenCalled();
@@ -109,7 +116,7 @@ describe('foreground activity observer (browser boundary)', () => {
     mocks.currentUser = account;
     let resolve!: (value: string) => void;
     mocks.getLimitedUseAppCheckToken.mockReturnValueOnce(new Promise<string>(r => { resolve = r; }));
-    stop = watchAuthenticatedAccountActivity(account as never);
+    stop = await observe(account);
     await vi.waitFor(() => expect(mocks.getLimitedUseAppCheckToken).toHaveBeenCalledTimes(1));
     mocks.currentUser = user();
     resolve('token');
@@ -125,7 +132,7 @@ describe('foreground activity observer (browser boundary)', () => {
       expect(init.signal.aborted).toBe(false);
       return new Promise(() => {});
     });
-    stop = watchAuthenticatedAccountActivity(account as never);
+    stop = await observe(account);
     await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
     const signal = (fetchMock.mock.calls[0][1] as { signal: AbortSignal }).signal;
     stop();
