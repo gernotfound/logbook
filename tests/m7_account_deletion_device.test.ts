@@ -1,26 +1,33 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const state = vi.hoisted(() => ({
-  registry: null as null | Record<string, unknown>,
+  registries: new Map<string, Record<string, unknown>>(),
   deletionJobUid: null as string | null,
   deleted: 0,
 }));
 
-function snapshot() {
+function registry(uid = 'user-a'): Record<string, unknown> | null {
+  return state.registries.get(uid) ?? null;
+}
+
+function snapshot(uid: string) {
+  const data = registry(uid);
+  return { exists: data !== null, data: () => data ?? undefined };
+}
+
+function deviceRef(uid: string) {
   return {
-    exists: state.registry !== null,
-    data: () => state.registry ?? undefined,
+    uid,
+    async get() { return snapshot(uid); },
+    async delete() {
+      if (state.registries.delete(uid)) state.deleted += 1;
+    },
   };
 }
 
-const ref = vi.hoisted(() => ({
-  async get() { return snapshot(); },
-  async delete() { state.registry = null; state.deleted += 1; },
-}));
-
 const fakeDb = vi.hoisted(() => ({
   collection(name: string) {
-    if (name === 'account_deletion_devices') return { doc: (_uid: string) => ref };
+    if (name === 'account_deletion_devices') return { doc: (uid: string) => deviceRef(uid) };
     if (name === 'account_deletions') return {
       doc: (uid: string) => ({
         async get() {
@@ -34,17 +41,17 @@ const fakeDb = vi.hoisted(() => ({
     const writes: Array<() => void> = [];
     await work({
       get: (target: { get: () => Promise<unknown> }) => target.get(),
-      create: (_ref: unknown, data: Record<string, unknown>) => {
-        writes.push(() => { state.registry = data; });
+      create: (target: { uid: string }, data: Record<string, unknown>) => {
+        if (registry(target.uid)) throw new Error('Already exists');
+        writes.push(() => { state.registries.set(target.uid, data); });
       },
-      update: (_ref: unknown, data: Record<string, unknown>) => {
-        writes.push(() => {
-          if (!state.registry) throw new Error('Missing registry');
-          state.registry = { ...state.registry, ...data };
-        });
+      update: (target: { uid: string }, data: Record<string, unknown>) => {
+        const old = registry(target.uid);
+        if (!old) throw new Error('Missing registry');
+        writes.push(() => { state.registries.set(target.uid, { ...old, ...data }); });
       },
     });
-    // No writes survive a rejected transaction, as with Firestore.
+    // Transaction writes become visible only after the callback succeeds.
     for (const apply of writes) apply();
   },
 }));
@@ -101,7 +108,7 @@ function request(method: 'GET' | 'POST', options?: { origin?: string; deviceToke
 
 describe('M7 account deletion recovery device registry', () => {
   beforeEach(() => {
-    state.registry = null;
+    state.registries.clear();
     state.deletionJobUid = null;
     state.deleted = 0;
     vi.clearAllMocks();
@@ -121,7 +128,7 @@ describe('M7 account deletion recovery device registry', () => {
       expect(response.status).toBe(400);
       expect(await response.json()).toEqual({ error: 'Corpo JSON non valido.' });
       expect(auth.verifyRecoveryRegistrationRequester).toHaveBeenCalledTimes(1);
-      expect(state.registry).toBeNull();
+      expect(registry()).toBeNull();
     },
   );
 
@@ -150,20 +157,20 @@ describe('M7 account deletion recovery device registry', () => {
     expect(await response.json()).toEqual({
       error: 'Registrazione dispositivo non consentita: cancellazione account già avviata.',
     });
-    expect(state.registry).toBeNull();
+    expect(registry()).toBeNull();
   });
 
   it('retains existing recovery proof but forbids new hashes or recency updates after deletion starts', async () => {
     const original = token('A');
     await registerDeletionRecoveryDevice('user-a', original);
-    const snapshotBefore = state.registry;
+    const snapshotBefore = registry();
     state.deletionJobUid = 'user-a';
 
     await expect(registerDeletionRecoveryDevice('user-a', token('B')))
       .rejects.toBeInstanceOf(DeletionRecoveryConflictError);
     await expect(registerDeletionRecoveryDevice('user-a', original))
       .rejects.toBeInstanceOf(DeletionRecoveryConflictError);
-    expect(state.registry).toBe(snapshotBefore);
+    expect(registry()).toBe(snapshotBefore);
     expect(await verifyDeletionRecoveryDevice('user-a', original)).toBe(true);
     expect(await verifyDeletionRecoveryDevice('user-a', token('B'))).toBe(false);
   });
@@ -171,35 +178,50 @@ describe('M7 account deletion recovery device registry', () => {
   it('does not block the same registration if another owner is being deleted', async () => {
     state.deletionJobUid = 'user-b';
     await expect(registerDeletionRecoveryDevice('user-a', token('A'))).resolves.toBeUndefined();
-    expect(state.registry?.uid).toBe('user-a');
+    expect(registry()?.uid).toBe('user-a');
   });
 
   it('stores only token hashes and verifies the matching account/device pair', async () => {
     const raw = token('A');
     await registerDeletionRecoveryDevice('user-a', raw);
 
-    expect(JSON.stringify(state.registry)).not.toContain(raw);
-    expect(state.registry?.tokenHashes).toEqual([expect.stringMatching(/^[a-f0-9]{64}$/)]);
+    expect(JSON.stringify(registry())).not.toContain(raw);
+    expect(registry()?.tokenHashes).toEqual([expect.stringMatching(/^[a-f0-9]{64}$/)]);
     await expect(verifyDeletionRecoveryDevice('user-a', raw)).resolves.toBe(true);
     await expect(verifyDeletionRecoveryDevice('user-a', token('B'))).resolves.toBe(false);
     await expect(verifyDeletionRecoveryDevice('user-b', raw)).resolves.toBe(false);
   });
 
+  it('keeps two owners recovery registries independent across registration and purge', async () => {
+    const a = token('A');
+    const b = token('B');
+    await registerDeletionRecoveryDevice('user-a', a);
+    await registerDeletionRecoveryDevice('user-b', b);
+    expect(registry('user-a')?.uid).toBe('user-a');
+    expect(registry('user-b')?.uid).toBe('user-b');
+    expect(await verifyDeletionRecoveryDevice('user-a', b)).toBe(false);
+    expect(await verifyDeletionRecoveryDevice('user-b', a)).toBe(false);
+    expect(await purgeDeletionRecoveryDevices('user-b')).toBe(1);
+    expect(registry('user-b')).toBeNull();
+    expect(await verifyDeletionRecoveryDevice('user-a', a)).toBe(true);
+    expect(registry('user-a')?.uid).toBe('user-a');
+  });
+
   it('keeps the registry bounded and evicts the least recently registered token instead of exhausting it', async () => {
     await registerDeletionRecoveryDevice('user-a', token('A'));
     await registerDeletionRecoveryDevice('user-a', token('A'));
-    expect((state.registry?.tokenHashes as string[])).toHaveLength(1);
+    expect((registry()?.tokenHashes as string[])).toHaveLength(1);
 
     for (let index = 1; index < MAX_DELETION_RECOVERY_DEVICES; index += 1) {
       await registerDeletionRecoveryDevice('user-a', token(String.fromCharCode(65 + index)));
     }
-    expect((state.registry?.tokenHashes as string[])).toHaveLength(MAX_DELETION_RECOVERY_DEVICES);
+    expect((registry()?.tokenHashes as string[])).toHaveLength(MAX_DELETION_RECOVERY_DEVICES);
 
     // Touch A so it is no longer the least-recently registered credential.
     await registerDeletionRecoveryDevice('user-a', token('A'));
     await registerDeletionRecoveryDevice('user-a', token('Z'));
 
-    expect((state.registry?.tokenHashes as string[])).toHaveLength(MAX_DELETION_RECOVERY_DEVICES);
+    expect((registry()?.tokenHashes as string[])).toHaveLength(MAX_DELETION_RECOVERY_DEVICES);
     await expect(verifyDeletionRecoveryDevice('user-a', token('A'))).resolves.toBe(true);
     await expect(verifyDeletionRecoveryDevice('user-a', token('B'))).resolves.toBe(false);
     await expect(verifyDeletionRecoveryDevice('user-a', token('Z'))).resolves.toBe(true);

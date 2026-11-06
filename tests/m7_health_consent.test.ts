@@ -22,7 +22,11 @@ vi.mock('../server/healthConsent/erasure', async importOriginal => ({
 }));
 
 vi.mock('../server/accountDeletion/httpAuth', () => auth);
-const transactionFixture = vi.hoisted(() => ({ failErasureSetOnce: false }));
+const transactionFixture = vi.hoisted(() => ({
+  failErasureSetOnce: false,
+  retries: 0,
+  overlap: null as null | { arrivals: number; gate: Promise<void>; release: () => void },
+}));
 vi.mock('../server/accountDeletion/firebaseAdmin', () => ({
   adminDb: () => ({
     collection: (name: string) => ({
@@ -35,36 +39,51 @@ vi.mock('../server/accountDeletion/firebaseAdmin', () => ({
         async delete() { storage.documents.delete(name + '/' + uid); },
       }),
     }),
-    // Stage writes until success: Firestore rolls back the entire transaction
-    // when a write fails, including erasure-job enqueue during withdrawal.
+    // Optimistic retries model Firestore's read-version validation: overlapping
+    // requests must not both commit changes computed from the same snapshot.
     runTransaction: async (fn: (tx: any) => Promise<unknown>) => {
-      const writes = new Map<string, Stored | null>();
-      const result = await fn({
-        get: (ref: { key: string }) => {
-          const item = storage.documents.get(ref.key);
-          return Promise.resolve({ exists: !!item, data: () => item });
-        },
-        create: (ref: { key: string }, data: Stored) => {
-          if (storage.documents.has(ref.key)) throw new Error('Already exists');
-          writes.set(ref.key, data);
-        },
-        set: (ref: { key: string }, data: Stored) => writes.set(ref.key, data),
-        update: (ref: { key: string }, data: Stored) => {
-          const old = storage.documents.get(ref.key);
-          if (!old) throw new Error('Not found');
-          writes.set(ref.key, { ...old, ...data });
-        },
-        delete: (ref: { key: string }) => writes.set(ref.key, null),
-      });
-      if (transactionFixture.failErasureSetOnce && writes.has('health_data_erasures/account-1')) {
-        transactionFixture.failErasureSetOnce = false;
-        throw new Error('Injected transactional erasure job write failure');
+      for (let attempt = 0; attempt < 5; attempt += 1) {
+        const reads = new Map<string, Stored | undefined>();
+        const writes = new Map<string, Stored | null>();
+        const result = await fn({
+          get: (ref: { key: string }) => {
+            const item = storage.documents.get(ref.key);
+            reads.set(ref.key, item);
+            return Promise.resolve({ exists: !!item, data: () => item });
+          },
+          create: (ref: { key: string }, data: Stored) => {
+            if (storage.documents.has(ref.key)) throw new Error('Already exists');
+            writes.set(ref.key, data);
+          },
+          set: (ref: { key: string }, data: Stored) => writes.set(ref.key, data),
+          update: (ref: { key: string }, data: Stored) => {
+            const old = storage.documents.get(ref.key);
+            if (!old) throw new Error('Not found');
+            writes.set(ref.key, { ...old, ...data });
+          },
+          delete: (ref: { key: string }) => writes.set(ref.key, null),
+        });
+        if (attempt === 0 && transactionFixture.overlap) {
+          const overlap = transactionFixture.overlap;
+          overlap.arrivals += 1;
+          if (overlap.arrivals === 2) overlap.release();
+          await overlap.gate;
+        }
+        if ([...reads].some(([key, value]) => storage.documents.get(key) !== value)) {
+          transactionFixture.retries += 1;
+          continue;
+        }
+        if (transactionFixture.failErasureSetOnce && writes.has('health_data_erasures/account-1')) {
+          transactionFixture.failErasureSetOnce = false;
+          throw new Error('Injected transactional erasure job write failure');
+        }
+        for (const [key, value] of writes) {
+          if (value === null) storage.documents.delete(key);
+          else storage.documents.set(key, value);
+        }
+        return result;
       }
-      for (const [key, value] of writes) {
-        if (value === null) storage.documents.delete(key);
-        else storage.documents.set(key, value);
-      }
-      return result;
+      throw new Error('Firestore transaction conflict retries exhausted');
     },
   }),
 }));
@@ -102,7 +121,7 @@ const acceptance = {
 };
 
 describe('trusted health consent boundary', () => {
-  beforeEach(() => { storage.documents.clear(); vi.clearAllMocks(); transactionFixture.failErasureSetOnce = false; });
+  beforeEach(() => { storage.documents.clear(); vi.clearAllMocks(); transactionFixture.failErasureSetOnce = false; transactionFixture.overlap = null; transactionFixture.retries = 0; });
 
   it('treats an absent trusted consent record as unregistered for every API request', async () => {
     expect(await readHealthConsentState('account-1')).toEqual({ status: 'unregistered', revision: 0 });
@@ -274,6 +293,50 @@ describe('trusted health consent boundary', () => {
 });
 
 describe('withdrawal revision concurrency', () => {
+  beforeEach(() => { transactionFixture.retries = 0; transactionFixture.overlap = null; });
+  it('retries overlapping withdrawals against the committed revision, not stale snapshots', async () => {
+    storage.documents.clear();
+    let release!: () => void;
+    const gate = new Promise<void>(resolve => { release = resolve; });
+    transactionFixture.overlap = { arrivals: 0, release, gate };
+    const [first, second] = await Promise.all([
+      recordHealthConsentWithdrawal('account-1', 0),
+      recordHealthConsentWithdrawal('account-1', 0),
+    ]);
+    expect(transactionFixture.overlap.arrivals).toBe(2);
+    expect(transactionFixture.retries).toBe(1);
+    expect(first).toEqual({ status: 'withdrawn', revision: 1 });
+    expect(second).toEqual(first);
+    expect(storage.documents.get('health_consent_withdrawals/account-1')).toMatchObject({
+      uid: 'account-1', status: 'withdrawn', revision: 1,
+    });
+    expect(storage.documents.get('health_data_erasures/account-1')).toMatchObject({
+      uid: 'account-1', status: 'requested', consentRevision: 1,
+    });
+    transactionFixture.overlap = null;
+  });
+
+  it('retries overlapping reacceptance against the winning consent revision', async () => {
+    storage.documents.clear();
+    await recordHealthConsentWithdrawal('account-1', 0);
+    finishErasure(1);
+    let release!: () => void;
+    const gate = new Promise<void>(resolve => { release = resolve; });
+    transactionFixture.overlap = { arrivals: 0, release, gate };
+    const [first, second] = await Promise.all([
+      recordHealthConsentReacceptance('account-1', acceptance, 2),
+      recordHealthConsentReacceptance('account-1', acceptance, 2),
+    ]);
+    expect(transactionFixture.overlap.arrivals).toBe(2);
+    expect(transactionFixture.retries).toBe(1);
+    expect(first).toMatchObject({ status: 'active', revision: 3 });
+    expect(second).toEqual(first);
+    expect(storage.documents.get('health_consent_withdrawals/account-1')).toMatchObject({
+      uid: 'account-1', status: 'active', revision: 3,
+    });
+    transactionFixture.overlap = null;
+  });
+
   it('refuses a delayed revocation request after another device reaccepted', async () => {
     storage.documents.clear();
     await recordHealthConsentWithdrawal('account-1', 0);

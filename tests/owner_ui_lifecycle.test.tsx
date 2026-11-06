@@ -38,6 +38,38 @@ describe('owner-bound UI mount', () => {
     expect((await screen.findByRole('button', { name: /^home$/i })).classList.contains('active')).toBe(true);
   });
 
+  it('hides the previous owners private foods while the next account is still hydrating', async () => {
+    const food = (id: string, name: string) => ({
+      id, name, unit: 'g', baseQty: 100, kcal: 100, carbs: 10, pro: 10, fat: 1,
+    });
+    useAppStore.setState({
+      userData: { ...data(), customFoods: [food('private-a', 'Alimento riservato account A')] },
+      dataOwner: 'user:a',
+    });
+    const view = render(<AuthContext.Provider value={owner('a')}><App /></AuthContext.Provider>);
+    fireEvent.click(await screen.findByRole('button', { name: 'Nutrizione' }));
+    fireEvent.click(await screen.findByRole('tab', { name: 'Alimenti' }));
+    expect(await screen.findByText('Alimento riservato account A')).toBeDefined();
+
+    // Firebase resolves B before the A snapshot has been evicted from Zustand.
+    // This is deliberately a mismatched but still-owned transitional snapshot.
+    view.rerender(<AuthContext.Provider value={owner('b')}><App /></AuthContext.Provider>);
+    expect(useAppStore.getState().dataOwner).toBe('user:a');
+    expect(useAppStore.getState().userData?.customFoods?.[0]?.id).toBe('private-a');
+    expect(screen.getByRole('status', { name: 'Preparazione account in corso' })).toBeDefined();
+    expect(screen.queryByText('Alimento riservato account A')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Nutrizione' })).toBeNull();
+
+    act(() => useAppStore.setState({
+      userData: { ...data(), customFoods: [food('private-b', 'Alimento riservato account B')] },
+      dataOwner: 'user:b',
+    }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Nutrizione' }));
+    fireEvent.click(await screen.findByRole('tab', { name: 'Alimenti' }));
+    expect(await screen.findByText('Alimento riservato account B')).toBeDefined();
+    expect(screen.queryByText('Alimento riservato account A')).toBeNull();
+  });
+
   it('retains the initial PWA shortcut when auth resolves after an anonymous bootstrap', async () => {
     window.history.replaceState({}, '', '/?tab=settings');
     const view = render(<AuthContext.Provider value={defaultAuthContext}><App /></AuthContext.Provider>);
