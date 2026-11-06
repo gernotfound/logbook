@@ -254,6 +254,24 @@ describe('trusted withdrawal evidence for automatic erasure', () => {
   });
 });
 
+describe('unsupported consent markers fail closed without migrations', () => {
+  it('does not authorize cloud or local fitness or contact the backend for an unknown marker', async () => {
+    const uid = 'unsupported-marker-' + crypto.randomUUID();
+    const actor = user(uid);
+    (auth as { currentUser: unknown }).currentUser = actor;
+    localStorage.setItem(key(uid), 'unsupported-legacy-state');
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    beginHealthConsentVerification(uid);
+    expect(await refreshHealthConsent(actor)).toBe('error');
+    expect(currentHealthConsentStatus(uid)).toBe('error');
+    expect(isHealthConsentWritable('user:' + uid)).toBe(false);
+    expect(isHealthConsentCloudWritable('user:' + uid)).toBe(false);
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(localStorage.getItem(key(uid))).toBe('unsupported-legacy-state');
+  });
+});
+
 describe('durable health-consent client barrier', () => {
   it('suspends writes before server verification and when local intent is pending', () => {
     const uid = 'check-' + crypto.randomUUID();
