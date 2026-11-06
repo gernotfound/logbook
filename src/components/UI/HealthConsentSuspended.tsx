@@ -282,7 +282,7 @@ export function HealthConsentSuspended({ status, user }: { status: HealthConsent
         </>}
         
         <button type="button" className="btn" disabled={erasingHealthData} onClick={() => void handleLogout()}>Esci dall'account</button>
-        <button type="button" className="btn" disabled={erasingHealthData} onClick={() => void handleDeleteAccount()}>{user === null ? 'Elimina definitivamente i dati ospite' : "Elimina definitivamente l'account"}</button>
+        {user !== null && <button type="button" className="btn" disabled={erasingHealthData} onClick={() => void handleDeleteAccount()}>Elimina definitivamente l'account</button>}
         <button type="button" className="btn" disabled={busy || recoveryBusy || exportingData || erasingHealthData} onClick={() => { void reloadPage(); }}>Ricarica pagina</button>
       </div>
       {error && <p role="alert">{error}</p>}
