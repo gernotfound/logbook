@@ -51,53 +51,13 @@ import {
     getNextScheduledRoutine,
 } from './calc/planning';
 
-// Re-export shared constants.
-export { MUSCLES, GROUP_MAP };
-
-// Re-export all functions
 export {
-    generateId,
-    getLocalDateString,
-    formatItalianDate,
-    parseDateInput,
-    calculateAge,
-    formatDuration,
-    normalizeDuration,
-    getCalendarMonthGrid,
     formatSleepTime,
     parseSleepInput,
     isSleepTimeValid,
-    isPlainObject,
-    generateUniqueName,
-    removeUndefinedValues,
-    calculateBodyFatByMethod,
-    calculateBodyFat,
-    calculateBodyComposition,
-    validateMeasurementData,
-    calculateTDEE,
-    calculateMacrosFromKg,
-    calculateMacroRatio,
-    calculateTDEEAndMacros,
-    scaleFoodNutrients,
-    searchFoods,
-    validateCustomFood,
-    calculateMealTotals,
-    validateWorkoutRatings,
-    filterItems,
     searchExerciseLibrary,
     normalizeStem,
-    getLatestUserWeight,
-    calculateEffectiveSetWeight,
-    calculateSetVolume,
-    calculateWorkoutVolume,
-    calculateCycleVolume,
-    getDetailedMuscleCategory,
-    calculateCycleTimeline,
-    calculateCycleSchedule,
-    getNextScheduledRoutine,
-    getMuscleName,
-    searchMuscles,
-    mergeActivePains
+    getDetailedMuscleCategory
 };
 
 export const Logic = {
