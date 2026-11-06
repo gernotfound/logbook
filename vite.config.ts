@@ -37,7 +37,6 @@ export default defineConfig({
       buildSW: {
         swSrc: 'src/sw.ts',
         // The web manifest is added separately by the PWA plugin.
-        // The web manifest is added separately by the PWA plugin.
         globPatterns: ['**/*.{js,css,html,ico,png,svg}'],
         globIgnores: ['social-share.png'],
       },

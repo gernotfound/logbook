@@ -98,8 +98,10 @@ test.describe('Offline scenarios & Background suspension', () => {
     await page.goto('/');
     await expect(page.getByRole('heading', { name: 'TheLogBook' })).toBeVisible();
 
-    // The SW update lifecycle is mounted after the app has an owner context.
-    // Enter guest mode first, exactly as a real installed PWA session would.
+    // Registration also runs on the login screen, before an owner is selected.
+    await page.evaluate(async () => { await navigator.serviceWorker.ready; });
+    await page.waitForFunction(() => navigator.serviceWorker.controller !== null);
+
     await page.getByRole('button', { name: 'Continua senza account' }).click();
     await page.waitForSelector('text=Aggiornamento Termini e Privacy');
     for (const checkbox of await page.locator('input[type="checkbox"]').all()) {
@@ -111,6 +113,29 @@ test.describe('Offline scenarios & Background suspension', () => {
     await page.evaluate(async () => { await navigator.serviceWorker.ready; });
     await page.waitForFunction(() => navigator.serviceWorker.controller !== null);
     await context.setOffline(true);
+
+    // Manifest icon URLs have revision queries, while the precache stores the
+    // underlying files. Verify that the installed worker resolves both offline.
+    const cachedAssets = await page.evaluate(async () => {
+      const response = await fetch('/manifest.webmanifest');
+      const manifest = await response.json() as { icons: Array<{ src: string }> };
+      const icons = await Promise.all(manifest.icons.map(async icon => {
+        const image = await fetch(icon.src);
+        return {
+          status: image.status,
+          type: image.headers.get('content-type'),
+          bytes: (await image.arrayBuffer()).byteLength,
+        };
+      }));
+      return { manifestStatus: response.status, icons };
+    });
+    expect(cachedAssets.manifestStatus).toBe(200);
+    expect(cachedAssets.icons).toHaveLength(4);
+    for (const icon of cachedAssets.icons) {
+      expect(icon.status).toBe(200);
+      expect(icon.type).toMatch(/^image\//);
+      expect(icon.bytes).toBeGreaterThan(0);
+    }
 
     await page.goto('/?tab=training');
     await expect(page.locator('#view-training')).toBeVisible();
