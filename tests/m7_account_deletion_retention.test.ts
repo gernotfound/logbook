@@ -6,7 +6,6 @@ const state = vi.hoisted(() => ({
   devices: new Set<string>(),
   failUid: '' as string,
   deleted: [] as string[],
-  afterId: '' as string,
 }));
 
 const fakeDb = vi.hoisted(() => ({
@@ -73,7 +72,7 @@ const EXPIRED = Timestamp.fromMillis(1);
 
 describe('atomic completed account deletion retention', () => {
   beforeEach(() => {
-    state.jobs = []; state.devices = new Set(); state.failUid = ''; state.deleted = []; state.afterId = '';
+    state.jobs = []; state.devices = new Set(); state.failUid = ''; state.deleted = [];
   });
 
   it('schedules tombstones 30 days after completion', () => {
