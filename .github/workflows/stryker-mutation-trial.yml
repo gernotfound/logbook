@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
   push:
     branches:
-      - test/stryker-sync-boundaries-20261106
+      - 'test/stryker-**'
 
 permissions:
   contents: read
@@ -23,6 +23,13 @@ jobs:
       max-parallel: 4
       matrix:
         area:
+          - csv
+          - meal-totals
+          - meal-item
+          - workout-duration
+          - secure-id
+          - cycle-limits
+          - password-policy
           - sync-batching
           - journal-retry
           - causal-compaction
