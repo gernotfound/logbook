@@ -1,11 +1,11 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { useAppStore } from '../../store/useAppStore';
 import type { User } from 'firebase/auth';
 import { useSettings } from '../../hooks/useSettings';
 import { recoverOldLocalEditsAfterConsent } from '../../lib/healthConsentRecovery';
 import { useDialogStore } from '../../store/useDialogStore';
 import { LEGAL_VERSIONS } from '../../lib/legalVersions';
-import { finishHealthConsentReacceptance, registerInitialHealthConsent, reacceptHealthConsent, reconfirmStaleHealthWithdrawal, retainNewerHealthConsent, refreshHealthConsent, type HealthConsentStatus } from '../../lib/healthConsent';
+import { finishHealthConsentReacceptance, registerInitialHealthConsent, reacceptHealthConsent, reconfirmStaleHealthWithdrawal, retainNewerHealthConsent, refreshHealthConsent, subscribeHealthConsent, isVerifiedHealthWithdrawal, type HealthConsentStatus } from '../../lib/healthConsent';
 import { safeHardReload } from '../../lib/sync/safeReload';
 import { UnverifiedTabSnapshotError } from '../../lib/sync/reloadBarrier';
 import { PrivacyPolicy } from '../../pages/PrivacyPolicy';
@@ -52,6 +52,8 @@ export function HealthConsentSuspended({ status, user }: { status: HealthConsent
   const [recoveryBusy, setRecoveryBusy] = useState(false);
   const [privacy, setPrivacy] = useState(false);
   const [terms, setTerms] = useState(false);
+  const verifiedWithdrawal = useSyncExternalStore(subscribeHealthConsent,
+    () => user !== null && isVerifiedHealthWithdrawal(user.uid), () => false);
   const [erasureProgress, setErasureProgress] = useState<HealthDataErasureOutcome | null>(null);
   const [checkingErasure, setCheckingErasure] = useState(false);
   const [localReadyUid, setLocalReadyUid] = useState<string | null>(null);
@@ -80,7 +82,7 @@ export function HealthConsentSuspended({ status, user }: { status: HealthConsent
   const showReacceptForm = initialAcceptance || canReaccept;
 
   const verifyAutomaticErasure = useCallback(async () => {
-    if (!user || status !== 'withdrawn' || offline || checkingErasureRef.current
+    if (!user || status !== 'withdrawn' || !verifiedWithdrawal || offline || checkingErasureRef.current
         || auth.currentUser?.uid !== user.uid) return;
     checkingErasureRef.current = true;
     setCheckingErasure(true);
@@ -126,14 +128,14 @@ export function HealthConsentSuspended({ status, user }: { status: HealthConsent
       checkingErasureRef.current = false;
       setCheckingErasure(false);
     }
-  }, [user, status, offline]);
+  }, [user, status, offline, verifiedWithdrawal]);
   useEffect(() => {
-    if (status === 'withdrawn' && user !== null && !offline) {
+    if (status === 'withdrawn' && user !== null && verifiedWithdrawal && !offline) {
       // Defer state changes beyond the effect setup; avoid redundant work on
       // the same owner when the component rerenders with progress feedback.
       void Promise.resolve().then(verifyAutomaticErasure);
     }
-  }, [status, user, offline, verifyAutomaticErasure]);
+  }, [status, user, verifiedWithdrawal, offline, verifyAutomaticErasure]);
 
   const acceptInitial = async () => {
     if (!user || !initialAcceptance || busy) return;
@@ -235,7 +237,9 @@ export function HealthConsentSuspended({ status, user }: { status: HealthConsent
           ? offline
             ? 'Revoca registrata solo sul dispositivo. Le funzioni fitness restano bloccate e la cancellazione cloud partirà dopo la conferma del server.'
             : 'Revoca registrata su questo dispositivo. In attesa della conferma cloud: riprova la verifica se la connessione è tornata.'
-          : 'Revoca confermata sul server. La cancellazione automatica dei dati applicativi è stata avviata; un nuovo consenso sarà disponibile solo dopo la verifica del completamento.'}
+          : verifiedWithdrawal
+            ? 'Revoca confermata sul server. La cancellazione automatica dei dati applicativi è stata avviata; un nuovo consenso sarà disponibile solo dopo la verifica del completamento.'
+            : 'Revoca registrata su questo dispositivo. Verifica del server ancora necessaria prima di confermare la cancellazione.'}
       </p>}
       {user !== null && status === 'withdrawn' && (
         <section aria-label="Cancellazione automatica dei dati">
@@ -249,7 +253,7 @@ export function HealthConsentSuspended({ status, user }: { status: HealthConsent
                 : erasureProgress?.status === 'failed'
                   ? 'Cancellazione cloud incompleta. È necessario riprendere o verificare il job.'
                   : 'Cancellazione richiesta: il server continua in modo riprendibile anche se chiudi la pagina.'}</p>
-          <button type="button" className="btn" disabled={checkingErasure || busy || offline}
+          <button type="button" className="btn" disabled={checkingErasure || busy || offline || !verifiedWithdrawal}
             onClick={() => { void verifyAutomaticErasure(); }}>
             {checkingErasure ? 'Verifica in corso…' : 'Verifica stato cancellazione'}
           </button>
