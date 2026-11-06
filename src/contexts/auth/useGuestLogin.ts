@@ -41,7 +41,7 @@ export function useGuestLogin({
 }: GuestLoginDependencies) {
     const loginAsGuest = useCallback(async () => {
         const isOriginalAttemptCurrent = captureAuthAttemptGuard(false);
-        let activatedSession: SessionSnapshot | null = null;
+        const activation: { session: SessionSnapshot | null } = { session: null };
         try {
             // Serialize the entire cleanup-to-activation transition across tabs.
             // An older logout must never delete a new guest generation.
@@ -63,19 +63,19 @@ export function useGuestLogin({
                 activateGuestSession(id);
                 // Capture under the lock: Auth may change before its Promise
                 // resumes, so the caller cannot capture a newer epoch as its own.
-                activatedSession = captureSession();
+                activation.session = captureSession();
                 useDialogStore.getState().cancelAll();
             });
         } catch {
-            if (!isOriginalAttemptCurrent() && (!activatedSession || !isCurrentSession(activatedSession))) return;
+            if (!isOriginalAttemptCurrent() && (!activation.session || !isCurrentSession(activation.session))) return;
             setSaveError('Impossibile avviare la modalità locale: pulizia o coordinamento delle sessioni non disponibile. I dati esistenti restano protetti.');
             return;
         }
         // Guest activation and vault provisioning are separate awaits. A
         // logout, account switch or other tab may revoke this generation
         // before the vault is ready. Never promote a stale guest into Zustand.
-        if (!activatedSession || activatedSession.owner !== 'guest' || !isCurrentSession(activatedSession)) return;
-        const guestSession = activatedSession;
+        if (!activation.session || activation.session.owner !== 'guest' || !isCurrentSession(activation.session)) return;
+        const guestSession = activation.session;
         const canPublishGuest = () => isGuestVaultReadinessCurrent(guestSession);
         await ensureLocalVaultReady('guest');
         // A cancelled readiness Promise may resolve without an unlocked vault.
