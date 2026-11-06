@@ -9,6 +9,9 @@ import {
 } from '../src/lib/storageIntegrity';
 import { CURRENT_DATA_SCHEMA, CURRENT_LOCAL_ENVELOPE, CURRENT_SYNC_PROTOCOL } from '../src/lib/schemaEvolution';
 import { localStorageMock } from './setup';
+import { prepareUnlockedTestArchive } from './secureVaultFixture';
+import { lockAllVaults } from '../src/lib/sync/secureArchiveSession';
+import { activateGuestSession, GUEST_SESSION_KEY, invalidateSession } from '../src/lib/sync/session';
 
 vi.mock('react-dom/client', () => ({
   createRoot: vi.fn(() => ({
@@ -38,7 +41,9 @@ describe('Storage bootstrap and owner integrity checks', () => {
   });
 
   afterEach(() => {
+    lockAllVaults();
     localStorage.clear();
+    invalidateSession();
     window.__INITIAL_USER_DATA__ = null;
     vi.restoreAllMocks();
   });
@@ -123,14 +128,25 @@ describe('Storage bootstrap and owner integrity checks', () => {
     expect(createRoot).toHaveBeenCalledTimes(1);
   });
 
-  it('Flow 3: An invalid cache does not update the marker', async () => {
-    updateStorageMarker(1000)!;
-    vi.spyOn(idbKeyval, 'get').mockResolvedValue('corrupted string payload' as any);
+  it('Flow 3: corrupted encrypted guest storage is read, rejected and preserved', async () => {
+    localStorage.removeItem('logbook_authenticated_owner');
+    localStorage.setItem('logbook_is_guest', 'true');
+    localStorage.setItem(GUEST_SESSION_KEY, 'storage-integrity-guest');
+    activateGuestSession('storage-integrity-guest');
+    await prepareUnlockedTestArchive('guest');
+    updateStorageMarker(1000, undefined, 'guest')!;
+
+    const corruptBytes = 'corrupted string payload';
+    await idbKeyval.set('logbook:v2:guest', corruptBytes);
+    const getSpy = vi.spyOn(idbKeyval, 'get');
 
     await initApp();
 
+    expect(getSpy.mock.calls.some(([key]) => key === 'logbook:v2:guest')).toBe(true);
     expect(window.__INITIAL_USER_DATA__).toBeNull();
-    expect(getStorageMarker()?.timestamp).toBe(1000);
+    expect(useAppStore.getState().localPersistenceBlocked).toBe(true);
+    expect(getStorageMarker(undefined, 'guest')?.timestamp).toBe(1000);
+    expect(await idbKeyval.get('logbook:v2:guest')).toBe(corruptBytes);
   });
 
   it('Flow 4: First launch without a marker or cache remains empty', async () => {
