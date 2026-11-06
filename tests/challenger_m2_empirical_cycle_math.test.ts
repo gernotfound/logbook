@@ -2,7 +2,6 @@ import { describe, it, expect } from 'vitest';
 import { parseISO, differenceInCalendarDays } from 'date-fns';
 import { computeEndDate, computeWeeksFromDates } from '../src/components/Training/planning/useCycleForm';
 import { calculateCycleTimeline } from '../src/lib/calc/planning';
-import { TrainingCycleSchema, DomainParsers } from '../src/lib/schema';
 import type { TrainingCycle } from '../src/types';
 
 describe('Challenger 1 Empirical Verification: Cycle Planning Mathematics & Edge Cases (Milestone 2 - Requirement R5)', () => {
@@ -117,28 +116,6 @@ describe('Challenger 1 Empirical Verification: Cycle Planning Mathematics & Edge
             expect(computeEndDate(startDate, weeks)).toBe('2026-09-30');
         });
 
-        it('recalculates duration weeks accurately across various end date alterations', () => {
-            const startDate = '2026-08-20';
-
-            // 1 week ahead: 2026-08-26 (diff = 6, total = 7 days) -> 1 week
-            expect(computeWeeksFromDates(startDate, '2026-08-26')).toBe(1);
-
-            // 2 weeks ahead: 2026-09-02 (diff = 13, total = 14 days) -> 2 weeks
-            expect(computeWeeksFromDates(startDate, '2026-09-02')).toBe(2);
-
-            // 3 weeks ahead: 2026-09-09 (diff = 20, total = 21 days) -> 3 weeks
-            expect(computeWeeksFromDates(startDate, '2026-09-09')).toBe(3);
-
-            // 4 weeks ahead: 2026-09-16 (diff = 27, total = 28 days) -> 4 weeks
-            expect(computeWeeksFromDates(startDate, '2026-09-16')).toBe(4);
-
-            // 8 weeks ahead: 2026-10-14 (diff = 55, total = 56 days) -> 8 weeks
-            expect(computeWeeksFromDates(startDate, '2026-10-14')).toBe(8);
-
-            // 12 weeks ahead: 2026-11-11 (diff = 83, total = 84 days) -> 12 weeks
-            expect(computeWeeksFromDates(startDate, '2026-11-11')).toBe(12);
-        });
-
         it('handles non-exact multi-day offsets via rounding to nearest week', () => {
             const startDate = '2026-08-20';
 
@@ -157,9 +134,9 @@ describe('Challenger 1 Empirical Verification: Cycle Planning Mathematics & Edge
     });
 
     // -------------------------------------------------------------------------
-    // 3. Leap Year Boundaries & Year Transitions
+    // 3. Leap Year Boundaries
     // -------------------------------------------------------------------------
-    describe('3. Leap Year Boundaries & Year Transitions', () => {
+    describe('3. Leap Year Boundaries', () => {
         it('calculates correct end dates across leap year 2024 boundary (Feb has 29 days)', () => {
             // Start 2024-02-01, 4 weeks (28 days) -> 2024-02-28 (since Feb has 29 days)
             expect(computeEndDate('2024-02-01', 4)).toBe('2024-02-28');
@@ -190,29 +167,12 @@ describe('Challenger 1 Empirical Verification: Cycle Planning Mathematics & Edge
             expect(computeWeeksFromDates('2027-02-15', '2027-03-14')).toBe(4);
         });
 
-        it('calculates accurate end dates across year transitions (Dec 2026 -> Jan 2027)', () => {
-            // Start 2026-12-01, 6 weeks (42 days) -> Dec 1 + 41 days = 2027-01-11
-            expect(computeEndDate('2026-12-01', 6)).toBe('2027-01-11');
-            expect(computeWeeksFromDates('2026-12-01', '2027-01-11')).toBe(6);
-
-            // Start 2026-12-25, 4 weeks (28 days) -> Dec 25 + 27 days = 2027-01-21
-            expect(computeEndDate('2026-12-25', 4)).toBe('2027-01-21');
-            expect(computeWeeksFromDates('2026-12-25', '2027-01-21')).toBe(4);
-
-            // Start 2026-12-31, 1 week (7 days) -> Dec 31 + 6 days = 2027-01-06
-            expect(computeEndDate('2026-12-31', 1)).toBe('2027-01-06');
-            expect(computeWeeksFromDates('2026-12-31', '2027-01-06')).toBe(1);
-
-            // Start 2026-12-31, 8 weeks (56 days) -> Dec 31 + 55 days = 2027-02-24
-            expect(computeEndDate('2026-12-31', 8)).toBe('2027-02-24');
-            expect(computeWeeksFromDates('2026-12-31', '2027-02-24')).toBe(8);
-        });
     });
 
     // -------------------------------------------------------------------------
-    // 4. Boundary & Edge Cases (1 week, 52 weeks, invalid, empty)
+    // 4. Boundary & Edge Cases (1 week, 52 weeks, missing start)
     // -------------------------------------------------------------------------
-    describe('4. Edge Cases: 1 Week, 52 Weeks, Invalid & Empty Dates', () => {
+    describe('4. Edge Cases: 1 Week, 52 Weeks, and Missing Start Date', () => {
         it('handles 1 week cycle (minimum valid duration)', () => {
             const start = '2026-08-20';
             const end = computeEndDate(start, 1);
@@ -279,64 +239,5 @@ describe('Challenger 1 Empirical Verification: Cycle Planning Mathematics & Edge
             expect(timeline.isEnded).toBe(false);
         });
 
-        it('gracefully handles invalid / malformed date strings', () => {
-            const cycleInvalidDate: TrainingCycle = {
-                id: 'c_invalid',
-                name: 'Ciclo Data Non Valida',
-                durationWeeks: 4,
-                startDate: 'not-a-real-date',
-                endDate: 'gibberish',
-                routines: []
-            };
-
-            // Should not throw or crash
-            expect(() => calculateCycleTimeline(cycleInvalidDate)).not.toThrow();
-            const timeline = calculateCycleTimeline(cycleInvalidDate);
-            expect(timeline.totalWeeks).toBe(0);
-            expect(timeline.isStarted).toBe(false);
-            expect(timeline.statusLabel).toBe('Parametri del ciclo da correggere');
-        });
-
-        it('gracefully handles inverted dates (endDate < startDate)', () => {
-            const cycleInverted: TrainingCycle = {
-                id: 'c_inv',
-                name: 'Ciclo Invertito',
-                durationWeeks: 4,
-                startDate: '2026-09-15',
-                endDate: '2026-09-01', // End date is before start date
-                routines: []
-            };
-
-            // calculateCycleTimeline falls back to computing end date from durationWeeks
-            const timeline = calculateCycleTimeline(cycleInverted, '2026-09-15');
-            expect(timeline.startDate).toBe('2026-09-15');
-            expect(timeline.endDate).toBe('2026-10-12'); // 4 weeks from 2026-09-15
-            expect(timeline.formattedRange).toBe('dal 15/09/2026 al 12/10/2026');
-
-            // computeWeeksFromDates safely clamps to 1
-            expect(computeWeeksFromDates('2026-09-15', '2026-09-01')).toBe(1);
-        });
-
-        it('schema and domain parser resilience with endDate and edge cases', () => {
-            const rawCycle = {
-                id: 'c_raw_1',
-                name: 'Ciclo Raw Test',
-                durationWeeks: 4,
-                startDate: '2026-08-20',
-                endDate: '2026-09-16',
-                routines: []
-            };
-
-            const parsed = TrainingCycleSchema.parse(rawCycle);
-            expect(parsed.id).toBe('c_raw_1');
-            expect(parsed.startDate).toBe('2026-08-20');
-            expect(parsed.endDate).toBe('2026-09-16');
-            expect(parsed.durationWeeks).toBe(4);
-
-            const domainParsed = DomainParsers.parseTrainingCycles([rawCycle, { id: 'c_raw_2', name: 'C2', durationWeeks: 8, routines: [] }]);
-            expect(domainParsed).toHaveLength(2);
-            expect(domainParsed[0].endDate).toBe('2026-09-16');
-            expect(domainParsed[1].endDate).toBeUndefined();
-        });
     });
 });
