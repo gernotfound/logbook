@@ -19,6 +19,7 @@ export interface AccountDeletionJob {
   updatedAt: unknown;
   status: AccountDeletionStatus;
   reason?: 'inactivity';
+  inactivityLastSeenAt?: unknown;
   cursor?: AccountDeletionCursor;
   attempts: number;
   receiptHash: string;
