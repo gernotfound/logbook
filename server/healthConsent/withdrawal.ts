@@ -1,6 +1,7 @@
 import { Timestamp, type DocumentData, type Transaction } from 'firebase-admin/firestore';
 import { adminDb } from '../accountDeletion/firebaseAdmin.js';
 import { LEGAL_VERSIONS } from '../../src/lib/legalVersions.js';
+import { queueHealthDataErasureInTransaction } from './erasure.js';
 
 const CONSENT_COLLECTION = 'health_consent_withdrawals';
 
@@ -68,7 +69,7 @@ export async function readHealthConsentState(uid: string): Promise<HealthConsent
   };
 }
 
-/** Durable server-only revocation. Never modify or delete fitness data here. */
+/** Record withdrawal and enqueue erasure atomically. Fitness bytes are deleted by the leased worker, never in this transaction. */
 export async function recordHealthConsentWithdrawal(uid: string, expectedRevision: number): Promise<HealthConsentState> {
   if (!Number.isSafeInteger(expectedRevision) || expectedRevision < 0) throw new Error('Revisione consenso richiesta non valida.');
   validUid(uid);
@@ -76,7 +77,8 @@ export async function recordHealthConsentWithdrawal(uid: string, expectedRevisio
   return db.runTransaction(async tx => {
     const deletion = db.collection('account_deletions').doc(uid);
     const state = consentRef(uid);
-    const [job, existing] = await Promise.all([tx.get(deletion), tx.get(state)]);
+    const erasure = db.collection('health_data_erasures').doc(uid);
+    const [job, existing, queued] = await Promise.all([tx.get(deletion), tx.get(state), tx.get(erasure)]);
     if (job.exists) throw new Error('Cancellazione account in corso.');
     const previous = existing.data();
     if (existing.exists) assertTrustedConsentRecord(uid, previous);
@@ -87,6 +89,7 @@ export async function recordHealthConsentWithdrawal(uid: string, expectedRevisio
         || previous.revision !== expectedRevision + 1) {
         throw new HealthConsentRevisionConflictError();
       }
+      queueHealthDataErasureInTransaction(tx, uid, previous.revision, queued.data());
       return { status: 'withdrawn', revision: previous.revision };
     }
     const actual = existing.exists ? Number(previous?.revision) : 0;
@@ -99,6 +102,7 @@ export async function recordHealthConsentWithdrawal(uid: string, expectedRevisio
     const update = {
       uid, status: 'withdrawn', revision, withdrawnAt: now, updatedAt: now,
     };
+    queueHealthDataErasureInTransaction(tx, uid, revision, queued.data());
     if (existing.exists) tx.update(state, update);
     else tx.create(state, update);
     return { status: 'withdrawn', revision };

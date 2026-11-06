@@ -16,7 +16,7 @@ vi.mock('../src/lib/firebase', () => ({ auth: { currentUser: null }, ensureAppCh
 vi.mock('../src/lib/appCheck', () => ({ getLimitedUseAppCheckToken: vi.fn(async () => 'fresh-limited-use') }));
 
 import {
-  beginHealthConsentVerification, currentHealthConsentStatus,
+  beginHealthConsentVerification, currentHealthConsentStatus, isVerifiedHealthWithdrawal,
   finishHealthConsentReacceptance, isHealthConsentWritable, isHealthConsentCloudWritable, getServerConfirmedLegalConsent,
   getVerifiedHealthConsentRevision,
   reacceptHealthConsent, reacceptHealthConsentLocally, isHealthConsentLocalOnly, refreshHealthConsent, registerInitialHealthConsent, requireHealthConsentWritable,
@@ -233,6 +233,25 @@ describe('erased acknowledged local consent generation', () => {
     expect(await retainNewerHealthConsent(actor)).toBe('erasure-required');
     expect(isHealthConsentWritable(owner)).toBe(false);
     expect(await readLocal(owner)).toEqual(original);
+  });
+});
+
+describe('trusted withdrawal evidence for automatic erasure', () => {
+  it('never treats a cross-tab withdrawn marker as confirmed before the trusted GET', async () => {
+    const uid = 'withdraw-proof-' + crypto.randomUUID();
+    const actor = user(uid);
+    (auth as { currentUser: unknown }).currentUser = actor;
+    beginHealthConsentVerification(uid);
+    localStorage.setItem(key(uid), 'withdrawn');
+    expect(currentHealthConsentStatus(uid)).toBe('withdrawn');
+    expect(isVerifiedHealthWithdrawal(uid)).toBe(false);
+    const fetchMock = vi.fn(async () => trustedConsentResponse({ status: 'withdrawn', revision: 2 }));
+    vi.stubGlobal('fetch', fetchMock);
+    expect(await refreshHealthConsent(actor)).toBe('withdrawn');
+    expect(isVerifiedHealthWithdrawal(uid)).toBe(true);
+    expect(fetchMock).toHaveBeenCalledOnce();
+    beginHealthConsentVerification(uid);
+    expect(isVerifiedHealthWithdrawal(uid)).toBe(false);
   });
 });
 

@@ -48,7 +48,7 @@ export const PrivacyPolicy: React.FC<{ onClose: () => void }> = ({ onClose }) =>
               Informativa sulla privacy
             </h2>
             <p style={{ margin: '4px 0 0', fontSize: 'var(--font-size-meta)', color: 'var(--text-muted)' }}>
-              Aggiornata al 5 novembre 2026
+              Aggiornata al 6 novembre 2026
             </p>
           </div>
           <button
@@ -154,37 +154,31 @@ export const PrivacyPolicy: React.FC<{ onClose: () => void }> = ({ onClose }) =>
 
           <Section title="Revoca del consenso per i dati salute">
             <p>
-              Puoi revocare il consenso per i dati relativi alla salute da Impostazioni → Privacy, scegliendo «Revoca il consenso per i dati salute». La revoca non pregiudica la liceità dei trattamenti effettuati prima della sua efficacia e non equivale alla cancellazione automatica dell'account.
+              Puoi revocare il consenso da Impostazioni → Privacy. Prima della conferma TheLogBook ti offre, senza obbligarti, l'esportazione di un backup JSON dei tuoi dati. Se non esporti, o se l'esportazione fallisce, puoi comunque revocare il consenso.
             </p>
             <p>
-              Dopo la revoca <strong style={{ color: 'var(--text-main)' }}>non puoi utilizzare le funzioni di allenamento, nutrizione, diario o altre funzionalità fitness</strong>. Rimangono disponibili la consultazione di questa informativa e dei termini, gli strumenti per esercitare i diritti applicabili, l'esportazione JSON dei dati, la cancellazione dell'account e la possibilità di prestare un nuovo consenso esplicito. Non è prevista una modalità fitness ridotta.
+              La revoca sospende immediatamente allenamenti, nutrizione, diario e tutte le funzioni fitness. Per un account, quando il server registra la revoca, avvia automaticamente la cancellazione dei dati applicativi (profilo fitness, misurazioni, allenamenti, nutrizione, schede e raccolte correlate). Non occorre inviare una seconda richiesta di cancellazione. L'account Firebase Authentication rimane esistente; puoi scegliere separatamente di eliminarlo.
             </p>
             <p>
-              Se usi un account, l'app interrompe subito le modifiche locali dipendenti dal consenso; se manca la connessione, la richiesta resta in attesa sul dispositivo e non viene presentata come revoca già confermata sul server. La conferma cloud avviene tramite un servizio autenticato. Le modifiche offline precedenti non vengono inviate automaticamente dopo un eventuale nuovo consenso: il loro recupero richiede una scelta separata e può presentare conflitti.
+              In assenza di connessione la revoca sospende subito le funzioni sul dispositivo, ma resta in attesa di registrazione e cancellazione cloud; al ritorno online il servizio tenta la riconciliazione. Se un job di cancellazione è interrotto, il sistema può riprenderlo; la cancellazione non è dichiarata completata fino alla verifica del server e delle copie locali accessibili. Non è possibile cancellare da remoto file JSON/CSV già esportati né copie su dispositivi che non tornano online.
             </p>
             <p>
-              In modalità ospite la revoca riguarda i dati locali del dispositivo e non richiede un account. Puoi eliminare i dati ospite localmente. Per un account, dopo che il server ha confermato la revoca, puoi richiedere separatamente la cancellazione dei dati applicativi dell'account (inclusi allenamenti, nutrizione, misurazioni, routine e profilo applicativo), mantenendo il tuo account di accesso: servono connessione, verifica dell'identità e due conferme. Dopo il completamento verrai disconnesso. Puoi anche eliminare l'intero account. Per riattivare le funzioni devi prestare una nuova accettazione esplicita dei documenti correnti; nessun consenso viene ricostruito automaticamente da una vecchia copia o da un backup.
-            </p>
-            <p>
-              La revoca sospende l'uso dei dati per le funzioni fitness, ma da sola non elimina gli archivi già presenti. Puoi esportare i tuoi dati e, dopo la conferma della revoca sul server, richiedere la cancellazione dei dati applicativi senza eliminare l'identità di accesso, oppure cancellare l'intero account.
+              In modalità ospite la revoca elimina l'archivio locale e termina la sessione ospite, senza creare alcun account. Dopo la cancellazione, un nuovo consenso consente di ricominciare con dati nuovi: i dati cancellati non possono essere ripristinati da una vecchia copia o backup. La revoca non pregiudica la liceità del trattamento precedente.
             </p>
           </Section>
 
           <Section title="Conservazione, backup e cancellazione dei dati">
             <p>
-              I dati locali in modalità ospite rimangono sul dispositivo finché non vengono eliminati dall'utente, rimossi dal browser/sistema oppure migrati secondo i flussi previsti dall'app.
+              I dati applicativi sono conservati durante l'uso autorizzato del servizio. Alla revoca del consenso per la salute, la cancellazione dei dati applicativi è avviata automaticamente quando la revoca è confermata dal server. Un job riprendibile elimina le raccolte operative e la chiave cloud solo dopo aver verificato che non rimangano dati non riconosciuti; le copie locali vengono eliminate dopo prova server del completamento. L'intero account di accesso può essere eliminato con un'azione separata.
             </p>
             <p>
-              I dati applicativi cloud associati all'account sono conservati mentre l'account è attivo e per le funzioni richieste. Dopo la revoca del consenso l'accesso fitness è sospeso, ma i dati già salvati non vengono cancellati automaticamente. Puoi utilizzare gli strumenti autenticati per esportarli o chiederne la cancellazione. TheLogBook offre backup JSON per esportare i dati disponibili e file CSV per le informazioni supportate; i file scaricati sono gestiti da te.
+              La prova tecnica minima del consenso, della revoca e della cancellazione è mantenuta separatamente dai dati fitness per sicurezza e responsabilizzazione, con criteri di conservazione da validare. La ricevuta completa del job è programmata per essere ritirata dopo 30 giorni, quando la prova dell'epoca di cancellazione è sufficiente; il termine tecnico non implica l'eliminazione immediata di ogni backup dei fornitori.
             </p>
             <p>
-              La funzione <strong style={{ color: 'var(--text-main)' }}>Elimina account</strong> avvia un workflow server-side che rimuove le raccolte private previste, i dati applicativi cloud e infine l'account Firebase Authentication. Il dispositivo conserva la propria copia locale finché non ha prova che il workflow cloud sia completato, per evitare cancellazioni locali premature in caso di rete instabile.
-            </p>
-            <p>
-              Dopo la cancellazione dell'account resta temporaneamente una ricevuta tecnica priva dei dati fitness, necessaria per verificare il completamento dell'operazione anche sui dispositivi che erano offline. La sua eliminazione è programmata dopo 30 giorni, con il successivo ciclo di manutenzione. Se scegli invece la cancellazione dei soli dati applicativi, rimangono l'account e le informazioni tecniche necessarie a registrare la revoca e impedire che vecchie copie dei dati tornino online.
+              I file JSON e CSV esportati non sono cifrati e rimangono sotto il controllo di chi li scarica. Backup, eventuali copie di ripristino e log dei fornitori possono avere tempi e limiti separati che devono essere verificati. Nessuna vecchia copia può essere usata per ripubblicare automaticamente un archivio eliminato.
             </p>
             <p style={{ marginTop: '8px', color: 'var(--warning-color)' }}>
-              <strong>Attenzione:</strong> i dati vengono salvati automaticamente sul dispositivo e, con un account, quelli supportati sono sincronizzati con il cloud quando connessione e autorizzazioni lo consentono. Solo i dati già sincronizzati possono essere recuperati dal cloud se l'archivio locale viene perso completamente; i dati ospite e le modifiche ancora offline potrebbero non essere recuperabili. Il backup JSON e l'esportazione CSV sono facoltativi, non necessari periodicamente per il normale utilizzo, e generano file non cifrati da conservare in modo protetto. Il servizio non garantisce backup gestiti di livello enterprise.
+              <strong>Attenzione:</strong> TheLogBook sincronizza i dati supportati quando connessione e autorizzazioni lo consentono; dati solo locali o mai sincronizzati potrebbero non essere recuperabili. L'esportazione è facoltativa prima della revoca, ma dopo l'avvio della cancellazione non è garantita la disponibilità dei vecchi dati per il download.
             </p>
           </Section>
 
@@ -204,8 +198,8 @@ export const PrivacyPolicy: React.FC<{ onClose: () => void }> = ({ onClose }) =>
             <ul style={ulStyle}>
               <li><strong style={{ color: 'var(--text-main)' }}>Accesso e portabilità</strong>: usare backup JSON/esportazione CSV e richiedere le informazioni applicabili al trattamento.</li>
               <li><strong style={{ color: 'var(--text-main)' }}>Rettifica</strong>: correggere i dati modificabili tramite l'app.</li>
-              <li><strong style={{ color: 'var(--text-main)' }}>Cancellazione</strong>: eliminare l'intero account oppure, dopo revoca confermata e con un account autenticato, usare «Elimina definitivamente i miei dati» per cancellare i dati applicativi (inclusi profilo e misurazioni), mantenendo l'identità Firebase Authentication ma disconnettendo il dispositivo. Per eventuali dati residui, backup e log tecnici rivolgiti al contatto privacy.</li>
-              <li><strong style={{ color: 'var(--text-main)' }}>Revoca del consenso</strong>: da Impostazioni → Privacy, con sospensione completa delle funzioni fitness; la revoca non pregiudica la liceità dei trattamenti precedenti. Puoi comunque esportare i dati, richiederne la cancellazione e, se lo desideri, prestare un nuovo consenso esplicito.</li>
+              <li><strong style={{ color: 'var(--text-main)' }}>Cancellazione</strong>: la revoca confermata avvia automaticamente la cancellazione dei dati applicativi senza eliminare l'account di accesso. Puoi inoltre eliminare separatamente l'intero account. Per eventuali dati residui, backup e log tecnici rivolgiti al contatto privacy.</li>
+              <li><strong style={{ color: 'var(--text-main)' }}>Revoca del consenso</strong>: da Impostazioni → Privacy, con esportazione facoltativa prima della conferma, sospensione delle funzioni fitness e cancellazione automatica dei dati applicativi. L'account resta attivo; un nuovo consenso potrà creare un archivio vuoto dopo la cancellazione.</li>
               <li><strong style={{ color: 'var(--text-main)' }}>Limitazione/opposizione</strong>: quando applicabile rispetto alla specifica base giuridica e al trattamento interessato.</li>
             </ul>
             <p>

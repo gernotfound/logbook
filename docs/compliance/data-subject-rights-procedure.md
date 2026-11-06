@@ -8,6 +8,12 @@
 - Supporto: `[SUPPORT_EMAIL]`
 - Capacità tecniche in app: backup JSON/esportazioni, rettifica, revoca/riaccettazione del consenso, cancellazione account e cancellazione separata dei soli dati dopo revoca server confermata. Per contratti e limiti usare [Consenso](../../.agents/rules/health-consent.md), [Ciclo account](../../.agents/rules/account-lifecycle.md) e [Portabilità](../../.agents/rules/backup-and-portability.md); questa procedura non certifica collaudi live.
 
+## Decisione operativa aggiornata — 6 novembre 2026
+
+Alla revoca del consenso salute (account), le funzioni fitness sono sospese subito; il backend trusted **accoda automaticamente la cancellazione dei dati applicativi quando la revoca viene confermata**, senza eliminare l'identità Firebase Auth. Il backup JSON è offerto prima della revoca ed è **facoltativo**: una mancata esportazione non blocca la revoca. Il worker registra stati `requested/deleting/verifying/failed/complete`; solo un `complete` con prova dell'epoch autorizza la pulizia locale. Per revoche offline, distinguere stato locale pending e registrazione server. La modalità ospite purga l'archivio locale e termina la sessione. L'account deletion rimane una richiesta distinta.
+
+Le precedenti note sulla cancellazione **solo su richiesta separata** sono storiche e non descrivono il nuovo flusso approvato. Restano verifiche legali/provider aperte per la conservazione delle prove tecniche e le copie non direttamente controllabili dal client.
+
 ## Apertura del caso
 
 Assegnare un identificativo `DSR-[YYYY]-[NNN]` e registrare soltanto quanto necessario:
@@ -55,6 +61,14 @@ Il product owner ha scelto la **soluzione A** (sospensione di tutte le funzioni 
 7. testo UI che non presenti il consenso come irrevocabile o artificiosamente obbligatorio.
 
 Distinguere implementazione e regressioni nel repository dalla prova runtime autenticata e dalla validazione legale ancora aperte.
+
+## Caso specifico #824 — revoca e cancellazione (6 novembre 2026)
+
+La revoca del consenso e la cancellazione dell'**identità di accesso** sono richieste distinte. La schermata sospesa della [PR #826](https://github.com/gernotfound/logbook/pull/826) consente al titolare di account con revoca server confermata di avviare la cancellazione dei dati applicativi **senza** cancellare Firebase Authentication; in modalità ospite offre la cancellazione dei dati locali. Il flusso account richiede recente autenticazione, due conferme, job cloud `complete` e verifica del purge prima di dichiarare il completamento.
+
+**Limite giuridico:** la presenza del pulsante non sostituisce l'obbligo del titolare di valutare la **cancellazione senza ingiustificato ritardo** dei dati conservati esclusivamente grazie al consenso revocato (GDPR Art. 17; [Commissione UE](https://commission.europa.eu/law/law-topic/data-protection/information-business-and-organisations/legal-grounds-processing-data_en)). Oggi il backend non avvia automaticamente il job alla revoca: questa è una lacuna di policy **non ancora risolta** dalla PR UX.
+
+Per le richieste concrete di cancellazione: verificare separatamente **revoca pending/confirmed**, richiesta distinta di erasure, **job requested/deleting/verifying/failed/complete**, cleanup locale e copie provider; non dichiarare un risultato globale da un solo job cloud né un diritto di accesso indefinito ai dati dopo revoca. Se la finalità di trattamento è cessata e manca altra base giuridica, non attendere indefinitamente un secondo clic per giustificare la permanenza delle informazioni salute. La nuova policy da approvare, inclusi export e cancellazione automatica eventualmente necessaria, è delimitata nel [retention schedule](retention-schedule.md).
 
 ## Flusso operativo
 

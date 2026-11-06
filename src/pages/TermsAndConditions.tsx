@@ -48,7 +48,7 @@ export const TermsAndConditions: React.FC<{ onClose: () => void }> = ({ onClose 
               Termini e condizioni
             </h2>
             <p style={{ margin: '4px 0 0', fontSize: 'var(--font-size-meta)', color: 'var(--text-muted)' }}>
-              Aggiornati al 5 novembre 2026
+              Aggiornati al 6 novembre 2026
             </p>
           </div>
           <button
@@ -125,7 +125,7 @@ export const TermsAndConditions: React.FC<{ onClose: () => void }> = ({ onClose 
               TheLogBook richiede un consenso separato ed esplicito per i trattamenti dei dati relativi alla salute. Puoi revocarlo da Impostazioni → Privacy. In tal caso tutte le funzioni fitness, inclusi allenamento, nutrizione e diario, rimangono sospese; non è disponibile una modalità di utilizzo ridotta.
             </p>
             <p>
-              Durante la sospensione restano disponibili informativa, esercizio dei diritti applicabili, esportazione JSON e cancellazione dell'account. Dopo la revoca confermata sul server, puoi inoltre cancellare i dati applicativi dell'account, inclusi profilo, allenamenti, nutrizione e misurazioni, mantenendo l'identità di accesso ma disconnettendo il dispositivo. La revoca non elimina automaticamente i dati; una nuova accettazione esplicita può consentire la riattivazione. Le modifiche offline precedenti non vengono ripristinate o inviate automaticamente.
+              Prima di confermare la revoca puoi esportare facoltativamente i dati JSON. La revoca sospende subito le funzioni fitness; dopo la conferma del server avvia automaticamente la cancellazione dei dati applicativi, inclusi profilo fitness, allenamenti, nutrizione e misurazioni, senza eliminare l'account di accesso. Se sei offline, la richiesta cloud resta in attesa. L'esportazione non è obbligatoria e i dati cancellati non sono ripristinabili dall'app: una nuova accettazione esplicita consente di ripartire da zero solo dopo la verifica del completamento. Puoi cancellare l'intero account separatamente.
             </p>
             <p>
               TheLogBook è gestito da <strong>Gerardo Califano</strong>, persona fisica. Per richieste sulla privacy: <a href="mailto:thelogbook.privacy@gmail.com">thelogbook.privacy@gmail.com</a>. Gli ulteriori dettagli sul trattamento e sui diritti sono riportati nell'informativa privacy.

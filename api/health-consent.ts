@@ -8,6 +8,7 @@ import {
   validateExplicitAcceptance,
   HealthConsentRevisionConflictError,
 } from '../server/healthConsent/withdrawal.js';
+import { processHealthDataErasure } from '../server/healthConsent/erasure.js';
 
 export const maxDuration = 30;
 const HEADERS = 'authorization, content-type, x-firebase-appcheck';
@@ -67,7 +68,15 @@ export async function POST(request: Request): Promise<Response> {
       if (typeof body.expectedRevision !== 'number' || !Number.isSafeInteger(body.expectedRevision) || body.expectedRevision < 0) {
         throw new ConsentInputError('Revisione consenso mancante o non valida.');
       }
-      return json(await recordHealthConsentWithdrawal(uid, body.expectedRevision), 200, origin);
+      const state = await recordHealthConsentWithdrawal(uid, body.expectedRevision);
+      // The erasure job was durably enqueued in the same Firestore transaction.
+      // Best-effort immediate progress must not turn a confirmed withdrawal into
+      // an HTTP failure: the existing cron recovers unfinished work.
+      try { await processHealthDataErasure(uid, Date.now() + 5_000); }
+      catch (error) {
+        console.error('[health-consent] erasure handoff failed', { kind: error instanceof Error ? error.name : 'unknown' });
+      }
+      return json(state, 200, origin);
     }
     if (body.action === 'reaccept') {
       requireVerifiedHealthConsentWrite(identity);

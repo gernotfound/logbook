@@ -40,6 +40,32 @@ export async function requestHealthDataErasure(user: User): Promise<HealthDataEr
   throw new Error('Stato cancellazione ricevuto non valido.');
 }
 
+/** Owner-scoped status: GET also gives the existing worker a bounded chance to
+ * resume the job. A completion is not by itself permission to purge local data. */
+export async function readHealthDataErasureProgress(user: User): Promise<HealthDataErasureOutcome> {
+  const session = captureSession();
+  if (session.owner !== 'user:' + user.uid || auth.currentUser?.uid !== user.uid) {
+    throw new Error('Sessione della cancellazione non verificabile.');
+  }
+  const headers = await erasureRequestHeaders(user);
+  if (!isCurrentSession(session) || auth.currentUser?.uid !== user.uid) {
+    throw new Error('Sessione cambiata durante la verifica della cancellazione.');
+  }
+  const result = await sendHealthDataErasure('GET', headers);
+  if (!isCurrentSession(session) || auth.currentUser?.uid !== user.uid) {
+    throw new Error('Sessione cambiata durante la verifica della cancellazione.');
+  }
+  const record = result as Partial<HealthDataErasureOutcome> | null;
+  if (record?.status === 'complete' && record.complete === true) return { status: 'complete', complete: true };
+  if (record && (record.status === 'requested' || record.status === 'deleting'
+      || record.status === 'verifying' || record.status === 'failed') && record.complete === false) {
+    return { status: record.status, complete: false,
+      ...(record.retryable !== undefined ? { retryable: record.retryable } : {}),
+      ...(record.error !== undefined ? { error: record.error } : {}) };
+  }
+  throw new Error('Nessun job di cancellazione verificabile per la revoca confermata.');
+}
+
 /**
  * Second, non-destructive trusted read required at the local purge boundary.
  * Old receipts are valid for status history, NOT for deleting a newer archive.

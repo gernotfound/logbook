@@ -26,9 +26,9 @@ afterEach(() => {
 describe('legal documents modal accessibility', () => {
   it('explains that manual exports are optional, plaintext, and do not replace cloud synchronization', () => {
     const { unmount } = render(<PrivacyPolicy onClose={vi.fn()} />);
-    expect(screen.getByText(/non necessari periodicamente per il normale utilizzo/i)).toBeDefined();
-    expect(screen.getByText(/generano file non cifrati/i)).toBeDefined();
-    expect(screen.getByText(/Solo i dati già sincronizzati possono essere recuperati dal cloud/i)).toBeDefined();
+    expect(screen.getByText(/L'esportazione è facoltativa prima della revoca/i)).toBeDefined();
+    expect(screen.getByText(/I file JSON e CSV esportati non sono cifrati/i)).toBeDefined();
+    expect(screen.getByText(/dati solo locali o mai sincronizzati potrebbero non essere recuperabili/i)).toBeDefined();
     unmount();
     render(<TermsAndConditions onClose={vi.fn()} />);
     expect(screen.getByText(/Le esportazioni JSON e CSV sono facoltative e producono file non cifrati/i)).toBeDefined();
