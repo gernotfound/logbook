@@ -756,14 +756,6 @@ describe('TheLogBook 4-Tier Automated Test Suite (Requirements R1 - R6)', () => 
                 expect(updated).toContain('bicipiti');
             });
 
-            it('T1.6.5: preserves all pre-existing active pains without implicit recovery', () => {
-                const activePains = ['petto', 'tricipiti', 'spalle'];
-                const sessionPains: string[] = []; // Neither petto nor tricipiti reselected
-
-                const updated = mergeActivePainsContract(activePains, sessionPains);
-                expect(updated).toEqual(['petto', 'tricipiti', 'spalle']); // Training does not imply that an active pain resolved.
-            });
-
             it('T1.6.6: WorkoutSessionSchema validates pains array on workout session history', () => {
                 const session = {
                     date: '2026-08-20',

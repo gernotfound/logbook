@@ -22,7 +22,7 @@ describe('Empirical Challenger: Sleep Format HH:MM Adversarial Stress Test Suite
 
     describe('1. Logic.formatSleepTime — Exhaustive Boundary & Attack Scenarios', () => {
         it('rejects non-clock numeric inputs without converting pre-launch values', () => {
-            for (const input of [0, 0.01, 7.5, 24, NaN, Infinity, '0', '7,5', '8h']) {
+            for (const input of [0, 0.01, 7.5, 24, NaN, Infinity, '0', '7', '7,5', '8h', '7.5H']) {
                 expect(formatSleepTime(input)).toBe('');
             }
         });
@@ -97,10 +97,12 @@ describe('Empirical Challenger: Sleep Format HH:MM Adversarial Stress Test Suite
             expect(parseSleepInput('8:30')).toBe('08:30');
             expect(parseSleepInput(7.5)).toBeNull();
             expect(parseSleepInput('7.5')).toBeNull();
+            expect(parseSleepInput('7.5H')).toBeNull();
             expect(parseSleepInput('00:00')).toBe('00:00');
             expect(parseSleepInput('23:59')).toBe('23:59');
 
             expect(parseSleepInput('')).toBeNull();
+            expect(parseSleepInput('   ')).toBeNull();
             expect(parseSleepInput(null)).toBeNull();
             expect(parseSleepInput(undefined)).toBeNull();
             expect(parseSleepInput('25:00')).toBeNull();
@@ -111,6 +113,7 @@ describe('Empirical Challenger: Sleep Format HH:MM Adversarial Stress Test Suite
 
         it('isSleepTimeValid returns boolean strictly', () => {
             expect(isSleepTimeValid('08:30')).toBe(true);
+            expect(isSleepTimeValid('8:30')).toBe(true);
             expect(isSleepTimeValid('00:00')).toBe(true);
             expect(isSleepTimeValid('23:59')).toBe(true);
             expect(isSleepTimeValid('7.5')).toBe(false);
@@ -151,6 +154,16 @@ describe('Empirical Challenger: Sleep Format HH:MM Adversarial Stress Test Suite
                 expect(result.data.sleepAwake).toBeUndefined();
             }
         });
+
+        it.each(['sleepHours', 'sleepDeep', 'sleepLight', 'sleepRem', 'sleepAwake'] as const)(
+            'rejects unsupported numeric and suffixed values in %s independently',
+            (field) => {
+                for (const invalidInput of [7.5, '7.5h']) {
+                    const parsed = NutritionDaySchema.parse({ date: '2026-11-03', [field]: invalidInput });
+                    expect(parsed[field]).toBeUndefined();
+                }
+            },
+        );
 
         it('handles boundary values in NutritionDaySchema', () => {
             const boundaryDay = {

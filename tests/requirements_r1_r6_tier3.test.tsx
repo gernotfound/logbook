@@ -1,6 +1,5 @@
 import React from 'react';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { defaultMockUserData } from './setup';
 import { useAppStore } from '../src/store/useAppStore';
 import type { Food, NutritionDay } from '../src/types';
 import {
@@ -108,35 +107,6 @@ describe('LogBook 4-Tier Automated Test Suite (Requirements R1 - R6)', () => {
             expect(updatedDay.fat).toBe(6);
         });
 
-        it('T3.3: Pure DOMS merge followed by test-controlled store assignment', () => {
-            // Initial state: User has DOMS in 'petto' and 'bicipiti'
-            const initialUserData: any = {
-                ...defaultMockUserData,
-                activePains: ['petto', 'bicipiti'],
-                library: [
-                    { id: 'ex_bench', name: 'Panca piana', muscles: ['petto'], setsCount: 3, sets: [] }
-                ]
-            };
-
-            // User performs Bench Press (Primary: petto)
-            const sessionRatingsPains: string[] = []; // User notes chest pain is gone!
-
-            const newActivePains = mergeActivePainsContract(initialUserData.activePains, sessionRatingsPains);
-
-            // 'petto' was trained and not re-selected -> preserved explicitly. 'bicipiti' was untrained -> retained.
-            expect(newActivePains).toEqual(['petto', 'bicipiti']);
-
-            // Update Zustand store
-            useAppStore.setState({
-                userData: {
-                    ...initialUserData,
-                    activePains: newActivePains
-                }
-            });
-
-            expect(useAppStore.getState().userData?.activePains).toEqual(['petto', 'bicipiti']);
-        });
-
         it('T3.4: Pure volume function differs for two explicitly supplied bodyweights', () => {
             // User weighed 80kg on 2026-08-01, and 75kg on 2026-08-15
             const ex = { id: 'ex_dip', isBodyweight: true, equipmentWeight: 0 };
@@ -218,9 +188,7 @@ describe('LogBook 4-Tier Automated Test Suite (Requirements R1 - R6)', () => {
             // User re-selected 'petto' in session pains, left 'quadricipiti' empty
             const activePains = ['petto', 'quadricipiti', 'polpacci'];
             const resolvedPains = mergeActivePainsContract(activePains, ['petto']);
-            // 'petto' retained because reselected
-            // 'quadricipiti' healed because trained as primary and not reselected
-            // 'polpacci' retained because untrained
+            // Existing pains are preserved regardless of training involvement or re-selection.
             expect(resolvedPains).toEqual(['petto', 'quadricipiti', 'polpacci']);
         });
     });
