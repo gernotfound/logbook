@@ -122,7 +122,10 @@ describe('password policy', () => {
         mockedValidatePassword.mockResolvedValueOnce({
             isValid: false, passwordPolicy: policy,
         } as any);
-        await expect(validatePasswordAgainstPolicy('SecurePassword123!')).resolves.toBe(PASSWORD_POLICY_SUMMARY);
+        await expect(validatePasswordAgainstPolicy('SecurePassword123!'))
+            .resolves.toBe('La password non rispetta i requisiti di sicurezza configurati per l’account.');
+        expect(PASSWORD_POLICY_SUMMARY)
+            .toBe('La password non rispetta i requisiti di sicurezza configurati per l’account.');
     });
 
 });

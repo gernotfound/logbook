@@ -1,7 +1,7 @@
 // Diagnostic mutation testing only. The normal M8 gate and production remain unchanged.
 // This selection is deliberately bounded: Stryker's Vitest runner cannot run Playwright
 // browser tests or the dedicated Firestore Emulator suite.
-const cases = {
+export const trialCases = {
   "csv": {
     "mutate": [
       "src/lib/csvExport.ts:7-25"
@@ -62,7 +62,8 @@ const cases = {
   }
 };
 const area = process.env.STRYKER_AREA ?? 'csv';
-if (!Object.hasOwn(cases, area)) {
+
+if (!Object.hasOwn(trialCases, area)) {
   throw new Error('Unknown Stryker area: ' + area);
 }
 export default {
@@ -72,11 +73,11 @@ export default {
   // Keep TypeScript checking in the normal M8 gate, not in this mutation sandbox.
   tsconfigFile: 'coverage/stryker-no-tsconfig-rewrite.json',
   vitest: {
-    configFile: 'vitest.config.ts',
+    configFile: 'vitest.mutation.config.mjs',
     related: false,
     pool: 'forks',
   },
-  ...cases[area],
+  mutate: trialCases[area].mutate,
   coverageAnalysis: 'perTest',
   concurrency: 2,
   reporters: ['clear-text', 'progress', 'json', 'html'],
