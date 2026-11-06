@@ -55,7 +55,7 @@ La scala tipografica è definita **unicamente** in `src/styles/tokens.css`. **MU
 
 ## PWA, Service Worker e icone
 
-- `vite-plugin-pwa` usa manifest e service worker alla radice `/`.
+- `@unplugin-pwa/vite` usa `buildSW` e il Service Worker classico `/sw.js`, con manifest e scope alla radice `/`. Le icone con parametro `?v` restano nel manifest, mentre il precache usa i file senza query per evitare lookup inesistenti nel build.
 - La sorgente vettoriale approvata `assets/brand/thelogbook-icon-master.svg` è canonica; `scripts/resize_icons.mjs` pubblica la copia scalabile `public/icon.svg` e genera direttamente dal master favicon, Apple touch, PNG PWA, variante maskable e card social PNG lossless. Quando cambia l'artwork, i riferimenti HTML/manifest devono cambiare revisione per invalidare le cache degli icon consumer.
 - Il manifest deve mantenere gli asset PNG standard 192×192 e 512×512 richiesti per la compatibilità/installabilità, la copia SVG scalabile `icon.svg` con `sizes: any` e il dedicato `icon-maskable-512.png` per `purpose: maskable`; evitare duplicati semantici oltre queste varianti necessarie.
 - **MUST:** una modifica all'icon pipeline va verificata attraverso build/gate, non solo guardando il file sorgente.

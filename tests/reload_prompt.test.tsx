@@ -3,7 +3,7 @@ import type { UserData, WorkoutSession } from '../src/types';
 import { describe, test, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, act, within } from '@testing-library/react';
 import ReloadPrompt from '../src/components/UI/ReloadPrompt';
-import { useRegisterSW } from 'virtual:pwa-register/react';
+import { useRegisterSW } from '../src/lib/pwaRegistration';
 import App from '../src/App';
 import { idbStore, localStorageMock, mockFirebaseAuth, renderWithProviders } from './setup';
 import { prepareUnlockedTestArchive } from './secureVaultFixture';
@@ -476,11 +476,11 @@ describe('Service Worker Update Lifecycle (ReloadPrompt) Suite', () => {
 
   test('R1: onRegistered checks immediately, keeps the periodic timer and handles errors gracefully', () => {
     vi.useFakeTimers();
-    let registeredCallback: ((r: any) => void) | undefined;
+    let registeredCallback: ((scriptUrl: string, r: any) => void) | undefined;
     let registerErrorCallback: ((error: any) => void) | undefined;
 
     vi.mocked(useRegisterSW).mockImplementation((options) => {
-      registeredCallback = options?.onRegistered;
+      registeredCallback = options?.onRegisteredSW;
       registerErrorCallback = options?.onRegisterError;
       return {
         needRefresh: [false, mockSetNeedRefresh],
@@ -498,9 +498,9 @@ describe('Service Worker Update Lifecycle (ReloadPrompt) Suite', () => {
       update: vi.fn().mockResolvedValue(undefined),
     };
 
-    // Trigger onRegistered
+    // Trigger onRegisteredSW
     act(() => {
-      registeredCallback!(mockRegistration);
+      registeredCallback!('/sw.js', mockRegistration);
     });
 
     // Registration performs an immediate check.
@@ -638,10 +638,10 @@ describe('Service Worker Update Lifecycle (ReloadPrompt) Suite', () => {
   test('Edge Case: Periodic timer handles SW registration update rejection gracefully', async () => {
     vi.useFakeTimers();
     const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
-    let registeredCallback: ((r: any) => void) | undefined;
+    let registeredCallback: ((scriptUrl: string, r: any) => void) | undefined;
 
     vi.mocked(useRegisterSW).mockImplementation((options) => {
-      registeredCallback = options?.onRegistered;
+      registeredCallback = options?.onRegisteredSW;
       return {
         needRefresh: [false, mockSetNeedRefresh],
         offlineReady: [false, vi.fn()],
@@ -656,7 +656,7 @@ describe('Service Worker Update Lifecycle (ReloadPrompt) Suite', () => {
     };
 
     act(() => {
-      registeredCallback!(mockRegistration);
+      registeredCallback!('/sw.js', mockRegistration);
     });
 
     act(() => {
@@ -700,10 +700,10 @@ describe('Service Worker Update Lifecycle (ReloadPrompt) Suite', () => {
   test('Edge Case: Handles synchronous exception thrown by r.update() in periodic timer', () => {
     vi.useFakeTimers();
     const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
-    let registeredCallback: ((r: any) => void) | undefined;
+    let registeredCallback: ((scriptUrl: string, r: any) => void) | undefined;
 
     vi.mocked(useRegisterSW).mockImplementation((options) => {
-      registeredCallback = options?.onRegistered;
+      registeredCallback = options?.onRegisteredSW;
       return {
         needRefresh: [false, mockSetNeedRefresh],
         offlineReady: [false, vi.fn()],
@@ -720,7 +720,7 @@ describe('Service Worker Update Lifecycle (ReloadPrompt) Suite', () => {
     };
 
     act(() => {
-      registeredCallback!(mockRegistration);
+      registeredCallback!('/sw.js', mockRegistration);
     });
 
     // Advance 60 minutes - should not crash

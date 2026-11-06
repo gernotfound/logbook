@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { useRegisterSW } from 'virtual:pwa-register/react';
+import { useRegisterSW } from '../../lib/pwaRegistration';
 import { isReloadSessionCurrent, prepareForReload } from '../../lib/sync/reloadBarrier';
 import { applyPWAUpdate, checkForWaitingServiceWorker } from '../../lib/pwaUpdate';
 
@@ -19,7 +19,7 @@ const ReloadPrompt: React.FC = () => {
     // Workbox otherwise reloads on "controlling" independently of this UI,
     // bypassing the owner-scoped reload barrier (including on another tab).
     onNeedReload: () => undefined,
-    onRegistered(r) {
+    onRegisteredSW(_swScriptUrl, r) {
       if (r && typeof r.update === 'function') {
         const requestUpdate = () => {
           try {
