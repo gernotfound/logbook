@@ -12,6 +12,8 @@ describe('SEC-01: CSV Formula Injection Mitigation in Export', () => {
         expect(Exporter.formatCsvField('\t=1+1')).toBe(`"'\t=1+1"`);
         expect(Exporter.formatCsvField('\r=1+1')).toBe(`"'\r=1+1"`);
         expect(Exporter.formatCsvField('   =foo')).toBe(`"'   =foo"`); // leading spaces
+        expect(Exporter.formatCsvField('\u00A0=foo')).toBe(`"'\u00A0=foo"`);
+        expect(Exporter.formatCsvField('\uFEFF=foo')).toBe(`"'\uFEFF=foo"`);
         expect(Exporter.formatCsvField('-1+2')).toBe(`"'-1+2"`); // stringa, non numero
 
         // Stringhe legittime
