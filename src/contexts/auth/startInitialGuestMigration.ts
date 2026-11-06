@@ -37,69 +37,76 @@ export async function startInitialGuestMigration(
     let guestAlreadyRetired = false;
     let recoveryWitnessId: string | null = null;
     await withGuestLifecycleLock(async () => {
-    // The reservation is immutable while this tab is transferring ownership.
-    // A second tab observing the Firebase sign-in may not race the same guest
-    // archive through a different choice or consume a completed handoff.
-    if (readBrowserValueStrict(guestKey) !== 'true') {
-        guestAlreadyRetired = true;
-        return;
-    }
-    if (!isCurrentRun()) return;
-    setGuestMigrationStatus('pending');
-    setLoading(false);
-    draftRegistry.flushAll();
-    const guestData = migrationDataRef.current || useAppStore.getState().userData;
-    let policy: GuestMigrationPolicy;
-    let intentId: string;
-    try {
-        const intent = await bindGuestMigrationIntentToUser(user);
-        policy = intent.policy;
-        intentId = intent.id;
-    } catch (error) {
-        if (!isCurrentRun()) return;
-        console.error('Intento migrazione guest non determinabile:', error);
-        setGuestMigrationStatus('failed');
-        setSaveError('Non è possibile determinare il tentativo di trasferimento. Avvia di nuovo l’accesso e scegli come gestire i dati locali.');
-        return;
-    }
-    try {
-        const migrationResult = await migrateGuestAccount({
-            user,
-            guestData,
-            policy,
-            setUserData,
-            setSyncing,
-            isCurrent: isCurrentRun,
-            onLocalReady: async () => {
-                // Persist recovery before changing owner. If any critical
-                // storage transition fails, migration remains recoverable.
-                recoveryWitnessId = markGuestMigrationSyncRecovery(user.uid);
-                removeBrowserValue(guestKey);
-                await clearGuestMigrationIntent(intentId);
-                isGuestRef.current = false;
-                setIsGuest(false);
-                migrationDataRef.current = null;
-            },
-        });
-        if (!isCurrentRun()) return;
-        if (migrationResult.status === 'rejected' || migrationResult.status === 'failed') {
-            setGuestMigrationStatus('failed');
-            setSaveError('I dati sono salvati su questo dispositivo, ma la sincronizzazione dell’account non è stata completata. Riprova.');
-        } else {
-            if (recoveryWitnessId) clearGuestMigrationSyncRecovery(user.uid, recoveryWitnessId);
-            setGuestMigrationStatus('idle');
-            if (migrationResult.status === 'local-pending') {
-                setSaveError(isLegalConsentRequiredError(migrationResult.error)
-                    ? 'Account preparato sul dispositivo. Accetta Termini e consenso salute per sincronizzare i progressi.'
-                    : '📶 Offline: account preparato sul dispositivo. La sincronizzazione riprenderà quando torni online.');
-            }
+        // The reservation is immutable while this tab is transferring ownership.
+        // A second tab observing the Firebase sign-in may not race the same guest
+        // archive through a different choice or consume a completed handoff.
+        if (readBrowserValueStrict(guestKey) !== 'true') {
+            guestAlreadyRetired = true;
+            return;
         }
-    } catch (error) {
         if (!isCurrentRun()) return;
-        console.error('Preparazione account da modalità locale non completata:', error);
-        setGuestMigrationStatus('failed');
-        setSaveError('Preparazione account non completata. I dati locali sono conservati e possono essere recuperati. Riprova.');
-    }
+        setGuestMigrationStatus('pending');
+        setLoading(false);
+        let policy: GuestMigrationPolicy;
+        let intentId: string;
+        try {
+            const intent = await bindGuestMigrationIntentToUser(user);
+            policy = intent.policy;
+            intentId = intent.id;
+        } catch (error) {
+            if (!isCurrentRun()) return;
+            console.error('Intento migrazione guest non determinabile:', error);
+            setGuestMigrationStatus('failed');
+            setSaveError('Non è possibile determinare il tentativo di trasferimento. Avvia di nuovo l’accesso e scegli come gestire i dati locali.');
+            return;
+        }
+        try {
+            if (!isCurrentRun()) return;
+            // Auth proof may wait for the popup/redirect result. Flush only after
+            // that wait and preserve the guest if any draft cannot be captured.
+            draftRegistry.flushAll({ strict: true });
+            const current = useAppStore.getState();
+            if (current.userData !== null && current.dataOwner !== 'guest') {
+                throw new Error('I dati in memoria non appartengono alla sessione locale.');
+            }
+            const guestData = current.userData ?? migrationDataRef.current;
+            const migrationResult = await migrateGuestAccount({
+                user,
+                guestData,
+                policy,
+                setUserData,
+                setSyncing,
+                isCurrent: isCurrentRun,
+                onLocalReady: async () => {
+                    // Persist recovery before changing owner. If any critical
+                    // storage transition fails, migration remains recoverable.
+                    recoveryWitnessId = markGuestMigrationSyncRecovery(user.uid);
+                    removeBrowserValue(guestKey);
+                    await clearGuestMigrationIntent(intentId);
+                    isGuestRef.current = false;
+                    setIsGuest(false);
+                    migrationDataRef.current = null;
+                },
+            });
+            if (!isCurrentRun()) return;
+            if (migrationResult.status === 'rejected' || migrationResult.status === 'failed') {
+                setGuestMigrationStatus('failed');
+                setSaveError('I dati sono salvati su questo dispositivo, ma la sincronizzazione dell’account non è stata completata. Riprova.');
+            } else {
+                if (recoveryWitnessId) clearGuestMigrationSyncRecovery(user.uid, recoveryWitnessId);
+                setGuestMigrationStatus('idle');
+                if (migrationResult.status === 'local-pending') {
+                    setSaveError(isLegalConsentRequiredError(migrationResult.error)
+                        ? 'Account preparato sul dispositivo. Accetta Termini e consenso salute per sincronizzare i progressi.'
+                        : '📶 Offline: account preparato sul dispositivo. La sincronizzazione riprenderà quando torni online.');
+                }
+            }
+        } catch (error) {
+            if (!isCurrentRun()) return;
+            console.error('Preparazione account da modalità locale non completata:', error);
+            setGuestMigrationStatus('failed');
+            setSaveError('Preparazione account non completata. I dati locali sono conservati e possono essere recuperati. Riprova.');
+        }
     });
     return guestAlreadyRetired;
 }
