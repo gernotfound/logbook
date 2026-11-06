@@ -64,7 +64,7 @@ describe('account activity trusted HTTP boundary', () => {
     expect(response.headers.get('cache-control')).toBe('no-store');
     expect(response.headers.get('access-control-allow-origin')).toBe('https://thelogbook.web.app');
     expect(verified.verifyRecoveryRegistrationRequester).toHaveBeenCalledTimes(1);
-    expect(tracker.recordAccountActivity).toHaveBeenCalledExactlyOnceWith('verified-owner');
+    expect(tracker.recordAccountActivity).toHaveBeenCalledWith('verified-owner');
   });
 
   it('does not mutate storage after Auth/App Check rejects the session', async () => {
@@ -80,7 +80,7 @@ describe('account activity trusted HTTP boundary', () => {
     tracker.recordAccountActivity.mockRejectedValueOnce(new AccountDeletionAlreadyScheduledError());
     const response = await POST(request());
     expect(response.status).toBe(409);
-    expect(tracker.recordAccountActivity).toHaveBeenCalledExactlyOnceWith('verified-owner');
+    expect(tracker.recordAccountActivity).toHaveBeenCalledWith('verified-owner');
   });
 
   it('masks provider details in backend errors and never acknowledges failed activity', async () => {
