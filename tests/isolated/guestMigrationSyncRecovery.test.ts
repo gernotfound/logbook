@@ -42,6 +42,18 @@ describe('owner-scoped guest migration sync recovery', () => {
         expect(readGuestMigrationSyncRecovery('account-a')).toBe(false);
     });
 
+    it.each(['null', '[]', '1', '"unexpected"', '{broken'])(
+        'rejects malformed recovery proof %s with its stable error and preserves the original',
+        raw => {
+            const uid = 'account-a';
+            const key = guestMigrationSyncRecoveryKey(uid);
+            localStorage.setItem(key, raw);
+            expect(() => readGuestMigrationSyncWitness(uid)).toThrow('Prova di recupero migrazione account non valida.');
+            expect(() => clearGuestMigrationSyncRecovery(uid, 'unverified')).toThrow('Prova di recupero migrazione account non valida.');
+            expect(localStorage.getItem(key)).toBe(raw);
+        },
+    );
+
     it('rejects altered recovery ownership without erasing evidence', () => {
         const uid = 'account-a';
         const key = guestMigrationSyncRecoveryKey(uid);
