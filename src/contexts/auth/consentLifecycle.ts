@@ -20,74 +20,73 @@ type ConsentLifecycleDependencies = {
 export function createAuthConsentLifecycleHandlers({
     isMounted, isGuestActiveStrict, isBootstrapInFlight = () => false, loadData, setLoading, setSaveError,
 }: ConsentLifecycleDependencies) {
-        // Track the owner generation rather than one global boolean: a stale
-        // request must not block a new login's own reconnect verification.
-        let reloadingSession: ReturnType<typeof captureSession> | null = null;
-        let reactivationRequest = 0;
-        const handleConsentReactivated = (event: Event) => {
-            const uid = (event as CustomEvent<{uid:string}>).detail?.uid;
-            const current = auth.currentUser;
-            if (!isMounted() || !current || current.uid !== uid || isGuestActiveStrict()
-                || !isHealthConsentWritable(userOwner(uid))) return;
-            const session = captureSession();
-            if (session.owner !== userOwner(uid)) return;
-            const request = ++reactivationRequest;
-            const stillCurrent = () => isMounted() && auth.currentUser?.uid === uid
-                && isCurrentSession(session) && request === reactivationRequest;
-            setLoading(true);
-            loadData(current).catch(error => {
-                if (!stillCurrent()) return;
-                console.error('Hydration dopo nuovo consenso non riuscita:', error);
-                setSaveError('Nuovo consenso registrato, ma i dati non sono ancora disponibili. Riprova dopo aver verificato la connessione.');
-            }).finally(() => {
-                if (stillCurrent()) setLoading(false);
-            });
-        };
-        window.addEventListener('logbook:health-consent-reactivated', handleConsentReactivated);
+    // Track the owner generation rather than one global boolean: a stale
+    // request must not block a new login's own reconnect verification.
+    let reloadingSession: ReturnType<typeof captureSession> | null = null;
+    let reactivationRequest = 0;
+    const handleConsentReactivated = (event: Event) => {
+        const uid = (event as CustomEvent<{uid:string}>).detail?.uid;
+        const current = auth.currentUser;
+        if (!isMounted() || !current || current.uid !== uid || isGuestActiveStrict()
+            || !isHealthConsentWritable(userOwner(uid))) return;
+        const session = captureSession();
+        if (session.owner !== userOwner(uid)) return;
+        const request = ++reactivationRequest;
+        const stillCurrent = () => isMounted() && auth.currentUser?.uid === uid
+            && isCurrentSession(session) && request === reactivationRequest;
+        setLoading(true);
+        loadData(current).catch(error => {
+            if (!stillCurrent()) return;
+            console.error('Hydration dopo nuovo consenso non riuscita:', error);
+            setSaveError('Nuovo consenso registrato, ma i dati non sono ancora disponibili. Riprova dopo aver verificato la connessione.');
+        }).finally(() => {
+            if (stillCurrent()) setLoading(false);
+        });
+    };
 
-        const handleVisibilityChange = async (event?: Event) => {
-            // Popup focus must not supersede the authoritative bootstrap GET.
-            if (isGuestActiveStrict() || isBootstrapInFlight()) return;
-            // The "online" event must check consent even if this tab is hidden.
-            if (event?.type !== 'online' && document.visibilityState !== 'visible') return;
-            const user = auth.currentUser;
-            if (!user || user.emailVerified === false || !navigator.onLine
-                || !isVaultUnlocked(userOwner(user.uid))
-                || isAccountDeletionPending(userOwner(user.uid))) return;
+    const handleVisibilityChange = async (event?: Event) => {
+        // Popup focus must not supersede the authoritative bootstrap GET.
+        if (isGuestActiveStrict() || isBootstrapInFlight()) return;
+        // The "online" event must check consent even if this tab is hidden.
+        if (event?.type !== 'online' && document.visibilityState !== 'visible') return;
+        const user = auth.currentUser;
+        if (!user || user.emailVerified === false || !navigator.onLine
+            || !isVaultUnlocked(userOwner(user.uid))
+            || isAccountDeletionPending(userOwner(user.uid))) return;
 
-            const session = captureSession();
-            if (session.owner !== userOwner(user.uid) || !isCurrentSession(session)) return;
-            if (reloadingSession && isCurrentSession(reloadingSession)) return;
-            reloadingSession = session;
-            const uid = user.uid;
-            const stillCurrent = () => isMounted() && auth.currentUser?.uid === uid
-                && !isGuestActiveStrict() && isCurrentSession(session);
-            try {
-                // A cached offline approval only authorizes local actions. On
-                // reconnect/foreground check the server BEFORE cloud hydration
-                // or delivering a journal that accumulated while disconnected.
-                const status = await refreshHealthConsent(user);
-                if (!stillCurrent()) return;
-                if (status !== 'active') {
-                    useAppStore.getState().cancelPendingSyncs();
-                    return;
-                }
-                if (useAppStore.getState().syncing) return;
-                await Promise.race([
-                    waitForPendingWrites(getDb()),
-                    new Promise(resolve => setTimeout(resolve, 1500))
-                ]);
-                if (!stillCurrent() || !isHealthConsentWritable(userOwner(uid))) return;
-                await loadData(user);
-            } catch (error) {
-                console.warn('Verifica consenso/aggiornamento dopo riconnessione non riusciti:', error);
-            } finally {
-                if (reloadingSession === session) reloadingSession = null;
+        const session = captureSession();
+        if (session.owner !== userOwner(user.uid) || !isCurrentSession(session)) return;
+        if (reloadingSession && isCurrentSession(reloadingSession)) return;
+        reloadingSession = session;
+        const uid = user.uid;
+        const stillCurrent = () => isMounted() && auth.currentUser?.uid === uid
+            && !isGuestActiveStrict() && isCurrentSession(session);
+        try {
+            // A cached offline approval only authorizes local actions. On
+            // reconnect/foreground check the server BEFORE cloud hydration
+            // or delivering a journal that accumulated while disconnected.
+            const status = await refreshHealthConsent(user);
+            if (!stillCurrent()) return;
+            if (status !== 'active') {
+                useAppStore.getState().cancelPendingSyncs();
+                return;
             }
-        };
-        const handleOffline = () => {
-            const uid = auth.currentUser?.uid;
-            if (uid) suspendHealthConsentCloudAccess(uid);
-        };
-        return { handleConsentReactivated, handleVisibilityChange, handleOffline };
+            if (useAppStore.getState().syncing) return;
+            await Promise.race([
+                waitForPendingWrites(getDb()),
+                new Promise(resolve => setTimeout(resolve, 1500))
+            ]);
+            if (!stillCurrent() || !isHealthConsentWritable(userOwner(uid))) return;
+            await loadData(user);
+        } catch (error) {
+            console.warn('Verifica consenso/aggiornamento dopo riconnessione non riusciti:', error);
+        } finally {
+            if (reloadingSession === session) reloadingSession = null;
+        }
+    };
+    const handleOffline = () => {
+        const uid = auth.currentUser?.uid;
+        if (uid) suspendHealthConsentCloudAccess(uid);
+    };
+    return { handleConsentReactivated, handleVisibilityChange, handleOffline };
 }

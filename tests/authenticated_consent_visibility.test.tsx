@@ -87,7 +87,6 @@ it('removes an authenticated fitness view on another tab withdrawal before the t
   act(() => {
     loading = loadAuthenticatedData({
       user: actor, isGuestActive: () => false,
-      setUserData: useAppStore.getState().setUserData,
       setSyncing: vi.fn(), setSaveError: vi.fn(),
     });
   });

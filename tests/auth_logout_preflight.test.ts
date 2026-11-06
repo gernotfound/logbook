@@ -182,4 +182,20 @@ describe('authenticated logout preflight', () => {
         expect(read).toHaveBeenCalledTimes(3);
         expect(useDialogStore.getState().showUnsyncedDataLogout).toHaveBeenCalledWith('offline');
     });
+    it('authorizes safe-exit only after the dialog and durable re-read both confirm a clean state', async () => {
+        useAppStore.setState({ syncHealth: 'local-pending' });
+        const read = vi.spyOn(localRepository, 'readLocal').mockResolvedValue({ pending: [] } as any);
+        vi.mocked(useDialogStore.getState().showUnsyncedDataLogout).mockImplementationOnce(async () => {
+            useAppStore.setState({ syncHealth: 'synced' });
+            return 'safe-exit';
+        });
+        const setSyncing = vi.fn();
+
+        expect(await prepareAuthenticatedLogout(ownerUid, setSyncing)).toBe(false);
+
+        expect(read).toHaveBeenCalledTimes(3);
+        expect(useDialogStore.getState().showUnsyncedDataLogout).toHaveBeenCalledExactlyOnceWith('offline');
+        expect(setSyncing).toHaveBeenLastCalledWith(false);
+    });
+
 });

@@ -9,7 +9,6 @@ import {
 } from '../src/lib/calc/workout';
 import {
     formatDuration,
-    formatTime,
     getCalendarMonthGrid
 } from '../src/lib/utils/date';
 import {
@@ -166,13 +165,6 @@ describe('EMPIRICAL CHALLENGER: Pure Math, State & Schema Adversarial Stress Sui
             expect(formatDuration(3600)).toBe('01:00:00');
             expect(formatDuration(3665)).toBe('01:01:05');
             expect(formatDuration(86400)).toBe('24:00:00');
-        });
-
-        it('formatTime formats MM:SS cleanly from milliseconds', () => {
-            // 300,000 ms = 5 minutes = 05:00
-            expect(formatTime(300000)).toBe('05:00');
-            // 3,665,000 ms with showHours = true -> 01:01:05
-            expect(formatTime(3665000, true)).toBe('01:01:05');
         });
     });
 

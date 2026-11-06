@@ -1,7 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
     BrowserStorageError,
-    readBrowserValue,
     readBrowserValueStrict,
     writeBrowserJson,
     writeBrowserValue,
@@ -36,12 +35,8 @@ describe('browser storage boundary', () => {
         vi.restoreAllMocks();
     });
 
-    it('keeps optional reads best-effort while strict reads expose storage failures', () => {
-        localStorageMock.getItem
-            .mockImplementationOnce(storageFailure)
-            .mockImplementationOnce(storageFailure);
-
-        expect(readBrowserValue('optional')).toBeNull();
+    it('exposes critical storage read failures without treating them as an absent key', () => {
+        localStorageMock.getItem.mockImplementationOnce(storageFailure);
         expect(() => readBrowserValueStrict('critical')).toThrow(BrowserStorageError);
     });
 

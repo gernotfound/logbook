@@ -2,12 +2,6 @@ import type { User } from 'firebase/auth';
 import { auth, firebaseApp, reload, verifyBeforeUpdateEmail } from '../firebase';
 import { captureSession, isCurrentSession } from '../sync/session';
 
-type IdentityToolkitError = {
-    error?: {
-        message?: string;
-    };
-};
-
 function authError(message: string): Error & { code: string } {
     const normalized = message.split(' : ')[0];
     const code = normalized === 'EMAIL_EXISTS'
@@ -54,13 +48,20 @@ export async function linkEmailPasswordWithEnumerationProtection(
     );
 
     if (!response.ok) {
-        let payload: IdentityToolkitError = {};
+        let message = `Identity Toolkit HTTP ${response.status}`;
         try {
-            payload = await response.json() as IdentityToolkitError;
+            const payload: unknown = await response.json();
+            if (payload !== null && typeof payload === 'object' && 'error' in payload) {
+                const error = payload.error;
+                if (error !== null && typeof error === 'object' && 'message' in error
+                    && typeof error.message === 'string' && error.message) {
+                    message = error.message;
+                }
+            }
         } catch {
             // Preserve a stable application error when the provider response is not JSON.
         }
-        throw authError(payload.error?.message || `Identity Toolkit HTTP ${response.status}`);
+        throw authError(message);
     }
 
     // HTTP 2xx alone is not proof that the requested identity was linked.
