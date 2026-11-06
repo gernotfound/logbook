@@ -23,4 +23,33 @@ describe('logged food reference quantities', () => {
             expect(() => createLoggedMealItem({ ...food, servingWeight }, 'Pranzo', 'meal-3', 4)).toThrow('peso di un pezzo');
         }
     });
+
+    it('uses only finite positive base quantities and retains the default gram unit', () => {
+        for (const baseQty of [0, -1, NaN, Infinity, undefined, null, '100']) {
+            const item = createLoggedMealItem({
+                ...food, unit: undefined, baseQty,
+            } as unknown as Parameters<typeof createLoggedMealItem>[0], 'Pranzo', 'id', 4);
+            expect(item).toMatchObject({ quantity: 100, baseQty: 100, unit: 'g', kcal: 120 });
+        }
+        const custom = createLoggedMealItem({ ...food, unit: 'g', baseQty: 250 }, 'Pranzo', 'id', 4);
+        expect(custom).toMatchObject({ quantity: 250, baseQty: 250, kcal: 120 });
+    });
+
+    it('handles the pcs alias and rejects non-finite or negative nutrients in every field', () => {
+        const piece = createLoggedMealItem({ ...food, unit: 'pcs' }, 'Pranzo', 'pcs-id', 5);
+        expect(piece).toMatchObject({
+            id: 'pcs-id', unit: 'pezzo', quantity: 1, baseQty: 1, kcal: 72, time: 5,
+        });
+        for (const field of ['kcal', 'carbs', 'pro', 'fat'] as const) {
+            for (const bad of [-1, NaN, Infinity]) {
+                expect(() => createLoggedMealItem({ ...food, [field]: bad }, 'Pranzo', 'id', 4))
+                    .toThrow('Valori nutrizionali non validi.');
+            }
+        }
+        const zero = createLoggedMealItem({
+            ...food, kcal: 0, carbs: 0, pro: 0, fat: 0,
+        }, 'Pranzo', 'zero', 5);
+        expect(zero).toMatchObject({ kcal: 0, carbs: 0, pro: 0, fat: 0 });
+    });
+
 });
