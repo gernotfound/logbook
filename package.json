@@ -1,7 +1,7 @@
 {
   "name": "logbook",
   "private": true,
-  "version": "2.189.0",
+  "version": "2.190.0",
   "type": "module",
   "packageManager": "npm@11.21.0",
   "engines": {
@@ -59,9 +59,11 @@
     "verify:m3": "npm run lint && npm run test && npm run test:isolated && npm run test:fuzz && npm run test:recovery && npm run test:stress && npm run test:rules && npm run test:e2e && npm run test:no-skips && npm run build",
     "verify:m4": "npm run lint && npm run test && npm run test:isolated && npm run test:fuzz && npm run test:recovery && npm run test:gc && npm run test:stress && npm run test:rules && npm run test:e2e && npm run test:no-skips && npm run build",
     "verify:m5": "npm run lint && npm run test:typecheck-coverage && npm run test:typecheck:m5 && npm run test:quality:m5 && npm run test && npm run test:isolated && npm run test:fuzz && npm run test:recovery && npm run test:gc && npm run test:hardening && npm run test:stress && npm run test:rules && npm run test:e2e && npm run test:no-skips && npm run build",
-    "verify:m6": "npm run test:ci-production-secrets && npm run test:install-scripts && npm run test:repo-hygiene && npm run test:version-bump && npm run test:ci-contract && npm run test:quality-guardrails && npm run test:dead-code && npm run lint:a11y && npm run lint:type-aware && npm run lint:baseline && npm run verify:m5",
+    "verify:m6": "npm run test:ci-production-secrets && npm run test:install-scripts && npm run test:repo-hygiene && npm run test:version-bump && npm run test:ci-contract && npm run test:quality-guardrails && npm run test:dead-code && npm run lint:a11y && npm run lint:type-aware && npm run lint:baseline && npm run test:discovery && npm run test:coverage:critical && npm run verify:m5",
     "verify:m7": "npm run verify:m6 && npm run test:typecheck:m7 && npm run test:m7 && npm run test:pwa:m7 && npm run test:smoke:m7",
-    "verify:m8": "npm run verify:m7 && npm run test:m8 && npm run test:domain-boundary:m8"
+    "verify:m8": "npm run verify:m7 && npm run test:m8 && npm run test:domain-boundary:m8",
+    "test:discovery": "node --test scripts/test-discovery-regressions.mjs && node scripts/check-test-discovery.mjs",
+    "test:coverage:critical": "node scripts/run-critical-coverage.mjs"
   },
   "dependencies": {
     "@noble/ciphers": "2.4.0",

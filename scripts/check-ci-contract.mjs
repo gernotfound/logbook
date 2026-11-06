@@ -46,6 +46,68 @@ if (!existsSync('config/lint-warning-baseline.json')) {
   failures.push('lint warning baseline: missing config/lint-warning-baseline.json');
 }
 
+// The umbrella gate retains its leaf commands but partitions their discovery.
+// Focused test:m7, test:m8 and test:hardening must still execute the dedicated files.
+const dedicatedUnitFiles = [
+  "tests/logout_protection.test.ts",
+  "tests/guest_bootstrap_lifecycle.test.tsx",
+  "tests/guest_account_migration_v3.test.tsx",
+  "tests/catalog_resolution_pipeline.test.ts",
+  "tests/hardening/**/*.test.{ts,tsx}",
+  "tests/m7_account_deletion_job_store.test.ts",
+  "tests/m7_account_deletion_fairness.test.ts",
+  "tests/m7_account_deletion_retention.test.ts",
+  "tests/m7_account_deletion_runner.test.ts",
+  "tests/m7_account_deletion_api.test.ts",
+  "tests/m7_account_deletion_http_auth.test.ts",
+  "tests/m7_account_deletion_device.test.ts",
+  "tests/m7_account_deletion_cron.test.ts",
+  "tests/m8_domain_operations.test.ts"
+];
+const standardVitest = readFileSync('vitest.config.ts', 'utf8');
+const isolatedVitest = readFileSync('vitest.isolated.config.ts', 'utf8');
+const dedicatedBlock = standardVitest.match(/const dedicatedSuiteExclusions = process\.env\.npm_lifecycle_event === 'test' \? \[([\s\S]*?)\] : \[\];/);
+const actualDedicated = dedicatedBlock ? [...dedicatedBlock[1].matchAll(/'([^']+)'/g)].map(match => match[1]) : [];
+if (JSON.stringify(actualDedicated) !== JSON.stringify(dedicatedUnitFiles)
+  || !standardVitest.includes('...dedicatedSuiteExclusions')) {
+  failures.push('vitest default: dedicated M5/M7/M8 files must be excluded only from npm run test');
+}
+if (packageJson.scripts?.['test:discovery'] !== 'node --test scripts/test-discovery-regressions.mjs && node scripts/check-test-discovery.mjs') {
+  failures.push('test:discovery: real test discovery and negative regressions must run together');
+}
+if (packageJson.scripts?.['test:coverage:critical'] !== 'node scripts/run-critical-coverage.mjs') {
+  failures.push('test:coverage:critical: diagnostic coverage runner missing');
+}
+if (!packageJson.scripts?.['verify:m6']?.includes('npm run test:discovery') || !packageJson.scripts?.['verify:m6']?.includes('npm run test:coverage:critical')) {
+  failures.push('verify:m6 must include discovery and critical coverage leaves');
+}
+if (packageJson.scripts?.test !== 'vitest run') {
+  failures.push('test: canonical general Vitest leaf must remain unmodified');
+}
+if (packageJson.scripts?.['test:isolated'] !== 'vitest run --config vitest.isolated.config.ts') {
+  failures.push('test:isolated canonical leaf must remain unmodified');
+}
+if (!isolatedVitest.includes("exclude: process.env.npm_lifecycle_event === 'test:isolated' ? ['tests/isolated/m8_domain_commit.test.ts'] : []")) {
+  failures.push('vitest isolated: m8_domain_commit must run only in dedicated M8 gate');
+}
+for (const file of dedicatedUnitFiles.filter(path => path.startsWith('tests/m7_account_deletion_'))) {
+  if (!packageJson.scripts?.['test:m7']?.includes(file)) {
+    failures.push(`test:m7: missing dedicated file ${file}`);
+  }
+}
+for (const name of ['m8_domain_operations', 'm8_domain_commit']) {
+  if (!packageJson.scripts?.['test:m8']?.includes(name)) {
+    failures.push(`test:m8: missing dedicated file ${name}`);
+  }
+}
+const hardeningConfig = readFileSync('vitest.hardening.config.ts', 'utf8');
+for (const file of dedicatedUnitFiles.filter(path => !path.startsWith('tests/m7_') && !path.startsWith('tests/m8_') && !path.startsWith('tests/hardening/'))) {
+  if (!hardeningConfig.includes(`'${file}'`)) failures.push(`test:hardening: missing dedicated file ${file}`);
+}
+if (!hardeningConfig.includes("'tests/hardening/**/*.test.{ts,tsx}'")) {
+  failures.push('test:hardening: missing dedicated nutrition guest flow discovery');
+}
+
 function requirePattern(label, source, pattern) {
   if (!pattern.test(source)) failures.push(`${label}: missing structure matching ${pattern}`);
 }
@@ -147,7 +209,10 @@ requirePattern('Temurin distribution', workflow, /^          distribution: temur
 requirePattern('Java 21 runtime', workflow, /^          java-version: ['"]?21['"]?\s*$/m);
 requirePattern('dedicated Playwright E2E job', workflow, /^  e2e:\s*$/m);
 requirePattern('Playwright container IPC sharing', workflow, /^      options: --ipc=host\s*$/m);
-requirePattern('Playwright E2E execution', workflow, /^          npm run test:e2e 2>&1 \| tee "verification-e2e\.log"\s*$/m);
+requirePattern('E2E matrix complete for both browser projects', workflow, /^  e2e:\n    if: github\.event_name == 'pull_request'\n    name: "Verification \/ Playwright E2E \$\{\{ matrix\.project \}\} \$\{\{ matrix\.shard \}\}\/4"\n    runs-on: ubuntu-24\.04\n    timeout-minutes: 30\n    strategy:\n      fail-fast: false\n      matrix:\n        project: \[chromium, mobile-safari\]\n        shard: \[1, 2, 3, 4\]\s*$/m);
+requirePattern('Playwright E2E project sharded execution', workflow, /^          npm run test:e2e -- --project=\$\{\{ matrix\.project \}\} --shard=\$\{\{ matrix\.shard \}\}\/4 2>&1 \| tee "verification-e2e-\$\{\{ matrix\.project \}\}-\$\{\{ matrix\.shard \}\}\.log"\s*$/m);
+requirePattern('Playwright unique project and shard artifacts', workflow, /^          name: verification-e2e-\$\{\{ matrix\.project \}\}-\$\{\{ matrix\.shard \}\}-\$\{\{ env\.EXPECTED_SHA \}\}\s*$/m);
+requirePattern('Playwright project and shard log retained', workflow, /^            verification-e2e-\$\{\{ matrix\.project \}\}-\$\{\{ matrix\.shard \}\}\.log\s*$/m);
 forbidPattern('host Playwright dependency install', workflow, /playwright install --with-deps/);
 const playwrightImageMatch = workflow.match(/^      image: mcr\.microsoft\.com\/playwright:v([0-9]+\.[0-9]+\.[0-9]+)-noble\s*$/m);
 if (!playwrightImageMatch) {
@@ -168,6 +233,7 @@ const allowedIfLines = new Set([
   "if: ${{ always() && github.event_name == 'pull_request' }}",
   'if: matrix.java == true',
   "if: matrix.id == 'core'",
+  "if: matrix.id == 'critical-coverage'",
   'if: failure()',
   'if: ${{ always() }}',
 ]);
@@ -193,7 +259,7 @@ if (!includeMatch) {
     return { id, command, java };
   });
 
-  const expectedIds = ['core', 'unit-1', 'unit-2', 'hardening-stress', 'rules', 'm7-m8'];
+  const expectedIds = ['core', 'unit-1', 'unit-2', 'unit-3', 'hardening-stress', 'rules', 'm7-m8', 'critical-coverage'];
   const ids = shards.map(shard => shard.id);
   if (JSON.stringify(ids) !== JSON.stringify(expectedIds)) {
     failures.push(`parallel matrix: expected shard ids ${expectedIds.join(', ')}, got ${ids.join(', ')}`);
@@ -211,7 +277,7 @@ if (!includeMatch) {
     }
     for (const part of splitChain(shard.command)) {
       if (part === 'npm audit --audit-level=high' || part === 'npm run test:security-static') continue;
-      if (/^npm run test -- --shard=[12]\/2$/.test(part)) {
+      if (/^npm run test -- --shard=[123]\/3$/.test(part)) {
         unitShardCommands.push(part);
         continue;
       }
@@ -225,11 +291,12 @@ if (!includeMatch) {
   }
 
   const expectedUnitShardCommands = [
-    'npm run test -- --shard=1/2',
-    'npm run test -- --shard=2/2',
+    'npm run test -- --shard=1/3',
+    'npm run test -- --shard=2/3',
+    'npm run test -- --shard=3/3',
   ];
   if (JSON.stringify([...unitShardCommands].sort()) !== JSON.stringify(expectedUnitShardCommands)) {
-    failures.push(`unit suite: expected deterministic 1/2 + 2/2 Vitest shards exactly once, got ${unitShardCommands.join(', ')}`);
+    failures.push(`unit suite: expected deterministic 1/3 + 2/3 + 3/3 Vitest shards exactly once, got ${unitShardCommands.join(', ')}`);
   } else {
     ciLeaves.push(...expandScript('test'));
   }
@@ -257,6 +324,12 @@ const guardOccurrences = workflow.match(/npm run test:quality-guardrails/g) ?? [
 if (guardOccurrences.length !== 1) failures.push(`quality regression gate: expected once in CI matrix, found ${guardOccurrences.length}`);
 const coverageOccurrences = workflow.match(/npm run test:typecheck-coverage/g) ?? [];
 if (coverageOccurrences.length !== 1) failures.push(`TypeScript coverage gate: expected once, found ${coverageOccurrences.length}`);
+const discoveryOccurrences = workflow.match(/npm run test:discovery/g) ?? [];
+if (discoveryOccurrences.length !== 1) failures.push('test discovery: expected once in CI core');
+const criticalCoverageOccurrences = workflow.match(/npm run test:coverage:critical/g) ?? [];
+if (criticalCoverageOccurrences.length !== 1) failures.push('critical coverage: expected once in CI matrix');
+requirePattern('critical coverage artifact bound to exact SHA', workflow, /^          name: critical-coverage-\$\{\{ env\.EXPECTED_SHA \}\}\s*$/m);
+requirePattern('critical coverage JSON evidence', workflow, /^          path: coverage\/critical\/coverage-summary\.json\s*$/m);
 const auditOccurrences = workflow.match(/npm audit --audit-level=high/g) ?? [];
 if (auditOccurrences.length !== 1) failures.push(`security audit: expected once, found ${auditOccurrences.length}`);
 const staticSecurityOccurrences = workflow.match(/npm run test:security-static/g) ?? [];
@@ -308,4 +381,4 @@ if (failures.length > 0) {
   process.exit(1);
 }
 
-console.log('M8 CI contract OK: exact-SHA matrix shards plus the pinned Playwright container are leaf-equivalent to verify:m8, CodeQL plus the supplemental static-security gate are required, specialized dependencies stay isolated, and Canonical Verification remains the single aggregate gate.');
+console.log('M8 CI contract OK: exact-SHA verification, three unit shards, eight project-isolated Playwright shards, runtime discovery checks and critical coverage are leaf-equivalent to verify:m8; CodeQL and Canonical Verification remain required.');
