@@ -6,7 +6,7 @@
 
 - Privacy: `thelogbook.privacy@gmail.com` (recapito dichiarato, funzionamento confermato dal product owner il 5 novembre 2026; organizzare controllo periodico della casella e registrazione delle richieste)
 - Supporto: `[SUPPORT_EMAIL]`
-- Capacità tecniche in app: backup JSON/esportazioni, rettifica, revoca/riaccettazione del consenso, cancellazione account e cancellazione separata dei soli dati dopo revoca server confermata. Per contratti e limiti usare [Consenso](../../.agents/rules/health-consent.md), [Ciclo account](../../.agents/rules/account-lifecycle.md) e [Portabilità](../../.agents/rules/backup-and-portability.md); questa procedura non certifica collaudi live.
+- Capacità tecniche in app: backup JSON/esportazioni, rettifica, revoca/riaccettazione del consenso, cancellazione automatica dei dati applicativi dopo revoca trusted, distinta dalla cancellazione dell'identità account. Per contratti e limiti usare [Consenso](../../.agents/rules/health-consent.md), [Ciclo account](../../.agents/rules/account-lifecycle.md) e [Portabilità](../../.agents/rules/backup-and-portability.md); questa procedura non certifica collaudi live.
 
 ## Decisione operativa aggiornata — 6 novembre 2026
 
@@ -41,34 +41,22 @@ Usare come riferimento l'Art. 12 GDPR: risposta senza ingiustificato ritardo e, 
 |---|---|
 | Accesso | Informazioni sul trattamento + raccolta dei dati applicabili; usare export quando adeguato alla richiesta concreta |
 | Rettifica | Funzioni di modifica in app; intervento documentato se un dato non è editabile direttamente |
-| Cancellazione | Distinguere `Elimina account` dalla cancellazione dei soli dati dopo revoca server confermata, che conserva Firebase Auth; in entrambi verificare lo specifico job trusted completo e il cleanup locale autorizzato |
+| Cancellazione | La revoca trusted avvia automaticamente la cancellazione dei dati applicativi mantenendo Firebase Auth; `Elimina account` è distinto. Verificare il job corretto, l'epoch, la chiave cloud e il cleanup locale autorizzato; considerare copie provider e file esportati |
 | Portabilità | Backup JSON / export CSV; verificare che il formato copra il perimetro richiesto |
 | Limitazione | `[DEFINE_IF_REQUIRED]`; non esiste oggi un flag generico di restriction |
 | Opposizione | Valutare i trattamenti effettivamente basati sul legittimo interesse, inclusi eventuali log tecnici dei fornitori se questa è la base giuridica applicabile; non presumere un servizio di telemetria applicativa |
-| Revoca consenso dati salute | **Soluzione A decisa (9 ottobre 2026): sospensione completa delle funzioni fitness, accesso a esportazione/diritti/account deletion e nuova accettazione esplicita possibile (decisione aggiornata il 12 ottobre).** Implementazione tecnica e regressioni integrate con PR #366; collaudo autenticato multi-dispositivo e valutazione delle basi giuridiche, dei contatti e della retention **ancora bloccanti prima del pilot con utenti reali**; vedi `health-consent-release-gate.md`. |
+| Revoca consenso dati salute | Blocco immediato fitness; esportazione JSON facoltativa **prima** della conferma, erasure automatica al trusted withdraw (PR #826), senza eliminare Auth. Pending offline non equivale a successo server; re-consenso solo dopo job completo e archivio vuoto. Collaudo multi-device e validazione legale restano aperti |
 | Reclamo | Informare del diritto di rivolgersi all'autorità di controllo competente |
 
-## Revoca consenso dati salute — decisione prodotto A, verifiche runtime e legali ancora aperte
+## Gestione della revoca e richieste successive — issue #824
 
-Il product owner ha scelto la **soluzione A** (sospensione di tutte le funzioni fitness, con accesso a diritti, esportazione, cancellazione account e facoltà di accettare nuovamente in modo esplicito). Il protocollo tecnico autorevole e le regressioni sono integrati con PR #366; prima del pilot restano il collaudo autenticato multi-dispositivo e la validazione legale, come specificato in `health-consent-release-gate.md`. In particolare occorre confermare con evidenza runtime e definire sul piano giuridico:
+**Comportamento del repository:** la revoca sospende immediatamente il fitness. Se online, il backend registra la revoca e accoda il job di erasure **nella stessa transazione**; in assenza di rete lo stato locale è pending finché non avviene la riconciliazione trusted. La cancellazione riguarda archivi applicativi e chiave cloud, **non** Firebase Authentication. Il guest elimina i dati locali e termina la sessione. Il vecchio percorso di cancellazione solo dopo un secondo clic e la riaccettazione offline di archivi precedenti sono superati dalle PR #826/#829.
 
-1. da quale momento cessano i trattamenti che dipendono dal consenso Art. 9;
-2. che restino solo informativa, gestione dei diritti/esportazione, cancellazioni distinte e nuova accettazione esplicita, senza funzioni fitness durante la sospensione (soluzione A);
-3. quali dati già raccolti devono essere cancellati, quali possono eventualmente essere conservati, per quale altra base giuridica e per quanto tempo: nessuna conservazione indefinita motivata dal consenso già ritirato;
-4. rapporto tra revoca, export e cancellazione account;
-5. comportamento offline e sincronizzazione multi-dispositivo;
-6. gestione di una revoca effettuata mentre esistono modifiche locali pendenti;
-7. testo UI che non presenti il consenso come irrevocabile o artificiosamente obbligatorio.
+L'utente può esportare facoltativamente i dati **prima della revoca**; la scelta di non esportare non la impedisce. Durante un job attivo non è garantita l'esportazione cloud completa: non tentare di ignorare i guard di cancellazione e non presentare copie parziali come complete. Gestire eventuali domande di accesso o portabilità successive sulla base dei dati realmente esistenti, delle copie disponibili e degli obblighi applicabili; motivare l'eventuale impossibilità con risposta individuale, non con un presunto diritto di retention indefinita.
 
-Distinguere implementazione e regressioni nel repository dalla prova runtime autenticata e dalla validazione legale ancora aperte.
+**Verifica del completamento:** distinguere local pending, revoca trusted e job `requested/deleting/verifying/failed/complete`. Prima di affermare la cancellazione, controllare ricevuta `complete`, epoch/revisione coerenti, chiave cloud eliminata, sottoraccolte previste e residui inattesi, pulizia owner-scoped locale; verificare separatamente l'eventuale copia provider e i limiti dei dispositivi offline. Un job fallito o una copia non verificata devono essere dichiarati come tali. La cancellazione dell'identità Auth richiede la procedura account deletion separata.
 
-## Caso specifico #824 — revoca e cancellazione (6 novembre 2026)
-
-La revoca del consenso e la cancellazione dell'**identità di accesso** sono richieste distinte. La schermata sospesa della [PR #826](https://github.com/gernotfound/logbook/pull/826) consente al titolare di account con revoca server confermata di avviare la cancellazione dei dati applicativi **senza** cancellare Firebase Authentication; in modalità ospite offre la cancellazione dei dati locali. Il flusso account richiede recente autenticazione, due conferme, job cloud `complete` e verifica del purge prima di dichiarare il completamento.
-
-**Limite giuridico:** la presenza del pulsante non sostituisce l'obbligo del titolare di valutare la **cancellazione senza ingiustificato ritardo** dei dati conservati esclusivamente grazie al consenso revocato (GDPR Art. 17; [Commissione UE](https://commission.europa.eu/law/law-topic/data-protection/information-business-and-organisations/legal-grounds-processing-data_en)). Oggi il backend non avvia automaticamente il job alla revoca: questa è una lacuna di policy **non ancora risolta** dalla PR UX.
-
-Per le richieste concrete di cancellazione: verificare separatamente **revoca pending/confirmed**, richiesta distinta di erasure, **job requested/deleting/verifying/failed/complete**, cleanup locale e copie provider; non dichiarare un risultato globale da un solo job cloud né un diritto di accesso indefinito ai dati dopo revoca. Se la finalità di trattamento è cessata e manca altra base giuridica, non attendere indefinitamente un secondo clic per giustificare la permanenza delle informazioni salute. La nuova policy da approvare, inclusi export e cancellazione automatica eventualmente necessaria, è delimitata nel [retention schedule](retention-schedule.md).
+**Resta aperto prima di utenti esterni:** determinare per finalità basi giuridiche artt. 6 e 9, libertà del consenso, conservazione e accessi dei marker/receipt/Auth/log/case file, procedure presso i fornitori e trasferimenti. Il codice e le regressioni non sostituiscono collaudi autenticati multi-dispositivo né parere professionale. Vedi [gate di consenso](health-consent-release-gate.md), [retention](retention-schedule.md) e [registro fornitori](vendor-transfer-register.md).
 
 ## Flusso operativo
 

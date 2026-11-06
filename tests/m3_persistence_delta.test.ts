@@ -366,8 +366,8 @@ describe('M3: Storage & Persistence Delta Isolation Suite', () => {
             const owner = 'user:test-user-id';
             const storageKey = 'logbook:v2:' + owner;
             const ciphertext = idbStore[storageKey];
-            expect(ciphertext).toMatch(/^tlb-sealed:v1:/);
-            expect(ciphertext).not.toContain('176');
+            // Short plaintext fragments may occur by chance in randomized base64url ciphertext.
+            expect(ciphertext).toMatch(/^tlb-sealed:v1:[A-Za-z0-9_-]{32}\.[A-Za-z0-9_-]+$/);
             expect((await readLocal(owner))?.data.profile?.height).toBe('176');
 
             // A null cache update is not verified account deletion: keep ciphertext.
