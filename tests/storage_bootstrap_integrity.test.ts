@@ -10,7 +10,10 @@ import {
 import { CURRENT_DATA_SCHEMA, CURRENT_LOCAL_ENVELOPE, CURRENT_SYNC_PROTOCOL } from '../src/lib/schemaEvolution';
 import { idbStore, localStorageMock } from './setup';
 import { prepareUnlockedTestArchive } from './secureVaultFixture';
-import { lockAllVaults } from '../src/lib/sync/secureArchiveSession';
+import { isVaultUnlocked, lockAllVaults, lockVault, vaultControlKey } from '../src/lib/sync/secureArchiveSession';
+import { initializeLocal } from '../src/lib/sync/localRepository';
+import { UserDataSchema } from '../src/lib/schema';
+import { deviceVaultKeyId } from '../src/lib/sync/secureArchiveKeys';
 import { activateGuestSession, GUEST_SESSION_KEY, invalidateSession } from '../src/lib/sync/session';
 
 vi.mock('react-dom/client', () => ({
@@ -150,6 +153,45 @@ describe('Storage bootstrap and owner integrity checks', () => {
     expect(useAppStore.getState().localPersistenceBlocked).toBe(true);
     expect(getStorageMarker(undefined, 'guest')?.timestamp).toBe(1000);
     expect(await idbKeyval.get('logbook:v2:guest')).toBe(corruptBytes);
+  });
+
+  it('Flow 3b: a cold guest boot rejects tampered authenticated ciphertext without replacing vault or data', async () => {
+    localStorage.removeItem('logbook_authenticated_owner');
+    localStorage.setItem('logbook_is_guest', 'true');
+    localStorage.setItem(GUEST_SESSION_KEY, 'storage-integrity-guest');
+    activateGuestSession('storage-integrity-guest');
+    await prepareUnlockedTestArchive('guest');
+    await initializeLocal('guest', UserDataSchema.parse({}));
+    updateStorageMarker(1000, undefined, 'guest');
+
+    const archiveKey = 'logbook:v2:guest';
+    const original = await idbKeyval.get<string>(archiveKey);
+    expect(original).toMatch(/^tlb-sealed:v1:/);
+    const dot = original!.lastIndexOf('.');
+    expect(dot).toBeGreaterThan(0);
+    const payload = original![dot + 1];
+    const tampered = original!.slice(0, dot + 1)
+      + (payload === 'A' ? 'B' : 'A') + original!.slice(dot + 2);
+    await idbKeyval.set(archiveKey, tampered);
+    const control = localStorage.getItem(vaultControlKey('guest'));
+    const wrappingKey = await idbKeyval.get(deviceVaultKeyId('guest'));
+
+    lockVault('guest');
+    expect(isVaultUnlocked('guest')).toBe(false);
+    const getSpy = vi.spyOn(idbKeyval, 'get');
+
+    await initApp();
+
+    expect(isVaultUnlocked('guest')).toBe(true);
+    expect(getSpy.mock.calls.some(([key]) => key === deviceVaultKeyId('guest'))).toBe(true);
+    expect(getSpy.mock.calls.some(([key]) => key === archiveKey)).toBe(true);
+    expect(window.__INITIAL_USER_DATA__).toBeNull();
+    expect(useAppStore.getState().userData).toBeNull();
+    expect(useAppStore.getState().localPersistenceBlocked).toBe(true);
+    expect(getStorageMarker(undefined, 'guest')?.timestamp).toBe(1000);
+    expect(await idbKeyval.get(archiveKey)).toBe(tampered);
+    expect(localStorage.getItem(vaultControlKey('guest'))).toBe(control);
+    expect(await idbKeyval.get(deviceVaultKeyId('guest'))).toBe(wrappingKey);
   });
 
   it('Flow 4: First launch without a marker or cache remains empty', async () => {
