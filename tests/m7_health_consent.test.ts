@@ -293,6 +293,7 @@ describe('trusted health consent boundary', () => {
 });
 
 describe('withdrawal revision concurrency', () => {
+  beforeEach(() => { transactionFixture.retries = 0; transactionFixture.overlap = null; });
   it('retries overlapping withdrawals against the committed revision, not stale snapshots', async () => {
     storage.documents.clear();
     let release!: () => void;
