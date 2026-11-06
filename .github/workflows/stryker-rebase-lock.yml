@@ -1,0 +1,80 @@
+name: Temporary Stryker lockfile from current main
+
+on:
+  push:
+    branches:
+      - experiment/stryker-vitest-20261106
+    paths:
+      - .github/workflows/stryker-rebase-lock.yml
+
+permissions:
+  contents: read
+
+jobs:
+  generate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Checkout exact branch SHA
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Setup Node 24
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: '24'
+      - name: Rebase dependency manifests onto independently verified main
+        env:
+          MAIN_SHA: e039c27693fec669e1a5ebbf1a2adebc33cab5cd
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$(npm --version)" == 11.* ]]
+          git fetch --no-tags origin main
+          test "$(git rev-parse origin/main)" = "$MAIN_SHA"
+          git show "$MAIN_SHA:package.json" > package.json
+          git show "$MAIN_SHA:package-lock.json" > package-lock.json
+          node --input-type=module <<'NODE'
+          import { readFileSync, writeFileSync } from 'node:fs';
+          const path = 'package.json';
+          const p = JSON.parse(readFileSync(path, 'utf8'));
+          if (p.version !== '2.201.0') throw new Error('Main version changed; do not reuse lock generation');
+          p.version = '2.202.0';
+          p.devDependencies['@stryker-mutator/core'] = '10.1.1';
+          p.devDependencies['@stryker-mutator/vitest-runner'] = '10.1.1';
+          p.scripts['test:mutation:trial'] = 'stryker run stryker.trial.config.mjs';
+          writeFileSync(path, JSON.stringify(p, null, 2) + '\n');
+          NODE
+          npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+          node scripts/check-install-scripts.mjs
+          npm audit --audit-level=high
+          npm ci --ignore-scripts --no-audit --no-fund
+          node --input-type=module <<'NODE'
+          import { readFileSync } from 'node:fs';
+          const p = JSON.parse(readFileSync('package.json', 'utf8'));
+          const l = JSON.parse(readFileSync('package-lock.json', 'utf8'));
+          if (p.version !== '2.202.0' || l.version !== p.version || l.packages[''].version !== p.version) throw new Error('Bad release version');
+          for (const n of ['@stryker-mutator/core', '@stryker-mutator/vitest-runner']) {
+            if (p.devDependencies[n] !== '10.1.1' || l.packages['node_modules/' + n]?.version !== '10.1.1') throw new Error('Bad locked Stryker version ' + n);
+          }
+          for (const n of ['@unplugin-pwa/core', '@unplugin-pwa/vite', '@vite-pwa/workbox-swkit']) {
+            if (!p.devDependencies[n] || !l.packages['node_modules/' + n]) throw new Error('Lost current Workbox 8 PWA dependency ' + n);
+          }
+          NODE
+      - name: Emit public package files in numbered logs for GitHub commit
+        shell: bash
+        run: |
+          node --input-type=module <<'NODE'
+          import { readFileSync } from 'node:fs';
+          import { createHash } from 'node:crypto';
+          for (const name of ['package.json', 'package-lock.json']) {
+            const data = readFileSync(name, 'utf8');
+            const size = 3000, count = Math.ceil(data.length / size);
+            console.log('LOCKMETA|' + name + '|' + count + '|' + createHash('sha256').update(data).digest('hex'));
+            for (let i = 0; i < count; i++) {
+              console.log('LOCKDATA|' + name + '|' + i + '|' + count + '|' + JSON.stringify(data.slice(i * size, (i + 1) * size)));
+            }
+          }
+          NODE
