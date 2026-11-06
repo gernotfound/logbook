@@ -280,7 +280,6 @@ export function HealthConsentSuspended({ status, user }: { status: HealthConsent
           <a className="btn btn-primary" href={preparedBackupUrl} download="logbook_backup.json">Scarica backup JSON</a>
           <button type="button" className="btn" onClick={releasePreparedBackup}>Elimina il download preparato</button>
         </>}
-        
         <button type="button" className="btn" disabled={erasingHealthData} onClick={() => void handleLogout()}>Esci dall'account</button>
         {user !== null && <button type="button" className="btn" disabled={erasingHealthData} onClick={() => void handleDeleteAccount()}>Elimina definitivamente l'account</button>}
         <button type="button" className="btn" disabled={busy || recoveryBusy || exportingData || erasingHealthData} onClick={() => { void reloadPage(); }}>Ricarica pagina</button>
