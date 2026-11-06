@@ -273,6 +273,18 @@ describe('M7 native deletion job store', () => {
     expect(state.docs.has('user_data_keys/u')).toBe(true);
   });
 
+  it('removes account activity under the deletion lease and refuses residual activity', async () => {
+    state.docs.add('account_deletions/u');
+    state.docs.add('account_activity/u');
+    await acquireDeletionLease('u', 'worker-activity', Date.now() + 60_000);
+    await deleteUserRoot('u', 'worker-activity');
+    expect(state.docs.has('account_activity/u')).toBe(false);
+    await expect(verifyNoAccountResidue('u', true)).resolves.toBeUndefined();
+
+    state.docs.add('account_activity/u');
+    await expect(verifyNoAccountResidue('u', true)).rejects.toThrow('Account activity marker still exists');
+  });
+
   it('does not verify account deletion while a revocation marker remains', async () => {
     state.docs.add('session_revocations/u');
     await expect(verifyNoAccountResidue('u')).rejects.toThrow(
