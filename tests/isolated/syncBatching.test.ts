@@ -284,4 +284,15 @@ describe('bounded causal sync batching', () => {
         expect(input).toEqual(before);
     });
 
+
+    it('rejects negative, non-integer or exhausted actor sequence coordinates before generating operations', () => {
+        const operations = [operation('history_months/2026-01', 1)];
+        for (const invalid of [-1, -100, 1.5, NaN, Infinity, Number.MAX_SAFE_INTEGER]) {
+            expect(() => sequenceOperationsForBoundedTransactions(
+                operations, 's00', invalid, { s00: invalid },
+            )).toThrow('Sequenza sync esaurita o non valida');
+        }
+    });
+
+
 });
