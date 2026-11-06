@@ -33,6 +33,9 @@ function isRetryableConsentTransportError(error: unknown): boolean {
 const verifiedRevisions = new Map<string, number>();
 // Offline access is local-only: a cached server approval must never authorize cloud I/O.
 const onlineVerifiedRevisions = new Map<string, number>();
+// A local withdrawn marker fences writes, but never proves the backend accepted
+// the revocation. UI must not start erasure polling from that marker alone.
+const confirmedServerWithdrawals = new Map<string, number>();
 // Only the latest check may publish its result for an owner.
 const verificationSerials = new Map<string, number>();
 const invalidateConsentChecks = (uid: string) => {
@@ -88,6 +91,7 @@ export function beginHealthConsentVerification(uid: string): void {
   invalidateConsentChecks(uid);
   verifiedRevisions.delete(uid);
   onlineVerifiedRevisions.delete(uid);
+  confirmedServerWithdrawals.delete(uid);
   serverConfirmedLegal.delete(uid);
   setStatus(uid, 'checking');
 }
@@ -100,8 +104,17 @@ function readMarker(uid: string): string | null {
   return readBrowserValueStrict(marker(uid));
 }
 function setStatus(uid: string, status: HealthConsentStatus): void {
+  if (status !== 'withdrawn') confirmedServerWithdrawals.delete(uid);
   entries.set(uid, status);
   notify();
+}
+
+/** A server GET or authenticated POST must attest the exact withdrawal before
+ * UI may poll the destructive job; a cross-tab/local marker alone is insufficient. */
+export function isVerifiedHealthWithdrawal(uid: string): boolean {
+  return confirmedServerWithdrawals.has(uid)
+    && entries.get(uid) === 'withdrawn'
+    && currentHealthConsentStatus(uid) === 'withdrawn';
 }
 export function currentHealthConsentStatus(uid: string | undefined): HealthConsentStatus {
   if (!uid) return 'active';
@@ -505,6 +518,7 @@ export async function refreshHealthConsent(user: User): Promise<HealthConsentSta
         // The account stays suspended and must explicitly accept again.
         if (state.status === 'withdrawn' && state.revision > sourceRevision + 1) {
           writeBrowserValue(marker(uid), 'withdrawn');
+          confirmedServerWithdrawals.set(uid, state.revision);
           setStatus(uid, 'withdrawn');
           return 'withdrawn';
         }
@@ -534,6 +548,7 @@ export async function refreshHealthConsent(user: User): Promise<HealthConsentSta
     if (state.status === 'withdrawn') {
       serverConfirmedLegal.delete(uid);
       writeBrowserValue(marker(uid), 'withdrawn');
+      confirmedServerWithdrawals.set(uid, state.revision);
       setStatus(uid, 'withdrawn');
       return 'withdrawn';
     }
@@ -549,6 +564,7 @@ export async function refreshHealthConsent(user: User): Promise<HealthConsentSta
       if (!isSameDecision()) return currentHealthConsentStatus(uid);
       if (retry.status !== 'withdrawn') throw new Error('Revoca non registrata.');
       writeBrowserValue(marker(uid), 'withdrawn');
+      confirmedServerWithdrawals.set(uid, retry.revision);
       setStatus(uid, 'withdrawn');
       return 'withdrawn';
     }
