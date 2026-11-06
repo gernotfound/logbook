@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { User } from 'firebase/auth';
 import { HealthConsentSuspended } from '../src/components/UI/HealthConsentSuspended';
-import { finishHealthConsentReacceptance, registerInitialHealthConsent, reacceptHealthConsent, reacceptHealthConsentLocally, refreshHealthConsent } from '../src/lib/healthConsent';
+import { registerInitialHealthConsent, reacceptHealthConsent, reacceptHealthConsentLocally } from '../src/lib/healthConsent';
 import { safeHardReload } from '../src/lib/sync/safeReload';
 import { UnverifiedTabSnapshotError } from '../src/lib/sync/reloadBarrier';
 import { useDialogStore } from '../src/store/useDialogStore';
@@ -36,24 +36,19 @@ const reacceptButton = () => screen.getByRole('button', { name: 'Presta un nuovo
 beforeEach(() => { vi.clearAllMocks(); backupUi.url = null; });
 
 describe('suspended health-consent screen', () => {
-  it('allows data-only erasure only after verified account withdrawal, not offline or for guests', async () => {
+
+  it('shows trusted automatic erasure status only after confirmed account withdrawal', () => {
     const { rerender } = render(<HealthConsentSuspended status="pending" user={account} />);
-    expect(screen.queryByRole('button', { name: 'Elimina definitivamente i miei dati' })).toBeNull();
+    expect(screen.queryByRole('region', { name: 'Cancellazione automatica dei dati' })).toBeNull();
     rerender(<HealthConsentSuspended status="withdrawn" user={null} />);
-    expect(screen.queryByRole('button', { name: 'Elimina definitivamente i miei dati' })).toBeNull();
+    expect(screen.queryByRole('region', { name: 'Cancellazione automatica dei dati' })).toBeNull();
     rerender(<HealthConsentSuspended status="withdrawn" user={account} />);
-    const button = screen.getByRole('button', { name: 'Elimina definitivamente i miei dati' });
-    const erasure = screen.getByRole('region', { name: 'Cancellazione dei dati dopo la revoca' });
-    expect(erasure.contains(button)).toBe(true);
-    expect((button.compareDocumentPosition(reacceptButton()) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0).toBe(true);
-    expect(backupUi.erase).not.toHaveBeenCalled();
-    fireEvent.click(button);
-    await waitFor(() => expect(backupUi.erase).toHaveBeenCalledTimes(1));
-    const offline = vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false);
-    try {
-      fireEvent(window, new Event('offline'));
-      await waitFor(() => expect((button as HTMLButtonElement).disabled).toBe(true));
-    } finally { offline.mockRestore(); }
+    const region = screen.getByRole('region', { name: 'Cancellazione automatica dei dati' });
+    expect(region.textContent).toMatch(/avvia automaticamente la cancellazione/i);
+    expect(region.querySelector('button')?.textContent).toContain('Verifica stato cancellazione');
+    expect(screen.queryByRole('button', { name: 'Elimina definitivamente i miei dati' })).toBeNull();
+    expect((screen.getByRole('button', { name: 'Prepara backup JSON' }) as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.queryByRole('button', { name: 'Presta un nuovo consenso' })).toBeNull();
   });
 
   it('allows guest deletion after withdrawal without submitting a cloud erasure', () => {
@@ -66,11 +61,13 @@ describe('suspended health-consent screen', () => {
     expect(backupUi.erase).not.toHaveBeenCalled();
   });
 
-  it('never offers data-only cloud deletion before trusted revocation confirmation', () => {
+
+  it('does not expose cloud erasure verification or new consent without trusted withdrawal', () => {
     const { rerender } = render(<HealthConsentSuspended status="unregistered" user={account} />);
     for (const status of ['unregistered', 'checking', 'error', 'pending', 'stale-request', 'reaccepting', 'recovery-required', 'erasure-required'] as const) {
       rerender(<HealthConsentSuspended status={status} user={account} />);
-      expect(screen.queryByRole('button', { name: 'Elimina definitivamente i miei dati' })).toBeNull();
+      expect(screen.queryByRole('region', { name: 'Cancellazione automatica dei dati' })).toBeNull();
+      if (status !== 'unregistered') expect(screen.queryByRole('button', { name: 'Presta un nuovo consenso' })).toBeNull();
     }
     expect(backupUi.erase).not.toHaveBeenCalled();
   });
@@ -92,53 +89,16 @@ describe('suspended health-consent screen', () => {
     expect(screen.getByRole('alert').textContent).toContain('Rete non disponibile');
   });
 
-  it('keeps the same reacceptance form visible from pending to server-confirmed withdrawal', () => {
+
+  it('blocks reacceptance during pending and scheduled erasure without consent checkboxes', () => {
     const { rerender } = render(<HealthConsentSuspended status="pending" user={account} />);
-    const [terms, health] = checkboxInputs();
-    const submit = reacceptButton();
-
     expect(screen.getByRole('status').textContent).toContain('In attesa della conferma cloud');
-    expect(terms.disabled).toBe(true);
-    expect(health.disabled).toBe(true);
-    expect(submit.disabled).toBe(true);
-    fireEvent.click(submit);
-    expect(reacceptHealthConsent).not.toHaveBeenCalled();
-    expect(screen.getByRole('button', { name: 'Prepara backup JSON' })).toBeDefined();
-    expect(screen.getByRole('button', { name: "Elimina definitivamente l'account" })).toBeDefined();
-
+    expect(screen.queryByRole('checkbox')).toBeNull();
     rerender(<HealthConsentSuspended status="withdrawn" user={account} />);
-    expect(screen.getByRole('status').textContent).toContain('Revoca confermata sul server');
-    expect(screen.getByRole('button', { name: 'Elimina definitivamente i miei dati' })).toBeDefined();
-    const removalSection = screen.getByRole('region', { name: 'Cancellazione dei dati dopo la revoca' });
-    expect(removalSection.textContent).toMatch(/tutti i dati applicativi \(profilo, misurazioni, allenamenti, nutrizione e schede\)/);
+    expect(screen.getByRole('region', { name: 'Cancellazione automatica dei dati' })).toBeDefined();
+    expect(screen.queryByRole('checkbox')).toBeNull();
     expect(screen.getByRole('button', { name: "Elimina definitivamente l'account" })).toBeDefined();
-    const [enabledTerms, enabledHealth] = checkboxInputs();
-    const enabledSubmit = reacceptButton();
-    expect(enabledTerms.disabled).toBe(false);
-    expect(enabledHealth.disabled).toBe(false);
-    expect(enabledTerms.checked).toBe(false);
-    expect(enabledHealth.checked).toBe(false);
-    expect(enabledSubmit.disabled).toBe(true);
-
-    fireEvent.click(enabledTerms);
-    expect(enabledSubmit.disabled).toBe(true);
-    fireEvent.click(enabledHealth);
-    expect(enabledSubmit.disabled).toBe(false);
-
-    rerender(<HealthConsentSuspended status="pending" user={account} />);
-    const [pendingTerms, pendingHealth] = checkboxInputs();
-    expect(pendingTerms.disabled).toBe(true);
-    expect(pendingHealth.disabled).toBe(true);
-    expect(pendingTerms.checked).toBe(false);
-    expect(pendingHealth.checked).toBe(false);
-    expect(reacceptButton().disabled).toBe(true);
-    fireEvent.click(reacceptButton());
     expect(reacceptHealthConsent).not.toHaveBeenCalled();
-
-    rerender(<HealthConsentSuspended status="withdrawn" user={account} />);
-    expect(checkboxInputs()[0].checked).toBe(false);
-    expect(checkboxInputs()[1].checked).toBe(false);
-    expect(reacceptButton().disabled).toBe(true);
   });
 
   it('shows erased local archives separately from recoverable offline journals, without a replay button', () => {
@@ -150,19 +110,7 @@ describe('suspended health-consent screen', () => {
     expect(screen.queryByRole('checkbox')).toBeNull();
   });
 
-  it('does not report a failed consent when the server accepted it but an old erased copy stays blocked', async () => {
-    vi.mocked(reacceptHealthConsent).mockResolvedValue('2026-10-12T10:00:00.000Z');
-    vi.mocked(refreshHealthConsent).mockResolvedValue('erasure-required');
-    render(<HealthConsentSuspended status="withdrawn" user={account} />);
-    const [terms, health] = checkboxInputs();
-    fireEvent.click(terms);
-    fireEvent.click(health);
-    fireEvent.click(reacceptButton());
-    await waitFor(() => expect(refreshHealthConsent).toHaveBeenCalledOnce());
-    await waitFor(() => expect(reacceptButton().textContent).toContain('Presta un nuovo consenso'));
-    expect(finishHealthConsentReacceptance).not.toHaveBeenCalled();
-    expect(screen.queryByText(/Non è stato possibile completare il nuovo consenso/)).toBeNull();
-  });
+
 
   it('offers retry on verification failure without reacceptance', () => {
     const onRetry = vi.fn();
@@ -193,96 +141,39 @@ describe('suspended health-consent screen', () => {
   });
 
 
-  it('does not report a failed consent when the server accepted it but offline data needs recovery', async () => {
-    vi.mocked(reacceptHealthConsent).mockResolvedValue('2026-10-12T10:00:00.000Z');
-    vi.mocked(refreshHealthConsent).mockResolvedValue('recovery-required');
 
-    render(<HealthConsentSuspended status="withdrawn" user={account} />);
-    const [terms, health] = checkboxInputs();
-    fireEvent.click(terms);
-    fireEvent.click(health);
-    fireEvent.click(reacceptButton());
 
-    await waitFor(() => expect(refreshHealthConsent).toHaveBeenCalledTimes(1));
-    await waitFor(() => expect(reacceptButton().textContent).toContain('Presta un nuovo consenso'));
-    expect(reacceptHealthConsent).toHaveBeenCalledTimes(1);
-    expect(finishHealthConsentReacceptance).not.toHaveBeenCalled();
-    expect(screen.queryByText(/Non è stato possibile completare il nuovo consenso/)).toBeNull();
-  });
 
-  it('keeps the guest withdrawal form immediately usable without a cloud wait', () => {
+  it('does not allow restarting guest fitness from the old withdrawn archive', () => {
     render(<HealthConsentSuspended status="withdrawn" user={null} />);
-    expect(checkboxInputs()).toHaveLength(2);
-    expect(checkboxInputs().every(input => !input.disabled)).toBe(true);
-    expect(reacceptButton().disabled).toBe(true);
+    expect(screen.queryByRole('checkbox')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Elimina dati di questo dispositivo' })).toBeDefined();
   });
 
-  it('allows explicit completion of an interrupted reacceptance without unlocking automatically', () => {
+
+  it('does not authorize an interrupted reacceptance without a completed erasure', () => {
     render(<HealthConsentSuspended status="reaccepting" user={account} />);
-    expect(checkboxInputs().every(input => !input.disabled)).toBe(true);
-    expect(reacceptButton().disabled).toBe(true);
-    expect(screen.getByRole('status').textContent).toContain('Nuovo consenso in fase di completamento');
+    expect(screen.queryByRole('checkbox')).toBeNull();
+    expect(reacceptHealthConsent).not.toHaveBeenCalled();
   });
+
 });
 
 describe('account consent withdrawal offline', () => {
-  it('offers a separate local-only consent after pending withdrawal and checks both boxes', async () => {
+
+  it('blocks account reacceptance offline while the erasure is not verified', () => {
     const online = vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false);
     try {
       render(<HealthConsentSuspended status="pending" user={account} />);
-      const button = screen.getByRole('button', { name: 'Riattiva solo su questo dispositivo' }) as HTMLButtonElement;
-      expect(button.disabled).toBe(true);
-      const [terms, health] = checkboxInputs();
-      expect(terms.disabled).toBe(false);
-      expect(health.disabled).toBe(false);
-      expect(screen.getByText(/I dati locali restano conservati/i)).toBeDefined();
-      expect(screen.getByRole('button', { name: 'Ricarica pagina' })).toBeDefined();
-      fireEvent.click(terms);
-      expect(button.disabled).toBe(true);
-      fireEvent.click(health);
-      expect(button.disabled).toBe(false);
-      fireEvent.click(button);
-      await waitFor(() => expect(reacceptHealthConsentLocally).toHaveBeenCalledTimes(1));
-      expect(reacceptHealthConsent).not.toHaveBeenCalled();
-      expect(useDialogStore.getState().showAlert).not.toHaveBeenCalled();
-      expect(vi.mocked(reacceptHealthConsentLocally).mock.calls[0][1]).toMatchObject({
-        acceptedTerms: true, acceptedHealthData: true,
-      });
-    } finally {
-      online.mockRestore();
-    }
-  });
-
-  it('shows a single transient notice if a server-confirmed revocation is reaccepted offline', async () => {
-    const online = vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false);
-    try {
-      render(<HealthConsentSuspended status="withdrawn" user={account} />);
-      expect(screen.getByRole('button', { name: 'Riattiva solo su questo dispositivo' })).toBeDefined();
-      const [terms, health] = checkboxInputs();
-      fireEvent.click(terms);
-      fireEvent.click(health);
-      fireEvent.click(screen.getByRole('button', { name: 'Riattiva solo su questo dispositivo' }));
-      await waitFor(() => expect(reacceptHealthConsentLocally).toHaveBeenCalledTimes(1));
-      expect(useDialogStore.getState().showAlert).toHaveBeenCalledTimes(1);
-      expect(useDialogStore.getState().showAlert).toHaveBeenCalledWith(
-        expect.stringContaining('revocato sul server'), 'Uso offline riattivato',
-      );
+      expect(screen.queryByRole('button', { name: 'Riattiva solo su questo dispositivo' })).toBeNull();
+      expect(screen.queryByRole('checkbox')).toBeNull();
+      expect(reacceptHealthConsentLocally).not.toHaveBeenCalled();
     } finally { online.mockRestore(); }
   });
 
-  it('does not display the cross-mode notice when local reacceptance is rejected', async () => {
-    const online = vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false);
-    try {
-      vi.mocked(reacceptHealthConsentLocally).mockImplementationOnce(() => { throw new Error('Test storage write failed'); });
-      render(<HealthConsentSuspended status="withdrawn" user={account} />);
-      const [terms, health] = checkboxInputs();
-      fireEvent.click(terms);
-      fireEvent.click(health);
-      fireEvent.click(screen.getByRole('button', { name: 'Riattiva solo su questo dispositivo' }));
-      await waitFor(() => expect(screen.getByRole('alert').textContent).toContain('Non è stato possibile completare'));
-      expect(useDialogStore.getState().showAlert).not.toHaveBeenCalled();
-    } finally { online.mockRestore(); }
-  });
+
+
+
 
   it('uses the safe persistence barrier for a visible reload action, including after reconnect', async () => {
     const onLine = vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(true);
@@ -298,8 +189,8 @@ describe('account consent withdrawal offline', () => {
   it('offers a direct download link only after the backup has been prepared', () => {
     const { rerender } = render(<HealthConsentSuspended status="withdrawn" user={account} />);
     expect(screen.queryByRole('link', { name: 'Scarica backup JSON' })).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: 'Prepara backup JSON' }));
-    expect(backupUi.prepare).toHaveBeenCalledTimes(1);
+    expect((screen.getByRole('button', { name: 'Prepara backup JSON' }) as HTMLButtonElement).disabled).toBe(true);
+    expect(backupUi.prepare).not.toHaveBeenCalled();
     backupUi.url = 'blob:https://example.test/prepared-backup';
     rerender(<HealthConsentSuspended status="withdrawn" user={account} />);
     const link = screen.getByRole('link', { name: 'Scarica backup JSON' }) as HTMLAnchorElement;
