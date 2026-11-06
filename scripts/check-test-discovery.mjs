@@ -68,10 +68,10 @@ function playwrightList(project, shard) {
   const output = execute('Playwright ' + project + (shard || 'all'), process.execPath, args, 'test:e2e');
   const tests = [];
   for (const line of output.split(/\r?\n/)) {
-    const match = line.match(/^\s*\[(chromium|mobile-safari)\]\s+›\s+(e2e\/[^\s:]+\.spec\.ts:\d+:\d+)\s+›\s+(.+)$/);
+    const match = line.match(/^\s*\[(chromium|mobile-safari)\]\s+›\s+((?:e2e\/)?[^\s:]+\.spec\.ts:\d+:\d+)\s+›\s+(.+)$/);
     if (match) {
       if (match[1] !== project) throw new Error('Unexpected Playwright project ' + match[1]);
-      tests.push(match[2] + ' › ' + match[3].trim());
+      tests.push((match[2].startsWith('e2e/') ? '' : 'e2e/') + match[2] + ' › ' + match[3].trim());
     }
   }
   if (!tests.length) throw new Error('No Playwright tests parsed for ' + project + ': ' + output.slice(0, 1500));
