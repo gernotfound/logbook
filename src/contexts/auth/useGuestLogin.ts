@@ -1,5 +1,4 @@
 import { useCallback, type Dispatch, type RefObject, type SetStateAction } from 'react';
-import { captureAuthAttemptGuard } from '../../lib/auth/authAttemptGuard';
 import { auth } from '../../lib/firebase';
 import { DB } from '../../lib/db';
 import { useAppStore } from '../../store/useAppStore';
@@ -28,6 +27,7 @@ export function isGuestVaultReadinessCurrent(
 
 type GuestMigrationStatus = 'idle' | 'pending' | 'failed';
 type GuestLoginDependencies = {
+    authRunRef: RefObject<number>;
     isGuestRef: RefObject<boolean>;
     setIsGuest: Dispatch<SetStateAction<boolean>>;
     setGuestMigrationStatus: Dispatch<SetStateAction<GuestMigrationStatus>>;
@@ -38,20 +38,15 @@ type GuestLoginDependencies = {
 // The provider owns Auth state. This hook preserves the guest generation lock,
 // archive cleanup and vault readiness before publishing guest data.
 export function useGuestLogin({
-    isGuestRef, setIsGuest, setGuestMigrationStatus, setUserData, setSaveError,
+    authRunRef, isGuestRef, setIsGuest, setGuestMigrationStatus, setUserData, setSaveError,
 }: GuestLoginDependencies) {
     const loginAsGuest = useCallback(async () => {
         const originalUser = auth.currentUser;
-        const originalEpoch = captureSession().epoch;
-        const originalGuard = captureAuthAttemptGuard(false);
-        const isOriginalAttemptCurrent = () => {
-            const current = originalGuard();
-            if (!current) console.warn('AUDIT_GUEST_START_GUARD', {
-                sameAuth: auth.currentUser === originalUser,
-                originalEpoch, currentEpoch: captureSession().epoch,
-            });
-            return current;
-        };
+        const authRun = authRunRef.current;
+        // Guest cleanup cancels store syncs and advances their epoch. That
+        // expected reset must not invalidate a queued guest login, whereas
+        // any Auth generation change (including null -> account -> null) must.
+        const isOriginalAttemptCurrent = () => auth.currentUser === originalUser && authRunRef.current === authRun;
         const activation: { session: SessionSnapshot | null } = { session: null };
         try {
             // Serialize the entire cleanup-to-activation transition across tabs.
@@ -85,13 +80,7 @@ export function useGuestLogin({
         // Guest activation and vault provisioning are separate awaits. A
         // logout, account switch or other tab may revoke this generation
         // before the vault is ready. Never promote a stale guest into Zustand.
-        if (!activation.session || activation.session.owner !== 'guest' || !isCurrentSession(activation.session)) {
-            console.warn('AUDIT_GUEST_ACTIVATION_GUARD', {
-                captured: activation.session, current: captureSession(),
-                sameAuth: auth.currentUser === originalUser,
-            });
-            return;
-        }
+        if (!activation.session || activation.session.owner !== 'guest' || !isCurrentSession(activation.session)) return;
         const guestSession = activation.session;
         const canPublishGuest = () => isGuestVaultReadinessCurrent(guestSession);
         await ensureLocalVaultReady('guest');
@@ -132,7 +121,7 @@ export function useGuestLogin({
         setIsGuest(true);
         setGuestMigrationStatus('idle');
         if (nextData) setUserData(nextData);
-    }, [isGuestRef, setIsGuest, setGuestMigrationStatus, setSaveError, setUserData]);
+    }, [authRunRef, isGuestRef, setIsGuest, setGuestMigrationStatus, setSaveError, setUserData]);
 
     return loginAsGuest;
 }

@@ -278,7 +278,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     });
 
     const loginAsGuest = useGuestLogin({
-        isGuestRef, setIsGuest, setGuestMigrationStatus, setUserData, setSaveError,
+        authRunRef, isGuestRef, setIsGuest, setGuestMigrationStatus, setUserData, setSaveError,
     });
 
     const continueUnverifiedLocally = useUnverifiedLocalContinuation({

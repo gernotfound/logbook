@@ -130,6 +130,45 @@ describe('Milestone M2: Guest Bootstrap & Cold Start Lifecycle', () => {
         },
     );
 
+    it('does not activate an old guest request after null-account-null Auth callbacks', async () => {
+        let notify!: (user: any) => Promise<void>;
+        vi.mocked(onAuthStateChanged).mockImplementation((_auth, callback: any) => {
+            notify = callback;
+            void callback(null);
+            return () => {};
+        });
+        const { result } = renderHook(() => useAuth(), {
+            wrapper: ({ children }) => <AuthProvider>{children}</AuthProvider>,
+        });
+        let release!: () => void;
+        let entered!: () => void;
+        const gate = new Promise<void>(resolve => { release = resolve; });
+        const acquired = new Promise<void>(resolve => { entered = resolve; });
+        const holder = withGuestLifecycleLock(async () => { entered(); await gate; });
+        await acquired;
+        let pending!: Promise<void>;
+        act(() => { pending = result.current.loginAsGuest(); });
+        try {
+            await act(async () => {
+                const account = { uid: 'intermediate-account', emailVerified: false } as any;
+                (auth as any).currentUser = account;
+                await notify(account);
+                (auth as any).currentUser = null;
+                await notify(null);
+                release();
+                await pending;
+            });
+            expect(result.current.currentUser).toBeNull();
+            expect(result.current.isGuest).toBe(false);
+            expect(localStorage.getItem('logbook_is_guest')).toBeNull();
+            expect(localStorage.getItem(GUEST_SESSION_KEY)).toBeNull();
+            expect(DB.purgeAllLocalUserData).not.toHaveBeenCalled();
+        } finally {
+            release();
+            await holder;
+        }
+    });
+
     it('does not adopt an Auth epoch that changed after guest activation but before the lock resumed', async () => {
         const { result } = renderHook(() => useAuth(), {
             wrapper: ({ children }) => <AuthProvider>{children}</AuthProvider>,
