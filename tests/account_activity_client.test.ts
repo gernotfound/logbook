@@ -37,6 +37,7 @@ describe('foreground activity observer (browser boundary)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.stubEnv('VITE_ACCOUNT_INACTIVITY_TRACKING', 'true');
+    vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('visible');
     mocks.currentUser = null;
     mocks.isCurrentSession.mockReturnValue(true);
     mocks.ensureAppCheck.mockResolvedValue(undefined);
@@ -48,6 +49,7 @@ describe('foreground activity observer (browser boundary)', () => {
     stop();
     vi.unstubAllGlobals();
     vi.unstubAllEnvs();
+    vi.restoreAllMocks();
   });
 
   it('is completely inert without explicit frontend rollout', () => {
@@ -57,6 +59,19 @@ describe('foreground activity observer (browser boundary)', () => {
     stop = watchAuthenticatedAccountActivity(account as never);
     window.dispatchEvent(new Event('focus'));
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('does not register background activity and resumes only when the user returns visibly', async () => {
+    const visibility = vi.spyOn(document, 'visibilityState', 'get');
+    visibility.mockReturnValue('hidden');
+    const account = user();
+    mocks.currentUser = account;
+    stop = watchAuthenticatedAccountActivity(account as never);
+    window.dispatchEvent(new Event('focus'));
+    expect(fetchMock).not.toHaveBeenCalled();
+    visibility.mockReturnValue('visible');
+    document.dispatchEvent(new Event('visibilitychange'));
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
   });
 
   it('counts visible read-only sessions without exporting business data or user-controlled time', async () => {
