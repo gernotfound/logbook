@@ -29,6 +29,19 @@ describe('SettingsView hierarchical navigation', () => {
         expect(screen.getByRole('button', { name: /Esporta dati \(CSV\)/i })).toBeDefined();
     });
 
+    it('explains irreversible deletion and offers an optional export before consent withdrawal', () => {
+        renderWithProviders(<SettingsView />);
+        fireEvent.click(screen.getByRole('button', { name: /^Privacy/i }));
+        fireEvent.click(screen.getByRole('button', { name: /Revoca il consenso per i dati salute/ }));
+        const section = screen.getByRole('region', { name: 'Conferma revoca del consenso' });
+        expect(section.textContent).toMatch(/cancellazione definitiva/i);
+        expect(section.textContent).toMatch(/account di accesso rimane esistente/i);
+        expect(screen.getByRole('button', { name: 'Esporta prima i miei dati' })).toBeDefined();
+        expect(screen.getByRole('button', { name: 'Revoca il consenso e cancella i dati' })).toBeDefined();
+        fireEvent.click(screen.getByRole('button', { name: 'Annulla' }));
+        expect(screen.queryByRole('region', { name: 'Conferma revoca del consenso' })).toBeNull();
+    });
+
     it('groups theme, updates and storage diagnostics under Aspetto e applicazione', () => {
         renderWithProviders(<SettingsView />);
         fireEvent.click(screen.getByRole('button', { name: /Aspetto e applicazione/i }));
