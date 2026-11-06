@@ -166,7 +166,7 @@ export function HealthConsentSuspended({ status, user }: { status: HealthConsent
       if (refreshed !== 'active') throw new Error('Nuovo consenso non ancora verificato su questo dispositivo.');
       finishHealthConsentReacceptance(user.uid);
     } catch {
-      setError('Non è stato possibile completare il nuovo consenso. L’accesso resta sospeso; nessun dato è stato eliminato.');
+      setError('Non è stato possibile completare il nuovo consenso. L’accesso resta sospeso: verifica prima lo stato della cancellazione.');
     } finally { setBusy(false); }
   };
 
@@ -230,7 +230,7 @@ export function HealthConsentSuspended({ status, user }: { status: HealthConsent
       {(status === 'pending' || (status === 'withdrawn' && user !== null)) && <p role="status">
         {status === 'pending'
           ? offline
-            ? 'Revoca registrata solo sul dispositivo. Puoi prestare nuovamente il consenso per continuare offline; l’accesso cloud resterà sospeso fino alla riconciliazione.'
+            ? 'Revoca registrata solo sul dispositivo. Le funzioni fitness restano bloccate e la cancellazione cloud partirà dopo la conferma del server.'
             : 'Revoca registrata su questo dispositivo. In attesa della conferma cloud: riprova la verifica se la connessione è tornata.'
           : 'Revoca confermata sul server. La cancellazione automatica dei dati applicativi è stata avviata; un nuovo consenso sarà disponibile solo dopo la verifica del completamento.'}
       </p>}
@@ -263,7 +263,7 @@ export function HealthConsentSuspended({ status, user }: { status: HealthConsent
       {status === 'stale-request' && <section aria-label="Revoca da riconfermare">
         <p role="alert">Una nuova accettazione da un altro dispositivo è più recente della richiesta di revoca rimasta in attesa. La vecchia richiesta non è stata reinviata.</p>
         <button className="btn btn-primary" type="button" disabled={busy} onClick={() => { void (async () => {
-          const confirmed = await useDialogStore.getState().showConfirm('Vuoi revocare nuovamente il consenso aggiornato? Tutte le funzioni fitness saranno sospese.');
+          const confirmed = await useDialogStore.getState().showConfirm('Vuoi revocare il consenso più recente? I dati fitness verranno cancellati automaticamente dopo la conferma del server, senza eliminare l’account.');
           if (!confirmed) return;
           setBusy(true); setError(null);
           try { if (!user) throw new Error('Account non disponibile.'); await reconfirmStaleHealthWithdrawal(user); }
@@ -298,7 +298,7 @@ export function HealthConsentSuspended({ status, user }: { status: HealthConsent
       {showReacceptForm &&
         <ReacceptanceForm
           key={initialAcceptance ? 'initial' : canReaccept ? 'confirmed' : 'awaiting-confirmation'}
-          enabled={canReaccept || initialAcceptance || localOnlyReaccept}
+          enabled={canReaccept || initialAcceptance}
           busy={busy || erasingHealthData}
           onReaccept={initialAcceptance ? acceptInitial : reaccept}
           firstAcceptance={initialAcceptance}
