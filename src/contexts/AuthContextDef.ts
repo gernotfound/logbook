@@ -1,7 +1,7 @@
 import { createContext } from 'react';
 import type { User } from 'firebase/auth';
 
-type LogoutOptions = { mode: 'normal' | 'force' };
+type LogoutOptions = { mode: 'normal' | 'force'; skipConfirm?: boolean };
 type GuestMigrationStatus = 'idle' | 'pending' | 'failed';
 export type GuestMigrationPolicy = 'merge' | 'skip';
 
