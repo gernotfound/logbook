@@ -14,15 +14,6 @@ import {
     resolveEffectiveExercises,
     resolveEffectiveFoods,
 
-
-    hideCatalogExercise,
-    unhideCatalogExercise,
-    hideCatalogFood,
-    unhideCatalogFood,
-    applyExerciseOverride,
-    removeExerciseOverride,
-    applyFoodOverride,
-    removeFoodOverride,
     mergeCatalogOverrides,
     extractCustomExercisesAndOverrides,
     extractCustomFoodsAndOverrides
@@ -194,44 +185,7 @@ describe('Catalog Resolution Pipeline & Service Unit Tests (M1)', () => {
         });
     });
 
-    describe('4. Override Mutation & Symmetrical Helpers', () => {
-        it('hides and unhides exercises and foods cleanly without mutating input', () => {
-            let overrides: CatalogOverrides = {};
-
-            overrides = hideCatalogExercise('ex1', overrides);
-            expect(overrides.hiddenExerciseIds).toEqual(['ex1']);
-
-            overrides = hideCatalogExercise('ex2', overrides);
-            expect(overrides.hiddenExerciseIds).toEqual(['ex1', 'ex2']);
-
-            overrides = unhideCatalogExercise('ex1', overrides);
-            expect(overrides.hiddenExerciseIds).toEqual(['ex2']);
-
-            overrides = hideCatalogFood(123, overrides);
-            expect(overrides.hiddenFoodIds).toEqual(['123']);
-
-            overrides = unhideCatalogFood('123', overrides);
-            expect(overrides.hiddenFoodIds).toEqual([]);
-        });
-
-        it('applies and removes exercise overrides', () => {
-            let overrides: CatalogOverrides = {};
-            overrides = applyExerciseOverride('bench', { notes: 'Updated note' }, overrides);
-            expect(overrides.exercises?.bench?.notes).toBe('Updated note');
-
-            overrides = removeExerciseOverride('bench', overrides);
-            expect(overrides.exercises?.bench).toBeUndefined();
-        });
-
-        it('applies and removes food overrides', () => {
-            let overrides: CatalogOverrides = {};
-            overrides = applyFoodOverride('f_rice', { brand: 'Gallo' }, overrides);
-            expect(overrides.foods?.f_rice?.brand).toBe('Gallo');
-
-            overrides = removeFoodOverride('f_rice', overrides);
-            expect(overrides.foods?.f_rice).toBeUndefined();
-        });
-
+    describe('4. Catalog Override Merge Contract', () => {
         it('merges catalog overrides symmetrically without data loss', () => {
             const a: CatalogOverrides = {
                 exercises: { ex1: { notes: 'Note A' } },

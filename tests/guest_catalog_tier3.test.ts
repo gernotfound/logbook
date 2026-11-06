@@ -9,9 +9,7 @@ import {
     resolveEffectiveExercises,
     resolveEffectiveFoods,
     createExerciseOverride,
-    createFoodOverride,
-    hideCatalogExercise,
-    hideCatalogFood
+    createFoodOverride
 } from '../src/lib/catalog/deltaResolver';
 import { useAppStore } from '../src/store/useAppStore';
 import type {
@@ -72,12 +70,12 @@ describe('Integration Suite: Guest Mode & Global Catalog Resolution', () => {
             });
 
             // 3. Hide standard exercise
-            let overrides: CatalogOverrides = {
+            const overrides: CatalogOverrides = {
                 exercises: {
                     'panca-piana-bilanciere': benchOverride
-                }
+                },
+                hiddenExerciseIds: ['panca-declinata-bilanciere']
             };
-            overrides = hideCatalogExercise('panca-declinata-bilanciere', overrides);
 
             // Resolution
             const effective = resolveEffectiveExercises(globalExercisesFixture, [customEx], overrides);
@@ -126,12 +124,12 @@ describe('Integration Suite: Guest Mode & Global Catalog Resolution', () => {
             });
 
             // 3. Hide turkey
-            let overrides: CatalogOverrides = {
+            const overrides: CatalogOverrides = {
                 foods: {
                     'petto-di-pollo-crudo': chickenOverride
-                }
+                },
+                hiddenFoodIds: ['petto-di-tacchino-crudo']
             };
-            overrides = hideCatalogFood('petto-di-tacchino-crudo', overrides);
 
             // Resolution
             const effectiveFoods = resolveEffectiveFoods(globalFoodsFixture, [customFood], overrides);
