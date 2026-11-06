@@ -7,7 +7,7 @@
 
 ## Decisione di prodotto e boundary
 
-La revoca sospende tutte le funzioni fitness; rimangono informativa, diritti/esportazione, cancellazione e nuova accettazione separata esplicita. Nessuna modalità fitness ridotta. La revoca da sola non cancella dati, account o chiavi.
+La revoca sospende tutte le funzioni fitness; prima della conferma l'utente può esportare facoltativamente i dati. La revoca account confermata sul server **accoda atomicamente** il job di cancellazione dei dati applicativi e della chiave cloud; l'account Firebase Auth resta separato. La revoca guest termina la sessione e purga i dati locali, senza server. La nuova accettazione account è possibile solo dopo completamento trusted e archivio locale ripulito. Nessuna modalità fitness ridotta.
 
 Guest: consenso e revoca sono locali alla generazione del dispositivo; nessun consenso server account viene ereditato dal guest. Account: lo stato autorevole è `health_consent_withdrawals/{uid}`, server-only; `legalConsent` business non lo sostituisce.
 
@@ -19,8 +19,8 @@ Fonti: `src/lib/healthConsent.ts`, `healthConsentRecovery.ts`, `src/contexts/aut
 |---|---|---|
 | Primo consenso account non confermato dal backend trusted | Bloccato | Nessuna replica; informativa e diritti applicabili disponibili |
 | Consenso attivo già attestato, vault e sessione coerenti | Disponibile anche offline per la generazione verificata | Replica solo con guard Auth/App Check/consenso correnti |
-| Revoca locale o trusted | Sospeso | Nessuna nuova scrittura fitness; export diritti e cancellazione sono percorsi separati |
-| Riaccettazione esplicita **solo offline** di generazione già attestata | Solo dispositivo già verificato | Cloud bloccato fino a riconciliazione trusted di revoca, riaccettazione e revisioni |
+| Revoca locale pendente | Sospeso | Nessuna nuova scrittura fitness; la revoca cloud e il job si riconciliano al ritorno online |
+| Revoca confermata | Sospeso | Job di cancellazione accodato atomicamente; esportazione completa non garantita durante il job |
 | Cancellazione sanitaria in corso | Bloccato | Nessun export dichiarato completo e nessuna riaccettazione che bypassi il job |
 | Cancellazione sanitaria `complete` | Purge locale protetto prima di ripartire | Firebase Auth rimane; le vecchie generazioni non possono sincronizzare dati eliminati |
 
@@ -37,8 +37,7 @@ Anche cancellazione account, registrazione credenziale di recovery ed esportazio
 
 ## Ripresa offline e riconciliazione delle revisioni
 
-**MUST:** Per un account con consenso iniziale *già attestato* dal server è consentita una nuova scelta esplicita offline dopo revoca locale. Il nuovo consenso abilita **esclusivamente** il dispositivo già verificato; marker persistente e revisioni mantengono il debito di revoca e riaccettazione sul server.
-`isHealthConsentCloudWritable` deve restare falso durante tale fase, anche se la rete torna disponibile. Il backend riceve prima la revoca relativa alla generazione nota e poi la riaccettazione attuale, entrambe con CAS; un GET trusted successivo deve confermare revisione e versioni legali prima di sbloccare la replica.
+**MUST (revoca con cancellazione):** il dispositivo registra il marker di revoca prima di qualsiasi I/O e interrompe subito mutazioni e sync. Una revoca locale pending non autorizza cancellazione cloud né una riaccettazione offline di dati da eliminare. Il backend registra revoca ed erasure job **nella stessa transazione**; GET/retry/cron gestiscono la ripresa. `isHealthConsentCloudWritable` deve restare falso durante la cancellazione, anche dopo ritorno online. La PWA non propone riaccettazione dei dati precedenti: nuovo consenso solo dopo ricevuta trusted `complete` e cancellazione/assenza locale verificata.
 
 Gli utenti al primo consenso, nuove identità, account non verificati, revisioni non attendibili e consenso legale scaduto non possono ottenere riattivazione offline. Una revoca più recente da un altro dispositivo sospende l'accesso; un'accettazione più recente richiede una scelta esplicita. Per le scelte esplicite `KEEP`, `WITHDRAW` e `REACCEPT`, l'UID invariato non dimostra continuità della sessione: una transizione Auth A→B→A durante GET o adozione IndexedDB deve invalidare la scelta precedente prima di modificare il journal o inviare il POST.
 
@@ -55,11 +54,11 @@ Il recupero esplicito di un vecchio journal richiede una seconda verifica truste
 
 **MUST (owner e consenso asincroni):** risposte trusted e scelte esplicite del consenso non possono pubblicare revisioni o modificare IndexedDB dopo un cambio UID; ricontrollare identità/decisione dopo le attese e nel commit locale. Il drenaggio del journal deve verificare l'UID anche dopo la lettura IndexedDB prima del flush globale.
 
-**MUST (export dopo revoca):** l'esportazione Admin dei dati cifrati con consenso revocato controlla anche `account_deletions/{uid}` prima e dopo ciascuna pagina, compreso il checkpoint finale. Qualunque job di cancellazione account, anche `complete`, sospende l'export: la revisione del solo consenso non basta a provare la coerenza durante una cancellazione account concorrente.
+**MUST (export vs cancellazione):** il backup JSON facoltativo va proposto prima della revoca; non può essere richiesto come condizione per revocare. L'esportazione Admin dei dati cifrati continua a controllare `account_deletions/{uid}` e `health_data_erasures/{uid}` a ogni pagina e checkpoint, e rifiuta il successo completo se una cancellazione è in corso. Non bypassare il fence per salvare una copia parziale dichiarata completa.
 
-## Cancellazione dei soli dati dopo revoca (mantenendo Firebase Auth)
+## Cancellazione automatica alla revoca (mantenendo Firebase Auth)
 
-**MUST:** l'azione distinta «Elimina definitivamente i miei dati» è visibile solo al titolare di account con revoca salute confermata dal server, mai come effetto implicito della revoca. Richiede rete, due conferme consapevoli, recente autenticazione Firebase, verifica ID token con revocation check e App Check limited-use consumato. Il server determina sempre l'UID dal token, non dall'input.
+**MUST (auto-erasure):** l'azione confermata di revoca account è seguita automaticamente dalla cancellazione dei dati applicativi tramite job trusted, mantenendo Firebase Auth. L'export è offerto **prima** della revoca, è facoltativo e non costituisce prerequisito. Il pulsante di cancellazione manuale e la sua riautenticazione restano disponibili solo nei percorsi separati che lo richiedono; non condizionano l'avvio del job automatico. Il server determina l'UID dal token verificato.
 
 `health_data_erasures/{uid}` è un job amministrativo server-only, riprendibile con lease, pagine bounded e cron. L'export privilegiato durante la revoca non dichiara una copia cloud completa se un job di cancellazione salute è attivo: verifica revisione trusted e stato del job prima e dopo ogni pagina, e il client richiede un checkpoint conclusivo dopo l'ultima pagina. La riaccettazione aggiorna solo il registro server-only del consenso, non il root business fuori da `_sync`. Il job non cancella **Firebase Auth, il marker di consenso o il marker di revoca delle sessioni**. Elimina le collection business Firestore dell'account e il root, poi verifica l'assenza anche di collection inattese. Un residuo sconosciuto impedisce il completamento; una cancellazione parziale non equivale a successo. `recordHealthConsentReacceptance` rifiuta qualsiasi job non completato.
 
