@@ -38,10 +38,12 @@ describe('password policy', () => {
         expect(mockedValidatePassword).not.toHaveBeenCalled();
     });
 
-    it('accepts a password only when Firebase accepts it', async () => {
+    it('accepts a policy-compliant password only when Firebase accepts it', async () => {
+        const validPassword = 'SecurePassword12345!';
+        expect(getPasswordRequirements(validPassword, policy.customStrengthOptions).every(rule => rule.met)).toBe(true);
         mockedValidatePassword.mockResolvedValueOnce({ isValid: true, passwordPolicy: policy } as any);
-        await expect(validatePasswordAgainstPolicy('SecurePassword123!')).resolves.toBeNull();
-        expect(mockedValidatePassword).toHaveBeenCalledTimes(1);
+        await expect(validatePasswordAgainstPolicy(validPassword)).resolves.toBeNull();
+        expect(mockedValidatePassword).toHaveBeenCalledWith(expect.anything(), validPassword);
     });
 
     it('reports the stricter minimum returned by Firebase', async () => {
