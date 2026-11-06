@@ -4,6 +4,12 @@
 
 **Fonte tecnica:** [AGENTS](../../AGENTS.md), [Telemetria e privacy](../../.agents/rules/telemetry-and-privacy.md) e [Consenso salute](../../.agents/rules/health-consent.md). I checkpoint Production sotto sono osservazioni storiche datate, da non usare come prova live attuale; le questioni giuridiche e i segnaposto restano aperti.
 
+## Decisione corrente — 6 novembre 2026 (issue #824)
+
+Il product owner ha **approvato il percorso export facoltativo pre-revoca → revoca trusted → cancellazione automatica dei dati applicativi**, conservando Firebase Authentication. Alla conferma server, la stessa transazione Firestore registra la revoca e accoda il job di cancellazione; worker e cron riprendono l'operazione. La revoca guest termina la sessione e avvia la cancellazione locale. I dati fitness non sono conservati per una possibile riattivazione futura. Una nuova accettazione può solo iniziare un archivio vuoto dopo completamento della cancellazione e riconciliazione locale.
+
+**Stato:** decisione tecnica implementata nel branch di PR #826, non attestazione di Production né validazione del parere legale. Il contenuto delle sezioni storiche 12 ottobre/5 novembre sottostanti documenta *la baseline precedente*, non la policy ora approvata. Restano da validare le basi Art. 6 e 9 per finalità residue, durata delle prove amministrative, gestione delle copie provider, DPA Vercel Hobby, regione/PITR/backup Firestore e trasferimenti extra SEE. Nessun go-live con utenti esterni finché le verifiche non sono chiuse.
+
 ## Decisione pubblicazione con segnaposto — 12 ottobre 2026
 
 Per la revoca esplicita dei dati salute, la UI non cancella automaticamente gli archivi locali e cloud: sospende le funzionalità, mantiene accessibili export e cancellazione, e può consentire nuovo consenso esplicito. Il codice offre una richiesta **distinta di cancellazione dei soli dati business** dopo revoca confermata, senza eliminare l'account, ma tale richiesta non viene eseguita automaticamente al momento della revoca. La retention **dopo la revoca** non è ancora giustificata né approvata sul piano giuridico: **`[DEFINIRE_FINALITÀ_BASE_GIURIDICA_DURATA_E_CANCELLAZIONE_POST_REVOCA]`**. Non confondere la tutela tecnica contro una perdita dati o una cancellazione prematura con l'autorizzazione giuridica a conservare indefinitamente. Il product owner ha autorizzato il merge con segnaposto; resta da completare prima di trattare dati reali in un pilot.
