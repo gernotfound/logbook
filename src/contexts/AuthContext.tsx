@@ -28,6 +28,7 @@ import { useUnverifiedLocalContinuation } from './auth/useUnverifiedLocalContinu
 import { bootstrapAuthenticatedSession } from './auth/bootstrapAuthenticatedSession';
 import { watchDeletionRecoveryDeviceRegistration } from '../lib/deletionDeviceRecovery';
 import { RecoveryDiagnosticTracker } from '../lib/deletionRecoveryDiagnostics';
+import { watchAuthenticatedAccountActivity } from '../lib/accountActivity';
 import { clearAuthenticatedOwnerHint } from '../lib/sync/authOwnerHint';
 import { cancelLocalVaultReadiness } from '../lib/sync/secureArchiveUnlockFlow';
 import { lockVault } from '../lib/sync/secureArchiveSession';
@@ -128,6 +129,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         isGuestActive: () => isGuestActiveStrict(),
         setSyncing, setSaveError,
     }), [isGuestActiveStrict, setSyncing, setSaveError]);
+
+    useEffect(() => {
+        if (!currentUser || isGuest || guestMigrationStatus !== 'idle') return;
+        return watchAuthenticatedAccountActivity(currentUser);
+    }, [currentUser, isGuest, guestMigrationStatus]);
 
     useEffect(() => {
         if (!currentUser || emailVerificationRequired) return;

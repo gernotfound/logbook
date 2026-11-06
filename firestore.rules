@@ -364,6 +364,11 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // Only the verified backend may register authenticated online activity.
+    match /account_activity/{userId} {
+      allow read, write: if false;
+    }
+
     match /session_revocations/{userId} {
       allow read, write: if false;
     }

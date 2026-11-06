@@ -35,6 +35,8 @@ jobs:
       VITE_FIREBASE_PROJECT_ID: ${{ vars.VITE_FIREBASE_PROJECT_ID }}
       VITE_FIREBASE_APP_ID: ${{ vars.VITE_FIREBASE_APP_ID }}
       VITE_ACCOUNT_DELETION_API_ORIGIN: ${{ vars.VITE_ACCOUNT_DELETION_API_ORIGIN }}
+      # Optional staged inactivity policy; empty unless expressly enabled after review.
+      VITE_ACCOUNT_INACTIVITY_TRACKING: ${{ vars.VITE_ACCOUNT_INACTIVITY_TRACKING }}
       VITE_RECAPTCHA_ENTERPRISE_SITE_KEY: ${{ vars.VITE_RECAPTCHA_ENTERPRISE_SITE_KEY }}
 
     steps:

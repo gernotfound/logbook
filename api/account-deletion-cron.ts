@@ -4,6 +4,7 @@ import {
   purgeExpiredCompletedDeletionJobs,
 } from '../server/accountDeletion/retention.js';
 import { processAccountDeletion } from '../server/accountDeletion/runner.js';
+import { queueInactiveAccountDeletions } from '../server/accountInactivity.js';
 import { listRecoverableHealthErasures, processHealthDataErasure, purgeExpiredCompletedHealthErasures } from '../server/healthConsent/erasure.js';
 
 export const maxDuration = 300;
@@ -38,6 +39,9 @@ export async function GET(request: Request): Promise<Response> {
   let erasureFailed = 0;
   let erasureErrors = 0;
   let erasureReceiptsPurged = 0;
+  let inactiveScanned = 0;
+  let inactiveQueued = 0;
+  let inactivityErrors = 0;
 
   // Prioritize a bounded slice of requested health-data erasures without
   // starving account deletion recovery.
@@ -92,6 +96,22 @@ export async function GET(request: Request): Promise<Response> {
     }
   }
 
+  // Do not schedule irreversible account deletion until the legal rollout is enabled.
+  if (process.env.ACCOUNT_INACTIVITY_TRACKING_ENABLED === 'true'
+    && process.env.ACCOUNT_INACTIVITY_DELETION_ENABLED === 'true'
+    && Date.now() + SAFETY_BUFFER_MS < deletionDeadlineMs) {
+    try {
+      const outcome = await queueInactiveAccountDeletions();
+      inactiveScanned = outcome.scanned;
+      inactiveQueued = outcome.queued;
+    } catch (error) {
+      inactivityErrors++;
+      console.error('[account-deletion-cron] inactivity scheduling failed', {
+        kind: error instanceof Error ? error.name : typeof error,
+      });
+    }
+  }
+
   let purged = 0;
   const retentionPage = { scanned: 0 } as import('../server/accountDeletion/retention.js').AccountDeletionRetentionPage;
   while (Date.now() + SAFETY_BUFFER_MS < deletionDeadlineMs) {
@@ -135,6 +155,9 @@ export async function GET(request: Request): Promise<Response> {
     erasureFailed,
     erasureErrors,
     erasureReceiptsPurged,
+    inactiveScanned,
+    inactiveQueued,
+    inactivityErrors,
     recoveryErrors,
     retentionErrors,
     purged,
@@ -154,6 +177,9 @@ export async function GET(request: Request): Promise<Response> {
     erasureFailed,
     erasureErrors,
     erasureReceiptsPurged,
+    inactiveScanned,
+    inactiveQueued,
+    inactivityErrors,
     recoveryErrors,
     retentionErrors,
     purged,
