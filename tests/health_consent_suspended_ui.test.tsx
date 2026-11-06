@@ -3,7 +3,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { User } from 'firebase/auth';
 import { HealthConsentSuspended } from '../src/components/UI/HealthConsentSuspended';
-import { registerInitialHealthConsent, reacceptHealthConsent, reacceptHealthConsentLocally } from '../src/lib/healthConsent';
+import { isVerifiedHealthWithdrawal, registerInitialHealthConsent, reacceptHealthConsent, reacceptHealthConsentLocally } from '../src/lib/healthConsent';
+import { mockFirebaseAuth } from './setup';
 import { safeHardReload } from '../src/lib/sync/safeReload';
 import { UnverifiedTabSnapshotError } from '../src/lib/sync/reloadBarrier';
 import { useDialogStore } from '../src/store/useDialogStore';
@@ -29,10 +30,30 @@ vi.mock('../src/hooks/useSettings', () => ({
   }),
 }));
 
+const automaticPurge = vi.hoisted(() => ({
+  progress: vi.fn(async () => ({ status: 'complete', complete: true } as const)),
+  local: vi.fn(async (owner: string) => {
+    // Mirror the real purge's durable postcondition, not just a resolved Promise.
+    localStorage.setItem('logbook:local-purge-fence:v1:' + owner, 'purge-complete:v1');
+  }),
+}));
+vi.mock('../src/lib/healthDataErasure', async importOriginal => ({
+  ...(await importOriginal<typeof import('../src/lib/healthDataErasure')>()),
+  readHealthDataErasureProgress: automaticPurge.progress,
+}));
+vi.mock('../src/lib/db/db_account', async importOriginal => ({
+  ...(await importOriginal<typeof import('../src/lib/db/db_account')>()),
+  purgeCompletedHealthDataLocal: automaticPurge.local,
+}));
+
 const account = { uid: 'consent-ui-account' } as User;
 const checkboxInputs = () => screen.getAllByRole('checkbox') as HTMLInputElement[];
 
-beforeEach(() => { vi.clearAllMocks(); backupUi.url = null; });
+beforeEach(() => {
+  vi.clearAllMocks();
+  backupUi.url = null;
+  vi.mocked(isVerifiedHealthWithdrawal).mockReturnValue(false);
+});
 
 describe('suspended health-consent screen', () => {
 
@@ -52,6 +73,20 @@ describe('suspended health-consent screen', () => {
     expect(screen.queryByRole('button', { name: 'Elimina definitivamente i miei dati' })).toBeNull();
     expect((screen.getByRole('button', { name: 'Prepara backup JSON' }) as HTMLButtonElement).disabled).toBe(true);
     expect(screen.queryByRole('button', { name: 'Presta un nuovo consenso' })).toBeNull();
+  });
+
+  it('resumes interrupted local erasure before opening an archive fenced by a prior purge', async () => {
+    const actor = mockFirebaseAuth.currentUser as User;
+    const owner = 'user:' + actor.uid;
+    const fence = 'logbook:local-purge-fence:v1:' + owner;
+    localStorage.setItem(fence, 'purge-in-progress:v1');
+    vi.mocked(isVerifiedHealthWithdrawal).mockReturnValue(true);
+
+    render(<HealthConsentSuspended status="withdrawn" user={actor} />);
+
+    await waitFor(() => expect(automaticPurge.local).toHaveBeenCalledWith(owner));
+    expect(automaticPurge.progress).toHaveBeenCalledTimes(1);
+    expect(localStorage.getItem(fence)).toBe('purge-complete:v1');
   });
 
   it('allows guest deletion after withdrawal without submitting a cloud erasure', () => {
