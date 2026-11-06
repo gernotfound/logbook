@@ -72,44 +72,57 @@ export async function queueInactiveAccountDeletions(
   const db = adminDb();
   const cutoffMs = inactivityCutoffMillis(now.toMillis());
   const limit = Math.max(1, Math.min(MAX_CANDIDATES_PER_RUN, Math.floor(maxCandidates)));
-  const candidates = await db.collection(ACTIVITY_COLLECTION)
-    .where('lastSeenAt', '<=', Timestamp.fromMillis(cutoffMs))
-    .orderBy('lastSeenAt', 'asc').limit(limit).get();
-
   let queued = 0;
-  for (const candidate of candidates.docs) {
-    const uid = candidate.id;
-    try { validateUid(uid); } catch { continue; }
-    if (candidate.data().uid !== uid) continue;
+  let scanned = 0;
+  let cursor: import('firebase-admin/firestore').QueryDocumentSnapshot | undefined;
 
-    const activityRef = db.collection(ACTIVITY_COLLECTION).doc(uid);
-    const deletionRef = db.collection(DELETION_COLLECTION).doc(uid);
-    const created = await db.runTransaction(async tx => {
-      const [activity, existingJob] = await Promise.all([tx.get(activityRef), tx.get(deletionRef)]);
-      if (existingJob.exists || !activity.exists) return false;
-      const state = activity.data();
-      const lastSeen = storedMillis(state?.lastSeenAt);
-      if (state?.uid !== uid || lastSeen === null || lastSeen > cutoffMs) return false;
-      const receiptHash = hashReceipt(randomBytes(32).toString('base64url'));
-      const job: AccountDeletionJob = {
-        uid,
-        requestedAt: now,
-        updatedAt: now,
-        status: 'requested',
-        cursor: { phase: 'requested' },
-        attempts: 0,
-        receiptHash,
-        receiptHashes: [],
-        reason: 'inactivity',
-        inactivityLastSeenAt: state.lastSeenAt,
-      };
-      // One atomic fence: retire the eligibility marker when the deletion job
-      // is created. This avoids repeatedly starving newer candidates on each cron.
-      tx.delete(activityRef);
-      tx.create(deletionRef, job);
-      return true;
-    });
-    if (created) queued++;
+  // Bounded pagination skips malformed/already-owned candidates instead of
+  // letting the same old records block healthy users at every daily sweep.
+  for (let page = 0; page < MAX_PAGES_PER_RUN && queued < limit; page++) {
+    let query = db.collection(ACTIVITY_COLLECTION)
+      .where('lastSeenAt', '<=', Timestamp.fromMillis(cutoffMs))
+      .orderBy('lastSeenAt', 'asc').limit(limit);
+    if (cursor) query = query.startAfter(cursor);
+    const candidates = await query.get();
+    for (const candidate of candidates.docs) {
+      scanned++;
+      const uid = candidate.id;
+      try { validateUid(uid); } catch { continue; }
+      if (candidate.data().uid !== uid) continue;
+
+      const activityRef = db.collection(ACTIVITY_COLLECTION).doc(uid);
+      const deletionRef = db.collection(DELETION_COLLECTION).doc(uid);
+      const created = await db.runTransaction(async tx => {
+        const [activity, existingJob] = await Promise.all([tx.get(activityRef), tx.get(deletionRef)]);
+        if (existingJob.exists || !activity.exists) return false;
+        const state = activity.data();
+        const lastSeen = storedMillis(state?.lastSeenAt);
+        if (state?.uid !== uid || lastSeen === null || lastSeen > cutoffMs) return false;
+        const receiptHash = hashReceipt(randomBytes(32).toString('base64url'));
+        const job: AccountDeletionJob = {
+          uid,
+          requestedAt: now,
+          updatedAt: now,
+          status: 'requested',
+          cursor: { phase: 'requested' },
+          attempts: 0,
+          receiptHash,
+          receiptHashes: [],
+          reason: 'inactivity',
+          inactivityLastSeenAt: state.lastSeenAt,
+        };
+        // Acknowledged activity and scheduling contend on the same document.
+        // This transaction also removes the old scan marker, so queued owners
+        // cannot starve other eligible accounts on subsequent cron executions.
+        tx.delete(activityRef);
+        tx.create(deletionRef, job);
+        return true;
+      });
+      if (created) queued++;
+      if (queued >= limit) break;
+    }
+    cursor = candidates.docs.at(-1);
+    if (candidates.size < limit || !cursor) break;
   }
-  return { scanned: candidates.size, queued };
+  return { scanned, queued };
 }
