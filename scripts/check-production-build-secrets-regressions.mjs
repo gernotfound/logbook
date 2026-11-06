@@ -54,6 +54,8 @@ void test('direct dependencies require explicit review before a new runtime or b
     '@types/react', '@types/react-dom', '@vitejs/plugin-react',
     '@vitest/coverage-v8', '@vitest/ui', 'fake-indexeddb', 'jsdom',
     'knip', 'oxlint', 'oxlint-tsgolint', 'rollup-plugin-visualizer',
+    // Reviewed diagnostic-only mutation tooling; no client/backend runtime imports.
+    '@stryker-mutator/core', '@stryker-mutator/vitest-runner',
     'sharp', 'typescript', 'vite', 'vitest', 'workbox-core',
     'workbox-precaching', 'workbox-routing',
   ]);
@@ -68,6 +70,21 @@ void test('direct dependencies require explicit review before a new runtime or b
       'Lockfile direct dependencies must match package.json');
     assert.deepEqual(Object.entries(direct).filter(([, spec]) => /^npm:/i.test(spec)), [],
       'Unreviewed dependency aliases are not permitted');
+  }
+});
+
+void test('Stryker mutation tooling is pinned, lockfile-matched and dev-only', () => {
+  const manifest = JSON.parse(readFileSync('package.json', 'utf8'));
+  const packages = JSON.parse(readFileSync('package-lock.json', 'utf8')).packages;
+  for (const name of ['@stryker-mutator/core', '@stryker-mutator/vitest-runner']) {
+    assert.equal(manifest.devDependencies?.[name], '10.1.1',
+      name + ' requires an explicit version review');
+    assert.equal(packages['']?.devDependencies?.[name], '10.1.1',
+      name + ' must remain synchronized with the lockfile root');
+    assert.equal(packages['node_modules/' + name]?.version, '10.1.1',
+      name + ' must resolve to the reviewed package release');
+    assert.equal(manifest.dependencies?.[name], undefined,
+      name + ' must not become a runtime dependency');
   }
 });
 
