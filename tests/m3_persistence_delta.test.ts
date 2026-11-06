@@ -12,9 +12,7 @@ import {
     resolveEffectiveExercises,
     resolveEffectiveFoods,
     createExerciseOverride,
-    createFoodOverride,
-    hideCatalogExercise,
-    hideCatalogFood
+    createFoodOverride
 } from '../src/lib/catalog/deltaResolver';
 import { saveUserDataToCache, getInitialUserData } from '../src/store/slices/createDataSlice';
 import { idbStore } from './setup';
@@ -180,16 +178,16 @@ describe('M3: Storage & Persistence Delta Isolation Suite', () => {
                 kcal: 110
             });
 
-            let overrides: CatalogOverrides = {
+            const overrides: CatalogOverrides = {
                 exercises: {
                     'panca-piana-bilanciere': benchOverride
                 },
                 foods: {
                     'petto-di-pollo-crudo': chickenOverride
-                }
+                },
+                hiddenExerciseIds: ['panca-declinata-bilanciere'],
+                hiddenFoodIds: ['petto-di-tacchino-crudo']
             };
-            overrides = hideCatalogExercise('panca-declinata-bilanciere', overrides);
-            overrides = hideCatalogFood('petto-di-tacchino-crudo', overrides);
 
             const fullResolvedLibrary = resolveEffectiveExercises(globalExFixture, [], overrides);
             const fullResolvedFoods = resolveEffectiveFoods(globalFoodFixture, [], overrides);

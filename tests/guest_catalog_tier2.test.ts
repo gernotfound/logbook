@@ -11,9 +11,7 @@ import {
 } from '../src/lib/catalog/catalogService';
 import {
     resolveEffectiveExercises,
-    resolveEffectiveFoods,
-    hideCatalogExercise,
-    unhideCatalogExercise
+    resolveEffectiveFoods
 } from '../src/lib/catalog/deltaResolver';
 import { UserDataSchema } from '../src/lib/schema';
 import { useAppStore } from '../src/store/useAppStore';
@@ -97,36 +95,18 @@ describe('Integration Suite: Guest Mode & Global Catalog Resolution', () => {
             expect(foods.every(f => f.isCustom === false)).toBe(true);
         });
 
-        it('T2.4: Partial and idempotent override operations: unhide non-hidden and hide non-existent items', () => {
-            // Local fixture with the exercises referenced by this test
+        it('T2.4: ignores unknown hidden IDs and restores a catalog item when its ID is absent', () => {
             const globalExFixture: CatalogExercise[] = [
                 { id: 'panca-piana-bilanciere', name: 'Panca Piana Bilanciere', muscles: ['chest'], trackingType: 'weight_reps', isDefault: true, setsCount: 3 }
             ];
+            const withUnknownId: CatalogOverrides = { hiddenExerciseIds: ['non-existent-exercise-id-999'] };
+            expect(resolveEffectiveExercises(globalExFixture, [], withUnknownId)).toHaveLength(1);
 
-            let overrides: CatalogOverrides = {};
+            const hidden: CatalogOverrides = { hiddenExerciseIds: ['non-existent-exercise-id-999', 'panca-piana-bilanciere'] };
+            expect(resolveEffectiveExercises(globalExFixture, [], hidden)).toHaveLength(0);
 
-            // Unhide item that was never hidden -> safe no-op
-            overrides = unhideCatalogExercise('panca-piana-bilanciere', overrides);
-            expect(overrides.hiddenExerciseIds).toEqual([]);
-
-            // Hide non-existent catalog ID -> recorded in hidden set without breaking resolution
-            overrides = hideCatalogExercise('non-existent-exercise-id-999', overrides);
-            expect(overrides.hiddenExerciseIds).toContain('non-existent-exercise-id-999');
-
-            const resolved = resolveEffectiveExercises(globalExFixture, [], overrides);
-            expect(resolved).toHaveLength(globalExFixture.length); // None of the fixture items hidden
-
-            // Idempotent hiding: hiding the same exercise twice does not duplicate ID
-            overrides = hideCatalogExercise('panca-piana-bilanciere', overrides);
-            overrides = hideCatalogExercise('panca-piana-bilanciere', overrides);
-            expect(overrides.hiddenExerciseIds?.filter(id => id === 'panca-piana-bilanciere')).toHaveLength(1);
-
-            // Unhide restores item
-            overrides = unhideCatalogExercise('panca-piana-bilanciere', overrides);
-            expect(overrides.hiddenExerciseIds).not.toContain('panca-piana-bilanciere');
-
-            const resolvedAfterUnhide = resolveEffectiveExercises(globalExFixture, [], overrides);
-            expect(resolvedAfterUnhide.find(e => e.id === 'panca-piana-bilanciere')).toBeDefined();
+            const restored: CatalogOverrides = { hiddenExerciseIds: ['non-existent-exercise-id-999'] };
+            expect(resolveEffectiveExercises(globalExFixture, [], restored).map(exercise => exercise.id)).toEqual(['panca-piana-bilanciere']);
         });
 
         it('T2.5: Override with empty strings, undefined fields, and partial macro updates preserves base fields', () => {
