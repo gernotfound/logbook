@@ -7,6 +7,9 @@ import {
 import type { User, UserCredential } from 'firebase/auth';
 import { auth } from '../../src/lib/firebase';
 import { useGoogleAuthActions } from '../../src/contexts/auth/useGoogleAuthActions';
+import { useGuestMigrationRetry } from '../../src/contexts/auth/useGuestMigrationRetry';
+import * as browserStorage from '../../src/lib/sync/browserStorage';
+import * as safeReload from '../../src/lib/sync/safeReload';
 import { useEmailAuthActions } from '../../src/contexts/auth/useEmailAuthActions';
 import { beginGuestMigrationIntent } from '../../src/lib/auth/guestMigrationIntent';
 import { markGuestMigrationSyncRecovery } from '../../src/lib/auth/guestMigrationSyncRecovery';
@@ -183,6 +186,73 @@ describe('serialized guest migration intent belongs to an exact Auth attempt', (
             uid: 'account-b', assertCurrent: () => false,
         })).rejects.toThrow('non è più attiva');
         expect(JSON.parse(localStorage.getItem(KEY)!).id).toBe(original.id);
+    });
+
+    it('does not publish a queued guest retry failure into a newer session', async () => {
+        const originalUser = auth.currentUser;
+        const user = { uid: 'guest-retry-account', emailVerified: true } as User;
+        (auth as { currentUser: User | null }).currentUser = user;
+        let releaseLock!: () => void;
+        let entered!: () => void;
+        const gate = new Promise<void>(resolve => { releaseLock = resolve; });
+        const acquired = new Promise<void>(resolve => { entered = resolve; });
+        const holder = withGuestLifecycleLock(async () => { entered(); await gate; });
+        await acquired;
+        const setStatus = vi.fn();
+        const setSaveError = vi.fn();
+        const reload = vi.spyOn(safeReload, 'safeHardReload').mockResolvedValue(undefined);
+        const { result } = renderHook(() => useGuestMigrationRetry({
+            isGuestActiveStrict: () => true, setSaveError,
+            setSyncing: vi.fn(), setGuestMigrationStatus: setStatus,
+            clearGuestMigrationSyncRecovery: vi.fn(),
+        }));
+        try {
+            const pending = result.current.retryGuestMigration('merge');
+            localStorage.setItem(GUEST_SESSION_KEY, 'replacement-retry-guest');
+            activateGuestSession('replacement-retry-guest');
+            releaseLock();
+            await holder;
+            await act(async () => { await pending; });
+            expect(reload).not.toHaveBeenCalled();
+            expect(setStatus).not.toHaveBeenCalled();
+            expect(setSaveError.mock.calls).toEqual([[null]]);
+            expect(localStorage.getItem(KEY)).toBeNull();
+        } finally {
+            releaseLock();
+            (auth as { currentUser: User | null }).currentUser = originalUser;
+        }
+    });
+
+    it('does not reload a new guest generation after reserving an older retry', async () => {
+        const originalUser = auth.currentUser;
+        const user = { uid: 'same-retry-account', emailVerified: true } as User;
+        (auth as { currentUser: User | null }).currentUser = user;
+        const write = browserStorage.writeBrowserJson;
+        vi.spyOn(browserStorage, 'writeBrowserJson').mockImplementation((key, value) => {
+            write(key, value);
+            if (key === KEY) {
+                localStorage.setItem(GUEST_SESSION_KEY, 'replacement-after-reservation');
+                activateGuestSession('replacement-after-reservation');
+            }
+        });
+        const reload = vi.spyOn(safeReload, 'safeHardReload').mockResolvedValue(undefined);
+        const setStatus = vi.fn();
+        const setSaveError = vi.fn();
+        const { result } = renderHook(() => useGuestMigrationRetry({
+            isGuestActiveStrict: () => true, setSaveError,
+            setSyncing: vi.fn(), setGuestMigrationStatus: setStatus,
+            clearGuestMigrationSyncRecovery: vi.fn(),
+        }));
+        try {
+            await act(async () => { await result.current.retryGuestMigration('skip'); });
+            expect(reload).not.toHaveBeenCalled();
+            expect(setStatus).not.toHaveBeenCalled();
+            expect(setSaveError.mock.calls).toEqual([[null]]);
+            expect(JSON.parse(localStorage.getItem(KEY)!))
+                .toMatchObject({ policy: 'skip', method: 'recovery', expectedUid: user.uid });
+        } finally {
+            (auth as { currentUser: User | null }).currentUser = originalUser;
+        }
     });
 
     it('never reports journal-only recovery as success while a stale guest snapshot belongs to another owner', async () => {
