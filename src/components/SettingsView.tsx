@@ -42,11 +42,13 @@ const SettingsView = ({ onClose }: SettingsViewProps) => {
         handleExportCSV, handleExportShare, handleExportBackup, handleImportFile, importingData, exportingData,
         handleDeleteAccount
     } = useSettings();
-    const { isGuest } = useAuth();
+    const { isGuest, logout } = useAuth();
     const { isInstallable, isIOSInstallable, promptInstall } = usePWAInstall();
     const [isOffline, setIsOffline] = useState(!navigator.onLine);
     const [showPrivacy, setShowPrivacy] = useState(false);
     const [showTerms, setShowTerms] = useState(false);
+    const [showWithdrawalOptions, setShowWithdrawalOptions] = useState(false);
+    const [withdrawing, setWithdrawing] = useState(false);
     const [activeSection, setActiveSection] = useState<SettingsSection | null>(null);
     const appearance = useAppearanceStore(state => state.preference);
     const setAppearance = useAppearanceStore(state => state.setPreference);
@@ -102,19 +104,29 @@ const SettingsView = ({ onClose }: SettingsViewProps) => {
     }, []);
 
     const handleWithdrawHealthConsent = async () => {
+        if (withdrawing) return;
         const user = auth.currentUser;
         if (!isGuest && !user) return;
-        const confirm = await useDialogStore.getState().showConfirm('Revocando il consenso, non potrai più usare allenamenti, nutrizione e diario. Potrai ancora esportare i dati, esercitare i diritti privacy, eliminare l’account oppure prestare un nuovo consenso. Confermi la revoca?');
-        if (!confirm || (!isGuest && auth.currentUser?.uid !== user?.uid)) return;
+        setWithdrawing(true);
         try {
             if (isGuest) {
                 withdrawGuestHealthConsent();
                 useAppStore.getState().cancelPendingSyncs();
+                // Guest mode has no cloud archive: the existing forced logout
+                // removes only its own device-scoped data and keys.
+                await logout({ mode: 'force' });
             } else if (user) {
                 await withdrawHealthConsent(user, () => useAppStore.getState().cancelPendingSyncs());
             }
+            setShowWithdrawalOptions(false);
         } catch {
-            await useDialogStore.getState().showAlert('La revoca è stata bloccata sul dispositivo, ma la conferma del server non è disponibile. Riprova quando torni online; i dati non sono stati eliminati.');
+            await useDialogStore.getState().showAlert(
+                isGuest
+                    ? 'Il consenso è stato revocato localmente, ma la pulizia del dispositivo non è stata completata. Riprova la cancellazione dal pannello sospeso.'
+                    : 'Le funzioni fitness sono state bloccate. La revoca o la cancellazione cloud non sono ancora confermate; il server riprenderà l’operazione se già registrata. Verifica lo stato quando torni online.',
+            );
+        } finally {
+            setWithdrawing(false);
         }
     };
 
@@ -195,7 +207,25 @@ const SettingsView = ({ onClose }: SettingsViewProps) => {
             )}
 
             {activeSection === 'privacy' && (
-                <PrivacySettingsTab onOpenTerms={() => setShowTerms(true)} onOpenPrivacy={() => setShowPrivacy(true)} onWithdrawHealthConsent={() => { void handleWithdrawHealthConsent(); }} />
+                <>
+                    <PrivacySettingsTab onOpenTerms={() => setShowTerms(true)} onOpenPrivacy={() => setShowPrivacy(true)} onWithdrawHealthConsent={() => setShowWithdrawalOptions(true)} />
+                    {showWithdrawalOptions && (
+                        <section className="settings-detail-card" aria-label="Conferma revoca del consenso">
+                            <h2>Revoca del consenso e cancellazione dati</h2>
+                            <p>La revoca sospende subito le funzioni fitness e avvia la cancellazione definitiva di allenamenti, nutrizione, misurazioni, profilo e bozze. Il tuo account di accesso rimane esistente. I dati cancellati non potranno essere ripristinati da TheLogBook.</p>
+                            <p>Puoi esportare una copia prima di revocare il consenso. L’esportazione è facoltativa, può contenere informazioni sulla salute in chiaro e non impedisce la revoca anche se non riesce.</p>
+                            <div className="settings-actions">
+                                <button type="button" className="btn" disabled={withdrawing || exportingData} onClick={() => { void handleExportBackup(); }}>
+                                    {exportingData ? 'Preparazione backup…' : 'Esporta prima i miei dati'}
+                                </button>
+                                <button type="button" className="btn btn-danger" disabled={withdrawing || exportingData} onClick={() => { void handleWithdrawHealthConsent(); }}>
+                                    {withdrawing ? 'Revoca in corso…' : 'Revoca il consenso e cancella i dati'}
+                                </button>
+                                <button type="button" className="btn" disabled={withdrawing} onClick={() => setShowWithdrawalOptions(false)}>Annulla</button>
+                            </div>
+                        </section>
+                    )}
+                </>
             )}
 
             {activeSection === 'data' && (
