@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Exporter } from '../src/lib/export';
+import { useDialogStore } from '../src/store/useDialogStore';
 import type { NutritionDay, WorkoutSession } from '../src/types';
 
 afterEach(() => {
@@ -18,7 +19,7 @@ describe('CSV portability contract', () => {
         vi.stubGlobal('showSaveFilePicker', picker);
         const fallback = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
 
-        expect(await Exporter.downloadFile('allenamenti.csv', '"test"\\n')).toBe(true);
+        expect(await Exporter.downloadFile('allenamenti.csv', '"test"\n')).toBe(true);
         expect(picker).toHaveBeenCalledWith(expect.objectContaining({ suggestedName: 'allenamenti.csv' }));
         expect(writable.write).toHaveBeenCalledOnce();
         expect(writable.close).toHaveBeenCalledOnce();
@@ -31,7 +32,7 @@ describe('CSV portability contract', () => {
             reader.readAsArrayBuffer(writtenBlob!);
         });
         expect(Array.from(bytes.slice(0, 3))).toEqual([0xef, 0xbb, 0xbf]);
-        expect(new TextDecoder().decode(bytes.slice(3))).toBe('"test"\\n');
+        expect(new TextDecoder().decode(bytes.slice(3))).toBe('"test"\n');
     });
 
     it('does not fall back to a download after native picker cancellation', async () => {
@@ -54,11 +55,13 @@ describe('CSV portability contract', () => {
         }));
         const fallback = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
         const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+        const alert = vi.spyOn(useDialogStore.getState(), 'showAlert').mockResolvedValue(undefined);
 
         await expect(Exporter.downloadFile('allenamenti.csv', 'content')).resolves.toBe(false);
         expect(writable.close).not.toHaveBeenCalled();
         expect(fallback).not.toHaveBeenCalled();
         expect(error).toHaveBeenCalledWith('Esportazione fallita:', expect.any(Error));
+        expect(alert).toHaveBeenCalledWith('Esportazione fallita, riprova.');
     });
 
     it('uses the canonical workout business date and exports sessions even without sets', async () => {
