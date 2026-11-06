@@ -222,12 +222,11 @@ describe('trusted health consent boundary', () => {
   it('reenables only after explicit acceptance; retry is idempotent and later revocation advances revision', async () => {
     await recordHealthConsentWithdrawal('account-1', 0);
     storage.documents.set('users/account-1', { _schemaVersion: 1, _sync: { writer: { seq: 5 } }, legalConsent: { acceptedAt: 'old' } });
-    const originalRoot = structuredClone(storage.documents.get('users/account-1'));
+    expect(storage.documents.has('users/account-1')).toBe(true);
     await expect(recordHealthConsentReacceptance('account-1', acceptance, 1)).rejects.toThrow('revoca');
     finishErasure(1);
     const accepted = await recordHealthConsentReacceptance('account-1', acceptance, 2);
     expect(storage.documents.has('users/account-1')).toBe(false);
-    expect(originalRoot).toBeDefined();
     expect(accepted).toMatchObject({ status: 'active', revision: 3, acceptedAt: expect.any(String) });
     expect(await recordHealthConsentReacceptance('account-1', acceptance, 2)).toEqual(accepted);
     const retry = await POST(req('POST', { action: 'reaccept', expectedRevision: 2, acceptance }));
