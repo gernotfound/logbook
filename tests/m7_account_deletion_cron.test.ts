@@ -10,6 +10,7 @@ const retention = vi.hoisted(() => ({
   ACCOUNT_DELETION_RETENTION_PAGE_SIZE: 400,
   purgeExpiredCompletedDeletionJobs: vi.fn(),
 }));
+const inactivity = vi.hoisted(() => ({ queueInactiveAccountDeletions: vi.fn() }));
 const healthErasure = vi.hoisted(() => ({
   listRecoverableHealthErasures: vi.fn(),
   processHealthDataErasure: vi.fn(),
@@ -20,6 +21,7 @@ vi.mock('../server/accountDeletion/jobStore', () => store);
 vi.mock('../server/accountDeletion/runner', () => runner);
 vi.mock('../server/accountDeletion/retention', () => retention);
 vi.mock('../server/healthConsent/erasure', () => healthErasure);
+vi.mock('../server/accountInactivity', () => inactivity);
 
 import { GET } from '../api/account-deletion-cron';
 
@@ -31,10 +33,15 @@ function request(secret?: string): Request {
 
 describe('M7 daily account deletion recovery cron', () => {
   const originalSecret = process.env.CRON_SECRET;
+  const originalTracking = process.env.ACCOUNT_INACTIVITY_TRACKING_ENABLED;
+  const originalDeletion = process.env.ACCOUNT_INACTIVITY_DELETION_ENABLED;
 
   beforeEach(() => {
     vi.clearAllMocks();
     delete process.env.CRON_SECRET;
+    delete process.env.ACCOUNT_INACTIVITY_TRACKING_ENABLED;
+    delete process.env.ACCOUNT_INACTIVITY_DELETION_ENABLED;
+    inactivity.queueInactiveAccountDeletions.mockResolvedValue({ scanned: 1, queued: 1 });
     store.listRecoverableDeletionJobs.mockResolvedValue([{ uid: 'a' }, { uid: 'b' }]);
     runner.processAccountDeletion.mockResolvedValue('complete');
     healthErasure.listRecoverableHealthErasures.mockResolvedValue([]);
@@ -46,6 +53,35 @@ describe('M7 daily account deletion recovery cron', () => {
   afterEach(() => {
     if (originalSecret === undefined) delete process.env.CRON_SECRET;
     else process.env.CRON_SECRET = originalSecret;
+    if (originalTracking === undefined) delete process.env.ACCOUNT_INACTIVITY_TRACKING_ENABLED;
+    else process.env.ACCOUNT_INACTIVITY_TRACKING_ENABLED = originalTracking;
+    if (originalDeletion === undefined) delete process.env.ACCOUNT_INACTIVITY_DELETION_ENABLED;
+    else process.env.ACCOUNT_INACTIVITY_DELETION_ENABLED = originalDeletion;
+  });
+
+  it('never queues automatic deletion unless BOTH independent rollout flags are true', async () => {
+    process.env.CRON_SECRET = 'expected-secret';
+
+    const disabled = await GET(request('expected-secret'));
+    expect(disabled.status).toBe(200);
+    expect(inactivity.queueInactiveAccountDeletions).not.toHaveBeenCalled();
+
+    process.env.ACCOUNT_INACTIVITY_TRACKING_ENABLED = 'true';
+    await GET(request('expected-secret'));
+    expect(inactivity.queueInactiveAccountDeletions).not.toHaveBeenCalled();
+
+    delete process.env.ACCOUNT_INACTIVITY_TRACKING_ENABLED;
+    process.env.ACCOUNT_INACTIVITY_DELETION_ENABLED = 'true';
+    await GET(request('expected-secret'));
+    expect(inactivity.queueInactiveAccountDeletions).not.toHaveBeenCalled();
+
+    process.env.ACCOUNT_INACTIVITY_TRACKING_ENABLED = 'true';
+    const enabled = await GET(request('expected-secret'));
+    expect(enabled.status).toBe(200);
+    expect(inactivity.queueInactiveAccountDeletions).toHaveBeenCalledTimes(1);
+    expect(await enabled.json()).toMatchObject({
+      inactiveScanned: 1, inactiveQueued: 1, inactivityErrors: 0,
+    });
   });
 
   it('resumes bounded health-data erasures without blocking independent account-deletion recovery', async () => {
@@ -111,6 +147,9 @@ describe('M7 daily account deletion recovery cron', () => {
       erasureFailed: 0,
       erasureErrors: 0,
       erasureReceiptsPurged: 0,
+      inactiveScanned: 0,
+      inactiveQueued: 0,
+      inactivityErrors: 0,
       recoveryErrors: 0,
       retentionErrors: 0,
       purged: 0,
@@ -126,6 +165,9 @@ describe('M7 daily account deletion recovery cron', () => {
       erasureFailed: 0,
       erasureErrors: 0,
       erasureReceiptsPurged: 0,
+      inactiveScanned: 0,
+      inactiveQueued: 0,
+      inactivityErrors: 0,
       recoveryErrors: 0,
       retentionErrors: 0,
       purged: 0,
