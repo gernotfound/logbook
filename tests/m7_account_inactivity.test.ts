@@ -150,6 +150,18 @@ describe('authenticated inactivity retention boundary', () => {
     expect(state.writes).toHaveLength(0);
   });
 
+  it('does not schedule deletion from a partial or chronologically invalid activity record', async () => {
+    state.docs.set('account_activity/missing-first', { uid: 'missing-first', lastSeenAt: old });
+    state.docs.set('account_activity/inverted', {
+      uid: 'inverted', firstSeenAt: now, lastSeenAt: old,
+    });
+    const outcome = await queueInactiveAccountDeletions(now);
+    expect(outcome).toEqual({ scanned: 2, queued: 0 });
+    expect(state.writes).toHaveLength(0);
+    await expect(recordAccountActivity('missing-first', now)).rejects.toThrow('Activity record invalid');
+    await expect(recordAccountActivity('inverted', now)).rejects.toThrow('Activity record invalid');
+  });
+
   it('does not delete based on an absent activity record, Auth creation time or automatic sync', async () => {
     const result = await queueInactiveAccountDeletions(now);
     expect(result).toEqual({ scanned: 0, queued: 0 });
