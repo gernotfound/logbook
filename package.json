@@ -1,7 +1,7 @@
 {
   "name": "logbook",
   "private": true,
-  "version": "2.201.0",
+  "version": "2.202.0",
   "type": "module",
   "packageManager": "npm@11.21.0",
   "engines": {
@@ -63,7 +63,8 @@
     "verify:m7": "npm run verify:m6 && npm run test:typecheck:m7 && npm run test:m7 && npm run test:pwa:m7 && npm run test:smoke:m7",
     "verify:m8": "npm run verify:m7 && npm run test:m8 && npm run test:domain-boundary:m8",
     "test:discovery": "node --test scripts/test-discovery-regressions.mjs && node scripts/check-test-discovery.mjs",
-    "test:coverage:critical": "node scripts/run-critical-coverage.mjs"
+    "test:coverage:critical": "node scripts/run-critical-coverage.mjs",
+    "test:mutation:trial": "stryker run stryker.trial.config.mjs"
   },
   "dependencies": {
     "@noble/ciphers": "2.4.0",
@@ -117,7 +118,9 @@
     "vitest": "^5.0.5",
     "@unplugin-pwa/vite": "0.0.3",
     "@vite-pwa/workbox-swkit": "8.0.13",
-    "@unplugin-pwa/core": "0.0.3"
+    "@unplugin-pwa/core": "0.0.3",
+    "@stryker-mutator/core": "10.1.1",
+    "@stryker-mutator/vitest-runner": "10.1.1"
   },
   "allowScripts": {
     "@firebase/util": true,

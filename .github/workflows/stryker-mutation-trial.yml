@@ -1,0 +1,104 @@
+name: Stryker Mutation Diagnostic
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - experiment/stryker-vitest-20261106
+
+permissions:
+  contents: read
+
+concurrency:
+  group: stryker-trial-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  mutation:
+    name: Mutation diagnostic / ${{ matrix.area }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix:
+        area:
+          - csv
+          - meal-totals
+          - meal-item
+          - workout-duration
+          - secure-id
+          - cycle-limits
+          - password-policy
+    env:
+      EXPECTED_SHA: ${{ github.sha }}
+      STRYKER_AREA: ${{ matrix.area }}
+
+    steps:
+      - name: Checkout exact branch SHA
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Verify exact SHA
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+
+      - name: Setup Node 24
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: '24'
+          cache: npm
+
+      - name: Verify npm and approved project install scripts
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$(npm --version)" == 11.* ]]
+          node scripts/check-install-scripts.mjs
+
+      - name: Install project dependencies
+        run: npm ci
+
+      - name: Verify locked diagnostic tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          node -e "for (const n of ['@stryker-mutator/core','@stryker-mutator/vitest-runner']) { const p = require(n + '/package.json'); if (p.version !== '10.1.1') process.exit(1); }"
+
+      - name: Run diagnostic mutations
+        shell: bash
+        run: |
+          set -o pipefail
+          npm run test:mutation:trial 2>&1 | tee stryker-trial.log
+
+      - name: Summarize findings without treating uncovered mutants as passing
+        shell: bash
+        run: |
+          node --input-type=module <<'NODE'
+          import { readFileSync } from 'node:fs';
+          const report = JSON.parse(readFileSync('coverage/mutation-trial/mutation.json', 'utf8'));
+          const mutants = Object.values(report.files ?? {}).flatMap(file => file.mutants ?? []);
+          if (mutants.length === 0) throw new Error('No mutations were generated: diagnostic invalid');
+          const counts = {};
+          for (const mutant of mutants) counts[mutant.status] = (counts[mutant.status] ?? 0) + 1;
+          console.log(JSON.stringify({ area: process.env.STRYKER_AREA, generated: mutants.length, ...counts }));
+          if (process.env.STRYKER_AREA === 'csv' && (counts.Killed ?? 0) < 20) {
+            throw new Error('Known CSV baseline failed to kill expected mutants: Vitest runner may be incompatible');
+          }
+          NODE
+
+      - name: Preserve area-specific diagnostic evidence
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: stryker-${{ matrix.area }}-${{ env.EXPECTED_SHA }}
+          if-no-files-found: ignore
+          retention-days: 7
+          path: |
+            stryker-trial.log
+            coverage/mutation-trial/

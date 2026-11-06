@@ -28,4 +28,33 @@ describe('canonical workout duration', () => {
         expect(getWorkoutDurationSeconds({ globalStartTime: 3001000, globalEndTime: 1000 })).toBeUndefined();
         expect(getWorkoutDurationSeconds({ manualDurationStr: 'invalid', globalDurationStr: '00:20:00' })).toBe(1200);
     });
+
+    it('ignores whitespace-only manual input and preserves hours and seconds', () => {
+        expect(getWorkoutDurationSeconds({
+            manualDurationStr: '  \t  ', globalDurationStr: '00:02:05',
+        })).toBe(125);
+        expect(getWorkoutDurationSeconds({
+            manualDurationStr: '01:02:03', globalDurationStr: '00:20:00',
+        })).toBe(3723);
+        expect(getWorkoutDurationSeconds({ manualDurationStr: '00:00:07' })).toBe(7);
+    });
+
+    it('rejects malformed timestamps instead of inventing elapsed time, including zero-duration edge', () => {
+        const malformed: Array<[unknown, unknown]> = [
+            [undefined, 2000], [1000, undefined],
+            [NaN, 2000], [1000, NaN],
+            [Infinity, 2000], [1000, Infinity],
+            ['1000', 2000], [1000, '2000'],
+            [2000, 1000],
+        ];
+        for (const [globalStartTime, globalEndTime] of malformed) {
+            expect(getWorkoutDurationSeconds({
+                globalStartTime, globalEndTime,
+            } as unknown as Parameters<typeof getWorkoutDurationSeconds>[0])).toBeUndefined();
+        }
+        expect(getWorkoutDurationSeconds({
+            globalStartTime: 1000, globalEndTime: 1000,
+        })).toBe(0);
+    });
+
 });

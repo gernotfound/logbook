@@ -18,4 +18,31 @@ describe('shared meal totals', () => {
         expect(calculateLoggedMealTotals([portion])).toEqual({ kcal: 240, carbs: 20, pro: 0, fat: 0 });
         expect(getLoggedMealPortion(meal({ quantity: 50 })).ratio).toBe(0.5);
     });
+
+    it('treats quick meals and per-piece units independently and avoids invalid serving bases', () => {
+        expect(getLoggedMealPortion(meal({
+            meal: 'quick', unit: 'g', baseQty: undefined, quantity: 2,
+        }))).toEqual({ quantity: 2, ratio: 2 });
+        expect(getLoggedMealPortion(meal({
+            meal: 'pranzo', unit: 'porzione', baseQty: undefined, quantity: 2,
+        }))).toEqual({ quantity: 2, ratio: 2 });
+        for (const baseQty of [0, -10]) {
+            expect(getLoggedMealPortion(meal({
+                meal: 'pranzo', unit: 'g', baseQty, quantity: 50,
+            }))).toEqual({ quantity: 50, ratio: 0.5 });
+        }
+        expect(getLoggedMealPortion(meal({
+            baseQty: 80, quantity: undefined,
+        }))).toEqual({ quantity: 80, ratio: 1 });
+    });
+
+    it('accepts empty collections and ignores invalid nutrient numbers without changing valid fields', () => {
+        expect(calculateRawLoggedMealTotals([])).toEqual({ kcal: 0, carbs: 0, pro: 0, fat: 0 });
+        expect(calculateRawLoggedMealTotals(null as unknown as LoggedMealItem[]))
+            .toEqual({ kcal: 0, carbs: 0, pro: 0, fat: 0 });
+        expect(calculateRawLoggedMealTotals([meal({
+            kcal: NaN, carbs: 10, pro: undefined, fat: 2,
+        })])).toEqual({ kcal: 0, carbs: 10, pro: 0, fat: 2 });
+    });
+
 });

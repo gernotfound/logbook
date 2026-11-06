@@ -79,4 +79,53 @@ describe('password policy', () => {
         await expect(validatePasswordAgainstPolicy('SecurePassword123!')).resolves.toContain('128 caratteri');
         expect(PASSWORD_POLICY_SUMMARY).not.toContain('8 caratteri');
     });
+
+    it('includes the exact minimum and maximum length limits in advisory requirements', () => {
+        const atLimit = getPasswordRequirements('Aa1!bbbb', { minPasswordLength: 8, maxPasswordLength: 8 });
+        expect(atLimit.find(item => item.label === 'Almeno 8 caratteri')).toEqual({
+            label: 'Almeno 8 caratteri', met: true,
+        });
+        expect(atLimit).not.toContainEqual(expect.objectContaining({ label: 'Massimo 8 caratteri' }));
+        const tooLong = getPasswordRequirements('Aa1!bbbbb', { maxPasswordLength: 8 });
+        expect(tooLong).toContainEqual({ label: 'Massimo 8 caratteri', met: false });
+        expect(atLimit).toContainEqual({ label: 'Una lettera minuscola', met: true });
+    });
+
+    it('preserves all local baseline advisory criteria when Firebase has no rule details', async () => {
+        mockedValidatePassword.mockResolvedValueOnce({ isValid: false } as any);
+        expect(await loadPasswordRuleConfig()).toEqual({
+            minPasswordLength: 8,
+            containsLowercaseLetter: true,
+            containsUppercaseLetter: true,
+            containsNumericCharacter: true,
+            containsNonAlphanumericCharacter: true,
+        });
+    });
+
+    it('reports each remote-only character requirement without accepting the password', async () => {
+        const remoteFailures = [
+            ['containsNumericCharacter', 'numero'],
+            ['containsLowercaseLetter', 'minuscola'],
+            ['containsUppercaseLetter', 'maiuscola'],
+            ['containsNonAlphanumericCharacter', 'speciale'],
+        ] as const;
+        for (const [field, message] of remoteFailures) {
+            mockedValidatePassword.mockResolvedValueOnce({
+                isValid: false, passwordPolicy: policy, [field]: false,
+            } as any);
+            await expect(validatePasswordAgainstPolicy('SecurePassword123!')).resolves.toContain(message);
+        }
+        expect(mockedValidatePassword).toHaveBeenCalledTimes(remoteFailures.length);
+    });
+
+    it('uses the generic provider rejection when no specific remote criterion is available', async () => {
+        mockedValidatePassword.mockResolvedValueOnce({
+            isValid: false, passwordPolicy: policy,
+        } as any);
+        await expect(validatePasswordAgainstPolicy('SecurePassword123!'))
+            .resolves.toBe('La password non rispetta i requisiti di sicurezza configurati per l’account.');
+        expect(PASSWORD_POLICY_SUMMARY)
+            .toBe('La password non rispetta i requisiti di sicurezza configurati per l’account.');
+    });
+
 });

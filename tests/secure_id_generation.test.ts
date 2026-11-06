@@ -33,4 +33,11 @@ describe('secure ID generation', () => {
         expect(() => generateId('actor')).toThrow('Generazione ID sicura non disponibile');
         expect(randomSpy).not.toHaveBeenCalled();
     });
+
+    it('fails closed when crypto exists but neither secure generation API is available', () => {
+        vi.stubGlobal('crypto', {} as Crypto);
+        expect(() => generateId('actor'))
+            .toThrow('Generazione ID sicura non disponibile in questo ambiente.');
+    });
+
 });

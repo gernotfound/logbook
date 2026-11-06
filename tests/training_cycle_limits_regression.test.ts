@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { UserDataSchema, TrainingCycleSchema } from '../src/lib/schema';
 import { applyDomainOperations } from '../src/lib/sync/domainOperations';
 import { calculateCycleSchedule, calculateCycleTimeline } from '../src/lib/calc/planning';
-import { previewCycleCount, MAX_EDITABLE_CYCLE_WEEKS, MAX_CYCLE_SESSIONS_PER_WEEK } from '../src/lib/calc/cycleLimits';
+import { getCycleVolumeFrequencies, isBoundedCycleCount, previewCycleCount, MAX_EDITABLE_CYCLE_WEEKS, MAX_CYCLE_SESSIONS_PER_WEEK } from '../src/lib/calc/cycleLimits';
 import type { TrainingCycle, UserData, WorkoutRoutine } from '../src/types';
 
 const routine: WorkoutRoutine = { id: 'r', name: 'A', exercises: [] };
@@ -58,4 +58,43 @@ describe('training cycle bounded input and safe legacy evaluation', () => {
         expect(calculateCycleTimeline({ ...cycle, durationWeeks: 1_000_000 }).statusLabel)
             .toBe('Parametri del ciclo da correggere');
     });
+
+    it('checks exact cycle count boundaries independently of the editor or persistence', () => {
+        expect(isBoundedCycleCount(1, MAX_CYCLE_SESSIONS_PER_WEEK)).toBe(true);
+        expect(isBoundedCycleCount(14, MAX_CYCLE_SESSIONS_PER_WEEK)).toBe(true);
+        for (const value of [0, -1, 15, 1.5, NaN, Infinity, '1', null, undefined]) {
+            expect(isBoundedCycleCount(value, MAX_CYCLE_SESSIONS_PER_WEEK)).toBe(false);
+        }
+        expect(previewCycleCount('1', 4, MAX_EDITABLE_CYCLE_WEEKS)).toBe(1);
+        expect(previewCycleCount('0', 4, MAX_EDITABLE_CYCLE_WEEKS)).toBe(4);
+    });
+
+    it('scales valid weekly frequencies without changing their proportions', () => {
+        expect(getCycleVolumeFrequencies([
+            { frequencyPerWeek: 1 }, { frequencyPerWeek: 2 },
+        ], 6)).toEqual({ sessionsPerWeek: 6, frequencies: [2, 4] });
+        expect(getCycleVolumeFrequencies([
+            {}, { frequencyPerWeek: 2 },
+        ], undefined)).toEqual({ sessionsPerWeek: 3, frequencies: [1, 2] });
+        expect(getCycleVolumeFrequencies([
+            { frequencyPerWeek: 1 }, { frequencyPerWeek: 1 },
+        ], 1)).toEqual({ sessionsPerWeek: 1, frequencies: [0.5, 0.5] });
+    });
+
+    it('refuses empty, malformed, excessive or unsafe weekly schedules', () => {
+        expect(getCycleVolumeFrequencies([], 1)).toBeNull();
+        for (const frequencyPerWeek of [0, -1, 1.5, NaN, Infinity]) {
+            expect(getCycleVolumeFrequencies([
+                { frequencyPerWeek: 2 }, { frequencyPerWeek },
+            ], 4)).toBeNull();
+        }
+        for (const sessions of [0, -1, 1.5, 15, Infinity]) {
+            expect(getCycleVolumeFrequencies([{ frequencyPerWeek: 2 }], sessions)).toBeNull();
+        }
+        expect(getCycleVolumeFrequencies([{ frequencyPerWeek: 15 }], undefined)).toBeNull();
+        expect(getCycleVolumeFrequencies([
+            { frequencyPerWeek: Number.MAX_SAFE_INTEGER }, { frequencyPerWeek: 1 },
+        ], 4)).toBeNull();
+    });
+
 });

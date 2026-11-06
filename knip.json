@@ -7,6 +7,8 @@
     "scripts/vercel-ignore-build.mjs",
     "tests/emulator/setup.ts",
     "vitest.emulator.config.ts",
-    "src/sw.ts"
+    "src/sw.ts",
+    "stryker.trial.config.mjs",
+    "vitest.mutation.config.mjs"
   ]
 }

@@ -50,7 +50,7 @@ void test('direct dependencies require explicit review before a new runtime or b
   ]);
   const approvedDev = new Set([
     '@axe-core/playwright', '@babel/parser', '@firebase/rules-unit-testing',
-    '@playwright/test', '@testing-library/dom', '@testing-library/react',
+    '@playwright/test', '@stryker-mutator/core', '@stryker-mutator/vitest-runner', '@testing-library/dom', '@testing-library/react',
     '@types/react', '@types/react-dom', '@unplugin-pwa/core', '@unplugin-pwa/vite', '@vite-pwa/workbox-swkit', '@vitejs/plugin-react',
     '@vitest/coverage-v8', '@vitest/ui', 'fake-indexeddb', 'jsdom',
     'knip', 'oxlint', 'oxlint-tsgolint', 'rollup-plugin-visualizer',
@@ -67,6 +67,17 @@ void test('direct dependencies require explicit review before a new runtime or b
       'Lockfile direct dependencies must match package.json');
     assert.deepEqual(Object.entries(direct).filter(([, spec]) => /^npm:/i.test(spec)), [],
       'Unreviewed dependency aliases are not permitted');
+  }
+});
+
+void test('mutation tooling remains exactly pinned, dev-only and lockfile-matched', () => {
+  const manifest = JSON.parse(readFileSync('package.json', 'utf8'));
+  const packages = JSON.parse(readFileSync('package-lock.json', 'utf8')).packages;
+  for (const name of ['@stryker-mutator/core', '@stryker-mutator/vitest-runner']) {
+    assert.equal(manifest.devDependencies?.[name], '10.1.1');
+    assert.equal(packages['']?.devDependencies?.[name], '10.1.1');
+    assert.equal(packages['node_modules/' + name]?.version, '10.1.1');
+    assert.equal(manifest.dependencies?.[name], undefined);
   }
 });
 
