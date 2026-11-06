@@ -10,7 +10,7 @@ vi.mock('../../src/lib/catalog/catalogService', () => ({
 import { getCachedCatalog } from '../../src/lib/catalog/catalogService';
 import { projectDocuments, applyRemoteDocuments } from '../../src/lib/sync/documentProjection';
 import { applySemanticOperations } from '../../src/lib/sync/semanticProjection';
-import type { CloudCheckpoint } from '../../src/lib/sync/replicaProtocol';
+import { checkpointFromCloudDocuments, type CloudCheckpoint } from '../../src/lib/sync/replicaProtocol';
 import type { UserData } from '../../src/types';
 import { UserDataSchema } from '../../src/lib/schema';
 import {
@@ -56,6 +56,12 @@ afterEach(() => {
 });
 
 
+function cloudCheckpoint(clock: CloudCheckpoint['clock']): CloudCheckpoint {
+    return checkpointFromCloudDocuments(new Map([['', {
+        _sync: { protocolVersion: 3, clock, fields: {} },
+    }]]));
+}
+
 async function pendingReplica(): Promise<LocalEnvelope> {
     await initializeLocal('a', data(170));
     await adoptReplicaCheckpoint('a', { identity: identity('s00'), baseSeq: 0 }, {
@@ -87,7 +93,7 @@ describe('durable local replica checkpoint adoption', () => {
         const replacement = identity('s01', 'replacement', 2);
         const after = await adoptReplicaCheckpoint(
             'a', { identity: replacement, baseSeq: 7 },
-            { clock: { s00: 1 }, syncMetaByDocument: {} },
+            cloudCheckpoint({ s00: 1 }),
         );
 
         expect(after.replica).toEqual(replacement);
@@ -113,9 +119,7 @@ describe('durable local replica checkpoint adoption', () => {
         await commitLocal('a', data(171), data(170));
         const before = (await readLocal('a'))!;
         const renewed = { ...oldReplica, checkpointAtMs: oldReplica.checkpointAtMs + 100 };
-        const after = await adoptReplicaCheckpoint('a', { identity: renewed, baseSeq: 1 }, {
-            clock: { s02: 4 }, syncMetaByDocument: {},
-        });
+        const after = await adoptReplicaCheckpoint('a', { identity: renewed, baseSeq: 1 }, cloudCheckpoint({ s02: 4 }));
 
         expect(after.replica).toEqual(renewed);
         expect(after.actorSeq).toBe(before.actorSeq);
@@ -176,16 +180,14 @@ describe('durable local replica checkpoint adoption', () => {
         identity('s00', 'checkpoint-test', 2),
     ])('rebases when one identity component changes: %j', async replacement => {
         const before = await pendingReplica();
-        const checkpoint: CloudCheckpoint = {
-            clock: { s00: 1, s02: 4, [replacement.slot]: 7 },
-            syncMetaByDocument: {
-                '': {
-                    protocolVersion: 3, clock: { s02: 4 },
-                    fields: { 'profile/height': { actorId: 's02', seq: 4, clock: { s02: 4 } } },
-                    writer: { slot: 's02', replicaId: 'remote-proof', generation: 1, seq: 4 },
-                },
+        const checkpoint = checkpointFromCloudDocuments(new Map([['', {
+            _sync: {
+                protocolVersion: 3, clock: { s00: 1, s02: 4, [replacement.slot]: 7 },
+                fields: { 'profile/height': { actorId: 's02', seq: 4, clock: { s02: 4 } } },
+                writer: { slot: 's02', replicaId: 'remote-proof', generation: 1, seq: 4 },
             },
-        };
+        }]]));
+        const expectedMetadata = structuredClone(checkpoint.syncMetaByDocument);
         const expectedClock = { ...checkpoint.clock, [replacement.slot]: 8 };
         const after = await adoptReplicaCheckpoint('a', { identity: replacement, baseSeq: 7 }, checkpoint);
         expect(after.replica).toEqual(replacement);
@@ -197,15 +199,14 @@ describe('durable local replica checkpoint adoption', () => {
             expect(op).toMatchObject({ actorId: replacement.slot, seq: 8, clock: expectedClock });
         }
         const replay = applySemanticOperations(projectDocuments(after.baseline, catalog), after.pending, after.syncMetaByDocument);
-        expect(applyRemoteDocuments(after.baseline, replay.documents, catalog).profile.height).toBe('171');
+        expect(applyRemoteDocuments(after.baseline, replay.documents, catalog).profile?.height).toBe('171');
         expect(after.data).toEqual(before.data);
         expect(after.baseline).toEqual(before.baseline);
         expect(after.revision).toBe(before.revision + 1);
         expect(after.syncMetaByDocument).toEqual(checkpoint.syncMetaByDocument);
         checkpoint.syncMetaByDocument[''].clock.s02 = 99;
         checkpoint.syncMetaByDocument[''].fields['profile/height'].clock.s02 = 99;
-        expect(after.syncMetaByDocument[''].clock).toEqual({ s02: 4 });
-        expect(after.syncMetaByDocument[''].fields['profile/height'].clock).toEqual({ s02: 4 });
+        expect(after.syncMetaByDocument).toEqual(expectedMetadata);
         expect(await readLocal('a')).toEqual(after);
     });
 
@@ -216,9 +217,7 @@ describe('durable local replica checkpoint adoption', () => {
         });
         const before = (await readLocal('a'))!;
         const replacement = identity('s01', 'replacement', 2);
-        const after = await adoptReplicaCheckpoint('a', { identity: replacement, baseSeq: 7 }, {
-            clock: { s00: 4, s01: 7 }, syncMetaByDocument: {},
-        });
+        const after = await adoptReplicaCheckpoint('a', { identity: replacement, baseSeq: 7 }, cloudCheckpoint({ s00: 4, s01: 7 }));
         expect(after.actorId).toBe('s01');
         expect(after.actorSeq).toBe(7);
         expect(after.clock).toEqual({ s00: 4, s01: 7 });
@@ -236,9 +235,7 @@ describe('durable local replica checkpoint adoption', () => {
         const release = pauseCatalog();
         let current = true;
         const replacement = mode === 'renew' ? before.replica! : identity('s01', 'replacement', 2);
-        const adoption = adoptReplicaCheckpoint('a', { identity: replacement, baseSeq: 1 }, {
-            clock: { s00: 1 }, syncMetaByDocument: {},
-        }, () => current);
+        const adoption = adoptReplicaCheckpoint('a', { identity: replacement, baseSeq: 1 }, cloudCheckpoint({ s00: 1 }), () => current);
         const rejection = expect(adoption).rejects.toThrow('Checkpoint replica invalidato dal cambio sessione');
         current = false;
         release();
@@ -251,24 +248,22 @@ describe('durable local replica checkpoint adoption', () => {
         await pendingReplica();
         const release = pauseCatalog();
         const replacement = identity('s01', 'replacement', 2);
-        const adoption = adoptReplicaCheckpoint('a', { identity: replacement, baseSeq: 7 }, {
-            clock: { s00: 1, s01: 7 }, syncMetaByDocument: {},
-        }, () => true);
+        const adoption = adoptReplicaCheckpoint('a', { identity: replacement, baseSeq: 7 }, cloudCheckpoint({ s00: 1, s01: 7 }), () => true);
         try {
             await commitLocal('a', data(172), data(171));
         } finally {
             release();
         }
         const after = await adoption;
-        expect(after.data.profile.height).toBe('172');
-        expect(after.baseline.profile.height).toBe('170');
+        expect(after.data.profile?.height).toBe('172');
+        expect(after.baseline.profile?.height).toBe('170');
         expect(after.actorSeq).toBe(8);
         expect(after.clock).toEqual({ s00: 1, s01: 8 });
         expect(after.pending).toContainEqual(expect.objectContaining({
             path: ['profile', 'height'], value: '172', actorId: 's01', seq: 8,
         }));
         const replay = applySemanticOperations(projectDocuments(after.baseline, catalog), after.pending, after.syncMetaByDocument);
-        expect(applyRemoteDocuments(after.baseline, replay.documents, catalog).profile.height).toBe('172');
+        expect(applyRemoteDocuments(after.baseline, replay.documents, catalog).profile?.height).toBe('172');
         expect(await readLocal('a')).toEqual(after);
     });
 
@@ -278,7 +273,7 @@ describe('durable local replica checkpoint adoption', () => {
         const failure = new Error('checkpoint disk write failed');
         vi.spyOn(indexedDb, 'update').mockRejectedValueOnce(failure);
         const claim = { identity: identity('s01', 'replacement', 2), baseSeq: 7 };
-        const checkpoint = { clock: { s00: 1, s01: 7 }, syncMetaByDocument: {} };
+        const checkpoint = cloudCheckpoint({ s00: 1, s01: 7 });
         await expect(adoptReplicaCheckpoint('a', claim, checkpoint)).rejects.toBe(failure);
         expect(await get(key('a'))).toBe(ciphertext);
         expect(await readLocal('a')).toEqual(before);
