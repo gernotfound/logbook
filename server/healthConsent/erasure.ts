@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { Timestamp, FieldValue, FieldPath, type QueryDocumentSnapshot, type Transaction } from 'firebase-admin/firestore';
+import { Timestamp, FieldValue, FieldPath, type DocumentData, type QueryDocumentSnapshot, type Transaction } from 'firebase-admin/firestore';
 import { adminDb } from '../accountDeletion/firebaseAdmin.js';
 import { PRIVATE_ACCOUNT_COLLECTIONS } from '../accountDeletion/types.js';
 
@@ -89,6 +89,33 @@ export async function readHealthDataErasureStatus(uid: string): Promise<PublicEr
   };
 }
 
+/** Queue once in the SAME transaction as trusted withdrawal. No post-commit gap
+ * may leave a confirmed revocation without durable erasure work. */
+export function queueHealthDataErasureInTransaction(
+  tx: Transaction, uid: string, consentRevision: number, previous: DocumentData | undefined,
+): void {
+  validUid(uid);
+  if (!isPositiveRevision(consentRevision)) throw new Error('Revisione cancellazione non valida.');
+  if (previous && (!isPositiveRevision(previous.consentRevision) || previous.uid !== uid)) {
+    throw new Error('Stato cancellazione precedente non verificabile.');
+  }
+  if (previous && (previous.consentRevision === consentRevision
+      || (previous.status === 'complete' && previous.completedRevision === consentRevision))) {
+    if (previous.status === 'failed' && previous.retryable === false) {
+      throw new HealthDataErasureConflict('Cancellazione interrotta per dati non riconosciuti: è necessario un controllo.');
+    }
+    return;
+  }
+  if (previous && previous.status !== 'complete') {
+    throw new HealthDataErasureConflict('Completa la cancellazione precedente prima di iniziarne una nuova.');
+  }
+  const now = Timestamp.now();
+  const next: Job = {
+    uid, consentRevision, status: 'requested', attempts: 0, requestedAt: now, updatedAt: now,
+  };
+  tx.set(jobRef(uid), next);
+}
+
 export async function createHealthDataErasureJob(uid: string): Promise<void> {
   validUid(uid);
   const db = adminDb();
@@ -103,28 +130,7 @@ export async function createHealthDataErasureJob(uid: string): Promise<void> {
     if (!state || state.status !== 'withdrawn' || !isPositiveRevision(state.revision)) {
       throw new HealthDataErasureConflict();
     }
-    const previous = job.data() as Job | undefined;
-    if (previous && (!isPositiveRevision(previous.consentRevision) || previous.uid !== uid)) {
-      throw new Error('Stato cancellazione precedente non verificabile.');
-    }
-    if (previous && (previous.consentRevision === state.revision
-        || (previous.status === 'complete' && previous.completedRevision === state.revision))) {
-      if (previous.status === 'failed' && previous.retryable === false) {
-        throw new HealthDataErasureConflict('Cancellazione interrotta per dati non riconosciuti: è necessario un controllo.');
-      }
-      // The completion itself advances the withdrawn consent revision once.
-      // Repeated POSTs at that revision cannot start another erasure.
-      return;
-    }
-    if (previous && previous.status !== 'complete') {
-      throw new HealthDataErasureConflict('Completa la cancellazione precedente prima di iniziarne una nuova.');
-    }
-    const now = Timestamp.now();
-    const next: Job = {
-      uid, consentRevision: state.revision,
-      status: 'requested', attempts: 0, requestedAt: now, updatedAt: now,
-    };
-    tx.set(ref, next);
+    queueHealthDataErasureInTransaction(tx, uid, state.revision, job.data());
   });
 }
 
