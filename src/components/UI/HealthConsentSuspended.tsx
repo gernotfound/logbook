@@ -104,15 +104,16 @@ export function HealthConsentSuspended({ status, user }: { status: HealthConsent
       }
       // A fresh login can have no old owner archive. In that case enable a
       // *new* explicit consent without repeatedly signing out the same user.
-      const envelope = await readLocal(owner);
+      // The durable purge fence blocks ordinary IndexedDB reads. Check it
+      // BEFORE readLocal/device backup inspection: an interrupted purge can
+      // already have removed its envelope while leaving other owner keys.
+      const interruptedPurge = isLocalPurgeIncomplete(owner);
+      const envelope = interruptedPurge ? undefined : await readLocal(owner);
       if (!isCurrentSession(session) || auth.currentUser?.uid !== uid) return;
       const app = useAppStore.getState();
-      // A prior interrupted purge may already have removed the IndexedDB
-      // envelope while leaving ciphertext/credentials elsewhere. Its durable
-      // fence is a recovery obligation, never proof of an empty device.
-      const hasLocalData = envelope !== undefined || hasDeviceRecoveryBackupSource(owner)
-        || (app.dataOwner === owner && app.userData !== null)
-        || isLocalPurgeIncomplete(owner);
+      const hasLocalData = interruptedPurge || envelope !== undefined
+        || hasDeviceRecoveryBackupSource(owner)
+        || (app.dataOwner === owner && app.userData !== null);
       if (!hasLocalData) {
         setLocalReadyUid(uid);
         return;
