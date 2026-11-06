@@ -126,8 +126,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const loadData = useCallback((user: User) => loadAndDrainAuthenticatedData({
         user,
         isGuestActive: () => isGuestActiveStrict(),
-        setUserData, setSyncing, setSaveError,
-    }), [isGuestActiveStrict, setSyncing, setUserData, setSaveError]);
+        setSyncing, setSaveError,
+    }), [isGuestActiveStrict, setSyncing, setSaveError]);
 
     useEffect(() => {
         if (!currentUser || emailVerificationRequired) return;

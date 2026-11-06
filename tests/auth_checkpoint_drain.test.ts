@@ -20,11 +20,9 @@ const environment = {
     isOnline: mocks.isOnline,
 };
 
-
 const options = () => ({
     user: { uid: 'account-a' } as User,
     isGuestActive: () => false,
-    setUserData: vi.fn(),
     setSyncing: vi.fn(),
     setSaveError: vi.fn(),
 });
@@ -51,7 +49,7 @@ describe('authenticated checkpoint journal drain', () => {
         await loadAndDrainAuthenticatedData(args, environment);
         expect(mocks.load).toHaveBeenCalledOnce();
         expect(mocks.load).toHaveBeenCalledWith(expect.objectContaining({
-            user: args.user, setUserData: args.setUserData,
+            user: args.user,
             setSyncing: args.setSyncing, setSaveError: args.setSaveError,
         }));
         expect(mocks.readLocal).toHaveBeenCalledWith('user:account-a');
@@ -87,7 +85,6 @@ describe('authenticated checkpoint journal drain', () => {
         expect(mocks.load.mock.invocationCallOrder[1])
             .toBeLessThan(mocks.flush.mock.invocationCallOrder[1]);
     });
-
 
     it('does not replay a durable journal if hydration was fenced or could not read cloud', async () => {
         mocks.load.mockResolvedValueOnce('blocked');

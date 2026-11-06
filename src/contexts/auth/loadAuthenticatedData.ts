@@ -1,5 +1,4 @@
 import type { User } from 'firebase/auth';
-import type { UserData } from '../../types';
 import { auth, getDb } from '../../lib/firebase';
 import { isHealthConsentCloudWritable } from '../../lib/healthConsent';
 import { DB } from '../../lib/db';
@@ -20,7 +19,6 @@ import { recoverWorkoutDeviceIntent } from '../../lib/sync/workoutDeviceIntent';
 type LoadAuthenticatedDataOptions = {
     user: User;
     isGuestActive: () => boolean;
-    setUserData: (data: UserData) => void;
     setSyncing: (value: boolean) => void;
     setSaveError: (value: string | null) => void;
 };
@@ -56,7 +54,7 @@ export async function loadAuthenticatedData({
             await markCloudIntegrityBlocked(expectedOwner, isCurrent);
         } catch (error) {
             console.error('Impossibile registrare la barriera cloud sul dispositivo:', error);
-            if (isCurrent()) useAppStore.setState({ localPersistenceBlocked: true, syncHealth: 'failed',
+            if (isCurrent()) useAppStore.setState({ localPersistenceBlocked: true, syncing: false, syncHealth: 'failed',
                 saveError: 'Protezione cloud non registrabile. I dati locali devono essere preservati.' });
             return false;
         }
@@ -75,7 +73,6 @@ export async function loadAuthenticatedData({
         if (!isCurrent()) return 'blocked';
         const localEnvelope = await readLocal(expectedOwner);
         if (!isCurrent()) return 'blocked';
-
 
         if (localEnvelope) {
             const localWorkout = getInitialLocalWorkout(expectedOwner, localEnvelope.data.activeWorkout ?? null, localEnvelope.data.history, localEnvelope.lastClosedWorkoutId, localEnvelope.closedWorkoutIds, localEnvelope.consentRevision);
@@ -116,7 +113,6 @@ export async function loadAuthenticatedData({
         const cloudAllowed = () => isCurrent() && isHealthConsentCloudWritable(expectedOwner);
         if (!cloudAllowed()) return 'blocked';
         const durableBeforeCloud = await readLocal(expectedOwner);
-        if (!cloudAllowed()) return 'blocked';
         if (!cloudAllowed()) return 'blocked';
         const checkpointDue = needsReplicaCheckpoint(durableBeforeCloud?.replica) || Boolean(durableBeforeCloud?.cloudIntegrityFence);
         // The ADK must be provisioned BEFORE a first replica checkpoint creates
