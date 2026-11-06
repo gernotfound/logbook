@@ -207,7 +207,7 @@ describe('serialized guest migration intent belongs to an exact Auth attempt', (
             clearGuestMigrationSyncRecovery: vi.fn(),
         }));
         try {
-            const pending = result.current.retryGuestMigration('merge');
+            const pending = result.current('merge');
             localStorage.setItem(GUEST_SESSION_KEY, 'replacement-retry-guest');
             activateGuestSession('replacement-retry-guest');
             releaseLock();
@@ -244,7 +244,7 @@ describe('serialized guest migration intent belongs to an exact Auth attempt', (
             clearGuestMigrationSyncRecovery: vi.fn(),
         }));
         try {
-            await act(async () => { await result.current.retryGuestMigration('skip'); });
+            await act(async () => { await result.current('skip'); });
             expect(reload).not.toHaveBeenCalled();
             expect(setStatus).not.toHaveBeenCalled();
             expect(setSaveError.mock.calls).toEqual([[null]]);
