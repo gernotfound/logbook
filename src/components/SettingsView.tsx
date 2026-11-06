@@ -114,7 +114,7 @@ const SettingsView = ({ onClose }: SettingsViewProps) => {
                 useAppStore.getState().cancelPendingSyncs();
                 // Guest mode has no cloud archive: the existing forced logout
                 // removes only its own device-scoped data and keys.
-                await logout({ mode: 'force' });
+                await logout({ mode: 'force', skipConfirm: true });
             } else if (user) {
                 await withdrawHealthConsent(user, () => useAppStore.getState().cancelPendingSyncs());
             }
