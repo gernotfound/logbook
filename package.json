@@ -63,7 +63,8 @@
     "verify:m7": "npm run verify:m6 && npm run test:typecheck:m7 && npm run test:m7 && npm run test:pwa:m7 && npm run test:smoke:m7",
     "verify:m8": "npm run verify:m7 && npm run test:m8 && npm run test:domain-boundary:m8",
     "test:discovery": "node --test scripts/test-discovery-regressions.mjs && node scripts/check-test-discovery.mjs",
-    "test:coverage:critical": "node scripts/run-critical-coverage.mjs"
+    "test:coverage:critical": "node scripts/run-critical-coverage.mjs",
+    "test:mutation:trial": "stryker run stryker.trial.config.mjs"
   },
   "dependencies": {
     "@noble/ciphers": "2.4.0",
@@ -96,8 +97,11 @@
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.14.0",
+    "@babel/parser": "7.29.7",
     "@firebase/rules-unit-testing": "6.0.0",
     "@playwright/test": "^1.64.1",
+    "@stryker-mutator/core": "10.1.1",
+    "@stryker-mutator/vitest-runner": "10.1.1",
     "@testing-library/dom": "^10.4.2",
     "@testing-library/react": "^16.3.3",
     "@types/react": "^19.3.0",
@@ -112,7 +116,6 @@
     "oxlint-tsgolint": "^7.0.2004",
     "rollup-plugin-visualizer": "^7.1.1",
     "sharp": "^0.35.5",
-    "@babel/parser": "7.29.7",
     "typescript": "^7.0.2",
     "vite": "^8.3.5",
     "vitest": "^5.0.5",

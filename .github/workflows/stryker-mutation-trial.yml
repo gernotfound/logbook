@@ -63,20 +63,17 @@ jobs:
       - name: Install project dependencies
         run: npm ci
 
-      - name: Add pinned experimental Stryker tools without changing the lockfile
+      - name: Verify locked diagnostic tools
         shell: bash
         run: |
           set -euo pipefail
-          npm install --no-save --package-lock=false --ignore-scripts --no-audit --no-fund \
-            @stryker-mutator/core@10.1.1 @stryker-mutator/vitest-runner@10.1.1
-          git diff --exit-code -- package.json package-lock.json
           node -e "for (const n of ['@stryker-mutator/core','@stryker-mutator/vitest-runner']) { const p = require(n + '/package.json'); if (p.version !== '10.1.1') process.exit(1); }"
 
       - name: Run diagnostic mutations
         shell: bash
         run: |
           set -o pipefail
-          ./node_modules/.bin/stryker run stryker.trial.config.mjs 2>&1 | tee stryker-trial.log
+          npm run test:mutation:trial 2>&1 | tee stryker-trial.log
 
       - name: Summarize findings without treating uncovered mutants as passing
         shell: bash
