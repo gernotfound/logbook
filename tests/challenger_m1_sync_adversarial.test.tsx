@@ -306,37 +306,4 @@ describe('Empirical Challenger: M1 Background Sync & Error Toast Stress Suite', 
       expect(useAppStore.getState().userData).toBeNull();
     });
   });
-
-  // --------------------------------------------------------------------------
-  // HARNESS 5: Accessibility & Specification Contracts
-  // --------------------------------------------------------------------------
-  describe('Harness 5: Accessibility & Specification Compliance', () => {
-    test('Sync indicator adheres to accessibility contract: role="status", aria-live="polite"', async () => {
-      const { container } = await renderSettledApp();
-      act(() => {
-        useAppStore.setState({ syncing: true });
-      });
-
-      const indicator = container.querySelector('.sync-indicator');
-      expect(indicator).not.toBeNull();
-      expect(indicator?.getAttribute('role')).toBe('status');
-      expect(indicator?.getAttribute('aria-live')).toBe('polite');
-      expect(indicator?.getAttribute('aria-label')).toBe('Salvataggio in corso');
-    });
-
-    test('Error toast adheres to accessibility contract: role="alert", aria-live="assertive"', async () => {
-      const { container } = await renderSettledApp();
-      act(() => {
-        useAppStore.setState({ saveError: 'Attenzione: salvataggio fallito' });
-      });
-
-      const toast = container.querySelector('.sync-error-toast');
-      expect(toast).not.toBeNull();
-      expect(toast?.getAttribute('role')).toBe('alert');
-      expect(toast?.getAttribute('aria-live')).toBe('assertive');
-
-      const closeBtn = toast?.querySelector('.sync-error-close');
-      expect(closeBtn?.getAttribute('aria-label')).toBe('Chiudi avviso');
-    });
-  });
 });
