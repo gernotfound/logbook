@@ -16,7 +16,7 @@ import { markGuestMigrationSyncRecovery } from '../../src/lib/auth/guestMigratio
 import { resumePersistedGuestMigration } from '../../src/contexts/auth/resumePersistedGuestMigration';
 import * as localRepository from '../../src/lib/sync/localRepository';
 import { useAppStore } from '../../src/store/useAppStore';
-import { activateGuestSession, GUEST_SESSION_KEY } from '../../src/lib/sync/session';
+import { activateGuestSession, GUEST_SESSION_KEY, invalidateSession } from '../../src/lib/sync/session';
 import { withGuestLifecycleLock } from '../../src/lib/sync/guestLifecycleLock';
 
 const KEY = 'guest_migration_intent_v1';
@@ -99,6 +99,25 @@ describe('serialized guest migration intent belongs to an exact Auth attempt', (
         expect(signInWithPopup).not.toHaveBeenCalled();
         expect(localStorage.getItem(KEY)).toBeNull();
     });
+
+    it.each(['login', 'linkGoogleAccount'] as const)(
+        'does not launch Google %s after its reservation resumes in a different Auth epoch',
+        async action => {
+            const write = browserStorage.writeBrowserJson;
+            vi.spyOn(browserStorage, 'writeBrowserJson').mockImplementation((key, value) => {
+                write(key, value);
+                if (key === KEY) invalidateSession();
+            });
+            const { result } = google(true);
+            await act(async () => { await result.current[action]('merge'); });
+
+            expect(signInWithPopup).not.toHaveBeenCalled();
+            expect(signInWithRedirect).not.toHaveBeenCalled();
+            expect(localStorage.getItem(KEY)).toBeNull();
+            expect(localStorage.getItem('logbook_is_guest')).toBe('true');
+            expect(localStorage.getItem(GUEST_SESSION_KEY)).toBe('guest-intent-test-generation');
+        },
+    );
 
     it('requires the actual Google popup result after an earlier same-UID Auth event', async () => {
         const { bindGuestMigrationIntentToUser } = await import('../../src/lib/auth/guestMigrationIntent');
