@@ -15,6 +15,12 @@ const auth = vi.hoisted(() => ({
   },
 }));
 
+const erasureWorker = vi.hoisted(() => ({ process: vi.fn(async () => 'pending' as const) }));
+vi.mock('../server/healthConsent/erasure', async importOriginal => ({
+  ...(await importOriginal<typeof import('../server/healthConsent/erasure')>()),
+  processHealthDataErasure: erasureWorker.process,
+}));
+
 vi.mock('../server/accountDeletion/httpAuth', () => auth);
 vi.mock('../server/accountDeletion/firebaseAdmin', () => ({
   adminDb: () => ({
@@ -37,6 +43,9 @@ vi.mock('../server/accountDeletion/firebaseAdmin', () => ({
         if (storage.documents.has(ref.key)) throw new Error('Already exists');
         storage.documents.set(ref.key, data);
       },
+      set: (ref: { key: string }, data: Stored) => {
+        storage.documents.set(ref.key, data);
+      },
       update: (ref: { key: string }, data: Stored) => {
         const old = storage.documents.get(ref.key);
         if (!old) throw new Error('Not found');
@@ -57,6 +66,17 @@ function req(method: 'GET' | 'POST' | 'OPTIONS', body?: unknown, origin = 'https
   return new Request('https://backend.test/api/health-consent', {
     method, headers: { origin, 'content-type': 'application/json' },
     ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+  });
+}
+
+function finishErasure(revision: number): void {
+  const consent = storage.documents.get('health_consent_withdrawals/account-1');
+  if (!consent) throw new Error('Consent must exist before finishing erasure');
+  storage.documents.set('health_consent_withdrawals/account-1', {
+    ...consent, status: 'withdrawn', revision: revision + 1, erasedBeforeRevision: revision,
+  });
+  storage.documents.set('health_data_erasures/account-1', {
+    uid: 'account-1', status: 'complete', consentRevision: revision, completedRevision: revision + 1,
   });
 }
 
@@ -142,14 +162,18 @@ describe('trusted health consent boundary', () => {
     expect(auth.requireVerifiedHealthConsentWrite).toHaveBeenCalledTimes(2);
   });
 
-  it('records withdrawal idempotently, monotonically and keeps the data intact', async () => {
+  it('atomically queues health erasure with the withdrawal and keeps Auth/business data until the worker completes', async () => {
     const first = await POST(req('POST', { action: 'withdraw', expectedRevision: 0 }));
     expect(first.status).toBe(200);
     expect(await first.json()).toEqual({ status: 'withdrawn', revision: 1 });
     expect(await recordHealthConsentWithdrawal('account-1', 0)).toEqual({ status: 'withdrawn', revision: 1 });
     const state = storage.documents.get('health_consent_withdrawals/account-1');
     expect(state).toMatchObject({ uid: 'account-1', revision: 1, status: 'withdrawn' });
-    expect(storage.documents.size).toBe(1);
+    expect(storage.documents.get('health_data_erasures/account-1')).toMatchObject({
+      uid: 'account-1', status: 'requested', consentRevision: 1,
+    });
+    expect(storage.documents.size).toBe(2);
+    expect(erasureWorker.process).toHaveBeenCalledWith('account-1', expect.any(Number));
   });
 
   it('rejects invalid and stale version acceptances while withdrawn', async () => {
@@ -166,18 +190,20 @@ describe('trusted health consent boundary', () => {
     await recordHealthConsentWithdrawal('account-1', 0);
     storage.documents.set('users/account-1', { _schemaVersion: 1, _sync: { writer: { seq: 5 } }, legalConsent: { acceptedAt: 'old' } });
     const originalRoot = structuredClone(storage.documents.get('users/account-1'));
-    const accepted = await recordHealthConsentReacceptance('account-1', acceptance, 1);
+    await expect(recordHealthConsentReacceptance('account-1', acceptance, 1)).rejects.toThrow('revoca');
+    finishErasure(1);
+    const accepted = await recordHealthConsentReacceptance('account-1', acceptance, 2);
     expect(storage.documents.get('users/account-1')).toEqual(originalRoot);
-    expect(accepted).toMatchObject({ status: 'active', revision: 2, acceptedAt: expect.any(String) });
-    expect(await recordHealthConsentReacceptance('account-1', acceptance, 1)).toEqual(accepted);
-    const retry = await POST(req('POST', { action: 'reaccept', expectedRevision: 1, acceptance }));
+    expect(accepted).toMatchObject({ status: 'active', revision: 3, acceptedAt: expect.any(String) });
+    expect(await recordHealthConsentReacceptance('account-1', acceptance, 2)).toEqual(accepted);
+    const retry = await POST(req('POST', { action: 'reaccept', expectedRevision: 2, acceptance }));
     expect(retry.status).toBe(200);
     expect(await retry.json()).toEqual(accepted);
-    expect(await recordHealthConsentWithdrawal('account-1', 2)).toEqual({ status: 'withdrawn', revision: 3 });
+    expect(await recordHealthConsentWithdrawal('account-1', 3)).toEqual({ status: 'withdrawn', revision: 4 });
     const staleSecondCycle = await POST(req('POST', { action: 'withdraw', expectedRevision: 0 }));
     expect(staleSecondCycle.status).toBe(409);
-    expect(await readHealthConsentState('account-1')).toMatchObject({ status: 'withdrawn', revision: 3 });
-    expect(await recordHealthConsentWithdrawal('account-1', 2)).toEqual({ status: 'withdrawn', revision: 3 });
+    expect(await readHealthConsentState('account-1')).toMatchObject({ status: 'withdrawn', revision: 4 });
+    expect(await recordHealthConsentWithdrawal('account-1', 3)).toEqual({ status: 'withdrawn', revision: 4 });
   });
 
   it('will not resume or withdraw when account deletion has started', async () => {
@@ -194,9 +220,9 @@ describe('trusted health consent boundary', () => {
       .rejects.toThrow('revoca');
     expect((await readHealthConsentState('account-1')).status).toBe('withdrawn');
 
-    storage.documents.set('health_data_erasures/account-1', { uid: 'account-1', status: 'complete', consentRevision: 0 });
-    expect(await recordHealthConsentReacceptance('account-1', acceptance, 1))
-      .toMatchObject({ status: 'active', revision: 2 });
+    finishErasure(1);
+    expect(await recordHealthConsentReacceptance('account-1', acceptance, 2))
+      .toMatchObject({ status: 'active', revision: 3 });
   });
 
   it('cleanup erases only the specific account consent marker', async () => {
@@ -218,11 +244,12 @@ describe('withdrawal revision concurrency', () => {
   it('refuses a delayed revocation request after another device reaccepted', async () => {
     storage.documents.clear();
     await recordHealthConsentWithdrawal('account-1', 0);
-    await recordHealthConsentReacceptance('account-1', acceptance, 1);
+    finishErasure(1);
+    await recordHealthConsentReacceptance('account-1', acceptance, 2);
     const stale = await POST(req('POST', { action: 'withdraw', expectedRevision: 0 }));
     expect(stale.status).toBe(409);
     expect((await readHealthConsentState('account-1')).status).toBe('active');
-    expect(await recordHealthConsentWithdrawal('account-1', 2)).toEqual({ status: 'withdrawn', revision: 3 });
+    expect(await recordHealthConsentWithdrawal('account-1', 3)).toEqual({ status: 'withdrawn', revision: 4 });
   });
 });
 
@@ -230,12 +257,15 @@ describe('reacceptance compare-and-set', () => {
   it('refuses an old delayed acceptance after a later withdrawal', async () => {
     storage.documents.clear();
     await recordHealthConsentWithdrawal('account-1', 0);
-    await recordHealthConsentReacceptance('account-1', acceptance, 1);
-    await recordHealthConsentWithdrawal('account-1', 2);
+    finishErasure(1);
+    await recordHealthConsentReacceptance('account-1', acceptance, 2);
+    await recordHealthConsentWithdrawal('account-1', 3);
     const response = await POST(req('POST', { action: 'reaccept', acceptance, expectedRevision: 1 }));
     expect(response.status).toBe(409);
     expect((await readHealthConsentState('account-1')).status).toBe('withdrawn');
-    expect(await recordHealthConsentReacceptance('account-1', acceptance, 3)).toMatchObject({ status: 'active', revision: 4 });
+    await expect(recordHealthConsentReacceptance('account-1', acceptance, 4)).rejects.toThrow('revoca');
+    finishErasure(4);
+    expect(await recordHealthConsentReacceptance('account-1', acceptance, 5)).toMatchObject({ status: 'active', revision: 6 });
   });
 });
 
