@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { removeUndefinedValues, isPlainObject } from '../src/lib/utils/object';
+import { removeUndefinedValuesForFirestore, isPlainObject } from '../src/lib/utils/object';
 import { projectDocuments } from '../src/lib/sync/documentProjection';
 import { getSeedCatalog } from '../src/lib/catalog/catalogService';
 
@@ -35,7 +35,7 @@ function assertNoUndefined(value: unknown, path = 'root'): void {
     }
 }
 
-describe('Empirical Challenger: removeUndefinedValues & Firestore Serialization Adversarial Stress Suite', () => {
+describe('Empirical Challenger: removeUndefinedValuesForFirestore & Firestore Serialization Adversarial Stress Suite', () => {
 
     // =========================================================================
     // 1. Extreme Deep Nesting Stress (50+ and 100+ levels)
@@ -57,7 +57,7 @@ describe('Empirical Challenger: removeUndefinedValues & Firestore Serialization 
                 }
             }
 
-            const cleaned = removeUndefinedValues(root);
+            const cleaned = removeUndefinedValuesForFirestore(root);
 
             // Traverse and assert all 100 levels are intact and all dropUndefined keys removed
             let check = cleaned;
@@ -82,7 +82,7 @@ describe('Empirical Challenger: removeUndefinedValues & Firestore Serialization 
                 current = [i, undefined, current, { drop: undefined, keep: i }];
             }
 
-            const cleaned = removeUndefinedValues(current);
+            const cleaned = removeUndefinedValuesForFirestore(current);
             expect(() => assertNoUndefined(cleaned)).not.toThrow();
         });
     });
@@ -113,7 +113,7 @@ describe('Empirical Challenger: removeUndefinedValues & Firestore Serialization 
                 dropMe2: undefined
             };
 
-            const result = removeUndefinedValues(input);
+            const result = removeUndefinedValuesForFirestore(input);
 
             expect(result.nullVal).toBe(null);
             expect(result.zero).toBe(0);
@@ -133,12 +133,12 @@ describe('Empirical Challenger: removeUndefinedValues & Firestore Serialization 
         });
 
         it('returns primitives passed directly at root without throwing', () => {
-            expect(removeUndefinedValues(null)).toBe(null);
-            expect(removeUndefinedValues(undefined)).toBe(undefined);
-            expect(removeUndefinedValues(0)).toBe(0);
-            expect(removeUndefinedValues('')).toBe('');
-            expect(removeUndefinedValues(false)).toBe(false);
-            expect(removeUndefinedValues(100)).toBe(100);
+            expect(removeUndefinedValuesForFirestore(null)).toBe(null);
+            expect(removeUndefinedValuesForFirestore(undefined)).toBe(undefined);
+            expect(removeUndefinedValuesForFirestore(0)).toBe(0);
+            expect(removeUndefinedValuesForFirestore('')).toBe('');
+            expect(removeUndefinedValuesForFirestore(false)).toBe(false);
+            expect(removeUndefinedValuesForFirestore(100)).toBe(100);
         });
     });
 
@@ -153,7 +153,7 @@ describe('Empirical Challenger: removeUndefinedValues & Firestore Serialization 
             sparseArr[2] = 3;
             sparseArr[4] = 5;
 
-            const result = removeUndefinedValues(sparseArr);
+            const result = removeUndefinedValuesForFirestore(sparseArr);
 
             expect(result.length).toBe(5);
             expect(result[0]).toBe(1);
@@ -166,7 +166,7 @@ describe('Empirical Challenger: removeUndefinedValues & Firestore Serialization 
 
         it('handles array with trailing undefined, null, and empty objects', () => {
             const arr = [undefined, null, {}, { a: undefined }, [undefined]];
-            const result = removeUndefinedValues(arr);
+            const result = removeUndefinedValuesForFirestore(arr);
 
             expect(result).toEqual([null, null, {}, {}, [null]]);
             expect(() => assertNoUndefined(result)).not.toThrow();
@@ -185,7 +185,7 @@ describe('Empirical Challenger: removeUndefinedValues & Firestore Serialization 
             }
 
             const start = performance.now();
-            const result = removeUndefinedValues(largeArray);
+            const result = removeUndefinedValuesForFirestore(largeArray);
             const duration = performance.now() - start;
 
             expect(result.length).toBe(5000);
@@ -227,7 +227,7 @@ describe('Empirical Challenger: removeUndefinedValues & Firestore Serialization 
                 dropRoot: undefined
             };
 
-            const result = removeUndefinedValues(payload);
+            const result = removeUndefinedValuesForFirestore(payload);
 
             expect(result.d).toBe(d);
             expect(result.d.getTime()).toBe(d.getTime());
@@ -287,7 +287,7 @@ describe('Empirical Challenger: removeUndefinedValues & Firestore Serialization 
                 dropTop: undefined
             };
 
-            const result = removeUndefinedValues(payload);
+            const result = removeUndefinedValuesForFirestore(payload);
 
             expect(result.serverTs).toBe(serverTs);
             expect(result.arrayUnion).toBe(arrayUnion);
@@ -320,7 +320,7 @@ describe('Empirical Challenger: removeUndefinedValues & Firestore Serialization 
             rootDict.arr[0].itemKey = 'itemVal';
             rootDict.arr[0].itemDrop = undefined;
 
-            const result = removeUndefinedValues(rootDict);
+            const result = removeUndefinedValuesForFirestore(rootDict);
 
             expect(result.name).toBe('Null Proto Root');
             expect(result.child.title).toBe('Null Proto Child');
@@ -352,7 +352,7 @@ describe('Empirical Challenger: removeUndefinedValues & Firestore Serialization 
                 }
             };
 
-            const result = removeUndefinedValues(obj);
+            const result = removeUndefinedValuesForFirestore(obj);
 
             expect(result.fullName).toBe('Mario Rossi');
             expect(result.numberGetter).toBe(42);
@@ -371,7 +371,7 @@ describe('Empirical Challenger: removeUndefinedValues & Firestore Serialization 
                 enumerable: false
             });
 
-            const result = removeUndefinedValues(obj);
+            const result = removeUndefinedValuesForFirestore(obj);
             expect(result.regularProp).toBe('visible');
             expect('hiddenProp' in result).toBe(false);
             expect('hiddenUndefined' in result).toBe(false);
@@ -385,7 +385,7 @@ describe('Empirical Challenger: removeUndefinedValues & Firestore Serialization 
             };
             obj[sym] = 'symbol value';
 
-            const result = removeUndefinedValues(obj);
+            const result = removeUndefinedValuesForFirestore(obj);
             expect(result.title).toBe('Symbol test');
             expect('omit' in result).toBe(false);
         });
@@ -395,7 +395,7 @@ describe('Empirical Challenger: removeUndefinedValues & Firestore Serialization 
     // 7. Circular References Stress (Objects, Arrays, Interleaved)
     // =========================================================================
     describe('7. Circular References Stress', () => {
-        it('handles complex multi-level cyclical references (A -> B -> C -> A) safely', () => {
+        it('rejects multi-level cyclical references (A -> B -> C -> A) without mutating the source', () => {
             const a: any = { name: 'A', dropA: undefined };
             const b: any = { name: 'B', dropB: undefined };
             const c: any = { name: 'C', dropC: undefined };
@@ -404,30 +404,23 @@ describe('Empirical Challenger: removeUndefinedValues & Firestore Serialization 
             b.c = c;
             c.a = a;
 
-            expect(() => {
-                const result = removeUndefinedValues(a);
-                expect(result.name).toBe('A');
-                expect('dropA' in result).toBe(false);
-                expect(result.b.name).toBe('B');
-                expect('dropB' in result.b).toBe(false);
-                expect(result.b.c.name).toBe('C');
-                expect('dropC' in result.b.c).toBe(false);
-                expect(result.b.c.a).toBe(a);
-            }).not.toThrow();
+            expect(() => removeUndefinedValuesForFirestore(a)).toThrow('Riferimento circolare');
+            expect(a.b.c.a).toBe(a);
+            expect(Object.hasOwn(a, 'dropA')).toBe(true);
+            expect(Object.hasOwn(b, 'dropB')).toBe(true);
+            expect(Object.hasOwn(c, 'dropC')).toBe(true);
         });
 
-        it('handles circular references inside arrays mixed with objects', () => {
+        it('rejects object-array cycles without mutating the source', () => {
             const parentObj: any = { title: 'Parent', drop: undefined };
             const childArr: any = [parentObj, undefined];
             parentObj.children = childArr;
 
-            expect(() => {
-                const result = removeUndefinedValues(parentObj);
-                expect(result.title).toBe('Parent');
-                expect('drop' in result).toBe(false);
-                expect(result.children[0]).toBe(parentObj);
-                expect(result.children[1]).toBe(null);
-            }).not.toThrow();
+            expect(() => removeUndefinedValuesForFirestore(parentObj)).toThrow('Riferimento circolare');
+            expect(parentObj.children).toBe(childArr);
+            expect(childArr[0]).toBe(parentObj);
+            expect(childArr[1]).toBeUndefined();
+            expect(Object.hasOwn(parentObj, 'drop')).toBe(true);
         });
     });
 
@@ -624,7 +617,7 @@ describe('Empirical Challenger: removeUndefinedValues & Firestore Serialization 
                 supplements: mockFullState.supplements || []
             };
 
-            const cleanUserDocData = removeUndefinedValues(userDocData);
+            const cleanUserDocData = removeUndefinedValuesForFirestore(userDocData);
             expect(() => assertNoUndefined(cleanUserDocData, 'cleanUserDocData')).not.toThrow();
 
             // 2. Simulate db.ts history_months payload
@@ -636,7 +629,7 @@ describe('Empirical Challenger: removeUndefinedValues & Firestore Serialization 
             });
 
             for (const month of Object.keys(histMonths)) {
-                const cleanHistDoc = removeUndefinedValues(histMonths[month]);
+                const cleanHistDoc = removeUndefinedValuesForFirestore(histMonths[month]);
                 expect(() => assertNoUndefined(cleanHistDoc, `history_months/${month}`)).not.toThrow();
             }
 
@@ -650,7 +643,7 @@ describe('Empirical Challenger: removeUndefinedValues & Firestore Serialization 
             });
 
             for (const month of Object.keys(nutMonths)) {
-                const cleanNutDoc = removeUndefinedValues(nutMonths[month]);
+                const cleanNutDoc = removeUndefinedValuesForFirestore(nutMonths[month]);
                 expect(() => assertNoUndefined(cleanNutDoc, `nutrition_months/${month}`)).not.toThrow();
             }
         });
@@ -703,13 +696,13 @@ describe('Empirical Challenger: removeUndefinedValues & Firestore Serialization 
 
             // Warm-up
             for (let i = 0; i < 20; i++) {
-                removeUndefinedValues(sampleData);
+                removeUndefinedValuesForFirestore(sampleData);
                 JSON.parse(JSON.stringify(sampleData));
             }
 
             const startCustom = performance.now();
             for (let i = 0; i < ITERATIONS; i++) {
-                removeUndefinedValues(sampleData);
+                removeUndefinedValuesForFirestore(sampleData);
             }
             const durationCustom = performance.now() - startCustom;
 
@@ -717,7 +710,7 @@ describe('Empirical Challenger: removeUndefinedValues & Firestore Serialization 
             expect(durationCustom).toBeLessThan(1000);
 
             // Assert custom does not convert Dates to ISO strings like JSON.parse(JSON.stringify) does
-            const customResult = removeUndefinedValues(sampleData);
+            const customResult = removeUndefinedValuesForFirestore(sampleData);
             const jsonResult = JSON.parse(JSON.stringify(sampleData));
 
             expect(customResult.items[0].date).toBeInstanceOf(Date);

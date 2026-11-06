@@ -166,9 +166,7 @@ export function useWorkoutSetMutations({ setLocalWorkout, showConfirm }: UseWork
     // Special Sets and generalized continuation segments
     // React recovery inputs are keyed by immutable child ID. A callback from
     // an unmounting child must never be retargeted to its successor's index.
-    const matchesSpecialItem = (item: { id?: string }, index: number, selector: number | string) =>
-        typeof selector === 'string' ? item.id === selector : index === selector;
-    const updateSpecialSet = useCallback((exIndex: number, setId: string, collection: 'segments', specIndex: number | string, field: string, value: any) => {
+    const updateSpecialSet = useCallback((exIndex: number, setId: string, collection: 'segments', segmentId: string, field: string, value: any) => {
         setLocalWorkout((prev) => {
             if (!prev) return prev;
             let changed = false;
@@ -176,17 +174,17 @@ export function useWorkoutSetMutations({ setLocalWorkout, showConfirm }: UseWork
                 ...ex,
                 sets: ex.sets.map((s: any) => {
                     if (s.id !== setId || !Array.isArray(s[collection])
-                        || !s[collection].some((item: any, idx: number) => matchesSpecialItem(item, idx, specIndex))) return s;
+                        || !s[collection].some((item: any) => item.id === segmentId)) return s;
                     changed = true;
                     return {
                         ...s,
-                        [collection]: s[collection].map((item: any, idx: number) => {
-                            if (!matchesSpecialItem(item, idx, specIndex)) return item;
-                                if (value === undefined) {
-                                    const { [field]: _removedField, ...withoutField } = item;
-                                    return withoutField;
-                                }
-                                return { ...item, [field]: value };
+                        [collection]: s[collection].map((item: any) => {
+                            if (item.id !== segmentId) return item;
+                            if (value === undefined) {
+                                const { [field]: _removedField, ...withoutField } = item;
+                                return withoutField;
+                            }
+                            return { ...item, [field]: value };
                         })
                     };
                 })
@@ -195,7 +193,7 @@ export function useWorkoutSetMutations({ setLocalWorkout, showConfirm }: UseWork
         });
     }, [setLocalWorkout]);
 
-    const removeSpecialSet = useCallback((exIndex: number, setId: string, collection: 'segments', specIndex: number | string) => {
+    const removeSpecialSet = useCallback((exIndex: number, setId: string, collection: 'segments', segmentId: string) => {
         setLocalWorkout((prev) => {
             if (!prev) return prev;
             let changed = false;
@@ -203,9 +201,9 @@ export function useWorkoutSetMutations({ setLocalWorkout, showConfirm }: UseWork
                 ...ex,
                 sets: ex.sets.map((s: any) => {
                     if (s.id !== setId || !Array.isArray(s[collection])
-                        || !s[collection].some((item: any, idx: number) => matchesSpecialItem(item, idx, specIndex))) return s;
+                        || !s[collection].some((item: any) => item.id === segmentId)) return s;
                     changed = true;
-                    const next = s[collection].filter((item: any, idx: number) => !matchesSpecialItem(item, idx, specIndex));
+                    const next = s[collection].filter((item: any) => item.id !== segmentId);
                     if (next.length === 0) {
                         const { technique: _technique, segments: _segments, target: _target, ...straight } = s;
                         return straight;

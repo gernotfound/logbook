@@ -12,7 +12,6 @@ import {
     parseSleepInput,
     isSleepTimeValid
 } from './utils/date';
-import { isPlainObject, removeUndefinedValues } from './utils/object';
 import { generateUniqueName } from './utils/string';
 import { 
     calculateBodyFatByMethod, 
@@ -77,9 +76,7 @@ export const Logic = {
     formatSleepTime,
     parseSleepInput,
     isSleepTimeValid,
-    isPlainObject,
     generateUniqueName,
-    removeUndefinedValues,
 
     // Body Fat & Composition
     calculateBodyFatByMethod,

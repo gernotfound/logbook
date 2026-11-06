@@ -17,8 +17,8 @@ interface SessionSetRowProps {
     onRemoveSet: (exIndex: number, sIndex: number) => void;
     onUpdateSet: (exIndex: number, setId: string, field: string, value: unknown) => void;
     onAddSpecialSet: (exIndex: number, type: string, setId: string) => void;
-    onUpdateSpecialSet: (exIndex: number, setId: string, type: 'segments', idx: number | string, field: string, value: unknown) => void;
-    onRemoveSpecialSet: (exIndex: number, setId: string, type: 'segments', idx: number | string) => void;
+    onUpdateSpecialSet: (exIndex: number, setId: string, type: 'segments', segmentId: string, field: string, value: unknown) => void;
+    onRemoveSpecialSet: (exIndex: number, setId: string, type: 'segments', segmentId: string) => void;
     onUpdateSetTarget: (exIndex: number, setId: string, reps: number | undefined) => void;
 }
 
@@ -354,7 +354,7 @@ const SessionSetRowInner: React.FC<SessionSetRowProps> = ({
                                                     exIndex,
                                                     s.id,
                                                     'segments',
-                                                    segmentIndex,
+                                                    segment.id,
                                                     'target',
                                                     val === '' || !Number.isFinite(parsed)
                                                         ? undefined

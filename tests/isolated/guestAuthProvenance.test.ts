@@ -67,6 +67,29 @@ describe('Auth result provenance for guest-to-account decisions', () => {
         expect(finished).toBe(true);
     });
 
+    it('does not attest a credential whose initiating lifecycle ends while the intent lock is queued', async () => {
+        const intent = await beginGuestMigrationIntent('merge', 'google');
+        const original = localStorage.getItem(KEY);
+        let entered!: () => void;
+        let release!: () => void;
+        const acquired = new Promise<void>(resolve => { entered = resolve; });
+        const gate = new Promise<void>(resolve => { release = resolve; });
+        const holder = navigator.locks.request('thelogbook:guest-auth-intent', { mode: 'exclusive' }, async () => {
+            entered();
+            await gate;
+        });
+        await acquired;
+        let current = true;
+        const confirmation = confirmGuestMigrationCredential(intent.id, credential('google.com'), () => current);
+        const rejected = expect(confirmation).rejects.toThrow('non è più attivo');
+        current = false;
+        release();
+        await holder;
+        await rejected;
+        expect(localStorage.getItem(KEY)).toBe(original);
+        expect(sessionStorage.getItem('logbook:guest-auth-attempt')).toBe(intent.id);
+    });
+
     it('rejects a different UID and does not consume the reserved guest choice', async () => {
         const intent = await beginGuestMigrationIntent('skip', 'email', {
             email: 'same@example.test', uid: user.uid,
@@ -103,4 +126,64 @@ describe('Auth result provenance for guest-to-account decisions', () => {
         expect(await outcome).toContain('non confermata');
         expect(localStorage.getItem(KEY)).not.toBeNull();
     });
+
+    it.each(['null', '[]', 'true', '42', '"invalid"', '{'])(
+        'rejects an invalid stored reservation (%s) without changing its evidence',
+        async raw => {
+            const intent = await beginGuestMigrationIntent('merge', 'google');
+            localStorage.setItem(KEY, raw);
+
+            await expect(bindGuestMigrationIntentToUser(user)).rejects.toThrow('Tentativo di trasferimento guest non valido.');
+            await expect(confirmGuestMigrationCredential(intent.id, credential('google.com'))).rejects.toThrow('Tentativo di trasferimento guest non valido.');
+            await expect(clearGuestMigrationIntent(intent.id)).rejects.toThrow('Tentativo di trasferimento guest non valido.');
+            await expect(beginGuestMigrationIntent('skip', 'recovery', { uid: user.uid })).rejects.toThrow('Tentativo di trasferimento guest non valido.');
+            expect(localStorage.getItem(KEY)).toBe(raw);
+            expect(sessionStorage.getItem('logbook:guest-auth-attempt')).toBe(intent.id);
+        },
+    );
+
+    describe.each(['expectedEmail', 'expectedUid', 'boundUid', 'claimedBy'])(
+        'stored identity constraint %s',
+        field => {
+            it.each([null, false, 42, {}, [], '', '   '])(
+                'does not drop a malformed constraint (%j) to authorize or clear a transfer',
+                async invalid => {
+                    const intent = await beginGuestMigrationIntent('merge', 'email', {
+                        email: user.email!, uid: user.uid,
+                    });
+                    const raw = JSON.stringify({ ...intent, [field]: invalid });
+                    localStorage.setItem(KEY, raw);
+
+                    await expect(confirmGuestMigrationCredential(intent.id, credential('password'))).rejects.toThrow('Tentativo di trasferimento guest non valido.');
+                    await expect(bindGuestMigrationIntentToUser(user)).rejects.toThrow('Tentativo di trasferimento guest non valido.');
+                    await expect(clearGuestMigrationIntent(intent.id)).rejects.toThrow('Tentativo di trasferimento guest non valido.');
+                    await expect(beginGuestMigrationIntent('skip', 'recovery', { uid: user.uid })).rejects.toThrow('Tentativo di trasferimento guest non valido.');
+                    expect(localStorage.getItem(KEY)).toBe(raw);
+                    expect(sessionStorage.getItem('logbook:guest-auth-attempt')).toBe(intent.id);
+                },
+            );
+        },
+    );
+
+    it('does not drop a malformed recovery UID and bind an unrelated account', async () => {
+        const intent = await beginGuestMigrationIntent('merge', 'recovery', { uid: 'reserved-account' });
+        const raw = JSON.stringify({ ...intent, expectedUid: 42 });
+        localStorage.setItem(KEY, raw);
+
+        await expect(bindGuestMigrationIntentToUser(user)).rejects.toThrow('Tentativo di trasferimento guest non valido.');
+        expect(localStorage.getItem(KEY)).toBe(raw);
+    });
+
+    it('preserves valid recovery ownership and allows only its reserved account', async () => {
+        const intent = await beginGuestMigrationIntent('skip', 'recovery', { uid: user.uid });
+        await expect(bindGuestMigrationIntentToUser({ ...user, uid: 'foreign-account' } as User))
+            .rejects.toThrow('account diverso');
+        await expect(bindGuestMigrationIntentToUser(user)).resolves.toMatchObject({
+            id: intent.id, expectedUid: user.uid, boundUid: user.uid, policy: 'skip',
+        });
+        await expect(clearGuestMigrationIntent(intent.id)).resolves.toBeUndefined();
+        expect(localStorage.getItem(KEY)).toBeNull();
+        expect(sessionStorage.getItem('logbook:guest-auth-attempt')).toBeNull();
+    });
+
 });

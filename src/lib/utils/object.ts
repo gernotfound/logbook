@@ -1,3 +1,5 @@
+import type { NutritionPlanning } from '../../types';
+
 /**
  * Object manipulation and sanitization utilities for LogBook.
  */
@@ -24,24 +26,11 @@ export function setOwnDataProperty<T>(target: Record<string, T>, key: string, va
 }
 
 /**
- * Removes undefined properties while preserving the historical non-throwing
- * behavior for circular references. This general-purpose helper is NOT a
- * Firestore serialization boundary: back-edges still refer to the source.
- */
-export function removeUndefinedValues<T>(value: T, seen?: WeakSet<object>): T {
-    return sanitizeUndefined(value, false, seen);
-}
-
-/**
  * Cleans a Firestore-bound payload and rejects cycles before the SDK sees it.
  * Shared but acyclic objects reuse their sanitized clone.
  */
 export function removeUndefinedValuesForFirestore<T>(value: T): T {
-    return sanitizeUndefined(value, true);
-}
-
-function sanitizeUndefined<T>(value: T, rejectCycles: boolean, seen?: WeakSet<object>): T {
-    const active = seen ?? new WeakSet<object>();
+    const active = new WeakSet<object>();
     const copies = new WeakMap<object, unknown>();
 
     const sanitize = (current: unknown): unknown => {
@@ -49,8 +38,7 @@ function sanitizeUndefined<T>(value: T, rejectCycles: boolean, seen?: WeakSet<ob
         if (!Array.isArray(current) && !isPlainObject(current)) return current;
 
         if (active.has(current)) {
-            if (rejectCycles) throw new Error('Riferimento circolare nel payload Firestore');
-            return current;
+            throw new Error('Riferimento circolare nel payload Firestore');
         }
         const previous = copies.get(current);
         if (previous) return previous;
@@ -81,8 +69,6 @@ function sanitizeUndefined<T>(value: T, rejectCycles: boolean, seen?: WeakSet<ob
 
     return sanitize(value) as T;
 }
-
-import type { NutritionPlanning } from '../../types';
 
 const NUTRITION_CONFLICT_FINGERPRINT_VERSION = 4;
 

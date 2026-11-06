@@ -4,8 +4,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { User } from 'firebase/auth';
 import { AuthProvider } from '../src/contexts/AuthContext';
 import { useAuth } from '../src/hooks/useAuth';
-import { auth, onAuthStateChanged, reload, sendEmailVerification, signInWithPopup, signInWithRedirect, signInWithEmailAndPassword, createUserWithEmailAndPassword } from '../src/lib/firebase';
+import { auth, onAuthStateChanged, reload, sendEmailVerification, signOut, signInWithPopup, signInWithRedirect, signInWithEmailAndPassword, createUserWithEmailAndPassword } from '../src/lib/firebase';
 import { DB } from '../src/lib/db';
+import { captureSession } from '../src/lib/sync/session';
+import { UserDataSchema } from '../src/lib/schema';
+import * as reloadBarrier from '../src/lib/sync/reloadBarrier';
 import { draftRegistry } from '../src/lib/utils/draftRegistry';
 import { idbStore } from './setup';
 import { useAppStore } from '../src/store/useAppStore';
@@ -111,6 +114,62 @@ describe('email verification actions across actual AuthProvider callbacks (SDK s
       expect(idbStore['logbook:v2:user:verification-a']).toBe(preserved);
     },
   );
+});
+
+describe('unverified local continuation preserves later Auth sessions', () => {
+  it.each(['other-account', 'signed-out', 'A-B-A'] as const)(
+    'does not sign out after %s while the draft barrier was pending', async kind => {
+      const { result, transition, preserved } = await start();
+      useAppStore.setState({
+        userData: UserDataSchema.parse({ profile: { height: '174' } }) as any,
+        dataOwner: 'user:verification-a',
+      });
+      let release!: () => void;
+      const gate = new Promise<void>(resolve => { release = resolve; });
+      const originalSession = captureSession();
+      const barrier = vi.spyOn(reloadBarrier, 'prepareForReload').mockImplementationOnce(async () => {
+        await gate;
+        return originalSession;
+      });
+      try {
+        let pending!: Promise<void>;
+        act(() => { pending = result.current.continueUnverifiedLocally(); });
+        await waitFor(() => expect(barrier).toHaveBeenCalledOnce());
+        await transition(kind);
+        await act(async () => { release(); await pending; });
+        expect(signOut).not.toHaveBeenCalled();
+        expect(localStorage.getItem('logbook_is_guest')).not.toBe('true');
+        expect(idbStore['logbook:v2:user:verification-a']).toBe(preserved);
+        expect(DB.purgeAllLocalUserData).not.toHaveBeenCalled();
+      } finally {
+        release();
+        barrier.mockRestore();
+      }
+    },
+  );
+
+  it('does not reset a new account after the old sign-out promise finishes', async () => {
+    const { result, transition, preserved } = await start();
+    let finish!: () => void;
+    vi.mocked(signOut).mockImplementationOnce(() => new Promise<void>(resolve => { finish = resolve; }));
+    let pending!: Promise<void>;
+    act(() => { pending = result.current.continueUnverifiedLocally(); });
+    await waitFor(() => expect(signOut).toHaveBeenCalledOnce());
+    // The SDK can finish its null notification before its Promise is consumed;
+    // another login then becomes current before the old continuation resumes.
+    await transition('signed-out');
+    await transition('other-account');
+    const newer = UserDataSchema.parse({ profile: { height: '182' } }) as any;
+    useAppStore.setState({ userData: newer, dataOwner: 'user:verification-b' });
+    await act(async () => { finish(); await pending; });
+
+    expect(auth.currentUser?.uid).toBe('verification-b');
+    expect(useAppStore.getState().dataOwner).toBe('user:verification-b');
+    expect(useAppStore.getState().userData).toBe(newer);
+    expect(localStorage.getItem('logbook_is_guest')).not.toBe('true');
+    expect(idbStore['logbook:v2:user:verification-a']).toBe(preserved);
+    expect(DB.purgeAllLocalUserData).not.toHaveBeenCalled();
+  });
 });
 
 describe('login failures cannot restart or overwrite a later Auth session', () => {

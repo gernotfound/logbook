@@ -1,10 +1,5 @@
 import type { SessionExerciseSet } from '../types';
 
-type SessionSetLike = Partial<SessionExerciseSet> & {
-    weight?: unknown;
-    timeInSeconds?: unknown;
-};
-
 const hasEnteredValue = (value: unknown): boolean => {
     if (value === undefined || value === null) return false;
     const text = String(value).trim();
@@ -13,13 +8,11 @@ const hasEnteredValue = (value: unknown): boolean => {
     return Number.isNaN(numeric) || numeric !== 0;
 };
 
-export function sessionSetHasMeaningfulData(set: SessionSetLike): boolean {
+export function sessionSetHasMeaningfulData(set: Partial<SessionExerciseSet>): boolean {
     if (
         hasEnteredValue(set.kg)
-        || hasEnteredValue(set.weight)
         || hasEnteredValue(set.reps)
         || hasEnteredValue(set.time)
-        || hasEnteredValue(set.timeInSeconds)
         || hasEnteredValue(set.distance)
         || hasEnteredValue(set.speed)
         || hasEnteredValue(set.incline)

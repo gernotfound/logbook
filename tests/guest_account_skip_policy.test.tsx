@@ -16,7 +16,10 @@ import { activateGuestSession, GUEST_SESSION_KEY } from '../src/lib/sync/session
 import { migrateGuestAccount } from '../src/contexts/auth/migrateGuestAccount';
 
 const parse = (value: unknown) => UserDataSchema.parse(value) as unknown as UserData;
-const user = { uid: 'skip-user', email: 'skip@example.com', displayName: 'Skip User' } as any;
+const user = {
+    uid: 'skip-user', email: 'skip@example.com', displayName: 'Skip User', emailVerified: true,
+    providerData: [{ providerId: 'password' }], getIdToken: vi.fn(async () => 'synthetic-token'),
+} as any;
 const guestArchiveKey = 'logbook:v2:guest';
 
 async function seedGuestArchive(guest: UserData): Promise<string> {
@@ -102,8 +105,7 @@ describe('guest -> account skip policy', () => {
         const offline = vi.spyOn(window.navigator, 'onLine', 'get').mockReturnValue(false);
         const onLocalReady = vi.fn();
         try {
-            // A null guest dataset exercises the cloudHasData && !guestHasData
-            // branch without a UI bootstrap that can seed default guest fields.
+            // Exercise an empty guest without UI bootstrap seeding default fields.
             const result = await migrateGuestAccount({
                 user, guestData: null, policy: 'merge',
                 setUserData: vi.fn(), setSyncing: vi.fn(), onLocalReady,
@@ -179,4 +181,24 @@ describe('guest -> account skip policy', () => {
         expect(localStorage.getItem('guest_migration_intent_v1')).toBeNull();
         expect(DB.loadCloudPayload).toHaveBeenCalledTimes(1);
     });
+    it('does not expose an existing account archive through the guest writer before handoff', async () => {
+        const account = parse({ profile: { height: '183' } });
+        await initializeLocal(user.uid, account);
+        const ciphertext = await get('logbook:v2:user:skip-user');
+        const setUserData = vi.fn();
+        const onLocalReady = vi.fn();
+        const failure = new Error('Cloud load unavailable');
+        vi.mocked(DB.loadCloudPayload).mockRejectedValueOnce(failure);
+
+        await expect(migrateGuestAccount({
+            user, guestData: null, policy: 'skip',
+            setUserData, setSyncing: vi.fn(), onLocalReady, isCurrent: () => true,
+        })).rejects.toBe(failure);
+
+        expect(setUserData).not.toHaveBeenCalled();
+        expect(onLocalReady).not.toHaveBeenCalled();
+        expect(await get('logbook:v2:user:skip-user')).toBe(ciphertext);
+        expect((await readLocal(user.uid))?.data.profile?.height).toBe('183');
+    });
+
 });

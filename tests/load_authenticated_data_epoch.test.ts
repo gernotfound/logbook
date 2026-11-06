@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { emptyUserData } from './setup';
-import { clear, get } from 'idb-keyval';
+import { clear, get, update } from 'idb-keyval';
 import type { UserData } from '../src/types';
 
 const authState = vi.hoisted(() => ({
@@ -105,7 +105,6 @@ describe('authenticated hydration session fencing', () => {
         const result = await loadAuthenticatedData({
             user: { uid: 'user-a' } as any,
             isGuestActive: () => false,
-            setUserData: vi.fn(),
             setSyncing: vi.fn(),
             setSaveError: vi.fn(),
         });
@@ -146,7 +145,6 @@ describe('authenticated hydration session fencing', () => {
         await loadAuthenticatedData({
             user: { uid: 'user-a' } as any,
             isGuestActive: () => false,
-            setUserData: vi.fn(),
             setSyncing: vi.fn(),
             setSaveError: vi.fn(),
         });
@@ -175,7 +173,6 @@ describe('authenticated hydration session fencing', () => {
         const result = await loadAuthenticatedData({
             user: { uid: 'user-a' } as any,
             isGuestActive: () => false,
-            setUserData: vi.fn(),
             setSyncing: vi.fn(),
             setSaveError,
         });
@@ -202,7 +199,6 @@ describe('authenticated hydration session fencing', () => {
         const result = await loadAuthenticatedData({
             user: { uid: 'user-a' } as any,
             isGuestActive: () => false,
-            setUserData: vi.fn(),
             setSyncing: vi.fn(),
             setSaveError,
         });
@@ -222,18 +218,15 @@ describe('authenticated hydration session fencing', () => {
         invalidateSession();
         storeState.current = { userData: null, localWorkout: null, localPersistenceBlocked: false };
         dbState.loadCloudPayload.mockRejectedValueOnce(Object.assign(new Error('Cloud unavailable'), { code: 'unavailable' }));
-        const setUserData = vi.fn();
         const setSaveError = vi.fn();
         const options = {
             user: { uid: 'user-a' } as any,
             isGuestActive: () => false,
-            setUserData,
             setSyncing: vi.fn(),
             setSaveError,
         };
 
         expect(await loadAuthenticatedData(options)).toBe('blocked');
-        expect(setUserData).not.toHaveBeenCalled();
         expect((await readLocal('user:user-a'))).toBeUndefined();
         expect(await get('logbook:v2:user:user-a')).toBeUndefined();
         expect(storeState.current.userData).toBeNull();
@@ -245,7 +238,7 @@ describe('authenticated hydration session fencing', () => {
         expect(await loadAuthenticatedData(options)).toBe('ready');
         expect(storeState.current.userData?.profile?.height).toBe('185');
         expect((await readLocal('user:user-a'))?.data.profile?.height).toBe('185');
-        expect(setUserData).not.toHaveBeenCalled();
+        expect((await readLocal('user:user-a'))?.pending).toEqual([]);
         await clear();
     });
 
@@ -254,14 +247,12 @@ describe('authenticated hydration session fencing', () => {
         invalidateSession();
         const firstPayload = deferred<ReturnType<typeof payload>>();
         dbState.loadCloudPayload.mockReturnValueOnce(firstPayload.promise);
-        const setUserData = vi.fn();
         const setSyncing = vi.fn();
         const setSaveError = vi.fn();
 
         const loadPromise = loadAuthenticatedData({
             user: { uid: 'user-a' } as any,
             isGuestActive: () => false,
-            setUserData,
             setSyncing,
             setSaveError,
         });
@@ -272,8 +263,7 @@ describe('authenticated hydration session fencing', () => {
         firstPayload.resolve(payload('171'));
         await loadPromise;
 
-        expect(await readLocal('user-a')).toBeUndefined();
-        expect(setUserData).not.toHaveBeenCalled();
+        expect(await readLocal('user:user-a')).toBeUndefined();
         expect(setSaveError).not.toHaveBeenCalled();
         expect(setSyncing).not.toHaveBeenCalledWith(false);
     });
@@ -285,13 +275,10 @@ describe('authenticated hydration session fencing', () => {
         dbState.loadCloudPayload
             .mockReturnValueOnce(firstPayload.promise)
             .mockResolvedValueOnce(payload('182'));
-        const firstSetUserData = vi.fn();
-        const secondSetUserData = vi.fn();
 
         const firstLoad = loadAuthenticatedData({
             user: { uid: 'user-a' } as any,
             isGuestActive: () => false,
-            setUserData: firstSetUserData,
             setSyncing: vi.fn(),
             setSaveError: vi.fn(),
         });
@@ -305,24 +292,25 @@ describe('authenticated hydration session fencing', () => {
         const secondLoad = loadAuthenticatedData({
             user: { uid: 'user-a' } as any,
             isGuestActive: () => false,
-            setUserData: secondSetUserData,
             setSyncing: vi.fn(),
             setSaveError: vi.fn(),
         });
         await secondLoad;
 
-        expect((await readLocal('user-a'))?.data.profile?.height).toBe('182');
+        expect((await readLocal('user:user-a'))?.data.profile?.height).toBe('182');
         // The cloud snapshot is already durably committed by hydrateLocal:
         // exposing it through the user-edit writer would spawn duplicate
         // SemanticOperations. The authenticated view must update directly.
         expect(storeState.current.userData?.profile?.height).toBe('182');
-        expect(secondSetUserData).not.toHaveBeenCalled();
+        expect((await readLocal('user:user-a'))?.pending).toEqual([]);
+        const ciphertext = await get('logbook:v2:user:user-a');
 
         firstPayload.resolve(payload('171'));
         await firstLoad;
 
-        expect((await readLocal('user-a'))?.data.profile?.height).toBe('182');
-        expect(firstSetUserData).not.toHaveBeenCalled();
+        expect((await readLocal('user:user-a'))?.data.profile?.height).toBe('182');
+        expect(storeState.current.userData?.profile?.height).toBe('182');
+        expect(await get('logbook:v2:user:user-a')).toBe(ciphertext);
     });
 
     it('lets the newest same-account load supersede an older overlapping load', async () => {
@@ -332,13 +320,10 @@ describe('authenticated hydration session fencing', () => {
         dbState.loadCloudPayload
             .mockReturnValueOnce(firstPayload.promise)
             .mockResolvedValueOnce(payload('183'));
-        const firstSetUserData = vi.fn();
-        const secondSetUserData = vi.fn();
 
         const firstLoad = loadAuthenticatedData({
             user: { uid: 'user-a' } as any,
             isGuestActive: () => false,
-            setUserData: firstSetUserData,
             setSyncing: vi.fn(),
             setSaveError: vi.fn(),
         });
@@ -347,24 +332,25 @@ describe('authenticated hydration session fencing', () => {
         const secondLoad = loadAuthenticatedData({
             user: { uid: 'user-a' } as any,
             isGuestActive: () => false,
-            setUserData: secondSetUserData,
             setSyncing: vi.fn(),
             setSaveError: vi.fn(),
         });
         await secondLoad;
 
-        expect((await readLocal('user-a'))?.data.profile?.height).toBe('183');
+        expect((await readLocal('user:user-a'))?.data.profile?.height).toBe('183');
         // The cloud snapshot is already durably committed by hydrateLocal:
         // exposing it through the user-edit writer would spawn duplicate
         // SemanticOperations. The authenticated view must update directly.
         expect(storeState.current.userData?.profile?.height).toBe('183');
-        expect(secondSetUserData).not.toHaveBeenCalled();
+        expect((await readLocal('user:user-a'))?.pending).toEqual([]);
+        const ciphertext = await get('logbook:v2:user:user-a');
 
         firstPayload.resolve(payload('171'));
         await firstLoad;
 
-        expect((await readLocal('user-a'))?.data.profile?.height).toBe('183');
-        expect(firstSetUserData).not.toHaveBeenCalled();
+        expect((await readLocal('user:user-a'))?.data.profile?.height).toBe('183');
+        expect(storeState.current.userData?.profile?.height).toBe('183');
+        expect(await get('logbook:v2:user:user-a')).toBe(ciphertext);
     });
 
     it('does not overwrite an unsaved UI draft with an older readable owner envelope', async () => {
@@ -377,7 +363,6 @@ describe('authenticated hydration session fencing', () => {
         await loadAuthenticatedData({
             user: { uid: 'user-a' } as any,
             isGuestActive: () => false,
-            setUserData: vi.fn(),
             setSyncing,
             setSaveError: vi.fn(),
         });
@@ -385,6 +370,73 @@ describe('authenticated hydration session fencing', () => {
         expect(storeState.current.localPersistenceBlocked).toBe(true);
         expect(dbState.loadCloudPayload).not.toHaveBeenCalled();
         expect(setSyncing).not.toHaveBeenCalled();
+        await clear();
+    });
+
+    it('stops loading and preserves the journal when the cloud integrity fence cannot be persisted', async () => {
+        await clear();
+        const { loadAuthenticatedData, readLocal, initializeLocal, commitDomainOperations, invalidateSession } = await loadModules();
+        const { CloudCiphertextError } = await import('../src/lib/sync/cloudDocumentCipher');
+        const { useAppStore } = await import('../src/store/useAppStore');
+        invalidateSession();
+        const initial = data('170');
+        await initializeLocal('user:user-a', initial);
+        await commitDomainOperations('user:user-a', { type: 'profile.patch', patch: { height: '175' } }, initial);
+        const original = await readLocal('user:user-a');
+        const ciphertext = await get('logbook:v2:user:user-a');
+        expect(original?.pending.length).toBeGreaterThan(0);
+        storeState.current = { userData: null, localWorkout: null, localPersistenceBlocked: false };
+        dbState.loadCloudPayload.mockImplementationOnce(async () => {
+            vi.mocked(update).mockRejectedValueOnce(new Error('IndexedDB write failed'));
+            throw new CloudCiphertextError();
+        });
+
+        expect(await loadAuthenticatedData({
+            user: { uid: 'user-a' } as any,
+            isGuestActive: () => false,
+            setSyncing: value => useAppStore.setState({ syncing: value }),
+            setSaveError: vi.fn(),
+        })).toBe('blocked');
+
+        expect(useAppStore.getState().syncing).toBe(false);
+        expect(useAppStore.getState().syncHealth).toBe('failed');
+        expect(storeState.current.localPersistenceBlocked).toBe(true);
+        expect(storeState.current.userData?.profile?.height).toBe('175');
+        expect(await get('logbook:v2:user:user-a')).toBe(ciphertext);
+        expect(await readLocal('user:user-a')).toEqual(original);
+        await clear();
+    });
+
+    it('does not stop the new session loading when a stale integrity fence write fails', async () => {
+        await clear();
+        const { loadAuthenticatedData, initializeLocal, invalidateSession } = await loadModules();
+        const { CloudCiphertextError } = await import('../src/lib/sync/cloudDocumentCipher');
+        const { useAppStore } = await import('../src/store/useAppStore');
+        invalidateSession();
+        await initializeLocal('user:user-a', data('170'));
+        let failFence!: (error: Error) => void;
+        dbState.loadCloudPayload.mockImplementationOnce(async () => {
+            vi.mocked(update).mockImplementationOnce(() => new Promise((_, reject) => { failFence = reject; }));
+            throw new CloudCiphertextError();
+        });
+        const setSaveError = vi.fn();
+        const loading = loadAuthenticatedData({
+            user: { uid: 'user-a' } as any,
+            isGuestActive: () => false,
+            setSyncing: value => useAppStore.setState({ syncing: value }),
+            setSaveError,
+        });
+        await vi.waitFor(() => expect(failFence).toBeTypeOf('function'));
+        authState.currentUser = { uid: 'user-b' };
+        invalidateSession();
+        useAppStore.setState({ userData: data('190'), dataOwner: 'user:user-b', syncing: true });
+        failFence(new Error('IndexedDB write failed'));
+        expect(await loading).toBe('blocked');
+
+        expect(useAppStore.getState().syncing).toBe(true);
+        expect(storeState.current.localPersistenceBlocked).toBe(false);
+        expect(storeState.current.userData?.profile?.height).toBe('190');
+        expect(setSaveError).not.toHaveBeenCalled();
         await clear();
     });
 

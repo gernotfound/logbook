@@ -126,8 +126,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const loadData = useCallback((user: User) => loadAndDrainAuthenticatedData({
         user,
         isGuestActive: () => isGuestActiveStrict(),
-        setUserData, setSyncing, setSaveError,
-    }), [isGuestActiveStrict, setSyncing, setUserData, setSaveError]);
+        setSyncing, setSaveError,
+    }), [isGuestActiveStrict, setSyncing, setSaveError]);
 
     useEffect(() => {
         if (!currentUser || emailVerificationRequired) return;
@@ -243,6 +243,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             isGuestActiveStrict, isBootstrapInFlight: () => authBootstrapInFlightRef.current,
             loadData, setLoading, setSaveError,
         });
+        window.addEventListener('logbook:health-consent-reactivated', handleConsentReactivated);
         document.addEventListener('visibilitychange', handleVisibilityChange);
         window.addEventListener('online', handleVisibilityChange);
         window.addEventListener('focus', handleVisibilityChange);
@@ -278,7 +279,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     });
 
     const loginAsGuest = useGuestLogin({
-        isGuestRef, setIsGuest, setGuestMigrationStatus, setUserData, setSaveError,
+        authRunRef, isGuestRef, setIsGuest, setGuestMigrationStatus, setUserData, setSaveError,
     });
 
     const continueUnverifiedLocally = useUnverifiedLocalContinuation({
@@ -393,19 +394,39 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                 await useDialogStore.getState().showAlert('Logout sospeso: una modifica locale non è stata salvata sul dispositivo.');
                 return;
             }
+            useAppStore.getState().cancelPendingSyncs();
+            const cleanupSession = captureSession();
+            const cleanupAuthRun = authRunRef.current;
+            const canFinalizeLogout = () => {
+                if (auth.currentUser) {
+                    return auth.currentUser.uid === initialUid
+                        && authRunRef.current === cleanupAuthRun && isCurrentSession(cleanupSession);
+                }
+                try {
+                    // Our own sign-out may emit one null callback and reset the
+                    // data epoch. A later login, guest activation or unmount
+                    // must not inherit this request's reset, errors or spinner.
+                    return readBrowserValueStrict(GUEST_KEY) !== 'true'
+                        && (authRunRef.current === cleanupAuthRun
+                            || (authRunRef.current === cleanupAuthRun + 1 && authUidRef.current === null));
+                } catch {
+                    return false;
+                }
+            };
             setSyncing(true);
             try {
-                useAppStore.getState().cancelPendingSyncs();
                 await DB.secureLogOut({ discardUnsynced,
                     expectedUid: initialUid ?? undefined,
                     verifyCurrentDrafts: discardUnsynced ? undefined : async () => { await prepareForReload(); },
                 });
+                if (!canFinalizeLogout()) return;
                 useAppStore.getState().resetStore({ force: true });
                 if (initialUid) {
                     clearAuthenticatedOwnerHint(userOwner(initialUid));
                 }
                 setGuestMigrationStatus('idle');
             } catch (error: any) {
+                if (!canFinalizeLogout()) return;
                 console.error("Errore durante il logout:", error);
                 const localStorageFailure = error instanceof AggregateError
                     || error instanceof BrowserStorageError
@@ -416,7 +437,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                         ? 'Impossibile completare il logout perché la memoria locale del dispositivo non è disponibile o non è stata pulita completamente. I dati locali potrebbero essere ancora presenti. Riprova.'
                         : 'Errore durante il logout. Controlla la connessione e riprova.');
             } finally {
-                setSyncing(false);
+                if (canFinalizeLogout()) setSyncing(false);
             }
         } finally {
             logoutInFlightRef.current = false;
