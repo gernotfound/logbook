@@ -7,13 +7,16 @@ import {
 import type { User, UserCredential } from 'firebase/auth';
 import { auth } from '../../src/lib/firebase';
 import { useGoogleAuthActions } from '../../src/contexts/auth/useGoogleAuthActions';
+import { useGuestMigrationRetry } from '../../src/contexts/auth/useGuestMigrationRetry';
+import * as browserStorage from '../../src/lib/sync/browserStorage';
+import * as safeReload from '../../src/lib/sync/safeReload';
 import { useEmailAuthActions } from '../../src/contexts/auth/useEmailAuthActions';
 import { beginGuestMigrationIntent } from '../../src/lib/auth/guestMigrationIntent';
 import { markGuestMigrationSyncRecovery } from '../../src/lib/auth/guestMigrationSyncRecovery';
 import { resumePersistedGuestMigration } from '../../src/contexts/auth/resumePersistedGuestMigration';
 import * as localRepository from '../../src/lib/sync/localRepository';
 import { useAppStore } from '../../src/store/useAppStore';
-import { activateGuestSession, GUEST_SESSION_KEY } from '../../src/lib/sync/session';
+import { activateGuestSession, GUEST_SESSION_KEY, invalidateSession } from '../../src/lib/sync/session';
 import { withGuestLifecycleLock } from '../../src/lib/sync/guestLifecycleLock';
 
 const KEY = 'guest_migration_intent_v1';
@@ -97,6 +100,47 @@ describe('serialized guest migration intent belongs to an exact Auth attempt', (
         expect(localStorage.getItem(KEY)).toBeNull();
     });
 
+    it.each(['login', 'linkGoogleAccount'] as const)(
+        'does not launch Google %s after its reservation resumes in a different Auth epoch',
+        async action => {
+            const write = browserStorage.writeBrowserJson;
+            vi.spyOn(browserStorage, 'writeBrowserJson').mockImplementation((key, value) => {
+                write(key, value);
+                if (key === KEY) invalidateSession();
+            });
+            const { result } = google(true);
+            await act(async () => { await result.current[action]('merge'); });
+
+            expect(signInWithPopup).not.toHaveBeenCalled();
+            expect(signInWithRedirect).not.toHaveBeenCalled();
+            expect(localStorage.getItem(KEY)).toBeNull();
+            expect(localStorage.getItem('logbook_is_guest')).toBe('true');
+            expect(localStorage.getItem(GUEST_SESSION_KEY)).toBe('guest-intent-test-generation');
+        },
+    );
+
+    it.each(['login', 'register'] as const)(
+        'does not send email %s credentials after its reservation resumes in a different Auth epoch',
+        async action => {
+            const write = browserStorage.writeBrowserJson;
+            vi.spyOn(browserStorage, 'writeBrowserJson').mockImplementation((key, value) => {
+                write(key, value);
+                if (key === KEY) invalidateSession();
+            });
+            const { result } = email(true);
+            await act(async () => {
+                if (action === 'login') await result.current.loginWithEmail('guest@example.test', 'SecurePassword123!Long', 'merge');
+                else await result.current.registerWithEmail('guest@example.test', 'SecurePassword123!Long', 'merge');
+            });
+
+            expect(signInWithEmailAndPassword).not.toHaveBeenCalled();
+            expect(createUserWithEmailAndPassword).not.toHaveBeenCalled();
+            expect(localStorage.getItem(KEY)).toBeNull();
+            expect(localStorage.getItem('logbook_is_guest')).toBe('true');
+            expect(localStorage.getItem(GUEST_SESSION_KEY)).toBe('guest-intent-test-generation');
+        },
+    );
+
     it('requires the actual Google popup result after an earlier same-UID Auth event', async () => {
         const { bindGuestMigrationIntentToUser } = await import('../../src/lib/auth/guestMigrationIntent');
         const user = { uid: 'shared-account', email: 'same@example.test',
@@ -117,6 +161,7 @@ describe('serialized guest migration intent belongs to an exact Auth attempt', (
         // user and provider do not release the originating tab's reservation.
         await Promise.resolve();
         expect(migrated).toBe(false);
+        (auth as { currentUser: User | null }).currentUser = user;
         deliver({ user, providerId: 'google.com', operationType: 'signIn' } as UserCredential);
         await act(async () => { await pendingLogin; });
         await expect(observed).resolves.toMatchObject({ id: attempted.id, policy: 'merge' });
@@ -183,6 +228,73 @@ describe('serialized guest migration intent belongs to an exact Auth attempt', (
             uid: 'account-b', assertCurrent: () => false,
         })).rejects.toThrow('non è più attiva');
         expect(JSON.parse(localStorage.getItem(KEY)!).id).toBe(original.id);
+    });
+
+    it('does not publish a queued guest retry failure into a newer session', async () => {
+        const originalUser = auth.currentUser;
+        const user = { uid: 'guest-retry-account', emailVerified: true } as User;
+        (auth as { currentUser: User | null }).currentUser = user;
+        let releaseLock!: () => void;
+        let entered!: () => void;
+        const gate = new Promise<void>(resolve => { releaseLock = resolve; });
+        const acquired = new Promise<void>(resolve => { entered = resolve; });
+        const holder = withGuestLifecycleLock(async () => { entered(); await gate; });
+        await acquired;
+        const setStatus = vi.fn();
+        const setSaveError = vi.fn();
+        const reload = vi.spyOn(safeReload, 'safeHardReload').mockResolvedValue(undefined);
+        const { result } = renderHook(() => useGuestMigrationRetry({
+            isGuestActiveStrict: () => true, setSaveError,
+            setSyncing: vi.fn(), setGuestMigrationStatus: setStatus,
+            clearGuestMigrationSyncRecovery: vi.fn(),
+        }));
+        try {
+            const pending = result.current('merge');
+            localStorage.setItem(GUEST_SESSION_KEY, 'replacement-retry-guest');
+            activateGuestSession('replacement-retry-guest');
+            releaseLock();
+            await holder;
+            await act(async () => { await pending; });
+            expect(reload).not.toHaveBeenCalled();
+            expect(setStatus).not.toHaveBeenCalled();
+            expect(setSaveError.mock.calls).toEqual([[null]]);
+            expect(localStorage.getItem(KEY)).toBeNull();
+        } finally {
+            releaseLock();
+            (auth as { currentUser: User | null }).currentUser = originalUser;
+        }
+    });
+
+    it('does not reload a new guest generation after reserving an older retry', async () => {
+        const originalUser = auth.currentUser;
+        const user = { uid: 'same-retry-account', emailVerified: true } as User;
+        (auth as { currentUser: User | null }).currentUser = user;
+        const write = browserStorage.writeBrowserJson;
+        vi.spyOn(browserStorage, 'writeBrowserJson').mockImplementation((key, value) => {
+            write(key, value);
+            if (key === KEY) {
+                localStorage.setItem(GUEST_SESSION_KEY, 'replacement-after-reservation');
+                activateGuestSession('replacement-after-reservation');
+            }
+        });
+        const reload = vi.spyOn(safeReload, 'safeHardReload').mockResolvedValue(undefined);
+        const setStatus = vi.fn();
+        const setSaveError = vi.fn();
+        const { result } = renderHook(() => useGuestMigrationRetry({
+            isGuestActiveStrict: () => true, setSaveError,
+            setSyncing: vi.fn(), setGuestMigrationStatus: setStatus,
+            clearGuestMigrationSyncRecovery: vi.fn(),
+        }));
+        try {
+            await act(async () => { await result.current('skip'); });
+            expect(reload).not.toHaveBeenCalled();
+            expect(setStatus).not.toHaveBeenCalled();
+            expect(setSaveError.mock.calls).toEqual([[null]]);
+            expect(JSON.parse(localStorage.getItem(KEY)!))
+                .toMatchObject({ policy: 'skip', method: 'recovery', expectedUid: user.uid });
+        } finally {
+            (auth as { currentUser: User | null }).currentUser = originalUser;
+        }
     });
 
     it('never reports journal-only recovery as success while a stale guest snapshot belongs to another owner', async () => {

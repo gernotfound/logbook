@@ -1,5 +1,3 @@
-import type { User } from 'firebase/auth';
-import type { UserData } from '../../types';
 import { auth } from '../../lib/firebase';
 import { captureSessionForOwner, isCurrentSession, userOwner } from '../../lib/sync/session';
 import { useAppStore } from '../../store/useAppStore';
@@ -21,19 +19,13 @@ const productionEnvironment: DrainEnvironment = {
     isOnline: () => typeof navigator === 'undefined' || navigator.onLine,
 };
 
-type AuthenticatedDataSyncOptions = {
-    user: User;
-    isGuestActive: () => boolean;
-    setUserData: (data: UserData) => void;
-    setSyncing: (value: boolean) => void;
-    setSaveError: (value: string | null) => void;
-};
+type AuthenticatedDataSyncOptions = Parameters<typeof loadAuthenticatedData>[0];
 
 // Preserve the ordered first hydrate -> checkpointed journal replay -> one
 // replica-fenced rehydrate/rebase -> replay. Do not acknowledge the local
 // journal unless the underlying replica transport confirms delivery.
 export async function loadAndDrainAuthenticatedData({
-    user, isGuestActive, setUserData, setSyncing, setSaveError,
+    user, isGuestActive, setSyncing, setSaveError,
 }: AuthenticatedDataSyncOptions, environment: DrainEnvironment = productionEnvironment): Promise<void> {
     // A delayed hydration or IndexedDB read must not authorize the global
     // store flush after signing out and back in with the SAME Firebase UID.
@@ -46,7 +38,6 @@ export async function loadAndDrainAuthenticatedData({
     const outcome = await environment.load({
         user,
         isGuestActive,
-        setUserData,
         setSyncing,
         setSaveError,
     });
@@ -75,7 +66,6 @@ export async function loadAndDrainAuthenticatedData({
         const retryOutcome = await environment.load({
             user,
             isGuestActive,
-            setUserData,
             setSyncing,
             setSaveError,
         });

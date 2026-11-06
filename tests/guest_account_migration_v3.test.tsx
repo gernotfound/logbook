@@ -9,6 +9,7 @@ import { UserDataSchema } from '../src/lib/schema';
 import { mergeUserData } from '../src/lib/merge';
 import { rootDocument } from '../src/lib/sync/documentProjection';
 import { readLocal } from '../src/lib/sync/localRepository';
+import * as localRepository from '../src/lib/sync/localRepository';
 import { useAppStore } from '../src/store/useAppStore';
 import type { UserData } from '../src/types';
 import { beginGuestMigrationIntent } from '../src/lib/auth/guestMigrationIntent';
@@ -21,8 +22,10 @@ vi.mock('../src/lib/sync/cloudAccountKeyAccess', () => ({
     requireRightsExportAccountDataKey: vi.fn(async () => new Uint8Array(32).fill(18)),
 }));
 const parse = (value: unknown) => UserDataSchema.parse(value) as unknown as UserData;
-const user = { uid: 'a', email: 'a@example.com', displayName: 'A' } as any;
-let onlineSpy: ReturnType<typeof vi.spyOn> | undefined;
+const user = {
+    uid: 'a', email: 'a@example.com', displayName: 'A', emailVerified: true,
+    providerData: [{ providerId: 'password' }], getIdToken: vi.fn(async () => 'synthetic-token'),
+} as any;
 
 function fixtures() {
     const cloud = parse({
@@ -53,8 +56,7 @@ beforeEach(async () => {
 });
 
 afterEach(() => {
-    onlineSpy?.mockRestore();
-    onlineSpy = undefined;
+    vi.restoreAllMocks();
 });
 
 describe('guest -> account V3 migration', () => {
@@ -167,7 +169,7 @@ describe('guest -> account V3 migration', () => {
         activateGuestSession('guest-migration-v3-generation');
         await beginGuestMigrationIntent('merge', 'recovery', { uid: user.uid });
         useAppStore.getState().setUserData(guest);
-        onlineSpy = vi.spyOn(window.navigator, 'onLine', 'get').mockReturnValue(false);
+        vi.spyOn(window.navigator, 'onLine', 'get').mockReturnValue(false);
 
         vi.mocked(DB.loadCloudPayload).mockResolvedValueOnce({
             data: cloud,
@@ -182,9 +184,41 @@ describe('guest -> account V3 migration', () => {
             expect(envelope?.pending.length).toBeGreaterThan(0);
             expect(envelope?.data.profile).toMatchObject({ height: '175', gender: 'M' });
             expect(useAppStore.getState().userData?.profile).toMatchObject({ height: '175', gender: 'M' });
+            expect(useAppStore.getState().syncHealth).toBe('local-pending');
         });
 
         expect(DB.loadCloudPayload).toHaveBeenCalledTimes(1);
         expect(localStorage.getItem('logbook_is_guest')).toBeNull();
     });
+    it('blocks editing instead of relabeling guest memory when the account archive becomes unreadable after handoff', async () => {
+        const { cloud, guest } = fixtures();
+        localStorage.setItem('logbook_is_guest', 'true');
+        localStorage.setItem(GUEST_SESSION_KEY, 'guest-migration-v3-generation');
+        activateGuestSession('guest-migration-v3-generation');
+        await beginGuestMigrationIntent('merge', 'recovery', { uid: user.uid });
+        useAppStore.getState().setUserData(guest);
+        const originalRead = localRepository.readLocal;
+        const read = vi.spyOn(localRepository, 'readLocal').mockImplementation(async owner => {
+            if ((owner === 'user:a' || owner === 'a') && localStorage.getItem('logbook_is_guest') !== 'true') {
+                throw new Error('Account archive unavailable after handoff');
+            }
+            return originalRead(owner);
+        });
+        vi.mocked(DB.loadCloudPayload).mockResolvedValueOnce({
+            data: cloud, completeMonths: [], cloudDocuments: new Map(),
+        });
+
+        render(<AuthProvider><div>Migration recovery</div></AuthProvider>);
+
+        await waitFor(() => expect(useAppStore.getState().localPersistenceBlocked).toBe(true));
+        expect(localStorage.getItem('logbook_is_guest')).toBeNull();
+        expect(useAppStore.getState().dataOwner).toBe('guest');
+        expect(useAppStore.getState().userData?.profile?.gender).toBeUndefined();
+        expect(useAppStore.getState().syncHealth).toBe('failed');
+        const preserved = await originalRead('user:a');
+        expect(preserved?.data.profile).toMatchObject({ height: '175', gender: 'M' });
+        expect(preserved?.pending.length).toBeGreaterThan(0);
+        expect(read).toHaveBeenCalled();
+    });
+
 });

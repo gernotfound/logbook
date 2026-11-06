@@ -1,10 +1,10 @@
 import React from 'react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { waitForPendingWrites } from 'firebase/firestore';
 import { AuthProvider } from '../src/contexts/AuthContext';
 import { useAuth } from '../src/hooks/useAuth';
-import { auth, onAuthStateChanged } from '../src/lib/firebase';
+import { auth, onAuthStateChanged, signOut } from '../src/lib/firebase';
 import { DB } from '../src/lib/db';
 import { UserDataSchema } from '../src/lib/schema';
 import { useDialogStore } from '../src/store/useDialogStore';
@@ -31,7 +31,11 @@ const dialogs = {
     showUnsyncedDataLogout: vi.mocked(dialogState.showUnsyncedDataLogout),
 };
 
-const authenticatedUser = { uid: 'logout-user', email: 'logout@example.com', displayName: 'Logout User' } as any;
+const authenticatedUser = {
+    uid: 'logout-user', email: 'logout@example.com', displayName: 'Logout User',
+    emailVerified: true, providerData: [{ providerId: 'password' }],
+    getIdToken: vi.fn(async () => 'synthetic-token'),
+} as any;
 const parse = (value: unknown) => UserDataSchema.parse(value) as unknown as UserData;
 const userData = () => parse({
     profile: { height: '175' },
@@ -67,7 +71,7 @@ beforeEach(async () => {
         return () => {};
     });
     vi.mocked(DB.loadCloudPayload).mockResolvedValue(null);
-    vi.mocked(DB.secureLogOut).mockResolvedValue(undefined);
+    vi.mocked(DB.secureLogOut).mockImplementation(async () => { await signOut(auth); });
     vi.mocked(DB.purgeAllLocalUserData).mockResolvedValue(undefined);
     vi.mocked(waitForPendingWrites).mockResolvedValue(undefined);
     dialogs.showAlert.mockResolvedValue(undefined);
@@ -78,6 +82,8 @@ beforeEach(async () => {
     // production code or replacing it with a mock. Each test owns a fresh key.
     await createAndMigrateVault('user:logout-user');
 });
+
+afterEach(() => { vi.restoreAllMocks(); });
 
 describe('M5 logout protection through AuthProvider', () => {
     it('keeps guest data when the destructive logout confirmation is cancelled, then purges it when confirmed', async () => {
@@ -324,4 +330,119 @@ describe('M5 logout protection through AuthProvider', () => {
         expect(useAppStore.getState().syncing).toBe(false);
         consoleError.mockRestore();
     });
+    it.each([
+        ['account-switch', 'success'], ['account-switch', 'failure'],
+        ['same-uid-login', 'success'], ['same-uid-login', 'failure'],
+        ['guest-activation', 'success'], ['guest-activation', 'failure'],
+        ['provider-unmount', 'success'], ['provider-unmount', 'failure'],
+    ] as const)('preserves successor state after %s and a late secure logout %s', async (transition, outcome) => {
+        let finish!: () => void;
+        let fail!: (error: Error) => void;
+        vi.mocked(DB.secureLogOut).mockImplementationOnce(() => new Promise<void>((resolve, reject) => {
+            finish = resolve;
+            fail = reject;
+        }));
+        const view = renderAuth();
+        await waitFor(() => expect(view.result.current.loading).toBe(false));
+        let logout!: Promise<void>;
+        act(() => { logout = view.result.current.logout({ mode: 'force' }); });
+        await waitFor(() => expect(finish).toBeTypeOf('function'));
+
+        if (transition === 'provider-unmount') view.unmount();
+        const nextOwner = transition === 'guest-activation' ? 'guest'
+            : transition === 'account-switch' ? 'user:next-user' : 'user:logout-user';
+        act(() => {
+            invalidateSession();
+            (auth as any).currentUser = transition === 'guest-activation' ? null
+                : { ...authenticatedUser, uid: transition === 'account-switch' ? 'next-user' : 'logout-user' };
+            if (transition === 'guest-activation') {
+                localStorage.setItem('logbook_is_guest', 'true');
+                localStorage.setItem(GUEST_SESSION_KEY, 'next-guest-generation');
+                activateGuestSession('next-guest-generation');
+            }
+            useAppStore.setState({
+                userData: parse({ profile: { height: '199' } }), dataOwner: nextOwner,
+                syncing: true, saveError: 'successor-message',
+            });
+        });
+        const successor = useAppStore.getState();
+        const alertCount = dialogs.showAlert.mock.calls.length;
+        await act(async () => {
+            if (outcome === 'success') finish();
+            else fail(new Error('old logout failure'));
+            await logout;
+        });
+
+        expect(useAppStore.getState()).toBe(successor);
+        expect(dialogs.showAlert).toHaveBeenCalledTimes(alertCount);
+    });
+
+    it.each(['success', 'failure'] as const)('ignores a late logout %s after null-account-null callbacks', async outcome => {
+        let notify!: (user: any) => Promise<void>;
+        vi.mocked(onAuthStateChanged).mockImplementationOnce((_auth, callback: any) => {
+            notify = callback;
+            callback(authenticatedUser);
+            return () => {};
+        });
+        let finish!: () => void;
+        let fail!: (error: Error) => void;
+        vi.mocked(DB.secureLogOut).mockImplementationOnce(() => new Promise<void>((resolve, reject) => {
+            finish = resolve;
+            fail = reject;
+        }));
+        const { result } = renderAuth();
+        await waitFor(() => expect(result.current.loading).toBe(false));
+        let logout!: Promise<void>;
+        act(() => { logout = result.current.logout({ mode: 'force' }); });
+        await waitFor(() => expect(finish).toBeTypeOf('function'));
+        await act(async () => {
+            (auth as any).currentUser = null;
+            await notify(null);
+            const nextLogin = { ...authenticatedUser, emailVerified: false };
+            (auth as any).currentUser = nextLogin;
+            await notify(nextLogin);
+            (auth as any).currentUser = null;
+            await notify(null);
+            useAppStore.setState({ syncing: true, saveError: 'later-session-message' });
+        });
+        const successor = useAppStore.getState();
+        const alertCount = dialogs.showAlert.mock.calls.length;
+
+        await act(async () => {
+            if (outcome === 'success') finish();
+            else fail(new Error('old logout failure'));
+            await logout;
+        });
+
+        expect(useAppStore.getState()).toBe(successor);
+        expect(dialogs.showAlert).toHaveBeenCalledTimes(alertCount);
+    });
+
+    it('finishes the expected sign-out callback without treating its epoch reset as a new login', async () => {
+        let notify!: (user: any) => Promise<void>;
+        vi.mocked(onAuthStateChanged).mockImplementationOnce((_auth, callback: any) => {
+            notify = callback;
+            callback(authenticatedUser);
+            return () => {};
+        });
+        let finish!: () => void;
+        vi.mocked(DB.secureLogOut).mockImplementationOnce(() => new Promise<void>(resolve => { finish = resolve; }));
+        const { result } = renderAuth();
+        await waitFor(() => expect(result.current.loading).toBe(false));
+        let logout!: Promise<void>;
+        act(() => { logout = result.current.logout({ mode: 'force' }); });
+        await waitFor(() => expect(finish).toBeTypeOf('function'));
+        await act(async () => {
+            (auth as any).currentUser = null;
+            await notify(null);
+            finish();
+            await logout;
+        });
+
+        expect(useAppStore.getState().userData).toBeNull();
+        expect(useAppStore.getState().syncing).toBe(false);
+        expect(result.current.currentUser).toBeNull();
+        expect(dialogs.showAlert).not.toHaveBeenCalled();
+    });
+
 });

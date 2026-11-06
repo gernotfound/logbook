@@ -177,12 +177,12 @@ export const ActiveWorkoutSession = ({ onNavigateToHistory, onRequestEnd }: Acti
         addSpecialSet(exIndex, setId, type, () => setOpenSpecialMenuId(null));
     }, [addSpecialSet]);
 
-    const handleUpdateSpecialSet = useCallback((exIndex: number, setId: string, type: 'segments', idx: number | string, field: string, val: unknown) => {
-        updateSpecialSet(exIndex, setId, type, idx, field, val);
+    const handleUpdateSpecialSet = useCallback((exIndex: number, setId: string, type: 'segments', segmentId: string, field: string, val: unknown) => {
+        updateSpecialSet(exIndex, setId, type, segmentId, field, val);
     }, [updateSpecialSet]);
 
-    const handleRemoveSpecialSet = useCallback((exIndex: number, setId: string, type: 'segments', idx: number | string) => {
-        removeSpecialSet(exIndex, setId, type, idx);
+    const handleRemoveSpecialSet = useCallback((exIndex: number, setId: string, type: 'segments', segmentId: string) => {
+        removeSpecialSet(exIndex, setId, type, segmentId);
     }, [removeSpecialSet]);
 
     const handleUpdateSetTarget = useCallback((exIndex: number, setId: string, reps: number | undefined) => {

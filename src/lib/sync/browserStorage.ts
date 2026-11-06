@@ -28,18 +28,6 @@ export function readBrowserValueStrict(key: string): string | null {
     }
 }
 
-/**
- * Best-effort reads are for hints/preferences only. Security/lifecycle gates that
- * must distinguish "missing" from "unreadable" use readBrowserValueStrict().
- */
-export function readBrowserValue(key: string): string | null {
-    try {
-        return readBrowserValueStrict(key);
-    } catch {
-        return null;
-    }
-}
-
 export function writeBrowserValue(key: string, value: string): void {
     try {
         storage('write', key).setItem(key, value);

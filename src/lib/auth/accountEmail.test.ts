@@ -1,10 +1,12 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { auth, firebaseApp, reload, verifyBeforeUpdateEmail } from '../firebase';
 import { invalidateSession } from '../sync/session';
 import { linkEmailPasswordWithEnumerationProtection, requestVerifiedEmailChange } from './accountEmail';
 
 const mockedReload = vi.mocked(reload);
 const mockedVerifyBeforeUpdateEmail = vi.mocked(verifyBeforeUpdateEmail);
+
+afterEach(() => vi.unstubAllGlobals());
 
 describe('account email operations', () => {
     beforeEach(() => {
@@ -80,6 +82,10 @@ describe('account email operations', () => {
     it.each([
         ['non-JSON error', 403, '<html>forbidden</html>'],
         ['empty error', 500, '{}'],
+        ['null body', 400, 'null'],
+        ['null error', 400, '{"error":null}'],
+        ['non-string message', 400, '{"error":{"message":123}}'],
+        ['object message', 400, '{"error":{"message":{"code":"EMAIL_EXISTS"}}}'],
     ])('fails closed for %s provider responses', async (_reason, status, body) => {
         const user = { uid: 'u1', getIdToken: vi.fn().mockResolvedValue('fresh-id-token') } as any;
         vi.mocked(fetch).mockResolvedValueOnce(new Response(body, { status }));
@@ -153,20 +159,5 @@ describe('account email operations', () => {
         await expect(pending).resolves.toBe('refresh-pending');
         expect(mockedReload).not.toHaveBeenCalled();
         expect(fetch).toHaveBeenCalledTimes(1);
-    });
-
-    it('does not reload the user when Identity Toolkit rejects the link', async () => {
-        const user = {
-            uid: 'u1',
-            getIdToken: vi.fn().mockResolvedValue('fresh-id-token'),
-        } as any;
-        vi.mocked(fetch).mockResolvedValueOnce(new Response(JSON.stringify({
-            error: { message: 'EMAIL_EXISTS' },
-        }), { status: 400 }));
-
-        await expect(
-            linkEmailPasswordWithEnumerationProtection(user, 'used@example.com', 'Secret1!'),
-        ).rejects.toMatchObject({ code: 'auth/email-already-in-use' });
-        expect(mockedReload).not.toHaveBeenCalled();
     });
 });

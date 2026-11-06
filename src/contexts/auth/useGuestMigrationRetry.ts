@@ -28,17 +28,20 @@ export function useGuestMigrationRetry({
         setSaveError(null);
 
         if (isGuestActiveStrict()) {
+            const uid = auth.currentUser?.uid;
+            const guestSession = captureSession();
+            const isCurrentGuestRetry = () => isCurrentSession(guestSession)
+                && auth.currentUser?.uid === uid && isGuestActiveStrict();
             try {
-                const uid = auth.currentUser?.uid;
                 if (!uid || !policy) throw new Error('Scegli esplicitamente se trasferire o non trasferire i dati locali.');
-                const guestSession = captureSession();
                 await beginGuestMigrationIntent(policy, 'recovery', {
                     uid,
-                    assertCurrent: () => isGuestActiveStrict()
-                        && auth.currentUser?.uid === uid && isCurrentSession(guestSession),
+                    assertCurrent: isCurrentGuestRetry,
                 });
+                if (!isCurrentGuestRetry()) return;
                 await safeHardReload();
             } catch (error) {
+                if (!isCurrentGuestRetry()) return;
                 setGuestMigrationStatus('failed');
                 setSaveError(
                     error instanceof Error && error.message.includes('Scelta di trasferimento')
