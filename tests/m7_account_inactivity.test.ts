@@ -57,11 +57,10 @@ class FakeQuery {
     return { docs: page, size: page.length };
   }
 }
-const fakeDb = vi.hoisted(() => ({ tag: 'production-boundary-fake' }));
 vi.mock('../server/accountDeletion/firebaseAdmin', () => ({
   adminDb: () => ({
     collection(name: string) {
-      return { doc: (id: string) => doc(name + '/' + id), where: () => new FakeQuery(name).where(...arguments as unknown as [string, string, Timestamp]) };
+      return { doc: (id: string) => doc(name + '/' + id), where: (field: string, comparison: string, value: Timestamp) => new FakeQuery(name).where(field, comparison, value) };
     },
     async runTransaction<T>(fn: (tx: {
       get: (ref: ReturnType<typeof doc>) => Promise<unknown>;
@@ -111,7 +110,6 @@ describe('authenticated inactivity retention boundary', () => {
     state.docs.clear();
     state.writes.length = 0;
     state.onQuery = null;
-    void fakeDb;
   });
 
   it('uses twelve calendar months, with leap-day clamping and exact UTC time', () => {
@@ -194,7 +192,7 @@ describe('authenticated inactivity retention boundary', () => {
     for (let i = 0; i < 12; i++) {
       state.docs.set('account_activity/invalid-' + i, { uid: 'foreign', lastSeenAt: old });
     }
-    activity('eligible', old);
+    activity('eligible', Timestamp.fromMillis(old.toMillis() + 1));
     expect(await queueInactiveAccountDeletions(now, 12)).toEqual({ scanned: 13, queued: 1 });
     expect(state.docs.has('account_deletions/eligible')).toBe(true);
   });
