@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { compactSyncMeta, coversVector } from '../../src/lib/sync/causalCompaction';
 import {
     applySemanticOperations,
+    parseSyncMeta,
     type SemanticOperation,
     type SyncMeta,
 } from '../../src/lib/sync/semanticProjection';
@@ -9,7 +10,7 @@ import type { DocumentData } from '../../src/lib/sync/documentProjection';
 
 const tombstonedProfileMeta = (): SyncMeta => ({
     protocolVersion: 3,
-    clock: { A: 2, B: 1, C: 1, ZERO: 0 },
+    clock: { A: 2, B: 1, C: 1, R: 1, ZERO: 0 },
     fields: {
         profile: { actorId: 'A', seq: 2, clock: { A: 2, B: 1, ZERO: 0 }, deleted: true },
         'profile/name': { actorId: 'A', seq: 1, clock: { A: 1 } },
@@ -68,6 +69,8 @@ describe('M4 causal metadata compaction', () => {
     });
 
     it('collects only causally covered descendants and keeps the terminal tombstone', () => {
+        // The fixture must be accepted by the persisted causal-metadata parser.
+        expect(() => parseSyncMeta(tombstonedProfileMeta())).not.toThrow();
         const compacted = compactSyncMeta(tombstonedProfileMeta());
 
         expect(compacted.fields.profile).toMatchObject({
@@ -80,7 +83,7 @@ describe('M4 causal metadata compaction', () => {
         expect(compacted.fields['profile/height']).toBeUndefined();
         expect(compacted.fields['profile/weight']).toBeDefined();
         expect(compacted.fields.routines).toBeDefined();
-        expect(compacted.clock).toEqual({ A: 2, B: 1, C: 1 });
+        expect(compacted.clock).toEqual({ A: 2, B: 1, C: 1, R: 1 });
     });
 
     it('does not compact a descendant when a hidden candidate is not covered by the ancestor delete barrier', () => {
@@ -217,6 +220,8 @@ describe('M4 causal metadata compaction', () => {
         };
         expect(compactSyncMeta(recreated, { s00: 4, s01: 2 }).fields.profile.deleteClock).toBeUndefined();
 
+        // A deleted winner cannot have update candidates. Model a recreated
+        // winner with a concurrent candidate, both observing the delete barrier.
         const hidden: SyncMeta = {
             protocolVersion: 3,
             clock: { s00: 4, s01: 2, s02: 1 },
@@ -225,18 +230,21 @@ describe('M4 causal metadata compaction', () => {
                     actorId: 's00',
                     seq: 4,
                     clock: { s00: 4, s01: 2 },
-                    deleted: true,
                     deleteClock: { s01: 2 },
                     candidates: [{
                         actorId: 's02',
                         seq: 1,
-                        clock: { s02: 1 },
+                        clock: { s01: 2, s02: 1 },
                         value: { name: 'late' },
                     }],
                 },
             },
         };
-        expect(compactSyncMeta(hidden, { s00: 4, s01: 2 }).fields.profile).toBeDefined();
+        expect(() => parseSyncMeta(hidden)).not.toThrow();
+        expect(compactSyncMeta(hidden, { s00: 4, s01: 2 }).fields.profile.deleteClock)
+            .toEqual({ s01: 2 });
+        expect(compactSyncMeta(hidden, { s00: 4, s01: 2, s02: 1 }).fields.profile.deleteClock)
+            .toBeUndefined();
     });
 
     it('is deterministic and idempotent', () => {
@@ -414,6 +422,32 @@ describe('M4 causal metadata compaction', () => {
         expect(compacted.fields['profile/name']).toEqual(meta.fields['profile/name']);
         expect(compacted.fields.profiles).toEqual(meta.fields.profiles);
         expect(compactSyncMeta(compacted, stable)).toEqual(compacted);
+    });
+
+
+
+    it('uses an explicit ancestor delete barrier for descendants and terminal stable frontier retirement', () => {
+        const meta: SyncMeta = {
+            protocolVersion: 3,
+            clock: { A: 3, B: 2 },
+            fields: {
+                profile: {
+                    actorId: 'A', seq: 3, clock: { A: 3 },
+                    deleted: true, deleteClock: { A: 3, B: 2 },
+                },
+                'profile/name': {
+                    actorId: 'B', seq: 2, clock: { B: 2 },
+                },
+            },
+        };
+        const original = structuredClone(meta);
+        expect(() => parseSyncMeta(meta)).not.toThrow();
+        const compacted = compactSyncMeta(meta);
+        expect(compacted.fields['profile/name']).toBeUndefined();
+        expect(compacted.fields.profile.deleteClock).toEqual({ A: 3, B: 2 });
+        expect(compactSyncMeta(meta, { A: 3 }).fields.profile).toBeDefined();
+        expect(compactSyncMeta(meta, { A: 3, B: 2 }).fields).toEqual({});
+        expect(meta).toEqual(original);
     });
 
 

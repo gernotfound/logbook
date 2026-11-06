@@ -175,4 +175,82 @@ describe('foreground durable journal backoff', () => {
     });
 
 
+
+    it('revalidates durable-journal and consent gates when a timer fires even without a subscriber notification', async () => {
+        vi.useFakeTimers();
+        const blocked: Array<Partial<JournalRetryState>> = [
+            { syncHealth: 'synced' }, { syncHealth: 'failed' },
+            { syncHealth: 'rejected' }, { syncHealth: 'saving' },
+            { syncing: true }, { localPersistenceBlocked: true },
+            { compatibilityStatus: 'update-required' },
+        ];
+        for (const changes of blocked) {
+            let state = initial();
+            const flush = vi.fn(async () => {});
+            const retry = createJournalRetry(
+                () => state, () => () => {}, () => true, flush,
+            );
+            await vi.advanceTimersByTimeAsync(19_999);
+            state = { ...state, ...changes };
+            await vi.advanceTimersByTimeAsync(1);
+            expect(flush).not.toHaveBeenCalled();
+            expect(vi.getTimerCount()).toBe(0);
+            retry.dispose();
+        }
+
+        let eligible = true;
+        const offlineFlush = vi.fn(async () => {});
+        const offlineRetry = createJournalRetry(
+            initial, () => () => {}, () => eligible, offlineFlush,
+        );
+        await vi.advanceTimersByTimeAsync(19_999);
+        eligible = false;
+        await vi.advanceTimersByTimeAsync(1);
+        expect(offlineFlush).not.toHaveBeenCalled();
+        offlineRetry.dispose();
+    });
+
+    it('unsubscribes and cancels all pending timers on disposal even if a stale listener fires', async () => {
+        vi.useFakeTimers();
+        let notify: () => void = () => {};
+        const unsubscribe = vi.fn();
+        const flush = vi.fn(async () => {});
+        const retry = createJournalRetry(
+            initial, listener => { notify = listener; return unsubscribe; }, () => true, flush,
+        );
+        expect(vi.getTimerCount()).toBe(1);
+        retry.dispose();
+        expect(unsubscribe).toHaveBeenCalledTimes(1);
+        expect(vi.getTimerCount()).toBe(0);
+        notify();
+        retry.refresh();
+        await vi.advanceTimersByTimeAsync(600_000);
+        expect(flush).not.toHaveBeenCalled();
+        expect(vi.getTimerCount()).toBe(0);
+    });
+
+    it('does not requeue an in-flight retry after the durable journal has been confirmed synced', async () => {
+        vi.useFakeTimers();
+        let state = initial();
+        let notify: () => void = () => {};
+        let complete: () => void = () => {};
+        const flush = vi.fn(() => new Promise<void>(resolve => { complete = () => resolve(); }));
+        const retry = createJournalRetry(
+            () => state,
+            listener => { notify = listener; return () => {}; },
+            () => true, flush,
+        );
+        await vi.advanceTimersByTimeAsync(20_000);
+        expect(flush).toHaveBeenCalledTimes(1);
+        state = { ...state, syncHealth: 'synced' };
+        notify();
+        complete();
+        await vi.advanceTimersByTimeAsync(0);
+        await vi.advanceTimersByTimeAsync(600_000);
+        expect(flush).toHaveBeenCalledTimes(1);
+        expect(vi.getTimerCount()).toBe(0);
+        retry.dispose();
+    });
+
+
 });
