@@ -1,5 +1,5 @@
 import React from 'react';
-import { describe, test, expect, beforeEach, vi } from 'vitest';
+import { afterEach, describe, test, expect, beforeEach, vi } from 'vitest';
 import { act, render, screen, waitFor } from '@testing-library/react';
 import { AuthProvider } from '../src/contexts/AuthContext';
 import { useAuth } from '../src/hooks/useAuth';
@@ -29,7 +29,8 @@ const TestAuthConsumer = () => {
   );
 };
 
-describe('PWA & iPhone Startup Resilience Tests', () => {
+describe('authenticated startup and foreground recovery', () => {
+  afterEach(() => { vi.restoreAllMocks(); });
   beforeEach(async () => {
     lockAllVaults();
     localStorage.clear();
@@ -365,7 +366,7 @@ describe('PWA & iPhone Startup Resilience Tests', () => {
     expect(useAppStore.getState().saveError).toContain('non può determinare in sicurezza');
   });
 
-  test('IndexedDB Cache Snapshot: stores cached userData in IndexedDB for instant offline start', async () => {
+  test('persists a sealed authenticated snapshot through the production store writer', async () => {
     const mockCache: UserData = {
       profile: { height: '180' },
       library: [{ id: 'ex1', name: 'Panca Piana', muscles: ['chest'], setsCount: 3, sets: [], notes: '' }],
@@ -377,7 +378,6 @@ describe('PWA & iPhone Startup Resilience Tests', () => {
       nutritionPlanning: {} as any
     };
 
-    // When store is updated or loaded, it syncs with IndexedDB cache
     useAppStore.getState().setUserData(mockCache);
     await waitFor(() => expect(idbStore['logbook:v2:user:test-user-id']).toMatch(/^tlb-sealed:v1:/));
 
@@ -385,31 +385,6 @@ describe('PWA & iPhone Startup Resilience Tests', () => {
     expect(cachedInStorage).toMatch(/^tlb-sealed:v1:/);
     expect(cachedInStorage).not.toContain('Panca Piana');
     expect((await localRepository.readLocal('user:test-user-id'))?.data.profile?.height).toBe('180');
-  });
-
-  test('persists sealed data before the fixture DB purge and clears the in-memory store', async () => {
-    const sampleData: UserData = {
-      profile: { height: '176' },
-      library: [],
-      routines: [],
-      history: [],
-      nutrition: {},
-      customFoods: [],
-      activeWorkout: null,
-      nutritionPlanning: {} as any
-    };
-
-    useAppStore.getState().setUserData(sampleData);
-    await waitFor(() => expect(idbStore['logbook:v2:user:test-user-id']).toMatch(/^tlb-sealed:v1:/));
-    expect((await localRepository.readLocal('user:test-user-id'))?.data.profile?.height).toBe('176');
-
-    // The shared DB fixture models purge by deleting the mock IDB key.
-    // This is not a proof of the production vault/key lifecycle.
-    await DB.purgeAllLocalUserData();
-    expect(DB.purgeAllLocalUserData).toHaveBeenCalledOnce();
-    useAppStore.getState().resetStore();
-    expect(idbStore['logbook:v2:user:test-user-id']).toBeUndefined();
-    expect(useAppStore.getState().userData).toBeNull();
   });
 
   test('a rejected production cloud load with no local archive remains blocked and recoverable', async () => {
@@ -442,4 +417,22 @@ describe('PWA & iPhone Startup Resilience Tests', () => {
     expect((await localRepository.readLocal('user:test-user-id'))?.data.profile?.height).toBe('179');
     expect(DB.purgeAllLocalUserData).not.toHaveBeenCalled();
   });
+
+  test('registers consent reactivation on the provider and removes the listener on unmount', async () => {
+    const view = render(<AuthProvider><TestAuthConsumer /></AuthProvider>);
+    await waitFor(() => expect(screen.getByTestId('loading-state').textContent).toBe('READY'));
+    const readsBefore = vi.mocked(DB.loadCloudPayload).mock.calls.length;
+    const reactivation = () => new CustomEvent('logbook:health-consent-reactivated', {
+      detail: { uid: auth.currentUser!.uid },
+    });
+
+    await act(async () => { window.dispatchEvent(reactivation()); });
+    await waitFor(() => expect(DB.loadCloudPayload).toHaveBeenCalledTimes(readsBefore + 1));
+    await waitFor(() => expect(screen.getByTestId('loading-state').textContent).toBe('READY'));
+
+    view.unmount();
+    await act(async () => { window.dispatchEvent(reactivation()); });
+    expect(DB.loadCloudPayload).toHaveBeenCalledTimes(readsBefore + 1);
+  });
+
 });

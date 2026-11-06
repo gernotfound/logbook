@@ -243,6 +243,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             isGuestActiveStrict, isBootstrapInFlight: () => authBootstrapInFlightRef.current,
             loadData, setLoading, setSaveError,
         });
+        window.addEventListener('logbook:health-consent-reactivated', handleConsentReactivated);
         document.addEventListener('visibilitychange', handleVisibilityChange);
         window.addEventListener('online', handleVisibilityChange);
         window.addEventListener('focus', handleVisibilityChange);

@@ -238,6 +238,7 @@ describe('authenticated hydration session fencing', () => {
         expect(await loadAuthenticatedData(options)).toBe('ready');
         expect(storeState.current.userData?.profile?.height).toBe('185');
         expect((await readLocal('user:user-a'))?.data.profile?.height).toBe('185');
+        expect((await readLocal('user:user-a'))?.pending).toEqual([]);
         await clear();
     });
 
@@ -262,7 +263,7 @@ describe('authenticated hydration session fencing', () => {
         firstPayload.resolve(payload('171'));
         await loadPromise;
 
-        expect(await readLocal('user-a')).toBeUndefined();
+        expect(await readLocal('user:user-a')).toBeUndefined();
         expect(setSaveError).not.toHaveBeenCalled();
         expect(setSyncing).not.toHaveBeenCalledWith(false);
     });
@@ -296,16 +297,20 @@ describe('authenticated hydration session fencing', () => {
         });
         await secondLoad;
 
-        expect((await readLocal('user-a'))?.data.profile?.height).toBe('182');
+        expect((await readLocal('user:user-a'))?.data.profile?.height).toBe('182');
         // The cloud snapshot is already durably committed by hydrateLocal:
         // exposing it through the user-edit writer would spawn duplicate
         // SemanticOperations. The authenticated view must update directly.
         expect(storeState.current.userData?.profile?.height).toBe('182');
+        expect((await readLocal('user:user-a'))?.pending).toEqual([]);
+        const ciphertext = await get('logbook:v2:user:user-a');
 
         firstPayload.resolve(payload('171'));
         await firstLoad;
 
-        expect((await readLocal('user-a'))?.data.profile?.height).toBe('182');
+        expect((await readLocal('user:user-a'))?.data.profile?.height).toBe('182');
+        expect(storeState.current.userData?.profile?.height).toBe('182');
+        expect(await get('logbook:v2:user:user-a')).toBe(ciphertext);
     });
 
     it('lets the newest same-account load supersede an older overlapping load', async () => {
@@ -332,16 +337,20 @@ describe('authenticated hydration session fencing', () => {
         });
         await secondLoad;
 
-        expect((await readLocal('user-a'))?.data.profile?.height).toBe('183');
+        expect((await readLocal('user:user-a'))?.data.profile?.height).toBe('183');
         // The cloud snapshot is already durably committed by hydrateLocal:
         // exposing it through the user-edit writer would spawn duplicate
         // SemanticOperations. The authenticated view must update directly.
         expect(storeState.current.userData?.profile?.height).toBe('183');
+        expect((await readLocal('user:user-a'))?.pending).toEqual([]);
+        const ciphertext = await get('logbook:v2:user:user-a');
 
         firstPayload.resolve(payload('171'));
         await firstLoad;
 
-        expect((await readLocal('user-a'))?.data.profile?.height).toBe('183');
+        expect((await readLocal('user:user-a'))?.data.profile?.height).toBe('183');
+        expect(storeState.current.userData?.profile?.height).toBe('183');
+        expect(await get('logbook:v2:user:user-a')).toBe(ciphertext);
     });
 
     it('does not overwrite an unsaved UI draft with an older readable owner envelope', async () => {

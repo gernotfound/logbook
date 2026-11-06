@@ -3,9 +3,10 @@ import type { User } from 'firebase/auth';
 import { auth } from '../src/lib/firebase';
 import { invalidateSession } from '../src/lib/sync/session';
 import { loadAndDrainAuthenticatedData } from '../src/contexts/auth/loadAndDrainAuthenticatedData';
+import type { loadAuthenticatedData } from '../src/contexts/auth/loadAuthenticatedData';
 
 const mocks = {
-    load: vi.fn(),
+    load: vi.fn<typeof loadAuthenticatedData>(),
     readLocal: vi.fn(),
     flush: vi.fn(),
     currentUid: vi.fn(),
@@ -39,7 +40,7 @@ describe('authenticated checkpoint journal drain', () => {
         (auth as { currentUser: unknown }).currentUser = { uid: 'account-a' };
         mocks.currentUid.mockReturnValue('account-a');
         mocks.isOnline.mockReturnValue(true);
-        mocks.load.mockResolvedValue(undefined);
+        mocks.load.mockResolvedValue('ready');
         mocks.flush.mockResolvedValue(undefined);
         mocks.readLocal.mockResolvedValue(undefined);
     });
@@ -121,6 +122,7 @@ describe('authenticated checkpoint journal drain', () => {
     it('never drains a journal after account identity changes during hydration', async () => {
         mocks.load.mockImplementationOnce(async () => {
             mocks.currentUid.mockReturnValue('account-b');
+            return 'ready';
         });
         await loadAndDrainAuthenticatedData(options(), environment);
         expect(mocks.readLocal).not.toHaveBeenCalled();
@@ -139,14 +141,14 @@ describe('authenticated checkpoint journal drain', () => {
     });
 
     it('does not replay after hydration from a prior login with the same UID', async () => {
-        let releaseHydration!: () => void;
-        mocks.load.mockImplementationOnce(() => new Promise<void>(resolve => { releaseHydration = resolve; }));
+        let releaseHydration!: (outcome: 'ready') => void;
+        mocks.load.mockImplementationOnce(() => new Promise<'ready'>(resolve => { releaseHydration = resolve; }));
         const draining = loadAndDrainAuthenticatedData(options(), environment);
         await vi.waitFor(() => expect(mocks.load).toHaveBeenCalledOnce());
         invalidateSession();
         // A new Firebase login with the identical UID must not adopt the old request.
         (auth as { currentUser: unknown }).currentUser = { uid: 'account-a' };
-        releaseHydration();
+        releaseHydration('ready');
         await draining;
         expect(mocks.readLocal).not.toHaveBeenCalled();
         expect(mocks.flush).not.toHaveBeenCalled();
@@ -166,16 +168,16 @@ describe('authenticated checkpoint journal drain', () => {
 
     it('does not retry replica-fenced recovery after a same-UID session replacement', async () => {
         const fenced = Object.assign(new Error('checkpoint required'), { code: 'replica-fenced' });
-        let releaseRehydration!: () => void;
+        let releaseRehydration!: (outcome: 'ready') => void;
         mocks.readLocal.mockResolvedValue(checkpointed);
         mocks.flush.mockRejectedValueOnce(fenced);
         mocks.load.mockResolvedValueOnce('ready')
-            .mockImplementationOnce(() => new Promise<void>(resolve => { releaseRehydration = resolve; }));
+            .mockImplementationOnce(() => new Promise<'ready'>(resolve => { releaseRehydration = resolve; }));
         const draining = loadAndDrainAuthenticatedData(options(), environment);
         await vi.waitFor(() => expect(mocks.load).toHaveBeenCalledTimes(2));
         invalidateSession();
         (auth as { currentUser: unknown }).currentUser = { uid: 'account-a' };
-        releaseRehydration();
+        releaseRehydration('ready');
         await draining;
         expect(mocks.flush).toHaveBeenCalledOnce();
         expect(mocks.readLocal).toHaveBeenCalledOnce();
@@ -187,4 +189,34 @@ describe('authenticated checkpoint journal drain', () => {
         expect(mocks.readLocal).not.toHaveBeenCalled();
         expect(mocks.flush).not.toHaveBeenCalled();
     });
+
+    it('propagates a second replica fence instead of retrying hydration indefinitely', async () => {
+        const fenced = Object.assign(new Error('checkpoint still fenced'), { code: 'replica-fenced' });
+        mocks.readLocal.mockResolvedValue(checkpointed);
+        mocks.flush.mockRejectedValue(fenced);
+
+        await expect(loadAndDrainAuthenticatedData(options(), environment)).rejects.toBe(fenced);
+
+        expect(mocks.load).toHaveBeenCalledTimes(2);
+        expect(mocks.readLocal).toHaveBeenCalledTimes(2);
+        expect(mocks.flush).toHaveBeenCalledTimes(2);
+    });
+
+    it.each(['health-consent-withdrawal', 'health-consent-generation'])(
+        'does not flush after %s changes during the journal read',
+        async marker => {
+            let resolveRead!: (value: unknown) => void;
+            mocks.readLocal.mockImplementationOnce(() => new Promise(resolve => { resolveRead = resolve; }));
+            const draining = loadAndDrainAuthenticatedData(options(), environment);
+            await vi.waitFor(() => expect(mocks.readLocal).toHaveBeenCalledOnce());
+            localStorage.setItem(`logbook:v2:user:account-a:${marker}`, 'changed');
+            resolveRead(checkpointed);
+
+            await draining;
+
+            expect(mocks.flush).not.toHaveBeenCalled();
+            expect(mocks.load).toHaveBeenCalledOnce();
+        },
+    );
+
 });
