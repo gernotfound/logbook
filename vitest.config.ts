@@ -13,7 +13,7 @@ const dedicatedSuiteExclusions = process.env.npm_lifecycle_event === 'test' ? [
   'tests/guest_bootstrap_lifecycle.test.tsx',
   'tests/guest_account_migration_v3.test.tsx',
   'tests/catalog_resolution_pipeline.test.ts',
-  'tests/hardening/nutrition_guest_flow.test.tsx',
+  'tests/hardening/**/*.test.{ts,tsx}',
   'tests/m7_account_deletion_job_store.test.ts',
   'tests/m7_account_deletion_fairness.test.ts',
   'tests/m7_account_deletion_retention.test.ts',
