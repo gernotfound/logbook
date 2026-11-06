@@ -262,11 +262,12 @@ describe('account deletion recovery foreground lifecycle', () => {
         });
         boundary.resume.mockRejectedValueOnce(new AccountDeletionReceiptNotFoundError('a'));
         boundary.recoverByDevice.mockResolvedValueOnce({ status: 'complete' });
-        boundary.isPending.mockReturnValue(true);
+        boundary.isPending.mockImplementation((owner: string) => owner === 'user:a');
 
         render(<AccountDeletionRecovery />);
         await settle();
 
+        expect(boundary.isPending).toHaveBeenCalledWith('user:a');
         expect(recoveryWarnings().some(message => message.includes('operation=pending-deletion'))).toBe(true);
         expect(boundary.showAlert).toHaveBeenCalledWith('Ricevuta non riconosciuta');
     });
@@ -278,11 +279,12 @@ describe('account deletion recovery foreground lifecycle', () => {
         });
         boundary.resume.mockRejectedValueOnce(new AccountDeletionReceiptNotFoundError('a'));
         boundary.recoverByDevice.mockResolvedValueOnce({ status: 'complete' });
-        boundary.isPending.mockReturnValue(false);
+        boundary.isPending.mockImplementation((owner: string) => owner !== 'user:a');
 
         render(<AccountDeletionRecovery />);
         await settle();
 
+        expect(boundary.isPending).toHaveBeenCalledWith('user:a');
         expect(boundary.showAlert).not.toHaveBeenCalled();
         expect(recoveryWarnings()).toHaveLength(0);
     });
