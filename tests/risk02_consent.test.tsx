@@ -38,8 +38,8 @@ describe('RISK-02: Legal Consent Lifecycle', () => {
         expect(LEGAL_VERSIONS.privacy).toBe('1.3.9');
         expect(needsLegalUpdate({ ...mockConsent, privacyVersion: '1.3.8' })).toBe(true);
         expect(needsLegalUpdate({ ...mockConsent, privacyVersion: '1.3.3' })).toBe(true);
-        expect(LEGAL_VERSIONS.terms).toBe('1.2.4');
-        expect(needsLegalUpdate({ ...mockConsent, termsVersion: '1.2.3' })).toBe(true);
+        expect(LEGAL_VERSIONS.terms).toBe('1.2.5');
+        expect(needsLegalUpdate({ ...mockConsent, termsVersion: '1.2.4' })).toBe(true);
         expect(needsLegalUpdate({ ...mockConsent, termsVersion: '1.2.1' })).toBe(true);
         expect(needsLegalUpdate({
             ...mockConsent,
@@ -227,10 +227,10 @@ describe('RISK-02: ConsentOverlay UI Behavior', () => {
 
     it('identifica il gestore e il contatto privacy nei termini aggiornati', () => {
         render(<TermsAndConditions onClose={vi.fn()} />);
-        expect(screen.getByText('Aggiornati al 5 novembre 2026')).toBeDefined();
+        expect(screen.getByText('Aggiornati al 6 novembre 2026')).toBeDefined();
         expect(screen.getByText('Gerardo Califano')).toBeDefined();
         expect(screen.getByRole('link', { name: 'thelogbook.privacy@gmail.com' }).getAttribute('href')).toBe('mailto:thelogbook.privacy@gmail.com');
-        expect(screen.getByText(/cancellare i dati applicativi dell'account/)).toBeDefined();
+        expect(screen.getByText(/avvia automaticamente la cancellazione dei dati applicativi/)).toBeDefined();
     });
 
     it('Pulsante disabilitato se consenso incompleto', () => {
