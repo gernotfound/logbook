@@ -1354,7 +1354,7 @@ describe('advanced workout segment identity across removal and draft recovery', 
         await prepareUnlockedTestArchive(owner);
         let workout: WorkoutSession = {
             id: workoutId,
-            exercises: [{ id: 'exercise-a', exId: 'bench', sets: [{
+            exercises: [{ id: 'exercise-a', exId: 'bench', sessionNote: '', sets: [{
                 ...initialSet,
                 technique: 'rep_match',
                 segments: [
