@@ -22,6 +22,7 @@ vi.mock('../server/healthConsent/erasure', async importOriginal => ({
 }));
 
 vi.mock('../server/accountDeletion/httpAuth', () => auth);
+const transactionFixture = vi.hoisted(() => ({ failErasureSetOnce: false }));
 vi.mock('../server/accountDeletion/firebaseAdmin', () => ({
   adminDb: () => ({
     collection: (name: string) => ({
@@ -34,24 +35,37 @@ vi.mock('../server/accountDeletion/firebaseAdmin', () => ({
         async delete() { storage.documents.delete(name + '/' + uid); },
       }),
     }),
-    runTransaction: async (fn: (tx: any) => Promise<unknown>) => fn({
-      get: (ref: { key: string }) => {
-        const item = storage.documents.get(ref.key);
-        return Promise.resolve({ exists: !!item, data: () => item });
-      },
-      create: (ref: { key: string }, data: Stored) => {
-        if (storage.documents.has(ref.key)) throw new Error('Already exists');
-        storage.documents.set(ref.key, data);
-      },
-      set: (ref: { key: string }, data: Stored) => {
-        storage.documents.set(ref.key, data);
-      },
-      update: (ref: { key: string }, data: Stored) => {
-        const old = storage.documents.get(ref.key);
-        if (!old) throw new Error('Not found');
-        storage.documents.set(ref.key, { ...old, ...data });
-      },
-    }),
+    // Stage writes until success: Firestore rolls back the entire transaction
+    // when a write fails, including erasure-job enqueue during withdrawal.
+    runTransaction: async (fn: (tx: any) => Promise<unknown>) => {
+      const writes = new Map<string, Stored | null>();
+      const result = await fn({
+        get: (ref: { key: string }) => {
+          const item = storage.documents.get(ref.key);
+          return Promise.resolve({ exists: !!item, data: () => item });
+        },
+        create: (ref: { key: string }, data: Stored) => {
+          if (storage.documents.has(ref.key)) throw new Error('Already exists');
+          writes.set(ref.key, data);
+        },
+        set: (ref: { key: string }, data: Stored) => writes.set(ref.key, data),
+        update: (ref: { key: string }, data: Stored) => {
+          const old = storage.documents.get(ref.key);
+          if (!old) throw new Error('Not found');
+          writes.set(ref.key, { ...old, ...data });
+        },
+        delete: (ref: { key: string }) => writes.set(ref.key, null),
+      });
+      if (transactionFixture.failErasureSetOnce && writes.has('health_data_erasures/account-1')) {
+        transactionFixture.failErasureSetOnce = false;
+        throw new Error('Injected transactional erasure job write failure');
+      }
+      for (const [key, value] of writes) {
+        if (value === null) storage.documents.delete(key);
+        else storage.documents.set(key, value);
+      }
+      return result;
+    },
   }),
 }));
 
@@ -78,6 +92,8 @@ function finishErasure(revision: number): void {
   storage.documents.set('health_data_erasures/account-1', {
     uid: 'account-1', status: 'complete', consentRevision: revision, completedRevision: revision + 1,
   });
+  storage.documents.delete('users/account-1');
+  storage.documents.delete('user_data_keys/account-1');
 }
 
 const acceptance = {
@@ -86,7 +102,7 @@ const acceptance = {
 };
 
 describe('trusted health consent boundary', () => {
-  beforeEach(() => { storage.documents.clear(); vi.clearAllMocks(); });
+  beforeEach(() => { storage.documents.clear(); vi.clearAllMocks(); transactionFixture.failErasureSetOnce = false; });
 
   it('treats an absent trusted consent record as unregistered for every API request', async () => {
     expect(await readHealthConsentState('account-1')).toEqual({ status: 'unregistered', revision: 0 });
@@ -176,6 +192,23 @@ describe('trusted health consent boundary', () => {
     expect(erasureWorker.process).toHaveBeenCalledWith('account-1', expect.any(Number));
   });
 
+  it('rolls back consent withdrawal if erasure enqueue fails in the transaction', async () => {
+    await recordInitialHealthConsentAcceptance('account-1', acceptance);
+    transactionFixture.failErasureSetOnce = true;
+    await expect(recordHealthConsentWithdrawal('account-1', 1))
+      .rejects.toThrow('transactional erasure job');
+    expect(storage.documents.get('health_consent_withdrawals/account-1')).toMatchObject({
+      status: 'active', revision: 1,
+    });
+    expect(storage.documents.has('health_data_erasures/account-1')).toBe(false);
+    expect(await recordHealthConsentWithdrawal('account-1', 1)).toMatchObject({
+      status: 'withdrawn', revision: 2,
+    });
+    expect(storage.documents.get('health_data_erasures/account-1')).toMatchObject({
+      status: 'requested', consentRevision: 2,
+    });
+  });
+
   it('rejects invalid and stale version acceptances while withdrawn', async () => {
     await recordHealthConsentWithdrawal('account-1', 0);
     for (const invalid of [null, {}, { ...acceptance, acceptedHealthData: false }, { ...acceptance, privacyVersion: 'old' }]) {
@@ -193,7 +226,8 @@ describe('trusted health consent boundary', () => {
     await expect(recordHealthConsentReacceptance('account-1', acceptance, 1)).rejects.toThrow('revoca');
     finishErasure(1);
     const accepted = await recordHealthConsentReacceptance('account-1', acceptance, 2);
-    expect(storage.documents.get('users/account-1')).toEqual(originalRoot);
+    expect(storage.documents.has('users/account-1')).toBe(false);
+    expect(originalRoot).toBeDefined();
     expect(accepted).toMatchObject({ status: 'active', revision: 3, acceptedAt: expect.any(String) });
     expect(await recordHealthConsentReacceptance('account-1', acceptance, 2)).toEqual(accepted);
     const retry = await POST(req('POST', { action: 'reaccept', expectedRevision: 2, acceptance }));
