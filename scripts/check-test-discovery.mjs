@@ -62,6 +62,10 @@ function commandFiles(script) {
   return { config, files };
 }
 
+export function normalizePlaywrightLocation(location) {
+  return (location.startsWith('e2e/') ? '' : 'e2e/') + location;
+}
+
 function playwrightList(project, shard) {
   const args = [require.resolve('@playwright/test/cli'), 'test', '--list', '--project=' + project];
   if (shard) args.push('--shard=' + shard + '/4');
@@ -71,7 +75,7 @@ function playwrightList(project, shard) {
     const match = line.match(/^\s*\[(chromium|mobile-safari)\]\s+›\s+((?:e2e\/)?[^\s:]+\.spec\.ts:\d+:\d+)\s+›\s+(.+)$/);
     if (match) {
       if (match[1] !== project) throw new Error('Unexpected Playwright project ' + match[1]);
-      tests.push((match[2].startsWith('e2e/') ? '' : 'e2e/') + match[2] + ' › ' + match[3].trim());
+      tests.push(normalizePlaywrightLocation(match[2]) + ' › ' + match[3].trim());
     }
   }
   if (!tests.length) throw new Error('No Playwright tests parsed for ' + project + ': ' + output.slice(0, 1500));

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { compareAssignments } from './check-test-discovery.mjs';
+import { compareAssignments, normalizePlaywrightLocation } from './check-test-discovery.mjs';
 
 await test('accepts complete one-to-one discovery', () => {
   assert.deepEqual(compareAssignments(['a.test.ts', 'b.test.ts'], { general: ['a.test.ts'], isolated: ['b.test.ts'] }, 'Vitest'), []);
@@ -25,4 +25,9 @@ await test('rejects an empty dedicated runner', () => {
 await test('rejects Playwright sharding loss and duplicate test identities', () => {
   const tests = ['e2e/a.spec.ts:3:1 › first', 'e2e/a.spec.ts:4:1 › second'];
   assert.match(compareAssignments(tests, { shard1: [tests[0]], shard2: [tests[0]] }, 'Playwright').join('\n'), /duplicate.*undiscovered/s);
+});
+
+await test('normalizes both Playwright CLI filename formats to the tracked E2E path', () => {
+  assert.equal(normalizePlaywrightLocation('accessibility.spec.ts:33:1'), 'e2e/accessibility.spec.ts:33:1');
+  assert.equal(normalizePlaywrightLocation('e2e/accessibility.spec.ts:33:1'), 'e2e/accessibility.spec.ts:33:1');
 });
