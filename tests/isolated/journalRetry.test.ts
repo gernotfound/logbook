@@ -87,4 +87,92 @@ describe('foreground durable journal backoff', () => {
         expect(retry.flush).toHaveBeenCalledTimes(1);
         retry.controller.dispose();
     });
+
+    it('restarts every interruption timer from the moment the journal becomes eligible again', async () => {
+        vi.useFakeTimers();
+        const blockers: Array<Partial<JournalRetryState>> = [
+            { syncHealth: 'failed' }, { syncHealth: 'rejected' },
+            { syncHealth: 'saving' }, { syncing: true },
+            { localPersistenceBlocked: true }, { compatibilityStatus: 'update-required' },
+        ];
+        for (const blocked of blockers) {
+            const retry = fixture();
+            await vi.advanceTimersByTimeAsync(10_000);
+            retry.update(blocked);
+            await vi.advanceTimersByTimeAsync(1_000);
+            retry.update(initial());
+            await vi.advanceTimersByTimeAsync(9_000);
+            expect(retry.flush).not.toHaveBeenCalled();
+            await vi.advanceTimersByTimeAsync(11_000);
+            expect(retry.flush).toHaveBeenCalledTimes(1);
+            retry.controller.dispose();
+        }
+    });
+
+    it('reset cancels the old exponential timer and refresh explicitly starts at the initial delay', async () => {
+        vi.useFakeTimers();
+        const retry = fixture();
+        await vi.advanceTimersByTimeAsync(20_000);
+        expect(retry.flush).toHaveBeenCalledTimes(1);
+        retry.controller.reset();
+        await vi.advanceTimersByTimeAsync(80_000);
+        expect(retry.flush).toHaveBeenCalledTimes(1);
+        retry.controller.refresh();
+        await vi.advanceTimersByTimeAsync(19_999);
+        expect(retry.flush).toHaveBeenCalledTimes(1);
+        await vi.advanceTimersByTimeAsync(1);
+        expect(retry.flush).toHaveBeenCalledTimes(2);
+        retry.controller.dispose();
+    });
+
+    it('dispose cancels pending work and also refuses future refresh or subscription callbacks', async () => {
+        vi.useFakeTimers();
+        const retry = fixture();
+        retry.controller.dispose();
+        retry.update({ syncHealth: 'local-pending' });
+        retry.controller.refresh();
+        await vi.advanceTimersByTimeAsync(600_000);
+        expect(retry.flush).not.toHaveBeenCalled();
+    });
+
+    it('never schedules overlapping flushes while one durable journal attempt is unresolved', async () => {
+        vi.useFakeTimers();
+        let notify: () => void = () => {};
+        let release: () => void = () => {};
+        const flush = vi.fn(() => new Promise<void>(resolve => { release = () => resolve(); }));
+        const controller = createJournalRetry(
+            initial, listener => { notify = listener; return () => { notify = () => {}; }; },
+            () => true, flush,
+        );
+        await vi.advanceTimersByTimeAsync(20_000);
+        expect(flush).toHaveBeenCalledTimes(1);
+        notify();
+        await vi.advanceTimersByTimeAsync(600_000);
+        expect(flush).toHaveBeenCalledTimes(1);
+        release();
+        await vi.advanceTimersByTimeAsync(0);
+        await vi.advanceTimersByTimeAsync(39_999);
+        expect(flush).toHaveBeenCalledTimes(1);
+        await vi.advanceTimersByTimeAsync(1);
+        expect(flush).toHaveBeenCalledTimes(2);
+        controller.dispose();
+        release();
+        await vi.advanceTimersByTimeAsync(0);
+    });
+
+    it('logs retry failures and continues from the durable pending journal without a second queue', async () => {
+        vi.useFakeTimers();
+        const error = new Error('temporary sync outage');
+        const warning = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        const flush = vi.fn().mockRejectedValueOnce(error).mockResolvedValue(undefined);
+        const controller = createJournalRetry(initial, () => () => {}, () => true, flush);
+        await vi.advanceTimersByTimeAsync(20_000);
+        expect(flush).toHaveBeenCalledTimes(1);
+        expect(warning).toHaveBeenCalledWith('Retry journal in primo piano non completato:', error);
+        await vi.advanceTimersByTimeAsync(40_000);
+        expect(flush).toHaveBeenCalledTimes(2);
+        controller.dispose();
+    });
+
+
 });
