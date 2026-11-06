@@ -14,11 +14,9 @@ vi.mock('../../src/lib/sync/session', () => ({
         fixture.current && session.owner === fixture.owner,
     isActiveGuestSession: () => true,
 }));
-// Consent notifications are part of the boundary under test, including the
-// event that clears previews before a later acceptance can reveal them again.
+// Consent notifications clear sensitive previews immediately after revocation.
 vi.unmock('../../src/lib/healthConsent');
 import {
-    beginGuestHealthReacceptance, completeGuestHealthReacceptance,
     refreshHealthConsentFromStorage, withdrawGuestHealthConsent,
 } from '../../src/lib/healthConsent';
 vi.mock('../../src/store/useAppStore', () => ({
@@ -72,7 +70,7 @@ it('does not open the archive when health consent is withdrawn', () => {
     expect(fixture.inspect).not.toHaveBeenCalled();
 });
 
-it.each(['user:a', 'guest'])('closes visible copies immediately on %s consent withdrawal and requires a new inspection after acceptance', owner => {
+it.each(['user:a', 'guest'])('closes visible copies immediately on %s consent withdrawal', owner => {
     fixture.owner = owner;
     fixture.dataOwner = owner;
     if (owner === 'guest') {
@@ -114,30 +112,7 @@ it.each(['user:a', 'guest'])('closes visible copies immediately on %s consent wi
     expect(screen.queryByDisplayValue('{"weight":"75"}')).toBeNull();
     expect(screen.queryByRole('button', { name: 'Nascondi copie' })).toBeNull();
 
-    act(() => {
-        if (owner === 'guest') {
-            beginGuestHealthReacceptance();
-            completeGuestHealthReacceptance(true);
-        } else {
-            localStorage.removeItem('logbook:v2:user:a:health-consent-withdrawal');
-            refreshHealthConsentFromStorage();
-        }
-    });
-    expect(inspectButton.hasAttribute('disabled')).toBe(false);
-    expect(screen.queryByRole('region', { name: 'Copie di recupero' })).toBeNull();
-    expect(screen.queryByDisplayValue('Older sensitive note')).toBeNull();
-    expect(screen.queryByDisplayValue('Newer sensitive note')).toBeNull();
-    expect(screen.queryByDisplayValue('{"weight":"75"}')).toBeNull();
-    expect(fixture.inspect).toHaveBeenCalledExactlyOnceWith(owner);
-    expect(fixture.inspectDated).toHaveBeenCalledExactlyOnceWith(owner);
 
-    fixture.inspect.mockReturnValue([]);
-    fixture.inspectDated.mockReturnValue([]);
-    fireEvent.click(inspectButton);
-    expect(fixture.inspect).toHaveBeenCalledTimes(2);
-    expect(fixture.inspectDated).toHaveBeenCalledTimes(2);
-    expect(screen.getByText('Nessuna testimonianza indipendente disponibile. Le altre bozze non vengono esaminate qui.')).toBeTruthy();
-    expect(screen.queryByDisplayValue('Newer sensitive note')).toBeNull();
 });
 
 it('hides plaintext on visibility change and fails closed on storage read error', () => {

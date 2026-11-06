@@ -17,7 +17,7 @@ import type { UserData } from '../../types';
 import type { BackupCoverage } from '../backup';
 import equal from 'fast-deep-equal';
 import { sameCloudControlState } from '../sync/cloudReadConsistency';
-import { currentHealthConsentStatus, hasUnreconciledOfflineReaccept, readHealthConsentServerStatus } from '../healthConsent';
+import { currentHealthConsentStatus, readHealthConsentServerStatus } from '../healthConsent';
 import { fetchWithdrawnCloudBackup } from './withdrawnBackupTransport';
 import { requireCompleteHistoryMonthDocument, requireCompleteNutritionMonthDocument } from '../sync/monthlyIntegrity';
 
@@ -122,12 +122,10 @@ export async function collectBackupSnapshot(fallback: UserData, includeCloud: bo
 
     let cloud: UserData | undefined;
     if (includeCloud && session.owner !== 'guest') {
-        // Explicit offline reacceptance does not authorize any cloud read.
-        // Only the separate recovery-required path, following a confirmed
-        // server reacceptance, may scan the cloud to rebase a stale journal.
-        if (hasUnreconciledOfflineReaccept(session.owner.slice(5))
-            && currentHealthConsentStatus(session.owner.slice(5)) !== 'recovery-required') {
-            throw new Error('Consenso riattivato solo sul dispositivo: il backup cloud richiede la riconciliazione online. Esporta una copia locale.');
+        // No local-only reacceptance exists. A malformed or unverifiable
+        // consent marker cannot be used to select either cloud export path.
+        if (currentHealthConsentStatus(session.owner.slice(5)) === 'error') {
+            throw new Error('Stato del consenso non verificabile: esportazione cloud sospesa. Esporta una copia locale.');
         }
         coverage.readStartedAt = new Date().toISOString();
         await ensureAppCheck();

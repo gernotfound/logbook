@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { User } from 'firebase/auth';
 import { HealthConsentSuspended } from '../src/components/UI/HealthConsentSuspended';
-import { isVerifiedHealthWithdrawal, registerInitialHealthConsent, reacceptHealthConsent, reacceptHealthConsentLocally } from '../src/lib/healthConsent';
+import { isVerifiedHealthWithdrawal, registerInitialHealthConsent, reacceptHealthConsent } from '../src/lib/healthConsent';
 import { mockFirebaseAuth } from './setup';
 import { safeHardReload } from '../src/lib/sync/safeReload';
 import { UnverifiedTabSnapshotError } from '../src/lib/sync/reloadBarrier';
@@ -205,7 +205,6 @@ describe('account consent withdrawal offline', () => {
       render(<HealthConsentSuspended status="pending" user={account} />);
       expect(screen.queryByRole('button', { name: 'Riattiva solo su questo dispositivo' })).toBeNull();
       expect(screen.queryByRole('checkbox')).toBeNull();
-      expect(reacceptHealthConsentLocally).not.toHaveBeenCalled();
     } finally { online.mockRestore(); }
   });
 

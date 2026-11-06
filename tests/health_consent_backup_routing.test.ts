@@ -2,7 +2,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const boundary = vi.hoisted(() => ({
   localStatus: 'reaccepting' as string,
-  offlineReaccept: false,
   serverStatus: 'withdrawn' as string,
   serverRead: vi.fn(async () => 'withdrawn' as string),
   trustedExport: vi.fn(async (): Promise<Map<string, unknown>> => new Map([['', {
@@ -33,7 +32,6 @@ const boundary = vi.hoisted(() => ({
 
 vi.mock('../src/lib/healthConsent', () => ({
   currentHealthConsentStatus: () => boundary.localStatus,
-  hasUnreconciledOfflineReaccept: () => boundary.offlineReaccept,
   readHealthConsentServerStatus: boundary.serverRead,
 }));
 vi.mock('../src/lib/firebase', () => ({
@@ -78,7 +76,6 @@ import { sealCloudDocument } from '../src/lib/sync/cloudDocumentCipher';
 beforeEach(() => {
   vi.clearAllMocks();
   boundary.localStatus = 'reaccepting';
-  boundary.offlineReaccept = false;
   boundary.serverStatus = 'withdrawn';
   boundary.serverRead.mockImplementation(async () => boundary.serverStatus);
   boundary.directRootRead.mockImplementation(async () => ({
@@ -174,23 +171,12 @@ describe('health consent rights export transport routing', () => {
     expect(boundary.controlRead).not.toHaveBeenCalled();
   });
 
-  it('blocks every cloud backup request before the offline local-only consent reconciles', async () => {
-    boundary.localStatus = 'active';
-    boundary.offlineReaccept = true;
-    await expect(exportSnapshot()).rejects.toThrow('solo sul dispositivo');
+  it('refuses cloud export when the local consent marker is unverified', async () => {
+    boundary.localStatus = 'error';
+    await expect(exportSnapshot()).rejects.toThrow('Stato del consenso non verificabile');
     expect(boundary.serverRead).not.toHaveBeenCalled();
     expect(boundary.trustedExport).not.toHaveBeenCalled();
     expect(boundary.directRootRead).not.toHaveBeenCalled();
-    expect(boundary.controlRead).not.toHaveBeenCalled();
-  });
-
-  it('allows verified server reacceptance recovery to read cloud even with the local intent retained', async () => {
-    boundary.localStatus = 'recovery-required';
-    boundary.offlineReaccept = true;
-    boundary.serverStatus = 'active';
-    await exportSnapshot();
-    expect(boundary.serverRead).toHaveBeenCalledTimes(1);
-    expect(boundary.directRootRead).toHaveBeenCalledTimes(1);
   });
 
   it('uses the direct Firestore read path for locally active consent; Rules authorization is tested separately', async () => {
