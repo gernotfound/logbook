@@ -76,7 +76,7 @@ describe('suspended health-consent screen', () => {
   });
 
   it('resumes interrupted local erasure before opening an archive fenced by a prior purge', async () => {
-    const actor = mockFirebaseAuth.currentUser as User;
+    const actor = mockFirebaseAuth.currentUser as unknown as User;
     const owner = 'user:' + actor.uid;
     const fence = 'logbook:local-purge-fence:v1:' + owner;
     localStorage.setItem(fence, 'purge-in-progress:v1');
