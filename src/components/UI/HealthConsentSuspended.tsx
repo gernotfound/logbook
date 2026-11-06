@@ -113,7 +113,9 @@ export function HealthConsentSuspended({ status, user }: { status: HealthConsent
         return;
       }
       await purgeCompletedHealthDataLocal(owner);
-      if (auth.currentUser?.uid !== uid) throw new Error('Account cambiato dopo la cancellazione locale.');
+      // A→B→A is a new authenticated session even when Firebase UID matches:
+      // never reset the new session's state or sign it out on a stale callback.
+      if (!isCurrentSession(session) || auth.currentUser?.uid !== uid) return;
       useAppStore.getState().resetStore({ force: true });
       await signOut(auth);
       await useDialogStore.getState().showAlert(
