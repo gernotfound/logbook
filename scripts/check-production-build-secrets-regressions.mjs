@@ -46,16 +46,15 @@ void test('direct dependencies require explicit review before a new runtime or b
   const approvedRuntime = new Set([
     '@noble/ciphers', 'chart.js', 'date-fns', 'fast-deep-equal', 'firebase',
     'firebase-admin', 'fuse.js', 'idb-keyval', 'lucide-react', 'react',
-    'react-chartjs-2', 'react-dom', 'vite-plugin-pwa', 'zod', 'zustand',
+    'react-chartjs-2', 'react-dom', 'zod', 'zustand',
   ]);
   const approvedDev = new Set([
     '@axe-core/playwright', '@babel/parser', '@firebase/rules-unit-testing',
     '@playwright/test', '@testing-library/dom', '@testing-library/react',
-    '@types/react', '@types/react-dom', '@vitejs/plugin-react',
+    '@types/react', '@types/react-dom', '@unplugin-pwa/core', '@unplugin-pwa/vite', '@vite-pwa/workbox-swkit', '@vitejs/plugin-react',
     '@vitest/coverage-v8', '@vitest/ui', 'fake-indexeddb', 'jsdom',
     'knip', 'oxlint', 'oxlint-tsgolint', 'rollup-plugin-visualizer',
-    'sharp', 'typescript', 'vite', 'vitest', 'workbox-core',
-    'workbox-precaching', 'workbox-routing',
+    'sharp', 'typescript', 'vite', 'vitest',
   ]);
   for (const [group, approved] of [
     ['dependencies', approvedRuntime], ['devDependencies', approvedDev],

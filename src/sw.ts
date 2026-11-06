@@ -1,7 +1,7 @@
 /// <reference lib="webworker" />
-import { clientsClaim } from 'workbox-core';
-import { createHandlerBoundToURL, precacheAndRoute } from 'workbox-precaching';
-import { NavigationRoute, registerRoute } from 'workbox-routing';
+import { clientsClaim } from '@vite-pwa/workbox-swkit/core';
+import { createHandlerBoundToURL, precacheAndRoute } from '@vite-pwa/workbox-swkit/precaching';
+import { NavigationRoute, registerRoute } from '@vite-pwa/workbox-swkit/routing';
 
 declare let self: ServiceWorkerGlobalScope;
 
@@ -28,12 +28,3 @@ registerRoute(new NavigationRoute(
     { denylist: [/^\/__\//] },
 ));
 
-// Existing registrations may still fire after upgrading. Only the open app replays
-// its owner-scoped journal; the worker never reads credentials or writes user data.
-self.addEventListener('sync', (event: any) => {
-    if (event.tag === 'logbook-sync') {
-        event.waitUntil(self.clients.matchAll({ type: 'window' }).then(clients => {
-            clients.forEach(client => client.postMessage({ type: 'LOGBOOK_SYNC_REQUIRED' }));
-        }));
-    }
-});

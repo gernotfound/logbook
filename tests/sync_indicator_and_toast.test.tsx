@@ -8,7 +8,7 @@ import { prepareUnlockedTestArchive } from './secureVaultFixture';
 import { useAppStore } from '../src/store/useAppStore';
 import { clearSyncTimers } from '../src/store/slices/createSyncSlice';
 import { DB } from '../src/lib/db';
-import { useRegisterSW } from 'virtual:pwa-register/react';
+import { useRegisterSW } from '../src/lib/pwaRegistration';
 import { useDialogStore } from '../src/store/useDialogStore';
 import { onAuthStateChanged } from 'firebase/auth';
 import { commitDomainOperations, initializeLocal } from '../src/lib/sync/localRepository';

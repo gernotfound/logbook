@@ -1,7 +1,7 @@
 /// <reference types="vitest" />
 import { defineConfig } from 'vitest/config'
 import react from '@vitejs/plugin-react'
-import { VitePWA } from 'vite-plugin-pwa'
+import { VitePWA } from '@unplugin-pwa/vite'
 import { visualizer } from 'rollup-plugin-visualizer'
 
 // Frontend production is Firebase Hosting at the root path.
@@ -12,16 +12,6 @@ const buildHash = buildSha.slice(0, 7)
 const buildTime = new Date().toISOString()
 
 const basePath = '/'
-
-const pwaVite8OutputCompatibility = () => ({
-  name: 'logbook:pwa-vite8-output-compatibility',
-  config(config: any) {
-    const output = config.build?.rollupOptions?.output
-    if (!output || Array.isArray(output) || output.inlineDynamicImports === undefined) return
-    delete output.inlineDynamicImports
-    output.codeSplitting = false
-  }
-})
 
 export default defineConfig({
   define: {
@@ -35,18 +25,20 @@ export default defineConfig({
   plugins: [
     react(),
     VitePWA({
-      strategies: 'injectManifest',
-      srcDir: 'src',
-      filename: 'sw.ts',
+      strategies: 'buildSW',
+      filename: 'sw.js',
+      swType: 'classic',
       registerType: 'prompt',
-      includeAssets: ['icon.svg', 'favicon.png', 'favicon.ico', 'apple-touch-icon.png', 'icon-192.png', 'icon-512.png', 'icon-maskable-512.png', 'icons.svg'],
-      injectManifest: {
-        globPatterns: ['**/*.{js,css,html,ico,png,svg,webmanifest}'],
+      // Manifest icon URLs include ?v, so avoid resolving them as disk paths.
+      // The image files are already covered by the dist precache glob.
+      includeManifestIcons: false,
+      includeManifestShortcutIcons: false,
+      maximumFileSizeToCacheInBytes: 3000000,
+      buildSW: {
+        swSrc: 'src/sw.ts',
+        // The web manifest is added separately by the PWA plugin.
+        globPatterns: ['**/*.{js,css,html,ico,png,svg}'],
         globIgnores: ['social-share.png'],
-        maximumFileSizeToCacheInBytes: 3000000,
-        buildPlugins: {
-          vite: [pwaVite8OutputCompatibility()]
-        }
       },
       manifest: {
         id: basePath,

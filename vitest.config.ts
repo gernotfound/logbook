@@ -1,6 +1,6 @@
 import { configDefaults, defineConfig } from 'vitest/config';
 import react from '@vitejs/plugin-react';
-import { VitePWA } from 'vite-plugin-pwa';
+import { VitePWA } from '@unplugin-pwa/vite';
 
 export const stressPatterns = ['**/challenger_*.test.{ts,tsx}', '**/*adversarial*.test.{ts,tsx}', '**/*stress*.test.{ts,tsx}'];
 
@@ -32,7 +32,7 @@ export default defineConfig({
   },
   plugins: [
     react(),
-    VitePWA({ registerType: 'prompt' }),
+    VitePWA({ strategies: 'buildSW', buildSW: { swSrc: 'src/sw.ts' }, registerType: 'prompt' }),
   ],
   test: {
     // All network tests use a non-routable loopback backend; Production config is injected by Hosting.

@@ -1,29 +1,21 @@
-# Debug Background Sync
+# Debug ripresa sincronizzazione
 
-## Comportamento attuale
+## Comportamento corrente
 
-Il Service Worker non salva direttamente dati utente e non conserva credenziali o payload di sincronizzazione.
-Quando riceve l'evento `logbook-sync`, invia `LOGBOOK_SYNC_REQUIRED` alle finestre TheLogBook aperte.
-L'app valuta il replay del journal durevole soltanto quando esiste una sessione attiva: guest non revocato oppure account Firebase autenticato con UID corrispondente. Dopo il logout la schermata di accesso non deve riprendere il vecchio archivio. Valgono comunque i gate di consenso, persistenza e autorizzazione cloud; una notifica non prova la conferma remota.
+Il journal owner-scoped rimane persistito localmente e il client gestisce i tentativi di replica. Il Service Worker non legge credenziali, stato utente o journal e non invia comandi di replay.
 
-Lo stesso replay viene richiesto anche quando:
+Un tentativo di sincronizzazione viene richiesto quando:
 
 1. il browser torna online;
-2. la PWA torna visibile in primo piano;
-3. una registrazione Background Sync precedente si riattiva dopo un aggiornamento.
+2. TheLogBook torna visibile in primo piano.
 
-## Verifica che il replay funzioni
+Il replay resta subordinato alla sessione e ai controlli di ownership, consenso, integrità e autorizzazione. I dati locali non vengono scartati a seguito di un errore remoto. L'assenza della Background Sync API su Safari/iOS non impedisce i due percorsi di ripresa.
 
-1. Apri DevTools > Application > Service Workers.
-2. Porta TheLogBook offline ed esegui una modifica che resti nel journal locale.
-3. Torna online oppure riporta la PWA in primo piano.
-4. Verifica che la sincronizzazione riparta senza letture di token o payload dal Service Worker.
-5. Se il browser supporta Background Sync, un evento `logbook-sync` deve soltanto notificare le finestre aperte.
+## Verifica
 
-## Compatibilità browser
+1. Apri la PWA con una sessione valida e registra una modifica offline, accertando che sia stata persistita.
+2. Riattiva la rete oppure riporta la PWA in primo piano.
+3. Verifica che il client ritenti la replica soltanto per l'owner autorizzato, senza inventare conferme cloud in caso di errore.
+4. Dopo logout, revoca o cambio di sessione, verifica che il vecchio journal non venga replicato.
 
-Safari/iOS può non supportare Background Sync. Questo non blocca il recupero: online, riapertura e ritorno in primo piano usano comunque lo stesso journal durevole.
-
-## Chiavi pre-lancio ritirate
-
-`pending_sync_payload`, `pending_sync_token` e `sync_failed` appartengono a un sistema pre-lancio non supportato. TheLogBook corrente non le legge, non le scrive, non le importa e non le elimina come parte del purge di un account. Il fresh start non richiede procedure di riconciliazione di dati storici inesistenti secondo il product owner. Background Sync usa il journal durable owner-scoped; crash, reload, offline e multi-tab della release supportata restano soggetti ai gate di persistenza e consenso.
+Non viene registrato alcun evento Background Sync `logbook-sync`. Il precedente handler serviva solo a notificare un browser con una registrazione pre-lancio; in assenza di installazioni storiche da supportare, è stato rimosso.
