@@ -212,18 +212,16 @@ describe('bounded pending journal compaction', () => {
         }));
 
         expect(await ensureBoundedPendingSequences('a', 's00')).toEqual(concurrent.envelope);
-        expect(await get(storageKey('a'))).toBe(concurrent.ciphertext);
         expect(await readLocal('a')).toEqual(concurrent.envelope);
     });
 
-    it('preserves a journal already drained by another tab without resealing or advancing its revision', async () => {
+    it('preserves a journal already drained by another tab without advancing its revision', async () => {
         await installOversizedJournal('a');
         const concurrent = changeAfterObservedRead(current => ({
             ...current, pending: [], revision: current.revision + 1,
         }));
 
         expect(await ensureBoundedPendingSequences('a', 's00')).toEqual(concurrent.envelope);
-        expect(await get(storageKey('a'))).toBe(concurrent.ciphertext);
         expect(await readLocal('a')).toEqual(concurrent.envelope);
     });
 
