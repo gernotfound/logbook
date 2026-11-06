@@ -8,7 +8,7 @@ import {
   updateStorageMarker,
 } from '../src/lib/storageIntegrity';
 import { CURRENT_DATA_SCHEMA, CURRENT_LOCAL_ENVELOPE, CURRENT_SYNC_PROTOCOL } from '../src/lib/schemaEvolution';
-import { localStorageMock } from './setup';
+import { idbStore, localStorageMock } from './setup';
 import { prepareUnlockedTestArchive } from './secureVaultFixture';
 import { lockAllVaults } from '../src/lib/sync/secureArchiveSession';
 import { activateGuestSession, GUEST_SESSION_KEY, invalidateSession } from '../src/lib/sync/session';
@@ -36,6 +36,9 @@ describe('Storage bootstrap and owner integrity checks', () => {
       compatibilityError: null,
     });
     vi.clearAllMocks();
+    // A spy on this shared mocked function can retain an earlier test's
+    // implementation. The real test IDB map must back vault provisioning.
+    vi.mocked(idbKeyval.get).mockImplementation(async key => idbStore[String(key)]);
     vi.useRealTimers();
     document.body.innerHTML = '<div id="root"></div>';
   });
