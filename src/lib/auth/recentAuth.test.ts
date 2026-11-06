@@ -93,26 +93,26 @@ describe('reauthenticateForSensitiveAction', () => {
     it('fails closed for unsupported provider sets', async () => {
         await expect(reauthenticateForSensitiveAction(user(['github.com']))).resolves.toBe('unsupported');
     });
-});
 
-it.each(['credential', 'popup', 'popup-error'] as const)(
-    'rejects obsolete %s reauthentication after A-B-A and never starts its redirect', async boundary => {
-        const current = user(boundary === 'credential' ? ['password'] : ['google.com']);
-        let finish!: () => void;
-        const gate = new Promise<void>((resolve, reject) => {
-            finish = () => boundary === 'popup-error'
-                ? reject(Object.assign(new Error('popup blocked'), { code: 'auth/popup-blocked' })) : resolve();
-        });
-        if (boundary === 'credential') mocks.credentialReauth.mockReturnValueOnce(gate);
-        else mocks.popupReauth.mockReturnValueOnce(gate);
-        const pending = reauthenticateForSensitiveAction(current, boundary === 'credential' ? 'Secret1!' : undefined);
-        expect(boundary === 'credential' ? mocks.credentialReauth : mocks.popupReauth).toHaveBeenCalledOnce();
-        mocks.auth.currentUser = { ...current, uid: 'another-user' };
-        invalidateSession();
-        mocks.auth.currentUser = current;
-        invalidateSession();
-        finish();
-        await expect(pending).rejects.toThrow('Sessione cambiata');
-        expect(mocks.redirectReauth).not.toHaveBeenCalled();
-    },
-);
+    it.each(['credential', 'popup', 'popup-error'] as const)(
+        'rejects obsolete %s reauthentication after A-B-A and never starts its redirect', async boundary => {
+            const current = user(boundary === 'credential' ? ['password'] : ['google.com']);
+            let finish!: () => void;
+            const gate = new Promise<void>((resolve, reject) => {
+                finish = () => boundary === 'popup-error'
+                    ? reject(Object.assign(new Error('popup blocked'), { code: 'auth/popup-blocked' })) : resolve();
+            });
+            if (boundary === 'credential') mocks.credentialReauth.mockReturnValueOnce(gate);
+            else mocks.popupReauth.mockReturnValueOnce(gate);
+            const pending = reauthenticateForSensitiveAction(current, boundary === 'credential' ? 'Secret1!' : undefined);
+            expect(boundary === 'credential' ? mocks.credentialReauth : mocks.popupReauth).toHaveBeenCalledOnce();
+            mocks.auth.currentUser = { ...current, uid: 'another-user' };
+            invalidateSession();
+            mocks.auth.currentUser = current;
+            invalidateSession();
+            finish();
+            await expect(pending).rejects.toThrow('Sessione cambiata');
+            expect(mocks.redirectReauth).not.toHaveBeenCalled();
+        },
+    );
+});
