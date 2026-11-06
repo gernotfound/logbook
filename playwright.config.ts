@@ -10,7 +10,8 @@ export default defineConfig({
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
   workers: process.env.CI ? 1 : undefined,
-  reporter: 'html',
+  // CI needs per-test durations to diagnose unbalanced shards, while preserving HTML evidence.
+  reporter: process.env.CI ? [['list'], ['html', { open: 'never' }]] : 'html',
   use: {
     baseURL: testBaseURL,
     trace: 'on-first-retry',
