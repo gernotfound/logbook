@@ -35,8 +35,8 @@ describe('RISK-02: Legal Consent Lifecycle', () => {
     };
 
     it('richiede un nuovo consenso quando una versione legale precedente non coincide', () => {
-        expect(LEGAL_VERSIONS.privacy).toBe('1.3.8');
-        expect(needsLegalUpdate({ ...mockConsent, privacyVersion: '1.3.7' })).toBe(true);
+        expect(LEGAL_VERSIONS.privacy).toBe('1.3.9');
+        expect(needsLegalUpdate({ ...mockConsent, privacyVersion: '1.3.8' })).toBe(true);
         expect(needsLegalUpdate({ ...mockConsent, privacyVersion: '1.3.3' })).toBe(true);
         expect(LEGAL_VERSIONS.terms).toBe('1.2.4');
         expect(needsLegalUpdate({ ...mockConsent, termsVersion: '1.2.3' })).toBe(true);
@@ -192,7 +192,7 @@ describe('RISK-02: ConsentOverlay UI Behavior', () => {
 
     it('descrive la rimozione di GA4 e la data dell’informativa aggiornata', () => {
         render(<PrivacyPolicy onClose={vi.fn()} />);
-        expect(screen.getByText('Aggiornata al 5 novembre 2026')).toBeDefined();
+        expect(screen.getByText('Aggiornata al 6 novembre 2026')).toBeDefined();
         expect(screen.getByText(/non integra Google Analytics 4/i)).toBeDefined();
         expect(screen.queryByText(/cookie first-party tecnici\/analitici/i)).toBeNull();
     });
@@ -209,11 +209,11 @@ describe('RISK-02: ConsentOverlay UI Behavior', () => {
     it('documenta revoca, diritti e titolare senza segnaposto di lavorazione', () => {
         render(<PrivacyPolicy onClose={vi.fn()} />);
         expect(screen.getByText('Revoca del consenso per i dati salute')).toBeDefined();
-        expect(screen.getByText(/non puoi utilizzare le funzioni di allenamento/)).toBeDefined();
+        expect(screen.getByText(/La revoca sospende immediatamente allenamenti, nutrizione/)).toBeDefined();
         expect(screen.queryByText(/DA DEFINIRE E VALIDARE/)).toBeNull();
-        expect(screen.getByText(/dopo che il server ha confermato la revoca/)).toBeDefined();
-        expect(screen.getByText(/inclusi allenamenti, nutrizione, misurazioni, routine e profilo applicativo/)).toBeDefined();
-        expect(screen.getByText(/i dati già salvati non vengono cancellati automaticamente/)).toBeDefined();
+        expect(screen.getByText(/quando il server registra la revoca, avvia automaticamente/)).toBeDefined();
+        expect(screen.getByText(/profilo fitness, misurazioni, allenamenti, nutrizione, schede e raccolte correlate/)).toBeDefined();
+        expect(screen.getByText(/La revoca sospende immediatamente allenamenti, nutrizione/)).toBeDefined();
         expect(screen.getByText(/possono utilizzare propri identificatori tecnici/)).toBeDefined();
         expect(screen.getByText(/Firebase Authentication elabora i dati di accesso negli Stati Uniti/)).toBeDefined();
         expect(screen.getByText(/data di nascita, altezza, genere e misure corporee/)).toBeDefined();
