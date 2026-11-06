@@ -1,20 +1,26 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useAppStore } from '../../store/useAppStore';
 import type { User } from 'firebase/auth';
 import { useSettings } from '../../hooks/useSettings';
 import { recoverOldLocalEditsAfterConsent } from '../../lib/healthConsentRecovery';
 import { useDialogStore } from '../../store/useDialogStore';
 import { LEGAL_VERSIONS } from '../../lib/legalVersions';
-import { beginGuestHealthReacceptance, completeGuestHealthReacceptance, finishHealthConsentReacceptance, registerInitialHealthConsent, reacceptHealthConsent, reacceptHealthConsentLocally, reconfirmStaleHealthWithdrawal, retainNewerHealthConsent, refreshHealthConsent, type HealthConsentStatus } from '../../lib/healthConsent';
+import { finishHealthConsentReacceptance, registerInitialHealthConsent, reacceptHealthConsent, reconfirmStaleHealthWithdrawal, retainNewerHealthConsent, refreshHealthConsent, type HealthConsentStatus } from '../../lib/healthConsent';
 import { safeHardReload } from '../../lib/sync/safeReload';
 import { UnverifiedTabSnapshotError } from '../../lib/sync/reloadBarrier';
 import { PrivacyPolicy } from '../../pages/PrivacyPolicy';
 import { TermsAndConditions } from '../../pages/TermsAndConditions';
+import { auth, signOut } from '../../lib/firebase';
+import { captureSession, isCurrentSession } from '../../lib/sync/session';
+import { readLocal } from '../../lib/sync/localRepository';
+import { hasDeviceRecoveryBackupSource } from '../../lib/db/backupSnapshot';
+import { purgeCompletedHealthDataLocal } from '../../lib/db/db_account';
+import { readHealthDataErasureProgress, type HealthDataErasureOutcome } from '../../lib/healthDataErasure';
 
 // The form has its own selection state: switching from pending to confirmed,
  // or back to pending, creates a fresh opt-in without a render-time reset.
-function ReacceptanceForm({ enabled, busy, onReaccept, firstAcceptance = false, localOnly = false }: {
-  enabled: boolean; busy: boolean; onReaccept: () => Promise<void>; firstAcceptance?: boolean; localOnly?: boolean;
+function ReacceptanceForm({ enabled, busy, onReaccept, firstAcceptance = false }: {
+  enabled: boolean; busy: boolean; onReaccept: () => Promise<void>; firstAcceptance?: boolean;
 }) {
   const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [acceptedHealth, setAcceptedHealth] = useState(false);
@@ -23,9 +29,7 @@ function ReacceptanceForm({ enabled, busy, onReaccept, firstAcceptance = false, 
     <h2>{firstAcceptance ? 'Prima di iniziare a usare TheLogBook' : 'Per tornare a usare la PWA'}</h2>
     <p>{firstAcceptance
       ? 'Esamina i documenti e presta il primo consenso esplicito per usare il tuo account. Il consenso viene registrato dal server prima di permettere la sincronizzazione.'
-      : localOnly
-        ? 'Puoi riprendere a usare TheLogBook su questo dispositivo anche senza Internet. I dati locali restano conservati.'
-        : 'Esamina i documenti e scegli liberamente se prestare un nuovo consenso. I dati già presenti non vengono cancellati automaticamente.'}</p>
+      : 'La cancellazione dei dati precedenti è stata verificata. Un nuovo consenso avvia un archivio vuoto e non ripristina i dati cancellati.'}</p>
     <label style={{ display: 'block', marginBlock: 12 }}>
       <input type="checkbox" disabled={!enabled || busy} checked={acceptedTerms} onChange={e => setAcceptedTerms(e.target.checked)} />
       {' '}Ho almeno 18 anni, ho letto l'informativa e accetto i termini.
@@ -36,19 +40,22 @@ function ReacceptanceForm({ enabled, busy, onReaccept, firstAcceptance = false, 
     </label>
     <button className="btn btn-primary" type="button" disabled={!enabled || busy || !acceptedTerms || !acceptedHealth}
       onClick={() => { if (enabled && !busy && acceptedTerms && acceptedHealth) void onReaccept(); }}>
-      {busy ? 'Salvataggio in corso…' : firstAcceptance ? 'Accetta e continua' : localOnly ? 'Riattiva solo su questo dispositivo' : 'Presta un nuovo consenso'}
+      {busy ? 'Salvataggio in corso…' : firstAcceptance ? 'Accetta e continua' : 'Presta un nuovo consenso'}
     </button>
   </>;
 }
 
 export function HealthConsentSuspended({ status, user }: { status: HealthConsentStatus; user: User | null }) {
-  const { handlePrepareBackup, preparedBackupUrl, releasePreparedBackup, handleDeleteAccount, handleDeleteHealthData, erasingHealthData, handleLogout, exportingData } = useSettings();
-  const submitLegalConsent = useAppStore(state => state.submitLegalConsent);
+  const { handlePrepareBackup, preparedBackupUrl, releasePreparedBackup, handleDeleteAccount, erasingHealthData, handleLogout, exportingData } = useSettings();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [recoveryBusy, setRecoveryBusy] = useState(false);
   const [privacy, setPrivacy] = useState(false);
   const [terms, setTerms] = useState(false);
+  const [erasureProgress, setErasureProgress] = useState<HealthDataErasureOutcome | null>(null);
+  const [checkingErasure, setCheckingErasure] = useState(false);
+  const [localReady, setLocalReady] = useState(false);
+  const checkingErasureRef = useRef(false);
   const [offline, setOffline] = useState(() => typeof navigator !== 'undefined' && navigator.onLine === false);
   useEffect(() => {
     const onOffline = () => setOffline(true);
@@ -69,9 +76,61 @@ export function HealthConsentSuspended({ status, user }: { status: HealthConsent
     };
   }, []);
   const initialAcceptance = status === 'unregistered' && user !== null;
-  const canReaccept = status === 'withdrawn' || status === 'reaccepting';
-  const localOnlyReaccept = offline && user !== null && (status === 'pending' || status === 'withdrawn');
-  const showReacceptForm = status === 'pending' || canReaccept || initialAcceptance;
+  const canReaccept = user !== null && localReady && (status === 'withdrawn' || status === 'reaccepting');
+  const showReacceptForm = initialAcceptance || canReaccept;
+
+  const verifyAutomaticErasure = async () => {
+    if (!user || status !== 'withdrawn' || offline || checkingErasureRef.current
+        || auth.currentUser?.uid !== user.uid) return;
+    checkingErasureRef.current = true;
+    setCheckingErasure(true);
+    setError(null);
+    const session = captureSession();
+    const uid = user.uid;
+    const owner = 'user:' + uid;
+    try {
+      if (session.owner !== owner) throw new Error('Account diverso da quello da cancellare.');
+      const progress = await readHealthDataErasureProgress(user);
+      if (!isCurrentSession(session) || auth.currentUser?.uid !== uid) return;
+      setErasureProgress(progress);
+      if (!progress.complete) {
+        if (progress.status === 'failed') {
+          setError('Cancellazione cloud incompleta. Non riattivare né importare archivi precedenti; riprova la verifica o richiedi assistenza.');
+        }
+        return;
+      }
+      // A fresh login can have no old owner archive. In that case enable a
+      // *new* explicit consent without repeatedly signing out the same user.
+      const envelope = await readLocal(owner);
+      if (!isCurrentSession(session) || auth.currentUser?.uid !== uid) return;
+      const app = useAppStore.getState();
+      const hasLocalData = envelope !== undefined || hasDeviceRecoveryBackupSource(owner)
+        || (app.dataOwner === owner && app.userData !== null);
+      if (!hasLocalData) {
+        setLocalReady(true);
+        return;
+      }
+      await purgeCompletedHealthDataLocal(owner);
+      if (auth.currentUser?.uid !== uid) throw new Error('Account cambiato dopo la cancellazione locale.');
+      useAppStore.getState().resetStore({ force: true });
+      await signOut(auth);
+      await useDialogStore.getState().showAlert(
+        'La cancellazione dei dati applicativi è completata su questo dispositivo e nel database operativo. Il tuo account è stato conservato. Puoi accedere di nuovo e prestare un nuovo consenso per ripartire da zero.',
+        'Dati cancellati',
+      );
+    } catch (cause) {
+      if (auth.currentUser?.uid === uid) {
+        setError(cause instanceof Error ? cause.message : 'Impossibile verificare la cancellazione.');
+      }
+    } finally {
+      checkingErasureRef.current = false;
+      setCheckingErasure(false);
+    }
+  };
+  useEffect(() => {
+    if (status === 'withdrawn' && user !== null && !offline) void verifyAutomaticErasure();
+    // The owner and consent status are the boundaries of this verification.
+  }, [status, user?.uid, offline]);
 
   const acceptInitial = async () => {
     if (!user || !initialAcceptance || busy) return;
@@ -91,41 +150,10 @@ export function HealthConsentSuspended({ status, user }: { status: HealthConsent
   };
 
   const reaccept = async () => {
-    if ((!canReaccept && !localOnlyReaccept) || busy) return;
+    if (!canReaccept || !user || busy) return;
     setBusy(true);
     setError(null);
     try {
-      if (user === null) {
-        beginGuestHealthReacceptance();
-        try {
-          await submitLegalConsent({
-            hasAcceptedTerms: true, hasAcceptedHealthData: true,
-            acceptedAt: new Date().toISOString(),
-            privacyVersion: LEGAL_VERSIONS.privacy, termsVersion: LEGAL_VERSIONS.terms,
-          });
-          completeGuestHealthReacceptance(true);
-        } catch (error) {
-          completeGuestHealthReacceptance(false);
-          throw error;
-        }
-        return;
-      }
-      if (localOnlyReaccept) {
-        // Only 'withdrawn' represents an earlier server-confirmed revocation.
-        // 'pending' means both choices were made offline: no intrusive notice.
-        const serverAlreadyWithdrawn = status === 'withdrawn';
-        reacceptHealthConsentLocally(user, {
-          acceptedTerms: true, acceptedHealthData: true,
-          privacyVersion: LEGAL_VERSIONS.privacy, termsVersion: LEGAL_VERSIONS.terms,
-        });
-        if (serverAlreadyWithdrawn) {
-          void useDialogStore.getState().showAlert(
-            'Il consenso era stato revocato sul server. Adesso puoi usare TheLogBook su questo dispositivo; il nuovo consenso verrà verificato quando tornerai online. Fino ad allora la sincronizzazione resta sospesa.',
-            'Uso offline riattivato',
-          );
-        }
-        return;
-      }
       await reacceptHealthConsent(user, {
         acceptedTerms: true, acceptedHealthData: true,
         privacyVersion: LEGAL_VERSIONS.privacy, termsVersion: LEGAL_VERSIONS.terms,
@@ -204,16 +232,25 @@ export function HealthConsentSuspended({ status, user }: { status: HealthConsent
           ? offline
             ? 'Revoca registrata solo sul dispositivo. Puoi prestare nuovamente il consenso per continuare offline; l’accesso cloud resterà sospeso fino alla riconciliazione.'
             : 'Revoca registrata su questo dispositivo. In attesa della conferma cloud: riprova la verifica se la connessione è tornata.'
-          : 'Revoca confermata sul server. Puoi prestare un nuovo consenso se desideri riattivare la PWA.'}
+          : 'Revoca confermata sul server. La cancellazione automatica dei dati applicativi è stata avviata; un nuovo consenso sarà disponibile solo dopo la verifica del completamento.'}
       </p>}
       {user !== null && status === 'withdrawn' && (
-        <section aria-label="Cancellazione dei dati dopo la revoca">
-          <p>Puoi eliminare tutti i dati applicativi (profilo, misurazioni, allenamenti, nutrizione e schede) conservando l’account di accesso. Servono Internet, due conferme e una nuova verifica dell’identità. Al termine verrai disconnesso. Le copie su dispositivi offline e i backup esterni potrebbero permanere.</p>
-          <button type="button" className="btn" disabled={busy || recoveryBusy || exportingData || erasingHealthData || offline}
-            onClick={() => { void handleDeleteHealthData(); }}>
-            {erasingHealthData ? 'Cancellazione in corso…' : 'Elimina definitivamente i miei dati'}
+        <section aria-label="Cancellazione automatica dei dati">
+          <p>La revoca avvia automaticamente la cancellazione dei dati applicativi, mantenendo l'account. Le copie su dispositivi offline, file esportati e backup tecnici dei fornitori hanno limiti di eliminazione separati.</p>
+          <p role="status">{localReady
+            ? 'Cancellazione cloud completata e nessun archivio locale precedente rilevato. Puoi iniziare con un nuovo consenso.'
+            : checkingErasure
+              ? 'Verifica della cancellazione in corso…'
+              : erasureProgress?.complete
+                ? 'Cloud cancellato. La pulizia locale deve ancora essere verificata.'
+                : erasureProgress?.status === 'failed'
+                  ? 'Cancellazione cloud incompleta. È necessario riprendere o verificare il job.'
+                  : 'Cancellazione richiesta: il server continua in modo riprendibile anche se chiudi la pagina.'}</p>
+          <button type="button" className="btn" disabled={checkingErasure || busy || offline}
+            onClick={() => { void verifyAutomaticErasure(); }}>
+            {checkingErasure ? 'Verifica in corso…' : 'Verifica stato cancellazione'}
           </button>
-          {offline && <p role="status">Connettiti a Internet per cancellare i dati cloud.</p>}
+          {offline && <p role="status">Riconnettiti per verificare i dati cloud e completare la pulizia locale.</p>}
         </section>
       )}
       {user === null && status === 'withdrawn' && (
@@ -248,7 +285,7 @@ export function HealthConsentSuspended({ status, user }: { status: HealthConsent
       </section>}
       {status === 'erasure-required' && <section aria-label="Copia locale di dati cancellati">
         <p role="alert">La cancellazione dei dati eseguita sul cloud include la generazione della copia conservata qui. Per rispettare quella cancellazione, TheLogBook non la trasforma automaticamente in dati nuovi.</p>
-        <p>Puoi preparare un backup della copia locale. Se non ci sono modifiche ancora pendenti, puoi scegliere «Esci dall’account» e poi accedere di nuovo per partire dal cloud aggiornato. L’uscita cancella la copia locale di questo account; se ci sono modifiche non sincronizzate, la protezione del logout può sospenderla.</p>
+        <p>I dati cancellati non possono essere riattivati o recuperati nella PWA. Verifica la cancellazione cloud e il dispositivo prima di prestare un nuovo consenso; per assistenza usa il recapito privacy.</p>
       </section>}
       {status === 'recovery-required' && <section aria-label="Recupero delle modifiche precedenti">
         <p role="alert">Il nuovo consenso è stato registrato, ma su questo dispositivo ci sono modifiche non sincronizzate prima della revoca. Non le eliminiamo e non le inviamo automaticamente.</p>
@@ -265,7 +302,6 @@ export function HealthConsentSuspended({ status, user }: { status: HealthConsent
           busy={busy || erasingHealthData}
           onReaccept={initialAcceptance ? acceptInitial : reaccept}
           firstAcceptance={initialAcceptance}
-          localOnly={localOnlyReaccept}
         />}
       <h2>Gestisci i tuoi dati e i tuoi diritti</h2>
       <p>Puoi farlo anche senza prestare un nuovo consenso.</p>
@@ -273,7 +309,7 @@ export function HealthConsentSuspended({ status, user }: { status: HealthConsent
       <div style={{ display: 'grid', gap: 12 }}>
         <button type="button" className="btn" onClick={() => setPrivacy(true)}>Leggi l’informativa privacy</button>
         <button type="button" className="btn" onClick={() => setTerms(true)}>Leggi i termini e condizioni</button>
-        <button type="button" className="btn" onClick={() => { void handlePrepareBackup().catch(error => setError(error instanceof Error ? error.message : 'Backup non riuscito.')); }} disabled={exportingData || erasingHealthData}>{exportingData ? 'Preparazione…' : 'Prepara backup JSON'}</button>
+        <button type="button" className="btn" onClick={() => { void handlePrepareBackup().catch(error => setError(error instanceof Error ? error.message : 'Backup non riuscito.')); }} disabled={exportingData || erasingHealthData || (user !== null && status === 'withdrawn')}>{exportingData ? 'Preparazione…' : 'Prepara backup JSON'}</button>
         {erasingHealthData && <p role="status">Cancellazione e verifica dei dati cloud in corso. Non chiudere TheLogBook finché è possibile attendere l'esito.</p>}
         {preparedBackupUrl && <>
           <p role="status">Backup pronto. Tocca il collegamento qui sotto per scaricare il file sul dispositivo.</p>
