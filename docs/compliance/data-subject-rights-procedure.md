@@ -8,6 +8,12 @@
 - Supporto: `[SUPPORT_EMAIL]`
 - Capacità tecniche in app: backup JSON/esportazioni, rettifica, revoca/riaccettazione del consenso, cancellazione account e cancellazione separata dei soli dati dopo revoca server confermata. Per contratti e limiti usare [Consenso](../../.agents/rules/health-consent.md), [Ciclo account](../../.agents/rules/account-lifecycle.md) e [Portabilità](../../.agents/rules/backup-and-portability.md); questa procedura non certifica collaudi live.
 
+## Decisione operativa aggiornata — 6 novembre 2026
+
+Alla revoca del consenso salute (account), le funzioni fitness sono sospese subito; il backend trusted **accoda automaticamente la cancellazione dei dati applicativi quando la revoca viene confermata**, senza eliminare l'identità Firebase Auth. Il backup JSON è offerto prima della revoca ed è **facoltativo**: una mancata esportazione non blocca la revoca. Il worker registra stati `requested/deleting/verifying/failed/complete`; solo un `complete` con prova dell'epoch autorizza la pulizia locale. Per revoche offline, distinguere stato locale pending e registrazione server. La modalità ospite purga l'archivio locale e termina la sessione. L'account deletion rimane una richiesta distinta.
+
+Le precedenti note sulla cancellazione **solo su richiesta separata** sono storiche e non descrivono il nuovo flusso approvato. Restano verifiche legali/provider aperte per la conservazione delle prove tecniche e le copie non direttamente controllabili dal client.
+
 ## Apertura del caso
 
 Assegnare un identificativo `DSR-[YYYY]-[NNN]` e registrare soltanto quanto necessario:
