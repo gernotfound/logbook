@@ -346,4 +346,75 @@ describe('M4 causal metadata compaction', () => {
             expect(compactedMeta).toEqual(originalMeta);
         }
     });
+
+    it('preserves and independently clones field guards, hidden candidates and replica writer', () => {
+        const meta: SyncMeta = {
+            protocolVersion: 3,
+            clock: { s00: 4, s01: 2 },
+            writer: { slot: 's00', replicaId: 'replica-a', generation: 1, seq: 4 },
+            fields: {
+                'profile/name': {
+                    actorId: 's00', seq: 4, clock: { s00: 4 },
+                    guard: { path: ['profile', 'name'], equals: { token: 'parent' } },
+                    candidates: [{
+                        actorId: 's01', seq: 2, clock: { s01: 2 },
+                        value: { names: ['hidden'] },
+                        guard: { path: ['profile', 'status'], equals: { allowed: true } },
+                    }],
+                },
+            },
+        };
+        const before = structuredClone(meta);
+        const result = compactSyncMeta(meta);
+        expect(result).toEqual(before);
+        expect(result).not.toBe(meta);
+        expect(result.fields['profile/name']).not.toBe(meta.fields['profile/name']);
+        expect(result.writer).not.toBe(meta.writer);
+
+        const stamp = result.fields['profile/name'];
+        stamp.guard!.path[0] = 'changed';
+        (stamp.guard!.equals as { token: string }).token = 'changed';
+        stamp.candidates![0].guard!.path[0] = 'changed';
+        (stamp.candidates![0].value as { names: string[] }).names.push('changed');
+        result.writer!.seq = 99;
+        expect(meta).toEqual(before);
+    });
+
+    it('retains a recreated field delete barrier until a stable frontier covers the entire winner', () => {
+        const meta: SyncMeta = {
+            protocolVersion: 3,
+            clock: { A: 3 },
+            fields: {
+                profile: { actorId: 'A', seq: 3, clock: { A: 3 }, deleteClock: { A: 2 } },
+                'profile/name': { actorId: 'A', seq: 1, clock: { A: 1 } },
+            },
+        };
+        const before = structuredClone(meta);
+        const withoutFrontier = compactSyncMeta(meta);
+        expect(withoutFrontier.fields.profile.deleteClock).toEqual({ A: 2 });
+        expect(withoutFrontier.fields['profile/name']).toBeUndefined();
+        expect(compactSyncMeta(meta, { A: 2 }).fields.profile.deleteClock).toEqual({ A: 2 });
+        expect(compactSyncMeta(meta, { A: 3 }).fields.profile.deleteClock).toBeUndefined();
+        expect(meta).toEqual(before);
+    });
+
+    it('retains a covered terminal ancestor when it still protects a concurrent live descendant', () => {
+        const meta: SyncMeta = {
+            protocolVersion: 3,
+            clock: { A: 1, B: 1 },
+            fields: {
+                profile: { actorId: 'A', seq: 1, clock: { A: 1 }, deleted: true, deleteClock: { A: 1 } },
+                'profile/name': { actorId: 'B', seq: 1, clock: { B: 1 } },
+                profiles: { actorId: 'B', seq: 1, clock: { B: 1 } },
+            },
+        };
+        const stable = { A: 1, B: 1 };
+        const compacted = compactSyncMeta(meta, stable);
+        expect(compacted.fields.profile).toEqual(meta.fields.profile);
+        expect(compacted.fields['profile/name']).toEqual(meta.fields['profile/name']);
+        expect(compacted.fields.profiles).toEqual(meta.fields.profiles);
+        expect(compactSyncMeta(compacted, stable)).toEqual(compacted);
+    });
+
+
 });

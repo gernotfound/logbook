@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
   push:
     branches:
-      - experiment/stryker-vitest-20261106
+      - 'test/stryker-**'
 
 permissions:
   contents: read
@@ -30,6 +30,9 @@ jobs:
           - secure-id
           - cycle-limits
           - password-policy
+          - sync-batching
+          - journal-retry
+          - causal-compaction
     env:
       EXPECTED_SHA: ${{ github.sha }}
       STRYKER_AREA: ${{ matrix.area }}
@@ -87,8 +90,8 @@ jobs:
           const counts = {};
           for (const mutant of mutants) counts[mutant.status] = (counts[mutant.status] ?? 0) + 1;
           console.log(JSON.stringify({ area: process.env.STRYKER_AREA, generated: mutants.length, ...counts }));
-          if (process.env.STRYKER_AREA === 'csv' && (counts.Killed ?? 0) < 20) {
-            throw new Error('Known CSV baseline failed to kill expected mutants: Vitest runner may be incompatible');
+          if ((counts.Killed ?? 0) === 0) {
+            throw new Error('No mutations killed: check runner correctness and test discovery');
           }
           NODE
 

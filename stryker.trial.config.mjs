@@ -59,6 +59,21 @@ export const trialCases = {
     "testFiles": [
       "src/lib/auth/passwordPolicy.test.ts"
     ]
+  },
+  "sync-batching": {
+    "mutate": ["src/lib/sync/syncBatching.ts"],
+    "testFiles": ["tests/isolated/syncBatching.test.ts"],
+    "runner": "isolated"
+  },
+  "journal-retry": {
+    "mutate": ["src/lib/sync/journalRetry.ts"],
+    "testFiles": ["tests/isolated/journalRetry.test.ts"],
+    "runner": "isolated"
+  },
+  "causal-compaction": {
+    "mutate": ["src/lib/sync/causalCompaction.ts"],
+    "testFiles": ["tests/gc/causalCompaction.test.ts"],
+    "runner": "gc"
   }
 };
 const area = process.env.STRYKER_AREA ?? 'csv';

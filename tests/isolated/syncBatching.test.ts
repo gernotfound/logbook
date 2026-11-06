@@ -223,4 +223,65 @@ describe('bounded causal sync batching', () => {
         }
     });
 
+
+    it('rejects invalid document limits at every non-empty batching boundary', () => {
+        const input = [operation('doc-1', 1)];
+        for (const maxDocuments of [0, -1, 1.5, NaN, Infinity]) {
+            expect(() => sequenceOperationsForBoundedTransactions(input, 's00', 0, {}, maxDocuments))
+                .toThrow('Limite documenti sync non valido');
+            expect(() => resequencePendingOperationsForBoundedTransactions(input, 's00', 1, { s00: 1 }, maxDocuments))
+                .toThrow('Limite documenti sync non valido');
+            expect(() => boundedPendingTransactionBatch(input, maxDocuments))
+                .toThrow('Limite documenti sync non valido');
+        }
+    });
+
+    it('preserves empty source clocks and rejects mixed actor journals without changes', () => {
+        const baseClock = { s00: 3, s01: 5 };
+        const emptySequenced = sequenceOperationsForBoundedTransactions([], 's00', 3, baseClock);
+        expect(emptySequenced).toEqual({ operations: [], actorSeq: 3, clock: baseClock });
+        expect(emptySequenced.clock).not.toBe(baseClock);
+        const emptyPending: SemanticOperation[] = [];
+        const emptyResult = resequencePendingOperationsForBoundedTransactions(emptyPending, 's00', 3, baseClock);
+        expect(emptyResult).toEqual({ operations: [], actorSeq: 3, clock: baseClock, changed: false });
+        expect(emptyResult.operations).toBe(emptyPending);
+        expect(emptyResult.clock).not.toBe(baseClock);
+        expect(boundedPendingTransactionBatch([])).toEqual([]);
+
+        const mixed = [operation('doc-1', 1, 's00'), operation('doc-2', 1, 's01')];
+        const before = structuredClone(mixed);
+        expect(() => resequencePendingOperationsForBoundedTransactions(mixed, 's00', 1, baseClock))
+            .toThrow('Journal locale appartiene a un actor diverso');
+        expect(mixed).toEqual(before);
+    });
+
+    it('keeps unchanged journals byte-for-byte equivalent and does not fabricate a resequence', () => {
+        const input = [operation('doc-later', 5), operation('doc-earlier', 3)];
+        const clock = { s00: 5, s01: 2 };
+        const result = resequencePendingOperationsForBoundedTransactions(input, 's00', 5, clock);
+        expect(result).toEqual({ operations: input, actorSeq: 5, clock, changed: false });
+        expect(result.operations).toBe(input);
+        expect(result.clock).not.toBe(clock);
+    });
+
+    it('orders re-assigned causal groups by original sequence, preserving remote clock coordinates', () => {
+        const input = [
+            { ...operation('last', 6), clock: { s00: 6, s01: 9 } },
+            ...Array.from({ length: MAX_SYNC_DOCUMENTS_PER_TRANSACTION + 1 }, (_, index) => ({
+                ...operation('doc-' + index, 5),
+                clock: { s00: 5, s01: 9 },
+            })),
+        ];
+        const before = structuredClone(input);
+        const result = resequencePendingOperationsForBoundedTransactions(input, 's00', 6, { s00: 6, s01: 9 });
+        expect(result.changed).toBe(true);
+        expect(result.actorSeq).toBe(7);
+        expect(result.clock).toEqual({ s00: 7, s01: 9 });
+        expect(result.operations.map(item => item.seq))
+            .toEqual([...Array(MAX_SYNC_DOCUMENTS_PER_TRANSACTION).fill(5), 6, 7]);
+        expect(result.operations.at(-1)?.docPath).toBe('last');
+        expect(result.operations.every(item => item.clock.s01 === 9)).toBe(true);
+        expect(input).toEqual(before);
+    });
+
 });
