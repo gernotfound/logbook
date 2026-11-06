@@ -15,19 +15,35 @@ const fakeDb = vi.hoisted(() => ({
       doc: (uid: string) => ({ id: uid, path: 'account_deletion_devices/' + uid }),
     };
     if (name !== 'account_deletions') throw new Error('Unexpected collection');
-    return {
-      where() { return this; },
-      orderBy() { return this; },
-      startAfter(document: { id: string }) { state.afterId = document.id; return this; },
+    const query = (
+      filters: Array<{ field: string; op: string; value: unknown }> = [],
+      order: string | null = null,
+      afterId: string | null = null,
+    ): any => ({
+      where(field: string, op: string, value: unknown) {
+        return query([...filters, { field, op, value }], order, afterId);
+      },
+      orderBy(field: string) {
+        if (field !== 'purgeAfter') throw new Error('Unsupported Firestore ordering');
+        return query(filters, field, afterId);
+      },
+      startAfter(document: { id: string }) { return query(filters, order, document.id); },
       limit(count: number) { return { async get() {
-        const matching = state.jobs.filter(job => job.data.status === 'complete'
-          && (job.data.purgeAfter as Timestamp)?.toMillis() <= Date.now());
-        const offset = state.afterId ? matching.findIndex(job => job.id === state.afterId) + 1 : 0;
+        if (order !== 'purgeAfter') throw new Error('Retention query must order by expiry');
+        const millis = (value: unknown): number => value instanceof Timestamp ? value.toMillis() : Number.NaN;
+        const matching = state.jobs.filter(job => filters.every(({ field, op, value }) => {
+          if (field === 'status' && op === '==') return job.data.status === value;
+          if (field === 'purgeAfter' && op === '<=') return millis(job.data.purgeAfter) <= millis(value);
+          throw new Error('Unsupported Firestore query predicate: ' + field + ' ' + op);
+        })).sort((left, right) =>
+          millis(left.data.purgeAfter) - millis(right.data.purgeAfter) || left.id.localeCompare(right.id));
+        const offset = afterId ? matching.findIndex(job => job.id === afterId) + 1 : 0;
         const docs = matching.slice(offset, offset + count)
           .map(job => ({ id: job.id, ref: { id: job.id, path: 'account_deletions/' + job.id }, data: () => job.data }));
         return { docs, empty: docs.length === 0 };
       } }; },
-    };
+    });
+    return query();
   },
   async runTransaction(work: (tx: any) => Promise<unknown>) {
     const paths: string[] = [];
@@ -78,6 +94,22 @@ describe('atomic completed account deletion retention', () => {
     ]);
     expect(state.devices.has('pending')).toBe(true);
     expect(state.jobs.map(x => x.id)).toEqual(['pending']);
+  });
+
+  it('filters on the real query fields and purges in expiry order, not insertion order', async () => {
+    const later = Timestamp.fromMillis(100);
+    const future = Timestamp.fromMillis(Date.now() + 60_000);
+    state.jobs = [
+      { id: 'later', data: { uid: 'later', status: 'complete', purgeAfter: later } },
+      { id: 'future', data: { uid: 'future', status: 'complete', purgeAfter: future } },
+      { id: 'pending', data: { uid: 'pending', status: 'deleting', purgeAfter: EXPIRED } },
+      { id: 'earlier', data: { uid: 'earlier', status: 'complete', purgeAfter: EXPIRED } },
+    ];
+    expect(await purgeExpiredCompletedDeletionJobs(400)).toBe(2);
+    expect(state.deleted).toEqual([
+      'account_deletions/earlier', 'account_deletions/later',
+    ]);
+    expect(state.jobs.map(job => job.id)).toEqual(['future', 'pending']);
   });
 
   it('rolls back both deletions if transaction commit fails', async () => {
