@@ -3,6 +3,15 @@
 > Stato tecnico al **6 novembre 2026**, issue [#824](https://github.com/gernotfound/logbook/issues/824). L'implementazione è integrata tramite [PR #826](https://github.com/gernotfound/logbook/pull/826) e [PR #829](https://github.com/gernotfound/logbook/pull/829). La CI non dimostra il collaudo autenticato in Production.
 > **Gate pre-utenti esterni: NO-GO.** Restano aperti collaudi multi-dispositivo, configurazioni e contratti dei fornitori, validazione giuridica delle basi e della conservazione residua. Questo documento non è un parere legale né una DPIA.
 
+## Decisioni di prodotto per la beta pubblica (6 novembre 2026)
+
+- La **beta è l'applicazione completa attuale**, non una variante limitata: registrazione libera a qualsiasi maggiorenne, senza inviti e senza introdurre restrizioni artificiali alle funzioni. La dicitura beta non esonera dagli obblighi GDPR o dai requisiti di sicurezza.
+- I partecipanti possono inserire **dati personali reali**, inclusi dati che possono rientrare nell'art. 9 GDPR: il gate legale e i collaudi di Production restano quindi obbligatori **prima** dell'apertura a terzi.
+- Maggiore età: dichiarazione esplicita **18+ separata** dall'accettazione dei termini e dal consenso salute, senza raccogliere data di nascita o documento. È un'autodichiarazione, **non** una verifica anagrafica forte.
+- La **modalità ospite** continua a usare soltanto il vault locale e rimane disponibile. Nessun consenso o dato guest è automaticamente attribuito a un nuovo account.
+- **Nessun reset alla fine della beta:** tutti i dati creati nella baseline supportata devono rimanere disponibili attraverso le release, salvo cancellazione avviata dall'utente, revoca del consenso o futura policy d'inattività effettivamente implementata e giuridicamente validata.
+- La politica proposta per l'inattività dell'account (12 mesi, attività autenticata online, senza email di preavviso) è analizzata nel [piano di conservazione](retention-schedule.md). **Non è una cancellazione automatica attiva** e non autorizza esperimenti distruttivi su Production.
+
 **Fonti tecniche:** [AGENTS](../../AGENTS.md), [consenso salute](../../.agents/rules/health-consent.md), [protocollo distribuito](health-consent-technical-protocol.md), [retention](retention-schedule.md). Le alternative precedenti alla PR #826, inclusa la cancellazione solo su pulsante, restano nella cronologia Git e **non** descrivono il contratto attuale.
 
 ## Contesto
