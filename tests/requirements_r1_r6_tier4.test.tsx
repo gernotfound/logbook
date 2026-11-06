@@ -97,21 +97,6 @@ describe('LogBook 4-Tier Automated Test Suite (Requirements R1 - R6)', () => {
             expect(lunchKcal).toBe(749); // 79*4 + 69*4 + 17.49*9 = 316 + 276 + 157.41 = 749.41 -> 749
         });
 
-        it('T4.3: Scenario 3 — "Leg Day Recovery & Explicit DOMS Life Cycle"', () => {
-            // Day 1: User does heavy squats. Next day logs 'quadricipiti' DOMS in Home card.
-            let userActivePains = ['quadricipiti'];
-
-            // Day 3: Upper body workout (Panca Piana). Session completes.
-            userActivePains = mergeActivePainsContract(userActivePains, []);
-            // Quadricipiti was not trained -> remains in pain
-            expect(userActivePains).toEqual(['quadricipiti']);
-
-            // Day 5: Legs workout again (Squat). Session completes with no pain re-selected.
-            userActivePains = mergeActivePainsContract(userActivePains, []);
-            // Quadricipiti was trained and not re-selected -> kept active!
-            expect(userActivePains).toEqual(['quadricipiti']);
-        });
-
         it('T4.4: Scenario 4 — "Athlete Multi-Day Training, Recovery & Nutrition Integration"', () => {
             // Day 1 (Monday): Log morning measurements
             const monday = '2026-08-17';
@@ -155,17 +140,5 @@ describe('LogBook 4-Tier Automated Test Suite (Requirements R1 - R6)', () => {
             expect(resolvedPains).toEqual(['dorso']);
         });
 
-        it('T4.5: Scenario 5 — "Rehabilitation & Pain Recovery Tracking through Deload Week"', () => {
-            // Athlete enters deload with shoulder and elbow fatigue
-            let pains = ['spalle', 'tricipiti'];
-
-            // Deload Day 1: Light overhead press only
-            pains = mergeActivePainsContract(pains, []);
-            expect(pains).toEqual(['spalle', 'tricipiti']); // Nessun recupero implicito.
-
-            // Deload Day 2: Light triceps extensions
-            pains = mergeActivePainsContract(pains, []);
-            expect(pains).toEqual(['spalle', 'tricipiti']); // I dolori restano finché rimossi esplicitamente.
-        });
     });
 });

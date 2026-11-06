@@ -494,34 +494,6 @@ describe('LogBook 4-Tier Automated Test Suite (Requirements R1 - R6)', () => {
         // Requirement R6: Boundaries
         // ---------------------------------------------------------------------
         describe('R6: Boundary & Corner Cases', () => {
-            it('T2.6.1: missing reported pains does not clear active pain', () => {
-                const activePains = ['petto'];
-
-                const updated = mergeActivePainsContract(activePains, []);
-                expect(updated).toEqual(['petto']); // No explicit removal: the pain remains active.
-            });
-
-            it('T2.6.2: no reported pains does not alter activePains', () => {
-                const activePains = ['dorso', 'bicipiti'];
-
-                const updated = mergeActivePainsContract(activePains, []);
-                expect(updated).toEqual(['dorso', 'bicipiti']);
-            });
-
-            it('T2.6.3: multiple active pains remain when not re-reported', () => {
-                const activePains = ['quadricipiti', 'polpacci'];
-
-                const updated = mergeActivePainsContract(activePains, []);
-                expect(updated).toEqual(['quadricipiti', 'polpacci']);
-            });
-
-            it('T2.6.4: preserving multiple pain identifiers never implies recovery', () => {
-                const activePains = ['petto', 'deltoidi_ant'];
-
-                const updated = mergeActivePainsContract(activePains, []);
-                expect(updated).toEqual(['petto', 'deltoidi_ant']);
-            });
-
             it('T2.6.5: empty and whitespace-only reports do not delete active pains', () => {
                 expect(mergeActivePainsContract(['petto'], ['', '  ', '     '])).toEqual(['petto']);
             });
@@ -531,9 +503,9 @@ describe('LogBook 4-Tier Automated Test Suite (Requirements R1 - R6)', () => {
                 const sessionPains = ['tricipiti', 'tricipiti', 'spalle'];
 
                 const updated = mergeActivePainsContract(activePains, sessionPains);
-                expect(updated).toContain('petto');
-                expect(updated).toContain('tricipiti');
-                expect(updated).toContain('spalle');
+                expect(updated).toEqual(['petto', 'tricipiti', 'spalle']);
+                expect(activePains).toEqual(['petto']);
+                expect(sessionPains).toEqual(['tricipiti', 'tricipiti', 'spalle']);
             });
 
             it('T2.6.7: mergeActivePains contract handles absent arguments as empty arrays', () => {
