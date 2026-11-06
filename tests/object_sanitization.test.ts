@@ -1,10 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import { removeUndefinedValues, removeUndefinedValuesForFirestore, isPlainObject } from '../src/lib/utils/object';
+import { removeUndefinedValuesForFirestore, isPlainObject } from '../src/lib/utils/object';
 import { rootDocument } from '../src/lib/sync/documentProjection';
 import type { UserData } from '../src/types';
-import { Logic } from '../src/lib/logic';
 
-describe('R3: Object Sanitization & removeUndefinedValues Suite', () => {
+describe('R3: Object Sanitization & removeUndefinedValuesForFirestore Suite', () => {
     describe('isPlainObject', () => {
         it('returns true for literal object {} and Object.create(null)', () => {
             expect(isPlainObject({})).toBe(true);
@@ -37,17 +36,17 @@ describe('R3: Object Sanitization & removeUndefinedValues Suite', () => {
 
     describe('Primitives & Falsy Values', () => {
         it('returns primitives and falsy values as-is', () => {
-            expect(removeUndefinedValues(null)).toBe(null);
-            expect(removeUndefinedValues(undefined)).toBe(undefined);
-            expect(removeUndefinedValues(0)).toBe(0);
-            expect(removeUndefinedValues(-0)).toBe(-0);
-            expect(removeUndefinedValues(NaN)).toBeNaN();
-            expect(removeUndefinedValues(Infinity)).toBe(Infinity);
-            expect(removeUndefinedValues('')).toBe('');
-            expect(removeUndefinedValues(false)).toBe(false);
-            expect(removeUndefinedValues(true)).toBe(true);
-            expect(removeUndefinedValues('valid string')).toBe('valid string');
-            expect(removeUndefinedValues(12345)).toBe(12345);
+            expect(removeUndefinedValuesForFirestore(null)).toBe(null);
+            expect(removeUndefinedValuesForFirestore(undefined)).toBe(undefined);
+            expect(removeUndefinedValuesForFirestore(0)).toBe(0);
+            expect(removeUndefinedValuesForFirestore(-0)).toBe(-0);
+            expect(removeUndefinedValuesForFirestore(NaN)).toBeNaN();
+            expect(removeUndefinedValuesForFirestore(Infinity)).toBe(Infinity);
+            expect(removeUndefinedValuesForFirestore('')).toBe('');
+            expect(removeUndefinedValuesForFirestore(false)).toBe(false);
+            expect(removeUndefinedValuesForFirestore(true)).toBe(true);
+            expect(removeUndefinedValuesForFirestore('valid string')).toBe('valid string');
+            expect(removeUndefinedValuesForFirestore(12345)).toBe(12345);
         });
     });
 
@@ -63,7 +62,7 @@ describe('R3: Object Sanitization & removeUndefinedValues Suite', () => {
                 dropAnotherUndefined: undefined
             };
 
-            const result = removeUndefinedValues(input);
+            const result = removeUndefinedValuesForFirestore(input);
 
             expect(result).toEqual({
                 keepNumber: 0,
@@ -92,7 +91,7 @@ describe('R3: Object Sanitization & removeUndefinedValues Suite', () => {
                 }
             };
 
-            const result = removeUndefinedValues(input);
+            const result = removeUndefinedValuesForFirestore(input);
 
             expect(result).toEqual({
                 level1: {
@@ -116,7 +115,7 @@ describe('R3: Object Sanitization & removeUndefinedValues Suite', () => {
             dict.notes = undefined;
             dict.weight = 80;
 
-            const result = removeUndefinedValues(dict);
+            const result = removeUndefinedValuesForFirestore(dict);
 
             expect(result.name).toBe('bench press');
             expect(result.weight).toBe(80);
@@ -127,14 +126,14 @@ describe('R3: Object Sanitization & removeUndefinedValues Suite', () => {
     describe('Arrays Sanitization', () => {
         it('preserves array of primitives without undefined values', () => {
             const input = [1, 'two', null, false, 0, ''];
-            const result = removeUndefinedValues(input);
+            const result = removeUndefinedValuesForFirestore(input);
 
             expect(result).toEqual([1, 'two', null, false, 0, '']);
         });
 
         it('converts undefined array items to null to preserve index positions for Firestore', () => {
             const input = [1, undefined, 'three', undefined, null];
-            const result = removeUndefinedValues(input);
+            const result = removeUndefinedValuesForFirestore(input);
 
             expect(result).toEqual([1, null, 'three', null, null]);
         });
@@ -145,7 +144,7 @@ describe('R3: Object Sanitization & removeUndefinedValues Suite', () => {
                 { id: '2', name: 'Deadlift', notes: 'heavy', rpe: undefined }
             ];
 
-            const result = removeUndefinedValues(input);
+            const result = removeUndefinedValuesForFirestore(input);
 
             expect(result).toEqual([
                 { id: '1', name: 'Squat', sets: 4 },
@@ -161,7 +160,7 @@ describe('R3: Object Sanitization & removeUndefinedValues Suite', () => {
                 [{ key: 'val', bad: undefined }, undefined]
             ];
 
-            const result = removeUndefinedValues(input);
+            const result = removeUndefinedValuesForFirestore(input);
 
             expect(result).toEqual([
                 [1, null, 2],
@@ -179,7 +178,7 @@ describe('R3: Object Sanitization & removeUndefinedValues Suite', () => {
                 dropMe: undefined
             };
 
-            const result = removeUndefinedValues(input);
+            const result = removeUndefinedValuesForFirestore(input);
 
             expect(result.timestamp).toBeInstanceOf(Date);
             expect(result.timestamp.getTime()).toBe(date.getTime());
@@ -200,7 +199,7 @@ describe('R3: Object Sanitization & removeUndefinedValues Suite', () => {
                 missing: undefined
             };
 
-            const result = removeUndefinedValues(input);
+            const result = removeUndefinedValuesForFirestore(input);
 
             expect(result.updatedAt).toBe(mockTimestamp);
             expect(result.meta.field).toBe(mockTimestamp);
@@ -220,7 +219,7 @@ describe('R3: Object Sanitization & removeUndefinedValues Suite', () => {
                 bad: undefined
             };
 
-            const result = removeUndefinedValues(input);
+            const result = removeUndefinedValuesForFirestore(input);
 
             expect(result.reg).toBe(reg);
             expect(result.uint).toBe(uint);
@@ -246,15 +245,6 @@ describe('R3: Object Sanitization & removeUndefinedValues Suite', () => {
             expect(cyclicArr[1]).toBeUndefined();
         });
 
-        it('retains the non-throwing generic cycle behavior without claiming Firestore safety', () => {
-            const cyc: any = { saved: 1, omit: undefined };
-            cyc.self = cyc;
-            const cleaned = removeUndefinedValues(cyc);
-            expect(cleaned.saved).toBe(1);
-            expect('omit' in cleaned).toBe(false);
-            expect(cleaned.self).toBe(cyc);
-        });
-
         it('rejects cyclic user profile fields at the actual root Firestore projection', () => {
             const profile: any = { height: '180', omit: undefined };
             profile.loop = profile;
@@ -266,7 +256,7 @@ describe('R3: Object Sanitization & removeUndefinedValues Suite', () => {
 
         it('sanitizes shared references consistently without mutating either branch', () => {
             const shared = { id: 'same', omit: undefined, nested: [undefined, { hidden: undefined, saved: 1 }] };
-            const result = removeUndefinedValues({ first: shared, second: shared });
+            const result = removeUndefinedValuesForFirestore({ first: shared, second: shared });
             expect(result.first).toBe(result.second);
             expect(result).toEqual({
                 first: { id: 'same', nested: [null, { saved: 1 }] },
@@ -278,22 +268,10 @@ describe('R3: Object Sanitization & removeUndefinedValues Suite', () => {
 
         it('preserves own __proto__ keys as data without prototype pollution', () => {
             const input = JSON.parse('{"__proto__":{"keep":1,"drop":null},"missing":null}');
-            const result = removeUndefinedValues(input);
+            const result = removeUndefinedValuesForFirestore(input);
             expect(Object.hasOwn(result, '__proto__')).toBe(true);
             expect((result as any).__proto__).toEqual({ keep: 1, drop: null });
             expect(({} as any).keep).toBeUndefined();
-        });
-    });
-
-    describe('Re-export through Logic module', () => {
-        it('Logic object exposes removeUndefinedValues and isPlainObject', () => {
-            expect(typeof Logic.removeUndefinedValues).toBe('function');
-            expect(typeof Logic.isPlainObject).toBe('function');
-
-            const testObj = { a: 1, b: undefined };
-            const cleaned = Logic.removeUndefinedValues(testObj);
-            expect(cleaned).toEqual({ a: 1 });
-            expect(Logic.isPlainObject(testObj)).toBe(true);
         });
     });
 
@@ -373,7 +351,7 @@ describe('R3: Object Sanitization & removeUndefinedValues Suite', () => {
                 }
             };
 
-            const sanitized = removeUndefinedValues(fullUserData);
+            const sanitized = removeUndefinedValuesForFirestore(fullUserData);
 
             // Assertions for deep undefined removal
             expect('bodyFat' in sanitized.profile).toBe(false);

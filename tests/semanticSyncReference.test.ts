@@ -7,14 +7,14 @@ import {
     resolveIdentity,
 } from '../src/lib/sync/semanticProjection';
 import type { DocumentData } from '../src/lib/sync/documentProjection';
-import { removeUndefinedValues } from '../src/lib/utils/object';
+import { removeUndefinedValuesForFirestore } from '../src/lib/utils/object';
 
 describe('Semantic sync reference invariants', () => {
     it('preserves prototype-named workout IDs and causal tombstones as own properties', () => {
         const path = 'history_months/2026-09';
         const workout = { id: '__proto__', date: '2026-09-13', exercises: [] };
         const input = Object.fromEntries([['__proto__', workout]]);
-        const clean = removeUndefinedValues(input);
+        const clean = removeUndefinedValuesForFirestore(input);
         expect(Object.keys(clean)).toEqual(['__proto__']);
         expect(Object.getPrototypeOf(clean)).toBe(Object.prototype);
 
