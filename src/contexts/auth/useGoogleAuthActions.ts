@@ -4,6 +4,7 @@ import { useAppStore } from '../../store/useAppStore';
 import { captureSession, isCurrentSession } from '../../lib/sync/session';
 import { AWAITING_REDIRECT_KEY, isCurrentAuthRedirectAttempt, writeAuthRedirectMarker, tryRemoveAuthRedirectMarker } from '../../lib/auth/authRedirectMarker';
 import { beginGuestMigrationIntent, clearGuestMigrationIntent, confirmGuestMigrationCredential, rejectGuestMigrationAuthWaiters } from '../../lib/auth/guestMigrationIntent';
+import { captureAuthAttemptGuard } from '../../lib/auth/authAttemptGuard';
 import { classifyGooglePopupFailure } from './googlePopup';
 import type { GuestMigrationPolicy } from '../AuthContextDef';
 import type { UserData } from '../../types';
@@ -53,8 +54,10 @@ export function useGoogleAuthActions({
     // Login con Google (dalla schermata di login, nessun guest precedente)
     const login = useCallback(async (guestPolicy?: GuestMigrationPolicy) => {
         setSaveError(null);
+        const guestActive = isGuestActiveStrict();
+        const stillOriginalAttempt = captureAuthAttemptGuard(guestActive);
         let intentId: string | null = null;
-        if (isGuestActiveStrict()) {
+        if (guestActive) {
             if (!guestPolicy) throw new Error('Scelta di trasferimento guest richiesta.');
             const guestSession = captureSession();
             intentId = (await beginGuestMigrationIntent(guestPolicy, 'google', {
@@ -65,12 +68,14 @@ export function useGoogleAuthActions({
         try {
             credential = await signInWithPopup(auth, provider);
         } catch (error: any) {
+            if (!stillOriginalAttempt()) { await abandonOwnGuestIntent(intentId); return; }
             const failure = classifyGooglePopupFailure(error);
             if (failure === 'redirect') {
                 try {
                     await startGoogleRedirect();
                 } catch {
                     await abandonOwnGuestIntent(intentId);
+                    if (!stillOriginalAttempt()) return;
                     console.error('Accesso Google tramite redirect non riuscito.');
                     setSaveError("Accesso fallito. Riprova.");
                 }
@@ -78,21 +83,25 @@ export function useGoogleAuthActions({
                 await abandonOwnGuestIntent(intentId);
             } else if (failure === 'network') {
                 await abandonOwnGuestIntent(intentId);
+                if (!stillOriginalAttempt()) return;
                 setSaveError("Connessione non disponibile. Riprova quando sei online.");
             } else if (failure === 'error') {
                 await abandonOwnGuestIntent(intentId);
+                if (!stillOriginalAttempt()) return;
                 console.error('Accesso Google non riuscito.');
                 setSaveError('Accesso Google non riuscito. Riprova.');
             }
             return;
         }
+        const resultSession = captureAuthAttemptGuard(false);
+        const resultIsCurrent = () => auth.currentUser?.uid === credential.user.uid && resultSession();
         if (intentId) {
             try {
                 await confirmGuestMigrationCredential(intentId, credential);
             } catch (error) {
                 rejectGuestMigrationAuthWaiters(intentId, 'Risultato di questo accesso Google non verificabile.');
                 console.error('Prova dell’accesso Google non confermata:', error);
-                setSaveError('Accesso effettuato, ma trasferimento guest non autorizzato. I dati locali sono conservati: riprova scegliendo come gestirli.');
+                if (resultIsCurrent()) setSaveError('Accesso effettuato, ma trasferimento guest non autorizzato. I dati locali sono conservati: riprova scegliendo come gestirli.');
             }
         }
     }, [isGuestActiveStrict, setSaveError, startGoogleRedirect]);
@@ -101,8 +110,10 @@ export function useGoogleAuthActions({
     const linkGoogleAccount = useCallback(async (guestPolicy?: GuestMigrationPolicy) => {
         setSaveError(null);
         migrationDataRef.current = useAppStore.getState().userData;
+        const guestActive = isGuestActiveStrict();
+        const stillOriginalAttempt = captureAuthAttemptGuard(guestActive);
         let intentId: string | null = null;
-        if (isGuestActiveStrict()) {
+        if (guestActive) {
             if (!guestPolicy) throw new Error('Scelta di trasferimento guest richiesta.');
             const guestSession = captureSession();
             intentId = (await beginGuestMigrationIntent(guestPolicy, 'google', {
@@ -113,12 +124,14 @@ export function useGoogleAuthActions({
         try {
             credential = await signInWithPopup(auth, provider);
         } catch (error: any) {
+            if (!stillOriginalAttempt()) { await abandonOwnGuestIntent(intentId); return; }
             const failure = classifyGooglePopupFailure(error);
             if (failure === 'redirect') {
                 try {
                     await startGoogleRedirect();
                 } catch {
                     await abandonOwnGuestIntent(intentId);
+                    if (!stillOriginalAttempt()) return;
                     console.error('Collegamento Google tramite redirect non riuscito.');
                     setSaveError("Accesso fallito. Riprova.");
                 }
@@ -130,23 +143,27 @@ export function useGoogleAuthActions({
             }
             if (failure === 'network') {
                 await abandonOwnGuestIntent(intentId);
+                if (!stillOriginalAttempt()) return;
                 setSaveError("Connessione non disponibile. Riprova quando sei online.");
                 return;
             }
             if (failure === 'error') {
                 await abandonOwnGuestIntent(intentId);
+                if (!stillOriginalAttempt()) return;
                 console.error('Collegamento account Google non riuscito.');
                 setSaveError("Collegamento fallito. Riprova.");
             }
             return;
         }
+        const resultSession = captureAuthAttemptGuard(false);
+        const resultIsCurrent = () => auth.currentUser?.uid === credential.user.uid && resultSession();
         if (intentId) {
             try {
                 await confirmGuestMigrationCredential(intentId, credential);
             } catch (error) {
                 rejectGuestMigrationAuthWaiters(intentId, 'Risultato di questo collegamento Google non verificabile.');
                 console.error('Prova del collegamento Google non confermata:', error);
-                setSaveError('Account collegato, ma trasferimento guest non autorizzato. I dati locali sono conservati: riprova scegliendo come gestirli.');
+                if (resultIsCurrent()) setSaveError('Account collegato, ma trasferimento guest non autorizzato. I dati locali sono conservati: riprova scegliendo come gestirli.');
             }
         }
     }, [isGuestActiveStrict, migrationDataRef, setSaveError, startGoogleRedirect]);

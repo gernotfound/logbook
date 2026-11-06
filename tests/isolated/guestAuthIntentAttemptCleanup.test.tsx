@@ -5,6 +5,7 @@ import {
     createUserWithEmailAndPassword,
 } from 'firebase/auth';
 import type { User, UserCredential } from 'firebase/auth';
+import { auth } from '../../src/lib/firebase';
 import { useGoogleAuthActions } from '../../src/contexts/auth/useGoogleAuthActions';
 import { useEmailAuthActions } from '../../src/contexts/auth/useEmailAuthActions';
 import { beginGuestMigrationIntent } from '../../src/lib/auth/guestMigrationIntent';
@@ -126,8 +127,12 @@ describe('serialized guest migration intent belongs to an exact Auth attempt', (
     it('does not fall back to redirect when a successful popup has the wrong credential provider', async () => {
         const user = { uid: 'shared-account', email: 'same@example.test',
             providerData: [{ providerId: 'google.com' }] } as User;
-        vi.mocked(signInWithPopup).mockResolvedValueOnce(
-            { user, providerId: 'password', operationType: 'signIn' } as UserCredential);
+        vi.mocked(signInWithPopup).mockImplementationOnce(async () => {
+            // A successful SDK sign-in installs its user before returning the
+            // credential. Keep only the provider mismatch under test invalid.
+            (auth as { currentUser: User | null }).currentUser = user;
+            return { user, providerId: 'password', operationType: 'signIn' } as UserCredential;
+        });
         const { result } = google(true);
         const logger = vi.spyOn(console, 'error').mockImplementation(() => {});
         try {
