@@ -13,6 +13,7 @@ const privatePaths = [
 ];
 const reservedPaths = [
   'account_deletions/a',
+  'account_activity/a',
   'account_deletion_devices/a',
   'health_consent_withdrawals/a',
 ];
