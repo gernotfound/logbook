@@ -23,10 +23,19 @@ vi.mock('../src/store/useDialogStore', () => ({
 vi.mock('../src/lib/auth/passwordPolicy', () => ({
   validatePasswordAgainstPolicy: vi.fn(async () => null),
 }));
+import { auth } from '../src/lib/firebase';
+import { activateGuestSession, GUEST_SESSION_KEY } from '../src/lib/sync/session';
+import { validatePasswordAgainstPolicy } from '../src/lib/auth/passwordPolicy';
+import { safeHardReload } from '../src/lib/sync/safeReload';
+vi.mock('../src/lib/sync/safeReload', () => ({ safeHardReload: vi.fn(async () => {}) }));
 import { AccountCard } from '../src/components/UI/AccountCard';
 
 beforeEach(() => {
   vi.clearAllMocks();
+  (auth as { currentUser: unknown }).currentUser = null;
+  localStorage.setItem('logbook_is_guest', 'true');
+  localStorage.setItem(GUEST_SESSION_KEY, 'guest-account-feedback');
+  activateGuestSession('guest-account-feedback');
   fixture.linkGoogleAccount.mockResolvedValue(undefined);
   fixture.registerWithEmail.mockResolvedValue(undefined);
 });
@@ -71,3 +80,49 @@ describe('guest account actions surface pre-provider coordination failures', () 
     expect(JSON.stringify(fixture.showAlert.mock.calls)).not.toContain('PRIVATE_EMAIL_RESERVATION_DETAILS');
   });
 });
+
+it('leaves verification and navigation to AuthProvider after a guest registration returns', async () => {
+  render(<AccountCard />);
+  fireEvent.click(screen.getByRole('button', { name: 'Crea account con Email e Password' }));
+  fireEvent.change(screen.getByPlaceholderText('La tua Email'), { target: { value: 'guest@example.test' } });
+  fireEvent.change(screen.getByPlaceholderText('Nuova Password'), { target: { value: 'SyntheticPassword123!' } });
+  const submit = screen.getByRole('button', { name: 'Registrati' });
+  fireEvent.click(submit);
+  await waitFor(() => expect(fixture.registerWithEmail).toHaveBeenCalledOnce());
+  await waitFor(() => expect(submit.hasAttribute('disabled')).toBe(false));
+  expect(safeHardReload).not.toHaveBeenCalled();
+});
+
+it('does not register from an old guest generation after password policy returns', async () => {
+  let finish!: () => void;
+  vi.mocked(validatePasswordAgainstPolicy).mockImplementationOnce(() => new Promise<null>(resolve => { finish = () => resolve(null); }));
+  render(<AccountCard />);
+  fireEvent.click(screen.getByRole('button', { name: 'Crea account con Email e Password' }));
+  fireEvent.change(screen.getByPlaceholderText('La tua Email'), { target: { value: 'guest@example.test' } });
+  fireEvent.change(screen.getByPlaceholderText('Nuova Password'), { target: { value: 'SyntheticPassword123!' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Registrati' }));
+  expect(validatePasswordAgainstPolicy).toHaveBeenCalledOnce();
+  localStorage.setItem(GUEST_SESSION_KEY, 'next-guest-generation');
+  activateGuestSession('next-guest-generation');
+  await act(async () => { finish(); });
+  expect(fixture.registerWithEmail).not.toHaveBeenCalled();
+  expect(fixture.showAlert).not.toHaveBeenCalled();
+  expect(safeHardReload).not.toHaveBeenCalled();
+});
+
+it.each(['auth-owner', 'guest-generation'] as const)(
+  'does not expose an old guest Google failure after %s changes', async boundary => {
+    let fail!: (error: unknown) => void;
+    fixture.linkGoogleAccount.mockImplementationOnce(() => new Promise<void>((_resolve, reject) => { fail = reject; }));
+    render(<AccountCard />);
+    fireEvent.click(screen.getByRole('button', { name: 'Crea account con Google' }));
+    expect(fixture.linkGoogleAccount).toHaveBeenCalledOnce();
+    if (boundary === 'auth-owner') (auth as { currentUser: unknown }).currentUser = { uid: 'next-account' };
+    else {
+      localStorage.setItem(GUEST_SESSION_KEY, 'next-guest-generation');
+      activateGuestSession('next-guest-generation');
+    }
+    await act(async () => { fail(new Error('obsolete reservation failure')); });
+    expect(fixture.showAlert).not.toHaveBeenCalled();
+  },
+);

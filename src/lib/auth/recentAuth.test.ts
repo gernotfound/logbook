@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { User } from 'firebase/auth';
 
 const mocks = vi.hoisted(() => ({
+    auth: { currentUser: null as User | null },
     credential: vi.fn((email: string, password: string) => ({ email, password })),
     credentialReauth: vi.fn(),
     popupReauth: vi.fn(),
@@ -9,6 +10,7 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('../firebase', () => ({
+    auth: mocks.auth,
     EmailAuthProvider: { credential: mocks.credential },
     provider: { providerId: 'google.com' },
     reauthenticateWithCredential: mocks.credentialReauth,
@@ -18,15 +20,20 @@ vi.mock('../firebase', () => ({
 
 import { isSensitiveReauthCancellation, reauthenticateForSensitiveAction } from './recentAuth';
 
+import { invalidateSession } from '../sync/session';
+
 function user(providerIds: string[], email = 'test@example.com'): User {
-    return {
+    const current = {
+        uid: 'reauth-user',
         email,
         providerData: providerIds.map(providerId => ({ providerId })),
     } as User;
+    mocks.auth.currentUser = current;
+    return current;
 }
 
 describe('reauthenticateForSensitiveAction', () => {
-    beforeEach(() => vi.clearAllMocks());
+    beforeEach(() => { vi.clearAllMocks(); localStorage.clear(); invalidateSession(); });
 
     it('requires a password for password-only accounts and then reauthenticates with it', async () => {
         const current = user(['password']);
@@ -87,3 +94,25 @@ describe('reauthenticateForSensitiveAction', () => {
         await expect(reauthenticateForSensitiveAction(user(['github.com']))).resolves.toBe('unsupported');
     });
 });
+
+it.each(['credential', 'popup', 'popup-error'] as const)(
+    'rejects obsolete %s reauthentication after A-B-A and never starts its redirect', async boundary => {
+        const current = user(boundary === 'credential' ? ['password'] : ['google.com']);
+        let finish!: () => void;
+        const gate = new Promise<void>((resolve, reject) => {
+            finish = () => boundary === 'popup-error'
+                ? reject(Object.assign(new Error('popup blocked'), { code: 'auth/popup-blocked' })) : resolve();
+        });
+        if (boundary === 'credential') mocks.credentialReauth.mockReturnValueOnce(gate);
+        else mocks.popupReauth.mockReturnValueOnce(gate);
+        const pending = reauthenticateForSensitiveAction(current, boundary === 'credential' ? 'Secret1!' : undefined);
+        expect(boundary === 'credential' ? mocks.credentialReauth : mocks.popupReauth).toHaveBeenCalledOnce();
+        mocks.auth.currentUser = { ...current, uid: 'another-user' };
+        invalidateSession();
+        mocks.auth.currentUser = current;
+        invalidateSession();
+        finish();
+        await expect(pending).rejects.toThrow('Sessione cambiata');
+        expect(mocks.redirectReauth).not.toHaveBeenCalled();
+    },
+);

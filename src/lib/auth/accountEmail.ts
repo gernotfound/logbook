@@ -1,5 +1,6 @@
 import type { User } from 'firebase/auth';
-import { firebaseApp, reload, verifyBeforeUpdateEmail } from '../firebase';
+import { auth, firebaseApp, reload, verifyBeforeUpdateEmail } from '../firebase';
+import { captureSession, isCurrentSession } from '../sync/session';
 
 type IdentityToolkitError = {
     error?: {
@@ -33,7 +34,11 @@ export async function linkEmailPasswordWithEnumerationProtection(
     const apiKey = firebaseApp.options.apiKey;
     if (!apiKey) throw new Error('Configurazione Firebase incompleta: API key non disponibile.');
 
+    const session = captureSession();
+    const stillCurrent = () => auth.currentUser?.uid === user.uid && isCurrentSession(session);
+    if (!stillCurrent()) throw new Error('Sessione cambiata. Ripeti l’operazione.');
     const idToken = await user.getIdToken();
+    if (!stillCurrent()) throw new Error('Sessione cambiata. Ripeti l’operazione.');
     const response = await fetch(
         `https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=${encodeURIComponent(apiKey)}`,
         {
@@ -67,6 +72,9 @@ export async function linkEmailPasswordWithEnumerationProtection(
 
     // The matching response already confirms the remote mutation. A failed
     // local refresh must not invite a second credential-linking request.
+    // A confirmed mutation remains confirmed even if its initiating Auth
+    // epoch ended while the response was pending. Do not refresh a stale user.
+    if (!stillCurrent()) return 'refresh-pending';
     try {
         await reload(user);
         return 'linked';
