@@ -70,6 +70,11 @@ export const trialCases = {
     "testFiles": ["tests/isolated/journalRetry.test.ts"],
     "runner": "isolated"
   },
+  "replica-checkpoint": {
+    "mutate": ["src/lib/sync/localReplicaCheckpoint.ts"],
+    "testFiles": ["tests/isolated/localReplicaCheckpoint.test.ts"],
+    "runner": "isolated"
+  },
   "pending-sequences": {
     "mutate": ["src/lib/sync/localPendingSequences.ts"],
     "testFiles": ["tests/isolated/localPendingSequences.test.ts"],
