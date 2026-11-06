@@ -159,6 +159,10 @@ describe('training session redesign', () => {
         expect(sessionSetHasMeaningfulData({ id: 'zero', kg: '0,0', reps: '0.00' })).toBe(false);
         expect(sessionSetHasMeaningfulData({ id: 'rir-zero', kg: '', reps: '', rir: 0 })).toBe(true);
         expect(sessionSetHasMeaningfulData({ id: 'advanced', kg: '', reps: '', technique: 'dropset' })).toBe(true);
+        expect(sessionSetHasMeaningfulData({ id: 'weight', kg: '80', reps: '' })).toBe(true);
+        expect(sessionSetHasMeaningfulData({ id: 'time', kg: '', reps: '', time: '60' })).toBe(true);
+        const retiredFields = { id: 'pre-launch', kg: '', reps: '', weight: 80, timeInSeconds: 60 };
+        expect(sessionSetHasMeaningfulData(retiredFields)).toBe(false);
     });
 
     it('keeps the note for the next session compact until requested', () => {
