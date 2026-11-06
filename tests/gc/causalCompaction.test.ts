@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { compactSyncMeta, coversVector } from '../../src/lib/sync/causalCompaction';
+import { compactSyncMeta, compactSyncMetas, coversVector } from '../../src/lib/sync/causalCompaction';
 import {
     applySemanticOperations,
     parseSyncMeta,
@@ -358,14 +358,15 @@ describe('M4 causal metadata compaction', () => {
     it('preserves and independently clones field guards, hidden candidates and replica writer', () => {
         const meta: SyncMeta = {
             protocolVersion: 3,
-            clock: { s00: 4, s01: 2 },
+            clock: { s00: 4, s01: 2, s02: 1, ZERO: 0 },
             writer: { slot: 's00', replicaId: 'replica-a', generation: 1, seq: 4 },
             fields: {
                 'profile/name': {
-                    actorId: 's00', seq: 4, clock: { s00: 4 },
+                    actorId: 's00', seq: 4, clock: { s00: 4, s02: 1, ZERO: 0 },
+                    deleteClock: { s02: 1, ZERO: 0 },
                     guard: { path: ['profile', 'name'], equals: { token: 'parent' } },
                     candidates: [{
-                        actorId: 's01', seq: 2, clock: { s01: 2 },
+                        actorId: 's01', seq: 2, clock: { s01: 2, s02: 1, ZERO: 0 },
                         value: { names: ['hidden'] },
                         guard: { path: ['profile', 'status'], equals: { allowed: true } },
                     }],
@@ -373,13 +374,20 @@ describe('M4 causal metadata compaction', () => {
             },
         };
         const before = structuredClone(meta);
+        expect(() => parseSyncMeta(meta)).not.toThrow();
         const result = compactSyncMeta(meta);
-        expect(result).toEqual(before);
+        expect(result.clock).toEqual({ s00: 4, s01: 2, s02: 1 });
+        expect(result.fields['profile/name'].clock).toEqual({ s00: 4, s02: 1 });
+        expect(result.fields['profile/name'].deleteClock).toEqual({ s02: 1 });
+        expect(result.fields['profile/name'].candidates?.[0].clock).toEqual({ s01: 2, s02: 1 });
         expect(result).not.toBe(meta);
         expect(result.fields['profile/name']).not.toBe(meta.fields['profile/name']);
         expect(result.writer).not.toBe(meta.writer);
 
         const stamp = result.fields['profile/name'];
+        stamp.clock.s00 = 99;
+        stamp.deleteClock!.s02 = 99;
+        stamp.candidates![0].clock.s01 = 99;
         stamp.guard!.path[0] = 'changed';
         (stamp.guard!.equals as { token: string }).token = 'changed';
         stamp.candidates![0].guard!.path[0] = 'changed';
@@ -450,5 +458,66 @@ describe('M4 causal metadata compaction', () => {
         expect(meta).toEqual(original);
     });
 
+    it('keeps live ancestor and descendant metadata when no delete barrier exists', () => {
+        const operations: SemanticOperation[] = [
+            {
+                docPath: '', path: ['profile'], value: { name: 'parent' }, isDelete: false,
+                actorId: 's00', seq: 1, clock: { s00: 1 },
+            },
+            {
+                docPath: '', path: ['profile', 'name'], value: 'child', isDelete: false,
+                actorId: 's00', seq: 1, clock: { s00: 1 },
+            },
+        ];
+        const merged = applySemanticOperations(rootBase(), operations);
+        const meta = merged.syncMetas[''];
+        expect(merged.documents.get('')).toEqual({ profile: { name: 'child' } });
+        expect(Object.keys(meta.fields).sort()).toEqual(['profile', 'profile/name']);
+        expect(() => parseSyncMeta(meta)).not.toThrow();
+        expect(compactSyncMeta(meta)).toEqual(meta);
+        expect(compactSyncMeta(meta, { s00: 1 })).toEqual(meta);
+    });
+
+    it('uses the terminal winner clock when no explicit delete clock was supplied', () => {
+        const meta: SyncMeta = {
+            protocolVersion: 3,
+            clock: { s00: 2, s01: 1 },
+            fields: {
+                'profile/name': {
+                    actorId: 's00', seq: 2, clock: { s00: 2, s01: 1 }, deleted: true,
+                },
+            },
+        };
+        expect(() => parseSyncMeta(meta)).not.toThrow();
+        expect(compactSyncMeta(meta, { s00: 2 })).toEqual(meta);
+        expect(compactSyncMeta(meta, { s00: 2, s01: 1 })).toEqual({
+            protocolVersion: 3, clock: { s00: 2, s01: 1 }, fields: {},
+        });
+    });
+
+    it('compacts each document against the shared frontier without collecting another document prematurely', () => {
+        const root: SyncMeta = {
+            protocolVersion: 3, clock: { s00: 2 },
+            fields: {
+                profile: { actorId: 's00', seq: 2, clock: { s00: 2 }, deleted: true, deleteClock: { s00: 2 } },
+            },
+        };
+        const month: SyncMeta = {
+            protocolVersion: 3, clock: { s01: 1 },
+            fields: {
+                workout: { actorId: 's01', seq: 1, clock: { s01: 1 }, deleted: true, deleteClock: { s01: 1 } },
+            },
+        };
+        const metas = { '': root, 'history_months/2026-11': month };
+        const before = structuredClone(metas);
+        const compacted = compactSyncMetas(metas, { s00: 2 });
+        expect(compacted).toEqual({
+            '': { protocolVersion: 3, clock: { s00: 2 }, fields: {} },
+            'history_months/2026-11': month,
+        });
+        expect(compacted['history_months/2026-11']).not.toBe(month);
+        expect(compactSyncMetas(compacted, { s00: 2 })).toEqual(compacted);
+        expect(metas).toEqual(before);
+    });
 
 });

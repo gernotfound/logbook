@@ -37,10 +37,14 @@ describe('bounded causal sync batching', () => {
             { ...operation(paths[1], 1), value: 'second' },
             { ...operation(paths[0], 1), value: 'third' },
             ...paths.slice(2).map(path => operation(path, 1)),
+            { ...operation(paths[0], 1), value: 'last' },
         ];
+        const before = structuredClone(input);
         const { operations } = sequenceOperationsForBoundedTransactions(input, 's00', 0, {});
         expect(operations.filter(op => op.seq === 1).map(op => op.value))
-            .toEqual(input.slice(0, -1).map(op => op.value));
+            .toEqual([...input.slice(0, -2).map(op => op.value), 'last']);
+        expect(operations.filter(op => op.docPath === paths[0]).map(op => op.seq)).toEqual([1, 1, 1]);
+        expect(input).toEqual(before);
         expect(distinctDocumentCount(operations.filter(op => op.seq === 1))).toBe(MAX_SYNC_DOCUMENTS_PER_TRANSACTION);
         expect(distinctDocumentCount(operations.filter(op => op.seq === 2))).toBe(1);
     });
@@ -98,7 +102,7 @@ describe('bounded causal sync batching', () => {
         expect(distinctDocumentCount(result.operations)).toBe(1);
     });
 
-    it('atomically resequences an oversized legacy pending group without acknowledging later work early', () => {
+    it('atomically resequences an oversized pending group without acknowledging later work early', () => {
         const oversized = Array.from({ length: MAX_SYNC_DOCUMENTS_PER_TRANSACTION + 1 }, (_, index) =>
             operation(`history_months/2025-${String(index + 1).padStart(2, '0')}`, 5),
         );
