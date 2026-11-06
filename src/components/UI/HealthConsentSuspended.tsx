@@ -288,7 +288,7 @@ export function HealthConsentSuspended({ status, user }: { status: HealthConsent
       </section>}
       {status === 'erasure-required' && <section aria-label="Copia locale di dati cancellati">
         <p role="alert">La cancellazione dei dati eseguita sul cloud include la generazione della copia conservata qui. Per rispettare quella cancellazione, TheLogBook non la trasforma automaticamente in dati nuovi.</p>
-        <p>I dati cancellati non possono essere riattivati o recuperati nella PWA. Verifica la cancellazione cloud e il dispositivo prima di prestare un nuovo consenso; per assistenza usa il recapito privacy.</p>
+        <p>I dati cancellati non possono essere riattivati o recuperati nella PWA. Puoi scegliere «Esci dall'account» per ripulire questo dispositivo e accedere nuovamente con un archivio vuoto; se sono presenti dati non sincronizzati, la protezione del logout può sospendere l'operazione. Se non riesci a completarla, contatta l'assistenza privacy.</p>
       </section>}
       {status === 'recovery-required' && <section aria-label="Recupero delle modifiche precedenti">
         <p role="alert">Il nuovo consenso è stato registrato, ma su questo dispositivo ci sono modifiche non sincronizzate prima della revoca. Non le eliminiamo e non le inviamo automaticamente.</p>
