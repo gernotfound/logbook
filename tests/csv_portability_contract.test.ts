@@ -35,6 +35,37 @@ describe('CSV portability contract', () => {
         expect(lines[1]).toContain('"chest"');
     });
 
+    it('exports a workout without date using the local day of its start instant', async () => {
+        const download = vi.spyOn(Exporter, 'downloadFile').mockResolvedValue(true);
+        const session: WorkoutSession = {
+            id: 'timestamp-only',
+            globalStartTime: new Date(2026, 7, 23, 12).getTime(),
+            routineName: 'Spinta A',
+            exercises: [{
+                exId: 'ex-1',
+                sessionNote: '',
+                sets: [{ id: 'set-1', kg: '100', reps: '8' }],
+            }],
+        };
+
+        expect(await Exporter.exportToCSV([session], {}, [{ id: 'ex-1', name: 'Panca piana' }])).toBe(true);
+        expect(download).toHaveBeenCalledOnce();
+        const row = download.mock.calls[0][1].split('\n')[1];
+        expect(row).toMatch(/^"2026-08-23","Spinta A","Panca piana",/);
+    });
+
+    it('does not download partial CSV files when a later workout has no valid date', async () => {
+        const download = vi.spyOn(Exporter, 'downloadFile').mockResolvedValue(true);
+        const history: WorkoutSession[] = [
+            { id: 'valid', date: '2026-08-23', exercises: [] },
+            { id: 'invalid', exercises: [] },
+        ];
+
+        await expect(Exporter.exportToCSV(history, {}, []))
+            .rejects.toThrow('identità temporale non valida');
+        expect(download).not.toHaveBeenCalled();
+    });
+
     it('exports normalized nutrition details using the canonical hip field', async () => {
         let csv = '';
         vi.spyOn(Exporter, 'downloadFile').mockImplementation(async (filename, content) => {

@@ -1,7 +1,6 @@
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, act } from '@testing-library/react';
-import { Exporter } from '../src/lib/export';
 import DataMeasurements from '../src/components/Data/DataMeasurements';
 import DataSleep from '../src/components/Data/DataSleep';
 import TrainingHistory from '../src/components/Training/TrainingHistory';
@@ -42,77 +41,6 @@ describe('Worker 1B: UI/UX, Date Navigation, CSV Export & PWA Fixes', () => {
                 catalogOverrides: { exercises: {}, foods: {} }
             } as UserData,
             localWorkout: null
-        });
-    });
-
-    describe('P0-2 & P2-6: Exporter.exportToCSV Quoting and Fallbacks', () => {
-        it('quotes canonical workout dates and text in CSV rows', async () => {
-            let exportedContent = '';
-            const downloadSpy = vi.spyOn(Exporter, 'downloadFile').mockImplementation(async (filename, content) => {
-                if (filename === 'allenamenti.csv') {
-                    exportedContent = content;
-                }
-                return true;
-            });
-
-            const timestamp = new Date('2026-08-23T17:40:00.000Z').getTime();
-            const session: WorkoutSession = {
-                id: 's1',
-                globalStartTime: timestamp,
-                routineName: 'Spinta A',
-                exercises: [
-                    {
-                        exId: 'ex_1',
-                        sessionNote: '',
-                        sets: [{ id: 'set_1', kg: '100', reps: '8' }]
-                    }
-                ]
-            };
-
-            await Exporter.exportToCSV([session], {}, [{ id: 'ex_1', name: 'Panca piana' }]);
-
-            expect(downloadSpy).toHaveBeenCalledWith('allenamenti.csv', expect.any(String), expect.anything());
-            const lines = exportedContent.split('\n');
-            const dataLine = lines[1]; // First data line after header
-
-            // The dataLine must start with quotes around the date string: "dateStr","Spinta A","Panca piana",...
-            expect(dataLine).toMatch(/^"[^"]+","Spinta A","Panca piana",/);
-            expect(dataLine).toContain('"Spinta A"');
-            expect(dataLine).toContain('"Panca piana"');
-
-            downloadSpy.mockRestore();
-        });
-
-        it('uses session.date when globalStartTime is absent or zero', async () => {
-            let exportedContent = '';
-            const downloadSpy = vi.spyOn(Exporter, 'downloadFile').mockImplementation(async (filename, content) => {
-                if (filename === 'allenamenti.csv') {
-                    exportedContent = content;
-                }
-                return true;
-            });
-
-            for (const globalStartTime of [undefined, 0]) {
-                const session: WorkoutSession = {
-                    id: 's2',
-                    date: '2026-05-14',
-                    globalStartTime,
-                    routineName: 'Gambe B',
-                    exercises: [
-                        {
-                            exId: 'ex_1',
-                            sessionNote: '',
-                            sets: [{ id: 'set_1', kg: '120', reps: '5' }]
-                        }
-                    ]
-                };
-
-                await Exporter.exportToCSV([session], {}, []);
-                expect(downloadSpy).toHaveBeenCalledWith('allenamenti.csv', expect.any(String), expect.anything());
-                expect(exportedContent.split('\n')[1]).toContain('"2026-05-14"');
-            }
-
-            downloadSpy.mockRestore();
         });
     });
 
