@@ -2,6 +2,10 @@
 // The official Vitest runner does not cover Playwright or Firestore Emulator suites.
 export default {
   testRunner: 'vitest',
+  // Stryker 10.1.1 calls a TypeScript API removed in TS 7 when rewriting tsconfigs.
+  // Its sandbox preserves this repository's relative paths and references, so
+  // no tsconfig rewrite is needed in this isolated diagnostic run.
+  tsconfigFile: 'coverage/stryker-no-tsconfig-rewrite.json',
   vitest: {
     configFile: 'vitest.config.ts',
     related: false,
