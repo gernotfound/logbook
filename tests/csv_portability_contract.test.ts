@@ -2,9 +2,65 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Exporter } from '../src/lib/export';
 import type { NutritionDay, WorkoutSession } from '../src/types';
 
-afterEach(() => vi.restoreAllMocks());
+afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+});
 
 describe('CSV portability contract', () => {
+    it('writes one UTF-8 BOM through the native save picker before reporting success', async () => {
+        let writtenBlob: Blob | undefined;
+        const writable = {
+            write: vi.fn(async (blob: Blob) => { writtenBlob = blob; }),
+            close: vi.fn(async () => {}),
+        };
+        const picker = vi.fn().mockResolvedValue({ createWritable: vi.fn().mockResolvedValue(writable) });
+        vi.stubGlobal('showSaveFilePicker', picker);
+        const fallback = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+
+        expect(await Exporter.downloadFile('allenamenti.csv', '"test"\\n')).toBe(true);
+        expect(picker).toHaveBeenCalledWith(expect.objectContaining({ suggestedName: 'allenamenti.csv' }));
+        expect(writable.write).toHaveBeenCalledOnce();
+        expect(writable.close).toHaveBeenCalledOnce();
+        expect(fallback).not.toHaveBeenCalled();
+
+        const bytes = await new Promise<Uint8Array>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(new Uint8Array(reader.result as ArrayBuffer));
+            reader.onerror = () => reject(reader.error);
+            reader.readAsArrayBuffer(writtenBlob!);
+        });
+        expect(Array.from(bytes.slice(0, 3))).toEqual([0xef, 0xbb, 0xbf]);
+        expect(new TextDecoder().decode(bytes.slice(3))).toBe('"test"\\n');
+    });
+
+    it('does not fall back to a download after native picker cancellation', async () => {
+        vi.stubGlobal('showSaveFilePicker', vi.fn().mockRejectedValue(
+            Object.assign(new Error('user cancelled'), { name: 'AbortError' }),
+        ));
+        const fallback = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+
+        await expect(Exporter.downloadFile('allenamenti.csv', 'content')).resolves.toBe(false);
+        expect(fallback).not.toHaveBeenCalled();
+    });
+
+    it('reports native save write failures without claiming a completed download', async () => {
+        const writable = {
+            write: vi.fn().mockRejectedValue(new Error('disk full')),
+            close: vi.fn(),
+        };
+        vi.stubGlobal('showSaveFilePicker', vi.fn().mockResolvedValue({
+            createWritable: vi.fn().mockResolvedValue(writable),
+        }));
+        const fallback = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+        const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+        await expect(Exporter.downloadFile('allenamenti.csv', 'content')).resolves.toBe(false);
+        expect(writable.close).not.toHaveBeenCalled();
+        expect(fallback).not.toHaveBeenCalled();
+        expect(error).toHaveBeenCalledWith('Esportazione fallita:', expect.any(Error));
+    });
+
     it('uses the canonical workout business date and exports sessions even without sets', async () => {
         let csv = '';
         vi.spyOn(Exporter, 'downloadFile').mockImplementation(async (filename, content) => {
