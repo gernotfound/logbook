@@ -72,6 +72,15 @@ if (JSON.stringify(actualDedicated) !== JSON.stringify(dedicatedUnitFiles)
   || !standardVitest.includes('...dedicatedSuiteExclusions')) {
   failures.push('vitest default: dedicated M5/M7/M8 files must be excluded only from npm run test');
 }
+if (packageJson.scripts?.['test:discovery'] !== 'node --test scripts/test-discovery-regressions.mjs && node scripts/check-test-discovery.mjs') {
+  failures.push('test:discovery: real test discovery and negative regressions must run together');
+}
+if (packageJson.scripts?.['test:coverage:critical'] !== 'node scripts/run-critical-coverage.mjs') {
+  failures.push('test:coverage:critical: diagnostic coverage runner missing');
+}
+if (!packageJson.scripts?.['verify:m6']?.includes('npm run test:discovery') || !packageJson.scripts?.['verify:m6']?.includes('npm run test:coverage:critical')) {
+  failures.push('verify:m6 must include discovery and critical coverage leaves');
+}
 if (packageJson.scripts?.test !== 'vitest run') {
   failures.push('test: canonical general Vitest leaf must remain unmodified');
 }
@@ -224,6 +233,7 @@ const allowedIfLines = new Set([
   "if: ${{ always() && github.event_name == 'pull_request' }}",
   'if: matrix.java == true',
   "if: matrix.id == 'core'",
+  "if: matrix.id == 'critical-coverage'",
   'if: failure()',
   'if: ${{ always() }}',
 ]);
@@ -249,7 +259,7 @@ if (!includeMatch) {
     return { id, command, java };
   });
 
-  const expectedIds = ['core', 'unit-1', 'unit-2', 'hardening-stress', 'rules', 'm7-m8'];
+  const expectedIds = ['core', 'unit-1', 'unit-2', 'unit-3', 'hardening-stress', 'rules', 'm7-m8', 'critical-coverage'];
   const ids = shards.map(shard => shard.id);
   if (JSON.stringify(ids) !== JSON.stringify(expectedIds)) {
     failures.push(`parallel matrix: expected shard ids ${expectedIds.join(', ')}, got ${ids.join(', ')}`);
@@ -267,7 +277,7 @@ if (!includeMatch) {
     }
     for (const part of splitChain(shard.command)) {
       if (part === 'npm audit --audit-level=high' || part === 'npm run test:security-static') continue;
-      if (/^npm run test -- --shard=[12]\/2$/.test(part)) {
+      if (/^npm run test -- --shard=[123]\/3$/.test(part)) {
         unitShardCommands.push(part);
         continue;
       }
@@ -281,11 +291,12 @@ if (!includeMatch) {
   }
 
   const expectedUnitShardCommands = [
-    'npm run test -- --shard=1/2',
-    'npm run test -- --shard=2/2',
+    'npm run test -- --shard=1/3',
+    'npm run test -- --shard=2/3',
+    'npm run test -- --shard=3/3',
   ];
   if (JSON.stringify([...unitShardCommands].sort()) !== JSON.stringify(expectedUnitShardCommands)) {
-    failures.push(`unit suite: expected deterministic 1/2 + 2/2 Vitest shards exactly once, got ${unitShardCommands.join(', ')}`);
+    failures.push(`unit suite: expected deterministic 1/3 + 2/3 + 3/3 Vitest shards exactly once, got ${unitShardCommands.join(', ')}`);
   } else {
     ciLeaves.push(...expandScript('test'));
   }
@@ -313,6 +324,12 @@ const guardOccurrences = workflow.match(/npm run test:quality-guardrails/g) ?? [
 if (guardOccurrences.length !== 1) failures.push(`quality regression gate: expected once in CI matrix, found ${guardOccurrences.length}`);
 const coverageOccurrences = workflow.match(/npm run test:typecheck-coverage/g) ?? [];
 if (coverageOccurrences.length !== 1) failures.push(`TypeScript coverage gate: expected once, found ${coverageOccurrences.length}`);
+const discoveryOccurrences = workflow.match(/npm run test:discovery/g) ?? [];
+if (discoveryOccurrences.length !== 1) failures.push('test discovery: expected once in CI core');
+const criticalCoverageOccurrences = workflow.match(/npm run test:coverage:critical/g) ?? [];
+if (criticalCoverageOccurrences.length !== 1) failures.push('critical coverage: expected once in CI matrix');
+requirePattern('critical coverage artifact bound to exact SHA', workflow, /^          name: critical-coverage-\$\{\{ env\.EXPECTED_SHA \}\}\s*$/m);
+requirePattern('critical coverage JSON evidence', workflow, /^          path: coverage\/critical\/coverage-summary\.json\s*$/m);
 const auditOccurrences = workflow.match(/npm audit --audit-level=high/g) ?? [];
 if (auditOccurrences.length !== 1) failures.push(`security audit: expected once, found ${auditOccurrences.length}`);
 const staticSecurityOccurrences = workflow.match(/npm run test:security-static/g) ?? [];
@@ -364,4 +381,4 @@ if (failures.length > 0) {
   process.exit(1);
 }
 
-console.log('M8 CI contract OK: exact-SHA verification and eight project-isolated Playwright shards are leaf-equivalent to verify:m8, dedicated Vitest files are partitioned without reexecution, CodeQL remains required, and Canonical Verification remains the aggregate gate.');
+console.log('M8 CI contract OK: exact-SHA verification, three unit shards, eight project-isolated Playwright shards, runtime discovery checks and critical coverage are leaf-equivalent to verify:m8; CodeQL and Canonical Verification remain required.');
