@@ -15,6 +15,7 @@ export const ConsentOverlay: React.FC = () => {
     const { isGuest } = useAuth();
     const { handleExportBackup, handleDeleteAccount, exportingData } = useSettings();
     const submitLegalConsent = useAppStore(state => state.submitLegalConsent);
+    const [confirmedAdult, setConfirmedAdult] = useState(false);
     const [acceptedTerms, setAcceptedTerms] = useState(false);
     const [acceptedHealth, setAcceptedHealth] = useState(false);
     const [showPrivacy, setShowPrivacy] = useState(false);
@@ -31,7 +32,7 @@ export const ConsentOverlay: React.FC = () => {
     });
 
     const handleAccept = async () => {
-        if (!acceptedTerms || !acceptedHealth || isSaving) return;
+        if (!confirmedAdult || !acceptedTerms || !acceptedHealth || isSaving) return;
         setIsSaving(true);
         try {
             await submitLegalConsent({
@@ -61,21 +62,29 @@ export const ConsentOverlay: React.FC = () => {
                 </p>
 
                 <div style={{ display: "flex", flexDirection: "column", gap: "0.9375rem" }}>
-                    {/* Checkbox 1: T&C e Privacy */}
                     <label style={{ display: "flex", alignItems: "flex-start", gap: "0.75rem", cursor: "pointer" }}>
                         <input
                             ref={firstCheckboxRef}
+                            type="checkbox"
+                            checked={confirmedAdult}
+                            onChange={(e) => setConfirmedAdult(e.target.checked)}
+                            style={{ width: "1.25rem", height: "1.25rem", accentColor: "var(--primary-color)", marginTop: "0.125rem", flexShrink: 0 }}
+                        />
+                        <span style={{ lineHeight: "1.4" }}>Confermo di avere almeno 18 anni.</span>
+                    </label>
+                    <label style={{ display: "flex", alignItems: "flex-start", gap: "0.75rem", cursor: "pointer" }}>
+                        <input
                             type="checkbox"
                             checked={acceptedTerms}
                             onChange={(e) => setAcceptedTerms(e.target.checked)}
                             style={{ width: "1.25rem", height: "1.25rem", accentColor: "var(--primary-color)", marginTop: "0.125rem", flexShrink: 0 }}
                         />
                         <span className="ui-consent-overlay-5" style={{ lineHeight: "1.4" }}>
-                            Confermo di avere almeno 18 anni, ho letto l'<button className="btn-link ui-consent-overlay-7" style={{ padding: 0, textDecoration: "underline", cursor: "pointer" }} onClick={(e) => { e.preventDefault(); setShowPrivacy(true); }}>Informativa sulla Privacy</button> e accetto i <button className="btn-link ui-consent-overlay-6" style={{ padding: 0, textDecoration: "underline", cursor: "pointer" }} onClick={(e) => { e.preventDefault(); setShowTerms(true); }}>Termini e Condizioni</button>.
+                            Ho letto l'<button className="btn-link ui-consent-overlay-7" style={{ padding: 0, textDecoration: "underline", cursor: "pointer" }} onClick={(e) => { e.preventDefault(); setShowPrivacy(true); }}>Informativa sulla Privacy</button> e accetto i <button className="btn-link ui-consent-overlay-6" style={{ padding: 0, textDecoration: "underline", cursor: "pointer" }} onClick={(e) => { e.preventDefault(); setShowTerms(true); }}>Termini e Condizioni</button>.
                         </span>
                     </label>
 
-                    {/* Checkbox 2: Dati Salute */}
+                    {/* Consenso esplicito per i dati salute */}
                     <label className="ui-consent-overlay-8" style={{ display: "flex", alignItems: "flex-start", gap: "0.75rem", cursor: "pointer", padding: "1rem" }}>
                         <input
                             type="checkbox"
@@ -91,7 +100,7 @@ export const ConsentOverlay: React.FC = () => {
 
                 <button
                     className="btn btn-primary ui-consent-overlay-10"
-                    disabled={!acceptedTerms || !acceptedHealth || isSaving}
+                    disabled={!confirmedAdult || !acceptedTerms || !acceptedHealth || isSaving}
                     onClick={handleAccept}
                     style={{ padding: "0.875rem", marginTop: "0.625rem" }}
                 >

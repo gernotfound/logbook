@@ -117,10 +117,11 @@ describe('suspended health-consent screen', () => {
     expect(screen.getByText(/Il backup JSON esportato non è cifrato/i)).toBeDefined();
     const submit = screen.getByRole('button', { name: 'Accetta e continua' }) as HTMLButtonElement;
     expect(submit.disabled).toBe(true);
-    expect(screen.getAllByRole('checkbox')).toHaveLength(2);
-    fireEvent.click(checkboxInputs()[0]);
-    expect(submit.disabled).toBe(true);
+    expect(screen.getAllByRole('checkbox')).toHaveLength(3);
     fireEvent.click(checkboxInputs()[1]);
+    fireEvent.click(checkboxInputs()[2]);
+    expect(submit.disabled).toBe(true);
+    fireEvent.click(checkboxInputs()[0]);
     expect(submit.disabled).toBe(false);
     fireEvent.click(submit);
     await waitFor(() => expect(registerInitialHealthConsent).toHaveBeenCalledTimes(1));

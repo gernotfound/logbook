@@ -23,6 +23,7 @@ import { readHealthDataErasureProgress, type HealthDataErasureOutcome } from '..
 function ReacceptanceForm({ enabled, busy, onReaccept, firstAcceptance = false }: {
   enabled: boolean; busy: boolean; onReaccept: () => Promise<void>; firstAcceptance?: boolean;
 }) {
+  const [confirmedAdult, setConfirmedAdult] = useState(false);
   const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [acceptedHealth, setAcceptedHealth] = useState(false);
 
@@ -32,15 +33,19 @@ function ReacceptanceForm({ enabled, busy, onReaccept, firstAcceptance = false }
       ? 'Esamina i documenti e presta il primo consenso esplicito per usare il tuo account. Il consenso viene registrato dal server prima di permettere la sincronizzazione.'
       : 'La cancellazione dei dati precedenti è stata verificata. Un nuovo consenso avvia un archivio vuoto e non ripristina i dati cancellati.'}</p>
     <label style={{ display: 'block', marginBlock: 12 }}>
+      <input type="checkbox" disabled={!enabled || busy} checked={confirmedAdult} onChange={e => setConfirmedAdult(e.target.checked)} />
+      {' '}Confermo di avere almeno 18 anni.
+    </label>
+    <label style={{ display: 'block', marginBlock: 12 }}>
       <input type="checkbox" disabled={!enabled || busy} checked={acceptedTerms} onChange={e => setAcceptedTerms(e.target.checked)} />
-      {' '}Ho almeno 18 anni, ho letto l'informativa e accetto i termini.
+      {' '}Ho letto l'informativa e accetto i termini.
     </label>
     <label style={{ display: 'block', marginBlock: 12 }}>
       <input type="checkbox" disabled={!enabled || busy} checked={acceptedHealth} onChange={e => setAcceptedHealth(e.target.checked)} />
       {' '}Presto esplicitamente il consenso al trattamento dei miei dati relativi alla salute per il servizio.
     </label>
-    <button className="btn btn-primary" type="button" disabled={!enabled || busy || !acceptedTerms || !acceptedHealth}
-      onClick={() => { if (enabled && !busy && acceptedTerms && acceptedHealth) void onReaccept(); }}>
+    <button className="btn btn-primary" type="button" disabled={!enabled || busy || !confirmedAdult || !acceptedTerms || !acceptedHealth}
+      onClick={() => { if (enabled && !busy && confirmedAdult && acceptedTerms && acceptedHealth) void onReaccept(); }}>
       {busy ? 'Salvataggio in corso…' : firstAcceptance ? 'Accetta e continua' : 'Presta un nuovo consenso'}
     </button>
   </>;
