@@ -6,6 +6,21 @@
 
 **Fonti:** [Consenso salute](../../.agents/rules/health-consent.md), [Account](../../.agents/rules/account-lifecycle.md), [Cifratura](../../.agents/rules/secure-storage.md), [Telemetria](../../.agents/rules/telemetry-and-privacy.md), [protocollo tecnico](health-consent-technical-protocol.md), [registro fornitori](vendor-transfer-register.md). Le precedenti proposte di cancellazione su secondo pulsante e riaccettazione offline sul vecchio archivio sono storiche, conservate in Git e non più vigenti.
 
+## Politica di inattività deliberata, non ancora attiva
+
+**Decisione prodotto del 6 novembre 2026:** cancellare gli account dopo **12 mesi senza utilizzo autenticato rilevato online**, anche se l'utente consulta soltanto i dati; **nessuna email preventiva**. La beta è pubblica, con utenti maggiorenni e dati reali. Questi 12 mesi sono una preferenza del prodotto, **non un termine imposto dal GDPR né una retention già implementata**.
+
+Per implementare questa decisione senza perdita accidentale di dati:
+
+1. Definire una prova autorevole lato server di attività **dell'utente autenticato effettivamente online**, basata sul tempo server e aggiornata anche per una consultazione senza modifiche. Il solo `lastSignInTime` di Firebase Auth non misura le consultazioni; l'ultimo aggiornamento di Firestore, il sync automatico e la presenza di cache offline non equivalgono ad attività umana. Ridurre al minimo i metadati aggiuntivi.
+2. Definire il momento di inizio del conteggio e distinguere account appena creati, account senza consenso fitness, account con revoca, account con cancellazione già in corso e sessioni offline. Non conteggiare un errore di rete come inattività confermata.
+3. **Rischio irrisolto:** un account può essere utilizzato per più di 12 mesi soltanto offline. Il backend non può osservarlo; un cron potrebbe cancellare permanentemente cloud, Auth e chiave di recovery anche se il dispositivo contiene attività locale recente. La mancata notifica riduce ulteriormente le occasioni di evitare la perdita. Definire e collaudare una protezione effettiva e decidere l'accettazione esplicita del rischio residuo prima di attivare la cancellazione.
+4. Se il cron trova un candidato, verificare la scadenza nuovamente in una transazione/fence con tutte le attività concorrenti; utilizzare soltanto la pipeline trusted `account_deletions/{uid}` (Auth eliminata per ultima), senza purge diretto dal cron o conversioni degli archivi locali a vuoti in caso di esito ambiguo. Non permettere a un nuovo dispositivo di riattivare o risincronizzare dati cancellati.
+5. Prima del rollout aggiornare testi pubblici e versioni legali, informare chiaramente **alla registrazione** del limite di 12 mesi e dell'assenza di email, fornire un percorso semplice per esportare i dati e valutare la correttezza della scelta con un professionista. Validare tempi/criteri, backup e copie dei fornitori.
+6. Testare con orologi controllati: 364/365 giorni e anno bisestile, nuova attività alla soglia, consultazione senza scrittura, browser in background, concorrenza su dispositivi, cron ripetuto, account revocato, errore provider, offline di lunga durata, recovery e dati di altri owner.
+
+**Stato:** solo decisione e requisiti di sicurezza; **nessun job di cancellazione per inattività è autorizzato a essere messo in Production** prima del completamento dei controlli. Vedi [issue #835](https://github.com/gernotfound/logbook/issues/835) e [#824](https://github.com/gernotfound/logbook/issues/824).
+
 ## Revoca: decisione corrente e limiti
 
 - **Prima:** la PWA offre un backup JSON facoltativo; non condiziona l'esercizio della revoca.
