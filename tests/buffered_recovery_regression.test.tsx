@@ -1349,6 +1349,64 @@ describe('advanced workout segment identity across removal and draft recovery', 
         view.unmount();
     });
 
+    it('keeps buffered target reps bound to their segment when a preceding dirty target is removed', async () => {
+        const owner = captureSession().owner;
+        await prepareUnlockedTestArchive(owner);
+        let workout: WorkoutSession = {
+            id: workoutId,
+            exercises: [{ id: 'exercise-a', exId: 'bench', sets: [{
+                ...initialSet,
+                technique: 'rep_match',
+                segments: [
+                    { ...segmentA, technique: 'rep_match', target: { type: 'reps', reps: 5 } },
+                    { ...segmentB, technique: 'rep_match', target: { type: 'reps', reps: 4 } },
+                ],
+            }] }],
+        };
+        const setLocalWorkout = (updater: (prev: WorkoutSession | null) => WorkoutSession | null) => {
+            workout = updater(workout) ?? workout;
+        };
+        const { result } = renderHook(() => useWorkoutSetMutations({
+            setLocalWorkout, showConfirm: async () => true,
+        }));
+        const update = vi.fn(result.current.updateSpecialSet);
+        const targetRow = () => (
+            <BufferedWorkoutScope.Provider value={workoutId}>
+                <SessionSetRow set={workout.exercises[0].sets[0]} sIndex={0} exIndex={0}
+                    isOpenMenu={false} {...handlers} onUpdateSpecialSet={update} />
+            </BufferedWorkoutScope.Provider>
+        );
+        const view = render(targetRow());
+        const inputA = view.container.querySelector('#seg-target-set-identity-seg-a') as HTMLInputElement;
+        const inputB = view.container.querySelector('#seg-target-set-identity-seg-b') as HTMLInputElement;
+        expect(inputA).not.toBeNull();
+        expect(inputB).not.toBeNull();
+        fireEvent.change(inputA, { target: { value: '6' } });
+        fireEvent.change(inputB, { target: { value: '7' } });
+        const nameB = `draft:buffered:input:${workoutId}:seg-target-set-identity-seg-b`;
+        const keyB = protectedDeviceKey(nameB, owner);
+        const savedDraftB = localStorage.getItem(keyB);
+        expect(savedDraftB).toMatch(/^tlb-sealed:v1:/);
+
+        act(() => result.current.removeSpecialSet(0, 'set-identity', 'segments', 'seg-a'));
+        view.rerender(targetRow());
+        const surviving = view.container.querySelector('#seg-target-set-identity-seg-b') as HTMLInputElement;
+        expect(surviving).toBe(inputB);
+        expect(surviving.value).toBe('7');
+        expect(workout.exercises[0].sets[0].segments).toEqual([
+            expect.objectContaining({ id: 'seg-b', target: { type: 'reps', reps: 4 } }),
+        ]);
+        expect(localStorage.getItem(keyB)).toBe(savedDraftB);
+        expect(update).toHaveBeenCalledWith(0, 'set-identity', 'segments', 'seg-a', 'target', { type: 'reps', reps: 6 });
+
+        fireEvent.blur(surviving);
+        expect(update).toHaveBeenCalledWith(0, 'set-identity', 'segments', 'seg-b', 'target', { type: 'reps', reps: 7 });
+        expect(workout.exercises[0].sets[0].segments).toEqual([
+            expect.objectContaining({ id: 'seg-b', target: { type: 'reps', reps: 7 } }),
+        ]);
+        view.unmount();
+    });
+
     it('ignores an unmounted segment callback and updates only the surviving ID', () => {
         let workout = { id: workoutId, exercises: [{ id: 'exercise-a', exId: 'bench',
             sets: [initialSet] }] } as unknown as WorkoutSession;
