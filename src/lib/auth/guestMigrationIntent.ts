@@ -50,19 +50,27 @@ function createId(): string {
 
 function parse(raw: string | null): GuestMigrationIntent {
     if (!raw) throw new Error('Tentativo di trasferimento guest assente.');
-    let value: Partial<GuestMigrationIntent>;
+    let parsed: unknown;
     try {
-        value = JSON.parse(raw) as Partial<GuestMigrationIntent>;
+        parsed = JSON.parse(raw);
     } catch (error) {
         throw new Error('Tentativo di trasferimento guest non valido.', { cause: error });
     }
+    if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+        throw new Error('Tentativo di trasferimento guest non valido.');
+    }
+    const value = parsed as Record<string, unknown>;
+    // Never discard malformed identity constraints: doing so would broaden
+    // which account or realm may claim the reserved guest transfer.
+    const identityFields = ['expectedEmail', 'expectedUid', 'boundUid', 'claimedBy'] as const;
     if (
         value.version !== 1
         || typeof value.id !== 'string' || !value.id
         || (value.policy !== 'merge' && value.policy !== 'skip')
         || (value.method !== 'email' && value.method !== 'google' && value.method !== 'recovery')
         || typeof value.startedAt !== 'number' || !Number.isFinite(value.startedAt) || value.startedAt <= 0
-        || (value.claimedBy !== undefined && (typeof value.claimedBy !== 'string' || !value.claimedBy))
+        || identityFields.some(field => value[field] !== undefined
+            && (typeof value[field] !== 'string' || !value[field].trim()))
     ) {
         throw new Error('Tentativo di trasferimento guest non valido.');
     }
