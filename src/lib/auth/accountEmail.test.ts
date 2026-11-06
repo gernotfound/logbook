@@ -80,6 +80,10 @@ describe('account email operations', () => {
     it.each([
         ['non-JSON error', 403, '<html>forbidden</html>'],
         ['empty error', 500, '{}'],
+        ['null body', 400, 'null'],
+        ['null error', 400, '{"error":null}'],
+        ['non-string message', 400, '{"error":{"message":123}}'],
+        ['object message', 400, '{"error":{"message":{"code":"EMAIL_EXISTS"}}}'],
     ])('fails closed for %s provider responses', async (_reason, status, body) => {
         const user = { uid: 'u1', getIdToken: vi.fn().mockResolvedValue('fresh-id-token') } as any;
         vi.mocked(fetch).mockResolvedValueOnce(new Response(body, { status }));
