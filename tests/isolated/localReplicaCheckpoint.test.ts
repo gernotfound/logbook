@@ -3,6 +3,13 @@ import { clear, get } from 'idb-keyval';
 import * as indexedDb from 'idb-keyval';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+// Native ESM exports cannot be spied on. Wrap only the external update;
+// ordinary calls still execute idb-keyval and the real encrypted gateway.
+vi.mock('idb-keyval', async importOriginal => {
+    const actual = await importOriginal<typeof import('idb-keyval')>();
+    return { ...actual, update: vi.fn(actual.update) };
+});
+
 vi.mock('../../src/lib/catalog/catalogService', () => ({
     getCachedCatalog: vi.fn(),
 }));
@@ -39,6 +46,8 @@ const identity = (slot: string, replicaId = 'checkpoint-test', generation = 1): 
 });
 
 beforeEach(async () => {
+    const actual = await vi.importActual<typeof import('idb-keyval')>('idb-keyval');
+    vi.mocked(indexedDb.update).mockReset().mockImplementation(actual.update);
     vi.mocked(getCachedCatalog).mockReset();
     vi.mocked(getCachedCatalog).mockResolvedValue(structuredClone(catalog));
     lockAllVaults();
@@ -271,7 +280,7 @@ describe('durable local replica checkpoint adoption', () => {
         const before = await pendingReplica();
         const ciphertext = await get(key('a'));
         const failure = new Error('checkpoint disk write failed');
-        vi.spyOn(indexedDb, 'update').mockRejectedValueOnce(failure);
+        vi.mocked(indexedDb.update).mockRejectedValueOnce(failure);
         const claim = { identity: identity('s01', 'replacement', 2), baseSeq: 7 };
         const checkpoint = cloudCheckpoint({ s00: 1, s01: 7 });
         await expect(adoptReplicaCheckpoint('a', claim, checkpoint)).rejects.toBe(failure);
