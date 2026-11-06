@@ -13,8 +13,6 @@ export function readAuthenticatedOwnerHint(): string | null {
 
 export function rememberAuthenticatedOwner(uid: string): string {
     const owner = userOwner(uid);
-    // Never persist an owner that the next cold boot would reject.
-    assertAuthenticatedOwner(owner);
     writeBrowserValue(AUTH_OWNER_HINT_KEY, owner);
     return owner;
 }

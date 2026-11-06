@@ -40,11 +40,11 @@ export function useEmailAuthActions({
         let intentId: string | null = null;
         if (isGuestActiveStrict()) {
             if (!guestPolicy) throw new Error('Scelta di trasferimento guest richiesta.');
-            const guestSession = captureSession();
             intentId = (await beginGuestMigrationIntent(guestPolicy, 'email', {
-                email, assertCurrent: () => isGuestActiveStrict() && isCurrentSession(guestSession),
+                email, assertCurrent: () => isGuestActiveStrict() && stillOriginalAttempt(),
             })).id;
         }
+        if (!stillOriginalAttempt()) { await abandonOwnGuestIntent(intentId); return; }
         let credential: Awaited<ReturnType<typeof signInWithEmailAndPassword>>;
         try {
             credential = await signInWithEmailAndPassword(auth, email, pass);
@@ -57,7 +57,7 @@ export function useEmailAuthActions({
         const resultIsCurrent = () => auth.currentUser?.uid === credential.user.uid && resultSession();
         if (intentId) {
             try {
-                await confirmGuestMigrationCredential(intentId, credential);
+                await confirmGuestMigrationCredential(intentId, credential, resultIsCurrent);
             } catch (error) {
                 rejectGuestMigrationAuthWaiters(intentId, 'Risultato di questo accesso email non verificabile.');
                 console.error('Prova dell’accesso email non confermata:', error);
@@ -81,12 +81,12 @@ export function useEmailAuthActions({
         let intentId: string | null = null;
         if (isGuestActiveStrict()) {
             if (!guestPolicy) throw new Error('Scelta di trasferimento guest richiesta.');
-            const guestSession = captureSession();
             intentId = (await beginGuestMigrationIntent(guestPolicy, 'email', {
-                email, assertCurrent: () => isGuestActiveStrict() && isCurrentSession(guestSession),
+                email, assertCurrent: () => isGuestActiveStrict() && stillOriginalAttempt(),
             })).id;
         }
 
+        if (!stillOriginalAttempt()) { await abandonOwnGuestIntent(intentId); return; }
         let credential: Awaited<ReturnType<typeof createUserWithEmailAndPassword>>;
         try {
             credential = await createUserWithEmailAndPassword(auth, email, pass);
@@ -102,7 +102,7 @@ export function useEmailAuthActions({
         let proofFailed = false;
         if (intentId) {
             try {
-                await confirmGuestMigrationCredential(intentId, credential);
+                await confirmGuestMigrationCredential(intentId, credential, resultIsCurrent);
             } catch (error) {
                 proofFailed = true;
                 rejectGuestMigrationAuthWaiters(intentId, 'Risultato della registrazione email non verificabile.');

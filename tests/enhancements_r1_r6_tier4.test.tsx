@@ -153,9 +153,10 @@ describe('LogBook PWA Enhancements Integration Suite (Requirements R1 - R6)', ()
                 sessionHook.current.addSpecialSet(1, curlSetId, 'dropset');
             });
 
+            const curlSegmentId = useAppStore.getState().localWorkout!.exercises[1].sets[0].segments![0].id;
             act(() => {
-                sessionHook.current.updateSpecialSet(1, curlSetId, 'segments', 0, 'kg', '12');
-                sessionHook.current.updateSpecialSet(1, curlSetId, 'segments', 0, 'reps', '8');
+                sessionHook.current.updateSpecialSet(1, curlSetId, 'segments', curlSegmentId, 'kg', '12');
+                sessionHook.current.updateSpecialSet(1, curlSetId, 'segments', curlSegmentId, 'reps', '8');
             });
 
             // Complete session

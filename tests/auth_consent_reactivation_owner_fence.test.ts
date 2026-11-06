@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { User } from 'firebase/auth';
 import { auth } from '../src/lib/firebase';
 import { invalidateSession } from '../src/lib/sync/session';
@@ -6,20 +6,20 @@ import { refreshHealthConsent } from '../src/lib/healthConsent';
 import { prepareUnlockedTestArchive } from './secureVaultFixture';
 import { createAuthConsentLifecycleHandlers } from '../src/contexts/auth/consentLifecycle';
 
-const registered: Array<(event: Event) => void> = [];
+type LifecycleOptions = Partial<Pick<Parameters<typeof createAuthConsentLifecycleHandlers>[0],
+  'isMounted' | 'isBootstrapInFlight'>>;
 
-function start(loadData: (user: User) => Promise<void>, isBootstrapInFlight = () => false) {
+function start(loadData: (user: User) => Promise<void>, options: LifecycleOptions = {}) {
   const setLoading = vi.fn();
   const setSaveError = vi.fn();
   const handlers = createAuthConsentLifecycleHandlers({
     isMounted: () => true,
     isGuestActiveStrict: () => false,
-    isBootstrapInFlight,
+    ...options,
     loadData,
     setLoading,
     setSaveError,
   });
-  registered.push(handlers.handleConsentReactivated);
   return { setLoading, setSaveError, handlers };
 }
 
@@ -27,12 +27,6 @@ beforeEach(async () => {
   vi.clearAllMocks();
   localStorage.clear();
   await prepareUnlockedTestArchive('user:' + auth.currentUser!.uid);
-});
-
-afterEach(() => {
-  for (const handler of registered.splice(0)) {
-    window.removeEventListener('logbook:health-consent-reactivated', handler);
-  }
 });
 
 describe('consent reactivation lifecycle owner fencing', () => {
@@ -55,7 +49,7 @@ describe('consent reactivation lifecycle owner fencing', () => {
   it('does not supersede a bootstrap verification on focus', async () => {
     const loadData = vi.fn(async () => {});
     const isBootstrapInFlight = vi.fn(() => true);
-    const { handlers } = start(loadData, isBootstrapInFlight);
+    const { handlers } = start(loadData, { isBootstrapInFlight });
     await handlers.handleVisibilityChange(new Event('focus'));
     expect(isBootstrapInFlight).toHaveBeenCalledOnce();
     expect(loadData).not.toHaveBeenCalled();
@@ -92,4 +86,30 @@ describe('consent reactivation lifecycle owner fencing', () => {
     finish();
     await vi.waitFor(() => expect(setLoading).toHaveBeenLastCalledWith(false));
   });
+
+  it.each(['same-uid-login', 'unmount'] as const)('ignores reactivation feedback after %s', async transition => {
+    const first = auth.currentUser!;
+    let mounted = true;
+    let rejectLoad!: (error: Error) => void;
+    const loadData = vi.fn(() => new Promise<void>((_resolve, reject) => { rejectLoad = reject; }));
+    const { setLoading, setSaveError, handlers } = start(loadData, { isMounted: () => mounted });
+    handlers.handleConsentReactivated(new CustomEvent('logbook:health-consent-reactivated', {
+      detail: { uid: first.uid },
+    }));
+    expect(loadData).toHaveBeenCalledExactlyOnceWith(first);
+    expect(setLoading).toHaveBeenCalledExactlyOnceWith(true);
+    if (transition === 'same-uid-login') {
+      invalidateSession();
+      (auth as { currentUser: unknown }).currentUser = { ...first };
+    } else {
+      mounted = false;
+    }
+
+    rejectLoad(new Error('stale hydration failure'));
+    await new Promise(resolve => setTimeout(resolve, 0));
+
+    expect(setSaveError).not.toHaveBeenCalled();
+    expect(setLoading).toHaveBeenCalledTimes(1);
+  });
+
 });

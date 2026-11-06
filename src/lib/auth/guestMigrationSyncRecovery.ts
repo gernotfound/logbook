@@ -19,7 +19,11 @@ export function readGuestMigrationSyncWitness(uid: string): GuestMigrationSyncWi
     if (raw === null) return null;
     let value: Partial<GuestMigrationSyncWitness>;
     try {
-        value = JSON.parse(raw) as Partial<GuestMigrationSyncWitness>;
+        const parsed: unknown = JSON.parse(raw);
+        if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
+            throw new Error('Formato prova non valido.');
+        }
+        value = parsed as Partial<GuestMigrationSyncWitness>;
     } catch {
         throw new Error('Prova di recupero migrazione account non valida.');
     }

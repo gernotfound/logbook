@@ -39,9 +39,10 @@ describe('password policy', () => {
     });
 
     it('accepts a password only when Firebase accepts it', async () => {
+        const password = 'SecurePassword123!Long';
         mockedValidatePassword.mockResolvedValueOnce({ isValid: true, passwordPolicy: policy } as any);
-        await expect(validatePasswordAgainstPolicy('SecurePassword123!')).resolves.toBeNull();
-        expect(mockedValidatePassword).toHaveBeenCalledTimes(1);
+        await expect(validatePasswordAgainstPolicy(password)).resolves.toBeNull();
+        expect(mockedValidatePassword).toHaveBeenCalledExactlyOnceWith(expect.anything(), password);
     });
 
     it('reports the stricter minimum returned by Firebase', async () => {

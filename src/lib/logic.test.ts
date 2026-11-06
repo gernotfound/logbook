@@ -351,6 +351,21 @@ describe('Logic Library Tests', () => {
         expect(Logic.formatItalianDate(null)).toBe('');
     });
 
+    it('formatItalianDate: keeps epoch zero and validates calendar-only strings', () => {
+        const epoch = new Date(0);
+        const epochDate = [epoch.getDate(), epoch.getMonth() + 1, epoch.getFullYear()]
+            .map((value, index) => String(value).padStart(index === 2 ? 4 : 2, '0')).join('/');
+        expect(Logic.formatItalianDate(0)).toBe(epochDate);
+        expect(Logic.formatItalianDate('29/02/2024')).toBe('29/02/2024');
+        expect(Logic.formatItalianDate('2024-02-29')).toBe('29/02/2024');
+        for (const value of ['29/02/2026', '31/04/2026', '00/00/2026', '2026-02-31', '2026-04-31']) {
+            expect(Logic.formatItalianDate(value)).toBe('');
+        }
+        expect(Logic.formatItalianDate(new Date(Number.NaN))).toBe('');
+        expect(Logic.formatItalianDate(Number.NaN)).toBe('');
+        expect(Logic.formatItalianDate(undefined)).toBe('');
+    });
+
     it('parseDateInput: parses various date string formats to YYYY-MM-DD', () => {
         expect(Logic.parseDateInput('08/08/2026')).toBe('2026-08-08');
         expect(Logic.parseDateInput('8/8/2026')).toBe('2026-08-08');

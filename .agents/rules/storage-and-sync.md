@@ -42,11 +42,10 @@ L'app utilizza quattro livelli di storage con ruoli distinti:
 
 ## Browser storage boundary
 
-`src/lib/sync/browserStorage.ts` centralizza i casi in cui è necessario distinguere accesso strict da best-effort:
+`src/lib/sync/browserStorage.ts` centralizza gli errori di accesso allo storage dei boundary applicativi:
 
 - `readBrowserValueStrict()` fallisce con `BrowserStorageError` se `localStorage` non è disponibile/leggibile;
-- `readBrowserValue()` degrada a `null` ed è adatto solo a hint/preferenze dove “mancante” e “illeggibile” possono avere la stessa semantica;
-- write/remove strict propagano l'errore; gli helper `try*` sono ammessi soltanto nei boundary esplicitamente best-effort.
+- write/remove strict propagano l'errore.
 
 **MUST:** gate CRITICAL (ownership, lifecycle, logout, account deletion, reload/persistenza) non devono trasformare uno storage illeggibile in “chiave assente” se questa distinzione può cambiare una decisione distruttiva o di sicurezza.
 

@@ -1,4 +1,5 @@
 import type { User } from 'firebase/auth';
+import type { GuestMigrationPolicy } from '../AuthContextDef';
 import type { SyncResult, UserData } from '../../types';
 import { DB } from '../../lib/db';
 import { getDb } from '../../lib/firebase';
@@ -17,8 +18,6 @@ import {
     retireExpiredReplicas,
 } from '../../lib/sync/replicaProtocol';
 import { IncompleteCloudSnapshotError, type LocalEnvelope } from '../../lib/sync/localRepository';
-
-type GuestMigrationPolicy = 'merge' | 'skip';
 
 class StaleGuestMigrationError extends Error {
     constructor() {
@@ -64,17 +63,26 @@ export async function migrateGuestAccount({ user, guestData, policy, setUserData
     };
     const restoreAfterFailure = async () => {
         if (!isCurrent()) return;
-        if (!localReady && guestData) { applyLocalData(guestData); return; }
+        if (!localReady) {
+            if (guestData) applyLocalData(guestData);
+            return;
+        }
         try {
             const { readLocal } = await import('../../lib/sync/localRepository');
             assertCurrent();
             const preserved = await readLocal(user.uid);
             assertCurrent();
-            if (preserved) { applyLocalData(preserved.data); return; }
+            if (!preserved) throw new Error('Archivio autenticato non disponibile dopo il passaggio di proprietario.');
+            applyLocalData(preserved.data);
         } catch (error) {
-            if (error instanceof StaleGuestMigrationError) throw error;
+            if (error instanceof StaleGuestMigrationError || !isCurrent()) throw new StaleGuestMigrationError();
+            // After handoff only the durable account envelope is authoritative.
+            // A guest snapshot cannot replace it or become a clean account base.
+            useAppStore.setState({
+                localPersistenceBlocked: true, syncing: false, syncHealth: 'failed',
+                saveError: 'Archivio account non rileggibile dopo la migrazione. Copie locali preservate; riapri TheLogBook prima di modificare i dati.',
+            });
         }
-        if (guestData && isCurrent()) applyLocalData(guestData);
     };
 
     try {
@@ -85,7 +93,6 @@ export async function migrateGuestAccount({ user, guestData, policy, setUserData
         const cloudPayload = await DB.loadCloudPayload({ allMonths: true, cloudKey });
         assertCurrent();
         const cloudData = cloudPayload?.data || null;
-        const cloudHasData = hasUserData(cloudData);
         const guestHasData = hasUserData(guestData);
         const prepareReplica = async (hydrated: LocalEnvelope): Promise<LocalEnvelope> => {
             assertCurrent();
@@ -120,6 +127,18 @@ export async function migrateGuestAccount({ user, guestData, policy, setUserData
             return UserDataSchema.parse(getResolvedDefaultUserData(catalog)) as unknown as UserData;
         };
 
+        const reflectDurableOutcome = (result: SyncResult, durable: LocalEnvelope): SyncResult => {
+            assertCurrent();
+            // A confirmed replay may leave another tab's newer operations pending.
+            const checked: SyncResult = durable.cloudIntegrityFence
+                ? { ok: false, status: 'failed', error: new Error('Recupero cloud richiesto: dati locali preservati.') }
+                : result.status === 'synced' && durable.pending.length > 0
+                    ? { ok: false, status: 'local-pending', error: new Error('Journal locale ancora in attesa di sincronizzazione.') }
+                    : result;
+            useAppStore.setState({ syncHealth: checked.status });
+            return checked;
+        };
+
         // An account may already hold its own pending journal even when the
         // guest intentionally skips the transfer. Hydration is not cloud ACK.
         const finishWithoutGuestMerge = async (): Promise<SyncResult> => {
@@ -137,81 +156,43 @@ export async function migrateGuestAccount({ user, guestData, policy, setUserData
             assertCurrent();
             if (!durable) throw new Error('Archivio autenticato non disponibile dopo la replica.');
             applyLocalData(durable.data);
-            let result = replayResult;
-            if (durable.cloudIntegrityFence) {
-                result = { ok: false, status: 'failed', error: new Error('Recupero cloud richiesto: dati locali preservati.') };
-            } else if (replayResult.status === 'synced' && durable.pending.length > 0) {
-                // A concurrent tab may have appended an edit during replay.
-                result = { ok: false, status: 'local-pending', error: new Error('Journal locale ancora in attesa di sincronizzazione.') };
-            }
-            useAppStore.setState({ syncHealth: result.status });
-            return result;
+            return reflectDurableOutcome(replayResult, durable);
         };
 
-        if (policy === 'skip') {
-            const { hydrateLocal } = await import('../../lib/sync/localRepository');
-            assertCurrent();
-            const authenticatedBase = await resolveAuthenticatedBase();
-            let hydratedEnv = await hydrateLocal(user.uid, authenticatedBase, cloudPayload?.completeMonths || [], cloudPayload?.cloudDocuments, 'all', isCurrent);
-            assertCurrent();
-            hydratedEnv = await prepareReplica(hydratedEnv);
-            assertCurrent();
-            return await finishWithoutGuestMerge();
-        }
-
-        if (cloudHasData && !guestHasData) {
-            const { hydrateLocal } = await import('../../lib/sync/localRepository');
-            assertCurrent();
-            let hydratedEnv = await hydrateLocal(user.uid, cloudData!, cloudPayload?.completeMonths || [], cloudPayload?.cloudDocuments, 'all', isCurrent);
-            assertCurrent();
-            hydratedEnv = await prepareReplica(hydratedEnv);
-            assertCurrent();
-            return await finishWithoutGuestMerge();
-        }
-
-        if (guestHasData) {
-            const { hydrateLocal, commitLocal, readLocal } = await import('../../lib/sync/localRepository');
-            assertCurrent();
-            const authenticatedBase = await resolveAuthenticatedBase();
-            let hydratedEnv = await hydrateLocal(user.uid, authenticatedBase, cloudPayload?.completeMonths || [], cloudPayload?.cloudDocuments, 'all', isCurrent);
-            assertCurrent();
-            hydratedEnv = await prepareReplica(hydratedEnv);
-            assertCurrent();
-            const mergedData = mergeUserData(hydratedEnv.data, guestData);
-            await commitLocal(user.uid, mergedData, hydratedEnv.data, isCurrent);
-            assertCurrent();
-            await markLocalReady();
-
-            const syncResult = await replicateJournal(userOwner(user.uid));
-            assertCurrent();
-            if (syncResult.status === 'local-pending') {
-                const pendingEnv = await readLocal(user.uid); assertCurrent();
-                applyLocalData(pendingEnv?.data ?? mergedData); return syncResult;
-            }
-            if (syncResult.status === 'rejected' || syncResult.status === 'failed') {
-                const preservedEnv = await readLocal(user.uid); assertCurrent();
-                applyLocalData(preservedEnv?.data ?? mergedData); return syncResult;
-            }
-
-            const resolvedPayload = await DB.loadCloudPayload({ cloudKey });
-            assertCurrent();
-            const resolvedData = resolvedPayload?.data || mergedData;
-            const hydratedFinal = await hydrateLocal(user.uid, resolvedData, resolvedPayload?.completeMonths || [], resolvedPayload?.cloudDocuments, 'window', isCurrent);
-            assertCurrent();
-            applyLocalData(hydratedFinal.data);
-            return syncResult;
-        }
-
-        const { hydrateLocal } = await import('../../lib/sync/localRepository');
+        const { hydrateLocal, commitLocal, readLocal } = await import('../../lib/sync/localRepository');
         assertCurrent();
         const authenticatedBase = await resolveAuthenticatedBase();
         let hydratedEnv = await hydrateLocal(user.uid, authenticatedBase, cloudPayload?.completeMonths || [], cloudPayload?.cloudDocuments, 'all', isCurrent);
         assertCurrent();
         hydratedEnv = await prepareReplica(hydratedEnv);
         assertCurrent();
-        return await finishWithoutGuestMerge();
+        if (policy === 'skip' || !guestHasData) return await finishWithoutGuestMerge();
+
+        const mergedData = mergeUserData(hydratedEnv.data, guestData);
+        await commitLocal(user.uid, mergedData, hydratedEnv.data, isCurrent);
+        assertCurrent();
+        await markLocalReady();
+
+        const syncResult = await replicateJournal(userOwner(user.uid));
+        assertCurrent();
+        if (syncResult.status !== 'synced') {
+            const preserved = await readLocal(user.uid);
+            assertCurrent();
+            if (!preserved) throw new Error('Archivio autenticato non disponibile dopo la replica.');
+            applyLocalData(preserved.data);
+            return reflectDurableOutcome(syncResult, preserved);
+        }
+
+        const resolvedPayload = await DB.loadCloudPayload({ cloudKey });
+        assertCurrent();
+        const resolvedData = resolvedPayload?.data || mergedData;
+        const hydratedFinal = await hydrateLocal(user.uid, resolvedData, resolvedPayload?.completeMonths || [], resolvedPayload?.cloudDocuments, 'window', isCurrent);
+        assertCurrent();
+        applyLocalData(hydratedFinal.data);
+        return reflectDurableOutcome(syncResult, hydratedFinal);
     } catch (error) {
         if (error instanceof StaleGuestMigrationError || !isCurrent()) throw new StaleGuestMigrationError();
+        useAppStore.setState({ syncHealth: 'failed' });
         const code = (error as { code?: unknown })?.code;
         if (error instanceof IncompleteCloudSnapshotError) {
             // The hydration transaction has already persisted the precise fence.

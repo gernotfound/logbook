@@ -53,18 +53,21 @@ export function getLocalDateString(d: Date | string | number = new Date()): stri
 }
 
 export function formatItalianDate(d: Date | string | number | undefined | null): string {
-    if (!d) return '';
+    if (d === undefined || d === null) return '';
     let date: Date;
     if (d instanceof Date) {
         date = d;
     } else if (typeof d === 'string') {
         const cleaned = d.trim();
         if (/^\d{2}\/\d{2}\/\d{4}$/.test(cleaned)) {
-            return cleaned;
-        }
-        date = cleaned.includes('T') ? new Date(cleaned) : parseISO(cleaned);
-        if (!isValid(date)) {
-            date = new Date(cleaned);
+            const [day, month, year] = cleaned.split('/');
+            date = parseISO(`${year}-${month}-${day}`);
+        } else {
+            date = cleaned.includes('T') ? new Date(cleaned) : parseISO(cleaned);
+            // Native parsing can roll an impossible calendar day into the next month.
+            if (!isValid(date) && !/^\d{4}-\d{2}-\d{2}$/.test(cleaned)) {
+                date = new Date(cleaned);
+            }
         }
     } else if (typeof d === 'number') {
         date = new Date(d);
@@ -148,7 +151,7 @@ export function formatDuration(secondsOrMs: number, isMs = false): string {
     return `${p(h)}:${p(m)}:${p(s)}`;
 }
 
-/** Strict boundary for user-edited workout duration; unlike legacy normalization, invalid input stays invalid. */
+/** Strict boundary for user-edited workout duration; unlike permissive normalization, invalid input stays invalid. */
 export function parseManualDuration(input: string | undefined | null): string | null {
     const cleaned = input?.trim() ?? '';
     if (!cleaned) return '00:00:00';
@@ -211,14 +214,6 @@ export function normalizeDuration(input: string | undefined | null): string {
     return '00:00:00';
 }
 
-export function formatTime(ms: number, showHours = false): string {
-    let totalSec = Math.floor(ms / 1000);
-    let h = Math.floor(totalSec / 3600);
-    let m = Math.floor((totalSec % 3600) / 60);
-    let s = totalSec % 60;
-    let p = (n: number) => n.toString().padStart(2, '0');
-    return showHours ? `${p(h)}:${p(m)}:${p(s)}` : `${p(m)}:${p(s)}`;
-}
 
 export interface CalendarDayCell {
     dayNum: number;
