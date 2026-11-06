@@ -213,7 +213,7 @@ describe('RISK-02: ConsentOverlay UI Behavior', () => {
         expect(screen.queryByText(/DA DEFINIRE E VALIDARE/)).toBeNull();
         expect(screen.getByText(/quando il server registra la revoca, avvia automaticamente/)).toBeDefined();
         expect(screen.getByText(/profilo fitness, misurazioni, allenamenti, nutrizione, schede e raccolte correlate/)).toBeDefined();
-        expect(screen.getByText(/La revoca sospende immediatamente allenamenti, nutrizione/)).toBeDefined();
+        expect(screen.getByText(/L'account Firebase Authentication rimane esistente/)).toBeDefined();
         expect(screen.getByText(/possono utilizzare propri identificatori tecnici/)).toBeDefined();
         expect(screen.getByText(/Firebase Authentication elabora i dati di accesso negli Stati Uniti/)).toBeDefined();
         expect(screen.getByText(/data di nascita, altezza, genere e misure corporee/)).toBeDefined();
