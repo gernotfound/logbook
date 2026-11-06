@@ -278,6 +278,8 @@ export async function deleteUserRoot(uidValue: string, leaseOwner: string): Prom
     // not leave it orphaned after account deletion; the deletion job fences
     // old clients throughout cleanup.
     transaction.delete(adminDb().collection('session_revocations').doc(uid));
+    // Account activity is server-only and must be removed for BOTH manual and automatic erasure.
+    transaction.delete(adminDb().collection('account_activity').doc(uid));
     // The account ADK envelope is a server-only TOP-LEVEL document, not a
     // private subcollection. The deletion lease must erase it explicitly.
     // Keep the wrapped ADK until all known and unexpected private data has been checked.
@@ -325,6 +327,9 @@ export async function verifyNoAccountResidue(uidValue: string, allowAccountKey =
 
   const revocationMarker = await adminDb().collection('session_revocations').doc(uid).get();
   if (revocationMarker.exists) throw new Error('Session revocation marker still exists after deletion.');
+
+  const activityMarker = await adminDb().collection('account_activity').doc(uid).get();
+  if (activityMarker.exists) throw new Error('Account activity marker still exists after deletion.');
 
   const known = new Set<string>(PRIVATE_ACCOUNT_COLLECTIONS);
   const collections = await root.listCollections();
