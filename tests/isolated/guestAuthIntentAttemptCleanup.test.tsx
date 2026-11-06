@@ -119,6 +119,28 @@ describe('serialized guest migration intent belongs to an exact Auth attempt', (
         },
     );
 
+    it.each(['login', 'register'] as const)(
+        'does not send email %s credentials after its reservation resumes in a different Auth epoch',
+        async action => {
+            const write = browserStorage.writeBrowserJson;
+            vi.spyOn(browserStorage, 'writeBrowserJson').mockImplementation((key, value) => {
+                write(key, value);
+                if (key === KEY) invalidateSession();
+            });
+            const { result } = email(true);
+            await act(async () => {
+                if (action === 'login') await result.current.loginWithEmail('guest@example.test', 'SecurePassword123!Long', 'merge');
+                else await result.current.registerWithEmail('guest@example.test', 'SecurePassword123!Long', 'merge');
+            });
+
+            expect(signInWithEmailAndPassword).not.toHaveBeenCalled();
+            expect(createUserWithEmailAndPassword).not.toHaveBeenCalled();
+            expect(localStorage.getItem(KEY)).toBeNull();
+            expect(localStorage.getItem('logbook_is_guest')).toBe('true');
+            expect(localStorage.getItem(GUEST_SESSION_KEY)).toBe('guest-intent-test-generation');
+        },
+    );
+
     it('requires the actual Google popup result after an earlier same-UID Auth event', async () => {
         const { bindGuestMigrationIntentToUser } = await import('../../src/lib/auth/guestMigrationIntent');
         const user = { uid: 'shared-account', email: 'same@example.test',
