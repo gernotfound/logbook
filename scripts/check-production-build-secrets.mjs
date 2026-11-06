@@ -9,6 +9,7 @@ export function checkProductionBuildSecrets(hosting, firestore) {
     'VITE_FIREBASE_API_KEY', 'VITE_FIREBASE_AUTH_DOMAIN',
     'VITE_FIREBASE_PROJECT_ID', 'VITE_FIREBASE_APP_ID',
     'VITE_ACCOUNT_DELETION_API_ORIGIN', 'VITE_RECAPTCHA_ENTERPRISE_SITE_KEY',
+    'VITE_ACCOUNT_INACTIVITY_TRACKING',
   ]);
   const jobEnv = hosting.match(/^ {4}env:\s*\r?\n([\s\S]*?)^ {4}steps:/m)?.[1];
   const names = [...(jobEnv?.matchAll(/^ {6}([A-Z][A-Z0-9_]*):/gm) ?? [])].map(match => match[1]);
@@ -20,6 +21,7 @@ export function checkProductionBuildSecrets(hosting, firestore) {
     'VITE_FIREBASE_API_KEY', 'VITE_FIREBASE_AUTH_DOMAIN',
     'VITE_FIREBASE_PROJECT_ID', 'VITE_FIREBASE_APP_ID',
     'VITE_ACCOUNT_DELETION_API_ORIGIN', 'VITE_RECAPTCHA_ENTERPRISE_SITE_KEY',
+    'VITE_ACCOUNT_INACTIVITY_TRACKING',
   ]);
   // Step-level env and arguments also resolve vars/secrets. Inspect the entire
   // workflow, not just the job env block, to catch unauthorized integrations.
