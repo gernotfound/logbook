@@ -131,6 +131,7 @@ describe('foreground durable journal backoff', () => {
         retry.controller.dispose();
         retry.update({ syncHealth: 'local-pending' });
         retry.controller.refresh();
+        expect(vi.getTimerCount()).toBe(0);
         await vi.advanceTimersByTimeAsync(600_000);
         expect(retry.flush).not.toHaveBeenCalled();
     });
@@ -250,6 +251,30 @@ describe('foreground durable journal backoff', () => {
         expect(flush).toHaveBeenCalledTimes(1);
         expect(vi.getTimerCount()).toBe(0);
         retry.dispose();
+    });
+
+
+
+    it('keeps a single scheduled retry despite repeated foreground and store notifications', async () => {
+        vi.useFakeTimers();
+        let notify: () => void = () => {};
+        const flush = vi.fn(async () => {});
+        const retry = createJournalRetry(
+            initial,
+            listener => { notify = listener; return () => {}; },
+            () => true,
+            flush,
+        );
+        expect(vi.getTimerCount()).toBe(1);
+        for (let i = 0; i < 10; i++) notify();
+        retry.refresh();
+        expect(vi.getTimerCount()).toBe(1);
+
+        await vi.advanceTimersByTimeAsync(20_000);
+        expect(flush).toHaveBeenCalledTimes(1);
+        expect(vi.getTimerCount()).toBe(1);
+        retry.dispose();
+        expect(vi.getTimerCount()).toBe(0);
     });
 
 
