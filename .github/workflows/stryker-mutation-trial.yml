@@ -33,6 +33,7 @@ jobs:
           - sync-batching
           - journal-retry
           - causal-compaction
+          - pending-sequences
     env:
       EXPECTED_SHA: ${{ github.sha }}
       STRYKER_AREA: ${{ matrix.area }}
@@ -84,7 +85,14 @@ jobs:
         run: |
           node --input-type=module <<'NODE'
           import { readFileSync } from 'node:fs';
+          const { trialCases } = await import('./stryker.trial.config.mjs');
           const report = JSON.parse(readFileSync('coverage/mutation-trial/mutation.json', 'utf8'));
+          const expectedFiles = trialCases[process.env.STRYKER_AREA].testFiles;
+          const testedFiles = Object.keys(report.testFiles ?? {}).sort();
+          if (JSON.stringify(testedFiles) !== JSON.stringify([...expectedFiles].sort())) {
+            throw new Error('Mutation test discovery differs from the selected suites: ' + testedFiles.join(', '));
+          }
+          console.log(JSON.stringify({ testedFiles }));
           const mutants = Object.values(report.files ?? {}).flatMap(file => file.mutants ?? []);
           if (mutants.length === 0) throw new Error('No mutations were generated: diagnostic invalid');
           const counts = {};

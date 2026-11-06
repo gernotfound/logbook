@@ -28,7 +28,11 @@ describe('foreground durable journal backoff', () => {
         const retry = fixture();
         const delays = [20_000, 40_000, 80_000, 160_000, 300_000, 300_000];
         for (const [index, delay] of delays.entries()) {
-            await vi.advanceTimersByTimeAsync(delay - 1);
+            // Observe an early retry before a shrinking-delay mutant can loop
+            // through indefinitely many fake timers inside one large advance.
+            await vi.advanceTimersByTimeAsync(10_000);
+            expect(retry.flush).toHaveBeenCalledTimes(index);
+            await vi.advanceTimersByTimeAsync(delay - 10_001);
             expect(retry.flush).toHaveBeenCalledTimes(index);
             await vi.advanceTimersByTimeAsync(1);
             expect(retry.flush).toHaveBeenCalledTimes(index + 1);

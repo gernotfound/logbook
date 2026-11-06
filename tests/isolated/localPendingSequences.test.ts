@@ -12,6 +12,7 @@ import type { LocalEnvelope } from '../../src/lib/sync/localEnvelopeValidation';
 import type { SemanticOperation } from '../../src/lib/sync/semanticProjection';
 import { createAndMigrateVault } from '../../src/lib/sync/secureArchiveMigration';
 import { lockAllVaults } from '../../src/lib/sync/secureArchiveSession';
+import * as archiveRepository from '../../src/lib/sync/secureArchiveRepository';
 import { updateArchiveRecord } from '../../src/lib/sync/secureArchiveRepository';
 import { MAX_SYNC_DOCUMENTS_PER_TRANSACTION } from '../../src/lib/sync/syncBatching';
 
@@ -48,6 +49,27 @@ async function installOversizedJournal(owner: string): Promise<LocalEnvelope> {
     return stored;
 }
 
+
+function changeAfterObservedRead(change: (current: LocalEnvelope) => LocalEnvelope) {
+    const state: { envelope?: LocalEnvelope; ciphertext?: unknown } = {};
+    const read = archiveRepository.getArchiveRecord;
+    // Return the real earlier read after another tab's durable write. The
+    // production update must re-read and validate the actual encrypted record.
+    vi.spyOn(archiveRepository, 'getArchiveRecord').mockImplementationOnce(
+        async <T>(owner: string): Promise<T | undefined> => {
+            const observed = await read<T>(owner);
+            await updateArchiveRecord<LocalEnvelope>(owner, current => {
+                if (!current) throw new Error('Expected an archive for the concurrent writer');
+                state.envelope = change(current);
+                return state.envelope;
+            });
+            state.ciphertext = await get('logbook:v2:' + owner);
+            return observed;
+        },
+    );
+    return state;
+}
+
 beforeEach(async () => {
     lockAllVaults();
     localStorage.clear();
@@ -57,6 +79,7 @@ beforeEach(async () => {
     } });
 });
 afterEach(() => {
+    vi.restoreAllMocks();
     lockAllVaults();
     vi.unstubAllGlobals();
 });
@@ -141,4 +164,77 @@ describe('bounded pending journal compaction', () => {
         expect(await ensureBoundedPendingSequences('missing', 's00')).toBeUndefined();
         expect(await get(storageKey('missing'))).toBeUndefined();
     });
+
+    it('rejects a session already stale after the read without rewriting ciphertext', async () => {
+        const before = await installOversizedJournal('a');
+        const encrypted = await get(storageKey('a'));
+        await expect(ensureBoundedPendingSequences('a', 's00', () => false))
+            .rejects.toThrow('Sequenze journal invalidate dal cambio sessione');
+        expect(await get(storageKey('a'))).toBe(encrypted);
+        expect(await readLocal('a')).toEqual(before);
+    });
+
+    it('resequences the latest durable journal and preserves an edit appended after the observed read', async () => {
+        await installOversizedJournal('a');
+        const concurrent = changeAfterObservedRead(current => ({
+            ...current,
+            pending: [...current.pending, operation('nutrition_months/2026-02', 7)],
+            actorSeq: 7,
+            clock: { ...current.clock, s00: 7 },
+            data: { ...current.data, profile: { ...current.data.profile, height: '178' } },
+            revision: current.revision + 1,
+        }));
+
+        const after = await ensureBoundedPendingSequences('a', 's00');
+        expect(after?.pending).toHaveLength(MAX_SYNC_DOCUMENTS_PER_TRANSACTION + 3);
+        expect(after?.pending.at(-1)).toMatchObject({
+            docPath: 'nutrition_months/2026-02', seq: 8, clock: { s00: 8 },
+        });
+        expect(after?.pending.filter(op => op.seq === 7)).toEqual([
+            expect.objectContaining({ docPath: 'nutrition_months/2026-01' }),
+        ]);
+        expect(after?.actorSeq).toBe(8);
+        expect(after?.clock).toEqual({ s00: 8, s01: 3 });
+        expect(after?.revision).toBe(concurrent.envelope!.revision + 1);
+        expect(after?.data).toEqual(concurrent.envelope!.data);
+        expect(after?.baseline).toEqual(concurrent.envelope!.baseline);
+        expect(after?.syncMetaByDocument).toEqual(concurrent.envelope!.syncMetaByDocument);
+        expect(await readLocal('a')).toEqual(after);
+    });
+
+    it('does not overwrite a different actor installed between the read and atomic update', async () => {
+        await installOversizedJournal('a');
+        const concurrent = changeAfterObservedRead(current => ({
+            ...current,
+            actorId: 's01', actorSeq: 3,
+            pending: [operation('nutrition_months/2026-02', 3, 's01')],
+            revision: current.revision + 1,
+        }));
+
+        expect(await ensureBoundedPendingSequences('a', 's00')).toEqual(concurrent.envelope);
+        expect(await readLocal('a')).toEqual(concurrent.envelope);
+    });
+
+    it('preserves a journal already drained by another tab without advancing its revision', async () => {
+        await installOversizedJournal('a');
+        const concurrent = changeAfterObservedRead(current => ({
+            ...current, pending: [], revision: current.revision + 1,
+        }));
+
+        expect(await ensureBoundedPendingSequences('a', 's00')).toEqual(concurrent.envelope);
+        expect(await readLocal('a')).toEqual(concurrent.envelope);
+    });
+
+    it('rejects a newly corrupt encrypted journal inside the atomic update and preserves its bytes', async () => {
+        await installOversizedJournal('a');
+        const concurrent = changeAfterObservedRead(current => ({
+            ...current,
+            pending: [{ ...current.pending[0], actorId: 'another-actor' }],
+            revision: current.revision + 1,
+        }));
+
+        await expect(ensureBoundedPendingSequences('a', 's00')).rejects.toThrow('Invalid causal dot');
+        expect(await get(storageKey('a'))).toBe(concurrent.ciphertext);
+    });
+
 });

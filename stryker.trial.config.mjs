@@ -70,6 +70,11 @@ export const trialCases = {
     "testFiles": ["tests/isolated/journalRetry.test.ts"],
     "runner": "isolated"
   },
+  "pending-sequences": {
+    "mutate": ["src/lib/sync/localPendingSequences.ts"],
+    "testFiles": ["tests/isolated/localPendingSequences.test.ts"],
+    "runner": "isolated"
+  },
   "causal-compaction": {
     "mutate": ["src/lib/sync/causalCompaction.ts"],
     "testFiles": ["tests/gc/causalCompaction.test.ts"],
