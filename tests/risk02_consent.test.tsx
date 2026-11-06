@@ -239,16 +239,19 @@ describe('RISK-02: ConsentOverlay UI Behavior', () => {
         expect(button.disabled).toBe(true);
     });
 
-    it('Abilita pulsante solo dopo aver spuntato entrambe le checkbox', () => {
+    it('Richiede la dichiarazione 18+ oltre a termini e consenso salute', () => {
         render(<ConsentOverlay />);
         const button = screen.getByRole('button', { name: /accetta e continua/i }) as HTMLButtonElement;
         const checkboxes = screen.getAllByRole('checkbox');
         
+        expect(checkboxes).toHaveLength(3);
+        fireEvent.click(checkboxes[1]);
+        fireEvent.click(checkboxes[2]);
+        expect(button.disabled).toBe(true);
+        fireEvent.click(checkboxes[0]);
+        expect(button.disabled).toBe(false);
         fireEvent.click(checkboxes[0]);
         expect(button.disabled).toBe(true);
-        
-        fireEvent.click(checkboxes[1]);
-        expect(button.disabled).toBe(false);
     });
 
     it('Doppio click bloccato e pulsante in stato Salvataggio', async () => {
@@ -260,6 +263,7 @@ describe('RISK-02: ConsentOverlay UI Behavior', () => {
         const checkboxes = screen.getAllByRole('checkbox');
         fireEvent.click(checkboxes[0]);
         fireEvent.click(checkboxes[1]);
+        fireEvent.click(checkboxes[2]);
         
         const button = screen.getByRole('button', { name: /accetta e continua/i }) as HTMLButtonElement;
         fireEvent.click(button);
@@ -284,6 +288,7 @@ describe('RISK-02: ConsentOverlay UI Behavior', () => {
         const checkboxes = screen.getAllByRole('checkbox');
         fireEvent.click(checkboxes[0]);
         fireEvent.click(checkboxes[1]);
+        fireEvent.click(checkboxes[2]);
         
         const button = screen.getByRole('button', { name: /accetta e continua/i }) as HTMLButtonElement;
         fireEvent.click(button);
@@ -312,6 +317,7 @@ describe('RISK-02: ConsentOverlay UI Behavior', () => {
         const checkboxes = screen.getAllByRole('checkbox');
         fireEvent.click(checkboxes[0]);
         fireEvent.click(checkboxes[1]);
+        fireEvent.click(checkboxes[2]);
         
         const button = screen.getByRole('button', { name: /accetta e continua/i }) as HTMLButtonElement;
         fireEvent.click(button);
