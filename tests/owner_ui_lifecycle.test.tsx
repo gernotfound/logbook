@@ -56,7 +56,7 @@ describe('owner-bound UI mount', () => {
     view.rerender(<AuthContext.Provider value={owner('b')}><App /></AuthContext.Provider>);
     expect(useAppStore.getState().dataOwner).toBe('user:a');
     expect(useAppStore.getState().userData?.customFoods?.[0]?.id).toBe('private-a');
-    expect(screen.getByText('Preparazione account in corso')).toBeDefined();
+    expect(screen.getByRole('status', { name: 'Preparazione account in corso' })).toBeDefined();
     expect(screen.queryByText('Alimento riservato account A')).toBeNull();
     expect(screen.queryByRole('button', { name: 'Nutrizione' })).toBeNull();
 
