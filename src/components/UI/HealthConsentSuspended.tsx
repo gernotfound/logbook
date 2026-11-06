@@ -206,6 +206,23 @@ export function HealthConsentSuspended({ status, user }: { status: HealthConsent
             : 'Revoca registrata su questo dispositivo. In attesa della conferma cloud: riprova la verifica se la connessione è tornata.'
           : 'Revoca confermata sul server. Puoi prestare un nuovo consenso se desideri riattivare la PWA.'}
       </p>}
+      {user !== null && status === 'withdrawn' && (
+        <section aria-label="Cancellazione dei dati dopo la revoca">
+          <p>Puoi eliminare tutti i dati applicativi (profilo, misurazioni, allenamenti, nutrizione e schede) conservando l’account di accesso. Servono Internet, due conferme e una nuova verifica dell’identità. Al termine verrai disconnesso. Le copie su dispositivi offline e i backup esterni potrebbero permanere.</p>
+          <button type="button" className="btn" disabled={busy || recoveryBusy || exportingData || erasingHealthData || offline}
+            onClick={() => { void handleDeleteHealthData(); }}>
+            {erasingHealthData ? 'Cancellazione in corso…' : 'Elimina definitivamente i miei dati'}
+          </button>
+          {offline && <p role="status">Connettiti a Internet per cancellare i dati cloud.</p>}
+        </section>
+      )}
+      {user === null && status === 'withdrawn' && (
+        <section aria-label="Cancellazione dei dati locali dopo la revoca">
+          <p>Puoi eliminare i dati ospite salvati su questo dispositivo. Non è necessaria una connessione.</p>
+          <button type="button" className="btn" disabled={busy || recoveryBusy || exportingData || erasingHealthData}
+            onClick={() => { void handleDeleteAccount(); }}>Elimina dati di questo dispositivo</button>
+        </section>
+      )}
       {status === 'stale-request' && <section aria-label="Revoca da riconfermare">
         <p role="alert">Una nuova accettazione da un altro dispositivo è più recente della richiesta di revoca rimasta in attesa. La vecchia richiesta non è stata reinviata.</p>
         <button className="btn btn-primary" type="button" disabled={busy} onClick={() => { void (async () => {
@@ -263,15 +280,9 @@ export function HealthConsentSuspended({ status, user }: { status: HealthConsent
           <a className="btn btn-primary" href={preparedBackupUrl} download="logbook_backup.json">Scarica backup JSON</a>
           <button type="button" className="btn" onClick={releasePreparedBackup}>Elimina il download preparato</button>
         </>}
-        {user !== null && status === 'withdrawn' && <>
-          <p>Puoi eliminare i dati applicativi dell'account (inclusi profilo, misurazioni, allenamenti, nutrizione e schede) dal database operativo mantenendo il tuo account di accesso; verrai disconnesso al termine. Servono Internet, verifica dell’identità e due conferme. Copie offline, backup esportati e backup tecnici del fornitore potrebbero permanere secondo le rispettive politiche di conservazione.</p>
-          <button type="button" className="btn" disabled={busy || exportingData || erasingHealthData || offline}
-            onClick={() => { void handleDeleteHealthData(); }}>
-            {erasingHealthData ? 'Cancellazione in corso…' : 'Elimina definitivamente i miei dati'}
-          </button>
-        </>}
+        
         <button type="button" className="btn" disabled={erasingHealthData} onClick={() => void handleLogout()}>Esci dall'account</button>
-        <button type="button" className="btn" disabled={erasingHealthData} onClick={() => void handleDeleteAccount()}>Elimina definitivamente l'account</button>
+        <button type="button" className="btn" disabled={erasingHealthData} onClick={() => void handleDeleteAccount()}>{user === null ? 'Elimina definitivamente i dati ospite' : "Elimina definitivamente l'account"}</button>
         <button type="button" className="btn" disabled={busy || recoveryBusy || exportingData || erasingHealthData} onClick={() => { void reloadPage(); }}>Ricarica pagina</button>
       </div>
       {error && <p role="alert">{error}</p>}

@@ -1,5 +1,5 @@
 import React from 'react';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const authState = vi.hoisted(() => ({
@@ -29,13 +29,18 @@ vi.mock('../src/store/useDialogStore', () => ({
   useDialogStore: () => ({ showAlert: authState.showAlert }),
 }));
 
+import { auth } from '../src/lib/firebase';
+import { invalidateSession } from '../src/lib/sync/session';
 import { AccountCard } from '../src/components/UI/AccountCard';
 
-describe('email verification feedback privacy', () => {
-  beforeEach(() => {
+beforeEach(() => {
     vi.clearAllMocks();
+    (auth as { currentUser: unknown }).currentUser = authState.user;
+    invalidateSession();
     authState.showAlert.mockResolvedValue(undefined);
   });
+
+describe('email verification feedback privacy', () => {
 
   it('does not reveal raw Firebase exceptions after verification refresh fails', async () => {
     authState.refreshEmailVerification.mockRejectedValueOnce(new Error('PRIVATE_AUTH_PROVIDER_DETAILS'));
@@ -54,4 +59,17 @@ describe('email verification feedback privacy', () => {
     await waitFor(() => expect(authState.showAlert).toHaveBeenCalledWith('Invio email non riuscito. Riprova.'));
     expect(JSON.stringify(authState.showAlert.mock.calls)).not.toContain('PRIVATE_AUTH_PROVIDER_DETAILS');
   });
+});
+
+it('does not alert the next session after an old email send resolves', async () => {
+  let finish!: () => void;
+  authState.resendEmailVerification.mockImplementationOnce(() => new Promise<void>(resolve => { finish = resolve; }));
+  render(<AccountCard />);
+  const button = screen.getByRole('button', { name: 'Invia di nuovo' });
+  fireEvent.click(button);
+  expect(authState.resendEmailVerification).toHaveBeenCalledOnce();
+  invalidateSession();
+  await act(async () => { finish(); });
+  await waitFor(() => expect(button.hasAttribute('disabled')).toBe(false));
+  expect(authState.showAlert).not.toHaveBeenCalled();
 });

@@ -14,13 +14,14 @@ const backupUi = vi.hoisted(() => ({
   prepare: vi.fn(async () => {}),
   release: vi.fn(),
   erase: vi.fn(async () => {}),
+  deleteAccount: vi.fn(async () => {}),
 }));
 vi.mock('../src/hooks/useSettings', () => ({
   useSettings: () => ({
     handlePrepareBackup: backupUi.prepare,
     preparedBackupUrl: backupUi.url,
     releasePreparedBackup: backupUi.release,
-    handleDeleteAccount: vi.fn(),
+    handleDeleteAccount: backupUi.deleteAccount,
     handleDeleteHealthData: backupUi.erase,
     erasingHealthData: false,
     handleLogout: vi.fn(),
@@ -42,6 +43,10 @@ describe('suspended health-consent screen', () => {
     expect(screen.queryByRole('button', { name: 'Elimina definitivamente i miei dati' })).toBeNull();
     rerender(<HealthConsentSuspended status="withdrawn" user={account} />);
     const button = screen.getByRole('button', { name: 'Elimina definitivamente i miei dati' });
+    const erasure = screen.getByRole('region', { name: 'Cancellazione dei dati dopo la revoca' });
+    expect(erasure.contains(button)).toBe(true);
+    expect((button.compareDocumentPosition(reacceptButton()) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0).toBe(true);
+    expect(backupUi.erase).not.toHaveBeenCalled();
     fireEvent.click(button);
     await waitFor(() => expect(backupUi.erase).toHaveBeenCalledTimes(1));
     const offline = vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false);
@@ -49,6 +54,25 @@ describe('suspended health-consent screen', () => {
       fireEvent(window, new Event('offline'));
       await waitFor(() => expect((button as HTMLButtonElement).disabled).toBe(true));
     } finally { offline.mockRestore(); }
+  });
+
+  it('allows guest deletion after withdrawal without submitting a cloud erasure', () => {
+    render(<HealthConsentSuspended status="withdrawn" user={null} />);
+    const button = screen.getByRole('button', { name: 'Elimina dati di questo dispositivo' });
+    expect(screen.getByRole('region', { name: 'Cancellazione dei dati locali dopo la revoca' }).contains(button)).toBe(true);
+    expect(screen.queryByRole('button', { name: 'Elimina definitivamente i miei dati' })).toBeNull();
+    fireEvent.click(button);
+    expect(backupUi.deleteAccount).toHaveBeenCalledTimes(1);
+    expect(backupUi.erase).not.toHaveBeenCalled();
+  });
+
+  it('never offers data-only cloud deletion before trusted revocation confirmation', () => {
+    const { rerender } = render(<HealthConsentSuspended status="unregistered" user={account} />);
+    for (const status of ['unregistered', 'checking', 'error', 'pending', 'stale-request', 'reaccepting', 'recovery-required', 'erasure-required'] as const) {
+      rerender(<HealthConsentSuspended status={status} user={account} />);
+      expect(screen.queryByRole('button', { name: 'Elimina definitivamente i miei dati' })).toBeNull();
+    }
+    expect(backupUi.erase).not.toHaveBeenCalled();
   });
 
   it('renders explicit first acceptance separately from revocation and does not submit unchecked choices', async () => {
