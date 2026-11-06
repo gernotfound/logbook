@@ -1,4 +1,5 @@
 import { useCallback, type Dispatch, type RefObject, type SetStateAction } from 'react';
+import { captureAuthAttemptGuard } from '../../lib/auth/authAttemptGuard';
 import { DB } from '../../lib/db';
 import { useAppStore } from '../../store/useAppStore';
 import { useDialogStore } from '../../store/useDialogStore';
@@ -7,7 +8,7 @@ import type { UserData } from '../../types';
 import { getCachedCatalog, getInMemoryCatalog, isCatalogInMemory } from '../../lib/catalog/catalogService';
 import { resolveEffectiveExercises, resolveEffectiveFoods } from '../../lib/catalog/deltaResolver';
 import { getResolvedDefaultUserData } from './defaultUserData';
-import { activateGuestSession, captureSession, isActiveGuestSession, isCurrentSession, type SessionSnapshot, GUEST_REVOCATION_KEY, GUEST_SESSION_KEY } from '../../lib/sync/session';
+import { activateGuestSession, captureSession, isCurrentSession, type SessionSnapshot, GUEST_REVOCATION_KEY, GUEST_SESSION_KEY } from '../../lib/sync/session';
 import { withGuestLifecycleLock } from '../../lib/sync/guestLifecycleLock';
 import { readBrowserValueStrict, removeBrowserValue, writeBrowserValue } from '../../lib/sync/browserStorage';
 import { clearAuthenticatedOwnerHint } from '../../lib/sync/authOwnerHint';
@@ -39,14 +40,17 @@ export function useGuestLogin({
     isGuestRef, setIsGuest, setGuestMigrationStatus, setUserData, setSaveError,
 }: GuestLoginDependencies) {
     const loginAsGuest = useCallback(async () => {
-        let activatedGuestId: string | null = null;
+        const isOriginalAttemptCurrent = captureAuthAttemptGuard(false);
+        let activatedSession: SessionSnapshot | null = null;
         try {
             // Serialize the entire cleanup-to-activation transition across tabs.
             // An older logout must never delete a new guest generation.
             await withGuestLifecycleLock(async () => {
+                if (!isOriginalAttemptCurrent()) return;
                 clearAuthenticatedOwnerHint();
                 if (readBrowserValueStrict(GUEST_REVOCATION_KEY) !== null) {
                     await DB.purgeAllLocalUserData('guest');
+                    if (!isOriginalAttemptCurrent()) return;
                     // This realm might still hold the revoked guest's snapshot.
                     // Do not seed the new generation with data from that session.
                     useAppStore.getState().resetStore({ force: true });
@@ -57,19 +61,21 @@ export function useGuestLogin({
                 writeBrowserValue(GUEST_KEY, 'true');
                 removeBrowserValue(GUEST_REVOCATION_KEY);
                 activateGuestSession(id);
-                activatedGuestId = id;
+                // Capture under the lock: Auth may change before its Promise
+                // resumes, so the caller cannot capture a newer epoch as its own.
+                activatedSession = captureSession();
                 useDialogStore.getState().cancelAll();
             });
         } catch {
+            if (!isOriginalAttemptCurrent() && (!activatedSession || !isCurrentSession(activatedSession))) return;
             setSaveError('Impossibile avviare la modalità locale: pulizia o coordinamento delle sessioni non disponibile. I dati esistenti restano protetti.');
             return;
         }
         // Guest activation and vault provisioning are separate awaits. A
         // logout, account switch or other tab may revoke this generation
         // before the vault is ready. Never promote a stale guest into Zustand.
-        if (!activatedGuestId || !isActiveGuestSession()
-            || readBrowserValueStrict(GUEST_SESSION_KEY) !== activatedGuestId) return;
-        const guestSession = captureSession();
+        if (!activatedSession || activatedSession.owner !== 'guest' || !isCurrentSession(activatedSession)) return;
+        const guestSession = activatedSession;
         const canPublishGuest = () => isGuestVaultReadinessCurrent(guestSession);
         await ensureLocalVaultReady('guest');
         // A cancelled readiness Promise may resolve without an unlocked vault.

@@ -11,8 +11,10 @@ import { useDialogStore } from '../src/store/useDialogStore';
 import { clearCatalogCache, saveCatalogToCache } from '../src/lib/catalog/catalogService';
 import { resolveEffectiveExercises, resolveEffectiveFoods } from '../src/lib/catalog/deltaResolver';
 import type { UserData, Exercise, Food } from '../src/types';
-import { activateGuestSession, captureSession, GUEST_REVOCATION_KEY, GUEST_SESSION_KEY, isCurrentSession } from '../src/lib/sync/session';
+import { activateGuestSession, captureSession, GUEST_REVOCATION_KEY, GUEST_SESSION_KEY, isCurrentSession, invalidateSession } from '../src/lib/sync/session';
 import { isVaultUnlocked } from '../src/lib/sync/secureArchiveSession';
+import { withGuestLifecycleLock } from '../src/lib/sync/guestLifecycleLock';
+import { UserDataSchema } from '../src/lib/schema';
 import { refreshHealthConsent } from '../src/lib/healthConsent';
 import { readAuthenticatedOwnerHint } from '../src/lib/sync/authOwnerHint';
 
@@ -75,6 +77,70 @@ describe('Milestone M2: Guest Bootstrap & Cold Start Lifecycle', () => {
         expect(state?.customFoods?.length).toBe(0);
         expect(parseInt(screen.getByTestId('exercise-count').textContent || '0')).toBe(0);
         expect(parseInt(screen.getByTestId('food-count').textContent || '0')).toBe(0);
+    });
+
+    it.each(['lock', 'purge'] as const)(
+        'does not activate a queued guest after another account signs in during %s',
+        async boundary => {
+            let notify!: (user: any) => Promise<void>;
+            vi.mocked(onAuthStateChanged).mockImplementation((_auth, callback: any) => {
+                notify = callback;
+                void callback(null);
+                return () => {};
+            });
+            const { result } = renderHook(() => useAuth(), {
+                wrapper: ({ children }) => <AuthProvider>{children}</AuthProvider>,
+            });
+            let release!: () => void;
+            let entered!: () => void;
+            const gate = new Promise<void>(resolve => { release = resolve; });
+            const acquired = new Promise<void>(resolve => { entered = resolve; });
+            let holder: Promise<void> | undefined;
+            if (boundary === 'lock') {
+                holder = withGuestLifecycleLock(async () => { entered(); await gate; });
+                await acquired;
+            } else {
+                localStorage.setItem(GUEST_REVOCATION_KEY, 'old-revoked-guest');
+                vi.spyOn(DB, 'purgeAllLocalUserData').mockImplementationOnce(async () => { entered(); await gate; });
+            }
+            let pending!: Promise<void>;
+            act(() => { pending = result.current.loginAsGuest(); });
+            try {
+                if (boundary === 'purge') await acquired;
+                const account = { uid: 'newer-unverified-account', emailVerified: false } as any;
+                await act(async () => {
+                    (auth as any).currentUser = account;
+                    await notify(account);
+                });
+                const newer = UserDataSchema.parse({ profile: { height: '182' } }) as unknown as UserData;
+                useAppStore.setState({ userData: newer, dataOwner: 'user:' + account.uid });
+                await act(async () => { release(); await pending; });
+
+                expect(result.current.currentUser?.uid).toBe(account.uid);
+                expect(result.current.isGuest).toBe(false);
+                expect(localStorage.getItem('logbook_is_guest')).not.toBe('true');
+                expect(localStorage.getItem(GUEST_SESSION_KEY)).toBeNull();
+                expect(useAppStore.getState().dataOwner).toBe('user:' + account.uid);
+                expect(useAppStore.getState().userData).toBe(newer);
+                if (boundary === 'lock') expect(DB.purgeAllLocalUserData).not.toHaveBeenCalled();
+            } finally {
+                release();
+                await holder;
+            }
+        },
+    );
+
+    it('does not adopt an Auth epoch that changed after guest activation but before the lock resumed', async () => {
+        const { result } = renderHook(() => useAuth(), {
+            wrapper: ({ children }) => <AuthProvider>{children}</AuthProvider>,
+        });
+        vi.spyOn(useDialogStore.getState(), 'cancelAll').mockImplementationOnce(() => { invalidateSession(); });
+        await act(async () => { await result.current.loginAsGuest(); });
+
+        expect(result.current.isGuest).toBe(false);
+        expect(useAppStore.getState().userData).toBeNull();
+        expect(localStorage.getItem('logbook_is_guest')).toBe('true');
+        expect(localStorage.getItem(GUEST_SESSION_KEY)).not.toBeNull();
     });
 
     it('does not replay a completed guest purge after returning to the login screen', async () => {
