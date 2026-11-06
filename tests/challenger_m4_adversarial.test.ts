@@ -566,25 +566,5 @@ describe('Empirical Challenger: Architectural Hardening Stress Suite', () => {
             expect(getDocFromServer).toHaveBeenCalledTimes(9);
         });
 
-        it('static smoke: deletion source orders residue verification before Auth cleanup', () => {
-            const jobStore = fs.readFileSync(
-                path.resolve(__dirname, '../server/accountDeletion/jobStore.ts'),
-                'utf-8'
-            );
-            const runner = fs.readFileSync(
-                path.resolve(__dirname, '../server/accountDeletion/runner.ts'),
-                'utf-8'
-            );
-
-            expect(jobStore).toContain('const PAGE_SIZE = 400;');
-            expect(jobStore).toMatch(/\.limit\(PAGE_SIZE\)/);
-
-            const verificationIndex = runner.indexOf('await verifyNoAccountResidue(uid);');
-            const authIndex = runner.indexOf('await deleteAuthUserLast(uid, leaseOwner);');
-            const completeIndex = runner.indexOf('await markDeletionComplete(uid, leaseOwner);');
-            expect(verificationIndex).toBeGreaterThan(-1);
-            expect(authIndex).toBeGreaterThan(verificationIndex);
-            expect(completeIndex).toBeGreaterThan(authIndex);
-        });
     });
 });

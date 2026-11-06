@@ -33,6 +33,37 @@ function assertCycleEndDate(startIso: string, weeks: number): string {
 }
 
 describe('Empirical Challenger: Training Cycles End Date & Two-Way Binding Adversarial Suite (Milestone 2 - Requirement R5)', () => {
+
+    it('does not invent a start date for a malformed persisted cycle', () => {
+        const cycle: TrainingCycle = {
+            id: 'malformed-start',
+            name: 'Historical invalid start',
+            durationWeeks: 4,
+            startDate: 'invalid-date-string',
+            routines: [],
+        };
+        const timeline = calculateCycleTimeline(cycle);
+        expect(timeline.totalWeeks).toBe(0);
+        expect(timeline.isStarted).toBe(false);
+        expect(timeline.statusLabel).toBe('Parametri del ciclo da correggere');
+        expect(cycle.startDate).toBe('invalid-date-string');
+    });
+
+    it('sanitizes malformed cycle routines and unknown fields without changing valid dates', () => {
+        const parsed = TrainingCycleSchema.parse({
+            id: 'malformed-cycle',
+            name: 'Malformed cycle',
+            durationWeeks: '6',
+            startDate: '2026-05-01',
+            endDate: '2026-06-11',
+            unexpectedProperty: { hack: true },
+            routines: 'not-an-array',
+        });
+        expect(parsed.durationWeeks).toBe(6);
+        expect(parsed.startDate).toBe('2026-05-01');
+        expect(parsed.endDate).toBe('2026-06-11');
+        expect(parsed.routines).toEqual([]);
+    });
     const sampleRoutines: WorkoutRoutine[] = [
         {
             id: 'r_push',
