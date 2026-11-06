@@ -7,7 +7,7 @@ import type { LegalConsent } from '../types.js';
  */
 export const LEGAL_VERSIONS = {
   privacy: "1.3.9",
-  terms: "1.2.4",
+  terms: "1.2.5",
 } as const;
 
 
