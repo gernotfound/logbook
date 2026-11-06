@@ -44,7 +44,11 @@ describe('suspended health-consent screen', () => {
     rerender(<HealthConsentSuspended status="withdrawn" user={account} />);
     const region = screen.getByRole('region', { name: 'Cancellazione automatica dei dati' });
     expect(region.textContent).toMatch(/avvia automaticamente la cancellazione/i);
-    expect(region.querySelector('button')?.textContent).toContain('Verifica stato cancellazione');
+    const verify = screen.getByRole('button', { name: 'Verifica stato cancellazione' }) as HTMLButtonElement;
+    expect(verify.disabled).toBe(true);
+    expect(screen.getByText(/Verifica del server ancora necessaria prima di confermare la cancellazione/i)).toBeDefined();
+    fireEvent.click(verify);
+    expect(backupUi.erase).not.toHaveBeenCalled();
     expect(screen.queryByRole('button', { name: 'Elimina definitivamente i miei dati' })).toBeNull();
     expect((screen.getByRole('button', { name: 'Prepara backup JSON' }) as HTMLButtonElement).disabled).toBe(true);
     expect(screen.queryByRole('button', { name: 'Presta un nuovo consenso' })).toBeNull();
