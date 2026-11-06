@@ -301,5 +301,5 @@ npm run verify:m8
 ## Documentazione complementare
 
 - [Protezione automatica dell'archivio locale](../../docs/architecture/secure-local-archive-design.md): specifica approvata e modello di minaccia; verificare sempre il codice corrente.
-- [Debug Background Sync](../../docs/BACKGROUND_SYNC_DEBUG.md): procedura diagnostica per journal e browser, non prova di funzionamento Production.
+- [Debug ripresa sincronizzazione](../../docs/BACKGROUND_SYNC_DEBUG.md): procedura diagnostica per replay journal su ritorno online/foreground, non prova di funzionamento Production.
 - [Indice documentazione](../../docs/README.md): ulteriori riferimenti con stato distinto dai presenti contratti normativi.

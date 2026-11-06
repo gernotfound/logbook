@@ -299,8 +299,8 @@ vi.mock('idb-keyval', () => ({
   }),
 }));
 
-// Mock virtual:pwa-register/react
-vi.mock('virtual:pwa-register/react', () => ({
+// Mock the app's PWA registration boundary
+vi.mock('../src/lib/pwaRegistration', () => ({
   useRegisterSW: vi.fn(() => ({
     needRefresh: [false, vi.fn()],
     offlineReady: [false, vi.fn()],

@@ -43,7 +43,7 @@ La selezione completa dei contratti resta in [AGENTS](../AGENTS.md). Qui si indi
 
 | Documento | Stato | Per quale attività |
 |---|---|---|
-| [Debug Background Sync](BACKGROUND_SYNC_DEBUG.md) | Guida diagnostica da verificare sul codice corrente | Replay journal, online/foreground, compatibilità browser |
+| [Debug ripresa sincronizzazione](BACKGROUND_SYNC_DEBUG.md) | Guida diagnostica al comportamento corrente | Replay journal, online/foreground, compatibilità browser |
 
 ## Privacy, dati salute e rapporti con le palestre
 

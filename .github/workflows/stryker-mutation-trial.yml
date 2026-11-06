@@ -1,6 +1,7 @@
-name: Stryker Mutation Trial (branch-only)
+name: Stryker Mutation Diagnostic
 
 on:
+  workflow_dispatch:
   push:
     branches:
       - experiment/stryker-vitest-20261106

@@ -112,9 +112,6 @@ if (typeof window !== 'undefined') {
     };
     window.addEventListener('online', replay);
     document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') replay(); });
-    if ('serviceWorker' in navigator) navigator.serviceWorker.addEventListener('message', event => {
-        if (event.data?.type === 'LOGBOOK_SYNC_REQUIRED') replay();
-    });
 }
 
 // PWA FIX: Sync App Badge with active local workout
