@@ -281,10 +281,14 @@ describe('bounded causal sync batching', () => {
         expect(result.changed).toBe(true);
         expect(result.actorSeq).toBe(7);
         expect(result.clock).toEqual({ s00: 7, s01: 9 });
-        expect(result.operations.map(item => item.seq))
-            .toEqual([...Array(MAX_SYNC_DOCUMENTS_PER_TRANSACTION).fill(5), 6, 7]);
+        expect(result.operations.map(item => ({ seq: item.seq, clock: item.clock }))).toEqual([
+            ...Array.from({ length: MAX_SYNC_DOCUMENTS_PER_TRANSACTION }, () => ({
+                seq: 5, clock: { s00: 5, s01: 9 },
+            })),
+            { seq: 6, clock: { s00: 6, s01: 9 } },
+            { seq: 7, clock: { s00: 7, s01: 9 } },
+        ]);
         expect(result.operations.at(-1)?.docPath).toBe('last');
-        expect(result.operations.every(item => item.clock.s01 === 9)).toBe(true);
         expect(input).toEqual(before);
     });
 
@@ -298,5 +302,20 @@ describe('bounded causal sync batching', () => {
         }
     });
 
+    it.each([
+        { baseSeq: 3, baseClock: { s00: 5, s01: 9 } },
+        { baseSeq: 5, baseClock: { s00: 3, s01: 9 } },
+    ])('allocates after both the base counter and observed actor frontier: %j', ({ baseSeq, baseClock }) => {
+        const input = [operation('nutrition_months/2026-01', 1)];
+        const before = structuredClone(input);
+        const result = sequenceOperationsForBoundedTransactions(input, 's00', baseSeq, baseClock);
+        expect(result).toEqual({
+            actorSeq: 6,
+            clock: { s00: 6, s01: 9 },
+            operations: [{ ...before[0], seq: 6, clock: { s00: 6, s01: 9 } }],
+        });
+        expect(input).toEqual(before);
+        expect(baseClock).toEqual({ s00: 8 - baseSeq, s01: 9 });
+    });
 
 });

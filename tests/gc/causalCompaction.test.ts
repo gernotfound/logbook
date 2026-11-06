@@ -382,6 +382,7 @@ describe('M4 causal metadata compaction', () => {
         expect(result.fields['profile/name'].candidates?.[0].clock).toEqual({ s01: 2, s02: 1 });
         expect(result).not.toBe(meta);
         expect(result.fields['profile/name']).not.toBe(meta.fields['profile/name']);
+        expect(result.writer).toEqual(meta.writer);
         expect(result.writer).not.toBe(meta.writer);
 
         const stamp = result.fields['profile/name'];
