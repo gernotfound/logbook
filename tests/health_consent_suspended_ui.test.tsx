@@ -31,7 +31,6 @@ vi.mock('../src/hooks/useSettings', () => ({
 
 const account = { uid: 'consent-ui-account' } as User;
 const checkboxInputs = () => screen.getAllByRole('checkbox') as HTMLInputElement[];
-const reacceptButton = () => screen.getByRole('button', { name: 'Presta un nuovo consenso' }) as HTMLButtonElement;
 
 beforeEach(() => { vi.clearAllMocks(); backupUi.url = null; });
 
