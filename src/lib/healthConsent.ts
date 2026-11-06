@@ -319,6 +319,13 @@ export async function refreshHealthConsent(user: User): Promise<HealthConsentSta
   // generation. A delayed GET must never publish consent into that session.
   const startingSessionEpoch = captureSessionForOwner(userOwner(uid)).epoch;
   const saved = readMarker(uid);
+  // A marker outside the supported current-state protocol is not a cached
+  // consent or an invitation to migrate an old offline acceptance.
+  if (saved !== null && saved !== 'withdrawn'
+    && parsePendingRevision(saved) === null && parseReacceptRevision(saved) === null) {
+    setStatus(uid, 'error');
+    return 'error';
+  }
   // A delayed server check must not overwrite a newer local decision or
   // the consent generation published by another tab during network I/O.
   let observedGeneration = readBrowserValueStrict(generationMarker(uid));
