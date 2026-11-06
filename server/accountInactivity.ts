@@ -8,6 +8,7 @@ const ACTIVITY_COLLECTION = 'account_activity';
 const DELETION_COLLECTION = 'account_deletions';
 const SERVER_TOUCH_MIN_INTERVAL_MS = 10 * 60 * 1000;
 const MAX_CANDIDATES_PER_RUN = 12;
+const MAX_PAGES_PER_RUN = 4;
 
 export class AccountDeletionAlreadyScheduledError extends Error {
   constructor() {
@@ -100,7 +101,11 @@ export async function queueInactiveAccountDeletions(
         receiptHash,
         receiptHashes: [],
         reason: 'inactivity',
+        inactivityLastSeenAt: state.lastSeenAt,
       };
+      // One atomic fence: retire the eligibility marker when the deletion job
+      // is created. This avoids repeatedly starving newer candidates on each cron.
+      tx.delete(activityRef);
       tx.create(deletionRef, job);
       return true;
     });
