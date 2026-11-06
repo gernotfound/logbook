@@ -37,7 +37,7 @@ function execute(label, command, args, lifecycle) {
   if (child.error || child.status !== 0) {
     throw new Error(label + ': failed to list tests: ' + (child.error?.message || child.stderr || child.stdout || child.status));
   }
-  return child.stdout.replace(/\u001b\[[0-9;]*m/g, '');
+  return child.stdout;
 }
 
 function normalizeFile(file) {
