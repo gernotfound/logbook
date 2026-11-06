@@ -250,7 +250,10 @@ describe('email verification lifecycle', () => {
 
     it('sends verification mail after creating an unverified password account', async () => {
         const createdUser = account(false);
-        vi.mocked(createUserWithEmailAndPassword).mockResolvedValueOnce({ user: createdUser, providerId: 'password', operationType: 'signIn' } as any);
+        vi.mocked(createUserWithEmailAndPassword).mockImplementationOnce(async () => {
+            (auth as any).currentUser = createdUser;
+            return { user: createdUser, providerId: 'password', operationType: 'signIn' } as any;
+        });
         vi.mocked(sendEmailVerification).mockResolvedValueOnce(undefined);
 
         const { result } = renderHook(() => useAuth(), { wrapper });
