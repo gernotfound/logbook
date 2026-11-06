@@ -161,6 +161,7 @@ describe('serialized guest migration intent belongs to an exact Auth attempt', (
         // user and provider do not release the originating tab's reservation.
         await Promise.resolve();
         expect(migrated).toBe(false);
+        (auth as { currentUser: User | null }).currentUser = user;
         deliver({ user, providerId: 'google.com', operationType: 'signIn' } as UserCredential);
         await act(async () => { await pendingLogin; });
         await expect(observed).resolves.toMatchObject({ id: attempted.id, policy: 'merge' });

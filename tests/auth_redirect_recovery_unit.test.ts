@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { invalidateSession } from '../src/lib/sync/session';
 import { attachAuthRedirectRecovery } from '../src/contexts/auth/attachAuthRedirectRecovery';
 import { AWAITING_REDIRECT_KEY, readAuthRedirectAttempt, tryRemoveAuthRedirectMarker, writeAuthRedirectMarker } from '../src/lib/auth/authRedirectMarker';
 
@@ -8,6 +9,7 @@ describe('isolated foreground redirect recovery', () => {
         for (const detach of detachAll.splice(0)) detach();
         sessionStorage.clear();
         localStorage.clear();
+        vi.restoreAllMocks();
     });
 
     function setup() {
@@ -33,7 +35,7 @@ describe('isolated foreground redirect recovery', () => {
             setSaveError,
         }, environment);
         detachAll.push(detach);
-        return { stored, remove, reload, setSaveError, foreground: () => listener() };
+        return { stored, remove, reload, setSaveError, detach, foreground: () => listener() };
     }
 
     it('accepts its own confirmed Google redirect even when the Auth callback arrives first', async () => {
@@ -141,9 +143,16 @@ describe('isolated foreground redirect recovery', () => {
         expect(readAuthRedirectAttempt()).toBeNull();
     });
 
-    it.each(['resolved', 'rejected'] as const)(
-        'does not consume a newer attempt when a previously active redirect promise is %s',
-        async outcome => {
+    it.each([
+        { outcome: 'resolved', guest: false }, { outcome: 'rejected', guest: false },
+        { outcome: 'resolved', guest: true }, { outcome: 'rejected', guest: true },
+    ] as const)(
+        'does not consume a newer attempt when an older redirect is $outcome (guest: $guest)',
+        async ({ outcome, guest }) => {
+            if (guest) {
+                const { beginGuestMigrationIntent } = await import('../src/lib/auth/guestMigrationIntent');
+                await beginGuestMigrationIntent('merge', 'google');
+            }
             let resolve!: (value: unknown) => void;
             let reject!: (reason: unknown) => void;
             const pending = new Promise<unknown>((yes, no) => { resolve = yes; reject = no; });
@@ -182,6 +191,64 @@ describe('isolated foreground redirect recovery', () => {
             expect(reload).not.toHaveBeenCalled();
             expect(marker).toBe('true');
             expect(attempt).toBe('attempt-p1');
+            expect(setSaveError).not.toHaveBeenCalled();
+        },
+    );
+
+    it.each(['resolved', 'rejected'] as const)(
+        'ignores an SDK result %s after its provider has detached',
+        async outcome => {
+            const intentModule = await import('../src/lib/auth/guestMigrationIntent');
+            const intent = await intentModule.beginGuestMigrationIntent('merge', 'google');
+            const original = localStorage.getItem('guest_migration_intent_v1');
+            const confirm = vi.spyOn(intentModule, 'confirmGuestMigrationCredential');
+            let resolve!: (value: unknown) => void;
+            let reject!: (reason: unknown) => void;
+            const pending = new Promise<unknown>((yes, no) => { resolve = yes; reject = no; });
+            const remove = vi.fn(() => true);
+            const reload = vi.fn(async () => {});
+            const setSaveError = vi.fn();
+            const detach = attachAuthRedirectRecovery({
+                awaitingRedirectKey: AWAITING_REDIRECT_KEY,
+                redirectLaunchFailedRef: { current: false }, setSaveError,
+            }, {
+                visibility: () => 'visible',
+                listen: () => () => {}, read: () => 'true', readAttempt: () => 'detached-attempt',
+                remove, reload, getRedirect: () => pending,
+            });
+            detach();
+            if (outcome === 'resolved') resolve({
+                user: { uid: 'redirect-account', providerData: [{ providerId: 'google.com' }] },
+                providerId: 'google.com',
+            });
+            else reject(new Error('detached redirect failed'));
+            await pending.catch(() => {});
+            await Promise.resolve();
+            await Promise.resolve();
+            expect(confirm).not.toHaveBeenCalled();
+            expect(remove).not.toHaveBeenCalled();
+            expect(reload).not.toHaveBeenCalled();
+            expect(setSaveError).not.toHaveBeenCalled();
+            expect(localStorage.getItem('guest_migration_intent_v1')).toBe(original);
+            expect(sessionStorage.getItem('logbook:guest-auth-attempt')).toBe(intent.id);
+            confirm.mockRestore();
+        },
+    );
+
+    it.each(['detach', 'Auth epoch'] as const)(
+        'does not publish a delayed reload failure after %s',
+        async boundary => {
+            const { foreground, reload, setSaveError, detach } = setup();
+            let reject!: (reason: unknown) => void;
+            const pending = new Promise<void>((_resolve, no) => { reject = no; });
+            reload.mockReturnValueOnce(pending);
+            foreground();
+            await vi.waitFor(() => expect(reload).toHaveBeenCalledOnce());
+            if (boundary === 'detach') detach();
+            else invalidateSession();
+            reject(new Error('obsolete reload failed'));
+            await pending.catch(() => {});
+            await Promise.resolve();
             expect(setSaveError).not.toHaveBeenCalled();
         },
     );

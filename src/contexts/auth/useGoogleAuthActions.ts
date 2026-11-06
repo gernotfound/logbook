@@ -98,7 +98,7 @@ export function useGoogleAuthActions({
         const resultIsCurrent = () => auth.currentUser?.uid === credential.user.uid && resultSession();
         if (intentId) {
             try {
-                await confirmGuestMigrationCredential(intentId, credential);
+                await confirmGuestMigrationCredential(intentId, credential, resultIsCurrent);
             } catch (error) {
                 rejectGuestMigrationAuthWaiters(intentId, 'Risultato di questo accesso Google non verificabile.');
                 console.error('Prova dell’accesso Google non confermata:', error);

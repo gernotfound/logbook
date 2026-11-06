@@ -67,6 +67,29 @@ describe('Auth result provenance for guest-to-account decisions', () => {
         expect(finished).toBe(true);
     });
 
+    it('does not attest a credential whose initiating lifecycle ends while the intent lock is queued', async () => {
+        const intent = await beginGuestMigrationIntent('merge', 'google');
+        const original = localStorage.getItem(KEY);
+        let entered!: () => void;
+        let release!: () => void;
+        const acquired = new Promise<void>(resolve => { entered = resolve; });
+        const gate = new Promise<void>(resolve => { release = resolve; });
+        const holder = navigator.locks.request('thelogbook:guest-auth-intent', { mode: 'exclusive' }, async () => {
+            entered();
+            await gate;
+        });
+        await acquired;
+        let current = true;
+        const confirmation = confirmGuestMigrationCredential(intent.id, credential('google.com'), () => current);
+        const rejected = expect(confirmation).rejects.toThrow('non è più attivo');
+        current = false;
+        release();
+        await holder;
+        await rejected;
+        expect(localStorage.getItem(KEY)).toBe(original);
+        expect(sessionStorage.getItem('logbook:guest-auth-attempt')).toBe(intent.id);
+    });
+
     it('rejects a different UID and does not consume the reserved guest choice', async () => {
         const intent = await beginGuestMigrationIntent('skip', 'email', {
             email: 'same@example.test', uid: user.uid,

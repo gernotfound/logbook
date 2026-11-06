@@ -154,8 +154,13 @@ function assertUserMatchesIntent(intent: GuestMigrationIntent, user: User): void
 
 /** Only a successful Firebase UserCredential from this initiating Auth action can
  * authorize a migration. onAuthStateChanged alone may report another tab's login. */
-export async function confirmGuestMigrationCredential(intentId: string, credential: UserCredential): Promise<void> {
+export async function confirmGuestMigrationCredential(
+    intentId: string, credential: UserCredential, isCurrent: () => boolean = () => true,
+): Promise<void> {
     await withIntentLock(async () => {
+        // A valid credential may have waited behind another tab's operation.
+        // Its initiating provider/session must still own this continuation.
+        if (!isCurrent()) throw new Error('Il tentativo Auth corrente non è più attivo.');
         const user = credential.user;
         const intent = readGuestMigrationIntentStrict();
         if (readTabReceipt() !== intentId || intent.id !== intentId || intent.method === 'recovery') {
