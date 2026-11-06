@@ -62,6 +62,16 @@ La scelta A **non autorizza cancellazioni automatiche e irreversibili** né la c
 
 Secondo GDPR art. 7(3) e Linee guida EDPB 05/2020, la revoca deve essere facile quanto il consenso; cessano le operazioni fondate solo su quel consenso, **compresa l'ulteriore conservazione se non esiste altra base valida**. La soluzione A non può promettere dati esportabili per un periodo indefinito senza una base giuridica appropriata. Prima del pilot con utenti reali, la revisione privacy deve definire chiaramente i trattamenti residui e i termini minimi strettamente necessari, le eccezioni legittime, la notifica ai fornitori applicabili e i testi rivolti all'utente.
 
+## Riconciliazione della decisione — issue #824, 6 novembre 2026
+
+La decisione storica «soluzione A» descrive correttamente la **sospensione del servizio fitness**, ma **non conclude** la liceità della **conservazione** dei relativi archivi. Il pulsante esplicito di cancellazione dei soli dati, presente sulla schermata sospesa nella [PR #826](https://github.com/gernotfound/logbook/pull/826), facilita l'esercizio di un diritto **senza eliminare l'account**; non costituisce di per sé una condizione di conservazione ex artt. 6 e 9 GDPR.
+
+La [Commissione europea](https://commission.europa.eu/law/law-topic/data-protection/information-business-and-organisations/legal-grounds-processing-data_en) e l'[EDPB, Guidelines 05/2020](https://www.edpb.europa.eu/documents/guideline/guidelines-052020-on-consent-under-regulation-2016679_en), chiariscono l'obbligo di cessare i trattamenti fondati sul consenso revocato e cancellare i dati privi di altre basi, nonché l'impossibilità di cambiare retroattivamente la base giuridica del medesimo trattamento. È necessario verificare sia la base Art. 6 sia una condizione Art. 9 per eventuali dati che rivelino salute.
+
+**Valutazione tecnica:** riutilizzare preferibilmente il job di cancellazione sanitaria esistente; nessun nuovo cron/storage. Prima di collegarlo automaticamente alla revoca server serve un'esplicita scelta di prodotto sul carattere irreversibile della cancellazione e su come presentare **prima della revoca** l'eventuale esportazione. Non trasformare il diritto alla revoca in un'accettazione forzata di cancellazione account; non usare una finestra arbitraria per conservare dati senza base.
+
+**Blocco pre-utenti esterni:** policy per dataset e procedure approvate da consulenza privacy competente, contratti/provider verificati (compresa la questione DPA Vercel Hobby), informativa/LEGAL_VERSIONS e implementazione coerenti, CI su SHA esatto, verifiche multi-device e provider live. Il dossier [retention](retention-schedule.md) distingue le alternative senza dichiararne alcuna già approvata.
+
 ## Invarianti richiesti a qualunque implementazione approvata
 
 - Nessuna nuova operazione che dipende esclusivamente dal consenso ritirato può essere accettata o replicata dopo la revoca efficace; includere client/tab vecchi, richieste in volo, offline journal e backend con privilegi Admin.
