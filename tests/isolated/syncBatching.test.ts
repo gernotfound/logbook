@@ -308,6 +308,7 @@ describe('bounded causal sync batching', () => {
     ])('allocates after both the base counter and observed actor frontier: %j', ({ baseSeq, baseClock }) => {
         const input = [operation('nutrition_months/2026-01', 1)];
         const before = structuredClone(input);
+        const observedClock = structuredClone(baseClock);
         const result = sequenceOperationsForBoundedTransactions(input, 's00', baseSeq, baseClock);
         expect(result).toEqual({
             actorSeq: 6,
@@ -315,7 +316,7 @@ describe('bounded causal sync batching', () => {
             operations: [{ ...before[0], seq: 6, clock: { s00: 6, s01: 9 } }],
         });
         expect(input).toEqual(before);
-        expect(baseClock).toEqual({ s00: 8 - baseSeq, s01: 9 });
+        expect(baseClock).toEqual(observedClock);
     });
 
 });
