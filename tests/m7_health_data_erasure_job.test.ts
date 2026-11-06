@@ -310,8 +310,13 @@ describe('trusted data-only erasure worker', () => {
     expect(await readHealthDataErasureStatus('a'))
       .toMatchObject({ complete: true, localPurgeAuthorized: false });
     await recordHealthConsentWithdrawal('a', 5);
+    // A new confirmed withdrawal enqueues a NEW generation, so an older
+    // completed receipt can no longer authorize any local purge.
+    expect(fixture.records.get(markerPath('a'))).toMatchObject({
+      status: 'requested', consentRevision: 6,
+    });
     expect(await readHealthDataErasureStatus('a'))
-      .toMatchObject({ complete: true, localPurgeAuthorized: false });
+      .toMatchObject({ status: 'requested', complete: false, localPurgeAuthorized: false });
   });
 
   it('denies new requests while consent is active or full account deletion is pending', async () => {
