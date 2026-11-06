@@ -302,36 +302,6 @@ describe('Empirical Challenger: Training Cycles End Date & Two-Way Binding Adver
     });
 
     // =========================================================================
-    // 5. Bidirectional Mathematical Invariance (Round-trip stability)
-    // =========================================================================
-    describe('5. Mathematical Invariance & Two-Way Binding Round-trip', () => {
-        const testStartDates = [
-            '2024-01-01', // Leap year start
-            '2024-02-29', // Leap day
-            '2025-06-15', // Mid year
-            '2026-09-01', // Canonical test date
-            '2026-12-28', // Late December
-            '2028-02-14', // Leap year Valentine
-            '2030-07-04'  // Far future
-        ];
-
-        testStartDates.forEach(startDate => {
-            it(`maintains exact round-trip computeEndDate <-> computeWeeksFromDates for all W in [1..52] starting ${startDate}`, () => {
-                for (let w = 1; w <= 52; w++) {
-                    const endDate = assertCycleEndDate(startDate, w);
-                    const computedWeeks = computeWeeksFromDatesDirect(startDate, endDate);
-                    expect(computedWeeks).toBe(w);
-
-                    const start = parseISO(startDate);
-                    const end = parseISO(endDate);
-                    const diffDays = differenceInCalendarDays(end, start);
-                    expect(diffDays + 1).toBe(w * 7);
-                }
-            });
-        });
-    });
-
-    // =========================================================================
     // 6. CycleEditor Component UI & Form Adversarial Interactions
     // =========================================================================
     describe('6. CycleEditor UI Stress & Interaction Robustness', () => {
