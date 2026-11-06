@@ -13,6 +13,7 @@ import { TermsAndConditions } from '../../pages/TermsAndConditions';
 import { auth, signOut } from '../../lib/firebase';
 import { captureSession, isCurrentSession } from '../../lib/sync/session';
 import { readLocal } from '../../lib/sync/localRepository';
+import { isLocalPurgeIncomplete } from '../../lib/sync/localPurgeFence';
 import { hasDeviceRecoveryBackupSource } from '../../lib/db/backupSnapshot';
 import { purgeCompletedHealthDataLocal } from '../../lib/db/db_account';
 import { readHealthDataErasureProgress, type HealthDataErasureOutcome } from '../../lib/healthDataErasure';
@@ -106,8 +107,12 @@ export function HealthConsentSuspended({ status, user }: { status: HealthConsent
       const envelope = await readLocal(owner);
       if (!isCurrentSession(session) || auth.currentUser?.uid !== uid) return;
       const app = useAppStore.getState();
+      // A prior interrupted purge may already have removed the IndexedDB
+      // envelope while leaving ciphertext/credentials elsewhere. Its durable
+      // fence is a recovery obligation, never proof of an empty device.
       const hasLocalData = envelope !== undefined || hasDeviceRecoveryBackupSource(owner)
-        || (app.dataOwner === owner && app.userData !== null);
+        || (app.dataOwner === owner && app.userData !== null)
+        || isLocalPurgeIncomplete(owner);
       if (!hasLocalData) {
         setLocalReadyUid(uid);
         return;
