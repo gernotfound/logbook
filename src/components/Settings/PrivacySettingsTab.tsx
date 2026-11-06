@@ -20,7 +20,7 @@ export function PrivacySettingsTab({ onOpenTerms, onOpenPrivacy, onWithdrawHealt
                     <span className="settings-row-copy"><strong>Termini e condizioni</strong></span>
                     <ChevronRight size={20} aria-hidden="true" />
                 </button>
-                {onWithdrawHealthConsent && <button type="button" className="settings-simple-row" onClick={onWithdrawHealthConsent}><span className="settings-row-copy"><strong>Revoca il consenso per i dati salute</strong><small>L’uso fitness sarà sospeso; rimangono esportazione, diritti e cancellazione account.</small></span><ChevronRight size={20} aria-hidden="true" /></button>}
+                {onWithdrawHealthConsent && <button type="button" className="settings-simple-row" onClick={onWithdrawHealthConsent}><span className="settings-row-copy"><strong>Revoca il consenso per i dati salute</strong><small>Esportazione facoltativa prima della revoca; poi cancellazione automatica dei dati fitness senza eliminare l’account.</small></span><ChevronRight size={20} aria-hidden="true" /></button>}
             </div>
         </section>
     );
