@@ -52,8 +52,10 @@ export async function recordAccountActivity(uidValue: string, now = Timestamp.no
       return;
     }
     const previous = existing.data();
+    const firstSeen = storedMillis(previous?.firstSeenAt);
     const lastSeen = storedMillis(previous?.lastSeenAt);
-    if (previous?.uid !== uid || lastSeen === null || lastSeen > now.toMillis()) {
+    if (previous?.uid !== uid || firstSeen === null || lastSeen === null
+      || firstSeen > lastSeen || lastSeen > now.toMillis()) {
       throw new Error('Activity record invalid; refusing to overwrite it.');
     }
     if (now.toMillis() - lastSeen >= SERVER_TOUCH_MIN_INTERVAL_MS) {
@@ -96,8 +98,10 @@ export async function queueInactiveAccountDeletions(
         const [activity, existingJob] = await Promise.all([tx.get(activityRef), tx.get(deletionRef)]);
         if (existingJob.exists || !activity.exists) return false;
         const state = activity.data();
+        const firstSeen = storedMillis(state?.firstSeenAt);
         const lastSeen = storedMillis(state?.lastSeenAt);
-        if (state?.uid !== uid || lastSeen === null || lastSeen > cutoffMs) return false;
+        if (state?.uid !== uid || firstSeen === null || lastSeen === null
+          || firstSeen > lastSeen || lastSeen > cutoffMs) return false;
         const receiptHash = hashReceipt(randomBytes(32).toString('base64url'));
         const job: AccountDeletionJob = {
           uid,
