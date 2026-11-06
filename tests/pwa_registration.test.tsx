@@ -91,7 +91,7 @@ describe('PWA registration adapter', () => {
       onNeedRefresh, onOfflineReady, onRegisteredSW, onRegisterError, onNeedReload,
     }));
     const options = registrationOptions();
-    act(() => options.onNeedReload?.());
+    act(() => { options.onNeedReload?.(); });
     expect(onNeedReload).toHaveBeenCalledOnce();
     onNeedReload.mockClear();
     view.unmount();
@@ -125,7 +125,7 @@ describe('PWA registration adapter', () => {
     expect(registration.update).toHaveBeenCalledOnce();
     await act(async () => { await vi.advanceTimersByTimeAsync(60 * 60 * 1000); });
     expect(registration.update).toHaveBeenCalledTimes(2);
-    act(() => options.onNeedRefresh?.());
+    act(() => { options.onNeedRefresh?.(); });
     expect(screen.getByText('Nuova versione disponibile')).toBeDefined();
 
     view.unmount();
