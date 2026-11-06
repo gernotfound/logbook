@@ -14,11 +14,24 @@ concurrency:
 
 jobs:
   mutation:
-    name: Experimental mutation test (Vitest)
+    name: Mutation diagnostic / ${{ matrix.area }}
     runs-on: ubuntu-24.04
     timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix:
+        area:
+          - csv
+          - meal-totals
+          - meal-item
+          - workout-duration
+          - secure-id
+          - cycle-limits
+          - password-policy
     env:
       EXPECTED_SHA: ${{ github.sha }}
+      STRYKER_AREA: ${{ matrix.area }}
 
     steps:
       - name: Checkout exact branch SHA
@@ -59,32 +72,33 @@ jobs:
           git diff --exit-code -- package.json package-lock.json
           node -e "for (const n of ['@stryker-mutator/core','@stryker-mutator/vitest-runner']) { const p = require(n + '/package.json'); if (p.version !== '10.1.1') process.exit(1); }"
 
-      - name: Run diagnostic mutations against production CSV formatter
+      - name: Run diagnostic mutations
         shell: bash
         run: |
           set -o pipefail
           ./node_modules/.bin/stryker run stryker.trial.config.mjs 2>&1 | tee stryker-trial.log
 
-      - name: Verify runner actually detects mutations
+      - name: Summarize findings without treating uncovered mutants as passing
         shell: bash
         run: |
           node --input-type=module <<'NODE'
           import { readFileSync } from 'node:fs';
-          const result = JSON.parse(readFileSync('coverage/mutation-trial/mutation.json', 'utf8'));
-          const mutants = Object.values(result.files ?? {}).flatMap(file => file.mutants ?? []);
-          const killed = mutants.filter(m => m.status === 'Killed').length;
-          const survived = mutants.filter(m => m.status === 'Survived').length;
-          if (killed < 2) {
-            throw new Error('Vitest 5 runner is untrusted: fewer than two killed mutants in a well-covered formatter');
+          const report = JSON.parse(readFileSync('coverage/mutation-trial/mutation.json', 'utf8'));
+          const mutants = Object.values(report.files ?? {}).flatMap(file => file.mutants ?? []);
+          if (mutants.length === 0) throw new Error('No mutations were generated: diagnostic invalid');
+          const counts = {};
+          for (const mutant of mutants) counts[mutant.status] = (counts[mutant.status] ?? 0) + 1;
+          console.log(JSON.stringify({ area: process.env.STRYKER_AREA, generated: mutants.length, ...counts }));
+          if (process.env.STRYKER_AREA === 'csv' && (counts.Killed ?? 0) < 20) {
+            throw new Error('Known CSV baseline failed to kill expected mutants: Vitest runner may be incompatible');
           }
-          console.log(JSON.stringify({ mutants: mutants.length, killed, survived }));
           NODE
 
-      - name: Preserve diagnostic evidence
+      - name: Preserve area-specific diagnostic evidence
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
-          name: stryker-trial-${{ env.EXPECTED_SHA }}
+          name: stryker-${{ matrix.area }}-${{ env.EXPECTED_SHA }}
           if-no-files-found: ignore
           retention-days: 7
           path: |
