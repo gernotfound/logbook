@@ -122,6 +122,29 @@ describe('Worker M2: Exercise Library UI & Food Form Real-Time Calorie Calculati
             expect(window.localStorage.getItem(deviceKey('draft_exercise', owner))).toBeNull();
         });
 
+        it('does not discard unsaved exercise fields if the protected draft cannot be cleared', async () => {
+            const owner = captureSession().owner;
+            await prepareUnlockedTestArchive(owner);
+            const { result } = renderHook(() => useTrainingExercises());
+            act(() => result.current.setExName('Modifica da preservare'));
+            const sealedKey = protectedDeviceKey('draft_exercise', owner);
+            const original = window.localStorage.getItem(sealedKey);
+            expect(original).toMatch(/^tlb-sealed:v1:/);
+
+            const originalWrite = window.localStorage.setItem.bind(window.localStorage);
+            vi.spyOn(window.localStorage, 'setItem').mockImplementation((key, value) => {
+                if (key === sealedKey) throw new Error('quota');
+                originalWrite(key, value);
+            });
+
+            let cancelled!: boolean;
+            act(() => { cancelled = result.current.handleCancelEdit(); });
+            expect(cancelled).toBe(false);
+            expect(result.current.exName).toBe('Modifica da preservare');
+            expect(window.localStorage.getItem(sealedKey)).toBe(original);
+            expect(useAppStore.getState().localPersistenceBlocked).toBe(true);
+        });
+
         it('handleSaveExercise creates new exercise with isBodyweight and equipmentWeight', async () => {
             const owner = captureSession().owner;
             localStorage.setItem(`logbook:v2:${owner}:health-consent-generation`, '3');
