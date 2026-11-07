@@ -212,6 +212,7 @@ describe('durable owner-scoped journal', () => {
     });
 
 
+
     it('retries a locally completed workout without modifying durable history or its journal', async () => {
         await prepareOwnerVault('user:a');
         const finished = { id: 'completion-retry', date: '2026-10-09', routineName: 'Original', exercises: [] };

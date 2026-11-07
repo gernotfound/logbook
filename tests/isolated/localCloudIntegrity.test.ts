@@ -243,7 +243,7 @@ describe('durable cloud integrity fencing and recovery', () => {
 
         const recovered = await work;
         expect(recovered).toEqual({ ...latest, cloudIntegrityFence: undefined, revision: latest.revision + 1 });
-        expect(recovered.data.profile.height).toBe('172');
+        expect(recovered.data.profile?.height).toBe('172');
         expect(recovered.actorSeq).toBeGreaterThan(observed.actorSeq);
         expect(await readLocal('a')).toEqual(recovered);
     });
