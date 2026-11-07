@@ -142,7 +142,7 @@ await test('a11y lint catches concrete failures of every configured rule', t => 
     assert.ok(report.diagnostics?.some(entry => String(entry.code).includes(rule)),
       rule + ' was not actually executed: ' + result.stdout);
   }
-  const valid = runCase('<div><label htmlFor="field">Name</label><input id="field" /><label>Consent<input type="checkbox" /></label></div>');
+  const valid = runCase('<div><label htmlFor="field">Name</label><input id="field" /><label>Consent<input type="checkbox" /></label><label><input type="radio" /><span><strong>Calcolo da misure</strong></span></label></div>');
   assert.equal(valid.status, 0, valid.stdout + valid.stderr);
 });
 
