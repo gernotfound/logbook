@@ -92,7 +92,8 @@ describe('useTrainingHistory deleteWorkout', () => {
                     await result.current.deleteWorkout('w-to-delete');
                 });
 
-                expect(dispatch).toHaveBeenCalledExactlyOnceWith({
+                expect(dispatch).toHaveBeenCalledTimes(1);
+                expect(dispatch).toHaveBeenCalledWith({
                     type: 'history.delete',
                     id: 'w-to-delete',
                 });
