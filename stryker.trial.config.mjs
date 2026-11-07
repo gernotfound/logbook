@@ -89,6 +89,11 @@ export const trialCases = {
     "mutate": ["src/lib/sync/syncFailure.ts"],
     "testFiles": ["tests/app_check_sync_semantics.test.ts"]
   },
+  "business-normalization": {
+    "mutate": ["src/lib/sync/businessNormalizationIntegrity.ts"],
+    "testFiles": ["tests/isolated/businessNormalizationIntegrity.test.ts"],
+    "runner": "isolated"
+  },
   "causal-compaction": {
     "mutate": ["src/lib/sync/causalCompaction.ts"],
     "testFiles": ["tests/gc/causalCompaction.test.ts"],
