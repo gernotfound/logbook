@@ -82,6 +82,42 @@ describe('Analytics UI Components & Dashboard Integration', () => {
             expect(btn4.getAttribute('aria-pressed')).toBe('false');
         });
 
+        it('recalculates actual weekly volume when changing the selected time window', async () => {
+            const olderDate = new Date(today);
+            olderDate.setDate(olderDate.getDate() - 42);
+            const olderDay = `${olderDate.getFullYear()}-${String(olderDate.getMonth() + 1).padStart(2, '0')}-${String(olderDate.getDate()).padStart(2, '0')}`;
+            const history: WorkoutSession[] = [
+                ...mockHistory,
+                {
+                    id: 'w-six-weeks-ago',
+                    date: olderDay,
+                    exercises: [{
+                        exId: 'ex1',
+                        sessionNote: '',
+                        sets: [{ id: 'older-set', kg: '200', reps: '10', done: true }]
+                    }]
+                }
+            ];
+            renderWithProviders(
+                <WeeklyVolumeChart
+                    history={history}
+                    library={mockLibrary}
+                    userWeight={80}
+                    defaultWeeks={8}
+                />
+            );
+
+            // 1000 kg in the current week and 2000 kg six weeks ago.
+            expect(await screen.findByText('375 kg')).toBeDefined();
+
+            fireEvent.click(screen.getByRole('button', { name: '4 sett' }));
+            expect(await screen.findByText('250 kg')).toBeDefined();
+            expect(screen.queryByText('375 kg')).toBeNull();
+
+            fireEvent.click(screen.getByRole('button', { name: '8 sett' }));
+            expect(await screen.findByText('375 kg')).toBeDefined();
+        });
+
         it('renders empty state when history is empty', async () => {
             renderWithProviders(
                 <WeeklyVolumeChart
