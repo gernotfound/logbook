@@ -113,6 +113,21 @@ export const LoginBox: React.FC<LoginBoxProps> = ({ onCancel }) => {
         }
     };
 
+    const handleGuestLogin = async () => {
+        if (authActionInFlight.current) return;
+        authActionInFlight.current = true;
+        setLoading(true);
+        setFormError(null);
+        try {
+            await loginAsGuest();
+        } catch (error) {
+            setFormError(describeEmailAuthError(error));
+        } finally {
+            authActionInFlight.current = false;
+            setLoading(false);
+        }
+    };
+
     const handleGoogle = async () => {
         if (authActionInFlight.current) return;
         authActionInFlight.current = true;
@@ -305,7 +320,7 @@ export const LoginBox: React.FC<LoginBoxProps> = ({ onCancel }) => {
                     type="button"
                     className="btn ui-login-box-20 auth-guest-action"
                     disabled={loading}
-                    onClick={() => { if (!authActionInFlight.current) void loginAsGuest().catch(error => setFormError(describeEmailAuthError(error))); }}
+                    onClick={() => void handleGuestLogin()}
                 >
                     <span>Continua senza account</span>{' '}
                     <span className="auth-guest-action__detail">
