@@ -49,7 +49,8 @@ export async function POST(request: Request): Promise<Response> {
   const origin = request.headers.get('origin');
   try {
     requireAccountDeletionOrigin(request);
-    if (request.headers.has('content-length') && Number(request.headers.get('content-length')) > 0) {
+    // Chunked bodies can be sent without Content-Length; this endpoint accepts no payload.
+    if (request.body !== null || (request.headers.has('content-length') && Number(request.headers.get('content-length')) > 0)) {
       return json({ error: 'Questa operazione non accetta dati da inviare.' }, 400, origin);
     }
     const params = new URL(request.url).searchParams;
