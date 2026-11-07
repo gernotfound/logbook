@@ -3,6 +3,7 @@ import { Trash2, Settings, MessageSquareText, History } from 'lucide-react';
 import { useDialogStore } from '../../../store/useDialogStore';
 import SessionSetRow from './SessionSetRow';
 import { BufferedInput, BufferedTextarea } from '../../UI/BufferedInput';
+import { BufferedWorkoutScope } from '../../UI/bufferedWorkoutScope';
 import { sessionSetHasMeaningfulData } from '../../../lib/workoutSetData';
 import { deriveCardioSpeed } from './deriveCardioSpeed';
 import type { Exercise, SessionExercise, SessionExerciseSet } from '../../../types';
@@ -68,6 +69,7 @@ const SessionExerciseCardInner: React.FC<SessionExerciseCardProps> = ({
     // Runtime session instances have their own ID; the fallback mirrors the
     // existing accordion key for older in-memory snapshots lacking one.
     const exerciseInstanceId = exItem.id || `${exItem.exId}_${exIndex}`;
+    const workoutId = React.useContext(BufferedWorkoutScope);
     const lastNote = pastWorkouts[0]?.note?.trim() || '';
 
     const [showPositionMenu, setShowPositionMenu] = React.useState(false);
@@ -107,8 +109,9 @@ const SessionExerciseCardInner: React.FC<SessionExerciseCardProps> = ({
             if (!confirmed) return;
         }
 
-        onRemoveSet(exIndex, lastIndex);
-    }, [exItem.sets, onRemoveSet, onRemoveLastSet, exIndex]);
+        if (!lastSet.id) return;
+        onRemoveSet(exIndex, lastIndex, lastSet.id, exItem.id, workoutId);
+    }, [exItem.sets, exItem.id, onRemoveSet, onRemoveLastSet, exIndex, workoutId]);
 
     const handleCardioChange = (field: 'time' | 'distance', value: string) => {
         const setId = exItem.sets[0]?.id;
