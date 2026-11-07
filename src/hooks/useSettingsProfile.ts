@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
 import { dispatchDurableOperation } from '../lib/sync/dispatchDurableOperation';
-import { captureSession, isCurrentSession } from '../lib/sync/session';
+import { captureSession, isCurrentSession, type SessionSnapshot } from '../lib/sync/session';
 import { useAppStore } from '../store/useAppStore';
 import { useDialogStore } from '../store/useDialogStore';
 
@@ -8,26 +8,33 @@ export function useSettingsProfile() {
     const storeProfile = useAppStore(state => state.userData?.profile);
     const dispatchDomainOperation = useAppStore(state => state.dispatchDomainOperation);
     const showAlert = useDialogStore(state => state.showAlert);
-    const [localProfile, setLocalProfile] = useState<{ dob?: string; height?: string; gender?: string } | null>(null);
+    const [localProfile, setLocalProfile] = useState<{
+        session: SessionSnapshot;
+        values: { dob?: string; height?: string; gender?: string };
+    } | null>(null);
     const draftRevision = useRef(0);
-    const profile = localProfile ?? storeProfile ?? { dob: '', height: '', gender: '' };
+    // A mounted form must not display or submit an old session's uncommitted health data.
+    const profile = localProfile && isCurrentSession(localProfile.session)
+        ? localProfile.values : storeProfile ?? { dob: '', height: '', gender: '' };
 
     const dob = profile.dob || '';
     const height = profile.height || '';
     const gender = profile.gender || '';
 
-    const setDob = (val: string) => {
+    const updateProfile = (field: 'dob' | 'height' | 'gender', value: string) => {
+        const session = captureSession();
         draftRevision.current++;
-        setLocalProfile(previous => ({ ...(previous ?? storeProfile), dob: val }));
+        setLocalProfile(previous => ({
+            session,
+            values: {
+                ...(previous && isCurrentSession(previous.session) ? previous.values : storeProfile),
+                [field]: value,
+            },
+        }));
     };
-    const setHeight = (val: string) => {
-        draftRevision.current++;
-        setLocalProfile(previous => ({ ...(previous ?? storeProfile), height: val }));
-    };
-    const setGender = (val: string) => {
-        draftRevision.current++;
-        setLocalProfile(previous => ({ ...(previous ?? storeProfile), gender: val }));
-    };
+    const setDob = (val: string) => updateProfile('dob', val);
+    const setHeight = (val: string) => updateProfile('height', val);
+    const setGender = (val: string) => updateProfile('gender', val);
     const handleSaveProfile = async (e?: { preventDefault: () => void }) => {
         if (e) e.preventDefault();
         const newProfile = { dob, height, gender };
