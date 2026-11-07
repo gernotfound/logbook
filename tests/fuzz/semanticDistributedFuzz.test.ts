@@ -202,9 +202,8 @@ describe('M2 distributed property fuzz', () => {
             expect(stamp).toMatchObject({ actorId: last.actorId, seq: last.seq, clock: last.clock });
             expect(Boolean(stamp.deleted)).toBe(last.isDelete);
             expect(distributed.syncMetas[''].clock).toEqual(last.clock);
-            expect(distributed.documents.get('')?.profile?.height).toBe(
-                last.isDelete ? undefined : last.value,
-            );
+            const profile = distributed.documents.get('')?.profile as Record<string, unknown> | undefined;
+            expect(profile?.height).toBe(last.isDelete ? undefined : last.value);
         });
     });
 
