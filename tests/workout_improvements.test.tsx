@@ -119,7 +119,7 @@ describe('Workout Improvements & History Edit Suite', () => {
   describe('3. MuscleModel & Compact Reps in TrainingRoutines', () => {
     test('MuscleModel is always visible in routine creation even with zero exercises', () => {
       const { container } = renderWithProviders(<TrainingRoutines />, {
-        userData: { ...emptyUserData, routines: [] } as any
+        userData: { ...emptyUserData, routines: [] }
       });
 
       // Click "Crea scheda"
@@ -164,7 +164,7 @@ describe('Workout Improvements & History Edit Suite', () => {
       const { container } = renderWithProviders(
         <TrainingHistory onEditWorkout={(w) => { editedWorkout = w; }} />,
         {
-          userData: { ...emptyUserData, history: mockHistory } as any
+          userData: { ...emptyUserData, history: mockHistory }
         }
       );
 
@@ -247,7 +247,7 @@ describe('Workout Improvements & History Edit Suite', () => {
 
       const { container } = renderWithProviders(<TrainingSession />, {
         localWorkout: editingSession,
-        userData: { ...emptyUserData, library: [{ id: 'ex1', name: 'Panca Piana' }] } as any
+        userData: { ...emptyUserData, library: [{ id: 'ex1', name: 'Panca Piana', setsCount: 3, sets: [] }] }
       });
 
       // Verify banner
@@ -349,12 +349,16 @@ describe('Workout Improvements & History Edit Suite', () => {
         {
           id: 'ex_bench',
           name: 'Panca Piana',
+          setsCount: 3,
+          sets: [],
           muscles: ['chest_lower', 'chest_upper'],
           secondaryMuscles: ['triceps', 'delts_front']
         },
         {
           id: 'ex_curl',
           name: 'Curl Bicipiti',
+          setsCount: 3,
+          sets: [],
           muscles: ['biceps'],
           secondaryMuscles: ['forearms']
         }
@@ -551,12 +555,16 @@ describe('Workout Improvements & History Edit Suite', () => {
         {
           id: 'ex_default',
           name: 'Panca Piana Catalogo',
+          setsCount: 3,
+          sets: [],
           isDefault: true,
           muscles: ['chest_lower']
         },
         {
           id: 'ex_custom',
           name: 'Panca Inclinata Custom',
+          setsCount: 3,
+          sets: [],
           isDefault: false,
           muscles: ['chest_upper']
         }

@@ -31,7 +31,7 @@ describe('useTrainingHistory deleteWorkout', () => {
         useAppStore.setState({
             dataOwner: captureSession().owner,
             userData: initial,
-            localWorkout: { id: 'w-to-delete', routineName: 'Full Body', exercises: [] } as any,
+            localWorkout: { id: 'w-to-delete', routineName: 'Full Body', exercises: [] },
             syncing: false,
             saveError: null,
             dispatchDomainOperation: vi.fn(async (operation: DomainOperationBatch) => {
@@ -39,7 +39,7 @@ describe('useTrainingHistory deleteWorkout', () => {
                 if (!previous) throw new Error('Dati utente non caricati');
                 useAppStore.setState({ userData: applyDomainOperations(previous, operation) });
                 return { ok: true, status: 'synced' } as const;
-            }) as any
+            })
         });
         vi.mocked(useDialogStore.getState().showConfirm).mockResolvedValue(true);
     });
