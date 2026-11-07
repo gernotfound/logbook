@@ -61,6 +61,9 @@ async function installTool(tool, root) {
 }
 
 async function main() {
+  // Keep the guarded npm script unchanged: run scanner regressions here before
+  // installing external tools so the canonical security gate stays intact.
+  run(process.execPath, ['--test', fileURLToPath(new URL('./run-security-static-regressions.mjs', import.meta.url))]);
   const platformKey = `${process.platform}-${process.arch}`;
   const toolset = TOOLSETS[platformKey];
   if (!toolset) throw new Error(`Unsupported platform for static security gate: ${platformKey}`);
