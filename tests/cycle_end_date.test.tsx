@@ -228,6 +228,39 @@ describe('Training Cycle End Date & Two-Way Binding (Milestone 2 - Requirement R
             expect(durationInput.value).toBe('12');
         });
 
+        it('keeps a partial final week consistent between editor, timeline and schedule', () => {
+            const onSave = vi.fn();
+            render(
+                <CycleEditor
+                    initialCycle={{
+                        id: 'cycle-partial-week',
+                        name: 'Ciclo di dieci giorni',
+                        durationWeeks: 4,
+                        sessionsPerWeek: 1,
+                        startDate: '2026-09-01',
+                        routines: [{ routineId: 'r_push', frequencyPerWeek: 1 }]
+                    }}
+                    routines={mockRoutines}
+                    onSave={onSave}
+                    onCancel={vi.fn()}
+                />
+            );
+
+            const endDateInput = screen.getByLabelText('Data di fine') as HTMLInputElement;
+            fireEvent.change(endDateInput, { target: { value: '10/09/2026' } });
+            fireEvent.blur(endDateInput);
+
+            expect((screen.getByLabelText('Durata (settimane)') as HTMLInputElement).value).toBe('2');
+            fireEvent.submit(document.querySelector('#cycle-editor-form') as HTMLFormElement);
+
+            expect(onSave).toHaveBeenCalledTimes(1);
+            const saved = onSave.mock.calls[0][0] as TrainingCycle;
+            expect(saved.endDate).toBe('2026-09-10');
+            expect(saved.durationWeeks).toBe(2);
+            expect(calculateCycleTimeline(saved, '2026-09-01').totalWeeks).toBe(2);
+            expect(calculateCycleSchedule(saved, mockRoutines).totalSessions).toBe(2);
+        });
+
         it('two-way binding: changing startDate updates endDate preserving durationWeeks', () => {
             const onSave = vi.fn();
             const onCancel = vi.fn();
