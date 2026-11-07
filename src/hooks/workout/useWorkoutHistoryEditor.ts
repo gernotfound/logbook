@@ -92,7 +92,7 @@ export function useWorkoutHistoryEditor({
             // The live timer belongs to the suspended session, not to the editor.
             return true;
         } catch (error) {
-            await showAlert('Impossibile aprire lo storico: il dispositivo non ha salvato il contesto della sessione attiva.');
+            if (isCurrentSession(session)) await showAlert('Impossibile aprire lo storico: il dispositivo non ha salvato il contesto della sessione attiva.');
             console.error('Apertura editor storico non durevole:', error);
             return false;
         }
@@ -126,7 +126,7 @@ export function useWorkoutHistoryEditor({
             if (!isCurrentSession(session) || !useAppStore.getState().userData) return false;
             const result = await dispatchDomainOperation({ type: 'history.upsert', workout: updatedWorkout });
             if (!result.ok && result.status !== 'local-pending') {
-                await showAlert('Errore durante il salvataggio delle modifiche.');
+                if (isCurrentSession(session)) await showAlert('Errore durante il salvataggio delle modifiche.');
                 return false;
             }
             if (!isCurrentSession(session)) return false;
@@ -163,7 +163,7 @@ export function useWorkoutHistoryEditor({
             return true;
         } catch (error) {
             console.error('Ripristino sessione sospesa fallito:', error);
-            await showAlert('Impossibile recuperare la sessione sospesa. Le modifiche restano disponibili.');
+            if (isCurrentSession(session)) await showAlert('Impossibile recuperare la sessione sospesa. Le modifiche restano disponibili.');
             return false;
         }
     }, [showConfirm, showAlert]);

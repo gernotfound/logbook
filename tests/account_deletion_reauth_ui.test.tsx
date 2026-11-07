@@ -296,6 +296,26 @@ describe('account deletion recent authentication', () => {
     }
   });
 
+  it('does not show an obsolete deletion failure after a same-UID Auth epoch replacement', async () => {
+    await withAuthenticatedFirebaseUser(async () => {
+      reauth.run.mockResolvedValue('reauthenticated');
+      let fail!: (error: Error) => void;
+      const deletion = vi.spyOn(DB, 'deleteAccount').mockImplementation(
+        () => new Promise((_resolve, reject) => { fail = reject; }),
+      );
+      const { result } = renderHook(() => useSettings());
+      let pending!: Promise<void>;
+      act(() => { pending = result.current.handleDeleteAccount(); });
+      await vi.waitFor(() => expect(deletion).toHaveBeenCalledOnce());
+
+      invalidateSession();
+      invalidateSession();
+      await act(async () => { fail(new Error('Obsolete failure')); await pending; });
+      expect(dialog.showAlert).not.toHaveBeenCalled();
+      expect(result.current.deletionPhase).toBe('idle');
+    });
+  });
+
   it('cancels safely when the password prompt is dismissed', async () => {
     dialog.showPasswordPrompt.mockResolvedValue(null);
     reauth.run.mockResolvedValue('password-required');

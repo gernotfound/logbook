@@ -8,9 +8,43 @@ import { useDialogStore } from '../src/store/useDialogStore';
 import { NutritionMealSection } from '../src/components/Nutrition/meals/NutritionMealSection';
 import type { LoggedMealItem, NutritionSubTab } from '../src/types';
 import { Logic } from '../src/lib/logic';
+import { invalidateSession } from '../src/lib/sync/session';
 import { emptyUserData, renderWithProviders } from './setup';
 
 describe('NutritionMeals decomposition parity', () => {
+    it('does not apply a confirmed day-type change after its Auth session was replaced', async () => {
+        const showConfirm = vi.mocked(useDialogStore.getState().showConfirm);
+        const originalDispatch = useAppStore.getState().dispatchDomainOperation;
+        let resolveConfirmation!: (choice: boolean) => void;
+        showConfirm.mockReset().mockImplementationOnce(() => new Promise(resolve => {
+            resolveConfirmation = resolve;
+        }));
+        const setDayType = vi.fn().mockResolvedValue(undefined);
+        const mockHook = {
+            targetDateStr: '2026-10-20',
+            todayNutrition: { date: '2026-10-20', kcal: 0, carbs: 0, pro: 0, fat: 0, meals: [] },
+            dailyTarget: { kcal: 0, carbs: 0, pro: 0, fat: 0 },
+            isDayOn: true, setDayType,
+            searchQuery: '', handleSearch: vi.fn(), searchResults: [], clearSearch: vi.fn(),
+            showCustomModal: false, setShowCustomModal: vi.fn(), editingFoodId: null,
+            cancelCustomFood: vi.fn(), cfData: {}, setCfData: vi.fn(), saveCustomFood: vi.fn(),
+            meals: [], addFood: vi.fn(), removeFood: vi.fn().mockResolvedValue(true),
+            updateMealItem: vi.fn().mockResolvedValue(true),
+        } as unknown as React.ComponentProps<typeof NutritionMeals>['mealsHook'];
+        try {
+            render(<NutritionMeals mealsHook={mockHook} />);
+            fireEvent.click(screen.getByRole('button', { name: 'OFF' }));
+            expect(showConfirm).toHaveBeenCalledOnce();
+            // The original account can disappear and return with the same UID.
+            act(() => { invalidateSession(); invalidateSession(); });
+            await act(async () => { resolveConfirmation(true); });
+            expect(setDayType).not.toHaveBeenCalled();
+        } finally {
+            showConfirm.mockReset().mockResolvedValue(true);
+            useAppStore.setState({ dispatchDomainOperation: originalDispatch });
+        }
+    });
+
     it('preserves date navigation, search add, meal editing, and removal callbacks', () => {
         const setSelectedDate = vi.fn();
         const handleSearch = vi.fn();
