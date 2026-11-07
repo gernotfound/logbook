@@ -15,8 +15,6 @@ export interface WorkoutSlice {
     setSyncedLocalWorkout: (workout: WorkoutSession | null | ((prev: WorkoutSession | null) => WorkoutSession | null)) => Promise<SyncResult>;
 }
 
-export const clearWorkoutTimer = () => {};
-
 const DEVICE_WORKOUT_PERSISTENCE_MESSAGE = 'Impossibile salvare l’allenamento sul dispositivo. Le modifiche sono bloccate per evitare perdita di dati; libera spazio o riabilita lo storage e riapri TheLogBook.';
 
 export class DeviceWorkoutCorruptError extends Error {
@@ -82,11 +80,18 @@ function normalizeDeviceWorkout(raw: WorkoutSession): WorkoutSession | null {
 }
 
 export const getInitialLocalWorkout = (owner?: string, fallback?: WorkoutSession | null, history?: ReadonlyArray<WorkoutSession>, lastClosedWorkoutId?: string, closedWorkoutIds?: ReadonlyArray<string>, expectedConsentRevision?: number): WorkoutSession | null => {
+    const resolvedOwner = owner ?? captureSession().owner;
     const wasClosed = (id: string) => lastClosedWorkoutId === id
         || closedWorkoutIds?.includes(id) === true
         || history?.some(item => item.id === id) === true;
     const recoverFallback = (): WorkoutSession | null => {
         if (!fallback) return null;
+        if (resolvedOwner.startsWith('user:')) {
+            // The IndexedDB fallback is already durable business state. It must
+            // not acquire new exercise/set identities during device hydration.
+            try { assertWorkoutSessionIdentities(fallback, 'Fallback activeWorkout'); }
+            catch { throw new DeviceWorkoutCorruptError('Fallback activeWorkout con identificativi non validi: copia originale preservata.'); }
+        }
         const normalized = normalizeDeviceWorkout(fallback);
         const validated = normalized ? DomainParsers.parseActiveWorkout(normalized) as WorkoutSession | null : null;
         if (!validated) throw new DeviceWorkoutCorruptError('Fallback activeWorkout locale non valido.');
@@ -109,9 +114,18 @@ export const getInitialLocalWorkout = (owner?: string, fallback?: WorkoutSession
     if (!parsed || typeof parsed !== 'object') throw new DeviceWorkoutCorruptError();
     // A pending synchronous intent must not be destroyed by bootstrap
     // normalization before its IndexedDB/journal reconciliation.
-    const resolvedOwner = owner ?? captureSession().owner;
     const { workout: savedWorkout, isIntent, consentRevision } = unwrapWorkoutDeviceSnapshot(parsed, resolvedOwner);
     assertWorkoutSnapshotEpoch(resolvedOwner, consentRevision, expectedConsentRevision);
+    // A signed account snapshot is durable evidence, not a transient editor input.
+    // Repairs for missing instance IDs belong only to setSyncedLocalWorkout(),
+    // before the new device intent and journal are committed.
+    if (resolvedOwner.startsWith('user:')) {
+        try {
+            assertWorkoutSessionIdentities(savedWorkout as WorkoutSession, 'Snapshot workout locale');
+        } catch {
+            throw new DeviceWorkoutCorruptError('Snapshot workout locale con identificativi non validi: copia originale preservata.');
+        }
+    }
     const normalized = normalizeDeviceWorkout(savedWorkout as WorkoutSession);
     if (!normalized) throw new DeviceWorkoutCorruptError('Snapshot workout locale privo di identità valida.');
     const validated = DomainParsers.parseActiveWorkout(normalized) as WorkoutSession | null;
