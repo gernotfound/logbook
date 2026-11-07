@@ -53,7 +53,7 @@ Per path gerarchici, gli stamp antenati sono il boundary canonico di riconciliaz
 
 1. `T.deleted === true` oppure `T.deleteClock` è presente dopo una recreation;
 2. la chiave di `D` è realmente discendente della chiave di `T` (`T + '/'` come prefisso di segmenti già URI-encoded);
-3. la barriera `T.deleteClock` (o il clock della tombstone terminale) copre completamente `D.clock` **e** i clock di ogni `D.candidates`; un contender nascosto non coperto impedisce la compaction dell'intero descendant.
+3. la barriera `T.deleteClock` (o il clock della tombstone terminale) copre completamente `D.clock`, la sua eventuale `D.deleteClock` **e** i clock di ogni `D.candidates`; un contender nascosto non coperto impedisce la compaction dell'intero descendant.
 
 **MUST:** senza una `stableFrontier` che copra integralmente lo stamp, `T` stessa e la sua barriera delete restano persistite. Con Protocol 3 possono essere ritirate solo secondo la prova stable-frontier descritta sotto.
 
@@ -69,7 +69,7 @@ Coordinate vector pari a zero possono essere eliminate perché il modello le int
 
 | Stato causale | Decisione |
 |---|---|
-| Descendant coperto dalla barriera delete dell'ancestor, inclusi tutti i candidate clock | Compaction del descendant consentita, se preserva la semantica |
+| Descendant coperto dalla barriera delete dell'ancestor, inclusi il suo deleteClock e tutti i candidate clock | Compaction del descendant consentita, se preserva la semantica |
 | Descendant concorrente o candidate clock non coperto | Conservare metadata; un tie-break non costituisce prova causale |
 | Tombstone terminale o barriera dopo recreation senza stable frontier sufficiente | Conservare tombstone/barriera |
 | Stable frontier delle sole repliche `active` che copre winner, delete e candidate clock | Valutare il ritiro secondo Protocol 3, senza usare il wall clock come prova |
