@@ -474,6 +474,115 @@ describe('Service Worker Update Lifecycle (ReloadPrompt) Suite', () => {
     unmount();
   });
 
+  test('registration exposes an already-waiting worker without activating or reloading it', async () => {
+    let onRegistered: ((scriptUrl: string, registration: ServiceWorkerRegistration | undefined) => void) | undefined;
+    vi.mocked(useRegisterSW).mockImplementation(options => {
+      onRegistered = options?.onRegisteredSW;
+      return { needRefresh: [false, mockSetNeedRefresh], offlineReady: [false, vi.fn()], updateServiceWorker: mockUpdateServiceWorker };
+    });
+    const view = render(<ReloadPrompt />);
+    const registration = {
+      waiting: { state: 'installed' },
+      update: vi.fn().mockResolvedValue(undefined),
+    } as unknown as ServiceWorkerRegistration;
+
+    await act(async () => {
+      onRegistered?.('/sw.js', registration);
+      await Promise.resolve();
+    });
+
+    expect(mockSetNeedRefresh).toHaveBeenCalledExactlyOnceWith(true);
+    expect(registration.update).not.toHaveBeenCalled();
+    expect(pwaUpdateModule.applyPWAUpdate).not.toHaveBeenCalled();
+    view.unmount();
+  });
+
+  test('periodic registration check reveals a worker that became waiting after the first check', async () => {
+    vi.useFakeTimers();
+    let onRegistered: ((scriptUrl: string, registration: ServiceWorkerRegistration | undefined) => void) | undefined;
+    vi.mocked(useRegisterSW).mockImplementation(options => {
+      onRegistered = options?.onRegisteredSW;
+      return { needRefresh: [false, mockSetNeedRefresh], offlineReady: [false, vi.fn()], updateServiceWorker: mockUpdateServiceWorker };
+    });
+    const registration = {
+      waiting: null as ServiceWorker | null,
+      installing: null,
+      update: vi.fn(async () => {
+        if (registration.update.mock.calls.length === 2) {
+          registration.waiting = { state: 'installed' } as ServiceWorker;
+        }
+      }),
+    } as unknown as ServiceWorkerRegistration & { update: ReturnType<typeof vi.fn> };
+    const view = render(<ReloadPrompt />);
+    try {
+      await act(async () => { onRegistered?.('/sw.js', registration); await Promise.resolve(); });
+      expect(mockSetNeedRefresh).not.toHaveBeenCalled();
+      await act(async () => { await vi.advanceTimersByTimeAsync(60 * 60 * 1000); });
+      expect(registration.update).toHaveBeenCalledTimes(2);
+      expect(mockSetNeedRefresh).toHaveBeenCalledExactlyOnceWith(true);
+      expect(pwaUpdateModule.applyPWAUpdate).not.toHaveBeenCalled();
+    } finally {
+      view.unmount();
+      vi.useRealTimers();
+    }
+  });
+
+  test('an outstanding registration check cannot reopen the prompt after unmount', async () => {
+    let onRegistered: ((scriptUrl: string, registration: ServiceWorkerRegistration | undefined) => void) | undefined;
+    vi.mocked(useRegisterSW).mockImplementation(options => {
+      onRegistered = options?.onRegisteredSW;
+      return { needRefresh: [false, mockSetNeedRefresh], offlineReady: [false, vi.fn()], updateServiceWorker: mockUpdateServiceWorker };
+    });
+    let finishUpdate!: () => void;
+    const registration = {
+      waiting: null as ServiceWorker | null,
+      installing: null,
+      update: vi.fn(() => new Promise<void>(resolve => {
+        finishUpdate = () => {
+          registration.waiting = { state: 'installed' } as ServiceWorker;
+          resolve();
+        };
+      })),
+    };
+    const view = render(<ReloadPrompt />);
+    act(() => { onRegistered?.('/sw.js', registration as unknown as ServiceWorkerRegistration); });
+    view.unmount();
+    await act(async () => { finishUpdate(); });
+    expect(mockSetNeedRefresh).not.toHaveBeenCalled();
+  });
+
+  test('a foreground check does not publish a waiting result after the tab becomes hidden', async () => {
+    const originalVisibility = Object.getOwnPropertyDescriptor(document, 'visibilityState');
+    let finishLookup!: (registration: ServiceWorkerRegistration) => void;
+    const lookup = vi.fn(() => new Promise<ServiceWorkerRegistration>(resolve => { finishLookup = resolve; }));
+    const registration = {
+      waiting: { state: 'installed' },
+      update: vi.fn(),
+    } as unknown as ServiceWorkerRegistration;
+    Object.defineProperty(navigator, 'serviceWorker', {
+      value: { getRegistration: lookup }, writable: true, configurable: true,
+    });
+    vi.mocked(useRegisterSW).mockReturnValue({
+      needRefresh: [false, mockSetNeedRefresh],
+      offlineReady: [false, vi.fn()],
+      updateServiceWorker: mockUpdateServiceWorker,
+    });
+    const view = render(<ReloadPrompt />);
+    try {
+      Object.defineProperty(document, 'visibilityState', { value: 'visible', configurable: true });
+      act(() => { document.dispatchEvent(new Event('visibilitychange')); });
+      expect(lookup).toHaveBeenCalledOnce();
+      Object.defineProperty(document, 'visibilityState', { value: 'hidden', configurable: true });
+      await act(async () => { finishLookup(registration); });
+      expect(registration.update).not.toHaveBeenCalled();
+      expect(mockSetNeedRefresh).not.toHaveBeenCalled();
+    } finally {
+      view.unmount();
+      if (originalVisibility) Object.defineProperty(document, 'visibilityState', originalVisibility);
+      else Reflect.deleteProperty(document, 'visibilityState');
+    }
+  });
+
   test('R1: onRegistered checks immediately, keeps the periodic timer and handles errors gracefully', () => {
     vi.useFakeTimers();
     let registeredCallback: ((scriptUrl: string, r: any) => void) | undefined;
@@ -697,7 +806,7 @@ describe('Service Worker Update Lifecycle (ReloadPrompt) Suite', () => {
     expect(closeBtn.className).toContain('btn-secondary');
   });
 
-  test('Edge Case: Handles synchronous exception thrown by r.update() in periodic timer', () => {
+  test('Edge Case: Handles synchronous exception thrown by r.update() in periodic timer', async () => {
     vi.useFakeTimers();
     const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
     let registeredCallback: ((scriptUrl: string, r: any) => void) | undefined;
@@ -729,7 +838,8 @@ describe('Service Worker Update Lifecycle (ReloadPrompt) Suite', () => {
     });
 
     expect(mockRegistration.update).toHaveBeenCalledTimes(2);
-    expect(consoleSpy).toHaveBeenCalledWith('SW update synchronous error:', expect.any(Error));
+    await act(async () => { await Promise.resolve(); });
+    expect(consoleSpy).toHaveBeenCalledWith('SW update error:', expect.any(Error));
 
     unmount();
     consoleSpy.mockRestore();

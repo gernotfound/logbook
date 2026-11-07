@@ -5,6 +5,7 @@ import { applyPWAUpdate, checkForWaitingServiceWorker } from '../../lib/pwaUpdat
 
 const ReloadPrompt: React.FC = () => {
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const mountedRef = useRef(false);
   const updateInFlight = useRef(false);
   const activationAbortRef = useRef<AbortController | null>(null);
   const [updating, setUpdating] = useState(false);
@@ -22,14 +23,13 @@ const ReloadPrompt: React.FC = () => {
     onRegisteredSW(_swScriptUrl, r) {
       if (r && typeof r.update === 'function') {
         const requestUpdate = () => {
-          try {
-            const updateRes = r.update();
-            if (updateRes && typeof updateRes.catch === 'function') {
-              updateRes.catch(err => console.log('SW update error:', err));
-            }
-          } catch (err) {
-            console.log('SW update synchronous error:', err);
-          }
+          // An already-waiting worker may not fire another Workbox callback.
+          // The explicit prompt must also discover it at startup and on retries.
+          void checkForWaitingServiceWorker(r)
+            .then(waiting => {
+              if (waiting && mountedRef.current) setNeedRefresh(true);
+            })
+            .catch(err => console.log('SW update error:', err));
         };
 
         // Controlla subito: iOS/PWA può tenere aperta una build per molto tempo.
@@ -55,7 +55,9 @@ const ReloadPrompt: React.FC = () => {
   }, []);
 
   useEffect(() => {
+    mountedRef.current = true;
     return () => {
+      mountedRef.current = false;
       activationAbortRef.current?.abort();
       if (intervalRef.current) {
         clearInterval(intervalRef.current);
@@ -66,6 +68,7 @@ const ReloadPrompt: React.FC = () => {
 
   // Al risveglio dell'app o cambio di visibilità, controlla la presenza di aggiornamenti
   useEffect(() => {
+    let cancelled = false;
     const handleVisibilityChange = () => {
       if (
         document.visibilityState === 'visible' &&
@@ -76,11 +79,14 @@ const ReloadPrompt: React.FC = () => {
       ) {
         try {
           navigator.serviceWorker.getRegistration().then(reg => {
+            if (cancelled || document.visibilityState !== 'visible') return;
             if (reg && typeof reg.update === 'function') {
               try {
                 void checkForWaitingServiceWorker(reg)
                   .then(waiting => {
-                    if (waiting) setNeedRefresh(true);
+                    if (!cancelled && document.visibilityState === 'visible' && waiting) {
+                      setNeedRefresh(true);
+                    }
                   })
                   .catch(err => console.log('SW visibility update error:', err));
               } catch (err) {
@@ -95,6 +101,7 @@ const ReloadPrompt: React.FC = () => {
     };
     document.addEventListener('visibilitychange', handleVisibilityChange);
     return () => {
+      cancelled = true;
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, [setNeedRefresh]);

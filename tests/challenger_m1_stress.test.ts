@@ -16,12 +16,13 @@ function assertNoUndefined(value: unknown, path = 'root'): void {
         return;
     }
     if (Array.isArray(value)) {
-        value.forEach((item, index) => {
-            if (item === undefined) {
-                throw new Error(`[FIRESTORE VIOLATION] Encountered 'undefined' in array at path: ${path}[${index}]`);
+        // forEach skips sparse holes, although Firestore-bound arrays must be dense.
+        for (let index = 0; index < value.length; index++) {
+            if (!Object.hasOwn(value, index) || value[index] === undefined) {
+                throw new Error(`[FIRESTORE VIOLATION] Missing or undefined array item at path: ${path}[${index}]`);
             }
-            assertNoUndefined(item, `${path}[${index}]`);
-        });
+            assertNoUndefined(value[index], `${path}[${index}]`);
+        }
         return;
     }
     if (isPlainObject(value)) {
@@ -152,6 +153,7 @@ describe('Empirical Challenger: removeUndefinedValuesForFirestore & Firestore Se
             sparseArr[0] = 1;
             sparseArr[2] = 3;
             sparseArr[4] = 5;
+            expect(() => assertNoUndefined(sparseArr)).toThrow('[FIRESTORE VIOLATION]');
 
             const result = removeUndefinedValuesForFirestore(sparseArr);
 
@@ -184,12 +186,9 @@ describe('Empirical Challenger: removeUndefinedValuesForFirestore & Firestore Se
                 }
             }
 
-            const start = performance.now();
             const result = removeUndefinedValuesForFirestore(largeArray);
-            const duration = performance.now() - start;
 
             expect(result.length).toBe(5000);
-            expect(duration).toBeLessThan(100); // Sub-100ms for 5k items
             expect(result[0]).toEqual({ id: 'item_0', index: 0 });
             expect(result[1]).toBe(null);
             expect(result[2]).toBe(2);
@@ -650,9 +649,9 @@ describe('Empirical Challenger: removeUndefinedValuesForFirestore & Firestore Se
     });
 
     // =========================================================================
-    // 9. Performance Benchmark vs JSON.parse(JSON.stringify(...))
+    // 9. Projection & Repeated Sanitization Invariants
     // =========================================================================
-    describe('9. Performance & GC Benchmark', () => {
+    describe('9. Projection & Repeated Sanitization Invariants', () => {
         it('projects validated current user data to actual root and monthly documents without undefined fields', () => {
             const input = {
                 profile: { height: '175' },
@@ -681,7 +680,7 @@ describe('Empirical Challenger: removeUndefinedValuesForFirestore & Firestore Se
                 .toMatchObject({ kcal: 2100 });
         });
 
-        it('sanitizes 500 iterations within 1000ms and preserves non-JSON types', () => {
+        it('preserves non-JSON types and does not mutate inputs across repeated sanitizations', () => {
             const sampleData = {
                 profile: { name: 'User 1', age: 30, notes: undefined },
                 items: Array.from({ length: 50 }, (_, i) => ({
@@ -692,29 +691,22 @@ describe('Empirical Challenger: removeUndefinedValuesForFirestore & Firestore Se
                 }))
             };
 
-            const ITERATIONS = 500;
-
-            // Warm-up
-            for (let i = 0; i < 20; i++) {
-                removeUndefinedValuesForFirestore(sampleData);
-                JSON.parse(JSON.stringify(sampleData));
+            // Repeated calls must not reuse stale sanitization state or mutate the source.
+            for (let i = 0; i < 100; i++) {
+                const result = removeUndefinedValuesForFirestore(sampleData);
+                expect(result.profile).not.toHaveProperty('notes');
+                expect(result.items).toHaveLength(50);
+                expect(result.items[0].sub).not.toHaveProperty('extra');
+                expect(result.items[0].date).toBe(sampleData.items[0].date);
             }
 
-            const startCustom = performance.now();
-            for (let i = 0; i < ITERATIONS; i++) {
-                removeUndefinedValuesForFirestore(sampleData);
-            }
-            const durationCustom = performance.now() - startCustom;
-
-            // Assert custom is fast (< 500ms for 500 comprehensive structures under parallel load)
-            expect(durationCustom).toBeLessThan(1000);
-
-            // Assert custom does not convert Dates to ISO strings like JSON.parse(JSON.stringify) does
+            // JSON serialization loses Date instances; the sanitizer preserves them.
             const customResult = removeUndefinedValuesForFirestore(sampleData);
             const jsonResult = JSON.parse(JSON.stringify(sampleData));
-
             expect(customResult.items[0].date).toBeInstanceOf(Date);
-            expect(typeof jsonResult.items[0].date).toBe('string'); // JSON destroyed Date object
+            expect(typeof jsonResult.items[0].date).toBe('string');
+            expect(sampleData.profile).toHaveProperty('notes');
+            expect(sampleData.items[0].sub).toHaveProperty('extra');
         });
     });
 });

@@ -354,14 +354,14 @@ describe('Intelligent Exercise Search & Dropdown Suite (M3: R4 & R6)', () => {
             const input = container.querySelector('input') as HTMLInputElement;
             fireEvent.focus(input);
 
-            // Press ArrowDown to select index 0
+            // The empty-query list is sorted alphabetically: Corsa, Panca Inclinata, ...
             fireEvent.keyDown(input, { key: 'ArrowDown' });
-            // Press ArrowDown to select index 1
             fireEvent.keyDown(input, { key: 'ArrowDown' });
-            // Press Enter to confirm
+            fireEvent.keyDown(input, { key: 'ArrowUp' });
+            fireEvent.keyDown(input, { key: 'ArrowDown' });
             fireEvent.keyDown(input, { key: 'Enter' });
 
-            expect(onSelect).toHaveBeenCalledTimes(1);
+            expect(onSelect).toHaveBeenCalledExactlyOnceWith('ex_incline');
             expect(container.querySelector('[role="listbox"]')).toBeNull();
         });
 
@@ -376,10 +376,13 @@ describe('Intelligent Exercise Search & Dropdown Suite (M3: R4 & R6)', () => {
 
             const input = container.querySelector('input') as HTMLInputElement;
             fireEvent.focus(input);
+            input.focus();
+            expect(document.activeElement).toBe(input);
             expect(container.querySelector('[role="listbox"]')).not.toBeNull();
 
             fireEvent.keyDown(input, { key: 'Escape' });
             expect(container.querySelector('[role="listbox"]')).toBeNull();
+            expect(document.activeElement).not.toBe(input);
         });
 
         it('2.9: Clicking outside closes the dropdown', () => {
