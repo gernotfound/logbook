@@ -399,6 +399,50 @@ describe('workout session preparation', () => {
         expect(saved.waterLiters).toBeUndefined();
     });
 
+
+    it.each(['1,5litri', '1.5.2', 'Infinity', '1e309', '-1', 'NaN', '  ', Infinity])(
+        'does not persist malformed, partial or non-finite water values (%s)',
+        invalidWater => {
+            const original = {
+                id: 'water-invalid',
+                date: '2026-09-16',
+                exercises: [],
+                waterLiters: invalidWater,
+            } as unknown as WorkoutSession;
+            const draft = applyWorkoutCompletionDraft(original, {
+                mood: '', pump: '', fatigue: '', water: String(invalidWater), pains: [],
+            });
+            const completed = prepareCompletedWorkout(original, 61_000, createRuntime()).finishedWorkout;
+            const history = prepareHistoricalWorkoutForSave(
+                original, original.id, { mood: '', pump: '', fatigue: '' },
+                String(invalidWater), '00:30:00', createRuntime(),
+            );
+            for (const result of [draft, completed, history]) {
+                expect(result).not.toHaveProperty('waterLiters');
+            }
+            expect(original.waterLiters).toBe(invalidWater);
+        },
+    );
+
+    it.each([
+        ['0', 0], ['.5', 0.5], ['1,5', 1.5], ['2.25', 2.25],
+    ])('preserves valid decimal water values in all three preparation paths (%s)', (water, expected) => {
+        const original = {
+            id: 'water-valid', date: '2026-09-16', exercises: [], waterLiters: water,
+        } as unknown as WorkoutSession;
+        const draft = applyWorkoutCompletionDraft(original, {
+            mood: '', pump: '', fatigue: '', water, pains: [],
+        });
+        const completed = prepareCompletedWorkout(original, 61_000, createRuntime()).finishedWorkout;
+        const history = prepareHistoricalWorkoutForSave(
+            original, original.id, { mood: '', pump: '', fatigue: '' },
+            water, '00:30:00', createRuntime(),
+        );
+        for (const result of [draft, completed, history]) {
+            expect(result.waterLiters).toBe(expected);
+        }
+    });
+
     it('uses the current 1–5 scale when a workout lacks a ratingScale marker', () => {
         const runtime = createRuntime();
         expect(buildFreeWorkout(runtime).ratingScale).toBe(5);
