@@ -56,9 +56,13 @@ Decisione: `[NOT_A_BREACH / BREACH_NO_NOTIFICATION / NOTIFY_AUTHORITY / NOTIFY_A
 
 ## 5. Scadenze e notifiche
 
-Se il provider agisce come titolare, la notifica all'autorità competente va valutata senza ingiustificato ritardo e, ove possibile, entro 72 ore dalla conoscenza quando il breach è suscettibile di presentare un rischio. Se esiste rischio elevato, valutare anche comunicazione agli interessati.
+Se TheLogBook agisce come **titolare** del trattamento e la violazione è suscettibile di presentare un rischio per i diritti e le libertà, notificare all'autorità competente senza ingiustificato ritardo e, ove possibile, entro 72 ore da quando si è avuta conoscenza della violazione. Quando il rischio è elevato, comunicare la violazione agli interessati senza ingiustificato ritardo, salvo le eccezioni dell'art. 34, par. 3, da documentare.
 
-Se il provider agisce come responsabile per uno specifico trattamento, notificare il titolare senza ingiustificato ritardo secondo contratto e Art. 33.
+Se TheLogBook agisce come **responsabile** per conto di una palestra o di un altro titolare, informare quest'ultimo senza ingiustificato ritardo appena accertata la violazione, secondo gli obblighi contrattuali e l'art. 33, par. 2. **Non attendere** la conclusione dell'analisi della causa radice o della valutazione del rischio: spetta al titolare stabilire se notificare l'autorità e gli interessati. Trasmettere tempestivamente ulteriori dettagli quando disponibili.
+
+Se la notifica al Garante è necessaria ma alcuni dettagli non sono ancora disponibili, inviare nei termini le informazioni già accertate e integrarle successivamente senza ulteriore ingiustificato ritardo (art. 33, par. 4). Una notifica oltre le 72 ore deve spiegare i motivi del ritardo. Registrare gli orari delle decisioni, delle notifiche e delle integrazioni; **non** far decorrere il termine dall'ultimazione dell'indagine tecnica.
+
+Riferimenti: [Garante — Data breach](https://www.garanteprivacy.it/data-breach); [EDPB — Linee guida 9/2022, versione finale](https://www.edpb.europa.eu/documents/guideline/guidelines-92022-on-personal-data-breach-notification-under-gdpr_en).
 
 - Ora conoscenza: `[UTC]`
 - Deadline 72h di riferimento: `[UTC]`
