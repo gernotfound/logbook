@@ -216,6 +216,8 @@ describe('guest -> account skip policy', () => {
             let cloudWritable = true;
             vi.mocked(isHealthConsentCloudWritable).mockImplementation(() => cloudWritable);
             const retire = vi.spyOn(replicaProtocol, 'retireExpiredReplicas').mockImplementation(async (_db, _uid, _now, guard) => {
+                expect(guard).toBeTypeOf('function');
+                if (!guard) throw new Error('Missing consent guard');
                 expect(guard()).toBe(true);
                 if (phase === 'retire') {
                     cloudWritable = false;
@@ -226,6 +228,8 @@ describe('guest -> account skip policy', () => {
             const claim = vi.spyOn(replicaProtocol, 'claimReplicaCheckpoint').mockImplementation(async (
                 _db, _uid, _replica, _clock, _seq, _candidateId, guard,
             ) => {
+                expect(guard).toBeTypeOf('function');
+                if (!guard) throw new Error('Missing consent guard');
                 expect(guard()).toBe(true);
                 cloudWritable = false;
                 expect(guard()).toBe(false);
