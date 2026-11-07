@@ -732,6 +732,32 @@ it('keeps a lost-ack receipt on 401 even without serverAcceptedAt', async () => 
     expect(await get('logbook:v2:user:a')).toBeDefined();
 });
 
+it.each([400, 401, 403])('preserves the initial recovery receipt after a rejected HTTP %i POST', async status => {
+    let firstReceipt = '';
+    boundary.fetch.mockImplementationOnce(async (_input, init?: RequestInit) => {
+        expect(init?.method).toBe('POST');
+        firstReceipt = (JSON.parse(String(init?.body ?? '{}')) as { receiptToken: string }).receiptToken;
+        expect(readAccountDeletionMarker('user:a')?.receiptToken).toBe(firstReceipt);
+        return response(status, { error: 'Richiesta di cancellazione rifiutata.' });
+    });
+
+    await expect(deleteAccount(context)).rejects.toThrow('Richiesta di cancellazione rifiutata.');
+    await Promise.resolve();
+
+    expect(firstReceipt).toBeTruthy();
+    expect(readAccountDeletionMarker('user:a')?.receiptToken).toBe(firstReceipt);
+    expect(isAccountDeletionPending('user:a')).toBe(true);
+    expect(await get('logbook:v2:user:a')).toEqual({ original: 'recoverable' });
+    expect(boundary.auth.signOut).not.toHaveBeenCalled();
+    expect(boundary.reset).not.toHaveBeenCalled();
+
+    // The same receipt must remain usable for the subsequent trusted retry.
+    boundary.fetch.mockReset();
+    installSuccessfulServerFlow(receipt => expect(receipt).toBe(firstReceipt));
+    await expect(deleteAccount(context)).resolves.toEqual({ status: 'complete' });
+    expect(isAccountDeletionPending('user:a')).toBe(false);
+});
+
 it('bounds the App Check provider during receipt polling without starting a late fetch', async () => {
     // Use a shortened real deadline rather than fake timers: dynamic module
     // import and fake IndexedDB each have their own asynchronous scheduling.

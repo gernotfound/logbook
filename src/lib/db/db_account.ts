@@ -390,10 +390,8 @@ async function performDeletion(context: AccountDeletionContext): Promise<Account
         if (error instanceof AccountDeletionRequestTimeoutError) {
             return pendingDeletionOutcome('La richiesta di cancellazione è stata inviata, ma il server non ha risposto entro il limite interattivo. La copia locale e la ricevuta sono state conservate; LogBook verificherà lo stato automaticamente e puoi riprendere l’operazione dalle impostazioni.');
         }
-        const definitive = Boolean(error && typeof error === 'object' && 'definitiveRejection' in error
-            && (error as { definitiveRejection?: boolean }).definitiveRejection);
-        // A previous POST may have been accepted despite a lost acknowledgement.
-        if (definitive && !existing) clearAccountDeletion(owner);
+        // A rejection for this POST cannot prove the persisted receipt was
+        // never accepted by an earlier request. Keep the recovery fence intact.
         throw error instanceof Error
             ? error
             : new Error('Cancellazione non avviata. Verifica la connessione e riprova.', { cause: error });
