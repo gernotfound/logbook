@@ -134,7 +134,7 @@ describe('Training Session UI Improvements Suite (R1, R2, R3)', () => {
     it('associa le cinque etichette cardio ai rispettivi campi', () => {
         render(
             <SessionExerciseCard
-                exItem={{ id: 'cardio-instance', exId: 'ex_treadmill', sets: [
+                exItem={{ id: 'cardio-instance', exId: 'ex_treadmill', sessionNote: '', sets: [
                     { id: 'cardio-set-1', kg: '', reps: '', time: '', distance: '', speed: '', incline: '', kcal: '' }
                 ] }}
                 exIndex={0}
