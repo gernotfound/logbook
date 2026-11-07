@@ -202,7 +202,10 @@ export function useSettingsAccountActions({ currentUser, isGuest, logout }: Acco
                 cancelPendingSyncs: () => useAppStore.getState().cancelPendingSyncs(),
                 resetStore: () => useAppStore.getState().resetStore(),
             });
-            if (outcome.status === 'pending') await showAlert(outcome.message);
+            if (outcome.status === 'pending' && session && isCurrentSession(session)
+                && (expectedUid === null ? auth.currentUser === null : auth.currentUser?.uid === expectedUid)) {
+                await showAlert(outcome.message);
+            }
         } catch (error) {
             if (isSensitiveReauthCancellation(error)) return;
             const code = (error as { code?: unknown } | null)?.code;
@@ -210,11 +213,9 @@ export function useSettingsAccountActions({ currentUser, isGuest, logout }: Acco
             const message = isCredentialMistake
                 ? 'Password attuale non corretta.'
                 : error instanceof Error ? error.message : 'Cancellazione non riuscita.';
-            let canShow = session === null;
-            if (session) {
-                try { canShow = captureSession().owner === session.owner; }
-                catch { canShow = true; }
-            }
+            // The same owner after A→B→A is not the same authenticated session.
+            const canShow = session === null || (isCurrentSession(session)
+                && (expectedUid === null ? auth.currentUser === null : auth.currentUser?.uid === expectedUid));
             if (canShow) void showAlert(message);
         } finally {
             deletionBusy.current = null;

@@ -42,7 +42,7 @@ import { AccountSettingsTab } from '../src/components/Settings/AccountSettingsTa
 import { DB } from '../src/lib/db';
 import { useSettings } from '../src/hooks/useSettings';
 import { localStorageMock } from './setup';
-import { activateGuestSession } from '../src/lib/sync/session';
+import { activateGuestSession, invalidateSession } from '../src/lib/sync/session';
 import { markAccountDeletion } from '../src/lib/sync/accountGate';
 
 describe('account deletion recent authentication', () => {
@@ -93,6 +93,68 @@ describe('account deletion recent authentication', () => {
     render(<AccountSettingsTab pendingAccountDeletion={result.current.pendingAccountDeletion}
       deletingAccount={false} onDeleteAccount={vi.fn()} />);
     expect(screen.getByRole('button', { name: 'Riprendi cancellazione account' })).toBeTruthy();
+  });
+
+
+  const withAuthenticatedFirebaseUser = async (work: () => Promise<void>) => {
+    const { auth } = await import('../src/lib/firebase');
+    const originalUser = Object.getOwnPropertyDescriptor(auth, 'currentUser');
+    Object.defineProperty(auth, 'currentUser', { configurable: true, value: authState.user });
+    try { await work(); }
+    finally {
+      if (originalUser) Object.defineProperty(auth, 'currentUser', originalUser);
+      else Reflect.deleteProperty(auth, 'currentUser');
+    }
+  };
+
+  it('suppresses stale account deletion errors after Auth A→B→A returns to the same UID', async () => {
+    await withAuthenticatedFirebaseUser(async () => {
+      dialog.showConfirm.mockImplementationOnce(async () => {
+        invalidateSession();
+        return true;
+      });
+      const deleteSpy = vi.spyOn(DB, 'deleteAccount').mockResolvedValue({ status: 'complete' });
+      const { result } = renderHook(() => useSettings());
+
+      await act(async () => result.current.handleDeleteAccount());
+
+      expect(dialog.showConfirm).toHaveBeenCalledOnce();
+      expect(deleteSpy).not.toHaveBeenCalled();
+      expect(dialog.showAlert).not.toHaveBeenCalled();
+    });
+  });
+
+  it('does not show an old pending deletion result after the server await changes Auth epoch', async () => {
+    await withAuthenticatedFirebaseUser(async () => {
+      reauth.run.mockResolvedValue('reauthenticated');
+      const deleteSpy = vi.spyOn(DB, 'deleteAccount').mockImplementation(async () => {
+        invalidateSession();
+        return { status: 'pending', message: 'Deletion remains pending for old session' };
+      });
+      const { result } = renderHook(() => useSettings());
+
+      await act(async () => result.current.handleDeleteAccount());
+
+      expect(deleteSpy).toHaveBeenCalledOnce();
+      expect(dialog.showAlert).not.toHaveBeenCalled();
+    });
+  });
+
+  it('suppresses health-data erasure errors after a same-UID Auth epoch replacement', async () => {
+    await withAuthenticatedFirebaseUser(async () => {
+      const { currentHealthConsentStatus } = await import('../src/lib/healthConsent');
+      vi.mocked(currentHealthConsentStatus).mockReturnValueOnce('withdrawn');
+      dialog.showConfirm.mockImplementationOnce(async () => {
+        invalidateSession();
+        return true;
+      });
+      const { result } = renderHook(() => useSettings());
+
+      await act(async () => result.current.handleDeleteHealthData());
+
+      expect(dialog.showConfirm).toHaveBeenCalledOnce();
+      expect(dialog.showAlert).not.toHaveBeenCalled();
+    });
   });
 
   it('releases the deletion busy guard when strict session capture fails', async () => {
