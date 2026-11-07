@@ -5,7 +5,7 @@ import { Chart as ChartJS } from 'chart.js';
 import { getLocalDateString } from '../src/lib/utils/date';
 import VolumeCaloriesCorrelationChart from '../src/components/analytics/VolumeCaloriesCorrelationChart';
 
-import {   computeVolumeCaloriesCorrelation, calculatePearsonCorrelation, generateWeekIntervals } from '../src/lib/calc/analytics';
+import { computeVolumeCaloriesCorrelation, computeWeeklyVolumeSeries, calculatePearsonCorrelation, generateWeekIntervals } from '../src/lib/calc/analytics';
 import type { WorkoutSession, NutritionDay, Exercise } from '../src/types';
 
 describe('Challenger 2: UI/UX Adversarial & Responsive Stress Test Suite', () => {
@@ -169,11 +169,11 @@ describe('Challenger 2: UI/UX Adversarial & Responsive Stress Test Suite', () =>
             expect(screen.getByText('Dati insufficienti per calcolare la correlazione.')).toBeDefined();
         });
 
-        it('1.5: Handles history with 0-volume sessions (zero reps/kg) gracefully', () => {
+        it('1.5: Handles a current-week zero-volume session without confusing it with an expired fixture', async () => {
             const zeroHistory: WorkoutSession[] = [
                 {
                     id: 'zero_1',
-                    date: '2026-08-18',
+                    date: recentDate(0),
                     routineName: 'Test',
                     exercises: [
                         {
@@ -185,6 +185,19 @@ describe('Challenger 2: UI/UX Adversarial & Responsive Stress Test Suite', () =>
                 }
             ];
 
+            const zero = computeWeeklyVolumeSeries(zeroHistory, mockLibrary, 80, 8);
+            expect(zero.stats.totalWorkouts).toBe(1);
+            expect(zero.stats.totalVolumeKg).toBe(0);
+            expect(zero.stats.hasData).toBe(false);
+            const nonzeroHistory = zeroHistory.map(session => ({
+                ...session,
+                exercises: session.exercises.map(exercise => ({
+                    ...exercise,
+                    sets: exercise.sets.map(set => ({ ...set, kg: '10', reps: '5' })),
+                })),
+            }));
+            expect(computeWeeklyVolumeSeries(nonzeroHistory, mockLibrary, 80, 8).stats.hasData).toBe(true);
+
             render(
                 <WeeklyVolumeChart
                     history={zeroHistory}
@@ -193,7 +206,7 @@ describe('Challenger 2: UI/UX Adversarial & Responsive Stress Test Suite', () =>
                 />
             );
 
-            // Should show empty fallback because total volume is 0
+            await waitFor(() => expect(document.querySelector('#weekly-volume-chart-card')?.getAttribute('aria-busy')).toBe('false'));
             expect(screen.getByText('Nessun dato di allenamento nelle settimane selezionate.')).toBeDefined();
         });
     });
