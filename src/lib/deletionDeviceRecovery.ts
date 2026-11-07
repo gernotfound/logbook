@@ -35,10 +35,15 @@ function readAll():Credential[]{
  try{parsed=JSON.parse(raw);}catch(error){throw new DeletionRecoveryCredentialCorruptError(error);}
  if(!Array.isArray(parsed))throw new DeletionRecoveryCredentialCorruptError();
  const credentials:Credential[]=[];
+ const seenOwners=new Set<string>();
  for(const item of parsed){
    if(!item||typeof item!=='object')throw new DeletionRecoveryCredentialCorruptError();
    const candidate=item as {uid?:unknown;token?:unknown};
    if(typeof candidate.uid!=='string'||candidate.uid.length===0||typeof candidate.token!=='string'||!/^[A-Za-z0-9_-]{43}$/.test(candidate.token))throw new DeletionRecoveryCredentialCorruptError();
+   // Each owner has one durable recovery witness. Duplicate owner entries
+   // are ambiguous and must not trigger repeated or conflicting finalization.
+   if(seenOwners.has(candidate.uid))throw new DeletionRecoveryCredentialCorruptError();
+   seenOwners.add(candidate.uid);
    credentials.push({uid:candidate.uid,token:candidate.token});
  }
  return credentials;
