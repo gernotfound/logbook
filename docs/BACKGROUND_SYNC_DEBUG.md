@@ -4,10 +4,7 @@
 
 Il journal owner-scoped rimane persistito localmente e il client gestisce i tentativi di replica. Il Service Worker non legge credenziali, stato utente o journal e non invia comandi di replay.
 
-Un tentativo di sincronizzazione viene richiesto quando:
-
-1. il browser torna online;
-2. TheLogBook torna visibile in primo piano.
+La ripresa può partire quando il browser torna online o quando TheLogBook torna visibile in primo piano. Inoltre, se il journal è ancora `local-pending` e la sessione autorizzata resta in primo piano e online, il client pianifica nuovi tentativi con backoff da 20 secondi fino a 5 minuti. Il timer non replica journal rifiutati o bloccati e non aggira i controlli di consenso, ownership e integrità.
 
 Il replay resta subordinato alla sessione e ai controlli di ownership, consenso, integrità e autorizzazione. I dati locali non vengono scartati a seguito di un errore remoto. L'assenza della Background Sync API su Safari/iOS non impedisce i due percorsi di ripresa.
 

@@ -22,7 +22,11 @@ jobs:
       fail-fast: false
       max-parallel: 4
       matrix:
+        # Overlap slow sync classification with the shorter diagnostic areas.
         area:
+          - monthly-tombstones
+          - business-normalization
+          - sync-failure
           - csv
           - meal-totals
           - meal-item
@@ -36,7 +40,6 @@ jobs:
           - pending-sequences
           - replica-checkpoint
           - cloud-integrity
-          - sync-failure
     env:
       EXPECTED_SHA: ${{ github.sha }}
       STRYKER_AREA: ${{ matrix.area }}
@@ -101,6 +104,17 @@ jobs:
           const counts = {};
           for (const mutant of mutants) counts[mutant.status] = (counts[mutant.status] ?? 0) + 1;
           console.log(JSON.stringify({ area: process.env.STRYKER_AREA, generated: mutants.length, ...counts }));
+          // The clear-text reporter omits individual timeout locations.
+          for (const [file, result] of Object.entries(report.files ?? {})) {
+            for (const mutant of result.mutants ?? []) {
+              if (mutant.status === 'Timeout') {
+                console.log(JSON.stringify({ timedOutMutant: {
+                  file, id: mutant.id, mutator: mutant.mutatorName,
+                  location: mutant.location, replacement: mutant.replacement,
+                } }));
+              }
+            }
+          }
           if ((counts.Killed ?? 0) === 0) {
             throw new Error('No mutations killed: check runner correctness and test discovery');
           }

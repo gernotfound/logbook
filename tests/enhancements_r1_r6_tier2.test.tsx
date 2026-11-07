@@ -803,7 +803,7 @@ describe('LogBook PWA Enhancements Integration Suite (Requirements R1 - R6)', ()
                         ...editing!,
                         exercises: [
                             ...editing!.exercises,
-                            { exId: 'ex_adhoc_added', sessionNote: 'Added', sets: [] },
+                            { id: 'se_adhoc_added', exId: 'ex_adhoc_added', sessionNote: 'Added', sets: [] },
                         ],
                     });
                 });
