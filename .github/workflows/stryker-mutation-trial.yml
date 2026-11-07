@@ -34,6 +34,7 @@ jobs:
           - journal-retry
           - causal-compaction
           - pending-sequences
+          - replica-checkpoint
     env:
       EXPECTED_SHA: ${{ github.sha }}
       STRYKER_AREA: ${{ matrix.area }}
