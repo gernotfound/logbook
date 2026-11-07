@@ -28,7 +28,8 @@ export class DeletionRecoveryCredentialCapacityError extends Error {
 function randomToken():string{const bytes=crypto.getRandomValues(new Uint8Array(32));let s='';for(const b of bytes)s+=String.fromCharCode(b);return btoa(s).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/g,'');}
 function readAll():Credential[]{
  const raw=readBrowserValueStrict(KEY);
- if(!raw)return[];
+ // Only an absent key means no proofs; an unreadable empty value is corrupt.
+ if(raw===null)return[];
  let parsed:unknown;
  try{parsed=JSON.parse(raw);}catch(error){throw new DeletionRecoveryCredentialCorruptError(error);}
  if(!Array.isArray(parsed))throw new DeletionRecoveryCredentialCorruptError();
