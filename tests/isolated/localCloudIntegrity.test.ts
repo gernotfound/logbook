@@ -169,7 +169,7 @@ describe('durable cloud integrity fencing and recovery', () => {
         const ciphertext = await get(key);
 
         await expect(completeCloudIntegrityRecovery('a', before.cloudIntegrityFence!, full))
-            .rejects.toMatchObject({ code: 'replica-fenced' });
+            .rejects.toMatchObject({ code: 'replica-fenced', message: expect.stringMatching(/\S/) });
         expect(await get(key)).toBe(ciphertext);
         expect(await readLocal('a')).toEqual(before);
     });
@@ -204,7 +204,7 @@ describe('durable cloud integrity fencing and recovery', () => {
             const expected = kind === 'missing-observation' ? null : 'earlier-cloud-fence';
 
             await expect(completeCloudIntegrityRecovery('a', expected, true))
-                .rejects.toMatchObject({ code: 'replica-fenced' });
+                .rejects.toMatchObject({ code: 'replica-fenced', message: expect.stringMatching(/\S/) });
             expect(await get(key)).toBe(ciphertext);
             expect(await readLocal('a')).toEqual(before);
         },
@@ -224,7 +224,7 @@ describe('durable cloud integrity fencing and recovery', () => {
         const ciphertext = await get(key);
         release();
 
-        await expect(work).rejects.toMatchObject({ code: 'replica-fenced' });
+        await expect(work).rejects.toMatchObject({ code: 'replica-fenced', message: expect.stringMatching(/\S/) });
         expect(latest.cloudIntegrityFence).not.toBe(observed.cloudIntegrityFence);
         expect(await get(key)).toBe(ciphertext);
         expect(await readLocal('a')).toEqual(latest);
