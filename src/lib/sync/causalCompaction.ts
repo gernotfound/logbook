@@ -54,8 +54,8 @@ function stampClocks(stamp: FieldStamp): VectorClock[] {
     ];
 }
 
-function stableCoversStamp(stableFrontier: VectorClock, stamp: FieldStamp): boolean {
-    return stampClocks(stamp).every(clock => coversVector(stableFrontier, clock));
+function coversStamp(cover: VectorClock, stamp: FieldStamp): boolean {
+    return stampClocks(stamp).every(clock => coversVector(cover, clock));
 }
 
 export function compactSyncMeta(meta: SyncMeta, stableFrontier?: VectorClock): SyncMeta {
@@ -73,11 +73,9 @@ export function compactSyncMeta(meta: SyncMeta, stableFrontier?: VectorClock): S
         const descendantPrefix = `${ancestorKey}/`;
         for (const [candidateKey, candidateStamp] of Object.entries(fields)) {
             if (!candidateKey.startsWith(descendantPrefix)) continue;
-            const candidateClocks = [
-                candidateStamp.clock,
-                ...(candidateStamp.candidates ?? []).map(candidate => candidate.clock),
-            ];
-            if (candidateClocks.every(clock => coversVector(coverage, clock))) {
+            // Concurrent deletes can extend the barrier beyond the winner clock.
+            // Removing the stamp must not discard those unobserved delete events.
+            if (coversStamp(coverage, candidateStamp)) {
                 delete fields[candidateKey];
             }
         }
@@ -87,7 +85,7 @@ export function compactSyncMeta(meta: SyncMeta, stableFrontier?: VectorClock): S
         for (const [key, stamp] of Object.entries(fields)) {
             if (!fields[key]) continue;
 
-            if (!stamp.deleted && stamp.deleteClock && stableCoversStamp(stableFrontier, stamp)) {
+            if (!stamp.deleted && stamp.deleteClock && coversStamp(stableFrontier, stamp)) {
                 const { deleteClock: _retiredBarrier, ...withoutBarrier } = stamp;
                 fields[key] = withoutBarrier;
             }
@@ -97,7 +95,7 @@ export function compactSyncMeta(meta: SyncMeta, stableFrontier?: VectorClock): S
             .sort((left, right) => pathDepth(right) - pathDepth(left) || right.localeCompare(left));
         for (const key of byDepthDesc) {
             const stamp = fields[key];
-            if (!stamp?.deleted || !stableCoversStamp(stableFrontier, stamp)) continue;
+            if (!stamp?.deleted || !coversStamp(stableFrontier, stamp)) continue;
             const descendantPrefix = `${key}/`;
             if (Object.keys(fields).some(other => other !== key && other.startsWith(descendantPrefix))) continue;
             delete fields[key];

@@ -7,6 +7,7 @@ import {
     type SyncMeta,
 } from '../../src/lib/sync/semanticProjection';
 import type { DocumentData } from '../../src/lib/sync/documentProjection';
+import { openCloudDocument, sealCloudDocument } from '../../src/lib/sync/cloudDocumentCipher';
 
 const tombstonedProfileMeta = (): SyncMeta => ({
     protocolVersion: 3,
@@ -20,6 +21,27 @@ const tombstonedProfileMeta = (): SyncMeta => ({
         routines: { actorId: 'R', seq: 1, clock: { R: 1 } },
     },
 });
+
+
+function expandedDescendantBarrier(): SyncMeta {
+    // Concurrent deletions may extend the barrier without changing the
+    // winning event clock; both are accepted by the current metadata codec.
+    return parseSyncMeta({
+        protocolVersion: 3,
+        clock: { s00: 1, s01: 1, s02: 1 },
+        writer: { slot: 's00', replicaId: 'gc-barrier-fixture', generation: 1, seq: 1 },
+        fields: {
+            profile: {
+                actorId: 's00', seq: 1, clock: { s00: 1, s01: 1 },
+                deleted: true, deleteClock: { s00: 1, s01: 1 },
+            },
+            'profile/name': {
+                actorId: 's01', seq: 1, clock: { s01: 1 },
+                deleted: true, deleteClock: { s01: 1, s02: 1 },
+            },
+        },
+    });
+}
 
 function rootBase(): Map<string, DocumentData> {
     return new Map([['', {}]]);
@@ -589,6 +611,91 @@ describe('M4 causal metadata compaction', () => {
         expect(documents.get('')).toHaveProperty('profiles', 'unrelated');
         expect(documents.get('')).not.toHaveProperty('profile.name.value');
         expect(input).toEqual(before);
+    });
+
+
+    it.each([
+        { label: 'no frontier', frontier: undefined },
+        { label: 'frontier missing the additional delete', frontier: { s00: 1, s01: 1 } },
+    ])('preserves a descendant delete barrier beyond its winner clock ($label)', ({ frontier }) => {
+        const meta = expandedDescendantBarrier();
+        const before = structuredClone(meta);
+        const compacted = compactSyncMeta(meta, frontier);
+        expect(compacted).toEqual(meta);
+        expect(parseSyncMeta(compacted)).toEqual(compacted);
+        expect(compactSyncMeta(compacted, frontier)).toEqual(compacted);
+        expect(meta).toEqual(before);
+
+        const fullyStable = compactSyncMeta(meta, { s00: 1, s01: 1, s02: 1 });
+        expect(fullyStable).toEqual({ ...meta, fields: {} });
+    });
+
+    it.each([
+        { label: 'no frontier', frontier: undefined },
+        { label: 'partial frontier', frontier: { s00: 1, s01: 1 } },
+    ])('keeps an unobserved delete effective after authenticated metadata compaction ($label)', ({ frontier }) => {
+        const key = new Uint8Array(32).fill(29);
+        const sealed = sealCloudDocument(key, 'gc-fixture', '', {}, expandedDescendantBarrier());
+        const restored = openCloudDocument(key, 'gc-fixture', '', sealed);
+        const future: SemanticOperation = {
+            docPath: '', path: ['profile', 'name'], value: 'must-not-return', isDelete: false,
+            actorId: 's03', seq: 1, clock: { s00: 1, s01: 1, s03: 1 },
+        };
+        const original = applySemanticOperations(
+            new Map([['', restored.business]]), [future], { '': restored.sync },
+        );
+        const compacted = applySemanticOperations(
+            new Map([['', restored.business]]), [future],
+            { '': compactSyncMeta(restored.sync, frontier) },
+        );
+
+        expect(original.documents.get('')).not.toHaveProperty('profile.name');
+        expect(compacted.documents).toEqual(original.documents);
+        expect(compacted.syncMetas).toEqual(original.syncMetas);
+    });
+
+    it.each([
+        { order: ['profile', 'profile/name', 'profile/name/value'] },
+        { order: ['profile', 'profile/name/value', 'profile/name'] },
+        { order: ['profile/name', 'profile', 'profile/name/value'] },
+        { order: ['profile/name', 'profile/name/value', 'profile'] },
+        { order: ['profile/name/value', 'profile', 'profile/name'] },
+        { order: ['profile/name/value', 'profile/name', 'profile'] },
+    ])('retains the stronger nested barrier regardless of insertion order $order', ({ order }) => {
+        const meta = expandedDescendantBarrier();
+        const fields = {
+            ...meta.fields,
+            'profile/name/value': {
+                actorId: 's02', seq: 1, clock: { s02: 1 },
+                deleted: true, deleteClock: { s02: 1 },
+            },
+        };
+        const permuted = parseSyncMeta({
+            ...meta, fields: Object.fromEntries(order.map(key => [key, fields[key as keyof typeof fields]])),
+        });
+        const before = structuredClone(permuted);
+        const result = compactSyncMeta(permuted);
+        expect(result).toEqual(meta);
+        expect(result.fields['profile/name'].deleteClock).toEqual({ s01: 1, s02: 1 });
+        expect(result.fields['profile/name/value']).toBeUndefined();
+        expect(compactSyncMeta(result)).toEqual(result);
+        expect(permuted).toEqual(before);
+    });
+
+    it('collects the descendant only when the ancestor covers its complete delete barrier', () => {
+        const meta = expandedDescendantBarrier();
+        const covered = parseSyncMeta({
+            ...meta,
+            fields: {
+                ...meta.fields,
+                profile: { ...meta.fields.profile, deleteClock: { s00: 1, s01: 1, s02: 1 } },
+            },
+        });
+        const result = compactSyncMeta(covered);
+        expect(result).toEqual({
+            ...covered, fields: { profile: covered.fields.profile },
+        });
+        expect(compactSyncMeta(result)).toEqual(result);
     });
 
 });

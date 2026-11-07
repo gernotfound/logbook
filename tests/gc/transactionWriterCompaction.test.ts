@@ -41,6 +41,12 @@ vi.mock('firebase/firestore', () => ({
                                 checkpointAtMs: Date.now() - 360 * 24 * 60 * 60 * 1000,
                                 checkpointClock: { s01: 2 },
                             },
+                            s02: {
+                                replicaId: 'retired-s02', generation: 1, status: 'retired', lastSeq: 1,
+                                leaseUntilMs: Date.now() - 24 * 60 * 60 * 1000,
+                                checkpointAtMs: Date.now() - 360 * 24 * 60 * 60 * 1000,
+                                checkpointClock: { s02: 1 },
+                            },
                         },
                         mutation: { slot: 's00', action: 'checkpoint' },
                     }),
@@ -58,11 +64,13 @@ vi.mock('firebase/firestore', () => ({
 
 import { applyDocumentChanges } from '../../src/lib/sync/transactionWriter';
 import { sealCloudDocument, openCloudDocument } from '../../src/lib/sync/cloudDocumentCipher';
-import type { SemanticOperation } from '../../src/lib/sync/semanticProjection';
+import { applySemanticOperations, type SemanticOperation } from '../../src/lib/sync/semanticProjection';
 
 const cloudKey = new Uint8Array(32).fill(18);
 describe('M4 transaction write-boundary compaction', () => {
     beforeEach(() => {
+        harness.checkpointClock = {};
+        harness.lastSeq = 0;
         harness.remoteDocument = sealCloudDocument(cloudKey, 'user-a', 'nutrition_months/2026-09', {}, {
             protocolVersion: 3,
             clock: { s01: 2 },
@@ -163,4 +171,60 @@ describe('M4 transaction write-boundary compaction', () => {
         expect(outcome.syncMeta['nutrition_months/2026-09'].fields).toEqual({});
         expect(harness.writes.some(write => write.deleted)).toBe(false);
     });
+
+    it('persists every descendant delete event and returns that same barrier to acknowledgement', async () => {
+        const path = 'nutrition_months/2026-09';
+        harness.checkpointClock = { s00: 1, s01: 1 };
+        harness.lastSeq = 1;
+        harness.remoteDocument = sealCloudDocument(cloudKey, 'user-a', path, {}, {
+            protocolVersion: 3,
+            clock: { s00: 1, s01: 1, s02: 1 },
+            fields: {
+                '2026-09-14': {
+                    actorId: 's00', seq: 1, clock: { s00: 1, s01: 1 },
+                    deleted: true, deleteClock: { s00: 1, s01: 1 },
+                },
+                '2026-09-14/meals': {
+                    actorId: 's01', seq: 1, clock: { s01: 1 },
+                    deleted: true, deleteClock: { s01: 1, s02: 1 },
+                },
+            },
+            writer: { slot: 's00', replicaId: 'replica-s00', generation: 1, seq: 1 },
+        });
+        const operation: SemanticOperation = {
+            docPath: path, path: ['2026-09-14', 'meals'], value: [], isDelete: false,
+            actorId: 's00', seq: 2, clock: { s00: 2, s01: 1 },
+        };
+        const now = Date.now();
+        const outcome = await applyDocumentChanges({} as any, 'user-a', [operation], () => true, {
+            slot: 's00', replicaId: 'replica-s00', generation: 1,
+            checkpointAtMs: now, leaseUntilMs: now + 360 * 24 * 60 * 60 * 1000,
+        }, cloudKey);
+
+        expect(outcome.documents.get(path)).toEqual({});
+        expect(harness.writes).toHaveLength(2);
+        const written = harness.writes.find(write => write.path.endsWith(path))!;
+        expect(written.deleted).not.toBe(true);
+        expect(written.data._sync.fields).toEqual({});
+        const restored = openCloudDocument(cloudKey, 'user-a', path, written.data);
+        expect(restored.sync).toEqual(outcome.syncMeta[path]);
+        expect(restored.sync.fields['2026-09-14/meals']).toMatchObject({
+            clock: { s01: 1 }, deleted: true, deleteClock: { s01: 1, s02: 1 },
+        });
+        expect(restored.sync.fields['2026-09-14']).toBeDefined();
+        expect(restored.sync.clock).toEqual({ s00: 2, s01: 1, s02: 1 });
+        expect(restored.sync.writer?.seq).toBe(2);
+
+        const unobservedDeleteReplay: SemanticOperation = {
+            docPath: path, path: ['2026-09-14', 'meals'], value: [], isDelete: false,
+            actorId: 's03', seq: 1, clock: { s00: 1, s01: 1, s03: 1 },
+        };
+        const replay = applySemanticOperations(
+            outcome.documents, [unobservedDeleteReplay], { [path]: restored.sync },
+        );
+        expect(replay.documents).toEqual(outcome.documents);
+        expect(replay.syncMetas[path].fields['2026-09-14/meals'].deleteClock)
+            .toEqual({ s01: 1, s02: 1 });
+    });
+
 });
