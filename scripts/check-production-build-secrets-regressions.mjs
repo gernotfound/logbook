@@ -81,6 +81,26 @@ void test('mutation tooling remains exactly pinned, dev-only and lockfile-matche
   }
 });
 
+
+void test('hosting revalidates live main after the build and immediately before deploy', () => {
+  const build = hosting.indexOf('      - name: Build exact production frontend');
+  const fence = hosting.indexOf('      - name: Recheck exact main SHA before Hosting deployment');
+  const deploy = hosting.indexOf('      - name: Deploy Firebase Hosting only');
+  assert.ok(build >= 0 && fence > build && deploy > fence, 'Expected post-build SHA fence immediately before deploy');
+  const preDeploy = hosting.slice(fence, deploy);
+  assert.match(preDeploy, /git ls-remote --exit-code origin refs\/heads\/main/);
+  assert.match(preDeploy, /git rev-parse HEAD/);
+  assert.ok(preDeploy.includes('[ "${current_main}" != "${EXPECTED_SHA}" ]'), 'Must compare freshly read main with exact expected SHA');
+  assert.match(preDeploy, /exit 1/);
+});
+
+void test('hosting post-deploy asset probes avoid find|head SIGPIPE under pipefail', () => {
+  const smoke = hosting.slice(hosting.indexOf('      - name: Verify public Hosting PWA cache policy'));
+  assert.doesNotMatch(smoke, /\|\s*head\s+-n\s+1/);
+  assert.match(smoke, /workbox_file="\$\(find dist[^\n]*-quit\)"/);
+  assert.match(smoke, /asset_file="\$\(find dist\/assets[^\n]*-quit\)"/);
+});
+
 function* clientSources(directory) {
   for (const entry of readdirSync(directory, { withFileTypes: true })) {
     const path = directory + '/' + entry.name;

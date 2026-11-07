@@ -126,6 +126,16 @@ jobs:
       - name: Build exact production frontend
         run: npm run build
 
+      - name: Recheck exact main SHA before Hosting deployment
+        shell: bash
+        run: |
+          set -euo pipefail
+          current_main="$(git ls-remote --exit-code origin refs/heads/main | awk '{print $1}')"
+          if [ "$(git rev-parse HEAD)" != "${EXPECTED_SHA}" ] || [ "${current_main}" != "${EXPECTED_SHA}" ]; then
+            echo "Refusing to deploy a superseded or mismatched main SHA" >&2
+            exit 1
+          fi
+
       - name: Deploy Firebase Hosting only
         run: npx --yes firebase-tools@15.30.2 deploy --only hosting --project "${VITE_FIREBASE_PROJECT_ID}" --non-interactive -m "GitHub ${EXPECTED_SHA}"
 
@@ -159,12 +169,12 @@ jobs:
           assert_revalidated "/appearance.js" /tmp/thelogbook-appearance-js-headers.txt
           assert_revalidated "/appearance.css" /tmp/thelogbook-appearance-css-headers.txt
 
-          workbox_file="$(find dist -maxdepth 1 -type f -name 'workbox-*.js' -printf '%f\n' | head -n 1 || true)"
+          workbox_file="$(find dist -maxdepth 1 -type f -name 'workbox-*.js' -printf '%f\n' -quit)"
           if [ -n "$workbox_file" ]; then
             assert_revalidated "/$workbox_file" /tmp/thelogbook-workbox-headers.txt
           fi
 
-          asset_file="$(find dist/assets -maxdepth 1 -type f \( -name '*.js' -o -name '*.css' \) -printf '%P\n' | head -n 1)"
+          asset_file="$(find dist/assets -maxdepth 1 -type f \( -name '*.js' -o -name '*.css' \) -printf '%P\n' -quit)"
           test -n "$asset_file"
           fetch_headers "/assets/$asset_file" /tmp/thelogbook-asset-headers.txt
           grep -iE '^cache-control: .*max-age=31536000.*immutable' /tmp/thelogbook-asset-headers.txt
