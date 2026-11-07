@@ -356,8 +356,10 @@ export async function refreshHealthConsent(user: User): Promise<HealthConsentSta
   const locallyVerified = saved === null
     && entries.get(uid) === 'active'
     && isHealthConsentWritable('user:' + uid);
-  if (!locallyVerified) verifiedRevisions.delete(uid);
-  verifiedSessionEpochs.delete(uid);
+  if (!locallyVerified) {
+    verifiedRevisions.delete(uid);
+    verifiedSessionEpochs.delete(uid);
+  }
   onlineVerifiedRevisions.delete(uid);
   if (!locallyVerified) {
     setStatus(uid, saved === null ? 'checking'
@@ -382,7 +384,7 @@ export async function refreshHealthConsent(user: User): Promise<HealthConsentSta
       // A missing server record never authorizes cloud access or restores
       // an unsent local withdrawal by accident.
       verifiedRevisions.delete(uid);
-  verifiedSessionEpochs.delete(uid);
+      verifiedSessionEpochs.delete(uid);
       onlineVerifiedRevisions.delete(uid);
       serverConfirmedLegal.delete(uid);
       if (saved !== null) return currentHealthConsentStatus(uid);
@@ -441,7 +443,7 @@ export async function refreshHealthConsent(user: User): Promise<HealthConsentSta
       if (!isSameDecision()) return currentHealthConsentStatus(uid);
       if (ready === 'erased') {
         verifiedRevisions.delete(uid);
-  verifiedSessionEpochs.delete(uid);
+        verifiedSessionEpochs.delete(uid);
         onlineVerifiedRevisions.delete(uid);
         serverConfirmedLegal.delete(uid);
         setStatus(uid, 'erasure-required');
@@ -557,7 +559,7 @@ export async function retainNewerHealthConsent(user: User): Promise<HealthConsen
   removeBrowserValue(marker(uid));
   if (ready === 'erased') {
     verifiedRevisions.delete(uid);
-  verifiedSessionEpochs.delete(uid);
+    verifiedSessionEpochs.delete(uid);
     onlineVerifiedRevisions.delete(uid);
     serverConfirmedLegal.delete(uid);
     setStatus(uid, 'erasure-required');
