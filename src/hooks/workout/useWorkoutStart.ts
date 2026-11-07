@@ -79,7 +79,7 @@ export function useWorkoutStart({
                     || useAppStore.getState().localWorkout?.id !== currentWorkout.id
                     || useAppStore.getState().localWorkout?.globalStartTime !== currentWorkout.globalStartTime) return false;
                 const persistedWorkout = durable?.data.activeWorkout;
-                if (persistedWorkout?.id === currentWorkout.id
+                if (persistedWorkout && persistedWorkout.id && persistedWorkout.id === currentWorkout.id
                     && persistedWorkout.globalStartTime === currentWorkout.globalStartTime) return true;
             } catch (error) {
                 console.error('Verifica avvio workout già presente non riuscita:', error);
