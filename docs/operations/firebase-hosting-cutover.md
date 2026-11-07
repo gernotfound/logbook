@@ -36,7 +36,9 @@ Completato e verificato prima del merge:
 
 Completamento 2026-10-02: PR #191 squash-merged; `main` = `edf164e3e410a650d1390b9cbe92344fa1fb9501`; Milestone Verification post-merge #1123 verde; Vercel Production READY sullo stesso SHA; Firebase Hosting Production run `36992998590` verde con prima release del site `thelogbook`; smoke automatici shell/SW verdi; login Google reale riuscito sul nuovo origin e registrazione recovery device osservata con risposte 200/204 dal backend.
 
-## Merge e deploy
+## Merge e deploy — procedura storica del cutover
+
+I passaggi seguenti descrivono il rilascio del 2 ottobre 2026 e **non sono un runbook per le release correnti**. Il contratto oggi vigente è in [CI Verification](../../.agents/rules/ci-verification.md): `Canonical Verification` sullo SHA della PR prima dello squash merge; sul nuovo SHA di `main`, `Main Release Gate` e `Security / CodeQL`, con attestazione dell'identità del tree e della CI precedente. Il riferimento storico a `Canonical Verification` sullo SHA di `main` non va applicato alle nuove release.
 
 1. Squash merge soltanto con exact-SHA verde.
 2. Leggere lo SHA reale di `main`.
