@@ -14,14 +14,14 @@ void test('rejects an unreviewed diagnostic credential in the production build',
   const altered = hosting.replace('      FIREBASE_HOSTING_DEPLOY:',
     '      ERROR_MONITOR_AUTH_TOKEN: ${{ secrets.ERROR_MONITOR_AUTH_TOKEN }}\n      FIREBASE_HOSTING_DEPLOY:');
   assert.notEqual(altered, hosting);
-  assert.match(checkProductionBuildSecrets(altered, firestore).join('; '), /external error monitoring/);
+  assert.match(checkProductionBuildSecrets(altered, firestore).join('; '), /unreviewed job-level env binding/);
 });
 
 void test('rejects an unreviewed browser diagnostic DSN', () => {
   const altered = hosting.replace('      FIREBASE_HOSTING_DEPLOY:',
     '      VITE_DIAGNOSTIC_DSN: ${{ vars.VITE_DIAGNOSTIC_DSN }}\n      FIREBASE_HOSTING_DEPLOY:');
   assert.notEqual(altered, hosting);
-  assert.match(checkProductionBuildSecrets(altered, firestore).join('; '), /external error monitoring/);
+  assert.match(checkProductionBuildSecrets(altered, firestore).join('; '), /unreviewed job-level env binding/);
 });
 
 void test('rejects diagnostic secrets introduced in an action step outside the job env', () => {
