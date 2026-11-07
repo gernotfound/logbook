@@ -240,6 +240,8 @@ jobs:
             -D /tmp/thelogbook-root-headers.txt https://thelogbook.web.app/ -o /tmp/thelogbook-index.html
           grep -F 'rel="canonical" href="https://thelogbook.web.app/"' /tmp/thelogbook-index.html
           grep -iE '^cache-control: .*no-cache.*no-store.*must-revalidate' /tmp/thelogbook-root-headers.txt
+          grep -iE '^x-content-type-options: nosniff' /tmp/thelogbook-root-headers.txt
+          grep -iE '^content-security-policy: ' /tmp/thelogbook-root-headers.txt
 
           assert_revalidated "/index.html" /tmp/thelogbook-index-headers.txt
           assert_revalidated "/manifest.webmanifest" /tmp/thelogbook-manifest-headers.txt

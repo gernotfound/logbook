@@ -117,12 +117,12 @@ void test('Hosting build remains unprivileged and hands an exact SHA artifact to
 
 void test('Hosting rejects unreviewed environment bindings in either job', () => {
   const rogueDeployEnv = hosting.replace('      GCP_FIREBASE_DEPLOY_SERVICE_ACCOUNT: ${{ vars.GCP_FIREBASE_DEPLOY_SERVICE_ACCOUNT }}',
-    '      GCP_FIREBASE_DEPLOY_SERVICE_ACCOUNT: ${{ vars.GCP_FIREBASE_DEPLOY_SERVICE_ACCOUNT }}\\n      UNREVIEWED_DEPLOY_FLAG: 1');
+    '      GCP_FIREBASE_DEPLOY_SERVICE_ACCOUNT: ${{ vars.GCP_FIREBASE_DEPLOY_SERVICE_ACCOUNT }}\n      UNREVIEWED_DEPLOY_FLAG: 1');
   assert.notEqual(rogueDeployEnv, hosting);
   assert.match(checkProductionBuildSecrets(rogueDeployEnv, firestore).join('; '), /deploy contains an unreviewed/);
 
   const rogueBuildEnv = hosting.replace('      FIREBASE_HOSTING_DEPLOY: production',
-    '      FIREBASE_HOSTING_DEPLOY: production\\n      UNREVIEWED_BUILD_FLAG: 1');
+    '      FIREBASE_HOSTING_DEPLOY: production\n      UNREVIEWED_BUILD_FLAG: 1');
   assert.notEqual(rogueBuildEnv, hosting);
   assert.match(checkProductionBuildSecrets(rogueBuildEnv, firestore).join('; '), /build contains an unreviewed/);
 });
@@ -132,6 +132,8 @@ void test('Hosting smoke verifies served bytes and browser MIME for critical PWA
   assert.ok(smoke.includes('assert_served_bytes "/" "dist/index.html" html'));
   assert.ok(smoke.includes('assert_served_bytes "/sw.js" "dist/sw.js" js'));
   assert.ok(smoke.includes('assert_served_bytes "/manifest.webmanifest" "dist/manifest.webmanifest" json'));
+  assert.match(smoke, /x-content-type-options: nosniff/);
+  assert.match(smoke, /content-security-policy:/);
   assert.match(smoke, /cmp -s/);
   assert.match(smoke, /Accept-Encoding: identity/);
   assert.match(smoke, /content_type/);
