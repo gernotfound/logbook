@@ -138,8 +138,13 @@ describe('Tier 5: Adversarial Coverage Hardening Suite', () => {
             const results = await settledPromise;
 
             expect(results).toHaveLength(10);
-            for (let i = 0; i < 10; i++) {
-                expect(results[i].status).toBe('fulfilled');
+            for (const result of results) {
+                expect(result.status).toBe('fulfilled');
+                if (result.status === 'fulfilled') {
+                    // A fulfilled Promise can still carry a rejected SyncResult.
+                    // Offline local-pending is allowed only because the sealed archive is checked below.
+                    expect(['synced', 'local-pending']).toContain(result.value.status);
+                }
             }
 
             expect(useAppStore.getState().syncing).toBe(false);
@@ -195,7 +200,7 @@ describe('Tier 5: Adversarial Coverage Hardening Suite', () => {
             }
         });
 
-        it('T5.5.4: Account linking during pending debounced save merges freshest in-memory state without data loss', () => {
+        it('T5.5.4: Pure guest/cloud merge uses the freshest supplied guest snapshot', () => {
             const cloudData: UserData = {
                 profile: { height: '173' },
                 library: [{ id: 'cloud_ex_1', name: 'Cloud Ex', setsCount: 3, sets: [], isDefault: false }],
