@@ -202,6 +202,50 @@ describe('Workout lifecycle durable recovery regressions', () => {
         expect(readDeviceValueStrict(name, owner)).toBe(original);
     });
 
+    it('preserves the newer check-in revision and refuses stale start and edits under the same account', async () => {
+        await prepareUnlockedTestArchive(owner);
+        localStorage.setItem(`logbook:v2:${owner}:health-consent-generation`, '3');
+        const name = 'draft:pre-session:concurrent-checkin';
+        const onStart = vi.fn(async () => true);
+        render(<PreSessionCheckIn workoutId="concurrent-checkin" onStart={onStart} onCancel={vi.fn(async () => true)} />);
+        fireEvent.click(screen.getByRole('button', { name: 'Energia: 4 su 5' }));
+        const first = readDeviceValueStrict(name, owner);
+        expect(first).not.toBeNull();
+        writeWorkoutRecoveryDraft(name, owner, { energy: 5 }, '3');
+        const newer = readDeviceValueStrict(name, owner);
+        expect(newer).not.toBe(first);
+
+        fireEvent.click(screen.getByRole('button', { name: 'Energia: 3 su 5' }));
+        expect(readDeviceValueStrict(name, owner)).toBe(newer);
+        expect(screen.getByRole('button', { name: 'Energia: 4 su 5' }).getAttribute('aria-pressed')).toBe('true');
+        fireEvent.click(screen.getByRole('button', { name: 'Salta check-in e inizia' }));
+        await waitFor(() => expect(useAppStore.getState().localPersistenceBlocked).toBe(true));
+        expect(onStart).not.toHaveBeenCalled();
+        expect(readDeviceValueStrict(name, owner)).toBe(newer);
+    });
+
+    it('does not overwrite a newer final rating or complete with an obsolete editor', async () => {
+        await prepareUnlockedTestArchive(owner);
+        localStorage.setItem(`logbook:v2:${owner}:health-consent-generation`, '3');
+        const active = workout('post-concurrent', true);
+        const name = 'draft:post-session:' + active.id;
+        useAppStore.setState({ userData: userData({ activeWorkout: active }), localWorkout: active });
+        renderOwnedWorkoutSession();
+        fireEvent.click(screen.getByRole('button', { name: 'Termina allenamento' }));
+        fireEvent.click(screen.getByRole('button', { name: 'Umore: 5 su 5' }));
+        const original = JSON.parse(readDeviceValueStrict(name, owner)!);
+        writeWorkoutRecoveryDraft(name, owner, {
+            ...original.data,
+            draft: { ...original.data.draft, mood: '2' },
+        }, '3');
+        const newer = readDeviceValueStrict(name, owner);
+        fireEvent.click(screen.getByRole('button', { name: 'Salva e termina' }));
+        await waitFor(() => expect(useAppStore.getState().localPersistenceBlocked).toBe(true));
+        expect(readDeviceValueStrict(name, owner)).toBe(newer);
+        expect(useAppStore.getState().localWorkout?.id).toBe(active.id);
+        expect(useAppStore.getState().userData?.history?.some(item => item.id === active.id)).not.toBe(true);
+    });
+
     it('preserves the source consent epoch of the current final rating against stale mounted edits', async () => {
         await prepareUnlockedTestArchive(owner);
         const current = workout('fresh-final-rating', true);

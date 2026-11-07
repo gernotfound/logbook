@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAppStore } from '../../store/useAppStore';
 import { Logic } from '../../lib/logic';
 import { captureSession, isCurrentSession } from '../../lib/sync/session';
-import { readWorkoutRecoveryDraft, writeWorkoutRecoveryDraft } from '../../lib/sync/workoutRecoveryDraft';
+import { readWorkoutRecoveryDraftImage, writeWorkoutRecoveryDraft } from '../../lib/sync/workoutRecoveryDraft';
 import { requiredUpdateRecoveryRegistry } from '../../lib/sync/requiredUpdateRecovery';
 import { draftRegistry } from '../../lib/utils/draftRegistry';
 import type { WorkoutReadiness } from '../../types';
@@ -65,6 +65,7 @@ type InitialReadinessRecovery = {
     session: ReturnType<typeof captureSession> | null;
     recoveryName: string;
     recovered: ReadinessDraft;
+    raw: string | null;
     error: unknown | null;
 };
 
@@ -72,14 +73,16 @@ function createInitialReadinessRecovery(workoutId: string): InitialReadinessReco
     const recoveryName = 'draft:pre-session:' + workoutId;
     try {
         const session = captureSession();
+        const image = readWorkoutRecoveryDraftImage(recoveryName, session.owner);
         return {
             session,
             recoveryName,
-            recovered: parseReadinessDraft(readWorkoutRecoveryDraft(recoveryName, session.owner)),
+            recovered: parseReadinessDraft(image.value),
+            raw: image.raw,
             error: null,
         };
     } catch (error) {
-        return { session: null, recoveryName, recovered: {}, error };
+        return { session: null, recoveryName, recovered: {}, raw: null, error };
     }
 }
 
@@ -89,6 +92,7 @@ export default function PreSessionCheckIn({ workoutId, routineName, date, onStar
     const [initialRecovery] = useState(() => createInitialReadinessRecovery(workoutId));
     const session = useRef(initialRecovery.session);
     const recoveryName = useRef(initialRecovery.recoveryName);
+    const recoveryRaw = useRef(initialRecovery.raw);
     const [values, setValues] = useState<ReadinessDraft>(initialRecovery.recovered);
     const valuesRef = useRef<ReadinessDraft>(initialRecovery.recovered);
     const dirtyRef = useRef(Object.keys(initialRecovery.recovered).length > 0);
@@ -105,13 +109,19 @@ export default function PreSessionCheckIn({ workoutId, routineName, date, onStar
         if (!dirtyRef.current) return;
         const activeSession = session.current;
         if (!activeSession || !isCurrentSession(activeSession)) throw new Error('Sessione cambiata prima del salvataggio del check-in.');
-        writeWorkoutRecoveryDraft(recoveryName.current, activeSession.owner, valuesRef.current, activeSession.consentGeneration);
+        recoveryRaw.current = writeWorkoutRecoveryDraft(
+            recoveryName.current, activeSession.owner, valuesRef.current,
+            activeSession.consentGeneration, recoveryRaw.current,
+        );
     }, []);
 
     const clearDraft = useCallback(() => {
         const activeSession = session.current;
         if (!activeSession || !isCurrentSession(activeSession)) throw new Error('Sessione cambiata prima della pulizia del check-in.');
-        writeWorkoutRecoveryDraft(recoveryName.current, activeSession.owner, null, activeSession.consentGeneration);
+        recoveryRaw.current = writeWorkoutRecoveryDraft(
+            recoveryName.current, activeSession.owner, null,
+            activeSession.consentGeneration, recoveryRaw.current,
+        );
         dirtyRef.current = false;
     }, []);
 
@@ -130,7 +140,10 @@ export default function PreSessionCheckIn({ workoutId, routineName, date, onStar
         try {
             const activeSession = session.current;
             if (!activeSession || !isCurrentSession(activeSession)) throw new Error('Sessione cambiata prima del salvataggio del check-in.');
-            writeWorkoutRecoveryDraft(recoveryName.current, activeSession.owner, next, activeSession.consentGeneration);
+            recoveryRaw.current = writeWorkoutRecoveryDraft(
+                recoveryName.current, activeSession.owner, next,
+                activeSession.consentGeneration, recoveryRaw.current,
+            );
         } catch (error) {
             blockReadinessPersistence(error);
             return;
@@ -147,7 +160,9 @@ export default function PreSessionCheckIn({ workoutId, routineName, date, onStar
             const activeSession = session.current;
             if (!activeSession || !isCurrentSession(activeSession)) throw new Error('Sessione cambiata prima di avviare il workout.');
             // Mounted UI values may predate a consent change in another tab.
-            readWorkoutRecoveryDraft(recoveryName.current, activeSession.owner);
+            if (readWorkoutRecoveryDraftImage(recoveryName.current, activeSession.owner).raw !== recoveryRaw.current) {
+                throw new Error('Check-in modificato da un’altra scheda: avvio bloccato.');
+            }
             const started = await onStart(includeReadiness ? valuesRef.current : undefined);
             if (started) {
                 try {
@@ -171,7 +186,9 @@ export default function PreSessionCheckIn({ workoutId, routineName, date, onStar
         try {
             const activeSession = session.current;
             if (!activeSession || !isCurrentSession(activeSession)) throw new Error('Sessione cambiata prima di eliminare il workout.');
-            readWorkoutRecoveryDraft(recoveryName.current, activeSession.owner);
+            if (readWorkoutRecoveryDraftImage(recoveryName.current, activeSession.owner).raw !== recoveryRaw.current) {
+                throw new Error('Check-in modificato da un’altra scheda: cancellazione bloccata.');
+            }
             if (await onCancel()) clearDraft();
         } catch (error) {
             blockReadinessPersistence(error);

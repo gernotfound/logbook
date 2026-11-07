@@ -10,7 +10,7 @@ import type { WorkoutSession } from '../../types';
 import { Logic } from '../../lib/logic';
 import { draftRegistry } from '../../lib/utils/draftRegistry';
 import { captureSession, isCurrentSession } from '../../lib/sync/session';
-import { readWorkoutRecoveryDraft, writeWorkoutRecoveryDraft } from '../../lib/sync/workoutRecoveryDraft';
+import { readWorkoutRecoveryDraftImage, writeWorkoutRecoveryDraft } from '../../lib/sync/workoutRecoveryDraft';
 import { requiredUpdateRecoveryRegistry } from '../../lib/sync/requiredUpdateRecovery';
 import type { WorkoutCompletionDraft } from '../../hooks/workout/workoutSessionPreparation';
 import { useAppStore } from '../../store/useAppStore';
@@ -96,6 +96,7 @@ const TrainingSession = ({ onNavigateToHistory, onNavigateToPlanning }: Training
     const [postSessionDraft, setPostSessionDraft] = useState<PostSessionDraft | null>(null);
     const postSessionDraftRef = useRef<PostSessionDraft | null>(null);
     const postSessionSessionRef = useRef(captureSession());
+    const postSessionRawRef = useRef<string | null | undefined>(undefined);
     const postSessionRecoveryName = activeWorkout?.id ? `draft:post-session:${activeWorkout.id}` : null;
     const wasStartedRef = useRef(Boolean(activeWorkout?.globalStartTime));
     const isPostSession = pendingEndTime !== null && postSessionDraft?.workoutId === String(activeWorkout?.id ?? '');
@@ -106,11 +107,13 @@ const TrainingSession = ({ onNavigateToHistory, onNavigateToPlanning }: Training
         const session = postSessionSessionRef.current;
         if (!isCurrentSession(session)) throw new Error('Sessione cambiata prima del salvataggio della valutazione finale.');
         try {
-            writeWorkoutRecoveryDraft(
+            if (postSessionRawRef.current === undefined) throw new Error('Bozza finale non ancora verificata.');
+            postSessionRawRef.current = writeWorkoutRecoveryDraft(
                 postSessionRecoveryName,
                 session.owner,
                 { pendingEndTime: endTime, draft },
                 session.consentGeneration,
+                postSessionRawRef.current,
             );
         } catch (error) {
             blockPostSessionPersistence(error);
@@ -123,7 +126,11 @@ const TrainingSession = ({ onNavigateToHistory, onNavigateToPlanning }: Training
         try {
             const session = postSessionSessionRef.current;
             if (!isCurrentSession(session)) throw new Error('Sessione cambiata prima della pulizia della valutazione finale.');
-            writeWorkoutRecoveryDraft(postSessionRecoveryName, session.owner, null, session.consentGeneration);
+            if (postSessionRawRef.current === undefined) throw new Error('Bozza finale non ancora verificata.');
+            postSessionRawRef.current = writeWorkoutRecoveryDraft(
+                postSessionRecoveryName, session.owner, null,
+                session.consentGeneration, postSessionRawRef.current,
+            );
         } catch (error) {
             console.warn('Workout salvato, ma la copia di recupero finale non è stata rimossa:', error);
             useAppStore.getState().setSaveError('Workout salvato; impossibile rimuovere una copia di recupero locale obsoleta.');
@@ -132,6 +139,7 @@ const TrainingSession = ({ onNavigateToHistory, onNavigateToPlanning }: Training
 
     useEffect(() => {
         const workoutId = String(activeWorkout?.id ?? '');
+        postSessionRawRef.current = undefined;
         if (!workoutId || activeWorkout?.isEditingHistory || !postSessionRecoveryName) {
             postSessionDraftRef.current = null;
             pendingEndTimeRef.current = null;
@@ -141,10 +149,9 @@ const TrainingSession = ({ onNavigateToHistory, onNavigateToPlanning }: Training
         postSessionSessionRef.current = session;
         let recovered: ReturnType<typeof parsePostSessionRecovery>;
         try {
-            recovered = parsePostSessionRecovery(
-                readWorkoutRecoveryDraft(postSessionRecoveryName, session.owner),
-                workoutId,
-            );
+            const image = readWorkoutRecoveryDraftImage(postSessionRecoveryName, session.owner);
+            recovered = parsePostSessionRecovery(image.value, workoutId);
+            postSessionRawRef.current = image.raw;
         } catch (error) {
             blockPostSessionPersistence(error);
             return;
