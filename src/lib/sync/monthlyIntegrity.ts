@@ -16,8 +16,14 @@ function isCanonicalLocalDate(date: unknown): date is string {
 
 export function requireCanonicalWorkoutDate(workout: Pick<WorkoutSession, 'date' | 'globalStartTime'>, label = 'Allenamento'): string {
     if (isCanonicalLocalDate(workout.date)) return workout.date;
-    if (typeof workout.globalStartTime === 'number' && Number.isFinite(workout.globalStartTime)) {
-        return getLocalDateString(workout.globalStartTime);
+    // A missing day may be recovered from a valid start instant. An explicitly
+    // malformed day must not be masked by that timestamp.
+    if (workout.date === undefined
+        && typeof workout.globalStartTime === 'number' && Number.isFinite(workout.globalStartTime)) {
+        const start = new Date(workout.globalStartTime);
+        // getLocalDateString falls back to today for invalid Date objects:
+        // never turn an out-of-range persisted timestamp into a real workout day.
+        if (!Number.isNaN(start.getTime())) return getLocalDateString(start);
     }
     throw new Error(`${label}: identità temporale non valida`);
 }
