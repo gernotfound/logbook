@@ -103,8 +103,7 @@ const TrainingRoutines: React.FC = () => {
                             }
                         }}
                         onCancel={() => {
-                            handleCancelEdit();
-                            setIsCreating(false);
+                            if (handleCancelEdit()) setIsCreating(false);
                         }}
                     />
                 </section>

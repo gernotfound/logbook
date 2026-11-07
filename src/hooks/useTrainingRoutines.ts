@@ -13,7 +13,8 @@ const EMPTY_ROUTINES: WorkoutRoutine[] = [];
 const EMPTY_LIBRARY: Exercise[] = [];
 const ROUTINE_DRAFT_KEY = 'draft_routine';
 
-function blockRoutineDraft(error: unknown): void {
+function blockRoutineDraft(error: unknown, session: ReturnType<typeof captureSession>): void {
+    if (!isCurrentSession(session)) return;
     console.error('Persistenza bozza scheda non disponibile:', error);
     useAppStore.setState({
         localPersistenceBlocked: true,
@@ -48,8 +49,8 @@ export function useTrainingRoutines() {
         readWorkoutRecoveryDraft(ROUTINE_DRAFT_KEY, draftOwner);
     }, [draftOwner, draftSession, initialRecovery.error, localPersistenceBlocked]);
     useEffect(() => {
-        if (initialRecovery.error) blockRoutineDraft(initialRecovery.error);
-    }, [initialRecovery.error]);
+        if (initialRecovery.error) blockRoutineDraft(initialRecovery.error, draftSession);
+    }, [initialRecovery.error, draftSession]);
     const [routineName, setRoutineName] = useState(() => initialDraft?.name || '');
     const [editingRoutineId, setEditingRoutineId] = useState<string | null>(null);
     const [routineExercises, setRoutineExercises] = useState<RoutineExercise[]>(() => Array.isArray(initialDraft?.exercises) ? initialDraft.exercises : []);
@@ -63,17 +64,19 @@ export function useTrainingRoutines() {
                 routineName.trim() !== '' || routineExercises.length > 0
                     ? { name: routineName, exercises: routineExercises } : null, draftSession.consentGeneration);
         } catch (error) {
-            blockRoutineDraft(error);
+            blockRoutineDraft(error, draftSession);
         }
     }, [routineName, routineExercises, editingRoutineId, draftOwner, draftSession,
         initialRecovery.error, localPersistenceBlocked, assertCurrentDraft]);
 
-    const clearRoutineDraft = () => {
+    const clearRoutineDraft = (): boolean => {
         try {
             assertCurrentDraft();
             writeWorkoutRecoveryDraft(ROUTINE_DRAFT_KEY, draftOwner, null, draftSession.consentGeneration);
+            return true;
         } catch (error) {
-            blockRoutineDraft(error);
+            blockRoutineDraft(error, draftSession);
+            return false;
         }
     };
 
@@ -82,6 +85,7 @@ export function useTrainingRoutines() {
     };
 
     const handleDuplicate = async (rtn: WorkoutRoutine) => {
+        if (!isCurrentSession(draftSession)) return;
         const newName = Logic.generateUniqueName(rtn.name, routines.map(r => r.name));
         const duplicated: WorkoutRoutine = {
             ...rtn,
@@ -92,7 +96,7 @@ export function useTrainingRoutines() {
             await dispatchDurableOperation(dispatchDomainOperation, { type: 'routine.upsert', routine: duplicated });
         } catch (err) {
             console.error(err);
-            await showAlert('Errore durante la duplicazione della scheda.');
+            if (isCurrentSession(draftSession)) await showAlert('Errore durante la duplicazione della scheda.');
         }
     };
 
@@ -104,10 +108,11 @@ export function useTrainingRoutines() {
     };
 
     const handleCancelEdit = () => {
+        if (!clearRoutineDraft()) return false;
         setEditingRoutineId(null);
         setRoutineName('');
         setRoutineExercises([]);
-        clearRoutineDraft();
+        return true;
     };
 
     const handleSave = async (e?: any) => {
@@ -184,26 +189,36 @@ export function useTrainingRoutines() {
                 ]);
             }
 
+            if (!isCurrentSession(draftSession)) return false;
+            const cleared = clearRoutineDraft();
+            if (!isCurrentSession(draftSession)) return false;
             setRoutineName('');
             setRoutineExercises([]);
             setEditingRoutineId(null);
-            clearRoutineDraft();
+            if (!cleared) {
+                await showAlert('Scheda salvata, ma la bozza cifrata non è stata ripulita. Verifica il recupero locale.');
+            }
             return true;
-        } catch (error) {
-            blockRoutineDraft(error);
-            await showAlert("Errore durante il salvataggio della scheda.");
+        } catch {
+            // A rejected business commit does not mean the encrypted recovery draft failed.
+            // Preserve it for retry without fencing unrelated local persistence.
+            if (isCurrentSession(draftSession)) await showAlert("Errore durante il salvataggio della scheda.");
             return false;
         }
     };
 
     const handleDelete = async (id: string, e: any) => {
         e.stopPropagation();
+        if (!isCurrentSession(draftSession)) return;
         if (!(await showConfirm("Sei sicuro di voler eliminare questa scheda?"))) return;
+        // The confirmed action cannot be transferred to a replacement Auth epoch.
+        if (!isCurrentSession(draftSession)) return;
         try {
             await dispatchDurableOperation(dispatchDomainOperation, { type: 'routine.delete', id });
+            if (!isCurrentSession(draftSession)) return;
             if (editingRoutineId === id) handleCancelEdit();
         } catch {
-            await showAlert("Errore durante l'eliminazione della scheda.");
+            if (isCurrentSession(draftSession)) await showAlert("Errore durante l'eliminazione della scheda.");
         }
     };
 
