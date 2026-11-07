@@ -20,7 +20,7 @@ describe('storage diagnostics presentation', () => {
     }));
 
     expect(screen.queryByText('Caricamento...')).toBeNull();
-    expect(screen.getByText('Persistente (Sicuro)')).toBeDefined();
+    expect(screen.getByText('Persistente (rischio ridotto)')).toBeDefined();
     expect(screen.getByText('1.00 MB / 4.00 MB')).toBeDefined();
   });
 
