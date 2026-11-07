@@ -143,6 +143,16 @@ describe('Audit 21 App Check and rejected-sync semantics', () => {
         });
     });
 
+    it('does not claim local recovery or durability from a schema-validation failure', () => {
+        const formatted = mapFirebaseErrorCode(Object.assign(new Error('ZodError: invalid shape'), {
+            code: 'ERR_SCHEMA_VALIDATION_FALLBACK',
+        }));
+        expect(formatted.code).toBe('ERR_SCHEMA_VALIDATION_FALLBACK');
+        expect(formatted.isOfflineSafe).toBe(false);
+        expect(formatted.message).toContain('non è stato confermato');
+        expect(formatted.message).not.toContain('ripristino sicuro');
+    });
+
     it('keeps unknown cloud failures fail-closed in presentation', () => {
         const formatted = mapFirebaseErrorCode(new Error('unexpected cloud runtime failure'));
 
