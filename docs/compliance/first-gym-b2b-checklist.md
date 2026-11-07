@@ -7,7 +7,8 @@ I collaudi sono requisiti di evidenza, non autorizzazioni a creare un ambiente T
 ## Gate tecnico
 
 - `[ ]` Production deriva da `main`.
-- `[ ]` Canonical Verification è verde sullo SHA effettivo di Production.
+- `[ ]` Sulla PR integrata, `Canonical Verification` (inclusi E2E e CodeQL) era verde sullo SHA esatto del candidato **prima** dello squash merge.
+- `[ ]` Sullo SHA effettivo di `main` da cui deriva la release, `Main Release Gate` e `Security / CodeQL` sono verdi: il gate post-merge attesta la base, l'identità del tree e la CI trusted della PR. Non attribuire `Canonical Verification` direttamente allo SHA dello squash commit.
 - `[ ]` Firebase Hosting Production è sulla release derivata dallo stesso `main` verificato.
 - `[ ]` Vercel backend Production deriva da main: deployment pertinente READY oppure skip verificato per assenza di delta backend. Registrare lo SHA effettivamente distribuito separatamente da Hosting; non richiedere un redeploy di un diff irrilevante.
 - `[ ]` Smoke home/API pertinenti sono verdi.
