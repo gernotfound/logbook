@@ -160,6 +160,20 @@ describe('F-006 active workout persisted business identity', () => {
         expect(readDeviceValueStrict('workout', owner)).toBe(original);
     });
 
+    it('does not synthesize missing business IDs from an authenticated durable fallback', async () => {
+        const owner = 'user:malformed-account-fallback';
+        localStorage.setItem(`logbook:v2:${owner}:health-consent-generation`, '1');
+        await prepareUnlockedTestArchive(owner);
+        const malformed = {
+            ...validWorkout,
+            exercises: [{ exId: 'bench', sessionNote: '', sets: [{ kg: '60', reps: '8' }] }],
+        } as WorkoutSession;
+
+        expect(() => getInitialLocalWorkout(owner, malformed)).toThrow(DeviceWorkoutCorruptError);
+        expect(readDeviceValueStrict('workout', owner)).toBeNull();
+        expect(localStorage.getItem(protectedDeviceKey('workout', owner))).toBeNull();
+    });
+
     it('does not adopt or persist a malformed remote active workout into runtime state', async () => {
         const owner = captureSession().owner;
         if (owner.startsWith('user:')) {
