@@ -255,6 +255,12 @@ describe('LogBook 4-Tier Automated Test Suite (Requirements R1 - R6)', () => {
                     />
                 );
 
+                const trigger = screen.getByRole('button', { name: 'Opzioni serie 1' });
+                expect(trigger.getAttribute('aria-expanded')).toBe('false');
+                fireEvent.click(trigger);
+                expect(mockToggle).toHaveBeenCalledTimes(1);
+                expect(mockToggle).toHaveBeenCalledWith('s1');
+
                 rerender(
                     <SessionSetRow 
                         set={{ id: 's1', kg: '80', reps: '10' }}
@@ -272,6 +278,10 @@ describe('LogBook 4-Tier Automated Test Suite (Requirements R1 - R6)', () => {
                 );
 
                 expect(screen.getByText('+ Dropset')).toBeDefined();
+                expect(trigger.getAttribute('aria-expanded')).toBe('true');
+                fireEvent.click(trigger);
+                expect(mockToggle).toHaveBeenCalledTimes(2);
+                expect(mockToggle).toHaveBeenLastCalledWith('s1');
             });
 
             it('T2.4.2: multiple dropsets display sequential labels "↳ Dropset 1", "↳ Dropset 2"', () => {
