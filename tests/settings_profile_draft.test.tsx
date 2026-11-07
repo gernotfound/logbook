@@ -11,13 +11,19 @@ const state = vi.hoisted(() => ({
     dataOwner: 'user:test',
 }));
 
-vi.mock('../src/store/useAppStore', () => ({
-    useAppStore: (select: (store: unknown) => unknown) => select({
+vi.mock('../src/store/useAppStore', () => {
+    const getState = () => ({
         userData: { profile: state.profile },
         dataOwner: state.dataOwner,
         dispatchDomainOperation: state.dispatch,
-    }),
-}));
+    });
+    return {
+        useAppStore: Object.assign(
+            (select: (store: ReturnType<typeof getState>) => unknown) => select(getState()),
+            { getState },
+        ),
+    };
+});
 vi.mock('../src/store/useDialogStore', () => ({
     useDialogStore: (select: (store: unknown) => unknown) => select({ showAlert: state.showAlert }),
 }));
