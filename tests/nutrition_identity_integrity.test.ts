@@ -4,6 +4,7 @@ import { getDocFromServer } from 'firebase/firestore';
 import type { CachedGlobalCatalog, UserData } from '../src/types';
 import {
     DomainParsers,
+    CardioSessionSchema,
     LoggedMealItemSchema,
     SupplementIntakeSchema,
     UserDataSchema,
@@ -53,12 +54,14 @@ const malformedDay = {
         { ...validMeal, id: '' },
         { ...validMeal, id: '   ' },
         { ...validMeal, id: 'bad/id' },
+        { ...validMeal, id: '$order' },
         { name: 'ghost', meal: 'cena', quantity: 1, kcal: 1, carbs: 0, pro: 0, fat: 0 },
     ],
     supplementsIntake: [
         validIntake,
         { ...validIntake, id: '' },
         { ...validIntake, id: 'bad/id' },
+        { ...validIntake, id: '$order' },
         { ...validIntake, id: 'intake-without-supplement', supplementId: '' },
     ],
 };
@@ -67,6 +70,11 @@ describe('F-003 nutrition identity integrity', () => {
     it('rejects invalid business identities at the nested entity schema boundary', () => {
         expect(() => LoggedMealItemSchema.parse({ ...validMeal, id: '' })).toThrow();
         expect(() => LoggedMealItemSchema.parse({ ...validMeal, id: 'bad/id' })).toThrow();
+        expect(() => LoggedMealItemSchema.parse({ ...validMeal, id: '$order' })).toThrow();
+        expect(() => SupplementIntakeSchema.parse({ ...validIntake, supplementId: '$order' })).toThrow();
+        expect(() => CardioSessionSchema.parse({
+            id: '$order', modality: 'run', durationMinutes: 30,
+        })).toThrow();
         expect(() => SupplementIntakeSchema.parse({ ...validIntake, id: '' })).toThrow();
         expect(() => SupplementIntakeSchema.parse({ ...validIntake, supplementId: '' })).toThrow();
         expect(LoggedMealItemSchema.parse({ ...validMeal, id: 42 }).id).toBe('42');

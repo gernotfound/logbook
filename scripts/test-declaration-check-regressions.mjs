@@ -15,6 +15,16 @@ for (const [source, reason] of [
   ["xdescribe('x', () => {})", 'skip'],
   ["test['concurrent']['skip']('x', () => {})", 'skip'],
   ["test.concurrent\n  .skip('x', () => {})", 'skip'],
+  ["test.skipIf(true)('x', () => {})", 'skipIf'],
+  ["describe.runIf(false)('x', () => {})", 'runIf'],
+  ["test.each([1]).skipIf(true)('x', () => {})", 'skipIf'],
+  ["import { it as scenario } from 'vitest'; scenario.skip('x', () => {})", 'skip'],
+  ["import { test as check } from '@jest/globals'; check.only('x', () => {})", 'only'],
+  ["import { describe as group } from 'vitest'; group.runIf(false)('x', () => {})", 'runIf'],
+  ["import { fit as focused } from 'vitest'; focused('x', () => {})", 'only'],
+  ["import testCase from 'node:test'; testCase.skip('x', () => {})", 'skip'],
+  ["import * as suite from 'vitest'; suite.test.skipIf(true)('x', () => {})", 'skipIf'],
+  ["import * as checks from '@jest/globals'; checks.describe.only('x', () => {})", 'only'],
 ]) {
   await test('detects disabled declaration: ' + source, () => {
     const findings = findDisabledTests(source);
@@ -28,6 +38,9 @@ for (const source of [
   "// it.skip('x', () => {})",
   "const text = \"test.only('x')\";",
   "obj.skip('x', () => {})",
+  "import { test as check } from './helpers'; check.skip('x', () => {})",
+  "import * as helper from './helpers'; helper.it.skip('x', () => {})",
+  "import type { test as scenario } from 'vitest'; scenario.skip('x', () => {})",
   "describe('suite', () => { it('works', () => {}) })",
 ]) {
   await test('allows ordinary source: ' + source, () => {

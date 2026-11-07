@@ -1,4 +1,5 @@
 import { LEGAL_VERSIONS } from '../src/lib/legalVersions';
+import { adminDb } from '../server/accountDeletion/firebaseAdmin';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 type Stored = Record<string, unknown>;
@@ -90,7 +91,7 @@ vi.mock('../server/accountDeletion/firebaseAdmin', () => ({
 
 import { GET, OPTIONS, POST } from '../api/health-consent';
 import {
-  readHealthConsentState, recordHealthConsentWithdrawal,
+  HealthConsentRevisionConflictError, readHealthConsentState, recordHealthConsentWithdrawal,
   recordInitialHealthConsentAcceptance,
   recordHealthConsentReacceptance, removeHealthConsentStateForDeletedAccount,
 } from '../server/healthConsent/withdrawal';
@@ -277,10 +278,51 @@ describe('trusted health consent boundary', () => {
       .toMatchObject({ status: 'active', revision: 3 });
   });
 
+  it('refuses reacceptance without a durable erasure generation even if the receipt is missing or marked complete', async () => {
+    await recordHealthConsentWithdrawal('account-1', 0);
+    storage.documents.delete('health_data_erasures/account-1');
+    await expect(recordHealthConsentReacceptance('account-1', acceptance, 1))
+      .rejects.toBeInstanceOf(HealthConsentRevisionConflictError);
+
+    storage.documents.set('health_data_erasures/account-1', {
+      uid: 'account-1', status: 'complete', consentRevision: 1, completedRevision: 2,
+    });
+    await expect(recordHealthConsentReacceptance('account-1', acceptance, 1))
+      .rejects.toBeInstanceOf(HealthConsentRevisionConflictError);
+    expect((await readHealthConsentState('account-1')).status).toBe('withdrawn');
+  });
+
+  it('rejects a mismatched completed erasure receipt even with a valid consent floor', async () => {
+    await recordHealthConsentWithdrawal('account-1', 0);
+    finishErasure(1);
+    const path = 'health_data_erasures/account-1';
+    const valid = storage.documents.get(path)!;
+    for (const patch of [
+      { uid: 'other-account' },
+      { consentRevision: 0 },
+      { completedRevision: 3 },
+    ]) {
+      storage.documents.set(path, { ...valid, ...patch });
+      await expect(recordHealthConsentReacceptance('account-1', acceptance, 2))
+        .rejects.toBeInstanceOf(HealthConsentRevisionConflictError);
+      expect((await readHealthConsentState('account-1')).status).toBe('withdrawn');
+    }
+  });
+
+  it('accepts re-consent after completed receipt retention only with matching consent erasure proof', async () => {
+    await recordHealthConsentWithdrawal('account-1', 0);
+    finishErasure(1);
+    storage.documents.delete('health_data_erasures/account-1');
+    expect(await recordHealthConsentReacceptance('account-1', acceptance, 2))
+      .toMatchObject({ status: 'active', revision: 3 });
+  });
+
   it('cleanup erases only the specific account consent marker', async () => {
     await recordHealthConsentWithdrawal('account-1', 0);
     await recordHealthConsentWithdrawal('account-2', 0);
-    await removeHealthConsentStateForDeletedAccount('account-1');
+    await adminDb().runTransaction(async tx => {
+      removeHealthConsentStateForDeletedAccount('account-1', tx);
+    });
     expect(storage.documents.has('health_consent_withdrawals/account-1')).toBe(false);
     expect(storage.documents.has('health_consent_withdrawals/account-2')).toBe(true);
   });
