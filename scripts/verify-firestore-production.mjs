@@ -5,6 +5,8 @@ import {
   FIELD_OVERRIDE_LIST_FILTER,
   fieldOverrideListParent,
   normalizeFieldIndexModes,
+  reconcileCompositeIndexes,
+  requireNoUnexpectedCompositeIndexes,
   progressSummary,
 } from './firestore-production-state.mjs';
 
@@ -40,40 +42,22 @@ const requestJson = async url => {
   return text ? JSON.parse(text) : {};
 };
 
-const normalizedDesiredFields = fields =>
-  fields.map(field => {
-    if (field.order) return { fieldPath: field.fieldPath, order: field.order };
-    if (field.arrayConfig) return { fieldPath: field.fieldPath, arrayConfig: field.arrayConfig };
-    if (field.vectorConfig) return { fieldPath: field.fieldPath, vectorConfig: field.vectorConfig };
-    throw new Error(`Unsupported desired index field: ${JSON.stringify(field)}`);
-  });
-
-const normalizedLiveFields = fields =>
-  fields
-    .filter(field => field.fieldPath !== '__name__')
-    .map(field => {
-      if (field.order) return { fieldPath: field.fieldPath, order: field.order };
-      if (field.arrayConfig) return { fieldPath: field.fieldPath, arrayConfig: field.arrayConfig };
-      if (field.vectorConfig) return { fieldPath: field.fieldPath, vectorConfig: field.vectorConfig };
-      throw new Error(`Unsupported live index field: ${JSON.stringify(field)}`);
-    });
-
-const sameJson = (left, right) => JSON.stringify(left) === JSON.stringify(right);
-
-const loadLiveIndexes = async collectionGroup => {
+const loadLiveIndexes = async () => {
   const indexes = [];
   let pageToken = '';
-
   do {
-    const parent = `projects/${projectId}/databases/(default)/collectionGroups/${encodeURIComponent(collectionGroup)}`;
+    // Firebase CLI uses this database-wide wildcard, including groups removed
+    // from the manifest; per-group reads cannot detect their stale indexes.
+    const parent = `projects/${projectId}/databases/(default)/collectionGroups/-`;
     const url = new URL(`https://firestore.googleapis.com/v1/${parent}/indexes`);
     if (pageToken) url.searchParams.set('pageToken', pageToken);
-
     const payload = await requestJson(url.toString());
+    if (payload.indexes !== undefined && !Array.isArray(payload.indexes)) {
+      throw new Error('Invalid Firestore composite index list response');
+    }
     indexes.push(...(payload.indexes ?? []));
     pageToken = payload.nextPageToken ?? '';
   } while (pageToken);
-
   return indexes;
 };
 
@@ -132,16 +116,6 @@ const loadActiveFirestoreOperations = async () => {
 
 const desiredFieldOverrides = indexConfig.fieldOverrides.map(normalizeDesiredFieldOverride);
 
-const desiredByGroup = new Map();
-for (const desired of indexConfig.indexes) {
-  if (!desired.collectionGroup || !desired.queryScope || !Array.isArray(desired.fields)) {
-    throw new Error(`Invalid desired index: ${JSON.stringify(desired)}`);
-  }
-  const group = desired.collectionGroup;
-  if (!desiredByGroup.has(group)) desiredByGroup.set(group, []);
-  desiredByGroup.get(group).push(desired);
-}
-
 const release = await requestJson(
   `https://firebaserules.googleapis.com/v1/projects/${encodeURIComponent(projectId)}/releases/cloud.firestore`,
 );
@@ -154,26 +128,9 @@ const liveRulesFile = (ruleset.source?.files ?? []).find(file => file.name === '
   ?? (ruleset.source?.files ?? [])[0];
 if (!liveRulesFile?.content) throw new Error('Live Cloud Firestore ruleset source is unavailable');
 
-const indexStatuses = [];
-for (const [collectionGroup, desiredIndexes] of desiredByGroup) {
-  const liveIndexes = await loadLiveIndexes(collectionGroup);
-
-  for (const desired of desiredIndexes) {
-    const desiredFields = normalizedDesiredFields(desired.fields);
-    const live = liveIndexes.find(candidate =>
-      candidate.queryScope === desired.queryScope &&
-      sameJson(normalizedLiveFields(candidate.fields ?? []), desiredFields),
-    );
-
-    indexStatuses.push({
-      collectionGroup,
-      queryScope: desired.queryScope,
-      fields: desiredFields,
-      found: Boolean(live),
-      state: live?.state ?? null,
-    });
-  }
-}
+const { statuses: indexStatuses, unexpected: unexpectedIndexes } = reconcileCompositeIndexes(
+  indexConfig.indexes, await loadLiveIndexes(), projectId,
+);
 
 const activeOperations = desiredFieldOverrides.length > 0
   ? await loadActiveFirestoreOperations()
@@ -198,6 +155,9 @@ if (mode === 'preflight') {
   for (const status of indexStatuses) {
     console.log(`- ${status.collectionGroup}: ${status.found ? status.state : 'MISSING'}`);
   }
+  for (const unexpected of unexpectedIndexes) {
+    console.log(`- unconfigured composite index: ${unexpected.name}`);
+  }
   for (const unexpected of unexpectedFieldOverrides) {
     console.log(`- unconfigured field override: ${unexpected.collectionGroup}/${unexpected.fieldPath}`);
   }
@@ -211,6 +171,10 @@ if (mode === 'preflight') {
   }
   process.exit(0);
 }
+
+// Unmanaged indexes are not authorized deletions. Refuse any automatic deploy,
+// including when unrelated desired indexes or Rules need reconciliation.
+requireNoUnexpectedCompositeIndexes(unexpectedIndexes);
 
 if (mode === 'status') {
   if (!rulesMatch || missingIndexes.length || mismatchedFieldOverrides.length || unexpectedFieldOverrides.length) {

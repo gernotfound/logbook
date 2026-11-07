@@ -11,7 +11,7 @@ import CustomFoodForm from '../src/components/Nutrition/CustomFoodForm';
 import type { Exercise } from '../src/types';
 import { deviceKey, protectedDeviceKey, readDeviceValueStrict } from '../src/lib/sync/deviceStorage';
 import { readWorkoutRecoveryDraft, writeWorkoutRecoveryDraft } from '../src/lib/sync/workoutRecoveryDraft';
-import { captureSession, invalidateSession } from '../src/lib/sync/session';
+import { captureSession, invalidateSession, isCurrentSession } from '../src/lib/sync/session';
 import { initializeLocal, readLocal } from '../src/lib/sync/localRepository';
 import { prepareUnlockedTestArchive } from './secureVaultFixture';
 
@@ -341,7 +341,14 @@ describe('Worker M2: Exercise Library UI & Food Form Real-Time Calorie Calculati
                     dispatchDomainOperation: dispatch,
                 });
                 try {
+                    const sessionBeforeMount = captureSession();
+                    expect(isCurrentSession(sessionBeforeMount)).toBe(true);
+                    expect(useDialogStore.getState().showConfirm).toBe(showConfirm);
                     const { result } = renderHook(() => useTrainingExercises());
+                    expect(isCurrentSession(sessionBeforeMount)).toBe(true);
+                    expect(useDialogStore.getState().showConfirm).toBe(showConfirm);
+                    expect(useAppStore.getState().dataOwner).toBe(owner);
+                    expect(useAppStore.getState().localPersistenceBlocked).toBe(false);
                     let pending!: Promise<unknown>;
                     act(() => {
                         pending = action === 'delete'
