@@ -219,7 +219,7 @@ describe('restored owner-scoped drafts', () => {
                         await act(async () => { releaseCommit(); expect(await saving).toBe(false); });
                         expect(hook.result.current.routineName).toBe('Modifica ancora aperta');
                         expect(readDeviceValueStrict(name, owner)).toBe(latest);
-                        expect((await readLocal(owner))?.data.routines.some(r => r.name === 'Scheda confermata')).toBe(true);
+                        expect((await readLocal(owner))?.data.routines?.some(r => r.name === 'Scheda confermata')).toBe(true);
                     } finally { hook.unmount(); }
                 } else {
                     const hook = renderHook(() => useTrainingExercises());
@@ -233,7 +233,7 @@ describe('restored owner-scoped drafts', () => {
                         await act(async () => { releaseCommit(); expect(await saving).toBe(false); });
                         expect(hook.result.current.exNotes).toBe('Nuova nota da conservare');
                         expect(readDeviceValueStrict(name, owner)).toBe(latest);
-                        expect((await readLocal(owner))?.data.library.some(e => e.name === 'Esercizio confermato')).toBe(true);
+                        expect((await readLocal(owner))?.data.library?.some(e => e.name === 'Esercizio confermato')).toBe(true);
                     } finally { hook.unmount(); }
                 }
             } finally {

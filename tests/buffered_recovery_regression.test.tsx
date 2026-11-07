@@ -1495,7 +1495,7 @@ describe('cardio set identity and buffered draft recovery', () => {
     const card = (setId: string, time: string) => (
         <BufferedWorkoutScope.Provider value={workoutId}>
             <SessionExerciseCard
-                exItem={{ id: exInstanceId, exId: 'cardio-run', sets: [{ id: setId, time }] }}
+                exItem={{ id: exInstanceId, exId: 'cardio-run', sets: [{ id: setId, kg: '', reps: '', time }] }}
                 exIndex={0}
                 libDef={{ name: 'Corsa', trackingType: 'cardio' }}
                 pastWorkouts={[]} isHistoryOpen={false} isSetupOpen={false}
