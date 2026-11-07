@@ -70,11 +70,11 @@ export function calculateBodyFatByMethod(method: any, params: any): number | nul
 
 export function calculateBodyFat(weight: any, profile: any): number | null {
     if (!profile || !profile.height || !weight) return null;
-    const manualBf = parseFloat(profile.manualBf);
-    if (Number.isFinite(manualBf) && manualBf >= 0 && manualBf <= 100) return manualBf;
     const wKg = parseFloat(weight);
     const hCm = parseFloat(profile.height);
     if (!Number.isFinite(hCm) || !Number.isFinite(wKg) || hCm <= 0 || wKg <= 0) return null;
+    const manualBf = parseFloat(profile.manualBf);
+    if (Number.isFinite(manualBf) && manualBf >= 0 && manualBf <= 100) return manualBf;
     
     if (profile.gender === 'M' && profile.neck && profile.waist) {
         return calculateUsNavyBodyFat({ gender: 'M', height: hCm, neck: parseFloat(profile.neck), waist: parseFloat(profile.waist), hip: 0 });
