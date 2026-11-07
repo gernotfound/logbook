@@ -184,6 +184,52 @@ describe('PWA update activation and navigation', () => {
     }
   });
 
+  it('does not reload offline when service worker registration is missing or unsupported', async () => {
+    const online = Object.getOwnPropertyDescriptor(navigator, 'onLine');
+    Object.defineProperty(navigator, 'onLine', { configurable: true, value: false });
+    try {
+      const container = new EventTarget() as ServiceWorkerContainer;
+      const getRegistration = vi.fn(async () => undefined);
+      Object.defineProperty(container, 'getRegistration', { value: getRegistration });
+
+      const missingReload = vi.fn();
+      await expect(applyPWAUpdate(container, missingReload))
+        .rejects.toThrow('Sei offline');
+      expect(getRegistration).toHaveBeenCalledOnce();
+      expect(missingReload).not.toHaveBeenCalled();
+
+      const unsupportedReload = vi.fn();
+      await expect(applyPWAUpdate(undefined, unsupportedReload))
+        .rejects.toThrow('Sei offline');
+      expect(unsupportedReload).not.toHaveBeenCalled();
+    } finally {
+      if (online) Object.defineProperty(navigator, 'onLine', online);
+      else Reflect.deleteProperty(navigator, 'onLine');
+    }
+  });
+
+  it('can reload offline after a replacement worker has actually activated', async () => {
+    const online = Object.getOwnPropertyDescriptor(navigator, 'onLine');
+    Object.defineProperty(navigator, 'onLine', { configurable: true, value: false });
+    try {
+      const worker = new FakeServiceWorker() as FakeServiceWorker & { postMessage: ReturnType<typeof vi.fn> };
+      worker.state = 'installed';
+      worker.postMessage = vi.fn();
+      const registration = { waiting: worker, installing: null } as unknown as ServiceWorkerRegistration;
+      const reload = vi.fn();
+      const apply = applyPWAUpdate(fakeContainer(registration), reload, 1000);
+      await vi.waitFor(() => expect(worker.postMessage).toHaveBeenCalledWith({ type: 'SKIP_WAITING' }));
+      expect(reload).not.toHaveBeenCalled();
+      worker.state = 'activated';
+      worker.dispatchEvent(new Event('statechange'));
+      await apply;
+      expect(reload).toHaveBeenCalledOnce();
+    } finally {
+      if (online) Object.defineProperty(navigator, 'onLine', online);
+      else Reflect.deleteProperty(navigator, 'onLine');
+    }
+  });
+
   it('keeps waiting after the slow-activation notice and reloads only when that worker activates', async () => {
     vi.useFakeTimers();
     try {
