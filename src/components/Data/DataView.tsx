@@ -42,7 +42,8 @@ const DataView: React.FC<DataViewProps> = ({
     const handleSelectEdit = (day: MeasurementHistoryDay) => {
         setSelectedDate(day.date);
         measurementsHook.handleEditClick(day);
-        sleepHook.setEditingDate(day.date);
+        // Keep the related sleep day in view without entering a second editor.
+        sleepHook.setSelectedDate(day.date);
         changeSubTab('measurements');
     };
 
