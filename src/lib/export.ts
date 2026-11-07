@@ -134,6 +134,7 @@ export const Exporter = {
         const blob = new Blob([prefix + content], { type });
 
         if (typeof window !== 'undefined' && 'showSaveFilePicker' in window) {
+            let pickerSucceeded = false;
             try {
                 const handle = await (window as any).showSaveFilePicker({
                     suggestedName: filename,
@@ -142,6 +143,7 @@ export const Exporter = {
                         accept: type.includes("json") ? { 'application/json': ['.json'] } : { 'text/csv': ['.csv'] },
                     }],
                 });
+                pickerSucceeded = true;
                 const writable = await handle.createWritable();
                 await writable.write(blob);
                 await writable.close();
@@ -150,7 +152,10 @@ export const Exporter = {
                 if (err.name === 'AbortError') {
                     return false;
                 }
-                if (err.name === 'SecurityError' || err.name === 'TypeError') {
+                // A picker error may justify the anchor fallback. Once a file
+                // handle was selected, write/close errors must not start a
+                // second, potentially misleading download.
+                if (!pickerSucceeded && (err.name === 'SecurityError' || err.name === 'TypeError')) {
                     console.warn("showSaveFilePicker bloccato, uso fallback nativo:", err);
                 } else {
                     console.error("Esportazione fallita:", err);

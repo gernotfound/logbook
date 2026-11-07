@@ -14,6 +14,7 @@ import { createDefaultNutritionPlanning } from '../src/lib/nutritionDefaults';
 import { UserData, NutritionPlanning } from '../src/types';
 import { defaultUserDataFallback } from '../src/lib/schema';
 import { DB } from '../src/lib/db';
+import { sealCloudDocument } from '../src/lib/sync/cloudDocumentCipher';
 
 function buildUserData(
     plan: NutritionPlanning | null,
@@ -209,21 +210,20 @@ describe('PR 3: FNC-MERGE-01 Nutrition Planning Merge Policy', () => {
 // the remote Firestore documents stubbed. The transport mock is shared with CI.
 describe('Current Firestore nutritionPlanningOrigin hydration', () => {
     const ownerRoot = 'users/test-user-id';
+    const accountKey = new Uint8Array(32).fill(18);
 
     function seedRoot(origin: unknown, includeOrigin = true) {
-        const document: Record<string, unknown> = {
-            _schemaVersion: 1,
-            _sync: {
-                protocolVersion: 3,
-                clock: {},
-                fields: {},
-                writer: { slot: 's00', replicaId: 'cloud-test', generation: 1, seq: 0 },
-            },
+        const business: Record<string, unknown> = {
             profile: { height: '180' },
             nutritionPlanning: { ...createDefaultNutritionPlanning(), weight: 90 },
         };
-        if (includeOrigin) document.nutritionPlanningOrigin = origin;
-        firestoreMockStore[ownerRoot] = document;
+        if (includeOrigin) business.nutritionPlanningOrigin = origin;
+        firestoreMockStore[ownerRoot] = sealCloudDocument(accountKey, 'test-user-id', '', business, {
+            protocolVersion: 3,
+            clock: {},
+            fields: {},
+            writer: { slot: 's00', replicaId: 'cloud-test', generation: 1, seq: 0 },
+        });
     }
 
     beforeEach(() => {
@@ -232,7 +232,7 @@ describe('Current Firestore nutritionPlanningOrigin hydration', () => {
     });
 
     it('R1. Firestore returns user-edited: real hydration preserves the explicit origin', async () => {
-        const result = await DB.loadCloudPayload();
+        const result = await DB.loadCloudPayload({ cloudKey: accountKey });
         expect(result?.data.nutritionPlanningOrigin).toBe('user-edited');
         expect(result?.data.nutritionPlanning?.weight).toBe(90);
         expect(result?.cloudDocuments.get('')?.nutritionPlanningOrigin).toBe('user-edited');
@@ -243,14 +243,14 @@ describe('Current Firestore nutritionPlanningOrigin hydration', () => {
 
     it('R2. Firestore returns generated-default: real hydration preserves the explicit origin', async () => {
         seedRoot('generated-default');
-        const result = await DB.loadCloudPayload();
+        const result = await DB.loadCloudPayload({ cloudKey: accountKey });
         expect(result?.data.nutritionPlanningOrigin).toBe('generated-default');
         expect(result?.cloudDocuments.get('')?.nutritionPlanningOrigin).toBe('generated-default');
     });
 
     it('R3. Firestore root without origin: real hydration leaves origin undefined', async () => {
         seedRoot(undefined, false);
-        const result = await DB.loadCloudPayload();
+        const result = await DB.loadCloudPayload({ cloudKey: accountKey });
         expect(result?.data.nutritionPlanningOrigin).toBeUndefined();
         expect(result?.data.nutritionPlanning?.weight).toBe(90);
         expect(Object.hasOwn(result?.cloudDocuments.get('') ?? {}, 'nutritionPlanningOrigin')).toBe(false);
@@ -260,7 +260,7 @@ describe('Current Firestore nutritionPlanningOrigin hydration', () => {
         seedRoot('invalid_value');
         const log = vi.spyOn(console, 'error').mockImplementation(() => {});
         try {
-            await expect(DB.loadCloudPayload()).rejects.toThrow();
+            await expect(DB.loadCloudPayload({ cloudKey: accountKey })).rejects.toThrow();
             expect(vi.mocked(getDocFromServer).mock.calls.some(([ref]) =>
                 (ref as { path?: string }).path === ownerRoot,
             )).toBe(true);
