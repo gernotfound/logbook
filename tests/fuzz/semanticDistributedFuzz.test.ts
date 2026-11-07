@@ -184,6 +184,25 @@ describe('M2 distributed property fuzz', () => {
             const distributed = deliverPartitioned(initialState(), operations, rng);
 
             expect(snapshot(distributed)).toEqual(snapshot(canonical));
+
+            // All contenders have independent single-event clocks. The
+            // protocol's delete barrier beats unseen updates; absent deletes,
+            // the lexical actor tie-break decides the visible value.
+            const deletes = operations.filter(operation => operation.isDelete);
+            const contenders = deletes.length ? deletes : operations;
+            const expectedWinner = contenders.reduce((winner, contender) =>
+                contender.actorId > winner.actorId ? contender : winner);
+            const stamp = distributed.syncMetas[''].fields['profile/name'];
+            expect(stamp).toMatchObject({
+                actorId: expectedWinner.actorId,
+                seq: expectedWinner.seq,
+                clock: { [expectedWinner.actorId]: 1 },
+            });
+            expect(Boolean(stamp.deleted)).toBe(expectedWinner.isDelete);
+            expect(distributed.syncMetas[''].clock).toEqual(
+                Object.fromEntries(operations.map(operation => [operation.actorId, 1])));
+            const profile = distributed.documents.get('')?.profile as Record<string, unknown> | undefined;
+            expect(profile?.name).toBe(expectedWinner.isDelete ? undefined : expectedWinner.value);
         });
     });
 

@@ -24,6 +24,8 @@ function fixture(): UserData {
         customFoods: [
             { id: 'food-chicken', name: 'Petto di Pollo', brand: 'Fixture', category: 'Carne', baseQty: 100, unit: 'g', kcal: 200, carbs: 40, pro: 10, fat: 2, isCustom: true },
             { id: 'food-rice', name: 'Riso Basmati', brand: 'Fixture', category: 'Cereali', baseQty: 100, unit: 'g', kcal: 350, carbs: 77, pro: 8, fat: 1, isCustom: true },
+            { id: 'food-grilled', name: 'Pollo grigliato', brand: 'Fixture', category: 'Carne', baseQty: 100, unit: 'g', kcal: 175, carbs: 0, pro: 25, fat: 7, isCustom: true },
+            { id: 'food-steamed', name: 'Pollo al vapore', brand: 'Fixture', category: 'Carne', baseQty: 100, unit: 'g', kcal: 165, carbs: 0, pro: 26, fat: 6, isCustom: true },
         ],
     });
 }
@@ -125,7 +127,7 @@ describe('M5 nutrition account flow through useNutritionMeals', () => {
 
         act(() => { result.current.handleSearch('pollo'); });
         expect(result.current.searchQuery).toBe('pollo');
-        expect(result.current.searchResults.map(food => food.id)).toEqual(['food-chicken']);
+        expect(result.current.searchResults.map(food => food.id)).toEqual(['food-steamed', 'food-grilled', 'food-chicken']);
 
         act(() => { result.current.handleSearch('basmati'); });
         expect(result.current.searchQuery).toBe('basmati');

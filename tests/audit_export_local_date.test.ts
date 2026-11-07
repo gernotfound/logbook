@@ -10,7 +10,7 @@ afterEach(() => {
 });
 
 describe('audit regression: emergency export local date', () => {
-    it('downloads a complete owner-scoped emergency backup and revokes its temporary URL after the click', async () => {
+    it('exports only in-memory owner-scoped data and keeps the emergency download URL alive', async () => {
         const userData: UserData = {
             ...structuredClone(emptyUserData),
             history: [{ id: 'unsynced-session', date: '2026-09-18', exercises: [] }],
@@ -49,7 +49,7 @@ describe('audit regression: emergency export local date', () => {
             expect(clickedWhileAttached).toBe(true);
             expect(document.querySelector('a[download="logbook_emergency_backup_2026-09-18.json"]')).toBeNull();
 
-            await vi.advanceTimersByTimeAsync(99);
+            await vi.advanceTimersByTimeAsync(999);
             expect(revoke).not.toHaveBeenCalled();
             await vi.advanceTimersByTimeAsync(1);
             expect(revoke).toHaveBeenCalledExactlyOnceWith('blob:logbook-test');
@@ -75,5 +75,7 @@ describe('audit regression: emergency export local date', () => {
             reason: 'logout-with-unsynced-data'
         });
         expect(backup).toHaveProperty('userData', userData);
+        expect(backup).not.toHaveProperty('recovery.envelope');
+        expect(backup).not.toHaveProperty('recovery.device');
     });
 });
