@@ -73,7 +73,7 @@ export function useNutritionPlanning() {
         avgMacros: basePlanning.avgMacros ? { ...defaultPlanning.avgMacros, ...basePlanning.avgMacros } : defaultPlanning.avgMacros,
         onBoost: basePlanning.onBoost ? { ...defaultPlanning.onBoost, ...basePlanning.onBoost } : defaultPlanning.onBoost,
         onDaysCount: normalizeOnDaysCount(basePlanning.onDaysCount),
-        weight: basePlanning.weight || latestWeight,
+        weight: basePlanning.weight ?? latestWeight,
         normocalorica: basePlanning.normocalorica ? { ...defaultPlanning.normocalorica, ...basePlanning.normocalorica } : defaultPlanning.normocalorica,
     };
 
