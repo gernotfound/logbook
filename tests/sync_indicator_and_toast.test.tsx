@@ -962,13 +962,15 @@ describe('LogBook Background Sync & Error Toast 4-Tier Test Suite', () => {
         }],
       }));
 
-      const first = save('1').catch(error => error);
+      let first!: Promise<unknown>;
+      await act(async () => { first = save('1').catch(error => error); });
       await act(async () => { await vi.advanceTimersByTimeAsync(1100); });
       expect(await first).toBeInstanceOf(Error);
       expect(useAppStore.getState().syncHealth).toBe('failed');
       expect(screen.getByText('Chiave cloud non disponibile')).toBeDefined();
 
-      const retry = save('2').catch(error => error);
+      let retry!: Promise<unknown>;
+      await act(async () => { retry = save('2').catch(error => error); });
       expect(useAppStore.getState().syncHealth).toBe('saving');
       expect(useAppStore.getState().syncing).toBe(true);
       expect(querySyncIndicator(container)).not.toBeNull();
