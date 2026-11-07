@@ -52,6 +52,25 @@ function seedCurrentDeviceWorkout(owner: string, snapshot: WorkoutSession): void
     persistPlainWorkoutSnapshot(snapshot, owner);
 }
 
+function advanceConsentAfterGuardRead(marker: string, next: string) {
+    const prior = localStorageMock.getItem.getMockImplementation();
+    if (!prior) throw new Error('Storage test implementation missing');
+    let advanced = false;
+    localStorageMock.getItem.mockImplementation((key: string) => {
+        const value = prior(key);
+        if (key === marker && !advanced) {
+            advanced = true;
+            // Simulate another tab publishing consent immediately after our guard read.
+            localStorage.setItem(marker, next);
+        }
+        return value;
+    });
+    return {
+        advanced: () => advanced,
+        restore: () => localStorageMock.getItem.mockImplementation(prior),
+    };
+}
+
 describe('Workout lifecycle durable recovery regressions', () => {
     let owner: string;
     beforeEach(() => {
@@ -115,6 +134,25 @@ describe('Workout lifecycle durable recovery regressions', () => {
         expect(readDeviceValueStrict(name, owner)).toBe(raw);
     });
 
+    it('does not relabel a pre-session answer if another tab advances consent after the session guard', async () => {
+        await prepareUnlockedTestArchive(owner);
+        const marker = `logbook:v2:${owner}:health-consent-generation`;
+        const name = 'draft:pre-session:guard-interleave';
+        localStorage.setItem(marker, '3');
+        render(<PreSessionCheckIn workoutId="guard-interleave"
+            onStart={vi.fn(async () => true)} onCancel={vi.fn(async () => true)} />);
+        const interleave = advanceConsentAfterGuardRead(marker, '5');
+        try {
+            fireEvent.click(screen.getByRole('button', { name: 'Energia: 4 su 5' }));
+            expect(interleave.advanced()).toBe(true);
+        } finally {
+            interleave.restore();
+        }
+        expect(readDeviceValueStrict(name, owner)).toBeNull();
+        expect(useAppStore.getState().localPersistenceBlocked).toBe(true);
+        expect(screen.getByRole('button', { name: 'Energia: 4 su 5' }).getAttribute('aria-pressed')).toBe('false');
+    });
+
     it('does not resurrect a legacy final workout rating after consent revocation and reacceptance', async () => {
         await prepareUnlockedTestArchive(owner);
         const current = workout('old-final-rating', true);
@@ -150,6 +188,26 @@ describe('Workout lifecycle durable recovery regressions', () => {
         localStorage.setItem(marker, '5');
         fireEvent.click(screen.getByRole('button', { name: 'Umore: 4 su 5' }));
         expect(readDeviceValueStrict(name, owner)).toBe(raw);
+    });
+
+    it('does not relabel a final-session draft if consent changes between the guard and device write', async () => {
+        await prepareUnlockedTestArchive(owner);
+        const current = workout('post-session-guard-interleave', true);
+        const name = 'draft:post-session:' + current.id;
+        const marker = `logbook:v2:${owner}:health-consent-generation`;
+        localStorage.setItem(marker, '3');
+        useAppStore.setState({ userData: userData({ activeWorkout: current }), localWorkout: current });
+        renderOwnedWorkoutSession();
+        const interleave = advanceConsentAfterGuardRead(marker, '5');
+        try {
+            fireEvent.click(screen.getByRole('button', { name: 'Termina allenamento' }));
+            expect(interleave.advanced()).toBe(true);
+        } finally {
+            interleave.restore();
+        }
+        expect(readDeviceValueStrict(name, owner)).toBeNull();
+        expect(useAppStore.getState().localPersistenceBlocked).toBe(true);
+        expect(screen.queryByRole('heading', { name: 'Com’è andato l’allenamento?' })).toBeNull();
     });
 
     it('keeps corrupted owner metadata in an old workout draft rather than overwriting it', async () => {

@@ -344,7 +344,7 @@ export default function NutritionSupplements({ selectedDate, setSelectedDate }: 
                                                     <span style={{ color: 'var(--text-muted)', marginRight: '8px' }}>{timeStr}</span>
                                                     <strong>{intake.amount}</strong> {supp.unit}
                                                 </div>
-                                                <button className="btn-icon text-danger" onClick={() => removeIntake(intake.id)}>✕</button>
+                                                <button type="button" className="btn-icon text-danger" aria-label={`Rimuovi assunzione di ${supp.name} delle ${timeStr}`} onClick={() => { void removeIntake(intake.id); }}>✕</button>
                                             </div>
                                         );
                                     })}

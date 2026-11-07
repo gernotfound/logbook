@@ -110,6 +110,7 @@ const TrainingSession = ({ onNavigateToHistory, onNavigateToPlanning }: Training
                 postSessionRecoveryName,
                 session.owner,
                 { pendingEndTime: endTime, draft },
+                session.consentGeneration,
             );
         } catch (error) {
             blockPostSessionPersistence(error);
@@ -120,7 +121,9 @@ const TrainingSession = ({ onNavigateToHistory, onNavigateToPlanning }: Training
     const clearPostSessionRecovery = useCallback(() => {
         if (!postSessionRecoveryName) return;
         try {
-            writeWorkoutRecoveryDraft(postSessionRecoveryName, postSessionSessionRef.current.owner, null);
+            const session = postSessionSessionRef.current;
+            if (!isCurrentSession(session)) throw new Error('Sessione cambiata prima della pulizia della valutazione finale.');
+            writeWorkoutRecoveryDraft(postSessionRecoveryName, session.owner, null, session.consentGeneration);
         } catch (error) {
             console.warn('Workout salvato, ma la copia di recupero finale non è stata rimossa:', error);
             useAppStore.getState().setSaveError('Workout salvato; impossibile rimuovere una copia di recupero locale obsoleta.');

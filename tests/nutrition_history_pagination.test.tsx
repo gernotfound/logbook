@@ -38,6 +38,7 @@ describe('meal history incremental rendering', () => {
         const card = container.querySelector<HTMLElement>('.clickable-card')!;
         expect(card.getAttribute('role')).toBe('button');
         expect(card.tabIndex).toBe(0);
+        expect(card.getAttribute('aria-label')).toContain('Apri il diario del');
 
         fireEvent.keyDown(card, { key: 'Enter' });
         fireEvent.keyDown(card, { key: ' ' });

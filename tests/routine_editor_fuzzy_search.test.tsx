@@ -244,6 +244,11 @@ describe('Intelligent Exercise Search & Dropdown Suite (M3: R4 & R6)', () => {
             expect(container.querySelector('[role="listbox"]')).toBeNull();
         });
 
+        it('2.1a: exposes a stable accessible name for the exercise combobox', () => {
+            render(<ExerciseSearchDropdown library={mockLibrary} onSelectExercise={vi.fn()} />);
+            expect(screen.getByRole('combobox', { name: 'Cerca esercizio' })).toBeDefined();
+        });
+
         it('2.2: Focusing/clicking input opens floating dropdown list', () => {
             const onSelect = vi.fn();
             const { container } = render(

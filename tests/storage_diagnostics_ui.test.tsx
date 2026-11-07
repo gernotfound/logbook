@@ -20,7 +20,7 @@ describe('storage diagnostics presentation', () => {
     }));
 
     expect(screen.queryByText('Caricamento...')).toBeNull();
-    expect(screen.getByText('Persistente (Sicuro)')).toBeDefined();
+    expect(screen.getByText('Persistente (rischio ridotto)')).toBeDefined();
     expect(screen.getByText('1.00 MB / 4.00 MB')).toBeDefined();
   });
 
@@ -33,6 +33,6 @@ describe('storage diagnostics presentation', () => {
 
     act(() => setStorageDiagnosticData({ supported: true, persistent: false }));
     expect(screen.queryByText(/Persistenza non supportata/)).toBeNull();
-    expect(screen.getByText('Best-Effort (Volatile)')).toBeDefined();
+    expect(screen.getByText('Best effort (dati rimovibili)')).toBeDefined();
   });
 });
