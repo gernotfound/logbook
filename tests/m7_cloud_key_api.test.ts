@@ -129,6 +129,114 @@ describe('authenticated cloud account key API', () => {
     expect(harness.unwrap).toHaveBeenCalledTimes(2);
   });
 
+  it('accepts an empty POST body stream, but never accepts payload bytes', async () => {
+    // Vercel's Request adapter can expose a non-null body stream even when
+    // the browser sends a bodyless POST.
+    const empty = new Request('https://backend.test/api/cloud-key', {
+      method: 'POST', headers: { origin: 'https://thelogbook.web.app' }, body: '',
+    });
+    expect(empty.body).not.toBeNull();
+    expect((await POST(empty)).status).toBe(200);
+
+    const zeroChunk = new Request('https://backend.test/api/cloud-key', {
+      method: 'POST', headers: { origin: 'https://thelogbook.web.app' },
+      body: new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.enqueue(new Uint8Array(0));
+          controller.close();
+        },
+      }),
+      duplex: 'half',
+    } as RequestInit & { duplex: 'half' });
+    expect((await POST(zeroChunk)).status).toBe(200);
+    expect(harness.wrap).toHaveBeenCalledTimes(1);
+
+    const nonEmpty = new Request('https://backend.test/api/cloud-key', {
+      method: 'POST', headers: { origin: 'https://thelogbook.web.app' },
+      body: new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.enqueue(new TextEncoder().encode('{"uid":"attacker"}'));
+          controller.close();
+        },
+      }),
+      duplex: 'half',
+    } as RequestInit & { duplex: 'half' });
+    const verifyCalls = harness.verify.mock.calls.length;
+    expect((await POST(nonEmpty)).status).toBe(400);
+    expect(harness.verify).toHaveBeenCalledTimes(verifyCalls);
+
+    const declaredNonEmpty = new Request('https://backend.test/api/cloud-key', {
+      method: 'POST', headers: { origin: 'https://thelogbook.web.app', 'content-length': '1' },
+    });
+    expect((await POST(declaredNonEmpty)).status).toBe(400);
+    expect(harness.verify).toHaveBeenCalledTimes(verifyCalls);
+  });
+
+  it.each(['stalled', 'empty-chunk-then-stalled'] as const)(
+    'bounds %s request-body inspection without running Auth or key provisioning',
+    async scenario => {
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+      try {
+        const body = new ReadableStream<Uint8Array>({
+          start(controller) {
+            if (scenario === 'empty-chunk-then-stalled') controller.enqueue(new Uint8Array(0));
+          },
+        });
+        const stalled = new Request('https://backend.test/api/cloud-key', {
+          method: 'POST',
+          headers: { origin: 'https://thelogbook.web.app' },
+          body,
+          duplex: 'half',
+        } as RequestInit & { duplex: 'half' });
+
+        const responsePromise = POST(stalled);
+        await vi.advanceTimersByTimeAsync(2_100);
+        const response = await responsePromise;
+        expect(response.status).toBe(400);
+        expect(await response.json()).toEqual({ error: 'Questa operazione non accetta dati da inviare.' });
+        expect(harness.verify).not.toHaveBeenCalled();
+        expect(harness.wrap).not.toHaveBeenCalled();
+        expect(harness.documents.has('user_data_keys/owner-a')).toBe(false);
+      } finally {
+        vi.useRealTimers();
+      }
+    },
+  );
+
+  it('accepts a delayed empty body that finishes before the inspection deadline', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    try {
+      const body = new ReadableStream<Uint8Array>({
+        start(controller) { setTimeout(() => controller.close(), 500); },
+      });
+      const delayed = new Request('https://backend.test/api/cloud-key', {
+        method: 'POST',
+        headers: { origin: 'https://thelogbook.web.app' },
+        body,
+        duplex: 'half',
+      } as RequestInit & { duplex: 'half' });
+
+      const responsePromise = POST(delayed);
+      await vi.advanceTimersByTimeAsync(500);
+      expect((await responsePromise).status).toBe(200);
+      expect(harness.wrap).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('accepts a bodyless rights export without provisioning a new key', async () => {
+    expect((await POST(request())).status).toBe(200);
+    harness.documents.set('health_consent_withdrawals/owner-a', { uid: 'owner-a', status: 'withdrawn', revision: 2 });
+    harness.verify.mockResolvedValue({ uid: 'owner-a', emailVerified: false });
+    const rights = new Request('https://backend.test/api/cloud-key?purpose=rights-export', {
+      method: 'POST', headers: { origin: 'https://thelogbook.web.app' }, body: '',
+    });
+    expect(rights.body).not.toBeNull();
+    expect((await POST(rights)).status).toBe(200);
+    expect(harness.wrap).toHaveBeenCalledTimes(1);
+  });
+
   it('rejects foreign Origin and unverified email before any key material is accessed', async () => {
     expect((await POST(request('https://attacker.example'))).status).toBe(403);
     expect(harness.verify).not.toHaveBeenCalled();

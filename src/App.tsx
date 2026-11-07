@@ -239,15 +239,15 @@ function OwnerBoundApp({ startupTab }: { startupTab: string | null }) {
     window.history.replaceState(window.history.state, '', url.pathname + url.search + url.hash);
   }, [startupTab]);
 
-  // Transient errors auto-dismiss; only a verified durable integrity fence or
-  // blocked local persistence keeps the warning until recovery.
+  // Transient errors auto-dismiss. A failed sync must remain visible until
+  // a subsequent verified recovery; a toast timeout is not cloud evidence.
   useEffect(() => {
-    if (!saveError || localPersistenceBlocked || cloudIntegrityBlocked) return;
+    if (!saveError || syncHealth === 'failed' || localPersistenceBlocked || cloudIntegrityBlocked) return;
     const timer = setTimeout(() => {
       setSaveError(null);
     }, 5000);
     return () => clearTimeout(timer);
-  }, [saveError, localPersistenceBlocked, cloudIntegrityBlocked, setSaveError]);
+  }, [saveError, syncHealth, localPersistenceBlocked, cloudIntegrityBlocked, setSaveError]);
 
   // Clear saveError on online event if it was due to missing connection during save
   useEffect(() => {
@@ -549,7 +549,7 @@ function OwnerBoundApp({ startupTab }: { startupTab: string | null }) {
         >
           <AlertTriangle className="sync-error-icon" size={20} aria-hidden="true" />
           <span className="sync-error-text">{saveError}</span>
-          {!localPersistenceBlocked && !cloudIntegrityBlocked && (
+          {syncHealth !== 'failed' && !localPersistenceBlocked && !cloudIntegrityBlocked && (
             <button
               type="button"
               className="sync-error-close"
