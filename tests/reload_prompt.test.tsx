@@ -414,6 +414,66 @@ describe('Service Worker Update Lifecycle (ReloadPrompt) Suite', () => {
     unmount();
   });
 
+  test('dismissal prevents an older foreground registration check from reopening the update banner', async () => {
+    let completeLookup!: (registration: ServiceWorkerRegistration) => void;
+    const getRegistration = vi.fn(() => new Promise<ServiceWorkerRegistration>(resolve => { completeLookup = resolve; }));
+    Object.defineProperty(navigator, 'serviceWorker', {
+      value: { getRegistration },
+      configurable: true,
+    });
+    vi.mocked(useRegisterSW).mockReturnValue({
+      needRefresh: [true, mockSetNeedRefresh],
+      offlineReady: [false, vi.fn()],
+      updateServiceWorker: mockUpdateServiceWorker,
+    });
+
+    const view = render(<ReloadPrompt />);
+    Object.defineProperty(document, 'visibilityState', { value: 'visible', configurable: true });
+    act(() => { document.dispatchEvent(new Event('visibilitychange')); });
+    expect(getRegistration).toHaveBeenCalledOnce();
+    fireEvent.click(screen.getByRole('button', { name: 'Chiudi notifica' }));
+
+    const registration = { waiting: {}, update: vi.fn() } as unknown as ServiceWorkerRegistration;
+    await act(async () => { completeLookup(registration); });
+    expect(registration.update).not.toHaveBeenCalled();
+    expect(mockSetNeedRefresh).toHaveBeenCalledWith(false);
+    expect(mockSetNeedRefresh).not.toHaveBeenCalledWith(true);
+    view.unmount();
+  });
+
+  test('a foreground worker check completing after unmount cannot update the removed prompt', async () => {
+    let finishUpdate!: () => void;
+    const registration = {
+      waiting: null as ServiceWorker | null,
+      installing: null,
+      update: vi.fn(() => new Promise<void>(resolve => { finishUpdate = resolve; })),
+    };
+    Object.defineProperty(navigator, 'serviceWorker', {
+      value: { getRegistration: vi.fn().mockResolvedValue(registration) },
+      configurable: true,
+    });
+    vi.mocked(useRegisterSW).mockReturnValue({
+      needRefresh: [false, mockSetNeedRefresh],
+      offlineReady: [false, vi.fn()],
+      updateServiceWorker: mockUpdateServiceWorker,
+    });
+
+    const view = render(<ReloadPrompt />);
+    Object.defineProperty(document, 'visibilityState', { value: 'visible', configurable: true });
+    await act(async () => {
+      document.dispatchEvent(new Event('visibilitychange'));
+      await Promise.resolve();
+    });
+    expect(registration.update).toHaveBeenCalledOnce();
+    view.unmount();
+
+    await act(async () => {
+      registration.waiting = {} as ServiceWorker;
+      finishUpdate();
+    });
+    expect(mockSetNeedRefresh).not.toHaveBeenCalledWith(true);
+  });
+
   test('R1 Edge Case: Does NOT trigger update when visibility changes to hidden', async () => {
     const mockUpdate = vi.fn().mockResolvedValue(undefined);
     const mockGetRegistration = vi.fn().mockResolvedValue({
@@ -472,6 +532,32 @@ describe('Service Worker Update Lifecycle (ReloadPrompt) Suite', () => {
     expect(screen.queryByRole('alert')).toBeNull();
 
     unmount();
+  });
+
+  test('closing the prompt invalidates a waiting registration check started before dismissal', async () => {
+    let onRegistered: ((scriptUrl: string, registration: ServiceWorkerRegistration | undefined) => void) | undefined;
+    vi.mocked(useRegisterSW).mockImplementation(options => {
+      onRegistered = options?.onRegisteredSW;
+      return { needRefresh: [true, mockSetNeedRefresh], offlineReady: [false, vi.fn()], updateServiceWorker: mockUpdateServiceWorker };
+    });
+    let finishUpdate!: () => void;
+    const registration = {
+      waiting: null as ServiceWorker | null,
+      installing: null,
+      update: vi.fn(() => new Promise<void>(resolve => {
+        finishUpdate = () => {
+          registration.waiting = { state: 'installed' } as ServiceWorker;
+          resolve();
+        };
+      })),
+    };
+    const view = render(<ReloadPrompt />);
+    act(() => { onRegistered?.('/sw.js', registration as unknown as ServiceWorkerRegistration); });
+    fireEvent.click(screen.getByRole('button', { name: 'Chiudi notifica' }));
+    await act(async () => { finishUpdate(); });
+    expect(mockSetNeedRefresh).toHaveBeenCalledWith(false);
+    expect(mockSetNeedRefresh).not.toHaveBeenCalledWith(true);
+    view.unmount();
   });
 
   test('registration exposes an already-waiting worker without activating or reloading it', async () => {

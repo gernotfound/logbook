@@ -221,7 +221,7 @@ export function HealthConsentSuspended({ status, user }: { status: HealthConsent
         return;
       }
       const confirmed = await useDialogStore.getState().showConfirm(
-        'Alcuni dati presenti solo in memoria non corrispondono all’archivio salvato. Non possiamo verificare che tutte le modifiche siano state conservate.\\n\\nSe continui, questi dati in memoria potrebbero andare persi; l’archivio salvato sul dispositivo e le modifiche ancora pendenti non verranno cancellati.\\n\\nVuoi ricaricare comunque?'
+        'Alcuni dati presenti solo in memoria non corrispondono all’archivio salvato. Non possiamo verificare che tutte le modifiche siano state conservate.\n\nSe continui, questi dati in memoria potrebbero andare persi; l’archivio salvato sul dispositivo e le modifiche ancora pendenti non verranno cancellati.\n\nVuoi ricaricare comunque?'
       );
       if (!confirmed) return;
       try {

@@ -101,7 +101,7 @@ describe('Challenger 1: UI & Chart Component Stress Testing', () => {
         );
 
         expect(screen.getByText('Correlazione volume vs calorie')).toBeDefined();
-        expect(screen.getByText('Dati insufficienti per calcolare la correlazione.')).toBeDefined();
+        expect(await screen.findByText('Dati insufficienti per calcolare la correlazione.')).toBeDefined();
         unmount();
 
         const referenceDate = new Date();

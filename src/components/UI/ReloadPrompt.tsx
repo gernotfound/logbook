@@ -8,6 +8,7 @@ const ReloadPrompt: React.FC = () => {
   const mountedRef = useRef(false);
   const updateInFlight = useRef(false);
   const activationAbortRef = useRef<AbortController | null>(null);
+  const visibilityCheckRef = useRef(0);
   const [updating, setUpdating] = useState(false);
   const [updatePhase, setUpdatePhase] = useState<'saving' | 'activating'>('saving');
   const [updateError, setUpdateError] = useState<string | null>(null);
@@ -23,11 +24,15 @@ const ReloadPrompt: React.FC = () => {
     onRegisteredSW(_swScriptUrl, r) {
       if (r && typeof r.update === 'function') {
         const requestUpdate = () => {
+          const requestId = visibilityCheckRef.current;
           // An already-waiting worker may not fire another Workbox callback.
           // The explicit prompt must also discover it at startup and on retries.
           void checkForWaitingServiceWorker(r)
             .then(waiting => {
-              if (waiting && mountedRef.current) setNeedRefresh(true);
+              // Dismissal or a newer visibility check invalidates this async result.
+              if (waiting && mountedRef.current && requestId === visibilityCheckRef.current) {
+                setNeedRefresh(true);
+              }
             })
             .catch(err => console.log('SW update error:', err));
         };
@@ -70,6 +75,7 @@ const ReloadPrompt: React.FC = () => {
   useEffect(() => {
     let cancelled = false;
     const handleVisibilityChange = () => {
+      const requestId = ++visibilityCheckRef.current;
       if (
         document.visibilityState === 'visible' &&
         typeof navigator !== 'undefined' &&
@@ -79,12 +85,13 @@ const ReloadPrompt: React.FC = () => {
       ) {
         try {
           navigator.serviceWorker.getRegistration().then(reg => {
-            if (cancelled || document.visibilityState !== 'visible') return;
+            if (cancelled || requestId !== visibilityCheckRef.current || document.visibilityState !== 'visible') return;
             if (reg && typeof reg.update === 'function') {
               try {
                 void checkForWaitingServiceWorker(reg)
                   .then(waiting => {
-                    if (!cancelled && document.visibilityState === 'visible' && waiting) {
+                    if (!cancelled && requestId === visibilityCheckRef.current
+                      && document.visibilityState === 'visible' && waiting) {
                       setNeedRefresh(true);
                     }
                   })
@@ -167,6 +174,7 @@ const ReloadPrompt: React.FC = () => {
   };
 
   const handleClose = () => {
+    visibilityCheckRef.current++;
     activationAbortRef.current?.abort();
     setNeedRefresh(false);
     setChunkFailed(false);

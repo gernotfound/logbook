@@ -22,6 +22,9 @@ export const LoginBox: React.FC<LoginBoxProps> = ({ onCancel }) => {
     const [configuredPasswordRules, setConfiguredPasswordRules] = useState<PasswordRuleConfig>();
     const [showPassword, setShowPassword] = useState(false);
     const [loading, setLoading] = useState(false);
+    const authActionInFlight = useRef(false);
+    const mountedRef = useRef(false);
+    const resetCooldownRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const [formError, setFormError] = useState<string | null>(null);
     const [resetSent, setResetSent] = useState(false);
     const [migrationPolicy, setMigrationPolicy] = useState<'merge' | 'skip'>('merge');
@@ -37,6 +40,13 @@ export const LoginBox: React.FC<LoginBoxProps> = ({ onCancel }) => {
     const passwordMismatch = mode === 'register' && confirmPassword.length > 0 && password !== confirmPassword;
     const dialogRef = useRef<HTMLDivElement>(null);
     const emailInputRef = useRef<HTMLInputElement>(null);
+    useEffect(() => {
+        mountedRef.current = true;
+        return () => {
+            mountedRef.current = false;
+            if (resetCooldownRef.current !== null) clearTimeout(resetCooldownRef.current);
+        };
+    }, []);
     useEffect(() => {
         if (mode !== 'register') return;
         let active = true;
@@ -57,7 +67,7 @@ export const LoginBox: React.FC<LoginBoxProps> = ({ onCancel }) => {
             await action();
         } catch (error) {
             if (isGuest && (error instanceof BrowserStorageError || (error instanceof Error && error.message.includes('trasferimento guest')))) {
-                await showAlert('Impossibile salvare la scelta di trasferimento sul dispositivo. Libera spazio o abilita l’archivio del browser e riprova.');
+                if (mountedRef.current) await showAlert('Impossibile salvare la scelta di trasferimento sul dispositivo. Libera spazio o abilita l’archivio del browser e riprova.');
                 return;
             }
             throw error;
@@ -66,7 +76,8 @@ export const LoginBox: React.FC<LoginBoxProps> = ({ onCancel }) => {
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (loading) return;
+        if (authActionInFlight.current) return;
+        authActionInFlight.current = true;
         setFormError(null);
         setLoading(true);
         try {
@@ -78,6 +89,9 @@ export const LoginBox: React.FC<LoginBoxProps> = ({ onCancel }) => {
                     return;
                 }
                 const weakError = await validatePasswordAgainstPolicy(password);
+                // A closed login overlay must not launch a new registration after
+                // the asynchronous password policy check completes.
+                if (!mountedRef.current) return;
                 if (weakError) {
                     setFormError(weakError);
                     return;
@@ -96,17 +110,57 @@ export const LoginBox: React.FC<LoginBoxProps> = ({ onCancel }) => {
                     // outcome if a legacy provider configuration returns this code.
                     if ((error as { code?: unknown } | null)?.code !== 'auth/user-not-found') throw error;
                 }
+                // The overlay can close while Firebase is still processing this request.
+                // Do not surface a stale account notice after its UI has gone away.
+                if (!mountedRef.current) return;
                 setResetSent(true);
                 await showAlert("Se l'email è registrata, riceverai un link per reimpostare la password. Controlla anche la cartella spam.");
-                setTimeout(() => setResetSent(false), 60000);
+                if (!mountedRef.current) return;
+                resetCooldownRef.current = setTimeout(() => {
+                    resetCooldownRef.current = null;
+                    if (mountedRef.current) setResetSent(false);
+                }, 60000);
                 setMode('login');
             }
         } catch (error: unknown) {
-            setFormError(mode === 'forgot'
+            if (mountedRef.current) setFormError(mode === 'forgot'
                 ? 'Non è stato possibile inviare il link. Controlla la connessione e riprova.'
                 : describeEmailAuthError(error));
         } finally {
-            setLoading(false);
+            authActionInFlight.current = false;
+            if (mountedRef.current) setLoading(false);
+        }
+    };
+
+    const handleGuestLogin = async () => {
+        if (authActionInFlight.current) return;
+        authActionInFlight.current = true;
+        setLoading(true);
+        setFormError(null);
+        try {
+            await loginAsGuest();
+        } catch (error) {
+            if (mountedRef.current) setFormError(describeEmailAuthError(error));
+        } finally {
+            authActionInFlight.current = false;
+            if (mountedRef.current) setLoading(false);
+        }
+    };
+
+    const handleGoogle = async () => {
+        if (authActionInFlight.current) return;
+        authActionInFlight.current = true;
+        setLoading(true);
+        setFormError(null);
+        try {
+            await handleAuthAction(() => isGuest ? linkGoogleAccount(migrationPolicy) : login());
+            const error = useAppStore.getState().saveError;
+            if (error && mountedRef.current) setFormError(error);
+        } catch (error) {
+            if (mountedRef.current) setFormError(describeEmailAuthError(error));
+        } finally {
+            authActionInFlight.current = false;
+            if (mountedRef.current) setLoading(false);
         }
     };
 
@@ -122,7 +176,8 @@ export const LoginBox: React.FC<LoginBoxProps> = ({ onCancel }) => {
                     type="button"
                     className={`auth-mode-option${mode !== 'register' ? ' auth-mode-option--active' : ''}`}
                     aria-pressed={mode !== 'register'}
-                    onClick={() => { setMode('login'); setPassword(''); setConfirmPassword(''); setFormError(null); }}
+                    disabled={loading}
+                    onClick={() => { setMode('login'); setPassword(''); setConfirmPassword(''); setShowPassword(false); setFormError(null); }}
                 >
                     Accedi
                 </button>
@@ -130,7 +185,8 @@ export const LoginBox: React.FC<LoginBoxProps> = ({ onCancel }) => {
                     type="button"
                     className={`auth-mode-option${mode === 'register' ? ' auth-mode-option--active' : ''}`}
                     aria-pressed={mode === 'register'}
-                    onClick={() => { setMode('register'); setPassword(''); setConfirmPassword(''); setFormError(null); }}
+                    disabled={loading}
+                    onClick={() => { setMode('register'); setPassword(''); setConfirmPassword(''); setShowPassword(false); setFormError(null); }}
                 >
                     Registrati
                 </button>
@@ -140,11 +196,11 @@ export const LoginBox: React.FC<LoginBoxProps> = ({ onCancel }) => {
                 <div className="ui-login-box-4" style={{ marginBottom: "1.25rem", textAlign: "left", padding: "0.9375rem" }}>
                     <p className="ui-login-box-5" style={{ marginBottom: "0.625rem" }}>Hai dei dati salvati in locale. Cosa vuoi fare?</p>
                     <label style={{ display: "flex", alignItems: "center", gap: "0.625rem", marginBottom: "0.625rem", cursor: "pointer" }}>
-                        <input type="radio" name="migration_policy" value="merge" checked={migrationPolicy === 'merge'} onChange={() => setMigrationPolicy('merge')} />
+                        <input type="radio" name="migration_policy" value="merge" checked={migrationPolicy === 'merge'} disabled={loading} onChange={() => setMigrationPolicy('merge')} />
                         <span className="ui-login-box-6" >Trasferisci i progressi nell'account</span>
                     </label>
                     <label style={{ display: "flex", alignItems: "center", gap: "0.625rem", cursor: "pointer" }}>
-                        <input type="radio" name="migration_policy" value="skip" checked={migrationPolicy === 'skip'} onChange={() => setMigrationPolicy('skip')} />
+                        <input type="radio" name="migration_policy" value="skip" checked={migrationPolicy === 'skip'} disabled={loading} onChange={() => setMigrationPolicy('skip')} />
                         <span className="ui-login-box-7" >Non trasferire i progressi</span>
                     </label>
                 </div>
@@ -157,6 +213,7 @@ export const LoginBox: React.FC<LoginBoxProps> = ({ onCancel }) => {
                         id={emailId}
                         ref={emailInputRef}
                         type="email"
+                        disabled={loading}
                         aria-label="Email"
                         placeholder="La tua email"
                         value={email}
@@ -175,6 +232,7 @@ export const LoginBox: React.FC<LoginBoxProps> = ({ onCancel }) => {
                             <input
                                 id={passwordId}
                                 type={showPassword ? "text" : "password"}
+                                disabled={loading}
                                 aria-label="Password"
                                 placeholder={mode === 'register' ? 'Scegli una password sicura' : 'Password'}
                                 value={password}
@@ -188,6 +246,7 @@ export const LoginBox: React.FC<LoginBoxProps> = ({ onCancel }) => {
                             <button
                                 type="button"
                                 aria-label={showPassword ? 'Nascondi password' : 'Mostra password'}
+                                disabled={loading}
                                 onClick={() => setShowPassword(!showPassword)}
                                 className="ui-login-box-10" style={{ position: "absolute", right: "0.625rem", top: "50%", transform: "translateY(-50%)", cursor: "pointer", display: "flex", alignItems: "center" }}
                             >
@@ -213,6 +272,7 @@ export const LoginBox: React.FC<LoginBoxProps> = ({ onCancel }) => {
                         <input
                             id={confirmPasswordId}
                             type={showPassword ? "text" : "password"}
+                            disabled={loading}
                             aria-label="Conferma password"
                             placeholder="Conferma Password"
                             value={confirmPassword}
@@ -240,12 +300,14 @@ export const LoginBox: React.FC<LoginBoxProps> = ({ onCancel }) => {
                 </button>
 
                 {mode === 'login' && (
-                    <button type="button" onClick={() => { setMode('forgot'); setFormError(null); }} className="ui-login-box-13 auth-recovery-link">
+                    <button type="button" disabled={loading}
+                        onClick={() => { setMode('forgot'); setPassword(''); setShowPassword(false); setFormError(null); }} className="ui-login-box-13 auth-recovery-link">
                         Hai dimenticato la password?
                     </button>
                 )}
                 {mode === 'forgot' && (
-                    <button type="button" onClick={() => { setMode('login'); setFormError(null); }} className="ui-login-box-14 auth-recovery-link">
+                    <button type="button" disabled={loading}
+                        onClick={() => { setMode('login'); setShowPassword(false); setFormError(null); }} className="ui-login-box-14 auth-recovery-link">
                         Torna all'accesso
                     </button>
                 )}
@@ -257,12 +319,7 @@ export const LoginBox: React.FC<LoginBoxProps> = ({ onCancel }) => {
                 <div className="ui-login-box-17" style={{ flex: 1, height: "1px" }} />
             </div>
 
-            <button id="btn-login-google" type="button" className="btn ui-login-box-18 auth-google-action" onClick={() => {
-                setFormError(null);
-                void handleAuthAction(() => isGuest ? linkGoogleAccount(migrationPolicy) : login())
-                    .then(() => { const error = useAppStore.getState().saveError; if (error) setFormError(error); })
-                    .catch(error => setFormError(describeEmailAuthError(error)));
-            }}>
+            <button id="btn-login-google" type="button" className="btn ui-login-box-18 auth-google-action" disabled={loading} onClick={() => void handleGoogle()}>
                 <svg style={{ width: "1.25rem", height: "1.25rem", marginRight: "0.625rem", fill: "currentColor", verticalAlign: "middle" }} viewBox="0 0 24 24">
                     <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
                     <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
@@ -285,7 +342,8 @@ export const LoginBox: React.FC<LoginBoxProps> = ({ onCancel }) => {
                     id="btn-login-anonymous"
                     type="button"
                     className="btn ui-login-box-20 auth-guest-action"
-                    onClick={loginAsGuest}
+                    disabled={loading}
+                    onClick={() => void handleGuestLogin()}
                 >
                     <span>Continua senza account</span>{' '}
                     <span className="auth-guest-action__detail">
