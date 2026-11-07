@@ -10,6 +10,7 @@ import { useTrainingHistory } from '../src/hooks/useTrainingHistory';
 import { restoreSessionAfterHistoryEdit } from '../src/hooks/workout/historyEditorContext';
 import { useWorkoutSetMutations } from '../src/hooks/workout/useWorkoutSetMutations';
 import { captureSession, invalidateSession } from '../src/lib/sync/session';
+import { draftRegistry } from '../src/lib/utils/draftRegistry';
 import { getInitialLocalWorkout } from '../src/store/slices/createWorkoutSlice';
 import { persistPlainWorkoutSnapshot } from '../src/lib/sync/workoutDeviceIntent';
 import { readWorkoutTimerSnapshot, writeWorkoutTimerSnapshot } from '../src/lib/utils/timer';
@@ -57,6 +58,9 @@ describe('Workout lifecycle durable recovery regressions', () => {
     beforeEach(() => {
         localStorage.clear();
         vi.clearAllMocks();
+        // A failed case must not leave one-shot dialog outcomes for later tests.
+        vi.mocked(useDialogStore.getState().showConfirm).mockReset().mockResolvedValue(true);
+        vi.mocked(useDialogStore.getState().showAlert).mockReset().mockResolvedValue(undefined);
         owner = captureSession().owner;
         useAppStore.setState({
             userData: userData({}), dataOwner: owner, localWorkout: null,

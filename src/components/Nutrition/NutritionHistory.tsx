@@ -35,8 +35,16 @@ const NutritionHistory: React.FC<NutritionHistoryProps> = ({ nutritionHistory, o
                     {visibleDays.map((day: any, idx: number) => (
                         <div 
                             key={`hist-nutr-${day.date}-${idx}`} 
-                            className="card clickable-card" 
-                            onClick={() => onDayClick && onDayClick(day.date)}
+                            className="card clickable-card"
+                            role={onDayClick ? 'button' : undefined}
+                            tabIndex={onDayClick ? 0 : undefined}
+                            onClick={onDayClick ? () => onDayClick(day.date) : undefined}
+                            onKeyDown={onDayClick ? (event) => {
+                                if (event.key === 'Enter' || event.key === ' ') {
+                                    event.preventDefault();
+                                    onDayClick(day.date);
+                                }
+                            } : undefined}
                             style={{ 
                                 padding: '15px', 
                                 marginBottom: 0, 
@@ -44,7 +52,7 @@ const NutritionHistory: React.FC<NutritionHistoryProps> = ({ nutritionHistory, o
                                 justifyContent: 'space-between', 
                                 alignItems: 'center',
                                 borderLeft: '1px solid var(--glass-border)',
-                                cursor: 'pointer'
+                                cursor: onDayClick ? 'pointer' : 'default'
                             }}
                         >
                             <div style={{ width: '100%' }}>
