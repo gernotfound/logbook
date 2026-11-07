@@ -230,15 +230,22 @@ function applyOne(data: UserData, operation: DomainOperation): UserData {
             break;
         }
         case 'training-cycle.upsert': {
-            // Validate the raw operation first: tolerant read schemas must not turn
-            // malformed input into a successful write by applying number fallbacks.
+            // Tolerant read schemas discard invalid and duplicate routine identities.
+            // A domain write must reject them before parsing, not silently save a truncated cycle.
             if (!isBoundedCycleCount(operation.cycle.durationWeeks, MAX_EDITABLE_CYCLE_WEEKS)
                 || (operation.cycle.sessionsPerWeek !== undefined
                     && !isBoundedCycleCount(operation.cycle.sessionsPerWeek, MAX_CYCLE_SESSIONS_PER_WEEK))) {
                 throw new Error('Durata o frequenza del ciclo non valida');
             }
+            const inputRoutines: unknown = operation.cycle.routines;
+            if (inputRoutines !== undefined) {
+                if (!Array.isArray(inputRoutines)) throw new Error('Routine ciclo: elenco non valido');
+                assertUnique(inputRoutines, item => requireId(item?.routineId, 'Routine ciclo'), 'Routine ciclo');
+            }
             const cycle = TrainingCycleWriteSchema.parse({ ...operation.cycle, id: requireId(operation.cycle.id, 'Ciclo') });
-            assertUnique(cycle.routines ?? [], item => requireId(item.routineId, 'Routine ciclo'), 'Routine ciclo');
+            if (Array.isArray(inputRoutines) && cycle.routines.length !== inputRoutines.length) {
+                throw new Error('Routine ciclo: impossibile conservare tutte le routine');
+            }
             data.trainingCycles = upsertById(data.trainingCycles, cycle, item => requireId(item.id, 'Ciclo'), 'Cicli');
             break;
         }
