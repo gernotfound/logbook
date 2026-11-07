@@ -48,7 +48,8 @@ export function applyPatch<T extends object>(target: T, patch: Partial<T>): T {
     for (const key of Object.keys(patch) as Array<keyof T>) {
         const value = patch[key];
         if (value === undefined) Reflect.deleteProperty(result, key);
-        else Object.assign(result, { [key]: value });
+        // Defining an own property also preserves reserved names such as "__proto__".
+        else Object.defineProperty(result, key, { value, writable: true, enumerable: true, configurable: true });
     }
     return result;
 }
