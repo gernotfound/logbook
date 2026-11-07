@@ -10,7 +10,7 @@ function git(...args) {
   return execFileSync('git', args, { encoding: 'utf8' }).trim();
 }
 
-test('Gitleaks scans from the explicit base and fails closed when that base is missing', () => {
+void test('Gitleaks scans from the explicit base and fails closed when that base is missing', () => {
   const directory = mkdtempSync(join(tmpdir(), 'logbook-gitleaks-range-'));
   const previousCwd = process.cwd();
   const previousBase = process.env.GITLEAKS_BASE_SHA;
