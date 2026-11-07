@@ -4,6 +4,7 @@ import { DB } from '../src/lib/db';
 import type { UserData } from '../src/types';
 import { prepareUnlockedTestArchive } from './secureVaultFixture';
 import { lockAllVaults } from '../src/lib/sync/secureArchiveSession';
+import { createDefaultNutritionPlanning } from '../src/lib/nutritionDefaults';
 
 describe('R3: Zustand saveUserData Error Rejection & Debouncing Suite', () => {
     const mockUserData1: UserData = {
@@ -16,7 +17,7 @@ describe('R3: Zustand saveUserData Error Rejection & Debouncing Suite', () => {
         trainingCycles: [],
         supplements: [],
         activeWorkout: null,
-        nutritionPlanning: {} as any
+        nutritionPlanning: createDefaultNutritionPlanning()
     };
 
     const mockUserData2: UserData = {

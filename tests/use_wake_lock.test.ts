@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { renderHook } from '@testing-library/react';
+import { act, renderHook } from '@testing-library/react';
 import { useWakeLock } from '../src/hooks/useWakeLock';
 
 // -------- Helpers --------
@@ -67,11 +67,18 @@ describe('useWakeLock', () => {
     });
 
     it('fallisce silenziosamente se la richiesta viene rifiutata', async () => {
-        mockRequest.mockRejectedValue(new DOMException('Not allowed', 'NotAllowedError'));
-        const spy = vi.spyOn(console, 'error');
+        let rejectRequest!: (error: unknown) => void;
+        mockRequest.mockReturnValue(new Promise((_resolve, reject) => { rejectRequest = reject; }));
+        const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
         renderHook(() => useWakeLock(true));
-        await vi.waitFor(() => expect(mockRequest).toHaveBeenCalled());
+        expect(mockRequest).toHaveBeenCalledWith('screen');
+
+        await act(async () => {
+            rejectRequest(new DOMException('Not allowed', 'NotAllowedError'));
+        });
+
         expect(spy).not.toHaveBeenCalled();
+        expect(mockRequest).toHaveBeenCalledTimes(1);
     });
 
     it('rilascia il sentinel quando enabled diventa false', async () => {
