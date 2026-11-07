@@ -42,16 +42,24 @@ async function hasRequestPayload(request: Request): Promise<boolean> {
   if (!request.body) return false;
 
   const reader = request.body.getReader();
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  // An open stream can stall on its first read (or between empty chunks).
+  // Bound the entire inspection, well below the function's 30-second limit.
+  const deadline = new Promise<null>(resolve => {
+    timeout = setTimeout(() => resolve(null), 2_000);
+  });
   try {
-    // Never buffer attacker-controlled payloads. Bound empty chunks as well,
-    // so a stream producing endless zero-byte chunks cannot loop indefinitely.
+    // Never buffer attacker-controlled payloads. Reject stalled streams and
+    // cap empty chunks so a stream cannot keep the endpoint busy indefinitely.
     for (let emptyReads = 0; emptyReads < 16; emptyReads++) {
-      const { done, value } = await reader.read();
-      if (done) return false;
-      if (value.byteLength > 0) return true;
+      const chunk = await Promise.race([reader.read(), deadline]);
+      if (chunk === null) return true;
+      if (chunk.done) return false;
+      if (chunk.value.byteLength > 0) return true;
     }
     return true;
   } finally {
+    if (timeout !== undefined) clearTimeout(timeout);
     void reader.cancel().catch(() => {});
     reader.releaseLock();
   }
