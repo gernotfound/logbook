@@ -240,7 +240,10 @@ function applyOne(data: UserData, operation: DomainOperation): UserData {
             const inputRoutines: unknown = operation.cycle.routines;
             if (inputRoutines !== undefined) {
                 if (!Array.isArray(inputRoutines)) throw new Error('Routine ciclo: elenco non valido');
-                assertUnique(inputRoutines, item => requireId(item?.routineId, 'Routine ciclo'), 'Routine ciclo');
+                assertUnique(inputRoutines, (item: unknown) => requireId(
+                    item && typeof item === 'object' && 'routineId' in item ? item.routineId : undefined,
+                    'Routine ciclo',
+                ), 'Routine ciclo');
             }
             const cycle = TrainingCycleWriteSchema.parse({ ...operation.cycle, id: requireId(operation.cycle.id, 'Ciclo') });
             if (Array.isArray(inputRoutines) && cycle.routines.length !== inputRoutines.length) {
