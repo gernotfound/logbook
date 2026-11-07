@@ -110,6 +110,29 @@ describe('M8 domain commit durability', () => {
         expect(stored?.pending.some(operation => operation.path[0] === 'trainingCycles')).toBe(true);
     });
 
+    it('keeps the encrypted local envelope and journal unchanged after a rejected cycle with duplicate routines', async () => {
+        const { initializeLocal, commitDomainOperations, readLocal } = await import('../../src/lib/sync/localRepository');
+        const initial = base();
+        await initializeLocal('user:a', initial);
+        const durableBefore = await readLocal('user:a');
+
+        await expect(commitDomainOperations('user:a', {
+            type: 'training-cycle.upsert',
+            cycle: {
+                id: 'cycle-duplicate',
+                name: 'Ciclo non valido',
+                durationWeeks: 6,
+                routines: [
+                    { routineId: 'r-1', frequencyPerWeek: 1 },
+                    { routineId: 'r-1', frequencyPerWeek: 2 },
+                ],
+            },
+        }, initial)).rejects.toThrow(/duplicato/i);
+
+        expect(await readLocal('user:a')).toEqual(durableBefore);
+        expect((await readLocal('user:a'))?.pending).toEqual([]);
+    });
+
     it('serializes concurrent domain commits without losing either intent', async () => {
         const { initializeLocal, commitDomainOperations, readLocal } = await import('../../src/lib/sync/localRepository');
         const initial = base();

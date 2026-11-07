@@ -85,7 +85,17 @@ export function hasDeviceRecoveryBackupSource(owner: string): boolean {
 
 export async function collectBackupSnapshot(fallback: UserData, includeCloud: boolean, consistencyAttempt = 0, accountKey?: Uint8Array) {
     const session = captureSession();
-    const assertCurrent = () => { if (!isCurrentSession(session)) throw new Error('Sessione cambiata durante il backup.'); };
+    const cloudUser = includeCloud && session.owner !== 'guest' ? auth.currentUser : null;
+    const assertCurrent = () => {
+        if (!isCurrentSession(session)) throw new Error('Sessione cambiata durante il backup.');
+        // Auth may replace the User object for a new login to the same UID
+        // before the local epoch observer runs. Never continue a cloud export
+        // using credentials from a different authenticated session.
+        if (includeCloud && session.owner !== 'guest'
+            && (!cloudUser || cloudUser.uid !== session.owner.slice(5) || auth.currentUser !== cloudUser)) {
+            throw new Error('Account cambiato durante il backup.');
+        }
+    };
     const coverage: BackupCoverage = { scope: 'device', months: [] };
     let effectiveCloudKey = accountKey;
     const documents = new Map<string, DocumentData>();

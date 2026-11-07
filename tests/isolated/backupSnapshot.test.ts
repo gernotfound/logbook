@@ -612,6 +612,26 @@ it('never labels a failed cloud scan complete; explicit device export still work
     expect((await collectBackupSnapshot(data, false)).coverage.scope).toBe('device');
 });
 
+it('refuses to finish a cloud backup after an Auth replacement with the same UID and unchanged local epoch', async () => {
+    const data = parse({ profile: { height: '170' } });
+    await initializeSealedLocal(data);
+    let replaced = false;
+    sdk.page.mockImplementation(async ({ path }) => {
+        if (!replaced && path.endsWith('history_months')) {
+            replaced = true;
+            // Firebase can publish the replacement User before the local Auth
+            // observer advances the epoch; comparing only the UID is insufficient.
+            sdk.auth.currentUser = { uid: 'a' };
+        }
+        return { size: 0, docs: [] };
+    });
+
+    await expect(collectBackupSnapshot(data, true)).rejects.toThrow('Account cambiato durante il backup.');
+    expect(replaced).toBe(true);
+    expect(sdk.page).toHaveBeenCalledTimes(1);
+    expect(sdk.control).toHaveBeenCalledTimes(1);
+});
+
 it('aborts if the account changes between pages', async () => {
     await initializeSealedLocal(parse({}));
     sdk.page.mockImplementation(async () => { sdk.auth.currentUser = { uid: 'b' }; invalidateSession(); return { size: 0, docs: [] }; });

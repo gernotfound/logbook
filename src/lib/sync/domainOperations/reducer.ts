@@ -230,15 +230,25 @@ function applyOne(data: UserData, operation: DomainOperation): UserData {
             break;
         }
         case 'training-cycle.upsert': {
-            // Validate the raw operation first: tolerant read schemas must not turn
-            // malformed input into a successful write by applying number fallbacks.
+            // Tolerant read schemas discard invalid and duplicate routine identities.
+            // A domain write must reject them before parsing, not silently save a truncated cycle.
             if (!isBoundedCycleCount(operation.cycle.durationWeeks, MAX_EDITABLE_CYCLE_WEEKS)
                 || (operation.cycle.sessionsPerWeek !== undefined
                     && !isBoundedCycleCount(operation.cycle.sessionsPerWeek, MAX_CYCLE_SESSIONS_PER_WEEK))) {
                 throw new Error('Durata o frequenza del ciclo non valida');
             }
+            const inputRoutines: unknown = operation.cycle.routines;
+            if (inputRoutines !== undefined) {
+                if (!Array.isArray(inputRoutines)) throw new Error('Routine ciclo: elenco non valido');
+                assertUnique(inputRoutines, (item: unknown) => requireId(
+                    item && typeof item === 'object' && 'routineId' in item ? item.routineId : undefined,
+                    'Routine ciclo',
+                ), 'Routine ciclo');
+            }
             const cycle = TrainingCycleWriteSchema.parse({ ...operation.cycle, id: requireId(operation.cycle.id, 'Ciclo') });
-            assertUnique(cycle.routines ?? [], item => requireId(item.routineId, 'Routine ciclo'), 'Routine ciclo');
+            if (Array.isArray(inputRoutines) && cycle.routines.length !== inputRoutines.length) {
+                throw new Error('Routine ciclo: impossibile conservare tutte le routine');
+            }
             data.trainingCycles = upsertById(data.trainingCycles, cycle, item => requireId(item.id, 'Ciclo'), 'Cicli');
             break;
         }
@@ -338,21 +348,33 @@ function applyOne(data: UserData, operation: DomainOperation): UserData {
             break;
         case 'catalog.exercise.patch': {
             const id = requireId(operation.id, 'Override esercizio');
+            // The current catalog-override record schema drops this key; reject instead of silently losing the write.
+            if (id === '__proto__') throw new Error('Override esercizio: identificativo non rappresentabile');
             const overrides = data.catalogOverrides ?? {};
             const exercises = { ...(overrides.exercises ?? {}) };
-            const patched = applyPatch(exercises[id] ?? {}, operation.patch);
-            if (Object.keys(patched).length) exercises[id] = patched;
-            else delete exercises[id];
+            const existing = Object.hasOwn(exercises, id) ? exercises[id] : {};
+            const patched = applyPatch(existing, operation.patch);
+            if (Object.keys(patched).length) {
+                Object.defineProperty(exercises, id, { value: patched, writable: true, enumerable: true, configurable: true });
+            } else if (Object.hasOwn(exercises, id)) {
+                delete exercises[id];
+            }
             data.catalogOverrides = { ...overrides, exercises };
             break;
         }
         case 'catalog.food.patch': {
             const id = requireId(operation.id, 'Override alimento');
+            // The current catalog-override record schema drops this key; reject instead of silently losing the write.
+            if (id === '__proto__') throw new Error('Override alimento: identificativo non rappresentabile');
             const overrides = data.catalogOverrides ?? {};
             const foods = { ...(overrides.foods ?? {}) };
-            const patched = applyPatch(foods[id] ?? {}, operation.patch);
-            if (Object.keys(patched).length) foods[id] = patched;
-            else delete foods[id];
+            const existing = Object.hasOwn(foods, id) ? foods[id] : {};
+            const patched = applyPatch(existing, operation.patch);
+            if (Object.keys(patched).length) {
+                Object.defineProperty(foods, id, { value: patched, writable: true, enumerable: true, configurable: true });
+            } else if (Object.hasOwn(foods, id)) {
+                delete foods[id];
+            }
             data.catalogOverrides = { ...overrides, foods };
             break;
         }
