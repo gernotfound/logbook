@@ -3,11 +3,13 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { fireEvent, screen } from '@testing-library/react';
 import { renderWithProviders, emptyUserData } from './setup';
 import TrainingRoutines from '../src/components/Training/TrainingRoutines';
+import type { Exercise, WorkoutRoutine } from '../src/types';
 
-const library = [
+const library: Exercise[] = [
     {
         id: 'bench',
         name: 'Panca piana',
+        setsCount: 3,
         muscles: ['chest'],
         secondaryMuscles: ['triceps'],
         trackingType: 'weight_reps',
@@ -16,14 +18,15 @@ const library = [
     {
         id: 'squat',
         name: 'Squat',
+        setsCount: 4,
         muscles: ['quads'],
         secondaryMuscles: ['glutes'],
         trackingType: 'weight_reps',
         sets: [],
     },
-] as any;
+];
 
-const routines = [
+const routines: WorkoutRoutine[] = [
     {
         id: 'upper-a',
         name: 'Upper body A',
@@ -34,7 +37,7 @@ const routines = [
         name: 'Lower body A',
         exercises: [{ exId: 'squat', setsCount: 4, minReps: 6, maxReps: 8 }],
     },
-] as any;
+];
 
 describe('Schede redesign', () => {
     beforeEach(() => {
@@ -43,7 +46,7 @@ describe('Schede redesign', () => {
 
     it('filters only by routine name and keeps one inline card expanded at a time', () => {
         const { container } = renderWithProviders(<TrainingRoutines />, {
-            userData: { ...emptyUserData, routines, library } as any,
+            userData: { ...emptyUserData, routines, library },
         });
 
         expect(screen.getByRole('heading', { name: 'Schede' })).toBeTruthy();
@@ -74,7 +77,7 @@ describe('Schede redesign', () => {
 
     it('keeps the contextual menu separate from expansion and exposes muscles in a collapsed disclosure', () => {
         const { container } = renderWithProviders(<TrainingRoutines />, {
-            userData: { ...emptyUserData, routines, library } as any,
+            userData: { ...emptyUserData, routines, library },
         });
 
         const card = screen.getByText('Upper body A').closest('.routine-library-card');
@@ -100,7 +103,7 @@ describe('Schede redesign', () => {
 
     it('adds an exercise from the whole result row and keeps per-set technique configuration aligned with set count', () => {
         const { container } = renderWithProviders(<TrainingRoutines />, {
-            userData: { ...emptyUserData, routines: [], library } as any,
+            userData: { ...emptyUserData, routines: [], library },
         });
 
         fireEvent.click(screen.getByRole('button', { name: 'Crea scheda' }));
