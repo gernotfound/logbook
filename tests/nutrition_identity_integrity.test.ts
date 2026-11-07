@@ -16,6 +16,7 @@ import { applyRemoteDocuments, projectDocuments } from '../src/lib/sync/document
 import { requireCompleteNutritionMonthDocument, IncompleteCloudMonthError } from '../src/lib/sync/monthlyIntegrity';
 import { loadNutritionMonths } from '../src/lib/db/db_nutrition';
 import { sealCloudDocument } from '../src/lib/sync/cloudDocumentCipher';
+import type { SyncMeta } from '../src/lib/sync/semanticProjection/contracts';
 
 const catalog: CachedGlobalCatalog = {
     manifest: {
@@ -148,7 +149,7 @@ describe('F-003 nutrition identity integrity', () => {
 
 
     it('aborts an entire multi-month Firestore read without publishing partial nutrition or sync metadata', async () => {
-        const sync = {
+        const sync: SyncMeta = {
             protocolVersion: 3, clock: {}, fields: {},
             writer: { slot: 's00', replicaId: 'nutrition-test', generation: 1, seq: 1 },
         };
