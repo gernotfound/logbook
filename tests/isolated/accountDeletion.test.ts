@@ -459,6 +459,28 @@ it('keeps a server-accepted receipt if the subsequent status check is unavailabl
     expect(boundary.auth.signOut).not.toHaveBeenCalled();
 });
 
+it.each([
+    ['another owner', () => response(202, { uid: 'b', status: 'requested' })],
+    ['missing status', () => response(202, { uid: 'a' })],
+    ['unknown status', () => response(202, { uid: 'a', status: 'unknown' })],
+    ['non-JSON success', () => new Response('<html>ok</html>', { status: 200, headers: { 'content-type': 'text/html' } })],
+    ['JSON null', () => new Response('null', { status: 202, headers: { 'content-type': 'application/json' } })],
+    ['unexpected 204', () => new Response(null, { status: 204 })],
+] as const)('does not acknowledge a deletion POST with %s', async (_caseName, makeResponse) => {
+    boundary.fetch.mockResolvedValueOnce(makeResponse());
+
+    await expect(deleteAccount(context)).rejects.toThrow('Conferma della cancellazione non verificabile');
+
+    const marker = readAccountDeletionMarker('user:a');
+    expect(marker?.receiptToken).toBeTruthy();
+    expect(marker?.serverAcceptedAt).toBeUndefined();
+    expect(await get('logbook:v2:user:a')).toEqual({ original: 'recoverable' });
+    expect(isAccountDeletionPending('user:a')).toBe(true);
+    expect(boundary.fetch).toHaveBeenCalledTimes(1);
+    expect(boundary.auth.signOut).not.toHaveBeenCalled();
+    expect(boundary.reset).not.toHaveBeenCalled();
+});
+
 it('checks recent authentication before App Check or any server request', async () => {
     boundary.token.mockResolvedValue({ authTime: '2020-01-01T00:00:00Z', token: 'stale-token' });
 
