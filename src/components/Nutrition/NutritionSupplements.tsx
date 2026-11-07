@@ -120,6 +120,7 @@ export default function NutritionSupplements({ selectedDate, setSelectedDate }: 
     };
 
     const handleDuplicateSupplement = async (supp: any) => {
+        const session = captureSession();
         const newName = Logic.generateUniqueName(supp.name, supplementsLibrary.map(s => s.name));
         const duplicated = {
             ...supp,
@@ -129,13 +130,15 @@ export default function NutritionSupplements({ selectedDate, setSelectedDate }: 
         try {
             await dispatchDurableOperation(dispatchDomainOperation, { type: 'supplement.upsert', supplement: duplicated });
         } catch {
-            await showAlert('Errore durante la duplicazione.');
+            if (isCurrentSession(session)) await showAlert('Errore durante la duplicazione.');
         }
     };
 
     const handleDeleteSupplement = async (id: string, name: string) => {
+        const session = captureSession();
         const confirmed = await showConfirm(`Sei sicuro di voler eliminare l'integratore "${name}" dalla libreria?`);
-        if (confirmed) {
+        // A confirmation belongs to the original Auth epoch, not to a reused supplement ID.
+        if (confirmed && isCurrentSession(session)) {
             await deleteSupplementFromLibrary(id);
         }
     };
@@ -313,17 +316,20 @@ export default function NutritionSupplements({ selectedDate, setSelectedDate }: 
                                             await showAlert('Inserisci una quantità valida da assumere.');
                                             return;
                                         }
+                                        const session = captureSession();
                                         pendingIntakes.current.add(supp.id);
                                         try {
                                             await addIntake(supp.id, amount);
-                                            setQuickInputs(prev => {
-                                                if (prev[supp.id] !== undefined && prev[supp.id] !== valStr) return prev;
-                                                const next = { ...prev };
-                                                delete next[supp.id];
-                                                return next;
-                                            });
+                                            if (isCurrentSession(session)) {
+                                                setQuickInputs(prev => {
+                                                    if (prev[supp.id] !== undefined && prev[supp.id] !== valStr) return prev;
+                                                    const next = { ...prev };
+                                                    delete next[supp.id];
+                                                    return next;
+                                                });
+                                            }
                                         } catch {
-                                            await showAlert("Errore durante l'aggiunta dell'assunzione.");
+                                            if (isCurrentSession(session)) await showAlert("Errore durante l'aggiunta dell'assunzione.");
                                         } finally {
                                             pendingIntakes.current.delete(supp.id);
                                         }
@@ -344,7 +350,7 @@ export default function NutritionSupplements({ selectedDate, setSelectedDate }: 
                                                     <span style={{ color: 'var(--text-muted)', marginRight: '8px' }}>{timeStr}</span>
                                                     <strong>{intake.amount}</strong> {supp.unit}
                                                 </div>
-                                                <button type="button" className="btn-icon text-danger" aria-label={`Rimuovi assunzione di ${supp.name} delle ${timeStr}`} onClick={() => { void removeIntake(intake.id); }}>✕</button>
+                                                <button className="btn-icon text-danger" onClick={() => removeIntake(intake.id)}>✕</button>
                                             </div>
                                         );
                                     })}

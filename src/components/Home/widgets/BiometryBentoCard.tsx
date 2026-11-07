@@ -2,11 +2,12 @@ import { Scale } from 'lucide-react';
 
 interface BiometryBentoCardProps {
     weightStats: any;
+    lastRecordedWeight: number | null;
     bf: string | number;
     bfSource?: string | null;
 }
 
-const BiometryBentoCard = ({ weightStats, bf, bfSource }: BiometryBentoCardProps) => {
+const BiometryBentoCard = ({ weightStats, lastRecordedWeight, bf, bfSource }: BiometryBentoCardProps) => {
     const delta = weightStats?.weightDelta;
     return (
         <section className="home-biometry">
@@ -14,7 +15,7 @@ const BiometryBentoCard = ({ weightStats, bf, bfSource }: BiometryBentoCardProps
             <dl className="home-biometry-values">
                 <div>
                     <dt>Ultimo peso</dt>
-                    <dd>{weightStats?.latestWeight ?? '--'} <span className="text-sm">{weightStats?.latestWeight ? 'kg' : ''}</span></dd>
+                    <dd>{lastRecordedWeight ?? '--'}{lastRecordedWeight !== null && <span className="text-sm"> kg</span>}</dd>
                     {delta != null && delta !== 0 && <p className="text-sm home-muted">{delta > 0 ? '+' : ''}{delta.toFixed(1)} kg nel periodo</p>}
                     {weightStats?.latestWeeklyAverage != null && (
                         <p className="text-sm home-muted">

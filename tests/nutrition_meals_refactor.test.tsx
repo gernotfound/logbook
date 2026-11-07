@@ -8,40 +8,40 @@ import { useDialogStore } from '../src/store/useDialogStore';
 import { NutritionMealSection } from '../src/components/Nutrition/meals/NutritionMealSection';
 import type { LoggedMealItem, NutritionSubTab } from '../src/types';
 import { Logic } from '../src/lib/logic';
-import { emptyUserData, renderWithProviders, renderWithAuthenticatedTestOwner } from './setup';
-import { prepareUnlockedTestArchive } from './secureVaultFixture';
 import { invalidateSession } from '../src/lib/sync/session';
+import { emptyUserData, renderWithProviders } from './setup';
 
 describe('NutritionMeals decomposition parity', () => {
-    it('rejects a stale ON/OFF confirmation after an auth session transition', async () => {
-        await prepareUnlockedTestArchive();
-        const date = '2026-08-16';
-        const data = {
-            ...emptyUserData,
-            nutrition: { [date]: {
-                date, kcal: 0, carbs: 0, pro: 0, fat: 0, meals: [], isDayOn: true,
-            } },
-        };
-        const previousDispatch = useAppStore.getState().dispatchDomainOperation;
-        const dispatch = vi.fn(previousDispatch);
-        useAppStore.setState({ dispatchDomainOperation: dispatch });
-        vi.mocked(useDialogStore.getState().showConfirm).mockImplementationOnce(async () => {
-            // The old dialog must not issue a mutation under the next auth epoch.
-            invalidateSession();
-            return true;
-        });
+    it('does not apply a confirmed day-type change after its Auth session was replaced', async () => {
+        const showConfirm = vi.mocked(useDialogStore.getState().showConfirm);
+        const originalDispatch = useAppStore.getState().dispatchDomainOperation;
+        let resolveConfirmation!: (choice: boolean) => void;
+        showConfirm.mockReset().mockImplementationOnce(() => new Promise(resolve => {
+            resolveConfirmation = resolve;
+        }));
+        const setDayType = vi.fn().mockResolvedValue(undefined);
+        const mockHook = {
+            targetDateStr: '2026-10-20',
+            todayNutrition: { date: '2026-10-20', kcal: 0, carbs: 0, pro: 0, fat: 0, meals: [] },
+            dailyTarget: { kcal: 0, carbs: 0, pro: 0, fat: 0 },
+            isDayOn: true, setDayType,
+            searchQuery: '', handleSearch: vi.fn(), searchResults: [], clearSearch: vi.fn(),
+            showCustomModal: false, setShowCustomModal: vi.fn(), editingFoodId: null,
+            cancelCustomFood: vi.fn(), cfData: {}, setCfData: vi.fn(), saveCustomFood: vi.fn(),
+            meals: [], addFood: vi.fn(), removeFood: vi.fn().mockResolvedValue(true),
+            updateMealItem: vi.fn().mockResolvedValue(true),
+        } as unknown as React.ComponentProps<typeof NutritionMeals>['mealsHook'];
         try {
-            renderWithAuthenticatedTestOwner(<NutritionMeals selectedDate={date} />, { userData: data });
-            await act(async () => {
-                fireEvent.click(screen.getByRole('button', { name: 'OFF' }));
-            });
-            expect(useDialogStore.getState().showConfirm).toHaveBeenCalledWith(
-                'Sei sicuro di voler cambiare il giorno in OFF?',
-            );
-            expect(dispatch).not.toHaveBeenCalled();
-            expect(useAppStore.getState().userData?.nutrition?.[date]?.isDayOn).toBe(true);
+            render(<NutritionMeals mealsHook={mockHook} />);
+            fireEvent.click(screen.getByRole('button', { name: 'OFF' }));
+            expect(showConfirm).toHaveBeenCalledOnce();
+            // The original account can disappear and return with the same UID.
+            act(() => { invalidateSession(); invalidateSession(); });
+            await act(async () => { resolveConfirmation(true); });
+            expect(setDayType).not.toHaveBeenCalled();
         } finally {
-            useAppStore.setState({ dispatchDomainOperation: previousDispatch });
+            showConfirm.mockReset().mockResolvedValue(true);
+            useAppStore.setState({ dispatchDomainOperation: originalDispatch });
         }
     });
 

@@ -36,9 +36,9 @@ export function useWorkoutFinalization({
         const expectedId = useAppStore.getState().localWorkout?.id;
         try {
         if (!expectedId) return null;
-        let expectedSession: ReturnType<typeof captureSession>;
+        let session: ReturnType<typeof captureSession>;
         try {
-            expectedSession = captureSession();
+            session = captureSession();
         } catch {
             useAppStore.setState({
                 localPersistenceBlocked: true, syncHealth: 'failed', syncPresentation: 'normal',
@@ -47,24 +47,26 @@ export function useWorkoutFinalization({
             return null;
         }
         if (confirmEnd && !(await showConfirm("Terminare l'allenamento?"))) return null;
-        if (!isCurrentSession(expectedSession)) return null;
+        // A-B-A authentication must not let an earlier completion act on a new session.
+        if (!isCurrentSession(session)) return null;
         try {
             draftRegistry.flushAll({ strict: true });
         } catch {
+            if (!isCurrentSession(session)) return null;
             useAppStore.setState({
                 localPersistenceBlocked: true,
                 syncHealth: 'failed',
                 syncPresentation: 'normal',
                 saveError: 'Impossibile mettere al sicuro le ultime modifiche del workout. La sessione non verrà terminata.',
             });
-            if (auth.currentUser?.uid === expectedUid) {
+            if (isCurrentSession(session) && auth.currentUser?.uid === expectedUid) {
                 await showAlert('Le ultime modifiche non sono ancora al sicuro sul dispositivo. Riprova dopo aver risolto il problema di storage.');
             }
             return null;
         }
         const currentWorkout = useAppStore.getState().localWorkout;
-        if (!isCurrentSession(expectedSession) || !currentWorkout
-            || currentWorkout.id !== expectedId || auth.currentUser?.uid !== expectedUid) return null;
+        if (!isCurrentSession(session) || !currentWorkout || currentWorkout.id !== expectedId
+            || auth.currentUser?.uid !== expectedUid) return null;
 
         const endTime = requestedEndTime ?? new Date().getTime();
         const workoutForCompletion = completionDraft
@@ -86,7 +88,7 @@ export function useWorkoutFinalization({
                 activePains: finalActivePains,
             });
             if (!result.ok && result.status !== 'local-pending') return null;
-            if (!isCurrentSession(expectedSession) || auth.currentUser?.uid !== expectedUid
+            if (!isCurrentSession(session) || auth.currentUser?.uid !== expectedUid
                 || useAppStore.getState().localWorkout?.id !== expectedId) return null;
             // IndexedDB already contains the completed workout. If device cleanup
             // fails, startup reconciles the stale snapshot against durable history.
@@ -107,7 +109,7 @@ export function useWorkoutFinalization({
             resetWorkoutClockGuard(expectedId);
             return useAppStore.getState().userData?.history?.find(item => item.id === expectedId) ?? finishedWorkout;
         } catch (error) {
-            if (auth.currentUser?.uid === expectedUid) {
+            if (isCurrentSession(session) && auth.currentUser?.uid === expectedUid) {
                 await showAlert(
                     isWorkoutClockAnomalyError(error)
                         ? 'L’orologio del dispositivo è cambiato durante l’allenamento. Correggi data e ora, riapri TheLogBook e poi termina la sessione.'
@@ -123,9 +125,10 @@ export function useWorkoutFinalization({
 
     const deleteWorkout = useCallback(async (): Promise<boolean> => {
         const deletedWorkoutId = useAppStore.getState().localWorkout?.id;
+        let expectedSession: ReturnType<typeof captureSession> | null = null;
         try {
             if (!deletedWorkoutId) return false;
-            const expectedSession = captureSession();
+            expectedSession = captureSession();
             if (!(await showConfirm("Sei sicuro di voler eliminare questa sessione in corso? Non verrà salvata."))) return false;
             if (!isCurrentSession(expectedSession) || useAppStore.getState().localWorkout?.id !== deletedWorkoutId) return false;
             const result = await dispatchDomainOperation({ type: 'active-workout.set', workout: null, deletedWorkoutId: String(deletedWorkoutId) });
@@ -155,7 +158,9 @@ export function useWorkoutFinalization({
             return true;
         } catch (error) {
             console.error('Eliminazione sessione non completata:', error);
-            await showAlert('Errore durante l’eliminazione della sessione.');
+            if (!expectedSession || isCurrentSession(expectedSession)) {
+                await showAlert('Errore durante l’eliminazione della sessione.');
+            }
             return false;
         }
     }, [showConfirm, dispatchDomainOperation, setLocalWorkout, showAlert]);
