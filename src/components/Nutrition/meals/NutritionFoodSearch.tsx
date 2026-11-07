@@ -80,7 +80,7 @@ export function NutritionFoodSearch({
                                             type="button"
                                             className="btn btn-secondary"
                                             onClick={() => addFood(food, mealType)}
-                                            title={`Aggiungi a ${mealType}`}
+                                            aria-label={`Aggiungi ${food.name} a ${mealType}`}
                                         >
                                             {mealType}
                                         </button>
