@@ -953,6 +953,31 @@ describe.each(['input', 'textarea'] as const)('independent same-workout %s write
         second.unmount();
     });
 
+    it('keeps a recovered buffered witness byte-for-byte unchanged on no-input required-update capture', async () => {
+        const owner = captureSession().owner;
+        await prepareUnlockedTestArchive(owner);
+        const first = mount(vi.fn());
+        fireEvent.change(edited(first), { target: { value: 'Recovery without new input' } });
+        const previousEvidence = readBufferedWriterEvidence(owner, draftName);
+        const sharedRaw = readBufferedDraftSnapshot(draftName, owner).raw;
+        const encryptedCanonical = localStorage.getItem(protectedDeviceKey(draftName, owner));
+        first.unmount();
+
+        const reopened = mount(vi.fn());
+        expect(edited(reopened).value).toBe('Recovery without new input');
+        act(() => requiredUpdateRecoveryRegistry.captureAll());
+        act(() => requiredUpdateRecoveryRegistry.captureAll());
+        expect(readBufferedWriterEvidence(owner, draftName)).toEqual(previousEvidence);
+        expect(readBufferedDraftSnapshot(draftName, owner).raw).toBe(sharedRaw);
+        expect(localStorage.getItem(protectedDeviceKey(draftName, owner))).toBe(encryptedCanonical);
+
+        fireEvent.change(edited(reopened), { target: { value: 'Real new input' } });
+        const lineage = readBufferedWriterEvidence(owner, draftName);
+        expect(lineage).toHaveLength(2);
+        expect(lineage.at(-1)?.value).toBe('Real new input');
+        reopened.unmount();
+    });
+
     it('recovers a verified successor across successive React remounts and confirms its lineage', async () => {
         const owner = captureSession().owner;
         await prepareUnlockedTestArchive(owner);

@@ -93,6 +93,9 @@ export const BufferedInput = React.forwardRef<HTMLInputElement, BufferedInputPro
         const [localValue, setLocalValue] = useState(initialValue);
         const recoveryKey = useRef(initialRecovery.key);
         const isDirty = useRef(initialRecovery.recovered !== null);
+        // Recovered text may still need a parent commit, but it is already
+        // durable: only a new keystroke requires another encrypted witness.
+        const needsDeviceWrite = useRef(false);
         const editSession = useRef(initialRecovery.session);
         const isFocused = useRef(false);
         const latestLocalValue = useRef(initialValue);
@@ -119,7 +122,7 @@ export const BufferedInput = React.forwardRef<HTMLInputElement, BufferedInputPro
         });
 
         const persistRecovery = useCallback(() => {
-            if (!isDirty.current) return;
+            if (!isDirty.current || !needsDeviceWrite.current) return;
             const key = recoveryKey.current;
             const session = editSession.current;
             if (!key) throw new Error('Bozza volatile senza identificativo stabile.');
@@ -158,6 +161,7 @@ export const BufferedInput = React.forwardRef<HTMLInputElement, BufferedInputPro
                 key, session.owner, raw, session.consentGeneration, observedRaw.current,
             );
             recoveryValue.current = raw;
+            needsDeviceWrite.current = false;
         }, [workoutId]);
 
         // Sync from external value if not focused or dirty. A recovered value remains
@@ -277,6 +281,7 @@ export const BufferedInput = React.forwardRef<HTMLInputElement, BufferedInputPro
             setLocalValue(e.target.value);
             latestLocalValue.current = e.target.value;
             isDirty.current = true;
+            needsDeviceWrite.current = true;
             try {
                 persistRecovery();
             } catch (error) {
@@ -356,6 +361,9 @@ export const BufferedTextarea = React.forwardRef<HTMLTextAreaElement, BufferedTe
         const [localValue, setLocalValue] = useState(initialValue);
         const recoveryKey = useRef(initialRecovery.key);
         const isDirty = useRef(initialRecovery.recovered !== null);
+        // Recovered text may still need a parent commit, but it is already
+        // durable: only a new keystroke requires another encrypted witness.
+        const needsDeviceWrite = useRef(false);
         const editSession = useRef(initialRecovery.session);
         const isFocused = useRef(false);
         const latestLocalValue = useRef(initialValue);
@@ -378,7 +386,7 @@ export const BufferedTextarea = React.forwardRef<HTMLTextAreaElement, BufferedTe
         });
 
         const persistRecovery = useCallback(() => {
-            if (!isDirty.current) return;
+            if (!isDirty.current || !needsDeviceWrite.current) return;
             const key = recoveryKey.current;
             const session = editSession.current;
             if (!key) throw new Error('Bozza volatile senza identificativo stabile.');
@@ -417,6 +425,7 @@ export const BufferedTextarea = React.forwardRef<HTMLTextAreaElement, BufferedTe
                 key, session.owner, raw, session.consentGeneration, observedRaw.current,
             );
             recoveryValue.current = raw;
+            needsDeviceWrite.current = false;
         }, [workoutId]);
 
         useEffect(() => {
@@ -524,6 +533,7 @@ export const BufferedTextarea = React.forwardRef<HTMLTextAreaElement, BufferedTe
             setLocalValue(e.target.value);
             latestLocalValue.current = e.target.value;
             isDirty.current = true;
+            needsDeviceWrite.current = true;
             try {
                 persistRecovery();
             } catch (error) {
