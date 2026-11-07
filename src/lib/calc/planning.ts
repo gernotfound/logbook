@@ -505,7 +505,8 @@ export function calculateCycleVolume(
             totalSetsPerWeek += weeklySetsForEx;
 
             // Process primary muscles only (as chosen by user)
-            const primaryMuscles = Array.isArray(libEx.muscles) ? libEx.muscles : [];
+            // Repeated muscle IDs represent one primary target, including on the heatmap.
+            const primaryMuscles = new Set(Array.isArray(libEx.muscles) ? libEx.muscles : []);
             const uniqueCategoriesInEx = new Set<string>();
 
             primaryMuscles.forEach(mId => {

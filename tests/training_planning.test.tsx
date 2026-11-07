@@ -106,6 +106,34 @@ describe('Training Planning & Volume Calculations', () => {
         expect(result.highlightedMuscles).toEqual([]);
     });
 
+    it('does not inflate heatmap intensity when a primary muscle ID is repeated', () => {
+        const cycle: TrainingCycle = {
+            id: 'dup-muscle-cycle',
+            name: 'Volume e mappa coerenti',
+            durationWeeks: 4,
+            sessionsPerWeek: 1,
+            routines: [{ routineId: 'dup-muscle-routine', frequencyPerWeek: 1 }],
+        };
+        const routines: WorkoutRoutine[] = [{
+            id: 'dup-muscle-routine',
+            name: 'Volume',
+            exercises: [{ exId: 'bench', setsCount: 2 }, { exId: 'row', setsCount: 5 }],
+        }];
+        const canonical: Exercise[] = [
+            { id: 'bench', name: 'Panca', setsCount: 2, sets: [], muscles: ['chest'] },
+            { id: 'row', name: 'Rematore', setsCount: 5, sets: [], muscles: ['lats'] },
+        ];
+        const withDuplicate = canonical.map(item => item.id === 'bench'
+            ? { ...item, muscles: ['chest', 'chest'] } : item);
+
+        const expected = calculateCycleVolume(cycle, routines, canonical);
+        const repeated = calculateCycleVolume(cycle, routines, withDuplicate);
+        expect(expected.muscleVolumes.find(item => item.key === 'chest')?.sets).toBe(2);
+        expect(expected.muscleColors.chest).toBe('#38bdf8');
+        expect(expected.muscleColors.lats).toBe('#0ea5e9');
+        expect(repeated).toEqual(expected);
+    });
+
     it('calculateCycleVolume gracefully handles deleted routines and exercises', () => {
         const cycleWithMissingRefs: TrainingCycle = {
             id: 'cycle_missing',
