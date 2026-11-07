@@ -6,7 +6,7 @@ describe('session cardio speed calculation', () => {
         expect(deriveCardioSpeed({ time: '30', distance: '5' }, 'time', '20')).toBe('15.00');
     });
 
-    it('accepts decimal commas without changing the saved input format', () => {
+    it('accepts decimal commas when deriving a two-decimal speed', () => {
         expect(deriveCardioSpeed({ time: '30', distance: '5' }, 'distance', '5,5')).toBe('11.00');
         expect(deriveCardioSpeed({ time: '30', distance: '5,5' }, 'time', '33')).toBe('10.00');
     });
@@ -41,5 +41,14 @@ describe('session cardio speed calculation', () => {
         expect(deriveCardioSpeed({ time: '30', distance: '5' }, 'distance', ',5')).toBe('1.00');
         expect(deriveCardioSpeed({ time: '30', distance: '5' }, 'distance', '5,')).toBe('10.00');
         expect(deriveCardioSpeed({ time: '30', distance: '5' }, 'time', ' 15 ')).toBe('20.00');
+    });
+
+    it('rejects finite speeds that toFixed would encode in scientific notation', () => {
+        const current = { time: '30', distance: '5' };
+
+        // Both inputs are syntactically valid finite decimals; their ratio is
+        // also finite, but would produce values like "3e+22" rather than "3.00".
+        expect(deriveCardioSpeed(current, 'time', '0.00000000000000000001')).toBeUndefined();
+        expect(deriveCardioSpeed(current, 'distance', '1000000000000000000000')).toBeUndefined();
     });
 });

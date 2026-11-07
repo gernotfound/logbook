@@ -23,7 +23,10 @@ export function deriveCardioSpeed(
 
     if (timeVal !== null && timeVal > 0 && distVal !== null && distVal >= 0) {
         const speed = distVal / (timeVal / 60);
-        return Number.isFinite(speed) ? speed.toFixed(2) : undefined;
+        // Number#toFixed switches to exponential notation at 1e21, even
+        // when the calculation itself is finite. Never persist that format
+        // as the two-decimal speed shown by the cardio editor.
+        return Number.isFinite(speed) && speed < 1e21 ? speed.toFixed(2) : undefined;
     }
     if (newTimeStr.trim() === '' || newDistStr.trim() === '') return '';
     return undefined;
