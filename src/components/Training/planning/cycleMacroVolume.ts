@@ -10,7 +10,7 @@ export interface CycleMacroVolumeItem {
 function getMacroArea(muscleId: string): { key: string; label: string } {
     const value = muscleId.toLocaleLowerCase('it');
     if (value.includes('pett') || value.includes('chest')) return { key: 'chest', label: 'Petto' };
-    if (value.includes('trap') || value.includes('lat') || value.includes('dors') || value.includes('schien') || value.includes('back') || value.includes('rhomboid')) {
+    if (value.includes('trap') || value === 'lats' || value.startsWith('lats_') || value.includes('dors') || value.includes('schien') || value.includes('back') || value.includes('rhomboid')) {
         return { key: 'back', label: 'Dorso' };
     }
     if (value.includes('delt') || value.includes('spall') || value.includes('shoulder')) return { key: 'shoulders', label: 'Spalle' };
