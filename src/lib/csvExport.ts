@@ -35,8 +35,10 @@ export function buildCsvFiles(
 ): Array<[string, string]> {
         const libMap = new Map(library.map(item => [item.id, item]));
         const jsonCell = (value: unknown) => value === undefined || value === null ? '' : JSON.stringify(value);
-        const isoInstant = (value: number | undefined) =>
-            typeof value === 'number' && Number.isFinite(value) ? new Date(value).toISOString() : '';
+        const isoInstant = (value: number | undefined) => {
+            const date = typeof value === 'number' && Number.isFinite(value) ? new Date(value) : null;
+            return date && Number.isFinite(date.getTime()) ? date.toISOString() : '';
+        };
 
         const workoutHeaders = [
             'Data', 'Nome allenamento', 'Esercizio', 'Serie', 'Tecnica', 'Segmento',

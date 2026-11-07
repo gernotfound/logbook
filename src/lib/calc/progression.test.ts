@@ -578,4 +578,46 @@ describe('contextual progression engine', () => {
         expect(current.exercises[0].sets).toHaveLength(3);
     });
 
+    it('never applies a current-only weight fallback to a historical exposure', () => {
+        const previous = workout({ id: 'weight-old', date: '2026-01-10', exId: 'pullup', sets: [set(20, 10, 2)] });
+        const current = workout({ id: 'weight-new', date: '2026-06-10', exId: 'pullup', sets: [set(20, 10, 2)] });
+        const nutrition = {
+            '2026-01-05': { date: '2026-01-05', kcal: 0, carbs: 0, pro: 0, fat: 0, weight: 80 },
+            '2026-06-05': { date: '2026-06-05', kcal: 0, carbs: 0, pro: 0, fat: 0, weight: 90 },
+        };
+
+        const withHistory = computeProgressionEngine(current, [previous], library, {
+            nutrition, explicitBodyweightKg: 95,
+        }).exercises[0];
+        expect(withHistory.current.bodyweightKg).toBe(95);
+        expect(withHistory.previousComparable?.bodyweightKg).toBe(80);
+        expect(withHistory.previousComparable?.tonnageKg).toBe(1000);
+        expect(withHistory.current.tonnageKg).toBe(1150);
+
+        const withoutHistory = computeProgressionEngine(current, [previous], library, {
+            explicitBodyweightKg: 95,
+        }).exercises[0];
+        expect(withoutHistory.current.bodyweightKg).toBe(95);
+        expect(withoutHistory.previousComparable?.bodyweightKg).toBeUndefined();
+        expect(withoutHistory.comparison.level).toBe('medium');
+    });
+
+    it('does not adopt infinite explicit bodyweight as a valid historical or current measurement', () => {
+        const current = workout({ id: 'weight-invalid', date: '2026-06-10', exId: 'pullup', sets: [set(20, 10, 2)] });
+        const analysis = computeProgressionEngine(current, [], library, {
+            explicitBodyweightKg: Infinity,
+        }).exercises[0];
+        expect(analysis.current.bodyweightKg).toBeUndefined();
+        expect(analysis.current.tonnageComplete).toBe(false);
+    });
+
+    it('does not truncate fractional repetitions into a fabricated performance comparison', () => {
+        const current = workout({ id: 'invalid-reps', date: '2026-09-08', sets: [set(100, '8.5', 2)] });
+        const exposure = normalizeExerciseExposure(current, current.exercises[0], bench);
+        expect(exposure.workSets).toBe(0);
+        expect(exposure.totalReps).toBe(0);
+        expect(exposure.referenceSet?.reps).toBeUndefined();
+        expect(computeProgressionEngine(current, [], library).exercises[0].isRecord).toBe(false);
+    });
+
 });

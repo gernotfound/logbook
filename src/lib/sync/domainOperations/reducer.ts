@@ -338,21 +338,33 @@ function applyOne(data: UserData, operation: DomainOperation): UserData {
             break;
         case 'catalog.exercise.patch': {
             const id = requireId(operation.id, 'Override esercizio');
+            // The current catalog-override record schema drops this key; reject instead of silently losing the write.
+            if (id === '__proto__') throw new Error('Override esercizio: identificativo non rappresentabile');
             const overrides = data.catalogOverrides ?? {};
             const exercises = { ...(overrides.exercises ?? {}) };
-            const patched = applyPatch(exercises[id] ?? {}, operation.patch);
-            if (Object.keys(patched).length) exercises[id] = patched;
-            else delete exercises[id];
+            const existing = Object.hasOwn(exercises, id) ? exercises[id] : {};
+            const patched = applyPatch(existing, operation.patch);
+            if (Object.keys(patched).length) {
+                Object.defineProperty(exercises, id, { value: patched, writable: true, enumerable: true, configurable: true });
+            } else if (Object.hasOwn(exercises, id)) {
+                delete exercises[id];
+            }
             data.catalogOverrides = { ...overrides, exercises };
             break;
         }
         case 'catalog.food.patch': {
             const id = requireId(operation.id, 'Override alimento');
+            // The current catalog-override record schema drops this key; reject instead of silently losing the write.
+            if (id === '__proto__') throw new Error('Override alimento: identificativo non rappresentabile');
             const overrides = data.catalogOverrides ?? {};
             const foods = { ...(overrides.foods ?? {}) };
-            const patched = applyPatch(foods[id] ?? {}, operation.patch);
-            if (Object.keys(patched).length) foods[id] = patched;
-            else delete foods[id];
+            const existing = Object.hasOwn(foods, id) ? foods[id] : {};
+            const patched = applyPatch(existing, operation.patch);
+            if (Object.keys(patched).length) {
+                Object.defineProperty(foods, id, { value: patched, writable: true, enumerable: true, configurable: true });
+            } else if (Object.hasOwn(foods, id)) {
+                delete foods[id];
+            }
             data.catalogOverrides = { ...overrides, foods };
             break;
         }

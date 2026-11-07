@@ -272,6 +272,15 @@ describe('EMPIRICAL ADVERSARIAL SUITE — R1 (TDEE Calculation) & R2 (Workout Vo
         const libraryMap = new Map(exerciseCatalog.map(item => [item.id, item]));
         const athleteWeight = 85; // 85kg user
 
+        // Historical bodyweight must come from a dated measurement, never the current-session fallback.
+        const measuredBodyweightContext = {
+            nutrition: {
+                '2026-08-20': {
+                    date: '2026-08-20', weight: 80, kcal: 0, carbs: 0, pro: 0, fat: 0,
+                },
+            },
+        };
+
         // 2.1 Complex Mixed Workout (3 free weights + 2 bodyweight exercises)
         it('R2.1: Correctly calculates volume for a complex mixed session (3 FW + 2 BW) with equipment weight', () => {
             const workout: WorkoutSession = {
@@ -463,7 +472,7 @@ describe('EMPIRICAL ADVERSARIAL SUITE — R1 (TDEE Calculation) & R2 (Workout Vo
                 ]
             };
 
-            const report = computeWorkoutReport(currentSession, [prevSession], libraryMap, 80);
+            const report = computeWorkoutReport(currentSession, [prevSession], libraryMap, 80, measuredBodyweightContext);
             expect(report.isFirstSession).toBe(false);
             expect(report.newPRs).toHaveLength(0);
 
@@ -512,7 +521,7 @@ describe('EMPIRICAL ADVERSARIAL SUITE — R1 (TDEE Calculation) & R2 (Workout Vo
                 ]
             };
 
-            const report = computeWorkoutReport(currSession, [prevSession], libraryMap, 80);
+            const report = computeWorkoutReport(currSession, [prevSession], libraryMap, 80, measuredBodyweightContext);
             expect(report.newPRs).toHaveLength(2);
             expect(report.newPRs.map(p => p.exId)).toEqual(['ex-bench', 'ex-pullup']);
         });
@@ -579,7 +588,7 @@ describe('EMPIRICAL ADVERSARIAL SUITE — R1 (TDEE Calculation) & R2 (Workout Vo
                 ]
             };
 
-            const report = computeWorkoutReport(currSession, [prevSession], libraryMap, 80);
+            const report = computeWorkoutReport(currSession, [prevSession], libraryMap, 80, measuredBodyweightContext);
             expect(report.isFirstSession).toBe(false);
             expect(report.exerciseComparisons).toHaveLength(2);
 
