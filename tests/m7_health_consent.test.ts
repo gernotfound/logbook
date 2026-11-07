@@ -1,4 +1,5 @@
 import { LEGAL_VERSIONS } from '../src/lib/legalVersions';
+import { adminDb } from '../server/accountDeletion/firebaseAdmin';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 type Stored = Record<string, unknown>;
@@ -319,7 +320,9 @@ describe('trusted health consent boundary', () => {
   it('cleanup erases only the specific account consent marker', async () => {
     await recordHealthConsentWithdrawal('account-1', 0);
     await recordHealthConsentWithdrawal('account-2', 0);
-    await removeHealthConsentStateForDeletedAccount('account-1');
+    await adminDb().runTransaction(async tx => {
+      removeHealthConsentStateForDeletedAccount('account-1', tx);
+    });
     expect(storage.documents.has('health_consent_withdrawals/account-1')).toBe(false);
     expect(storage.documents.has('health_consent_withdrawals/account-2')).toBe(true);
   });
