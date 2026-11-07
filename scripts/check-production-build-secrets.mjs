@@ -24,9 +24,12 @@ export function checkProductionBuildSecrets(hosting, firestore) {
         !/^    needs: build\s*$/m.test(deploy)) {
       issues.push('Hosting: verified same-run frontend artifact handoff is missing');
     }
-    if (deploy.indexOf('      - name: Authenticate to Google Cloud') <=
-        deploy.indexOf('      - name: Download same-run verified frontend') ||
-        !deploy.includes('      - name: Recheck exact main SHA before Hosting deployment')) {
+    const downloadedAt = deploy.indexOf('      - name: Download same-run verified frontend');
+    const authenticatedAt = deploy.indexOf('      - name: Authenticate to Google Cloud');
+    const recheckedAt = deploy.indexOf('      - name: Recheck exact main SHA before Hosting deployment');
+    const publishedAt = deploy.indexOf('      - name: Deploy Firebase Hosting only');
+    if (downloadedAt < 0 || authenticatedAt <= downloadedAt ||
+        recheckedAt <= authenticatedAt || publishedAt <= recheckedAt) {
       issues.push('Hosting: trusted credentials or exact main SHA guard out of order');
     }
   }
@@ -41,10 +44,12 @@ export function checkProductionBuildSecrets(hosting, firestore) {
     'VITE_ACCOUNT_DELETION_API_ORIGIN', 'VITE_RECAPTCHA_ENTERPRISE_SITE_KEY',
     'VITE_ACCOUNT_INACTIVITY_TRACKING',
   ]);
-  const jobEnv = hosting.match(/^ {4}env:\s*\r?\n([\s\S]*?)^ {4}steps:/m)?.[1];
-  const names = [...(jobEnv?.matchAll(/^ {6}([A-Z][A-Z0-9_]*):/gm) ?? [])].map(match => match[1]);
-  if (!jobEnv || names.length === 0 || names.some(name => !permittedHostingEnv.has(name))) {
-    issues.push('Hosting: external error monitoring or an unreviewed build env binding');
+  for (const [jobName, section] of [['build', build], ['deploy', deploy]]) {
+    const jobEnv = section?.match(/^ {4}env:\s*\r?\n([\s\S]*?)^ {4}steps:/m)?.[1];
+    const names = [...(jobEnv?.matchAll(/^ {6}([A-Z][A-Z0-9_]*):/gm) ?? [])].map(match => match[1]);
+    if (!jobEnv || names.length === 0 || names.some(name => !permittedHostingEnv.has(name))) {
+      issues.push(`Hosting: ${jobName} contains an unreviewed job-level env binding`);
+    }
   }
   const permittedGithubBindings = new Set([
     'GCP_WORKLOAD_IDENTITY_PROVIDER', 'GCP_FIREBASE_DEPLOY_SERVICE_ACCOUNT',

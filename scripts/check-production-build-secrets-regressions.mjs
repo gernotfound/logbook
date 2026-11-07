@@ -115,6 +115,18 @@ void test('Hosting build remains unprivileged and hands an exact SHA artifact to
   }
 });
 
+void test('Hosting rejects unreviewed environment bindings in either job', () => {
+  const rogueDeployEnv = hosting.replace('      GCP_FIREBASE_DEPLOY_SERVICE_ACCOUNT: ${{ vars.GCP_FIREBASE_DEPLOY_SERVICE_ACCOUNT }}',
+    '      GCP_FIREBASE_DEPLOY_SERVICE_ACCOUNT: ${{ vars.GCP_FIREBASE_DEPLOY_SERVICE_ACCOUNT }}\\n      UNREVIEWED_DEPLOY_FLAG: 1');
+  assert.notEqual(rogueDeployEnv, hosting);
+  assert.match(checkProductionBuildSecrets(rogueDeployEnv, firestore).join('; '), /deploy contains an unreviewed/);
+
+  const rogueBuildEnv = hosting.replace('      FIREBASE_HOSTING_DEPLOY: production',
+    '      FIREBASE_HOSTING_DEPLOY: production\\n      UNREVIEWED_BUILD_FLAG: 1');
+  assert.notEqual(rogueBuildEnv, hosting);
+  assert.match(checkProductionBuildSecrets(rogueBuildEnv, firestore).join('; '), /build contains an unreviewed/);
+});
+
 void test('Hosting smoke verifies served bytes and browser MIME for critical PWA resources', () => {
   const smoke = hosting.slice(hosting.indexOf('      - name: Verify public Hosting PWA cache policy'));
   assert.ok(smoke.includes('assert_served_bytes "/" "dist/index.html" html'));
