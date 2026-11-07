@@ -286,7 +286,7 @@ export async function deleteUserRoot(uidValue: string, leaseOwner: string): Prom
     // A data-only erasure keeps Auth, but when the entire account is deleted
     // its server-owned erasure receipt must be removed as well.
     transaction.delete(adminDb().collection('health_data_erasures').doc(uid));
-    await removeHealthConsentStateForDeletedAccount(uid, transaction);
+    removeHealthConsentStateForDeletedAccount(uid, transaction);
     transaction.update(ref, {
       status: 'deleting', cursor: { phase: 'root' }, updatedAt: Timestamp.now(),
     });
