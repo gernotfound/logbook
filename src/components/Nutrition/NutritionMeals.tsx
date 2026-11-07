@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { captureSession, isCurrentSession } from '../../lib/sync/session';
 import { shiftDateString } from '../../lib/utils/date';
 import { useNutritionMeals } from '../../hooks/useNutritionMeals';
 import { useDialogStore } from '../../store/useDialogStore';
@@ -43,6 +44,7 @@ function NutritionMealsContent({
 
     const { removeIntake, supplementsLibrary } = useSupplements(selectedDate);
     const showConfirm = useDialogStore(state => state.showConfirm);
+    const showAlert = useDialogStore(state => state.showAlert);
     const dataOwner = useAppStore(state => state.dataOwner);
     const [editContext, setEditContext] = useState<{
         owner: string | null; date: string; item: LoggedMealItem;
@@ -109,9 +111,18 @@ function NutritionMealsContent({
                                 onClick={async () => {
                                     if (isDayOn === option.value) return;
                                     const needsConfirm = isDayOn !== undefined;
-                                    if (!needsConfirm || await showConfirm(`Sei sicuro di voler cambiare il giorno in ${option.label}?`)) {
-                                        await setDayType(option.value);
+                                    if (needsConfirm) {
+                                        let session: ReturnType<typeof captureSession>;
+                                        try {
+                                            session = captureSession();
+                                        } catch {
+                                            await showAlert('Sessione non verificata: modifica della giornata non effettuata.');
+                                            return;
+                                        }
+                                        if (!(await showConfirm(`Sei sicuro di voler cambiare il giorno in ${option.label}?`))
+                                            || !isCurrentSession(session)) return;
                                     }
+                                    await setDayType(option.value);
                                 }}
                             >
                                 {option.label}
