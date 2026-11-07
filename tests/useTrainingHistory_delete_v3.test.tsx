@@ -68,6 +68,47 @@ describe('useTrainingHistory deleteWorkout', () => {
         });
     });
 
+    it.each(['rejected-result', 'throw'] as const)(
+        'preserves the local workout and history when deletion is not committed (%s)',
+        async (failureMode) => {
+            const dispatch = vi.mocked(useAppStore.getState().dispatchDomainOperation);
+            const showAlert = vi.mocked(useDialogStore.getState().showAlert);
+            const before = structuredClone(useAppStore.getState().userData);
+            const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+            try {
+                if (failureMode === 'rejected-result') {
+                    dispatch.mockResolvedValueOnce({
+                        ok: false,
+                        status: 'rejected',
+                        error: new Error('Local deletion not committed'),
+                    });
+                } else {
+                    dispatch.mockRejectedValueOnce(new Error('IndexedDB write failed'));
+                }
+                const { result } = renderHook(() => useTrainingHistory());
+
+                await act(async () => {
+                    await result.current.deleteWorkout('w-to-delete');
+                });
+
+                expect(dispatch).toHaveBeenCalledExactlyOnceWith({
+                    type: 'history.delete',
+                    id: 'w-to-delete',
+                });
+                expect(useAppStore.getState().userData).toEqual(before);
+                expect(useAppStore.getState().localWorkout?.id).toBe('w-to-delete');
+                expect(showAlert).toHaveBeenCalledWith("Errore durante l'eliminazione dell'allenamento.");
+                expect(consoleError).toHaveBeenCalledWith(
+                    'Eliminazione storico non completata:',
+                    expect.any(Error),
+                );
+            } finally {
+                consoleError.mockRestore();
+            }
+        },
+    );
+
     it('leaves state untouched when confirmation is cancelled', async () => {
         vi.mocked(useDialogStore.getState().showConfirm).mockResolvedValue(false);
         const before = structuredClone(useAppStore.getState().userData);
