@@ -6,7 +6,7 @@ export type SyncFailureResult = Exclude<SyncResult, { ok: true }>;
 type SyncErrorDetail = { code?: string; retryable: boolean };
 const capabilityCodes = new Set(['app-check-unavailable', 'app-check-limited-use-unavailable', 'cloud-key-unavailable']);
 
-function getSyncErrorChain(error: unknown): SyncErrorDetail[] {
+function getSyncErrorChain(error: unknown): { chain: SyncErrorDetail[]; incomplete: boolean } {
     const chain: SyncErrorDetail[] = [];
     const seen = new Set<object>();
     let current = error;
@@ -20,7 +20,7 @@ function getSyncErrorChain(error: unknown): SyncErrorDetail[] {
         });
         current = Object.hasOwn(item, 'cause') ? item.cause : undefined;
     }
-    return chain;
+    return { chain, incomplete: !!current && typeof current === 'object' && !seen.has(current) };
 }
 
 /**
@@ -29,7 +29,7 @@ function getSyncErrorChain(error: unknown): SyncErrorDetail[] {
  * `local-pending`; unknown bootstrap/import/runtime failures are fail-closed.
  */
 export function classifySyncFailure(error: unknown, options?: { retryable?: boolean }): SyncFailureResult {
-    const chain = getSyncErrorChain(error);
+    const { chain, incomplete } = getSyncErrorChain(error);
     const direct = chain[0];
     // Only a caller with independent proof of a retained journal may force a retry:
     // a confirmed remote commit with a lost local ACK can wrap a provider error.
@@ -37,6 +37,9 @@ export function classifySyncFailure(error: unknown, options?: { retryable?: bool
     if (direct?.code === 'permission-denied' || (!provenPending && chain.some(item => item.code === 'permission-denied'))) {
         return { ok: false, status: 'rejected', error };
     }
+    // The bounded scan may leave an unseen cause. A transport code cannot prove
+    // that this hidden outcome is safe to retry without independent journal evidence.
+    if (incomplete && !provenPending) return { ok: false, status: 'failed', error };
     if (direct?.code && capabilityCodes.has(direct.code)) {
         return { ok: false, status: direct.retryable ? 'local-pending' : 'failed', error };
     }
