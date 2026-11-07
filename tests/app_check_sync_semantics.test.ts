@@ -1,9 +1,13 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { mapFirebaseErrorCode } from '../src/lib/errorHandler';
 import { AppCheckLimitedUseTokenError } from '../src/lib/appCheck';
 import { SyncTimeoutError } from '../src/lib/db/db_core';
-import { CloudKeyAccessUnavailableError } from '../src/lib/sync/cloudAccountKeyAccess';
 import { classifySyncFailure } from '../src/lib/sync/syncFailure';
+
+// The UI setup mocks key transport; use its real error type without calling that transport.
+const { CloudKeyAccessUnavailableError } = await vi.importActual<typeof import('../src/lib/sync/cloudAccountKeyAccess')>(
+    '../src/lib/sync/cloudAccountKeyAccess',
+);
 
 describe('Audit 21 App Check and rejected-sync semantics', () => {
     it('fails closed for permanent App Check failures and retries only explicit transient failures', () => {
