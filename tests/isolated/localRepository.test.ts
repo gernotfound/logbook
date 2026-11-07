@@ -1204,7 +1204,7 @@ describe('durable owner-scoped journal', () => {
         expect(await get('logbook:v2:user:a')).toBe(foreignCiphertext);
     });
 
-    it('rejects a changed durable baseline even when actor revision did not advance', async () => {
+    it('increments the local revision on changed cloud hydration and rejects a stale bulk write', async () => {
         await prepareOwnerVault('user:a');
         const base = data(170);
         await initializeLocal('a', base);
@@ -1213,7 +1213,7 @@ describe('durable owner-scoped journal', () => {
 
         await hydrateLocal('a', data(180), [], undefined, 'window');
         const hydrated = await readLocal('a');
-        expect(hydrated?.revision).toBe(preview?.revision);
+        expect(hydrated?.revision).toBe((preview?.revision ?? 0) + 1);
         expect(hydrated?.data.profile?.height).toBe('180');
 
         await expect(
