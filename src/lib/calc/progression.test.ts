@@ -611,4 +611,13 @@ describe('contextual progression engine', () => {
         expect(analysis.current.tonnageComplete).toBe(false);
     });
 
+    it('does not truncate fractional repetitions into a fabricated performance comparison', () => {
+        const current = workout({ id: 'invalid-reps', date: '2026-09-08', sets: [set(100, '8.5', 2)] });
+        const exposure = normalizeExerciseExposure(current, current.exercises[0], bench);
+        expect(exposure.workSets).toBe(0);
+        expect(exposure.totalReps).toBe(0);
+        expect(exposure.referenceSet?.reps).toBeUndefined();
+        expect(computeProgressionEngine(current, [], library).exercises[0].isRecord).toBe(false);
+    });
+
 });
