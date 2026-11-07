@@ -151,6 +151,36 @@ describe('Firestore Production field exemption convergence', () => {
     });
   });
 
+  it('does not certify a named field with missing or malformed index configuration', () => {
+    for (const field of [
+      { name: fieldName },
+      { name: fieldName, indexConfig: null },
+      { name: fieldName, indexConfig: { indexes: 'invalid' } },
+    ]) {
+      expect(classifyFieldOverride(desired, [field], [])).toMatchObject({
+        found: true,
+        explicit: false,
+        indexesDisabled: false,
+        indexesMatch: false,
+        indexesReady: false,
+        matchesDesired: false,
+        pending: false,
+      });
+    }
+  });
+
+  it('accepts an explicitly configured exemption with an omitted empty indexes array', () => {
+    expect(classifyFieldOverride(desired, [{
+      name: fieldName, indexConfig: { usesAncestorConfig: false },
+    }], [])).toMatchObject({
+      explicit: true,
+      indexesDisabled: true,
+      indexesMatch: true,
+      indexesReady: true,
+      matchesDesired: true,
+    });
+  });
+
   it('classifies a verified active removal as pending instead of redeploy-required', () => {
     const status = classifyFieldOverride(desired, [{
       name: fieldName,
