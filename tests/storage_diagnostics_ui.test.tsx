@@ -33,6 +33,6 @@ describe('storage diagnostics presentation', () => {
 
     act(() => setStorageDiagnosticData({ supported: true, persistent: false }));
     expect(screen.queryByText(/Persistenza non supportata/)).toBeNull();
-    expect(screen.getByText('Best-Effort (Volatile)')).toBeDefined();
+    expect(screen.getByText('Best effort (dati rimovibili)')).toBeDefined();
   });
 });
