@@ -112,6 +112,16 @@ export const getInitialLocalWorkout = (owner?: string, fallback?: WorkoutSession
     const resolvedOwner = owner ?? captureSession().owner;
     const { workout: savedWorkout, isIntent, consentRevision } = unwrapWorkoutDeviceSnapshot(parsed, resolvedOwner);
     assertWorkoutSnapshotEpoch(resolvedOwner, consentRevision, expectedConsentRevision);
+    // A signed account snapshot is durable evidence, not a transient editor input.
+    // Repairs for missing instance IDs belong only to setSyncedLocalWorkout(),
+    // before the new device intent and journal are committed.
+    if (resolvedOwner.startsWith('user:')) {
+        try {
+            assertWorkoutSessionIdentities(savedWorkout as WorkoutSession, 'Snapshot workout locale');
+        } catch {
+            throw new DeviceWorkoutCorruptError('Snapshot workout locale con identificativi non validi: copia originale preservata.');
+        }
+    }
     const normalized = normalizeDeviceWorkout(savedWorkout as WorkoutSession);
     if (!normalized) throw new DeviceWorkoutCorruptError('Snapshot workout locale privo di identità valida.');
     const validated = DomainParsers.parseActiveWorkout(normalized) as WorkoutSession | null;
