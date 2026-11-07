@@ -29,8 +29,9 @@ describe('Training stylesheet module boundaries', () => {
   });
 
   it('keeps all training sections visible to existing UI regressions', () => {
-    // Vitest expands local imports for this canonical entrypoint, like global.css.
-    const css = readFileSync(entrypoint, 'utf8');
+    // Node's readFileSync does not expand CSS @imports. Inspect the actual
+    // imported modules in the order verified by the preceding test.
+    const css = modules.map(name => readFileSync(path.join(directory, name), 'utf8')).join('\n');
     const markers = [
       '.workout-sticky-timer {',
       '/* Training history calendar */',
