@@ -3,7 +3,7 @@ import { useDialogStore } from '../../store/useDialogStore';
 import { GlobalDialog } from './GlobalDialog';
 import { DB } from '../../lib/db';
 import { safeHardReload } from '../../lib/sync/safeReload';
-import { captureSession, isActiveGuestSession, isCurrentSession, revokeGuestSession } from '../../lib/sync/session';
+import { captureSession, captureSessionForOwner, isActiveGuestSession, isCurrentSession, revokeGuestSession } from '../../lib/sync/session';
 import { withGuestLifecycleLock } from '../../lib/sync/guestLifecycleLock';
 import { isAccountDeletionPending } from '../../lib/sync/accountGate';
 
@@ -29,7 +29,11 @@ class ErrorBoundary extends Component<Props, State> {
     console.error('Uncaught error:', error, errorInfo);
   }
 
+  private recoveryInProgress = false;
+
   private handleSafeReload = async () => {
+    if (this.recoveryInProgress) return;
+    this.recoveryInProgress = true;
     try {
       await safeHardReload();
     } catch (error) {
@@ -37,10 +41,24 @@ class ErrorBoundary extends Component<Props, State> {
       await useDialogStore.getState().showAlert(
         'Impossibile ricaricare in sicurezza: alcune modifiche locali potrebbero non essere ancora state salvate. Riprova tra qualche secondo.'
       );
+    } finally {
+      this.recoveryInProgress = false;
     }
   };
 
   private handleLocalReset = async () => {
+    // A second confirmation or reload must not race an ongoing destructive
+    // purge, nor may a reset start while the reload durability barrier runs.
+    if (this.recoveryInProgress) return;
+    this.recoveryInProgress = true;
+    try {
+      await this.performLocalReset();
+    } finally {
+      this.recoveryInProgress = false;
+    }
+  };
+
+  private performLocalReset = async () => {
     const dialogs = useDialogStore.getState();
     // Bind user consent to the owner/session that displayed the confirmation.
     // A concurrent account/guest switch must not redirect a destructive reset.
@@ -56,6 +74,7 @@ class ErrorBoundary extends Component<Props, State> {
     );
     if (!confirmed) return;
 
+    let revokedGuestEpoch: number | null = null;
     try {
       if (!isCurrentSession(session)) throw new Error('Sessione cambiata prima della pulizia.');
       const owner = session.owner;
@@ -70,6 +89,7 @@ class ErrorBoundary extends Component<Props, State> {
           // Error recovery is also a destructive guest reset: fence every
           // other tab before removing IndexedDB and never race a new login.
           revokeGuestSession();
+          revokedGuestEpoch = captureSessionForOwner('guest').epoch;
           await DB.purgeAllLocalUserData('guest');
         });
       } else {
@@ -81,6 +101,18 @@ class ErrorBoundary extends Component<Props, State> {
       window.location.reload();
     } catch (error) {
       console.error('Pulizia locale di recovery non completata:', error);
+      // A superseded owner must not receive an alert from this attempt.
+      // Revoking this very guest session intentionally changes its epoch.
+      if (revokedGuestEpoch === null) {
+        if (!isCurrentSession(session)) return;
+      } else {
+        try {
+          if (captureSessionForOwner('guest').epoch !== revokedGuestEpoch
+              || captureSession().owner !== 'guest') return;
+        } catch {
+          return;
+        }
+      }
       await useDialogStore.getState().showAlert(
         'Pulizia locale non completata. I dati rimasti sul dispositivo non sono stati dichiarati eliminati. Riprova o ricarica la pagina.'
       );

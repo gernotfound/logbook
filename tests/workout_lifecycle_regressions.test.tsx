@@ -71,6 +71,86 @@ describe('Workout lifecycle durable recovery regressions', () => {
     });
     afterEach(() => vi.restoreAllMocks());
 
+    it('does not treat an optimistic started snapshot as a confirmed local commit', async () => {
+        await prepareUnlockedTestArchive(owner);
+        const prepared = workout('optimistic-start');
+        const optimistic = { ...prepared, globalStartTime: Date.now() };
+        const state = userData({ activeWorkout: prepared });
+        await initializeLocal(owner, state);
+        useAppStore.setState({ userData: state, localWorkout: optimistic });
+        vi.mocked(useDialogStore.getState().showAlert).mockResolvedValue(undefined);
+
+        const hook = renderHook(() => useWorkoutSession());
+        await act(async () => {
+            expect(await hook.result.current.confirmWorkoutStart()).toBe(false);
+        });
+
+        expect(useAppStore.getState().localPersistenceBlocked).toBe(true);
+        expect((await readLocal(owner))?.data.activeWorkout?.globalStartTime).toBeUndefined();
+        expect(useDialogStore.getState().showAlert).toHaveBeenCalledWith(
+            expect.stringContaining('Impossibile confermare il salvataggio dell’avvio'),
+        );
+    });
+
+    it('recognizes a previously started workout only with matching durable identity and timestamp', async () => {
+        await prepareUnlockedTestArchive(owner);
+        const started = workout('durable-start', true);
+        const state = userData({ activeWorkout: started });
+        await initializeLocal(owner, state);
+        useAppStore.setState({ userData: state, localWorkout: started });
+        const hook = renderHook(() => useWorkoutSession());
+
+        await act(async () => {
+            expect(await hook.result.current.confirmWorkoutStart()).toBe(true);
+        });
+        expect(useAppStore.getState().localPersistenceBlocked).toBe(false);
+        expect((await readLocal(owner))?.data.activeWorkout?.globalStartTime).toBe(started.globalStartTime);
+
+        useAppStore.setState({ localPersistenceBlocked: true });
+        await act(async () => {
+            expect(await hook.result.current.confirmWorkoutStart()).toBe(false);
+        });
+        expect(useAppStore.getState().localPersistenceBlocked).toBe(true);
+    });
+
+    it('serializes overlapping workout starts across mounted hooks and unlocks after failure', async () => {
+        const prepared = workout('concurrent-start');
+        useAppStore.setState({ userData: userData({ activeWorkout: prepared }), localWorkout: prepared });
+        const originalFlush = useAppStore.getState().flushPendingSyncs;
+        let releaseFirst!: () => void;
+        const flush = vi.fn()
+            .mockImplementationOnce(() => new Promise<void>(resolve => { releaseFirst = resolve; }))
+            .mockResolvedValue(undefined);
+        vi.mocked(useDialogStore.getState().showAlert).mockResolvedValue(undefined);
+        useAppStore.setState({ flushPendingSyncs: flush });
+        try {
+            const first = renderHook(() => useWorkoutSession());
+            const second = renderHook(() => useWorkoutSession());
+            let inFlight!: Promise<boolean>;
+            act(() => { inFlight = first.result.current.confirmWorkoutStart(); });
+            expect(flush).toHaveBeenCalledOnce();
+
+            await act(async () => {
+                expect(await second.result.current.confirmWorkoutStart()).toBe(false);
+            });
+            expect(flush).toHaveBeenCalledOnce();
+
+            await act(async () => {
+                releaseFirst();
+                // No locally committed preparation exists, so the first start must fail closed.
+                expect(await inFlight).toBe(false);
+            });
+            expect(flush).toHaveBeenCalledOnce();
+
+            await act(async () => {
+                expect(await second.result.current.confirmWorkoutStart()).toBe(false);
+            });
+            expect(flush).toHaveBeenCalledTimes(2);
+        } finally {
+            useAppStore.setState({ flushPendingSyncs: originalFlush });
+        }
+    });
+
     it('blocks pre-launch plaintext timer at vault readiness without deleting its only copy', async () => {
         const key = deviceKey('timer', owner);
         const original = '{bad-json';

@@ -185,6 +185,81 @@ describe('R2: ErrorBoundary & Dialog Hardening Suite', () => {
 
         consoleErrorSpy.mockRestore();
     });
+    it('runs only one local reset while confirmation or purge is still pending', async () => {
+        const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+        let approve!: (approved: boolean) => void;
+        const confirm = vi.mocked(useDialogStore.getState().showConfirm).mockImplementationOnce(
+            () => new Promise(resolve => { approve = resolve; }),
+        );
+        let finishPurge!: () => void;
+        const purge = vi.mocked(DB.purgeAllLocalUserData).mockImplementationOnce(
+            () => new Promise<void>(resolve => { finishPurge = resolve; }),
+        );
+        const reload = vi.spyOn(safeReloadModule, 'safeHardReload').mockResolvedValue(undefined);
+
+        render(<ErrorBoundary><ProblemChild shouldThrow={true} /></ErrorBoundary>);
+        const reset = screen.getByRole('button', { name: /Azzera dati locali/i });
+        fireEvent.click(reset);
+        fireEvent.click(reset);
+        expect(confirm).toHaveBeenCalledTimes(1);
+        expect(purge).not.toHaveBeenCalled();
+
+        await act(async () => { approve(true); });
+        expect(purge).toHaveBeenCalledExactlyOnceWith('user:test-user-id');
+        fireEvent.click(reset);
+        fireEvent.click(screen.getByRole('button', { name: /Ricarica pagina/i }));
+        expect(confirm).toHaveBeenCalledTimes(1);
+        expect(purge).toHaveBeenCalledTimes(1);
+        expect(reload).not.toHaveBeenCalled();
+        expect(window.location.reload).not.toHaveBeenCalled();
+
+        await act(async () => { finishPurge(); });
+        expect(window.location.reload).toHaveBeenCalledTimes(1);
+        log.mockRestore();
+    });
+
+    it('does not begin a destructive reset during the reload durability check', async () => {
+        const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+        let finishReload!: () => void;
+        const reload = vi.spyOn(safeReloadModule, 'safeHardReload').mockImplementationOnce(
+            () => new Promise<void>(resolve => { finishReload = resolve; }),
+        );
+        const confirm = vi.mocked(useDialogStore.getState().showConfirm).mockResolvedValue(true);
+
+        render(<ErrorBoundary><ProblemChild shouldThrow={true} /></ErrorBoundary>);
+        fireEvent.click(screen.getByRole('button', { name: /Ricarica pagina/i }));
+        fireEvent.click(screen.getByRole('button', { name: /Azzera dati locali/i }));
+        expect(reload).toHaveBeenCalledTimes(1);
+        expect(confirm).not.toHaveBeenCalled();
+        expect(DB.purgeAllLocalUserData).not.toHaveBeenCalled();
+
+        await act(async () => { finishReload(); });
+        await act(async () => { fireEvent.click(screen.getByRole('button', { name: /Azzera dati locali/i })); });
+        expect(confirm).toHaveBeenCalledTimes(1);
+        expect(DB.purgeAllLocalUserData).toHaveBeenCalledExactlyOnceWith('user:test-user-id');
+        log.mockRestore();
+    });
+
+    it('allows retrying local reset after a rejected purge', async () => {
+        const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+        const confirm = vi.mocked(useDialogStore.getState().showConfirm).mockResolvedValue(true);
+        const purge = vi.mocked(DB.purgeAllLocalUserData)
+            .mockRejectedValueOnce(new Error('IndexedDB cleanup unavailable'))
+            .mockResolvedValueOnce(undefined);
+
+        render(<ErrorBoundary><ProblemChild shouldThrow={true} /></ErrorBoundary>);
+        const reset = screen.getByRole('button', { name: /Azzera dati locali/i });
+        await act(async () => { fireEvent.click(reset); });
+        expect(purge).toHaveBeenCalledTimes(1);
+        expect(window.location.reload).not.toHaveBeenCalled();
+
+        await act(async () => { fireEvent.click(reset); });
+        expect(confirm).toHaveBeenCalledTimes(2);
+        expect(purge).toHaveBeenCalledTimes(2);
+        expect(window.location.reload).toHaveBeenCalledTimes(1);
+        log.mockRestore();
+    });
+
     it('revokes the guest generation before a failed error-recovery purge', async () => {
         const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
         vi.mocked(useDialogStore.getState().showConfirm).mockResolvedValue(true);
@@ -217,6 +292,7 @@ describe('R2: ErrorBoundary & Dialog Hardening Suite', () => {
 
         expect(DB.purgeAllLocalUserData).not.toHaveBeenCalled();
         expect(window.location.reload).not.toHaveBeenCalled();
+        expect(useDialogStore.getState().showAlert).not.toHaveBeenCalled();
         spy.mockRestore();
     });
 
@@ -238,6 +314,28 @@ describe('R2: ErrorBoundary & Dialog Hardening Suite', () => {
         await act(async () => { finishPurge(); });
 
         expect(window.location.reload).not.toHaveBeenCalled();
+        log.mockRestore();
+    });
+
+    it('suppresses obsolete local purge failure alerts after Auth A→B→A', async () => {
+        const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+        vi.mocked(useDialogStore.getState().showConfirm).mockResolvedValueOnce(true);
+        const alert = vi.mocked(useDialogStore.getState().showAlert);
+        let failPurge!: (error: Error) => void;
+        const purge = vi.mocked(DB.purgeAllLocalUserData).mockImplementationOnce(
+            () => new Promise<void>((_resolve, reject) => { failPurge = reject; }),
+        );
+
+        render(<ErrorBoundary><ProblemChild shouldThrow={true} /></ErrorBoundary>);
+        await act(async () => { fireEvent.click(screen.getByRole('button', { name: /Azzera dati locali/i })); });
+        expect(purge).toHaveBeenCalledExactlyOnceWith('user:test-user-id');
+
+        // The same account label after two Auth transitions is not the old epoch.
+        invalidateSession();
+        invalidateSession();
+        await act(async () => { failPurge(new Error('obsolete IndexedDB cleanup error')); });
+        expect(window.location.reload).not.toHaveBeenCalled();
+        expect(alert).not.toHaveBeenCalled();
         log.mockRestore();
     });
 
