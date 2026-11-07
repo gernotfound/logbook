@@ -6,6 +6,7 @@ import { Logic } from '../../lib/logic';
 import { parseManualDuration } from '../../lib/utils/date';
 import SessionHeader from './SessionHeader';
 import SessionExerciseAccordion from './session/SessionExerciseAccordion';
+import { isCurrentExerciseMutationTarget } from './session/exerciseMutationTarget';
 import SessionRatings from './session/SessionRatings';
 import { BufferedWorkoutScope } from '../UI/bufferedWorkoutScope';
 import { ExerciseSearchDropdown } from './ExerciseSearchDropdown';
@@ -14,13 +15,6 @@ import { useAppStore } from '../../store/useAppStore';
 import type { SessionExerciseSet } from '../../types';
 
 const EMPTY_HISTORY_ARRAY: Array<{ date: string; sets: SessionExerciseSet[]; note: string }> = [];
-
-/** A buffered callback can outlive a reorder; only its captured exercise may receive it. */
-export function isCurrentExerciseMutationTarget(workoutId: string, index: number, exerciseId: string): boolean {
-    const current = useAppStore.getState().localWorkout;
-    return Boolean(exerciseId) && current?.id === workoutId
-        && current.exercises[index]?.id === exerciseId;
-}
 
 const remapIndexAfterMove = (index: number | null, fromIndex: number, toIndex: number): number | null => {
     if (index === null || fromIndex === toIndex) return index;

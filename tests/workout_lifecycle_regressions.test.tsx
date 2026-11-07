@@ -17,7 +17,7 @@ import { readWorkoutTimerSnapshot, writeWorkoutTimerSnapshot } from '../src/lib/
 import { readWorkoutRecoveryDraft, writeWorkoutRecoveryDraft } from '../src/lib/sync/workoutRecoveryDraft';
 import PreSessionCheckIn from '../src/components/Training/PreSessionCheckIn';
 import TrainingSession from '../src/components/Training/TrainingSession';
-import { isCurrentExerciseMutationTarget } from '../src/components/Training/ActiveWorkoutSession';
+import { isCurrentExerciseMutationTarget } from '../src/components/Training/session/exerciseMutationTarget';
 import WorkoutTimer from '../src/components/Training/WorkoutTimer';
 import { useWorkoutSession } from '../src/hooks/useWorkoutSession';
 import { commitDomainOperations, initializeLocal, readLocal } from '../src/lib/sync/localRepository';
