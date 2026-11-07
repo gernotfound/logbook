@@ -79,6 +79,26 @@ describe('M8 Domain Operations V4', () => {
         expect(month['__proto__']).toMatchObject({ id: '__proto__', date: '2026-09-15' });
     });
 
+    it('preserves catalog overrides whose identities are inherited Object property names', () => {
+        const before = base({ catalogOverrides: { exercises: {}, foods: {} } });
+        const after = applyDomainOperations(before, [
+            { type: 'catalog.exercise.patch', id: '__proto__', patch: { name: 'Esercizio personale' } },
+            { type: 'catalog.food.patch', id: 'constructor', patch: { name: 'Alimento personale' } },
+        ]);
+        const exercises = after.catalogOverrides?.exercises ?? {};
+        const foods = after.catalogOverrides?.foods ?? {};
+        expect(Object.hasOwn(exercises, '__proto__')).toBe(true);
+        expect(exercises['__proto__']).toEqual({ name: 'Esercizio personale' });
+        expect(Object.getPrototypeOf(exercises)).toBe(Object.prototype);
+        expect(Object.hasOwn(foods, 'constructor')).toBe(true);
+        expect(foods.constructor).toEqual({ name: 'Alimento personale' });
+        expect(Object.getPrototypeOf(foods)).toBe(Object.prototype);
+        const persisted = projectDocuments(after, catalog).get('')!;
+        expect(Object.hasOwn((persisted.catalogOverrides as Record<string, Record<string, unknown>>).exercises, '__proto__')).toBe(true);
+        expect(({} as Record<string, unknown>).name).toBeUndefined();
+        expect(before.catalogOverrides?.exercises).toEqual({});
+    });
+
     it('compiles a profile patch only inside the profile root scope', () => {
         const before = base({ profile: { height: '170', gender: 'M' }, activePains: ['shoulder'] });
         const { after, operations, replay } = compile(before, { type: 'profile.patch', patch: { height: '171' } });
