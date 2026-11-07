@@ -147,7 +147,9 @@ describe('Challenger 1: Algorithmic & Mathematical Stress Test Suite', () => {
             expect(getWorkoutDateString(undefined)).toBeNull();
             expect(getWorkoutDateString({})).toBeNull();
             expect(getWorkoutDateString({ date: '' } as any)).toBeNull();
-            expect(getWorkoutDateString({ date: 'invalid-date' } as any)).toBe('invalid-da');
+            expect(getWorkoutDateString({ date: 'invalid-date' } as any)).toBeNull();
+            expect(getWorkoutDateString({ date: '2026-02-30' } as any)).toBeNull();
+            expect(getWorkoutDateString({ date: '2026-09-15T20:15:00.000Z' } as any)).toBe('2026-09-15');
             expect(getWorkoutDateString({ globalStartTime: NaN } as any)).toBeNull();
             expect(getWorkoutDateString({ globalEndTime: 'abc' as any } as any)).toBeNull();
             expect(getWorkoutDateString({ globalStartTime: 1770000000000 } as any)).toMatch(/^\d{4}-\d{2}-\d{2}$/);
