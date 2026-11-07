@@ -15,12 +15,13 @@ function getMacroArea(muscleId: string): { key: string; label: string } {
         return { key: 'back', label: 'Dorso' };
     }
     if (value.includes('delt') || value.includes('spall') || value.includes('shoulder')) return { key: 'shoulders', label: 'Spalle' };
-    if (value.includes('bicip') || value.includes('biceps') || value.includes('brachial') || value.includes('tricip') || value.includes('triceps') || value.includes('avambr') || value.includes('forearm')) {
+    if (value.includes('bicip') || value.includes('biceps') || value.includes('brachial') || value.includes('tricip') || value.includes('triceps') || value.includes('avambr') || value.includes('forearm') || value.includes('hand_flexors')) {
         return { key: 'arms', label: 'Braccia' };
     }
     if (value.includes('quad')) return { key: 'quads', label: 'Quadricipiti' };
     if (value.includes('femoral') || value.includes('hamstring')) return { key: 'hamstrings', label: 'Femorali' };
-    if (value.includes('glute')) return { key: 'glutes', label: 'Glutei' };
+    // The canonical hip-abductor regions are drawn on gluteus medius.
+    if (value.includes('glute') || value.includes('abductors')) return { key: 'glutes', label: 'Glutei' };
     if (value.includes('addom') || value.includes('abs') || value.includes('core') || value.includes('obliq')) {
         return { key: 'core', label: 'Core' };
     }
