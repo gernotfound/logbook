@@ -414,8 +414,9 @@ describe('Workout lifecycle durable recovery regressions', () => {
             useAppStore.setState({ userData: initial, dataOwner: owner, localWorkout: active });
             const previousDispatch = useAppStore.getState().dispatchDomainOperation;
             let reject!: (error: Error) => void;
-            const dispatch = vi.fn(() => new Promise((_resolve, fail) => { reject = fail; }));
-            useAppStore.setState({ dispatchDomainOperation: dispatch as typeof previousDispatch });
+            const dispatch = vi.fn((_operation: Parameters<typeof previousDispatch>[0]) =>
+                new Promise<Awaited<ReturnType<typeof previousDispatch>>>((_resolve, fail) => { reject = fail; }));
+            useAppStore.setState({ dispatchDomainOperation: dispatch });
             vi.mocked(useDialogStore.getState().showConfirm).mockResolvedValueOnce(true);
             vi.mocked(useDialogStore.getState().showAlert).mockResolvedValue();
             try {
