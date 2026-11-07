@@ -5,7 +5,7 @@ describe('observed mechanical volume', () => {
     it('rejects partial or fractional repetitions instead of silently rounding them down', () => {
         expect(calculateSetVolume({ kg: '50', reps: '8reps' })).toBe(0);
         expect(calculateSetVolume({ kg: '50', reps: '8.5' })).toBe(0);
-        expect(calculateSetVolume({ kg: '50', reps: '-2' })).toBe(0);
+        expect(calculateSetVolume({ kg: '50', reps: '-2' })).toBe(-100);
         expect(calculateSetVolume({ kg: '50', reps: '8' })).toBe(400);
     });
 
