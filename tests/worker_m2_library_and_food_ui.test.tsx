@@ -134,18 +134,22 @@ describe('Worker M2: Exercise Library UI & Food Form Real-Time Calorie Calculati
             const original = window.localStorage.getItem(sealedKey);
             expect(original).toMatch(/^tlb-sealed:v1:/);
 
-            const originalWrite = window.localStorage.setItem.bind(window.localStorage);
-            vi.spyOn(window.localStorage, 'setItem').mockImplementation((key, value) => {
+            const originalRemove = vi.mocked(window.localStorage.removeItem).getMockImplementation();
+            if (!originalRemove) throw new Error('Storage mock non inizializzato.');
+            vi.mocked(window.localStorage.removeItem).mockImplementation((key) => {
                 if (key === sealedKey) throw new Error('quota');
-                originalWrite(key, value);
+                originalRemove(key);
             });
-
-            let cancelled!: boolean;
-            act(() => { cancelled = result.current.handleCancelEdit(); });
-            expect(cancelled).toBe(false);
-            expect(result.current.exName).toBe('Modifica da preservare');
-            expect(window.localStorage.getItem(sealedKey)).toBe(original);
-            expect(useAppStore.getState().localPersistenceBlocked).toBe(true);
+            try {
+                let cancelled!: boolean;
+                act(() => { cancelled = result.current.handleCancelEdit(); });
+                expect(cancelled).toBe(false);
+                expect(result.current.exName).toBe('Modifica da preservare');
+                expect(window.localStorage.getItem(sealedKey)).toBe(original);
+                expect(useAppStore.getState().localPersistenceBlocked).toBe(true);
+            } finally {
+                vi.mocked(window.localStorage.removeItem).mockImplementation(originalRemove);
+            }
         });
 
         it('handleSaveExercise creates new exercise with isBodyweight and equipmentWeight', async () => {
