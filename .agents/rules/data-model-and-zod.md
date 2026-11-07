@@ -170,7 +170,7 @@ Conservare nel `cloudDocuments` i metadati causali `_sync` dei documenti validi;
 - **MUST:** anche dopo la verifica di completezza, confrontare i record mensili raw con quelli normalizzati usando `assertCloudBusinessPreserved()`; date/ID integri non bastano se un valore business annidato viene silenziosamente sostituito o perso.
 
 Applicare lo stesso contratto alla finestra mensile e a `allMonths`, prima di pubblicare qualsiasi snapshot autorevole.
-- **MUST:** preservare la validazione finale `DomainParsers.parseHistory()` e `DomainParsers.parseNutrition()` nel caricamento cloud, oltre al gateway `UserDataSchema` nell'hydration/commit locale. Gli oggetti Firestore intermedi restano non attendibili anche se hanno tipi TypeScript.
+- **MUST:** preservare la validazione finale `DomainParsers.parseHistory()` e `DomainParsers.parseNutrition()` nel caricamento cloud, oltre al gateway `UserDataSchema` nell'hydration/commit locale. `parseNutrition()` rifiuta chiavi data non canoniche e `day.date` incoerenti prima di costruire lo stato autorevole, senza trattare chiavi speciali come proprietà del prototipo. Gli oggetti Firestore intermedi restano non attendibili anche se hanno tipi TypeScript.
 
 **MUST:** un mese non caricato, un documento assente e una voce scartata per integrità sono casi distinti; nessuno giustifica da solo una cancellazione cloud o la sostituzione distruttiva di mesi locali. Rimangono obbligatori la copertura `window`/`all`, il journal e il replay causale. Ogni modifica di questi boundary richiede regressioni per dati incompleti, date/mese incoerenti, versioni future, fallimenti e retry.
 

@@ -81,6 +81,25 @@ describe('F-003 nutrition identity integrity', () => {
         expect(SupplementIntakeSchema.parse({ ...validIntake, id: 7, supplementId: 9 })).toMatchObject({ id: '7', supplementId: '9' });
     });
 
+    it('rejects invalid calendar keys and mismatched day identity at the authoritative parser', () => {
+        const specialKey = JSON.parse('{"__proto__":{"date":"__proto__","kcal":2400}}') as Record<string, unknown>;
+        const before = structuredClone(specialKey);
+        expect(() => DomainParsers.parseNutrition(specialKey)).toThrow(/Giornata nutrizione non valida/);
+        expect(specialKey).toEqual(before);
+        expect(Object.hasOwn(specialKey, '__proto__')).toBe(true);
+
+        const invalidDate = { '2026-9-29': { date: '2026-9-29', kcal: 2400 } };
+        expect(() => DomainParsers.parseNutrition(invalidDate)).toThrow(/Giornata nutrizione non valida/);
+
+        const mismatchedDay = { '2026-09-29': { date: '2026-09-30', kcal: 2400 } };
+        expect(() => DomainParsers.parseNutrition(mismatchedDay)).toThrow(/Giornata nutrizione incoerente/);
+        expect(mismatchedDay['2026-09-29'].date).toBe('2026-09-30');
+
+        const valid = DomainParsers.parseNutrition({ '2026-09-29': { date: '2026-09-29', kcal: 2400 } });
+        expect(Object.keys(valid)).toEqual(['2026-09-29']);
+        expect(valid['2026-09-29'].kcal).toBe(2400);
+    });
+
     it('quarantines malformed nested records while preserving valid siblings during hydration parsing', () => {
         const nutrition = DomainParsers.parseNutrition({ '2026-09-29': malformedDay });
 
