@@ -3,7 +3,7 @@ import { prepareUnlockedTestArchive } from './secureVaultFixture';
 import { doc, getDoc, getDocFromServer, writeBatch } from 'firebase/firestore';
 
 vi.unmock('../src/lib/db');
-import { ConsentedTestDB as DB, openTestCloudBusiness, openTestCloudDocument } from './testUtils';
+import { ConsentedTestDB as DB, openTestCloudBusiness, openTestCloudDocument, sealTestCloudFixture, testCloudKey } from './testUtils';
 import { DomainParsers } from '../src/lib/schema';
 import type { UserData } from '../src/types';
 
@@ -360,19 +360,19 @@ describe('Empirical Challenger: Persistence, Save Amnesia, 3-Month Windowing & D
             vi.mocked(getDocFromServer).mockImplementation(async (docRef: any) => {
                 const pathStr = docRef?.path || '';
                 if (pathStr.includes('history_months')) {
-                    if (pathStr.includes(m0)) return { exists: () => true, data: () => mockHistoryM0 } as any;
-                    if (pathStr.includes(m1)) return { exists: () => true, data: () => mockHistoryM1 } as any;
+                    if (pathStr.includes(m0)) return { exists: () => true, data: () => sealTestCloudFixture(mockHistoryM0, 'history_months/' + m0) } as any;
+                    if (pathStr.includes(m1)) return { exists: () => true, data: () => sealTestCloudFixture(mockHistoryM1, 'history_months/' + m1) } as any;
                     return { exists: () => false, data: () => undefined } as any;
                 }
                 if (pathStr.includes('nutrition_months')) {
-                    if (pathStr.includes(m2)) return { exists: () => true, data: () => mockNutritionM2 } as any;
+                    if (pathStr.includes(m2)) return { exists: () => true, data: () => sealTestCloudFixture(mockNutritionM2, 'nutrition_months/' + m2) } as any;
                     return { exists: () => false, data: () => undefined } as any;
                 }
                 // Root user doc
-                return { exists: () => true, data: () => mockUserDoc } as any;
+                return { exists: () => true, data: () => sealTestCloudFixture(mockUserDoc) } as any;
             });
 
-            const loaded = await DB.loadUserData();
+            const loaded = await DB.loadUserData({ cloudKey: testCloudKey() });
 
             expect(loaded).not.toBeNull();
             expect(loaded?.profile?.height).toBe('178');

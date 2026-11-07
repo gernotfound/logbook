@@ -15,6 +15,7 @@ import { applyDomainOperations } from '../src/lib/sync/domainOperations';
 import { applyRemoteDocuments, projectDocuments } from '../src/lib/sync/documentProjection';
 import { requireCompleteNutritionMonthDocument, IncompleteCloudMonthError } from '../src/lib/sync/monthlyIntegrity';
 import { loadNutritionMonths } from '../src/lib/db/db_nutrition';
+import { sealCloudDocument } from '../src/lib/sync/cloudDocumentCipher';
 
 const catalog: CachedGlobalCatalog = {
     manifest: {
@@ -151,14 +152,14 @@ describe('F-003 nutrition identity integrity', () => {
             protocolVersion: 3, clock: {}, fields: {},
             writer: { slot: 's00', replicaId: 'nutrition-test', generation: 1, seq: 1 },
         };
-        const monthlyDocument = (entries: Record<string, unknown>) => ({
-            _schemaVersion: 1, _sync: sync, ...entries,
-        });
+        const accountKey = new Uint8Array(32).fill(18);
+        const monthlyDocument = (month: string, entries: Record<string, unknown>) =>
+            sealCloudDocument(accountKey, 'account-14', 'nutrition_months/' + month, entries, sync);
         const docs = [
-            monthlyDocument({ '2026-08-03': {
+            monthlyDocument('2026-08', { '2026-08-03': {
                 date: '2026-08-03', kcal: 120, carbs: 10, pro: 15, fat: 2, meals: [validMeal],
             } }),
-            monthlyDocument({ '2026-09-29': malformedDay }),
+            monthlyDocument('2026-09', { '2026-09-29': malformedDay }),
         ];
         const firestore = vi.mocked(getDocFromServer);
         firestore.mockClear();
@@ -170,7 +171,7 @@ describe('F-003 nutrition identity integrity', () => {
         const state = { nutrition: { '2026-07-01': { date: '2026-07-01', kcal: 0 } as unknown } };
         const initial = structuredClone(state.nutrition);
         const cloudDocuments = new Map<string, Record<string, unknown>>();
-        await expect(loadNutritionMonths({ uid: 'account-14' }, ['2026-08', '2026-09'], state, cloudDocuments))
+        await expect(loadNutritionMonths({ uid: 'account-14' }, ['2026-08', '2026-09'], state, cloudDocuments, accountKey))
             .rejects.toThrow(IncompleteCloudMonthError);
         expect(firestore).toHaveBeenCalledTimes(2);
         expect(state.nutrition).toEqual(initial);

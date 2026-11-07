@@ -11,8 +11,19 @@ vi.mock('../../src/lib/firebase', () => ({ getDb: () => ({}) }));
 vi.mock('firebase/firestore', () => ({
     doc: (_db: unknown, ...segments: string[]) => segments.join('/'),
     getDoc: firestore.getDoc,
-    getDocFromServer: firestore.getDocFromServer,
+    getDocFromServer: async (path: string) => {
+        const snap = await firestore.getDocFromServer(path);
+        if (!snap?.exists?.()) return snap;
+        const raw = snap.data();
+        if (Object.hasOwn(raw, '_sealed')) return snap;
+        const { _schemaVersion, _sync, ...business } = raw;
+        const docPath = path.slice('users/owner-1/'.length);
+        const sealed = sealCloudDocument(TEST_ADK, owner.uid, docPath, business, _sync as SyncMeta);
+        return { ...snap, data: () => _schemaVersion === 1 ? sealed : { ...sealed, _schemaVersion } };
+    },
 }));
+
+const TEST_ADK = new Uint8Array(32).fill(18);
 
 const syncMeta: SyncMeta = {
     protocolVersion: 3,
@@ -81,7 +92,7 @@ describe('monthly Firestore read boundaries', () => {
         const docs = cloudDocuments();
         await expect(loadNutritionMonths(owner, ['2026-05'], state, docs, crypto.getRandomValues(new Uint8Array(32))))
             .rejects.toBeInstanceOf(CloudCiphertextError);
-        await expect(loadNutritionMonths(owner, ['2026-05'], state, docs))
+        await expect(loadNutritionMonths(owner, ['2026-05'], state, docs, TEST_ADK))
             .rejects.toBeInstanceOf(CloudCiphertextError);
         expect(state.nutrition).toEqual({});
         expect(docs.size).toBe(0);
@@ -97,8 +108,8 @@ describe('monthly Firestore read boundaries', () => {
         const data = draft();
         const documents = cloudDocuments();
         await Promise.all([
-            loadHistoryMonths(owner, ['2026-05'], data, documents),
-            loadNutritionMonths(owner, ['2026-05'], data, documents),
+            loadHistoryMonths(owner, ['2026-05'], data, documents, TEST_ADK),
+            loadNutritionMonths(owner, ['2026-05'], data, documents, TEST_ADK),
         ]);
         expect(data.history).toHaveLength(1);
         expect(data.nutrition['2026-05-11']).toMatchObject({ weight: 74 });
@@ -119,14 +130,14 @@ describe('monthly Firestore read boundaries', () => {
             });
         });
 
-        await expect(loadHistoryMonths(owner, ['2026-06', '2026-05'], data, documents))
+        await expect(loadHistoryMonths(owner, ['2026-06', '2026-05'], data, documents, TEST_ADK))
             .rejects.toThrow('Shard storico 2026-05 non integro');
         expect(data.history).toEqual([]);
         expect(documents.size).toBe(0);
 
         firestore.getDocFromServer.mockReset();
         firestore.getDocFromServer.mockResolvedValue(snapshot({ good: { id: 'good', date: '2026-05-10', exercises: [] } }));
-        await loadHistoryMonths(owner, ['2026-05'], data, documents);
+        await loadHistoryMonths(owner, ['2026-05'], data, documents, TEST_ADK);
         expect(data.history).toHaveLength(1);
         expect(documents.get('history_months/2026-05')).toMatchObject({ good: { id: 'good' }, _sync: syncMeta });
     });
@@ -143,7 +154,7 @@ describe('monthly Firestore read boundaries', () => {
             firestore.getDocFromServer.mockResolvedValue(snapshot({
                 workout: { id: 'workout', ...bad, exercises: [] },
             }));
-            await expect(loadHistoryMonths(owner, ['2026-05'], state, docs))
+            await expect(loadHistoryMonths(owner, ['2026-05'], state, docs, TEST_ADK))
                 .rejects.toThrow('Shard storico 2026-05 non integro');
             expect(state.history).toEqual([]);
             expect(docs.size).toBe(0);
@@ -154,7 +165,7 @@ describe('monthly Firestore read boundaries', () => {
         firestore.getDocFromServer.mockResolvedValue(snapshot({
             workout: { id: 'workout', globalStartTime: startedAt, exercises: [] },
         }));
-        await loadHistoryMonths(owner, ['2026-05'], state, docs);
+        await loadHistoryMonths(owner, ['2026-05'], state, docs, TEST_ADK);
         expect(state.history).toHaveLength(1);
         expect(docs.get('history_months/2026-05')).toHaveProperty('_sync', syncMeta);
     });
@@ -167,14 +178,14 @@ describe('monthly Firestore read boundaries', () => {
             '2026-05-04': { date: '2026-05-05', weight: 75 },
         }));
 
-        await expect(loadNutritionMonths(owner, ['2026-05'], data, documents))
+        await expect(loadNutritionMonths(owner, ['2026-05'], data, documents, TEST_ADK))
             .rejects.toThrow('Shard nutrizione 2026-05 non integro');
         expect(data.nutrition).toEqual({});
         expect(documents.size).toBe(0);
 
         firestore.getDocFromServer.mockReset();
         firestore.getDocFromServer.mockResolvedValue(snapshot({ '2026-05-03': { date: '2026-05-03', weight: 74 } }));
-        await loadNutritionMonths(owner, ['2026-05'], data, documents);
+        await loadNutritionMonths(owner, ['2026-05'], data, documents, TEST_ADK);
         expect(data.nutrition['2026-05-03']).toMatchObject({ date: '2026-05-03', weight: 74 });
         expect(documents.get('nutrition_months/2026-05')).toHaveProperty('_sync', syncMeta);
     });
@@ -185,7 +196,7 @@ describe('monthly Firestore read boundaries', () => {
         firestore.getDocFromServer.mockResolvedValue(snapshot({
             '2026-05-03': { date: '2026-05-03', weight: 'corrupted' },
         }));
-        await expect(loadNutritionMonths(owner, ['2026-05'], data, documents))
+        await expect(loadNutritionMonths(owner, ['2026-05'], data, documents, TEST_ADK))
             .rejects.toThrow('Dati cloud non validi in Firestore nutrition_months/2026-05');
         expect(data.nutrition).toEqual({});
         expect(documents.size).toBe(0);
@@ -193,7 +204,7 @@ describe('monthly Firestore read boundaries', () => {
         firestore.getDocFromServer.mockResolvedValue(snapshot({
             '2026-05-03': { date: '2026-05-03', weight: '74.5' },
         }));
-        await loadNutritionMonths(owner, ['2026-05'], data, documents);
+        await loadNutritionMonths(owner, ['2026-05'], data, documents, TEST_ADK);
         expect(data.nutrition['2026-05-03']).toMatchObject({ weight: 74.5 });
     });
 
@@ -209,7 +220,7 @@ describe('monthly Firestore read boundaries', () => {
                 ],
             },
         }));
-        await expect(loadNutritionMonths(owner, ['2026-05'], data, documents))
+        await expect(loadNutritionMonths(owner, ['2026-05'], data, documents, TEST_ADK))
             .rejects.toThrow('record annidati non validi');
         expect(data.nutrition).toEqual({});
         expect(documents.size).toBe(0);
@@ -226,7 +237,7 @@ describe('monthly Firestore read boundaries', () => {
                 ] }] },
             ] },
         }));
-        await expect(loadHistoryMonths(owner, ['2026-05'], state, docs))
+        await expect(loadHistoryMonths(owner, ['2026-05'], state, docs, TEST_ADK))
             .rejects.toThrow('Shard storico 2026-05 non integro');
         expect(state.history).toEqual([]);
         expect(docs.size).toBe(0);
@@ -238,7 +249,7 @@ describe('monthly Firestore read boundaries', () => {
         firestore.getDocFromServer.mockImplementation(async (path: string) => path.endsWith('2026-05')
             ? snapshot({ safe: { id: 'safe', date: '2026-05-10', exercises: [] } })
             : snapshot({ corrupt: { id: 'wrong', date: '2026-06-10', exercises: [] } }));
-        await expect(loadHistoryMonths(owner, ['2026-05', '2026-06'], state, docs)).rejects.toThrow('Shard storico 2026-06 non integro');
+        await expect(loadHistoryMonths(owner, ['2026-05', '2026-06'], state, docs, TEST_ADK)).rejects.toThrow('Shard storico 2026-06 non integro');
         expect(state.history).toEqual([]);
         expect(docs.size).toBe(0);
     });
@@ -249,7 +260,7 @@ describe('monthly Firestore read boundaries', () => {
         firestore.getDocFromServer.mockImplementation(async (path: string) => path.endsWith('2026-05')
             ? snapshot({ '2026-05-01': { date: '2026-05-01', weight: 70 } })
             : snapshot({ '2026-06-01': { date: '2026-06-02', weight: 71 } }));
-        await expect(loadNutritionMonths(owner, ['2026-05', '2026-06'], state, docs)).rejects.toThrow('Shard nutrizione 2026-06 non integro');
+        await expect(loadNutritionMonths(owner, ['2026-05', '2026-06'], state, docs, TEST_ADK)).rejects.toThrow('Shard nutrizione 2026-06 non integro');
         expect(state.nutrition).toEqual({});
         expect(docs.size).toBe(0);
     });
@@ -261,14 +272,14 @@ describe('monthly Firestore read boundaries', () => {
             safe: { id: 'safe', date: '2026-05-11', exercises: [] },
         }, 999));
 
-        await expect(loadHistoryMonths(owner, ['2026-05'], data, documents)).rejects.toThrow();
+        await expect(loadHistoryMonths(owner, ['2026-05'], data, documents, TEST_ADK)).rejects.toThrow();
         expect(data.history).toEqual([]);
         expect(documents.size).toBe(0);
 
         firestore.getDocFromServer.mockResolvedValueOnce(snapshot({
             safe: { id: 'safe', date: '2026-05-11', exercises: [] },
         }));
-        await loadHistoryMonths(owner, ['2026-05'], data, documents);
+        await loadHistoryMonths(owner, ['2026-05'], data, documents, TEST_ADK);
         expect(data.history).toHaveLength(1);
     });
 
@@ -281,7 +292,7 @@ describe('monthly Firestore read boundaries', () => {
                 safe: { id: 'safe', date: '2026-05-11', exercises: [] },
             })));
 
-        await expect(loadHistoryMonths(owner, ['2026-05', '2026-06'], data, documents))
+        await expect(loadHistoryMonths(owner, ['2026-05', '2026-06'], data, documents, TEST_ADK))
             .rejects.toThrow('Firestore temporarily unavailable');
         expect(data.history).toEqual([]);
         expect(documents.size).toBe(0);
@@ -290,7 +301,7 @@ describe('monthly Firestore read boundaries', () => {
         firestore.getDocFromServer.mockResolvedValue(snapshot({
             safe: { id: 'safe', date: '2026-05-11', exercises: [] },
         }));
-        await loadHistoryMonths(owner, ['2026-05'], data, documents);
+        await loadHistoryMonths(owner, ['2026-05'], data, documents, TEST_ADK);
         expect(data.history).toHaveLength(1);
     });
 
@@ -303,7 +314,7 @@ describe('monthly Firestore read boundaries', () => {
                 '2026-05-03': { date: '2026-05-03', weight: 74 },
             })));
 
-        await expect(loadNutritionMonths(owner, ['2026-05', '2026-06'], data, documents))
+        await expect(loadNutritionMonths(owner, ['2026-05', '2026-06'], data, documents, TEST_ADK))
             .rejects.toThrow('Temporary nutrition fetch failure');
         expect(data.nutrition).toEqual({});
         expect(documents.size).toBe(0);
@@ -312,7 +323,7 @@ describe('monthly Firestore read boundaries', () => {
         firestore.getDocFromServer.mockResolvedValue(snapshot({
             '2026-05-03': { date: '2026-05-03', weight: 74 },
         }));
-        await loadNutritionMonths(owner, ['2026-05'], data, documents);
+        await loadNutritionMonths(owner, ['2026-05'], data, documents, TEST_ADK);
         expect(Object.keys(data.nutrition)).toEqual(['2026-05-03']);
         expect(data.nutrition).toMatchObject({ '2026-05-03': { date: '2026-05-03', weight: 74 } });
         expect(data.nutrition['2026-05-03']).toHaveProperty('meals', []);
@@ -328,7 +339,7 @@ describe('monthly Firestore read boundaries', () => {
         const documents = cloudDocuments();
         firestore.getDocFromServer.mockImplementation(() => new Promise(() => {}));
 
-        const loading = loadNutritionMonths(owner, ['2026-05'], data, documents);
+        const loading = loadNutritionMonths(owner, ['2026-05'], data, documents, TEST_ADK);
         const assertion = expect(loading).rejects.toBeInstanceOf(SyncTimeoutError);
         await vi.advanceTimersByTimeAsync(6000);
         await assertion;
