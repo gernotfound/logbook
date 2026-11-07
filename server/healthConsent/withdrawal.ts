@@ -89,7 +89,11 @@ export async function recordHealthConsentWithdrawal(uid: string, expectedRevisio
         || previous.revision !== expectedRevision + 1) {
         throw new HealthConsentRevisionConflictError();
       }
-      queueHealthDataErasureInTransaction(tx, uid, previous.revision, queued.data());
+      // The completed worker advances the consent revision. A delayed retry
+      // must not recreate an erasure after its 30-day receipt was retired.
+      if (previous.erasedBeforeRevision !== previous.revision - 1) {
+        queueHealthDataErasureInTransaction(tx, uid, previous.revision, queued.data());
+      }
       return { status: 'withdrawn', revision: previous.revision };
     }
     const actual = existing.exists ? Number(previous?.revision) : 0;
