@@ -123,7 +123,10 @@ export async function purgeOwnerLocalData(owner: string, resumeOnly = false, gat
         // A second tab must not purge newly activated guest data after the
         // previous generation's deletion was already completed.
         if (isLocalPurgePending(owner) && !isLocalPurgeIncomplete(owner)) {
-            // Already fully purged. A new sign-out may still need to invalidate Auth.
+            // A retired owner needs no further purge. Before invoking an
+            // afterFence callback that may sign out Auth, reject a different
+            // identity that became active since the original purge.
+            gate?.assertStillSafe?.();
             if (gate) await gate.afterFence();
             return;
         }
@@ -133,6 +136,9 @@ export async function purgeOwnerLocalData(owner: string, resumeOnly = false, gat
         beginLocalPurge(owner);
         if (gate) {
             try {
+                // The preflight can await journal/storage work. Recheck the
+                // current identity before afterFence can invalidate Auth.
+                gate.assertStillSafe?.();
                 await gate.afterFence();
             } catch (error) {
                 // No deletion occurred yet. Restore write access only if this
