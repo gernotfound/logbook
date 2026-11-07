@@ -116,19 +116,16 @@ describe('Challenger 1 Empirical Verification: Cycle Planning Mathematics & Edge
             expect(computeEndDate(startDate, weeks)).toBe('2026-09-30');
         });
 
-        it('handles non-exact multi-day offsets via rounding to nearest week', () => {
+        it('counts an incomplete final week consistently with the cycle timeline', () => {
             const startDate = '2026-08-20';
 
-            // 2026-09-28 (diff = 39, total = 40 days) -> 40/7 = 5.71 -> round = 6 weeks
+            // 40 inclusive days span six calendar weeks; partial final weeks are counted.
             expect(computeWeeksFromDates(startDate, '2026-09-28')).toBe(6);
-
-            // 2026-09-26 (diff = 37, total = 38 days) -> 38/7 = 5.42 -> round = 5 weeks
-            expect(computeWeeksFromDates(startDate, '2026-09-26')).toBe(5);
-
-            // 2026-08-23 (diff = 3, total = 4 days) -> 4/7 = 0.57 -> round = 1 week
+            // 38 inclusive days also span six calendar weeks (not five).
+            expect(computeWeeksFromDates(startDate, '2026-09-26')).toBe(6);
+            // Four inclusive days still occupy one calendar week.
             expect(computeWeeksFromDates(startDate, '2026-08-23')).toBe(1);
-
-            // Same day: 2026-08-20 (diff = 0, total = 1 day) -> 1/7 = 0.14 -> max(1, round(0.14)) = 1 week
+            // A single-day cycle occupies one week.
             expect(computeWeeksFromDates(startDate, '2026-08-20')).toBe(1);
         });
     });

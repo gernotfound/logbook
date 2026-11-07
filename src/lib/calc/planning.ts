@@ -175,7 +175,8 @@ export function getDetailedMuscleCategory(mId: string): { key: string; label: st
 
     if (low.includes('pett') || low.includes('chest')) return { key: 'chest', label: 'Petto' };
     if (low.includes('trap')) return { key: 'traps', label: 'Trapezi' };
-    if (low.includes('lat') || low.includes('dors') || low.includes('schien') || low.includes('back') || low.includes('rhomboid')) {
+    if (low.includes('lomb') || low.includes('lower_back') || low.includes('lower-back')) return { key: 'core', label: 'Addome e Core' };
+    if (low === 'lats' || low.startsWith('lats_') || low.includes('dors') || low.includes('schien') || low.includes('back') || low.includes('rhomboid')) {
         return { key: 'back', label: 'Dorso' };
     }
     if (low.includes('delt') || low.includes('spall') || low.includes('shoulder')) return { key: 'shoulders', label: 'Spalle' };
@@ -186,7 +187,7 @@ export function getDetailedMuscleCategory(mId: string): { key: string; label: st
     if (low.includes('bicip') || low.includes('biceps') || low.includes('brachial')) return { key: 'biceps', label: 'Bicipiti' };
     if (low.includes('tricip') || low.includes('triceps')) return { key: 'triceps', label: 'Tricipiti' };
     if (low.includes('polp') || low.includes('calv')) return { key: 'calves', label: 'Polpacci' };
-    if (low.includes('avambr') || low.includes('forearm')) return { key: 'forearms', label: 'Avambracci' };
+    if (low.includes('avambr') || low.includes('forearm') || low.includes('hand_flexors')) return { key: 'forearms', label: 'Avambracci' };
     if (low.includes('addom') || low.includes('abs') || low.includes('core') || low.includes('obliq')) return { key: 'core', label: 'Addome e Core' };
     if (low.includes('leg') || low.includes('gamb')) return { key: 'legs', label: 'Gambe (generale)' };
 
@@ -504,7 +505,8 @@ export function calculateCycleVolume(
             totalSetsPerWeek += weeklySetsForEx;
 
             // Process primary muscles only (as chosen by user)
-            const primaryMuscles = Array.isArray(libEx.muscles) ? libEx.muscles : [];
+            // Repeated muscle IDs represent one primary target, including on the heatmap.
+            const primaryMuscles = new Set(Array.isArray(libEx.muscles) ? libEx.muscles : []);
             const uniqueCategoriesInEx = new Set<string>();
 
             primaryMuscles.forEach(mId => {
@@ -550,26 +552,23 @@ export function calculateCycleVolume(
         }))
         .sort((a, b) => b.sets - a.sets);
 
-    // Calculate glowing colors for MuscleModel heatmap
+    // Canonical groups can overlap anatomically (e.g. chest and chest_upper).
+    // Keep the strongest signal on each path: summing duplicates broad/narrow
+    // targets, while last-write-wins makes the colors depend on routine order.
+    const pathSets = new Map<string, number>();
+    rawMuscleSets.forEach((sets, mId) => {
+        const paths = GROUP_MAP[mId] ?? [mId];
+        for (const path of new Set([...paths, mId])) {
+            pathSets.set(path, Math.max(pathSets.get(path) ?? 0, sets));
+        }
+    });
+
     const muscleColors: Record<string, string> = {};
     const maxMuscleSets = Math.max(1, ...Array.from(rawMuscleSets.values()));
-
-    rawMuscleSets.forEach((sets, mId) => {
+    pathSets.forEach((sets, path) => {
         const ratio = sets / maxMuscleSets;
-        let color = '#38bdf8'; // Base light sky
-        if (ratio >= 0.75) {
-            color = '#0ea5e9'; // High intensity cyan
-        } else if (ratio >= 0.4) {
-            color = '#38bdf8'; // Medium intensity
-        } else {
-            color = '#7dd3fc'; // Low intensity
-        }
-
-        const atomicPaths = GROUP_MAP[mId] || [mId];
-        atomicPaths.forEach(path => {
-            muscleColors[path] = color;
-        });
-        muscleColors[mId] = color;
+        muscleColors[path] = ratio >= 0.75 ? '#0ea5e9'
+            : ratio >= 0.4 ? '#38bdf8' : '#7dd3fc';
     });
 
     return {

@@ -7,6 +7,7 @@ const ReloadPrompt: React.FC = () => {
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const updateInFlight = useRef(false);
   const activationAbortRef = useRef<AbortController | null>(null);
+  const visibilityCheckRef = useRef(0);
   const [updating, setUpdating] = useState(false);
   const [updatePhase, setUpdatePhase] = useState<'saving' | 'activating'>('saving');
   const [updateError, setUpdateError] = useState<string | null>(null);
@@ -66,7 +67,9 @@ const ReloadPrompt: React.FC = () => {
 
   // Al risveglio dell'app o cambio di visibilità, controlla la presenza di aggiornamenti
   useEffect(() => {
+    let active = true;
     const handleVisibilityChange = () => {
+      const requestId = ++visibilityCheckRef.current;
       if (
         document.visibilityState === 'visible' &&
         typeof navigator !== 'undefined' &&
@@ -76,11 +79,13 @@ const ReloadPrompt: React.FC = () => {
       ) {
         try {
           navigator.serviceWorker.getRegistration().then(reg => {
+            if (!active || requestId !== visibilityCheckRef.current) return;
             if (reg && typeof reg.update === 'function') {
               try {
                 void checkForWaitingServiceWorker(reg)
                   .then(waiting => {
-                    if (waiting) setNeedRefresh(true);
+                    // A dismissed banner or newer foreground check supersedes this response.
+                    if (active && requestId === visibilityCheckRef.current && waiting) setNeedRefresh(true);
                   })
                   .catch(err => console.log('SW visibility update error:', err));
               } catch (err) {
@@ -95,6 +100,8 @@ const ReloadPrompt: React.FC = () => {
     };
     document.addEventListener('visibilitychange', handleVisibilityChange);
     return () => {
+      active = false;
+      visibilityCheckRef.current++;
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, [setNeedRefresh]);
@@ -160,6 +167,7 @@ const ReloadPrompt: React.FC = () => {
   };
 
   const handleClose = () => {
+    visibilityCheckRef.current++;
     activationAbortRef.current?.abort();
     setNeedRefresh(false);
     setChunkFailed(false);
