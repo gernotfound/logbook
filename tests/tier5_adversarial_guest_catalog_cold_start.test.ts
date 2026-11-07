@@ -67,11 +67,11 @@ describe('Tier 5: Adversarial Coverage Hardening Suite', () => {
     });
 
     // =========================================================================
-    // 5.2: COLD START WITH UNPOPULATED INDEXEDDB -> SEARCH -> MEAL LOG
+    // 5.2: EXPLICIT TEST CATALOG CACHE -> SEARCH -> MEAL LOG
     // =========================================================================
-    describe('5.2: Cold Start with Unpopulated IndexedDB -> Immediate Search -> Real-Time Meal Logging', () => {
+    describe('5.2: Catalog cache fixtures, food search and meal logging', () => {
 
-        it('T5.2.1: Cold start with 0 IndexedDB entries -> bootstrap catalog -> rapid multi-pattern food search returns exact expected items', async () => {
+        it('T5.2.1: Empty cache is seeded with a local fixture before rapid multi-pattern food searches', async () => {
             // Confirm cold start before deterministic bootstrap data is installed.
             expect(await idbGet(CATALOG_CACHE_KEY)).toBeUndefined();
 
@@ -122,7 +122,7 @@ describe('Tier 5: Adversarial Coverage Hardening Suite', () => {
             expect(res6.map(food => food.id)).toContain('riso-basmati-crudo');
         });
 
-        it('T5.2.2: Cold start catalog meals produce exact totals through Production Domain Operations', async () => {
+        it('T5.2.2: Fixture-catalog meals produce exact totals through production domain operations', async () => {
             // Local fixture to populate the cache (seed is empty — commit e61a133)
             const fixtureCatalog = {
                 manifest: { version: '1.0.0', schemaVersion: 1, docRefs: { exercises: 'exercises_v1', foods: 'foods_v1' } },
