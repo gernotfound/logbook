@@ -124,7 +124,7 @@ describe('Challenger 2 Empirical Stress Test Suite: Requirement R5 Training Cycl
             expect(calculateCycleTimeline({ id: 'inverted', name: 'Inverted', startDate: '2026-09-15', endDate: '2026-09-01', durationWeeks: 2, routines: [] }, '2026-09-15').endDate).toBe('2026-09-28');
             expect(computeWeeksFromDates('2026-12-31', '2026-01-01')).toBe(1);
 
-            // 0 duration or negative weeks: clamped to minimum 1 week
+            // Nonpositive and non-finite durations are rejected as invalid cycles.
             expect(calculateCycleTimeline({ id: 'zero', name: 'Zero', startDate: '2026-09-01', durationWeeks: 0, routines: [] }, '2026-09-01').totalWeeks).toBe(0);
             expect(calculateCycleTimeline({ id: 'negative', name: 'Negative', startDate: '2026-09-01', durationWeeks: -5, routines: [] }, '2026-09-01').totalWeeks).toBe(0);
             // When weeks is NaN, computeEndDate catches the error and safely falls back to startIso
