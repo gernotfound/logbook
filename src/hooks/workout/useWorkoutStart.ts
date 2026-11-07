@@ -9,6 +9,9 @@ import type { WorkoutSession, WorkoutReadiness } from '../../types';
 import { useAppStore } from '../../store/useAppStore';
 import { useDialogStore } from '../../store/useDialogStore';
 
+// Starting the same owner's session must be serialized across mounted hook instances.
+const pendingStartsByOwner = new Set<string>();
+
 type StartDependencies = {
     mutateActiveWorkout: (workoutOrUpdater: Parameters<ReturnType<typeof useAppStore.getState>['setSyncedLocalWorkout']>[0]) => void;
     setSyncedLocalWorkout: ReturnType<typeof useAppStore.getState>['setSyncedLocalWorkout'];
@@ -67,9 +70,12 @@ export function useWorkoutStart({
     const confirmWorkoutStart = useCallback(async (readiness?: Omit<WorkoutReadiness, 'capturedAt'>) => {
         const currentWorkout = useAppStore.getState().localWorkout;
         if (!currentWorkout || currentWorkout.isEditingHistory) return false;
-        if (currentWorkout.globalStartTime) return true;
         const session = captureSession();
+        if (pendingStartsByOwner.has(session.owner)) return false;
+        if (currentWorkout.globalStartTime) return true;
+        pendingStartsByOwner.add(session.owner);
 
+        try {
         try {
             // Preparing a workout is itself an asynchronous domain commit. Starting
             // it before that write finishes can let the older unstarted snapshot
@@ -173,6 +179,9 @@ export function useWorkoutStart({
             return false;
         }
         return true;
+        } finally {
+            pendingStartsByOwner.delete(session.owner);
+        }
     }, [setSyncedLocalWorkout, showAlert]);
 
     return { selectedRoutine, setSelectedRoutine, startWorkout, startFreeWorkout, confirmWorkoutStart };
