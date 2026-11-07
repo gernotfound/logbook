@@ -195,6 +195,24 @@ describe('browser storage boundary', () => {
         });
     });
 
+    it('rejects writer inputs that would leave an unreadable account-deletion receipt', () => {
+        const storageKey = 'logbook:v2:' + OWNER + ':account-deletion';
+        markAccountDeletion(OWNER, { receiptToken: 'receipt-A' });
+        const original = localStorage.getItem(storageKey);
+        const writes = localStorageMock.setItem.mock.calls.length;
+
+        expect(() => markAccountDeletion('user:')).toThrow('account autenticato');
+        expect(() => markAccountDeletion(OWNER, { receiptToken: '' }))
+            .toThrow(AccountDeletionMarkerCorruptError);
+        expect(() => markAccountDeletion(OWNER, { serverAcceptedAt: 0 }))
+            .toThrow(AccountDeletionMarkerCorruptError);
+
+        expect(localStorageMock.setItem).toHaveBeenCalledTimes(writes);
+        expect(localStorage.getItem(storageKey)).toBe(original);
+        expect(localStorage.getItem('logbook:v2:user::account-deletion')).toBeNull();
+        expect(readAccountDeletionMarker(OWNER)?.receiptToken).toBe('receipt-A');
+    });
+
     it('keeps valid receipts recoverable when reading another owner marker fails', () => {
         const otherOwner = 'user:other';
         markAccountDeletion(OWNER, { receiptToken: 'receipt-A' });
