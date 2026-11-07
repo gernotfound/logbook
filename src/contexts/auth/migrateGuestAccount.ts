@@ -44,7 +44,7 @@ export async function migrateGuestAccount({ user, guestData, policy, setUserData
     // through an async Firestore transaction or its SDK retry.
     const cloudAllowed = () => isCurrent() && isHealthConsentCloudWritable(userOwner(user.uid));
     const assertCloudAllowed = () => { if (!cloudAllowed()) throw new StaleGuestMigrationError(); };
-    const markLocalReady = async () => { assertCurrent(); localReady = true; await onLocalReady(); };
+    const markLocalReady = async () => { assertCloudAllowed(); localReady = true; await onLocalReady(); };
     const applyLocalData = (data: UserData) => {
         assertCurrent();
         if (localReady) {
@@ -174,8 +174,8 @@ export async function migrateGuestAccount({ user, guestData, policy, setUserData
         if (policy === 'skip' || !guestHasData) return await finishWithoutGuestMerge();
 
         const mergedData = mergeUserData(hydratedEnv.data, guestData);
-        await commitLocal(user.uid, mergedData, hydratedEnv.data, isCurrent);
-        assertCurrent();
+        await commitLocal(user.uid, mergedData, hydratedEnv.data, cloudAllowed);
+        assertCloudAllowed();
         await markLocalReady();
 
         const syncResult = await replicateJournal(userOwner(user.uid));
@@ -188,11 +188,12 @@ export async function migrateGuestAccount({ user, guestData, policy, setUserData
             return reflectDurableOutcome(syncResult, preserved);
         }
 
+        assertCloudAllowed();
         const resolvedPayload = await DB.loadCloudPayload({ cloudKey });
-        assertCurrent();
+        assertCloudAllowed();
         const resolvedData = resolvedPayload?.data || mergedData;
-        const hydratedFinal = await hydrateLocal(user.uid, resolvedData, resolvedPayload?.completeMonths || [], resolvedPayload?.cloudDocuments, 'window', isCurrent);
-        assertCurrent();
+        const hydratedFinal = await hydrateLocal(user.uid, resolvedData, resolvedPayload?.completeMonths || [], resolvedPayload?.cloudDocuments, 'window', cloudAllowed);
+        assertCloudAllowed();
         applyLocalData(hydratedFinal.data);
         return reflectDurableOutcome(syncResult, hydratedFinal);
     } catch (error) {
