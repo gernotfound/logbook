@@ -235,6 +235,20 @@ describe('EMPIRICAL ADVERSARIAL SUITE — R1 (TDEE Calculation) & R2 (Workout Vo
             expect(ambiguous).toEqual([...sevenDays, duplicate]);
         });
 
+        it('R1.6d: ignores duplicate days outside the sampled calendar window', () => {
+            const recent = Array.from({ length: 7 }, (_, index) => ({
+                date: `2026-08-${String(index + 1).padStart(2, '0')}`, weight: 80, kcal: 2400,
+            }));
+            const distantDuplicates = [
+                { date: '2026-01-01', weight: 60, kcal: 1000 },
+                { date: '2026-01-01', weight: 100, kcal: 7000 },
+            ];
+            const result = calculateTDEE([...recent, ...distantDuplicates]);
+            expect(result.error).toBe(false);
+            expect(result.tdee).toBe(2400);
+            expect(result.daysTracked).toBe(7);
+        });
+
         // 1.7 Identical dates scenario
         it('R1.7: counts seven repeated records as one valid calendar day', () => {
             const sameDayData = [

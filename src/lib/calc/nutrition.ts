@@ -20,24 +20,25 @@ export function calculateTDEE(nutritionHistoryList: { date?: string; weight?: st
         const [year, month, day] = date.split('-').map(Number);
         return Date.UTC(year, month - 1, day) / (1000 * 60 * 60 * 24);
     };
-    // One business day is one observation. Duplicates are ambiguous and must
-    // not inflate the sample size or bias its average/weight trend.
+    // One business day is one observation. Duplicate dates cannot inflate
+    // the sample size or bias its average and weight trend.
     const distinctDateCount = new Set(validDays.map(day => day.date)).size;
     if (distinctDateCount < 7) {
         return { error: true, message: `Raccolta dati in corso... (${distinctDateCount}/7 giorni richiesti)` };
     }
-    if (distinctDateCount !== validDays.length) {
+    const sortedValidDays = [...validDays].sort((a, b) => dayOrdinal(a.date) - dayOrdinal(b.date));
+    // The sample is anchored to the most recent recorded calendar day.
+    // Duplicates outside this window cannot invalidate an otherwise valid estimate.
+    const latestDay = dayOrdinal(sortedValidDays[sortedValidDays.length - 1].date);
+    const recentCandidates = sortedValidDays.filter(d => dayOrdinal(d.date) >= latestDay - 13);
+    const recentDistinctCount = new Set(recentCandidates.map(day => day.date)).size;
+    if (recentDistinctCount < 7) {
+        return { error: true, message: `Dati insufficienti: ${recentDistinctCount}/7 giornate valide negli ultimi 14 giorni.` };
+    }
+    if (recentDistinctCount !== recentCandidates.length) {
         return { error: true, message: 'Campione non valido: registrazioni duplicate per la stessa giornata.' };
     }
-    const sortedValidDays = [...validDays].sort((a, b) => dayOrdinal(a.date) - dayOrdinal(b.date));
-    // A sample of the last 14 *entries* can span months when logging is sparse.
-    // Require at least seven recorded days within 14 calendar days ending on
-    // the latest recorded date, rather than treating missing days as observed.
-    const latestDay = dayOrdinal(sortedValidDays[sortedValidDays.length - 1].date);
-    const recentDays = sortedValidDays.filter(d => dayOrdinal(d.date) >= latestDay - 13).slice(-14);
-    if (recentDays.length < 7) {
-        return { error: true, message: `Dati insufficienti: ${recentDays.length}/7 giornate valide negli ultimi 14 giorni.` };
-    }
+    const recentDays = recentCandidates.slice(-14);
     const wFirst = parseFloat(String(recentDays[0].weight).replace(',', '.'));
     const wLast = parseFloat(String(recentDays[recentDays.length - 1].weight).replace(',', '.'));
     const diffDays = Math.abs(dayOrdinal(recentDays[recentDays.length - 1].date) - dayOrdinal(recentDays[0].date));
