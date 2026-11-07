@@ -156,11 +156,15 @@ export function classifyFieldOverride(desired, liveFields, operations) {
   });
   const indexConfig = live?.indexConfig;
   const indexes = Array.isArray(indexConfig?.indexes) ? indexConfig.indexes : [];
-  const explicit = Boolean(live) && indexConfig?.usesAncestorConfig !== true;
+  // A Field name alone does not prove an explicit exemption: the API can return
+  // a field without indexConfig, which must not certify Production as reconciled.
+  const explicit = Boolean(indexConfig) && typeof indexConfig === 'object'
+    && !Array.isArray(indexConfig) && indexConfig.usesAncestorConfig !== true
+    && (indexConfig.indexes === undefined || Array.isArray(indexConfig.indexes));
   const reverting = indexConfig?.reverting === true;
-  const indexesDisabled = Boolean(live) && indexes.length === 0;
+  const indexesDisabled = explicit && indexes.length === 0;
   const desiredModes = normalizeFieldIndexModes(desired.indexes ?? []);
-  const indexesMatch = Boolean(live) && (desiredModes.length === 0
+  const indexesMatch = explicit && (desiredModes.length === 0
     ? indexes.length === 0
     : JSON.stringify(normalizeLiveFieldIndexModes(indexes, desired.fieldPath)) === JSON.stringify(desiredModes));
   const indexesReady = indexesMatch &&
