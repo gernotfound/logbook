@@ -150,6 +150,53 @@ describe('account deletion recovery device registration retries', () => {
     dispose();
   });
 
+  it('rejects registration from a previous Auth object even when the replacement has the same UID', async () => {
+    const { registerDeletionRecoveryDevice } = await loadSubject();
+    let releaseToken!: (token: string) => void;
+    const token = new Promise<string>(resolve => { releaseToken = resolve; });
+    const stale = user('user-a');
+    stale.getIdToken = vi.fn(() => token);
+    firebase.auth.currentUser = stale;
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+
+    const registration = registerDeletionRecoveryDevice(stale);
+    await vi.waitFor(() => expect(stale.getIdToken).toHaveBeenCalledTimes(1));
+    firebase.auth.currentUser = user('user-a');
+    releaseToken('old-session-token');
+
+    await expect(registration).rejects.toMatchObject({
+      operation: 'device-registration', phase: 'auth-token', kind: 'stale-session',
+    });
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(localStorage.getItem('logbook_deletion_recovery_devices_v1')).not.toBeNull();
+  });
+
+  it('rejects a stale A→B→A Auth epoch even if the original user object becomes current again', async () => {
+    const { registerDeletionRecoveryDevice } = await loadSubject();
+    const { invalidateSession } = await import('../src/lib/sync/session');
+    let releaseToken!: (token: string) => void;
+    const token = new Promise<string>(resolve => { releaseToken = resolve; });
+    const stale = user('user-a');
+    stale.getIdToken = vi.fn(() => token);
+    firebase.auth.currentUser = stale;
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+
+    const registration = registerDeletionRecoveryDevice(stale);
+    await vi.waitFor(() => expect(stale.getIdToken).toHaveBeenCalledTimes(1));
+    firebase.auth.currentUser = user('user-b');
+    invalidateSession();
+    firebase.auth.currentUser = stale;
+    invalidateSession();
+    releaseToken('old-session-token');
+
+    await expect(registration).rejects.toMatchObject({
+      operation: 'device-registration', phase: 'auth-token', kind: 'stale-session',
+    });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   it('does not report a missing backend as successful recovery when a device proof exists', async () => {
     vi.stubEnv('VITE_ACCOUNT_DELETION_API_ORIGIN', '');
     const { recoverDeletedAccountOnThisDevice, registerDeletionRecoveryDevice } = await loadSubject();
