@@ -46,7 +46,7 @@ L'helper di formattazione non valida input persistiti: i gateway devono rifiutar
 
 **MUST:** i calcoli derivati non presentano campioni insufficienti o numeri non rappresentabili come statistiche affidabili. Un risultato rifiutato non autorizza a modificare misurazioni, workout, diario o target manuali.
 
-- `calculateTDEE()` richiede almeno **sette giornate valide in 14 giorni di calendario**, ancorati all'ultima data registrata: sette voci sparse in mesi diversi non costituiscono un campione recente. Una stima rifiutata non sostituisce un obiettivo calorico manuale. Regressioni: `src/lib/logic.test.ts` e `tests/r1_r2_empirical_challenge.test.ts`.
+- `calculateTDEE()` richiede almeno **sette date distinte con registrazioni valide in 14 giorni di calendario**, ancorati all'ultima data registrata: sette voci sparse in mesi diversi non costituiscono un campione recente. Registrazioni duplicate della stessa giornata non possono essere conteggiate più volte e un campione altrimenti sufficiente con date duplicate va rifiutato, non aggregato arbitrariamente. Una stima rifiutata non sostituisce un obiettivo calorico manuale. Regressioni: `src/lib/logic.test.ts` e `tests/r1_r2_empirical_challenge.test.ts`.
 - Statistiche e correlazioni del volume settimanale non pubblicano `NaN`, `Infinity`, somme o variazioni percentuali non finite, anche quando i singoli addendi erano finiti. Il conteggio delle sessioni e la parità del percorso cooperativo restano corretti; il calcolatore meccanico di base conserva il proprio contratto. Regressioni: `src/lib/calc/analytics.test.ts`.
 
 Le formule specifiche restano nel codice; qui si preserva la proprietà di non pubblicare risultati fuorvianti.
@@ -103,7 +103,7 @@ Il controllo è condiviso con `transactionWriter.ts`, che lo applica prima delle
 - **MUST:** dopo il merge semantico, `transactionWriter` verifica nuovamente con `assertCloudBusinessPreserved()` che la normalizzazione finale non perda o sostituisca valori business. Validare il remoto iniziale non prova la validità del risultato delle operazioni. Un fallimento impedisce l'intero commit business/control; il journal locale non viene acknowledged.
 
 Le conversioni scalari reversibili restano consentite.
-- **MUST:** `TransactionOutcome.documents` contiene esattamente il business normalizzato cifrato e scritto nella transazione, insieme ai metadati causali scritti. Lo snapshot precedente alla normalizzazione non è una prova valida per l'ACK.
+- **MUST:** `TransactionOutcome.documents` restituisce **in memoria e in chiaro** il business normalizzato che è stato passato a `sealCloudDocument()` e cifrato nella transazione; non contiene ciphertext Firestore. I metadati causali scritti sono restituiti separatamente in `TransactionOutcome.syncMeta`. L'ACK deve usare questi stessi documenti normalizzati e metadati; lo snapshot precedente alla normalizzazione non è una prova valida.
 - **MUST:** un `activeWorkout` cloud non nullo ma privo di identità valida è un errore di integrità, mai un'autorizzazione a cancellare la sessione corrente.
 - **Versioni future:** fail-closed / `update-required` secondo `storage-and-sync.md`.
 
@@ -129,7 +129,7 @@ Per ogni nuovo campo business del root cifrato Firestore verificare e aggiornare
 
 3. `src/lib/sync/documentProjection.ts` — `rootKeys`, projection e hydration root;
 
-4. `src/contexts/AuthContext.tsx` — bootstrap/hydration/merge quando il campo partecipa a quei flussi;
+4. `src/contexts/AuthContext.tsx` e `src/contexts/auth/bootstrapAuthenticatedSession.ts`, `loadAuthenticatedData.ts`, `migrateGuestAccount.ts` — orchestrazione, bootstrap/hydration e merge guest→account quando il campo partecipa a quei flussi;
 
 5. `src/lib/db.ts` e moduli DB correlati — boundary Firestore;
 

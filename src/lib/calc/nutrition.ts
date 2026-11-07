@@ -20,11 +20,16 @@ export function calculateTDEE(nutritionHistoryList: { date?: string; weight?: st
         const [year, month, day] = date.split('-').map(Number);
         return Date.UTC(year, month - 1, day) / (1000 * 60 * 60 * 24);
     };
-    const sortedValidDays = [...validDays].sort((a, b) => dayOrdinal(a.date) - dayOrdinal(b.date));
-
-    if (sortedValidDays.length < 7) {
-        return { error: true, message: `Raccolta dati in corso... (${sortedValidDays.length}/7 giorni richiesti)` };
+    // One business day is one observation. Duplicates are ambiguous and must
+    // not inflate the sample size or bias its average/weight trend.
+    const distinctDateCount = new Set(validDays.map(day => day.date)).size;
+    if (distinctDateCount < 7) {
+        return { error: true, message: `Raccolta dati in corso... (${distinctDateCount}/7 giorni richiesti)` };
     }
+    if (distinctDateCount !== validDays.length) {
+        return { error: true, message: 'Campione non valido: registrazioni duplicate per la stessa giornata.' };
+    }
+    const sortedValidDays = [...validDays].sort((a, b) => dayOrdinal(a.date) - dayOrdinal(b.date));
     // A sample of the last 14 *entries* can span months when logging is sparse.
     // Require at least seven recorded days within 14 calendar days ending on
     // the latest recorded date, rather than treating missing days as observed.
