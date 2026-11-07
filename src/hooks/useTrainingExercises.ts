@@ -58,7 +58,7 @@ export function useTrainingExercises() {
     }, [draftOwner, draftSession, initialRecovery.error, localPersistenceBlocked]);
     useEffect(() => {
         if (initialRecovery.error) blockExerciseDraft(initialRecovery.error, draftSession);
-    }, [initialRecovery.error]);
+    }, [initialRecovery.error, draftSession]);
     const [editingExId, setEditingExId] = useState<string | null>(null);
     const [exName, setExName] = useState(() => initialDraft?.name || '');
     const [exNotes, setExNotes] = useState(() => initialDraft?.notes || '');
