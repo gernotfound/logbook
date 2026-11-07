@@ -141,8 +141,15 @@ describe('F-006 active workout persisted business identity', () => {
             ...validWorkout,
             exercises: [{ id: 'se-1', exId: 'bench', sessionNote: '', sets }],
         };
-        persistPlainWorkoutSnapshot(corrupted as WorkoutSession, owner);
         const protectedKey = protectedDeviceKey('workout', owner);
+        expect(() => persistPlainWorkoutSnapshot(corrupted as WorkoutSession, owner))
+            .toThrow('identificativo');
+        expect(localStorage.getItem(protectedKey)).toBeNull();
+        // A malformed ciphertext must be injected at the storage boundary,
+        // never through the production writer that is under test.
+        writeDeviceValue('workout', JSON.stringify({
+            __logbookWorkoutSnapshot: 1, owner, consentRevision: 1, workout: corrupted,
+        }), owner);
         const ciphertext = localStorage.getItem(protectedKey);
         const original = readDeviceValueStrict('workout', owner);
         expect(ciphertext).toMatch(/^tlb-sealed:v1:/);
