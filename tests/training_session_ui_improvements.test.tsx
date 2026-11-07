@@ -674,8 +674,7 @@ describe('Training Session UI Improvements Suite (R1, R2, R3)', () => {
             await act(async () => {
                 fireEvent.click(screen.getByText('- Rimuovi serie'));
             });
-            expect(onRemoveSet.mock.calls[0].slice(0, 3)).toEqual([0, 0, onRemoveSet.mock.calls[0][2]]);
-            expect(['s_iso', 's_rir']).toContain(onRemoveSet.mock.calls[0][2]);
+            expect(onRemoveSet.mock.calls[0].slice(0, 3)).toEqual([0, 0, 's_iso']);
 
             showConfirm.mockClear();
             onRemoveSet.mockClear();
@@ -687,8 +686,7 @@ describe('Training Session UI Improvements Suite (R1, R2, R3)', () => {
                 fireEvent.click(screen.getByText('- Rimuovi serie'));
             });
             expect(showConfirm).toHaveBeenCalledTimes(1);
-            expect(onRemoveSet.mock.calls[0].slice(0, 3)).toEqual([0, 0, onRemoveSet.mock.calls[0][2]]);
-            expect(['s_iso', 's_rir']).toContain(onRemoveSet.mock.calls[0][2]);
+            expect(onRemoveSet.mock.calls[0].slice(0, 3)).toEqual([0, 0, 's_rir']);
         });
     });
 
