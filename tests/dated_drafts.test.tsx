@@ -1162,6 +1162,34 @@ it('preserves a dirty sleep form when an unrelated meal is received', async () =
     expect(localStorage.getItem(deviceKey(name, owner))).toBeNull();
     hook.unmount();
 });
+it('historical measurement editing does not accidentally put the sleep editor into edit mode', async () => {
+    const owner = storageOwner();
+    await prepareUnlockedTestArchive(owner);
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 9, 5, 12, 0, 0));
+    const historicalDay = '2026-10-04';
+    useAppStore.setState({
+        userData: data({ [historicalDay]: day(historicalDay, { weight: 80, sleepHours: '07:30' }) }),
+        dataOwner: owner,
+    });
+    const Harness = () => {
+        const [tab, setTab] = useState<DataSubTab>('history');
+        return <DataView subTab={tab} setSubTab={setTab} />;
+    };
+    const view = render(<Harness />);
+    fireEvent.click(screen.getByRole('button', { name: 'Opzioni' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Modifica misurazione' }));
+    expect(view.container.querySelector('#data-panel-measurements')).not.toBeNull();
+    fireEvent.click(screen.getByRole('tab', { name: 'Sonno' }));
+    expect(view.container.querySelector('#data-panel-sleep')).not.toBeNull();
+    expect(screen.getByRole('heading', { name: 'Dati sonno' })).toBeDefined();
+    const previous = screen.getByRole('button', { name: 'Giorno precedente' });
+    expect(previous).toHaveProperty('disabled', false);
+    fireEvent.click(previous);
+    expect(screen.getByRole('heading', { name: 'Dati sonno' })).toBeDefined();
+    view.unmount();
+});
+
 it('stays in the measurement editor when draft cancellation fails and navigates only after retry', async () => {
     const owner = storageOwner();
     await prepareUnlockedTestArchive(owner);
