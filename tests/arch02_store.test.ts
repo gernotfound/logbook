@@ -1,17 +1,15 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { useAppStore } from '../src/store/useAppStore';
 import { DB } from '../src/lib/db';
 import { prepareUnlockedTestArchive } from './secureVaultFixture';
-
-vi.mock('firebase/firestore', async (importOriginal) => {
-    const actual = await importOriginal();
-    return {
-        ...(actual as object),
-        waitForPendingWrites: vi.fn().mockReturnValue(new Promise(() => {})), // Never resolves so we can check pending state
-    };
-});
+import { clearSyncTimers } from '../src/store/slices/createSyncSlice';
 
 describe('ARCH-02: createSyncSlice', () => {
+    afterEach(() => {
+        clearSyncTimers();
+        vi.useRealTimers();
+    });
+
     beforeEach(async () => {
         vi.clearAllMocks();
         // AEAD provisioning uses real asynchronous Web Crypto before timer virtualization.

@@ -3,7 +3,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { mergeCloudIntoLocal, mergeHistoryNonDestructive, mergeNutritionNonDestructive } from '../src/lib/merge';
 import { DB } from '../src/lib/db';
 import { useAppStore } from '../src/store/useAppStore';
-import { renderHook, act } from '@testing-library/react';
+import { renderHook, act, waitFor } from '@testing-library/react';
 import { AuthProvider } from '../src/contexts/AuthContext';
 import { AuthContext } from '../src/contexts/AuthContextDef';
 import { useContext } from 'react';
@@ -149,20 +149,14 @@ describe('ARCH-01: Non-destructive Cache Merge', () => {
             const rendered = renderHook(() => useContext(AuthContext), { wrapper: AuthProvider });
 
             try {
-                // Give React a moment to run the effect
-                await act(async () => {
-                    await new Promise(r => setTimeout(r, 10));
-                });
-
-                if (!authCallback) throw new Error("authCallback was not set by renderHook!");
+                await waitFor(() => expect(authCallback).not.toBeNull());
 
                 // Fire auth callback with a mock user
                 await act(async () => {
                     (auth as any).currentUser = { uid: 'user123' };
                     await authCallback({ uid: 'user123' });
-                    // Flush loadData promises
-                    await new Promise(r => setTimeout(r, 10));
                 });
+                await waitFor(() => expect(useAppStore.getState().userData?.history?.map(h => h.id)).toContain('cloud-new'));
 
                 // Verification: unloaded January survives while complete September is adopted.
                 const finalState = useAppStore.getState().userData;
@@ -210,17 +204,13 @@ describe('ARCH-01: Non-destructive Cache Merge', () => {
             const rendered = renderHook(() => useContext(AuthContext), { wrapper: AuthProvider });
 
             try {
-                await act(async () => {
-                    await new Promise(r => setTimeout(r, 10));
-                });
-
-                if (!authCallback) throw new Error("authCallback was not set by renderHook!");
+                await waitFor(() => expect(authCallback).not.toBeNull());
 
                 await act(async () => {
                     (auth as any).currentUser = { uid: 'user123' };
                     await authCallback({ uid: 'user123' });
-                    await new Promise(r => setTimeout(r, 10));
                 });
+                await waitFor(() => expect(useAppStore.getState().saveError).toContain('metadati di sincronizzazione remoti non sono validi'));
 
                 const state = useAppStore.getState();
                 expect(state.userData?.profile?.height).toBe('170');
@@ -267,18 +257,16 @@ describe('ARCH-01: Non-destructive Cache Merge', () => {
             const rendered = renderHook(() => useContext(AuthContext), { wrapper: AuthProvider });
 
             try {
-                await act(async () => {
-                    await new Promise(r => setTimeout(r, 10));
-                });
-
-                if (!authCallback) throw new Error("authCallback was not set by renderHook!");
+                await waitFor(() => expect(authCallback).not.toBeNull());
 
                 await act(async () => {
                     (auth as any).currentUser = { uid: 'user123' };
                     await authCallback({ uid: 'user123' });
-                    // Flush loadData promises
-                    await new Promise(r => setTimeout(r, 10));
                 });
+                await waitFor(() => expect(consoleSpy).toHaveBeenCalledWith(
+                    "Hydration cloud non valida; stato locale preservato:",
+                    expect.any(Error)
+                ));
 
                 const finalState = useAppStore.getState().userData;
                 expect(finalState?.profile?.height).toBe('170');
