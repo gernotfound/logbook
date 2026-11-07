@@ -552,26 +552,23 @@ export function calculateCycleVolume(
         }))
         .sort((a, b) => b.sets - a.sets);
 
-    // Calculate glowing colors for MuscleModel heatmap
+    // Canonical groups can overlap anatomically (e.g. chest and chest_upper).
+    // Keep the strongest signal on each path: summing duplicates broad/narrow
+    // targets, while last-write-wins makes the colors depend on routine order.
+    const pathSets = new Map<string, number>();
+    rawMuscleSets.forEach((sets, mId) => {
+        const paths = GROUP_MAP[mId] ?? [mId];
+        for (const path of new Set([...paths, mId])) {
+            pathSets.set(path, Math.max(pathSets.get(path) ?? 0, sets));
+        }
+    });
+
     const muscleColors: Record<string, string> = {};
     const maxMuscleSets = Math.max(1, ...Array.from(rawMuscleSets.values()));
-
-    rawMuscleSets.forEach((sets, mId) => {
+    pathSets.forEach((sets, path) => {
         const ratio = sets / maxMuscleSets;
-        let color = '#38bdf8'; // Base light sky
-        if (ratio >= 0.75) {
-            color = '#0ea5e9'; // High intensity cyan
-        } else if (ratio >= 0.4) {
-            color = '#38bdf8'; // Medium intensity
-        } else {
-            color = '#7dd3fc'; // Low intensity
-        }
-
-        const atomicPaths = GROUP_MAP[mId] || [mId];
-        atomicPaths.forEach(path => {
-            muscleColors[path] = color;
-        });
-        muscleColors[mId] = color;
+        muscleColors[path] = ratio >= 0.75 ? '#0ea5e9'
+            : ratio >= 0.4 ? '#38bdf8' : '#7dd3fc';
     });
 
     return {

@@ -134,6 +134,37 @@ describe('Training Planning & Volume Calculations', () => {
         expect(repeated).toEqual(expected);
     });
 
+    it('keeps overlapping anatomical paths independent of routine exercise order', () => {
+        const cycle: TrainingCycle = {
+            id: 'overlap-cycle',
+            name: 'Regioni sovrapposte',
+            durationWeeks: 4,
+            sessionsPerWeek: 1,
+            routines: [{ routineId: 'overlap-routine', frequencyPerWeek: 1 }],
+        };
+        const library: Exercise[] = [
+            { id: 'broad', name: 'Petto intero', setsCount: 6, sets: [], muscles: ['chest'] },
+            { id: 'narrow', name: 'Petto alto', setsCount: 2, sets: [], muscles: ['chest_upper'] },
+        ];
+        const exercises = [
+            { exId: 'broad', setsCount: 6 },
+            { exId: 'narrow', setsCount: 2 },
+        ];
+        const compute = (items: WorkoutRoutine['exercises']) => calculateCycleVolume(
+            cycle,
+            [{ id: 'overlap-routine', name: 'Scheda', exercises: items }],
+            library,
+        );
+
+        const broadFirst = compute(exercises);
+        const narrowFirst = compute([...exercises].reverse());
+        expect(broadFirst.totalSetsPerWeek).toBe(8);
+        expect(broadFirst.muscleColors['chest-upper-left']).toBe('#0ea5e9');
+        expect(broadFirst.muscleColors['chest-lower-left']).toBe('#0ea5e9');
+        expect(broadFirst.muscleColors.chest_upper).toBe('#7dd3fc');
+        expect(narrowFirst.muscleColors).toEqual(broadFirst.muscleColors);
+    });
+
     it('calculateCycleVolume gracefully handles deleted routines and exercises', () => {
         const cycleWithMissingRefs: TrainingCycle = {
             id: 'cycle_missing',
