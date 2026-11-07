@@ -69,7 +69,9 @@ describe('monthly tombstone assembly invariants', () => {
         expect(deleted.map(op => `${op.docPath}/${op.path.join('/')}`)).toEqual(expectedDeletes);
         expect(deleted).toHaveLength(24 * 48);
         expect(deleted.every(op => op.isDelete && op.actorId === 'replica'
-            && op.seq === 8 && op.clock === clock && op.path.length === 1)).toBe(true);
+            && op.seq === 8 && op.path.length === 1)).toBe(true);
+        // Causal contents are contractual; clock allocation identity is incidental.
+        expect(deleted.map(op => op.clock)).toEqual(expectedDeletes.map(() => ({ replica: 8, peer: 5 })));
         expect(input).toEqual(snapshot);
     });
 
