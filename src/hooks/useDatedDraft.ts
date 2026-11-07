@@ -276,15 +276,23 @@ export function useDatedDraft<T extends Record<string, string>>(kind: string, da
     };
 
     const persistRef = useRef(persist);
+    const verifyRef = useRef(verifyCurrentDraft);
     useLayoutEffect(() => {
         persistRef.current = persist;
+        verifyRef.current = verifyCurrentDraft;
     });
 
     useEffect(() => {
         const flush = () => {
             const draft = current.current;
-            if (!draft.dirty) return;
-            if (!draft.key || !draft.name || !draft.session || !isCurrentSession(draft.session)) {
+            if (!draft.key) return;
+            if (!draft.dirty) {
+                // A successful synchronous edit needs no second write, but a
+                // required-update reload still has to authenticate its source.
+                verifyRef.current();
+                return;
+            }
+            if (!draft.name || !draft.session || !isCurrentSession(draft.session)) {
                 throw new Error('Sessione cambiata prima del salvataggio della bozza.');
             }
             persistRef.current(draft);

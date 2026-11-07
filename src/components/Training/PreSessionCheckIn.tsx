@@ -107,9 +107,12 @@ export default function PreSessionCheckIn({ workoutId, routineName, date, onStar
     }, [initialRecovery.error]);
 
     const persistDraft = useCallback(() => {
-        if (!dirtyRef.current) return;
         const activeSession = session.current;
         if (!activeSession || !isCurrentSession(activeSession)) throw new Error('Sessione cambiata prima del salvataggio del check-in.');
+        if (readWorkoutRecoveryDraftImage(recoveryName.current, activeSession.owner).raw !== recoveryRaw.current) {
+            throw new Error('Bozza check-in modificata durante il recupero: originale preservato.');
+        }
+        if (!dirtyRef.current) return;
         recoveryRaw.current = writeWorkoutRecoveryDraft(
             recoveryName.current, activeSession.owner, valuesRef.current,
             activeSession.consentGeneration, recoveryRaw.current,

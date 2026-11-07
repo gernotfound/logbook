@@ -837,6 +837,19 @@ it('does not rewrite an already persisted user edit during later background or u
     hook.unmount();
 });
 
+it('rejects an unchanged dated form during required-update capture if another tab replaced its record', async () => {
+    const owner = storageOwner();
+    await prepareUnlockedTestArchive(owner);
+    const name = 'draft:measurement:2026-09-11';
+    const editor = renderHook(() => useNutritionMeasurements('2026-09-11'));
+    act(() => editor.result.current.setWeight('75'));
+    const observed = readFencedDatedDraftImage(name, owner).raw;
+    const replacement = writeFencedDatedDraft(name, owner, { weight: '85' }, observed);
+    expect(() => draftRegistry.flushAll({ strict: true })).toThrow(AggregateError);
+    expect(readFencedDatedDraftImage(name, owner).raw).toBe(replacement);
+    editor.unmount();
+});
+
 it('preserves a mounted old editor\'s next edit when a second confirmed form consumed its witness', async () => {
     const owner = storageOwner();
     await prepareUnlockedTestArchive(owner);

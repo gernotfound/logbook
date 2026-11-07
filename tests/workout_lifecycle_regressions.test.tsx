@@ -270,6 +270,20 @@ describe('Workout lifecycle durable recovery regressions', () => {
         expect(onStart).not.toHaveBeenCalled();
     });
 
+    it('refuses no-input update capture when a mounted pre-session draft belongs to a revoked epoch', async () => {
+        await prepareUnlockedTestArchive(owner);
+        const marker = `logbook:v2:${owner}:health-consent-generation`;
+        localStorage.setItem(marker, '3');
+        const name = 'draft:pre-session:stale-flush';
+        render(<PreSessionCheckIn workoutId="stale-flush"
+            onStart={vi.fn(async () => true)} onCancel={vi.fn(async () => true)} />);
+        fireEvent.click(screen.getByRole('button', { name: 'Energia: 4 su 5' }));
+        const raw = readDeviceValueStrict(name, owner);
+        localStorage.setItem(marker, '5');
+        expect(() => draftRegistry.flushAll({ strict: true })).toThrow(AggregateError);
+        expect(readDeviceValueStrict(name, owner)).toBe(raw);
+    });
+
     it('does not relabel a pre-session answer if another tab advances consent after the session guard', async () => {
         await prepareUnlockedTestArchive(owner);
         const marker = `logbook:v2:${owner}:health-consent-generation`;
