@@ -290,6 +290,24 @@ describe('Zod Schema Resilience & Defensive Catches', () => {
             expect(parsed.history![0].exercises[0].sets[0].segments?.filter(segment => segment.technique === 'isometry')?.[0].time).toBe('10');
         });
 
+        it('keeps only valid workout continuation IDs, rejecting the reserved ordering segment', () => {
+            const parsed = WorkoutSessionSchema.parse({
+                id: 'workout-1',
+                exercises: [{
+                    id: 'ex-1', exId: 'exercise', sessionNote: '',
+                    sets: [{
+                        id: 'set-1', kg: '10', reps: '8',
+                        segments: [
+                            { id: 'segment-1', kg: '8', reps: '6' },
+                            { id: '$order', kg: '6', reps: '6' },
+                        ],
+                    }],
+                }],
+            });
+            expect(parsed.exercises[0].sets[0].segments?.map(segment => segment.id))
+                .toEqual(['segment-1']);
+        });
+
         it('defensively sanitizes corrupted Nutrition dictionary and preserves numeric values in strings', () => {
             const corruptedNutrition = {
                 '2026-08-14': {
