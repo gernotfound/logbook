@@ -157,6 +157,9 @@ export async function parseLargeBackupJson(
     for (let offset = 0; offset < file.size; offset += chunkBytes) {
         assertCurrent();
         const bytes = await read(file.slice(offset, Math.min(offset + chunkBytes, file.size)));
+        // The owner can change while FileReader is pending. Do not decode or
+        // validate bytes from a session that no longer owns this import.
+        assertCurrent();
         if (bytes.byteLength === 0) throw new Error('Lettura JSON incompleta. Il file originale resta intatto.');
         accept(decoder.decode(bytes, { stream: true }));
     }
