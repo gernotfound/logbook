@@ -3,7 +3,6 @@ import { get } from 'idb-keyval';
 import { act, renderHook } from '@testing-library/react';
 import { auth } from '../../src/lib/firebase';
 import { DB } from '../../src/lib/db';
-import { Logic } from '../../src/lib/logic';
 import { UserDataSchema } from '../../src/lib/schema';
 import { calculateLoggedMealTotals } from '../../src/lib/nutrition/calculateLoggedMealTotals';
 import { activateGuestSession, captureSession, GUEST_SESSION_KEY, invalidateSession } from '../../src/lib/sync/session';
@@ -121,19 +120,19 @@ describe('M5 nutrition account flow through useNutritionMeals', () => {
         expect(disk?.data.nutrition?.[DATE]?.meals?.map(meal => meal.id)).toEqual(['meal-a']);
     });
 
-    it('returns the same ranked production results using the prepared search index', () => {
+    it('returns independently expected food IDs through the prepared hook index across queries', () => {
         const { result } = renderHook(() => useNutritionMeals(DATE));
 
-        act(() => {
-            result.current.handleSearch('pollo');
-        });
-
-        expect(result.current.searchResults).toEqual(
-            Logic.searchFoods(useAppStore.getState().userData?.customFoods ?? [], 'pollo').slice(0, 15)
-        );
+        act(() => { result.current.handleSearch('pollo'); });
         expect(result.current.searchQuery).toBe('pollo');
-        expect(result.current.searchResults.map(food => food.id)).toContain('food-chicken');
-        expect(result.current.searchResults.map(food => food.id)).not.toContain('food-rice');
+        expect(result.current.searchResults.map(food => food.id)).toEqual(['food-chicken']);
+
+        act(() => { result.current.handleSearch('basmati'); });
+        expect(result.current.searchQuery).toBe('basmati');
+        expect(result.current.searchResults.map(food => food.id)).toEqual(['food-rice']);
+
+        act(() => { result.current.handleSearch('zzzzzzzzzz'); });
+        expect(result.current.searchResults).toEqual([]);
     });
 
     it('adds, rescales and removes a meal through the real store mutation path', async () => {

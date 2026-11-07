@@ -18,7 +18,7 @@ I test M5 devono attraversare il boundary production che dichiarano di verificar
 - logout guest/autenticato: `AuthProvider` + `useAuth`;
 - migrazione guest → account: `AuthProvider` + `localRepository`/journal al boundary testato;
 - catalogo: `catalogService` e `deltaResolver` reali;
-- nutrizione: `useNutritionMeals`, `Logic.searchFoods` e store reale; `DB` resta il boundary esterno mocked nella suite jsdom;
+- nutrizione: `useNutritionMeals` e il suo indice `createFoodSearcher` reali, con risultati attesi espliciti; `DB` resta il boundary esterno mocked nella suite jsdom. `Logic.searchFoods` usa lo stesso algoritmo e non è un oracle indipendente;
 - totali meal: confronto con `calculateLoggedMealTotals` e valori attesi espliciti.
 
 Le suite stress `tests/tier5_adversarial_guest_catalog_*.test.ts`, ora suddivise per scenario, forniscono copertura supplementare ma non sostituiscono questi acceptance oracle.
