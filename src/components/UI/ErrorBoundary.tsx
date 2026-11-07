@@ -40,7 +40,21 @@ class ErrorBoundary extends Component<Props, State> {
     }
   };
 
+  private localResetInProgress = false;
+
   private handleLocalReset = async () => {
+    // A second confirmation must not race an owner-scoped purge that is still
+    // running or schedule another destructive attempt behind the first dialog.
+    if (this.localResetInProgress) return;
+    this.localResetInProgress = true;
+    try {
+      await this.performLocalReset();
+    } finally {
+      this.localResetInProgress = false;
+    }
+  };
+
+  private performLocalReset = async () => {
     const dialogs = useDialogStore.getState();
     // Bind user consent to the owner/session that displayed the confirmation.
     // A concurrent account/guest switch must not redirect a destructive reset.
