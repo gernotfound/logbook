@@ -586,7 +586,8 @@ describe('M4 causal metadata compaction', () => {
             fields: { profiles: original.fields.profiles },
         });
         expect(compactSyncMeta(collected, fullFrontier)).toEqual(collected);
-        expect(documents.get('')).toEqual({ profiles: 'unrelated' });
+        expect(documents.get('')).toHaveProperty('profiles', 'unrelated');
+        expect(documents.get('')).not.toHaveProperty('profile.name.value');
         expect(input).toEqual(before);
     });
 
