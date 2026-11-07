@@ -67,6 +67,48 @@ describe('Workout lifecycle durable recovery regressions', () => {
     });
     afterEach(() => vi.restoreAllMocks());
 
+    it('does not treat an optimistic started snapshot as a confirmed local commit', async () => {
+        await prepareUnlockedTestArchive(owner);
+        const prepared = workout('optimistic-start');
+        const optimistic = { ...prepared, globalStartTime: Date.now() };
+        const state = userData({ activeWorkout: prepared });
+        await initializeLocal(owner, state);
+        useAppStore.setState({ userData: state, localWorkout: optimistic });
+        vi.mocked(useDialogStore.getState().showAlert).mockResolvedValue(undefined);
+
+        const hook = renderHook(() => useWorkoutSession());
+        await act(async () => {
+            expect(await hook.result.current.confirmWorkoutStart()).toBe(false);
+        });
+
+        expect(useAppStore.getState().localPersistenceBlocked).toBe(true);
+        expect((await readLocal(owner))?.data.activeWorkout?.globalStartTime).toBeUndefined();
+        expect(useDialogStore.getState().showAlert).toHaveBeenCalledWith(
+            expect.stringContaining('Impossibile confermare il salvataggio dell’avvio'),
+        );
+    });
+
+    it('recognizes a previously started workout only with matching durable identity and timestamp', async () => {
+        await prepareUnlockedTestArchive(owner);
+        const started = workout('durable-start', true);
+        const state = userData({ activeWorkout: started });
+        await initializeLocal(owner, state);
+        useAppStore.setState({ userData: state, localWorkout: started });
+        const hook = renderHook(() => useWorkoutSession());
+
+        await act(async () => {
+            expect(await hook.result.current.confirmWorkoutStart()).toBe(true);
+        });
+        expect(useAppStore.getState().localPersistenceBlocked).toBe(false);
+        expect((await readLocal(owner))?.data.activeWorkout?.globalStartTime).toBe(started.globalStartTime);
+
+        useAppStore.setState({ localPersistenceBlocked: true });
+        await act(async () => {
+            expect(await hook.result.current.confirmWorkoutStart()).toBe(false);
+        });
+        expect(useAppStore.getState().localPersistenceBlocked).toBe(true);
+    });
+
     it('serializes overlapping workout starts across mounted hooks and unlocks after failure', async () => {
         const prepared = workout('concurrent-start');
         useAppStore.setState({ userData: userData({ activeWorkout: prepared }), localWorkout: prepared });
