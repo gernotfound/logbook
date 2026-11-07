@@ -48,7 +48,7 @@ export function useWorkoutFinalization({
                 syncPresentation: 'normal',
                 saveError: 'Impossibile mettere al sicuro le ultime modifiche del workout. La sessione non verrà terminata.',
             });
-            if (auth.currentUser?.uid === expectedUid) {
+            if (isCurrentSession(session) && auth.currentUser?.uid === expectedUid) {
                 await showAlert('Le ultime modifiche non sono ancora al sicuro sul dispositivo. Riprova dopo aver risolto il problema di storage.');
             }
             return null;
@@ -98,7 +98,7 @@ export function useWorkoutFinalization({
             resetWorkoutClockGuard(expectedId);
             return useAppStore.getState().userData?.history?.find(item => item.id === expectedId) ?? finishedWorkout;
         } catch (error) {
-            if (auth.currentUser?.uid === expectedUid) {
+            if (isCurrentSession(session) && auth.currentUser?.uid === expectedUid) {
                 await showAlert(
                     isWorkoutClockAnomalyError(error)
                         ? 'L’orologio del dispositivo è cambiato durante l’allenamento. Correggi data e ora, riapri TheLogBook e poi termina la sessione.'
@@ -114,9 +114,10 @@ export function useWorkoutFinalization({
 
     const deleteWorkout = useCallback(async (): Promise<boolean> => {
         const deletedWorkoutId = useAppStore.getState().localWorkout?.id;
+        let expectedSession: ReturnType<typeof captureSession> | null = null;
         try {
             if (!deletedWorkoutId) return false;
-            const expectedSession = captureSession();
+            expectedSession = captureSession();
             if (!(await showConfirm("Sei sicuro di voler eliminare questa sessione in corso? Non verrà salvata."))) return false;
             if (!isCurrentSession(expectedSession) || useAppStore.getState().localWorkout?.id !== deletedWorkoutId) return false;
             const result = await dispatchDomainOperation({ type: 'active-workout.set', workout: null, deletedWorkoutId: String(deletedWorkoutId) });
@@ -146,7 +147,9 @@ export function useWorkoutFinalization({
             return true;
         } catch (error) {
             console.error('Eliminazione sessione non completata:', error);
-            await showAlert('Errore durante l’eliminazione della sessione.');
+            if (!expectedSession || isCurrentSession(expectedSession)) {
+                await showAlert('Errore durante l’eliminazione della sessione.');
+            }
             return false;
         }
     }, [showConfirm, dispatchDomainOperation, setLocalWorkout, showAlert]);
