@@ -308,7 +308,7 @@ describe('Firestore Production field exemption convergence', () => {
     });
   });
 });
- 
+
 describe('Firestore Production complete composite index inventory', () => {
   const wanted = [{ collectionGroup: 'account_deletions', queryScope: 'COLLECTION', fields: [
     { fieldPath: 'status', order: 'ASCENDING' }, { fieldPath: 'retryable', order: 'ASCENDING' },
@@ -328,6 +328,7 @@ describe('Firestore Production complete composite index inventory', () => {
     const result = reconcileCompositeIndexes(wanted, [ready, otherMode, removedGroup], 'p');
     expect(result.statuses).toMatchObject([{ found: true, state: 'READY' }]);
     expect(result.unexpected.map(index => index.name)).toEqual([otherMode.name, removedGroup.name]);
+    expect(reconcileCompositeIndexes(wanted, [ready], 'p').unexpected).toEqual([]);
     expect(reconcileCompositeIndexes([], [ready], 'p').unexpected).toHaveLength(1);
   });
 
