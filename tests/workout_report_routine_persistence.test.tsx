@@ -35,7 +35,7 @@ function openRoutineForm(result: SyncResult) {
     render(<WorkoutReportModal workout={workout} history={[]} library={[]} fromEndWorkout onClose={vi.fn()} />);
     fireEvent.click(screen.getByRole('button', { name: 'Salva come scheda' }));
     fireEvent.change(screen.getByRole('textbox', { name: 'Nome nuova scheda' }), { target: { value: 'Nuova scheda' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Salva', exact: true }));
+    fireEvent.click(screen.getByRole('button', { name: 'Salva' }));
     return dispatch;
 }
 
@@ -59,9 +59,9 @@ describe('workout report routine persistence result', () => {
             type: 'routine.upsert',
             routine: expect.objectContaining({ name: 'Nuova scheda' }),
         }));
-        expect(screen.getByRole('textbox', { name: 'Nome nuova scheda' })).toHaveValue('Nuova scheda');
-        expect(screen.getByRole('button', { name: 'Salva', exact: true })).toBeEnabled();
-        expect(screen.queryByRole('button', { name: 'Salva come scheda' })).not.toBeInTheDocument();
+        expect((screen.getByRole('textbox', { name: 'Nome nuova scheda' }) as HTMLInputElement).value).toBe('Nuova scheda');
+        expect((screen.getByRole('button', { name: 'Salva' }) as HTMLButtonElement).disabled).toBe(false);
+        expect(screen.queryByRole('button', { name: 'Salva come scheda' })).toBeNull();
     });
 
     it.each([
@@ -70,9 +70,9 @@ describe('workout report routine persistence result', () => {
     ] satisfies SyncResult[])('closes the form after a confirmed $status result', async result => {
         const dispatch = openRoutineForm(result);
 
-        await waitFor(() => expect(screen.queryByRole('textbox', { name: 'Nome nuova scheda' })).not.toBeInTheDocument());
+        await waitFor(() => expect(screen.queryByRole('textbox', { name: 'Nome nuova scheda' })).toBeNull());
         expect(dispatch).toHaveBeenCalledOnce();
-        expect(screen.getByRole('button', { name: 'Salva come scheda' })).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'Salva come scheda' })).not.toBeNull();
         expect(useDialogStore.getState().showAlert).not.toHaveBeenCalled();
     });
 });

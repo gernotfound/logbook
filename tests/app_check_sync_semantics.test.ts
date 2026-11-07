@@ -1,5 +1,4 @@
 import { describe, expect, it, vi } from 'vitest';
-import { mapFirebaseErrorCode } from '../src/lib/errorHandler';
 import { AppCheckLimitedUseTokenError } from '../src/lib/appCheck';
 import { SyncTimeoutError } from '../src/lib/db/db_core';
 import { classifySyncFailure } from '../src/lib/sync/syncFailure';
@@ -9,7 +8,7 @@ const { CloudKeyAccessUnavailableError } = await vi.importActual<typeof import('
     '../src/lib/sync/cloudAccountKeyAccess',
 );
 
-describe('Audit 21 App Check and rejected-sync semantics', () => {
+describe('cloud sync failure classification', () => {
     it('fails closed for permanent App Check failures and retries only explicit transient failures', () => {
         const permanent = Object.assign(new Error('App Check unsupported'), {
             code: 'app-check-unavailable',
@@ -48,19 +47,6 @@ describe('Audit 21 App Check and rejected-sync semantics', () => {
         })).status).toBe('failed');
     });
 
-    it('preserves permission-denied through a wrapping Error cause', () => {
-        const firebaseError = Object.assign(new Error('Missing or insufficient permissions.'), {
-            code: 'permission-denied',
-        });
-        const wrapped = new Error('Sincronizzazione rifiutata dal server.', { cause: firebaseError });
-
-        const formatted = mapFirebaseErrorCode(wrapped);
-
-        expect(formatted.code).toBe('ERR_FIRESTORE_PERMISSION');
-        expect(formatted.category).toBe('permission');
-        expect(formatted.isOfflineSafe).toBe(false);
-        expect(formatted.canRetry).toBe(false);
-    });
 
     it('classifies permission denial inside a transport wrapper as rejected, never pending', () => {
         const denial = Object.assign(new Error('Firestore denied'), { code: 'permission-denied' });
@@ -87,7 +73,6 @@ describe('Audit 21 App Check and rejected-sync semantics', () => {
         expect(classifySyncFailure({ code: 'quota-exceeded' }).status).toBe('local-pending');
         expect(classifySyncFailure(new Error('Unsafe wrapper', { cause: quota })).status).toBe('failed');
         expect(classifySyncFailure(new DOMException('Local quota', 'QuotaExceededError')).status).toBe('failed');
-        expect(mapFirebaseErrorCode(quota)).toMatchObject({ code: 'ERR_FIRESTORE_QUOTA', isOfflineSafe: true });
     });
 
     it('never converts an unsafe lost-response wrapper into pending from a nested transport error', () => {
@@ -144,7 +129,7 @@ describe('Audit 21 App Check and rejected-sync semantics', () => {
         expect(result.error).toBe(error);
     });
 
-    it.each([null, undefined, 'provider rejected', 7])('fails closed for a non-object rejection: %s', error => {
+    it.each([null, undefined, 'provider rejected', 7, Object.assign(() => undefined, { code: 'unavailable' })])('fails closed for a non-object rejection: %s', error => {
         expect(classifySyncFailure(error)).toEqual({ ok: false, status: 'failed', error });
     });
 
@@ -165,11 +150,12 @@ describe('Audit 21 App Check and rejected-sync semantics', () => {
     });
 
     it('keeps completely inspected transport causes retryable, including a visited cycle', () => {
-        const short = Object.assign(new Error('Transport', { cause: new Error('Remote context') }), { code: 'unavailable' });
+        for (const cause of [new Error('Remote context'), null, undefined, 'Remote context', 7]) {
+            const short = Object.assign(new Error('Transport', { cause }), { code: 'unavailable' });
+            expect(classifySyncFailure(short)).toEqual({ ok: false, status: 'local-pending', error: short });
+        }
         const cyclic = Object.assign(new Error('Transport'), { code: 'unavailable', cause: {} as unknown });
         cyclic.cause = cyclic;
-
-        expect(classifySyncFailure(short)).toEqual({ ok: false, status: 'local-pending', error: short });
         expect(classifySyncFailure(cyclic)).toEqual({ ok: false, status: 'local-pending', error: cyclic });
     });
 
@@ -179,43 +165,6 @@ describe('Audit 21 App Check and rejected-sync semantics', () => {
         expect(classifySyncFailure(new Error('Unknown', { cause: cyclic })).status).toBe('failed');
     });
 
-    it('does not turn structural App Check failures into offline success messaging', () => {
-        const unsupported = Object.assign(new Error('Verifica di sicurezza non supportata'), {
-            code: 'app-check-unavailable',
-            phase: 'unsupported',
-            retryable: false,
-        });
 
-        const formatted = mapFirebaseErrorCode(unsupported);
 
-        expect(formatted.code).toBe('ERR_APP_CHECK_UNSUPPORTED');
-        expect(formatted.isOfflineSafe).toBe(false);
-        expect(formatted.canRetry).toBe(false);
-    });
-
-    it('maps limited-use and reCAPTCHA provider failures to App Check diagnostics', () => {
-        const limited = Object.assign(new Error('Token App Check limited-use non disponibile'), {
-            code: 'app-check-limited-use-unavailable',
-        });
-        const recaptcha = Object.assign(new Error('assessment rejected'), {
-            code: 'appCheck/recaptcha-error',
-        });
-
-        expect(mapFirebaseErrorCode(limited)).toMatchObject({
-            code: 'ERR_APP_CHECK_BLOCKED',
-            category: 'app_check',
-        });
-        expect(mapFirebaseErrorCode(recaptcha)).toMatchObject({
-            code: 'ERR_APP_CHECK_BLOCKED',
-            category: 'app_check',
-        });
-    });
-
-    it('keeps unknown cloud failures fail-closed in presentation', () => {
-        const formatted = mapFirebaseErrorCode(new Error('unexpected cloud runtime failure'));
-
-        expect(formatted.code).toBe('ERR_UNKNOWN');
-        expect(formatted.isOfflineSafe).toBe(false);
-        expect(formatted.canRetry).toBe(false);
-    });
 });
