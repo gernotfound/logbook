@@ -16,6 +16,7 @@ import { activateGuestSession, GUEST_SESSION_KEY } from '../src/lib/sync/session
 import { migrateGuestAccount } from '../src/contexts/auth/migrateGuestAccount';
 import { isHealthConsentCloudWritable } from '../src/lib/healthConsent';
 import * as replicaProtocol from '../src/lib/sync/replicaProtocol';
+import * as replicateModule from '../src/lib/sync/replicateJournal';
 
 const parse = (value: unknown) => UserDataSchema.parse(value) as unknown as UserData;
 const user = {
@@ -255,5 +256,37 @@ describe('guest -> account skip policy', () => {
             }
         },
     );
+
+
+    it('does not start the post-replication cloud read after consent is suspended', async () => {
+        const account = parse({ profile: { gender: 'M' } });
+        const guest = parse({ profile: { height: '175' } });
+        await initializeLocal(user.uid, account);
+        vi.mocked(DB.loadCloudPayload).mockResolvedValueOnce({
+            data: account, completeMonths: [], cloudDocuments: new Map(),
+        });
+        let cloudWritable = true;
+        vi.mocked(isHealthConsentCloudWritable).mockImplementation(() => cloudWritable);
+        const replay = vi.spyOn(replicateModule, 'replicateJournal').mockImplementation(async () => {
+            cloudWritable = false;
+            return { ok: true, status: 'synced' };
+        });
+        const onLocalReady = vi.fn();
+        try {
+            const result = await migrateGuestAccount({
+                user, guestData: guest, policy: 'merge', setUserData: vi.fn(),
+                setSyncing: vi.fn(), onLocalReady, isCurrent: () => true,
+            });
+            expect(onLocalReady).toHaveBeenCalledOnce();
+            expect(replay).toHaveBeenCalledOnce();
+            expect(result.status).toBe('failed');
+            expect(DB.loadCloudPayload).toHaveBeenCalledTimes(1);
+            expect(await readLocal(user.uid)).toBeDefined();
+        } finally {
+            cloudWritable = true;
+            vi.mocked(isHealthConsentCloudWritable).mockImplementation(() => true);
+            replay.mockRestore();
+        }
+    });
 
 });
