@@ -948,6 +948,38 @@ describe('LogBook Background Sync & Error Toast 4-Tier Test Suite', () => {
       expect(useAppStore.getState().saveError).toBeNull();
     });
 
+    test('T4.1b_workload: Retrying a failed sync does not produce a false cloud success', async () => {
+      const { container } = await renderSettledApp();
+      vi.mocked(DB.saveUserData)
+        .mockRejectedValueOnce(new Error('Chiave cloud non disponibile'))
+        .mockRejectedValueOnce(new Error('Chiave cloud ancora non disponibile'));
+
+      const save = (reps: string) => useAppStore.getState().saveUserData(previous => ({
+        ...previous!, history: [{
+          id: 'retry-check', date: '2026-11-08', routineName: 'Retry',
+          duration: '10m', mood: 3, pump: 3, fatigue: 3, water: 1,
+          exercises: [], note: reps,
+        }],
+      }));
+
+      const first = save('1').catch(error => error);
+      await act(async () => { await vi.advanceTimersByTimeAsync(1100); });
+      expect(await first).toBeInstanceOf(Error);
+      expect(useAppStore.getState().syncHealth).toBe('failed');
+      expect(screen.getByText('Chiave cloud non disponibile')).toBeDefined();
+
+      const retry = save('2').catch(error => error);
+      expect(useAppStore.getState().syncHealth).toBe('saving');
+      expect(useAppStore.getState().syncing).toBe(true);
+      expect(querySyncIndicator(container)).not.toBeNull();
+
+      await act(async () => { await vi.advanceTimersByTimeAsync(1100); });
+      expect(await retry).toBeInstanceOf(Error);
+      expect(useAppStore.getState().syncHealth).toBe('failed');
+      expect(useAppStore.getState().saveError).toBe('Chiave cloud ancora non disponibile');
+      expect(screen.getByText('Chiave cloud ancora non disponibile')).toBeDefined();
+    });
+
     test('T4.2_workload: Rapid nutrition multi-item logging with debounced batch sync', async () => {
       const saveSpy = vi.mocked(DB.saveUserData).mockResolvedValue({ ok: true, status: 'synced' });
       const { container } = await renderSettledApp();

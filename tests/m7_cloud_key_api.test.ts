@@ -344,15 +344,23 @@ describe('authenticated cloud account key API', () => {
     // Simulate a new, server-owned consent generation between the successful
     // Firestore transaction and the final release check. The same status is
     // insufficient evidence that the selected key still belongs to this epoch.
-    harness.afterTransaction = () => harness.documents.set(
-      'health_consent_withdrawals/owner-a', { ...consent(), revision: 3, erasedBeforeRevision: 2 },
-    );
+    harness.afterTransaction = () => {
+      // Model the real trusted sequence: withdraw revision 2, complete erasure
+      // at revision 3 (destroying the old wrapped key), reaccept revision 4.
+      harness.documents.delete('user_data_keys/owner-a');
+      harness.documents.set('health_data_erasures/owner-a', {
+        uid: 'owner-a', consentRevision: 2, completedRevision: 3, status: 'complete',
+      });
+      harness.documents.set('health_consent_withdrawals/owner-a', {
+        ...consent(), revision: 4, erasedBeforeRevision: 2,
+      });
+    };
     const response = await POST(request());
     expect(response.status).toBe(503);
     expect(await response.text()).not.toMatch(/[A-Za-z0-9+/]{43}=/);
     expect(unwrappedKeys).toHaveLength(1);
     expect(unwrappedKeys[0].every(byte => byte === 0)).toBe(true);
-    expect(harness.documents.has('user_data_keys/owner-a')).toBe(true);
+    expect(harness.documents.has('user_data_keys/owner-a')).toBe(false);
     expect(harness.wrap).toHaveBeenCalledTimes(1);
   });
 
