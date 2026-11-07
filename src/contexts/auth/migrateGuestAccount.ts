@@ -2,6 +2,7 @@ import type { User } from 'firebase/auth';
 import type { GuestMigrationPolicy } from '../AuthContextDef';
 import type { SyncResult, UserData } from '../../types';
 import { DB } from '../../lib/db';
+import { isHealthConsentCloudWritable } from '../../lib/healthConsent';
 import { getDb } from '../../lib/firebase';
 import { UserDataSchema } from '../../lib/schema';
 import { hasUserData, mergeUserData } from '../../lib/merge';
@@ -39,6 +40,10 @@ type MigrateGuestAccountOptions = {
 export async function migrateGuestAccount({ user, guestData, policy, setUserData, setSyncing, onLocalReady, isCurrent }: MigrateGuestAccountOptions): Promise<SyncResult> {
     let localReady = false;
     const assertCurrent = () => { if (!isCurrent()) throw new StaleGuestMigrationError(); };
+    // A valid Auth run alone does not preserve the server-verified consent epoch
+    // through an async Firestore transaction or its SDK retry.
+    const cloudAllowed = () => isCurrent() && isHealthConsentCloudWritable(userOwner(user.uid));
+    const assertCloudAllowed = () => { if (!cloudAllowed()) throw new StaleGuestMigrationError(); };
     const markLocalReady = async () => { assertCurrent(); localReady = true; await onLocalReady(); };
     const applyLocalData = (data: UserData) => {
         assertCurrent();
@@ -86,19 +91,19 @@ export async function migrateGuestAccount({ user, guestData, policy, setUserData
     };
 
     try {
-        assertCurrent();
+        assertCloudAllowed();
         setSyncing(true);
-        const cloudKey = await requireCloudAccountDataKey(user.uid, assertCurrent);
-        assertCurrent();
+        const cloudKey = await requireCloudAccountDataKey(user.uid, assertCloudAllowed);
+        assertCloudAllowed();
         const cloudPayload = await DB.loadCloudPayload({ allMonths: true, cloudKey });
-        assertCurrent();
+        assertCloudAllowed();
         const cloudData = cloudPayload?.data || null;
         const guestHasData = hasUserData(guestData);
         const prepareReplica = async (hydrated: LocalEnvelope): Promise<LocalEnvelope> => {
-            assertCurrent();
+            assertCloudAllowed();
             const { adoptReplicaCheckpoint, completeCloudIntegrityRecovery } = await import('../../lib/sync/localRepository');
-            await retireExpiredReplicas(getDb(), user.uid, Date.now(), isCurrent);
-            assertCurrent();
+            await retireExpiredReplicas(getDb(), user.uid, Date.now(), cloudAllowed);
+            assertCloudAllowed();
             const checkpoint = checkpointFromCloudDocuments(cloudPayload?.cloudDocuments ?? new Map());
             const claim = await claimReplicaCheckpoint(
                 getDb(),
@@ -107,12 +112,12 @@ export async function migrateGuestAccount({ user, guestData, policy, setUserData
                 checkpoint.clock,
                 hydrated.actorSeq,
                 hydrated.replica ? undefined : hydrated.actorId,
-                isCurrent,
+                cloudAllowed,
             );
-            assertCurrent();
-            await adoptReplicaCheckpoint(user.uid, claim, checkpoint, isCurrent);
-            assertCurrent();
-            const recovered = await completeCloudIntegrityRecovery(user.uid, hydrated.cloudIntegrityFence ?? null, true, isCurrent);
+            assertCloudAllowed();
+            await adoptReplicaCheckpoint(user.uid, claim, checkpoint, cloudAllowed);
+            assertCloudAllowed();
+            const recovered = await completeCloudIntegrityRecovery(user.uid, hydrated.cloudIntegrityFence ?? null, true, cloudAllowed);
             if (hydrated.cloudIntegrityFence && isCurrent()) {
                 useAppStore.setState({ cloudIntegrityBlocked: false, syncHealth: recovered.pending.length ? 'local-pending' : 'synced', saveError: null });
             }
@@ -162,10 +167,10 @@ export async function migrateGuestAccount({ user, guestData, policy, setUserData
         const { hydrateLocal, commitLocal, readLocal } = await import('../../lib/sync/localRepository');
         assertCurrent();
         const authenticatedBase = await resolveAuthenticatedBase();
-        let hydratedEnv = await hydrateLocal(user.uid, authenticatedBase, cloudPayload?.completeMonths || [], cloudPayload?.cloudDocuments, 'all', isCurrent);
-        assertCurrent();
+        let hydratedEnv = await hydrateLocal(user.uid, authenticatedBase, cloudPayload?.completeMonths || [], cloudPayload?.cloudDocuments, 'all', cloudAllowed);
+        assertCloudAllowed();
         hydratedEnv = await prepareReplica(hydratedEnv);
-        assertCurrent();
+        assertCloudAllowed();
         if (policy === 'skip' || !guestHasData) return await finishWithoutGuestMerge();
 
         const mergedData = mergeUserData(hydratedEnv.data, guestData);
