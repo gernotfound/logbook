@@ -87,7 +87,7 @@ describe('audit interaction regressions', () => {
         let second!: Promise<string | null>;
         act(() => { second = useDialogStore.getState().showPasswordPrompt('Nuova identità'); });
         expect((screen.getByLabelText('Password attuale') as HTMLInputElement).value).toBe('');
-        expect(screen.getByRole('button', { name: 'Conferma' })).toBeDisabled();
+        expect((screen.getByRole('button', { name: 'Conferma' }) as HTMLButtonElement).disabled).toBe(true);
 
         act(() => { useDialogStore.getState().cancelAll(); });
         expect(await second).toBeNull();
