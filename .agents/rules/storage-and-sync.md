@@ -217,6 +217,8 @@ Il sistema `replicateJournal` / `transactionWriter` gestisce l'esito:
 | `local-pending` | Offline o esito ambiguo per cui il batch completo è ancora provato durevole nel journal |
 | `failed` | Errore critico/non sicuro o stato locale incompatibile con un retry affidabile |
 
+La classificazione ispeziona solo proprietà proprie degli errori e una catena `cause` limitata. Se restano cause non ispezionate, un codice di rete esterno non basta a classificare l'esito come `local-pending`: serve la prova indipendente del batch ancora durevole, altrimenti l'esito è `failed`. Un `permission-denied` già osservato resta `rejected`, salvo il recupero di un ACK perso con prova indipendente; un rigetto diretto resta sempre `rejected`.
+
 `synced` viene restituito anche per il guest e per un journal già vuoto: da solo non prova una nuova write Firestore della specifica operazione.
 
 `update-required` è intenzionalmente separato da questi status di trasporto: rappresenta incompatibilità di versione e porta l'intera sessione in fail-closed.
