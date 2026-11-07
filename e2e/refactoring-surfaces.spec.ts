@@ -92,6 +92,31 @@ for (const viewport of viewports) {
       }
       await page.getByRole('tab', { name: 'Storico', exact: true }).click();
       await expect(page.getByRole('heading', { name: 'Storico Dati', exact: true })).toBeVisible();
+      const outsideDay = page.locator('#view-data .history-day.outside:not(.selected):not(.today)').first();
+      await expect(outsideDay).toBeEnabled();
+      // Adjacent-month days remain actionable, so muted text must still meet WCAG AA.
+      const adjacentContrast = await outsideDay.evaluate(day => {
+        const style = getComputedStyle(day);
+        const panel = day.closest('.history-calendar-panel');
+        if (!panel) throw new Error('Missing calendar background');
+        const parse = (color: string) => {
+          const channels = color.match(/[0-9.]+/g)?.slice(0, 3).map(Number);
+          if (!channels || channels.length !== 3) throw new Error('Unexpected computed color');
+          return channels;
+        };
+        const text = parse(style.color);
+        const background = parse(getComputedStyle(panel).backgroundColor);
+        const opacity = Number(style.opacity);
+        const composite = text.map((value, index) => value * opacity + background[index] * (1 - opacity));
+        const luminance = (rgb: number[]) => rgb.map(channel => {
+          const normalized = channel / 255;
+          return normalized <= 0.04045 ? normalized / 12.92 : ((normalized + 0.055) / 1.055) ** 2.4;
+        }).reduce((sum, value, index) => sum + value * [0.2126, 0.7152, 0.0722][index], 0);
+        const lightness = luminance(composite);
+        const backdrop = luminance(background);
+        return (Math.max(lightness, backdrop) + 0.05) / (Math.min(lightness, backdrop) + 0.05);
+      });
+      expect(adjacentContrast).toBeGreaterThanOrEqual(4.5);
       await capture(page, testInfo, 'data-history');
       const detailTrigger = page.getByRole('button', { name: /Apri dettaglio/i });
       await detailTrigger.focus();

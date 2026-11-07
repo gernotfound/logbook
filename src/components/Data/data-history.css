@@ -201,7 +201,6 @@
 
 #view-data .history-day.outside {
     color: var(--text-muted);
-    opacity: .45;
 }
 
 #view-data .history-day.has-data:not(.has-multiple)::after {
