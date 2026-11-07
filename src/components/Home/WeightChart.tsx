@@ -53,7 +53,7 @@ function makeOptions(colors: ReturnType<typeof useChartAppearance>['colors'], re
             ticks: {
                 color: colors.muted,
                 callback: (val: any) => `${val} kg`,
-                font: { size: 11 }
+                font: { size: 12 }
             }
         },
         x: {
@@ -63,7 +63,7 @@ function makeOptions(colors: ReturnType<typeof useChartAppearance>['colors'], re
                 maxTicksLimit: 7,
                 maxRotation: 0,
                 autoSkip: true,
-                font: { size: 11 }
+                font: { size: 12 }
             }
         }
     }
@@ -74,7 +74,9 @@ export default function WeightChart({ chartData }: { chartData: any }) {
     const options = useMemo(() => makeOptions(colors, reducedMotion), [colors, reducedMotion]);
     const data = useMemo(() => ({ ...chartData, datasets: (chartData?.datasets || []).map((dataset: any) => ({
         ...dataset, borderColor: colors.primary, backgroundColor: colors.primary,
-        pointBackgroundColor: colors.primary, pointBorderColor: colors.surface, fill: false,
+        pointBackgroundColor: colors.primary, pointBorderColor: colors.surface,
+        pointHoverBackgroundColor: colors.surface, pointHoverBorderColor: colors.primary,
+        fill: false,
     })) }), [chartData, colors]);
     return <Line data={data} options={options as any} role="img" aria-label="Andamento del peso corporeo in chilogrammi" />;
 }

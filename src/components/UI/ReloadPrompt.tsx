@@ -5,6 +5,7 @@ import { applyPWAUpdate, checkForWaitingServiceWorker } from '../../lib/pwaUpdat
 
 const ReloadPrompt: React.FC = () => {
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const mountedRef = useRef(false);
   const updateInFlight = useRef(false);
   const activationAbortRef = useRef<AbortController | null>(null);
   const visibilityCheckRef = useRef(0);
@@ -23,14 +24,17 @@ const ReloadPrompt: React.FC = () => {
     onRegisteredSW(_swScriptUrl, r) {
       if (r && typeof r.update === 'function') {
         const requestUpdate = () => {
-          try {
-            const updateRes = r.update();
-            if (updateRes && typeof updateRes.catch === 'function') {
-              updateRes.catch(err => console.log('SW update error:', err));
-            }
-          } catch (err) {
-            console.log('SW update synchronous error:', err);
-          }
+          const requestId = visibilityCheckRef.current;
+          // An already-waiting worker may not fire another Workbox callback.
+          // The explicit prompt must also discover it at startup and on retries.
+          void checkForWaitingServiceWorker(r)
+            .then(waiting => {
+              // Dismissal or a newer visibility check invalidates this async result.
+              if (waiting && mountedRef.current && requestId === visibilityCheckRef.current) {
+                setNeedRefresh(true);
+              }
+            })
+            .catch(err => console.log('SW update error:', err));
         };
 
         // Controlla subito: iOS/PWA può tenere aperta una build per molto tempo.
@@ -56,7 +60,9 @@ const ReloadPrompt: React.FC = () => {
   }, []);
 
   useEffect(() => {
+    mountedRef.current = true;
     return () => {
+      mountedRef.current = false;
       activationAbortRef.current?.abort();
       if (intervalRef.current) {
         clearInterval(intervalRef.current);
@@ -67,7 +73,7 @@ const ReloadPrompt: React.FC = () => {
 
   // Al risveglio dell'app o cambio di visibilità, controlla la presenza di aggiornamenti
   useEffect(() => {
-    let active = true;
+    let cancelled = false;
     const handleVisibilityChange = () => {
       const requestId = ++visibilityCheckRef.current;
       if (
@@ -79,13 +85,15 @@ const ReloadPrompt: React.FC = () => {
       ) {
         try {
           navigator.serviceWorker.getRegistration().then(reg => {
-            if (!active || requestId !== visibilityCheckRef.current) return;
+            if (cancelled || requestId !== visibilityCheckRef.current || document.visibilityState !== 'visible') return;
             if (reg && typeof reg.update === 'function') {
               try {
                 void checkForWaitingServiceWorker(reg)
                   .then(waiting => {
-                    // A dismissed banner or newer foreground check supersedes this response.
-                    if (active && requestId === visibilityCheckRef.current && waiting) setNeedRefresh(true);
+                    if (!cancelled && requestId === visibilityCheckRef.current
+                      && document.visibilityState === 'visible' && waiting) {
+                      setNeedRefresh(true);
+                    }
                   })
                   .catch(err => console.log('SW visibility update error:', err));
               } catch (err) {
@@ -100,7 +108,7 @@ const ReloadPrompt: React.FC = () => {
     };
     document.addEventListener('visibilitychange', handleVisibilityChange);
     return () => {
-      active = false;
+      cancelled = true;
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, [setNeedRefresh]);

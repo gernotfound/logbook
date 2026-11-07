@@ -51,7 +51,7 @@ export function NutritionSupplementIntakes({
                             type="button"
                             className="btn-icon text-danger"
                             onClick={() => onRemoveIntake(intake.id)}
-                            aria-label="Rimuovi integratore"
+                            aria-label={`Rimuovi assunzione di ${supplement?.name ?? 'integratore eliminato'} delle ${timeStr}`}
                         >
                             ✕
                         </button>

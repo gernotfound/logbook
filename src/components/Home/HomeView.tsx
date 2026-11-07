@@ -46,7 +46,7 @@ const HomeView = ({ onNavigate, onOpenSettings, isActive = true }: any) => {
       kcalEaten, carbs, pro, fat, kcalTarget,
       bf, bfSource, streak, totalWorkouts,
       chartData,
-      weightPeriod, setWeightPeriod, weightStats,
+      weightPeriod, setWeightPeriod, weightStats, lastRecordedWeight,
       activePains, painColors, muscleColors, toggleActivePain,
       history, nutrition, library, userWeight
   } = homeState;
@@ -84,7 +84,7 @@ const HomeView = ({ onNavigate, onOpenSettings, isActive = true }: any) => {
 
         {/* Biometria + Recovery - Half Width Each */}
         <div className="card home-biometry-card">
-            <BiometryBentoCard weightStats={weightStats} bf={bf} bfSource={bfSource} />
+            <BiometryBentoCard weightStats={weightStats} lastRecordedWeight={lastRecordedWeight} bf={bf} bfSource={bfSource} />
         </div>
 
         <div className="card home-recovery-card">

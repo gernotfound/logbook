@@ -180,6 +180,7 @@ export const ExerciseSearchDropdown: React.FC<ExerciseSearchDropdownProps> = ({
                     ref={inputRef}
                     type="text"
                     role="combobox"
+                    aria-label="Cerca esercizio"
                     aria-expanded={isOpen}
                     aria-autocomplete="list"
                     aria-controls={isOpen ? listboxId : undefined}

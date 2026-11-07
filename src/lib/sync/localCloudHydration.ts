@@ -1,3 +1,4 @@
+import equal from 'fast-deep-equal';
 import type { UserData } from '../../types';
 import { UserDataSchema } from '../schema';
 import { generateId } from '../utils/date';
@@ -148,10 +149,17 @@ export async function hydrateLocal(owner: string, cloudData: UserData, months: s
             const data = applyRemoteDocuments(applicationBase, mergedDocs, catalog);
             data.pendingConflicts = current.data.pendingConflicts;
             const parsedData = parse(data);
-            saved = { ...current, ...currentEnvelopeVersions(), clock: updatedClock, data: parsedData, baseline: parsedBaseline, completeMonths: coverageMode === 'all' ? [...new Set(months)] : [...new Set([...current.completeMonths, ...months])], // Derived merge stamps belong to the pending journal, not to the
+            const next = { ...current, ...currentEnvelopeVersions(), clock: updatedClock, data: parsedData, baseline: parsedBaseline, completeMonths: coverageMode === 'all' ? [...new Set(months)] : [...new Set([...current.completeMonths, ...months])], // Derived merge stamps belong to the pending journal, not to the
                 // acknowledged cloud frontier. Only server reads can prove
                 // that a document was ever stored remotely.
                 syncMetaByDocument: syncMeta };
+            // Recovery previews are fenced by the local revision. Installing a
+            // different cloud baseline/causal frontier must invalidate them.
+            if (equal(next, current)) {
+                saved = current;
+                return raw;
+            }
+            saved = { ...next, revision: current.revision + 1 };
         }
         return saved;
     });

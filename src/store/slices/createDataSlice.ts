@@ -41,8 +41,17 @@ export const getInitialUserData = (): UserData | null => {
     }
 };
 
+// Snapshot boundaries from the same browser session must commit in invocation order.
+// IndexedDB serializes individual transactions, not the async catalog/read/commit
+// sequence preceding them. A failed earlier snapshot rejects its queued intents,
+// but cannot poison a newly authenticated session, even with the same UID.
+const inFlightSnapshotCommits = new Map<string, Promise<UserData | null>>();
+
 export const saveUserDataToCache = async (data: UserData | null, base?: UserData, expectedRevision?: number): Promise<UserData | null> => {
         const session = captureSession();
+        const sessionKey = JSON.stringify(session);
+        const prior = inFlightSnapshotCommits.get(sessionKey);
+        const persist = async (): Promise<UserData | null> => {
         const guard = () => isCurrentSession(session);
         if (!guard()) throw new Error('Sessione non più autorizzata a salvare dati locali.');
         if (data) {
@@ -74,6 +83,16 @@ export const saveUserDataToCache = async (data: UserData | null, base?: UserData
         await idbDel(`logbook:v2:${session.owner}`);
         if (guard()) clearStorageMarker(undefined, session.owner);
         return null;
+        };
+        // Start the first writer immediately; later writes await its full
+        // read/commit/readback, not merely the IndexedDB update callback.
+        const operation = prior ? prior.then(persist) : persist();
+        inFlightSnapshotCommits.set(sessionKey, operation);
+        void operation.then(
+            () => { if (inFlightSnapshotCommits.get(sessionKey) === operation) inFlightSnapshotCommits.delete(sessionKey); },
+            () => { if (inFlightSnapshotCommits.get(sessionKey) === operation) inFlightSnapshotCommits.delete(sessionKey); },
+        );
+        return operation;
 };
 
 function alignActiveWorkout(

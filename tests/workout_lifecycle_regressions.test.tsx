@@ -53,6 +53,25 @@ function seedCurrentDeviceWorkout(owner: string, snapshot: WorkoutSession): void
     persistPlainWorkoutSnapshot(snapshot, owner);
 }
 
+function advanceConsentAfterGuardRead(marker: string, next: string) {
+    const prior = localStorageMock.getItem.getMockImplementation();
+    if (!prior) throw new Error('Storage test implementation missing');
+    let advanced = false;
+    localStorageMock.getItem.mockImplementation((key: string) => {
+        const value = prior(key);
+        if (key === marker && !advanced) {
+            advanced = true;
+            // Simulate another tab publishing consent immediately after our guard read.
+            localStorage.setItem(marker, next);
+        }
+        return value;
+    });
+    return {
+        advanced: () => advanced,
+        restore: () => localStorageMock.getItem.mockImplementation(prior),
+    };
+}
+
 describe('Workout lifecycle durable recovery regressions', () => {
     let owner: string;
     beforeEach(() => {
@@ -70,6 +89,38 @@ describe('Workout lifecycle durable recovery regressions', () => {
         });
     });
     afterEach(() => vi.restoreAllMocks());
+
+    it('resets the current exercise UI when a running workout is replaced without unmounting TrainingSession', async () => {
+        await prepareUnlockedTestArchive(owner);
+        const exercises: WorkoutSession['exercises'] = [
+            { id: 'ex-one', exId: 'bench', sessionNote: '', sets: [] },
+            { id: 'ex-two', exId: 'squat', sessionNote: '', sets: [] },
+        ];
+        const first = { ...workout('running-a', true), routineName: 'First workout', exercises };
+        const next = { ...workout('running-b', true), routineName: 'Second workout', exercises };
+        const library = [
+            { id: 'bench', name: 'Panca', setsCount: 0, sets: [], muscles: [], secondaryMuscles: [] },
+            { id: 'squat', name: 'Squat', setsCount: 0, sets: [], muscles: [], secondaryMuscles: [] },
+        ];
+        useAppStore.setState({
+            userData: userData({ activeWorkout: first, library }), dataOwner: owner,
+            localWorkout: first,
+        });
+        renderOwnedWorkoutSession();
+        const progress = screen.getByRole('progressbar', { name: 'Avanzamento nella sequenza degli esercizi' });
+        expect(progress.getAttribute('aria-valuenow')).toBe('0');
+        fireEvent.click(screen.getByRole('button', { name: /squat/i }));
+        expect(progress.getAttribute('aria-valuenow')).toBe('100');
+
+        // Replacing a live workout must also reset state held above the keyed accordion tree.
+        act(() => useAppStore.setState({
+            userData: userData({ activeWorkout: next, library }),
+            localWorkout: next,
+        }));
+        expect(screen.getByRole('heading', { name: 'Second workout' })).toBeTruthy();
+        expect(screen.getByRole('progressbar', { name: 'Avanzamento nella sequenza degli esercizi' })
+            .getAttribute('aria-valuenow')).toBe('0');
+    });
 
     it('blocks pre-launch plaintext timer at vault readiness without deleting its only copy', async () => {
         const key = deviceKey('timer', owner);
@@ -119,6 +170,25 @@ describe('Workout lifecycle durable recovery regressions', () => {
         expect(readDeviceValueStrict(name, owner)).toBe(raw);
     });
 
+    it('does not relabel a pre-session answer if another tab advances consent after the session guard', async () => {
+        await prepareUnlockedTestArchive(owner);
+        const marker = `logbook:v2:${owner}:health-consent-generation`;
+        const name = 'draft:pre-session:guard-interleave';
+        localStorage.setItem(marker, '3');
+        render(<PreSessionCheckIn workoutId="guard-interleave"
+            onStart={vi.fn(async () => true)} onCancel={vi.fn(async () => true)} />);
+        const interleave = advanceConsentAfterGuardRead(marker, '5');
+        try {
+            fireEvent.click(screen.getByRole('button', { name: 'Energia: 4 su 5' }));
+            expect(interleave.advanced()).toBe(true);
+        } finally {
+            interleave.restore();
+        }
+        expect(readDeviceValueStrict(name, owner)).toBeNull();
+        expect(useAppStore.getState().localPersistenceBlocked).toBe(true);
+        expect(screen.getByRole('button', { name: 'Energia: 4 su 5' }).getAttribute('aria-pressed')).toBe('false');
+    });
+
     it('does not resurrect a legacy final workout rating after consent revocation and reacceptance', async () => {
         await prepareUnlockedTestArchive(owner);
         const current = workout('old-final-rating', true);
@@ -134,6 +204,50 @@ describe('Workout lifecycle durable recovery regressions', () => {
         expect(readDeviceValueStrict(name, owner)).toBe(original);
         expect(() => writeWorkoutRecoveryDraft(name, owner, null)).toThrow('senza provenienza');
         expect(readDeviceValueStrict(name, owner)).toBe(original);
+    });
+
+    it('preserves the newer check-in revision and refuses stale start and edits under the same account', async () => {
+        await prepareUnlockedTestArchive(owner);
+        localStorage.setItem(`logbook:v2:${owner}:health-consent-generation`, '3');
+        const name = 'draft:pre-session:concurrent-checkin';
+        const onStart = vi.fn(async () => true);
+        render(<PreSessionCheckIn workoutId="concurrent-checkin" onStart={onStart} onCancel={vi.fn(async () => true)} />);
+        fireEvent.click(screen.getByRole('button', { name: 'Energia: 4 su 5' }));
+        const first = readDeviceValueStrict(name, owner);
+        expect(first).not.toBeNull();
+        writeWorkoutRecoveryDraft(name, owner, { energy: 5 }, '3');
+        const newer = readDeviceValueStrict(name, owner);
+        expect(newer).not.toBe(first);
+
+        fireEvent.click(screen.getByRole('button', { name: 'Energia: 3 su 5' }));
+        expect(readDeviceValueStrict(name, owner)).toBe(newer);
+        expect(screen.getByRole('button', { name: 'Energia: 4 su 5' }).getAttribute('aria-pressed')).toBe('true');
+        fireEvent.click(screen.getByRole('button', { name: 'Salta check-in e inizia' }));
+        await waitFor(() => expect(useAppStore.getState().localPersistenceBlocked).toBe(true));
+        expect(onStart).not.toHaveBeenCalled();
+        expect(readDeviceValueStrict(name, owner)).toBe(newer);
+    });
+
+    it('does not overwrite a newer final rating or complete with an obsolete editor', async () => {
+        await prepareUnlockedTestArchive(owner);
+        localStorage.setItem(`logbook:v2:${owner}:health-consent-generation`, '3');
+        const active = workout('post-concurrent', true);
+        const name = 'draft:post-session:' + active.id;
+        useAppStore.setState({ userData: userData({ activeWorkout: active }), localWorkout: active });
+        renderOwnedWorkoutSession();
+        fireEvent.click(screen.getByRole('button', { name: 'Termina allenamento' }));
+        fireEvent.click(screen.getByRole('button', { name: 'Umore: 5 su 5' }));
+        const original = JSON.parse(readDeviceValueStrict(name, owner)!);
+        writeWorkoutRecoveryDraft(name, owner, {
+            ...original.data,
+            draft: { ...original.data.draft, mood: '2' },
+        }, '3');
+        const newer = readDeviceValueStrict(name, owner);
+        fireEvent.click(screen.getByRole('button', { name: 'Salva e termina' }));
+        await waitFor(() => expect(useAppStore.getState().localPersistenceBlocked).toBe(true));
+        expect(readDeviceValueStrict(name, owner)).toBe(newer);
+        expect(useAppStore.getState().localWorkout?.id).toBe(active.id);
+        expect(useAppStore.getState().userData?.history?.some(item => item.id === active.id)).not.toBe(true);
     });
 
     it('preserves the source consent epoch of the current final rating against stale mounted edits', async () => {
@@ -154,6 +268,26 @@ describe('Workout lifecycle durable recovery regressions', () => {
         localStorage.setItem(marker, '5');
         fireEvent.click(screen.getByRole('button', { name: 'Umore: 4 su 5' }));
         expect(readDeviceValueStrict(name, owner)).toBe(raw);
+    });
+
+    it('does not relabel a final-session draft if consent changes between the guard and device write', async () => {
+        await prepareUnlockedTestArchive(owner);
+        const current = workout('post-session-guard-interleave', true);
+        const name = 'draft:post-session:' + current.id;
+        const marker = `logbook:v2:${owner}:health-consent-generation`;
+        localStorage.setItem(marker, '3');
+        useAppStore.setState({ userData: userData({ activeWorkout: current }), localWorkout: current });
+        renderOwnedWorkoutSession();
+        const interleave = advanceConsentAfterGuardRead(marker, '5');
+        try {
+            fireEvent.click(screen.getByRole('button', { name: 'Termina allenamento' }));
+            expect(interleave.advanced()).toBe(true);
+        } finally {
+            interleave.restore();
+        }
+        expect(readDeviceValueStrict(name, owner)).toBeNull();
+        expect(useAppStore.getState().localPersistenceBlocked).toBe(true);
+        expect(screen.queryByRole('heading', { name: 'Com’è andato l’allenamento?' })).toBeNull();
     });
 
     it('keeps corrupted owner metadata in an old workout draft rather than overwriting it', async () => {
@@ -463,6 +597,33 @@ describe('Workout lifecycle durable recovery regressions', () => {
             expect(useAppStore.getState().localWorkout?.id).toBe(active.id);
         } finally {
             draftRegistry.unregister(failOnFlush);
+        }
+    });
+
+    it('rejects a stale completion confirmation even when the same UID and workout ID return', async () => {
+        await prepareUnlockedTestArchive(owner);
+        const active = workout('finish-auth-epoch', true);
+        const initial = userData({ activeWorkout: active });
+        await initializeLocal(owner, initial);
+        useAppStore.setState({ userData: initial, dataOwner: owner, localWorkout: active });
+        const previousDispatch = useAppStore.getState().dispatchDomainOperation;
+        const mockedDispatch = vi.fn(previousDispatch);
+        useAppStore.setState({ dispatchDomainOperation: mockedDispatch });
+        vi.mocked(useDialogStore.getState().showConfirm).mockImplementationOnce(async () => {
+            // The new session can have the same identity and locally restored workout.
+            invalidateSession();
+            return true;
+        });
+        try {
+            const hook = renderHook(() => useWorkoutSession());
+            await act(async () => { expect(await hook.result.current.endWorkout()).toBeNull(); });
+            expect(mockedDispatch).not.toHaveBeenCalled();
+            expect(useAppStore.getState().localWorkout?.id).toBe(active.id);
+            const durable = await readLocal(owner);
+            expect(durable?.data.activeWorkout?.id).toBe(active.id);
+            expect(durable?.data.history?.some(item => item.id === active.id)).toBe(false);
+        } finally {
+            useAppStore.setState({ dispatchDomainOperation: previousDispatch });
         }
     });
 

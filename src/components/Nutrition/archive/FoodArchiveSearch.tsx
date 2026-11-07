@@ -15,6 +15,7 @@ export const FoodArchiveSearch: React.FC<FoodArchiveSearchProps> = ({
             <input 
                 type="text" 
                 placeholder="Cerca per nome o marca..." 
+                aria-label="Cerca alimenti per nome o marca"
                 value={searchQuery}
                 onChange={e => setSearchQuery(e.target.value)}
                 onFocus={e => e.target.select()}
@@ -23,7 +24,7 @@ export const FoodArchiveSearch: React.FC<FoodArchiveSearchProps> = ({
                     margin: 0, 
                     height: '44px', 
                     paddingLeft: '14px', 
-                    paddingRight: searchQuery ? '36px' : '14px',
+                    paddingRight: searchQuery ? '56px' : '14px',
                     fontSize: '16px',
                     borderRadius: '10px'
                 }}

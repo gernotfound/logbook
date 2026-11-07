@@ -76,6 +76,8 @@ export async function revertRejectedConsent(owner: string, expected: UserData['l
             && op.seq === rejectedSeq
         ));
         const data = parse({ ...current.data, legalConsent: previous });
-        return { ...current, data, pending };
+        // A rollback changes the authenticated envelope and must invalidate
+        // previews captured before it, even when unrelated intents remain.
+        return { ...current, data, pending, revision: current.revision + 1 };
     });
 }

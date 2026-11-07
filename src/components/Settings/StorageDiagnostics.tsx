@@ -12,7 +12,7 @@ export function StorageDiagnostics() {
                 <span className="settings-meta settings-danger">Persistenza non supportata (Storage API mancante).</span>
             ) : (
                 <dl className="settings-details">
-                    <div><dt>Stato</dt><dd className={storageDiag.persistent ? 'settings-success' : 'settings-warning'}>{storageDiag.persistent ? 'Persistente (Sicuro)' : 'Best-Effort (Volatile)'}</dd></div>
+                    <div><dt>Stato</dt><dd className={storageDiag.persistent ? 'settings-success' : 'settings-warning'}>{storageDiag.persistent ? 'Persistente (rischio ridotto)' : 'Best effort (dati rimovibili)'}</dd></div>
                     {storageDiag.usage !== undefined && storageDiag.quota !== undefined && <div><dt>Utilizzo</dt><dd>{(storageDiag.usage / 1024 / 1024).toFixed(2)} MB / {(storageDiag.quota / 1024 / 1024).toFixed(2)} MB</dd></div>}
                 </dl>
             )}

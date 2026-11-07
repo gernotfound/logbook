@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 import RecoveryBentoCard from '../src/components/Home/widgets/RecoveryBentoCard';
 import TrainingPlanning from '../src/components/Training/planning/TrainingPlanning';
 import { UserDataSchema } from '../src/lib/schema';
+import { Logic } from '../src/lib/logic';
 import { storageOwner } from '../src/lib/sync/session';
 import { useAppStore } from '../src/store/useAppStore';
 
@@ -24,6 +25,25 @@ describe('React effect replacement with derived state', () => {
 
         view.rerender(<RecoveryBentoCard {...props} />);
         expect(screen.getByRole('button', { name: '1 dolori attivi' }).getAttribute('aria-expanded')).toBe('false');
+    });
+
+    it('gives the muscle pain search an accessible name and exposes toggle state', () => {
+        const muscle = Logic.searchMuscles('pettorali', 8)[0];
+        expect(muscle).toBeDefined();
+        const onTogglePain = vi.fn();
+        render(<RecoveryBentoCard
+            activePains={[muscle.id]}
+            painColors={{}}
+            muscleColors={{}}
+            onTogglePain={onTogglePain}
+        />);
+
+        const search = screen.getByRole('textbox', { name: 'Cerca muscolo dolorante' });
+        fireEvent.change(search, { target: { value: 'pettorali' } });
+        const selected = screen.getAllByRole('button', { pressed: true });
+        expect(selected.length).toBeGreaterThan(0);
+        fireEvent.click(selected[0]);
+        expect(onTogglePain).toHaveBeenCalledWith(muscle.id);
     });
 
     it('never carries the expanded details of an active cycle to a different cycle or back', () => {
