@@ -46,6 +46,7 @@ export default function WeeklyVolumeChart({
   const { colors, reducedMotion } = useChartAppearance();
   const [selectedWeeks, setSelectedWeeks] = useState<number>(defaultWeeks);
   const [isCalculating, setIsCalculating] = useState(true);
+  const [calcError, setCalcError] = useState(false);
   const { calculateVolumeStats } = useAnalyticsWorker(isActive);
 
   const [calcResult, setCalcResult] = useState<{points: any[], stats: any}>({
@@ -67,12 +68,14 @@ export default function WeeklyVolumeChart({
       .then((res: any) => {
         if (isMounted) {
           setCalcResult(res);
+          setCalcError(false);
           setIsCalculating(false);
         }
       })
       .catch((err: any) => {
         if (!isMounted) return;
         console.error("Errore calcolo grafico volume:", err);
+        setCalcError(true);
         setIsCalculating(false);
       });
 
@@ -174,7 +177,7 @@ export default function WeeklyVolumeChart({
       <div className="home-chart-header">
         <div>
           <h2>Volume di allenamento settimanale</h2>
-          {stats.hasData && <div className="analytics-stat-line">
+          {!isCalculating && !calcError && stats.hasData && <div className="analytics-stat-line">
             <span>Attuale: <strong>{stats.currentWeekVolumeKg.toLocaleString('it-IT')} kg</strong></span>
             <span>Media: <strong>{stats.avgWeeklyVolumeKg.toLocaleString('it-IT')} kg</strong></span>
             {stats.percentageChange !== null && <span className="analytics-change">{stats.percentageChange > 0 ? '+' : ''}{stats.percentageChange.toFixed(1)}%</span>}
@@ -186,7 +189,7 @@ export default function WeeklyVolumeChart({
       </div>
       {isCalculating && <div className="analytics-loading" role="status"><div className="spinner" />Aggiornamento grafico...</div>}
       <div className="home-chart-canvas">
-        {stats.hasData ? <Bar data={chartData} options={chartOptions as any} role="img" aria-label={`Volume settimanale. Attuale: ${stats.currentWeekVolumeKg} kg; media: ${stats.avgWeeklyVolumeKg} kg.`} /> : (
+        {isCalculating ? null : calcError ? <div role="alert" className="home-chart-empty"><p>Impossibile aggiornare il grafico del volume. Riprova.</p></div> : stats.hasData ? <Bar data={chartData} options={chartOptions as any} role="img" aria-label={`Volume settimanale. Attuale: ${stats.currentWeekVolumeKg} kg; media: ${stats.avgWeeklyVolumeKg} kg.`} /> : (
           <div className="home-chart-empty"><Dumbbell size={32} aria-hidden="true" /><p>Nessun dato di allenamento nelle settimane selezionate.</p><p className="text-sm">Completa una sessione per visualizzare il volume di allenamento.</p></div>
         )}
       </div>
