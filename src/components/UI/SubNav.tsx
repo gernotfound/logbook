@@ -51,6 +51,10 @@ export default function SubNav<T extends string>({
       ? new ResizeObserver(revealSelection)
       : null;
     observer?.observe(node);
+    // Text metrics may change after font loading without resizing the strip.
+    // Observe the active tab too, so its expanded width is revealed.
+    const activeTab = node.querySelector<HTMLElement>('[aria-selected="true"]');
+    if (activeTab) observer?.observe(activeTab);
     window.addEventListener('resize', revealSelection);
 
     return () => {
