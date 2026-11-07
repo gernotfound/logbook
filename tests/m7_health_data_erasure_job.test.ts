@@ -222,6 +222,51 @@ describe('trusted data-only erasure worker', () => {
     expect(fixture.records.has(consentPath('a'))).toBe(true);
   });
 
+  it.each([
+    'foreign-consent-owner', 'missing-completion-epoch',
+    'inconsistent-completion-epoch', 'consent-before-completion',
+  ] as const)('preserves a receipt when retention proof has %s', async scenario => {
+    await createHealthDataErasureJob('a');
+    expect(await processHealthDataErasure('a', Date.now() + 30_000)).toBe('complete');
+    const job = fixture.records.get(markerPath('a'))!;
+    const consent = fixture.records.get(consentPath('a'))!;
+    const recordedJob = { ...job };
+    const recordedConsent = { ...consent };
+    const expired = Timestamp.fromMillis(Date.now() - 60_000);
+    job.purgeAfter = expired;
+
+    if (scenario === 'foreign-consent-owner') consent.uid = 'b';
+    if (scenario === 'missing-completion-epoch') delete job.completedRevision;
+    if (scenario === 'inconsistent-completion-epoch') job.completedRevision = 5;
+    if (scenario === 'consent-before-completion') consent.revision = 3;
+
+    expect(await purgeExpiredCompletedHealthErasures(Date.now() + 30_000)).toBe(0);
+    expect(fixture.records.has(markerPath('a'))).toBe(true);
+    expect((fixture.records.get(markerPath('a'))!.purgeAfter as Timestamp).toMillis())
+      .toBeGreaterThan(Date.now() + 6 * 24 * 60 * 60 * 1000);
+
+    // Repair the trusted evidence and retry after the deferral period.
+    fixture.records.set(consentPath('a'), recordedConsent);
+    fixture.records.set(markerPath('a'), { ...recordedJob, purgeAfter: expired });
+    expect(await purgeExpiredCompletedHealthErasures(Date.now() + 30_000)).toBe(1);
+    expect(fixture.records.has(markerPath('a'))).toBe(false);
+  });
+
+  it('retires an old completed receipt after a newer explicit consent', async () => {
+    await createHealthDataErasureJob('a');
+    expect(await processHealthDataErasure('a', Date.now() + 30_000)).toBe('complete');
+    await recordHealthConsentReacceptance('a', {
+      acceptedTerms: true, acceptedHealthData: true,
+      privacyVersion: LEGAL_VERSIONS.privacy, termsVersion: LEGAL_VERSIONS.terms,
+    }, 4);
+    fixture.records.get(markerPath('a'))!.purgeAfter = Timestamp.fromMillis(Date.now() - 60_000);
+    expect(await purgeExpiredCompletedHealthErasures(Date.now() + 30_000)).toBe(1);
+    expect(fixture.records.has(markerPath('a'))).toBe(false);
+    expect(fixture.records.get(consentPath('a'))).toMatchObject({
+      uid: 'a', status: 'active', revision: 5, erasedBeforeRevision: 3,
+    });
+  });
+
   it('recovers owner-scoped completion proof after the 30-day receipt expires and never reenqueues it', async () => {
     await createHealthDataErasureJob('a');
     expect(await processHealthDataErasure('a', Date.now() + 30_000)).toBe('complete');
@@ -277,7 +322,7 @@ describe('trusted data-only erasure worker', () => {
       });
     }
     fixture.records.set(markerPath('valid'), {
-      uid: 'valid', status: 'complete', consentRevision: 3, purgeAfter: expired,
+      uid: 'valid', status: 'complete', consentRevision: 3, completedRevision: 4, purgeAfter: expired,
     });
     fixture.records.set(consentPath('valid'), { uid: 'valid', status: 'withdrawn', revision: 4, erasedBeforeRevision: 3 });
     expect(await purgeExpiredCompletedHealthErasures(Date.now() + 30_000)).toBe(1);
@@ -294,7 +339,7 @@ describe('trusted data-only erasure worker', () => {
       });
     }
     fixture.records.set(markerPath('zz-valid'), {
-      uid: 'zz-valid', status: 'complete', consentRevision: 3, purgeAfter: expired,
+      uid: 'zz-valid', status: 'complete', consentRevision: 3, completedRevision: 4, purgeAfter: expired,
     });
     fixture.records.set(consentPath('zz-valid'), {
       uid: 'zz-valid', status: 'withdrawn', revision: 4, erasedBeforeRevision: 3,
@@ -319,7 +364,7 @@ describe('trusted data-only erasure worker', () => {
   it('keeps a blocked receipt and deletes it only after epoch proof is repaired', async () => {
     const expired = Timestamp.fromMillis(Date.now() - 60_000);
     fixture.records.set(markerPath('blocked'), {
-      uid: 'blocked', status: 'complete', consentRevision: 3, purgeAfter: expired,
+      uid: 'blocked', status: 'complete', consentRevision: 3, completedRevision: 4, purgeAfter: expired,
     });
     expect(await purgeExpiredCompletedHealthErasures(Date.now() + 30_000)).toBe(0);
     const deferred = fixture.records.get(markerPath('blocked'))!;
