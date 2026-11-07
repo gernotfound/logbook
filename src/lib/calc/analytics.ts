@@ -117,9 +117,9 @@ export function getWorkoutDateString(w: WorkoutSession | any): string | null {
             return clean.slice(0, 10);
         }
     }
-    const ts = typeof w.globalStartTime === 'number' && !isNaN(w.globalStartTime)
+    const ts = Number.isFinite(w.globalStartTime)
         ? w.globalStartTime
-        : (typeof w.globalEndTime === 'number' && !isNaN(w.globalEndTime) ? w.globalEndTime : null);
+        : (Number.isFinite(w.globalEndTime) ? w.globalEndTime : null);
 
     if (ts !== null) {
         return Logic.getLocalDateString(ts);
@@ -179,7 +179,7 @@ function* computeWeeklyVolumeSteps(
 ): Generator<void, WeeklyVolumeResult, void> {
     const safeHistory = Array.isArray(history) ? history : [];
     const safeLibrary = Array.isArray(library) ? library : [];
-    const safeUserWeight = typeof userWeight === 'number' && userWeight > 0 ? userWeight : 80;
+    const safeUserWeight = Number.isFinite(userWeight) && userWeight > 0 ? userWeight : 80;
 
     const intervals = generateWeekIntervals(numWeeks, referenceDate);
     const libraryLookup = new Map<string, Exercise>();
@@ -329,11 +329,11 @@ export function computeWeeklyNutritionSeries(
             const dateStr = format(cur, 'yyyy-MM-dd');
             const dayData = safeNutrition[dateStr];
 
-            if (dayData && typeof dayData.kcal === 'number' && !isNaN(dayData.kcal) && dayData.kcal > 0) {
+            if (dayData && Number.isFinite(dayData.kcal) && dayData.kcal > 0) {
                 weekKcalSum += dayData.kcal;
-                weekCarbsSum += typeof dayData.carbs === 'number' ? dayData.carbs : 0;
-                weekProSum += typeof dayData.pro === 'number' ? dayData.pro : 0;
-                weekFatSum += typeof dayData.fat === 'number' ? dayData.fat : 0;
+                weekCarbsSum += Number.isFinite(dayData.carbs) ? dayData.carbs : 0;
+                weekProSum += Number.isFinite(dayData.pro) ? dayData.pro : 0;
+                weekFatSum += Number.isFinite(dayData.fat) ? dayData.fat : 0;
                 loggedDays++;
             }
             cur = addDays(cur, 1);
