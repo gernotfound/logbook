@@ -89,6 +89,9 @@ export const LoginBox: React.FC<LoginBoxProps> = ({ onCancel }) => {
                     return;
                 }
                 const weakError = await validatePasswordAgainstPolicy(password);
+                // A closed login overlay must not launch a new registration after
+                // the asynchronous password policy check completes.
+                if (!mountedRef.current) return;
                 if (weakError) {
                     setFormError(weakError);
                     return;

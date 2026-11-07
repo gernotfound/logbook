@@ -369,6 +369,37 @@ describe('LoginBox guest Google authentication', () => {
         expect(screen.queryByRole('alert')).toBeNull();
     });
 
+    it('does not register an account when the overlay closes during asynchronous password validation', async () => {
+        authState.isGuest = false;
+        const view = render(<LoginBox onCancel={() => {}} />);
+        fireEvent.click(screen.getAllByRole('button', { name: 'Registrati' }).at(-1)!);
+        await waitFor(() => expect(validatePassword).toHaveBeenCalledWith(expect.anything(), ''));
+
+        let release!: (result: any) => void;
+        vi.mocked(validatePassword).mockImplementationOnce(() => new Promise(resolve => { release = resolve; }));
+        fireEvent.change(screen.getByRole('textbox', { name: 'Email' }), {
+            target: { value: 'new-account@example.com' },
+        });
+        fireEvent.change(screen.getByLabelText('Password'), {
+            target: { value: 'SecurePassword123!' },
+        });
+        fireEvent.change(screen.getByLabelText('Conferma password'), {
+            target: { value: 'SecurePassword123!' },
+        });
+        fireEvent.click(screen.getAllByRole('button', { name: 'Registrati' }).at(-1)!);
+        await waitFor(() => expect(validatePassword).toHaveBeenCalledWith(expect.anything(), 'SecurePassword123!'));
+        expect(authMocks.registerWithEmail).not.toHaveBeenCalled();
+
+        view.unmount();
+        await act(async () => {
+            release({
+                isValid: true,
+                passwordPolicy: { customStrengthOptions: { minPasswordLength: 8 } },
+            });
+        });
+        expect(authMocks.registerWithEmail).not.toHaveBeenCalled();
+    });
+
     it('does not distinguish a non-existent email from a successful password reset request', async () => {
         authState.isGuest = false;
         const messages: string[] = [];
