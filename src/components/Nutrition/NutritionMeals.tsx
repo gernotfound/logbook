@@ -5,6 +5,7 @@ import { useDialogStore } from '../../store/useDialogStore';
 import { useAppStore } from '../../store/useAppStore';
 import { useSupplements } from '../../hooks/useSupplements';
 import { Logic } from '../../lib/logic';
+import { captureSession, isCurrentSession } from '../../lib/sync/session';
 import type { LoggedMealItem } from '../../types';
 import { NutritionDateNavigator } from './meals/NutritionDateNavigator';
 import { NutritionFoodSearch } from './meals/NutritionFoodSearch';
@@ -108,10 +109,13 @@ function NutritionMealsContent({
                                 aria-pressed={isDayOn === option.value}
                                 onClick={async () => {
                                     if (isDayOn === option.value) return;
+                                    // A confirmation may outlive its owner or the original Auth epoch.
+                                    let session: ReturnType<typeof captureSession>;
+                                    try { session = captureSession(); } catch { return; }
                                     const needsConfirm = isDayOn !== undefined;
-                                    if (!needsConfirm || await showConfirm(`Sei sicuro di voler cambiare il giorno in ${option.label}?`)) {
-                                        await setDayType(option.value);
-                                    }
+                                    if (needsConfirm && !(await showConfirm(`Sei sicuro di voler cambiare il giorno in ${option.label}?`))) return;
+                                    if (!isCurrentSession(session)) return;
+                                    await setDayType(option.value);
                                 }}
                             >
                                 {option.label}

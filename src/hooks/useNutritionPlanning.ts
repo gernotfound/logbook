@@ -4,6 +4,7 @@ import { useDialogStore } from '../store/useDialogStore';
 import { Logic } from '../lib/logic';
 import type { NutritionPlanning } from '../types';
 import { createDefaultNutritionPlanning, normalizeOnDaysCount } from '../lib/nutritionDefaults';
+import { captureSession, isCurrentSession, type SessionSnapshot } from '../lib/sync/session';
 
 // Form inputs have intermediate strings (including an empty field), while only
 // normalized numeric values may enter the persisted NutritionPlanning schema.
@@ -50,13 +51,21 @@ function deriveMacroSplit(avgValue: unknown, boostPercentValue: unknown, onDaysC
 }
 
 export function useNutritionPlanning() {
-    const storePlanning = useAppStore(state => state.userData?.nutritionPlanning);
-    const nutritionMap = useAppStore(state => state.userData?.nutrition);
-    const profile = useAppStore(state => state.userData?.profile);
+    const dataOwner = useAppStore(state => state.dataOwner);
+    const selectedPlanning = useAppStore(state => state.userData?.nutritionPlanning);
+    const selectedNutrition = useAppStore(state => state.userData?.nutrition);
+    const selectedProfile = useAppStore(state => state.userData?.profile);
+    let visibleOwner: string | null = null;
+    try { visibleOwner = captureSession().owner; }
+    catch { /* Unreadable ownership must not expose a previous user's data. */ }
+    const owned = visibleOwner !== null && dataOwner === visibleOwner;
+    const storePlanning = owned ? selectedPlanning : undefined;
+    const nutritionMap = owned ? selectedNutrition : undefined;
+    const profile = owned ? selectedProfile : undefined;
     const dispatchDomainOperation = useAppStore(state => state.dispatchDomainOperation);
     const showAlert = useDialogStore(state => state.showAlert);
 
-    const [localPlanning, setLocalPlanning] = useState<NutritionPlanningDraft | null>(null);
+    const [localPlanning, setLocalPlanning] = useState<{ session: SessionSnapshot; values: NutritionPlanningDraft } | null>(null);
     const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'unsaved'>('idle');
     const draftRevision = useRef(0);
 
@@ -65,13 +74,14 @@ export function useNutritionPlanning() {
 
     const defaultPlanning: NutritionPlanningDraft = { ...createDefaultNutritionPlanning(), weight: latestWeight };
 
-    const basePlanning = localPlanning ?? storePlanning ?? defaultPlanning;
+    const activeDraft = localPlanning && isCurrentSession(localPlanning.session) ? localPlanning.values : null;
+    const basePlanning = activeDraft ?? storePlanning ?? defaultPlanning;
     const planning: NutritionPlanningDraft = {
         ...basePlanning,
         avgMacros: basePlanning.avgMacros ? { ...defaultPlanning.avgMacros, ...basePlanning.avgMacros } : defaultPlanning.avgMacros,
         onBoost: basePlanning.onBoost ? { ...defaultPlanning.onBoost, ...basePlanning.onBoost } : defaultPlanning.onBoost,
         onDaysCount: normalizeOnDaysCount(basePlanning.onDaysCount),
-        weight: basePlanning.weight || latestWeight,
+        weight: basePlanning.weight ?? latestWeight,
         normocalorica: basePlanning.normocalorica ? { ...defaultPlanning.normocalorica, ...basePlanning.normocalorica } : defaultPlanning.normocalorica,
     };
 
@@ -105,28 +115,33 @@ export function useNutritionPlanning() {
     }), [storePlanning, nutritionMap, profile]);
     const tdeeCalc = useMemo(() => Logic.calculateTDEEAndMacros(tdeeUserData), [tdeeUserData]);
 
-    const handleUpdate = (field: keyof NutritionPlanningDraft, value: NutritionPlanningDraft[keyof NutritionPlanningDraft]) => {
+    const updateDraft = (update: (value: NutritionPlanningDraft) => NutritionPlanningDraft) => {
+        const session = captureSession();
+        if (useAppStore.getState().dataOwner !== session.owner) return;
         draftRevision.current++;
         setSaveStatus('unsaved');
-        setLocalPlanning({ ...planning, [field]: value });
+        // Functional updates compose simultaneous field edits without reviving an old Auth draft.
+        setLocalPlanning(previous => ({
+            session,
+            values: update(previous && isCurrentSession(previous.session) ? previous.values : planning),
+        }));
+    };
+    const handleUpdate = (field: keyof NutritionPlanningDraft, value: NutritionPlanningDraft[keyof NutritionPlanningDraft]) => {
+        updateDraft(previous => ({ ...previous, [field]: value }));
     };
 
     const handleUpdateAvgMacros = (field: keyof NonNullable<NutritionPlanningDraft['avgMacros']>, value: string) => {
-        draftRevision.current++;
-        setSaveStatus('unsaved');
-        setLocalPlanning({
-            ...planning,
-            avgMacros: { ...planning.avgMacros!, [field]: value === '' ? '' : Number(value) }
-        });
+        updateDraft(previous => ({
+            ...previous,
+            avgMacros: { ...previous.avgMacros!, [field]: value === '' ? '' : Number(value) },
+        }));
     };
 
     const handleUpdateOnBoost = (field: keyof NonNullable<NutritionPlanningDraft['onBoost']>, value: string) => {
-        draftRevision.current++;
-        setSaveStatus('unsaved');
-        setLocalPlanning({
-            ...planning,
-            onBoost: { ...planning.onBoost!, [field]: value === '' ? '' : Number(value) }
-        });
+        updateDraft(previous => ({
+            ...previous,
+            onBoost: { ...previous.onBoost!, [field]: value === '' ? '' : Number(value) },
+        }));
     };
 
     const handleSave = async (e?: { preventDefault(): void }) => {
@@ -184,6 +199,11 @@ export function useNutritionPlanning() {
             offMacros: currentOffMacros
         };
 
+        const session = captureSession();
+        if (!isCurrentSession(session) || useAppStore.getState().dataOwner !== session.owner) {
+            await showAlert('Pianificazione non disponibile per la sessione corrente.');
+            return;
+        }
         const revisionAtSubmit = draftRevision.current;
         setSaveStatus('saving');
         try {
@@ -195,7 +215,8 @@ export function useNutritionPlanning() {
             if (!result.ok && result.status !== 'local-pending') {
                 throw new Error('Salvataggio non confermato');
             }
-            // Keep keystrokes made while saving, instead of clearing newer drafts.
+            // A superseded Auth epoch must not clear the next session's edits or status.
+            if (!isCurrentSession(session)) return;
             if (draftRevision.current === revisionAtSubmit) {
                 setLocalPlanning(null);
                 setSaveStatus('idle');
@@ -203,6 +224,7 @@ export function useNutritionPlanning() {
                 setSaveStatus('unsaved');
             }
         } catch {
+            if (!isCurrentSession(session)) return;
             setSaveStatus('unsaved');
             // The draft remains editable, but must not be confused with a saved plan.
             await showAlert("Errore durante il salvataggio della pianificazione.");
@@ -210,7 +232,7 @@ export function useNutritionPlanning() {
     };
 
     return {
-        planning, saveStatus,
+        planning, saveStatus: localPlanning && !isCurrentSession(localPlanning.session) ? 'idle' as const : saveStatus,
         onMacrosCalc, offMacrosCalc, avgMacrosCalc, tdeeCalc,
         currentOnMacros, currentOffMacros,
         handleUpdate, handleUpdateAvgMacros, handleUpdateOnBoost, handleSave

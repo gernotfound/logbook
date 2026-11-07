@@ -48,7 +48,7 @@ describe('TrainingExercises decomposition parity', () => {
             handleToggleMuscleById: vi.fn(),
             removeMuscleById: vi.fn(),
             handleEditClick: vi.fn(),
-            handleCancelEdit: vi.fn(),
+            handleCancelEdit: vi.fn(() => true),
             handleSaveExercise: vi.fn().mockResolvedValue(true),
             handleDelete: vi.fn(),
             handleRestoreExercise: vi.fn(),
@@ -70,6 +70,16 @@ describe('TrainingExercises decomposition parity', () => {
         renderWithProviders(<TrainingExercises />);
         expect(screen.getByRole('button', { name: 'Crea esercizio' })).toBeDefined();
         expect(screen.queryByRole('heading', { name: 'Nuovo esercizio' })).toBeNull();
+    });
+
+    it('does not close the editor if protected draft cleanup fails', () => {
+        renderWithProviders(<TrainingExercises />);
+        const hook = mocks.useTrainingExercises.mock.results[0].value;
+        hook.handleCancelEdit.mockReturnValue(false);
+        fireEvent.click(screen.getByRole('button', { name: 'Crea esercizio' }));
+        fireEvent.click(screen.getByRole('button', { name: 'Chiudi' }));
+        expect(hook.handleCancelEdit).toHaveBeenCalledOnce();
+        expect(screen.getByRole('heading', { level: 2, name: 'Nuovo esercizio' })).toBeDefined();
     });
 
     it('opens and cancels the creation form through the existing reset callback', () => {
