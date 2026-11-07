@@ -97,8 +97,8 @@ const WorkoutReportModal: React.FC<WorkoutReportModalProps> = ({ workout, histor
             
             setIsSavingAsRoutine(false);
         } catch {
-            // An offline-classified rejection does not prove an IndexedDB commit.
-            // Keep the editor open so the user can retry without losing the name.
+            // The durable boundary already accepts verified local-pending results.
+            // An error message cannot turn a rejected/unsafe save into confirmation.
             void showAlert("Errore durante il salvataggio della scheda.");
         } finally {
             setIsSavingRoutineLoading(false);
