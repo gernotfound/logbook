@@ -521,4 +521,73 @@ describe('M4 causal metadata compaction', () => {
         expect(metas).toEqual(before);
     });
 
+
+    it.each([
+        { order: ['profile', 'profile/name', 'profile/name/value'] },
+        { order: ['profile', 'profile/name/value', 'profile/name'] },
+        { order: ['profile/name', 'profile', 'profile/name/value'] },
+        { order: ['profile/name', 'profile/name/value', 'profile'] },
+        { order: ['profile/name/value', 'profile', 'profile/name'] },
+        { order: ['profile/name/value', 'profile/name', 'profile'] },
+    ])('preserves nested terminal barriers across insertion order $order until the entire subtree is stable', ({ order }) => {
+        const operations: SemanticOperation[] = [
+            { docPath: '', path: ['profile'], isDelete: true,
+                actorId: 's00', seq: 1, clock: { s00: 1 } },
+            { docPath: '', path: ['profile', 'name'], isDelete: true,
+                actorId: 's01', seq: 1, clock: { s00: 1, s01: 1 } },
+            { docPath: '', path: ['profile', 'name', 'value'], isDelete: true,
+                actorId: 's02', seq: 1, clock: { s00: 1, s01: 1, s02: 1 } },
+            { docPath: '', path: ['profiles'], value: 'unrelated', isDelete: false,
+                actorId: 's03', seq: 1, clock: { s03: 1 } },
+        ];
+        let documents = rootBase();
+        let metas: Record<string, SyncMeta> = {};
+        for (const operation of operations) {
+            const outcome = applySemanticOperations(documents, [operation], metas);
+            documents = outcome.documents;
+            metas = outcome.syncMetas;
+        }
+        const original = metas[''];
+        expect(() => parseSyncMeta(original)).not.toThrow();
+        expect(Object.keys(original.fields).sort()).toEqual([
+            'profile', 'profile/name', 'profile/name/value', 'profiles',
+        ]);
+        const terminal = {
+            actorId: 's02', seq: 1, clock: { s00: 1, s01: 1, s02: 1 },
+            deleted: true, deleteClock: { s02: 1 },
+        };
+        expect(original.fields['profile/name/value']).toEqual(terminal);
+
+        const entries = order.map(key => [key, original.fields[key]] as const);
+        entries.splice(1, 0, ['profiles', original.fields.profiles]);
+        const input = { ...original, fields: Object.fromEntries(entries) };
+        const before = structuredClone(input);
+        const partialFrontier = { s00: 1, s01: 1, s03: 1 };
+
+        expect(compactSyncMeta(input)).toEqual(original);
+        const partial = compactSyncMeta(input, partialFrontier);
+        // Acknowledging both ancestors cannot retire their barriers while
+        // a terminal descendant still lies outside the stable frontier.
+        expect(partial).toEqual(original);
+        expect(compactSyncMeta(partial, partialFrontier)).toEqual(partial);
+
+        const staleUpdate: SemanticOperation = {
+            docPath: '', path: ['profile', 'name', 'value'], value: 'stale', isDelete: false,
+            actorId: 's03', seq: 2, clock: { s00: 1, s01: 1, s03: 2 },
+        };
+        const replay = applySemanticOperations(documents, [staleUpdate], { '': partial });
+        expect(replay.documents).toEqual(documents);
+        expect(replay.syncMetas[''].fields['profile/name/value']).toEqual(terminal);
+
+        const fullFrontier = { ...partialFrontier, s02: 1 };
+        const collected = compactSyncMeta(input, fullFrontier);
+        expect(collected).toEqual({
+            protocolVersion: 3, clock: { s00: 1, s01: 1, s02: 1, s03: 1 },
+            fields: { profiles: original.fields.profiles },
+        });
+        expect(compactSyncMeta(collected, fullFrontier)).toEqual(collected);
+        expect(documents.get('')).toEqual({ profiles: 'unrelated' });
+        expect(input).toEqual(before);
+    });
+
 });
