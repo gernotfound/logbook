@@ -46,9 +46,16 @@ export function assertUnique<T>(items: readonly T[], identity: (item: T) => stri
 export function applyPatch<T extends object>(target: T, patch: Partial<T>): T {
     const result = { ...target } as T;
     for (const key of Object.keys(patch) as Array<keyof T>) {
+        // Persisted or externally provided patches must not use JavaScript
+        // prototype-sensitive keys to change an object's inheritance.
+        if (key === '__proto__' || key === 'constructor' || key === 'prototype') {
+            throw new Error('Chiave patch non valida');
+        }
         const value = patch[key];
         if (value === undefined) Reflect.deleteProperty(result, key);
-        else Object.assign(result, { [key]: value });
+        else Object.defineProperty(result, key, {
+            value, enumerable: true, writable: true, configurable: true,
+        });
     }
     return result;
 }

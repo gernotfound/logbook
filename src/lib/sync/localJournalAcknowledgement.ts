@@ -66,7 +66,7 @@ export async function acknowledgeThrough(
         // Another tab may already have installed a causally newer acknowledgement.
         // Never let an older remote snapshot replace that durable business state after
         // the newer journal entries have already been acknowledged and removed.
-        if (incomingIsStale) return current;
+        if (incomingIsStale) return raw;
         const newClock = { ...current.clock };
         if (syncMeta) for (const meta of Object.values(syncMeta)) for (const [actor, seq] of Object.entries(meta.clock)) newClock[actor] = Math.max(newClock[actor] || 0, seq);
         const newSyncMeta = { ...current.syncMetaByDocument, ...(syncMeta || {}) };
@@ -94,6 +94,9 @@ export async function acknowledgeThrough(
         const data = parse(reconciled);
         // Persist only server-confirmed metadata; replayed pending operations are
         // speculative and must never become evidence that a cloud document exists.
-        return { ...current, clock: newClock, baseline: acknowledgedBaseline, data, pending, completeMonths: [...new Set([...current.completeMonths, ...months])], syncMetaByDocument: newSyncMeta };
+        const next = { ...current, clock: newClock, baseline: acknowledgedBaseline, data, pending, completeMonths: [...new Set([...current.completeMonths, ...months])], syncMetaByDocument: newSyncMeta };
+        // A partial ACK can change baseline and pending without changing the
+        // displayed business state. Fence previously captured recovery previews.
+        return equal(next, current) ? raw : { ...next, revision: current.revision + 1 };
     });
 }
