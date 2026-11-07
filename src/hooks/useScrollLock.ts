@@ -9,24 +9,20 @@ export const useScrollLock = (isLocked: boolean = true) => {
 
         if (lockCount === 0) {
             const style = document.body.style;
-            const previous = (property: string) => ({
-                value: style.getPropertyValue(property),
-                priority: style.getPropertyPriority(property),
-            });
-            const overflow = previous('overflow');
-            const touchAction = previous('touch-action');
+            // Overflow is a shorthand: writing it can replace existing
+            // overflow-x/overflow-y declarations and their priorities.
+            const previous = (['overflow', 'overflow-x', 'overflow-y', 'touch-action'] as const)
+                .map(property => ({
+                    property,
+                    value: style.getPropertyValue(property),
+                    priority: style.getPropertyPriority(property),
+                }));
 
-            // A nested dialog must not overwrite the page's original inline styles.
+            // Restore only the properties owned by this lock, never unrelated body styles.
             restoreBodyStyles = () => {
-                for (const [property, prior] of [
-                    ['overflow', overflow],
-                    ['touch-action', touchAction],
-                ] as const) {
-                    if (prior.value) {
-                        style.setProperty(property, prior.value, prior.priority);
-                    } else {
-                        style.removeProperty(property);
-                    }
+                for (const { property } of previous) style.removeProperty(property);
+                for (const { property, value, priority } of previous) {
+                    if (value) style.setProperty(property, value, priority);
                 }
             };
             style.setProperty('overflow', 'hidden');
