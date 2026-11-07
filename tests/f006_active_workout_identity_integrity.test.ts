@@ -141,6 +141,7 @@ describe('F-006 active workout persisted business identity', () => {
         expect(ciphertext).toMatch(/^tlb-sealed:v1:/);
 
         expect(() => getInitialLocalWorkout(owner)).toThrow(DeviceWorkoutCorruptError);
+        expect(() => persistPlainWorkoutSnapshot(validWorkout, owner)).toThrow('identificativi non validi');
         expect(localStorage.getItem(protectedKey)).toBe(ciphertext);
         expect(readDeviceValueStrict('workout', owner)).toBe(original);
     });
