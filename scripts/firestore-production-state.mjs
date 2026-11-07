@@ -125,6 +125,54 @@ export function normalizeLiveFieldIndexModes(indexes, expectedFieldPath) {
   }));
 }
 
+
+function normalizeCompositeIndexFields(fields, live) {
+  if (!Array.isArray(fields)) throw new Error('Invalid Firestore composite index fields');
+  return fields.filter(field => !live || field.fieldPath !== '__name__').map(field => {
+    if (field.order) return { fieldPath: field.fieldPath, order: field.order };
+    if (field.arrayConfig) return { fieldPath: field.fieldPath, arrayConfig: field.arrayConfig };
+    if (field.vectorConfig) return { fieldPath: field.fieldPath, vectorConfig: field.vectorConfig };
+    throw new Error('Unsupported Firestore composite index field');
+  });
+}
+
+// An index removed from the manifest may belong to a collection group that has
+// no remaining desired indexes. Read the complete inventory before certification.
+export function reconcileCompositeIndexes(desiredIndexes, liveIndexes, projectId) {
+  if (!projectId || !Array.isArray(desiredIndexes) || !Array.isArray(liveIndexes)) {
+    throw new Error('Invalid Firestore composite index inventory');
+  }
+  const desired = desiredIndexes.map(index => {
+    if (!index?.collectionGroup || !index.queryScope || !Array.isArray(index.fields)) {
+      throw new Error('Invalid desired Firestore composite index');
+    }
+    return { collectionGroup: index.collectionGroup, queryScope: index.queryScope,
+      fields: normalizeCompositeIndexFields(index.fields, false) };
+  });
+  const prefix = `projects/${projectId}/databases/(default)/collectionGroups/`;
+  const live = liveIndexes.map(index => {
+    if (typeof index?.name !== 'string' || !index.name.startsWith(prefix)) {
+      throw new Error('Invalid live Firestore composite index resource');
+    }
+    const match = /^([^/]+)\/indexes\/([^/]+)$/.exec(index.name.slice(prefix.length));
+    if (!match) throw new Error('Invalid live Firestore composite index resource');
+    return { collectionGroup: decodeResourceSegment(match[1]), queryScope: index.queryScope,
+      fields: normalizeCompositeIndexFields(index.fields, true),
+      name: index.name, state: index.state ?? null };
+  });
+  const key = index => JSON.stringify([index.collectionGroup, index.queryScope, index.fields]);
+  const desiredKeys = new Set(desired.map(key));
+  if (desiredKeys.size !== desired.length) throw new Error('Duplicate desired Firestore composite index');
+  if (new Set(live.map(key)).size !== live.length) throw new Error('Duplicate live Firestore composite index');
+  return {
+    statuses: desired.map(index => {
+      const match = live.find(candidate => key(candidate) === key(index));
+      return { ...index, found: Boolean(match), state: match?.state ?? null };
+    }),
+    unexpected: live.filter(index => !desiredKeys.has(key(index))),
+  };
+}
+
 export function isActiveFieldIndexAddition(operation, desired) {
   if (!operation || operation.done === true || operation.error) return false;
   const field = parseFieldResource(operation.metadata?.field);

@@ -11,6 +11,7 @@ import {
   normalizeFieldIndexModes,
   normalizeLiveFieldIndexModes,
   parseFieldResource,
+  reconcileCompositeIndexes,
 } from '../../scripts/firestore-production-state.mjs';
 
 const desired = { collectionGroup: 'history_months', fieldPath: '*' };
@@ -305,5 +306,46 @@ describe('Firestore Production field exemption convergence', () => {
       pending: false,
       indexesDisabled: false,
     });
+  });
+});
+ 
+describe('Firestore Production complete composite index inventory', () => {
+  const wanted = [{ collectionGroup: 'account_deletions', queryScope: 'COLLECTION', fields: [
+    { fieldPath: 'status', order: 'ASCENDING' }, { fieldPath: 'retryable', order: 'ASCENDING' },
+  ] }];
+  const ready = {
+    name: 'projects/p/databases/(default)/collectionGroups/account_deletions/indexes/idx1',
+    queryScope: 'COLLECTION',
+    fields: [...wanted[0].fields, { fieldPath: '__name__', order: 'ASCENDING' }],
+    state: 'READY',
+  };
+
+  it('detects unexpected indexes in both retained and removed groups', () => {
+    const otherMode = { ...ready, name: ready.name.replace('idx1', 'idx2'),
+      fields: [{ fieldPath: 'status', order: 'DESCENDING' }, { fieldPath: '__name__', order: 'DESCENDING' }] };
+    const removedGroup = { ...ready,
+      name: 'projects/p/databases/(default)/collectionGroups/removed_group/indexes/idx3' };
+    const result = reconcileCompositeIndexes(wanted, [ready, otherMode, removedGroup], 'p');
+    expect(result.statuses).toMatchObject([{ found: true, state: 'READY' }]);
+    expect(result.unexpected.map(index => index.name)).toEqual([otherMode.name, removedGroup.name]);
+    expect(reconcileCompositeIndexes([], [ready], 'p').unexpected).toHaveLength(1);
+  });
+
+  it('distinguishes missing, building and malformed indexes', () => {
+    expect(reconcileCompositeIndexes(wanted, [], 'p').statuses)
+      .toMatchObject([{ found: false, state: null }]);
+    expect(reconcileCompositeIndexes(wanted, [{ ...ready, state: 'CREATING' }], 'p').statuses)
+      .toMatchObject([{ found: true, state: 'CREATING' }]);
+    expect(() => reconcileCompositeIndexes(wanted, [{ ...ready,
+      name: 'projects/other/databases/(default)/collectionGroups/account_deletions/indexes/idx1' }], 'p'))
+      .toThrow('Invalid live Firestore composite index resource');
+    expect(() => reconcileCompositeIndexes(wanted, [ready, ready], 'p'))
+      .toThrow('Duplicate live Firestore composite index');
+  });
+
+  it('requires database-wide composite index inventory readback', () => {
+    const verifier = readFileSync('scripts/verify-firestore-production.mjs', 'utf8');
+    expect(verifier).toContain('collectionGroups/-');
+    expect(verifier).toContain('unexpectedIndexes.length');
   });
 });
