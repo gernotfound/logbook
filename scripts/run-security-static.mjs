@@ -1,7 +1,8 @@
 import { createHash } from 'node:crypto';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 
 const TOOLSETS = {
@@ -34,9 +35,15 @@ function resolveCommit(ref) {
   return result.status === 0 ? result.stdout.trim() : null;
 }
 
-function scanRange() {
+export function scanRange() {
   const requested = process.env.GITLEAKS_BASE_SHA?.trim();
-  const base = resolveCommit(requested) ?? resolveCommit('HEAD^');
+  if (requested) {
+    const base = resolveCommit(requested);
+    // A missing requested base must not silently narrow the security scan to HEAD^.
+    if (!base) throw new Error('Unable to resolve the requested Gitleaks base commit.');
+    return `${base}..HEAD`;
+  }
+  const base = resolveCommit('HEAD^');
   if (!base) throw new Error('Unable to resolve a Git base commit for Gitleaks.');
   return `${base}..HEAD`;
 }
@@ -54,6 +61,9 @@ async function installTool(tool, root) {
 }
 
 async function main() {
+  // Keep the guarded npm script unchanged: run scanner regressions here before
+  // installing external tools so the canonical security gate stays intact.
+  run(process.execPath, ['--test', fileURLToPath(new URL('./run-security-static-regressions.mjs', import.meta.url))]);
   const platformKey = `${process.platform}-${process.arch}`;
   const toolset = TOOLSETS[platformKey];
   if (!toolset) throw new Error(`Unsupported platform for static security gate: ${platformKey}`);
@@ -74,7 +84,9 @@ async function main() {
   }
 }
 
-main().catch(error => {
-  console.error(error instanceof Error ? error.message : String(error));
-  process.exitCode = error instanceof ToolFailure ? error.status : 1;
-});
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  main().catch(error => {
+    console.error(error instanceof Error ? error.message : String(error));
+    process.exitCode = error instanceof ToolFailure ? error.status : 1;
+  });
+}
