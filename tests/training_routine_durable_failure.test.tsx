@@ -46,6 +46,20 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('routine editor durable failures', () => {
+    it('keeps the form visible when deletion of its sealed draft is rejected', () => {
+        const { result } = renderHook(() => useTrainingRoutines());
+        act(() => result.current.setRoutineName('Scheda non cancellabile'));
+        mocks.writeDraft.mockImplementationOnce(() => { throw new Error('quota'); });
+
+        let cancelled!: boolean;
+        act(() => { cancelled = result.current.handleCancelEdit(); });
+        expect(cancelled).toBe(false);
+        expect(result.current.routineName).toBe('Scheda non cancellabile');
+        expect(mocks.blockStore).toHaveBeenCalledWith(expect.objectContaining({
+            localPersistenceBlocked: true, syncHealth: 'failed',
+        }));
+    });
+
     it('retains a retryable routine draft without quarantining local storage when the domain commit fails', async () => {
         mocks.dispatch.mockResolvedValue({ ok: false, status: 'failed', error: new Error('commit rejected') });
         const { result } = renderHook(() => useTrainingRoutines());
