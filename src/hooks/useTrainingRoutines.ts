@@ -84,6 +84,7 @@ export function useTrainingRoutines() {
     };
 
     const handleDuplicate = async (rtn: WorkoutRoutine) => {
+        if (!isCurrentSession(draftSession)) return;
         const newName = Logic.generateUniqueName(rtn.name, routines.map(r => r.name));
         const duplicated: WorkoutRoutine = {
             ...rtn,
@@ -94,7 +95,7 @@ export function useTrainingRoutines() {
             await dispatchDurableOperation(dispatchDomainOperation, { type: 'routine.upsert', routine: duplicated });
         } catch (err) {
             console.error(err);
-            await showAlert('Errore durante la duplicazione della scheda.');
+            if (isCurrentSession(draftSession)) await showAlert('Errore durante la duplicazione della scheda.');
         }
     };
 
@@ -191,12 +192,16 @@ export function useTrainingRoutines() {
 
     const handleDelete = async (id: string, e: any) => {
         e.stopPropagation();
+        if (!isCurrentSession(draftSession)) return;
         if (!(await showConfirm("Sei sicuro di voler eliminare questa scheda?"))) return;
+        // The confirmed action cannot be transferred to a replacement Auth epoch.
+        if (!isCurrentSession(draftSession)) return;
         try {
             await dispatchDurableOperation(dispatchDomainOperation, { type: 'routine.delete', id });
+            if (!isCurrentSession(draftSession)) return;
             if (editingRoutineId === id) handleCancelEdit();
         } catch {
-            await showAlert("Errore durante l'eliminazione della scheda.");
+            if (isCurrentSession(draftSession)) await showAlert("Errore durante l'eliminazione della scheda.");
         }
     };
 

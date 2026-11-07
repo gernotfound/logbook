@@ -305,6 +305,56 @@ describe('Worker M2: Exercise Library UI & Food Form Real-Time Calorie Calculati
             expect(idbStore['logbook:v2:' + owner]).toMatch(/^tlb-sealed:v1:/);
         });
 
+        it.each(['delete', 'restore'] as const)(
+            'refuses stale %s confirmation even when the next Auth epoch reuses the exercise ID', async action => {
+                const owner = captureSession().owner;
+                const sameId = 'shared-exercise';
+                const original: Exercise = {
+                    id: sameId, name: 'Esercizio A', trackingType: 'weight_reps',
+                    setsCount: 3, sets: [], isDefault: action === 'restore',
+                };
+                if (action === 'restore') {
+                    await clearCatalogCache();
+                    await saveCatalogToCache({
+                        manifest: {
+                            version: 'stale-auth-test', updatedAt: '2026-10-20T00:00:00.000Z',
+                            schemaVersion: 1, docRefs: { exercises: 'ex-test', foods: 'food-test' },
+                            itemCounts: { exercises: 1, foods: 0 },
+                        },
+                        exercises: [original as any], foods: [], cachedAt: Date.now(),
+                    });
+                }
+                const previousDispatch = useAppStore.getState().dispatchDomainOperation;
+                const previousConfirm = useDialogStore.getState().showConfirm;
+                let confirm!: (choice: boolean) => void;
+                const showConfirm = vi.fn(() => new Promise<boolean>(resolve => { confirm = resolve; }));
+                const dispatch = vi.fn().mockResolvedValue({ ok: true, status: 'synced' });
+                useDialogStore.setState({ showConfirm });
+                useAppStore.setState({
+                    dataOwner: owner,
+                    userData: { ...emptyUserData, library: [original] },
+                    dispatchDomainOperation: dispatch,
+                });
+                try {
+                    const { result } = renderHook(() => useTrainingExercises());
+                    let pending!: Promise<unknown>;
+                    act(() => {
+                        pending = action === 'delete'
+                            ? result.current.handleDelete(sameId, { stopPropagation: vi.fn() })
+                            : result.current.handleRestoreExercise(sameId);
+                    });
+                    expect(showConfirm).toHaveBeenCalledOnce();
+                    act(() => { invalidateSession(); invalidateSession(); });
+                    await act(async () => { confirm(true); await pending; });
+                    expect(dispatch).not.toHaveBeenCalled();
+                } finally {
+                    useAppStore.setState({ dispatchDomainOperation: previousDispatch });
+                    useDialogStore.setState({ showConfirm: previousConfirm });
+                    if (action === 'restore') await clearCatalogCache();
+                }
+            },
+        );
+
         it('handleDelete blocks catalog exercises and deletes personal exercises after confirmation', async () => {
             const catalogExercise: Exercise = {
                 id: 'ex-catalog',

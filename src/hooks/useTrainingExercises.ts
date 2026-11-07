@@ -141,6 +141,7 @@ export function useTrainingExercises() {
     };
 
     const handleDuplicate = async (ex: any) => {
+        if (!isCurrentSession(draftSession)) return;
         const newName = Logic.generateUniqueName(ex.name, library.map(l => l.name));
         const duplicated = {
             ...ex,
@@ -308,6 +309,7 @@ export function useTrainingExercises() {
 
     const handleDelete = async (id: string, e: any) => {
         e.stopPropagation();
+        if (!isCurrentSession(draftSession)) return false;
 
         const exercise = library.find(item => item.id === id);
         if (exercise?.isDefault) {
@@ -325,18 +327,22 @@ export function useTrainingExercises() {
         }
 
         if (!(await showConfirm(confirmMsg))) return false;
+        // The same exercise ID in a later Auth epoch does not authorize the old deletion.
+        if (!isCurrentSession(draftSession)) return false;
 
         try {
             await persistExercise({ type: 'exercise.delete', id });
+            if (!isCurrentSession(draftSession)) return false;
             if (editingExId === id) handleCancelEdit();
             return true;
         } catch {
-            await showAlert("Errore durante l'eliminazione dell'esercizio.");
+            if (isCurrentSession(draftSession)) await showAlert("Errore durante l'eliminazione dell'esercizio.");
             return false;
         }
     };
 
     const handleRestoreExercise = async (id: string) => {
+        if (!isCurrentSession(draftSession)) return;
         const catalog = getInMemoryCatalog(true);
         const originalEx = catalog.exercises.find(e => e.id === id);
         if (!originalEx) {
@@ -345,6 +351,7 @@ export function useTrainingExercises() {
         }
 
         if (await showConfirm("Vuoi ripristinare questo esercizio ai valori originali? Le tue modifiche andranno perse.")) {
+            if (!isCurrentSession(draftSession)) return;
             try {
                 await persistExercise({
                     type: 'exercise.upsert',
@@ -355,11 +362,12 @@ export function useTrainingExercises() {
                     } as any
                 });
                 // Aggiorna anche il form corrente se è aperto
+                if (!isCurrentSession(draftSession)) return;
                 if (editingExId === id) {
                     handleEditClick(originalEx);
                 }
             } catch {
-                void showAlert("Errore durante il ripristino dell'esercizio.");
+                if (isCurrentSession(draftSession)) void showAlert("Errore durante il ripristino dell'esercizio.");
             }
         }
     };

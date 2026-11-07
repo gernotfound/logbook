@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({
     dispatch: vi.fn(),
     showAlert: vi.fn(async (_message: string) => {}),
+    showConfirm: vi.fn(async (_message: string) => true),
     blockStore: vi.fn(),
     readDraft: vi.fn(() => null),
     writeDraft: vi.fn(),
@@ -23,7 +24,7 @@ vi.mock('../src/store/useAppStore', () => ({
 vi.mock('../src/store/useDialogStore', () => ({
     useDialogStore: (select: (state: unknown) => unknown) => select({
         showAlert: mocks.showAlert,
-        showConfirm: vi.fn(),
+        showConfirm: mocks.showConfirm,
     }),
 }));
 vi.mock('../src/lib/sync/session', () => ({
@@ -42,6 +43,7 @@ beforeEach(() => {
     mocks.dispatch.mockReset();
     mocks.blockStore.mockClear();
     mocks.showAlert.mockClear();
+    mocks.showConfirm.mockReset().mockResolvedValue(true);
     mocks.readDraft.mockClear();
     mocks.writeDraft.mockClear();
 });
@@ -57,6 +59,30 @@ describe('routine editor durable failures', () => {
         expect(cancelled).toBe(false);
         expect(result.current.routineName).toBe('Bozza precedente');
         expect(mocks.blockStore).not.toHaveBeenCalled();
+    });
+
+    it('refuses a confirmed routine deletion after an Auth A→B→A replacement', async () => {
+        let complete!: (value: boolean) => void;
+        mocks.showConfirm.mockImplementationOnce(() => new Promise<boolean>(resolve => { complete = resolve; }));
+        const { result } = renderHook(() => useTrainingRoutines());
+        let pending!: Promise<void>;
+        const event = { stopPropagation: vi.fn() };
+        act(() => { pending = result.current.handleDelete('routine-same-id', event); });
+        expect(mocks.showConfirm).toHaveBeenCalledOnce();
+        mocks.currentSession = false;
+        await act(async () => { complete(true); await pending; });
+        expect(mocks.dispatch).not.toHaveBeenCalled();
+        expect(mocks.showAlert).not.toHaveBeenCalled();
+        expect(event.stopPropagation).toHaveBeenCalledOnce();
+    });
+
+    it('does not duplicate a routine from an editor mounted in an obsolete Auth epoch', async () => {
+        const { result } = renderHook(() => useTrainingRoutines());
+        mocks.currentSession = false;
+        await act(async () => {
+            await result.current.handleDuplicate({ id: 'r-same', name: 'Old routine', exercises: [] });
+        });
+        expect(mocks.dispatch).not.toHaveBeenCalled();
     });
 
     it('suppresses an obsolete failed-save alert after a session replacement', async () => {
