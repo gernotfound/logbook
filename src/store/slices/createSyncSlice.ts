@@ -4,7 +4,6 @@ import { isHealthConsentWritable, requireHealthConsentWritable } from '../../lib
 import type { UserData, SyncResult } from '../../types';
 import { DEBOUNCE_DELAY_GLOBAL } from '../../constants';
 import { saveUserDataToCache } from './createDataSlice';
-import { clearWorkoutTimer } from './createWorkoutSlice';
 import type { AppState } from '../useAppStore';
 import { captureSession, invalidateSession, isActiveGuestSession, isCurrentSession } from '../../lib/sync/session';
 import { commitDomainOperations, readLocal, revertRejectedConsent, WorkoutIntentConflictError } from '../../lib/sync/localRepository';
@@ -133,7 +132,6 @@ export const createSyncSlice: StateCreator<AppState, [], [], SyncSlice> = (set, 
         }
 
         invalidateSession();
-        clearWorkoutTimer();
         if (timer) clearTimeout(timer);
         timer = null;
         const queued = pending;
@@ -404,7 +402,6 @@ export const createSyncSlice: StateCreator<AppState, [], [], SyncSlice> = (set, 
         },
         cancelPendingSyncs: () => {
             invalidateSession();
-            clearWorkoutTimer();
             [...pending, ...active].forEach(job => job.reject(new Error('Sincronizzazione annullata per cambio sessione')));
             clearSyncTimers();
             set({ syncing: false, syncPresentation: 'normal', syncGeneration: get().syncGeneration + 1 });

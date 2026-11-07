@@ -112,10 +112,66 @@ describe('F-006 active workout persisted business identity', () => {
         expect(() => getInitialLocalWorkout(owner)).toThrow(DeviceWorkoutCorruptError);
         expect(localStorage.getItem(sealedKey)).toBe(invalidCiphertext);
 
+        // A routine writer must not silently replace the malformed ciphertext.
+        expect(() => persistPlainWorkoutSnapshot(validWorkout, owner)).toThrow('identificativi non validi');
+        expect(localStorage.getItem(sealedKey)).toBe(invalidCiphertext);
+
+        // Explicitly retire only this test's quarantined fixture before seeding
+        // a separate valid workout lifecycle; normal boot never does this.
+        writeDeviceValue('workout', null, owner);
         persistPlainWorkoutSnapshot(validWorkout, owner);
         expect(getInitialLocalWorkout(owner)).toMatchObject(validWorkout);
         expect(localStorage.getItem(sealedKey)).toMatch(/^tlb-sealed:v1:/);
         expect(localStorage.getItem(deviceKey('workout', owner))).toBeNull();
+    });
+
+    it.each([
+        ['duplicated set ID', [
+            { id: 's-1', kg: '80', reps: '8' },
+            { id: 's-1', kg: '75', reps: '10' },
+        ]],
+        ['missing set ID', [
+            { kg: '80', reps: '8' },
+        ]],
+    ])('preserves authenticated device ciphertext with a %s instead of silently repairing the ID', async (_case, sets) => {
+        const owner = 'user:nested-identity-recovery';
+        localStorage.setItem(`logbook:v2:${owner}:health-consent-generation`, '1');
+        await prepareUnlockedTestArchive(owner);
+        const corrupted = {
+            ...validWorkout,
+            exercises: [{ id: 'se-1', exId: 'bench', sessionNote: '', sets }],
+        };
+        const protectedKey = protectedDeviceKey('workout', owner);
+        expect(() => persistPlainWorkoutSnapshot(corrupted as WorkoutSession, owner))
+            .toThrow('identificativo');
+        expect(localStorage.getItem(protectedKey)).toBeNull();
+        // A malformed ciphertext must be injected at the storage boundary,
+        // never through the production writer that is under test.
+        writeDeviceValue('workout', JSON.stringify({
+            __logbookWorkoutSnapshot: 1, owner, consentRevision: 1, workout: corrupted,
+        }), owner);
+        const ciphertext = localStorage.getItem(protectedKey);
+        const original = readDeviceValueStrict('workout', owner);
+        expect(ciphertext).toMatch(/^tlb-sealed:v1:/);
+
+        expect(() => getInitialLocalWorkout(owner)).toThrow(DeviceWorkoutCorruptError);
+        expect(() => persistPlainWorkoutSnapshot(validWorkout, owner)).toThrow('identificativi non validi');
+        expect(localStorage.getItem(protectedKey)).toBe(ciphertext);
+        expect(readDeviceValueStrict('workout', owner)).toBe(original);
+    });
+
+    it('does not synthesize missing business IDs from an authenticated durable fallback', async () => {
+        const owner = 'user:malformed-account-fallback';
+        localStorage.setItem(`logbook:v2:${owner}:health-consent-generation`, '1');
+        await prepareUnlockedTestArchive(owner);
+        const malformed = {
+            ...validWorkout,
+            exercises: [{ exId: 'bench', sessionNote: '', sets: [{ kg: '60', reps: '8' }] }],
+        } as WorkoutSession;
+
+        expect(() => getInitialLocalWorkout(owner, malformed)).toThrow(DeviceWorkoutCorruptError);
+        expect(readDeviceValueStrict('workout', owner)).toBeNull();
+        expect(localStorage.getItem(protectedDeviceKey('workout', owner))).toBeNull();
     });
 
     it('does not adopt or persist a malformed remote active workout into runtime state', async () => {
