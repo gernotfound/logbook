@@ -67,12 +67,14 @@ export function useTrainingRoutines() {
     }, [routineName, routineExercises, editingRoutineId, draftOwner, draftSession,
         initialRecovery.error, localPersistenceBlocked, assertCurrentDraft]);
 
-    const clearRoutineDraft = () => {
+    const clearRoutineDraft = (): boolean => {
         try {
             assertCurrentDraft();
             writeWorkoutRecoveryDraft(ROUTINE_DRAFT_KEY, draftOwner, null, draftSession.consentGeneration);
+            return true;
         } catch (error) {
             blockRoutineDraft(error);
+            return false;
         }
     };
 
@@ -103,10 +105,11 @@ export function useTrainingRoutines() {
     };
 
     const handleCancelEdit = () => {
+        if (!clearRoutineDraft()) return false;
         setEditingRoutineId(null);
         setRoutineName('');
         setRoutineExercises([]);
-        clearRoutineDraft();
+        return true;
     };
 
     const handleSave = async (e?: any) => {
