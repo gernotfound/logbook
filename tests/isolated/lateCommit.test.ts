@@ -4,8 +4,8 @@ import { clear, del, get } from 'idb-keyval';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 
 const catalogReader = vi.hoisted(() => ({ read: vi.fn() }));
-const remote = vi.hoisted(() => ({ apply: vi.fn(), auth: { currentUser: { uid: 'a' } } }));
-vi.mock('../../src/lib/firebase', () => ({ auth: remote.auth, getDb: () => ({}), ensureAppCheck: async () => {}, waitForPendingWrites: async () => {} }));
+const remote = vi.hoisted(() => ({ apply: vi.fn(), appCheck: vi.fn(), pendingWrites: vi.fn(), auth: { currentUser: { uid: 'a' } } }));
+vi.mock('../../src/lib/firebase', () => ({ auth: remote.auth, getDb: () => ({}), ensureAppCheck: () => remote.appCheck(), waitForPendingWrites: () => remote.pendingWrites() }));
 // Isolate server consent transport with a verified active revision. The durable
 // generation and session fences remain real for delayed-ACK interleavings.
 vi.mock('../../src/lib/healthConsent', async () => {
@@ -61,6 +61,8 @@ beforeEach(async () => {
     invalidateSession();
     await clear();
     remote.auth.currentUser = { uid: 'a' }; remote.apply.mockReset();
+    remote.appCheck.mockReset().mockResolvedValue(undefined);
+    remote.pendingWrites.mockReset().mockResolvedValue(undefined);
     await createAndMigrateVault('user:a');
     await initializeLocal('user:a', data(170));
     const now = Date.now();
@@ -193,6 +195,26 @@ it('does not acknowledge a late result after A to B to A even though the uid mat
     expect((await first).status).toBe('failed');
     expect((await readLocal('user:a'))?.pending).toHaveLength(1);
 });
+
+it.each(['app-check', 'pending-writes'] as const)(
+    'rejects a retryable %s preflight error from an obsolete A→B→A Auth epoch', async boundary => {
+        const before = await readLocal('user:a');
+        const ciphertext = await get('logbook:v2:user:a');
+        const obsoleteNetworkFailure = async () => {
+            remote.auth.currentUser = { uid: 'b' }; invalidateSession();
+            remote.auth.currentUser = { uid: 'a' }; invalidateSession();
+            throw Object.assign(new Error('Transient network failure after session switch'), { code: 'unavailable' });
+        };
+        if (boundary === 'app-check') remote.appCheck.mockImplementationOnce(obsoleteNetworkFailure);
+        else remote.pendingWrites.mockImplementationOnce(obsoleteNetworkFailure);
+
+        const result = await replicateJournal();
+        expect(result.status).toBe('failed');
+        expect(remote.apply).not.toHaveBeenCalled();
+        expect(await get('logbook:v2:user:a')).toEqual(ciphertext);
+        expect(await readLocal('user:a')).toEqual(before);
+    },
+);
 
 it.each([
     ['catalog', 'owner-roundtrip'],
