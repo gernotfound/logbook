@@ -34,6 +34,29 @@ function errorResponse(error: unknown, origin: string | null): Response {
   return json({ error: 'Chiave cloud temporaneamente non disponibile. I dati locali sono conservati.' }, 503, origin);
 }
 
+// A Web Request may expose an empty stream for a bodyless POST (for example,
+// after an HTTP adapter normalizes the request). Reject bytes, not the stream.
+async function hasRequestPayload(request: Request): Promise<boolean> {
+  const length = request.headers.get('content-length');
+  if (length !== null && (!/^\d+$/.test(length) || Number(length) > 0)) return true;
+  if (!request.body) return false;
+
+  const reader = request.body.getReader();
+  try {
+    // Never buffer attacker-controlled payloads. Bound empty chunks as well,
+    // so a stream producing endless zero-byte chunks cannot loop indefinitely.
+    for (let emptyReads = 0; emptyReads < 16; emptyReads++) {
+      const { done, value } = await reader.read();
+      if (done) return false;
+      if (value.byteLength > 0) return true;
+    }
+    return true;
+  } finally {
+    void reader.cancel().catch(() => {});
+    reader.releaseLock();
+  }
+}
+
 export async function OPTIONS(request: Request): Promise<Response> {
   const origin = request.headers.get('origin');
   try {
@@ -49,8 +72,8 @@ export async function POST(request: Request): Promise<Response> {
   const origin = request.headers.get('origin');
   try {
     requireAccountDeletionOrigin(request);
-    // Chunked bodies can be sent without Content-Length; this endpoint accepts no payload.
-    if (request.body !== null || (request.headers.has('content-length') && Number(request.headers.get('content-length')) > 0)) {
+    // Reject actual request bytes, including chunked uploads with no Content-Length.
+    if (await hasRequestPayload(request)) {
       return json({ error: 'Questa operazione non accetta dati da inviare.' }, 400, origin);
     }
     const params = new URL(request.url).searchParams;

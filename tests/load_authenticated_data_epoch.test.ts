@@ -212,6 +212,36 @@ describe('authenticated hydration session fencing', () => {
         await clear();
     });
 
+    it('marks an ADK denial as failed without changing durable local data or inventing a cloud ACK', async () => {
+        await clear();
+        const { loadAuthenticatedData, initializeLocal, readLocal, invalidateSession } = await loadModules();
+        const { requireCloudAccountDataKey } = await import('../src/lib/sync/cloudAccountKeyAccess');
+        invalidateSession();
+        await initializeLocal('user:user-a', data('170'));
+        const original = await readLocal('user:user-a');
+        storeState.current = {
+            userData: data('170'), localWorkout: null, localPersistenceBlocked: false,
+        };
+        const { useAppStore } = await import('../src/store/useAppStore');
+        useAppStore.setState({ syncHealth: 'synced' });
+        vi.mocked(requireCloudAccountDataKey).mockRejectedValueOnce(
+            Object.assign(new Error('Chiave cloud non disponibile'), { code: 'cloud-key-unavailable' }),
+        );
+        const setSaveError = vi.fn();
+
+        expect(await loadAuthenticatedData({
+            user: { uid: 'user-a' } as any,
+            isGuestActive: () => false,
+            setSyncing: vi.fn(),
+            setSaveError,
+        })).toBe('blocked');
+        expect('syncHealth' in storeState.current && storeState.current.syncHealth).toBe('failed');
+        expect(setSaveError).toHaveBeenCalledWith(expect.stringContaining('sincronizzazione sospesa'));
+        expect(dbState.loadCloudPayload).not.toHaveBeenCalled();
+        expect(await readLocal('user:user-a')).toEqual(original);
+        await clear();
+    });
+
     it('does not create an empty account journal when a cloud read fails without a local envelope', async () => {
         await clear();
         const { loadAuthenticatedData, readLocal, invalidateSession } = await loadModules();
