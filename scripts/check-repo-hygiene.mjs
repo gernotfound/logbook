@@ -44,17 +44,49 @@ if (taskSpecificAnalysisArtifacts.length > 0) {
   );
 }
 
-// Existing tracked rules bypass Git ignore; check a future untracked path so a
-// broad agent-workspace exclusion cannot silently hide new normative rules.
-for (const [path, shouldIgnore] of [
-  ['.agents/rules/__new_contract__.md', false],
-  ['.agents/__local_workspace__.md', true],
-]) {
-  const result = spawnSync('git', ['check-ignore', '--no-index', '-q', path]);
-  if (result.error || (result.status !== 0 && result.status !== 1)) {
-    failures.push('Git ignore policy could not be verified for ' + path);
-  } else if ((result.status === 0) !== shouldIgnore) {
-    failures.push('Git ignore policy unexpectedly ' + (shouldIgnore ? 'tracks ' : 'hides ') + path);
+// Tracked files bypass Git ignore. Probe future paths to catch accidental
+// omission of project rules and disclosure of local agent/build credentials.
+const visiblePaths = [
+  '.agents/rules/__new_contract__.md',
+  '.agents/rules/nested/__new_contract__.md',
+  '.agents/rules/nested/deeper/__new_contract__.md',
+  '.env.example',
+  '.env.test',
+  'AGENTS.md',
+  'assets/brand/thelogbook-icon-master.svg',
+  'public/appearance.js',
+  'src/App.tsx',
+];
+const ignoredPaths = [
+  '.agents/__local_workspace__.md',
+  '.agents/workspace/__private__.json',
+  '.agents/rules/__private__.json',
+  '.agents/rules/nested/__private__.json',
+  '.env',
+  '.env.production',
+  '.env.production.local',
+  '.env.preview.local',
+  'service-account.json',
+  'server/service-account.json',
+  'gha-creds-example.json',
+  'node_modules/example/index.js',
+  'dist/assets/example.js',
+  'vercel-backend-static/backend-only.txt',
+  'public/icon.svg',
+  'public/favicon.ico',
+  'public/social-share.png',
+  'coverage/mutation-trial/mutation.json',
+  'playwright-report/index.html',
+  'test-results/example.png',
+];
+for (const [paths, shouldIgnore] of [[visiblePaths, false], [ignoredPaths, true]]) {
+  for (const path of paths) {
+    const result = spawnSync('git', ['-c', 'core.excludesFile=', 'check-ignore', '--no-index', '-q', path]);
+    if (result.error || (result.status !== 0 && result.status !== 1)) {
+      failures.push('Git ignore policy could not be verified for ' + path);
+    } else if ((result.status === 0) !== shouldIgnore) {
+      failures.push('Git ignore policy unexpectedly ' + (shouldIgnore ? 'tracks ' : 'hides ') + path);
+    }
   }
 }
 
