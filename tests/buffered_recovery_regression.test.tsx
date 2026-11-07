@@ -1452,6 +1452,73 @@ describe('advanced workout segment identity across removal and draft recovery', 
 
 });
 
+describe('cardio set identity and buffered draft recovery', () => {
+    const workoutId = 'cardio-recovery-workout';
+    const exInstanceId = 'se-cardio';
+    const onUpdateSet = vi.fn();
+    const handlers = {
+        onToggleHistory: vi.fn(), onToggleSetup: vi.fn(),
+        onRemoveExercise: vi.fn(), onUpdateSessionNote: vi.fn(),
+        onUpdateSetupNote: vi.fn(), onUpdateTechnicalStandard: vi.fn(),
+        onUpdateSet, onAddSet: vi.fn(), onRemoveSet: vi.fn(),
+        onAddSpecialSet: vi.fn(), onUpdateSpecialSet: vi.fn(),
+        onRemoveSpecialSet: vi.fn(), onUpdateSetTarget: vi.fn(),
+        onToggleSpecialMenu: vi.fn(),
+    };
+    const card = (setId: string, time: string) => (
+        <BufferedWorkoutScope.Provider value={workoutId}>
+            <SessionExerciseCard
+                exItem={{ id: exInstanceId, exId: 'cardio-run', sets: [{ id: setId, time }] }}
+                exIndex={0}
+                libDef={{ name: 'Corsa', trackingType: 'cardio' }}
+                pastWorkouts={[]} isHistoryOpen={false} isSetupOpen={false}
+                openSpecialMenuId={null} {...handlers}
+            />
+        </BufferedWorkoutScope.Provider>
+    );
+    const keyFor = (setId: string) =>
+        `draft:buffered:input:${workoutId}:cardio-time-${exInstanceId}-${setId}`;
+
+    beforeEach(() => {
+        localStorageMock.getItem.mockImplementation(initialGetItem);
+        localStorageMock.setItem.mockImplementation(initialSetItem);
+        localStorage.clear();
+        vi.clearAllMocks();
+        useAppStore.setState({ localWorkout: { id: workoutId } as WorkoutSession,
+            localPersistenceBlocked: false, syncHealth: 'synced', saveError: null });
+        localStorage.setItem(`logbook:v2:${captureSession().owner}:health-consent-generation`, '3');
+    });
+    afterEach(() => {
+        useAppStore.setState({ localWorkout: null });
+        localStorageMock.getItem.mockImplementation(initialGetItem);
+        localStorageMock.setItem.mockImplementation(initialSetItem);
+        vi.restoreAllMocks();
+    });
+
+    it('preserves the old cardio set draft while replacing the UI with a different persistent set ID', async () => {
+        const owner = captureSession().owner;
+        await prepareUnlockedTestArchive(owner);
+        const view = render(card('set-old', '8'));
+        const input = (id: string) => view.container.querySelector<HTMLInputElement>(`#cardio-time-${exInstanceId}-${id}`);
+        fireEvent.change(input('set-old')!, { target: { value: '30' } });
+        const oldImage = readBufferedDraftSnapshot(keyFor('set-old'), owner).raw;
+        expect(oldImage).toContain('30');
+        expect(localStorage.getItem(protectedDeviceKey(keyFor('set-old'), owner))).toMatch(/^tlb-sealed:v1:/);
+
+        view.rerender(card('set-new', '5'));
+        expect(input('set-old')).toBeNull();
+        expect(input('set-new')?.value).toBe('5');
+        expect(readBufferedDraftSnapshot(keyFor('set-old'), owner).raw).toBe(oldImage);
+        expect(readBufferedDraftSnapshot(keyFor('set-new'), owner).raw).toBeNull();
+
+        fireEvent.change(input('set-new')!, { target: { value: '10' } });
+        expect(readBufferedDraftSnapshot(keyFor('set-new'), owner).value).toBe('10');
+        expect(readBufferedDraftSnapshot(keyFor('set-old'), owner).raw).toBe(oldImage);
+        expect(onUpdateSet.mock.calls.every(([, setId]) => setId !== undefined)).toBe(true);
+        view.unmount();
+    });
+});
+
 describe('F-001 — stable exercise instance recovery with shared catalog editor boundaries', () => {
     const workoutId = 'w-duplicate-exercises';
     const first = { id: 'se-first', exId: 'bench', sessionNote: '', technicalStandard: '',

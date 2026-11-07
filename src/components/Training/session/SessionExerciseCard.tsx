@@ -271,12 +271,12 @@ const SessionExerciseCardInner: React.FC<SessionExerciseCardProps> = ({
             )}
 
             {libDef?.trackingType === 'cardio' ? (
-                <div style={{ background: 'var(--surface-light)', padding: '15px', borderRadius: '12px', border: '1px solid var(--glass-border)', marginTop: '10px' }}>
+                exItem.sets?.[0]?.id ? <div key={exItem.sets[0].id} style={{ background: 'var(--surface-light)', padding: '15px', borderRadius: '12px', border: '1px solid var(--glass-border)', marginTop: '10px' }}>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '10px' }}>
                         <div>
                             <label className="text-muted text-xs mb-4 block" htmlFor={`cardio-time-${exerciseInstanceId}`}>Durata (min)</label>
                             <BufferedInput 
-                                id={`cardio-time-${exerciseInstanceId}`}
+                                id={`cardio-time-${exerciseInstanceId}-${exItem.sets[0].id}`}
                                 type="text" 
                                 inputMode="decimal"
                                 value={exItem.sets[0]?.time || ''} 
@@ -289,7 +289,7 @@ const SessionExerciseCardInner: React.FC<SessionExerciseCardProps> = ({
                         <div>
                             <label className="text-muted text-xs mb-4 block" htmlFor={`cardio-distance-${exerciseInstanceId}`}>Distanza (km)</label>
                             <BufferedInput 
-                                id={`cardio-distance-${exerciseInstanceId}`}
+                                id={`cardio-distance-${exerciseInstanceId}-${exItem.sets[0].id}`}
                                 type="text" 
                                 inputMode="decimal"
                                 value={exItem.sets[0]?.distance || ''} 
@@ -302,7 +302,7 @@ const SessionExerciseCardInner: React.FC<SessionExerciseCardProps> = ({
                         <div>
                             <label className="text-muted text-xs mb-4 block" htmlFor={`cardio-speed-${exerciseInstanceId}`}>Velocità media</label>
                             <BufferedInput 
-                                id={`cardio-speed-${exerciseInstanceId}`}
+                                id={`cardio-speed-${exerciseInstanceId}-${exItem.sets[0].id}`}
                                 type="text" 
                                 inputMode="decimal"
                                 value={exItem.sets[0]?.speed || ''} 
@@ -315,7 +315,7 @@ const SessionExerciseCardInner: React.FC<SessionExerciseCardProps> = ({
                         <div>
                             <label className="text-muted text-xs mb-4 block" htmlFor={`cardio-incline-${exerciseInstanceId}`}>Inclinazione (%)</label>
                             <BufferedInput 
-                                id={`cardio-incline-${exerciseInstanceId}`}
+                                id={`cardio-incline-${exerciseInstanceId}-${exItem.sets[0].id}`}
                                 type="text" 
                                 inputMode="decimal"
                                 value={exItem.sets[0]?.incline || ''} 
@@ -329,7 +329,7 @@ const SessionExerciseCardInner: React.FC<SessionExerciseCardProps> = ({
                     <div>
                         <label className="text-muted text-xs mb-4 block" htmlFor={`cardio-kcal-${exerciseInstanceId}`}>Kcal stimate</label>
                         <BufferedInput 
-                            id={`cardio-kcal-${exerciseInstanceId}`}
+                            id={`cardio-kcal-${exerciseInstanceId}-${exItem.sets[0].id}`}
                             type="text" 
                             inputMode="decimal"
                             value={exItem.sets[0]?.kcal || ''} 
@@ -339,7 +339,7 @@ const SessionExerciseCardInner: React.FC<SessionExerciseCardProps> = ({
                             style={{ fontSize: '16px', boxSizing: 'border-box' }}
                         />
                     </div>
-                </div>
+                </div> : <p role="alert">Serie cardio senza identificativo: dati di recupero non modificabili.</p>
             ) : (
                 <>
                     {(exItem.sets || []).map((s, sIndex: number) => (
