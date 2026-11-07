@@ -94,8 +94,12 @@ describe('Workout lifecycle durable recovery regressions', () => {
         ];
         const first = { ...workout('running-a', true), routineName: 'First workout', exercises };
         const next = { ...workout('running-b', true), routineName: 'Second workout', exercises };
+        const library = [
+            { id: 'bench', name: 'Panca', setsCount: 0, sets: [], muscles: [], secondaryMuscles: [] },
+            { id: 'squat', name: 'Squat', setsCount: 0, sets: [], muscles: [], secondaryMuscles: [] },
+        ];
         useAppStore.setState({
-            userData: userData({ activeWorkout: first }), dataOwner: owner,
+            userData: userData({ activeWorkout: first, library }), dataOwner: owner,
             localWorkout: first,
         });
         renderOwnedWorkoutSession();
@@ -106,7 +110,7 @@ describe('Workout lifecycle durable recovery regressions', () => {
 
         // Replacing a live workout must also reset state held above the keyed accordion tree.
         act(() => useAppStore.setState({
-            userData: userData({ activeWorkout: next }),
+            userData: userData({ activeWorkout: next, library }),
             localWorkout: next,
         }));
         expect(screen.getByRole('heading', { name: 'Second workout' })).toBeTruthy();
