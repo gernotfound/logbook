@@ -118,6 +118,33 @@ describe('F-006 active workout persisted business identity', () => {
         expect(localStorage.getItem(deviceKey('workout', owner))).toBeNull();
     });
 
+    it.each([
+        ['duplicated set ID', [
+            { id: 's-1', kg: '80', reps: '8' },
+            { id: 's-1', kg: '75', reps: '10' },
+        ]],
+        ['missing set ID', [
+            { kg: '80', reps: '8' },
+        ]],
+    ])('preserves authenticated device ciphertext with a %s instead of silently repairing the ID', async (_case, sets) => {
+        const owner = 'user:nested-identity-recovery';
+        localStorage.setItem(`logbook:v2:${owner}:health-consent-generation`, '1');
+        await prepareUnlockedTestArchive(owner);
+        const corrupted = {
+            ...validWorkout,
+            exercises: [{ id: 'se-1', exId: 'bench', sessionNote: '', sets }],
+        };
+        persistPlainWorkoutSnapshot(corrupted as WorkoutSession, owner);
+        const protectedKey = protectedDeviceKey('workout', owner);
+        const ciphertext = localStorage.getItem(protectedKey);
+        const original = readDeviceValueStrict('workout', owner);
+        expect(ciphertext).toMatch(/^tlb-sealed:v1:/);
+
+        expect(() => getInitialLocalWorkout(owner)).toThrow(DeviceWorkoutCorruptError);
+        expect(localStorage.getItem(protectedKey)).toBe(ciphertext);
+        expect(readDeviceValueStrict('workout', owner)).toBe(original);
+    });
+
     it('does not adopt or persist a malformed remote active workout into runtime state', async () => {
         const owner = captureSession().owner;
         if (owner.startsWith('user:')) {
