@@ -250,6 +250,11 @@ export function persistPlainWorkoutSnapshot(workout: WorkoutSession | null, owne
             }
         }
     }
+    if (owner.startsWith('user:') && workout !== null) {
+        // A device writer must not create a new account snapshot that boot
+        // would immediately quarantine as an unidentifiable persisted record.
+        assertWorkoutSessionIdentities(workout, 'Nuovo snapshot workout');
+    }
     const value = workout === null ? null : current === undefined
         ? JSON.stringify(workout)
         : JSON.stringify({
