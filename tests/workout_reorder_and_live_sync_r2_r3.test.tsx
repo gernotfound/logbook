@@ -1,6 +1,6 @@
 import { captureSession } from '../src/lib/sync/session';
 import { deviceKey, protectedDeviceKey, readDeviceValueStrict } from '../src/lib/sync/deviceStorage';
-import { persistPlainWorkoutSnapshot, unwrapWorkoutDeviceSnapshot } from '../src/lib/sync/workoutDeviceIntent';
+import { persistPlainWorkoutSnapshot } from '../src/lib/sync/workoutDeviceIntent';
 import { prepareUnlockedTestArchive } from './secureVaultFixture';
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -13,7 +13,7 @@ import { SessionExerciseCard } from '../src/components/Training/session/SessionE
 import TrainingSession from '../src/components/Training/TrainingSession';
 import { SessionExerciseSchema, UserDataSchema } from '../src/lib/schema';
 import { initializeLocal, readLocal } from '../src/lib/sync/localRepository';
-import { getInitialLocalWorkout } from '../src/store/slices/createWorkoutSlice';
+import { DeviceWorkoutCorruptError, getInitialLocalWorkout } from '../src/store/slices/createWorkoutSlice';
 import type { WorkoutSession, ExerciseLibraryItem } from '../src/types';
 
 const mockLibrary: ExerciseLibraryItem[] = [
@@ -193,8 +193,9 @@ describe('Workout Reorder (R2) and Live Sync & Badges (R3) Suite', () => {
             expect(active?.exercises[0].id).toMatch(/^se_/);
         });
 
-        it('1.6: getInitialLocalWorkout repairs device-only missing identities once and persists them', async () => {
+        it('1.6: preserves malformed authenticated snapshot without generating new persisted identities', async () => {
             const owner = captureSession().owner;
+            expect(owner.startsWith('user:')).toBe(true);
             await prepareUnlockedTestArchive(owner);
             const malformedWorkout = {
                 id: 'w_malformed',
@@ -207,23 +208,15 @@ describe('Workout Reorder (R2) and Live Sync & Badges (R3) Suite', () => {
             persistPlainWorkoutSnapshot(malformedWorkout as WorkoutSession, owner);
             const sealedKey = protectedDeviceKey('workout', owner);
             const originalCiphertext = localStorage.getItem(sealedKey);
+            const originalPlain = readDeviceValueStrict('workout', owner);
             expect(originalCiphertext).toMatch(/^tlb-sealed:v1:/);
             expect(localStorage.getItem(deviceKey('workout', owner))).toBeNull();
 
-            const initial = getInitialLocalWorkout(owner);
-            expect(initial).not.toBeNull();
-            expect(initial?.exercises).toHaveLength(2);
-            expect(initial?.exercises[0].id).toMatch(/^se_/);
-            expect(initial?.exercises[0].sets[0].id).toMatch(/^s_/);
-            expect(initial?.exercises[0].sets[0].rir).toBe(0);
-            expect(initial?.exercises[1].id).toBe('se_preserved');
-            const saved = unwrapWorkoutDeviceSnapshot(JSON.parse(readDeviceValueStrict('workout', owner)!), owner).workout as WorkoutSession;
-            expect(saved.exercises[0].id).toBe(initial?.exercises[0].id);
-            expect(saved.exercises[0].sets[0].id).toBe(initial?.exercises[0].sets[0].id);
-            expect(localStorage.getItem(sealedKey)).toMatch(/^tlb-sealed:v1:/);
-            expect(localStorage.getItem(sealedKey)).not.toBe(originalCiphertext);
-            expect(localStorage.getItem(deviceKey('workout', owner))).toBeNull();
-            expect(getInitialLocalWorkout(owner)).toMatchObject(initial as WorkoutSession);
+            expect(() => getInitialLocalWorkout(owner)).toThrow(DeviceWorkoutCorruptError);
+            expect(localStorage.getItem(sealedKey)).toBe(originalCiphertext);
+            expect(readDeviceValueStrict('workout', owner)).toBe(originalPlain);
+            expect(() => persistPlainWorkoutSnapshot(null, owner)).toThrow('identificativi non validi');
+            expect(localStorage.getItem(sealedKey)).toBe(originalCiphertext);
         });
     });
 
