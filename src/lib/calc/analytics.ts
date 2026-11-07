@@ -114,7 +114,9 @@ export function getWorkoutDateString(w: WorkoutSession | any): string | null {
     if (w.date && typeof w.date === 'string') {
         const clean = w.date.trim();
         if (clean.length >= 10) {
-            return clean.slice(0, 10);
+            const day = clean.slice(0, 10);
+            // Only calendar-valid local day keys may enter weekly analytics buckets.
+            if (/^\d{4}-\d{2}-\d{2}$/.test(day) && isValid(parseISO(day))) return day;
         }
     }
     const ts = typeof w.globalStartTime === 'number' && !isNaN(w.globalStartTime)
