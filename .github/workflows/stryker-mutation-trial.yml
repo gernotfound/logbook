@@ -35,6 +35,7 @@ jobs:
           - causal-compaction
           - pending-sequences
           - replica-checkpoint
+          - cloud-integrity
     env:
       EXPECTED_SHA: ${{ github.sha }}
       STRYKER_AREA: ${{ matrix.area }}
