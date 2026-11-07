@@ -15,8 +15,6 @@ export interface WorkoutSlice {
     setSyncedLocalWorkout: (workout: WorkoutSession | null | ((prev: WorkoutSession | null) => WorkoutSession | null)) => Promise<SyncResult>;
 }
 
-export const clearWorkoutTimer = () => {};
-
 const DEVICE_WORKOUT_PERSISTENCE_MESSAGE = 'Impossibile salvare l’allenamento sul dispositivo. Le modifiche sono bloccate per evitare perdita di dati; libera spazio o riabilita lo storage e riapri TheLogBook.';
 
 export class DeviceWorkoutCorruptError extends Error {
