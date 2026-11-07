@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { getDocFromServer, getDocs, writeBatch } from 'firebase/firestore';
+import { getDocFromServer, writeBatch } from 'firebase/firestore';
 
 vi.unmock('../src/lib/db');
 
@@ -109,10 +109,6 @@ describe('DB Persistence for Training Cycles and Planning', () => {
         } as any;
             });
 
-        vi.mocked(getDocs).mockResolvedValue({
-            forEach: () => {}
-        } as any);
-
         const loadedData = (await DB.loadCloudPayload({ cloudKey: accountKey }))?.data;
 
         expect(loadedData).not.toBeNull();
@@ -137,10 +133,6 @@ describe('DB Persistence for Training Cycles and Planning', () => {
             data: () => sealedRoot({ profile: { name: 'Mario' } })
         } as any;
             });
-
-        vi.mocked(getDocs).mockResolvedValue({
-            forEach: () => {}
-        } as any);
 
         const loadedData = (await DB.loadCloudPayload({ cloudKey: accountKey }))?.data;
 
