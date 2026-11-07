@@ -603,7 +603,7 @@ describe('Empirical Challenger: Deterministic Guest Merge (R5) Stress & Adversar
                 guestSupplements.push({ id: guestSuppId, name: `Guest Supplement ${i}`, unit: 'g', target: 10 });
 
                 // Nutrition Days (Dates)
-                const dateKey = `2026-01-${String((i % 28) + 1).padStart(2, '0')}-${Math.floor(i / 28)}`;
+                const dateKey = new Date(Date.UTC(2026, 0, i + 1)).toISOString().slice(0, 10);
                 cloudNutrition[dateKey] = {
                     date: dateKey,
                     kcal: 2000 + i,
@@ -612,7 +612,7 @@ describe('Empirical Challenger: Deterministic Guest Merge (R5) Stress & Adversar
                     fat: 60,
                     meals: [{ id: `meal_c_${i}`, name: `Cloud Meal ${i}`, meal: 'pranzo', quantity: 100, baseQty: 100, kcal: 300, carbs: 30, pro: 20, fat: 5 }]
                 };
-                const guestDateKey = i < 30 ? dateKey : `2026-06-${String((i % 28) + 1).padStart(2, '0')}-${Math.floor(i / 28)}`;
+                const guestDateKey = i < 30 ? dateKey : new Date(Date.UTC(2026, 6, i + 1)).toISOString().slice(0, 10);
                 guestNutrition[guestDateKey] = {
                     date: guestDateKey,
                     kcal: 2100 + i,
@@ -658,6 +658,12 @@ describe('Empirical Challenger: Deterministic Guest Merge (R5) Stress & Adversar
             expect(merged.trainingCycles).toHaveLength(90);
             expect(merged.history).toHaveLength(90);
             expect(merged.supplements).toHaveLength(90);
+            // The dates must be real ISO calendar days: malformed fixture keys can be
+            // discarded by schema validation and conceal missing nutrition records.
+            expect(Object.keys(merged.nutrition ?? {})).toHaveLength(90);
+            expect(Object.keys(merged.nutrition ?? {}).every(date => /^\d{4}-\d{2}-\d{2}$/.test(date))).toBe(true);
+            expect(merged.nutrition?.['2026-01-01']).toBeDefined();
+            expect(merged.nutrition?.['2026-08-01']).toBeDefined();
             expect(merged.activeWorkout?.id).toBe('w_active_large');
             expect(merged.profile?.height).toBe('182');
             expect(merged.profile?.waist).toBe('82');

@@ -19,7 +19,7 @@ function computeWeeksFromDatesDirect(startIso: string, endIso: string): number {
     const end = typeof endIso === 'string' && !endIso.includes('T') ? parseISO(endIso) : new Date(endIso);
     const diffDays = differenceInCalendarDays(startOfDay(end), startOfDay(start));
     if (diffDays < 0) return 1;
-    return Math.max(1, Math.ceil((diffDays + 1) / 7));
+    return Math.max(1, Math.round((diffDays + 1) / 7));
 }
 
 function assertCycleEndDate(startIso: string, weeks: number): string {
@@ -285,19 +285,29 @@ describe('Empirical Challenger: Training Cycles End Date & Two-Way Binding Adver
         });
 
         it('survives European Daylight Savings Time (DST) Spring & Fall transitions without 23h/25h hour drift', () => {
-            // Spring transition (March 2026 - clock springs forward)
-            const startSpring = '2026-03-15';
-            const endSpring = assertCycleEndDate(startSpring, 4);
-            // 4 weeks = 28 days -> start + 27 days = 2026-04-11
-            expect(endSpring).toBe('2026-04-11');
-            expect(computeWeeksFromDatesDirect(startSpring, endSpring)).toBe(4);
+            // UTC-based CI runners would otherwise never cross CET/CEST.
+            // Isolate the calendar oracle to Rome and restore the runner zone.
+            const previousZone = process.env.TZ;
+            try {
+                process.env.TZ = 'Europe/Rome';
+                expect(new Date(2026, 2, 28, 12).getTimezoneOffset()).toBe(-60);
+                expect(new Date(2026, 2, 30, 12).getTimezoneOffset()).toBe(-120);
+                expect(new Date(2026, 9, 24, 12).getTimezoneOffset()).toBe(-120);
+                expect(new Date(2026, 9, 26, 12).getTimezoneOffset()).toBe(-60);
 
-            // Fall transition (October 2026 - clock falls back)
-            const startFall = '2026-10-15';
-            const endFall = assertCycleEndDate(startFall, 4);
-            // 4 weeks = 28 days -> start + 27 days = 2026-11-11
-            expect(endFall).toBe('2026-11-11');
-            expect(computeWeeksFromDatesDirect(startFall, endFall)).toBe(4);
+                const startSpring = '2026-03-15';
+                const endSpring = assertCycleEndDate(startSpring, 4);
+                expect(endSpring).toBe('2026-04-11');
+                expect(computeWeeksFromDatesDirect(startSpring, endSpring)).toBe(4);
+
+                const startFall = '2026-10-15';
+                const endFall = assertCycleEndDate(startFall, 4);
+                expect(endFall).toBe('2026-11-11');
+                expect(computeWeeksFromDatesDirect(startFall, endFall)).toBe(4);
+            } finally {
+                if (previousZone === undefined) delete process.env.TZ;
+                else process.env.TZ = previousZone;
+            }
         });
     });
 

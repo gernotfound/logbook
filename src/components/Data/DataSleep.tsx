@@ -66,6 +66,7 @@ const DataSleep: React.FC<DataSleepProps> = ({ sleepHook, selectedDate, setSelec
                         if (activeDateStr !== today) setSelectedDate(shiftDateString(activeDateStr, 1));
                     }}
                     onToday={() => setSelectedDate(today)}
+                    disabled={isEditing}
                 />
             )}
 
