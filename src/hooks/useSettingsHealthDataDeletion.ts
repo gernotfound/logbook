@@ -19,12 +19,16 @@ export function useSettingsHealthDataDeletion(beginDeletion: () => boolean, endD
     const handleDeleteHealthData = async () => {
         if (!beginDeletion()) return;
         let serverComplete = false;
+        let requestSession: ReturnType<typeof captureSession> | null = null;
+        let expectedUid: string | null = null;
         try {
             const user = auth.currentUser;
             const session = captureSession();
+            requestSession = session;
             if (!user || session.owner !== 'user:' + user.uid) {
                 throw new Error('Accedi al tuo account prima di richiedere la cancellazione.');
             }
+            expectedUid = user.uid;
             const assertCurrent = () => {
                 if (!isCurrentSession(session) || auth.currentUser?.uid !== user.uid) {
                     throw new Error('Sessione cambiata durante la cancellazione. Verifica il risultato prima di riprovare.');
@@ -86,6 +90,20 @@ export function useSettingsHealthDataDeletion(beginDeletion: () => boolean, endD
             await showAlert('Dati del database operativo e di questo dispositivo eliminati. Il tuo account non è stato cancellato: puoi accedere di nuovo. Copie su dispositivi offline, backup già esportati e backup tecnici del fornitore non sono eliminabili da questo comando.', 'Cancellazione completata');
         } catch (error) {
             if (isSensitiveReauthCancellation(error)) return;
+            if (requestSession && expectedUid !== null) {
+                if (auth.currentUser?.uid !== expectedUid) return;
+                if (!serverComplete && !isCurrentSession(requestSession)) return;
+                if (serverComplete) {
+                    // Purge removes the original consent marker; only its Auth epoch
+                    // and owner can still identify the session for recovery feedback.
+                    let sameIdentity = false;
+                    try {
+                        const current = captureSession();
+                        sameIdentity = current.owner === requestSession.owner && current.epoch === requestSession.epoch;
+                    } catch { /* No readable proof of the original session. */ }
+                    if (!sameIdentity) return;
+                }
+            }
             await showAlert(
                 (serverComplete
                     ? 'Il server ha completato la cancellazione, ma la pulizia su questo dispositivo o la disconnessione non è terminata. Non considerare conclusa la pulizia locale. Riprova da questo dispositivo.\\n\\n'

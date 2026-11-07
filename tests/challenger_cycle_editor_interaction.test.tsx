@@ -263,8 +263,6 @@ describe('Challenger 2 Empirical Verification: CycleEditor UI & Two-Way Binding'
         // Duration weeks should be 8
         expect(durationInput.value).toBe('8');
 
-        // CRITICAL CHECK: Start date text MUST NOT have been overwritten by 14/10/2026!
-        // In current CycleEditor.tsx line 171, setDateTextInput is wrongly called, causing startDateTextInput to be '14/10/2026'
         expect(startDateTextInput.value).toBe('20/08/2026');
     });
 
