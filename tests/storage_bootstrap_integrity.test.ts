@@ -194,6 +194,27 @@ describe('Storage bootstrap and owner integrity checks', () => {
     expect(await idbKeyval.get(deviceVaultKeyId('guest'))).toBe(wrappingKey);
   });
 
+  it('blocks guest cold boot when an existing integrity marker is unreadable and the cache is absent', async () => {
+    localStorage.removeItem('logbook_authenticated_owner');
+    localStorage.setItem('logbook_is_guest', 'true');
+    localStorage.setItem(GUEST_SESSION_KEY, 'guest-marker-recovery');
+    activateGuestSession('guest-marker-recovery');
+    await prepareUnlockedTestArchive('guest');
+    // Use the owner-scoped key computed by production, not the old global marker.
+    const { getStorageMarkerKey } = await import('../src/lib/storageIntegrity');
+    localStorage.setItem(getStorageMarkerKey('guest'), '{not-json');
+    const original = localStorage.getItem(getStorageMarkerKey('guest'));
+    const originalArchive = await idbKeyval.get('logbook:v2:guest');
+
+    await initApp();
+
+    expect(window.__INITIAL_USER_DATA__).toBeNull();
+    expect(useAppStore.getState().localPersistenceBlocked).toBe(true);
+    expect(localStorage.getItem(getStorageMarkerKey('guest'))).toBe(original);
+    expect(await idbKeyval.get('logbook:v2:guest')).toBe(originalArchive);
+    expect(createRoot).toHaveBeenCalledTimes(1);
+  });
+
   it('Flow 4: First launch without a marker or cache remains empty', async () => {
     vi.spyOn(idbKeyval, 'get').mockResolvedValue(null);
 
