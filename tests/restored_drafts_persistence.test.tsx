@@ -188,6 +188,62 @@ describe('restored owner-scoped drafts', () => {
         },
     );
 
+    it.each(['routine', 'exercise'] as const)(
+        'retains newer %s edits made while an earlier domain commit is awaiting its result',
+        async kind => {
+            const owner = storageOwner();
+            const name = kind === 'routine' ? 'draft_routine' : 'draft_exercise';
+            const originalDispatch = useAppStore.getState().dispatchDomainOperation;
+            const originalAlert = useDialogStore.getState().showAlert;
+            let notifyCommitted!: () => void;
+            let releaseCommit!: () => void;
+            const committed = new Promise<void>(resolve => { notifyCommitted = resolve; });
+            const release = new Promise<void>(resolve => { releaseCommit = resolve; });
+            useAppStore.setState({ dispatchDomainOperation: async operation => {
+                const result = await originalDispatch(operation);
+                notifyCommitted();
+                await release;
+                return result;
+            } });
+            useDialogStore.setState({ showAlert: vi.fn(async () => {}) });
+            try {
+                if (kind === 'routine') {
+                    const hook = renderHook(() => useTrainingRoutines());
+                    try {
+                        act(() => hook.result.current.setRoutineName('Scheda confermata'));
+                        let saving!: Promise<boolean>;
+                        act(() => { saving = hook.result.current.handleSave(); });
+                        await committed;
+                        act(() => hook.result.current.setRoutineName('Modifica ancora aperta'));
+                        const latest = readDeviceValueStrict(name, owner);
+                        await act(async () => { releaseCommit(); expect(await saving).toBe(false); });
+                        expect(hook.result.current.routineName).toBe('Modifica ancora aperta');
+                        expect(readDeviceValueStrict(name, owner)).toBe(latest);
+                        expect((await readLocal(owner))?.data.routines.some(r => r.name === 'Scheda confermata')).toBe(true);
+                    } finally { hook.unmount(); }
+                } else {
+                    const hook = renderHook(() => useTrainingExercises());
+                    try {
+                        act(() => hook.result.current.setExName('Esercizio confermato'));
+                        let saving!: Promise<boolean>;
+                        act(() => { saving = hook.result.current.handleSaveExercise(); });
+                        await committed;
+                        act(() => hook.result.current.setExNotes('Nuova nota da conservare'));
+                        const latest = readDeviceValueStrict(name, owner);
+                        await act(async () => { releaseCommit(); expect(await saving).toBe(false); });
+                        expect(hook.result.current.exNotes).toBe('Nuova nota da conservare');
+                        expect(readDeviceValueStrict(name, owner)).toBe(latest);
+                        expect((await readLocal(owner))?.data.library.some(e => e.name === 'Esercizio confermato')).toBe(true);
+                    } finally { hook.unmount(); }
+                }
+            } finally {
+                releaseCommit?.();
+                useAppStore.setState({ dispatchDomainOperation: originalDispatch });
+                useDialogStore.setState({ showAlert: originalAlert });
+            }
+        },
+    );
+
     it('quarantines old exercise and routine drafts before hydration or mount cleanup', async () => {
         const owner = storageOwner();
         const marker = `logbook:v2:${owner}:health-consent-generation`;

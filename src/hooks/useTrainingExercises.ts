@@ -292,6 +292,8 @@ export function useTrainingExercises() {
             return false;
         }
 
+        // A later edit in this same form must outlive an earlier business commit.
+        const submittedDraftRaw = draftRaw.current;
         try {
             const savedExercise = editingExId
                 ? updatedLibrary.find(ex => ex.id === editingExId)
@@ -299,6 +301,10 @@ export function useTrainingExercises() {
             if (!savedExercise) throw new Error('Esercizio non trovato dopo la modifica');
             await persistExercise({ type: 'exercise.upsert', exercise: savedExercise });
             if (!isCurrentSession(draftSession)) return false;
+            if (draftRaw.current !== submittedDraftRaw) {
+                await showAlert('Una versione dell’esercizio è stata salvata, ma ci sono modifiche successive ancora da salvare.');
+                return false;
+            }
             const cleared = handleCancelEdit();
             if (!isCurrentSession(draftSession)) return false;
             if (!cleared) {

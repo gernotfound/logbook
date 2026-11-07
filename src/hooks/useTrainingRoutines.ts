@@ -163,6 +163,9 @@ export function useTrainingRoutines() {
             return false;
         }
 
+        // A durable commit can finish after this form receives a newer edit.
+        // Its cleanup may only consume the exact draft submitted with this save.
+        const submittedDraftRaw = draftRaw.current;
         try {
             const sanitizedExercises: RoutineExercise[] = routineExercises.map(ex => {
                 const num = typeof ex.setsCount === 'number' ? ex.setsCount : parseInt(String(ex.setsCount), 10);
@@ -195,6 +198,10 @@ export function useTrainingRoutines() {
             }
 
             if (!isCurrentSession(draftSession)) return false;
+            if (draftRaw.current !== submittedDraftRaw) {
+                await showAlert('Una versione della scheda è stata salvata, ma ci sono modifiche successive ancora da salvare.');
+                return false;
+            }
             const cleared = clearRoutineDraft();
             if (!isCurrentSession(draftSession)) return false;
             setRoutineName('');

@@ -250,6 +250,23 @@ describe('Workout lifecycle durable recovery regressions', () => {
         expect(readDeviceValueStrict(name, owner)).toBe(raw);
     });
 
+    it('does not reseal an already persisted pre-session check-in during repeated update flushes', async () => {
+        const owner = storageOwner();
+        const name = 'draft:pre-session:checkin-noop-flush';
+        const onStart = vi.fn(async () => true);
+        render(<PreSessionCheckIn workoutId="checkin-noop-flush" onStart={onStart} onCancel={vi.fn(async () => true)} />);
+        fireEvent.click(screen.getByRole('button', { name: 'Energia: 3 su 5' }));
+        const originalRaw = readDeviceValueStrict(name, owner);
+        const sealed = localStorage.getItem(protectedDeviceKey(name, owner));
+        expect(originalRaw).toContain('"energy":3');
+        expect(sealed).toMatch(/^tlb-sealed:v1:/);
+        act(() => draftRegistry.flushAll({ strict: true }));
+        act(() => draftRegistry.flushAll({ strict: true }));
+        expect(readDeviceValueStrict(name, owner)).toBe(originalRaw);
+        expect(localStorage.getItem(protectedDeviceKey(name, owner))).toBe(sealed);
+        expect(onStart).not.toHaveBeenCalled();
+    });
+
     it('does not relabel a pre-session answer if another tab advances consent after the session guard', async () => {
         await prepareUnlockedTestArchive(owner);
         const marker = `logbook:v2:${owner}:health-consent-generation`;
