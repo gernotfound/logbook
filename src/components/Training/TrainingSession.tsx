@@ -360,6 +360,7 @@ const TrainingSession = ({ onNavigateToHistory, onNavigateToPlanning }: Training
     if (activeWorkout && !activeWorkout.isEditingHistory && !activeWorkout.globalStartTime) {
         return (
             <PreSessionCheckIn
+                key={String(activeWorkout.id ?? '')}
                 workoutId={String(activeWorkout.id ?? '')}
                 routineName={activeWorkout.routineName}
                 date={activeWorkout.date}

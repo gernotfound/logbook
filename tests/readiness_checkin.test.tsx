@@ -103,6 +103,34 @@ describe('pre-session readiness contract', () => {
         expect(screen.queryByText('Durata Totale')).toBeNull();
     });
 
+    it('keeps pre-session answers scoped to the currently displayed workout after a replacement', async () => {
+        const owner = captureSession().owner;
+        await prepareUnlockedTestArchive(owner);
+        const first: WorkoutSession = { id: 'checkin-first', date: '2026-09-24', routineName: 'First', exercises: [] };
+        const second: WorkoutSession = { id: 'checkin-second', date: '2026-09-24', routineName: 'Second', exercises: [] };
+        useAppStore.setState({
+            userData: parseUserData({ activeWorkout: first }), dataOwner: owner,
+            localWorkout: first, localPersistenceBlocked: false,
+        });
+        renderOwnedWorkoutSession();
+        fireEvent.click(screen.getByRole('button', { name: 'Energia: 4 su 5' }));
+        const firstName = 'draft:pre-session:checkin-first';
+        const secondName = 'draft:pre-session:checkin-second';
+        expect(JSON.parse(readDeviceValueStrict(firstName, owner)!).data.energy).toBe(4);
+
+        // The session can be replaced without unmounting the enclosing TrainingSession.
+        act(() => useAppStore.setState({
+            userData: parseUserData({ activeWorkout: second }), localWorkout: second,
+        }));
+        expect(screen.getByText('Second')).toBeTruthy();
+        expect(screen.getByRole('button', { name: 'Energia: 4 su 5' }).getAttribute('aria-pressed')).toBe('false');
+        expect(readDeviceValueStrict(secondName, owner)).toBeNull();
+
+        fireEvent.click(screen.getByRole('button', { name: 'Energia: 2 su 5' }));
+        expect(JSON.parse(readDeviceValueStrict(secondName, owner)!).data).toMatchObject({ energy: 2 });
+        expect(JSON.parse(readDeviceValueStrict(firstName, owner)!).data).toMatchObject({ energy: 4 });
+    });
+
     it('scrolls to the top after confirming the pre-session check-in', async () => {
         await prepareUnlockedTestArchive(captureSession().owner);
         const scrollToSpy = vi.spyOn(window, 'scrollTo').mockImplementation(() => {});
