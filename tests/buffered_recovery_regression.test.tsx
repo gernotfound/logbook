@@ -535,6 +535,24 @@ describe.each(['input', 'textarea'] as const)('concurrent same-workout %s drafts
         vi.restoreAllMocks();
     });
 
+    it('rejects a new independent buffered witness before business flush or required-update capture', async () => {
+        const owner = captureSession().owner;
+        await prepareUnlockedTestArchive(owner);
+        const onChange = vi.fn();
+        const view = mount(onChange);
+        fireEvent.change(edited(view), { target: { value: 'Current input' } });
+        const original = readBufferedDraftSnapshot(draftName, owner).raw;
+        const contender = createBufferedWriterIntentName();
+        writeBufferedWriterIntent(contender, owner, draftName, 'Competing private copy', null, '3');
+        expect(readBufferedWriterEvidence(owner, draftName)).toHaveLength(2);
+        expect(() => requiredUpdateRecoveryRegistry.captureAll()).toThrow(AggregateError);
+        fireEvent.blur(edited(view));
+        expect(onChange).not.toHaveBeenCalled();
+        expect(readBufferedDraftSnapshot(draftName, owner).raw).toBe(original);
+        expect(useAppStore.getState().localPersistenceBlocked).toBe(true);
+        view.unmount();
+    });
+
     it('rejects a second stale editor before overwriting a newer draft in the same consent revision', async () => {
         const owner = captureSession().owner;
         await prepareUnlockedTestArchive(owner);

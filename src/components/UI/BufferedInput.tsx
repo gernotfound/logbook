@@ -121,6 +121,21 @@ export const BufferedInput = React.forwardRef<HTMLInputElement, BufferedInputPro
             inputModeRef.current = inputMode;
         });
 
+        const assertIndependentWitnesses = useCallback(() => {
+            const key = recoveryKey.current;
+            const session = editSession.current;
+            if (!key || !session) throw new Error('Testimonianze della bozza non verificabili.');
+            const present = traceWriterLineage(readBufferedWriterEvidence(session.owner, key));
+            const expected = [...sourceLineage.current,
+                ...(writerIntentName.current && writerIntentRaw.current
+                    ? [{ name: writerIntentName.current, raw: writerIntentRaw.current }] : [])];
+            if (present.length !== expected.length
+                || present.some(entry => !expected.some(item =>
+                    item.name === entry.name && item.raw === entry.raw))) {
+                throw new Error('Testimonianze concorrenti: modifica locale non pubblicabile.');
+            }
+        }, []);
+
         const persistRecovery = useCallback(() => {
             if (!isDirty.current) return;
             const key = recoveryKey.current;
@@ -139,6 +154,7 @@ export const BufferedInput = React.forwardRef<HTMLInputElement, BufferedInputPro
                 // observed image. A consent change must block reload, not be
                 // mistaken for an already-secured current draft.
                 assertBufferedDraftUnchanged(key, session.owner, observedRaw.current);
+                assertIndependentWitnesses();
                 return;
             }
             // Every editor has its own device key: preserve input synchronously
@@ -169,7 +185,7 @@ export const BufferedInput = React.forwardRef<HTMLInputElement, BufferedInputPro
             );
             recoveryValue.current = raw;
             needsDeviceWrite.current = false;
-        }, [workoutId]);
+        }, [workoutId, assertIndependentWitnesses]);
 
         // Sync from external value if not focused or dirty. A recovered value remains
         // visible until its parent confirms the same value, then its recovery key is cleared.
@@ -262,6 +278,7 @@ export const BufferedInput = React.forwardRef<HTMLInputElement, BufferedInputPro
                     assertBufferedDraftUnchanged(
                         recoveryKey.current, session.owner, observedRaw.current,
                     );
+                    assertIndependentWitnesses();
                 }
                 const finalVal = normalizeInputValue(
                     String(latestLocalValue.current),
@@ -271,7 +288,7 @@ export const BufferedInput = React.forwardRef<HTMLInputElement, BufferedInputPro
                 onChangeRef.current(finalVal);
                 isDirty.current = false;
             }
-        }, [workoutId]);
+        }, [workoutId, assertIndependentWitnesses]);
 
         useEffect(() => {
             draftRegistry.register(flush);
@@ -392,6 +409,21 @@ export const BufferedTextarea = React.forwardRef<HTMLTextAreaElement, BufferedTe
             onChangeRef.current = onChange;
         });
 
+        const assertIndependentWitnesses = useCallback(() => {
+            const key = recoveryKey.current;
+            const session = editSession.current;
+            if (!key || !session) throw new Error('Testimonianze della bozza non verificabili.');
+            const present = traceWriterLineage(readBufferedWriterEvidence(session.owner, key));
+            const expected = [...sourceLineage.current,
+                ...(writerIntentName.current && writerIntentRaw.current
+                    ? [{ name: writerIntentName.current, raw: writerIntentRaw.current }] : [])];
+            if (present.length !== expected.length
+                || present.some(entry => !expected.some(item =>
+                    item.name === entry.name && item.raw === entry.raw))) {
+                throw new Error('Testimonianze concorrenti: modifica locale non pubblicabile.');
+            }
+        }, []);
+
         const persistRecovery = useCallback(() => {
             if (!isDirty.current) return;
             const key = recoveryKey.current;
@@ -410,6 +442,7 @@ export const BufferedTextarea = React.forwardRef<HTMLTextAreaElement, BufferedTe
                 // observed image. A consent change must block reload, not be
                 // mistaken for an already-secured current draft.
                 assertBufferedDraftUnchanged(key, session.owner, observedRaw.current);
+                assertIndependentWitnesses();
                 return;
             }
             // Every editor has its own device key: preserve input synchronously
@@ -440,7 +473,7 @@ export const BufferedTextarea = React.forwardRef<HTMLTextAreaElement, BufferedTe
             );
             recoveryValue.current = raw;
             needsDeviceWrite.current = false;
-        }, [workoutId]);
+        }, [workoutId, assertIndependentWitnesses]);
 
         useEffect(() => {
             if (recoveryValue.current !== null && !isDirty.current && recoveryKey.current) {
@@ -526,11 +559,12 @@ export const BufferedTextarea = React.forwardRef<HTMLTextAreaElement, BufferedTe
                     assertBufferedDraftUnchanged(
                         recoveryKey.current, session.owner, observedRaw.current,
                     );
+                    assertIndependentWitnesses();
                 }
                 onChangeRef.current(String(latestLocalValue.current));
                 isDirty.current = false;
             }
-        }, [workoutId]);
+        }, [workoutId, assertIndependentWitnesses]);
 
         useEffect(() => {
             draftRegistry.register(flush);
