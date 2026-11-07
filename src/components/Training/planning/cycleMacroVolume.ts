@@ -10,6 +10,7 @@ export interface CycleMacroVolumeItem {
 function getMacroArea(muscleId: string): { key: string; label: string } {
     const value = muscleId.toLocaleLowerCase('it');
     if (value.includes('pett') || value.includes('chest')) return { key: 'chest', label: 'Petto' };
+    if (value.includes('lomb') || value.includes('lower_back') || value.includes('lower-back')) return { key: 'core', label: 'Core' };
     if (value.includes('trap') || value === 'lats' || value.startsWith('lats_') || value.includes('dors') || value.includes('schien') || value.includes('back') || value.includes('rhomboid')) {
         return { key: 'back', label: 'Dorso' };
     }
@@ -20,7 +21,7 @@ function getMacroArea(muscleId: string): { key: string; label: string } {
     if (value.includes('quad')) return { key: 'quads', label: 'Quadricipiti' };
     if (value.includes('femoral') || value.includes('hamstring')) return { key: 'hamstrings', label: 'Femorali' };
     if (value.includes('glute')) return { key: 'glutes', label: 'Glutei' };
-    if (value.includes('addom') || value.includes('abs') || value.includes('core') || value.includes('obliq') || value.includes('lomb') || value.includes('lower-back')) {
+    if (value.includes('addom') || value.includes('abs') || value.includes('core') || value.includes('obliq')) {
         return { key: 'core', label: 'Core' };
     }
     if (value.includes('adductor') || value.includes('addutt')) return { key: 'adductors', label: 'Adduttori' };
