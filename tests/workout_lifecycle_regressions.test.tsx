@@ -442,6 +442,26 @@ describe('Workout lifecycle durable recovery regressions', () => {
         },
     );
 
+    it('does not quarantine a replacement Auth session when a stale draft flush fails', async () => {
+        const active = workout('flush-obsolete-auth', true);
+        useAppStore.setState({ userData: userData({ activeWorkout: active }), dataOwner: owner, localWorkout: active });
+        const failOnFlush = () => {
+            invalidateSession();
+            throw new Error('Obsolete draft flush');
+        };
+        draftRegistry.register(failOnFlush);
+        vi.mocked(useDialogStore.getState().showAlert).mockResolvedValue();
+        try {
+            const { result } = renderHook(() => useWorkoutSession());
+            await act(async () => { expect(await result.current.endWorkout(false)).toBeNull(); });
+            expect(useAppStore.getState().localPersistenceBlocked).toBe(false);
+            expect(useDialogStore.getState().showAlert).not.toHaveBeenCalled();
+            expect(useAppStore.getState().localWorkout?.id).toBe(active.id);
+        } finally {
+            draftRegistry.unregister(failOnFlush);
+        }
+    });
+
     it('retains a live workout, timer and final draft when completion commit is rejected', async () => {
         await prepareUnlockedTestArchive(owner);
         const pending = workout('finish-rejected', true);
