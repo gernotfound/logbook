@@ -18,7 +18,8 @@ import {
 
 const EMPTY_ARRAY: any[] = [];
 
-function blockExerciseDraft(error: unknown): void {
+function blockExerciseDraft(error: unknown, session: ReturnType<typeof captureSession>): void {
+    if (!isCurrentSession(session)) return;
     console.error('Persistenza bozza esercizio non disponibile:', error);
     useAppStore.setState({
         localPersistenceBlocked: true,
@@ -56,7 +57,7 @@ export function useTrainingExercises() {
         readExerciseDraft(draftOwner);
     }, [draftOwner, draftSession, initialRecovery.error, localPersistenceBlocked]);
     useEffect(() => {
-        if (initialRecovery.error) blockExerciseDraft(initialRecovery.error);
+        if (initialRecovery.error) blockExerciseDraft(initialRecovery.error, draftSession);
     }, [initialRecovery.error]);
     const [editingExId, setEditingExId] = useState<string | null>(null);
     const [exName, setExName] = useState(() => initialDraft?.name || '');
@@ -84,7 +85,7 @@ export function useTrainingExercises() {
                 equipmentWeight,
             }, draftOwner, draftSession.consentGeneration);
         } catch (error) {
-            blockExerciseDraft(error);
+            blockExerciseDraft(error, draftSession);
         }
     }, [exName, exNotes, trackingType, selectedMuscles, secondaryMuscles, isBodyweight,
         equipmentWeight, editingExId, draftOwner, draftSession, initialRecovery.error,
@@ -193,7 +194,7 @@ export function useTrainingExercises() {
             assertCurrentDraft();
             clearExerciseDraft(draftOwner, draftSession.consentGeneration);
         } catch (error) {
-            blockExerciseDraft(error);
+            blockExerciseDraft(error, draftSession);
             return false;
         }
         setEditingExId(null);
@@ -281,7 +282,7 @@ export function useTrainingExercises() {
         try {
             assertCurrentDraft();
         } catch (error) {
-            blockExerciseDraft(error);
+            blockExerciseDraft(error, draftSession);
             void showAlert("Errore durante il salvataggio dell\x27esercizio.");
             return false;
         }
