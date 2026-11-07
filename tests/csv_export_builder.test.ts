@@ -67,6 +67,29 @@ describe('pure CSV export builder', () => {
         expect(source).toEqual(before);
     });
 
+    it('omits impossible but finite timestamps without aborting a valid CSV export', () => {
+        const history: WorkoutSession[] = [{
+            id: 'workout-overflow', date: '2026-10-22', exercises: [],
+            globalStartTime: Number.MAX_VALUE, globalEndTime: -Number.MAX_VALUE,
+        }];
+        const nutrition: Record<string, NutritionDay> = {
+            '2026-10-22': {
+                date: '2026-10-22', kcal: 2000, carbs: 200, pro: 120, fat: 60,
+                steps: 1000, stepsCapturedAt: Number.MAX_VALUE,
+                cardioSessions: [{
+                    id: 'cardio-overflow', modality: 'bike', durationMinutes: 10,
+                    startedAt: Number.MAX_VALUE,
+                }],
+            },
+        };
+        const files = new Map(buildCsvFiles(history, nutrition));
+        expect(files.get('allenamenti.csv')).toContain('"workout-overflow"');
+        expect(files.get('passi.csv')).toContain('2026-10-22,1000');
+        expect(files.get('cardio.csv')).toContain('"cardio-overflow"');
+        expect(files.get('allenamenti.csv')).not.toContain('Invalid Date');
+        expect(files.get('cardio.csv')).not.toContain('Invalid Date');
+    });
+
     it('omits empty optional files and exports sessions with no exercises', () => {
         const history: WorkoutSession[] = [{ id: 'empty', date: '2026-10-22', exercises: [] }];
         const files = buildCsvFiles(history, {}, []);
