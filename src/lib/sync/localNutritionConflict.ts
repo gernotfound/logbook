@@ -25,7 +25,9 @@ export async function clearNutritionConflict(owner: string, fingerprint: string,
             throw new Error('Conflitto cambiato durante la risoluzione');
         }
         saved = parse(clear(current.data));
-        return { ...current, data: saved, baseline: clear(current.baseline) };
+        // A resolved conflict changes the durable local state even though it
+        // emits no cloud journal entry. Invalidate stale recovery previews.
+        return { ...current, data: saved, baseline: clear(current.baseline), revision: current.revision + 1 };
     });
     return saved;
 }
