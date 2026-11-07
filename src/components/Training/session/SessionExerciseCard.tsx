@@ -277,7 +277,7 @@ const SessionExerciseCardInner: React.FC<SessionExerciseCardProps> = ({
                 exItem.sets?.[0]?.id ? <div key={exItem.sets[0].id} style={{ background: 'var(--surface-light)', padding: '15px', borderRadius: '12px', border: '1px solid var(--glass-border)', marginTop: '10px' }}>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '10px' }}>
                         <div>
-                            <label className="text-muted text-xs mb-4 block" htmlFor={`cardio-time-${exerciseInstanceId}`}>Durata (min)</label>
+                            <label className="text-muted text-xs mb-4 block" htmlFor={`cardio-time-${exerciseInstanceId}-${exItem.sets[0].id}`}>Durata (min)</label>
                             <BufferedInput 
                                 id={`cardio-time-${exerciseInstanceId}-${exItem.sets[0].id}`}
                                 type="text" 
@@ -290,7 +290,7 @@ const SessionExerciseCardInner: React.FC<SessionExerciseCardProps> = ({
                             />
                         </div>
                         <div>
-                            <label className="text-muted text-xs mb-4 block" htmlFor={`cardio-distance-${exerciseInstanceId}`}>Distanza (km)</label>
+                            <label className="text-muted text-xs mb-4 block" htmlFor={`cardio-distance-${exerciseInstanceId}-${exItem.sets[0].id}`}>Distanza (km)</label>
                             <BufferedInput 
                                 id={`cardio-distance-${exerciseInstanceId}-${exItem.sets[0].id}`}
                                 type="text" 
@@ -303,7 +303,7 @@ const SessionExerciseCardInner: React.FC<SessionExerciseCardProps> = ({
                             />
                         </div>
                         <div>
-                            <label className="text-muted text-xs mb-4 block" htmlFor={`cardio-speed-${exerciseInstanceId}`}>Velocità media</label>
+                            <label className="text-muted text-xs mb-4 block" htmlFor={`cardio-speed-${exerciseInstanceId}-${exItem.sets[0].id}`}>Velocità media</label>
                             <BufferedInput 
                                 id={`cardio-speed-${exerciseInstanceId}-${exItem.sets[0].id}`}
                                 type="text" 
@@ -316,7 +316,7 @@ const SessionExerciseCardInner: React.FC<SessionExerciseCardProps> = ({
                             />
                         </div>
                         <div>
-                            <label className="text-muted text-xs mb-4 block" htmlFor={`cardio-incline-${exerciseInstanceId}`}>Inclinazione (%)</label>
+                            <label className="text-muted text-xs mb-4 block" htmlFor={`cardio-incline-${exerciseInstanceId}-${exItem.sets[0].id}`}>Inclinazione (%)</label>
                             <BufferedInput 
                                 id={`cardio-incline-${exerciseInstanceId}-${exItem.sets[0].id}`}
                                 type="text" 
@@ -330,7 +330,7 @@ const SessionExerciseCardInner: React.FC<SessionExerciseCardProps> = ({
                         </div>
                     </div>
                     <div>
-                        <label className="text-muted text-xs mb-4 block" htmlFor={`cardio-kcal-${exerciseInstanceId}`}>Kcal stimate</label>
+                        <label className="text-muted text-xs mb-4 block" htmlFor={`cardio-kcal-${exerciseInstanceId}-${exItem.sets[0].id}`}>Kcal stimate</label>
                         <BufferedInput 
                             id={`cardio-kcal-${exerciseInstanceId}-${exItem.sets[0].id}`}
                             type="text" 

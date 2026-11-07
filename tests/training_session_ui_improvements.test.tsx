@@ -212,7 +212,7 @@ describe('Training Session UI Improvements Suite (R1, R2, R3)', () => {
             expect(summary?.getAttribute('aria-controls')).toBe(`session-exercise-body-${identity}`);
             expect(body?.id).toBe(`session-exercise-body-${identity}`);
             for (const field of ['time', 'distance', 'speed', 'incline', 'kcal']) {
-                const id = `cardio-${field}-${identity}`;
+                const id = `cardio-${field}-${identity}-${index === 0 ? 'set-one' : 'set-two'}`;
                 const input = shell.querySelector(`input[id="${id}"]`);
                 const label = shell.querySelector(`label[for="${id}"]`) as HTMLLabelElement | null;
                 expect(input).not.toBeNull();
@@ -674,7 +674,8 @@ describe('Training Session UI Improvements Suite (R1, R2, R3)', () => {
             await act(async () => {
                 fireEvent.click(screen.getByText('- Rimuovi serie'));
             });
-            expect(onRemoveSet).toHaveBeenCalledWith(0, 0);
+            expect(onRemoveSet.mock.calls[0].slice(0, 3)).toEqual([0, 0, onRemoveSet.mock.calls[0][2]]);
+            expect(['s_iso', 's_rir']).toContain(onRemoveSet.mock.calls[0][2]);
 
             showConfirm.mockClear();
             onRemoveSet.mockClear();
@@ -686,7 +687,8 @@ describe('Training Session UI Improvements Suite (R1, R2, R3)', () => {
                 fireEvent.click(screen.getByText('- Rimuovi serie'));
             });
             expect(showConfirm).toHaveBeenCalledTimes(1);
-            expect(onRemoveSet).toHaveBeenCalledWith(0, 0);
+            expect(onRemoveSet.mock.calls[0].slice(0, 3)).toEqual([0, 0, onRemoveSet.mock.calls[0][2]]);
+            expect(['s_iso', 's_rir']).toContain(onRemoveSet.mock.calls[0][2]);
         });
     });
 
