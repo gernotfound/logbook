@@ -194,6 +194,17 @@ describe('M2 distributed property fuzz', () => {
             const distributed = deliverPartitioned(initialState(), operations, rng);
 
             expect(snapshot(distributed)).toEqual(snapshot(canonical));
+            // This is an independent oracle, not another comparison between
+            // two executions of the same merge algorithm: every event in a
+            // causal chain observes all predecessors.
+            const last = operations[operations.length - 1];
+            const stamp = distributed.syncMetas[''].fields['profile/height'];
+            expect(stamp).toMatchObject({ actorId: last.actorId, seq: last.seq, clock: last.clock });
+            expect(Boolean(stamp.deleted)).toBe(last.isDelete);
+            expect(distributed.syncMetas[''].clock).toEqual(last.clock);
+            expect(distributed.documents.get('')?.profile?.height).toBe(
+                last.isDelete ? undefined : last.value,
+            );
         });
     });
 
