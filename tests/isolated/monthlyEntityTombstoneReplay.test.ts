@@ -81,7 +81,7 @@ describe('monthly tombstones through the encrypted local journal and causal repl
             const path = kind === 'history' ? 'history_months/2026-11' : 'nutrition_months/2026-11';
             const data = parseData(kind === 'history'
                 ? { history: [session(entity, day)] }
-                : { nutrition: { [day]: { date: day, weight: '80' } } });
+                : { nutrition: { [day]: { date: day, weight: 80 } } });
             const before = await seedReplica(data);
             const desired = structuredClone(before.data);
             if (kind === 'history') desired.history = [];
@@ -110,7 +110,7 @@ describe('monthly tombstones through the encrypted local journal and causal repl
             for (const event of oldEvents) {
                 const stale: SemanticOperation = {
                     docPath: path, path: [entity, kind === 'history' ? 'date' : 'weight'],
-                    value: kind === 'history' ? '2026-11-06' : '79',
+                    value: kind === 'history' ? '2026-11-06' : 79,
                     actorId: 's01', seq: event.seq, clock: event.clock, isDelete: false,
                 };
                 const first = applySemanticOperations(structuredClone(baseDocs), [stale], structuredClone(before.syncMetaByDocument));
@@ -139,7 +139,7 @@ describe('monthly tombstones through the encrypted local journal and causal repl
     it('moves a workout to another month without deleting its new occurrence', async () => {
         const before = await seedReplica(parseData({ history: [session('moved-workout', '2026-10-31')] }));
         const desired = structuredClone(before.data);
-        desired.history[0].date = '2026-11-01';
+        desired.history![0].date = '2026-11-01';
 
         const operations = await commitLocal('a', desired, before.data, () => true);
         const stored = (await readLocal('a'))!;
@@ -155,7 +155,7 @@ describe('monthly tombstones through the encrypted local journal and causal repl
             projectDocuments(desired, catalog).get('history_months/2026-11')!['moved-workout'],
         );
         const reconciled = applyRemoteDocuments(before.data, replay.documents, catalog);
-        expect(reconciled.history.map(workout => [workout.id, workout.date]))
+        expect(reconciled.history!.map(workout => [workout.id, workout.date]))
             .toEqual([['moved-workout', '2026-11-01']]);
         expect(stored.data.history).toEqual(reconciled.history);
     });
@@ -163,27 +163,27 @@ describe('monthly tombstones through the encrypted local journal and causal repl
     it('keeps a nutrition edit when a removed workout uses the same entity key', async () => {
         const day = '2026-11-07';
         const before = await seedReplica(parseData({
-            history: [session(day, day)], nutrition: { [day]: { date: day, weight: '80' } },
+            history: [session(day, day)], nutrition: { [day]: { date: day, weight: 80 } },
         }));
         const desired = structuredClone(before.data);
         desired.history = [];
-        desired.nutrition[day].weight = '82';
+        desired.nutrition![day].weight = '82';
 
         const operations = await commitLocal('a', desired, before.data, () => true);
         expect(operations.some(op => op.docPath === 'nutrition_months/2026-11'
-            && op.path[0] === day && op.path[1] === 'weight' && op.value === '82' && !op.isDelete)).toBe(true);
+            && op.path[0] === day && op.path[1] === 'weight' && op.value === 82 && !op.isDelete)).toBe(true);
         const replay = applySemanticOperations(projectDocuments(before.data, catalog), operations, before.syncMetaByDocument);
         expect(Object.hasOwn(replay.documents.get('history_months/2026-11')!, day)).toBe(false);
         const restored = applyRemoteDocuments(before.data, replay.documents, catalog);
         expect(restored.history).toEqual([]);
-        expect(restored.nutrition[day].weight).toBe('82');
-        expect((await readLocal('a'))!.data.nutrition[day].weight).toBe('82');
+        expect(restored.nutrition![day].weight).toBe(82);
+        expect((await readLocal('a'))!.data.nutrition![day].weight).toBe(82);
     });
 
     it('preserves the encrypted envelope when the monthly projection is unchanged', async () => {
         const before = await seedReplica(parseData({
             history: [session('unchanged-workout', '2026-11-07')],
-            nutrition: { '2026-11-07': { date: '2026-11-07', weight: '80' } },
+            nutrition: { '2026-11-07': { date: '2026-11-07', weight: 80 } },
         }));
         const ciphertext = await get('logbook:v2:user:a');
         expect(ciphertext).toMatch(/^tlb-sealed:v1:/);
