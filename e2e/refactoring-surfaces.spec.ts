@@ -77,6 +77,8 @@ for (const viewport of viewports) {
       await page.getByRole('tab', { name: 'Storico', exact: true }).click();
       await expect(page.getByRole('heading', { name: 'Storico allenamenti', exact: true })).toBeVisible();
       await expect(page.locator('#training-panel-history .history-calendar-grid')).toBeVisible();
+      // Adjacent dates in both calendars are interactive, not disabled.
+      await expect(page.locator('.training-history .history-day.outside').first()).toHaveCSS('opacity', '1');
       await capture(page, testInfo, 'training-history');
 
       await page.getByRole('button', { name: 'Dati e statistiche', exact: true }).click();

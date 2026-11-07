@@ -205,7 +205,6 @@
 
 .history-day.outside {
   color: var(--text-muted);
-  opacity: .45;
 }
 
 .history-day.has-workout:not(.has-multiple)::after {
