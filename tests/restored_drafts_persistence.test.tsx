@@ -55,6 +55,37 @@ describe('restored owner-scoped drafts', () => {
         }
     });
 
+    it.each(['exercise', 'routine'] as const)(
+        'does not reseal a confirmed %s recovery draft without new input',
+        kind => {
+            const owner = storageOwner();
+            const name = kind === 'exercise' ? 'draft_exercise' : 'draft_routine';
+            const payload = kind === 'exercise' ? {
+                name: 'Unchanged exercise', notes: 'Keep witness',
+                trackingType: 'weight_reps', selectedMuscles: [], secondaryMuscles: [],
+                isBodyweight: false, equipmentWeight: '',
+            } : { name: 'Unchanged routine', exercises: [] };
+            const initialRaw = writeWorkoutRecoveryDraft(name, owner, payload, '3');
+            const key = protectedDeviceKey(name, owner);
+            const originalSealed = localStorage.getItem(key);
+            const editor = kind === 'exercise'
+                ? renderHook(() => useTrainingExercises())
+                : renderHook(() => useTrainingRoutines());
+            editor.rerender();
+            expect(readDeviceValueStrict(name, owner)).toBe(initialRaw);
+            expect(localStorage.getItem(key)).toBe(originalSealed);
+            expect(writeWorkoutRecoveryDraft(name, owner, payload, '3', initialRaw)).toBe(initialRaw);
+            expect(localStorage.getItem(key)).toBe(originalSealed);
+            editor.unmount();
+
+            // An equal payload from an old epoch must still fail closed.
+            localStorage.setItem(`logbook:v2:${owner}:health-consent-generation`, '4');
+            expect(() => writeWorkoutRecoveryDraft(name, owner, payload, '3', initialRaw))
+                .toThrow();
+            expect(localStorage.getItem(key)).toBe(originalSealed);
+        },
+    );
+
     it('does not clear the routine draft before hydration is reflected in React state', () => {
         const key = deviceKey('draft_routine', storageOwner());
         const draft = JSON.stringify({ name: 'Draft routine', exercises: [] });
