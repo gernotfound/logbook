@@ -1,0 +1,87 @@
+import { act, cleanup, renderHook } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+const state = vi.hoisted(() => ({
+    profile: { dob: '2000-01-01', height: '170', gender: 'M' },
+    dispatch: vi.fn(),
+    showAlert: vi.fn(async (_message: string) => {}),
+    currentSession: true,
+}));
+
+vi.mock('../src/store/useAppStore', () => ({
+    useAppStore: (select: (store: unknown) => unknown) => select({
+        userData: { profile: state.profile },
+        dispatchDomainOperation: state.dispatch,
+    }),
+}));
+vi.mock('../src/store/useDialogStore', () => ({
+    useDialogStore: (select: (store: unknown) => unknown) => select({ showAlert: state.showAlert }),
+}));
+vi.mock('../src/lib/sync/session', () => ({
+    captureSession: () => ({ owner: 'user:test', epoch: 1 }),
+    isCurrentSession: () => state.currentSession,
+}));
+
+import { useSettingsProfile } from '../src/hooks/useSettingsProfile';
+
+beforeEach(() => {
+    state.currentSession = true;
+    state.dispatch.mockReset();
+    state.dispatch.mockResolvedValue({ ok: true, status: 'synced' });
+    state.showAlert.mockClear();
+});
+afterEach(cleanup);
+
+describe('biometric profile draft persistence', () => {
+    it('keeps fields edited during an unresolved durable save and persists them on the next submit', async () => {
+        let complete!: (value: { ok: boolean; status: string }) => void;
+        state.dispatch.mockImplementationOnce(() => new Promise(resolve => { complete = resolve; }));
+
+        const { result } = renderHook(() => useSettingsProfile());
+        act(() => result.current.setHeight('180'));
+
+        let firstSave!: Promise<void>;
+        act(() => { firstSave = result.current.handleSaveProfile(); });
+        expect(state.dispatch).toHaveBeenCalledWith({
+            type: 'profile.patch',
+            patch: { dob: '2000-01-01', height: '180', gender: 'M' },
+        });
+
+        act(() => result.current.setHeight('181'));
+        await act(async () => {
+            complete({ ok: true, status: 'synced' });
+            await firstSave;
+        });
+
+        expect(result.current.height).toBe('181');
+        await act(async () => { await result.current.handleSaveProfile(); });
+        expect(state.dispatch).toHaveBeenLastCalledWith({
+            type: 'profile.patch',
+            patch: { dob: '2000-01-01', height: '181', gender: 'M' },
+        });
+    });
+
+    it('composes multiple field changes made in the same render cycle', () => {
+        const { result } = renderHook(() => useSettingsProfile());
+        act(() => {
+            result.current.setDob('2001-02-03');
+            result.current.setHeight('182');
+            result.current.setGender('F');
+        });
+        expect([result.current.dob, result.current.height, result.current.gender])
+            .toEqual(['2001-02-03', '182', 'F']);
+    });
+
+    it('does not clear the draft or show an old-session error after the session changes', async () => {
+        let reject!: (error: Error) => void;
+        state.dispatch.mockImplementationOnce(() => new Promise((_resolve, rejectPromise) => { reject = rejectPromise; }));
+        const { result } = renderHook(() => useSettingsProfile());
+        act(() => result.current.setHeight('185'));
+        let pending!: Promise<void>;
+        act(() => { pending = result.current.handleSaveProfile(); });
+        state.currentSession = false;
+        await act(async () => { reject(new Error('obsolete request')); await pending; });
+        expect(result.current.height).toBe('185');
+        expect(state.showAlert).not.toHaveBeenCalled();
+    });
+});
