@@ -16,7 +16,9 @@ export function getWorkoutDurationSeconds(
     const { globalStartTime: start, globalEndTime: end } = workout;
     if (typeof start === 'number' && Number.isFinite(start)
         && typeof end === 'number' && Number.isFinite(end) && end >= start) {
-        return Math.floor((end - start) / 1000);
+        // Finite endpoints can still overflow when subtracted.
+        const elapsed = end - start;
+        return Number.isFinite(elapsed) ? Math.floor(elapsed / 1000) : undefined;
     }
     return undefined;
 }
