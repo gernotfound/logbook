@@ -12,6 +12,7 @@ import {
   normalizeLiveFieldIndexModes,
   parseFieldResource,
   reconcileCompositeIndexes,
+  requireNoUnexpectedCompositeIndexes,
 } from '../../scripts/firestore-production-state.mjs';
 
 const desired = { collectionGroup: 'history_months', fieldPath: '*' };
@@ -328,6 +329,9 @@ describe('Firestore Production complete composite index inventory', () => {
     const result = reconcileCompositeIndexes(wanted, [ready, otherMode, removedGroup], 'p');
     expect(result.statuses).toMatchObject([{ found: true, state: 'READY' }]);
     expect(result.unexpected.map(index => index.name)).toEqual([otherMode.name, removedGroup.name]);
+    expect(() => requireNoUnexpectedCompositeIndexes(result.unexpected))
+      .toThrow('require manual review before deployment');
+    expect(() => requireNoUnexpectedCompositeIndexes([])).not.toThrow();
     expect(reconcileCompositeIndexes(wanted, [ready], 'p').unexpected).toEqual([]);
     expect(reconcileCompositeIndexes([], [ready], 'p').unexpected).toHaveLength(1);
   });
@@ -347,6 +351,6 @@ describe('Firestore Production complete composite index inventory', () => {
   it('requires database-wide composite index inventory readback', () => {
     const verifier = readFileSync('scripts/verify-firestore-production.mjs', 'utf8');
     expect(verifier).toContain('collectionGroups/-');
-    expect(verifier).toContain('unexpectedIndexes.length');
+    expect(verifier).toContain('requireNoUnexpectedCompositeIndexes(unexpectedIndexes)');
   });
 });

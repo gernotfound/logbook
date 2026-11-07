@@ -173,6 +173,15 @@ export function reconcileCompositeIndexes(desiredIndexes, liveIndexes, projectId
   };
 }
 
+
+export function requireNoUnexpectedCompositeIndexes(indexes) {
+  if (!Array.isArray(indexes)) throw new Error('Invalid Firestore composite index reconciliation result');
+  if (indexes.length > 0) {
+    throw new Error('Unexpected Firestore composite indexes require manual review before deployment: ' +
+      indexes.map(index => index.name).join(', '));
+  }
+}
+
 export function isActiveFieldIndexAddition(operation, desired) {
   if (!operation || operation.done === true || operation.error) return false;
   const field = parseFieldResource(operation.metadata?.field);

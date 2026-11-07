@@ -6,6 +6,7 @@ import {
   fieldOverrideListParent,
   normalizeFieldIndexModes,
   reconcileCompositeIndexes,
+  requireNoUnexpectedCompositeIndexes,
   progressSummary,
 } from './firestore-production-state.mjs';
 
@@ -171,14 +172,15 @@ if (mode === 'preflight') {
   process.exit(0);
 }
 
+// Unmanaged indexes are not authorized deletions. Refuse any automatic deploy,
+// including when unrelated desired indexes or Rules need reconciliation.
+requireNoUnexpectedCompositeIndexes(unexpectedIndexes);
+
 if (mode === 'status') {
-  if (!rulesMatch || missingIndexes.length || unexpectedIndexes.length || mismatchedFieldOverrides.length || unexpectedFieldOverrides.length) {
+  if (!rulesMatch || missingIndexes.length || mismatchedFieldOverrides.length || unexpectedFieldOverrides.length) {
     if (!rulesMatch) console.log('Firestore reconciliation required: live Rules differ from firestore.rules.');
     for (const status of missingIndexes) {
       console.log(`Firestore reconciliation required: missing desired index ${status.collectionGroup}.`);
-    }
-    for (const unexpected of unexpectedIndexes) {
-      console.log(`Firestore reconciliation required: unexpected composite index ${unexpected.name}.`);
     }
     for (const status of mismatchedFieldOverrides) {
       console.log(`Firestore reconciliation required: field index override ${status.collectionGroup}/${status.fieldPath} differs from source.`);
@@ -206,9 +208,6 @@ if (mode === 'status') {
 
 if (!rulesMatch) {
   throw new Error('Live Cloud Firestore rules do not match firestore.rules from the deployed SHA');
-}
-if (unexpectedIndexes.length) {
-  throw new Error(`Firestore has composite indexes not present in the desired configuration: ${unexpectedIndexes.map(item => item.name).join(', ')}`);
 }
 if (unexpectedFieldOverrides.length) {
   throw new Error(
