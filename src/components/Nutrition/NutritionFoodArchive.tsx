@@ -1,4 +1,5 @@
 import { dispatchDurableOperation } from '../../lib/sync/dispatchDurableOperation';
+import { captureSession, isCurrentSession } from '../../lib/sync/session';
 import { useState, useMemo } from 'react';
 import { Plus, Search, Utensils } from 'lucide-react';
 import { useAppStore } from '../../store/useAppStore';
@@ -107,13 +108,21 @@ export default function NutritionFoodArchive({ onEditFood }: NutritionFoodArchiv
     };
 
     const handleDeleteFood = async (food: any) => {
+        // The confirmation belongs to the session that opened it, not to any
+        // new owner or consent generation that may become active meanwhile.
+        let session: ReturnType<typeof captureSession>;
+        try {
+            session = captureSession();
+        } catch {
+            return;
+        }
         const confirmed = await showConfirm(`Sei sicuro di voler eliminare l'alimento "${food.name}"?`);
-        if (!confirmed) return;
+        if (!confirmed || !isCurrentSession(session)) return;
 
         try {
             await dispatchDurableOperation(dispatchDomainOperation, { type: 'food.delete', id: food.id });
         } catch {
-            await showAlert("Errore durante l'eliminazione dell'alimento.");
+            if (isCurrentSession(session)) await showAlert("Errore durante l'eliminazione dell'alimento.");
         }
     };
 

@@ -35,8 +35,18 @@ export function useWorkoutFinalization({
         const expectedUid = auth.currentUser?.uid;
         const expectedId = useAppStore.getState().localWorkout?.id;
         try {
-        const session = captureSession();
-        if (!expectedId || (confirmEnd && !(await showConfirm("Terminare l'allenamento?")))) return null;
+        if (!expectedId) return null;
+        let session: ReturnType<typeof captureSession>;
+        try {
+            session = captureSession();
+        } catch {
+            useAppStore.setState({
+                localPersistenceBlocked: true, syncHealth: 'failed', syncPresentation: 'normal',
+                saveError: 'Impossibile verificare la sessione prima di terminare l’allenamento.',
+            });
+            return null;
+        }
+        if (confirmEnd && !(await showConfirm("Terminare l'allenamento?"))) return null;
         // A-B-A authentication must not let an earlier completion act on a new session.
         if (!isCurrentSession(session)) return null;
         try {
@@ -135,7 +145,7 @@ export function useWorkoutFinalization({
             // This draft belongs exclusively to the deleted session, not a new
             // workout. Failed best-effort cleanup must not undo a durable deletion.
             try {
-                writeWorkoutRecoveryDraft('draft:post-session:' + deletedWorkoutId, expectedSession.owner, null);
+                writeWorkoutRecoveryDraft('draft:post-session:' + deletedWorkoutId, expectedSession.owner, null, expectedSession.consentGeneration);
             } catch (error) {
                 console.warn('Impossibile pulire la bozza finale di una sessione eliminata:', error);
                 useAppStore.getState().setSaveError('Sessione eliminata, ma una copia locale della valutazione finale non è stata rimossa.');

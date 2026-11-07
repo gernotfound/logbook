@@ -325,6 +325,9 @@ describe('production encrypted localRepository gateway', () => {
         expect(after?.baseline.pendingConflicts?.nutritionPlanning).toBeUndefined();
         expect(after?.pending).toEqual(before?.pending);
         expect(after?.actorSeq).toBe(before?.actorSeq);
+        // Conflict resolution changes durable business state without a cloud
+        // operation, so a previously captured recovery revision must expire.
+        expect(after?.revision).toBe((before?.revision ?? 0) + 1);
         expect(await get<string>(archive)).not.toBe(ciphertext);
     });
 
