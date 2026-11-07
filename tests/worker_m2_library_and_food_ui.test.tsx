@@ -125,6 +125,9 @@ describe('Worker M2: Exercise Library UI & Food Form Real-Time Calorie Calculati
         it('does not discard unsaved exercise fields if the protected draft cannot be cleared', async () => {
             const owner = captureSession().owner;
             await prepareUnlockedTestArchive(owner);
+            if (owner.startsWith('user:')) {
+                localStorage.setItem(`logbook:v2:${owner}:health-consent-generation`, '3');
+            }
             const { result } = renderHook(() => useTrainingExercises());
             act(() => result.current.setExName('Modifica da preservare'));
             const sealedKey = protectedDeviceKey('draft_exercise', owner);
