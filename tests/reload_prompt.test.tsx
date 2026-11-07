@@ -512,10 +512,10 @@ describe('Service Worker Update Lifecycle (ReloadPrompt) Suite', () => {
           registration.waiting = { state: 'installed' } as ServiceWorker;
         }
       }),
-    } as unknown as ServiceWorkerRegistration & { update: ReturnType<typeof vi.fn> };
+    };
     const view = render(<ReloadPrompt />);
     try {
-      await act(async () => { onRegistered?.('/sw.js', registration); await Promise.resolve(); });
+      await act(async () => { onRegistered?.('/sw.js', registration as unknown as ServiceWorkerRegistration); await Promise.resolve(); });
       expect(mockSetNeedRefresh).not.toHaveBeenCalled();
       await act(async () => { await vi.advanceTimersByTimeAsync(60 * 60 * 1000); });
       expect(registration.update).toHaveBeenCalledTimes(2);
