@@ -67,12 +67,13 @@ const RecoveryBentoCardContent: React.FC<RecoveryBentoCardProps> = ({ activePain
                 <input
                     type="text"
                     placeholder="🔍 Cerca muscolo dolorante..."
+                    aria-label="Cerca muscolo dolorante"
                     value={searchQuery}
                     onChange={e => setSearchQuery(e.target.value)}
                     style={{
                         width: '100%',
                         margin: 0,
-                        paddingRight: searchQuery ? '36px' : '14px',
+                        paddingRight: searchQuery ? '52px' : '14px',
                         fontSize: '16px',
                         boxSizing: 'border-box'
                     }}
@@ -92,6 +93,8 @@ const RecoveryBentoCardContent: React.FC<RecoveryBentoCardProps> = ({ activePain
                             fontSize: 'var(--font-size-control)',
                             cursor: 'pointer',
                             padding: '6px',
+                            minWidth: '44px',
+                            minHeight: '44px',
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center'
@@ -130,12 +133,14 @@ const RecoveryBentoCardContent: React.FC<RecoveryBentoCardProps> = ({ activePain
                                     key={m.id}
                                     type="button"
                                     onClick={() => onTogglePain(m.id)}
+                                    aria-pressed={isPain}
                                     style={{
                                         display: 'flex',
                                         justifyContent: 'space-between',
                                         alignItems: 'center',
                                         width: '100%',
                                         padding: '8px 12px',
+                                        minHeight: '44px',
                                         borderRadius: '6px',
                                         fontSize: 'var(--font-size-meta)',
                                         cursor: 'pointer',
@@ -200,6 +205,8 @@ const RecoveryBentoCardContent: React.FC<RecoveryBentoCardProps> = ({ activePain
                                         fontSize: 'var(--font-size-meta)',
                                         cursor: 'pointer',
                                         padding: '0 2px',
+                                        minWidth: '44px',
+                                        minHeight: '44px',
                                         display: 'inline-flex',
                                         alignItems: 'center',
                                         lineHeight: 1
