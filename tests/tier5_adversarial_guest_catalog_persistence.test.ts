@@ -262,7 +262,7 @@ describe('Tier 5: Adversarial Coverage Hardening Suite', () => {
             // and meal entries. Inspect the decrypted business values of every sealed month.
             const savedHistory = Object.assign({}, ...historyMonths) as Record<string, WorkoutSession>;
             for (const session of history) {
-                const saved = savedHistory[session.id];
+                const saved = savedHistory[String(session.id)];
                 expect(saved).toMatchObject({
                     id: session.id,
                     date: session.date,
