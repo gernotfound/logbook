@@ -322,7 +322,7 @@ export function calculateEffectiveSetWeight(
 
 function observedReps(raw: unknown): number {
     const text = String(raw ?? '').trim();
-    if (!/^\d+$/.test(text)) return 0;
+    if (!/^-?\d+$/.test(text)) return 0;
     const value = Number(text);
     return Number.isSafeInteger(value) ? value : 0;
 }
