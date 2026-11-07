@@ -9,7 +9,7 @@ import { deviceKey, protectedDeviceKey, readDeviceValueStrict, writeDeviceValue 
 import { useTrainingHistory } from '../src/hooks/useTrainingHistory';
 import { restoreSessionAfterHistoryEdit } from '../src/hooks/workout/historyEditorContext';
 import { useWorkoutSetMutations } from '../src/hooks/workout/useWorkoutSetMutations';
-import { captureSession } from '../src/lib/sync/session';
+import { captureSession, invalidateSession } from '../src/lib/sync/session';
 import { getInitialLocalWorkout } from '../src/store/slices/createWorkoutSlice';
 import { persistPlainWorkoutSnapshot } from '../src/lib/sync/workoutDeviceIntent';
 import { readWorkoutTimerSnapshot, writeWorkoutTimerSnapshot } from '../src/lib/utils/timer';
@@ -432,6 +432,33 @@ describe('Workout lifecycle durable recovery regressions', () => {
             expect(useAppStore.getState().localWorkout?.id).toBe(replacement.id);
             expect((await readLocal(owner))?.data.history?.some(w => w.id === original.id)).toBe(false);
             expect((await readLocal(owner))?.data.activeWorkout?.id).toBe(original.id);
+        } finally {
+            useAppStore.setState({ dispatchDomainOperation: previousDispatch });
+        }
+    });
+
+    it('rejects a stale completion confirmation even when the same UID and workout ID return', async () => {
+        await prepareUnlockedTestArchive(owner);
+        const active = workout('finish-auth-epoch', true);
+        const initial = userData({ activeWorkout: active });
+        await initializeLocal(owner, initial);
+        useAppStore.setState({ userData: initial, dataOwner: owner, localWorkout: active });
+        const previousDispatch = useAppStore.getState().dispatchDomainOperation;
+        const mockedDispatch = vi.fn(previousDispatch);
+        useAppStore.setState({ dispatchDomainOperation: mockedDispatch });
+        vi.mocked(useDialogStore.getState().showConfirm).mockImplementationOnce(async () => {
+            // The new session can have the same identity and locally restored workout.
+            invalidateSession();
+            return true;
+        });
+        try {
+            const hook = renderHook(() => useWorkoutSession());
+            await act(async () => { expect(await hook.result.current.endWorkout()).toBeNull(); });
+            expect(mockedDispatch).not.toHaveBeenCalled();
+            expect(useAppStore.getState().localWorkout?.id).toBe(active.id);
+            const durable = await readLocal(owner);
+            expect(durable?.data.activeWorkout?.id).toBe(active.id);
+            expect(durable?.data.history?.some(item => item.id === active.id)).toBe(false);
         } finally {
             useAppStore.setState({ dispatchDomainOperation: previousDispatch });
         }

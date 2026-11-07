@@ -35,7 +35,19 @@ export function useWorkoutFinalization({
         const expectedUid = auth.currentUser?.uid;
         const expectedId = useAppStore.getState().localWorkout?.id;
         try {
-        if (!expectedId || (confirmEnd && !(await showConfirm("Terminare l'allenamento?")))) return null;
+        if (!expectedId) return null;
+        let expectedSession: ReturnType<typeof captureSession>;
+        try {
+            expectedSession = captureSession();
+        } catch {
+            useAppStore.setState({
+                localPersistenceBlocked: true, syncHealth: 'failed', syncPresentation: 'normal',
+                saveError: 'Impossibile verificare la sessione prima di terminare l’allenamento.',
+            });
+            return null;
+        }
+        if (confirmEnd && !(await showConfirm("Terminare l'allenamento?"))) return null;
+        if (!isCurrentSession(expectedSession)) return null;
         try {
             draftRegistry.flushAll({ strict: true });
         } catch {
@@ -51,7 +63,8 @@ export function useWorkoutFinalization({
             return null;
         }
         const currentWorkout = useAppStore.getState().localWorkout;
-        if (!currentWorkout || currentWorkout.id !== expectedId || auth.currentUser?.uid !== expectedUid) return null;
+        if (!isCurrentSession(expectedSession) || !currentWorkout
+            || currentWorkout.id !== expectedId || auth.currentUser?.uid !== expectedUid) return null;
 
         const endTime = requestedEndTime ?? new Date().getTime();
         const workoutForCompletion = completionDraft
@@ -73,7 +86,8 @@ export function useWorkoutFinalization({
                 activePains: finalActivePains,
             });
             if (!result.ok && result.status !== 'local-pending') return null;
-            if (auth.currentUser?.uid !== expectedUid || useAppStore.getState().localWorkout?.id !== expectedId) return null;
+            if (!isCurrentSession(expectedSession) || auth.currentUser?.uid !== expectedUid
+                || useAppStore.getState().localWorkout?.id !== expectedId) return null;
             // IndexedDB already contains the completed workout. If device cleanup
             // fails, startup reconciles the stale snapshot against durable history.
             try {
