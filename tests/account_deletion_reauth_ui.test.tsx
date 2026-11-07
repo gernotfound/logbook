@@ -43,6 +43,7 @@ import { DB } from '../src/lib/db';
 import { useSettings } from '../src/hooks/useSettings';
 import { localStorageMock } from './setup';
 import { activateGuestSession } from '../src/lib/sync/session';
+import { markAccountDeletion } from '../src/lib/sync/accountGate';
 
 describe('account deletion recent authentication', () => {
   beforeEach(() => {
@@ -84,7 +85,7 @@ describe('account deletion recent authentication', () => {
     localStorage.setItem('logbook_is_guest', 'true');
     localStorage.setItem('logbook_guest_session_id_v1', 'guest-before-consent');
     activateGuestSession('guest-before-consent');
-    localStorage.setItem('logbook:v2:user:test-user-id:account-deletion', '{"receipt":"pending"}');
+    markAccountDeletion('user:test-user-id');
 
     const { result } = renderHook(() => useSettings());
     expect(result.current.pendingAccountDeletion).toBe(true);
