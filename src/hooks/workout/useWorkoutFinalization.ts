@@ -42,6 +42,7 @@ export function useWorkoutFinalization({
         try {
             draftRegistry.flushAll({ strict: true });
         } catch {
+            if (!isCurrentSession(session)) return null;
             useAppStore.setState({
                 localPersistenceBlocked: true,
                 syncHealth: 'failed',
