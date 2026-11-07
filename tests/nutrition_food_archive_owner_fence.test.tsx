@@ -31,7 +31,7 @@ describe('nutrition food archive owner isolation', () => {
             });
             expect(useDialogStore.getState().showConfirm).toHaveBeenCalledOnce();
             expect(dispatch).not.toHaveBeenCalled();
-            expect(useAppStore.getState().userData?.customFoods.some(item => item.id === food.id)).toBe(true);
+            expect(useAppStore.getState().userData?.customFoods?.some(item => item.id === food.id)).toBe(true);
         } finally {
             useAppStore.setState({ dispatchDomainOperation: previousDispatch });
         }
