@@ -44,12 +44,18 @@ vi.mock('../src/lib/firebase', () => ({
     })),
 }));
 
+vi.mock('../src/lib/auth/passwordPolicy', async importOriginal => {
+    const actual = await importOriginal<typeof import('../src/lib/auth/passwordPolicy')>();
+    return { ...actual, validatePasswordAgainstPolicy: vi.fn(actual.validatePasswordAgainstPolicy) };
+});
+
 vi.mock('../src/store/useDialogStore', () => ({
     useDialogStore: () => ({ showAlert: authMocks.showAlert }),
 }));
 
 import { LoginBox } from '../src/components/UI/LoginBox';
 import { sendPasswordResetEmail, validatePassword } from '../src/lib/firebase';
+import { validatePasswordAgainstPolicy } from '../src/lib/auth/passwordPolicy';
 import { useAppStore } from '../src/store/useAppStore';
 
 describe('LoginBox guest Google authentication', () => {
@@ -69,6 +75,7 @@ describe('LoginBox guest Google authentication', () => {
         authMocks.showAlert.mockClear();
         vi.mocked(sendPasswordResetEmail).mockReset();
         vi.mocked(sendPasswordResetEmail).mockResolvedValue(undefined);
+        vi.mocked(validatePasswordAgainstPolicy).mockClear();
     });
 
     it('keeps the local-data explanation inside the guest action and preserves its behavior', async () => {
@@ -371,12 +378,12 @@ describe('LoginBox guest Google authentication', () => {
 
     it('does not register an account when the overlay closes during asynchronous password validation', async () => {
         authState.isGuest = false;
+        let release!: (result: string | null) => void;
+        const validatePolicy = vi.mocked(validatePasswordAgainstPolicy);
+        validatePolicy.mockImplementationOnce(() => new Promise(resolve => { release = resolve; }));
+
         const view = render(<LoginBox onCancel={() => {}} />);
         fireEvent.click(screen.getAllByRole('button', { name: 'Registrati' }).at(-1)!);
-        await waitFor(() => expect(validatePassword).toHaveBeenCalledWith(expect.anything(), ''));
-
-        let release!: (result: any) => void;
-        vi.mocked(validatePassword).mockImplementationOnce(() => new Promise(resolve => { release = resolve; }));
         fireEvent.change(screen.getByRole('textbox', { name: 'Email' }), {
             target: { value: 'new-account@example.com' },
         });
@@ -387,16 +394,11 @@ describe('LoginBox guest Google authentication', () => {
             target: { value: 'SecurePassword123!' },
         });
         fireEvent.click(screen.getAllByRole('button', { name: 'Registrati' }).at(-1)!);
-        await waitFor(() => expect(validatePassword).toHaveBeenCalledWith(expect.anything(), 'SecurePassword123!'));
+        await waitFor(() => expect(validatePolicy).toHaveBeenCalledExactlyOnceWith('SecurePassword123!'));
         expect(authMocks.registerWithEmail).not.toHaveBeenCalled();
 
         view.unmount();
-        await act(async () => {
-            release({
-                isValid: true,
-                passwordPolicy: { customStrengthOptions: { minPasswordLength: 8 } },
-            });
-        });
+        await act(async () => { release(null); });
         expect(authMocks.registerWithEmail).not.toHaveBeenCalled();
     });
 
