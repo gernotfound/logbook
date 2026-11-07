@@ -44,6 +44,8 @@ describe('canonical workout duration', () => {
             [undefined, 2000], [1000, undefined],
             [NaN, 2000], [1000, NaN],
             [Infinity, 2000], [1000, Infinity],
+            [-Infinity, 2000], [1000, -Infinity],
+            [-Number.MAX_VALUE, Number.MAX_VALUE],
             ['1000', 2000], [1000, '2000'],
             [2000, 1000],
         ];
@@ -56,5 +58,22 @@ describe('canonical workout duration', () => {
             globalStartTime: 1000, globalEndTime: 1000,
         })).toBe(0);
     });
-
+    it('excludes overflowing timestamps from reports and the routine estimate sample', () => {
+        const overflowing = {
+            ...session('overflow'),
+            manualDurationStr: undefined,
+            globalDurationStr: undefined,
+            globalStartTime: -Number.MAX_VALUE,
+            globalEndTime: Number.MAX_VALUE,
+        };
+        const before = structuredClone(overflowing);
+        expect(computeWorkoutReport(overflowing, [], new Map(), 80).durationSeconds).toBe(0);
+        expect(getRoutineDurationEstimate('routine-a', [
+            overflowing, session('a'), session('b'), session('c'),
+        ])).toEqual({ minutes: 45, sampleSize: 3 });
+        expect(getRoutineDurationEstimate('routine-a', [
+            overflowing, session('a'), session('b'),
+        ])).toBeNull();
+        expect(overflowing).toEqual(before);
+    });
 });
