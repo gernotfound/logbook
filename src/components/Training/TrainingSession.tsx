@@ -376,6 +376,7 @@ const TrainingSession = ({ onNavigateToHistory, onNavigateToPlanning }: Training
 
     return (
         <ActiveWorkoutSession
+            key={String(activeWorkout.id ?? '')}
             onNavigateToHistory={onNavigateToHistory}
             onRequestEnd={handleRequestEnd}
         />

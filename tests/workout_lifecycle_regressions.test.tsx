@@ -86,6 +86,34 @@ describe('Workout lifecycle durable recovery regressions', () => {
     });
     afterEach(() => vi.restoreAllMocks());
 
+    it('resets the current exercise UI when a running workout is replaced without unmounting TrainingSession', async () => {
+        await prepareUnlockedTestArchive(owner);
+        const exercises: WorkoutSession['exercises'] = [
+            { id: 'ex-one', exId: 'bench', sessionNote: '', sets: [] },
+            { id: 'ex-two', exId: 'squat', sessionNote: '', sets: [] },
+        ];
+        const first = { ...workout('running-a', true), routineName: 'First workout', exercises };
+        const next = { ...workout('running-b', true), routineName: 'Second workout', exercises };
+        useAppStore.setState({
+            userData: userData({ activeWorkout: first }), dataOwner: owner,
+            localWorkout: first,
+        });
+        renderOwnedWorkoutSession();
+        const progress = screen.getByRole('progressbar', { name: 'Avanzamento nella sequenza degli esercizi' });
+        expect(progress.getAttribute('aria-valuenow')).toBe('0');
+        fireEvent.click(screen.getByRole('button', { name: /squat/i }));
+        expect(progress.getAttribute('aria-valuenow')).toBe('100');
+
+        // Replacing a live workout must also reset state held above the keyed accordion tree.
+        act(() => useAppStore.setState({
+            userData: userData({ activeWorkout: next }),
+            localWorkout: next,
+        }));
+        expect(screen.getByRole('heading', { name: 'Second workout' })).toBeTruthy();
+        expect(screen.getByRole('progressbar', { name: 'Avanzamento nella sequenza degli esercizi' })
+            .getAttribute('aria-valuenow')).toBe('0');
+    });
+
     it('blocks pre-launch plaintext timer at vault readiness without deleting its only copy', async () => {
         const key = deviceKey('timer', owner);
         const original = '{bad-json';
