@@ -1,6 +1,6 @@
 import React from 'react';
 import { describe, expect, it, vi } from 'vitest';
-import { fireEvent, screen } from '@testing-library/react';
+import { act, fireEvent, screen } from '@testing-library/react';
 import NutritionFoodArchive from '../src/components/Nutrition/NutritionFoodArchive';
 import { useAppStore } from '../src/store/useAppStore';
 import { useDialogStore } from '../src/store/useDialogStore';
@@ -26,9 +26,11 @@ describe('nutrition food archive owner isolation', () => {
         try {
             renderWithAuthenticatedTestOwner(<NutritionFoodArchive />, { userData: data });
             fireEvent.click(screen.getByRole('button', { name: 'Opzioni' }));
-            fireEvent.click(screen.getByRole('menuitem', { name: 'Elimina' }));
+            await act(async () => {
+                fireEvent.click(screen.getByRole('menuitem', { name: 'Elimina' }));
+            });
             expect(useDialogStore.getState().showConfirm).toHaveBeenCalledOnce();
-            await vi.waitFor(() => expect(dispatch).not.toHaveBeenCalled());
+            expect(dispatch).not.toHaveBeenCalled();
             expect(useAppStore.getState().userData?.customFoods.some(item => item.id === food.id)).toBe(true);
         } finally {
             useAppStore.setState({ dispatchDomainOperation: previousDispatch });
