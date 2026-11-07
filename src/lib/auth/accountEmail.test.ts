@@ -186,7 +186,7 @@ describe('account email operations', () => {
         let finish!: (token: string) => void;
         const user = { uid: 'u1', getIdToken: vi.fn(() => new Promise<string>(resolve => { finish = resolve; })) } as any;
         const pending = linkEmailPasswordWithEnumerationProtection(user, 'user@example.test', 'Secret1!');
-        expect(user.getIdToken).toHaveBeenCalledOnce();
+        await vi.waitFor(() => expect(user.getIdToken).toHaveBeenCalledOnce());
         (auth as { currentUser: unknown }).currentUser = { uid: 'u2' };
         invalidateSession();
         (auth as { currentUser: unknown }).currentUser = { uid: 'u1' };
