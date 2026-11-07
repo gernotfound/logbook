@@ -338,6 +338,8 @@ function applyOne(data: UserData, operation: DomainOperation): UserData {
             break;
         case 'catalog.exercise.patch': {
             const id = requireId(operation.id, 'Override esercizio');
+            // The current catalog-override record schema drops this key; reject instead of silently losing the write.
+            if (id === '__proto__') throw new Error('Override esercizio: identificativo non rappresentabile');
             const overrides = data.catalogOverrides ?? {};
             const exercises = { ...(overrides.exercises ?? {}) };
             const existing = Object.hasOwn(exercises, id) ? exercises[id] : {};
@@ -352,6 +354,8 @@ function applyOne(data: UserData, operation: DomainOperation): UserData {
         }
         case 'catalog.food.patch': {
             const id = requireId(operation.id, 'Override alimento');
+            // The current catalog-override record schema drops this key; reject instead of silently losing the write.
+            if (id === '__proto__') throw new Error('Override alimento: identificativo non rappresentabile');
             const overrides = data.catalogOverrides ?? {};
             const foods = { ...(overrides.foods ?? {}) };
             const existing = Object.hasOwn(foods, id) ? foods[id] : {};
