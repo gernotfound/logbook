@@ -1,14 +1,36 @@
 import { randomBytes } from 'node:crypto';
-import { Timestamp } from 'firebase-admin/firestore';
+import { FieldPath, Timestamp } from 'firebase-admin/firestore';
 import { adminDb } from './accountDeletion/firebaseAdmin.js';
 import { hashReceipt, validateUid } from './accountDeletion/jobStore.js';
 import type { AccountDeletionJob } from './accountDeletion/types.js';
 
 const ACTIVITY_COLLECTION = 'account_activity';
 const DELETION_COLLECTION = 'account_deletions';
+const SCAN_COLLECTION = 'account_inactivity_scan';
 const SERVER_TOUCH_MIN_INTERVAL_MS = 10 * 60 * 1000;
 const MAX_CANDIDATES_PER_RUN = 12;
 const MAX_PAGES_PER_RUN = 4;
+
+
+type ScanCursor = { lastSeenAt: unknown; uid: string };
+type ScanProgress = { revision: number; cursor: ScanCursor | null };
+
+function parseScanProgress(data: Record<string, unknown> | undefined): ScanProgress {
+  if (!data || !Number.isSafeInteger(data.revision) || Number(data.revision) < 1 || !('cursor' in data)) {
+    throw new Error('Invalid account inactivity scan checkpoint.');
+  }
+  if (data.cursor === null) return { revision: Number(data.revision), cursor: null };
+  if (!data.cursor || typeof data.cursor !== 'object' || Array.isArray(data.cursor)) {
+    throw new Error('Invalid account inactivity scan cursor.');
+  }
+  const cursor = data.cursor as Record<string, unknown>;
+  // Query cursors include malformed owners: document IDs may not pass UID validation.
+  if (typeof cursor.uid !== 'string' || cursor.uid.length === 0 || cursor.uid.length > 1500
+    || cursor.uid.includes('/') || !('lastSeenAt' in cursor) || cursor.lastSeenAt === undefined) {
+    throw new Error('Invalid account inactivity scan cursor.');
+  }
+  return { revision: Number(data.revision), cursor: { uid: cursor.uid, lastSeenAt: cursor.lastSeenAt } };
+}
 
 export class AccountDeletionAlreadyScheduledError extends Error {
   constructor() {
@@ -76,17 +98,31 @@ export async function queueInactiveAccountDeletions(
   const limit = Math.max(1, Math.min(MAX_CANDIDATES_PER_RUN, Math.floor(maxCandidates)));
   let queued = 0;
   let scanned = 0;
-  let cursor: import('firebase-admin/firestore').QueryDocumentSnapshot | undefined;
+  const progressRef = db.collection(SCAN_COLLECTION).doc('state');
+  const progressSnap = await progressRef.get();
+  const previous: ScanProgress = progressSnap.exists
+    ? parseScanProgress(progressSnap.data())
+    : { revision: 0, cursor: null };
+  let cursor: ScanCursor | null = previous.cursor;
 
-  // Bounded pagination skips malformed/already-owned candidates instead of
-  // letting the same old records block healthy users at every daily sweep.
+  // Preserve the scan position across cron invocations: permanently malformed
+  // records must not occupy the entire bounded window on every daily run.
   for (let page = 0; page < MAX_PAGES_PER_RUN && queued < limit; page++) {
     let query = db.collection(ACTIVITY_COLLECTION)
       .where('lastSeenAt', '<=', Timestamp.fromMillis(cutoffMs))
-      .orderBy('lastSeenAt', 'asc').limit(limit);
-    if (cursor) query = query.startAfter(cursor);
+      .orderBy('lastSeenAt', 'asc')
+      .orderBy(FieldPath.documentId(), 'asc').limit(limit);
+    if (cursor) query = query.startAfter(cursor.lastSeenAt, cursor.uid);
     const candidates = await query.get();
+    if (candidates.size === 0) {
+      // On reaching EOF, wrap to records that arrived behind the saved cursor.
+      if (cursor) { cursor = null; continue; }
+      break;
+    }
     for (const candidate of candidates.docs) {
+      const lastSeenAt = candidate.data().lastSeenAt;
+      if (lastSeenAt === undefined) throw new Error('Inactivity query returned a record without lastSeenAt.');
+      cursor = { lastSeenAt, uid: candidate.id };
       scanned++;
       const uid = candidate.id;
       try { validateUid(uid); } catch { continue; }
@@ -125,8 +161,21 @@ export async function queueInactiveAccountDeletions(
       if (created) queued++;
       if (queued >= limit) break;
     }
-    cursor = candidates.docs.at(-1);
-    if (candidates.size < limit || !cursor) break;
+    if (candidates.size < limit) {
+      cursor = null;
+      break;
+    }
+  }
+  if (cursor || previous.cursor) {
+    await db.runTransaction(async tx => {
+      const latest = await tx.get(progressRef);
+      const revision = latest.exists ? parseScanProgress(latest.data()).revision : 0;
+      // A second cron cannot roll the checkpoint backwards after a concurrent update.
+      if (revision !== previous.revision) return;
+      const next = { revision: revision + 1, cursor };
+      if (latest.exists) tx.update(progressRef, next);
+      else tx.create(progressRef, next);
+    });
   }
   return { scanned, queued };
 }
