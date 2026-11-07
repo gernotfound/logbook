@@ -809,6 +809,34 @@ it('does not create a new writer when an untouched recovered draft is flushed', 
     recovered.unmount();
 });
 
+it('does not rewrite an already persisted user edit during later background or update flushes', async () => {
+    const owner = storageOwner();
+    await prepareUnlockedTestArchive(owner);
+    const name = 'draft:measurement:2026-09-11';
+    const canonicalKey = protectedDeviceKey(name, owner);
+    const hook = renderHook(() => useNutritionMeasurements('2026-09-11'));
+    act(() => hook.result.current.setWeight('75'));
+
+    const canonical = readFencedDatedDraftImage(name, owner).raw;
+    const ciphertext = localStorage.getItem(canonicalKey);
+    const witnesses = readDatedWriterEvidence(owner, name);
+    expect(witnesses).toHaveLength(1);
+    expect(witnesses[0].values.weight).toBe('75');
+    expect(ciphertext).toMatch(/^tlb-sealed:v1:/);
+
+    act(() => draftRegistry.flushAll({ strict: true }));
+    hook.rerender();
+    act(() => draftRegistry.flushAll({ strict: true }));
+    expect(readFencedDatedDraftImage(name, owner).raw).toBe(canonical);
+    expect(localStorage.getItem(canonicalKey)).toBe(ciphertext);
+    expect(readDatedWriterEvidence(owner, name)).toEqual(witnesses);
+
+    act(() => hook.result.current.setWeight('76'));
+    expect(readFencedDatedDraftImage(name, owner).raw).not.toBe(canonical);
+    expect(readDatedWriterEvidence(owner, name)).toHaveLength(1);
+    hook.unmount();
+});
+
 it('preserves a mounted old editor\'s next edit when a second confirmed form consumed its witness', async () => {
     const owner = storageOwner();
     await prepareUnlockedTestArchive(owner);
