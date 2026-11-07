@@ -156,6 +156,30 @@ describe('Worker 1B: UI/UX, Date Navigation, CSV Export & PWA Fixes', () => {
             expect(setSelectedDate).not.toHaveBeenCalled();
         });
 
+        it('locks the sleep date while editing an existing record', () => {
+            const setSelectedDate = vi.fn();
+            const setField = vi.fn();
+            const sleepHook = {
+                editingDate: '2026-09-01', setEditingDate: vi.fn(), cancelEdit: vi.fn(() => true),
+                saveSleep: vi.fn(), sleepHours: '07:30', setSleepHours: setField,
+                sleepDeep: '', setSleepDeep: setField,
+                sleepLight: '', setSleepLight: setField,
+                sleepRem: '', setSleepRem: setField,
+                sleepAwake: '', setSleepAwake: setField,
+            };
+            render(<DataSleep sleepHook={sleepHook} selectedDate="2026-09-01"
+                setSelectedDate={setSelectedDate} todayDateStr="2026-10-01" />);
+            for (const name of ['Giorno precedente', 'Giorno successivo']) {
+                const button = screen.getByRole('button', { name });
+                expect(button).toHaveProperty('disabled', true);
+                fireEvent.click(button);
+            }
+            const today = screen.getByRole('button', { name: /Torna a oggi/ });
+            expect(today).toHaveProperty('disabled', true);
+            fireEvent.click(today);
+            expect(setSelectedDate).not.toHaveBeenCalled();
+        });
+
         it('DataSleep navigates previous and next days accurately across month boundaries', () => {
             let selectedDate = '2026-09-01';
             const setSelectedDate = vi.fn((newDate: string) => {
