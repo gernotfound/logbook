@@ -123,6 +123,8 @@ export function useSettingsTransfers({ currentUser, isGuest }: TransferAuth) {
             }
             if (!isCurrentSession(session)) throw new Error('Sessione cambiata.');
             const { Exporter } = await import('../lib/export');
+            // Module loading is asynchronous: recheck ownership before constructing any download.
+            if (!isCurrentSession(session)) throw new Error('Sessione cambiata durante la preparazione del backup.');
             const identity = session.owner === 'guest' ? null : { uid: session.owner.slice(5) };
             if (prepareDownload) {
                 const url = Exporter.prepareBackupJsonUrl(snapshot.data, identity, snapshot.coverage, snapshot.recovery);
@@ -136,7 +138,7 @@ export function useSettingsTransfers({ currentUser, isGuest }: TransferAuth) {
                 setPreparedBackupUrl(url);
             } else {
                 const saved = await Exporter.exportBackupJson(snapshot.data, identity, snapshot.coverage, snapshot.recovery);
-                if (!saved) await showAlert('Download annullato o non avviato. Riprova.');
+                if (!saved && isCurrentSession(session)) await showAlert('Download annullato o non avviato. Riprova.');
             }
         } catch (error) {
             if (isCurrentSession(session)) void showAlert(error instanceof Error ? error.message : 'Backup non riuscito.');
@@ -152,10 +154,12 @@ export function useSettingsTransfers({ currentUser, isGuest }: TransferAuth) {
     const handleImportFile = async (e: ChangeEvent<HTMLInputElement>, mode: ImportMode = 'merge') => {
         const file = e.target.files?.[0];
         if (!file || importBusy.current) return;
+        const session = captureSession();
         importBusy.current = true;
         setImportingData(true);
         try {
             const { Exporter } = await import('../lib/export');
+            if (!isCurrentSession(session)) return;
             await Exporter.importFromJson(file, currentUser, saveUserData, mode);
         } catch (error) {
             console.error("Import error:", error);
