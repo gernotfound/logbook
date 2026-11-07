@@ -19,7 +19,7 @@ describe('UI Alignments - R3 & R4', () => {
         useAppStore.setState({
             dataOwner: storageOwner(),
             userData: {
-                profile: { height: 180, gender: 'M' },
+                profile: { height: '180', gender: 'M' },
                 nutrition: {
                     '2026-08-10': {
                         date: '2026-08-10',
@@ -46,7 +46,7 @@ describe('UI Alignments - R3 & R4', () => {
                 activeCycleId: null,
                 activeWorkout: null,
                 supplements: []
-            } as any
+            }
         });
     });
 

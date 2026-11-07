@@ -1,7 +1,20 @@
 import { describe, expect, it } from 'vitest';
 import { applySemanticOperations, diffDocuments } from '../src/lib/sync/semanticProjection';
 import { projectDocuments } from '../src/lib/sync/documentProjection';
-import type { UserData, WorkoutSession } from '../src/types';
+import type { CachedGlobalCatalog, UserData, WorkoutSession } from '../src/types';
+
+const emptyCatalog: CachedGlobalCatalog = {
+  manifest: {
+    version: 'empty-test-catalog',
+    updatedAt: '2026-07-01T00:00:00.000Z',
+    schemaVersion: 1,
+    docRefs: { exercises: 'catalog/exercises', foods: 'catalog/foods' },
+    itemCounts: { exercises: 0, foods: 0 },
+  },
+  exercises: [],
+  foods: [],
+  cachedAt: 0,
+};
 
 describe('Workout Deletion & Subcollection Persistence (V3)', () => {
   it('updates month document when deleting a single workout from a multi-workout month', () => {
@@ -50,14 +63,13 @@ describe('Workout Deletion & Subcollection Persistence (V3)', () => {
       history: [workout2, otherMonthWorkout]
     };
 
-    const catalog = { exercises: [], foods: [] } as any;
-    const baseDocs = projectDocuments(initialUserData, catalog);
-    const desiredDocs = projectDocuments(updatedUserData, catalog);
+    const baseDocs = projectDocuments(initialUserData, emptyCatalog);
+    const desiredDocs = projectDocuments(updatedUserData, emptyCatalog);
     const ops = diffDocuments(baseDocs, desiredDocs, 'actor1', 1, { actor1: 1 });
     const { documents, syncMetas } = applySemanticOperations(baseDocs, ops);
 
     const monthDoc = documents.get('history_months/2026-07');
-    expect(monthDoc?.['w-jul-2']).toBeDefined();
+    expect(monthDoc?.['w-jul-2']).toEqual(baseDocs.get('history_months/2026-07')?.['w-jul-2']);
     expect(monthDoc?.['w-jul-1']).toBeUndefined();
     expect(syncMetas['history_months/2026-07'].fields['w-jul-1']?.deleted).toBe(true);
     expect(documents.get('history_months/2026-08')).toEqual(baseDocs.get('history_months/2026-08'));
@@ -93,9 +105,8 @@ describe('Workout Deletion & Subcollection Persistence (V3)', () => {
     };
 
     const updatedUserData: UserData = { ...initialUserData, history: [] };
-    const catalog = { exercises: [], foods: [] } as any;
-    const baseDocs = projectDocuments(initialUserData, catalog);
-    const desiredDocs = projectDocuments(updatedUserData, catalog);
+    const baseDocs = projectDocuments(initialUserData, emptyCatalog);
+    const desiredDocs = projectDocuments(updatedUserData, emptyCatalog);
     const ops = diffDocuments(baseDocs, desiredDocs, 'actor1', 1, { actor1: 1 });
     const { documents, syncMetas } = applySemanticOperations(baseDocs, ops);
 
