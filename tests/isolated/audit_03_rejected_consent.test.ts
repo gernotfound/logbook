@@ -66,7 +66,9 @@ describe('rejected legal-consent durable compensation', () => {
         expect(after?.data.legalConsent).toBeUndefined();
         expect(after?.pending.some(op => op.path[0] === 'legalConsent')).toBe(false);
         expect(after?.actorSeq).toBe(before?.actorSeq);
-        expect(after?.revision).toBe(before?.revision);
+        // The rollback changes durable business state and journal; a preview
+        // captured before compensation must no longer pass its revision fence.
+        expect(after?.revision).toBe((before?.revision ?? 0) + 1);
     });
 
     it('retires only the rejected consent intent and preserves newer unrelated work', async () => {

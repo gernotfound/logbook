@@ -46,9 +46,14 @@ export function assertUnique<T>(items: readonly T[], identity: (item: T) => stri
 export function applyPatch<T extends object>(target: T, patch: Partial<T>): T {
     const result = { ...target } as T;
     for (const key of Object.keys(patch) as Array<keyof T>) {
+        // Patch fields are named properties, not business entity identifiers.
+        // Reserved keys must never be interpreted as prototype mutations.
+        if (key === '__proto__' || key === 'constructor' || key === 'prototype') {
+            throw new Error('Chiave patch non valida');
+        }
         const value = patch[key];
         if (value === undefined) Reflect.deleteProperty(result, key);
-        // Defining an own property also preserves reserved names such as "__proto__".
+        // Defining an own property avoids implicit setters when updating fields.
         else Object.defineProperty(result, key, { value, writable: true, enumerable: true, configurable: true });
     }
     return result;

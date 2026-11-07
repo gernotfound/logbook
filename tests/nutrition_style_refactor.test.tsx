@@ -234,6 +234,17 @@ renderWithProviders(
     });
 
     describe('R1 & R2: NutritionPlanning', () => {
+        it('associates every macro-planning number input with its visible label', () => {
+            renderWithProviders(<NutritionPlanning />);
+            for (const name of [
+                'Giorni ON (su 7)',
+                'Pro (g/kg)', 'Carbo (g/kg)', 'Grassi (g/kg)',
+                'Variazione pro (%)', 'Variazione carbo (%)', 'Variazione grassi (%)',
+            ]) {
+                expect(screen.getByRole('spinbutton', { name })).toBeDefined();
+            }
+        });
+
         it('renders titles and macro labels in Dark Glassmorphism text hierarchy', () => {
             renderWithProviders(<NutritionPlanning />);
 

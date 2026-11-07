@@ -10,7 +10,7 @@ vi.mock('../../src/lib/catalog/catalogService', () => ({
 import { UserDataSchema } from '../../src/lib/schema';
 import type { UserData } from '../../src/types';
 import {
-  commitLocal, initializeLocal, readLocal,
+  acknowledgeThrough, adoptReplicaCheckpoint, commitLocal, hydrateLocal, initializeLocal, readLocal,
   rebaseConsentRecoveryWithExplicitChoice, StaleLocalRevisionError,
 } from '../../src/lib/sync/localRepository';
 import { purgeAllLocalUserData } from '../../src/lib/db/db_account';
@@ -146,6 +146,50 @@ describe('explicit consent-epoch journal recovery', () => {
       owner, 2, original.revision, state('175'), state('180'), new Map(), () => true,
     )).rejects.toBeInstanceOf(StaleLocalRevisionError);
     expect(await readLocal(owner)).toEqual(concurrent);
+  });
+
+  it('rejects a recovery preview captured before a changed cloud hydration', async () => {
+    await commitLocal(owner, state('180'), state('170'));
+    const preview = (await readLocal(owner))!;
+    await hydrateLocal(owner, state('175'), [], undefined, 'window', () => true);
+    const updated = (await readLocal(owner))!;
+    expect(updated.revision).toBe(preview.revision + 1);
+    expect(updated.baseline.profile?.height).toBe('175');
+    expect(updated.pending.length).toBeGreaterThan(0);
+
+    await expect(rebaseConsentRecoveryWithExplicitChoice(
+      owner, 2, preview.revision, state('175'), state('180'), new Map(), () => true,
+    )).rejects.toBeInstanceOf(StaleLocalRevisionError);
+    expect(await readLocal(owner)).toEqual(updated);
+  });
+
+  it('rejects a recovery preview after a partial confirmed ACK changes pending and baseline', async () => {
+    const now = Date.now();
+    const identity = {
+      slot: 's00', replicaId: 'epoch-recovery-ack', generation: 1,
+      checkpointAtMs: now, leaseUntilMs: now + 31_104_000_000,
+    };
+    await adoptReplicaCheckpoint(owner, { identity, baseSeq: 0 },
+      { clock: {}, syncMetaByDocument: {} });
+    await commitLocal(owner, state('180'), state('170'));
+    const delivered = (await readLocal(owner))!;
+    await commitLocal(owner, state('185'), state('180'));
+    const preview = (await readLocal(owner))!;
+    expect(preview.pending.length).toBeGreaterThan(delivered.pending.length);
+    const deliveredSeq = delivered.pending.at(-1)!.seq;
+
+    await acknowledgeThrough(owner, deliveredSeq, state('180'), [], undefined,
+      { operations: delivered.pending, replica: identity }, () => true);
+    const updated = (await readLocal(owner))!;
+    expect(updated.revision).toBe(preview.revision + 1);
+    expect(updated.baseline.profile?.height).toBe('180');
+    expect(updated.data.profile?.height).toBe('185');
+    expect(updated.pending.length).toBeGreaterThan(0);
+
+    await expect(rebaseConsentRecoveryWithExplicitChoice(
+      owner, 2, preview.revision, state('180'), state('185'), new Map(), () => true,
+    )).rejects.toBeInstanceOf(StaleLocalRevisionError);
+    expect(await readLocal(owner)).toEqual(updated);
   });
 
   it('cannot silently reauthorize a journal already stamped for the new epoch', async () => {

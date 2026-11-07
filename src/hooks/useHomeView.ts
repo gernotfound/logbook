@@ -77,6 +77,7 @@ export type HomeViewState =
         weightPeriod: string;
         setWeightPeriod: (p: any) => void;
         weightStats: any;
+        lastRecordedWeight: number | null;
         muscleColors: any;
         activePains: string[];
         painColors: Record<string, string>;
@@ -338,7 +339,7 @@ export function useHomeView(isActive = true): HomeViewState {
     const fat = todayNutrition.fat || 0;
 
     // Get Targets from planning
-    let kcalTarget = nutritionPlanning?.normocalorica?.kcal || 2500;
+    let kcalTarget = nutritionPlanning?.normocalorica?.kcal || 0;
     
     if (nutritionPlanning) {
         const isDayOn = todayNutrition.isDayOn;
@@ -389,6 +390,7 @@ export function useHomeView(isActive = true): HomeViewState {
         bf, bfSource, streak, totalWorkouts,
         chartData,
         weightPeriod, setWeightPeriod, weightStats,
+        lastRecordedWeight: recentWeight ?? null,
         muscleColors,
         activePains, painColors, toggleActivePain,
         history, nutrition, library,

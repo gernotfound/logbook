@@ -38,6 +38,7 @@ const NutritionHistory: React.FC<NutritionHistoryProps> = ({ nutritionHistory, o
                             className="card clickable-card"
                             role={onDayClick ? 'button' : undefined}
                             tabIndex={onDayClick ? 0 : undefined}
+                            aria-label={onDayClick ? `Apri il diario del ${Logic.formatItalianDate(day.date)}` : undefined}
                             onClick={onDayClick ? () => onDayClick(day.date) : undefined}
                             onKeyDown={onDayClick ? (event) => {
                                 if (event.key === 'Enter' || event.key === ' ') {

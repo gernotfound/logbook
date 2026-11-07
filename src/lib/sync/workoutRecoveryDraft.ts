@@ -13,9 +13,9 @@ type RecoveryDraftWitness = {
  * Recovery JSON is historical evidence until its consent generation is proven.
  * Keep provenance and payload in the same synchronous owner-scoped record.
  */
-export function readWorkoutRecoveryDraft(name: string, owner: string): unknown | null {
+export function readWorkoutRecoveryDraftImage(name: string, owner: string): { value: unknown | null; raw: string | null } {
     const raw = readDeviceValueStrict(name, owner);
-    if (raw === null) return null;
+    if (raw === null) return { value: null, raw: null };
     let parsed: unknown;
     try { parsed = JSON.parse(raw); }
     catch { throw new Error('Bozza workout di recupero non leggibile: originale conservato.'); }
@@ -43,15 +43,24 @@ export function readWorkoutRecoveryDraft(name: string, owner: string): unknown |
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
         throw new Error('Contenuto della bozza workout non valido: originale conservato.');
     }
-    return parsed;
+    return { value: parsed, raw };
+}
+
+export function readWorkoutRecoveryDraft(name: string, owner: string): unknown | null {
+    return readWorkoutRecoveryDraftImage(name, owner).value;
 }
 
 /** An unproven previous draft is never overwritten or cleared automatically. */
 export function writeWorkoutRecoveryDraft(
     name: string, owner: string, data: unknown | null,
     expectedConsentGeneration?: string | null,
-): void {
-    readWorkoutRecoveryDraft(name, owner);
+    expectedRaw?: string | null,
+): string | null {
+    const current = readWorkoutRecoveryDraftImage(name, owner);
+    // Consent/owner equality alone cannot distinguish two editors in the same session.
+    if (expectedRaw !== undefined && current.raw !== expectedRaw) {
+        throw new Error('Bozza workout modificata da un’altra scheda: copia più recente conservata.');
+    }
     const revision = readDeviceConsentRevision(owner);
     // A mounted editor must write the generation it originally captured, never
     // relabel old in-memory answers with a concurrently published new generation.
@@ -61,7 +70,7 @@ export function writeWorkoutRecoveryDraft(
     }
     if (data === null) {
         writeDeviceValue(name, null, owner);
-        return;
+        return null;
     }
     const origin = expectedConsentGeneration === undefined ? revision
         : expectedConsentGeneration === null ? undefined : Number(expectedConsentGeneration);
@@ -71,5 +80,7 @@ export function writeWorkoutRecoveryDraft(
     const value: unknown = owner.startsWith('user:') && origin !== undefined
         ? { __logbookWorkoutRecoveryDraft: 1, owner, name, consentRevision: origin, data } satisfies RecoveryDraftWitness
         : data;
-    writeDeviceValue(name, JSON.stringify(value), owner);
+    const raw = JSON.stringify(value);
+    writeDeviceValue(name, raw, owner);
+    return raw;
 }

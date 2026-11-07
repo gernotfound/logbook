@@ -89,6 +89,7 @@ export const FoodItemRow: React.FC<FoodItemRowProps> = ({
                         className="btn-link"
                         style={{ fontSize: 'var(--font-size-meta)' }}
                         onClick={() => onQuickAddToMeal(food, mt)}
+                        aria-label={`Aggiungi ${food.name} a ${mt}`}
                     >
                         {mt}
                     </button>

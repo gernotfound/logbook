@@ -506,6 +506,21 @@ describe('durable owner-scoped journal', () => {
     });
 
 
+    it('rejects non-business sync metadata paths without overwriting encrypted evidence', async () => {
+        await prepareOwnerVault('user:a');
+        await initializeLocal('a', data(170));
+        const clean = await readLocal('a');
+        const invalidMetadata = JSON.parse('{"__proto__":{"clock":{},"fields":{}}}');
+        await updateArchiveRecord<any>('user:a', () => ({
+            ...clean, syncMetaByDocument: invalidMetadata,
+        }));
+        const key = 'logbook:v2:user:a';
+        const original = await get<string>(key);
+
+        await expect(readLocal('a')).rejects.toThrow('Percorso metadati sync locale non valido');
+        expect(await get<string>(key)).toBe(original);
+    });
+
     it('preserves a pending journal and rejects stale session during consent revision adoption', async () => {
         await prepareOwnerVault('user:a');
         const original = data(170);
@@ -1189,7 +1204,7 @@ describe('durable owner-scoped journal', () => {
         expect(await get('logbook:v2:user:a')).toBe(foreignCiphertext);
     });
 
-    it('rejects a changed durable baseline even when actor revision did not advance', async () => {
+    it('increments the local revision on changed cloud hydration and rejects a stale bulk write', async () => {
         await prepareOwnerVault('user:a');
         const base = data(170);
         await initializeLocal('a', base);
@@ -1198,7 +1213,7 @@ describe('durable owner-scoped journal', () => {
 
         await hydrateLocal('a', data(180), [], undefined, 'window');
         const hydrated = await readLocal('a');
-        expect(hydrated?.revision).toBe(preview?.revision);
+        expect(hydrated?.revision).toBe((preview?.revision ?? 0) + 1);
         expect(hydrated?.data.profile?.height).toBe('180');
 
         await expect(

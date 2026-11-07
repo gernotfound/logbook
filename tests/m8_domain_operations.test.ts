@@ -37,6 +37,17 @@ const compile = (before: UserData, operation: DomainOperation | DomainOperation[
 };
 
 describe('M8 Domain Operations V4', () => {
+    it('rejects prototype-sensitive patch keys instead of changing object inheritance', () => {
+        const before = base({ profile: { height: '170' } });
+        for (const key of ['__proto__', 'constructor', 'prototype']) {
+            const patch = JSON.parse(JSON.stringify({ [key]: { forged: true } }));
+            expect(() => applyDomainOperations(before, { type: 'profile.patch', patch }))
+                .toThrow('Chiave patch non valida');
+        }
+        expect(before.profile?.height).toBe('170');
+        expect(Object.getPrototypeOf(before.profile)).toBe(Object.prototype);
+    });
+
     it('preserves source data and batch isolation when a later operation fails', () => {
         const before = base({ nutrition: {} });
         const original = structuredClone(before);

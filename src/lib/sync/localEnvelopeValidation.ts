@@ -95,9 +95,16 @@ export function validateLocalEnvelope(value: unknown, owner: string): LocalEnvel
     }
     const syncMetaByDocument: Record<string, SyncMeta> = {};
     for (const [path, rawMeta] of Object.entries(record.syncMetaByDocument as Record<string, unknown>)) {
+        // The durable frontier tracks business documents only. Reject unknown
+        // paths rather than normalizing them into inherited object properties.
+        if (path !== '' && !/^(history_months|nutrition_months)\/\d{4}-(0[1-9]|1[0-2])$/.test(path)) {
+            throw new Error('Percorso metadati sync locale non valido');
+        }
         const meta = parseSyncMeta(rawMeta);
         if (!coversVectorClock(clock, meta.clock)) throw new Error('Metadati sync locali fuori dal frontier');
-        syncMetaByDocument[path] = meta;
+        Object.defineProperty(syncMetaByDocument, path, {
+            value: meta, enumerable: true, configurable: true, writable: true,
+        });
     }
 
     if (!Array.isArray(record.completeMonths) || record.completeMonths.some(month => typeof month !== 'string' || !/^\d{4}-(0[1-9]|1[0-2])$/.test(month))) {
