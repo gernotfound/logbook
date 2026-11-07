@@ -883,7 +883,7 @@ describe('LogBook Background Sync & Error Toast 4-Tier Test Suite', () => {
   // ============================================================================
   describe('Tier 4: Real-World Application Workloads', () => {
 
-    test('T4.1_workload: Underground gym workout with spotty connection and auto-dismiss error recovery', async () => {
+    test('T4.1_workload: Underground gym workout keeps failed-sync warning until a successful recovery', async () => {
       const { container } = await renderSettledApp();
 
       // Step 1: Lifter performs set 1 and triggers debounced save
@@ -916,12 +916,14 @@ describe('LogBook Background Sync & Error Toast 4-Tier Test Suite', () => {
       expect(screen.getByText(/Network unreachable: Underground gym/i)).toBeDefined();
       expect(container.querySelector('#sync-overlay')).toBeNull();
 
-      // Step 3: Lifter continues workout without clicking dismiss; toast auto-dismisses at 5s
+      // Step 3: A failed (not retryable/pending) sync cannot silently turn
+      // into a successful one just because the toast timer elapsed.
       await act(async () => {
         await vi.advanceTimersByTimeAsync(5100);
       });
-      expect(useAppStore.getState().saveError).toBeNull();
-      expect(screen.queryByText(/Errore sincronizzazione/i)).toBeNull();
+      expect(useAppStore.getState().syncHealth).toBe('failed');
+      expect(useAppStore.getState().saveError).toBe('Network unreachable: Underground gym');
+      expect(screen.getByText(/Network unreachable: Underground gym/i)).toBeDefined();
 
       // Step 4: Connection restored, next save succeeds
       vi.mocked(DB.saveUserData).mockResolvedValueOnce({ ok: true, status: 'synced' } as any);
