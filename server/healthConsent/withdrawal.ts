@@ -202,6 +202,19 @@ export async function recordHealthConsentReacceptance(
     if (!previousSnap.exists || previous?.status !== 'withdrawn' || previous.revision !== expectedRevision) {
       throw new HealthConsentRevisionConflictError();
     }
+    // Erasure receipts expire after 30 days; the monotonic consent floor is
+    // the durable proof that the immediately preceding withdrawal was erased.
+    if (!isPositiveRevision(previous.erasedBeforeRevision)
+      || previous.erasedBeforeRevision !== previous.revision - 1) {
+      throw new HealthConsentRevisionConflictError();
+    }
+    if (erasureJob.exists) {
+      const receipt = erasureJob.data();
+      if (receipt?.uid !== uid || receipt.consentRevision !== previous.erasedBeforeRevision
+        || receipt.completedRevision !== previous.revision) {
+        throw new HealthConsentRevisionConflictError();
+      }
+    }
     const revision = Number(previous.revision) + 1;
     if (!Number.isSafeInteger(revision)) throw new Error('Revision consenso non valida.');
     const now = Timestamp.now();
