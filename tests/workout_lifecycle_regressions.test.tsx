@@ -1400,6 +1400,35 @@ describe('Workout lifecycle durable recovery regressions', () => {
     });
 
 
+    it('preserves a final-session draft modified by another tab after durable workout deletion', async () => {
+        await prepareUnlockedTestArchive(owner);
+        localStorage.setItem(`logbook:v2:${owner}:health-consent-generation`, '3');
+        const target = workout('delete-concurrent-final', true);
+        const initial = userData({ activeWorkout: target });
+        await initializeLocal(owner, initial);
+        useAppStore.setState({ userData: initial, dataOwner: owner, localWorkout: target });
+        const name = 'draft:post-session:' + target.id;
+        const original = writeWorkoutRecoveryDraft(name, owner, { draft: { workoutId: target.id, mood: '3' } }, '3');
+        const originalDispatch = useAppStore.getState().dispatchDomainOperation;
+        let competingRaw: string | null = null;
+        useAppStore.setState({ dispatchDomainOperation: async (...args) => {
+            const response = await originalDispatch(...args);
+            competingRaw = writeWorkoutRecoveryDraft(name, owner,
+                { draft: { workoutId: target.id, mood: '4' } }, '3', original);
+            return response;
+        } });
+        vi.mocked(useDialogStore.getState().showConfirm).mockResolvedValueOnce(true);
+        try {
+            const { result } = renderHook(() => useWorkoutSession());
+            await act(async () => { expect(await result.current.deleteWorkout()).toBe(true); });
+            expect((await readLocal(owner))?.data.activeWorkout).toBeNull();
+            expect(readDeviceValueStrict(name, owner)).toBe(competingRaw);
+            expect(useAppStore.getState().saveError).toMatch(/copia locale/i);
+        } finally {
+            useAppStore.setState({ dispatchDomainOperation: originalDispatch });
+        }
+    });
+
     it('serializes a rapid start after its preparation without requiring an explicit UI flush', async () => {
         if (owner.startsWith('user:')) localStorage.setItem(`logbook:v2:${owner}:health-consent-generation`, '1');
         await prepareUnlockedTestArchive(owner);
