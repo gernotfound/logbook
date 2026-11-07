@@ -97,14 +97,11 @@ const WorkoutReportModal: React.FC<WorkoutReportModalProps> = ({ workout, histor
             await dispatchDurableOperation(dispatchDomainOperation, { type: 'routine.upsert', routine: newRoutine });
             
             setIsSavingAsRoutine(false);
-        } catch (err: any) {
+        } catch (err: unknown) {
             const formatted = mapFirebaseErrorCode(err);
-            if (formatted.isOfflineSafe) {
-                setIsSavingAsRoutine(false);
-                void showAlert("Scheda salvata in locale (offline).");
-            } else {
-                void showAlert("Errore durante il salvataggio della scheda.");
-            }
+            // A failed durable dispatch is never proof of a local save, even if
+            // its nested Firebase error looks like a retryable network outage.
+            void showAlert(`Salvataggio della scheda non confermato (${formatted.title.toLowerCase()}). La scheda resta nel modulo: riprova.`);
         } finally {
             setIsSavingRoutineLoading(false);
         }
