@@ -101,7 +101,6 @@ const ReloadPrompt: React.FC = () => {
     document.addEventListener('visibilitychange', handleVisibilityChange);
     return () => {
       active = false;
-      visibilityCheckRef.current++;
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, [setNeedRefresh]);
