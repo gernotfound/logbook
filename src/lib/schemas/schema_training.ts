@@ -9,7 +9,7 @@ import {
     safeOptionalNullableNumber,
 } from './schema_utils';
 import { normalizeBusinessId } from '../businessIdentity';
-import { MAX_EDITABLE_CYCLE_WEEKS, MAX_CYCLE_SESSIONS_PER_WEEK } from '../calc/cycleLimits';
+import { isBoundedCycleCount, MAX_EDITABLE_CYCLE_WEEKS, MAX_CYCLE_SESSIONS_PER_WEEK } from '../calc/cycleLimits';
 
 export const ExerciseSetSchema = z.object({
     weight: safeString(''),
@@ -251,6 +251,11 @@ export const TrainingCycleWriteSchema = TrainingCycleSchema.refine(
         && (cycle.sessionsPerWeek === undefined
             || (Number.isSafeInteger(cycle.sessionsPerWeek)
                 && cycle.sessionsPerWeek >= 1
-                && cycle.sessionsPerWeek <= MAX_CYCLE_SESSIONS_PER_WEEK)),
+                && cycle.sessionsPerWeek <= MAX_CYCLE_SESSIONS_PER_WEEK))
+        && cycle.routines.every(routine => routine.frequencyPerWeek === undefined
+            || isBoundedCycleCount(routine.frequencyPerWeek, MAX_CYCLE_SESSIONS_PER_WEEK))
+        && (cycle.sessionsPerWeek !== undefined
+            || cycle.routines.reduce((total, routine) => total + (routine.frequencyPerWeek ?? 1), 0)
+                <= MAX_CYCLE_SESSIONS_PER_WEEK),
     { message: 'Durata o frequenza del ciclo non valida' },
 );

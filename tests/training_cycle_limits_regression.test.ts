@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { UserDataSchema, TrainingCycleSchema } from '../src/lib/schema';
+import { UserDataSchema, TrainingCycleSchema, TrainingCycleWriteSchema } from '../src/lib/schema';
 import { applyDomainOperations } from '../src/lib/sync/domainOperations';
 import { calculateCycleSchedule, calculateCycleTimeline } from '../src/lib/calc/planning';
 import { getCycleVolumeFrequencies, isBoundedCycleCount, previewCycleCount, MAX_EDITABLE_CYCLE_WEEKS, MAX_CYCLE_SESSIONS_PER_WEEK } from '../src/lib/calc/cycleLimits';
@@ -30,6 +30,52 @@ describe('training cycle bounded input and safe legacy evaluation', () => {
             })).toThrow('Durata o frequenza del ciclo non valida');
             expect(input.trainingCycles).toHaveLength(0);
         }
+    });
+
+    it('rejects invalid routine frequencies in both cycle and individual-routine writes', () => {
+        const base = UserDataSchema.parse({ trainingCycles: [cycle] }) as UserData;
+        const before = structuredClone(base);
+        for (const bad of [0, -1, 1.5, 15, NaN, Infinity, null, 'not-a-number']) {
+            const frequencyPerWeek = bad as number;
+            const badCycle = { ...cycle, routines: [{ routineId: 'r', frequencyPerWeek }] };
+            expect(() => applyDomainOperations(base, {
+                type: 'training-cycle.upsert', cycle: badCycle,
+            })).toThrow(/Frequenza routine ciclo non valida/);
+            expect(() => applyDomainOperations(base, {
+                type: 'training-cycle-routine.upsert', cycleId: cycle.id,
+                routine: { routineId: 'r', frequencyPerWeek },
+            })).toThrow(/Frequenza routine ciclo non valida/);
+        }
+        expect(base).toEqual(before);
+
+        const valid = applyDomainOperations(base, {
+            type: 'training-cycle-routine.upsert', cycleId: cycle.id,
+            routine: { routineId: 'r', frequencyPerWeek: 14 },
+        });
+        expect(valid.trainingCycles?.[0]?.routines[0].frequencyPerWeek).toBe(14);
+        expect(base).toEqual(before);
+    });
+
+    it('rejects implicit schedules above fourteen sessions while retaining tolerant reads', () => {
+        const base = UserDataSchema.parse({}) as UserData;
+        const noExplicitSchedule = {
+            ...cycle, sessionsPerWeek: undefined,
+            routines: [{ routineId: 'r', frequencyPerWeek: 14 }, { routineId: 'r2', frequencyPerWeek: 1 }],
+        };
+        expect(() => applyDomainOperations(base, { type: 'training-cycle.upsert', cycle: noExplicitSchedule }))
+            .toThrow(/Frequenza routine ciclo non valida/);
+        expect(TrainingCycleWriteSchema.safeParse(noExplicitSchedule).success).toBe(false);
+
+        const stored = TrainingCycleSchema.parse(noExplicitSchedule);
+        expect(stored.routines).toHaveLength(2);
+        const existing = UserDataSchema.parse({ trainingCycles: [{
+            ...noExplicitSchedule, routines: [{ routineId: 'r', frequencyPerWeek: 14 }],
+        }] }) as UserData;
+        expect(() => applyDomainOperations(existing, {
+            type: 'training-cycle-routine.upsert', cycleId: cycle.id,
+            routine: { routineId: 'r2', frequencyPerWeek: 1 },
+        })).toThrow(/Frequenza routine ciclo non valida/);
+        expect(existing.trainingCycles?.[0]?.routines).toHaveLength(1);
     });
 
     it('bounds preview work without silently changing a saved input', () => {
