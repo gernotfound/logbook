@@ -325,16 +325,16 @@ describe('Worker M2: Exercise Library UI & Food Form Real-Time Calorie Calculati
                     });
                 }
                 const previousDispatch = useAppStore.getState().dispatchDomainOperation;
-                const previousConfirm = useDialogStore.getState().showConfirm;
+                const showConfirm = vi.mocked(useDialogStore.getState().showConfirm);
                 let confirm!: (choice: boolean) => void;
-                const showConfirm = vi.fn(() => new Promise<boolean>(resolve => { confirm = resolve; }));
+                // The suite's dialog fixture has an inert setState; configure its callable mock.
+                showConfirm.mockReset().mockImplementationOnce(() => new Promise<boolean>(resolve => { confirm = resolve; }));
                 const dispatch = vi.fn().mockResolvedValue({ ok: true, status: 'synced' });
                 const initialData = { ...emptyUserData, library: [original] };
                 // This is a real owner-bound editor: its protected draft must be readable
                 // before testing the subsequent Auth-epoch transition.
                 await prepareUnlockedTestArchive(owner);
                 await initializeLocal(owner, initialData);
-                useDialogStore.setState({ showConfirm });
                 useAppStore.setState({
                     dataOwner: owner,
                     userData: initialData,
@@ -361,7 +361,7 @@ describe('Worker M2: Exercise Library UI & Food Form Real-Time Calorie Calculati
                     expect(dispatch).not.toHaveBeenCalled();
                 } finally {
                     useAppStore.setState({ dispatchDomainOperation: previousDispatch });
-                    useDialogStore.setState({ showConfirm: previousConfirm });
+                    showConfirm.mockReset().mockResolvedValue(true);
                     if (action === 'restore') await clearCatalogCache();
                 }
             },
