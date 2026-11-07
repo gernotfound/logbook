@@ -242,6 +242,12 @@ export function persistPlainWorkoutSnapshot(workout: WorkoutSession | null, owne
             catch { throw new Error('Snapshot workout esistente corrotto: copia preservata.'); }
             const source = unwrapWorkoutDeviceSnapshot(value, owner);
             assertWorkoutSnapshotEpoch(owner, source.consentRevision);
+            if (!source.isIntent) {
+                // Replacing even an authenticated plain draft must not erase an
+                // invalid instance identity before explicit data recovery.
+                try { assertWorkoutSessionIdentities(source.workout as WorkoutSession, 'Snapshot workout esistente'); }
+                catch { throw new Error('Snapshot workout esistente con identificativi non validi: copia preservata.'); }
+            }
         }
     }
     const value = workout === null ? null : current === undefined
