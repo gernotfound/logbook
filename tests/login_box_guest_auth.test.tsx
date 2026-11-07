@@ -1,5 +1,5 @@
 import React from 'react';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const authMocks = vi.hoisted(() => ({
@@ -397,6 +397,35 @@ describe('LoginBox guest Google authentication', () => {
         expect(messages[0]).toContain("Se l'email è registrata");
         expect(sendPasswordResetEmail).toHaveBeenCalledTimes(2);
     });
+
+    it.each(['success', 'unknown-address'] as const)(
+        'does not show a stale password-recovery notice after the login overlay closes (%s)',
+        async outcome => {
+            authState.isGuest = false;
+            let finish!: () => void;
+            let fail!: (error: Error) => void;
+            vi.mocked(sendPasswordResetEmail).mockImplementationOnce(() => new Promise<void>((resolve, reject) => {
+                finish = resolve;
+                fail = reject;
+            }));
+
+            const view = render(<LoginBox onCancel={() => {}} />);
+            fireEvent.click(screen.getByRole('button', { name: 'Hai dimenticato la password?' }));
+            fireEvent.change(screen.getByRole('textbox', { name: 'Email' }), {
+                target: { value: 'account@example.com' },
+            });
+            fireEvent.click(screen.getByRole('button', { name: 'Invia Link di Recupero' }));
+            expect(sendPasswordResetEmail).toHaveBeenCalledTimes(1);
+
+            view.unmount();
+            await act(async () => {
+                if (outcome === 'success') finish();
+                else fail(Object.assign(new Error('masked'), { code: 'auth/user-not-found' }));
+            });
+
+            expect(authMocks.showAlert).not.toHaveBeenCalled();
+        },
+    );
 
     it('continues to report genuine password reset delivery failures without disclosing provider errors', async () => {
         authState.isGuest = false;

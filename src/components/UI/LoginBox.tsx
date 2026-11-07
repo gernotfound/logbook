@@ -23,6 +23,8 @@ export const LoginBox: React.FC<LoginBoxProps> = ({ onCancel }) => {
     const [showPassword, setShowPassword] = useState(false);
     const [loading, setLoading] = useState(false);
     const authActionInFlight = useRef(false);
+    const mountedRef = useRef(false);
+    const resetCooldownRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const [formError, setFormError] = useState<string | null>(null);
     const [resetSent, setResetSent] = useState(false);
     const [migrationPolicy, setMigrationPolicy] = useState<'merge' | 'skip'>('merge');
@@ -38,6 +40,13 @@ export const LoginBox: React.FC<LoginBoxProps> = ({ onCancel }) => {
     const passwordMismatch = mode === 'register' && confirmPassword.length > 0 && password !== confirmPassword;
     const dialogRef = useRef<HTMLDivElement>(null);
     const emailInputRef = useRef<HTMLInputElement>(null);
+    useEffect(() => {
+        mountedRef.current = true;
+        return () => {
+            mountedRef.current = false;
+            if (resetCooldownRef.current !== null) clearTimeout(resetCooldownRef.current);
+        };
+    }, []);
     useEffect(() => {
         if (mode !== 'register') return;
         let active = true;
@@ -58,7 +67,7 @@ export const LoginBox: React.FC<LoginBoxProps> = ({ onCancel }) => {
             await action();
         } catch (error) {
             if (isGuest && (error instanceof BrowserStorageError || (error instanceof Error && error.message.includes('trasferimento guest')))) {
-                await showAlert('Impossibile salvare la scelta di trasferimento sul dispositivo. Libera spazio o abilita l’archivio del browser e riprova.');
+                if (mountedRef.current) await showAlert('Impossibile salvare la scelta di trasferimento sul dispositivo. Libera spazio o abilita l’archivio del browser e riprova.');
                 return;
             }
             throw error;
@@ -98,18 +107,25 @@ export const LoginBox: React.FC<LoginBoxProps> = ({ onCancel }) => {
                     // outcome if a legacy provider configuration returns this code.
                     if ((error as { code?: unknown } | null)?.code !== 'auth/user-not-found') throw error;
                 }
+                // The overlay can close while Firebase is still processing this request.
+                // Do not surface a stale account notice after its UI has gone away.
+                if (!mountedRef.current) return;
                 setResetSent(true);
                 await showAlert("Se l'email è registrata, riceverai un link per reimpostare la password. Controlla anche la cartella spam.");
-                setTimeout(() => setResetSent(false), 60000);
+                if (!mountedRef.current) return;
+                resetCooldownRef.current = setTimeout(() => {
+                    resetCooldownRef.current = null;
+                    if (mountedRef.current) setResetSent(false);
+                }, 60000);
                 setMode('login');
             }
         } catch (error: unknown) {
-            setFormError(mode === 'forgot'
+            if (mountedRef.current) setFormError(mode === 'forgot'
                 ? 'Non è stato possibile inviare il link. Controlla la connessione e riprova.'
                 : describeEmailAuthError(error));
         } finally {
             authActionInFlight.current = false;
-            setLoading(false);
+            if (mountedRef.current) setLoading(false);
         }
     };
 
@@ -121,10 +137,10 @@ export const LoginBox: React.FC<LoginBoxProps> = ({ onCancel }) => {
         try {
             await loginAsGuest();
         } catch (error) {
-            setFormError(describeEmailAuthError(error));
+            if (mountedRef.current) setFormError(describeEmailAuthError(error));
         } finally {
             authActionInFlight.current = false;
-            setLoading(false);
+            if (mountedRef.current) setLoading(false);
         }
     };
 
@@ -136,12 +152,12 @@ export const LoginBox: React.FC<LoginBoxProps> = ({ onCancel }) => {
         try {
             await handleAuthAction(() => isGuest ? linkGoogleAccount(migrationPolicy) : login());
             const error = useAppStore.getState().saveError;
-            if (error) setFormError(error);
+            if (error && mountedRef.current) setFormError(error);
         } catch (error) {
-            setFormError(describeEmailAuthError(error));
+            if (mountedRef.current) setFormError(describeEmailAuthError(error));
         } finally {
             authActionInFlight.current = false;
-            setLoading(false);
+            if (mountedRef.current) setLoading(false);
         }
     };
 
