@@ -147,6 +147,7 @@ export async function applyPWAUpdate(
   options: ActivationOptions = {},
 ): Promise<void> {
   throwIfCancelled(options.signal);
+  let activatedReplacement = false;
   if (container && typeof container.getRegistration === 'function') {
     const registration = await boundedUpdateStep(container.getRegistration(), timeoutMs);
     if (registration) {
@@ -156,13 +157,14 @@ export async function applyPWAUpdate(
       throwIfCancelled(options.signal);
       if (registration.waiting) {
         await activateWaitingWorker(registration.waiting, container, timeoutMs, options);
-      } else if (typeof navigator !== 'undefined' && navigator.onLine === false) {
-        // A stale prompt with no installed replacement is not a reason to
-        // reload an offline tab: the existing cached shell may be its only
-        // working copy. Keep data in place and allow a later retry.
-        throw new Error('Sei offline e la nuova versione non è ancora installata. Riprova quando torni online.');
+        activatedReplacement = true;
       }
     }
+  }
+  // When the registration is missing or unsupported, the old shell may be
+  // the only usable offline copy. A confirmed new worker can reload from cache.
+  if (!activatedReplacement && typeof navigator !== 'undefined' && navigator.onLine === false) {
+    throw new Error('Sei offline e la nuova versione non è ancora installata. Riprova quando torni online.');
   }
   throwIfCancelled(options.signal);
   await reload();
