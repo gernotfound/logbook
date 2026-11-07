@@ -35,12 +35,12 @@ const NutritionHistory: React.FC<NutritionHistoryProps> = ({ nutritionHistory, o
                     {visibleDays.map((day: any, idx: number) => (
                         <div 
                             key={`hist-nutr-${day.date}-${idx}`} 
-                            className="card clickable-card" 
+                            className="card clickable-card"
                             role={onDayClick ? 'button' : undefined}
                             tabIndex={onDayClick ? 0 : undefined}
                             aria-label={onDayClick ? `Apri il diario del ${Logic.formatItalianDate(day.date)}` : undefined}
-                            onClick={() => onDayClick?.(day.date)}
-                            onKeyDown={onDayClick ? event => {
+                            onClick={onDayClick ? () => onDayClick(day.date) : undefined}
+                            onKeyDown={onDayClick ? (event) => {
                                 if (event.key === 'Enter' || event.key === ' ') {
                                     event.preventDefault();
                                     onDayClick(day.date);
