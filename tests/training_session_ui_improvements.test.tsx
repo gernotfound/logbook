@@ -5,6 +5,7 @@ import { captureSession } from '../src/lib/sync/session';
 import { prepareUnlockedTestArchive } from './secureVaultFixture';
 import { initializeLocal } from '../src/lib/sync/localRepository';
 import SessionExerciseCard from '../src/components/Training/session/SessionExerciseCard';
+import SessionExerciseAccordion from '../src/components/Training/session/SessionExerciseAccordion';
 import SessionSetRow from '../src/components/Training/session/SessionSetRow';
 import TrainingSession from '../src/components/Training/TrainingSession';
 import { useDialogStore } from '../src/store/useDialogStore';
@@ -162,6 +163,65 @@ describe('Training Session UI Improvements Suite (R1, R2, R3)', () => {
 
         for (const label of ['Durata (min)', 'Distanza (km)', 'Velocità media', 'Inclinazione (%)', 'Kcal stimate']) {
             expect(screen.getByRole('textbox', { name: label })).toBeDefined();
+        }
+    });
+
+    it('isola ID e associazioni dei campi di due istanze senza ID persistente', () => {
+        const props = {
+            exItem: { exId: 'ex_treadmill', sessionNote: '', sets: [{ id: 'set-one', kg: '', reps: '' }] },
+            exIndex: 0,
+            libDef: { id: 'ex_treadmill', name: 'Tapis Roulant', trackingType: 'cardio' },
+            pastWorkouts: [],
+            isHistoryOpen: false,
+            isSetupOpen: false,
+            openSpecialMenuId: null,
+            onToggleHistory: vi.fn(),
+            onToggleSetup: vi.fn(),
+            onRemoveExercise: vi.fn(),
+            onUpdateSetupNote: vi.fn(),
+            onUpdateSessionNote: vi.fn(),
+            onUpdateTechnicalStandard: vi.fn(),
+            onAddSet: vi.fn(),
+            onRemoveSet: vi.fn(),
+            onUpdateSet: vi.fn(),
+            onAddSpecialSet: vi.fn(),
+            onUpdateSpecialSet: vi.fn(),
+            onRemoveSpecialSet: vi.fn(),
+            onUpdateSetTarget: vi.fn(),
+            onToggleSpecialMenu: vi.fn(),
+        };
+        const { container } = render(
+            <>
+                <SessionExerciseAccordion {...props} isCurrent initiallyExpanded />
+                <SessionExerciseAccordion
+                    {...props}
+                    exItem={{ ...props.exItem, sets: [{ id: 'set-two', kg: '', reps: '' }] }}
+                    exIndex={1}
+                    isCurrent={false}
+                    initiallyExpanded
+                />
+            </>
+        );
+
+        const shells = [...container.querySelectorAll('.session-exercise-shell')];
+        expect(shells).toHaveLength(2);
+        for (const [index, shell] of shells.entries()) {
+            const identity = `ex_treadmill_${index}`;
+            const summary = shell.querySelector('.session-exercise-summary');
+            const body = shell.querySelector('.session-exercise-shell-body');
+            expect(summary?.getAttribute('aria-controls')).toBe(`session-exercise-body-${identity}`);
+            expect(body?.id).toBe(`session-exercise-body-${identity}`);
+            for (const field of ['time', 'distance', 'speed', 'incline', 'kcal']) {
+                const id = `cardio-${field}-${identity}`;
+                const input = shell.querySelector(`input[id="${id}"]`);
+                const label = shell.querySelector(`label[for="${id}"]`) as HTMLLabelElement | null;
+                expect(input).not.toBeNull();
+                expect(label?.control).toBe(input);
+                expect(container.querySelectorAll(`[id="${id}"]`)).toHaveLength(1);
+            }
+            const noteId = `session-note-${identity}`;
+            expect(shell.querySelector(`textarea[id="${noteId}"]`)).not.toBeNull();
+            expect(container.querySelectorAll(`[id="${noteId}"]`)).toHaveLength(1);
         }
     });
 

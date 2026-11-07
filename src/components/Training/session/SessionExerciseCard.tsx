@@ -274,9 +274,9 @@ const SessionExerciseCardInner: React.FC<SessionExerciseCardProps> = ({
                 <div style={{ background: 'var(--surface-light)', padding: '15px', borderRadius: '12px', border: '1px solid var(--glass-border)', marginTop: '10px' }}>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '10px' }}>
                         <div>
-                            <label className="text-muted text-xs mb-4 block" htmlFor={`cardio-time-${exItem.id ?? exItem.exId}`}>Durata (min)</label>
+                            <label className="text-muted text-xs mb-4 block" htmlFor={`cardio-time-${exerciseInstanceId}`}>Durata (min)</label>
                             <BufferedInput 
-                                id={`cardio-time-${exItem.id ?? exItem.exId}`}
+                                id={`cardio-time-${exerciseInstanceId}`}
                                 type="text" 
                                 inputMode="decimal"
                                 value={exItem.sets[0]?.time || ''} 
@@ -287,9 +287,9 @@ const SessionExerciseCardInner: React.FC<SessionExerciseCardProps> = ({
                             />
                         </div>
                         <div>
-                            <label className="text-muted text-xs mb-4 block" htmlFor={`cardio-distance-${exItem.id ?? exItem.exId}`}>Distanza (km)</label>
+                            <label className="text-muted text-xs mb-4 block" htmlFor={`cardio-distance-${exerciseInstanceId}`}>Distanza (km)</label>
                             <BufferedInput 
-                                id={`cardio-distance-${exItem.id ?? exItem.exId}`}
+                                id={`cardio-distance-${exerciseInstanceId}`}
                                 type="text" 
                                 inputMode="decimal"
                                 value={exItem.sets[0]?.distance || ''} 
@@ -300,9 +300,9 @@ const SessionExerciseCardInner: React.FC<SessionExerciseCardProps> = ({
                             />
                         </div>
                         <div>
-                            <label className="text-muted text-xs mb-4 block" htmlFor={`cardio-speed-${exItem.id ?? exItem.exId}`}>Velocità media</label>
+                            <label className="text-muted text-xs mb-4 block" htmlFor={`cardio-speed-${exerciseInstanceId}`}>Velocità media</label>
                             <BufferedInput 
-                                id={`cardio-speed-${exItem.id ?? exItem.exId}`}
+                                id={`cardio-speed-${exerciseInstanceId}`}
                                 type="text" 
                                 inputMode="decimal"
                                 value={exItem.sets[0]?.speed || ''} 
@@ -313,9 +313,9 @@ const SessionExerciseCardInner: React.FC<SessionExerciseCardProps> = ({
                             />
                         </div>
                         <div>
-                            <label className="text-muted text-xs mb-4 block" htmlFor={`cardio-incline-${exItem.id ?? exItem.exId}`}>Inclinazione (%)</label>
+                            <label className="text-muted text-xs mb-4 block" htmlFor={`cardio-incline-${exerciseInstanceId}`}>Inclinazione (%)</label>
                             <BufferedInput 
-                                id={`cardio-incline-${exItem.id ?? exItem.exId}`}
+                                id={`cardio-incline-${exerciseInstanceId}`}
                                 type="text" 
                                 inputMode="decimal"
                                 value={exItem.sets[0]?.incline || ''} 
@@ -327,9 +327,9 @@ const SessionExerciseCardInner: React.FC<SessionExerciseCardProps> = ({
                         </div>
                     </div>
                     <div>
-                        <label className="text-muted text-xs mb-4 block" htmlFor={`cardio-kcal-${exItem.id ?? exItem.exId}`}>Kcal stimate</label>
+                        <label className="text-muted text-xs mb-4 block" htmlFor={`cardio-kcal-${exerciseInstanceId}`}>Kcal stimate</label>
                         <BufferedInput 
-                            id={`cardio-kcal-${exItem.id ?? exItem.exId}`}
+                            id={`cardio-kcal-${exerciseInstanceId}`}
                             type="text" 
                             inputMode="decimal"
                             value={exItem.sets[0]?.kcal || ''} 
@@ -395,7 +395,7 @@ const SessionExerciseCardInner: React.FC<SessionExerciseCardProps> = ({
                 <span aria-hidden="true">{isNextNoteOpen ? '−' : '+'}</span>
             </button>
             <BufferedTextarea
-                id={`session-note-${exItem.id ?? exItem.exId}`}
+                id={`session-note-${exerciseInstanceId}`}
                 placeholder="Note per la prossima volta (dolori, feedback)..."
                 value={exItem.sessionNote || ''}
                 onChange={val => onUpdateSessionNote(exIndex, val)}

@@ -8,26 +8,7 @@ const edit = (docPath: string, path: string[]): SemanticOperation => ({
     docPath, path, actorId: 'replica', seq: 8, clock, isDelete: false, value: path.join('/'),
 });
 
-// Identical to the previous production implementation: a trusted reference oracle.
-function previous(
-    base: Map<string, DocumentData>, desired: Map<string, DocumentData>, input: SemanticOperation[],
-): SemanticOperation[] {
-    let result = [...input];
-    const paths = new Set([...base.keys(), ...desired.keys()]);
-    for (const docPath of paths) {
-        if (!docPath.startsWith('history_months/') && !docPath.startsWith('nutrition_months/')) continue;
-        const source = base.get(docPath) ?? {};
-        const target = desired.get(docPath) ?? {};
-        for (const id of Object.keys(source)) {
-            if (Object.hasOwn(target, id)) continue;
-            result = result.filter(op => !(op.docPath === docPath && op.path[0] === id));
-            result.push({ docPath, path: [id], isDelete: true, actorId: 'replica', seq: 8, clock });
-        }
-    }
-    return result;
-}
-
-describe('monthly tombstone assembly equivalence', () => {
+describe('monthly tombstone assembly invariants', () => {
     it('preserves order and replaces all child operations of removed entities', () => {
         const base = new Map<string, DocumentData>([
             ['history_months/2026-10', { workoutA: { sets: 3 }, workoutB: { sets: 2 } }],
@@ -49,16 +30,19 @@ describe('monthly tombstone assembly equivalence', () => {
         ];
         const snapshot = structuredClone(original);
         const actual = enforceMonthlyEntityTombstones(base, desired, original, 'replica', 8, clock);
-        expect(actual).toEqual(previous(base, desired, original));
-        expect(actual.slice(0, 3)).toEqual([original[1], original[3], original[5]]);
-        expect(actual.slice(3).map(op => op.path)).toEqual([['workoutA'], ['dayA']]);
+        expect(actual).toEqual([
+            original[1], original[3], original[5],
+            { docPath: 'history_months/2026-10', path: ['workoutA'], isDelete: true, actorId: 'replica', seq: 8, clock },
+            { docPath: 'nutrition_months/2026-10', path: ['dayA'], isDelete: true, actorId: 'replica', seq: 8, clock },
+        ]);
         expect(original).toEqual(snapshot);
     });
 
-    it('matches the prior implementation on 24 shards and thousands of mixed operations', () => {
+    it('preserves surviving operations and emits exactly the expected 24-shard tombstones', () => {
         const base = new Map<string, DocumentData>();
         const desired = new Map<string, DocumentData>();
         const input: SemanticOperation[] = [edit('', ['profile', 'height'])];
+        const expectedDeletes: string[] = [];
         for (let month = 1; month <= 12; month++) {
             for (const kind of ['history', 'nutrition']) {
                 const path = `${kind}_months/2026-${String(month).padStart(2, '0')}`;
@@ -68,6 +52,7 @@ describe('monthly tombstone assembly equivalence', () => {
                     const key = 'entity-' + n;
                     source[key] = { amount: n };
                     if (n % 4 === 0) target[key] = { amount: n + 1 };
+                    else expectedDeletes.push(`${path}/${key}`);
                     input.push(edit(path, [key, 'amount']), edit(path, [key, 'extra']));
                 }
                 base.set(path, source);
@@ -76,8 +61,15 @@ describe('monthly tombstone assembly equivalence', () => {
         }
         const snapshot = structuredClone(input);
         const actual = enforceMonthlyEntityTombstones(base, desired, input, 'replica', 8, clock);
-        expect(actual).toEqual(previous(base, desired, input));
-        expect(actual.filter(op => op.isDelete)).toHaveLength(24 * 48);
+        const surviving = input.filter(op =>
+            op.docPath === '' || Number(op.path[0].slice('entity-'.length)) % 4 === 0,
+        );
+        expect(actual.slice(0, surviving.length)).toEqual(surviving);
+        const deleted = actual.slice(surviving.length);
+        expect(deleted.map(op => `${op.docPath}/${op.path.join('/')}`)).toEqual(expectedDeletes);
+        expect(deleted).toHaveLength(24 * 48);
+        expect(deleted.every(op => op.isDelete && op.actorId === 'replica'
+            && op.seq === 8 && op.clock === clock && op.path.length === 1)).toBe(true);
         expect(input).toEqual(snapshot);
     });
 
