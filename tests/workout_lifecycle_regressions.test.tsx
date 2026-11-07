@@ -67,6 +67,44 @@ describe('Workout lifecycle durable recovery regressions', () => {
     });
     afterEach(() => vi.restoreAllMocks());
 
+    it('serializes overlapping workout starts across mounted hooks and unlocks after failure', async () => {
+        const prepared = workout('concurrent-start');
+        useAppStore.setState({ userData: userData({ activeWorkout: prepared }), localWorkout: prepared });
+        const originalFlush = useAppStore.getState().flushPendingSyncs;
+        let releaseFirst!: () => void;
+        const flush = vi.fn()
+            .mockImplementationOnce(() => new Promise<void>(resolve => { releaseFirst = resolve; }))
+            .mockResolvedValue(undefined);
+        vi.mocked(useDialogStore.getState().showAlert).mockResolvedValue(undefined);
+        useAppStore.setState({ flushPendingSyncs: flush });
+        try {
+            const first = renderHook(() => useWorkoutSession());
+            const second = renderHook(() => useWorkoutSession());
+            let inFlight!: Promise<boolean>;
+            act(() => { inFlight = first.result.current.confirmWorkoutStart(); });
+            expect(flush).toHaveBeenCalledOnce();
+
+            await act(async () => {
+                expect(await second.result.current.confirmWorkoutStart()).toBe(false);
+            });
+            expect(flush).toHaveBeenCalledOnce();
+
+            await act(async () => {
+                releaseFirst();
+                // No locally committed preparation exists, so the first start must fail closed.
+                expect(await inFlight).toBe(false);
+            });
+            expect(flush).toHaveBeenCalledOnce();
+
+            await act(async () => {
+                expect(await second.result.current.confirmWorkoutStart()).toBe(false);
+            });
+            expect(flush).toHaveBeenCalledTimes(2);
+        } finally {
+            useAppStore.setState({ flushPendingSyncs: originalFlush });
+        }
+    });
+
     it('blocks pre-launch plaintext timer at vault readiness without deleting its only copy', async () => {
         const key = deviceKey('timer', owner);
         const original = '{bad-json';
