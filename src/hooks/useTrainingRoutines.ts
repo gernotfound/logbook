@@ -49,7 +49,7 @@ export function useTrainingRoutines() {
     }, [draftOwner, draftSession, initialRecovery.error, localPersistenceBlocked]);
     useEffect(() => {
         if (initialRecovery.error) blockRoutineDraft(initialRecovery.error, draftSession);
-    }, [initialRecovery.error]);
+    }, [initialRecovery.error, draftSession]);
     const [routineName, setRoutineName] = useState(() => initialDraft?.name || '');
     const [editingRoutineId, setEditingRoutineId] = useState<string | null>(null);
     const [routineExercises, setRoutineExercises] = useState<RoutineExercise[]>(() => Array.isArray(initialDraft?.exercises) ? initialDraft.exercises : []);
