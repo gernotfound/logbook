@@ -252,6 +252,10 @@ it('completes a fenced owner purge when the same owner is still active', async (
 
 it('does not sign out a replacement account while a stale logout preflight is pending', async () => {
     const { logoutAndPurgeAccount } = await import('../../src/lib/db/db_account');
+    const localRepository = await import('../../src/lib/sync/localRepository');
+    // This fixture stores a placeholder IndexedDB value; the logout preflight
+    // is only meant to model an otherwise clean, readable journal.
+    vi.spyOn(localRepository, 'readLocal').mockResolvedValue(undefined);
     let entered!: () => void;
     let release!: () => void;
     const enteredPreflight = new Promise<void>(resolve => { entered = resolve; });
