@@ -147,8 +147,8 @@ describe('Workout Improvements & History Edit Suite', () => {
           globalStartTime: 1722500000000,
           globalEndTime: 1722503600000,
           globalDurationStr: '01:00:00',
-          moodRating: 8,
-          pumpRating: 9,
+          moodRating: 4,
+          pumpRating: 5,
           fatigueRating: 4,
           waterLiters: 1.5,
           exercises: [
@@ -232,8 +232,8 @@ describe('Workout Improvements & History Edit Suite', () => {
         date: '2026-08-01',
         globalDurationStr: '00:45:00',
         manualDurationStr: '00:45:00',
-        moodRating: 7,
-        pumpRating: 8,
+        moodRating: 4,
+        pumpRating: 5,
         fatigueRating: 5,
         waterLiters: 2.0,
         exercises: [
