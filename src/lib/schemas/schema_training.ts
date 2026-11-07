@@ -102,7 +102,7 @@ export const WorkoutRoutineSchema = z.object({
 export const RoutineSchema = WorkoutRoutineSchema;
 
 const SessionSetSegmentSchema = z.object({
-    id: z.string().trim().min(1).max(160).refine(id => !id.includes('/'), 'Identificativo segmento non valido'),
+    id: z.string().trim().min(1).max(160).refine(id => normalizeBusinessId(id) !== null, 'Identificativo segmento non valido'),
     kg: safeString(''),
     reps: safeString(''),
     time: safeOptionalString(),
