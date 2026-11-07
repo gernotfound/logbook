@@ -7,6 +7,7 @@ import path from 'path';
 vi.unmock('../src/lib/db');
 import { ConsentedTestDB as DB, openTestCloudBusiness } from './testUtils';
 import { mergeUserData } from '../src/lib/merge';
+import { readLocal } from '../src/lib/sync/localRepository';
 import { DomainParsers } from '../src/lib/schema';
 import { useAppStore } from '../src/store/useAppStore';
 import type { UserData } from '../src/types';
@@ -84,8 +85,8 @@ describe('Empirical Challenger: Architectural Hardening Stress Suite', () => {
         await prepareUnlockedTestArchive('user:test-user-id');
     });
 
-    describe('Scope 1: Save Amnesia & Offline Diffing Resilience', () => {
-        it('does NOT update lastSavedStateStr when batch.commit fails with timeout, and re-attempts on next save', async () => {
+    describe('Scope 1: Durable journal retry and offline diffing resilience', () => {
+        it('preserves the pending journal after a cloud timeout and retries the identical state', async () => {
             const initialData = {
                 profile: { name: 'Initial Name' },
                 library: [],
@@ -120,10 +121,9 @@ describe('Empirical Challenger: Architectural Hardening Stress Suite', () => {
             mockBatch.set.mockClear();
             mockBatch.commit.mockClear();
 
-            // 3. CRUCIAL TEST FOR SAVE AMNESIA:
-            // If the bug was present, lastSavedStateStr was overwritten with mutatedData1.
-            // Calling saveUserData again with mutatedData1 would produce hasWrites=false (skipped!).
-            // With the fix, lastSavedStateStr remains initialData, so hasWrites=true and commit IS called!
+            // A failed cloud commit must not acknowledge the production journal.
+            // The test adapter's last-saved snapshot is not a production persistence contract.
+            expect((await readLocal('user:test-user-id'))?.pending.length).toBeGreaterThan(0);
             mockBatch.commit.mockResolvedValueOnce(undefined);
             await DB.saveUserData(mutatedData1);
 
@@ -132,13 +132,15 @@ describe('Empirical Challenger: Architectural Hardening Stress Suite', () => {
             mockBatch.set.mockClear();
             mockBatch.commit.mockClear();
 
-            // 4. Subsequent save with same state should now detect no changes (hasWrites=false)
+            expect((await readLocal('user:test-user-id'))?.pending).toEqual([]);
+
+            // An already acknowledged state must not create another cloud write.
             await DB.saveUserData(mutatedData1);
             expect(mockBatch.set).not.toHaveBeenCalled();
             expect(mockBatch.commit).not.toHaveBeenCalled();
         });
 
-        it('does NOT update lastSavedStateStr and re-throws when batch.commit fails with non-offline critical error', async () => {
+        it('returns a rejection without acknowledging a pending journal and allows retry', async () => {
             const state = {
                 profile: { name: 'Permission Denied State' },
                 library: [],
@@ -159,6 +161,7 @@ describe('Empirical Challenger: Architectural Hardening Stress Suite', () => {
 
             const saveRes = await DB.saveUserData(state);
             expect(saveRes).toEqual({ ok: false, status: 'rejected', error: permError });
+            expect((await readLocal('user:test-user-id'))?.pending.length).toBeGreaterThan(0);
             mockBatch.set.mockClear();
             mockBatch.commit.mockClear();
 
@@ -167,6 +170,7 @@ describe('Empirical Challenger: Architectural Hardening Stress Suite', () => {
             await DB.saveUserData(state);
             expect(mockBatch.set.mock.calls.filter((call: any[]) => !String(call[0]?.path || '').includes('sync_control'))).toHaveLength(1);
             expect(mockBatch.commit).toHaveBeenCalledTimes(1);
+            expect((await readLocal('user:test-user-id'))?.pending).toEqual([]);
         });
 
         it('handles monthly history and nutrition diffing correctly after failure recovery', async () => {
