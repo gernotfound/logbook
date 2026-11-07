@@ -70,8 +70,9 @@ export function useNutritionMeals(dateStr?: string) {
 
     const setDayType = async (isOn: boolean | undefined) => {
         if (isDayOn === isOn) return;
+        const session = captureSession();
         try { await persistDayType(isOn); }
-        catch { await showAlert("Errore durante il salvataggio."); }
+        catch { if (isCurrentSession(session)) await showAlert("Errore durante il salvataggio."); }
     };
 
     const toggleDayType = async () => setDayType(isDayOn === true ? false : true);
@@ -104,6 +105,7 @@ export function useNutritionMeals(dateStr?: string) {
     };
 
     const handleQuickAdd = async (quickData: any) => {
+        const session = captureSession();
         const addedItem: LoggedMealItem = {
             id: Logic.generateId('food'),
             name: quickData.name,
@@ -119,18 +121,20 @@ export function useNutritionMeals(dateStr?: string) {
         };
 
         try { await saveMeal(addedItem); }
-        catch { void showAlert("Errore durante il salvataggio dell'alimento."); }
+        catch { if (isCurrentSession(session)) void showAlert("Errore durante il salvataggio dell'alimento."); }
     };
 
     const handleSearch = (query: string) => setSearchQuery(query);
 
     const addFood = async (food: any, mealType: string) => {
+        const session = captureSession();
         try {
             const addedItem = createLoggedMealItem(food, mealType, Logic.generateId('meal'), Date.now());
             await saveMeal(addedItem);
-            setSearchQuery('');
+            // The form may survive Auth A→B→A while this device commit awaits an ACK.
+            if (isCurrentSession(session)) setSearchQuery('');
         } catch {
-            void showAlert("Errore durante il salvataggio dell'alimento.");
+            if (isCurrentSession(session)) void showAlert("Errore durante il salvataggio dell'alimento.");
         }
     };
 
@@ -175,10 +179,11 @@ export function useNutritionMeals(dateStr?: string) {
     const handleDeleteItem = async (mealId: string): Promise<boolean> => removeFood(mealId);
 
     const clearDay = async () => {
+        const session = captureSession();
         try {
             await persistNutrition({ type: 'nutrition-day.delete', date: targetDateStr });
         } catch {
-            void showAlert("Errore durante la pulizia della giornata.");
+            if (isCurrentSession(session)) void showAlert("Errore durante la pulizia della giornata.");
         }
     };
 

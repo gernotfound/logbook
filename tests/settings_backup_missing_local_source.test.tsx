@@ -8,6 +8,7 @@ const fixture = vi.hoisted(() => ({
     readLocal: vi.fn(),
     collectSnapshot: vi.fn(),
     exportBackup: vi.fn(),
+    exportShare: vi.fn(),
     flush: vi.fn(async () => {}),
     hasRecoverySource: vi.fn(),
     current: true,
@@ -39,6 +40,7 @@ vi.mock('../src/store/useAppStore', () => {
 vi.mock('../src/lib/export', () => ({
     Exporter: {
         exportBackupJson: fixture.exportBackup,
+        exportShareJson: fixture.exportShare,
         prepareBackupJsonUrl: vi.fn(),
     },
 }));
@@ -61,6 +63,29 @@ beforeEach(() => {
     useDialogStore.getState().showConfirm = vi.fn(async () => true);
     fixture.readLocal.mockResolvedValue(undefined);
     fixture.exportBackup.mockResolvedValue(true);
+    fixture.exportShare.mockReset().mockResolvedValue({ cyclesCount: 1, routinesCount: 2, libraryCount: 3 });
+});
+
+describe('owner-scoped asynchronous share export feedback', () => {
+    it.each(['success', 'failure'] as const)(
+        'does not display previous account %s feedback in a replaced session', async outcome => {
+            fixture.state.userData = empty();
+            fixture.state.dataOwner = fixture.owner;
+            let settle!: () => void;
+            fixture.exportShare.mockImplementationOnce(() => new Promise((resolve, reject) => {
+                settle = () => outcome === 'success'
+                    ? resolve({ cyclesCount: 1, routinesCount: 2, libraryCount: 3 })
+                    : reject(new Error('old account export failed'));
+            }));
+            const { result } = renderHook(() => useSettingsTransfers({ currentUser: owner, isGuest: false }));
+            let exporting!: Promise<void>;
+            act(() => { exporting = result.current.handleExportShare(); });
+            await vi.waitFor(() => expect(fixture.exportShare).toHaveBeenCalledOnce());
+            fixture.current = false;
+            await act(async () => { settle(); await exporting; });
+            expect(useDialogStore.getState().showAlert).not.toHaveBeenCalled();
+        },
+    );
 });
 
 describe('quarantined workout device backup', () => {

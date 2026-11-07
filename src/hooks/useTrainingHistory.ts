@@ -24,7 +24,7 @@ export function useTrainingHistory() {
             if (!result.ok && result.status !== 'local-pending') throw new Error('Cancellazione non confermata');
         } catch (error) {
             console.error('Eliminazione storico non completata:', error);
-            await showAlert("Errore durante l'eliminazione dell'allenamento.");
+            if (isCurrentSession(session)) await showAlert("Errore durante l'eliminazione dell'allenamento.");
             return;
         }
         if (!isCurrentSession(session)) return;
@@ -39,7 +39,7 @@ export function useTrainingHistory() {
             }
         } catch (error) {
             console.error('Allenamento eliminato, ma ripristino sessione non completato:', error);
-            await showAlert('Allenamento eliminato dallo storico, ma non è stato possibile ripristinare la sessione sospesa. Riapri TheLogBook per recuperarla.');
+            if (isCurrentSession(session)) await showAlert('Allenamento eliminato dallo storico, ma non è stato possibile ripristinare la sessione sospesa. Riapri TheLogBook per recuperarla.');
         }
     };
 
