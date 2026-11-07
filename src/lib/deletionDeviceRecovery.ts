@@ -3,6 +3,7 @@ import type { User } from 'firebase/auth';
 import { auth, ensureAppCheck } from './firebase';
 import { readBrowserValueStrict, removeBrowserValue, writeBrowserJson } from './sync/browserStorage';
 import { assertDeletionDeadlineActive, withDeletionDeadline } from './deletionDeadline';
+import { captureSession, isCurrentSession } from './sync/session';
 import { DeletionDeviceOperationError, deviceOperationFailure, type RecoveryPhase } from './deletionRecoveryDiagnostics';
 
 const KEY='logbook_deletion_recovery_devices_v1';
@@ -28,15 +29,21 @@ export class DeletionRecoveryCredentialCapacityError extends Error {
 function randomToken():string{const bytes=crypto.getRandomValues(new Uint8Array(32));let s='';for(const b of bytes)s+=String.fromCharCode(b);return btoa(s).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/g,'');}
 function readAll():Credential[]{
  const raw=readBrowserValueStrict(KEY);
- if(!raw)return[];
+ // Only an absent key means no proofs; an unreadable empty value is corrupt.
+ if(raw===null)return[];
  let parsed:unknown;
  try{parsed=JSON.parse(raw);}catch(error){throw new DeletionRecoveryCredentialCorruptError(error);}
  if(!Array.isArray(parsed))throw new DeletionRecoveryCredentialCorruptError();
  const credentials:Credential[]=[];
+ const seenOwners=new Set<string>();
  for(const item of parsed){
    if(!item||typeof item!=='object')throw new DeletionRecoveryCredentialCorruptError();
    const candidate=item as {uid?:unknown;token?:unknown};
    if(typeof candidate.uid!=='string'||candidate.uid.length===0||typeof candidate.token!=='string'||!/^[A-Za-z0-9_-]{43}$/.test(candidate.token))throw new DeletionRecoveryCredentialCorruptError();
+   // Each owner has one durable recovery witness. Duplicate owner entries
+   // are ambiguous and must not trigger repeated or conflicting finalization.
+   if(seenOwners.has(candidate.uid))throw new DeletionRecoveryCredentialCorruptError();
+   seenOwners.add(candidate.uid);
    credentials.push({uid:candidate.uid,token:candidate.token});
  }
  return credentials;
@@ -47,10 +54,10 @@ export function removeDeletionRecoveryCredential(uid:string):void{writeAll(readA
 // Serialize new proofs across concurrent account bootstraps, including other
 // tabs where Web Locks are supported. The lock is released before HTTP work.
 let pendingCredentialWrite:Promise<void>=Promise.resolve();
-function getOrCreateCredential(uid:string):Promise<Credential>{
+function getOrCreateCredential(uid:string, assertCurrent:()=>void):Promise<Credential>{
  const create=async():Promise<Credential>=>{
    const action=()=>{
-     if(auth.currentUser?.uid!==uid)throw new DeletionDeviceOperationError('device-registration','auth-token','stale-session');
+     assertCurrent();
      const all=readAll();
      const existing=all.find(x=>x.uid===uid);
      if(existing)return existing;
@@ -83,17 +90,24 @@ async function appToken(signal:AbortSignal){
 export async function registerDeletionRecoveryDevice(user:User):Promise<void>{
  if(!API)throw new DeletionDeviceOperationError('device-registration','http','configuration');
  if(!navigator.onLine)throw new DeletionDeviceOperationError('device-registration','http','transport');
- const cred=await getOrCreateCredential(user.uid);
+ const session=captureSession();
+ const assertCurrent=()=>{
+   if(auth.currentUser!==user || !isCurrentSession(session)){
+     throw new DeletionDeviceOperationError('device-registration','auth-token','stale-session');
+   }
+ };
+ assertCurrent();
+ const cred=await getOrCreateCredential(user.uid, assertCurrent);
  let phase:RecoveryPhase='auth-token';
  try{
    await withDeletionDeadline(async signal=>{
      const idToken=await user.getIdToken();
      assertDeletionDeadlineActive(signal);
-     if(auth.currentUser?.uid!==user.uid)throw new DeletionDeviceOperationError('device-registration','auth-token','stale-session');
+     assertCurrent();
      phase='app-check';
      const check=await appToken(signal);
      assertDeletionDeadlineActive(signal);
-     if(auth.currentUser?.uid!==user.uid)throw new DeletionDeviceOperationError('device-registration','auth-token','stale-session');
+     assertCurrent();
      phase='http';
      const response=await fetch(API+'/api/account-deletion-device',{method:'POST',headers:{'content-type':'application/json',authorization:'Bearer '+idToken,'x-firebase-appcheck':check},body:JSON.stringify({deviceToken:cred.token}),cache:'no-store',signal});
      assertDeletionDeadlineActive(signal);
@@ -106,7 +120,7 @@ export async function registerDeletionRecoveryDevice(user:User):Promise<void>{
        || (body as {registered?:unknown}).registered!==true){
        throw new DeletionDeviceOperationError('device-registration','server-status','invalid-response');
      }
-     if(auth.currentUser?.uid!==user.uid)throw new DeletionDeviceOperationError('device-registration','auth-token','stale-session');
+     assertCurrent();
    },RECOVERY_REQUEST_TIMEOUT_MS);
  }catch(error){
    throw deviceOperationFailure('device-registration',phase,error);
@@ -120,9 +134,9 @@ export function watchDeletionRecoveryDeviceRegistration(
 ):()=>void{
  let disposed=false;let running=false;let registered=false;
  const attempt=async()=>{
-   if(disposed||running||registered||!API||!navigator.onLine||auth.currentUser?.uid!==user.uid)return;
+   if(disposed||running||registered||!API||!navigator.onLine||auth.currentUser!==user)return;
    running=true;
-   try{await registerDeletionRecoveryDevice(user);if(!disposed&&auth.currentUser?.uid===user.uid){registered=true;onSuccess();}}catch(error){if(!disposed&&auth.currentUser?.uid===user.uid)onError(error);}finally{running=false;}
+   try{await registerDeletionRecoveryDevice(user);if(!disposed&&auth.currentUser===user){registered=true;onSuccess();}}catch(error){if(!disposed&&auth.currentUser===user)onError(error);}finally{running=false;}
  };
  const handleOnline=()=>{void attempt();};
  const handleVisibility=()=>{if(document.visibilityState==='visible')void attempt();};

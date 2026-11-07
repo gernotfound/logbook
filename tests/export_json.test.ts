@@ -7,6 +7,30 @@ import { CURRENT_BACKUP_SCHEMA, CURRENT_DATA_SCHEMA, CURRENT_SYNC_PROTOCOL } fro
 afterEach(() => vi.restoreAllMocks());
 
 describe('JSON Export/Import Logic', () => {
+    it('keeps the native download blob URL alive past the anchor click', async () => {
+        vi.useFakeTimers();
+        try {
+            const url = 'blob:logbook-export-test';
+            const create = vi.spyOn(URL, 'createObjectURL').mockReturnValue(url);
+            const revoke = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
+            const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (this: HTMLAnchorElement) {
+                expect(this.href).toContain(url);
+                expect(revoke).not.toHaveBeenCalled();
+            });
+
+            const saved = await Exporter.downloadFile('backup.json', '{"valid":true}', 'application/json');
+            expect(saved).toBe(true);
+            expect(click).toHaveBeenCalledOnce();
+            expect(create).toHaveBeenCalledOnce();
+            expect(revoke).not.toHaveBeenCalled();
+
+            await vi.advanceTimersByTimeAsync(1000);
+            expect(revoke).toHaveBeenCalledExactlyOnceWith(url);
+        } finally {
+            vi.useRealTimers();
+        }
+    });
+
     it('exportShareJson uses the current versioned envelope and contains only shared fields', async () => {
         const mockUserData: any = {
             profile: { dob: '2000-01-01' },

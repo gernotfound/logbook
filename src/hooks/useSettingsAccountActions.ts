@@ -140,7 +140,9 @@ export function useSettingsAccountActions({ currentUser, isGuest, logout }: Acco
     };
     const { erasingHealthData, handleDeleteHealthData } = useSettingsHealthDataDeletion(beginHealthDeletion, endHealthDeletion);
     let pendingAccountDeletion = false;
-    try { pendingAccountDeletion = isAccountDeletionPending(captureSession().owner); }
+    try {
+        pendingAccountDeletion = isAccountDeletionPending(currentUser ? `user:${currentUser.uid}` : captureSession().owner);
+    }
     catch { /* The writer separately refuses an unreadable deletion marker. */ }
 
 
@@ -200,7 +202,10 @@ export function useSettingsAccountActions({ currentUser, isGuest, logout }: Acco
                 cancelPendingSyncs: () => useAppStore.getState().cancelPendingSyncs(),
                 resetStore: () => useAppStore.getState().resetStore(),
             });
-            if (outcome.status === 'pending') await showAlert(outcome.message);
+            if (outcome.status === 'pending' && session && isCurrentSession(session)
+                && (expectedUid === null ? auth.currentUser === null : auth.currentUser?.uid === expectedUid)) {
+                await showAlert(outcome.message);
+            }
         } catch (error) {
             if (isSensitiveReauthCancellation(error)) return;
             const code = (error as { code?: unknown } | null)?.code;
@@ -208,8 +213,9 @@ export function useSettingsAccountActions({ currentUser, isGuest, logout }: Acco
             const message = isCredentialMistake
                 ? 'Password attuale non corretta.'
                 : error instanceof Error ? error.message : 'Cancellazione non riuscita.';
-            // A-B-A logins to the same UID still invalidate the former deletion attempt.
-            const canShow = session === null || isCurrentSession(session);
+            // The same owner after A→B→A is not the same authenticated session.
+            const canShow = session === null || (isCurrentSession(session)
+                && (expectedUid === null ? auth.currentUser === null : auth.currentUser?.uid === expectedUid));
             if (canShow) void showAlert(message);
         } finally {
             deletionBusy.current = null;

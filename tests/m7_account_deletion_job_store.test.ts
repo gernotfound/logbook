@@ -148,6 +148,12 @@ import {
 } from '../server/accountDeletion/jobStore';
 import { ACCOUNT_DELETION_COMPLETED_RETENTION_MS } from '../server/accountDeletion/retention';
 
+function stageDeletionJob(uid: string) {
+  const path = 'account_deletions/' + uid;
+  state.docs.add(path);
+  state.jobData.set(path, { uid, status: 'requested', attempts: 0 });
+}
+
 describe('M7 native deletion job store', () => {
   beforeEach(() => {
     state.docs.clear();
@@ -205,8 +211,45 @@ describe('M7 native deletion job store', () => {
     expect(state.jobUpdates).toHaveLength(0);
   });
 
+  it('refuses an account deletion lease when the persisted job belongs to a different UID', async () => {
+    stageDeletionJob('u');
+    state.jobData.set('account_deletions/u', { uid: 'another-owner', status: 'requested', attempts: 0 });
+    state.docs.add('users/u/history_months/survivor');
+    state.docs.add('user_data_keys/u');
+    await expect(acquireDeletionLease('u', 'worker', Date.now() + 60_000))
+      .rejects.toBeInstanceOf(NonRetryableDeletionError);
+    expect(state.jobUpdates).toHaveLength(0);
+    expect(state.docs.has('users/u/history_months/survivor')).toBe(true);
+    expect(state.docs.has('user_data_keys/u')).toBe(true);
+    expect(state.revokeRefreshTokens).not.toHaveBeenCalled();
+    expect(state.deleteUser).not.toHaveBeenCalled();
+  });
+
+  it('fences every destructive transaction if the job owner changes after lease acquisition', async () => {
+    stageDeletionJob('u');
+    state.docs.add('users/u/history_months/survivor');
+    state.docs.add('user_data_keys/u');
+    expect(await acquireDeletionLease('u', 'worker', Date.now() + 60_000)).toBe(true);
+    const job = state.jobData.get('account_deletions/u');
+    state.jobData.set('account_deletions/u', { ...job, uid: 'another-owner' });
+    const writesBefore = state.jobUpdates.length;
+
+    await expect(deletePrivateCollectionPage('u', 'history_months', 1, 'worker'))
+      .rejects.toBeInstanceOf(DeletionLeaseLostError);
+    await expect(deleteUserRoot('u', 'worker')).rejects.toBeInstanceOf(DeletionLeaseLostError);
+    await expect(deleteAccountKeyAfterVerification('u', 'worker'))
+      .rejects.toBeInstanceOf(DeletionLeaseLostError);
+    await expect(deleteAuthUserLast('u', 'worker')).rejects.toBeInstanceOf(DeletionLeaseLostError);
+    await expect(markDeletionComplete('u', 'worker')).rejects.toBeInstanceOf(DeletionLeaseLostError);
+
+    expect(state.jobUpdates).toHaveLength(writesBefore);
+    expect(state.docs.has('users/u/history_months/survivor')).toBe(true);
+    expect(state.docs.has('user_data_keys/u')).toBe(true);
+    expect(state.deleteUser).not.toHaveBeenCalled();
+  });
+
   it('drains arbitrarily large collections by repeatedly deleting at most 400 documents', async () => {
-    state.docs.add('account_deletions/u');
+    stageDeletionJob('u');
     for (let i = 0; i < 950; i++) state.docs.add(`users/u/history_months/doc-${i}`);
 
     await acquireDeletionLease('u', 'worker-page', Date.now() + 60_000);
@@ -223,7 +266,7 @@ describe('M7 native deletion job store', () => {
   });
 
   it('uses reference-only projections when verifying account deletion residue', async () => {
-    state.docs.add('account_deletions/u');
+    stageDeletionJob('u');
 
     await expect(verifyNoAccountResidue('u')).resolves.toBeUndefined();
 
@@ -234,7 +277,7 @@ describe('M7 native deletion job store', () => {
   });
 
   it('removes the server-only session marker under the deletion lease', async () => {
-    state.docs.add('account_deletions/u');
+    stageDeletionJob('u');
     state.docs.add('session_revocations/u');
     state.docs.add('user_data_keys/u');
     state.docs.add('user_data_keys/another-owner');
@@ -256,7 +299,7 @@ describe('M7 native deletion job store', () => {
   });
 
   it('preserves the account key if an unexpected private collection blocks deletion', async () => {
-    state.docs.add('account_deletions/u');
+    stageDeletionJob('u');
     state.docs.add('user_data_keys/u');
     state.docs.add('users/u/unknown_private/2026-11');
     await acquireDeletionLease('u', 'worker-residue', Date.now() + 60_000);
@@ -266,7 +309,7 @@ describe('M7 native deletion job store', () => {
   });
 
   it('cannot retire a cloud key after losing the deletion lease', async () => {
-    state.docs.add('account_deletions/u');
+    stageDeletionJob('u');
     state.docs.add('user_data_keys/u');
     await acquireDeletionLease('u', 'worker-original', Date.now() + 60_000);
     await expect(deleteAccountKeyAfterVerification('u', 'worker-other')).rejects.toBeInstanceOf(DeletionLeaseLostError);
@@ -274,7 +317,7 @@ describe('M7 native deletion job store', () => {
   });
 
   it('removes account activity under the deletion lease and refuses residual activity', async () => {
-    state.docs.add('account_deletions/u');
+    stageDeletionJob('u');
     state.docs.add('account_activity/u');
     await acquireDeletionLease('u', 'worker-activity', Date.now() + 60_000);
     await deleteUserRoot('u', 'worker-activity');
@@ -305,7 +348,7 @@ describe('M7 native deletion job store', () => {
   });
 
   it('preserves root and consent if another worker owns the lease', async () => {
-    state.docs.add('account_deletions/u');
+    stageDeletionJob('u');
     state.docs.add('users/u');
     state.docs.add('health_consent_withdrawals/u');
     await acquireDeletionLease('u', 'worker-A', Date.now() + 60_000);
@@ -317,7 +360,7 @@ describe('M7 native deletion job store', () => {
   });
 
   it('fails closed when the user root document still exists', async () => {
-    state.docs.add('account_deletions/u');
+    stageDeletionJob('u');
     state.docs.add('users/u');
 
     await expect(verifyNoAccountResidue('u')).rejects.toThrow('User root document still exists after deletion.');
@@ -325,7 +368,7 @@ describe('M7 native deletion job store', () => {
   });
 
   it('fails closed on an unexpected residual private subcollection', async () => {
-    state.docs.add('account_deletions/u');
+    stageDeletionJob('u');
     state.docs.add('users/u/legacy_private/residual');
 
     await expect(verifyNoAccountResidue('u')).rejects.toBeInstanceOf(NonRetryableDeletionError);
@@ -333,7 +376,7 @@ describe('M7 native deletion job store', () => {
   });
 
   it('treats an already-missing Firebase Auth user as idempotent success', async () => {
-    state.docs.add('account_deletions/u');
+    stageDeletionJob('u');
     state.deleteUser.mockRejectedValueOnce(Object.assign(new Error('already deleted'), { code: 'auth/user-not-found' }));
 
     await acquireDeletionLease('u', 'worker-auth', Date.now() + 60_000);
@@ -384,7 +427,7 @@ describe('M7 native deletion job store', () => {
 
 
   it('fences a stale worker out of document deletion, park, failure and completion', async () => {
-    state.docs.add('account_deletions/u');
+    stageDeletionJob('u');
     state.docs.add('users/u/history_months/survivor');
     await acquireDeletionLease('u', 'worker-A', Date.now() + 60_000);
     // Simulate lease expiry and takeover after worker A reads its page.
@@ -406,7 +449,7 @@ describe('M7 native deletion job store', () => {
   });
 
   it('preserves terminal complete state even if an older worker resumes', async () => {
-    state.docs.add('account_deletions/u');
+    stageDeletionJob('u');
     await acquireDeletionLease('u', 'worker-B', Date.now() + 60_000);
     await markDeletionComplete('u', 'worker-B');
     await expect(markDeletionFailed('u', 'root', new Error('late'), true, 'worker-B'))
@@ -417,7 +460,7 @@ describe('M7 native deletion job store', () => {
   });
 
   it('starts the 30-day tombstone retention window only after deletion is complete', async () => {
-    state.docs.add('account_deletions/u');
+    stageDeletionJob('u');
     await acquireDeletionLease('u', 'worker-complete', Date.now() + 60_000);
     await markDeletionComplete('u', 'worker-complete');
 

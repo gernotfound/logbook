@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useAppStore } from '../store/useAppStore';
 import { useDialogStore } from '../store/useDialogStore';
 import { Logic } from '../lib/logic';
+import { normalizeBusinessId } from '../lib/businessIdentity';
 import { readWorkoutRecoveryDraft, writeWorkoutRecoveryDraft } from '../lib/sync/workoutRecoveryDraft';
 import { captureSession, isCurrentSession } from '../lib/sync/session';
 import type { Exercise, PlannedSetTechnique, ProgressionContract, RoutineExercise, SetTechnique, WorkoutRoutine } from '../types';
@@ -119,6 +120,22 @@ export function useTrainingRoutines() {
         if (!routineName.trim()) {
             await showAlert("Inserisci il nome della scheda");
             return false;
+        }
+
+        const seenExerciseIds = new Set<string>();
+        for (const exercise of routineExercises) {
+            const id = normalizeBusinessId(exercise.exId);
+            if (!id) {
+                await showAlert('La scheda contiene un esercizio con identificativo non valido.');
+                return false;
+            }
+            if (seenExerciseIds.has(id)) {
+                // Persistence identifies a routine exercise by exId. A duplicate
+                // would be rejected by the reducer, not saved as a second instance.
+                await showAlert('Lo stesso esercizio è presente due volte nella scheda. Rimuovi una voce prima di salvare.');
+                return false;
+            }
+            seenExerciseIds.add(id);
         }
 
         if (routineExercises.some(ex => {

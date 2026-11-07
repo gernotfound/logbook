@@ -34,7 +34,7 @@ export function computeWeeksFromDates(startIso: string, endIso: string): number 
         if (!isValid(start) || !isValid(end)) return 1;
         const diffDays = differenceInCalendarDays(startOfDay(end), startOfDay(start));
         if (diffDays < 0) return 1;
-        return Math.max(1, Math.round((diffDays + 1) / 7));
+        return Math.max(1, Math.ceil((diffDays + 1) / 7));
     } catch {
         return 1;
     }
