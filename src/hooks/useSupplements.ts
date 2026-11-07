@@ -1,4 +1,5 @@
 import { useAppStore } from '../store/useAppStore';
+import { captureSession, isCurrentSession } from '../lib/sync/session';
 import { dispatchDurableOperation } from '../lib/sync/dispatchDurableOperation';
 import { useDialogStore } from '../store/useDialogStore';
 import { Logic } from '../lib/logic';
@@ -25,10 +26,11 @@ export function useSupplements(dateStr?: string) {
     };
 
     const deleteSupplementFromLibrary = async (id: string) => {
+        const session = captureSession();
         try {
             await persistSupplement({ type: 'supplement.delete', id });
         } catch {
-            void showAlert("Errore durante l'eliminazione dell'integratore.");
+            if (isCurrentSession(session)) void showAlert("Errore durante l'eliminazione dell'integratore.");
         }
     };
 
@@ -43,10 +45,11 @@ export function useSupplements(dateStr?: string) {
     };
 
     const removeIntake = async (intakeId: string) => {
+        const session = captureSession();
         try {
             await persistSupplement({ type: 'supplement-intake.delete', date: targetDateStr, intakeId });
         } catch {
-            void showAlert("Errore durante la rimozione dell'assunzione.");
+            if (isCurrentSession(session)) void showAlert("Errore durante la rimozione dell'assunzione.");
         }
     };
 
