@@ -79,6 +79,8 @@ I domini Firebase predefiniti possono comunque essere presenti nelle configurazi
 
 Firebase Authentication è il provider identità del prodotto. TheLogBook supporta autenticazione Google e credenziali email/password.
 
+**Audit provider, 2026-11-08:** il collegamento email/password su un account esistente con protezione anti-enumerazione usa la REST Identity Toolkit `accounts:signUp` con `idToken`; le chiamate REST scritte direttamente dal client non ereditano l'header App Check delle richieste del Firebase SDK. `src/lib/auth/accountEmail.ts` ora acquisisce l'attestazione standard, la include nell'header `X-Firebase-AppCheck` e interrompe l'invio delle credenziali se manca, con test di session fencing. Il controllo del provider live su questo specifico percorso richiede una prova autenticata non distruttiva; l'enforcement registrato il 2026-10-02 non è una verifica live odierna.
+
 Stato live verificato il 2026-10-02 dopo il cutover:
 
 - Firebase Project e Web App hanno display name **TheLogBook**;
