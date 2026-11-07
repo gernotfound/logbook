@@ -370,6 +370,7 @@ describe('Intelligent Exercise Search & Dropdown Suite (M3: R4 & R6)', () => {
             );
 
             const input = container.querySelector('input') as HTMLInputElement;
+            fireEvent.focus(input);
             input.focus();
             expect(document.activeElement).toBe(input);
             expect(container.querySelector('[role="listbox"]')).not.toBeNull();
