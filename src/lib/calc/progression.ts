@@ -164,7 +164,7 @@ function historicalBodyweight(
     date: string,
     context: ProgressionBodyweightContext,
 ): number | undefined {
-    if (context.explicitBodyweightKg && context.explicitBodyweightKg > 0) return context.explicitBodyweightKg;
+    if (Number.isFinite(context.explicitBodyweightKg) && (context.explicitBodyweightKg ?? 0) > 0) return context.explicitBodyweightKg;
     if (!date || !context.nutrition) return undefined;
     const eligibleDates = Object.keys(context.nutrition)
         .filter(key => /^\d{4}-\d{2}-\d{2}$/.test(key) && key <= date)
@@ -665,13 +665,15 @@ export function computeProgressionEngine(
 ): ProgressionEngineResult {
     const analyses: ExerciseProgressionAnalysis[] = [];
     const orderedHistory = orderedEarlierSessions(history, currentWorkout);
+    // A current-only bodyweight fallback must never be substituted for historical weigh-ins.
+    const historicalContext: ProgressionBodyweightContext = { nutrition: context.nutrition };
     for (const currentExercise of currentWorkout.exercises ?? []) {
         if (!currentExercise?.exId) continue;
         const exercise = libraryMap.get(currentExercise.exId);
         const current = normalizeExerciseExposure(currentWorkout, currentExercise, exercise, context);
         const historical = orderedHistory.flatMap(session => {
             const found = (session.exercises ?? []).find(item => item.exId === currentExercise.exId);
-            return found ? [normalizeExerciseExposure(session, found, exercise, context)] : [];
+            return found ? [normalizeExerciseExposure(session, found, exercise, historicalContext)] : [];
         });
 
         const latestExposure = historical.at(-1);
