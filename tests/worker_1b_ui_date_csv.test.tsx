@@ -8,6 +8,7 @@ import TrainingPlanning from '../src/components/Training/planning/TrainingPlanni
 import { SessionRatings } from '../src/components/Training/session/SessionRatings';
 import { useAppStore } from '../src/store/useAppStore';
 import type { WorkoutSession, UserData } from '../src/types';
+import { createDefaultNutritionPlanning } from '../src/lib/nutritionDefaults';
 import fs from 'fs';
 import path from 'path';
 
@@ -35,11 +36,11 @@ describe('Worker 1B: UI/UX, Date Navigation, CSV Export & PWA Fixes', () => {
                 nutrition: {},
                 customFoods: [],
                 activeWorkout: null,
-                nutritionPlanning: {} as any,
+                nutritionPlanning: createDefaultNutritionPlanning(),
                 supplements: [],
                 activePains: [],
                 catalogOverrides: { exercises: {}, foods: {} }
-            } as UserData,
+            } satisfies UserData,
             localWorkout: null
         });
     });

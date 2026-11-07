@@ -342,7 +342,7 @@ describe('Worker M2: Exercise Library UI & Food Form Real-Time Calorie Calculati
                     docRefs: { exercises: 'exercises_test', foods: 'foods_test' },
                     itemCounts: { exercises: 1, foods: 0 }
                 },
-                exercises: [original as any],
+                exercises: [original],
                 foods: [],
                 cachedAt: Date.now()
             });

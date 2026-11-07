@@ -15,6 +15,7 @@ import { SessionExerciseSchema, UserDataSchema } from '../src/lib/schema';
 import { initializeLocal, readLocal } from '../src/lib/sync/localRepository';
 import { getInitialLocalWorkout } from '../src/store/slices/createWorkoutSlice';
 import type { WorkoutSession, ExerciseLibraryItem } from '../src/types';
+import { createDefaultNutritionPlanning } from '../src/lib/nutritionDefaults';
 
 const mockLibrary: ExerciseLibraryItem[] = [
     {
@@ -59,8 +60,8 @@ describe('Workout Reorder (R2) and Live Sync & Badges (R3) Suite', () => {
         useAppStore.setState({
             dataOwner: captureSession().owner,
             userData: {
-                profile: {} as any,
-                library: mockLibrary as any,
+                profile: {},
+                library: mockLibrary,
                 routines: [
                     {
                         id: 'rot_1',
@@ -76,7 +77,7 @@ describe('Workout Reorder (R2) and Live Sync & Badges (R3) Suite', () => {
                 supplements: [],
                 history: [],
                 nutrition: {},
-                nutritionPlanning: {} as any,
+                nutritionPlanning: createDefaultNutritionPlanning(),
                 activeWorkout: null,
                 activeCycleId: null
             },
