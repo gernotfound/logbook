@@ -1,48 +1,49 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-vi.unmock('../src/lib/db');
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { runTransaction } from 'firebase/firestore';
 import { ConsentedTestDB as DB } from './testUtils';
 import { prepareUnlockedTestArchive } from './secureVaultFixture';
+import { readLocal } from '../src/lib/sync/localRepository';
+import { lockAllVaults } from '../src/lib/sync/secureArchiveSession';
 
-
-
-let mockBatch: any;
-import { writeBatch } from 'firebase/firestore';
+const OWNER = 'user:test-user-id';
+const state = {
+    profile: { height: '180' },
+    history: [],
+    nutrition: {},
+    library: [],
+    routines: [],
+    customFoods: [],
+    supplements: [],
+    activePains: [],
+};
 
 describe('ARCH-02: DB.saveUserData', () => {
     beforeEach(async () => {
         vi.clearAllMocks();
         DB.resetCache();
-        await prepareUnlockedTestArchive('user:test-user-id');
-        
-        mockBatch = {
-            set: vi.fn(),
-            delete: vi.fn(),
-            commit: vi.fn().mockResolvedValue(undefined),
-        };
-        vi.mocked(writeBatch).mockReturnValue(mockBatch);
+        await prepareUnlockedTestArchive(OWNER);
     });
 
-    it('should return { ok: false, status: "rejected" } on permission-denied', async () => {
-        mockBatch.commit.mockRejectedValue({ code: 'permission-denied' });
-        
-        const result = await DB.saveUserData({ profile: { height: '180' }, history: [], library: [], routines: [], customFoods: [], supplements: [], activePains: [] });
-        
-        expect(result).toBeDefined();
-        expect(result?.ok).toBe(false);
-        expect(result?.status).toBe('rejected');
-        expect(mockBatch.set).toHaveBeenCalled();
-        expect(mockBatch.commit).toHaveBeenCalledOnce();
-    });
+    afterEach(() => lockAllVaults());
 
-    it('should handle offline scenario by returning local-pending', async () => {
-        mockBatch.commit.mockRejectedValue({ code: 'unavailable' });
-        
-        const result = await DB.saveUserData({ profile: { height: '180' }, history: [], library: [], routines: [], customFoods: [], supplements: [], activePains: [] });
-        
-        expect(result).toBeDefined();
-        expect(result?.ok).toBe(false);
-        expect(result?.status).toBe('local-pending');
-        expect(mockBatch.set).toHaveBeenCalled();
-        expect(mockBatch.commit).toHaveBeenCalledOnce();
+    it.each([
+        ['permission-denied', 'rejected'],
+        ['unavailable', 'local-pending'],
+    ] as const)('preserves the local journal when a %s transaction returns %s', async (code, status) => {
+        // Cloud persistence uses runTransaction. A writeBatch mock can pass
+        // through the test adapter without exercising the production boundary.
+        vi.mocked(runTransaction).mockRejectedValueOnce({ code });
+
+        const result = await DB.saveUserData(state);
+
+        expect(runTransaction).toHaveBeenCalled();
+        expect(result).toMatchObject({ ok: false, status });
+
+        const durable = await readLocal(OWNER);
+        expect(durable?.data.profile?.height).toBe('180');
+        expect(durable?.pending.length).toBeGreaterThan(0);
+        expect(durable?.pending.every(operation =>
+            operation.actorId === durable.actorId && operation.seq <= durable.actorSeq,
+        )).toBe(true);
     });
 });
