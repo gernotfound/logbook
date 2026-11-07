@@ -70,6 +70,17 @@ describe('nutrition planning edits and session ownership', () => {
         expect(result.current.saveStatus).toBe('unsaved');
     });
 
+    it('preserves an explicitly invalid zero weight and refuses substituted persistence', async () => {
+        const dispatch = vi.fn(async () => ({ ok: true as const, status: 'synced' as const }));
+        useAppStore.setState({ dispatchDomainOperation: dispatch });
+        const { result } = renderHook(() => useNutritionPlanning());
+        act(() => result.current.handleUpdate('weight', 0));
+        expect(result.current.planning.weight).toBe(0);
+        await act(async () => { await result.current.handleSave(); });
+        expect(dispatch).not.toHaveBeenCalled();
+        expect(result.current.saveStatus).toBe('unsaved');
+    });
+
     it('does not stage or submit another owner\'s planning when hydration has not switched', async () => {
         const dispatch = vi.fn(async () => ({ ok: true as const, status: 'synced' as const }));
         useAppStore.setState({ dataOwner: 'user:different', dispatchDomainOperation: dispatch });
