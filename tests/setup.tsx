@@ -278,46 +278,45 @@ HTMLCanvasElement.prototype.getContext = vi.fn().mockImplementation(function (th
 
 // Mock idb-keyval
 export const idbStore: Record<string, any> = {};
-// idb-keyval.update uses an IndexedDB readwrite transaction, not an async
-// read-then-write. Concurrent callbacks for one key must observe prior commits.
-const idbUpdateQueues = new Map<string, Promise<void>>();
+// All idb-keyval writes share an IndexedDB object store. Readwrite
+// transactions serialize even when one writer uses set/del/clear instead of update.
+let idbWriteTail: Promise<void> = Promise.resolve();
+function queueIdbWrite<T>(write: () => T): Promise<T> {
+  const previous = idbWriteTail;
+  let release!: () => void;
+  const pending = new Promise<void>(resolve => { release = resolve; });
+  idbWriteTail = pending;
+  return previous.then(write).finally(() => {
+    release();
+    if (idbWriteTail === pending) idbWriteTail = Promise.resolve();
+  });
+}
 beforeEach(() => {
-  idbUpdateQueues.clear();
+  idbWriteTail = Promise.resolve();
   for (const key of Object.keys(idbStore)) delete idbStore[key];
   localStorageMock.clear();
   sessionStorageMock.clear();
 });
 vi.mock('idb-keyval', () => ({
   get: vi.fn(async (key: string) => Object.prototype.hasOwnProperty.call(idbStore, key) ? idbStore[key] : undefined),
-  set: vi.fn(async (key: string, value: any) => {
+  set: vi.fn((key: string, value: any) => queueIdbWrite(() => {
     idbStore[key] = value;
-  }),
-  update: vi.fn(async (key: string, updater: (value: any) => any) => {
-    const previous = idbUpdateQueues.get(key) ?? Promise.resolve();
-    let release!: () => void;
-    const held = new Promise<void>(resolve => { release = resolve; });
-    idbUpdateQueues.set(key, held);
-    await previous;
-    try {
-      const next = updater(idbStore[key]);
-      // A transaction updater is synchronous; storing a Promise would fail
-      // structured cloning in IndexedDB, not await and commit its resolution.
-      if (next !== null && (typeof next === 'object' || typeof next === 'function')
-        && typeof next.then === 'function') {
-        throw new DOMException('Asynchronous IndexedDB update result', 'DataCloneError');
-      }
-      idbStore[key] = next;
-    } finally {
-      release();
-      if (idbUpdateQueues.get(key) === held) idbUpdateQueues.delete(key);
+  })),
+  update: vi.fn((key: string, updater: (value: any) => any) => queueIdbWrite(() => {
+    const next = updater(idbStore[key]);
+    // The updater executes inside a readwrite transaction: it cannot be async.
+    if (next !== null && (typeof next === 'object' || typeof next === 'function')
+      && typeof next.then === 'function') {
+      throw new DOMException('Asynchronous IndexedDB update result', 'DataCloneError');
     }
-  }),
-  del: vi.fn(async (key: string) => {
+    idbStore[key] = next;
+  })),
+  del: vi.fn((key: string) => queueIdbWrite(() => {
     delete idbStore[key];
-  }),
-  clear: vi.fn(async () => {
+  })),
+  clear: vi.fn(() => queueIdbWrite(() => {
     for (const k in idbStore) delete idbStore[k];
-  }),
+  })),
 }));
 
 // Mock the app's PWA registration boundary
