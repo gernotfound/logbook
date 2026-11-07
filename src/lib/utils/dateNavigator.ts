@@ -6,6 +6,7 @@ export function getDateNavigatorState(date: string, today: string, disabled = fa
     return {
         isToday,
         formattedDate: formatItalianDate(date),
-        nextDisabled: disabled || isToday,
+        // Canonical YYYY-MM-DD dates sort in local calendar order, including across years.
+        nextDisabled: disabled || date >= today,
     };
 }

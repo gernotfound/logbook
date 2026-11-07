@@ -4,10 +4,6 @@ const auth = vi.hoisted(() => ({
   verifyDeletionRequester: vi.fn(),
   verifyRecoveryRegistrationRequester: vi.fn(),
 }));
-const cors = vi.hoisted(() => ({
-  requireAccountDeletionOrigin: vi.fn(),
-  accountDeletionCorsHeaders: vi.fn(() => ({ 'access-control-allow-origin': 'https://thelogbook.web.app' })),
-}));
 const erasure = vi.hoisted(() => ({
   createHealthDataErasureJob: vi.fn(),
   processHealthDataErasure: vi.fn(),
@@ -18,7 +14,6 @@ const erasure = vi.hoisted(() => ({
 vi.mock('../server/accountDeletion/httpAuth', () => ({
   ...auth, RequestAuthError: class RequestAuthError extends Error { constructor(message: string, public status: number = 401) { super(message); } },
 }));
-vi.mock('../server/accountDeletion/cors', () => cors);
 vi.mock('../server/healthConsent/erasure', () => erasure);
 
 import { GET, POST, OPTIONS } from '../api/health-data-erasure';
@@ -69,15 +64,27 @@ describe('data-only erasure trusted API', () => {
     expect(auth.verifyRecoveryRegistrationRequester).toHaveBeenCalledTimes(1);
   });
 
-  it('enforces origin before processing identity or data', async () => {
-    cors.requireAccountDeletionOrigin.mockImplementationOnce(() => { throw new Error('Invalid origin'); });
-    expect((await POST(request('POST'))).status).toBe(503);
+  it('rejects disallowed origins through the real CORS boundary before authenticating or reading data', async () => {
+    const untrustedRequest = (method: string) => new Request('https://backend.example/api/health-data-erasure', {
+      method, headers: { origin: 'https://attacker.example' },
+    });
+    for (const handler of [POST, GET, OPTIONS]) {
+      const method = handler === POST ? 'POST' : handler === GET ? 'GET' : 'OPTIONS';
+      const response = await handler(untrustedRequest(method));
+      expect(response.status).toBe(403);
+      expect(response.headers.get('access-control-allow-origin')).toBeNull();
+    }
     expect(auth.verifyDeletionRequester).not.toHaveBeenCalled();
+    expect(auth.verifyRecoveryRegistrationRequester).not.toHaveBeenCalled();
     expect(erasure.createHealthDataErasureJob).not.toHaveBeenCalled();
+    expect(erasure.readHealthDataErasureStatus).not.toHaveBeenCalled();
   });
 
-  it('never exposes erasure actions via OPTIONS preflight', async () => {
-    expect((await OPTIONS(request('OPTIONS'))).status).toBe(204);
+  it('advertises real CORS headers for the permitted preflight without invoking erasure', async () => {
+    const response = await OPTIONS(request('OPTIONS'));
+    expect(response.status).toBe(204);
+    expect(response.headers.get('access-control-allow-origin')).toBe('https://thelogbook.web.app');
+    expect(response.headers.get('access-control-allow-headers')).toContain('x-firebase-appcheck');
     expect(erasure.createHealthDataErasureJob).not.toHaveBeenCalled();
   });
 });
