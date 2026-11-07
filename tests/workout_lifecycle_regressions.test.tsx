@@ -714,6 +714,39 @@ describe('Workout lifecycle durable recovery regressions', () => {
         }
     });
 
+    it('does not show an obsolete rejected history commit alert after Auth A→B→A', async () => {
+        const historical = workout('history-old-session', true);
+        const editor: WorkoutSession & { id: string } = {
+            ...historical, isEditingHistory: true, originalHistoryId: historical.id,
+        };
+        const previousDispatch = useAppStore.getState().dispatchDomainOperation;
+        let complete!: (result: { ok: false; status: 'failed'; error: Error }) => void;
+        const mockedDispatch = vi.fn(() => new Promise<{ ok: false; status: 'failed'; error: Error }>(
+            resolve => { complete = resolve; },
+        ));
+        useAppStore.setState({
+            userData: userData({ history: [historical] }), localWorkout: editor,
+            dispatchDomainOperation: mockedDispatch,
+        });
+        const alert = vi.mocked(useDialogStore.getState().showAlert);
+        alert.mockClear();
+        try {
+            const { result } = renderHook(() => useWorkoutSession());
+            let saving!: Promise<boolean>;
+            act(() => { saving = result.current.saveHistoryEdit(); });
+            expect(mockedDispatch).toHaveBeenCalledOnce();
+            act(() => { invalidateSession(); invalidateSession(); });
+            await act(async () => {
+                complete({ ok: false, status: 'failed', error: new Error('obsolete write rejection') });
+                expect(await saving).toBe(false);
+            });
+            expect(alert).not.toHaveBeenCalled();
+            expect(useAppStore.getState().localWorkout?.id).toBe(editor.id);
+        } finally {
+            useAppStore.setState({ dispatchDomainOperation: previousDispatch });
+        }
+    });
+
     it('serializes overlapping history saves across separately mounted workout hooks', async () => {
         const historical = workout('shared-history-save', true);
         const editor: WorkoutSession & { id: string } = {
