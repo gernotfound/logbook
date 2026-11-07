@@ -170,9 +170,10 @@ describe('LoginBox guest Google authentication', () => {
         render(<LoginBox />);
         const google = screen.getByRole('button', { name: 'Accedi con Google' }) as HTMLButtonElement;
         fireEvent.click(google);
-        const submit = screen.getAllByRole('button', { name: 'Accedi' }).at(-1)! as HTMLButtonElement;
+        const form = screen.getByRole('textbox', { name: 'Email' }).closest('form')!;
+        const submit = form.querySelector<HTMLButtonElement>('button[type="submit"]')!;
         expect(submit.disabled).toBe(true);
-        fireEvent.submit(submit.closest('form')!);
+        fireEvent.submit(form);
         expect(authMocks.loginWithEmail).not.toHaveBeenCalled();
 
         finish();
