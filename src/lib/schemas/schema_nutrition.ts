@@ -1,4 +1,5 @@
 import { z } from '../zod';
+import { isValidBusinessId } from '../businessIdentity';
 import { 
     safeNumber, 
     safeOptionalNumber, 
@@ -72,7 +73,7 @@ const NutritionEntityIdSchema = z.union([
     z.string(),
     z.number().finite().transform(value => String(value)),
 ]).transform(id => id.trim()).refine(
-    id => id.length > 0 && id.length <= 160 && id !== 'undefined' && id !== 'null' && !id.includes('/'),
+    id => isValidBusinessId(id),
     'Identificativo nutrizione non valido',
 );
 
@@ -148,7 +149,7 @@ function sanitizeSupplementIntakes(value: unknown): unknown[] {
 }
 
 export const CardioSessionSchema = z.object({
-    id: z.string().trim().min(1).max(160).refine(id => !id.includes('/'), 'Identificativo cardio non valido'),
+    id: z.string().trim().min(1).max(160).refine(isValidBusinessId, 'Identificativo cardio non valido'),
     startedAt: z.number().finite().nonnegative().optional().catch(undefined),
     modality: z.enum(['walk', 'treadmill', 'bike', 'elliptical', 'stair', 'run', 'row', 'swim', 'other']),
     structure: z.enum(['continuous', 'intervals']).optional().catch(undefined),
