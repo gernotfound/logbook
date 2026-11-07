@@ -122,7 +122,7 @@ describe('pre-session readiness contract', () => {
         act(() => useAppStore.setState({
             userData: parseUserData({ activeWorkout: second }), localWorkout: second,
         }));
-        expect(screen.getByText('Second')).toBeTruthy();
+        expect(screen.getByText(/Second · Tutti i valori sono facoltativi/)).toBeTruthy();
         expect(screen.getByRole('button', { name: 'Energia: 4 su 5' }).getAttribute('aria-pressed')).toBe('false');
         expect(readDeviceValueStrict(secondName, owner)).toBeNull();
 
