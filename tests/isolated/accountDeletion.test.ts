@@ -250,6 +250,42 @@ it('completes a fenced owner purge when the same owner is still active', async (
     expect(isLocalPurgePending('user:a')).toBe(true);
 });
 
+it('does not sign out a replacement account while a stale logout preflight is pending', async () => {
+    const { logoutAndPurgeAccount } = await import('../../src/lib/db/db_account');
+    let entered!: () => void;
+    let release!: () => void;
+    const enteredPreflight = new Promise<void>(resolve => { entered = resolve; });
+    const continuePreflight = new Promise<void>(resolve => { release = resolve; });
+    const verifyCurrentDrafts = vi.fn(async () => { entered(); await continuePreflight; });
+    const signOut = vi.fn(async () => { boundary.auth.currentUser = null; });
+
+    const operation = logoutAndPurgeAccount('user:a', signOut, false, verifyCurrentDrafts);
+    await enteredPreflight;
+    boundary.auth.currentUser = { uid: 'b' };
+    release();
+
+    await expect(operation).rejects.toThrow('La pulizia locale resta sospesa');
+    expect(signOut).not.toHaveBeenCalled();
+    expect(await get('logbook:v2:user:a')).toEqual({ original: 'recoverable' });
+    expect(await get('logbook:v2:user:b')).toEqual({ original: 'other owner' });
+    expect(isLocalPurgePending('user:a')).toBe(false);
+});
+
+it('does not invoke a retired owner sign-out callback for a different current account', async () => {
+    const { logoutAndPurgeAccount } = await import('../../src/lib/db/db_account');
+    await purgeCompletedAccountLocalData('user:a');
+    expect(isLocalPurgePending('user:a')).toBe(true);
+
+    boundary.auth.currentUser = { uid: 'b' };
+    const signOut = vi.fn(async () => { boundary.auth.currentUser = null; });
+
+    await expect(logoutAndPurgeAccount('user:a', signOut)).rejects.toThrow('La pulizia locale resta sospesa');
+    expect(signOut).not.toHaveBeenCalled();
+    expect(boundary.auth.currentUser?.uid).toBe('b');
+    expect(await get('logbook:v2:user:b')).toEqual({ original: 'other owner' });
+    expect(isLocalPurgePending('user:a')).toBe(true);
+});
+
 it('drains owner-scoped keys discovered during a previous localStorage purge pass', async () => {
     const owner = 'user:a';
     const first = 'logbook:v2:user:a:sealed:workout';
