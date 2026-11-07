@@ -131,6 +131,40 @@ describe('Training Session UI Improvements Suite (R1, R2, R3)', () => {
         expect(container.textContent?.toLocaleLowerCase('it')).not.toContain('segmento');
     });
 
+    it('associa le cinque etichette cardio ai rispettivi campi', () => {
+        render(
+            <SessionExerciseCard
+                exItem={{ id: 'cardio-instance', exId: 'ex_treadmill', sessionNote: '', sets: [
+                    { id: 'cardio-set-1', kg: '', reps: '', time: '', distance: '', speed: '', incline: '', kcal: '' }
+                ] }}
+                exIndex={0}
+                libDef={{ id: 'ex_treadmill', name: 'Tapis Roulant', trackingType: 'cardio' }}
+                pastWorkouts={[]}
+                isHistoryOpen={false}
+                isSetupOpen={false}
+                openSpecialMenuId={null}
+                onToggleHistory={vi.fn()}
+                onToggleSetup={vi.fn()}
+                onRemoveExercise={vi.fn()}
+                onUpdateSetupNote={vi.fn()}
+                onUpdateSessionNote={vi.fn()}
+                onUpdateTechnicalStandard={vi.fn()}
+                onAddSet={vi.fn()}
+                onRemoveSet={vi.fn()}
+                onUpdateSet={vi.fn()}
+                onAddSpecialSet={vi.fn()}
+                onUpdateSpecialSet={vi.fn()}
+                onRemoveSpecialSet={vi.fn()}
+                onUpdateSetTarget={vi.fn()}
+                onToggleSpecialMenu={vi.fn()}
+            />
+        );
+
+        for (const label of ['Durata (min)', 'Distanza (km)', 'Velocità media', 'Inclinazione (%)', 'Kcal stimate']) {
+            expect(screen.getByRole('textbox', { name: label })).toBeDefined();
+        }
+    });
+
     describe('R2: Set Button Layout & Functionality', () => {
         it('R2.1: Renders two side-by-side buttons for "Rimuovi serie" and "Aggiungi serie"', () => {
             const exItem = {

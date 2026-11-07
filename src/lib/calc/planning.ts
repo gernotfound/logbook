@@ -175,7 +175,8 @@ export function getDetailedMuscleCategory(mId: string): { key: string; label: st
 
     if (low.includes('pett') || low.includes('chest')) return { key: 'chest', label: 'Petto' };
     if (low.includes('trap')) return { key: 'traps', label: 'Trapezi' };
-    if (low.includes('lat') || low.includes('dors') || low.includes('schien') || low.includes('back') || low.includes('rhomboid')) {
+    if (low.includes('lomb') || low.includes('lower_back') || low.includes('lower-back')) return { key: 'core', label: 'Addome e Core' };
+    if (low === 'lats' || low.startsWith('lats_') || low.includes('dors') || low.includes('schien') || low.includes('back') || low.includes('rhomboid')) {
         return { key: 'back', label: 'Dorso' };
     }
     if (low.includes('delt') || low.includes('spall') || low.includes('shoulder')) return { key: 'shoulders', label: 'Spalle' };
@@ -186,7 +187,7 @@ export function getDetailedMuscleCategory(mId: string): { key: string; label: st
     if (low.includes('bicip') || low.includes('biceps') || low.includes('brachial')) return { key: 'biceps', label: 'Bicipiti' };
     if (low.includes('tricip') || low.includes('triceps')) return { key: 'triceps', label: 'Tricipiti' };
     if (low.includes('polp') || low.includes('calv')) return { key: 'calves', label: 'Polpacci' };
-    if (low.includes('avambr') || low.includes('forearm')) return { key: 'forearms', label: 'Avambracci' };
+    if (low.includes('avambr') || low.includes('forearm') || low.includes('hand_flexors')) return { key: 'forearms', label: 'Avambracci' };
     if (low.includes('addom') || low.includes('abs') || low.includes('core') || low.includes('obliq')) return { key: 'core', label: 'Addome e Core' };
     if (low.includes('leg') || low.includes('gamb')) return { key: 'legs', label: 'Gambe (generale)' };
 

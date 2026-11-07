@@ -91,6 +91,10 @@ describe('Training Planning & Volume Calculations', () => {
         expect(getDetailedMuscleCategory('delts_side').label).toBe('Spalle');
         expect(getDetailedMuscleCategory('quads').label).toBe('Quadricipiti');
         expect(getDetailedMuscleCategory('biceps').label).toBe('Bicipiti');
+        expect(getDetailedMuscleCategory('triceps_lateral').label).toBe('Tricipiti');
+        expect(getDetailedMuscleCategory('lats_upper_right').label).toBe('Dorso');
+        expect(getDetailedMuscleCategory('lower_back').label).toBe('Addome e Core');
+        expect(getDetailedMuscleCategory('hand_flexors_right').label).toBe('Avambracci');
         expect(getDetailedMuscleCategory('unknown_xyz').label).toBe('Altro');
     });
 
