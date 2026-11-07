@@ -70,10 +70,18 @@ export async function requestServerDeletion(marker: AccountDeletionMarker, idTok
         return { response, body };
     }, ACCOUNT_DELETION_HTTP_TIMEOUT_MS, () => new AccountDeletionRequestTimeoutError());
     if (!response.ok) {
-        const message = typeof body.error === 'string' ? body.error : 'Impossibile avviare la cancellazione account.';
+        const message = typeof body?.error === 'string' ? body.error : 'Impossibile avviare la cancellazione account.';
         const error = new Error(message) as Error & { definitiveRejection?: boolean };
         error.definitiveRejection = response.status === 400 || response.status === 401 || response.status === 403;
         throw error;
+    }
+    // HTTP success alone is not proof that the trusted backend accepted this
+    // owner's durable receipt. Preserve the marker for reconciliation on an
+    // unexpected or unparseable response rather than recording a false ACK.
+    if ((response.status !== 200 && response.status !== 202)
+        || body?.uid !== marker.uid
+        || !['requested', 'deleting', 'verifying', 'complete', 'failed'].includes(String(body?.status))) {
+        throw new Error('Conferma della cancellazione non verificabile. La ricevuta locale resta conservata per il recupero.');
     }
 }
 
