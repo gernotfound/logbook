@@ -11,6 +11,8 @@ import {
   normalizeFieldIndexModes,
   normalizeLiveFieldIndexModes,
   parseFieldResource,
+  reconcileCompositeIndexes,
+  requireNoUnexpectedCompositeIndexes,
 } from '../../scripts/firestore-production-state.mjs';
 
 const desired = { collectionGroup: 'history_months', fieldPath: '*' };
@@ -305,5 +307,125 @@ describe('Firestore Production field exemption convergence', () => {
       pending: false,
       indexesDisabled: false,
     });
+  });
+});
+
+describe('Firestore Production complete composite index inventory', () => {
+  const wanted = [{ collectionGroup: 'account_deletions', queryScope: 'COLLECTION', fields: [
+    { fieldPath: 'status', order: 'ASCENDING' }, { fieldPath: 'retryable', order: 'ASCENDING' },
+  ] }];
+  const ready = {
+    name: 'projects/p/databases/(default)/collectionGroups/account_deletions/indexes/idx1',
+    queryScope: 'COLLECTION',
+    fields: [...wanted[0].fields, { fieldPath: '__name__', order: 'ASCENDING' }],
+    state: 'READY',
+  };
+
+  it('detects unexpected indexes in both retained and removed groups', () => {
+    const otherMode = { ...ready, name: ready.name.replace('idx1', 'idx2'),
+      fields: [{ fieldPath: 'status', order: 'DESCENDING' }, { fieldPath: '__name__', order: 'DESCENDING' }] };
+    const removedGroup = { ...ready,
+      name: 'projects/p/databases/(default)/collectionGroups/removed_group/indexes/idx3' };
+    const result = reconcileCompositeIndexes(wanted, [ready, otherMode, removedGroup], 'p');
+    expect(result.statuses).toMatchObject([{ found: true, state: 'READY' }]);
+    expect(result.unexpected.map(index => index.name)).toEqual([otherMode.name, removedGroup.name]);
+    expect(() => requireNoUnexpectedCompositeIndexes(result.unexpected))
+      .toThrow('require manual review before deployment');
+    expect(() => requireNoUnexpectedCompositeIndexes([])).not.toThrow();
+    expect(reconcileCompositeIndexes(wanted, [ready], 'p').unexpected).toEqual([]);
+    expect(reconcileCompositeIndexes([], [ready], 'p').unexpected).toHaveLength(1);
+  });
+
+  it('does not certify an index with a non-default __name__ ordering', () => {
+    const invertedName = { ...ready, fields: [
+      ...wanted[0].fields, { fieldPath: '__name__', order: 'DESCENDING' },
+    ] };
+    const mismatch = reconcileCompositeIndexes(wanted, [invertedName], 'p');
+    expect(mismatch.statuses).toMatchObject([{ found: false, state: null }]);
+    expect(mismatch.unexpected.map(index => index.name)).toEqual([invertedName.name]);
+    expect(() => requireNoUnexpectedCompositeIndexes(mismatch.unexpected))
+      .toThrow('require manual review before deployment');
+
+    const explicitlyDescending = [{ ...wanted[0], fields: invertedName.fields }];
+    expect(reconcileCompositeIndexes(explicitlyDescending, [invertedName], 'p'))
+      .toMatchObject({ statuses: [{ found: true, state: 'READY' }], unexpected: [] });
+  });
+
+  it('rejects absent or malformed live __name__ suffixes instead of matching partially', () => {
+    expect(() => reconcileCompositeIndexes(wanted, [{ ...ready, fields: wanted[0].fields }], 'p'))
+      .toThrow('Missing Firestore live composite index __name__ field');
+    expect(() => reconcileCompositeIndexes(wanted, [{ ...ready, fields: [
+      { fieldPath: '__name__', order: 'ASCENDING' }, ...wanted[0].fields,
+    ] }], 'p')).toThrow('Invalid Firestore composite index __name__ position');
+    expect(() => reconcileCompositeIndexes(wanted, [{ ...ready, fields: [
+      ...wanted[0].fields, { fieldPath: '__name__', order: 'INVALID' },
+    ] }], 'p')).toThrow('Unsupported Firestore composite index order');
+    expect(() => reconcileCompositeIndexes(wanted, [{ ...ready, fields: [
+      { fieldPath: 'status', order: 'ASCENDING', arrayConfig: 'CONTAINS' },
+      { fieldPath: '__name__', order: 'ASCENDING' },
+    ] }], 'p')).toThrow('Unsupported Firestore composite index field');
+  });
+
+  it('applies Firestore implicit __name__ defaults to array and vector indexes', () => {
+    const expectedArray = [{ collectionGroup: 'sample', queryScope: 'COLLECTION', fields: [
+      { fieldPath: 'status', order: 'DESCENDING' },
+      { fieldPath: 'tags', arrayConfig: 'CONTAINS' },
+    ] }];
+    const arrayIndex = { name: 'projects/p/databases/(default)/collectionGroups/sample/indexes/a',
+      queryScope: 'COLLECTION', fields: [
+        ...expectedArray[0].fields, { fieldPath: '__name__', order: 'DESCENDING' },
+      ], state: 'READY' };
+    expect(reconcileCompositeIndexes(expectedArray, [arrayIndex], 'p'))
+      .toMatchObject({ statuses: [{ found: true, state: 'READY' }], unexpected: [] });
+
+    const expectedVector = [{ collectionGroup: 'sample', queryScope: 'COLLECTION', fields: [
+      { fieldPath: 'category', order: 'ASCENDING' },
+      { fieldPath: 'embedding', vectorConfig: { dimension: 4, flat: {} } },
+    ] }];
+    const vectorIndex = { ...arrayIndex, fields: [
+      expectedVector[0].fields[0], { fieldPath: '__name__', order: 'ASCENDING' },
+      expectedVector[0].fields[1],
+    ] };
+    expect(reconcileCompositeIndexes(expectedVector, [vectorIndex], 'p'))
+      .toMatchObject({ statuses: [{ found: true, state: 'READY' }], unexpected: [] });
+  });
+
+  it('compares Firestore index API scope, density and multikey metadata', () => {
+    expect(reconcileCompositeIndexes(wanted, [{ ...ready,
+      apiScope: 'ANY_API', density: 'SPARSE_ALL', multikey: false,
+    }], 'p')).toMatchObject({ statuses: [{ found: true, state: 'READY' }], unexpected: [] });
+
+    for (const override of [
+      { apiScope: 'MONGODB_COMPATIBLE_API' },
+      { density: 'DENSE' },
+      { multikey: true },
+    ]) {
+      const drift = reconcileCompositeIndexes(wanted, [{ ...ready, ...override }], 'p');
+      expect(drift.statuses).toMatchObject([{ found: false }]);
+      expect(drift.unexpected.map(index => index.name)).toEqual([ready.name]);
+      expect(() => requireNoUnexpectedCompositeIndexes(drift.unexpected))
+        .toThrow('require manual review before deployment');
+    }
+
+    expect(() => reconcileCompositeIndexes(wanted, [{ ...ready, density: 'INVALID' }], 'p'))
+      .toThrow('Invalid Firestore composite index metadata');
+  });
+
+  it('distinguishes missing, building and malformed indexes', () => {
+    expect(reconcileCompositeIndexes(wanted, [], 'p').statuses)
+      .toMatchObject([{ found: false, state: null }]);
+    expect(reconcileCompositeIndexes(wanted, [{ ...ready, state: 'CREATING' }], 'p').statuses)
+      .toMatchObject([{ found: true, state: 'CREATING' }]);
+    expect(() => reconcileCompositeIndexes(wanted, [{ ...ready,
+      name: 'projects/other/databases/(default)/collectionGroups/account_deletions/indexes/idx1' }], 'p'))
+      .toThrow('Invalid live Firestore composite index resource');
+    expect(() => reconcileCompositeIndexes(wanted, [ready, ready], 'p'))
+      .toThrow('Duplicate live Firestore composite index');
+  });
+
+  it('requires database-wide composite index inventory readback', () => {
+    const verifier = readFileSync('scripts/verify-firestore-production.mjs', 'utf8');
+    expect(verifier).toContain('collectionGroups/-');
+    expect(verifier).toContain('requireNoUnexpectedCompositeIndexes(unexpectedIndexes)');
   });
 });
