@@ -1,4 +1,4 @@
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { checkMarkdownLinks } from './markdown-links.mjs';
 import './markdown-links-regressions.mjs';
@@ -42,6 +42,20 @@ if (taskSpecificAnalysisArtifacts.length > 0) {
       .map(path => `  ${path}`)
       .join('\n')}`,
   );
+}
+
+// Existing tracked rules bypass Git ignore; check a future untracked path so a
+// broad agent-workspace exclusion cannot silently hide new normative rules.
+for (const [path, shouldIgnore] of [
+  ['.agents/rules/__new_contract__.md', false],
+  ['.agents/__local_workspace__.md', true],
+]) {
+  const result = spawnSync('git', ['check-ignore', '--no-index', '-q', path]);
+  if (result.error || (result.status !== 0 && result.status !== 1)) {
+    failures.push('Git ignore policy could not be verified for ' + path);
+  } else if ((result.status === 0) !== shouldIgnore) {
+    failures.push('Git ignore policy unexpectedly ' + (shouldIgnore ? 'tracks ' : 'hides ') + path);
+  }
 }
 
 const deploymentEnvSnapshots = tracked.filter(path => /^\.env\.(?:production|preview)(?:\.local)?$/.test(path));

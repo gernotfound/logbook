@@ -38,7 +38,9 @@ service-account.json
 gha-creds-*.json
 
 # AI Agents & Workspaces
-.agents/
+# Keep local agent workspace files ignored, but allow new versioned project rules.
+/.agents/*
+!/.agents/rules/
 teamwork_projects/
 docs/ai/
 TEST_INFRA.md
