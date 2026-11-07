@@ -5,7 +5,7 @@ import * as path from 'path';
 import { useLocalStorage } from '../src/hooks/useLocalStorage';
 import type { UserData } from '../src/types';
 import { idbStore } from './setup';
-import { readLocal } from '../src/lib/sync/localRepository';
+
 
 describe('EMPIRICAL CHALLENGER: Adversarial Stress & Robustness Suite (R2, R3, R4)', () => {
 
@@ -230,8 +230,9 @@ describe('EMPIRICAL CHALLENGER: Adversarial Stress & Robustness Suite (R2, R3, R
             expect(useAppStore.getState().syncing).toBe(false);
             expect(useAppStore.getState().saveError).toBeNull();
             expect(useAppStore.getState().userData?.profile?.height).toBe('220');
-            // The cloud adapter's one call must reflect the exact committed
-            // local envelope, not only optimistic Zustand state or debounce order.
+            // This suite resets modules: use the store's current vault instance.
+            // Verify the durable archive, not just the optimistic Zustand state.
+            const { readLocal } = await import('../src/lib/sync/localRepository');
             const durable = await readLocal('user:test-user-id');
             expect(durable?.data.profile?.height).toBe('220');
             expect(durable?.data.library?.map(item => item.id)).toEqual(['ex_50']);
