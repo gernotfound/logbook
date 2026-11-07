@@ -16,6 +16,7 @@ import DataSleep from '../src/components/Data/DataSleep';
 import DataBiometry from '../src/components/Data/DataBiometry';
 import { renderWithProviders } from './setup';
 import { useAppStore } from '../src/store/useAppStore';
+import { captureSession } from '../src/lib/sync/session';
 
 describe('EMPIRICAL CHALLENGER: Viewport & Overflow Adversarial Stress Suite (m23_1)', () => {
     const cssPath = path.resolve(__dirname, '../src/styles/global.css');
@@ -23,6 +24,7 @@ describe('EMPIRICAL CHALLENGER: Viewport & Overflow Adversarial Stress Suite (m2
 
     beforeEach(() => {
         useAppStore.setState({
+            dataOwner: captureSession().owner,
             userData: {
                 profile: { height: 180, gender: 'M' },
                 nutrition: {

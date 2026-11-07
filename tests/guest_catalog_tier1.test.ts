@@ -60,80 +60,44 @@ describe('Integration Suite: Guest Mode & Global Catalog Resolution', () => {
             expect(getInMemoryCatalog()).not.toBeNull();
         });
 
-        it('T1.2: Verifies immediate presence and properties of specific known standard exercises in a populated catalog', async () => {
-            // Local fixture (seed is empty — commit e61a133) simulating remote catalog payload
-            const catalog = {
-                exercises: [
-                    { id: 'panca-piana-bilanciere', name: 'Panca Piana Bilanciere', muscles: ['chest'], secondaryMuscles: ['triceps', 'shoulders'], trackingType: 'weight_reps', isDefault: true, setsCount: 3 },
-                    { id: 'panca-inclinata-bilanciere', name: 'Panca Inclinata Bilanciere', muscles: ['chest'], trackingType: 'weight_reps', isDefault: true, setsCount: 3 },
-                    { id: 'squat-bilanciere', name: 'Squat con Bilanciere', muscles: ['quads'], trackingType: 'weight_reps', isDefault: true, setsCount: 3 },
-                    { id: 'stacchi-da-terra', name: 'Stacchi da Terra (Deadlift)', muscles: ['back'], secondaryMuscles: ['hamstrings'], trackingType: 'weight_reps', isDefault: true, setsCount: 3 }
-                ] as import('../src/types').CatalogExercise[]
-            };
+        it('T1.2: Resolves real catalog exercise fields to a usable workout library without mutating the source', () => {
+            const globalExercises: import('../src/types').CatalogExercise[] = [
+                {
+                    id: 'bench', name: 'Panca Piana Bilanciere', muscles: ['chest'],
+                    secondaryMuscles: ['triceps'], trackingType: 'weight_reps',
+                    setsCount: 4, isDefault: true,
+                },
+            ];
+            const resolved = resolveEffectiveExercises(globalExercises);
 
-            // 1. Panca Piana Bilanciere
-            const bench = catalog.exercises.find(e => e.id === 'panca-piana-bilanciere');
-            expect(bench).toBeDefined();
-            expect(bench?.name).toBe('Panca Piana Bilanciere');
-            expect(bench?.muscles).toContain('chest');
-            expect(bench?.secondaryMuscles).toEqual(expect.arrayContaining(['triceps', 'shoulders']));
-            expect(bench?.trackingType).toBe('weight_reps');
-            expect(bench?.isDefault).toBe(true);
-
-            // 2. Panca Inclinata Bilanciere
-            const inclineBench = catalog.exercises.find(e => e.id === 'panca-inclinata-bilanciere');
-            expect(inclineBench).toBeDefined();
-            expect(inclineBench?.muscles).toContain('chest');
-
-            // 3. Squat con Bilanciere
-            const squat = catalog.exercises.find(e => e.id === 'squat-bilanciere');
-            expect(squat).toBeDefined();
-            expect(squat?.name).toBe('Squat con Bilanciere');
-            expect(squat?.muscles).toContain('quads');
-            expect(squat?.isDefault).toBe(true);
-
-            // 4. Stacchi da Terra
-            const deadlift = catalog.exercises.find(e => e.id === 'stacchi-da-terra');
-            expect(deadlift).toBeDefined();
-            expect(deadlift?.name).toBe('Stacchi da Terra (Deadlift)');
-            expect(deadlift?.muscles).toContain('back');
-            expect(deadlift?.secondaryMuscles).toContain('hamstrings');
+            expect(resolved).toEqual([{
+                id: 'bench', name: 'Panca Piana Bilanciere', notes: undefined,
+                muscles: ['chest'], secondaryMuscles: ['triceps'],
+                trackingType: 'weight_reps', setsCount: 4,
+                isDefault: true, isBodyweight: false, equipmentWeight: undefined, sets: [],
+            }]);
+            expect(globalExercises[0]).not.toHaveProperty('sets');
         });
 
-        it('T1.3: Verifies immediate presence and properties of specific known standard foods in a populated catalog', async () => {
-            // Local fixture (seed is empty — commit e61a133) simulating remote catalog payload
-            const catalog = {
-                foods: [
-                    { id: 'petto-di-pollo-crudo', name: 'Petto di Pollo Crudo', brand: 'Generico', kcal: 103, pro: 23, carbs: 0, fat: 1.2, isCustom: false },
-                    { id: 'petto-di-tacchino-crudo', name: 'Petto di Tacchino', kcal: 110, pro: 24, carbs: 0, fat: 1.5, isCustom: false },
-                    { id: 'vitello-magro-crudo', name: 'Vitello magro', kcal: 107, pro: 21, carbs: 0, fat: 2.5, isCustom: false },
-                    ...Array.from({ length: 118 }, (_, i) => ({ id: `food-${i}`, name: `Food ${i}`, kcal: 100, pro: 10, carbs: 10, fat: 2, isCustom: false }))
-                ] as import('../src/types').CatalogFood[]
-            };
+        it('T1.3: Resolves foods with custom-ID precedence while preserving standard macros', () => {
+            const globalFoods: import('../src/types').CatalogFood[] = [
+                { id: 'chicken', name: 'Petto di pollo', kcal: 103, pro: 23, carbs: 0, fat: 1.2 },
+                { id: 'rice', name: 'Riso', kcal: 130, pro: 2.7, carbs: 28, fat: 0.3 },
+            ];
+            const customFoods: import('../src/types').Food[] = [
+                { id: 'chicken', name: 'Ricetta personale', kcal: 220, pro: 17, carbs: 12, fat: 9, isCustom: true },
+            ];
 
-            // 1. Petto di Pollo Crudo
-            const chicken = catalog.foods.find(f => f.id === 'petto-di-pollo-crudo');
-            expect(chicken).toBeDefined();
-            expect(chicken?.name).toBe('Petto di Pollo Crudo');
-            expect(chicken?.brand).toBe('Generico');
-            expect(chicken?.kcal).toBe(103);
-            expect(chicken?.pro).toBe(23);
-            expect(chicken?.carbs).toBe(0);
-            expect(chicken?.fat).toBe(1.2);
+            const resolved = resolveEffectiveFoods(globalFoods, customFoods);
 
-            // 2. Petto di Tacchino Crudo
-            const turkey = catalog.foods.find(f => f.id === 'petto-di-tacchino-crudo');
-            expect(turkey).toBeDefined();
-            expect(turkey?.kcal).toBe(110);
-            expect(turkey?.pro).toBe(24);
-
-            // 3. Vitello Magro Crudo
-            const veal = catalog.foods.find(f => f.id === 'vitello-magro-crudo');
-            expect(veal).toBeDefined();
-            expect(veal?.pro).toBe(21);
-
-            // 4. Total simulated foods count meets catalog contract
-            expect(catalog.foods.length).toBeGreaterThan(120);
+            expect(resolved.map(food => food.id)).toEqual(['chicken', 'rice']);
+            expect(resolved[0]).toMatchObject({
+                name: 'Ricetta personale', kcal: 220, pro: 17, isCustom: true,
+            });
+            expect(resolved[1]).toMatchObject({
+                name: 'Riso', kcal: 130, pro: 2.7, carbs: 28, fat: 0.3, isCustom: false,
+            });
+            expect(globalFoods[0].name).toBe('Petto di pollo');
         });
 
         it('T1.4: Flat store contract: resolveEffectiveExercises and resolveEffectiveFoods produce ready-to-consume lists', () => {

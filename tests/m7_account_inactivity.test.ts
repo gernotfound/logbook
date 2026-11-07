@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { Timestamp } from 'firebase-admin/firestore';
+import { FieldPath, Timestamp } from 'firebase-admin/firestore';
 
 const state = vi.hoisted(() => ({
   docs: new Map<string, Record<string, unknown>>(),
@@ -21,22 +21,24 @@ class FakeQuery {
     private name: string,
     private cutoff = Number.POSITIVE_INFINITY,
     private limitCount = 100,
-    private cursor: { id: string; data: () => Record<string, unknown> } | null = null,
+    private cursor: { uid: string; lastSeenAt: Timestamp } | null = null,
   ) {}
   where(field: string, comparison: string, value: Timestamp) {
     expect(field).toBe('lastSeenAt');
     expect(comparison).toBe('<=');
     return new FakeQuery(this.name, value.toMillis(), this.limitCount, this.cursor);
   }
-  orderBy(field: string, direction: string) {
-    expect([field, direction]).toEqual(['lastSeenAt', 'asc']);
+  orderBy(field: string | FieldPath, direction: string) {
+    if (typeof field === 'string') expect(field).toBe('lastSeenAt');
+    else expect(field).toEqual(FieldPath.documentId());
+    expect(direction).toBe('asc');
     return this;
   }
   limit(count: number) {
     return new FakeQuery(this.name, this.cutoff, count, this.cursor);
   }
-  startAfter(cursor: { id: string; data: () => Record<string, unknown> }) {
-    return new FakeQuery(this.name, this.cutoff, this.limitCount, cursor);
+  startAfter(lastSeenAt: Timestamp, uid: string) {
+    return new FakeQuery(this.name, this.cutoff, this.limitCount, { lastSeenAt, uid });
   }
   async get() {
     const docs = [...state.docs.entries()]
@@ -45,12 +47,14 @@ class FakeQuery {
       .map(([path, value]) => ({ id: path.split('/')[1], data: () => value }))
       .sort((a, b) => (a.data().lastSeenAt as Timestamp).toMillis() - (b.data().lastSeenAt as Timestamp).toMillis()
         || a.id.localeCompare(b.id));
-    const start = this.cursor ? docs.findIndex(x => x.id === this.cursor!.id) + 1 : 0;
-    // In real Firestore a deleted snapshot still supplies an order-by cursor.
-    const effectiveStart = this.cursor && start === 0
-      ? docs.findIndex(x => (x.data().lastSeenAt as Timestamp).toMillis() > (this.cursor!.data().lastSeenAt as Timestamp).toMillis())
-      : start;
-    const page = docs.slice(Math.max(0, effectiveStart), Math.max(0, effectiveStart) + this.limitCount);
+    // Firestore orders by lastSeenAt, then document ID. Its snapshot cursor
+    // retains both values when the previous page's document was deleted.
+    const cursorTime = this.cursor ? this.cursor.lastSeenAt.toMillis() : null;
+    const remaining = cursorTime === null ? docs : docs.filter(item => {
+      const timestamp = (item.data().lastSeenAt as Timestamp).toMillis();
+      return timestamp > cursorTime || (timestamp === cursorTime && item.id > this.cursor!.uid);
+    });
+    const page = remaining.slice(0, this.limitCount);
     const callback = state.onQuery;
     state.onQuery = null;
     callback?.();
@@ -200,12 +204,79 @@ describe('authenticated inactivity retention boundary', () => {
     expect(state.writes).toHaveLength(0);
   });
 
+
+  it('progresses beyond 48 persistently invalid markers with equal timestamps', async () => {
+    for (let i = 0; i < 60; i++) {
+      state.docs.set('account_activity/a-' + String(i).padStart(3, '0'), {
+        uid: 'foreign-owner', firstSeenAt: old, lastSeenAt: old,
+      });
+    }
+    activity('z-eligible', old);
+
+    expect(await queueInactiveAccountDeletions(now)).toEqual({ scanned: 48, queued: 0 });
+    expect(state.docs.get('account_inactivity_scan/state')).toMatchObject({
+      revision: 1, cursor: { uid: 'a-047', lastSeenAt: old },
+    });
+    expect(state.docs.has('account_deletions/z-eligible')).toBe(false);
+
+    expect(await queueInactiveAccountDeletions(now)).toEqual({ scanned: 13, queued: 1 });
+    expect(state.docs.has('account_deletions/z-eligible')).toBe(true);
+    expect(state.docs.has('account_activity/z-eligible')).toBe(false);
+    expect(state.docs.get('account_inactivity_scan/state')).toMatchObject({ revision: 2, cursor: null });
+    expect([...state.docs.keys()].filter(path => path.startsWith('account_deletions/')))
+      .toEqual(['account_deletions/z-eligible']);
+  });
+
+  it('wraps at EOF to discover an overdue marker inserted behind the saved cursor', async () => {
+    for (let i = 0; i < 48; i++) {
+      state.docs.set('account_activity/b-' + String(i).padStart(3, '0'), {
+        uid: 'foreign-owner', firstSeenAt: old, lastSeenAt: old,
+      });
+    }
+    expect(await queueInactiveAccountDeletions(now)).toEqual({ scanned: 48, queued: 0 });
+    activity('a-inserted-before-cursor', old);
+
+    const next = await queueInactiveAccountDeletions(now);
+    expect(next.queued).toBe(1);
+    expect(next.scanned).toBeLessThanOrEqual(48);
+    expect(state.docs.has('account_deletions/a-inserted-before-cursor')).toBe(true);
+  });
+
+  it('preserves concurrent scan progress instead of overwriting it with a stale cursor', async () => {
+    for (let i = 0; i < 60; i++) {
+      state.docs.set('account_activity/a-' + String(i).padStart(3, '0'), {
+        uid: 'foreign-owner', firstSeenAt: old, lastSeenAt: old,
+      });
+    }
+    await queueInactiveAccountDeletions(now);
+    const path = 'account_inactivity_scan/state';
+    state.onQuery = () => state.docs.set(path, {
+      revision: 2, cursor: { uid: 'a-059', lastSeenAt: old },
+    });
+    await queueInactiveAccountDeletions(now);
+    expect(state.docs.get(path)).toEqual({
+      revision: 2, cursor: { uid: 'a-059', lastSeenAt: old },
+    });
+  });
+
+  it('rejects a corrupt scheduler checkpoint before scheduling any deletion', async () => {
+    state.docs.set('account_inactivity_scan/state', {
+      revision: 1, cursor: { uid: '', lastSeenAt: old },
+    });
+    activity('eligible', old);
+    await expect(queueInactiveAccountDeletions(now)).rejects.toThrow('Invalid account inactivity scan cursor');
+    expect(state.docs.has('account_deletions/eligible')).toBe(false);
+    expect(state.writes).toHaveLength(0);
+  });
+
   it('skips malformed owners and continues on the following bounded query page', async () => {
     for (let i = 0; i < 12; i++) {
       state.docs.set('account_activity/invalid-' + i, { uid: 'foreign', lastSeenAt: old });
     }
-    activity('eligible', Timestamp.fromMillis(old.toMillis() + 1));
+    // Use the exact same ordered timestamp: a cursor that compares only
+    // lastSeenAt would skip this eligible owner after the first full page.
+    activity('z-eligible', old);
     expect(await queueInactiveAccountDeletions(now, 12)).toEqual({ scanned: 13, queued: 1 });
-    expect(state.docs.has('account_deletions/eligible')).toBe(true);
+    expect(state.docs.has('account_deletions/z-eligible')).toBe(true);
   });
 });

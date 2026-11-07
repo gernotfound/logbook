@@ -140,6 +140,36 @@ describe('foreground durable journal backoff', () => {
         expect(retry.flush).not.toHaveBeenCalled();
     });
 
+    it.each(['dispose', 'revoked', 'rejected'] as const)(
+        'does not start a journal flush when %s occurs after the timer but before its microtask', async (interruption) => {
+            vi.useFakeTimers();
+            const retry = fixture();
+
+            // Synchronous timer advance fires the callback without draining
+            // the Promise continuation that starts the remote operation.
+            vi.advanceTimersByTime(20_000);
+            expect(retry.flush).not.toHaveBeenCalled();
+
+            if (interruption === 'dispose') retry.controller.dispose();
+            else if (interruption === 'revoked') retry.eligible(false);
+            else retry.update({ syncHealth: 'rejected' });
+
+            await vi.advanceTimersByTimeAsync(0);
+            expect(retry.flush).not.toHaveBeenCalled();
+            expect(vi.getTimerCount()).toBe(0);
+
+            if (interruption !== 'dispose') {
+                if (interruption === 'revoked') retry.eligible(true);
+                else retry.update({ syncHealth: 'local-pending' });
+                await vi.advanceTimersByTimeAsync(19_999);
+                expect(retry.flush).not.toHaveBeenCalled();
+                await vi.advanceTimersByTimeAsync(1);
+                expect(retry.flush).toHaveBeenCalledTimes(1);
+                retry.controller.dispose();
+            }
+        },
+    );
+
     it('never schedules overlapping flushes while one durable journal attempt is unresolved', async () => {
         vi.useFakeTimers();
         let notify: () => void = () => {};

@@ -1,4 +1,4 @@
-import { act, renderHook } from '@testing-library/react';
+import { act, fireEvent, render, renderHook, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const authState = vi.hoisted(() => ({
@@ -6,7 +6,7 @@ const authState = vi.hoisted(() => ({
     uid: 'test-user-id',
     email: 'test@example.com',
     providerData: [{ providerId: 'password' }],
-  },
+  } as { uid: string; email: string; providerData: { providerId: string }[] } | null,
   logout: vi.fn(),
   isGuest: false,
 }));
@@ -28,6 +28,7 @@ vi.mock('../src/hooks/useAuth', () => ({
     logout: authState.logout,
   }),
 }));
+vi.mock('../src/components/UI/AccountCard', () => ({ AccountCard: () => null }));
 vi.mock('../src/lib/auth/recentAuth', () => ({
   reauthenticateForSensitiveAction: reauth.run,
   isSensitiveReauthCancellation: () => false,
@@ -37,18 +38,123 @@ vi.mock('../src/store/useDialogStore', () => ({
   useDialogStore: (selector: (state: typeof dialog) => unknown) => selector(dialog),
 }));
 
+import { AccountSettingsTab } from '../src/components/Settings/AccountSettingsTab';
 import { DB } from '../src/lib/db';
 import { useSettings } from '../src/hooks/useSettings';
 import { localStorageMock } from './setup';
-import { activateGuestSession } from '../src/lib/sync/session';
+import { activateGuestSession, invalidateSession } from '../src/lib/sync/session';
+import { markAccountDeletion } from '../src/lib/sync/accountGate';
 
 describe('account deletion recent authentication', () => {
   beforeEach(() => {
     localStorage.clear();
     vi.clearAllMocks();
     authState.isGuest = false;
+    authState.user = {
+      uid: 'test-user-id',
+      email: 'test@example.com',
+      providerData: [{ providerId: 'password' }],
+    };
     dialog.showConfirm.mockResolvedValue(true);
     dialog.showAlert.mockResolvedValue(undefined);
+  });
+
+  it('labels destructive action as account deletion when Firebase is authenticated but local owner is guest', () => {
+    authState.isGuest = true;
+    const onDeleteAccount = vi.fn();
+    render(<AccountSettingsTab pendingAccountDeletion={false} deletingAccount={false} onDeleteAccount={onDeleteAccount} />);
+
+    const button = screen.getByRole('button', { name: 'Elimina account e dati' });
+    expect(screen.getByText('Elimina permanentemente il tuo account e tutti i dati associati. Questa azione è irreversibile.')).toBeTruthy();
+    fireEvent.click(button);
+    expect(onDeleteAccount).toHaveBeenCalledOnce();
+    expect(screen.queryByText('Elimina dati locali')).toBeNull();
+  });
+
+  it('retains guest-only deletion wording when no authenticated account exists', () => {
+    authState.isGuest = true;
+    authState.user = null;
+    render(<AccountSettingsTab pendingAccountDeletion={false} deletingAccount={false} onDeleteAccount={vi.fn()} />);
+
+    expect(screen.getByRole('button', { name: 'Elimina dati locali' })).toBeTruthy();
+    expect(screen.getByText('Elimina permanentemente tutti i dati salvati su questo dispositivo. Questa azione è irreversibile.')).toBeTruthy();
+  });
+
+  it('reads a pending authenticated account deletion even while the active local owner is guest', () => {
+    authState.isGuest = true;
+    localStorage.setItem('logbook_is_guest', 'true');
+    localStorage.setItem('logbook_guest_session_id_v1', 'guest-before-consent');
+    activateGuestSession('guest-before-consent');
+    markAccountDeletion('user:test-user-id');
+
+    const { result } = renderHook(() => useSettings());
+    expect(result.current.pendingAccountDeletion).toBe(true);
+
+    render(<AccountSettingsTab pendingAccountDeletion={result.current.pendingAccountDeletion}
+      deletingAccount={false} onDeleteAccount={vi.fn()} />);
+    expect(screen.getByRole('button', { name: 'Riprendi cancellazione account' })).toBeTruthy();
+  });
+
+
+  const withAuthenticatedFirebaseUser = async (work: () => Promise<void>) => {
+    const { auth } = await import('../src/lib/firebase');
+    const originalUser = Object.getOwnPropertyDescriptor(auth, 'currentUser');
+    Object.defineProperty(auth, 'currentUser', { configurable: true, value: authState.user });
+    try { await work(); }
+    finally {
+      if (originalUser) Object.defineProperty(auth, 'currentUser', originalUser);
+      else Reflect.deleteProperty(auth, 'currentUser');
+    }
+  };
+
+  it('suppresses stale account deletion errors after Auth A→B→A returns to the same UID', async () => {
+    await withAuthenticatedFirebaseUser(async () => {
+      dialog.showConfirm.mockImplementationOnce(async () => {
+        invalidateSession();
+        return true;
+      });
+      const deleteSpy = vi.spyOn(DB, 'deleteAccount').mockResolvedValue({ status: 'complete' });
+      const { result } = renderHook(() => useSettings());
+
+      await act(async () => result.current.handleDeleteAccount());
+
+      expect(dialog.showConfirm).toHaveBeenCalledOnce();
+      expect(deleteSpy).not.toHaveBeenCalled();
+      expect(dialog.showAlert).not.toHaveBeenCalled();
+    });
+  });
+
+  it('does not show an old pending deletion result after the server await changes Auth epoch', async () => {
+    await withAuthenticatedFirebaseUser(async () => {
+      reauth.run.mockResolvedValue('reauthenticated');
+      const deleteSpy = vi.spyOn(DB, 'deleteAccount').mockImplementation(async () => {
+        invalidateSession();
+        return { status: 'pending', message: 'Deletion remains pending for old session' };
+      });
+      const { result } = renderHook(() => useSettings());
+
+      await act(async () => result.current.handleDeleteAccount());
+
+      expect(deleteSpy).toHaveBeenCalledOnce();
+      expect(dialog.showAlert).not.toHaveBeenCalled();
+    });
+  });
+
+  it('suppresses health-data erasure errors after a same-UID Auth epoch replacement', async () => {
+    await withAuthenticatedFirebaseUser(async () => {
+      const { currentHealthConsentStatus } = await import('../src/lib/healthConsent');
+      vi.mocked(currentHealthConsentStatus).mockReturnValueOnce('withdrawn');
+      dialog.showConfirm.mockImplementationOnce(async () => {
+        invalidateSession();
+        return true;
+      });
+      const { result } = renderHook(() => useSettings());
+
+      await act(async () => result.current.handleDeleteHealthData());
+
+      expect(dialog.showConfirm).toHaveBeenCalledOnce();
+      expect(dialog.showAlert).not.toHaveBeenCalled();
+    });
   });
 
   it('releases the deletion busy guard when strict session capture fails', async () => {
