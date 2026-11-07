@@ -168,6 +168,7 @@ export async function releaseCommittedWorkoutSlot(
         || marker.intentId !== intent.intentId) return;
     const slots = new Map(readRecoverySlots(owner).map(slot => [slot.intent.intentId, slot]));
     const visited = new Set<string>();
+    const toRelease: Array<{ name: string; intent: WorkoutDeviceIntent }> = [];
     let id: string | undefined = intent.intentId;
     let parent: string | undefined = intent.parentIntentId;
     while (id && !visited.has(id)) {
@@ -177,7 +178,7 @@ export async function releaseCommittedWorkoutSlot(
             if (slot.intent.generation !== intent.generation) throw new WorkoutIntentConflictError('Catena copie workout incoerente.');
             parent = slot.intent.parentIntentId;
             // This key is immutable; no editor can reuse it for a future edit.
-            writeDeviceValue(slot.name, null, owner);
+            toRelease.push(slot);
         }
         id = parent;
         parent = undefined;
@@ -187,10 +188,13 @@ export async function releaseCommittedWorkoutSlot(
         const slot = slots.get(ancestorId);
         if (!slot) continue;
         if (slot.intent.generation !== intent.generation) throw new WorkoutIntentConflictError('Ascendenza workout non valida.');
-        writeDeviceValue(slot.name, null, owner);
+        toRelease.push(slot);
     }
+    // Remove oldest ancestors first and the committed head LAST. A partial
+    // localStorage failure must leave the newest authenticated witness for retry.
+    // Validate the entire chain before beginning the non-transactional cleanup.
+    for (const slot of toRelease.reverse()) writeDeviceValue(slot.name, null, owner);
 }
-
 /** Shared synchronous snapshot, complemented by immutable recovery witnesses. */
 export function readWorkoutDeviceIntent(owner: string): WorkoutDeviceIntent | null {
     const raw = readDeviceValueStrict('workout', owner);
