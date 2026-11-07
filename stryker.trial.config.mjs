@@ -89,6 +89,11 @@ export const trialCases = {
     "mutate": ["src/lib/sync/syncFailure.ts"],
     "testFiles": ["tests/app_check_sync_semantics.test.ts"]
   },
+  "monthly-tombstones": {
+    "mutate": ["src/lib/sync/monthlyEntityTombstones.ts"],
+    "testFiles": ["tests/isolated/monthlyEntityTombstones.test.ts"],
+    "runner": "isolated"
+  },
   "business-normalization": {
     "mutate": ["src/lib/sync/businessNormalizationIntegrity.ts"],
     "testFiles": ["tests/isolated/businessNormalizationIntegrity.test.ts"],
