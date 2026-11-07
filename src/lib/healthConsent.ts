@@ -31,6 +31,8 @@ function isRetryableConsentTransportError(error: unknown): boolean {
       || candidate.code === 'app-check-limited-use-unavailable');
 }
 const verifiedRevisions = new Map<string, number>();
+// A UID alone is not a consent proof across Auth epochs, including A→B→A.
+const verifiedSessionEpochs = new Map<string, number>();
 // Offline access is local-only: a cached server approval must never authorize cloud I/O.
 const onlineVerifiedRevisions = new Map<string, number>();
 // A local withdrawn marker fences writes, but never proves the backend accepted
@@ -75,6 +77,7 @@ function notify() { for (const listener of listeners) listener(); }
 export function beginHealthConsentVerification(uid: string): void {
   invalidateConsentChecks(uid);
   verifiedRevisions.delete(uid);
+  verifiedSessionEpochs.delete(uid);
   onlineVerifiedRevisions.delete(uid);
   confirmedServerWithdrawals.delete(uid);
   serverConfirmedLegal.delete(uid);
@@ -143,12 +146,14 @@ export function isHealthConsentWritable(owner: string): boolean {
   if (!owner.startsWith('user:')) return true;
   const uid = owner.slice(5);
   if (currentHealthConsentStatus(uid) !== 'active') return false;
-  // A real authenticated session may not write on the default/unknown revision.
-  // Node-only pure sync tests have no Firebase currentUser and use rev 0 fixtures.
-  if (auth?.currentUser?.uid === uid && (!verifiedRevisions.has(uid) || (verifiedRevisions.get(uid) ?? 0) < 1)) return false;
+  // An Auth epoch replacement invalidates the approval even when the UID
+  // and persisted consent revision remain unchanged.
   try {
     const persisted = readBrowserValueStrict(generationMarker(uid));
     const verified = verifiedRevisions.get(uid) ?? 0;
+    if (auth?.currentUser?.uid === uid && (verified < 1
+      || verifiedSessionEpochs.get(uid) !== captureSessionForOwner(owner).epoch)) return false;
+    // Node-only pure sync tests have no Firebase currentUser and use rev 0 fixtures.
     return verified === 0 ? auth?.currentUser?.uid !== uid && persisted === null : persisted === String(verified);
   } catch { return false; }
 }
@@ -339,6 +344,7 @@ export async function refreshHealthConsent(user: User): Promise<HealthConsentSta
     const cached = saved === null ? readCachedActiveRevision(uid) : null;
     if (cached === null || !isSameDecision()) return false;
     verifiedRevisions.set(uid, cached);
+    verifiedSessionEpochs.set(uid, startingSessionEpoch);
     setStatus(uid, 'active');
     return true;
   };
@@ -351,6 +357,7 @@ export async function refreshHealthConsent(user: User): Promise<HealthConsentSta
     && entries.get(uid) === 'active'
     && isHealthConsentWritable('user:' + uid);
   if (!locallyVerified) verifiedRevisions.delete(uid);
+  verifiedSessionEpochs.delete(uid);
   onlineVerifiedRevisions.delete(uid);
   if (!locallyVerified) {
     setStatus(uid, saved === null ? 'checking'
@@ -375,6 +382,7 @@ export async function refreshHealthConsent(user: User): Promise<HealthConsentSta
       // A missing server record never authorizes cloud access or restores
       // an unsent local withdrawal by accident.
       verifiedRevisions.delete(uid);
+  verifiedSessionEpochs.delete(uid);
       onlineVerifiedRevisions.delete(uid);
       serverConfirmedLegal.delete(uid);
       if (saved !== null) return currentHealthConsentStatus(uid);
@@ -433,6 +441,7 @@ export async function refreshHealthConsent(user: User): Promise<HealthConsentSta
       if (!isSameDecision()) return currentHealthConsentStatus(uid);
       if (ready === 'erased') {
         verifiedRevisions.delete(uid);
+  verifiedSessionEpochs.delete(uid);
         onlineVerifiedRevisions.delete(uid);
         serverConfirmedLegal.delete(uid);
         setStatus(uid, 'erasure-required');
@@ -448,6 +457,7 @@ export async function refreshHealthConsent(user: User): Promise<HealthConsentSta
     writeBrowserValue(lastActiveMarker(uid), String(state.revision));
     if (!isSameDecision()) return currentHealthConsentStatus(uid);
     verifiedRevisions.set(uid, state.revision);
+    verifiedSessionEpochs.set(uid, startingSessionEpoch);
     onlineVerifiedRevisions.set(uid, state.revision);
     if (state.privacyVersion === LEGAL_VERSIONS.privacy
       && state.termsVersion === LEGAL_VERSIONS.terms
@@ -476,8 +486,14 @@ export async function refreshHealthConsent(user: User): Promise<HealthConsentSta
 
 export async function withdrawHealthConsent(user: User, freezeWriters?: () => void): Promise<void> {
   const uid = user.uid;
+  // A stale settings callback must not leave a durable withdrawal that the
+  // next login could replay as a newly confirmed destructive choice.
+  if (auth.currentUser !== user) throw new Error('Sessione cambiata.');
   const verified = verifiedRevisions.get(uid);
-  if (verified === undefined) throw new Error('Verifica prima il consenso sul server.');
+  if (verified === undefined || verifiedSessionEpochs.get(uid) !== captureSessionForOwner(userOwner(uid)).epoch
+    || !isHealthConsentWritable(userOwner(uid))) {
+    throw new Error('Verifica prima il consenso sul server.');
+  }
   writeBrowserValue(marker(uid), pendingMarker(verified));
   setStatus(uid, 'pending');
   // The durable local barrier precedes cancellation, network I/O and any
@@ -541,6 +557,7 @@ export async function retainNewerHealthConsent(user: User): Promise<HealthConsen
   removeBrowserValue(marker(uid));
   if (ready === 'erased') {
     verifiedRevisions.delete(uid);
+  verifiedSessionEpochs.delete(uid);
     onlineVerifiedRevisions.delete(uid);
     serverConfirmedLegal.delete(uid);
     setStatus(uid, 'erasure-required');
@@ -552,6 +569,7 @@ export async function retainNewerHealthConsent(user: User): Promise<HealthConsen
   }
   writeBrowserValue(lastActiveMarker(uid), String(live.revision));
   verifiedRevisions.set(uid, live.revision);
+  verifiedSessionEpochs.set(uid, startingSessionEpoch);
   onlineVerifiedRevisions.set(uid, live.revision);
   setStatus(uid, 'active');
   return 'active';
