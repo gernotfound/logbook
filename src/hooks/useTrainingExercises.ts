@@ -283,7 +283,7 @@ export function useTrainingExercises() {
             assertCurrentDraft();
         } catch (error) {
             blockExerciseDraft(error, draftSession);
-            void showAlert("Errore durante il salvataggio dell\x27esercizio.");
+            if (isCurrentSession(draftSession)) void showAlert("Errore durante il salvataggio dell\x27esercizio.");
             return false;
         }
 
@@ -293,10 +293,15 @@ export function useTrainingExercises() {
                 : updatedLibrary.find(ex => !library.some(current => current.id === ex.id));
             if (!savedExercise) throw new Error('Esercizio non trovato dopo la modifica');
             await persistExercise({ type: 'exercise.upsert', exercise: savedExercise });
-            handleCancelEdit(); // Reset form
+            if (!isCurrentSession(draftSession)) return false;
+            const cleared = handleCancelEdit();
+            if (!isCurrentSession(draftSession)) return false;
+            if (!cleared) {
+                await showAlert('Esercizio salvato, ma la bozza cifrata non è stata ripulita. Verifica il recupero locale.');
+            }
             return true;
         } catch {
-            void showAlert("Errore durante il salvataggio dell'esercizio.");
+            if (isCurrentSession(draftSession)) void showAlert("Errore durante il salvataggio dell'esercizio.");
             return false;
         }
     };
