@@ -5,6 +5,7 @@ import type { AccountDeletionJob } from './types.js';
 const JOB_COLLECTION = 'account_deletions';
 const DEVICE_COLLECTION = 'account_deletion_devices';
 const RETENTION_SAFETY_BUFFER_MS = 8_000;
+const INELIGIBLE_RECEIPT_RETRY_MS = 7 * 24 * 60 * 60 * 1000;
 
 export const ACCOUNT_DELETION_COMPLETED_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
 export const ACCOUNT_DELETION_RETENTION_PAGE_SIZE = 400;
@@ -13,16 +14,6 @@ export const ACCOUNT_DELETION_RETENTION_PAGE_SIZE = 400;
 export interface AccountDeletionRetentionPage {
   lastDocument?: QueryDocumentSnapshot;
   scanned: number;
-}
-
-function timestampMillis(value: unknown): number | null {
-  if (value instanceof Timestamp) return value.toMillis();
-  if (value && typeof value === 'object' && 'toMillis' in value
-    && typeof (value as { toMillis?: unknown }).toMillis === 'function') {
-    try { return (value as { toMillis: () => number }).toMillis(); }
-    catch { return null; }
-  }
-  return null;
 }
 
 export function completedDeletionPurgeAfter(now = Timestamp.now()): Timestamp {
@@ -59,12 +50,6 @@ export async function purgeExpiredCompletedDeletionJobs(
       page.lastDocument = item;
       page.scanned += 1;
     }
-    const job = item.data() as AccountDeletionJob;
-    // The document ID is the canonical owner; a corrupted UID must not delete
-    // an unrelated device registry.
-    if (job.uid !== item.id || job.status !== 'complete'
-      || (timestampMillis(job.purgeAfter) ?? Number.POSITIVE_INFINITY) > nowMs) continue;
-
     const jobRef: DocumentReference = item.ref;
     const deviceRef = db.collection(DEVICE_COLLECTION).doc(item.id);
     const removed = await db.runTransaction(async transaction => {
@@ -73,8 +58,18 @@ export async function purgeExpiredCompletedDeletionJobs(
       ]);
       if (!currentJobSnapshot.exists) return false;
       const current = currentJobSnapshot.data() as AccountDeletionJob;
-      if (current.uid !== item.id || current.status !== 'complete'
-        || (timestampMillis(current.purgeAfter) ?? Number.POSITIVE_INFINITY) > nowMs) return false;
+      if (current.status !== 'complete' || !(current.purgeAfter instanceof Timestamp)
+        || current.purgeAfter.toMillis() > nowMs) return false;
+      // Only the final leased worker transition produces this proof. A stray
+      // "complete" status or mismatched UID must never erase recovery credentials.
+      if (current.uid !== item.id || current.cursor?.phase !== 'complete') {
+        // Preserve the unsafe receipt. Moving it beyond the query cutoff lets
+        // later valid owners progress across separate cron invocations too.
+        transaction.update(jobRef, {
+          purgeAfter: Timestamp.fromMillis(Math.max(Date.now(), nowMs) + INELIGIBLE_RECEIPT_RETRY_MS),
+        });
+        return false;
+      }
       if (deviceSnapshot.exists) transaction.delete(deviceRef);
       transaction.delete(jobRef);
       return true;
