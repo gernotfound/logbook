@@ -68,10 +68,10 @@ export default function VolumeCaloriesCorrelationChart({
     stats: { hasData: false, correlationCoefficient: null, correlationInsight: '', avgWeeklyVolumeKg: 0, avgDailyKcal: 0, validDataPointsCount: 0 }
   });
 
-  const [prevParams, setPrevParams] = useState({ history, nutrition, library, userWeight, selectedWeeks });
-  if (history !== prevParams.history || nutrition !== prevParams.nutrition || library !== prevParams.library || userWeight !== prevParams.userWeight || selectedWeeks !== prevParams.selectedWeeks) {
-    setPrevParams({ history, nutrition, library, userWeight, selectedWeeks });
-    setIsCalculating(true);
+  const [prevParams, setPrevParams] = useState({ history, nutrition, library, userWeight, selectedWeeks, isActive });
+  if (isActive !== prevParams.isActive || history !== prevParams.history || nutrition !== prevParams.nutrition || library !== prevParams.library || userWeight !== prevParams.userWeight || selectedWeeks !== prevParams.selectedWeeks) {
+    setPrevParams({ history, nutrition, library, userWeight, selectedWeeks, isActive });
+    if (isActive) setIsCalculating(true);
   }
 
   useEffect(() => {

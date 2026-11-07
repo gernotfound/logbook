@@ -54,10 +54,10 @@ export default function WeeklyVolumeChart({
     stats: { hasData: false, currentWeekVolumeKg: 0, avgWeeklyVolumeKg: 0, percentageChange: null }
   });
 
-  const [prevParams, setPrevParams] = useState({ history, library, userWeight, selectedWeeks });
-  if (history !== prevParams.history || library !== prevParams.library || userWeight !== prevParams.userWeight || selectedWeeks !== prevParams.selectedWeeks) {
-    setPrevParams({ history, library, userWeight, selectedWeeks });
-    setIsCalculating(true);
+  const [prevParams, setPrevParams] = useState({ history, library, userWeight, selectedWeeks, isActive });
+  if (isActive !== prevParams.isActive || history !== prevParams.history || library !== prevParams.library || userWeight !== prevParams.userWeight || selectedWeeks !== prevParams.selectedWeeks) {
+    setPrevParams({ history, library, userWeight, selectedWeeks, isActive });
+    if (isActive) setIsCalculating(true);
   }
 
   useEffect(() => {
