@@ -225,6 +225,29 @@ describe('LoginBox guest Google authentication', () => {
         expect(authMocks.loginWithEmail).toHaveBeenCalledTimes(1);
     });
 
+    it('masks credentials again when switching between login, registration and recovery', () => {
+        authState.isGuest = false;
+        render(<LoginBox />);
+        const password = screen.getByLabelText('Password') as HTMLInputElement;
+        const reveal = () => fireEvent.click(screen.getByRole('button', { name: 'Mostra password' }));
+
+        reveal();
+        expect(password.type).toBe('text');
+        fireEvent.click(screen.getByRole('button', { name: 'Registrati', pressed: false }));
+        expect((screen.getByLabelText('Password') as HTMLInputElement).type).toBe('password');
+        expect((screen.getByLabelText('Conferma password') as HTMLInputElement).type).toBe('password');
+
+        reveal();
+        expect((screen.getByLabelText('Password') as HTMLInputElement).type).toBe('text');
+        fireEvent.click(screen.getByRole('button', { name: 'Accedi', pressed: false }));
+        expect((screen.getByLabelText('Password') as HTMLInputElement).type).toBe('password');
+
+        reveal();
+        fireEvent.click(screen.getByRole('button', { name: 'Hai dimenticato la password?' }));
+        fireEvent.click(screen.getByRole('button', { name: "Torna all'accesso" }));
+        expect((screen.getByLabelText('Password') as HTMLInputElement).type).toBe('password');
+    });
+
     it('identifies the email input as the username for autofill and password managers', () => {
         render(<LoginBox />);
         const emailField = screen.getByRole('textbox', { name: 'Email' });

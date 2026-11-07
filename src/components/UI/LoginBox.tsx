@@ -158,7 +158,7 @@ export const LoginBox: React.FC<LoginBoxProps> = ({ onCancel }) => {
                     className={`auth-mode-option${mode !== 'register' ? ' auth-mode-option--active' : ''}`}
                     aria-pressed={mode !== 'register'}
                     disabled={loading}
-                    onClick={() => { setMode('login'); setPassword(''); setConfirmPassword(''); setFormError(null); }}
+                    onClick={() => { setMode('login'); setPassword(''); setConfirmPassword(''); setShowPassword(false); setFormError(null); }}
                 >
                     Accedi
                 </button>
@@ -167,7 +167,7 @@ export const LoginBox: React.FC<LoginBoxProps> = ({ onCancel }) => {
                     className={`auth-mode-option${mode === 'register' ? ' auth-mode-option--active' : ''}`}
                     aria-pressed={mode === 'register'}
                     disabled={loading}
-                    onClick={() => { setMode('register'); setPassword(''); setConfirmPassword(''); setFormError(null); }}
+                    onClick={() => { setMode('register'); setPassword(''); setConfirmPassword(''); setShowPassword(false); setFormError(null); }}
                 >
                     Registrati
                 </button>
@@ -282,13 +282,13 @@ export const LoginBox: React.FC<LoginBoxProps> = ({ onCancel }) => {
 
                 {mode === 'login' && (
                     <button type="button" disabled={loading}
-                        onClick={() => { setMode('forgot'); setPassword(''); setFormError(null); }} className="ui-login-box-13 auth-recovery-link">
+                        onClick={() => { setMode('forgot'); setPassword(''); setShowPassword(false); setFormError(null); }} className="ui-login-box-13 auth-recovery-link">
                         Hai dimenticato la password?
                     </button>
                 )}
                 {mode === 'forgot' && (
                     <button type="button" disabled={loading}
-                        onClick={() => { setMode('login'); setFormError(null); }} className="ui-login-box-14 auth-recovery-link">
+                        onClick={() => { setMode('login'); setShowPassword(false); setFormError(null); }} className="ui-login-box-14 auth-recovery-link">
                         Torna all'accesso
                     </button>
                 )}
