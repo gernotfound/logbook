@@ -42,7 +42,7 @@ export const GlobalDialog: React.FC = () => {
       if (event.key === 'Escape') {
         event.preventDefault();
         event.stopPropagation();
-        if (type === 'password-prompt') setPromptValue('');
+        if (type === 'password-prompt') setPasswordInput({ prompt: onInputConfirm, value: '' });
         onCancel();
       } else if (event.key === 'Tab') {
         // This capture-phase trap takes precedence over focus traps in underlying modals.
@@ -63,7 +63,7 @@ export const GlobalDialog: React.FC = () => {
       siblings.forEach((el, index) => { el.inert = previousInert[index]; });
       if (previousFocus?.isConnected) previousFocus.focus();
     };
-  }, [isOpen, onCancel, type]);
+  }, [isOpen, onCancel, onInputConfirm, type]);
 
   if (!isOpen) return null;
 
