@@ -96,17 +96,17 @@ const DataView: React.FC<DataViewProps> = ({
                             const wasEditing = !!measurementsHook.editingDate;
                             const cancelled = measurementsHook.handleCancelEdit();
                             if (wasEditing && cancelled) {
-                sleepHook.setEditingDate(null);
-                changeSubTab('history');
-            }
+                                sleepHook.setEditingDate(null);
+                                changeSubTab('history');
+                            }
                         }}
                         calculateAndSave={async (e, bodyFatMode) => {
                             const wasEditing = !!measurementsHook.editingDate;
                             const saved = await measurementsHook.calculateAndSave(e, bodyFatMode);
                             if (wasEditing && saved) {
-                sleepHook.setEditingDate(null);
-                changeSubTab('history');
-            }
+                                sleepHook.setEditingDate(null);
+                                changeSubTab('history');
+                            }
                         }}
                         onOpenBiometry={() => changeSubTab('biometry')}
                     />

@@ -30,6 +30,29 @@ describe('meal history incremental rendering', () => {
         expect(onDayClick).toHaveBeenCalledWith(days[65].date);
     });
 
+    it('opens selectable days by keyboard and leaves read-only cards out of the tab order', () => {
+        const onDayClick = vi.fn();
+        const { container, rerender } = render(
+            <NutritionHistory nutritionHistory={days.slice(0, 1)} onDayClick={onDayClick} />
+        );
+        const card = container.querySelector<HTMLElement>('.clickable-card')!;
+        expect(card.getAttribute('role')).toBe('button');
+        expect(card.tabIndex).toBe(0);
+
+        fireEvent.keyDown(card, { key: 'Enter' });
+        fireEvent.keyDown(card, { key: ' ' });
+        expect(onDayClick).toHaveBeenCalledTimes(2);
+        expect(onDayClick).toHaveBeenNthCalledWith(1, days[0].date);
+        expect(onDayClick).toHaveBeenNthCalledWith(2, days[0].date);
+
+        rerender(<NutritionHistory nutritionHistory={days.slice(0, 1)} />);
+        const readOnlyCard = container.querySelector<HTMLElement>('.clickable-card')!;
+        expect(readOnlyCard.hasAttribute('role')).toBe(false);
+        expect(readOnlyCard.hasAttribute('tabindex')).toBe(false);
+        fireEvent.click(readOnlyCard);
+        expect(onDayClick).toHaveBeenCalledTimes(2);
+    });
+
     it('retains expanded history when a parent temporarily unmounts the history tab', () => {
         function HistoryParent() {
             const [open, setOpen] = React.useState(true);
