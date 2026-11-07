@@ -970,3 +970,25 @@ describe('Large archive cooperative analytics fallback', () => {
         await expect(pending).rejects.toThrow('annullato');
     });
 });
+
+
+describe('weekly analytics tolerate invalid non-finite records without contaminating charts', () => {
+    it('excludes infinite calories instead of treating them as a logged nutrition day', () => {
+        const nutrition = {
+            '2026-08-17': { date: '2026-08-17', kcal: Infinity, carbs: 200, pro: 100, fat: 50 },
+            '2026-08-18': { date: '2026-08-18', kcal: 2500, carbs: Infinity, pro: NaN, fat: 70 },
+        } as Record<string, NutritionDay>;
+        const { points, stats } = computeWeeklyNutritionSeries(nutrition, 1, '2026-08-18');
+        expect(points[0]).toMatchObject({
+            totalKcal: 2500, loggedDaysCount: 1, avgDailyKcal: 2500,
+            avgCarbs: 0, avgPro: 0, avgFat: 70,
+        });
+        expect(stats).toMatchObject({ hasData: true, avgDailyKcalOverall: 2500 });
+    });
+
+    it('ignores invalid workout timestamps instead of interpreting them as today', () => {
+        expect(getWorkoutDateString({ globalStartTime: Infinity, globalEndTime: NaN } as WorkoutSession)).toBeNull();
+        expect(getWorkoutDateString({ globalStartTime: Infinity, globalEndTime: Date.parse('2026-08-18T12:00:00Z') } as WorkoutSession))
+            .toBe(getLocalDateString(new Date('2026-08-18T12:00:00Z')));
+    });
+});

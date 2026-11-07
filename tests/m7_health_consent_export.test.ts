@@ -76,6 +76,77 @@ const request = (params: string, origin='https://thelogbook.web.app') => new Req
 );
 
 describe('withdrawn client export final consistency checkpoint', () => {
+  it.each([
+    ['first collection page', 1, 0],
+    ['final checkpoint', 4, 3],
+  ] as const)('does not send a stale bearer token after a same-UID login during %s', async (_stage, delayedCall, expectedRequests) => {
+    const original = clientAuth.currentUser;
+    let resolveToken!: (token: string) => void;
+    let tokenRequested!: () => void;
+    const delayedToken = new Promise<string>(resolve => { resolveToken = resolve; });
+    const requested = new Promise<void>(resolve => { tokenRequested = resolve; });
+    let tokenCalls = 0;
+    (clientAuth as { currentUser: unknown }).currentUser = {
+      uid: 'owner-1',
+      getIdToken: vi.fn(() => {
+        tokenCalls++;
+        if (tokenCalls === delayedCall) {
+          tokenRequested();
+          return delayedToken;
+        }
+        return Promise.resolve('original-token');
+      }),
+    };
+    const fetchMock = vi.fn(async () => Response.json({
+      documents: [], nextCursor: null, consentRevision: 3,
+    }));
+    vi.stubGlobal('fetch', fetchMock);
+    try {
+      const pending = fetchWithdrawnCloudBackup('owner-1', () => {});
+      await requested;
+      // Even an account with the same UID is a different authenticated session.
+      (clientAuth as { currentUser: unknown }).currentUser = {
+        uid: 'owner-1', getIdToken: vi.fn(async () => 'replacement-token'),
+      };
+      resolveToken('stale-token');
+      await expect(pending).rejects.toThrow('Account cambiato durante esportazione.');
+      expect(fetchMock).toHaveBeenCalledTimes(expectedRequests);
+    } finally {
+      (clientAuth as { currentUser: unknown }).currentUser = original;
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('rechecks the caller session after ID token acquisition before the first export request', async () => {
+    const original = clientAuth.currentUser;
+    let resolveToken!: (token: string) => void;
+    let tokenRequested!: () => void;
+    const delayedToken = new Promise<string>(resolve => { resolveToken = resolve; });
+    const requested = new Promise<void>(resolve => { tokenRequested = resolve; });
+    let valid = true;
+    (clientAuth as { currentUser: unknown }).currentUser = {
+      uid: 'owner-1', getIdToken: vi.fn(() => {
+        tokenRequested();
+        return delayedToken;
+      }),
+    };
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    try {
+      const pending = fetchWithdrawnCloudBackup('owner-1', () => {
+        if (!valid) throw new Error('Sessione cambiata durante il backup.');
+      });
+      await requested;
+      valid = false;
+      resolveToken('stale-token');
+      await expect(pending).rejects.toThrow('Sessione cambiata durante il backup.');
+      expect(fetchMock).not.toHaveBeenCalled();
+    } finally {
+      (clientAuth as { currentUser: unknown }).currentUser = original;
+      vi.unstubAllGlobals();
+    }
+  });
+
   it('refuses a different consent revision at the final checkpoint without returning an incomplete snapshot', async () => {
     const original = clientAuth.currentUser;
     (clientAuth as { currentUser: unknown }).currentUser = {

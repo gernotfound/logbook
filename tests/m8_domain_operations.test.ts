@@ -79,6 +79,33 @@ describe('M8 Domain Operations V4', () => {
         expect(month['__proto__']).toMatchObject({ id: '__proto__', date: '2026-09-15' });
     });
 
+    it('fails closed for catalog keys that Zod record maps cannot persist, without dropping other reserved-name overrides', () => {
+        const before = base({ catalogOverrides: { exercises: {}, foods: {} } });
+        expect(() => applyDomainOperations(before, {
+            type: 'catalog.exercise.patch', id: '__proto__', patch: { name: 'Non conservabile' },
+        })).toThrow('identificativo non rappresentabile');
+        expect(() => applyDomainOperations(before, {
+            type: 'catalog.food.patch', id: '__proto__', patch: { name: 'Non conservabile' },
+        })).toThrow('identificativo non rappresentabile');
+
+        const after = applyDomainOperations(before, [
+            { type: 'catalog.exercise.patch', id: 'constructor', patch: { name: 'Esercizio personale' } },
+            { type: 'catalog.food.patch', id: 'toString', patch: { name: 'Alimento personale' } },
+        ]);
+        const exercises = after.catalogOverrides?.exercises ?? {};
+        const foods = after.catalogOverrides?.foods ?? {};
+        expect(Object.hasOwn(exercises, 'constructor')).toBe(true);
+        expect(exercises['constructor']).toEqual({ name: 'Esercizio personale' });
+        expect(Object.getPrototypeOf(exercises)).toBe(Object.prototype);
+        expect(Object.hasOwn(foods, 'toString')).toBe(true);
+        expect(foods['toString']).toEqual({ name: 'Alimento personale' });
+        expect(Object.getPrototypeOf(foods)).toBe(Object.prototype);
+        const persisted = projectDocuments(after, catalog).get('')!;
+        expect(Object.hasOwn((persisted.catalogOverrides as Record<string, Record<string, unknown>>).exercises, 'constructor')).toBe(true);
+        expect(({} as Record<string, unknown>).name).toBeUndefined();
+        expect(before.catalogOverrides?.exercises).toEqual({});
+    });
+
     it('compiles a profile patch only inside the profile root scope', () => {
         const before = base({ profile: { height: '170', gender: 'M' }, activePains: ['shoulder'] });
         const { after, operations, replay } = compile(before, { type: 'profile.patch', patch: { height: '171' } });
@@ -204,6 +231,43 @@ describe('M8 Domain Operations V4', () => {
                 ],
             },
         })).toThrow(/duplicato/i);
+    });
+
+    it('rejects cycle writes whose routine identities would be discarded by the tolerant read schema', () => {
+        const before = base({ trainingCycles: [] });
+        const original = structuredClone(before);
+        const cycle = {
+            id: 'cycle-routines',
+            name: 'Ciclo con due routine',
+            durationWeeks: 6,
+            routines: [
+                { routineId: 'r-1', frequencyPerWeek: 1 },
+                { routineId: 'r-2', frequencyPerWeek: 2 },
+            ],
+        };
+
+        const invalid = [
+            { ...cycle, routines: [
+                { routineId: 'r-1', frequencyPerWeek: 1 },
+                { routineId: ' r-1 ', frequencyPerWeek: 2 },
+            ] },
+            { ...cycle, routines: [{ routineId: 'invalid/id', frequencyPerWeek: 1 }] },
+            { ...cycle, routines: [null] },
+            { ...cycle, routines: { routineId: 'r-1' } },
+        ];
+        for (const malformed of invalid) {
+            expect(() => applyDomainOperations(before, {
+                type: 'training-cycle.upsert',
+                cycle: malformed as unknown as typeof cycle,
+            })).toThrow();
+            expect(before).toEqual(original);
+        }
+
+        const { after, operations, replay } = compile(before, { type: 'training-cycle.upsert', cycle });
+        expect(after.trainingCycles?.[0]?.routines).toEqual(cycle.routines);
+        expect(operations.some(operation => operation.path[0] === 'trainingCycles')).toBe(true);
+        const persisted = replay.get('')?.trainingCycles as Array<{ routines: typeof cycle.routines }>;
+        expect(persisted?.[0]?.routines).toEqual(cycle.routines);
     });
 
     it('rejects an incomplete reorder instead of silently dropping an entity', () => {
