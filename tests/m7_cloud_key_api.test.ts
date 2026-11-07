@@ -230,6 +230,25 @@ describe('authenticated cloud account key API', () => {
     expect((await POST(request())).status).toBe(503);
   });
 
+  it.each([
+    ['client-selected uid', '?uid=another-account'],
+    ['client-supplied key', '?key=untrusted'],
+    ['unknown purpose', '?purpose=sync'],
+    ['duplicate purpose', '?purpose=rights-export&purpose=rights-export'],
+    ['empty purpose', '?purpose='],
+    ['rights export with uid', '?purpose=rights-export&uid=another-account'],
+  ])('rejects %s query before authentication or key access', async (_case, query) => {
+    const response = await POST(new Request(`https://backend.test/api/cloud-key${query}`, {
+      method: 'POST',
+      headers: { origin: 'https://thelogbook.web.app' },
+    }));
+    expect(response.status).toBe(400);
+    expect(harness.verify).not.toHaveBeenCalled();
+    expect(harness.wrap).not.toHaveBeenCalled();
+    expect(harness.unwrap).not.toHaveBeenCalled();
+    expect(harness.documents.has('user_data_keys/owner-a')).toBe(false);
+  });
+
   it('ignores client-supplied uid/key and always uses verified caller identity', async () => {
     const result = await POST(request('https://thelogbook.web.app', true));
     expect(result.status).toBe(400);
