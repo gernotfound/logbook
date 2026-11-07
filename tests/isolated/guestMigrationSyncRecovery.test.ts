@@ -54,6 +54,52 @@ describe('owner-scoped guest migration sync recovery', () => {
         },
     );
 
+    it.each([null, '', '   '])(
+        'refuses to create a recovery proof without a valid guest generation (%j)',
+        generation => {
+            const key = guestMigrationSyncRecoveryKey('account-a');
+            if (generation === null) localStorage.removeItem(GUEST_SESSION_KEY);
+            else localStorage.setItem(GUEST_SESSION_KEY, generation);
+
+            expect(() => markGuestMigrationSyncRecovery('account-a'))
+                .toThrow('Generazione guest mancante');
+            expect(localStorage.getItem(key)).toBeNull();
+
+            localStorage.setItem(GUEST_SESSION_KEY, 'generation-a');
+            const id = markGuestMigrationSyncRecovery('account-a');
+            expect(readGuestMigrationSyncWitness('account-a'))
+                .toMatchObject({ guestSessionId: 'generation-a', id });
+        },
+    );
+
+    it.each([null, '', '   ', 42, false])(
+        'does not accept a stored recovery proof with a corrupt generation (%j)',
+        generation => {
+            const uid = 'account-a';
+            const key = guestMigrationSyncRecoveryKey(uid);
+            const raw = JSON.stringify({ version: 1, uid, guestSessionId: generation, id: 'witness' });
+            localStorage.setItem(key, raw);
+
+            expect(() => readGuestMigrationSyncWitness(uid))
+                .toThrow('Prova di recupero migrazione account non valida.');
+            expect(() => clearGuestMigrationSyncRecovery(uid, 'witness'))
+                .toThrow('Prova di recupero migrazione account non valida.');
+            expect(localStorage.getItem(key)).toBe(raw);
+        },
+    );
+
+    it.each(['', 'invalid/uid'])(
+        'does not construct or mutate a guest-migration namespace for an invalid account UID (%j)',
+        uid => {
+            const before = localStorage.length;
+            expect(() => guestMigrationSyncRecoveryKey(uid)).toThrow();
+            expect(() => readGuestMigrationSyncWitness(uid)).toThrow();
+            expect(() => markGuestMigrationSyncRecovery(uid)).toThrow();
+            expect(() => clearGuestMigrationSyncRecovery(uid, 'witness')).toThrow();
+            expect(localStorage.length).toBe(before);
+        },
+    );
+
     it('rejects altered recovery ownership without erasing evidence', () => {
         const uid = 'account-a';
         const key = guestMigrationSyncRecoveryKey(uid);
