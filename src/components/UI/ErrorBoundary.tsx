@@ -29,7 +29,11 @@ class ErrorBoundary extends Component<Props, State> {
     console.error('Uncaught error:', error, errorInfo);
   }
 
+  private recoveryInProgress = false;
+
   private handleSafeReload = async () => {
+    if (this.recoveryInProgress) return;
+    this.recoveryInProgress = true;
     try {
       await safeHardReload();
     } catch (error) {
@@ -37,20 +41,20 @@ class ErrorBoundary extends Component<Props, State> {
       await useDialogStore.getState().showAlert(
         'Impossibile ricaricare in sicurezza: alcune modifiche locali potrebbero non essere ancora state salvate. Riprova tra qualche secondo.'
       );
+    } finally {
+      this.recoveryInProgress = false;
     }
   };
 
-  private localResetInProgress = false;
-
   private handleLocalReset = async () => {
-    // A second confirmation must not race an owner-scoped purge that is still
-    // running or schedule another destructive attempt behind the first dialog.
-    if (this.localResetInProgress) return;
-    this.localResetInProgress = true;
+    // A second confirmation or reload must not race an ongoing destructive
+    // purge, nor may a reset start while the reload durability barrier runs.
+    if (this.recoveryInProgress) return;
+    this.recoveryInProgress = true;
     try {
       await this.performLocalReset();
     } finally {
-      this.localResetInProgress = false;
+      this.recoveryInProgress = false;
     }
   };
 
