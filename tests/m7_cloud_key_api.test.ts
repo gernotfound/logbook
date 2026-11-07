@@ -194,6 +194,16 @@ describe('authenticated cloud account key API', () => {
   it('ignores client-supplied uid/key and always uses verified caller identity', async () => {
     const result = await POST(request('https://thelogbook.web.app', true));
     expect(result.status).toBe(400);
+
+    // A client can send a body as a stream without declaring Content-Length.
+    const withoutLength = new Request('https://backend.test/api/cloud-key', {
+      method: 'POST',
+      headers: { origin: 'https://thelogbook.web.app' },
+      body: '{"uid":"another-account"}',
+    });
+    expect(withoutLength.headers.has('content-length')).toBe(false);
+    expect((await POST(withoutLength)).status).toBe(400);
+
     expect(harness.verify).not.toHaveBeenCalled();
     expect(harness.documents.has('user_data_keys/owner-a')).toBe(false);
   });
