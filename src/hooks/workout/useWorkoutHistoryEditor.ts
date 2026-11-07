@@ -63,10 +63,18 @@ export function useWorkoutHistoryEditor({
             }
             // Preserve the device's authoritative session (including unsynced sets)
             // before replacing the visible snapshot with a history editor.
+            const afterRecovery = useAppStore.getState();
+            if (!isCurrentSession(session) || afterRecovery.localWorkout !== currentLocal
+                || afterRecovery.userData?.activeWorkout !== state.userData?.activeWorkout
+                || afterRecovery.userData?.history?.find(item => item.id === workout.id) !== selectedHistory
+                || isHistorySavePending(session.owner)) return false;
             const previousContext = readDeviceValueStrict(HISTORY_EDITOR_CONTEXT, session.owner);
-            // An abandoned editor context can outlive a consent withdrawal.
-            // Never replace an unproven suspended session with a current-epoch one.
+            // A previous editor's suspended workout remains recovery evidence,
+            // even when its owner and consent epoch are still valid.
             assertHistoryEditorContextEpoch(previousContext, session.owner);
+            if (previousContext !== null) {
+                throw new Error('Contesto di un precedente editor ancora presente: copia preservata.');
+            }
             const sourceRevision = readDeviceConsentRevision(session.owner);
             if (session.owner.startsWith('user:') && sourceRevision === undefined) {
                 throw new Error('Generazione consenso editor storico non verificabile: nessun contesto creato.');
@@ -77,6 +85,9 @@ export function useWorkoutHistoryEditor({
                 ...(sourceRevision !== undefined ? { consentRevision: sourceRevision } : {}),
                 suspended,
             });
+            if (readDeviceValueStrict(HISTORY_EDITOR_CONTEXT, session.owner) !== previousContext) {
+                throw new Error('Contesto editor modificato da un’altra scheda: copia preservata.');
+            }
             writeDeviceValue(HISTORY_EDITOR_CONTEXT, nextContext, session.owner);
             try {
                 setLocalWorkout(editingWorkout);

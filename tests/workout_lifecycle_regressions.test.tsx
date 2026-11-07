@@ -1152,6 +1152,57 @@ describe('Workout lifecycle durable recovery regressions', () => {
         }
     });
 
+    it('preserves an abandoned historical editor context under the current consent epoch', async () => {
+        await prepareUnlockedTestArchive(owner);
+        if (owner.startsWith('user:')) localStorage.setItem(`logbook:v2:${owner}:health-consent-generation`, '1');
+        const historical = workout('history-new', true);
+        const live = workout('workout-live', true);
+        const existing = JSON.stringify({ version: 1, editorId: 'other-editor',
+            ...(owner.startsWith('user:') ? { consentRevision: 1 } : {}),
+            suspended: workout('unrestored-workout', true) });
+        writeDeviceValue('history-editor-context', existing, owner);
+        useAppStore.setState({ localWorkout: live, userData: userData({ history: [historical], activeWorkout: live }) });
+        vi.mocked(useDialogStore.getState().showConfirm).mockResolvedValueOnce(true);
+        const { result } = renderHook(() => useWorkoutSession());
+        await act(async () => { expect(await result.current.startEditHistoricalWorkout(historical)).toBe(false); });
+        expect(readDeviceValueStrict('history-editor-context', owner)).toBe(existing);
+        expect(useAppStore.getState().localWorkout?.id).toBe(live.id);
+    });
+
+    it('does not restore history without the previously persisted suspended-session context', async () => {
+        await prepareUnlockedTestArchive(owner);
+        const editor = { ...workout('history-unproved', true), isEditingHistory: true };
+        useAppStore.setState({ localWorkout: editor, userData: userData({ activeWorkout: workout('unproved-shadow', true) }) });
+        await expect(restoreSessionAfterHistoryEdit(editor.id)).rejects.toThrow('Contesto editor storico mancante');
+        expect(useAppStore.getState().localWorkout?.id).toBe(editor.id);
+    });
+
+    it('preserves a concurrent replacement of the historical editor context during cleanup', async () => {
+        await prepareUnlockedTestArchive(owner);
+        if (owner.startsWith('user:')) localStorage.setItem(`logbook:v2:${owner}:health-consent-generation`, '1');
+        const editor = { ...workout('old-history-editor', true), isEditingHistory: true };
+        const suspended = workout('suspended-during-history', true);
+        const initial = userData({ activeWorkout: suspended });
+        await initializeLocal(owner, initial);
+        const original = JSON.stringify({ version: 1, editorId: editor.id,
+            ...(owner.startsWith('user:') ? { consentRevision: 1 } : {}), suspended });
+        const newer = JSON.stringify({ version: 1, editorId: 'newer-editor',
+            ...(owner.startsWith('user:') ? { consentRevision: 1 } : {}),
+            suspended: workout('newer-suspended-workout', true) });
+        writeDeviceValue('history-editor-context', original, owner);
+        useAppStore.setState({ userData: initial, localWorkout: editor });
+        const unsubscribe = useAppStore.subscribe((state, previous) => {
+            if (previous.localWorkout?.isEditingHistory && state.localWorkout?.id === suspended.id) {
+                writeDeviceValue('history-editor-context', newer, owner);
+            }
+        });
+        try {
+            await act(async () => { await restoreSessionAfterHistoryEdit(editor.id); });
+            expect(readDeviceValueStrict('history-editor-context', owner)).toBe(newer);
+            expect(useAppStore.getState().saveError).toMatch(/contesto editor/);
+        } finally { unsubscribe(); }
+    });
+
     it('does not resurrect a suspended workout durably deleted in another tab', async () => {
         await prepareUnlockedTestArchive(owner);
         const previous = workout('closed-in-other-tab', true);
