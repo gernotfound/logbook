@@ -16,8 +16,9 @@ const NutritionPlanning = () => {
 
             <div className="input-row flex-between" style={{ marginBottom: '20px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
-                    <label style={{ fontSize: 'var(--font-size-control)', color: 'var(--text-main)', margin: 0, fontWeight: 'bold' }}>Giorni ON (su 7)</label>
+                    <label htmlFor="nutrition-on-days" style={{ fontSize: 'var(--font-size-control)', color: 'var(--text-main)', margin: 0, fontWeight: 'bold' }}>Giorni ON (su 7)</label>
                     <input 
+                        id="nutrition-on-days"
                         type="number" 
                         min="0" max="7" step="1"
                         value={planning.onDaysCount !== undefined && planning.onDaysCount !== null ? planning.onDaysCount : 4} 
@@ -34,16 +35,16 @@ const NutritionPlanning = () => {
                     <h2 style={{marginTop: 0, marginBottom: '15px', color: 'var(--text-main)'}}>⚖️ Media settimanale desiderata</h2>
                     
                     <div className="input-row flex-between" style={{ marginBottom: '10px' }}>
-                        <span style={{ color: 'var(--text-muted)' }}>Pro (g/kg)</span>
-                        <input type="number" min="0" step="0.1" value={planning.avgMacros?.proPerKg ?? ''} onChange={e => handleUpdateAvgMacros('proPerKg', e.target.value)} onFocus={e => e.target.select()} style={{ width: '80px', textAlign: 'right' }} />
+                        <label htmlFor="nutrition-average-pro" style={{ color: 'var(--text-muted)' }}>Pro (g/kg)</label>
+                        <input id="nutrition-average-pro" type="number" min="0" step="0.1" value={planning.avgMacros?.proPerKg ?? ''} onChange={e => handleUpdateAvgMacros('proPerKg', e.target.value)} onFocus={e => e.target.select()} style={{ width: '80px', textAlign: 'right' }} />
                     </div>
                     <div className="input-row flex-between" style={{ marginBottom: '10px' }}>
-                        <span style={{ color: 'var(--text-muted)' }}>Carbo (g/kg)</span>
-                        <input type="number" min="0" step="0.1" value={planning.avgMacros?.carbsPerKg ?? ''} onChange={e => handleUpdateAvgMacros('carbsPerKg', e.target.value)} onFocus={e => e.target.select()} style={{ width: '80px', textAlign: 'right' }} />
+                        <label htmlFor="nutrition-average-carbs" style={{ color: 'var(--text-muted)' }}>Carbo (g/kg)</label>
+                        <input id="nutrition-average-carbs" type="number" min="0" step="0.1" value={planning.avgMacros?.carbsPerKg ?? ''} onChange={e => handleUpdateAvgMacros('carbsPerKg', e.target.value)} onFocus={e => e.target.select()} style={{ width: '80px', textAlign: 'right' }} />
                     </div>
                     <div className="input-row flex-between" style={{ marginBottom: '15px' }}>
-                        <span style={{ color: 'var(--text-muted)' }}>Grassi (g/kg)</span>
-                        <input type="number" min="0" step="0.1" value={planning.avgMacros?.fatPerKg ?? ''} onChange={e => handleUpdateAvgMacros('fatPerKg', e.target.value)} onFocus={e => e.target.select()} style={{ width: '80px', textAlign: 'right' }} />
+                        <label htmlFor="nutrition-average-fat" style={{ color: 'var(--text-muted)' }}>Grassi (g/kg)</label>
+                        <input id="nutrition-average-fat" type="number" min="0" step="0.1" value={planning.avgMacros?.fatPerKg ?? ''} onChange={e => handleUpdateAvgMacros('fatPerKg', e.target.value)} onFocus={e => e.target.select()} style={{ width: '80px', textAlign: 'right' }} />
                     </div>
 
                     <div style={{ display: 'flex', justifyContent: 'space-between', background: 'var(--surface-color)', padding: '10px', borderRadius: '8px' }}>
@@ -74,16 +75,16 @@ const NutritionPlanning = () => {
                     <p style={{ fontSize: 'var(--font-size-body)', color: 'var(--text-muted)', marginBottom: '15px' }}>Varia in percentuale i macro nei giorni di allenamento.</p>
                     
                     <div className="input-row flex-between" style={{ marginBottom: '10px' }}>
-                        <span style={{ color: 'var(--text-muted)' }}>Variazione pro (%)</span>
-                        <input type="number" min="-100" step="1" value={planning.onBoost?.proPercent ?? ''} onChange={e => handleUpdateOnBoost('proPercent', e.target.value)} onFocus={e => e.target.select()} style={{ width: '80px', textAlign: 'right' }} />
+                        <label htmlFor="nutrition-on-pro" style={{ color: 'var(--text-muted)' }}>Variazione pro (%)</label>
+                        <input id="nutrition-on-pro" type="number" min="-100" step="1" value={planning.onBoost?.proPercent ?? ''} onChange={e => handleUpdateOnBoost('proPercent', e.target.value)} onFocus={e => e.target.select()} style={{ width: '80px', textAlign: 'right' }} />
                     </div>
                     <div className="input-row flex-between" style={{ marginBottom: '10px' }}>
-                        <span style={{ color: 'var(--text-muted)' }}>Variazione carbo (%)</span>
-                        <input type="number" min="-100" step="1" value={planning.onBoost?.carbsPercent ?? ''} onChange={e => handleUpdateOnBoost('carbsPercent', e.target.value)} onFocus={e => e.target.select()} style={{ width: '80px', textAlign: 'right' }} />
+                        <label htmlFor="nutrition-on-carbs" style={{ color: 'var(--text-muted)' }}>Variazione carbo (%)</label>
+                        <input id="nutrition-on-carbs" type="number" min="-100" step="1" value={planning.onBoost?.carbsPercent ?? ''} onChange={e => handleUpdateOnBoost('carbsPercent', e.target.value)} onFocus={e => e.target.select()} style={{ width: '80px', textAlign: 'right' }} />
                     </div>
                     <div className="input-row flex-between" style={{ marginBottom: '15px' }}>
-                        <span style={{ color: 'var(--text-muted)' }}>Variazione grassi (%)</span>
-                        <input type="number" min="-100" step="1" value={planning.onBoost?.fatPercent ?? ''} onChange={e => handleUpdateOnBoost('fatPercent', e.target.value)} onFocus={e => e.target.select()} style={{ width: '80px', textAlign: 'right' }} />
+                        <label htmlFor="nutrition-on-fat" style={{ color: 'var(--text-muted)' }}>Variazione grassi (%)</label>
+                        <input id="nutrition-on-fat" type="number" min="-100" step="1" value={planning.onBoost?.fatPercent ?? ''} onChange={e => handleUpdateOnBoost('fatPercent', e.target.value)} onFocus={e => e.target.select()} style={{ width: '80px', textAlign: 'right' }} />
                     </div>
                 </div>
 
