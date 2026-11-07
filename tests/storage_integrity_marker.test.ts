@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import {
-  STORAGE_MARKER_VERSION, getStorageMarker, getStorageMarkerKey,
+  STORAGE_MARKER_VERSION, StorageMarkerReadError, getStorageMarker, getStorageMarkerKey,
   updateStorageMarker, clearStorageMarker, diagnoseStorageState,
 } from '../src/lib/storageIntegrity';
 
@@ -25,9 +25,9 @@ describe('Owner-scoped storage integrity markers', () => {
   it('rejects malformed markers and ignores global prelaunch keys', () => {
     const key = getStorageMarkerKey('user:a');
     localStorage.setItem(key, '{broken');
-    expect(getStorageMarker(undefined, 'user:a')).toBeNull();
+    expect(() => getStorageMarker(undefined, 'user:a')).toThrow(StorageMarkerReadError);
     localStorage.setItem(key, JSON.stringify({ version: '1', timestamp: 1 }));
-    expect(getStorageMarker(undefined, 'user:a')).toBeNull();
+    expect(() => getStorageMarker(undefined, 'user:a')).toThrow(StorageMarkerReadError);
     localStorage.setItem('logbook_storage_marker', JSON.stringify({ version: 1, timestamp: 5 }));
     clearStorageMarker(undefined, 'user:a');
     expect(localStorage.getItem('logbook_storage_marker')).not.toBeNull();
@@ -39,9 +39,20 @@ describe('Owner-scoped storage integrity markers', () => {
       setItem: vi.fn(() => { throw new Error('blocked'); }),
       removeItem: vi.fn(() => { throw new Error('blocked'); }),
     } as unknown as Storage;
-    expect(getStorageMarker(unavailable)).toBeNull();
+    expect(() => getStorageMarker(unavailable)).toThrow(StorageMarkerReadError);
     expect(updateStorageMarker(1, unavailable)).toBeNull();
     expect(() => clearStorageMarker(unavailable)).not.toThrow();
+  });
+
+  it('never mistakes an empty or incompatible present marker for a first-run guest', () => {
+    const key = getStorageMarkerKey('guest');
+    for (const raw of ['', 'null', '{}', JSON.stringify({ version: 1, timestamp: 1, schemaVersion: 2 })]) {
+      localStorage.setItem(key, raw);
+      expect(() => getStorageMarker(undefined, 'guest')).toThrow(StorageMarkerReadError);
+      expect(localStorage.getItem(key)).toBe(raw);
+    }
+    localStorage.removeItem(key);
+    expect(getStorageMarker(undefined, 'guest')).toBeNull();
   });
 
   it('distinguishes missing, empty guest, unreadable and invalid snapshots', () => {

@@ -36,8 +36,13 @@ export function createJournalRetry(
             timer = null;
             if (!canSchedule() || disposed) return;
             active = true;
-            attempts += 1;
-            void Promise.resolve().then(flush).catch(error => {
+            // A session or consent change can happen after the timer callback
+            // but before its queued microtask starts the remote operation.
+            void Promise.resolve().then(() => {
+                if (disposed || !canSchedule()) return;
+                attempts += 1;
+                return flush();
+            }).catch(error => {
                 console.warn('Retry journal in primo piano non completato:', error);
             }).finally(() => {
                 active = false;

@@ -9,7 +9,7 @@ import { localStorageMock } from './setup';
 import { prepareUnlockedTestArchive } from './secureVaultFixture';
 import { advanceLocalConsentRevisionIfClean, commitDomainOperations, initializeLocal, readLocal } from '../src/lib/sync/localRepository';
 import {
-    persistPlainWorkoutSnapshot, readWorkoutDeviceIntent, recoverWorkoutDeviceIntent, saveWorkoutDeviceIntent, unwrapWorkoutDeviceSnapshot,
+    persistPlainWorkoutSnapshot, readWorkoutDeviceIntent, recoverWorkoutDeviceIntent, releaseCommittedWorkoutSlot, saveWorkoutDeviceIntent, unwrapWorkoutDeviceSnapshot,
 } from '../src/lib/sync/workoutDeviceIntent';
 import { getInitialLocalWorkout } from '../src/store/slices/createWorkoutSlice';
 import { persistOwnerBoundWorkoutSnapshot } from '../src/lib/sync/deviceCriticalState';
@@ -667,6 +667,46 @@ describe('authenticated device-intent replay into semantic journal', () => {
         const remaining = Array.from({ length: localStorage.length }, (_, i) => localStorage.key(i))
             .filter(key => key?.startsWith('logbook:v2:' + testOwner + ':') && key.includes('workout-intent:'));
         expect(remaining).toHaveLength(0);
+    });
+
+    it('retains the committed head if ancestor cleanup fails midway, then recovers without a stale-witness block', async () => {
+        const account = 'user:partial-witness-cleanup';
+        const initial = data(workout('50'));
+        await prepareAccountWorkoutArchive(account);
+        await initializeLocal(account, initial);
+        const first = saveWorkoutDeviceIntent(account, initial.activeWorkout ?? null, workout('52'), initial.activeWorkout ?? null);
+        const middle = saveWorkoutDeviceIntent(account, first.workout, workout('55'), first.baseline);
+        const latest = saveWorkoutDeviceIntent(account, middle.workout, workout('60'), middle.baseline);
+        await commitDomainOperations(account, { type: 'active-workout.set', workout: latest.workout }, initial, undefined, {
+            generation: latest.generation, sequence: latest.sequence, consentRevision: latest.consentRevision,
+            intentId: latest.intentId, parentIntentId: latest.parentIntentId,
+            ancestorIds: latest.ancestorIds, baseline: latest.baseline,
+        });
+
+        const originalRemove = localStorageMock.removeItem.getMockImplementation();
+        if (!originalRemove) throw new Error('Expected localStorage removeItem mock');
+        let witnessRemovals = 0;
+        localStorageMock.removeItem.mockImplementation((key: string) => {
+            if (key.includes(':sealed:workout-intent:') && ++witnessRemovals === 2) {
+                throw new DOMException('Storage cleanup interrupted', 'SecurityError');
+            }
+            return originalRemove(key);
+        });
+        try {
+            await expect(releaseCommittedWorkoutSlot(account, latest)).rejects.toThrow();
+        } finally {
+            localStorageMock.removeItem.mockImplementation(originalRemove);
+        }
+
+        expect(witnessRemovals).toBe(2);
+        expect(readDeviceValueStrict('workout-intent:' + first.intentId, account)).toBeNull();
+        expect(readDeviceValueStrict('workout-intent:' + latest.intentId, account)).not.toBeNull();
+
+        await recoverWorkoutDeviceIntent(account, () => true);
+        for (const intent of [first, middle, latest]) {
+            expect(readDeviceValueStrict('workout-intent:' + intent.intentId, account)).toBeNull();
+        }
+        expect((await readLocal(account))?.data.activeWorkout?.exercises[0].sets[0].kg).toBe('60');
     });
 
     it('retains its immutable witness if the shared snapshot write is denied after the first write', async () => {

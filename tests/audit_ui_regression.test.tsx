@@ -13,7 +13,6 @@ import { DB } from '../src/lib/db';
 import { useDialogStore } from '../src/store/useDialogStore';
 import { GlobalDialog } from '../src/components/UI/GlobalDialog';
 import { clearSyncTimers } from '../src/store/slices/createSyncSlice';
-import { clearWorkoutTimer } from '../src/store/slices/createWorkoutSlice';
 import { draftRegistry } from '../src/lib/utils/draftRegistry';
 import { captureSession } from '../src/lib/sync/session';
 
@@ -46,7 +45,6 @@ beforeEach(async () => {
 afterEach(() => {
     cleanup();
     clearSyncTimers();
-    clearWorkoutTimer();
     useDialogStore.getState().onCancel();
     vi.restoreAllMocks();
     vi.useRealTimers();
@@ -71,6 +69,26 @@ describe('audit interaction regressions', () => {
         expect(await confirmation).toBe(false);
         expect(document.activeElement).toBe(opener);
         expect(container.inert).not.toBe(true);
+    });
+
+    it('does not reuse a password typed into a cancelled owner-bound prompt', async () => {
+        render(<GlobalDialog />);
+        let first!: Promise<string | null>;
+        act(() => { first = useDialogStore.getState().showPasswordPrompt('Prima identità'); });
+        const password = screen.getByLabelText('Password attuale') as HTMLInputElement;
+        fireEvent.change(password, { target: { value: 'secret-from-first-account' } });
+        expect(password.value).toBe('secret-from-first-account');
+
+        act(() => { useDialogStore.getState().cancelAll(); });
+        expect(await first).toBeNull();
+
+        let second!: Promise<string | null>;
+        act(() => { second = useDialogStore.getState().showPasswordPrompt('Nuova identità'); });
+        expect((screen.getByLabelText('Password attuale') as HTMLInputElement).value).toBe('');
+        expect((screen.getByRole('button', { name: 'Conferma' }) as HTMLButtonElement).disabled).toBe(true);
+
+        act(() => { useDialogStore.getState().cancelAll(); });
+        expect(await second).toBeNull();
     });
 
     it('does not offer safe exit while a save is still running', () => {

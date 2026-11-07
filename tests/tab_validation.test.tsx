@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { screen, renderHook, fireEvent, act, waitFor } from '@testing-library/react';
 import App from '../src/App';
 import HeaderDashboard from '../src/components/Home/widgets/HeaderDashboard';
@@ -24,6 +24,8 @@ describe('R4: Tab Zod Schema & LocalStorage Fallback Resilience (ARCH-05)', () =
         vi.clearAllMocks();
         await prepareUnlockedTestArchive();
     });
+
+    afterEach(() => window.history.replaceState({}, '', '/'));
 
     describe('Zod Schema Unit Validation', () => {
         it('validates all valid AppTab / MainTab values', () => {
@@ -219,6 +221,21 @@ describe('R4: Tab Zod Schema & LocalStorage Fallback Resilience (ARCH-05)', () =
             // synchronously with the visible shortcut navigation.
             await waitFor(() => expect(window.localStorage.getItem(accountTabKey)).toBe(JSON.stringify('home')));
             expect(window.location.search).toBe('');
+        });
+
+        it('removes only the PWA shortcut while preserving other URL params, hash and history state', async () => {
+            const state = { source: 'external-entry' };
+            window.history.replaceState(state, '', '/?source=link&tab=training&code=keep#details');
+            renderWithProviders(<App />);
+            await waitFor(() => expect(window.location.search).toBe('?source=link&code=keep'));
+            expect(window.location.hash).toBe('#details');
+            expect(window.history.state).toEqual(state);
+        });
+
+        it('consumes an empty shortcut without dropping unrelated query values', async () => {
+            window.history.replaceState({}, '', '/?tab=&source=keep');
+            renderWithProviders(<App />);
+            await waitFor(() => expect(window.location.search).toBe('?source=keep'));
         });
 
         it('exposes the settings control in the Home header', () => {

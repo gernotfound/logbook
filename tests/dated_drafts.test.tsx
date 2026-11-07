@@ -1162,6 +1162,39 @@ it('preserves a dirty sleep form when an unrelated meal is received', async () =
     expect(localStorage.getItem(deviceKey(name, owner))).toBeNull();
     hook.unmount();
 });
+it('leaves the sleep historical editor accessible but closes it after measurement edit cancellation', async () => {
+    const owner = storageOwner();
+    await prepareUnlockedTestArchive(owner);
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 9, 5, 12, 0, 0));
+    const historicalDay = '2026-10-04';
+    useAppStore.setState({
+        userData: data({ [historicalDay]: day(historicalDay, { weight: 80, sleepHours: '07:30' }) }),
+        dataOwner: owner,
+    });
+    const Harness = () => {
+        const [tab, setTab] = useState<DataSubTab>('history');
+        return <DataView subTab={tab} setSubTab={setTab} />;
+    };
+    const view = render(<Harness />);
+    fireEvent.click(screen.getByRole('button', { name: 'Opzioni' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Modifica misurazione' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Sonno' }));
+    expect(screen.getByRole('heading', { name: 'Modifica sonno' })).toBeDefined();
+    expect(screen.getByRole('button', { name: 'Giorno precedente' })).toHaveProperty('disabled', true);
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Misurazioni' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Annulla' }));
+    expect(view.container.querySelector('#data-panel-history')).not.toBeNull();
+    fireEvent.click(screen.getByRole('tab', { name: 'Sonno' }));
+    expect(screen.getByRole('heading', { name: 'Dati sonno' })).toBeDefined();
+    const previous = screen.getByRole('button', { name: 'Giorno precedente' });
+    expect(previous).toHaveProperty('disabled', false);
+    fireEvent.click(previous);
+    expect(screen.getByRole('heading', { name: 'Dati sonno' })).toBeDefined();
+    view.unmount();
+});
+
 it('stays in the measurement editor when draft cancellation fails and navigates only after retry', async () => {
     const owner = storageOwner();
     await prepareUnlockedTestArchive(owner);

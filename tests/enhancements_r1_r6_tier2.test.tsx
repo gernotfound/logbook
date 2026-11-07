@@ -14,6 +14,7 @@ import { SessionExerciseSchema } from '../src/lib/schema';
 import { useSleepMeasurements } from '../src/hooks/useSleepMeasurements';
 import { useWorkoutSetMutations } from '../src/hooks/workout/useWorkoutSetMutations';
 import { useWorkoutSession } from '../src/hooks/useWorkoutSession';
+import { useTrainingRoutines } from '../src/hooks/useTrainingRoutines';
 import { RoutineEditor } from '../src/components/Training/routines/RoutineEditor';
 import TrainingSession from '../src/components/Training/TrainingSession';
 import SessionExerciseCard from '../src/components/Training/session/SessionExerciseCard';
@@ -483,6 +484,36 @@ describe('LogBook PWA Enhancements Integration Suite (Requirements R1 - R6)', ()
                 expect(container.textContent).toContain('Esercizi nella scheda (2)');
             });
 
+            it('T2.4.3b: repeated routine exercise identities fail validation without locking the local archive', async () => {
+                const owner = captureSession().owner;
+                const initialData = { ...emptyUserData, routines: [] };
+                delete idbStore['logbook:v2:' + owner];
+                await initializeLocal(owner, initialData);
+                useAppStore.setState({ userData: initialData, dataOwner: owner });
+
+                const { result } = renderHook(() => useTrainingRoutines());
+                act(() => {
+                    result.current.setRoutineName('Routine test');
+                    result.current.handleAddExerciseToRoutine('ex_pullup');
+                    result.current.handleAddExerciseToRoutine('ex_pullup');
+                });
+                expect(result.current.routineExercises).toHaveLength(2);
+
+                let saved: boolean | undefined;
+                await act(async () => {
+                    saved = await result.current.handleSave();
+                });
+
+                expect(saved).toBe(false);
+                expect(useDialogStore.getState().showAlert).toHaveBeenCalledWith(
+                    expect.stringContaining('presente due volte'),
+                );
+                expect(result.current.routineExercises).toHaveLength(2);
+                expect(useAppStore.getState().localPersistenceBlocked).toBe(false);
+                expect((await readLocal(owner))?.data.routines).toEqual([]);
+                expect(idbStore['logbook:v2:' + owner]).toMatch(/^tlb-sealed:v1:/);
+            });
+
             it('T2.4.4: Long routine name (100+ chars) renders without breaking layout', () => {
                 const longName = 'Scheda Ipertrofia ad Alto Volume con Focus Pettorali, Deltoidi Laterali e Braccia - Versione 2.0 Avanzata';
                 const setRoutineName = vi.fn();
@@ -803,7 +834,7 @@ describe('LogBook PWA Enhancements Integration Suite (Requirements R1 - R6)', ()
                         ...editing!,
                         exercises: [
                             ...editing!.exercises,
-                            { exId: 'ex_adhoc_added', sessionNote: 'Added', sets: [] },
+                            { id: 'se_adhoc_added', exId: 'ex_adhoc_added', sessionNote: 'Added', sets: [] },
                         ],
                     });
                 });
