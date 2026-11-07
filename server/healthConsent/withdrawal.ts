@@ -202,6 +202,20 @@ export async function recordHealthConsentReacceptance(
     if (!previousSnap.exists || previous?.status !== 'withdrawn' || previous.revision !== expectedRevision) {
       throw new HealthConsentRevisionConflictError();
     }
+    // Erasure receipts expire after 30 days; the monotonic consent floor is
+    // the durable proof that the immediately preceding withdrawal was erased.
+    if (!Number.isSafeInteger(previous.erasedBeforeRevision)
+      || previous.erasedBeforeRevision < 1
+      || previous.erasedBeforeRevision !== previous.revision - 1) {
+      throw new HealthConsentRevisionConflictError();
+    }
+    if (erasureJob.exists) {
+      const receipt = erasureJob.data();
+      if (receipt?.uid !== uid || receipt.consentRevision !== previous.erasedBeforeRevision
+        || receipt.completedRevision !== previous.revision) {
+        throw new HealthConsentRevisionConflictError();
+      }
+    }
     const revision = Number(previous.revision) + 1;
     if (!Number.isSafeInteger(revision)) throw new Error('Revision consenso non valida.');
     const now = Timestamp.now();
@@ -217,17 +231,11 @@ export async function recordHealthConsentReacceptance(
   });
 }
 
-/** Called by the existing deletion worker; never used by user-side revocation. */
-export async function removeHealthConsentStateForDeletedAccount(
+/** The account deletion worker must remove consent under its lease-fenced transaction. */
+export function removeHealthConsentStateForDeletedAccount(
   uid: string,
-  transaction?: Pick<Transaction, 'delete'>,
-): Promise<void> {
+  transaction: Pick<Transaction, 'delete'>,
+): void {
   validUid(uid);
-  // The account deletion worker passes its lease-fenced transaction to remove
-  // the server-owned consent record atomically with the account root.
-  if (transaction) {
-    transaction.delete(consentRef(uid));
-    return;
-  }
-  await consentRef(uid).delete();
+  transaction.delete(consentRef(uid));
 }

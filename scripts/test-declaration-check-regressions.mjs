@@ -15,6 +15,9 @@ for (const [source, reason] of [
   ["xdescribe('x', () => {})", 'skip'],
   ["test['concurrent']['skip']('x', () => {})", 'skip'],
   ["test.concurrent\n  .skip('x', () => {})", 'skip'],
+  ["test.skipIf(true)('x', () => {})", 'skipIf'],
+  ["describe.runIf(false)('x', () => {})", 'runIf'],
+  ["test.each([1]).skipIf(true)('x', () => {})", 'skipIf'],
 ]) {
   await test('detects disabled declaration: ' + source, () => {
     const findings = findDisabledTests(source);

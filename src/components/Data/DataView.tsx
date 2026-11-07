@@ -42,6 +42,9 @@ const DataView: React.FC<DataViewProps> = ({
     const handleSelectEdit = (day: MeasurementHistoryDay) => {
         setSelectedDate(day.date);
         measurementsHook.handleEditClick(day);
+        // Keep both editors on the historical day; release sleep edit state
+        // when the measurement edit is completed, without discarding sleep drafts.
+        sleepHook.setSelectedDate(day.date);
         sleepHook.setEditingDate(day.date);
         changeSubTab('measurements');
     };
@@ -92,12 +95,18 @@ const DataView: React.FC<DataViewProps> = ({
                         handleCancelEdit={() => {
                             const wasEditing = !!measurementsHook.editingDate;
                             const cancelled = measurementsHook.handleCancelEdit();
-                            if (wasEditing && cancelled) changeSubTab('history');
+                            if (wasEditing && cancelled) {
+                sleepHook.setEditingDate(null);
+                changeSubTab('history');
+            }
                         }}
                         calculateAndSave={async (e, bodyFatMode) => {
                             const wasEditing = !!measurementsHook.editingDate;
                             const saved = await measurementsHook.calculateAndSave(e, bodyFatMode);
-                            if (wasEditing && saved) changeSubTab('history');
+                            if (wasEditing && saved) {
+                sleepHook.setEditingDate(null);
+                changeSubTab('history');
+            }
                         }}
                         onOpenBiometry={() => changeSubTab('biometry')}
                     />
