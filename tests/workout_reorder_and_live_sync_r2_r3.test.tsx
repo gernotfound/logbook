@@ -1,5 +1,5 @@
 import { captureSession } from '../src/lib/sync/session';
-import { deviceKey, protectedDeviceKey, readDeviceValueStrict } from '../src/lib/sync/deviceStorage';
+import { deviceKey, protectedDeviceKey, readDeviceValueStrict, writeDeviceValue } from '../src/lib/sync/deviceStorage';
 import { persistPlainWorkoutSnapshot } from '../src/lib/sync/workoutDeviceIntent';
 import { prepareUnlockedTestArchive } from './secureVaultFixture';
 import React from 'react';
@@ -205,7 +205,11 @@ describe('Workout Reorder (R2) and Live Sync & Badges (R3) Suite', () => {
                     { id: 'se_preserved', exId: 'ex_squat', sessionNote: '', sets: [] }
                 ]
             };
-            persistPlainWorkoutSnapshot(malformedWorkout as WorkoutSession, owner);
+            expect(() => persistPlainWorkoutSnapshot(malformedWorkout as WorkoutSession, owner))
+                .toThrow('identificativo');
+            writeDeviceValue('workout', JSON.stringify({
+                __logbookWorkoutSnapshot: 1, owner, consentRevision: 1, workout: malformedWorkout,
+            }), owner);
             const sealedKey = protectedDeviceKey('workout', owner);
             const originalCiphertext = localStorage.getItem(sealedKey);
             const originalPlain = readDeviceValueStrict('workout', owner);
