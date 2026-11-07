@@ -204,7 +204,8 @@ export async function recordHealthConsentReacceptance(
     }
     // Erasure receipts expire after 30 days; the monotonic consent floor is
     // the durable proof that the immediately preceding withdrawal was erased.
-    if (!isPositiveRevision(previous.erasedBeforeRevision)
+    if (!Number.isSafeInteger(previous.erasedBeforeRevision)
+      || previous.erasedBeforeRevision < 1
       || previous.erasedBeforeRevision !== previous.revision - 1) {
       throw new HealthConsentRevisionConflictError();
     }
