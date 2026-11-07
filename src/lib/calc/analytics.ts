@@ -120,9 +120,11 @@ export function getWorkoutDateString(w: WorkoutSession | any): string | null {
             }
         }
     }
-    const ts = typeof w.globalStartTime === 'number' && Number.isFinite(w.globalStartTime)
+    const validTimestamp = (value: unknown): value is number =>
+        typeof value === 'number' && Number.isFinite(value) && isValid(new Date(value));
+    const ts = validTimestamp(w.globalStartTime)
         ? w.globalStartTime
-        : (typeof w.globalEndTime === 'number' && Number.isFinite(w.globalEndTime) ? w.globalEndTime : null);
+        : (validTimestamp(w.globalEndTime) ? w.globalEndTime : null);
 
     if (ts !== null) {
         return Logic.getLocalDateString(ts);
