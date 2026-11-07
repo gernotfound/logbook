@@ -126,6 +126,20 @@ export function normalizeLiveFieldIndexModes(indexes, expectedFieldPath) {
 }
 
 
+// Firestore Standard uses these defaults when the manifest or REST response
+// omits optional index metadata. The Firebase CLI compares all three attributes.
+function normalizeCompositeIndexMetadata(index) {
+  const apiScope = index.apiScope ?? 'ANY_API';
+  const density = index.density ?? 'SPARSE_ALL';
+  const multikey = index.multikey ?? false;
+  if (!['ANY_API', 'DATASTORE_MODE_API', 'MONGODB_COMPATIBLE_API'].includes(apiScope) ||
+      !['SPARSE_ALL', 'SPARSE_ANY', 'DENSE'].includes(density) ||
+      typeof multikey !== 'boolean') {
+    throw new Error('Invalid Firestore composite index metadata');
+  }
+  return { apiScope, density, multikey };
+}
+
 function normalizeCompositeIndexFields(fields, live) {
   if (!Array.isArray(fields) || fields.length === 0) {
     throw new Error('Invalid Firestore composite index fields');
@@ -183,7 +197,8 @@ export function reconcileCompositeIndexes(desiredIndexes, liveIndexes, projectId
       throw new Error('Invalid desired Firestore composite index');
     }
     return { collectionGroup: index.collectionGroup, queryScope: index.queryScope,
-      fields: normalizeCompositeIndexFields(index.fields, false) };
+      fields: normalizeCompositeIndexFields(index.fields, false),
+      ...normalizeCompositeIndexMetadata(index) };
   });
   const prefix = `projects/${projectId}/databases/(default)/collectionGroups/`;
   const live = liveIndexes.map(index => {
@@ -194,9 +209,13 @@ export function reconcileCompositeIndexes(desiredIndexes, liveIndexes, projectId
     if (!match) throw new Error('Invalid live Firestore composite index resource');
     return { collectionGroup: decodeResourceSegment(match[1]), queryScope: index.queryScope,
       fields: normalizeCompositeIndexFields(index.fields, true),
+      ...normalizeCompositeIndexMetadata(index),
       name: index.name, state: index.state ?? null };
   });
-  const key = index => JSON.stringify([index.collectionGroup, index.queryScope, index.fields]);
+  const key = index => JSON.stringify([
+    index.collectionGroup, index.queryScope, index.fields,
+    index.apiScope, index.density, index.multikey,
+  ]);
   const desiredKeys = new Set(desired.map(key));
   if (desiredKeys.size !== desired.length) throw new Error('Duplicate desired Firestore composite index');
   if (new Set(live.map(key)).size !== live.length) throw new Error('Duplicate live Firestore composite index');

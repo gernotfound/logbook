@@ -390,6 +390,27 @@ describe('Firestore Production complete composite index inventory', () => {
       .toMatchObject({ statuses: [{ found: true, state: 'READY' }], unexpected: [] });
   });
 
+  it('compares Firestore index API scope, density and multikey metadata', () => {
+    expect(reconcileCompositeIndexes(wanted, [{ ...ready,
+      apiScope: 'ANY_API', density: 'SPARSE_ALL', multikey: false,
+    }], 'p')).toMatchObject({ statuses: [{ found: true, state: 'READY' }], unexpected: [] });
+
+    for (const override of [
+      { apiScope: 'MONGODB_COMPATIBLE_API' },
+      { density: 'DENSE' },
+      { multikey: true },
+    ]) {
+      const drift = reconcileCompositeIndexes(wanted, [{ ...ready, ...override }], 'p');
+      expect(drift.statuses).toMatchObject([{ found: false }]);
+      expect(drift.unexpected.map(index => index.name)).toEqual([ready.name]);
+      expect(() => requireNoUnexpectedCompositeIndexes(drift.unexpected))
+        .toThrow('require manual review before deployment');
+    }
+
+    expect(() => reconcileCompositeIndexes(wanted, [{ ...ready, density: 'INVALID' }], 'p'))
+      .toThrow('Invalid Firestore composite index metadata');
+  });
+
   it('distinguishes missing, building and malformed indexes', () => {
     expect(reconcileCompositeIndexes(wanted, [], 'p').statuses)
       .toMatchObject([{ found: false, state: null }]);
