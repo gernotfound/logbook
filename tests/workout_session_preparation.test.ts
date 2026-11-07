@@ -414,7 +414,7 @@ describe('workout session preparation', () => {
             });
             const completed = prepareCompletedWorkout(original, 61_000, createRuntime()).finishedWorkout;
             const history = prepareHistoricalWorkoutForSave(
-                original, original.id, { mood: '', pump: '', fatigue: '' },
+                original, 'water-invalid', { mood: '', pump: '', fatigue: '' },
                 String(invalidWater), '00:30:00', createRuntime(),
             );
             for (const result of [draft, completed, history]) {
@@ -435,7 +435,7 @@ describe('workout session preparation', () => {
         });
         const completed = prepareCompletedWorkout(original, 61_000, createRuntime()).finishedWorkout;
         const history = prepareHistoricalWorkoutForSave(
-            original, original.id, { mood: '', pump: '', fatigue: '' },
+            original, 'water-valid', { mood: '', pump: '', fatigue: '' },
             water, '00:30:00', createRuntime(),
         );
         for (const result of [draft, completed, history]) {
