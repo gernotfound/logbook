@@ -30,6 +30,20 @@ describe('meal history incremental rendering', () => {
         expect(onDayClick).toHaveBeenCalledWith(days[65].date);
     });
 
+    it('opens a day by keyboard and does not expose non-clickable days as controls', () => {
+        const onDayClick = vi.fn();
+        const view = render(<NutritionHistory nutritionHistory={days.slice(0, 1)} onDayClick={onDayClick} />);
+        const day = screen.getByRole('button', { name: /Apri il diario del/i });
+        expect(day.getAttribute('tabindex')).toBe('0');
+        fireEvent.keyDown(day, { key: 'Enter' });
+        fireEvent.keyDown(day, { key: ' ' });
+        expect(onDayClick).toHaveBeenCalledTimes(2);
+        expect(onDayClick).toHaveBeenLastCalledWith(days[0].date);
+
+        view.rerender(<NutritionHistory nutritionHistory={days.slice(0, 1)} />);
+        expect(screen.queryByRole('button', { name: /Apri il diario del/i })).toBeNull();
+    });
+
     it('retains expanded history when a parent temporarily unmounts the history tab', () => {
         function HistoryParent() {
             const [open, setOpen] = React.useState(true);
