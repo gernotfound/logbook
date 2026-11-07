@@ -1,5 +1,6 @@
 import { readBrowserValueStrict, removeBrowserValue, writeBrowserJson } from '../sync/browserStorage';
 import { GUEST_SESSION_KEY } from '../sync/sessionKeys';
+import { userOwner } from '../sync/owner';
 
 // Both the UID and the precise guest generation belong to this handoff.
 // The random attempt id prevents a stale retry for the same UID from
@@ -7,12 +8,12 @@ import { GUEST_SESSION_KEY } from '../sync/sessionKeys';
 export type GuestMigrationSyncWitness = {
     version: 1;
     uid: string;
-    guestSessionId: string | null;
+    guestSessionId: string;
     id: string;
 };
 
 export const guestMigrationSyncRecoveryKey = (uid: string): string =>
-    `logbook:v2:user:${uid}:guest-migration-sync-recovery`;
+    `logbook:v2:${userOwner(uid)}:guest-migration-sync-recovery`;
 
 export function readGuestMigrationSyncWitness(uid: string): GuestMigrationSyncWitness | null {
     const raw = readBrowserValueStrict(guestMigrationSyncRecoveryKey(uid));
@@ -29,7 +30,7 @@ export function readGuestMigrationSyncWitness(uid: string): GuestMigrationSyncWi
     }
     if (value.version !== 1 || value.uid !== uid
         || typeof value.id !== 'string' || !value.id
-        || !(value.guestSessionId === null || (typeof value.guestSessionId === 'string' && value.guestSessionId))) {
+        || typeof value.guestSessionId !== 'string' || !value.guestSessionId.trim()) {
         throw new Error('Prova di recupero migrazione account non valida.');
     }
     return value as GuestMigrationSyncWitness;
@@ -40,10 +41,16 @@ export function readGuestMigrationSyncRecovery(uid: string): boolean {
 }
 
 export function markGuestMigrationSyncRecovery(uid: string): string {
+    const key = guestMigrationSyncRecoveryKey(uid);
     const sessionId = readBrowserValueStrict(GUEST_SESSION_KEY);
+    // A recovery marker without a guest generation cannot fence a later guest
+    // session, so it must not authorize the owner handoff after a restart.
+    if (!sessionId || !sessionId.trim()) {
+        throw new Error('Generazione guest mancante per la prova di migrazione account.');
+    }
     const bytes = crypto.getRandomValues(new Uint8Array(16));
     const id = Array.from(bytes, byte => byte.toString(16).padStart(2, '0')).join('');
-    writeBrowserJson(guestMigrationSyncRecoveryKey(uid), {
+    writeBrowserJson(key, {
         version: 1, uid, guestSessionId: sessionId, id,
     } satisfies GuestMigrationSyncWitness);
     return id;

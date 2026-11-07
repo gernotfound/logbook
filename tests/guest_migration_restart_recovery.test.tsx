@@ -51,6 +51,17 @@ function fixtures() {
     return { cloud, guest };
 }
 
+// The real handoff persists its witness while the guest generation still
+// exists, then retires the guest flag/generation before a later restart.
+function markPersistedGuestHandoff(): string {
+    localStorage.setItem(GUEST_SESSION_KEY, 'guest-restart-generation');
+    try {
+        return markGuestMigrationSyncRecovery(user.uid);
+    } finally {
+        localStorage.removeItem(GUEST_SESSION_KEY);
+    }
+}
+
 beforeEach(async () => {
     lockAllVaults();
     vi.clearAllMocks();
@@ -331,14 +342,16 @@ describe('guest migration restart recovery', () => {
     });
 
     it('retains the recovery marker and blocks account data if the authenticated envelope is missing', async () => {
-        markGuestMigrationSyncRecovery(user.uid);
+        markPersistedGuestHandoff();
+        expect(localStorage.getItem(GUEST_SESSION_KEY)).toBeNull();
         expect(await localRepository.readLocal(user.uid)).toBeUndefined();
         const purge = vi.spyOn(DB, 'purgeAllLocalUserData');
 
         render(<AuthProvider><App /></AuthProvider>);
 
         await waitFor(() => expect(screen.getByText('Accesso non completato')).toBeTruthy());
-        expect(JSON.parse(localStorage.getItem(SYNC_RECOVERY_KEY)!)).toMatchObject({ uid: user.uid });
+        expect(JSON.parse(localStorage.getItem(SYNC_RECOVERY_KEY)!))
+            .toMatchObject({ uid: user.uid, guestSessionId: 'guest-restart-generation' });
         expect(useAppStore.getState().saveError).toContain('copia locale autenticata non disponibile');
         expect(screen.queryByTestId('bottom-nav')).toBeNull();
         expect(purge).not.toHaveBeenCalled();
@@ -374,7 +387,8 @@ describe('guest migration restart recovery', () => {
     });
 
     it('retains the recovery marker when the authenticated envelope cannot be read', async () => {
-        markGuestMigrationSyncRecovery(user.uid);
+        markPersistedGuestHandoff();
+        expect(localStorage.getItem(GUEST_SESSION_KEY)).toBeNull();
         const readLocal = localRepository.readLocal;
         vi.spyOn(localRepository, 'readLocal').mockImplementation(async owner => {
             if (owner === user.uid) throw new Error('Simulated encrypted envelope read failure');
@@ -398,7 +412,8 @@ describe('guest migration restart recovery', () => {
         await localRepository.commitLocal(user.uid, merged, cloud);
         useAppStore.getState().setUserData(merged);
         expect((await localRepository.readLocal(user.uid))?.pending.length).toBeGreaterThan(0);
-        markGuestMigrationSyncRecovery(user.uid);
+        markPersistedGuestHandoff();
+        expect(localStorage.getItem(GUEST_SESSION_KEY)).toBeNull();
         expect(sessionStorage.getItem(OVERLAY_SESSION_KEY)).toBeNull();
         onlineSpy?.mockReturnValue(true);
         const permissionDenied = Object.assign(new Error('permission denied'), { code: 'permission-denied' });
