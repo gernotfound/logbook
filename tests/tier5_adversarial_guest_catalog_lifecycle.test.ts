@@ -61,9 +61,9 @@ describe('Tier 5: Adversarial Coverage Hardening Suite', () => {
     });
 
     // =========================================================================
-    // 5.1: RAPID GUEST LOGIN/LOGOUT & LIFECYCLE FLAPPING STRESS
+    // 5.1: DIRECT GUEST STORE RESETS (NOT AUTH PROVIDER LOGIN/LOGOUT)
     // =========================================================================
-    describe('5.1: Rapid Guest Login/Logout & Lifecycle Flapping Stress', () => {
+    describe('5.1: Repeated guest store reset and catalog reconstruction', () => {
 
         it('T5.1.1: Repeated direct store reset under guest flag leaves deterministic transient state', async () => {
             const GUEST_KEY = 'logbook_is_guest';
@@ -113,7 +113,6 @@ describe('Tier 5: Adversarial Coverage Hardening Suite', () => {
             // Final state verification
             expect(localStorage.getItem(GUEST_KEY)).toBeNull();
             expect(useAppStore.getState().userData).toBeNull();
-            expect(idbStore['logbook_cached_user_data']).toBeUndefined();
         });
 
         it('T5.1.2: Store reset preserves data until explicitly requested and clean fixture has no stale data', async () => {
@@ -238,7 +237,7 @@ describe('Tier 5: Adversarial Coverage Hardening Suite', () => {
             const healed = useAppStore.getState().userData!;
             // Profile & routines preserved
             expect(healed.profile?.height).toBe('182');
-            expect(healed.profile?.height).toBe('182');
+            expect(healed.profile?.gender).toBe('M');
             expect(healed.routines).toHaveLength(1);
             expect(healed.routines?.[0].id).toBe('r_existing');
 
