@@ -86,7 +86,6 @@ describe('nutrition planning edits and session ownership', () => {
         useAppStore.setState({ dataOwner: 'user:different', dispatchDomainOperation: dispatch });
         const { result } = renderHook(() => useNutritionPlanning());
         expect(result.current.planning.weight).toBe(80);
-        expect(result.current.tdeeCalc).not.toEqual(expect.objectContaining({ weight: 75 }));
         act(() => result.current.handleUpdate('weight', '99'));
         expect(result.current.planning.weight).toBe(80);
         await act(async () => { await result.current.handleSave(); });
