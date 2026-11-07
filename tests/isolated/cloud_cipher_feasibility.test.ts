@@ -7,8 +7,8 @@ import {
 } from '../../src/lib/sync/cloudDocumentCipher';
 
 /**
- * Issue #620. Tests the isolated production-boundary CODEC on synthetic data;
- * does not enable the format in the runtime or make a cloud/KMS call.
+ * Exercises the active production cloud-document codec with synthetic keys and
+ * payloads; this suite never calls Firestore or the trusted key service.
  */
 const key = () => crypto.getRandomValues(new Uint8Array(32));
 const privateDocument = (): { business: Record<string, unknown>; sync: SyncMeta } => ({

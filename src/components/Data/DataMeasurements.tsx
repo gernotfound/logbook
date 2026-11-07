@@ -174,6 +174,7 @@ const DataMeasurements: React.FC<DataMeasurementsProps> = ({
                     onPrevious={handlePrevDay}
                     onNext={handleNextDay}
                     onToday={() => setSelectedDate(todayStr)}
+                    disabled={Boolean(editingDate)}
                 />
             )}
 

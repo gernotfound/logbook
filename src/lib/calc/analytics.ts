@@ -114,12 +114,17 @@ export function getWorkoutDateString(w: WorkoutSession | any): string | null {
     if (w.date && typeof w.date === 'string') {
         const clean = w.date.trim();
         if (clean.length >= 10) {
-            return clean.slice(0, 10);
+            // Only calendar-valid ISO day keys/timestamps may enter weekly analytics buckets.
+            if (/^\d{4}-\d{2}-\d{2}(?:$|T)/.test(clean) && isValid(parseISO(clean))) {
+                return clean.slice(0, 10);
+            }
         }
     }
-    const ts = typeof w.globalStartTime === 'number' && !isNaN(w.globalStartTime)
+    const validTimestamp = (value: unknown): value is number =>
+        typeof value === 'number' && Number.isFinite(value) && isValid(new Date(value));
+    const ts = validTimestamp(w.globalStartTime)
         ? w.globalStartTime
-        : (typeof w.globalEndTime === 'number' && !isNaN(w.globalEndTime) ? w.globalEndTime : null);
+        : (validTimestamp(w.globalEndTime) ? w.globalEndTime : null);
 
     if (ts !== null) {
         return Logic.getLocalDateString(ts);
