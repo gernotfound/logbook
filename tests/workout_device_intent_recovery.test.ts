@@ -761,6 +761,27 @@ describe('authenticated device-intent replay into semantic journal', () => {
         expect((await readLocal(owner))?.pending.length).toBe(count);
     });
 
+    it('blocks an equivalent background or reload workout intent from a previous consent epoch', async () => {
+        const original = data(workout('50'));
+        await prepareAccountWorkoutArchive(owner);
+        await initializeLocal(owner, original);
+        const intent = saveWorkoutDeviceIntent(owner, original.activeWorkout ?? null,
+            workout('55'), original.activeWorkout ?? null);
+        const sharedBefore = readDeviceValueStrict('workout', owner);
+        const privateBefore = readDeviceValueStrict('workout-intent:' + intent.intentId, owner);
+
+        localStorage.setItem(`logbook:v2:${owner}:health-consent-generation`, '3');
+        expect(await advanceLocalConsentRevisionIfClean(owner, 3)).toBe(true);
+        const envelopeBefore = await readLocal(owner);
+
+        // The same workout value is not proof of a valid consent generation.
+        expect(() => persistOwnerBoundWorkoutSnapshot(captureSession(), owner, workout('55')))
+            .toThrow('generazione di consenso precedente');
+        expect(readDeviceValueStrict('workout', owner)).toBe(sharedBefore);
+        expect(readDeviceValueStrict('workout-intent:' + intent.intentId, owner)).toBe(privateBefore);
+        expect(await readLocal(owner)).toEqual(envelopeBefore);
+    });
+
     it('applies the latest rapid edit and refuses a delayed older IndexedDB commit', async () => {
         const initial = data(workout('50'));
         await prepareAccountWorkoutArchive(owner);
