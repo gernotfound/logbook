@@ -60,7 +60,22 @@ const isPositiveRevision = (revision: unknown): revision is number =>
 
 export async function readHealthDataErasureStatus(uid: string): Promise<PublicErasureStatus | null> {
   const snap = await jobRef(validUid(uid)).get();
-  if (!snap.exists) return null;
+  if (!snap.exists) {
+    // The completed job receipt expires after 30 days. Its server-owned
+    // consent epoch remains the durable completion proof for offline devices.
+    const [consentSnap, keySnap] = await Promise.all([
+      consentRef(uid).get(),
+      adminDb().collection('user_data_keys').doc(uid).get(),
+    ]);
+    const consent = consentSnap.data();
+    if (!keySnap.exists && consent?.uid === uid && consent.status === 'withdrawn'
+        && isPositiveRevision(consent.erasedBeforeRevision)
+        && Number.isSafeInteger(consent.revision)
+        && consent.revision === consent.erasedBeforeRevision + 1) {
+      return { status: 'complete', complete: true, localPurgeAuthorized: true };
+    }
+    return null;
+  }
   const job = snap.data() as Job;
   if (job.uid !== uid || !isPositiveRevision(job.consentRevision)
       || !['requested', 'deleting', 'verifying', 'complete', 'failed'].includes(job.status)) {
@@ -127,8 +142,18 @@ export async function createHealthDataErasureJob(uid: string): Promise<void> {
     ]);
     if (accountDeletion.exists) throw new HealthDataErasureConflict('Cancellazione account già in corso.');
     const state = consent.data();
-    if (!state || state.status !== 'withdrawn' || !isPositiveRevision(state.revision)) {
+    if (!state || state.uid !== uid || state.status !== 'withdrawn' || !isPositiveRevision(state.revision)) {
       throw new HealthDataErasureConflict();
+    }
+    // Completion already advanced the consent epoch. Never enqueue another
+    // erasure for it, with or without its expiring job receipt.
+    if (isPositiveRevision(state.erasedBeforeRevision)
+        && state.revision === state.erasedBeforeRevision + 1) {
+      const previous = job.data();
+      if (!job.exists || (previous?.uid === uid && previous.status === 'complete'
+          && previous.consentRevision === state.erasedBeforeRevision
+          && previous.completedRevision === state.revision)) return;
+      throw new HealthDataErasureConflict('Una cancellazione precedente non è riconciliata.');
     }
     queueHealthDataErasureInTransaction(tx, uid, state.revision, job.data());
   });

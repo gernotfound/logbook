@@ -219,6 +219,52 @@ describe('trusted data-only erasure worker', () => {
     expect(fixture.records.has(consentPath('a'))).toBe(true);
   });
 
+  it('recovers owner-scoped completion proof after the 30-day receipt expires and never reenqueues it', async () => {
+    await createHealthDataErasureJob('a');
+    expect(await processHealthDataErasure('a', Date.now() + 30_000)).toBe('complete');
+    fixture.records.get(markerPath('a'))!.purgeAfter = Timestamp.fromMillis(Date.now() - 1);
+    expect(await purgeExpiredCompletedHealthErasures(Date.now() + 30_000)).toBe(1);
+    expect(fixture.records.has(markerPath('a'))).toBe(false);
+    expect(await readHealthDataErasureStatus('a')).toEqual({
+      status: 'complete', complete: true, localPurgeAuthorized: true,
+    });
+    await createHealthDataErasureJob('a');
+    expect(fixture.records.has(markerPath('a'))).toBe(false);
+    expect(await recordHealthConsentWithdrawal('a', 3)).toEqual({ status: 'withdrawn', revision: 4 });
+    expect(fixture.records.has(markerPath('a'))).toBe(false);
+    expect(fixture.records.get(consentPath('a'))).toMatchObject({
+      uid: 'a', status: 'withdrawn', revision: 4, erasedBeforeRevision: 3,
+    });
+  });
+
+  it('rejects expired completion proof with a foreign owner, unexpected key or new consent cycle', async () => {
+    await createHealthDataErasureJob('a');
+    expect(await processHealthDataErasure('a', Date.now() + 30_000)).toBe('complete');
+    fixture.records.get(markerPath('a'))!.purgeAfter = Timestamp.fromMillis(Date.now() - 1);
+    expect(await purgeExpiredCompletedHealthErasures(Date.now() + 30_000)).toBe(1);
+
+    fixture.records.set('user_data_keys/a', { uid: 'a', ciphertext: 'unexpected' });
+    expect(await readHealthDataErasureStatus('a')).toBeNull();
+    fixture.records.delete('user_data_keys/a');
+    fixture.records.get(consentPath('a'))!.uid = 'other-owner';
+    expect(await readHealthDataErasureStatus('a')).toBeNull();
+    fixture.records.get(consentPath('a'))!.uid = 'a';
+    fixture.records.get(consentPath('a'))!.revision = 6;
+    expect(await readHealthDataErasureStatus('a')).toBeNull();
+    fixture.records.get(consentPath('a'))!.revision = 4;
+
+    const acceptance = {
+      acceptedTerms: true as const, acceptedHealthData: true as const,
+      privacyVersion: LEGAL_VERSIONS.privacy, termsVersion: LEGAL_VERSIONS.terms,
+    };
+    await recordHealthConsentReacceptance('a', acceptance, 4);
+    expect(await readHealthDataErasureStatus('a')).toBeNull();
+    await recordHealthConsentWithdrawal('a', 5);
+    expect(await readHealthDataErasureStatus('a')).toMatchObject({
+      status: 'requested', complete: false, localPurgeAuthorized: false,
+    });
+  });
+
   it('scans beyond a full page of ineligible expired receipts without starving later valid ones', async () => {
     const expired = Timestamp.fromMillis(Date.now() - 60_000);
     for (let i = 0; i < 100; i++) {
