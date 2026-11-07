@@ -214,6 +214,11 @@ describe('LogBook PWA Enhancements Integration Suite (Requirements R1 - R6)', ()
             const activeWorkout = useAppStore.getState().localWorkout;
             expect(activeWorkout).not.toBeNull();
             expect(activeWorkout?.exercises.length).toBe(1);
+            await act(async () => {
+                expect(await sessionHook.current.confirmWorkoutStart()).toBe(true);
+            });
+            expect(useAppStore.getState().localWorkout?.globalStartTime).toEqual(expect.any(Number));
+            expect((await readLocal(owner))?.data.activeWorkout?.globalStartTime).toEqual(expect.any(Number));
 
             // 2. Add ad-hoc finisher
             act(() => {
@@ -335,6 +340,10 @@ describe('LogBook PWA Enhancements Integration Suite (Requirements R1 - R6)', ()
                 await sessionHook.current.startWorkout('r_quads', { cycleId: 'c_mass', cycleName: 'Massa Gambe' });
             });
             expect(useAppStore.getState().localWorkout).not.toBeNull();
+            await act(async () => {
+                expect(await sessionHook.current.confirmWorkoutStart()).toBe(true);
+            });
+            expect((await readLocal(owner))?.data.activeWorkout?.globalStartTime).toEqual(expect.any(Number));
 
             // 3. Add ad-hoc finisher
             act(() => {
