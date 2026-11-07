@@ -7,7 +7,7 @@
 
 ## Tema adattivo
 
-La presentazione usa superfici, controlli e navigazione ispirati alle app iPhone, conservando un layout leggibile su schermi piccoli e desktop. `src/styles/global.css` importa i moduli `tokens.css`, `base.css`, `components.css`, `utilities.css`, `context-menu.css` e `ui-surfaces.css`. Le sezioni possono importare il proprio CSS.
+La presentazione usa superfici, controlli e navigazione ispirati alle app iPhone, conservando un layout leggibile su schermi piccoli e desktop. `src/styles/global.css` importa, nell'ordine, `tokens.css`, `base.css`, `sub-nav.css`, `components.css`, `utilities.css`, `context-menu.css` e `ui-surfaces.css`. Le sezioni possono importare il proprio CSS.
 
 `tokens.css` definisce i temi dark e light. Usare token semantici, non colori di testo fissati per il solo tema scuro:
 
@@ -27,7 +27,7 @@ Se lo storage non è scrivibile, il tema scelto resta applicato per la sessione 
 
 ## Tipografia
 
-La scala tipografica è definita **unicamente** in `src/styles/tokens.css`. **MUST:** usare `--font-size-body` per testo normale, `--font-size-secondary` per testo secondario, `--font-size-meta`/`--font-size-micro` per metadati e badge, e `--font-size-control`, `--font-size-section`, `--font-size-page` per titoli nella corretta gerarchia. Dati numerici e timer usano soltanto i token display/timer dedicati. Il marchio nella schermata iniziale e nel dialogo guest usa `--font-size-brand-title`, peso 800, adattato alla larghezza senza spezzare il nome; non si applica a normali titoli di pagina.
+La scala tipografica ha come fonte canonica `src/styles/tokens.css`. Per il primo disegno, `public/appearance.css` ne replica i token, che devono restare identici fra bootstrap e runtime. **MUST:** usare `--font-size-body` per testo normale, `--font-size-secondary` per testo secondario, `--font-size-meta`/`--font-size-micro` per metadati e badge, e `--font-size-control`, `--font-size-section`, `--font-size-page` per titoli nella corretta gerarchia. Dati numerici e timer usano soltanto i token display/timer dedicati. Il marchio nella schermata iniziale e nel dialogo guest usa `--font-size-brand-title`, peso 800, adattato alla larghezza senza spezzare il nome; non si applica a normali titoli di pagina.
 
 - **MUST:** una stessa funzione visiva mantiene lo stesso token fra pagine: titoli di riga/card = `--font-size-control`, descrizioni = `--font-size-body`, metadati = `--font-size-meta`/`--font-size-secondary`. Non introdurre `fontSize` numerici inline o dimensioni arbitrarie; la misura di 16 px per input/select/textarea iOS è un'eccezione intenzionale descritta nella sezione accessibilità.
 - **MUST:** nessun testo informativo ordinario scende sotto 12 px; i token display non sostituiscono il testo discorsivo.
