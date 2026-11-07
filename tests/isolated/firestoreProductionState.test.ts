@@ -336,6 +336,60 @@ describe('Firestore Production complete composite index inventory', () => {
     expect(reconcileCompositeIndexes([], [ready], 'p').unexpected).toHaveLength(1);
   });
 
+  it('does not certify an index with a non-default __name__ ordering', () => {
+    const invertedName = { ...ready, fields: [
+      ...wanted[0].fields, { fieldPath: '__name__', order: 'DESCENDING' },
+    ] };
+    const mismatch = reconcileCompositeIndexes(wanted, [invertedName], 'p');
+    expect(mismatch.statuses).toMatchObject([{ found: false, state: null }]);
+    expect(mismatch.unexpected.map(index => index.name)).toEqual([invertedName.name]);
+    expect(() => requireNoUnexpectedCompositeIndexes(mismatch.unexpected))
+      .toThrow('require manual review before deployment');
+
+    const explicitlyDescending = [{ ...wanted[0], fields: invertedName.fields }];
+    expect(reconcileCompositeIndexes(explicitlyDescending, [invertedName], 'p'))
+      .toMatchObject({ statuses: [{ found: true, state: 'READY' }], unexpected: [] });
+  });
+
+  it('rejects absent or malformed live __name__ suffixes instead of matching partially', () => {
+    expect(() => reconcileCompositeIndexes(wanted, [{ ...ready, fields: wanted[0].fields }], 'p'))
+      .toThrow('Missing Firestore live composite index __name__ field');
+    expect(() => reconcileCompositeIndexes(wanted, [{ ...ready, fields: [
+      { fieldPath: '__name__', order: 'ASCENDING' }, ...wanted[0].fields,
+    ] }], 'p')).toThrow('Invalid Firestore composite index __name__ position');
+    expect(() => reconcileCompositeIndexes(wanted, [{ ...ready, fields: [
+      ...wanted[0].fields, { fieldPath: '__name__', order: 'INVALID' },
+    ] }], 'p')).toThrow('Unsupported Firestore composite index order');
+    expect(() => reconcileCompositeIndexes(wanted, [{ ...ready, fields: [
+      { fieldPath: 'status', order: 'ASCENDING', arrayConfig: 'CONTAINS' },
+      { fieldPath: '__name__', order: 'ASCENDING' },
+    ] }], 'p')).toThrow('Unsupported Firestore composite index field');
+  });
+
+  it('applies Firestore implicit __name__ defaults to array and vector indexes', () => {
+    const expectedArray = [{ collectionGroup: 'sample', queryScope: 'COLLECTION', fields: [
+      { fieldPath: 'status', order: 'DESCENDING' },
+      { fieldPath: 'tags', arrayConfig: 'CONTAINS' },
+    ] }];
+    const arrayIndex = { name: 'projects/p/databases/(default)/collectionGroups/sample/indexes/a',
+      queryScope: 'COLLECTION', fields: [
+        ...expectedArray[0].fields, { fieldPath: '__name__', order: 'DESCENDING' },
+      ], state: 'READY' };
+    expect(reconcileCompositeIndexes(expectedArray, [arrayIndex], 'p'))
+      .toMatchObject({ statuses: [{ found: true, state: 'READY' }], unexpected: [] });
+
+    const expectedVector = [{ collectionGroup: 'sample', queryScope: 'COLLECTION', fields: [
+      { fieldPath: 'category', order: 'ASCENDING' },
+      { fieldPath: 'embedding', vectorConfig: { dimension: 4, flat: {} } },
+    ] }];
+    const vectorIndex = { ...arrayIndex, fields: [
+      expectedVector[0].fields[0], { fieldPath: '__name__', order: 'ASCENDING' },
+      expectedVector[0].fields[1],
+    ] };
+    expect(reconcileCompositeIndexes(expectedVector, [vectorIndex], 'p'))
+      .toMatchObject({ statuses: [{ found: true, state: 'READY' }], unexpected: [] });
+  });
+
   it('distinguishes missing, building and malformed indexes', () => {
     expect(reconcileCompositeIndexes(wanted, [], 'p').statuses)
       .toMatchObject([{ found: false, state: null }]);

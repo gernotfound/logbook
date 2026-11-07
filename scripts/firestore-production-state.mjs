@@ -127,13 +127,49 @@ export function normalizeLiveFieldIndexModes(indexes, expectedFieldPath) {
 
 
 function normalizeCompositeIndexFields(fields, live) {
-  if (!Array.isArray(fields)) throw new Error('Invalid Firestore composite index fields');
-  return fields.filter(field => !live || field.fieldPath !== '__name__').map(field => {
-    if (field.order) return { fieldPath: field.fieldPath, order: field.order };
-    if (field.arrayConfig) return { fieldPath: field.fieldPath, arrayConfig: field.arrayConfig };
-    if (field.vectorConfig) return { fieldPath: field.fieldPath, vectorConfig: field.vectorConfig };
-    throw new Error('Unsupported Firestore composite index field');
+  if (!Array.isArray(fields) || fields.length === 0) {
+    throw new Error('Invalid Firestore composite index fields');
+  }
+  const normalized = fields.map(field => {
+    if (typeof field?.fieldPath !== 'string' || !field.fieldPath) {
+      throw new Error('Invalid Firestore composite index field path');
+    }
+    const modes = ['order', 'arrayConfig', 'vectorConfig'].filter(mode => field[mode] !== undefined);
+    if (modes.length !== 1) throw new Error('Unsupported Firestore composite index field');
+    if (field.order !== undefined && !['ASCENDING', 'DESCENDING'].includes(field.order)) {
+      throw new Error('Unsupported Firestore composite index order');
+    }
+    if (field.arrayConfig !== undefined && field.arrayConfig !== 'CONTAINS') {
+      throw new Error('Unsupported Firestore composite index array mode');
+    }
+    if (field.vectorConfig !== undefined && (!field.vectorConfig ||
+      typeof field.vectorConfig !== 'object' || Array.isArray(field.vectorConfig))) {
+      throw new Error('Unsupported Firestore composite index vector mode');
+    }
+    return { fieldPath: field.fieldPath, [modes[0]]: field[modes[0]] };
   });
+
+  // Firestore adds __name__ implicitly with the direction of the last ordered
+  // field (ASCENDING if none). An explicit non-default direction is a different
+  // index, and must never be discarded during Production reconciliation.
+  const vectorLast = normalized.at(-1).vectorConfig !== undefined;
+  const namePosition = vectorLast ? normalized.length - 2 : normalized.length - 1;
+  const nameFields = normalized.filter(field => field.fieldPath === '__name__');
+  if (nameFields.length > 0) {
+    if (nameFields.length !== 1 || normalized[namePosition]?.fieldPath !== '__name__' ||
+        !normalized[namePosition].order) {
+      throw new Error('Invalid Firestore composite index __name__ position');
+    }
+    return normalized;
+  }
+  if (live) throw new Error('Missing Firestore live composite index __name__ field');
+
+  const defaultNameOrder = normalized.reduce(
+    (direction, field) => field.order ?? direction, 'ASCENDING',
+  );
+  normalized.splice(vectorLast ? normalized.length - 1 : normalized.length, 0,
+    { fieldPath: '__name__', order: defaultNameOrder });
+  return normalized;
 }
 
 // An index removed from the manifest may belong to a collection group that has
