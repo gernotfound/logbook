@@ -404,6 +404,43 @@ describe('Workout lifecycle durable recovery regressions', () => {
         }
     });
 
+    it.each(['finish', 'delete'] as const)(
+        'suppresses obsolete %s error dialogs after a same-owner Auth epoch replacement',
+        async action => {
+            await prepareUnlockedTestArchive(owner);
+            const active = workout('superseded-' + action, true);
+            const initial = userData({ activeWorkout: active });
+            await initializeLocal(owner, initial);
+            useAppStore.setState({ userData: initial, dataOwner: owner, localWorkout: active });
+            const previousDispatch = useAppStore.getState().dispatchDomainOperation;
+            let reject!: (error: Error) => void;
+            const dispatch = vi.fn(() => new Promise((_resolve, fail) => { reject = fail; }));
+            useAppStore.setState({ dispatchDomainOperation: dispatch as typeof previousDispatch });
+            vi.mocked(useDialogStore.getState().showConfirm).mockResolvedValueOnce(true);
+            vi.mocked(useDialogStore.getState().showAlert).mockResolvedValue();
+            try {
+                const { result } = renderHook(() => useWorkoutSession());
+                let pending!: Promise<unknown>;
+                act(() => {
+                    pending = action === 'finish'
+                        ? result.current.endWorkout(false)
+                        : result.current.deleteWorkout();
+                });
+                await vi.waitFor(() => expect(dispatch).toHaveBeenCalledOnce());
+                invalidateSession();
+                invalidateSession();
+                await act(async () => {
+                    reject(new Error('obsolete asynchronous operation'));
+                    await pending;
+                });
+                expect(useDialogStore.getState().showAlert).not.toHaveBeenCalled();
+                expect(useAppStore.getState().localWorkout?.id).toBe(active.id);
+            } finally {
+                useAppStore.setState({ dispatchDomainOperation: previousDispatch });
+            }
+        },
+    );
+
     it('retains a live workout, timer and final draft when completion commit is rejected', async () => {
         await prepareUnlockedTestArchive(owner);
         const pending = workout('finish-rejected', true);
