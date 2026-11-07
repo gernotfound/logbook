@@ -516,6 +516,31 @@ describe('account deletion recovery device registration retries', () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
+  it('preserves a corrupt empty credential registry instead of treating it as absent', async () => {
+    const {
+      recoverDeletedAccountOnThisDevice,
+      registerDeletionRecoveryDevice,
+      removeDeletionRecoveryCredential,
+      DeletionRecoveryCredentialCorruptError,
+    } = await loadSubject();
+    localStorage.setItem('logbook_deletion_recovery_devices_v1', '');
+    const network = vi.fn();
+    vi.stubGlobal('fetch', network);
+    const finalize = vi.fn();
+
+    await expect(recoverDeletedAccountOnThisDevice(finalize))
+      .rejects.toBeInstanceOf(DeletionRecoveryCredentialCorruptError);
+    const current = user('user-a');
+    firebase.auth.currentUser = current;
+    await expect(registerDeletionRecoveryDevice(current))
+      .rejects.toBeInstanceOf(DeletionRecoveryCredentialCorruptError);
+    expect(() => removeDeletionRecoveryCredential(current.uid))
+      .toThrow(DeletionRecoveryCredentialCorruptError);
+    expect(localStorage.getItem('logbook_deletion_recovery_devices_v1')).toBe('');
+    expect(network).not.toHaveBeenCalled();
+    expect(finalize).not.toHaveBeenCalled();
+  });
+
   it('does not submit device registration after Auth changes while App Check is resolving', async () => {
     const { registerDeletionRecoveryDevice } = await loadSubject();
     const original = user('user-a');
