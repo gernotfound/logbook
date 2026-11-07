@@ -14,6 +14,8 @@ import { createAndMigrateVault } from '../src/lib/sync/secureArchiveMigration';
 import { lockAllVaults, LocalVaultLockedError } from '../src/lib/sync/secureArchiveSession';
 import { activateGuestSession, GUEST_SESSION_KEY } from '../src/lib/sync/session';
 import { migrateGuestAccount } from '../src/contexts/auth/migrateGuestAccount';
+import { isHealthConsentCloudWritable } from '../src/lib/healthConsent';
+import * as replicaProtocol from '../src/lib/sync/replicaProtocol';
 
 const parse = (value: unknown) => UserDataSchema.parse(value) as unknown as UserData;
 const user = {
@@ -200,5 +202,54 @@ describe('guest -> account skip policy', () => {
         expect(await get('logbook:v2:user:skip-user')).toBe(ciphertext);
         expect((await readLocal(user.uid))?.data.profile?.height).toBe('183');
     });
+
+
+    it.each(['retire', 'checkpoint'] as const)(
+        'invalidates guest migration %s when consent authorization changes inside replica maintenance',
+        async phase => {
+            const account = parse({ profile: { height: '183' } });
+            await initializeLocal(user.uid, account);
+            vi.mocked(DB.loadCloudPayload).mockResolvedValueOnce({
+                data: account, completeMonths: [], cloudDocuments: new Map(),
+            });
+
+            let cloudWritable = true;
+            vi.mocked(isHealthConsentCloudWritable).mockImplementation(() => cloudWritable);
+            const retire = vi.spyOn(replicaProtocol, 'retireExpiredReplicas').mockImplementation(async (_db, _uid, _now, guard) => {
+                expect(guard()).toBe(true);
+                if (phase === 'retire') {
+                    cloudWritable = false;
+                    expect(guard()).toBe(false);
+                    throw new Error('Consent authorization changed');
+                }
+            });
+            const claim = vi.spyOn(replicaProtocol, 'claimReplicaCheckpoint').mockImplementation(async (
+                _db, _uid, _replica, _clock, _seq, _candidateId, guard,
+            ) => {
+                expect(guard()).toBe(true);
+                cloudWritable = false;
+                expect(guard()).toBe(false);
+                throw new Error('Consent authorization changed');
+            });
+            const onLocalReady = vi.fn();
+
+            try {
+                await expect(migrateGuestAccount({
+                    user, guestData: null, policy: 'skip',
+                    setUserData: vi.fn(), setSyncing: vi.fn(), onLocalReady,
+                    isCurrent: () => true,
+                })).rejects.toThrow('Consent authorization changed');
+                expect(retire).toHaveBeenCalledOnce();
+                expect(claim).toHaveBeenCalledTimes(phase === 'checkpoint' ? 1 : 0);
+                expect(onLocalReady).not.toHaveBeenCalled();
+                expect((await readLocal(user.uid))?.data.profile?.height).toBe('183');
+            } finally {
+                cloudWritable = true;
+                vi.mocked(isHealthConsentCloudWritable).mockImplementation(() => true);
+                retire.mockRestore();
+                claim.mockRestore();
+            }
+        },
+    );
 
 });
