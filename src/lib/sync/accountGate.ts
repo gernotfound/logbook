@@ -110,7 +110,8 @@ export function listPendingAccountDeletions(): {
     if (typeof localStorage === 'undefined') {
         throw new BrowserStorageError('read', 'account-deletion-inventory', new Error('localStorage unavailable'));
     }
-    const inventory = stableStorageKeyInventory('Inventario marker cancellazione account modificato durante il recupero: copie preservate.');
+    const inventoryChanged = 'Inventario marker cancellazione account modificato durante il recupero: copie preservate.';
+    const inventory = stableStorageKeyInventory(inventoryChanged);
     for (const storageKey of inventory) {
         if (!storageKey.startsWith('logbook:v2:user:') || !storageKey.endsWith(suffix)) continue;
         const owner = storageKey.slice('logbook:v2:'.length, -suffix.length);
@@ -124,6 +125,12 @@ export function listPendingAccountDeletions(): {
             corrupt.push(error instanceof AccountDeletionMarkerCorruptError
                 ? error : new AccountDeletionMarkerCorruptError(owner, error));
         }
+    }
+    // Another tab can add or remove a receipt after the first inventory but
+    // while individual marker values are being read. Reject a partial snapshot.
+    const after = stableStorageKeyInventory(inventoryChanged);
+    if (after.size !== inventory.size || [...inventory].some(storageKey => !after.has(storageKey))) {
+        throw new Error(inventoryChanged);
     }
     markers.sort((a, b) => a.startedAt - b.startedAt);
     return { markers, corrupt };
