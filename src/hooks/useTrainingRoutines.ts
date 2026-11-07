@@ -172,8 +172,9 @@ export function useTrainingRoutines() {
             setEditingRoutineId(null);
             clearRoutineDraft();
             return true;
-        } catch (error) {
-            blockRoutineDraft(error);
+        } catch {
+            // A rejected business commit does not mean the encrypted recovery draft failed.
+            // Preserve it for retry without fencing unrelated local persistence.
             await showAlert("Errore durante il salvataggio della scheda.");
             return false;
         }
