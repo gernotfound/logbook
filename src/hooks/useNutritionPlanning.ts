@@ -51,9 +51,17 @@ function deriveMacroSplit(avgValue: unknown, boostPercentValue: unknown, onDaysC
 }
 
 export function useNutritionPlanning() {
-    const storePlanning = useAppStore(state => state.userData?.nutritionPlanning);
-    const nutritionMap = useAppStore(state => state.userData?.nutrition);
-    const profile = useAppStore(state => state.userData?.profile);
+    const dataOwner = useAppStore(state => state.dataOwner);
+    const selectedPlanning = useAppStore(state => state.userData?.nutritionPlanning);
+    const selectedNutrition = useAppStore(state => state.userData?.nutrition);
+    const selectedProfile = useAppStore(state => state.userData?.profile);
+    let visibleOwner: string | null = null;
+    try { visibleOwner = captureSession().owner; }
+    catch { /* Unreadable ownership must not expose a previous user's data. */ }
+    const owned = visibleOwner !== null && dataOwner === visibleOwner;
+    const storePlanning = owned ? selectedPlanning : undefined;
+    const nutritionMap = owned ? selectedNutrition : undefined;
+    const profile = owned ? selectedProfile : undefined;
     const dispatchDomainOperation = useAppStore(state => state.dispatchDomainOperation);
     const showAlert = useDialogStore(state => state.showAlert);
 
