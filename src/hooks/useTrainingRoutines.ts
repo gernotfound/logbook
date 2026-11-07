@@ -12,7 +12,8 @@ const EMPTY_ROUTINES: WorkoutRoutine[] = [];
 const EMPTY_LIBRARY: Exercise[] = [];
 const ROUTINE_DRAFT_KEY = 'draft_routine';
 
-function blockRoutineDraft(error: unknown): void {
+function blockRoutineDraft(error: unknown, session: ReturnType<typeof captureSession>): void {
+    if (!isCurrentSession(session)) return;
     console.error('Persistenza bozza scheda non disponibile:', error);
     useAppStore.setState({
         localPersistenceBlocked: true,
@@ -47,7 +48,7 @@ export function useTrainingRoutines() {
         readWorkoutRecoveryDraft(ROUTINE_DRAFT_KEY, draftOwner);
     }, [draftOwner, draftSession, initialRecovery.error, localPersistenceBlocked]);
     useEffect(() => {
-        if (initialRecovery.error) blockRoutineDraft(initialRecovery.error);
+        if (initialRecovery.error) blockRoutineDraft(initialRecovery.error, draftSession);
     }, [initialRecovery.error]);
     const [routineName, setRoutineName] = useState(() => initialDraft?.name || '');
     const [editingRoutineId, setEditingRoutineId] = useState<string | null>(null);
@@ -62,7 +63,7 @@ export function useTrainingRoutines() {
                 routineName.trim() !== '' || routineExercises.length > 0
                     ? { name: routineName, exercises: routineExercises } : null, draftSession.consentGeneration);
         } catch (error) {
-            blockRoutineDraft(error);
+            blockRoutineDraft(error, draftSession);
         }
     }, [routineName, routineExercises, editingRoutineId, draftOwner, draftSession,
         initialRecovery.error, localPersistenceBlocked, assertCurrentDraft]);
@@ -73,7 +74,7 @@ export function useTrainingRoutines() {
             writeWorkoutRecoveryDraft(ROUTINE_DRAFT_KEY, draftOwner, null, draftSession.consentGeneration);
             return true;
         } catch (error) {
-            blockRoutineDraft(error);
+            blockRoutineDraft(error, draftSession);
             return false;
         }
     };
