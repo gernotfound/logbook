@@ -588,6 +588,32 @@ describe('account deletion recovery device registration retries', () => {
     expect(finalize).not.toHaveBeenCalled();
   });
 
+  it('rejects conflicting proof entries for the same owner without attempting recovery or registration', async () => {
+    const {
+      recoverDeletedAccountOnThisDevice,
+      registerDeletionRecoveryDevice,
+      DeletionRecoveryCredentialCorruptError,
+    } = await loadSubject();
+    const raw = JSON.stringify([
+      { uid: 'user-a', token: 'A'.repeat(43) },
+      { uid: 'user-a', token: 'B'.repeat(43) },
+    ]);
+    localStorage.setItem('logbook_deletion_recovery_devices_v1', raw);
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    const finalize = vi.fn();
+
+    await expect(recoverDeletedAccountOnThisDevice(finalize))
+      .rejects.toBeInstanceOf(DeletionRecoveryCredentialCorruptError);
+    const current = user('user-a');
+    firebase.auth.currentUser = current;
+    await expect(registerDeletionRecoveryDevice(current))
+      .rejects.toBeInstanceOf(DeletionRecoveryCredentialCorruptError);
+    expect(localStorage.getItem('logbook_deletion_recovery_devices_v1')).toBe(raw);
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(finalize).not.toHaveBeenCalled();
+  });
+
   it('does not submit device registration after Auth changes while App Check is resolving', async () => {
     const { registerDeletionRecoveryDevice } = await loadSubject();
     const original = user('user-a');
