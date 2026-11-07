@@ -91,7 +91,7 @@ export const trialCases = {
   },
   "monthly-tombstones": {
     "mutate": ["src/lib/sync/monthlyEntityTombstones.ts"],
-    "testFiles": ["tests/isolated/monthlyEntityTombstones.test.ts"],
+    "testFiles": ["tests/isolated/monthlyEntityTombstones.test.ts", "tests/isolated/monthlyEntityTombstoneReplay.test.ts"],
     "runner": "isolated"
   },
   "business-normalization": {
