@@ -270,7 +270,7 @@ jobs:
                 --header 'Accept-Encoding: identity' --write-out '%{content_type}' \
                 --output /tmp/thelogbook-served-resource "https://thelogbook.web.app${path}")"
               case "${kind}:${mime}" in
-                html:text/html*|js:text/javascript*|js:application/javascript*|json:application/manifest+json*|json:application/json*)
+                html:text/html*|js:text/javascript*|js:application/javascript*|json:application/manifest+json*|json:application/json*|css:text/css*)
                   if cmp -s "${local_file}" /tmp/thelogbook-served-resource; then
                     return 0
                   fi
@@ -285,3 +285,10 @@ jobs:
           assert_served_bytes "/" "dist/index.html" html
           assert_served_bytes "/sw.js" "dist/sw.js" js
           assert_served_bytes "/manifest.webmanifest" "dist/manifest.webmanifest" json
+          assert_served_bytes "/appearance.js" "dist/appearance.js" js
+          assert_served_bytes "/appearance.css" "dist/appearance.css" css
+          if [ -n "$workbox_file" ]; then
+            assert_served_bytes "/$workbox_file" "dist/$workbox_file" js
+          fi
+          asset_kind="${asset_file##*.}"
+          assert_served_bytes "/assets/$asset_file" "dist/assets/$asset_file" "$asset_kind"

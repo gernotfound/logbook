@@ -132,6 +132,10 @@ void test('Hosting smoke verifies served bytes and browser MIME for critical PWA
   assert.ok(smoke.includes('assert_served_bytes "/" "dist/index.html" html'));
   assert.ok(smoke.includes('assert_served_bytes "/sw.js" "dist/sw.js" js'));
   assert.ok(smoke.includes('assert_served_bytes "/manifest.webmanifest" "dist/manifest.webmanifest" json'));
+  assert.ok(smoke.includes('assert_served_bytes "/appearance.js" "dist/appearance.js" js'));
+  assert.ok(smoke.includes('assert_served_bytes "/appearance.css" "dist/appearance.css" css'));
+  assert.ok(smoke.includes('assert_served_bytes "/$workbox_file" "dist/$workbox_file" js'));
+  assert.ok(smoke.includes('assert_served_bytes "/assets/$asset_file" "dist/assets/$asset_file" "$asset_kind"'));
   assert.match(smoke, /x-content-type-options: nosniff/);
   assert.match(smoke, /content-security-policy:/);
   assert.match(smoke, /cmp -s/);
