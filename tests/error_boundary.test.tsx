@@ -195,6 +195,7 @@ describe('R2: ErrorBoundary & Dialog Hardening Suite', () => {
         const purge = vi.mocked(DB.purgeAllLocalUserData).mockImplementationOnce(
             () => new Promise<void>(resolve => { finishPurge = resolve; }),
         );
+        const reload = vi.spyOn(safeReloadModule, 'safeHardReload').mockResolvedValue(undefined);
 
         render(<ErrorBoundary><ProblemChild shouldThrow={true} /></ErrorBoundary>);
         const reset = screen.getByRole('button', { name: /Azzera dati locali/i });
@@ -206,12 +207,36 @@ describe('R2: ErrorBoundary & Dialog Hardening Suite', () => {
         await act(async () => { approve(true); });
         expect(purge).toHaveBeenCalledExactlyOnceWith('user:test-user-id');
         fireEvent.click(reset);
+        fireEvent.click(screen.getByRole('button', { name: /Ricarica pagina/i }));
         expect(confirm).toHaveBeenCalledTimes(1);
         expect(purge).toHaveBeenCalledTimes(1);
+        expect(reload).not.toHaveBeenCalled();
         expect(window.location.reload).not.toHaveBeenCalled();
 
         await act(async () => { finishPurge(); });
         expect(window.location.reload).toHaveBeenCalledTimes(1);
+        log.mockRestore();
+    });
+
+    it('does not begin a destructive reset during the reload durability check', async () => {
+        const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+        let finishReload!: () => void;
+        const reload = vi.spyOn(safeReloadModule, 'safeHardReload').mockImplementationOnce(
+            () => new Promise<void>(resolve => { finishReload = resolve; }),
+        );
+        const confirm = vi.mocked(useDialogStore.getState().showConfirm).mockResolvedValue(true);
+
+        render(<ErrorBoundary><ProblemChild shouldThrow={true} /></ErrorBoundary>);
+        fireEvent.click(screen.getByRole('button', { name: /Ricarica pagina/i }));
+        fireEvent.click(screen.getByRole('button', { name: /Azzera dati locali/i }));
+        expect(reload).toHaveBeenCalledTimes(1);
+        expect(confirm).not.toHaveBeenCalled();
+        expect(DB.purgeAllLocalUserData).not.toHaveBeenCalled();
+
+        await act(async () => { finishReload(); });
+        await act(async () => { fireEvent.click(screen.getByRole('button', { name: /Azzera dati locali/i })); });
+        expect(confirm).toHaveBeenCalledTimes(1);
+        expect(DB.purgeAllLocalUserData).toHaveBeenCalledExactlyOnceWith('user:test-user-id');
         log.mockRestore();
     });
 
