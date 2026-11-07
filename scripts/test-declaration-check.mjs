@@ -2,7 +2,8 @@ import { parse } from '@babel/parser';
 
 const testNames = new Set(['test', 'it', 'describe']);
 const aliases = new Map([['fit', 'only'], ['fdescribe', 'only'], ['xit', 'skip'], ['xtest', 'skip'], ['xdescribe', 'skip']]);
-const forbidden = new Set(['skip', 'todo', 'only']);
+// Conditional Vitest helpers can silently omit tests from the canonical suite.
+const forbidden = new Set(['skip', 'todo', 'only', 'skipIf', 'runIf']);
 
 function declarationModifiers(expression) {
   const modifiers = [];
