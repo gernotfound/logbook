@@ -9,7 +9,7 @@ import { deviceKey, protectedDeviceKey, readDeviceValueStrict, writeDeviceValue 
 import { useTrainingHistory } from '../src/hooks/useTrainingHistory';
 import { restoreSessionAfterHistoryEdit } from '../src/hooks/workout/historyEditorContext';
 import { useWorkoutSetMutations } from '../src/hooks/workout/useWorkoutSetMutations';
-import { captureSession } from '../src/lib/sync/session';
+import { captureSession, invalidateSession } from '../src/lib/sync/session';
 import { getInitialLocalWorkout } from '../src/store/slices/createWorkoutSlice';
 import { persistPlainWorkoutSnapshot } from '../src/lib/sync/workoutDeviceIntent';
 import { readWorkoutTimerSnapshot, writeWorkoutTimerSnapshot } from '../src/lib/utils/timer';
@@ -352,6 +352,31 @@ describe('Workout lifecycle durable recovery regressions', () => {
         expect(getInitialLocalWorkout(owner, null, [workout('other', true)])?.id).toBe('prepared');
     });
 
+
+    it('does not complete a workout after a same-owner authentication epoch change during confirmation', async () => {
+        const original = workout('finish-old-auth-epoch', true);
+        useAppStore.setState({ userData: userData({ activeWorkout: original }), dataOwner: owner, localWorkout: original });
+        const previousDispatch = useAppStore.getState().dispatchDomainOperation;
+        const dispatch = vi.fn(previousDispatch);
+        useAppStore.setState({ dispatchDomainOperation: dispatch });
+        let accept!: (value: boolean) => void;
+        vi.mocked(useDialogStore.getState().showConfirm).mockImplementationOnce(
+            () => new Promise(resolve => { accept = resolve; }),
+        );
+        try {
+            const hook = renderHook(() => useWorkoutSession());
+            let pending!: Promise<WorkoutSession | null>;
+            act(() => { pending = hook.result.current.endWorkout(); });
+            // A-B-A account transitions can restore the original UID and workout ID.
+            invalidateSession();
+            invalidateSession();
+            await act(async () => { accept(true); expect(await pending).toBeNull(); });
+            expect(dispatch).not.toHaveBeenCalled();
+            expect(useAppStore.getState().localWorkout?.id).toBe(original.id);
+        } finally {
+            useAppStore.setState({ dispatchDomainOperation: previousDispatch });
+        }
+    });
 
     it('never completes a workout replaced while the finish confirmation is open', async () => {
         await prepareUnlockedTestArchive(owner);
