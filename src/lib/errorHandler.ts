@@ -281,8 +281,8 @@ export function mapFirebaseErrorCode(error: unknown): FormattedSyncError {
       category: 'validation',
       title: 'Formato dei dati non valido',
       message:
-        'Alcuni dati contengono un formato non supportato. È stato applicato un ripristino sicuro per evitare perdite di informazioni.',
-      isOfflineSafe: true,
+        'Alcuni dati non rispettano il formato previsto. Il salvataggio non è stato confermato: conserva i dati originali e riprova dopo aver risolto il problema.',
+      isOfflineSafe: false,
       canRetry: false,
     };
   }
