@@ -131,6 +131,34 @@ describe('monthly Firestore read boundaries', () => {
         expect(documents.get('history_months/2026-05')).toMatchObject({ good: { id: 'good' }, _sync: syncMeta });
     });
 
+    it('rejects a corrupted explicit workout day or out-of-range start instant before cloud hydration', async () => {
+        const startedAt = new Date(2026, 4, 11, 12, 0).getTime();
+        const state = draft();
+        const docs = cloudDocuments();
+
+        for (const bad of [
+            { date: '2026-05-32', globalStartTime: startedAt },
+            { globalStartTime: Number.MAX_VALUE },
+        ]) {
+            firestore.getDocFromServer.mockResolvedValue(snapshot({
+                workout: { id: 'workout', ...bad, exercises: [] },
+            }));
+            await expect(loadHistoryMonths(owner, ['2026-05'], state, docs))
+                .rejects.toThrow('Shard storico 2026-05 non integro');
+            expect(state.history).toEqual([]);
+            expect(docs.size).toBe(0);
+        }
+
+        // The historical record with no explicit day is still recoverable when
+        // the start instant is a genuine local calendar date.
+        firestore.getDocFromServer.mockResolvedValue(snapshot({
+            workout: { id: 'workout', globalStartTime: startedAt, exercises: [] },
+        }));
+        await loadHistoryMonths(owner, ['2026-05'], state, docs);
+        expect(state.history).toHaveLength(1);
+        expect(docs.get('history_months/2026-05')).toHaveProperty('_sync', syncMeta);
+    });
+
     it('fails closed on a damaged nutrition date without publishing partial days, then recovers on retry', async () => {
         const data = draft();
         const documents = cloudDocuments();
