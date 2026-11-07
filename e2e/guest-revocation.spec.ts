@@ -2,7 +2,7 @@ import { test, expect, type Page } from './fixtures';
 
 const routineName = 'Scheda E2E revoca guest';
 
-async function hasGuestEnvelope(page: Page): Promise<boolean> {
+async function guestArchiveState(page: Page): Promise<{ envelope: boolean; mirror: boolean; key: boolean }> {
   return page.evaluate(async () => {
     const db = await new Promise<IDBDatabase>((resolve, reject) => {
       const request = indexedDB.open('keyval-store');
@@ -10,10 +10,19 @@ async function hasGuestEnvelope(page: Page): Promise<boolean> {
       request.onerror = () => reject(request.error);
     });
     try {
-      return await new Promise<boolean>((resolve, reject) => {
-        const request = db.transaction('keyval', 'readonly').objectStore('keyval').get('logbook:v2:guest');
-        request.onsuccess = () => resolve(request.result !== undefined);
-        request.onerror = () => reject(request.error);
+      return await new Promise<{ envelope: boolean; mirror: boolean; key: boolean }>((resolve, reject) => {
+        const transaction = db.transaction('keyval', 'readonly');
+        const store = transaction.objectStore('keyval');
+        const envelope = store.get('logbook:v2:guest');
+        const mirror = store.get('logbook:v2:guest:secure-vault-control-mirror');
+        const key = store.get('logbook:v2:guest:device-vault-key');
+        transaction.oncomplete = () => resolve({
+          envelope: envelope.result !== undefined,
+          mirror: mirror.result !== undefined,
+          key: key.result !== undefined,
+        });
+        transaction.onabort = () => reject(transaction.error);
+        transaction.onerror = () => reject(transaction.error);
       });
     } finally {
       db.close();
@@ -36,7 +45,10 @@ test('guest logout revokes another tab and removes its durable archive without r
   await page.locator('input[placeholder="Nome scheda"]').fill(routineName);
   await page.locator('#routine-creation-form').getByRole('button', { name: 'Salva', exact: true }).click();
   await expect(page.getByText(routineName, { exact: true })).toBeVisible();
-  await expect.poll(() => hasGuestEnvelope(page)).toBe(true);
+  await expect.poll(() => guestArchiveState(page)).toEqual({ envelope: true, mirror: true, key: true });
+  await expect.poll(() => page.evaluate(() =>
+    localStorage.getItem('logbook:v2:guest:secure-vault-control') !== null
+  )).toBe(true);
 
   const background = await context.newPage();
   await background.goto('/');
@@ -52,13 +64,16 @@ test('guest logout revokes another tab and removes its durable archive without r
   await expect(background.locator('.guest-banner')).toHaveCount(0);
   await expect(background.getByRole('button', { name: 'Continua senza account' })).toBeVisible();
   await expect.poll(() => background.evaluate(() => localStorage.getItem('logbook_is_guest'))).toBeNull();
-  await expect.poll(() => hasGuestEnvelope(background)).toBe(false);
+  await expect.poll(() => background.evaluate(() =>
+    localStorage.getItem('logbook:v2:guest:secure-vault-control')
+  )).toBeNull();
+  await expect.poll(() => guestArchiveState(background)).toEqual({ envelope: false, mirror: false, key: false });
 
   await background.evaluate(() => {
     Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'hidden' });
     document.dispatchEvent(new Event('visibilitychange'));
   });
-  await expect.poll(() => hasGuestEnvelope(background)).toBe(false);
+  await expect.poll(() => guestArchiveState(background)).toEqual({ envelope: false, mirror: false, key: false });
   await expect.poll(() => background.evaluate(() =>
     Object.keys(localStorage).filter(key => key.startsWith('logbook:v2:guest:')).length
   )).toBe(0);
