@@ -57,4 +57,18 @@ describe('completed workout to reusable routine', () => {
             ] },
         ]);
     });
+    it('does not convert partial, non-integer or non-positive repetitions into a routine target', () => {
+        const workout: WorkoutSession = {
+            exercises: [{ exId: 'exercise', sets: [
+                { id: 's1', reps: '8reps', kg: '20' },
+                { id: 's2', reps: '8.5', kg: '20' },
+                { id: 's3', reps: '-2', kg: '20' },
+                { id: 's4', reps: '0', kg: '20' },
+                { id: 's5', reps: '12', kg: '20' },
+            ] }],
+        };
+        const result = routineFromWorkout(workout, 'routine', 'Pulita');
+        expect(result.exercises).toEqual([{ exId: 'exercise', setsCount: 5, minReps: 12, maxReps: 12 }]);
+    });
+
 });
