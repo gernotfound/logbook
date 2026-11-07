@@ -105,7 +105,7 @@ void test('hosting post-deploy asset probes avoid find|head SIGPIPE under pipefa
 void test('Hosting build remains unprivileged and hands an exact SHA artifact to its deploy job', () => {
   assert.deepEqual(checkProductionBuildSecrets(hosting, firestore), []);
   for (const [replacement, finding] of [
-    [hosting.replace('    name: Build verified main frontend', '    name: Build verified main frontend\\n    permissions:\\n      id-token: write'),
+    [hosting.replace('    name: Build verified main frontend', '    name: Build verified main frontend\n    permissions:\n      id-token: write'),
       /build can access cloud identity/],
     [hosting.replace('    needs: build', '    needs: none'), /artifact handoff/],
     [hosting.replace('      - name: Download same-run verified frontend', '      - name: Download discarded frontend'), /credentials or exact main SHA guard out of order/],
@@ -117,13 +117,13 @@ void test('Hosting build remains unprivileged and hands an exact SHA artifact to
 
 void test('Hosting smoke verifies served bytes and browser MIME for critical PWA resources', () => {
   const smoke = hosting.slice(hosting.indexOf('      - name: Verify public Hosting PWA cache policy'));
-  assert.match(smoke, /assert_served_bytes "\\/" "dist\\/index\\.html" html/);
-  assert.match(smoke, /assert_served_bytes "\\/sw\\.js" "dist\\/sw\\.js" js/);
-  assert.match(smoke, /assert_served_bytes "\\/manifest\\.webmanifest" "dist\\/manifest\\.webmanifest" json/);
+  assert.ok(smoke.includes('assert_served_bytes "/" "dist/index.html" html'));
+  assert.ok(smoke.includes('assert_served_bytes "/sw.js" "dist/sw.js" js'));
+  assert.ok(smoke.includes('assert_served_bytes "/manifest.webmanifest" "dist/manifest.webmanifest" json'));
   assert.match(smoke, /cmp -s/);
   assert.match(smoke, /Accept-Encoding: identity/);
   assert.match(smoke, /content_type/);
-  assert.match(smoke, /if \\[ "\\$\\{attempt\\}" -lt 5 \\]; then sleep 2; fi/);
+  assert.ok(smoke.includes('if [ "${attempt}" -lt 5 ]; then sleep 2; fi'));
 });
 
 function* clientSources(directory) {
