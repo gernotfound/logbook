@@ -189,6 +189,13 @@ export function useTrainingExercises() {
     };
 
     const handleCancelEdit = () => {
+        try {
+            assertCurrentDraft();
+            clearExerciseDraft(draftOwner, draftSession.consentGeneration);
+        } catch (error) {
+            blockExerciseDraft(error);
+            return false;
+        }
         setEditingExId(null);
         setExName('');
         setExNotes('');
@@ -199,12 +206,7 @@ export function useTrainingExercises() {
         setTrackingType('weight_reps');
         setIsBodyweight(false);
         setEquipmentWeight('');
-        try {
-            assertCurrentDraft();
-            clearExerciseDraft(draftOwner, draftSession.consentGeneration);
-        } catch (error) {
-            blockExerciseDraft(error);
-        }
+        return true;
     };
 
     const isDuplicateName = useMemo(() => {
