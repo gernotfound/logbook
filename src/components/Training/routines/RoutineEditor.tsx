@@ -46,6 +46,7 @@ export const RoutineEditor: React.FC<RoutineEditorProps> = ({
     onCancel,
     isSaving
 }) => {
+    const exerciseSearchId = React.useId();
     return (
         <div>
             <div className="routine-editor-head">
@@ -74,9 +75,10 @@ export const RoutineEditor: React.FC<RoutineEditorProps> = ({
             </div>
 
             <div className="routine-editor-field">
-                <label>Aggiungi esercizio</label>
+                <label htmlFor={exerciseSearchId}>Aggiungi esercizio</label>
                 <div className="routine-editor-search">
                     <ExerciseSearchDropdown
+                        inputId={exerciseSearchId}
                         library={library}
                         onSelectExercise={onAddExercise}
                         placeholder="Cerca esercizi da aggiungere"
