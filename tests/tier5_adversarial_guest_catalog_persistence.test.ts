@@ -280,10 +280,12 @@ describe('Tier 5: Adversarial Coverage Hardening Suite', () => {
                 const saved = savedNutrition[date];
                 expect(saved).toMatchObject({
                     date,
-                    kcal: day.kcal,
-                    pro: day.pro,
-                    carbs: day.carbs,
-                    fat: day.fat,
+                    // Semantic cloud projection recalculates these daily totals
+                    // from the logged meal; the input deliberately has stale totals.
+                    kcal: 500,
+                    pro: 40,
+                    carbs: 50,
+                    fat: 15,
                     meals: [{ id: day.meals![0].id, name: 'Meal 1', quantity: 100,
                         kcal: 500, pro: 40, carbs: 50, fat: 15 }],
                 });
