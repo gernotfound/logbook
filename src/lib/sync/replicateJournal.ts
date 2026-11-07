@@ -238,6 +238,9 @@ export async function replicateJournal(expectedOwner?: string): Promise<SyncResu
             throw error;
         }
     } catch (error) {
+        // A retryable network failure is not evidence that a preflight still
+        // belongs to the current Auth/consent epoch (including A→B→A).
+        if (!isWritableSession(session)) return { ok: false, status: 'failed', error };
         if (error instanceof ReplicaFencedError && session.owner.startsWith('user:') && isWritableSession(session)) {
             try {
                 const durable = await readLocal(session.owner);
