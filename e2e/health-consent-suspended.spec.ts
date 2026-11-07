@@ -50,6 +50,7 @@ for (const theme of ['light', 'dark'] as const) {
     await page.getByRole('button', { name: 'Salva profilo biometrico' }).click();
     await expect(page.locator('#biometry-height')).toHaveValue('183');
     await expect.poll(() => guestArchiveEntries(page)).toBe(3);
+    await expect.poll(() => page.evaluate(() => localStorage.getItem('logbook:v2:guest:secure-vault-control') !== null)).toBe(true);
 
     const secondTab = await context.newPage();
     await secondTab.goto('/');
@@ -70,6 +71,8 @@ for (const theme of ['light', 'dark'] as const) {
     // A fresh guest could hide the old values even if their encrypted bytes survived.
     // Check the underlying archive, wrapped control and device key before provisioning it.
     await expect.poll(() => guestArchiveEntries(page)).toBe(0);
+    // The independently stored vault control must be erased as well as the IDB mirror and device key.
+    await expect.poll(() => page.evaluate(() => localStorage.getItem('logbook:v2:guest:secure-vault-control'))).toBeNull();
     await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1)).toBe(true);
 
