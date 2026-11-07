@@ -1,6 +1,36 @@
 // Check privileged production deployment identities without contacting providers.
 export function checkProductionBuildSecrets(hosting, firestore) {
   const issues = [];
+  const build = hosting.match(/^  build:\\s*\\r?\\n([\\s\\S]*?)(?=^  deploy:\\s*$)/m)?.[1];
+  const deploy = hosting.match(/^  deploy:\\s*\\r?\\n([\\s\\S]*)$/m)?.[1];
+  if (!build || !deploy) {
+    issues.push('Hosting: expected separate unprivileged build and privileged deploy jobs');
+  } else {
+    if (!/^    permissions:\\s*\\r?\\n      contents: read\\s*$/m.test(build) ||
+        /\\bid-token:\\s*write\\b/.test(build) ||
+        /\\bGCP_[A-Z_]+\\b|google-github-actions\\/auth/.test(build)) {
+      issues.push('Hosting: build can access cloud identity instead of remaining unprivileged');
+    }
+    if (!/^    permissions:\\s*\\r?\\n      contents: read\\s*\\r?\\n      id-token: write\\s*$/m.test(deploy) ||
+        /\\bnpm ci\\b/.test(deploy) ||
+        /\\bnpm run build\\b/.test(deploy)) {
+      issues.push('Hosting: deploy job must not install or compile app dependencies');
+    }
+    const uploaded = build.includes('actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9');
+    const downloaded = deploy.includes('actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131');
+    if (!uploaded || !downloaded ||
+        !build.includes('hosting-frontend-${{ env.EXPECTED_SHA }}') ||
+        !deploy.includes('hosting-frontend-${{ env.EXPECTED_SHA }}') ||
+        !/^    needs: build\\s*$/m.test(deploy)) {
+      issues.push('Hosting: verified same-run frontend artifact handoff is missing');
+    }
+    if (deploy.indexOf('      - name: Authenticate to Google Cloud') <=
+        deploy.indexOf('      - name: Download same-run verified frontend') ||
+        !deploy.includes('      - name: Recheck exact main SHA before Hosting deployment')) {
+      issues.push('Hosting: trusted credentials or exact main SHA guard out of order');
+    }
+  }
+
   // An explicit env allowlist keeps retired diagnostics credentials out of the
   // production build without coupling the rule to any particular vendor.
   const permittedHostingEnv = new Set([
