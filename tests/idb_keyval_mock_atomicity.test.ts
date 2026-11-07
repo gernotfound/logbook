@@ -28,6 +28,17 @@ describe('shared IndexedDB test adapter follows idb-keyval transaction semantics
         expect(await get<number>(key)).toBeUndefined();
     });
 
+    it('returns a read between ordered transactions before a subsequent write', async () => {
+        const key = 'mock-read-after-update';
+        await set(key, 0);
+        const updatePromise = update<number>(key, value => (value ?? 0) + 1);
+        const readPromise = get<number>(key);
+        const followupWrite = set(key, 10);
+        expect(await readPromise).toBe(1);
+        await Promise.all([updatePromise, followupWrite]);
+        expect(await get<number>(key)).toBe(10);
+    });
+
     it('rejects an asynchronous transaction updater without changing durable data', async () => {
         const key = 'mock-atomic-async-rejection';
         await set(key, 4);

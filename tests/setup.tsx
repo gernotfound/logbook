@@ -278,31 +278,32 @@ HTMLCanvasElement.prototype.getContext = vi.fn().mockImplementation(function (th
 
 // Mock idb-keyval
 export const idbStore: Record<string, any> = {};
-// All idb-keyval writes share an IndexedDB object store. Readwrite
-// transactions serialize even when one writer uses set/del/clear instead of update.
-let idbWriteTail: Promise<void> = Promise.resolve();
-function queueIdbWrite<T>(write: () => T): Promise<T> {
-  const previous = idbWriteTail;
+// The shared object store orders overlapping readonly/readwrite transactions
+// by creation, including get after a write and set/del/clear after update.
+let idbTransactionTail: Promise<void> = Promise.resolve();
+function queueIdbTransaction<T>(write: () => T): Promise<T> {
+  const previous = idbTransactionTail;
   let release!: () => void;
   const pending = new Promise<void>(resolve => { release = resolve; });
-  idbWriteTail = pending;
+  idbTransactionTail = pending;
   return previous.then(write).finally(() => {
     release();
-    if (idbWriteTail === pending) idbWriteTail = Promise.resolve();
+    if (idbTransactionTail === pending) idbTransactionTail = Promise.resolve();
   });
 }
 beforeEach(() => {
-  idbWriteTail = Promise.resolve();
+  idbTransactionTail = Promise.resolve();
   for (const key of Object.keys(idbStore)) delete idbStore[key];
   localStorageMock.clear();
   sessionStorageMock.clear();
 });
 vi.mock('idb-keyval', () => ({
-  get: vi.fn(async (key: string) => Object.prototype.hasOwnProperty.call(idbStore, key) ? idbStore[key] : undefined),
-  set: vi.fn((key: string, value: any) => queueIdbWrite(() => {
+  get: vi.fn((key: string) => queueIdbTransaction(() =>
+    Object.prototype.hasOwnProperty.call(idbStore, key) ? idbStore[key] : undefined)),
+  set: vi.fn((key: string, value: any) => queueIdbTransaction(() => {
     idbStore[key] = value;
   })),
-  update: vi.fn((key: string, updater: (value: any) => any) => queueIdbWrite(() => {
+  update: vi.fn((key: string, updater: (value: any) => any) => queueIdbTransaction(() => {
     const next = updater(idbStore[key]);
     // The updater executes inside a readwrite transaction: it cannot be async.
     if (next !== null && (typeof next === 'object' || typeof next === 'function')
@@ -311,10 +312,10 @@ vi.mock('idb-keyval', () => ({
     }
     idbStore[key] = next;
   })),
-  del: vi.fn((key: string) => queueIdbWrite(() => {
+  del: vi.fn((key: string) => queueIdbTransaction(() => {
     delete idbStore[key];
   })),
-  clear: vi.fn(() => queueIdbWrite(() => {
+  clear: vi.fn(() => queueIdbTransaction(() => {
     for (const k in idbStore) delete idbStore[k];
   })),
 }));
