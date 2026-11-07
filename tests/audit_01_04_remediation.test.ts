@@ -131,6 +131,19 @@ describe('AUDIT 01-04 remediation invariants', () => {
         expect(() => requireCanonicalWorkoutDate({})).toThrow(/identità temporale/i);
     });
 
+    it('only derives a missing workout day from a representable start instant', () => {
+        const startedAt = new Date(2026, 4, 11, 12, 0).getTime();
+        expect(requireCanonicalWorkoutDate({ globalStartTime: startedAt })).toBe('2026-05-11');
+        expect(requireCanonicalWorkoutDate({ date: '2026-05-11', globalStartTime: startedAt })).toBe('2026-05-11');
+
+        for (const invalidDate of ['', '2026-02-31', '11/05/2026', '2026-05-32']) {
+            expect(() => requireCanonicalWorkoutDate({ date: invalidDate, globalStartTime: startedAt }))
+                .toThrow(/identità temporale non valida/i);
+        }
+        expect(() => requireCanonicalWorkoutDate({ globalStartTime: Number.MAX_VALUE }))
+            .toThrow(/identità temporale non valida/i);
+    });
+
     it('preserves guest local-only conflicts during guest-to-account merge', () => {
         const cloud = parse({});
         const guest = parse({
