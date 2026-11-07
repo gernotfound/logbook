@@ -144,7 +144,7 @@ test('native guest lifecycle lock survives closed holder and queued login tabs w
   await latest.locator('input[placeholder="Nome scheda"]').fill(routineName);
   await latest.locator('#routine-creation-form').getByRole('button', { name: 'Salva', exact: true }).click();
   await expect(latest.getByText(routineName, { exact: true })).toBeVisible();
-  await expect.poll(() => hasGuestEnvelope(latest)).toBe(true);
+  await expect.poll(() => guestArchiveState(latest)).toEqual({ envelope: true, mirror: true, key: true });
 
   const fresh = await context.newPage();
   await fresh.goto('/?tab=training');
