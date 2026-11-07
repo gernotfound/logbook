@@ -36,10 +36,12 @@ function errorResponse(error: unknown, origin: string | null): Response {
 
 // A Web Request may expose an empty stream for a bodyless POST (for example,
 // after an HTTP adapter normalizes the request). Reject bytes, not the stream.
-async function hasRequestPayload(request: Request): Promise<boolean> {
+type BodyInspection = 'empty' | 'payload' | 'timed-out';
+
+async function inspectRequestBody(request: Request): Promise<BodyInspection> {
   const length = request.headers.get('content-length');
-  if (length !== null && (!/^\d+$/.test(length) || Number(length) > 0)) return true;
-  if (!request.body) return false;
+  if (length !== null && (!/^\d+$/.test(length) || Number(length) > 0)) return 'payload';
+  if (!request.body) return 'empty';
 
   const reader = request.body.getReader();
   let timeout: ReturnType<typeof setTimeout> | undefined;
@@ -53,11 +55,11 @@ async function hasRequestPayload(request: Request): Promise<boolean> {
     // cap empty chunks so a stream cannot keep the endpoint busy indefinitely.
     for (let emptyReads = 0; emptyReads < 16; emptyReads++) {
       const chunk = await Promise.race([reader.read(), deadline]);
-      if (chunk === null) return true;
-      if (chunk.done) return false;
-      if (chunk.value.byteLength > 0) return true;
+      if (chunk === null) return 'timed-out';
+      if (chunk.done) return 'empty';
+      if (chunk.value.byteLength > 0) return 'payload';
     }
-    return true;
+    return 'payload';
   } finally {
     if (timeout !== undefined) clearTimeout(timeout);
     void reader.cancel().catch(() => {});
@@ -80,8 +82,13 @@ export async function POST(request: Request): Promise<Response> {
   const origin = request.headers.get('origin');
   try {
     requireAccountDeletionOrigin(request);
-    // Reject actual request bytes, including chunked uploads with no Content-Length.
-    if (await hasRequestPayload(request)) {
+    // A stalled stream is a retryable transport failure, not proof of a
+    // client-supplied payload. Neither outcome may reach Auth or key storage.
+    const bodyInspection = await inspectRequestBody(request);
+    if (bodyInspection === 'timed-out') {
+      return json({ error: 'Lettura della richiesta scaduta. Riprova.' }, 408, origin);
+    }
+    if (bodyInspection === 'payload') {
       return json({ error: 'Questa operazione non accetta dati da inviare.' }, 400, origin);
     }
     const params = new URL(request.url).searchParams;
