@@ -359,6 +359,13 @@ describe('Empirical Challenger: Persistence, Save Amnesia, 3-Month Windowing & D
 
             vi.mocked(getDocFromServer).mockImplementation(async (docRef: any) => {
                 const pathStr = docRef?.path || '';
+                // sync_control/state is public causal metadata, not a sealed
+                // business document. Both server reads must see one stable epoch.
+                if (pathStr.endsWith('/sync_control/state')) {
+                    return { exists: () => true, data: () => ({
+                        protocolVersion: 3, replicas: {}, mutation: { batchId: 'stable-fixture' },
+                    }) } as any;
+                }
                 if (pathStr.includes('history_months')) {
                     if (pathStr.includes(m0)) return { exists: () => true, data: () => sealTestCloudFixture(mockHistoryM0, 'history_months/' + m0) } as any;
                     if (pathStr.includes(m1)) return { exists: () => true, data: () => sealTestCloudFixture(mockHistoryM1, 'history_months/' + m1) } as any;
