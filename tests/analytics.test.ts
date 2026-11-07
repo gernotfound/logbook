@@ -253,10 +253,22 @@ describe('Analytics Engine: src/lib/calc/analytics.ts', () => {
             };
 
             const result = computeVolumeCaloriesCorrelation(history, nutrition, mockLibrary, 80, 4, refDate);
-            expect(result.points).toHaveLength(4);
+            expect(result.points.map(point => ({
+                volumeKg: point.volumeKg,
+                avgDailyKcal: point.avgDailyKcal,
+                loggedNutritionDays: point.loggedNutritionDays
+            }))).toEqual([
+                { volumeKg: 700, avgDailyKcal: 2200, loggedNutritionDays: 1 },
+                { volumeKg: 900, avgDailyKcal: 2500, loggedNutritionDays: 1 },
+                { volumeKg: 1100, avgDailyKcal: 2800, loggedNutritionDays: 1 },
+                { volumeKg: 0, avgDailyKcal: 0, loggedNutritionDays: 0 }
+            ]);
             expect(result.stats.hasData).toBe(true);
-            expect(result.stats.correlationCoefficient).not.toBeNull();
-            expect(result.stats.correlationInsight).toMatch(/associazione/i);
+            expect(result.stats.validDataPointsCount).toBe(3);
+            expect(result.stats.avgWeeklyVolumeKg).toBe(675);
+            expect(result.stats.avgDailyKcal).toBe(2500);
+            expect(result.stats.correlationCoefficient).toBe(1);
+            expect(result.stats.correlationInsight).toContain('Associazione positiva forte');
         });
     });
 });
