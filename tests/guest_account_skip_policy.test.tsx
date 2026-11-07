@@ -273,13 +273,12 @@ describe('guest -> account skip policy', () => {
         });
         const onLocalReady = vi.fn();
         try {
-            const result = await migrateGuestAccount({
+            await expect(migrateGuestAccount({
                 user, guestData: guest, policy: 'merge', setUserData: vi.fn(),
                 setSyncing: vi.fn(), onLocalReady, isCurrent: () => true,
-            });
+            })).rejects.toThrow('Migrazione guest invalidata');
             expect(onLocalReady).toHaveBeenCalledOnce();
             expect(replay).toHaveBeenCalledOnce();
-            expect(result.status).toBe('failed');
             expect(DB.loadCloudPayload).toHaveBeenCalledTimes(1);
             expect(await readLocal(user.uid)).toBeDefined();
         } finally {
