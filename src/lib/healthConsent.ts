@@ -145,6 +145,9 @@ export function isHealthConsentWritable(owner: string): boolean {
   }
   if (!owner.startsWith('user:')) return true;
   const uid = owner.slice(5);
+  // A still-mounted editor for account A cannot write to A after login to B,
+  // even if A's previously verified revision remains in this module's cache.
+  if (auth?.currentUser && auth.currentUser.uid !== uid) return false;
   if (currentHealthConsentStatus(uid) !== 'active') return false;
   // An Auth epoch replacement invalidates the approval even when the UID
   // and persisted consent revision remain unchanged.
