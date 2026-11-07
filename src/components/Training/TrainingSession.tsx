@@ -121,16 +121,16 @@ const TrainingSession = ({ onNavigateToHistory, onNavigateToPlanning }: Training
         }
     }, [postSessionRecoveryName, activeWorkout?.id]);
 
-    const clearPostSessionRecovery = useCallback(() => {
+    const clearPostSessionRecovery = useCallback((savedRaw: string | null, savedSession: ReturnType<typeof captureSession>) => {
         if (!postSessionRecoveryName) return;
         try {
-            const session = postSessionSessionRef.current;
-            if (!isCurrentSession(session)) throw new Error('Sessione cambiata prima della pulizia della valutazione finale.');
-            if (postSessionRawRef.current === undefined) throw new Error('Bozza finale non ancora verificata.');
-            postSessionRawRef.current = writeWorkoutRecoveryDraft(
-                postSessionRecoveryName, session.owner, null,
-                session.consentGeneration, postSessionRawRef.current,
+            if (!isCurrentSession(savedSession)) throw new Error('Sessione cambiata prima della pulizia della valutazione finale.');
+            writeWorkoutRecoveryDraft(
+                postSessionRecoveryName, savedSession.owner, null,
+                savedSession.consentGeneration, savedRaw,
             );
+            // Completion can unmount this editor before cleanup; do not mutate a newer editor's baseline.
+            if (postSessionRawRef.current === savedRaw) postSessionRawRef.current = null;
         } catch (error) {
             console.warn('Workout salvato, ma la copia di recupero finale non è stata rimossa:', error);
             useAppStore.getState().setSaveError('Workout salvato; impossibile rimuovere una copia di recupero locale obsoleta.');
@@ -267,9 +267,15 @@ const TrainingSession = ({ onNavigateToHistory, onNavigateToPlanning }: Training
                 water: draft.water,
                 pains: [...draft.pains],
             };
+            const savedRaw = postSessionRawRef.current;
+            if (savedRaw === undefined) {
+                blockPostSessionPersistence(new Error('Bozza finale non ancora verificata.'));
+                return;
+            }
+            const savedSession = postSessionSessionRef.current;
             const finished = await endWorkout(false, pendingEndTime, completionDraft);
             if (finished) {
-                clearPostSessionRecovery();
+                clearPostSessionRecovery(savedRaw, savedSession);
                 postSessionDraftRef.current = null;
                 setPostSessionDraft(null);
                 pendingEndTimeRef.current = null;

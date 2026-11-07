@@ -256,6 +256,9 @@ describe('pre-session readiness contract', () => {
                 },
             });
             await waitFor(() => expect(useAppStore.getState().localWorkout).toBeNull());
+            await waitFor(() => expect(readDeviceValueStrict(
+                'draft:post-session:post-session-draft', captureSession().owner,
+            )).toBeNull());
         } finally {
             useAppStore.setState({ dispatchDomainOperation: originalDispatch });
         }
