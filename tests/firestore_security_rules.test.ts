@@ -74,7 +74,7 @@ describe('Firestore Security Rules Whitelist & Parity Verification', () => {
     expect(rulesContent.match(/preservesSyncProtocol\(\)/g)?.length).toBe(4);
   });
 
-  it('users/{userId} whitelist contains all root UserData payload keys plus sync/schema metadata', () => {
+  it('allows only schema, sync and sealed ciphertext fields on cloud document envelopes', () => {
     const hasOnlyMatch = rulesContent.match(/function isSealedCloudDocument\(data\)[\s\S]*?data\.keys\(\)\.hasOnly\(\[\s*([\s\S]*?)\s*\]\)/);
     expect(hasOnlyMatch).not.toBeNull();
 

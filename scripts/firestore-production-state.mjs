@@ -125,6 +125,118 @@ export function normalizeLiveFieldIndexModes(indexes, expectedFieldPath) {
   }));
 }
 
+
+// Firestore Standard uses these defaults when the manifest or REST response
+// omits optional index metadata. The Firebase CLI compares all three attributes.
+function normalizeCompositeIndexMetadata(index) {
+  const apiScope = index.apiScope ?? 'ANY_API';
+  const density = index.density ?? 'SPARSE_ALL';
+  const multikey = index.multikey ?? false;
+  if (!['ANY_API', 'DATASTORE_MODE_API', 'MONGODB_COMPATIBLE_API'].includes(apiScope) ||
+      !['SPARSE_ALL', 'SPARSE_ANY', 'DENSE'].includes(density) ||
+      typeof multikey !== 'boolean') {
+    throw new Error('Invalid Firestore composite index metadata');
+  }
+  return { apiScope, density, multikey };
+}
+
+function normalizeCompositeIndexFields(fields, live) {
+  if (!Array.isArray(fields) || fields.length === 0) {
+    throw new Error('Invalid Firestore composite index fields');
+  }
+  const normalized = fields.map(field => {
+    if (typeof field?.fieldPath !== 'string' || !field.fieldPath) {
+      throw new Error('Invalid Firestore composite index field path');
+    }
+    const modes = ['order', 'arrayConfig', 'vectorConfig'].filter(mode => field[mode] !== undefined);
+    if (modes.length !== 1) throw new Error('Unsupported Firestore composite index field');
+    if (field.order !== undefined && !['ASCENDING', 'DESCENDING'].includes(field.order)) {
+      throw new Error('Unsupported Firestore composite index order');
+    }
+    if (field.arrayConfig !== undefined && field.arrayConfig !== 'CONTAINS') {
+      throw new Error('Unsupported Firestore composite index array mode');
+    }
+    if (field.vectorConfig !== undefined && (!field.vectorConfig ||
+      typeof field.vectorConfig !== 'object' || Array.isArray(field.vectorConfig))) {
+      throw new Error('Unsupported Firestore composite index vector mode');
+    }
+    return { fieldPath: field.fieldPath, [modes[0]]: field[modes[0]] };
+  });
+
+  // Firestore adds __name__ implicitly with the direction of the last ordered
+  // field (ASCENDING if none). An explicit non-default direction is a different
+  // index, and must never be discarded during Production reconciliation.
+  const vectorLast = normalized.at(-1).vectorConfig !== undefined;
+  const namePosition = vectorLast ? normalized.length - 2 : normalized.length - 1;
+  const nameFields = normalized.filter(field => field.fieldPath === '__name__');
+  if (nameFields.length > 0) {
+    if (nameFields.length !== 1 || normalized[namePosition]?.fieldPath !== '__name__' ||
+        !normalized[namePosition].order) {
+      throw new Error('Invalid Firestore composite index __name__ position');
+    }
+    return normalized;
+  }
+  if (live) throw new Error('Missing Firestore live composite index __name__ field');
+
+  const defaultNameOrder = normalized.reduce(
+    (direction, field) => field.order ?? direction, 'ASCENDING',
+  );
+  normalized.splice(vectorLast ? normalized.length - 1 : normalized.length, 0,
+    { fieldPath: '__name__', order: defaultNameOrder });
+  return normalized;
+}
+
+// An index removed from the manifest may belong to a collection group that has
+// no remaining desired indexes. Read the complete inventory before certification.
+export function reconcileCompositeIndexes(desiredIndexes, liveIndexes, projectId) {
+  if (!projectId || !Array.isArray(desiredIndexes) || !Array.isArray(liveIndexes)) {
+    throw new Error('Invalid Firestore composite index inventory');
+  }
+  const desired = desiredIndexes.map(index => {
+    if (!index?.collectionGroup || !index.queryScope || !Array.isArray(index.fields)) {
+      throw new Error('Invalid desired Firestore composite index');
+    }
+    return { collectionGroup: index.collectionGroup, queryScope: index.queryScope,
+      fields: normalizeCompositeIndexFields(index.fields, false),
+      ...normalizeCompositeIndexMetadata(index) };
+  });
+  const prefix = `projects/${projectId}/databases/(default)/collectionGroups/`;
+  const live = liveIndexes.map(index => {
+    if (typeof index?.name !== 'string' || !index.name.startsWith(prefix)) {
+      throw new Error('Invalid live Firestore composite index resource');
+    }
+    const match = /^([^/]+)\/indexes\/([^/]+)$/.exec(index.name.slice(prefix.length));
+    if (!match) throw new Error('Invalid live Firestore composite index resource');
+    return { collectionGroup: decodeResourceSegment(match[1]), queryScope: index.queryScope,
+      fields: normalizeCompositeIndexFields(index.fields, true),
+      ...normalizeCompositeIndexMetadata(index),
+      name: index.name, state: index.state ?? null };
+  });
+  const key = index => JSON.stringify([
+    index.collectionGroup, index.queryScope, index.fields,
+    index.apiScope, index.density, index.multikey,
+  ]);
+  const desiredKeys = new Set(desired.map(key));
+  if (desiredKeys.size !== desired.length) throw new Error('Duplicate desired Firestore composite index');
+  if (new Set(live.map(key)).size !== live.length) throw new Error('Duplicate live Firestore composite index');
+  return {
+    statuses: desired.map(index => {
+      const match = live.find(candidate => key(candidate) === key(index));
+      return { ...index, found: Boolean(match), state: match?.state ?? null };
+    }),
+    unexpected: live.filter(index => !desiredKeys.has(key(index))),
+  };
+}
+
+
+export function requireNoUnexpectedCompositeIndexes(indexes) {
+  if (!Array.isArray(indexes)) throw new Error('Invalid Firestore composite index reconciliation result');
+  if (indexes.length > 0) {
+    throw new Error('Unexpected Firestore composite indexes require manual review before deployment: ' +
+      indexes.map(index => index.name).join(', '));
+  }
+}
+
 export function isActiveFieldIndexAddition(operation, desired) {
   if (!operation || operation.done === true || operation.error) return false;
   const field = parseFieldResource(operation.metadata?.field);
@@ -156,11 +268,15 @@ export function classifyFieldOverride(desired, liveFields, operations) {
   });
   const indexConfig = live?.indexConfig;
   const indexes = Array.isArray(indexConfig?.indexes) ? indexConfig.indexes : [];
-  const explicit = Boolean(live) && indexConfig?.usesAncestorConfig !== true;
+  // A Field name alone does not prove an explicit exemption: the API can return
+  // a field without indexConfig, which must not certify Production as reconciled.
+  const explicit = Boolean(indexConfig) && typeof indexConfig === 'object'
+    && !Array.isArray(indexConfig) && indexConfig.usesAncestorConfig !== true
+    && (indexConfig.indexes === undefined || Array.isArray(indexConfig.indexes));
   const reverting = indexConfig?.reverting === true;
-  const indexesDisabled = Boolean(live) && indexes.length === 0;
+  const indexesDisabled = explicit && indexes.length === 0;
   const desiredModes = normalizeFieldIndexModes(desired.indexes ?? []);
-  const indexesMatch = Boolean(live) && (desiredModes.length === 0
+  const indexesMatch = explicit && (desiredModes.length === 0
     ? indexes.length === 0
     : JSON.stringify(normalizeLiveFieldIndexModes(indexes, desired.fieldPath)) === JSON.stringify(desiredModes));
   const indexesReady = indexesMatch &&

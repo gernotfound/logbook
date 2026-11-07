@@ -4,7 +4,6 @@ import { isHealthConsentWritable, requireHealthConsentWritable } from '../../lib
 import type { UserData, SyncResult } from '../../types';
 import { DEBOUNCE_DELAY_GLOBAL } from '../../constants';
 import { saveUserDataToCache } from './createDataSlice';
-import { clearWorkoutTimer } from './createWorkoutSlice';
 import type { AppState } from '../useAppStore';
 import { captureSession, invalidateSession, isActiveGuestSession, isCurrentSession } from '../../lib/sync/session';
 import { commitDomainOperations, readLocal, revertRejectedConsent, WorkoutIntentConflictError } from '../../lib/sync/localRepository';
@@ -88,6 +87,24 @@ function relevantDeletionPending(): boolean {
     }
 }
 
+/**
+ * The pending-deletion marker protects a recovery view only if it belongs to
+ * the owner of the data actually displayed. A different owner's receipt must
+ * not keep their previous account's data visible across an auth-less reset.
+ */
+function shouldPreserveDeletionRecoveryView(dataOwner: string | null): boolean {
+    if (!dataOwner?.startsWith('user:')) return false;
+    try {
+        if (localStorage.getItem('logbook_is_guest') === 'true') return false;
+        const currentOwner = captureSession().owner;
+        if (currentOwner !== 'guest' && currentOwner !== dataOwner) return false;
+    } catch {
+        // If ownership storage is unreadable, preserve this owner's view only
+        // when its deletion marker cannot be ruled out.
+    }
+    return isAccountDeletionPending(dataOwner);
+}
+
 export function clearSyncTimers() {
     if (timer) clearTimeout(timer);
     timer = null;
@@ -133,7 +150,6 @@ export const createSyncSlice: StateCreator<AppState, [], [], SyncSlice> = (set, 
         }
 
         invalidateSession();
-        clearWorkoutTimer();
         if (timer) clearTimeout(timer);
         timer = null;
         const queued = pending;
@@ -404,7 +420,6 @@ export const createSyncSlice: StateCreator<AppState, [], [], SyncSlice> = (set, 
         },
         cancelPendingSyncs: () => {
             invalidateSession();
-            clearWorkoutTimer();
             [...pending, ...active].forEach(job => job.reject(new Error('Sincronizzazione annullata per cambio sessione')));
             clearSyncTimers();
             set({ syncing: false, syncPresentation: 'normal', syncGeneration: get().syncGeneration + 1 });
@@ -413,7 +428,7 @@ export const createSyncSlice: StateCreator<AppState, [], [], SyncSlice> = (set, 
             // Preserve the recovery view only for the deletion that belongs to the active
             // authenticated owner, or for an auth-less post-deletion restart. A stale marker
             // from account A must not block/reset account B or an explicitly active guest.
-            if (!options?.force && relevantDeletionPending()) {
+            if (!options?.force && shouldPreserveDeletionRecoveryView(get().dataOwner)) {
                 get().cancelPendingSyncs();
                 set({ syncing: false, saveError: 'Cancellazione account in verifica. Copia locale conservata fino alla conferma del server.' });
                 return;

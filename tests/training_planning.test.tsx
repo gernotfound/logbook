@@ -91,6 +91,10 @@ describe('Training Planning & Volume Calculations', () => {
         expect(getDetailedMuscleCategory('delts_side').label).toBe('Spalle');
         expect(getDetailedMuscleCategory('quads').label).toBe('Quadricipiti');
         expect(getDetailedMuscleCategory('biceps').label).toBe('Bicipiti');
+        expect(getDetailedMuscleCategory('triceps_lateral').label).toBe('Tricipiti');
+        expect(getDetailedMuscleCategory('lats_upper_right').label).toBe('Dorso');
+        expect(getDetailedMuscleCategory('lower_back').label).toBe('Addome e Core');
+        expect(getDetailedMuscleCategory('hand_flexors_right').label).toBe('Avambracci');
         expect(getDetailedMuscleCategory('unknown_xyz').label).toBe('Altro');
     });
 
@@ -100,6 +104,65 @@ describe('Training Planning & Volume Calculations', () => {
         expect(result.totalSetsPerWeek).toBe(0);
         expect(result.muscleVolumes).toEqual([]);
         expect(result.highlightedMuscles).toEqual([]);
+    });
+
+    it('does not inflate heatmap intensity when a primary muscle ID is repeated', () => {
+        const cycle: TrainingCycle = {
+            id: 'dup-muscle-cycle',
+            name: 'Volume e mappa coerenti',
+            durationWeeks: 4,
+            sessionsPerWeek: 1,
+            routines: [{ routineId: 'dup-muscle-routine', frequencyPerWeek: 1 }],
+        };
+        const routines: WorkoutRoutine[] = [{
+            id: 'dup-muscle-routine',
+            name: 'Volume',
+            exercises: [{ exId: 'bench', setsCount: 2 }, { exId: 'row', setsCount: 5 }],
+        }];
+        const canonical: Exercise[] = [
+            { id: 'bench', name: 'Panca', setsCount: 2, sets: [], muscles: ['chest'] },
+            { id: 'row', name: 'Rematore', setsCount: 5, sets: [], muscles: ['lats'] },
+        ];
+        const withDuplicate = canonical.map(item => item.id === 'bench'
+            ? { ...item, muscles: ['chest', 'chest'] } : item);
+
+        const expected = calculateCycleVolume(cycle, routines, canonical);
+        const repeated = calculateCycleVolume(cycle, routines, withDuplicate);
+        expect(expected.muscleVolumes.find(item => item.key === 'chest')?.sets).toBe(2);
+        expect(expected.muscleColors.chest).toBe('#38bdf8');
+        expect(expected.muscleColors.lats).toBe('#0ea5e9');
+        expect(repeated).toEqual(expected);
+    });
+
+    it('keeps overlapping anatomical paths independent of routine exercise order', () => {
+        const cycle: TrainingCycle = {
+            id: 'overlap-cycle',
+            name: 'Regioni sovrapposte',
+            durationWeeks: 4,
+            sessionsPerWeek: 1,
+            routines: [{ routineId: 'overlap-routine', frequencyPerWeek: 1 }],
+        };
+        const library: Exercise[] = [
+            { id: 'broad', name: 'Petto intero', setsCount: 6, sets: [], muscles: ['chest'] },
+            { id: 'narrow', name: 'Petto alto', setsCount: 2, sets: [], muscles: ['chest_upper'] },
+        ];
+        const exercises = [
+            { exId: 'broad', setsCount: 6 },
+            { exId: 'narrow', setsCount: 2 },
+        ];
+        const compute = (items: WorkoutRoutine['exercises']) => calculateCycleVolume(
+            cycle,
+            [{ id: 'overlap-routine', name: 'Scheda', exercises: items }],
+            library,
+        );
+
+        const broadFirst = compute(exercises);
+        const narrowFirst = compute([...exercises].reverse());
+        expect(broadFirst.totalSetsPerWeek).toBe(8);
+        expect(broadFirst.muscleColors['chest-upper-left']).toBe('#0ea5e9');
+        expect(broadFirst.muscleColors['chest-lower-left']).toBe('#0ea5e9');
+        expect(broadFirst.muscleColors.chest_upper).toBe('#7dd3fc');
+        expect(narrowFirst.muscleColors).toEqual(broadFirst.muscleColors);
     });
 
     it('calculateCycleVolume gracefully handles deleted routines and exercises', () => {

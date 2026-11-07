@@ -7,6 +7,8 @@ import { CycleCard } from '../src/components/Training/planning/CycleCard';
 import { FoodItemRow } from '../src/components/Nutrition/archive/FoodItemRow';
 import TrainingExercises from '../src/components/Training/TrainingExercises';
 import { useAppStore } from '../src/store/useAppStore';
+import { captureSession } from '../src/lib/sync/session';
+import { prepareUnlockedTestArchive } from './secureVaultFixture';
 import { Pencil, Trash2, Copy } from 'lucide-react';
 import type { Routine, ExerciseLibraryItem, TrainingCycle, WorkoutRoutine } from '../src/types';
 
@@ -275,7 +277,8 @@ describe('Empirical Adversarial Stress Suite: ContextMenu & Integrations', () =>
     });
 
     describe('TrainingExercises Integration', () => {
-      beforeEach(() => {
+      beforeEach(async () => {
+        await prepareUnlockedTestArchive();
         const initialUserData: any = {
           library: [
             { id: 'lib-1', name: 'Croci ai cavi', muscles: ['chest'], trackingType: 'weight_reps', isDefault: false, setsCount: 3, sets: [] },
@@ -283,12 +286,20 @@ describe('Empirical Adversarial Stress Suite: ContextMenu & Integrations', () =>
           ],
           routines: [],
         };
-        useAppStore.setState({ userData: initialUserData });
+        useAppStore.setState({
+          userData: initialUserData,
+          dataOwner: captureSession().owner,
+          localPersistenceBlocked: false,
+          saveError: null,
+        });
       });
 
       it('moves exercise actions to the dedicated detail surface and keeps catalog items non-deletable', () => {
         render(<TrainingExercises />);
 
+        // The UI must be exercised with a working owner vault, not while its
+        // draft-persistence boundary has already entered fail-closed mode.
+        expect(useAppStore.getState().localPersistenceBlocked).toBe(false);
         expect(screen.queryByRole('button', { name: 'Opzioni' })).toBeNull();
 
         fireEvent.click(screen.getByRole('button', { name: 'Apri dettaglio di Croci ai cavi' }));

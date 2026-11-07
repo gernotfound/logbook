@@ -41,6 +41,38 @@ describe('sub-navigation interaction', () => {
     expect(screen.getAllByRole('tab').filter(tab => tab.tabIndex === 0)).toEqual([session]);
   });
 
+  it('reveals the active tab when its text width grows without resizing the tablist', () => {
+    let resized: () => void = () => {};
+    const observe = vi.fn();
+    vi.stubGlobal('ResizeObserver', class {
+      constructor(callback: () => void) { resized = callback; }
+      observe(target: Element) { observe(target); }
+      disconnect() {}
+    });
+
+    render(<SubNav id="test" label="Allenamento" items={items} value="history" onChange={vi.fn()} />);
+    const list = screen.getByRole('tablist');
+    const history = screen.getByRole('tab', { name: 'Storico' });
+
+    // The strip keeps a fixed width; only the selected tab grows (e.g. webfont loading).
+    expect(observe).toHaveBeenCalledWith(list);
+    expect(observe).toHaveBeenCalledWith(history);
+    Object.defineProperty(list, 'clientWidth', { value: 320, configurable: true });
+    Object.defineProperty(list, 'scrollWidth', { value: 650, configurable: true });
+    vi.spyOn(list, 'getBoundingClientRect').mockImplementation(() => ({ left: 0, right: 320 } as DOMRect));
+    let tabRight = 310;
+    vi.spyOn(history, 'getBoundingClientRect').mockImplementation(() => ({
+      left: 200 - list.scrollLeft,
+      right: tabRight - list.scrollLeft,
+    } as DOMRect));
+
+    act(() => resized());
+    expect(list.scrollLeft).toBe(0);
+    tabRight = 405;
+    act(() => resized());
+    expect(list.scrollLeft).toBe(85);
+  });
+
   it('reveals a retained selection on resize or reappearance without scrolling the page', () => {
     let resized: () => void = () => {};
     const disconnect = vi.fn();

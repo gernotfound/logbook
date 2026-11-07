@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import { useScrollLock } from '../../hooks/useScrollLock';
 
 type Props = { error: string; retry: () => void };
 
@@ -8,6 +9,7 @@ type Props = { error: string; retry: () => void };
  * Never offer a silent reset: offline-only pending journal may be irreplaceable.
  */
 export function SecureVaultPrompt({ error, retry }: Props) {
+    useScrollLock();
     const retryRef = useRef<HTMLButtonElement>(null);
 
     useEffect(() => {
@@ -19,10 +21,8 @@ export function SecureVaultPrompt({ error, retry }: Props) {
         const background = Array.from(document.body.children)
             .filter((child): child is HTMLElement => child instanceof HTMLElement && child !== mount);
         const previousInert = background.map(child => child.inert);
-        const previousOverflow = document.body.style.overflow;
 
         background.forEach(child => { child.inert = true; });
-        document.body.style.overflow = 'hidden';
         button.focus();
 
         const keepFocusInside = (event: KeyboardEvent) => {
@@ -41,7 +41,6 @@ export function SecureVaultPrompt({ error, retry }: Props) {
         return () => {
             document.removeEventListener('keydown', keepFocusInside, true);
             background.forEach((child, index) => { child.inert = previousInert[index]; });
-            document.body.style.overflow = previousOverflow;
             if (previousFocus?.isConnected) previousFocus.focus();
         };
     }, []);

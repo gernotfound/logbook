@@ -168,7 +168,9 @@ export const Exporter = {
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
-        URL.revokeObjectURL(url);
+        // The browser may start processing the download after the click handler
+        // returns. Immediate revocation can invalidate the URL before that step.
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
         return true;
     },
 

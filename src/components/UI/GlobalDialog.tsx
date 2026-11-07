@@ -13,7 +13,11 @@ export const GlobalDialog: React.FC = () => {
   const onCancel = useDialogStore(state => state.onCancel);
   const onAction = useDialogStore(state => state.onAction);
   const onInputConfirm = useDialogStore(state => state.onInputConfirm);
-  const [promptValue, setPromptValue] = useState('');
+  const [passwordInput, setPasswordInput] = useState({ prompt: onInputConfirm, value: '' });
+  // A queued password prompt can replace the previous owner without unmounting.
+  // Only the active prompt's input may be submitted.
+  const promptValue = passwordInput.prompt === onInputConfirm ? passwordInput.value : '';
+  const setPromptValue = (value: string) => setPasswordInput({ prompt: onInputConfirm, value });
 
   const syncHealth = useAppStore(state => state.syncHealth);
   const hasConflicts = useAppStore(state => !!state.userData?.pendingConflicts);
@@ -38,7 +42,7 @@ export const GlobalDialog: React.FC = () => {
       if (event.key === 'Escape') {
         event.preventDefault();
         event.stopPropagation();
-        if (type === 'password-prompt') setPromptValue('');
+        if (type === 'password-prompt') setPasswordInput({ prompt: onInputConfirm, value: '' });
         onCancel();
       } else if (event.key === 'Tab') {
         // This capture-phase trap takes precedence over focus traps in underlying modals.
@@ -59,7 +63,7 @@ export const GlobalDialog: React.FC = () => {
       siblings.forEach((el, index) => { el.inert = previousInert[index]; });
       if (previousFocus?.isConnected) previousFocus.focus();
     };
-  }, [isOpen, onCancel, type]);
+  }, [isOpen, onCancel, onInputConfirm, type]);
 
   if (!isOpen) return null;
 

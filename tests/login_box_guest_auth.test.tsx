@@ -1,5 +1,5 @@
 import React from 'react';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const authMocks = vi.hoisted(() => ({
@@ -44,12 +44,18 @@ vi.mock('../src/lib/firebase', () => ({
     })),
 }));
 
+vi.mock('../src/lib/auth/passwordPolicy', async importOriginal => {
+    const actual = await importOriginal<typeof import('../src/lib/auth/passwordPolicy')>();
+    return { ...actual, validatePasswordAgainstPolicy: vi.fn(actual.validatePasswordAgainstPolicy) };
+});
+
 vi.mock('../src/store/useDialogStore', () => ({
     useDialogStore: () => ({ showAlert: authMocks.showAlert }),
 }));
 
 import { LoginBox } from '../src/components/UI/LoginBox';
 import { sendPasswordResetEmail, validatePassword } from '../src/lib/firebase';
+import { validatePasswordAgainstPolicy } from '../src/lib/auth/passwordPolicy';
 import { useAppStore } from '../src/store/useAppStore';
 
 describe('LoginBox guest Google authentication', () => {
@@ -69,6 +75,7 @@ describe('LoginBox guest Google authentication', () => {
         authMocks.showAlert.mockClear();
         vi.mocked(sendPasswordResetEmail).mockReset();
         vi.mocked(sendPasswordResetEmail).mockResolvedValue(undefined);
+        vi.mocked(validatePasswordAgainstPolicy).mockClear();
     });
 
     it('keeps the local-data explanation inside the guest action and preserves its behavior', async () => {
@@ -139,6 +146,75 @@ describe('LoginBox guest Google authentication', () => {
         await waitFor(() => expect(submit.hasAttribute('disabled')).toBe(false));
     });
 
+    it('does not start Google or guest sign-in while an email login is pending', async () => {
+        authState.isGuest = false;
+        let finish!: () => void;
+        authMocks.loginWithEmail.mockImplementationOnce(() => new Promise<void>(resolve => { finish = resolve; }));
+        render(<LoginBox />);
+        fireEvent.change(screen.getByRole('textbox', { name: 'Email' }), { target: { value: 'existing@example.com' } });
+        fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'ExistingPassword1!' } });
+        fireEvent.click(screen.getAllByRole('button', { name: 'Accedi' }).at(-1)!);
+
+        const google = screen.getByRole('button', { name: 'Accedi con Google' }) as HTMLButtonElement;
+        const guest = screen.getByRole('button', { name: /Continua senza account/i }) as HTMLButtonElement;
+        expect(google.disabled).toBe(true);
+        expect(guest.disabled).toBe(true);
+        fireEvent.click(google);
+        fireEvent.click(guest);
+        expect(authMocks.login).not.toHaveBeenCalled();
+        expect(authMocks.loginAsGuest).not.toHaveBeenCalled();
+
+        finish();
+        await waitFor(() => expect(google.disabled).toBe(false));
+        fireEvent.click(google);
+        await waitFor(() => expect(authMocks.login).toHaveBeenCalledTimes(1));
+    });
+
+    it('freezes guest transfer choice and credentials while Google account linking is pending', async () => {
+        authState.isGuest = true;
+        let finish!: () => void;
+        authMocks.linkGoogleAccount.mockImplementationOnce(() => new Promise<void>(resolve => { finish = resolve; }));
+        render(<LoginBox onCancel={() => {}} />);
+
+        fireEvent.click(screen.getByLabelText('Non trasferire i progressi'));
+        const merge = screen.getByLabelText('Trasferisci i progressi nell\'account') as HTMLInputElement;
+        const skip = screen.getByLabelText('Non trasferire i progressi') as HTMLInputElement;
+        const email = screen.getByRole('textbox', { name: 'Email' }) as HTMLInputElement;
+        const password = screen.getByLabelText('Password') as HTMLInputElement;
+        const reveal = screen.getByRole('button', { name: 'Mostra password' }) as HTMLButtonElement;
+        expect(skip.checked).toBe(true);
+
+        fireEvent.click(screen.getByRole('button', { name: 'Accedi con Google' }));
+        expect(authMocks.linkGoogleAccount).toHaveBeenCalledExactlyOnceWith('skip');
+        expect(merge.disabled).toBe(true);
+        expect(skip.disabled).toBe(true);
+        expect(email.disabled).toBe(true);
+        expect(password.disabled).toBe(true);
+        expect(reveal.disabled).toBe(true);
+
+        finish();
+        await waitFor(() => expect(skip.disabled).toBe(false));
+        expect(email.disabled).toBe(false);
+        expect(password.disabled).toBe(false);
+    });
+
+    it('does not start email sign-in while a Google login is pending', async () => {
+        authState.isGuest = false;
+        let finish!: () => void;
+        authMocks.login.mockImplementationOnce(() => new Promise<void>(resolve => { finish = resolve; }));
+        render(<LoginBox />);
+        const google = screen.getByRole('button', { name: 'Accedi con Google' }) as HTMLButtonElement;
+        fireEvent.click(google);
+        const form = screen.getByRole('textbox', { name: 'Email' }).closest('form')!;
+        const submit = form.querySelector<HTMLButtonElement>('button[type="submit"]')!;
+        expect(submit.disabled).toBe(true);
+        fireEvent.submit(form);
+        expect(authMocks.loginWithEmail).not.toHaveBeenCalled();
+
+        finish();
+        await waitFor(() => expect(submit.disabled).toBe(false));
+    });
+
     it('sanitizes email sign-in failure without exposing Firebase provider details', async () => {
         authState.isGuest = false;
         authMocks.loginWithEmail.mockRejectedValueOnce(
@@ -154,6 +230,29 @@ describe('LoginBox guest Google authentication', () => {
         await waitFor(() => expect(screen.getByRole('alert').textContent).toContain('Email o password errati.'));
         expect(screen.getByRole('alert').textContent).not.toContain('PRIVATE_AUTH_PROVIDER_DETAILS');
         expect(authMocks.loginWithEmail).toHaveBeenCalledTimes(1);
+    });
+
+    it('masks credentials again when switching between login, registration and recovery', () => {
+        authState.isGuest = false;
+        render(<LoginBox />);
+        const password = screen.getByLabelText('Password') as HTMLInputElement;
+        const reveal = () => fireEvent.click(screen.getByRole('button', { name: 'Mostra password' }));
+
+        reveal();
+        expect(password.type).toBe('text');
+        fireEvent.click(screen.getByRole('button', { name: 'Registrati', pressed: false }));
+        expect((screen.getByLabelText('Password') as HTMLInputElement).type).toBe('password');
+        expect((screen.getByLabelText('Conferma password') as HTMLInputElement).type).toBe('password');
+
+        reveal();
+        expect((screen.getByLabelText('Password') as HTMLInputElement).type).toBe('text');
+        fireEvent.click(screen.getByRole('button', { name: 'Accedi', pressed: false }));
+        expect((screen.getByLabelText('Password') as HTMLInputElement).type).toBe('password');
+
+        reveal();
+        fireEvent.click(screen.getByRole('button', { name: 'Hai dimenticato la password?' }));
+        fireEvent.click(screen.getByRole('button', { name: "Torna all'accesso" }));
+        expect((screen.getByLabelText('Password') as HTMLInputElement).type).toBe('password');
     });
 
     it('identifies the email input as the username for autofill and password managers', () => {
@@ -277,6 +376,32 @@ describe('LoginBox guest Google authentication', () => {
         expect(screen.queryByRole('alert')).toBeNull();
     });
 
+    it('does not register an account when the overlay closes during asynchronous password validation', async () => {
+        authState.isGuest = false;
+        let release!: (result: string | null) => void;
+        const validatePolicy = vi.mocked(validatePasswordAgainstPolicy);
+        validatePolicy.mockImplementationOnce(() => new Promise(resolve => { release = resolve; }));
+
+        const view = render(<LoginBox onCancel={() => {}} />);
+        fireEvent.click(screen.getAllByRole('button', { name: 'Registrati' }).at(-1)!);
+        fireEvent.change(screen.getByRole('textbox', { name: 'Email' }), {
+            target: { value: 'new-account@example.com' },
+        });
+        fireEvent.change(screen.getByLabelText('Password'), {
+            target: { value: 'SecurePassword123!' },
+        });
+        fireEvent.change(screen.getByLabelText('Conferma password'), {
+            target: { value: 'SecurePassword123!' },
+        });
+        fireEvent.click(screen.getAllByRole('button', { name: 'Registrati' }).at(-1)!);
+        await waitFor(() => expect(validatePolicy).toHaveBeenCalledExactlyOnceWith('SecurePassword123!'));
+        expect(authMocks.registerWithEmail).not.toHaveBeenCalled();
+
+        view.unmount();
+        await act(async () => { release(null); });
+        expect(authMocks.registerWithEmail).not.toHaveBeenCalled();
+    });
+
     it('does not distinguish a non-existent email from a successful password reset request', async () => {
         authState.isGuest = false;
         const messages: string[] = [];
@@ -305,6 +430,35 @@ describe('LoginBox guest Google authentication', () => {
         expect(messages[0]).toContain("Se l'email è registrata");
         expect(sendPasswordResetEmail).toHaveBeenCalledTimes(2);
     });
+
+    it.each(['success', 'unknown-address'] as const)(
+        'does not show a stale password-recovery notice after the login overlay closes (%s)',
+        async outcome => {
+            authState.isGuest = false;
+            let finish!: () => void;
+            let fail!: (error: Error) => void;
+            vi.mocked(sendPasswordResetEmail).mockImplementationOnce(() => new Promise<void>((resolve, reject) => {
+                finish = resolve;
+                fail = reject;
+            }));
+
+            const view = render(<LoginBox onCancel={() => {}} />);
+            fireEvent.click(screen.getByRole('button', { name: 'Hai dimenticato la password?' }));
+            fireEvent.change(screen.getByRole('textbox', { name: 'Email' }), {
+                target: { value: 'account@example.com' },
+            });
+            fireEvent.click(screen.getByRole('button', { name: 'Invia Link di Recupero' }));
+            expect(sendPasswordResetEmail).toHaveBeenCalledTimes(1);
+
+            view.unmount();
+            await act(async () => {
+                if (outcome === 'success') finish();
+                else fail(Object.assign(new Error('masked'), { code: 'auth/user-not-found' }));
+            });
+
+            expect(authMocks.showAlert).not.toHaveBeenCalled();
+        },
+    );
 
     it('continues to report genuine password reset delivery failures without disclosing provider errors', async () => {
         authState.isGuest = false;

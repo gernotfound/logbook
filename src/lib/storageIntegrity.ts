@@ -32,31 +32,38 @@ export function getStorageMarkerKey(owner?: string): string {
 /**
  * Retrieves the versioned storage marker from localStorage if valid.
  */
+export class StorageMarkerReadError extends Error {
+  readonly code = 'storage-marker-unreadable';
+
+  constructor(cause?: unknown) {
+    super('Marker di integrità locale presente ma non leggibile. Le copie sul dispositivo devono restare preservate.', { cause });
+    this.name = 'StorageMarkerReadError';
+  }
+}
+
 export function getStorageMarker(customStorage?: Storage, owner?: string): StorageMarker | null {
+  const storage = customStorage ?? (typeof localStorage !== 'undefined' ? localStorage : null);
+  if (!storage) return null;
+  let raw: string | null;
   try {
-    const storage = customStorage ?? (typeof localStorage !== 'undefined' ? localStorage : null);
-    if (!storage) return null;
-    const key = getStorageMarkerKey(owner);
-    const raw = storage.getItem(key);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw);
-    if (
-      parsed &&
-      typeof parsed === 'object' &&
-      typeof parsed.version === 'number' &&
-      Number.isFinite(parsed.version) &&
-      typeof parsed.timestamp === 'number' &&
-      Number.isFinite(parsed.timestamp)
-    ) {
-      return {
-        version: parsed.version,
-        timestamp: parsed.timestamp,
-        schemaVersion: typeof parsed.schemaVersion === 'number' && Number.isFinite(parsed.schemaVersion) ? parsed.schemaVersion : 1,
-      };
+    raw = storage.getItem(getStorageMarkerKey(owner));
+  } catch (error) {
+    throw new StorageMarkerReadError(error);
+  }
+  // Only a genuinely absent marker permits a first-time empty guest archive.
+  if (raw === null) return null;
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('Invalid marker shape');
+    const value = parsed as Partial<StorageMarker>;
+    if (value.version !== STORAGE_MARKER_VERSION
+      || !Number.isSafeInteger(value.timestamp) || (value.timestamp ?? 0) < 0
+      || (value.schemaVersion !== undefined && value.schemaVersion !== 1)) {
+      throw new Error('Unsupported marker version or timestamp');
     }
-    return null;
-  } catch {
-    return null;
+    return { version: value.version, timestamp: value.timestamp!, schemaVersion: value.schemaVersion ?? 1 };
+  } catch (error) {
+    throw new StorageMarkerReadError(error);
   }
 }
 

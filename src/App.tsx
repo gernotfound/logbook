@@ -231,9 +231,12 @@ function OwnerBoundApp({ startupTab }: { startupTab: string | null }) {
   // PWA shortcuts override the saved initial tab during state initialization.
   // Only the URL cleanup belongs in an effect; no extra render is required.
   useEffect(() => {
-    if (startupTab && typeof window !== 'undefined') {
-      window.history.replaceState({}, '', window.location.pathname);
-    }
+    if (startupTab === null || typeof window === 'undefined') return;
+    // Consume only our one-shot shortcut, preserving independent query/hash
+    // parameters and router history state for other application entry flows.
+    const url = new URL(window.location.href);
+    url.searchParams.delete('tab');
+    window.history.replaceState(window.history.state, '', url.pathname + url.search + url.hash);
   }, [startupTab]);
 
   // Transient errors auto-dismiss; only a verified durable integrity fence or

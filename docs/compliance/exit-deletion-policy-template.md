@@ -4,7 +4,7 @@
 
 ## Principio corrente
 
-Nel modello pilot la palestra non possiede né amministra gli account TheLogBook degli iscritti. La cessazione del contratto B2B non comporta automaticamente la cancellazione degli account o dei dati dei singoli utenti.
+Nell'eventuale futuro modello pilota B2B, la palestra non possiederà né amministrerà gli account TheLogBook degli iscritti. La cessazione di un contratto B2B non comporterebbe automaticamente la cancellazione degli account o dei dati dei singoli utenti. Attualmente non è documentato alcun contratto con palestre.
 
 ## Cessazione palestra ↔ provider
 
@@ -28,8 +28,8 @@ Se il rapporto commerciale genera contatti, fatture o ticket relativi alla pales
 
 ## Dati utenti TheLogBook
 
-- Nessuna cancellazione automatica per cessazione del contratto palestra nel modello corrente.
-- Gli utenti mantengono gli strumenti di export e cancellazione account secondo il servizio disponibile.
+- Nessuna cancellazione automatica per cessazione di un eventuale contratto palestra nel modello previsto.
+- Gli eventuali utenti mantengono gli strumenti di export e cancellazione account secondo il servizio disponibile.
 - Se il servizio TheLogBook stesso viene dismesso, serve una procedura separata con preavviso, export, cessazione sync e cancellazione dei dati secondo basi/obblighi applicabili.
 
 ## Scenario processor Art. 28

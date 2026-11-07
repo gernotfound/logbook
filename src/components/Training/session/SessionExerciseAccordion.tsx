@@ -45,7 +45,8 @@ const SessionExerciseAccordion = (props: SessionExerciseAccordionProps) => {
         });
     };
 
-    const bodyId = `session-exercise-body-${exItem?.id || exItem?.exId || exIndex}`;
+    const exerciseInstanceId = exItem.id || `${exItem.exId}_${exIndex}`;
+    const bodyId = `session-exercise-body-${exerciseInstanceId}`;
 
     return (
         <article className={`session-exercise-shell${isCurrent ? ' current' : ''}`}>

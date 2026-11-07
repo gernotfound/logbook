@@ -5,7 +5,7 @@ import { Chart as ChartJS } from 'chart.js';
 import { getLocalDateString } from '../src/lib/utils/date';
 import VolumeCaloriesCorrelationChart from '../src/components/analytics/VolumeCaloriesCorrelationChart';
 
-import {   computeVolumeCaloriesCorrelation, calculatePearsonCorrelation, generateWeekIntervals } from '../src/lib/calc/analytics';
+import { computeVolumeCaloriesCorrelation, computeWeeklyVolumeSeries, calculatePearsonCorrelation, generateWeekIntervals } from '../src/lib/calc/analytics';
 import type { WorkoutSession, NutritionDay, Exercise } from '../src/types';
 
 describe('Challenger 2: UI/UX Adversarial & Responsive Stress Test Suite', () => {
@@ -113,7 +113,7 @@ describe('Challenger 2: UI/UX Adversarial & Responsive Stress Test Suite', () =>
     // SECTION 1: EMPTY STATE RENDERING & DEFENSIVE BOUNDARIES
     // =========================================================================
     describe('1. Empty State Rendering & Defensive Bounds', () => {
-        it('1.1: WeeklyVolumeChart renders sentence case fallback with zero history', () => {
+        it('1.1: WeeklyVolumeChart renders sentence case fallback with zero history', async () => {
             render(
                 <WeeklyVolumeChart
                     history={[]}
@@ -123,11 +123,11 @@ describe('Challenger 2: UI/UX Adversarial & Responsive Stress Test Suite', () =>
             );
 
             expect(screen.getByText('Volume di allenamento settimanale')).toBeDefined();
-            expect(screen.getByText('Nessun dato di allenamento nelle settimane selezionate.')).toBeDefined();
-            expect(screen.getByText('Completa una sessione per visualizzare il volume di allenamento.')).toBeDefined();
+            expect(await screen.findByText('Nessun dato di allenamento nelle settimane selezionate.')).toBeDefined();
+            expect(await screen.findByText('Completa una sessione per visualizzare il volume di allenamento.')).toBeDefined();
         });
 
-        it('1.2: WeeklyVolumeChart handles null or undefined props without throwing', () => {
+        it('1.2: WeeklyVolumeChart handles null or undefined props without throwing', async () => {
             render(
                 <WeeklyVolumeChart
                     history={undefined as any}
@@ -137,10 +137,10 @@ describe('Challenger 2: UI/UX Adversarial & Responsive Stress Test Suite', () =>
             );
 
             expect(screen.getByText('Volume di allenamento settimanale')).toBeDefined();
-            expect(screen.getByText('Nessun dato di allenamento nelle settimane selezionate.')).toBeDefined();
+            expect(await screen.findByText('Nessun dato di allenamento nelle settimane selezionate.')).toBeDefined();
         });
 
-        it('1.3: VolumeCaloriesCorrelationChart renders sentence case fallback with empty history and nutrition', () => {
+        it('1.3: VolumeCaloriesCorrelationChart renders sentence case fallback with empty history and nutrition', async () => {
             render(
                 <VolumeCaloriesCorrelationChart
                     history={[]}
@@ -151,11 +151,11 @@ describe('Challenger 2: UI/UX Adversarial & Responsive Stress Test Suite', () =>
             );
 
             expect(screen.getByText('Correlazione volume vs calorie')).toBeDefined();
-            expect(screen.getByText('Dati insufficienti per calcolare la correlazione.')).toBeDefined();
-            expect(screen.getByText('Registra allenamenti e pasti per visualizzare la relazione tra apporto energetico e carichi.')).toBeDefined();
+            expect(await screen.findByText('Dati insufficienti per calcolare la correlazione.')).toBeDefined();
+            expect(await screen.findByText('Registra allenamenti e pasti per visualizzare la relazione tra apporto energetico e carichi.')).toBeDefined();
         });
 
-        it('1.4: VolumeCaloriesCorrelationChart handles null or undefined props defensively', () => {
+        it('1.4: VolumeCaloriesCorrelationChart handles null or undefined props defensively', async () => {
             render(
                 <VolumeCaloriesCorrelationChart
                     history={null as any}
@@ -166,14 +166,14 @@ describe('Challenger 2: UI/UX Adversarial & Responsive Stress Test Suite', () =>
             );
 
             expect(screen.getByText('Correlazione volume vs calorie')).toBeDefined();
-            expect(screen.getByText('Dati insufficienti per calcolare la correlazione.')).toBeDefined();
+            expect(await screen.findByText('Dati insufficienti per calcolare la correlazione.')).toBeDefined();
         });
 
-        it('1.5: Handles history with 0-volume sessions (zero reps/kg) gracefully', () => {
+        it('1.5: Handles a current-week zero-volume session without confusing it with an expired fixture', async () => {
             const zeroHistory: WorkoutSession[] = [
                 {
                     id: 'zero_1',
-                    date: '2026-08-18',
+                    date: recentDate(0),
                     routineName: 'Test',
                     exercises: [
                         {
@@ -185,6 +185,19 @@ describe('Challenger 2: UI/UX Adversarial & Responsive Stress Test Suite', () =>
                 }
             ];
 
+            const zero = computeWeeklyVolumeSeries(zeroHistory, mockLibrary, 80, 8);
+            expect(zero.stats.totalWorkouts).toBe(1);
+            expect(zero.stats.totalVolumeKg).toBe(0);
+            expect(zero.stats.hasData).toBe(false);
+            const nonzeroHistory = zeroHistory.map(session => ({
+                ...session,
+                exercises: session.exercises.map(exercise => ({
+                    ...exercise,
+                    sets: exercise.sets.map(set => ({ ...set, kg: '10', reps: '5' })),
+                })),
+            }));
+            expect(computeWeeklyVolumeSeries(nonzeroHistory, mockLibrary, 80, 8).stats.hasData).toBe(true);
+
             render(
                 <WeeklyVolumeChart
                     history={zeroHistory}
@@ -193,8 +206,8 @@ describe('Challenger 2: UI/UX Adversarial & Responsive Stress Test Suite', () =>
                 />
             );
 
-            // Should show empty fallback because total volume is 0
-            expect(screen.getByText('Nessun dato di allenamento nelle settimane selezionate.')).toBeDefined();
+            await waitFor(() => expect(document.querySelector('#weekly-volume-chart-card')?.getAttribute('aria-busy')).toBe('false'));
+            expect(await screen.findByText('Nessun dato di allenamento nelle settimane selezionate.')).toBeDefined();
         });
     });
 
@@ -230,10 +243,10 @@ describe('Challenger 2: UI/UX Adversarial & Responsive Stress Test Suite', () =>
                 />
             );
 
-            expect(screen.getByText('Dati insufficienti per calcolare la correlazione.')).toBeDefined();
+            expect(await screen.findByText('Dati insufficienti per calcolare la correlazione.')).toBeDefined();
         });
 
-        it('2.2: Nutrition present but NO workouts: Volume chart shows empty state', () => {
+        it('2.2: Nutrition present but NO workouts: Volume chart shows empty state', async () => {
             const nutrition = generateRealisticNutrition();
 
             render(
@@ -244,7 +257,7 @@ describe('Challenger 2: UI/UX Adversarial & Responsive Stress Test Suite', () =>
                 />
             );
 
-            expect(screen.getByText('Nessun dato di allenamento nelle settimane selezionate.')).toBeDefined();
+            expect(await screen.findByText('Nessun dato di allenamento nelle settimane selezionate.')).toBeDefined();
 
             cleanup();
 
@@ -257,7 +270,7 @@ describe('Challenger 2: UI/UX Adversarial & Responsive Stress Test Suite', () =>
                 />
             );
 
-            expect(screen.getByText('Dati insufficienti per calcolare la correlazione.')).toBeDefined();
+            expect(await screen.findByText('Dati insufficienti per calcolare la correlazione.')).toBeDefined();
         });
 
         it('2.3: Sparse / staggered weeks: Volume and nutrition synchronised by week interval', () => {

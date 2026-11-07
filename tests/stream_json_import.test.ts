@@ -39,6 +39,27 @@ describe('bounded-source JSON backup reader', () => {
         await expect(parseLargeBackupJson(file)).rejects.toThrow('Lettura JSON incompleta');
     });
 
+    it('rejects a changed session before parsing an asynchronously read chunk', async () => {
+        let isCurrent = true;
+        class SwitchingBlob extends Blob {
+            override slice(start?: number, end?: number, contentType?: string): Blob {
+                const part = super.slice(start, end, contentType);
+                // FileReader still reads a genuine Blob; only Auth changes
+                // between the pre-read check and the asynchronous completion.
+                isCurrent = false;
+                return part;
+            }
+        }
+        const source = new SwitchingBlob(['{"value":}']);
+        const check = vi.fn(() => {
+            if (!isCurrent) throw new Error('Sessione cambiata');
+        });
+
+        // An invalid source must not mask an owner switch with a JSON error.
+        await expect(parseLargeBackupJson(source, check, 32)).rejects.toThrow('Sessione cambiata');
+        expect(check).toHaveBeenCalledTimes(2);
+    });
+
     it('checks the owner session during each chunk, including before returning', async () => {
         let calls = 0;
         await expect(parseLargeBackupJson(new Blob(['{"x":1}']), () => {
