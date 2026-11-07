@@ -6,6 +6,8 @@ const state = vi.hoisted(() => ({
     dispatch: vi.fn(),
     showAlert: vi.fn(async (_message: string) => {}),
     currentSession: true,
+    epoch: 1,
+    owner: 'user:test',
 }));
 
 vi.mock('../src/store/useAppStore', () => ({
@@ -18,14 +20,18 @@ vi.mock('../src/store/useDialogStore', () => ({
     useDialogStore: (select: (store: unknown) => unknown) => select({ showAlert: state.showAlert }),
 }));
 vi.mock('../src/lib/sync/session', () => ({
-    captureSession: () => ({ owner: 'user:test', epoch: 1 }),
-    isCurrentSession: () => state.currentSession,
+    captureSession: () => ({ owner: state.owner, epoch: state.epoch }),
+    isCurrentSession: (snapshot: { owner: string; epoch: number }) =>
+        state.currentSession && snapshot.owner === state.owner && snapshot.epoch === state.epoch,
 }));
 
 import { useSettingsProfile } from '../src/hooks/useSettingsProfile';
 
 beforeEach(() => {
     state.currentSession = true;
+    state.epoch = 1;
+    state.owner = 'user:test';
+    state.profile = { dob: '2000-01-01', height: '170', gender: 'M' };
     state.dispatch.mockReset();
     state.dispatch.mockResolvedValue({ ok: true, status: 'synced' });
     state.showAlert.mockClear();
@@ -70,6 +76,27 @@ describe('biometric profile draft persistence', () => {
         });
         expect([result.current.dob, result.current.height, result.current.gender])
             .toEqual(['2001-02-03', '182', 'F']);
+    });
+
+    it('does not surface or reuse another Auth epoch\'s unsaved biometric fields', () => {
+        const { result, rerender } = renderHook(() => useSettingsProfile());
+        act(() => result.current.setHeight('188'));
+        expect(result.current.height).toBe('188');
+
+        state.owner = 'user:second';
+        state.epoch++;
+        state.profile = { dob: '2002-02-02', height: '164', gender: 'F' };
+        rerender();
+        expect([result.current.dob, result.current.height, result.current.gender])
+            .toEqual(['2002-02-02', '164', 'F']);
+        act(() => result.current.setGender('M'));
+        expect(result.current.height).toBe('164');
+
+        state.owner = 'user:test';
+        state.epoch++;
+        state.profile = { dob: '2000-01-01', height: '170', gender: 'M' };
+        rerender();
+        expect(result.current.height).toBe('170');
     });
 
     it('does not clear the draft or show an old-session error after the session changes', async () => {
