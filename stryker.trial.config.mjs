@@ -85,6 +85,10 @@ export const trialCases = {
     "testFiles": ["tests/isolated/localPendingSequences.test.ts"],
     "runner": "isolated"
   },
+  "sync-failure": {
+    "mutate": ["src/lib/sync/syncFailure.ts"],
+    "testFiles": ["tests/app_check_sync_semantics.test.ts"]
+  },
   "causal-compaction": {
     "mutate": ["src/lib/sync/causalCompaction.ts"],
     "testFiles": ["tests/gc/causalCompaction.test.ts"],
