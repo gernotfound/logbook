@@ -9,7 +9,6 @@ import { Logic } from '../../lib/logic';
 import type { WorkoutSession, Exercise } from '../../types';
 import { useAppStore } from '../../store/useAppStore';
 import { useDialogStore } from '../../store/useDialogStore';
-import { mapFirebaseErrorCode } from '../../lib/errorHandler';
 
 interface WorkoutReportModalProps {
     workout: WorkoutSession;
@@ -97,14 +96,10 @@ const WorkoutReportModal: React.FC<WorkoutReportModalProps> = ({ workout, histor
             await dispatchDurableOperation(dispatchDomainOperation, { type: 'routine.upsert', routine: newRoutine });
             
             setIsSavingAsRoutine(false);
-        } catch (err: any) {
-            const formatted = mapFirebaseErrorCode(err);
-            if (formatted.isOfflineSafe) {
-                setIsSavingAsRoutine(false);
-                void showAlert("Scheda salvata in locale (offline).");
-            } else {
-                void showAlert("Errore durante il salvataggio della scheda.");
-            }
+        } catch {
+            // The durable boundary already accepts verified local-pending results.
+            // An error message cannot turn a rejected/unsafe save into confirmation.
+            void showAlert("Errore durante il salvataggio della scheda.");
         } finally {
             setIsSavingRoutineLoading(false);
         }
