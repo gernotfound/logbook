@@ -1,4 +1,4 @@
-import { calculateAge } from '../utils/date';
+import { calculateAge, getLocalDateString } from '../utils/date';
 
 function calculateUsNavyBodyFat({ gender, height, waist, neck, hip }: { gender?: string; height: any; waist: any; neck: any; hip?: any }): number | null {
     const h = parseFloat(height);
@@ -6,21 +6,21 @@ function calculateUsNavyBodyFat({ gender, height, waist, neck, hip }: { gender?:
     const n = parseFloat(neck);
     const hp = parseFloat(hip);
     const g = (gender || 'M').toUpperCase();
-    if (isNaN(h) || isNaN(w) || isNaN(n) || h < 50 || h > 250 || w <= 0 || n <= 0) return null;
+    if (![h, w, n].every(Number.isFinite) || h < 50 || h > 250 || w <= 0 || n <= 0) return null;
     if (g === 'M') {
         if (w <= n) return null;
         const logWaistNeck = Math.log10(w - n);
         const logHeight = Math.log10(h);
         const denom = 1.0324 - (0.19077 * logWaistNeck) + (0.15456 * logHeight);
-        if (denom <= 0) return null;
+        if (!Number.isFinite(denom) || denom <= 0) return null;
         const bf = (495 / denom) - 450;
         return Math.max(2, Math.min(60, Math.round(bf * 10) / 10));
     } else if (g === 'F') {
-        if (isNaN(hp) || hp <= 0 || (w + hp) <= n) return null;
+        if (!Number.isFinite(hp) || hp <= 0 || (w + hp) <= n) return null;
         const logWaistHipNeck = Math.log10(w + hp - n);
         const logHeight = Math.log10(h);
         const denom = 1.29579 - (0.35004 * logWaistHipNeck) + (0.22100 * logHeight);
-        if (denom <= 0) return null;
+        if (!Number.isFinite(denom) || denom <= 0) return null;
         const bf = (495 / denom) - 450;
         return Math.max(2, Math.min(60, Math.round(bf * 10) / 10));
     }
@@ -32,7 +32,7 @@ export function calculateBodyFatByMethod(method: any, params: any): number | nul
     const m = (method || '').toString().toLowerCase().trim();
     if (m === 'manual') {
         const val = parseFloat(params.bfPercentage !== undefined ? params.bfPercentage : (params.manualBf !== undefined ? params.manualBf : params.bf));
-        if (isNaN(val) || val < 0 || val > 100) return null;
+        if (!Number.isFinite(val) || val < 0 || val > 100) return null;
         return Math.round(val * 10) / 10;
     }
     if (m === 'navy_male') {
@@ -51,18 +51,18 @@ export function calculateBodyFatByMethod(method: any, params: any): number | nul
     if (m === 'bmi') {
         const weight = parseFloat(params.weight);
         const height = parseFloat(params.height);
-        if (isNaN(weight) || isNaN(height) || weight <= 0 || height <= 0) return null;
+        if (!Number.isFinite(weight) || !Number.isFinite(height) || weight <= 0 || height <= 0) return null;
         const hMeters = height / 100;
         const bmi = weight / (hMeters * hMeters);
         let age = 30;
-        if (params.age !== undefined && !isNaN(parseFloat(params.age))) {
+        if (params.age !== undefined && Number.isFinite(parseFloat(params.age))) {
             age = parseFloat(params.age);
         } else if (params.dob) {
             age = calculateAge(params.dob);
         }
         const sexFactor = (params.gender === 'F' || params.gender === 'female') ? 0 : 1;
         const bf = (1.20 * bmi) + (0.23 * age) - (10.8 * sexFactor) - 5.4;
-        if (isNaN(bf)) return null;
+        if (!Number.isFinite(bf)) return null;
         return Math.max(2, Math.min(60, Math.round(bf * 10) / 10));
     }
     return null;
@@ -70,10 +70,11 @@ export function calculateBodyFatByMethod(method: any, params: any): number | nul
 
 export function calculateBodyFat(weight: any, profile: any): number | null {
     if (!profile || !profile.height || !weight) return null;
-    if (profile.manualBf) return profile.manualBf;
+    const manualBf = parseFloat(profile.manualBf);
+    if (Number.isFinite(manualBf) && manualBf >= 0 && manualBf <= 100) return manualBf;
     const wKg = parseFloat(weight);
     const hCm = parseFloat(profile.height);
-    if (hCm <= 0 || wKg <= 0) return null;
+    if (!Number.isFinite(hCm) || !Number.isFinite(wKg) || hCm <= 0 || wKg <= 0) return null;
     
     if (profile.gender === 'M' && profile.neck && profile.waist) {
         return calculateUsNavyBodyFat({ gender: 'M', height: hCm, neck: parseFloat(profile.neck), waist: parseFloat(profile.waist), hip: 0 });
@@ -88,7 +89,7 @@ export function calculateBodyFat(weight: any, profile: any): number | null {
 export function calculateBodyComposition(weight: any, bfPercentage: any): { fatMass: number; leanMass: number } {
     const w = parseFloat(weight);
     const bf = parseFloat(bfPercentage);
-    if (isNaN(w) || isNaN(bf) || w <= 0 || bf < 0 || bf > 100) {
+    if (!Number.isFinite(w) || !Number.isFinite(bf) || w <= 0 || bf < 0 || bf > 100) {
         return { fatMass: 0, leanMass: 0 };
     }
     const fatMass = Math.round(w * (bf / 100) * 10) / 10;
@@ -102,14 +103,16 @@ export function validateMeasurementData(data: any) {
         return { isValid: false, errors: { general: "Dati non validi" }, cleanData: null, bfPercentage: null };
     }
     const dateStr = String(data.date || '').trim();
-    if (!dateStr || isNaN(Date.parse(dateStr))) {
+    const parsedDate = /^\d{4}-\d{2}-\d{2}$/.test(dateStr)
+        ? new Date(`${dateStr}T12:00:00`) : null;
+    if (!parsedDate || !Number.isFinite(parsedDate.getTime()) || getLocalDateString(parsedDate) !== dateStr) {
         errors.date = "Data non valida (richiesto formato AAAA-MM-GG)";
     }
     const weight = parseFloat(data.weight);
-    if (isNaN(weight) || weight <= 0) {
+    if (!Number.isFinite(weight) || weight <= 0) {
         errors.weight = "Il peso corporeo deve essere maggiore di 0 kg";
     }
-    const method = (data.method || data.measurementMethod || 'manual').toLowerCase().trim();
+    const method = String(data.method || data.measurementMethod || 'manual').toLowerCase().trim();
     const validMethods = ['manual', 'navy_male', 'navy_female', 'bmi'];
     if (!validMethods.includes(method)) {
         errors.method = "Metodo di misurazione non supportato";
@@ -120,26 +123,26 @@ export function validateMeasurementData(data: any) {
     const hip = parseFloat(data.hip);
     const manualBf = parseFloat(data.manualBf !== undefined ? data.manualBf : data.bfPercentage);
     if (method === 'manual') {
-        if (isNaN(manualBf) || manualBf < 0 || manualBf > 100) {
+        if (!Number.isFinite(manualBf) || manualBf < 0 || manualBf > 100) {
             errors.manualBf = "La percentuale di massa grassa manuale deve essere compresa tra 0% e 100%";
         }
     } else if (method === 'navy_male') {
-        if (isNaN(height) || height <= 0) errors.height = "Altezza richiesta e maggiore di 0 cm";
-        if (isNaN(neck) || neck <= 0) errors.neck = "Circonferenza collo richiesta e maggiore di 0 cm";
-        if (isNaN(waist) || waist <= 0) errors.waist = "Circonferenza vita richiesta e maggiore di 0 cm";
+        if (!Number.isFinite(height) || height <= 0) errors.height = "Altezza richiesta e maggiore di 0 cm";
+        if (!Number.isFinite(neck) || neck <= 0) errors.neck = "Circonferenza collo richiesta e maggiore di 0 cm";
+        if (!Number.isFinite(waist) || waist <= 0) errors.waist = "Circonferenza vita richiesta e maggiore di 0 cm";
         if (!errors.waist && !errors.neck && waist <= neck) {
             errors.waist = "La circonferenza vita deve essere maggiore del collo";
         }
     } else if (method === 'navy_female') {
-        if (isNaN(height) || height <= 0) errors.height = "Altezza richiesta e maggiore di 0 cm";
-        if (isNaN(neck) || neck <= 0) errors.neck = "Circonferenza collo richiesta e maggiore di 0 cm";
-        if (isNaN(waist) || waist <= 0) errors.waist = "Circonferenza vita richiesta e maggiore di 0 cm";
-        if (isNaN(hip) || hip <= 0) errors.hip = "Circonferenza fianchi richiesta e maggiore di 0 cm";
+        if (!Number.isFinite(height) || height <= 0) errors.height = "Altezza richiesta e maggiore di 0 cm";
+        if (!Number.isFinite(neck) || neck <= 0) errors.neck = "Circonferenza collo richiesta e maggiore di 0 cm";
+        if (!Number.isFinite(waist) || waist <= 0) errors.waist = "Circonferenza vita richiesta e maggiore di 0 cm";
+        if (!Number.isFinite(hip) || hip <= 0) errors.hip = "Circonferenza fianchi richiesta e maggiore di 0 cm";
         if (!errors.waist && !errors.hip && !errors.neck && (waist + hip <= neck)) {
             errors.hip = "La somma di vita e fianchi deve essere maggiore del collo";
         }
     } else if (method === 'bmi') {
-        if (isNaN(height) || height <= 0) errors.height = "Altezza richiesta e maggiore di 0 cm";
+        if (!Number.isFinite(height) || height <= 0) errors.height = "Altezza richiesta e maggiore di 0 cm";
     }
     const isValid = Object.keys(errors).length === 0;
     if (!isValid) {
