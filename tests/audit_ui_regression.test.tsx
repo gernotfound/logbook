@@ -13,7 +13,6 @@ import { DB } from '../src/lib/db';
 import { useDialogStore } from '../src/store/useDialogStore';
 import { GlobalDialog } from '../src/components/UI/GlobalDialog';
 import { clearSyncTimers } from '../src/store/slices/createSyncSlice';
-import { clearWorkoutTimer } from '../src/store/slices/createWorkoutSlice';
 import { draftRegistry } from '../src/lib/utils/draftRegistry';
 import { captureSession } from '../src/lib/sync/session';
 
@@ -46,7 +45,6 @@ beforeEach(async () => {
 afterEach(() => {
     cleanup();
     clearSyncTimers();
-    clearWorkoutTimer();
     useDialogStore.getState().onCancel();
     vi.restoreAllMocks();
     vi.useRealTimers();
