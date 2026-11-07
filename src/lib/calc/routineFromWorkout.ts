@@ -9,8 +9,9 @@ export function routineFromWorkout(workout: WorkoutSession, routineId: string, n
         let validSetsCount = 0;
 
         ex.sets.forEach(set => {
-            const reps = parseInt(set.reps, 10);
-            if (!isNaN(reps)) {
+            const rawReps = typeof set.reps === 'string' ? set.reps.trim() : '';
+            const reps = /^\d+$/.test(rawReps) ? Number(rawReps) : NaN;
+            if (Number.isSafeInteger(reps) && reps > 0) {
                 if (reps < minReps) minReps = reps;
                 if (reps > maxReps) maxReps = reps;
             }
