@@ -136,6 +136,19 @@ describe('authenticated logout preflight', () => {
         expect(useDialogStore.getState().showUnsyncedDataLogout).toHaveBeenCalledWith('offline');
     });
 
+    it('shows an unsafe failure rather than offline when cloud error inspection is incomplete', async () => {
+        vi.spyOn(localRepository, 'readLocal').mockResolvedValue({ pending: [{}] } as any);
+        let cause: Error = Object.assign(new Error('Denied'), { code: 'permission-denied' });
+        for (let depth = 0; depth < 12; depth++) cause = new Error('Intermediate wrapper', { cause });
+        vi.mocked(waitForPendingWrites).mockRejectedValueOnce(
+            Object.assign(new Error('Transport wrapper', { cause }), { code: 'unavailable' }),
+        );
+        vi.mocked(useDialogStore.getState().showUnsyncedDataLogout).mockResolvedValueOnce('wait');
+
+        expect(await prepareAuthenticatedLogout(ownerUid, vi.fn())).toBeNull();
+        expect(useDialogStore.getState().showUnsyncedDataLogout).toHaveBeenCalledExactlyOnceWith('failed');
+    });
+
     it('recognizes a journal drained while pending server writes settle', async () => {
         const read = vi.spyOn(localRepository, 'readLocal')
             .mockResolvedValueOnce({ pending: [{}] } as any)
