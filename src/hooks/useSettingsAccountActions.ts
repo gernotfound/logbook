@@ -140,7 +140,9 @@ export function useSettingsAccountActions({ currentUser, isGuest, logout }: Acco
     };
     const { erasingHealthData, handleDeleteHealthData } = useSettingsHealthDataDeletion(beginHealthDeletion, endHealthDeletion);
     let pendingAccountDeletion = false;
-    try { pendingAccountDeletion = isAccountDeletionPending(captureSession().owner); }
+    try {
+        pendingAccountDeletion = isAccountDeletionPending(currentUser ? `user:${currentUser.uid}` : captureSession().owner);
+    }
     catch { /* The writer separately refuses an unreadable deletion marker. */ }
 
 
