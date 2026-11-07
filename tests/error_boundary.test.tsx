@@ -292,6 +292,7 @@ describe('R2: ErrorBoundary & Dialog Hardening Suite', () => {
 
         expect(DB.purgeAllLocalUserData).not.toHaveBeenCalled();
         expect(window.location.reload).not.toHaveBeenCalled();
+        expect(useDialogStore.getState().showAlert).not.toHaveBeenCalled();
         spy.mockRestore();
     });
 
@@ -313,6 +314,28 @@ describe('R2: ErrorBoundary & Dialog Hardening Suite', () => {
         await act(async () => { finishPurge(); });
 
         expect(window.location.reload).not.toHaveBeenCalled();
+        log.mockRestore();
+    });
+
+    it('suppresses obsolete local purge failure alerts after Auth A→B→A', async () => {
+        const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+        vi.mocked(useDialogStore.getState().showConfirm).mockResolvedValueOnce(true);
+        const alert = vi.mocked(useDialogStore.getState().showAlert);
+        let failPurge!: (error: Error) => void;
+        const purge = vi.mocked(DB.purgeAllLocalUserData).mockImplementationOnce(
+            () => new Promise<void>((_resolve, reject) => { failPurge = reject; }),
+        );
+
+        render(<ErrorBoundary><ProblemChild shouldThrow={true} /></ErrorBoundary>);
+        await act(async () => { fireEvent.click(screen.getByRole('button', { name: /Azzera dati locali/i })); });
+        expect(purge).toHaveBeenCalledExactlyOnceWith('user:test-user-id');
+
+        // The same account label after two Auth transitions is not the old epoch.
+        invalidateSession();
+        invalidateSession();
+        await act(async () => { failPurge(new Error('obsolete IndexedDB cleanup error')); });
+        expect(window.location.reload).not.toHaveBeenCalled();
+        expect(alert).not.toHaveBeenCalled();
         log.mockRestore();
     });
 
