@@ -40,7 +40,7 @@ vi.mock('../src/store/useDialogStore', () => ({
 import { DB } from '../src/lib/db';
 import { useSettings } from '../src/hooks/useSettings';
 import { localStorageMock } from './setup';
-import { activateGuestSession } from '../src/lib/sync/session';
+import { activateGuestSession, invalidateSession } from '../src/lib/sync/session';
 
 describe('account deletion recent authentication', () => {
   beforeEach(() => {
@@ -188,6 +188,24 @@ describe('account deletion recent authentication', () => {
       if (originalUser) Object.defineProperty(auth, 'currentUser', originalUser);
       else Reflect.deleteProperty(auth, 'currentUser');
     }
+  });
+
+  it('does not show an obsolete deletion failure after a same-UID Auth epoch replacement', async () => {
+    reauth.run.mockResolvedValue('reauthenticated');
+    let fail!: (error: Error) => void;
+    const deletion = vi.spyOn(DB, 'deleteAccount').mockImplementation(
+      () => new Promise((_resolve, reject) => { fail = reject; }),
+    );
+    const { result } = renderHook(() => useSettings());
+    let pending!: Promise<void>;
+    act(() => { pending = result.current.handleDeleteAccount(); });
+    await vi.waitFor(() => expect(deletion).toHaveBeenCalledOnce());
+
+    invalidateSession();
+    invalidateSession();
+    await act(async () => { fail(new Error('Obsolete failure')); await pending; });
+    expect(dialog.showAlert).not.toHaveBeenCalled();
+    expect(result.current.deletionPhase).toBe('idle');
   });
 
   it('cancels safely when the password prompt is dismissed', async () => {

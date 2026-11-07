@@ -18,7 +18,8 @@ import {
 
 const EMPTY_ARRAY: any[] = [];
 
-function blockExerciseDraft(error: unknown): void {
+function blockExerciseDraft(error: unknown, session: ReturnType<typeof captureSession>): void {
+    if (!isCurrentSession(session)) return;
     console.error('Persistenza bozza esercizio non disponibile:', error);
     useAppStore.setState({
         localPersistenceBlocked: true,
@@ -56,8 +57,8 @@ export function useTrainingExercises() {
         readExerciseDraft(draftOwner);
     }, [draftOwner, draftSession, initialRecovery.error, localPersistenceBlocked]);
     useEffect(() => {
-        if (initialRecovery.error) blockExerciseDraft(initialRecovery.error);
-    }, [initialRecovery.error]);
+        if (initialRecovery.error) blockExerciseDraft(initialRecovery.error, draftSession);
+    }, [initialRecovery.error, draftSession]);
     const [editingExId, setEditingExId] = useState<string | null>(null);
     const [exName, setExName] = useState(() => initialDraft?.name || '');
     const [exNotes, setExNotes] = useState(() => initialDraft?.notes || '');
@@ -84,7 +85,7 @@ export function useTrainingExercises() {
                 equipmentWeight,
             }, draftOwner, draftSession.consentGeneration);
         } catch (error) {
-            blockExerciseDraft(error);
+            blockExerciseDraft(error, draftSession);
         }
     }, [exName, exNotes, trackingType, selectedMuscles, secondaryMuscles, isBodyweight,
         equipmentWeight, editingExId, draftOwner, draftSession, initialRecovery.error,
@@ -189,6 +190,13 @@ export function useTrainingExercises() {
     };
 
     const handleCancelEdit = () => {
+        try {
+            assertCurrentDraft();
+            clearExerciseDraft(draftOwner, draftSession.consentGeneration);
+        } catch (error) {
+            blockExerciseDraft(error, draftSession);
+            return false;
+        }
         setEditingExId(null);
         setExName('');
         setExNotes('');
@@ -199,12 +207,7 @@ export function useTrainingExercises() {
         setTrackingType('weight_reps');
         setIsBodyweight(false);
         setEquipmentWeight('');
-        try {
-            assertCurrentDraft();
-            clearExerciseDraft(draftOwner, draftSession.consentGeneration);
-        } catch (error) {
-            blockExerciseDraft(error);
-        }
+        return true;
     };
 
     const isDuplicateName = useMemo(() => {
@@ -279,8 +282,8 @@ export function useTrainingExercises() {
         try {
             assertCurrentDraft();
         } catch (error) {
-            blockExerciseDraft(error);
-            void showAlert("Errore durante il salvataggio dell\x27esercizio.");
+            blockExerciseDraft(error, draftSession);
+            if (isCurrentSession(draftSession)) void showAlert("Errore durante il salvataggio dell\x27esercizio.");
             return false;
         }
 
@@ -290,10 +293,15 @@ export function useTrainingExercises() {
                 : updatedLibrary.find(ex => !library.some(current => current.id === ex.id));
             if (!savedExercise) throw new Error('Esercizio non trovato dopo la modifica');
             await persistExercise({ type: 'exercise.upsert', exercise: savedExercise });
-            handleCancelEdit(); // Reset form
+            if (!isCurrentSession(draftSession)) return false;
+            const cleared = handleCancelEdit();
+            if (!isCurrentSession(draftSession)) return false;
+            if (!cleared) {
+                await showAlert('Esercizio salvato, ma la bozza cifrata non è stata ripulita. Verifica il recupero locale.');
+            }
             return true;
         } catch {
-            void showAlert("Errore durante il salvataggio dell'esercizio.");
+            if (isCurrentSession(draftSession)) void showAlert("Errore durante il salvataggio dell'esercizio.");
             return false;
         }
     };

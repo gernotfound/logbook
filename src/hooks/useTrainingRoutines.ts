@@ -12,7 +12,8 @@ const EMPTY_ROUTINES: WorkoutRoutine[] = [];
 const EMPTY_LIBRARY: Exercise[] = [];
 const ROUTINE_DRAFT_KEY = 'draft_routine';
 
-function blockRoutineDraft(error: unknown): void {
+function blockRoutineDraft(error: unknown, session: ReturnType<typeof captureSession>): void {
+    if (!isCurrentSession(session)) return;
     console.error('Persistenza bozza scheda non disponibile:', error);
     useAppStore.setState({
         localPersistenceBlocked: true,
@@ -47,8 +48,8 @@ export function useTrainingRoutines() {
         readWorkoutRecoveryDraft(ROUTINE_DRAFT_KEY, draftOwner);
     }, [draftOwner, draftSession, initialRecovery.error, localPersistenceBlocked]);
     useEffect(() => {
-        if (initialRecovery.error) blockRoutineDraft(initialRecovery.error);
-    }, [initialRecovery.error]);
+        if (initialRecovery.error) blockRoutineDraft(initialRecovery.error, draftSession);
+    }, [initialRecovery.error, draftSession]);
     const [routineName, setRoutineName] = useState(() => initialDraft?.name || '');
     const [editingRoutineId, setEditingRoutineId] = useState<string | null>(null);
     const [routineExercises, setRoutineExercises] = useState<RoutineExercise[]>(() => Array.isArray(initialDraft?.exercises) ? initialDraft.exercises : []);
@@ -62,17 +63,19 @@ export function useTrainingRoutines() {
                 routineName.trim() !== '' || routineExercises.length > 0
                     ? { name: routineName, exercises: routineExercises } : null, draftSession.consentGeneration);
         } catch (error) {
-            blockRoutineDraft(error);
+            blockRoutineDraft(error, draftSession);
         }
     }, [routineName, routineExercises, editingRoutineId, draftOwner, draftSession,
         initialRecovery.error, localPersistenceBlocked, assertCurrentDraft]);
 
-    const clearRoutineDraft = () => {
+    const clearRoutineDraft = (): boolean => {
         try {
             assertCurrentDraft();
             writeWorkoutRecoveryDraft(ROUTINE_DRAFT_KEY, draftOwner, null, draftSession.consentGeneration);
+            return true;
         } catch (error) {
-            blockRoutineDraft(error);
+            blockRoutineDraft(error, draftSession);
+            return false;
         }
     };
 
@@ -103,10 +106,11 @@ export function useTrainingRoutines() {
     };
 
     const handleCancelEdit = () => {
+        if (!clearRoutineDraft()) return false;
         setEditingRoutineId(null);
         setRoutineName('');
         setRoutineExercises([]);
-        clearRoutineDraft();
+        return true;
     };
 
     const handleSave = async (e?: any) => {
@@ -167,14 +171,20 @@ export function useTrainingRoutines() {
                 ]);
             }
 
+            if (!isCurrentSession(draftSession)) return false;
+            const cleared = clearRoutineDraft();
+            if (!isCurrentSession(draftSession)) return false;
             setRoutineName('');
             setRoutineExercises([]);
             setEditingRoutineId(null);
-            clearRoutineDraft();
+            if (!cleared) {
+                await showAlert('Scheda salvata, ma la bozza cifrata non è stata ripulita. Verifica il recupero locale.');
+            }
             return true;
-        } catch (error) {
-            blockRoutineDraft(error);
-            await showAlert("Errore durante il salvataggio della scheda.");
+        } catch {
+            // A rejected business commit does not mean the encrypted recovery draft failed.
+            // Preserve it for retry without fencing unrelated local persistence.
+            if (isCurrentSession(draftSession)) await showAlert("Errore durante il salvataggio della scheda.");
             return false;
         }
     };

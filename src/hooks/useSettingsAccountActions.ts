@@ -208,11 +208,8 @@ export function useSettingsAccountActions({ currentUser, isGuest, logout }: Acco
             const message = isCredentialMistake
                 ? 'Password attuale non corretta.'
                 : error instanceof Error ? error.message : 'Cancellazione non riuscita.';
-            let canShow = session === null;
-            if (session) {
-                try { canShow = captureSession().owner === session.owner; }
-                catch { canShow = true; }
-            }
+            // A-B-A logins to the same UID still invalidate the former deletion attempt.
+            const canShow = session === null || isCurrentSession(session);
             if (canShow) void showAlert(message);
         } finally {
             deletionBusy.current = null;

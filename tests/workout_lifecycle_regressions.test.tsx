@@ -9,7 +9,7 @@ import { deviceKey, protectedDeviceKey, readDeviceValueStrict, writeDeviceValue 
 import { useTrainingHistory } from '../src/hooks/useTrainingHistory';
 import { restoreSessionAfterHistoryEdit } from '../src/hooks/workout/historyEditorContext';
 import { useWorkoutSetMutations } from '../src/hooks/workout/useWorkoutSetMutations';
-import { captureSession } from '../src/lib/sync/session';
+import { captureSession, invalidateSession } from '../src/lib/sync/session';
 import { getInitialLocalWorkout } from '../src/store/slices/createWorkoutSlice';
 import { persistPlainWorkoutSnapshot } from '../src/lib/sync/workoutDeviceIntent';
 import { readWorkoutTimerSnapshot, writeWorkoutTimerSnapshot } from '../src/lib/utils/timer';
@@ -353,6 +353,31 @@ describe('Workout lifecycle durable recovery regressions', () => {
     });
 
 
+    it('does not complete a workout after a same-owner authentication epoch change during confirmation', async () => {
+        const original = workout('finish-old-auth-epoch', true);
+        useAppStore.setState({ userData: userData({ activeWorkout: original }), dataOwner: owner, localWorkout: original });
+        const previousDispatch = useAppStore.getState().dispatchDomainOperation;
+        const dispatch = vi.fn(previousDispatch);
+        useAppStore.setState({ dispatchDomainOperation: dispatch });
+        let accept!: (value: boolean) => void;
+        vi.mocked(useDialogStore.getState().showConfirm).mockImplementationOnce(
+            () => new Promise(resolve => { accept = resolve; }),
+        );
+        try {
+            const hook = renderHook(() => useWorkoutSession());
+            let pending!: Promise<WorkoutSession | null>;
+            act(() => { pending = hook.result.current.endWorkout(); });
+            // A-B-A account transitions can restore the original UID and workout ID.
+            invalidateSession();
+            invalidateSession();
+            await act(async () => { accept(true); expect(await pending).toBeNull(); });
+            expect(dispatch).not.toHaveBeenCalled();
+            expect(useAppStore.getState().localWorkout?.id).toBe(original.id);
+        } finally {
+            useAppStore.setState({ dispatchDomainOperation: previousDispatch });
+        }
+    });
+
     it('never completes a workout replaced while the finish confirmation is open', async () => {
         await prepareUnlockedTestArchive(owner);
         const original = workout('finish-confirm-original', true);
@@ -376,6 +401,64 @@ describe('Workout lifecycle durable recovery regressions', () => {
             expect((await readLocal(owner))?.data.activeWorkout?.id).toBe(original.id);
         } finally {
             useAppStore.setState({ dispatchDomainOperation: previousDispatch });
+        }
+    });
+
+    it.each(['finish', 'delete'] as const)(
+        'suppresses obsolete %s error dialogs after a same-owner Auth epoch replacement',
+        async action => {
+            await prepareUnlockedTestArchive(owner);
+            const active = workout('superseded-' + action, true);
+            const initial = userData({ activeWorkout: active });
+            await initializeLocal(owner, initial);
+            useAppStore.setState({ userData: initial, dataOwner: owner, localWorkout: active });
+            const previousDispatch = useAppStore.getState().dispatchDomainOperation;
+            let reject!: (error: Error) => void;
+            const dispatch = vi.fn((_operation: Parameters<typeof previousDispatch>[0]) =>
+                new Promise<Awaited<ReturnType<typeof previousDispatch>>>((_resolve, fail) => { reject = fail; }));
+            useAppStore.setState({ dispatchDomainOperation: dispatch });
+            vi.mocked(useDialogStore.getState().showConfirm).mockResolvedValueOnce(true);
+            vi.mocked(useDialogStore.getState().showAlert).mockResolvedValue();
+            try {
+                const { result } = renderHook(() => useWorkoutSession());
+                let pending!: Promise<unknown>;
+                act(() => {
+                    pending = action === 'finish'
+                        ? result.current.endWorkout(false)
+                        : result.current.deleteWorkout();
+                });
+                await vi.waitFor(() => expect(dispatch).toHaveBeenCalledOnce());
+                invalidateSession();
+                invalidateSession();
+                await act(async () => {
+                    reject(new Error('obsolete asynchronous operation'));
+                    await pending;
+                });
+                expect(useDialogStore.getState().showAlert).not.toHaveBeenCalled();
+                expect(useAppStore.getState().localWorkout?.id).toBe(active.id);
+            } finally {
+                useAppStore.setState({ dispatchDomainOperation: previousDispatch });
+            }
+        },
+    );
+
+    it('does not quarantine a replacement Auth session when a stale draft flush fails', async () => {
+        const active = workout('flush-obsolete-auth', true);
+        useAppStore.setState({ userData: userData({ activeWorkout: active }), dataOwner: owner, localWorkout: active });
+        const failOnFlush = () => {
+            invalidateSession();
+            throw new Error('Obsolete draft flush');
+        };
+        draftRegistry.register(failOnFlush);
+        vi.mocked(useDialogStore.getState().showAlert).mockResolvedValue();
+        try {
+            const { result } = renderHook(() => useWorkoutSession());
+            await act(async () => { expect(await result.current.endWorkout(false)).toBeNull(); });
+            expect(useAppStore.getState().localPersistenceBlocked).toBe(false);
+            expect(useDialogStore.getState().showAlert).not.toHaveBeenCalled();
+            expect(useAppStore.getState().localWorkout?.id).toBe(active.id);
+        } finally {
+            draftRegistry.unregister(failOnFlush);
         }
     });
 
