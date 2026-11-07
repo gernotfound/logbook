@@ -122,7 +122,7 @@ export const BufferedInput = React.forwardRef<HTMLInputElement, BufferedInputPro
         });
 
         const persistRecovery = useCallback(() => {
-            if (!isDirty.current || !needsDeviceWrite.current) return;
+            if (!isDirty.current) return;
             const key = recoveryKey.current;
             const session = editSession.current;
             if (!key) throw new Error('Bozza volatile senza identificativo stabile.');
@@ -133,6 +133,13 @@ export const BufferedInput = React.forwardRef<HTMLInputElement, BufferedInputPro
             const raw = String(latestLocalValue.current);
             if (useAppStore.getState().localPersistenceBlocked) {
                 throw new Error('Persistenza delle bozze del workout bloccata.');
+            }
+            if (!needsDeviceWrite.current) {
+                // Read-only captures still authenticate the source generation and
+                // observed image. A consent change must block reload, not be
+                // mistaken for an already-secured current draft.
+                assertBufferedDraftUnchanged(key, session.owner, observedRaw.current);
+                return;
             }
             // Every editor has its own device key: preserve input synchronously
             // before the shared canonical key can lose a truly simultaneous race.
@@ -386,7 +393,7 @@ export const BufferedTextarea = React.forwardRef<HTMLTextAreaElement, BufferedTe
         });
 
         const persistRecovery = useCallback(() => {
-            if (!isDirty.current || !needsDeviceWrite.current) return;
+            if (!isDirty.current) return;
             const key = recoveryKey.current;
             const session = editSession.current;
             if (!key) throw new Error('Bozza volatile senza identificativo stabile.');
@@ -397,6 +404,13 @@ export const BufferedTextarea = React.forwardRef<HTMLTextAreaElement, BufferedTe
             const raw = String(latestLocalValue.current);
             if (useAppStore.getState().localPersistenceBlocked) {
                 throw new Error('Persistenza delle bozze del workout bloccata.');
+            }
+            if (!needsDeviceWrite.current) {
+                // Read-only captures still authenticate the source generation and
+                // observed image. A consent change must block reload, not be
+                // mistaken for an already-secured current draft.
+                assertBufferedDraftUnchanged(key, session.owner, observedRaw.current);
+                return;
             }
             // Every editor has its own device key: preserve input synchronously
             // before the shared canonical key can lose a truly simultaneous race.

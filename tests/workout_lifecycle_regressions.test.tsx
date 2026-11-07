@@ -253,6 +253,7 @@ describe('Workout lifecycle durable recovery regressions', () => {
     it('does not reseal an already persisted pre-session check-in during repeated update flushes', async () => {
         const owner = captureSession().owner;
         await prepareUnlockedTestArchive(owner);
+        localStorage.setItem(`logbook:v2:${owner}:health-consent-generation`, '3');
         const name = 'draft:pre-session:checkin-noop-flush';
         const onStart = vi.fn(async () => true);
         render(<PreSessionCheckIn workoutId="checkin-noop-flush" onStart={onStart} onCancel={vi.fn(async () => true)} />);
