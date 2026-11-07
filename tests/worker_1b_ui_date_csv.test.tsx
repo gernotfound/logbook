@@ -127,6 +127,35 @@ describe('Worker 1B: UI/UX, Date Navigation, CSV Export & PWA Fixes', () => {
             expect(setSelectedDate).toHaveBeenCalledWith('2026-08-01');
         });
 
+        it('locks the measurement date while editing an existing history record', () => {
+            const setSelectedDate = vi.fn();
+            const setValue = vi.fn();
+            render(
+                <DataMeasurements
+                    profile={{ gender: 'M' }} selectedDate="2026-08-01"
+                    editingDate="2026-08-01" setSelectedDate={setSelectedDate}
+                    measureTime="" setMeasureTime={setValue}
+                    weight="75" setWeight={setValue}
+                    waist="" setWaist={setValue} neck="" setNeck={setValue}
+                    hip="" setHip={setValue} manualBf="" setManualBf={setValue}
+                    chest="" setChest={setValue} shoulders="" setShoulders={setValue}
+                    biceps="" setBiceps={setValue} thighs="" setThighs={setValue}
+                    calves="" setCalves={setValue}
+                    handleCancelEdit={vi.fn()} calculateAndSave={vi.fn()}
+                />
+            );
+            const previous = screen.getByRole('button', { name: 'Giorno precedente' });
+            const next = screen.getByRole('button', { name: 'Giorno successivo' });
+            const today = screen.getByRole('button', { name: /Torna a oggi/ });
+            expect(previous).toHaveProperty('disabled', true);
+            expect(next).toHaveProperty('disabled', true);
+            expect(today).toHaveProperty('disabled', true);
+            fireEvent.click(previous);
+            fireEvent.click(next);
+            fireEvent.click(today);
+            expect(setSelectedDate).not.toHaveBeenCalled();
+        });
+
         it('DataSleep navigates previous and next days accurately across month boundaries', () => {
             let selectedDate = '2026-09-01';
             const setSelectedDate = vi.fn((newDate: string) => {
