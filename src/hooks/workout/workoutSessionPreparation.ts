@@ -65,6 +65,15 @@ function repairWorkoutInstanceIdentities(
     };
 }
 
+function parseOptionalWaterLiters(value: unknown): number | undefined {
+    if (typeof value !== 'string' && typeof value !== 'number') return undefined;
+    const raw = String(value).trim();
+    // Number/parseFloat alone accept partial or non-decimal values.
+    if (!/^(?:\d+(?:[.,]\d*)?|[.,]\d+)$/.test(raw)) return undefined;
+    const parsed = Number(raw.replace(',', '.'));
+    return Number.isFinite(parsed) ? parsed : undefined;
+}
+
 export function buildRoutineWorkout(
     userData: UserData | null | undefined,
     routine: WorkoutRoutine,
@@ -209,7 +218,7 @@ export function prepareHistoricalWorkoutForSave(
         moodRating: valRes.mood,
         pumpRating: valRes.pump,
         fatigueRating: valRes.fatigue,
-        waterLiters: water ? parseFloat(String(water).replace(',', '.')) : undefined,
+        waterLiters: parseOptionalWaterLiters(water),
         pains: Array.isArray(currentWorkout.pains) ? currentWorkout.pains : [],
         date: currentWorkout.date || (currentWorkout.globalStartTime ? runtime.getLocalDateString(currentWorkout.globalStartTime) : runtime.getLocalDateString()),
     };
@@ -225,9 +234,7 @@ export function applyWorkoutCompletionDraft(
     draft: WorkoutCompletionDraft,
 ): WorkoutSession {
     const valRes = Logic.validateWorkoutRatings(draft.mood, draft.pump, draft.fatigue);
-    const waterValue = draft.water.trim()
-        ? parseFloat(draft.water.replace(',', '.'))
-        : undefined;
+    const waterValue = parseOptionalWaterLiters(draft.water);
 
     const nextWorkout: WorkoutSession = {
         ...currentWorkout,
@@ -237,7 +244,7 @@ export function applyWorkoutCompletionDraft(
         pains: [...draft.pains],
     };
 
-    if (waterValue !== undefined && Number.isFinite(waterValue)) {
+    if (waterValue !== undefined) {
         nextWorkout.waterLiters = waterValue;
     } else {
         delete nextWorkout.waterLiters;
@@ -277,7 +284,7 @@ export function prepareCompletedWorkout(
         moodRating: valRes.mood,
         pumpRating: valRes.pump,
         fatigueRating: valRes.fatigue,
-        waterLiters: normalizedWorkout.waterLiters !== undefined && normalizedWorkout.waterLiters !== null && String(normalizedWorkout.waterLiters).trim() !== '' ? parseFloat(String(normalizedWorkout.waterLiters).replace(',', '.')) : undefined,
+        waterLiters: parseOptionalWaterLiters(normalizedWorkout.waterLiters),
         pains: sessionPains,
         date: normalizedWorkout.date || runtime.getLocalDateString(startTime),
     };

@@ -26,6 +26,27 @@ describe('R4: useLocalStorage Safe Fallback & Strict Serialization Suite', () =>
         expect(localStorage.getItem('user:account-navigation')).toBe(JSON.stringify('home'));
     });
 
+    it('preserves both owners\' preferences when the storage key changes without an override', () => {
+        localStorage.setItem('user:first:navigation', JSON.stringify('training'));
+        localStorage.setItem('user:second:navigation', JSON.stringify('nutrition'));
+
+        const { result, rerender } = renderHook(
+            ({ storageKey }: { storageKey: string }) =>
+                useLocalStorage<'home' | 'training' | 'nutrition' | 'data'>(storageKey, 'home'),
+            { initialProps: { storageKey: 'user:first:navigation' } },
+        );
+        expect(result.current[0]).toBe('training');
+
+        rerender({ storageKey: 'user:second:navigation' });
+        expect(result.current[0]).toBe('nutrition');
+        expect(localStorage.getItem('user:first:navigation')).toBe(JSON.stringify('training'));
+
+        act(() => result.current[1]('data'));
+        expect(result.current[0]).toBe('data');
+        expect(localStorage.getItem('user:first:navigation')).toBe(JSON.stringify('training'));
+        expect(localStorage.getItem('user:second:navigation')).toBe(JSON.stringify('data'));
+    });
+
     describe('Valid JSON Retrieval', () => {
         it('returns initialValue when localStorage item is null (key not present)', () => {
             const consoleErrorSpy = vi.spyOn(console, 'error');
