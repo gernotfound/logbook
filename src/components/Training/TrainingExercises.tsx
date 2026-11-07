@@ -33,8 +33,7 @@ const TrainingExercises = () => {
     };
 
     const handleCancel = () => {
-        hook.handleCancelEdit();
-        setIsCreating(false);
+        if (hook.handleCancelEdit()) setIsCreating(false);
     };
 
     const handleSave = async () => {
