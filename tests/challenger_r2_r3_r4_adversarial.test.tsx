@@ -5,6 +5,7 @@ import * as path from 'path';
 import { useLocalStorage } from '../src/hooks/useLocalStorage';
 import type { UserData } from '../src/types';
 import { idbStore } from './setup';
+import { readLocal } from '../src/lib/sync/localRepository';
 
 describe('EMPIRICAL CHALLENGER: Adversarial Stress & Robustness Suite (R2, R3, R4)', () => {
 
@@ -229,6 +230,11 @@ describe('EMPIRICAL CHALLENGER: Adversarial Stress & Robustness Suite (R2, R3, R
             expect(useAppStore.getState().syncing).toBe(false);
             expect(useAppStore.getState().saveError).toBeNull();
             expect(useAppStore.getState().userData?.profile?.height).toBe('220');
+            // The cloud adapter's one call must reflect the exact committed
+            // local envelope, not only optimistic Zustand state or debounce order.
+            const durable = await readLocal('user:test-user-id');
+            expect(durable?.data.profile?.height).toBe('220');
+            expect(durable?.data.library?.map(item => item.id)).toEqual(['ex_50']);
         });
 
         it('BURST STRESS (50 Concurrent Calls - Rejection): when debounced DB write fails, ALL 50 caller promises reject with the identical error', async () => {
