@@ -135,7 +135,7 @@ describe('Training Session UI Improvements Suite (R1, R2, R3)', () => {
         render(
             <SessionExerciseCard
                 exItem={{ id: 'cardio-instance', exId: 'ex_treadmill', sets: [
-                    { id: 'cardio-set-1', time: '', distance: '', speed: '', incline: '', kcal: '' }
+                    { id: 'cardio-set-1', kg: '', reps: '', time: '', distance: '', speed: '', incline: '', kcal: '' }
                 ] }}
                 exIndex={0}
                 libDef={{ id: 'ex_treadmill', name: 'Tapis Roulant', trackingType: 'cardio' }}
