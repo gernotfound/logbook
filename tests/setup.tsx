@@ -278,7 +278,11 @@ HTMLCanvasElement.prototype.getContext = vi.fn().mockImplementation(function (th
 
 // Mock idb-keyval
 export const idbStore: Record<string, any> = {};
+// idb-keyval.update uses an IndexedDB readwrite transaction, not an async
+// read-then-write. Concurrent callbacks for one key must observe prior commits.
+const idbUpdateQueues = new Map<string, Promise<void>>();
 beforeEach(() => {
+  idbUpdateQueues.clear();
   for (const key of Object.keys(idbStore)) delete idbStore[key];
   localStorageMock.clear();
   sessionStorageMock.clear();
@@ -289,7 +293,24 @@ vi.mock('idb-keyval', () => ({
     idbStore[key] = value;
   }),
   update: vi.fn(async (key: string, updater: (value: any) => any) => {
-    idbStore[key] = await updater(idbStore[key]);
+    const previous = idbUpdateQueues.get(key) ?? Promise.resolve();
+    let release!: () => void;
+    const held = new Promise<void>(resolve => { release = resolve; });
+    idbUpdateQueues.set(key, held);
+    await previous;
+    try {
+      const next = updater(idbStore[key]);
+      // A transaction updater is synchronous; storing a Promise would fail
+      // structured cloning in IndexedDB, not await and commit its resolution.
+      if (next !== null && (typeof next === 'object' || typeof next === 'function')
+        && typeof next.then === 'function') {
+        throw new DOMException('Asynchronous IndexedDB update result', 'DataCloneError');
+      }
+      idbStore[key] = next;
+    } finally {
+      release();
+      if (idbUpdateQueues.get(key) === held) idbUpdateQueues.delete(key);
+    }
   }),
   del: vi.fn(async (key: string) => {
     delete idbStore[key];
