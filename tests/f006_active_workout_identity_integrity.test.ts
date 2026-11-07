@@ -112,6 +112,13 @@ describe('F-006 active workout persisted business identity', () => {
         expect(() => getInitialLocalWorkout(owner)).toThrow(DeviceWorkoutCorruptError);
         expect(localStorage.getItem(sealedKey)).toBe(invalidCiphertext);
 
+        // A routine writer must not silently replace the malformed ciphertext.
+        expect(() => persistPlainWorkoutSnapshot(validWorkout, owner)).toThrow('identificativi non validi');
+        expect(localStorage.getItem(sealedKey)).toBe(invalidCiphertext);
+
+        // Explicitly retire only this test's quarantined fixture before seeding
+        // a separate valid workout lifecycle; normal boot never does this.
+        writeDeviceValue('workout', null, owner);
         persistPlainWorkoutSnapshot(validWorkout, owner);
         expect(getInitialLocalWorkout(owner)).toMatchObject(validWorkout);
         expect(localStorage.getItem(sealedKey)).toMatch(/^tlb-sealed:v1:/);
