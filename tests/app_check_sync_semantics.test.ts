@@ -105,6 +105,23 @@ describe('Audit 21 App Check and rejected-sync semantics', () => {
         expect(classifySyncFailure(inheritedCause).status).toBe('failed');
     });
 
+    it.each([
+        ['permission denial', Object.assign(new Error('Denied'), { code: 'permission-denied' })],
+        ['permanent capability failure', new AppCheckLimitedUseTokenError(
+            Object.assign(new Error('Provider unsupported'), { code: 'appcheck/provider-unavailable' }),
+        )],
+        ['unknown failure', new Error('Unknown remote outcome')],
+    ])('fails closed when a transport wrapper hides an uninspected %s', (_, terminal) => {
+        let cause: Error = terminal;
+        for (let depth = 0; depth < 12; depth++) cause = new Error('Intermediate wrapper', { cause });
+        const error = Object.assign(new Error('Transport wrapper', { cause }), { code: 'unavailable' });
+
+        expect(classifySyncFailure(error)).toEqual({ ok: false, status: 'failed', error });
+        expect(classifySyncFailure(error, { retryable: false }).status).toBe('failed');
+        // This override belongs to callers which have independently re-read the retained batch.
+        expect(classifySyncFailure(error, { retryable: true }).status).toBe('local-pending');
+    });
+
     it('bounds cyclic error causes and fails closed on unknown failures', () => {
         const cyclic: { cause?: unknown } = {};
         cyclic.cause = cyclic;
