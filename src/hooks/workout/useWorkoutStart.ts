@@ -71,8 +71,27 @@ export function useWorkoutStart({
         const currentWorkout = useAppStore.getState().localWorkout;
         if (!currentWorkout || currentWorkout.isEditingHistory) return false;
         const session = captureSession();
-        if (pendingStartsByOwner.has(session.owner)) return false;
-        if (currentWorkout.globalStartTime) return true;
+        if (pendingStartsByOwner.has(session.owner) || useAppStore.getState().localPersistenceBlocked) return false;
+        if (currentWorkout.globalStartTime) {
+            try {
+                const durable = await readLocal(session.owner);
+                if (!isCurrentSession(session) || useAppStore.getState().localPersistenceBlocked
+                    || useAppStore.getState().localWorkout?.id !== currentWorkout.id
+                    || useAppStore.getState().localWorkout?.globalStartTime !== currentWorkout.globalStartTime) return false;
+                if (durable?.data.activeWorkout?.id === currentWorkout.id
+                    && durable.data.activeWorkout.globalStartTime === currentWorkout.globalStartTime) return true;
+            } catch (error) {
+                console.error('Verifica avvio workout già presente non riuscita:', error);
+                if (!isCurrentSession(session)) return false;
+            }
+            if (!isCurrentSession(session)) return false;
+            useAppStore.setState({
+                localPersistenceBlocked: true, syncHealth: 'failed', syncPresentation: 'normal',
+                saveError: 'Avvio workout visibile ma non confermato nell’archivio locale. Riapri TheLogBook per il recupero.',
+            });
+            await showAlert('Impossibile confermare il salvataggio dell’avvio. Riapri TheLogBook per il recupero.');
+            return false;
+        }
         pendingStartsByOwner.add(session.owner);
 
         try {
