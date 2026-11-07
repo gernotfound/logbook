@@ -203,7 +203,7 @@ const SettingsView = ({ onClose }: SettingsViewProps) => {
             )}
 
             {activeSection === 'account' && (
-                <AccountSettingsTab pendingAccountDeletion={pendingAccountDeletion} isGuest={isGuest} deletingAccount={deletingAccount} onDeleteAccount={handleDeleteAccount} />
+                <AccountSettingsTab pendingAccountDeletion={pendingAccountDeletion} deletingAccount={deletingAccount} onDeleteAccount={handleDeleteAccount} />
             )}
 
             {activeSection === 'privacy' && (
