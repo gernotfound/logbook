@@ -109,6 +109,7 @@ describe('Challenger 2: Zustand Fine-Grained Selectors & Background Render Isola
                         globalStartTime: 1723810000000,
                         exercises: [
                             {
+                                id: 'se_bench_live',
                                 exId: 'ex_bench',
                                 sessionNote: `Note keystroke ${i}`,
                                 sets: [
@@ -204,6 +205,7 @@ describe('Challenger 2: Zustand Fine-Grained Selectors & Background Render Isola
                         date: '2026-08-16',
                         exercises: [
                             {
+                                id: 'se_squat_live',
                                 exId: 'squat',
                                 sessionNote: `Typing set ${i}`,
                                 sets: [{ id: `s_${i}`, kg: '120', reps: '5' }]
@@ -324,7 +326,7 @@ describe('Challenger 2: Zustand Fine-Grained Selectors & Background Render Isola
                     useAppStore.getState().setLocalWorkout({
                         id: 'w1',
                         routineName: 'Upper Body',
-                        exercises: [{ exId: 'e1', sessionNote: `Char ${i}`, sets: [] }]
+                        exercises: [{ id: 'se_background_live', exId: 'e1', sessionNote: `Char ${i}`, sets: [] }]
                     });
                 });
             }
