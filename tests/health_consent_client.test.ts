@@ -786,6 +786,8 @@ describe('withdrawal remains bound to the verified Auth generation', () => {
     expect(await refreshHealthConsent(actor)).toBe('active');
 
     (auth as { currentUser: unknown }).currentUser = user('other-' + crypto.randomUUID());
+    // Account A's in-memory approval is not write permission for A under B.
+    expect(isHealthConsentWritable('user:' + uid)).toBe(false);
     invalidateSession();
     await expect(withdrawHealthConsent(actor)).rejects.toThrow('Sessione cambiata');
     expect(localStorage.getItem(key(uid))).toBeNull();
