@@ -35,7 +35,10 @@ export function useWorkoutFinalization({
         const expectedUid = auth.currentUser?.uid;
         const expectedId = useAppStore.getState().localWorkout?.id;
         try {
+        const session = captureSession();
         if (!expectedId || (confirmEnd && !(await showConfirm("Terminare l'allenamento?")))) return null;
+        // A-B-A authentication must not let an earlier completion act on a new session.
+        if (!isCurrentSession(session)) return null;
         try {
             draftRegistry.flushAll({ strict: true });
         } catch {
@@ -51,7 +54,8 @@ export function useWorkoutFinalization({
             return null;
         }
         const currentWorkout = useAppStore.getState().localWorkout;
-        if (!currentWorkout || currentWorkout.id !== expectedId || auth.currentUser?.uid !== expectedUid) return null;
+        if (!isCurrentSession(session) || !currentWorkout || currentWorkout.id !== expectedId
+            || auth.currentUser?.uid !== expectedUid) return null;
 
         const endTime = requestedEndTime ?? new Date().getTime();
         const workoutForCompletion = completionDraft
@@ -73,7 +77,8 @@ export function useWorkoutFinalization({
                 activePains: finalActivePains,
             });
             if (!result.ok && result.status !== 'local-pending') return null;
-            if (auth.currentUser?.uid !== expectedUid || useAppStore.getState().localWorkout?.id !== expectedId) return null;
+            if (!isCurrentSession(session) || auth.currentUser?.uid !== expectedUid
+                || useAppStore.getState().localWorkout?.id !== expectedId) return null;
             // IndexedDB already contains the completed workout. If device cleanup
             // fails, startup reconciles the stale snapshot against durable history.
             try {
