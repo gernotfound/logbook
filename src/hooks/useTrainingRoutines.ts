@@ -171,15 +171,20 @@ export function useTrainingRoutines() {
                 ]);
             }
 
+            if (!isCurrentSession(draftSession)) return false;
+            const cleared = clearRoutineDraft();
+            if (!isCurrentSession(draftSession)) return false;
             setRoutineName('');
             setRoutineExercises([]);
             setEditingRoutineId(null);
-            clearRoutineDraft();
+            if (!cleared) {
+                await showAlert('Scheda salvata, ma la bozza cifrata non è stata ripulita. Verifica il recupero locale.');
+            }
             return true;
         } catch {
             // A rejected business commit does not mean the encrypted recovery draft failed.
             // Preserve it for retry without fencing unrelated local persistence.
-            await showAlert("Errore durante il salvataggio della scheda.");
+            if (isCurrentSession(draftSession)) await showAlert("Errore durante il salvataggio della scheda.");
             return false;
         }
     };
