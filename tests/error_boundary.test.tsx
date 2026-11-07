@@ -185,6 +185,56 @@ describe('R2: ErrorBoundary & Dialog Hardening Suite', () => {
 
         consoleErrorSpy.mockRestore();
     });
+    it('runs only one local reset while confirmation or purge is still pending', async () => {
+        const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+        let approve!: (approved: boolean) => void;
+        const confirm = vi.mocked(useDialogStore.getState().showConfirm).mockImplementationOnce(
+            () => new Promise(resolve => { approve = resolve; }),
+        );
+        let finishPurge!: () => void;
+        const purge = vi.mocked(DB.purgeAllLocalUserData).mockImplementationOnce(
+            () => new Promise<void>(resolve => { finishPurge = resolve; }),
+        );
+
+        render(<ErrorBoundary><ProblemChild shouldThrow={true} /></ErrorBoundary>);
+        const reset = screen.getByRole('button', { name: /Azzera dati locali/i });
+        fireEvent.click(reset);
+        fireEvent.click(reset);
+        expect(confirm).toHaveBeenCalledTimes(1);
+        expect(purge).not.toHaveBeenCalled();
+
+        await act(async () => { approve(true); });
+        expect(purge).toHaveBeenCalledExactlyOnceWith('user:test-user-id');
+        fireEvent.click(reset);
+        expect(confirm).toHaveBeenCalledTimes(1);
+        expect(purge).toHaveBeenCalledTimes(1);
+        expect(window.location.reload).not.toHaveBeenCalled();
+
+        await act(async () => { finishPurge(); });
+        expect(window.location.reload).toHaveBeenCalledTimes(1);
+        log.mockRestore();
+    });
+
+    it('allows retrying local reset after a rejected purge', async () => {
+        const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+        const confirm = vi.mocked(useDialogStore.getState().showConfirm).mockResolvedValue(true);
+        const purge = vi.mocked(DB.purgeAllLocalUserData)
+            .mockRejectedValueOnce(new Error('IndexedDB cleanup unavailable'))
+            .mockResolvedValueOnce(undefined);
+
+        render(<ErrorBoundary><ProblemChild shouldThrow={true} /></ErrorBoundary>);
+        const reset = screen.getByRole('button', { name: /Azzera dati locali/i });
+        await act(async () => { fireEvent.click(reset); });
+        expect(purge).toHaveBeenCalledTimes(1);
+        expect(window.location.reload).not.toHaveBeenCalled();
+
+        await act(async () => { fireEvent.click(reset); });
+        expect(confirm).toHaveBeenCalledTimes(2);
+        expect(purge).toHaveBeenCalledTimes(2);
+        expect(window.location.reload).toHaveBeenCalledTimes(1);
+        log.mockRestore();
+    });
+
     it('revokes the guest generation before a failed error-recovery purge', async () => {
         const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
         vi.mocked(useDialogStore.getState().showConfirm).mockResolvedValue(true);
