@@ -69,8 +69,10 @@ export async function releaseAccountDataKey(uid: string, purpose: 'sync' | 'righ
       transaction.get(keyRef), transaction.get(consentRef), transaction.get(deletionRef),
       transaction.get(erasureRef),
     ]);
-    if (!trustedConsent(consent.data(), uid, purpose) || deletion.exists
+    const consentData = consent.data();
+    if (!trustedConsent(consentData, uid, purpose) || deletion.exists
         || (erasure.exists && erasure.data()?.status !== 'complete')) throw new AccountKeyUnavailableError();
+    const consentRevision = consentData!.revision as number;
     if (stored.exists) {
       const data = stored.data();
       if (!data || data.uid !== uid || data.format !== 'thelogbook-wrapped-account-key'
@@ -79,7 +81,7 @@ export async function releaseAccountDataKey(uid: string, purpose: 'sync' | 'righ
           || typeof data.tag !== 'string') {
         throw new AccountKeyUnavailableError();
       }
-      return data;
+      return { wrapped: data, consentRevision };
     }
     // Rights-only access NEVER provisions keys: withdrawal may export existing
     // ciphertext, but cannot create fresh cloud storage or re-enable sync.
@@ -98,21 +100,25 @@ export async function releaseAccountDataKey(uid: string, purpose: 'sync' | 'righ
     }
     if (!wrappedCandidate) throw new AccountKeyUnavailableError();
     transaction.create(keyRef, wrappedCandidate);
-    return wrappedCandidate;
+    return { wrapped: wrappedCandidate, consentRevision };
   });
 
-  const key = await unwrapAccountDataKey(uid, selected);
+  const key = await unwrapAccountDataKey(uid, selected.wrapped);
   try {
     // An admin action can revoke an account after the transaction finishes.
-    // Recheck immediately before releasing bytes; the browser must still
-    // enforce session+consent fences on subsequent cloud operations.
+    // Recheck the exact consent epoch selected by the transaction before
+    // releasing bytes. Active -> withdrawn -> active must not authorize an
+    // ADK selected for the old generation; clients also fence later use.
     const [consent, deletion, erasure] = await Promise.all([
       readHealthConsentState(uid),
       deletionRef.get(),
       erasureRef.get(),
     ]);
-    if (consent.status !== (purpose === 'sync' ? 'active' : 'withdrawn') || deletion.exists
-        || (erasure.exists && erasure.data()?.status !== 'complete')) throw new AccountKeyUnavailableError();
+    if (consent.status !== (purpose === 'sync' ? 'active' : 'withdrawn')
+        || consent.revision !== selected.consentRevision
+        || deletion.exists || (erasure.exists && erasure.data()?.status !== 'complete')) {
+      throw new AccountKeyUnavailableError();
+    }
     return key;
   } catch {
     key.fill(0);
