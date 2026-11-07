@@ -49,7 +49,7 @@ for (const theme of ['light', 'dark'] as const) {
     await page.locator('#biometry-height').fill('183');
     await page.getByRole('button', { name: 'Salva profilo biometrico' }).click();
     await expect(page.locator('#biometry-height')).toHaveValue('183');
-    expect(await guestArchiveEntries(page)).toBe(3);
+    await expect.poll(() => guestArchiveEntries(page)).toBe(3);
 
     const secondTab = await context.newPage();
     await secondTab.goto('/');
