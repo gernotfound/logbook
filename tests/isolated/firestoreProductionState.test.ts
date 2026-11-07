@@ -146,7 +146,10 @@ describe('Firestore Production field exemption convergence', () => {
     }], [])).toMatchObject({
       found: true,
       explicit: false,
-      indexesDisabled: true,
+      indexesDisabled: false,
+      indexesMatch: false,
+      indexesReady: false,
+      matchesDesired: false,
       pending: false,
     });
   });
