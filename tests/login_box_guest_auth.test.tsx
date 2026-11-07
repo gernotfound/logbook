@@ -139,6 +139,46 @@ describe('LoginBox guest Google authentication', () => {
         await waitFor(() => expect(submit.hasAttribute('disabled')).toBe(false));
     });
 
+    it('does not start Google or guest sign-in while an email login is pending', async () => {
+        authState.isGuest = false;
+        let finish!: () => void;
+        authMocks.loginWithEmail.mockImplementationOnce(() => new Promise<void>(resolve => { finish = resolve; }));
+        render(<LoginBox />);
+        fireEvent.change(screen.getByRole('textbox', { name: 'Email' }), { target: { value: 'existing@example.com' } });
+        fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'ExistingPassword1!' } });
+        fireEvent.click(screen.getAllByRole('button', { name: 'Accedi' }).at(-1)!);
+
+        const google = screen.getByRole('button', { name: 'Accedi con Google' }) as HTMLButtonElement;
+        const guest = screen.getByRole('button', { name: /Continua senza account/i }) as HTMLButtonElement;
+        expect(google.disabled).toBe(true);
+        expect(guest.disabled).toBe(true);
+        fireEvent.click(google);
+        fireEvent.click(guest);
+        expect(authMocks.login).not.toHaveBeenCalled();
+        expect(authMocks.loginAsGuest).not.toHaveBeenCalled();
+
+        finish();
+        await waitFor(() => expect(google.disabled).toBe(false));
+        fireEvent.click(google);
+        await waitFor(() => expect(authMocks.login).toHaveBeenCalledTimes(1));
+    });
+
+    it('does not start email sign-in while a Google login is pending', async () => {
+        authState.isGuest = false;
+        let finish!: () => void;
+        authMocks.login.mockImplementationOnce(() => new Promise<void>(resolve => { finish = resolve; }));
+        render(<LoginBox />);
+        const google = screen.getByRole('button', { name: 'Accedi con Google' }) as HTMLButtonElement;
+        fireEvent.click(google);
+        const submit = screen.getAllByRole('button', { name: 'Accedi' }).at(-1)! as HTMLButtonElement;
+        expect(submit.disabled).toBe(true);
+        fireEvent.submit(submit.closest('form')!);
+        expect(authMocks.loginWithEmail).not.toHaveBeenCalled();
+
+        finish();
+        await waitFor(() => expect(submit.disabled).toBe(false));
+    });
+
     it('sanitizes email sign-in failure without exposing Firebase provider details', async () => {
         authState.isGuest = false;
         authMocks.loginWithEmail.mockRejectedValueOnce(
