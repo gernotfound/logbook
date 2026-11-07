@@ -163,6 +163,34 @@ describe('LoginBox guest Google authentication', () => {
         await waitFor(() => expect(authMocks.login).toHaveBeenCalledTimes(1));
     });
 
+    it('freezes guest transfer choice and credentials while Google account linking is pending', async () => {
+        authState.isGuest = true;
+        let finish!: () => void;
+        authMocks.linkGoogleAccount.mockImplementationOnce(() => new Promise<void>(resolve => { finish = resolve; }));
+        render(<LoginBox onCancel={() => {}} />);
+
+        fireEvent.click(screen.getByLabelText('Non trasferire i progressi'));
+        const merge = screen.getByLabelText('Trasferisci i progressi nell\'account') as HTMLInputElement;
+        const skip = screen.getByLabelText('Non trasferire i progressi') as HTMLInputElement;
+        const email = screen.getByRole('textbox', { name: 'Email' }) as HTMLInputElement;
+        const password = screen.getByLabelText('Password') as HTMLInputElement;
+        const reveal = screen.getByRole('button', { name: 'Mostra password' }) as HTMLButtonElement;
+        expect(skip.checked).toBe(true);
+
+        fireEvent.click(screen.getByRole('button', { name: 'Accedi con Google' }));
+        expect(authMocks.linkGoogleAccount).toHaveBeenCalledExactlyOnceWith('skip');
+        expect(merge.disabled).toBe(true);
+        expect(skip.disabled).toBe(true);
+        expect(email.disabled).toBe(true);
+        expect(password.disabled).toBe(true);
+        expect(reveal.disabled).toBe(true);
+
+        finish();
+        await waitFor(() => expect(skip.disabled).toBe(false));
+        expect(email.disabled).toBe(false);
+        expect(password.disabled).toBe(false);
+    });
+
     it('does not start email sign-in while a Google login is pending', async () => {
         authState.isGuest = false;
         let finish!: () => void;

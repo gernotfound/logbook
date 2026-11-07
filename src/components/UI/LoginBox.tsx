@@ -177,11 +177,11 @@ export const LoginBox: React.FC<LoginBoxProps> = ({ onCancel }) => {
                 <div className="ui-login-box-4" style={{ marginBottom: "1.25rem", textAlign: "left", padding: "0.9375rem" }}>
                     <p className="ui-login-box-5" style={{ marginBottom: "0.625rem" }}>Hai dei dati salvati in locale. Cosa vuoi fare?</p>
                     <label style={{ display: "flex", alignItems: "center", gap: "0.625rem", marginBottom: "0.625rem", cursor: "pointer" }}>
-                        <input type="radio" name="migration_policy" value="merge" checked={migrationPolicy === 'merge'} onChange={() => setMigrationPolicy('merge')} />
+                        <input type="radio" name="migration_policy" value="merge" checked={migrationPolicy === 'merge'} disabled={loading} onChange={() => setMigrationPolicy('merge')} />
                         <span className="ui-login-box-6" >Trasferisci i progressi nell'account</span>
                     </label>
                     <label style={{ display: "flex", alignItems: "center", gap: "0.625rem", cursor: "pointer" }}>
-                        <input type="radio" name="migration_policy" value="skip" checked={migrationPolicy === 'skip'} onChange={() => setMigrationPolicy('skip')} />
+                        <input type="radio" name="migration_policy" value="skip" checked={migrationPolicy === 'skip'} disabled={loading} onChange={() => setMigrationPolicy('skip')} />
                         <span className="ui-login-box-7" >Non trasferire i progressi</span>
                     </label>
                 </div>
@@ -194,6 +194,7 @@ export const LoginBox: React.FC<LoginBoxProps> = ({ onCancel }) => {
                         id={emailId}
                         ref={emailInputRef}
                         type="email"
+                        disabled={loading}
                         aria-label="Email"
                         placeholder="La tua email"
                         value={email}
@@ -212,6 +213,7 @@ export const LoginBox: React.FC<LoginBoxProps> = ({ onCancel }) => {
                             <input
                                 id={passwordId}
                                 type={showPassword ? "text" : "password"}
+                                disabled={loading}
                                 aria-label="Password"
                                 placeholder={mode === 'register' ? 'Scegli una password sicura' : 'Password'}
                                 value={password}
@@ -225,6 +227,7 @@ export const LoginBox: React.FC<LoginBoxProps> = ({ onCancel }) => {
                             <button
                                 type="button"
                                 aria-label={showPassword ? 'Nascondi password' : 'Mostra password'}
+                                disabled={loading}
                                 onClick={() => setShowPassword(!showPassword)}
                                 className="ui-login-box-10" style={{ position: "absolute", right: "0.625rem", top: "50%", transform: "translateY(-50%)", cursor: "pointer", display: "flex", alignItems: "center" }}
                             >
@@ -250,6 +253,7 @@ export const LoginBox: React.FC<LoginBoxProps> = ({ onCancel }) => {
                         <input
                             id={confirmPasswordId}
                             type={showPassword ? "text" : "password"}
+                            disabled={loading}
                             aria-label="Conferma password"
                             placeholder="Conferma Password"
                             value={confirmPassword}
