@@ -9,7 +9,6 @@ import { Logic } from '../../lib/logic';
 import type { WorkoutSession, Exercise } from '../../types';
 import { useAppStore } from '../../store/useAppStore';
 import { useDialogStore } from '../../store/useDialogStore';
-import { mapFirebaseErrorCode } from '../../lib/errorHandler';
 
 interface WorkoutReportModalProps {
     workout: WorkoutSession;
@@ -97,11 +96,10 @@ const WorkoutReportModal: React.FC<WorkoutReportModalProps> = ({ workout, histor
             await dispatchDurableOperation(dispatchDomainOperation, { type: 'routine.upsert', routine: newRoutine });
             
             setIsSavingAsRoutine(false);
-        } catch (err: unknown) {
-            const formatted = mapFirebaseErrorCode(err);
-            // A failed durable dispatch is never proof of a local save, even if
-            // its nested Firebase error looks like a retryable network outage.
-            void showAlert(`Salvataggio della scheda non confermato (${formatted.title.toLowerCase()}). La scheda resta nel modulo: riprova.`);
+        } catch {
+            // The durable boundary already accepts verified local-pending results.
+            // An error message cannot turn a rejected/unsafe save into confirmation.
+            void showAlert("Errore durante il salvataggio della scheda.");
         } finally {
             setIsSavingRoutineLoading(false);
         }
