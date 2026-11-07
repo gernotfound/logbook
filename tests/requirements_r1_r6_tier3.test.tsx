@@ -1,6 +1,4 @@
-import React from 'react';
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { useAppStore } from '../src/store/useAppStore';
+import { describe, it, expect } from 'vitest';
 import type { Food, NutritionDay } from '../src/types';
 import {
     calculateSetVolumeContract,
@@ -10,17 +8,6 @@ import {
 } from './requirements_r1_r6_contracts';
 
 describe('LogBook 4-Tier Automated Test Suite (Requirements R1 - R6)', () => {
-    beforeEach(() => {
-        window.localStorage.clear();
-        useAppStore.getState().resetStore();
-        vi.clearAllMocks();
-    });
-
-    afterEach(() => {
-        window.localStorage.clear();
-        useAppStore.getState().resetStore();
-        vi.restoreAllMocks();
-    });
 
     /* =========================================================================
      * TIER 3: PURE-FUNCTION COMPOSITIONS (not end-to-end persistence tests)
