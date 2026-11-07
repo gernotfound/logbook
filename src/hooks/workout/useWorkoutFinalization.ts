@@ -128,7 +128,7 @@ export function useWorkoutFinalization({
             // This draft belongs exclusively to the deleted session, not a new
             // workout. Failed best-effort cleanup must not undo a durable deletion.
             try {
-                writeWorkoutRecoveryDraft('draft:post-session:' + deletedWorkoutId, expectedSession.owner, null);
+                writeWorkoutRecoveryDraft('draft:post-session:' + deletedWorkoutId, expectedSession.owner, null, expectedSession.consentGeneration);
             } catch (error) {
                 console.warn('Impossibile pulire la bozza finale di una sessione eliminata:', error);
                 useAppStore.getState().setSaveError('Sessione eliminata, ma una copia locale della valutazione finale non è stata rimossa.');

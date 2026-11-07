@@ -105,13 +105,13 @@ export default function PreSessionCheckIn({ workoutId, routineName, date, onStar
         if (!dirtyRef.current) return;
         const activeSession = session.current;
         if (!activeSession || !isCurrentSession(activeSession)) throw new Error('Sessione cambiata prima del salvataggio del check-in.');
-        writeWorkoutRecoveryDraft(recoveryName.current, activeSession.owner, valuesRef.current);
+        writeWorkoutRecoveryDraft(recoveryName.current, activeSession.owner, valuesRef.current, activeSession.consentGeneration);
     }, []);
 
     const clearDraft = useCallback(() => {
         const activeSession = session.current;
         if (!activeSession || !isCurrentSession(activeSession)) throw new Error('Sessione cambiata prima della pulizia del check-in.');
-        writeWorkoutRecoveryDraft(recoveryName.current, activeSession.owner, null);
+        writeWorkoutRecoveryDraft(recoveryName.current, activeSession.owner, null, activeSession.consentGeneration);
         dirtyRef.current = false;
     }, []);
 
@@ -130,7 +130,7 @@ export default function PreSessionCheckIn({ workoutId, routineName, date, onStar
         try {
             const activeSession = session.current;
             if (!activeSession || !isCurrentSession(activeSession)) throw new Error('Sessione cambiata prima del salvataggio del check-in.');
-            writeWorkoutRecoveryDraft(recoveryName.current, activeSession.owner, next);
+            writeWorkoutRecoveryDraft(recoveryName.current, activeSession.owner, next, activeSession.consentGeneration);
         } catch (error) {
             blockReadinessPersistence(error);
             return;
