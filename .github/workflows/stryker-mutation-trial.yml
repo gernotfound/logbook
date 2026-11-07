@@ -36,6 +36,7 @@ jobs:
           - pending-sequences
           - replica-checkpoint
           - cloud-integrity
+          - sync-failure
     env:
       EXPECTED_SHA: ${{ github.sha }}
       STRYKER_AREA: ${{ matrix.area }}
