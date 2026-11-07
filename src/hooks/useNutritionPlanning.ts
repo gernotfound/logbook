@@ -109,6 +109,7 @@ export function useNutritionPlanning() {
 
     const updateDraft = (update: (value: NutritionPlanningDraft) => NutritionPlanningDraft) => {
         const session = captureSession();
+        if (useAppStore.getState().dataOwner !== session.owner) return;
         draftRevision.current++;
         setSaveStatus('unsaved');
         // Functional updates compose simultaneous field edits without reviving an old Auth draft.
