@@ -75,6 +75,11 @@ export const trialCases = {
     "testFiles": ["tests/isolated/localReplicaCheckpoint.test.ts"],
     "runner": "isolated"
   },
+  "cloud-integrity": {
+    "mutate": ["src/lib/sync/localCloudIntegrity.ts"],
+    "testFiles": ["tests/isolated/localCloudIntegrity.test.ts"],
+    "runner": "isolated"
+  },
   "pending-sequences": {
     "mutate": ["src/lib/sync/localPendingSequences.ts"],
     "testFiles": ["tests/isolated/localPendingSequences.test.ts"],

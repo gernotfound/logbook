@@ -3,14 +3,13 @@ import { clear, del, get, set } from 'idb-keyval';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { UserDataSchema } from '../../src/lib/schema';
 import { validateLocalEnvelope } from '../../src/lib/sync/localEnvelopeValidation';
-import { fenceCloudIntegrity } from '../../src/lib/sync/localCloudIntegrity';
 import { createAndMigrateVault } from '../../src/lib/sync/secureArchiveMigration';
 import { lockAllVaults } from '../../src/lib/sync/secureArchiveSession';
 import { getArchiveRecord, updateArchiveRecord } from '../../src/lib/sync/secureArchiveRepository';
 import { LocalCiphertextError } from '../../src/lib/sync/secureArchiveCipher';
 import { activateGuestSession, GUEST_SESSION_KEY } from '../../src/lib/sync/session';
 import type { UserData } from '../../src/types';
-import { adoptReplicaCheckpoint, markReplicaCheckpointRequired, markCloudIntegrityBlocked, completeCloudIntegrityRecovery, hydrateLocal, commitLocal, commitDomainOperations, initializeLocal, readLocal, acknowledgeThrough, advanceLocalConsentRevisionIfClean, StaleLocalRevisionError } from '../../src/lib/sync/localRepository';
+import { adoptReplicaCheckpoint, hydrateLocal, commitLocal, commitDomainOperations, initializeLocal, readLocal, acknowledgeThrough, advanceLocalConsentRevisionIfClean, StaleLocalRevisionError } from '../../src/lib/sync/localRepository';
 import {
     CURRENT_DATA_SCHEMA,
     CURRENT_LOCAL_ENVELOPE,
@@ -81,56 +80,6 @@ describe('durable owner-scoped journal', () => {
         await expect(adoptReplicaCheckpoint(owner, { identity, baseSeq: 0 },
             { clock: {}, syncMetaByDocument: {} }, () => false))
             .rejects.toThrow('Checkpoint replica invalidato dal cambio sessione');
-        expect(await get('logbook:v2:' + owner)).toBe(before);
-        expect(await readLocal(owner)).toEqual(durable);
-    });
-
-    it('rejects stale cloud integrity fencing inside the encrypted IndexedDB update', async () => {
-        await prepareOwnerVault('user:a');
-        await initializeLocal('a', data(170));
-        await commitLocal('a', data(171), data(170));
-        const before = await get('logbook:v2:user:a');
-        const durable = await readLocal('a');
-
-        await expect(markCloudIntegrityBlocked('a', () => false))
-            .rejects.toThrow('Barriera cloud invalidata dal cambio sessione');
-        expect(await get('logbook:v2:user:a')).toBe(before);
-        expect(await readLocal('a')).toEqual(durable);
-
-        await markCloudIntegrityBlocked('a', () => true);
-        expect((await readLocal('a'))?.cloudIntegrityFence).toBeTruthy();
-    });
-
-    it('rejects stale replica checkpoint retirement inside the encrypted IndexedDB update', async () => {
-        await prepareOwnerVault('user:a');
-        await initializeLocal('a', data(170));
-        const now = Date.now();
-        const identity = { slot: 's00', replicaId: 'replica-a', generation: 1, checkpointAtMs: now, leaseUntilMs: now + 31_104_000_000 };
-        await adoptReplicaCheckpoint('a', { identity, baseSeq: 0 }, { clock: {}, syncMetaByDocument: {} });
-        await commitLocal('a', data(171), data(170));
-        const before = await get('logbook:v2:user:a');
-        const durable = await readLocal('a');
-
-        await expect(markReplicaCheckpointRequired('a', identity, () => false))
-            .rejects.toThrow('Checkpoint locale invalidato dal cambio sessione');
-        expect(await get('logbook:v2:user:a')).toBe(before);
-        expect(await readLocal('a')).toEqual(durable);
-
-        await markReplicaCheckpointRequired('a', identity, () => true);
-        expect((await readLocal('a'))?.replica?.leaseUntilMs).toBe(1);
-    });
-
-    it('rejects a stale integrity recovery, preserving its durable fence and pending journal', async () => {
-        const owner = 'user:a';
-        await prepareOwnerVault(owner);
-        await initializeLocal(owner, data(170));
-        await commitLocal(owner, data(171), data(170));
-        await markCloudIntegrityBlocked(owner);
-        const durable = (await readLocal(owner))!;
-        const before = await get('logbook:v2:' + owner);
-
-        await expect(completeCloudIntegrityRecovery(owner, durable.cloudIntegrityFence ?? null,
-            true, () => false)).rejects.toThrow('Recupero cloud invalidato dal cambio sessione');
         expect(await get('logbook:v2:' + owner)).toBe(before);
         expect(await readLocal(owner)).toEqual(durable);
     });
@@ -556,23 +505,6 @@ describe('durable owner-scoped journal', () => {
         expect(await get('logbook:v2:user:a')).toBe(sealed);
     });
 
-    it('builds a cloud-integrity fence without mutating the source envelope or its journal', async () => {
-        await prepareOwnerVault('user:a');
-        const base = data(170);
-        await initializeLocal('a', base);
-        await commitLocal('a', data(171), base);
-        const original = (await readLocal('a'))!;
-        const snapshot = structuredClone(original);
-        const fenced = fenceCloudIntegrity(original);
-
-        expect(fenced).not.toBe(original);
-        expect(fenced.cloudIntegrityFence).toEqual(expect.any(String));
-        expect(fenced.revision).toBe(original.revision + 1);
-        expect(fenced.data).toEqual(original.data);
-        expect(fenced.pending).toEqual(original.pending);
-        expect(original).toEqual(snapshot);
-        expect(await readLocal('a')).toEqual(snapshot);
-    });
 
     it('preserves a pending journal and rejects stale session during consent revision adoption', async () => {
         await prepareOwnerVault('user:a');
@@ -604,53 +536,6 @@ describe('durable owner-scoped journal', () => {
         expect(await readLocal('a')).toEqual(after);
     });
 
-    it('persists cloud-integrity fencing until a verified full checkpoint, retaining pending edits', async () => {
-        await prepareOwnerVault('user:a');
-        const base = data(170);
-        await initializeLocal('a', base);
-        await commitLocal('a', data(171), base);
-        await markCloudIntegrityBlocked('a');
-        const fenced = (await readLocal('a'))!;
-        expect(fenced.cloudIntegrityFence).toEqual(expect.any(String));
-        expect(fenced.pending.length).toBeGreaterThan(0);
-        await expect(completeCloudIntegrityRecovery('a', fenced.cloudIntegrityFence!, false))
-            .rejects.toMatchObject({ code: 'replica-fenced' });
-        const identity = { slot: 's00', replicaId: 'recovery', generation: 1,
-            checkpointAtMs: Date.now(), leaseUntilMs: Date.now() + 360 * 24 * 60 * 60 * 1000 };
-        await adoptReplicaCheckpoint('a', { identity, baseSeq: 0 }, { clock: {}, syncMetaByDocument: {} });
-        await markCloudIntegrityBlocked('a');
-        await expect(completeCloudIntegrityRecovery('a', fenced.cloudIntegrityFence!, true))
-            .rejects.toMatchObject({ code: 'replica-fenced' });
-        const latest = (await readLocal('a'))!;
-        await adoptReplicaCheckpoint('a', { identity, baseSeq: 0 }, { clock: {}, syncMetaByDocument: {} });
-        const recovered = await completeCloudIntegrityRecovery('a', latest.cloudIntegrityFence!, true);
-        expect(recovered.cloudIntegrityFence).toBeUndefined();
-        expect(recovered.pending.length).toBeGreaterThan(0);
-    });
-
-    it('marks only the matching fenced replica as checkpoint-required without dropping its journal', async () => {
-        await prepareOwnerVault('user:a');
-        await initializeLocal('a', data(170));
-        const now = Date.now();
-        const identity = {
-            slot: 's00',
-            replicaId: 'replica-a',
-            generation: 1,
-            checkpointAtMs: now,
-            leaseUntilMs: now + 31_104_000_000,
-        };
-        await adoptReplicaCheckpoint('a', { identity, baseSeq: 0 }, { clock: {}, syncMetaByDocument: {} });
-        await commitLocal('a', data(171), data(170));
-
-        await markReplicaCheckpointRequired('a', { ...identity, generation: 2 });
-        expect((await readLocal('a'))?.replica?.leaseUntilMs).toBe(identity.leaseUntilMs);
-
-        await markReplicaCheckpointRequired('a', identity);
-        const fenced = await readLocal('a');
-        expect(fenced?.replica).toMatchObject({ slot: 's00', replicaId: 'replica-a', generation: 1, checkpointAtMs: 1, leaseUntilMs: 1 });
-        expect(fenced?.pending).toHaveLength(1);
-        expect(fenced?.actorSeq).toBe(1);
-    });
 
     it('keeps pending sequence numbers when renewing the same replica', async () => {
         await prepareOwnerVault('user:a');
