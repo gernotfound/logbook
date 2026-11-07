@@ -250,6 +250,46 @@ it('completes a fenced owner purge when the same owner is still active', async (
     expect(isLocalPurgePending('user:a')).toBe(true);
 });
 
+it('does not sign out a replacement account while a stale logout preflight is pending', async () => {
+    const { logoutAndPurgeAccount } = await import('../../src/lib/db/db_account');
+    const localRepository = await import('../../src/lib/sync/localRepository');
+    // This fixture stores a placeholder IndexedDB value; the logout preflight
+    // is only meant to model an otherwise clean, readable journal.
+    vi.spyOn(localRepository, 'readLocal').mockResolvedValue(undefined);
+    let entered!: () => void;
+    let release!: () => void;
+    const enteredPreflight = new Promise<void>(resolve => { entered = resolve; });
+    const continuePreflight = new Promise<void>(resolve => { release = resolve; });
+    const verifyCurrentDrafts = vi.fn(async () => { entered(); await continuePreflight; });
+    const signOut = vi.fn(async () => { boundary.auth.currentUser = null; });
+
+    const operation = logoutAndPurgeAccount('user:a', signOut, false, verifyCurrentDrafts);
+    await enteredPreflight;
+    boundary.auth.currentUser = { uid: 'b' };
+    release();
+
+    await expect(operation).rejects.toThrow('La pulizia locale resta sospesa');
+    expect(signOut).not.toHaveBeenCalled();
+    expect(await get('logbook:v2:user:a')).toEqual({ original: 'recoverable' });
+    expect(await get('logbook:v2:user:b')).toEqual({ original: 'other owner' });
+    expect(isLocalPurgePending('user:a')).toBe(false);
+});
+
+it('does not invoke a retired owner sign-out callback for a different current account', async () => {
+    const { logoutAndPurgeAccount } = await import('../../src/lib/db/db_account');
+    await purgeCompletedAccountLocalData('user:a');
+    expect(isLocalPurgePending('user:a')).toBe(true);
+
+    boundary.auth.currentUser = { uid: 'b' };
+    const signOut = vi.fn(async () => { boundary.auth.currentUser = null; });
+
+    await expect(logoutAndPurgeAccount('user:a', signOut)).rejects.toThrow('La pulizia locale resta sospesa');
+    expect(signOut).not.toHaveBeenCalled();
+    expect(boundary.auth.currentUser?.uid).toBe('b');
+    expect(await get('logbook:v2:user:b')).toEqual({ original: 'other owner' });
+    expect(isLocalPurgePending('user:a')).toBe(true);
+});
+
 it('drains owner-scoped keys discovered during a previous localStorage purge pass', async () => {
     const owner = 'user:a';
     const first = 'logbook:v2:user:a:sealed:workout';
@@ -457,6 +497,28 @@ it('keeps a server-accepted receipt if the subsequent status check is unavailabl
     expect(isAccountDeletionPending('user:a')).toBe(true);
     expect(await get('logbook:v2:user:a')).toBeDefined();
     expect(boundary.auth.signOut).not.toHaveBeenCalled();
+});
+
+it.each([
+    ['another owner', () => response(202, { uid: 'b', status: 'requested' })],
+    ['missing status', () => response(202, { uid: 'a' })],
+    ['unknown status', () => response(202, { uid: 'a', status: 'unknown' })],
+    ['non-JSON success', () => new Response('<html>ok</html>', { status: 200, headers: { 'content-type': 'text/html' } })],
+    ['JSON null', () => new Response('null', { status: 202, headers: { 'content-type': 'application/json' } })],
+    ['unexpected 204', () => new Response(null, { status: 204 })],
+] as const)('does not acknowledge a deletion POST with %s', async (_caseName, makeResponse) => {
+    boundary.fetch.mockResolvedValueOnce(makeResponse());
+
+    await expect(deleteAccount(context)).rejects.toThrow('Conferma della cancellazione non verificabile');
+
+    const marker = readAccountDeletionMarker('user:a');
+    expect(marker?.receiptToken).toBeTruthy();
+    expect(marker?.serverAcceptedAt).toBeUndefined();
+    expect(await get('logbook:v2:user:a')).toEqual({ original: 'recoverable' });
+    expect(isAccountDeletionPending('user:a')).toBe(true);
+    expect(boundary.fetch).toHaveBeenCalledTimes(1);
+    expect(boundary.auth.signOut).not.toHaveBeenCalled();
+    expect(boundary.reset).not.toHaveBeenCalled();
 });
 
 it('checks recent authentication before App Check or any server request', async () => {

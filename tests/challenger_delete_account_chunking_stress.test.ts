@@ -89,7 +89,7 @@ describe('M7 client boundary: durable server-coordinated account deletion', () =
             const body = JSON.parse(String(init?.body)) as { receiptToken: string };
             expect(body.receiptToken).toMatch(/^[A-Za-z0-9_-]{43}$/);
             expect(readAccountDeletionMarker('user:test-user-id')?.receiptToken).toBe(body.receiptToken);
-            return response(202, { accepted: true, status: 'requested' });
+            return response(202, { uid: 'test-user-id', status: 'requested', attempts: 1 });
         });
         fetchMock.mockResolvedValueOnce(response(200, { uid: 'test-user-id', status: 'complete', attempts: 1 }));
 
@@ -146,7 +146,7 @@ describe('M7 client boundary: durable server-coordinated account deletion', () =
 
     it('fails closed with the mandatory partial-cloud warning when the durable job reports failed', async () => {
         const fetchMock = vi.mocked(fetch);
-        fetchMock.mockResolvedValueOnce(response(202, { accepted: true, status: 'requested' }));
+        fetchMock.mockResolvedValueOnce(response(202, { uid: 'test-user-id', status: 'requested', attempts: 1 }));
         fetchMock.mockResolvedValueOnce(response(200, {
             uid: 'test-user-id',
             status: 'failed',
