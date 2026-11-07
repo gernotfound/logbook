@@ -42,7 +42,7 @@ export function useSettingsTransfers({ currentUser, isGuest }: TransferAuth) {
             await Exporter.exportToCSV(userData.history || [], userData.nutrition || {}, userData.library || []);
         } catch (error) {
             console.error('Errore esportazione CSV:', error);
-            await showAlert('Esportazione CSV non riuscita. Riprova.');
+            if (isCurrentSession(session)) await showAlert('Esportazione CSV non riuscita. Riprova.');
         }
     };
 
@@ -55,12 +55,12 @@ export function useSettingsTransfers({ currentUser, isGuest }: TransferAuth) {
             const { Exporter } = await import('../lib/export');
             if (!isCurrentSession(session)) return;
             const result = await Exporter.exportShareJson(userData, options);
-            if (result) {
+            if (result && isCurrentSession(session)) {
                 await showAlert(`Esportati con successo: ${result.cyclesCount} cicli, ${result.routinesCount} schede, ${result.libraryCount} esercizi.`);
             }
         } catch (error) {
             console.error('Errore esportazione condivisione:', error);
-            await showAlert('Esportazione JSON non riuscita. Riprova.');
+            if (isCurrentSession(session)) await showAlert('Esportazione JSON non riuscita. Riprova.');
         }
     };
 

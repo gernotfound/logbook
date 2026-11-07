@@ -1,4 +1,4 @@
-import { captureSession } from '../src/lib/sync/session';
+import { captureSession, invalidateSession } from '../src/lib/sync/session';
 import { prepareUnlockedTestArchive } from './secureVaultFixture';
 import { act, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -81,4 +81,21 @@ describe('useTrainingHistory deleteWorkout', () => {
         expect(useAppStore.getState().localWorkout?.id).toBe('w-to-delete');
         expect(useAppStore.getState().dispatchDomainOperation).not.toHaveBeenCalled();
     });
+    it('does not show an obsolete deletion failure after an Auth epoch replacement', async () => {
+        let rejectOperation!: (reason: Error) => void;
+        const pendingOperation = new Promise<never>((_, reject) => { rejectOperation = reject; });
+        useAppStore.setState({
+            dispatchDomainOperation: vi.fn(() => pendingOperation) as any,
+        });
+        const showAlert = vi.mocked(useDialogStore.getState().showAlert);
+        const { result } = renderHook(() => useTrainingHistory());
+        let deleting!: Promise<void>;
+        act(() => { deleting = result.current.deleteWorkout('w-to-delete'); });
+        await vi.waitFor(() => expect(useAppStore.getState().dispatchDomainOperation).toHaveBeenCalledOnce());
+        act(() => { invalidateSession(); invalidateSession(); });
+        await act(async () => { rejectOperation(new Error('old session write failed')); await deleting; });
+        expect(showAlert).not.toHaveBeenCalled();
+        expect(useAppStore.getState().userData?.history).toHaveLength(1);
+    });
+
 });
