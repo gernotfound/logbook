@@ -320,6 +320,13 @@ export function calculateEffectiveSetWeight(
     return baseKg + bw + eq;
 }
 
+function observedReps(raw: unknown): number {
+    const text = String(raw ?? '').trim();
+    if (!/^\d+$/.test(text)) return 0;
+    const value = Number(text);
+    return Number.isSafeInteger(value) ? value : 0;
+}
+
 export function calculateSetVolume(
     set: {
         kg?: string | number;
@@ -331,12 +338,12 @@ export function calculateSetVolume(
     userWeight: number = 80
 ): number {
     if (!set) return 0;
-    const reps = parseInt(String(set.reps ?? ''), 10) || 0;
+    const reps = observedReps(set.reps);
     const effectiveWeight = calculateEffectiveSetWeight(set.kg, exercise, userWeight);
     let volume = effectiveWeight * reps;
 
     for (const segment of getSetSegments(set as any)) {
-        const segmentReps = parseInt(String(segment.reps ?? ''), 10) || 0;
+        const segmentReps = observedReps(segment.reps);
         const segmentEffectiveWeight = calculateEffectiveSetWeight(segment.kg, exercise, userWeight);
         volume += segmentEffectiveWeight * segmentReps;
     }
