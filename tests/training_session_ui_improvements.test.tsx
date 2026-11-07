@@ -700,6 +700,7 @@ describe('Training Session UI Improvements Suite (R1, R2, R3)', () => {
                 globalStartTime: Date.now(),
                 exercises: [
                     {
+                        id: 'session-instance-bench',
                         exId: 'ex_bench',
                         sets: [
                             { id: 's1', kg: '80', reps: '10' },
