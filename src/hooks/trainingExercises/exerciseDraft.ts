@@ -1,5 +1,5 @@
 import type { MuscleDef } from '../../lib/constants/muscles';
-import { readWorkoutRecoveryDraft, writeWorkoutRecoveryDraft } from '../../lib/sync/workoutRecoveryDraft';
+import { readWorkoutRecoveryDraft, readWorkoutRecoveryDraftImage, writeWorkoutRecoveryDraft } from '../../lib/sync/workoutRecoveryDraft';
 import { storageOwner } from '../../lib/sync/session';
 
 const EXERCISE_DRAFT_KEY = 'draft_exercise';
@@ -17,12 +17,22 @@ export interface ExerciseDraft {
 }
 
 export function readExerciseDraft(owner = storageOwner()): Record<string, any> | null {
-    // The recovery payload cannot be promoted to a new consent generation merely
-    // because its owner-scoped ciphertext is still readable.
     return readWorkoutRecoveryDraft(EXERCISE_DRAFT_KEY, owner) as Record<string, any> | null;
 }
 
-export function persistExerciseDraft(draft: ExerciseDraft, owner = storageOwner(), expectedConsentGeneration?: string | null): void {
+export function readExerciseDraftImage(owner = storageOwner()): {
+    draft: Record<string, any> | null; raw: string | null;
+} {
+    // The authenticated owner, consent revision and observed document image
+    // must all remain unchanged before a mounted editor may write or commit.
+    const image = readWorkoutRecoveryDraftImage(EXERCISE_DRAFT_KEY, owner);
+    return { draft: image.value as Record<string, any> | null, raw: image.raw };
+}
+
+export function persistExerciseDraft(
+    draft: ExerciseDraft, owner = storageOwner(),
+    expectedConsentGeneration?: string | null, expectedRaw?: string | null,
+): string | null {
     const hasContent = Boolean(
         draft.name.trim() ||
         draft.notes.trim() ||
@@ -34,9 +44,13 @@ export function persistExerciseDraft(draft: ExerciseDraft, owner = storageOwner(
 
     // Propagate persistence failures: swallowing them would permit a user to
     // commit memory-only or obsolete draft values as new business data.
-    writeWorkoutRecoveryDraft(EXERCISE_DRAFT_KEY, owner, hasContent ? draft : null, expectedConsentGeneration);
+    return writeWorkoutRecoveryDraft(EXERCISE_DRAFT_KEY, owner, hasContent ? draft : null,
+        expectedConsentGeneration, expectedRaw);
 }
 
-export function clearExerciseDraft(owner = storageOwner(), expectedConsentGeneration?: string | null): void {
-    writeWorkoutRecoveryDraft(EXERCISE_DRAFT_KEY, owner, null, expectedConsentGeneration);
+export function clearExerciseDraft(
+    owner = storageOwner(), expectedConsentGeneration?: string | null,
+    expectedRaw?: string | null,
+): string | null {
+    return writeWorkoutRecoveryDraft(EXERCISE_DRAFT_KEY, owner, null, expectedConsentGeneration, expectedRaw);
 }

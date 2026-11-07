@@ -140,6 +140,54 @@ describe('restored owner-scoped drafts', () => {
         hook.unmount();
     });
 
+    it.each(['routine', 'exercise'] as const)(
+        'preserves a concurrent %s draft and rejects a stale editor save or cleanup',
+        async kind => {
+            const owner = storageOwner();
+            const name = kind === 'routine' ? 'draft_routine' : 'draft_exercise';
+            const first = kind === 'routine'
+                ? { name: 'Bozza iniziale', exercises: [] }
+                : { name: 'Bozza iniziale', notes: '', trackingType: 'weight_reps',
+                    selectedMuscles: [], secondaryMuscles: [], isBodyweight: false, equipmentWeight: '' };
+            writeWorkoutRecoveryDraft(name, owner, first);
+            const dispatch = vi.fn(async () => ({ ok: true as const, status: 'synced' as const }));
+            const oldDispatch = useAppStore.getState().dispatchDomainOperation;
+            const oldAlert = useDialogStore.getState().showAlert;
+            useAppStore.setState({ dispatchDomainOperation: dispatch });
+            useDialogStore.setState({ showAlert: vi.fn(async () => {}) });
+            const hook = kind === 'routine'
+                ? renderHook(() => useTrainingRoutines())
+                : renderHook(() => useTrainingExercises());
+            try {
+                const competing = kind === 'routine'
+                    ? { name: 'Un’altra scheda', exercises: [] }
+                    : { ...first, name: 'Un’altra scheda' };
+                writeWorkoutRecoveryDraft(name, owner, competing);
+                const intact = localStorage.getItem(protectedDeviceKey(name, owner));
+                expect(intact).toMatch(/^tlb-sealed:v1:/);
+
+                if (kind === 'routine') {
+                    const editor = hook as ReturnType<typeof renderHook<ReturnType<typeof useTrainingRoutines>, unknown>>;
+                    act(() => editor.result.current.setRoutineName('Valore obsoleto'));
+                    await act(async () => { expect(await editor.result.current.handleSave()).toBe(false); });
+                    expect(editor.result.current.handleCancelEdit()).toBe(false);
+                } else {
+                    const editor = hook as ReturnType<typeof renderHook<ReturnType<typeof useTrainingExercises>, unknown>>;
+                    act(() => editor.result.current.setExName('Valore obsoleto'));
+                    await act(async () => { expect(await editor.result.current.handleSaveExercise()).toBe(false); });
+                    expect(editor.result.current.handleCancelEdit()).toBe(false);
+                }
+                expect(dispatch).not.toHaveBeenCalled();
+                expect(localStorage.getItem(protectedDeviceKey(name, owner))).toBe(intact);
+                expect(useAppStore.getState().localPersistenceBlocked).toBe(true);
+            } finally {
+                hook.unmount();
+                useAppStore.setState({ dispatchDomainOperation: oldDispatch });
+                useDialogStore.setState({ showAlert: oldAlert });
+            }
+        },
+    );
+
     it('quarantines old exercise and routine drafts before hydration or mount cleanup', async () => {
         const owner = storageOwner();
         const marker = `logbook:v2:${owner}:health-consent-generation`;

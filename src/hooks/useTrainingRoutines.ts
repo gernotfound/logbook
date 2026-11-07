@@ -1,11 +1,11 @@
 import { MAX_ROUTINE_SEGMENTS, MAX_ROUTINE_SETS, previewRoutineSets } from '../lib/routineSessionLimits';
 import { dispatchDurableOperation } from '../lib/sync/dispatchDurableOperation';
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useAppStore } from '../store/useAppStore';
 import { useDialogStore } from '../store/useDialogStore';
 import { Logic } from '../lib/logic';
 import { normalizeBusinessId } from '../lib/businessIdentity';
-import { readWorkoutRecoveryDraft, writeWorkoutRecoveryDraft } from '../lib/sync/workoutRecoveryDraft';
+import { readWorkoutRecoveryDraftImage, writeWorkoutRecoveryDraft } from '../lib/sync/workoutRecoveryDraft';
 import { captureSession, isCurrentSession } from '../lib/sync/session';
 import type { Exercise, PlannedSetTechnique, ProgressionContract, RoutineExercise, SetTechnique, WorkoutRoutine } from '../types';
 
@@ -34,19 +34,23 @@ export function useTrainingRoutines() {
     const draftOwner = draftSession.owner;
     const [initialRecovery] = useState(() => {
         try {
-            const draft = readWorkoutRecoveryDraft(ROUTINE_DRAFT_KEY, draftOwner);
-            return { draft: draft as { name?: string; exercises?: RoutineExercise[] } | null, error: null as unknown };
+            const image = readWorkoutRecoveryDraftImage(ROUTINE_DRAFT_KEY, draftOwner);
+            return { draft: image.value as { name?: string; exercises?: RoutineExercise[] } | null,
+                raw: image.raw, error: null as unknown };
         } catch (error) {
-            return { draft: null, error };
+            return { draft: null, raw: null, error };
         }
     });
     const initialDraft = initialRecovery.draft;
+    const draftRaw = useRef<string | null>(initialRecovery.raw);
     const localPersistenceBlocked = useAppStore(state => state.localPersistenceBlocked);
     const assertCurrentDraft = useCallback(() => {
         if (initialRecovery.error || localPersistenceBlocked || !isCurrentSession(draftSession)) {
             throw new Error('Sessione, consenso o bozza scheda non più verificabili.');
         }
-        readWorkoutRecoveryDraft(ROUTINE_DRAFT_KEY, draftOwner);
+        if (readWorkoutRecoveryDraftImage(ROUTINE_DRAFT_KEY, draftOwner).raw !== draftRaw.current) {
+            throw new Error('Bozza scheda modificata da un’altra scheda: originale conservato.');
+        }
     }, [draftOwner, draftSession, initialRecovery.error, localPersistenceBlocked]);
     useEffect(() => {
         if (initialRecovery.error) blockRoutineDraft(initialRecovery.error, draftSession);
@@ -60,9 +64,10 @@ export function useTrainingRoutines() {
         if (editingRoutineId || initialRecovery.error || localPersistenceBlocked) return;
         try {
             assertCurrentDraft();
-            writeWorkoutRecoveryDraft(ROUTINE_DRAFT_KEY, draftOwner,
+            draftRaw.current = writeWorkoutRecoveryDraft(ROUTINE_DRAFT_KEY, draftOwner,
                 routineName.trim() !== '' || routineExercises.length > 0
-                    ? { name: routineName, exercises: routineExercises } : null, draftSession.consentGeneration);
+                    ? { name: routineName, exercises: routineExercises } : null,
+                draftSession.consentGeneration, draftRaw.current);
         } catch (error) {
             blockRoutineDraft(error, draftSession);
         }
@@ -72,7 +77,7 @@ export function useTrainingRoutines() {
     const clearRoutineDraft = (): boolean => {
         try {
             assertCurrentDraft();
-            writeWorkoutRecoveryDraft(ROUTINE_DRAFT_KEY, draftOwner, null, draftSession.consentGeneration);
+            draftRaw.current = writeWorkoutRecoveryDraft(ROUTINE_DRAFT_KEY, draftOwner, null, draftSession.consentGeneration, draftRaw.current);
             return true;
         } catch (error) {
             blockRoutineDraft(error, draftSession);

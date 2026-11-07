@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useCallback } from 'react';
+import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { useAppStore } from '../store/useAppStore';
 import { useDialogStore } from '../store/useDialogStore';
 import { Logic } from '../lib/logic';
@@ -12,7 +12,7 @@ import {
 import {
     clearExerciseDraft,
     persistExerciseDraft,
-    readExerciseDraft,
+    readExerciseDraftImage,
     type ExerciseTrackingType
 } from './trainingExercises/exerciseDraft';
 
@@ -44,17 +44,21 @@ export function useTrainingExercises() {
     const [draftSession] = useState(() => captureSession());
     const draftOwner = draftSession.owner;
     const [initialRecovery] = useState(() => {
-        try { return { draft: readExerciseDraft(draftOwner), error: null as unknown }; }
-        catch (error) { return { draft: null, error }; }
+        try { return { ...readExerciseDraftImage(draftOwner), error: null as unknown }; }
+        catch (error) { return { draft: null, raw: null, error }; }
     });
     const initialDraft = initialRecovery.draft;
+    const draftRaw = useRef<string | null>(initialRecovery.raw);
     const localPersistenceBlocked = useAppStore(state => state.localPersistenceBlocked);
     const assertCurrentDraft = useCallback(() => {
         if (initialRecovery.error || localPersistenceBlocked || !isCurrentSession(draftSession)) {
             throw new Error('Sessione, consenso o bozza esercizio non più verificabili.');
         }
-        // A different tab may have replaced the stored draft since the form mounted.
-        readExerciseDraft(draftOwner);
+        // Owner and consent can match even when a second editor has replaced
+        // the canonical draft. Keep the exact image observed by this form.
+        if (readExerciseDraftImage(draftOwner).raw !== draftRaw.current) {
+            throw new Error('Bozza esercizio modificata da un’altra scheda: originale conservato.');
+        }
     }, [draftOwner, draftSession, initialRecovery.error, localPersistenceBlocked]);
     useEffect(() => {
         if (initialRecovery.error) blockExerciseDraft(initialRecovery.error, draftSession);
@@ -75,7 +79,7 @@ export function useTrainingExercises() {
         if (editingExId || initialRecovery.error || localPersistenceBlocked) return;
         try {
             assertCurrentDraft();
-            persistExerciseDraft({
+            draftRaw.current = persistExerciseDraft({
                 name: exName,
                 notes: exNotes,
                 trackingType,
@@ -83,7 +87,7 @@ export function useTrainingExercises() {
                 secondaryMuscles,
                 isBodyweight,
                 equipmentWeight,
-            }, draftOwner, draftSession.consentGeneration);
+            }, draftOwner, draftSession.consentGeneration, draftRaw.current);
         } catch (error) {
             blockExerciseDraft(error, draftSession);
         }
@@ -193,7 +197,7 @@ export function useTrainingExercises() {
     const handleCancelEdit = () => {
         try {
             assertCurrentDraft();
-            clearExerciseDraft(draftOwner, draftSession.consentGeneration);
+            draftRaw.current = clearExerciseDraft(draftOwner, draftSession.consentGeneration, draftRaw.current);
         } catch (error) {
             blockExerciseDraft(error, draftSession);
             return false;
