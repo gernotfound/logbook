@@ -17,6 +17,7 @@ import { readWorkoutTimerSnapshot, writeWorkoutTimerSnapshot } from '../src/lib/
 import { readWorkoutRecoveryDraft, writeWorkoutRecoveryDraft } from '../src/lib/sync/workoutRecoveryDraft';
 import PreSessionCheckIn from '../src/components/Training/PreSessionCheckIn';
 import TrainingSession from '../src/components/Training/TrainingSession';
+import { isCurrentExerciseMutationTarget } from '../src/components/Training/ActiveWorkoutSession';
 import WorkoutTimer from '../src/components/Training/WorkoutTimer';
 import { useWorkoutSession } from '../src/hooks/useWorkoutSession';
 import { commitDomainOperations, initializeLocal, readLocal } from '../src/lib/sync/localRepository';
@@ -1241,6 +1242,20 @@ describe('Workout lifecycle durable recovery regressions', () => {
         useAppStore.setState({ userData: userData({ activeWorkout: staleCloud }), localWorkout: editor });
         await act(async () => { await restoreSessionAfterHistoryEdit(editor.id); });
         expect(useAppStore.getState().localWorkout?.id).toBe(suspended.id);
+    });
+
+    it('rejects stale exercise callback targets after reordering duplicate set IDs', () => {
+        const original = workout('captured-workout', true);
+        const first = { ...original.exercises[0], id: 'first-instance', sets: [{ id: 'shared-set', kg: '60', reps: '8' }] };
+        const second = { ...original.exercises[0], id: 'second-instance', sets: [{ id: 'shared-set', kg: '70', reps: '6' }] };
+        const initial = { ...original, exercises: [first, second] };
+        useAppStore.setState({ localWorkout: initial });
+        expect(isCurrentExerciseMutationTarget(original.id, 0, first.id)).toBe(true);
+        useAppStore.setState({ localWorkout: { ...initial, exercises: [second, first] } });
+        expect(isCurrentExerciseMutationTarget(original.id, 0, first.id)).toBe(false);
+        expect(isCurrentExerciseMutationTarget(original.id, 1, first.id)).toBe(true);
+        expect(isCurrentExerciseMutationTarget(original.id, 0, second.id)).toBe(true);
+        expect(isCurrentExerciseMutationTarget('replacement-workout', 0, second.id)).toBe(false);
     });
 
     it('never removes a different last set inserted while confirming deletion', async () => {
