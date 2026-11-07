@@ -16,12 +16,13 @@ function assertNoUndefined(value: unknown, path = 'root'): void {
         return;
     }
     if (Array.isArray(value)) {
-        value.forEach((item, index) => {
-            if (item === undefined) {
-                throw new Error(`[FIRESTORE VIOLATION] Encountered 'undefined' in array at path: ${path}[${index}]`);
+        // forEach skips sparse holes, although Firestore-bound arrays must be dense.
+        for (let index = 0; index < value.length; index++) {
+            if (!Object.hasOwn(value, index) || value[index] === undefined) {
+                throw new Error(`[FIRESTORE VIOLATION] Missing or undefined array item at path: ${path}[${index}]`);
             }
-            assertNoUndefined(item, `${path}[${index}]`);
-        });
+            assertNoUndefined(value[index], `${path}[${index}]`);
+        }
         return;
     }
     if (isPlainObject(value)) {
@@ -152,6 +153,7 @@ describe('Empirical Challenger: removeUndefinedValuesForFirestore & Firestore Se
             sparseArr[0] = 1;
             sparseArr[2] = 3;
             sparseArr[4] = 5;
+            expect(() => assertNoUndefined(sparseArr)).toThrow('[FIRESTORE VIOLATION]');
 
             const result = removeUndefinedValuesForFirestore(sparseArr);
 
