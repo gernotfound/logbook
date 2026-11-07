@@ -78,8 +78,9 @@ export function useWorkoutStart({
                 if (!isCurrentSession(session) || useAppStore.getState().localPersistenceBlocked
                     || useAppStore.getState().localWorkout?.id !== currentWorkout.id
                     || useAppStore.getState().localWorkout?.globalStartTime !== currentWorkout.globalStartTime) return false;
-                if (durable?.data.activeWorkout?.id === currentWorkout.id
-                    && durable.data.activeWorkout.globalStartTime === currentWorkout.globalStartTime) return true;
+                const persistedWorkout = durable?.data.activeWorkout;
+                if (persistedWorkout?.id === currentWorkout.id
+                    && persistedWorkout.globalStartTime === currentWorkout.globalStartTime) return true;
             } catch (error) {
                 console.error('Verifica avvio workout già presente non riuscita:', error);
                 if (!isCurrentSession(session)) return false;
