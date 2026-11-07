@@ -1432,6 +1432,33 @@ describe('advanced workout segment identity across removal and draft recovery', 
         view.unmount();
     });
 
+    it('refuses a delayed set removal when the selected set, exercise or workout identity moved', () => {
+        let workout = {
+            id: workoutId, exercises: [{
+                id: 'ex-original', exId: 'bench',
+                sets: [{ id: 'set-a', kg: '80', reps: '6' }, { id: 'set-b', kg: '90', reps: '5' }],
+            }],
+        } as unknown as WorkoutSession;
+        const setLocalWorkout = (updater: (prev: WorkoutSession | null) => WorkoutSession | null) => {
+            workout = updater(workout) ?? workout;
+        };
+        const { result } = renderHook(() => useWorkoutSetMutations({
+            setLocalWorkout, showConfirm: async () => true,
+        }));
+        workout = { ...workout, exercises: workout.exercises.map(exercise => ({
+            ...exercise, sets: [...exercise.sets].reverse(),
+        })) };
+        const reversed = workout;
+        act(() => result.current.removeSet(0, 0, 'set-a', 'ex-original', workoutId));
+        expect(workout).toBe(reversed);
+        act(() => result.current.removeSet(0, 1, 'set-a', 'ex-other', workoutId));
+        expect(workout).toBe(reversed);
+        act(() => result.current.removeSet(0, 1, 'set-a', 'ex-original', 'different-workout'));
+        expect(workout).toBe(reversed);
+        act(() => result.current.removeSet(0, 1, 'set-a', 'ex-original', workoutId));
+        expect(workout.exercises[0].sets.map(set => set.id)).toEqual(['set-b']);
+    });
+
     it('ignores an unmounted segment callback and updates only the surviving ID', () => {
         let workout = { id: workoutId, exercises: [{ id: 'exercise-a', exId: 'bench',
             sets: [initialSet] }] } as unknown as WorkoutSession;

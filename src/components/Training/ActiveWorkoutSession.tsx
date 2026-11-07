@@ -161,8 +161,9 @@ export const ActiveWorkoutSession = ({ onNavigateToHistory, onRequestEnd }: Acti
         addSet(exIndex);
     }, [addSet]);
 
-    const handleRemoveSet = useCallback((exIndex: number, sIndex: number) => {
-        removeSet(exIndex, sIndex);
+    const handleRemoveSet = useCallback((exIndex: number, sIndex: number, setId: string,
+        exerciseId?: string, workoutId?: string | null) => {
+        removeSet(exIndex, sIndex, setId, exerciseId, workoutId);
     }, [removeSet]);
 
     const handleRemoveLastSet = useCallback((exIndex: number) => {

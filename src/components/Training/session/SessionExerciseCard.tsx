@@ -25,7 +25,7 @@ interface SessionExerciseCardProps {
     onUpdateSessionNote: (exIndex: number, note: string) => void;
     onUpdateTechnicalStandard: (exIndex: number, value: string) => void;
     onAddSet: (exIndex: number) => void;
-    onRemoveSet: (exIndex: number, sIndex: number) => void;
+    onRemoveSet: (exIndex: number, sIndex: number, setId: string, exerciseId?: string, workoutId?: string | null) => void;
     onUpdateSet: (exIndex: number, setId: string, field: string, value: unknown) => void;
     onAddSpecialSet: (exIndex: number, type: string, setId: string) => void;
     onUpdateSpecialSet: (exIndex: number, setId: string, type: 'segments', segmentId: string, field: string, value: unknown) => void;
