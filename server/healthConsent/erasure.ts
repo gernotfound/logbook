@@ -349,9 +349,17 @@ export async function purgeExpiredCompletedHealthErasures(deadlineMs: number, ma
         const consent = consentSnap.data();
         if (!jobSnap.exists || !job || job.status !== 'complete'
           || !(job.purgeAfter instanceof Timestamp) || job.purgeAfter.toMillis() > Date.now()) return false;
+        // Retire a receipt only when the matching owner and the completed
+        // epoch are attested by the still-durable consent record. A higher
+        // erase floor alone cannot validate a damaged or foreign receipt.
         if (job.uid === item.id
           && isPositiveRevision(job.consentRevision)
-          && consent && isPositiveRevision(consent.erasedBeforeRevision)
+          && isPositiveRevision(job.completedRevision)
+          && job.completedRevision === job.consentRevision + 1
+          && consent?.uid === item.id
+          && Number.isSafeInteger(consent.revision)
+          && consent.revision >= job.completedRevision
+          && isPositiveRevision(consent.erasedBeforeRevision)
           && consent.erasedBeforeRevision >= job.consentRevision) {
           tx.delete(item.ref);
           return true;
