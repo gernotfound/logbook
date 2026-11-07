@@ -1,8 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { auth, firebaseApp, reload, verifyBeforeUpdateEmail } from '../firebase';
 import { invalidateSession } from '../sync/session';
+import { getAppCheckToken } from '../appCheck';
 import { linkEmailPasswordWithEnumerationProtection, requestVerifiedEmailChange } from './accountEmail';
 
+vi.mock('../appCheck', async importOriginal => ({
+    ...(await importOriginal<typeof import('../appCheck')>()),
+    getAppCheckToken: vi.fn(async () => 'standard-app-check-token'),
+}));
+
+const mockedGetAppCheckToken = vi.mocked(getAppCheckToken);
 const mockedReload = vi.mocked(reload);
 const mockedVerifyBeforeUpdateEmail = vi.mocked(verifyBeforeUpdateEmail);
 
@@ -11,6 +18,7 @@ afterEach(() => vi.unstubAllGlobals());
 describe('account email operations', () => {
     beforeEach(() => {
         vi.clearAllMocks();
+        mockedGetAppCheckToken.mockResolvedValue('standard-app-check-token');
         localStorage.clear();
         (auth as { currentUser: unknown }).currentUser = { uid: 'u1' };
         invalidateSession();
@@ -40,7 +48,8 @@ describe('account email operations', () => {
             'https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=test-api-key',
             expect.objectContaining({
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 'Content-Type': 'application/json', 'X-Firebase-AppCheck': 'standard-app-check-token' },
+                signal: expect.any(AbortSignal),
                 body: JSON.stringify({
                     idToken: 'fresh-id-token',
                     email: 'user@example.com',
@@ -50,6 +59,46 @@ describe('account email operations', () => {
             }),
         );
         expect(mockedReload).toHaveBeenCalledWith(user);
+    });
+
+    it('fails closed before sending credentials when standard App Check is unavailable', async () => {
+        const user = { uid: 'u1', getIdToken: vi.fn().mockResolvedValue('fresh-id-token') } as any;
+        mockedGetAppCheckToken.mockResolvedValueOnce(null);
+
+        await expect(linkEmailPasswordWithEnumerationProtection(user, 'user@example.com', 'Secret1!'))
+            .rejects.toThrow('Verifica App Check non disponibile');
+        expect(user.getIdToken).not.toHaveBeenCalled();
+        expect(fetch).not.toHaveBeenCalled();
+    });
+
+    it('does not submit credentials if App Check token acquisition rejects', async () => {
+        const user = { uid: 'u1', getIdToken: vi.fn().mockResolvedValue('fresh-id-token') } as any;
+        mockedGetAppCheckToken.mockRejectedValueOnce(new Error('attestation failed'));
+
+        await expect(linkEmailPasswordWithEnumerationProtection(user, 'user@example.com', 'Secret1!'))
+            .rejects.toThrow('attestation failed');
+        expect(user.getIdToken).not.toHaveBeenCalled();
+        expect(fetch).not.toHaveBeenCalled();
+    });
+
+    it('does not submit credentials after the Auth epoch changes during App Check acquisition', async () => {
+        let finish!: (token: string) => void;
+        mockedGetAppCheckToken.mockImplementationOnce(
+            () => new Promise<string>(resolve => { finish = resolve; }),
+        );
+        const user = { uid: 'u1', getIdToken: vi.fn().mockResolvedValue('fresh-id-token') } as any;
+        const pending = linkEmailPasswordWithEnumerationProtection(user, 'user@example.com', 'Secret1!');
+        await vi.waitFor(() => expect(mockedGetAppCheckToken).toHaveBeenCalledOnce());
+
+        (auth as { currentUser: unknown }).currentUser = { uid: 'u2' };
+        invalidateSession();
+        (auth as { currentUser: unknown }).currentUser = { uid: 'u1' };
+        invalidateSession();
+        finish('stale-token');
+
+        await expect(pending).rejects.toThrow('Sessione cambiata');
+        expect(user.getIdToken).not.toHaveBeenCalled();
+        expect(fetch).not.toHaveBeenCalled();
     });
 
     it('keeps a confirmed remote link distinct from a failed local refresh', async () => {
