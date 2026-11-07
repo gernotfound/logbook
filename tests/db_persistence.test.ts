@@ -1,14 +1,22 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { getDocFromServer, getDocs, writeBatch } from 'firebase/firestore';
+import { getDocFromServer, writeBatch } from 'firebase/firestore';
 
 vi.unmock('../src/lib/db');
 
 import { ConsentedTestDB as DB, openTestCloudBusiness } from './testUtils';
 import { prepareUnlockedTestArchive } from './secureVaultFixture';
+import { sealCloudDocument } from '../src/lib/sync/cloudDocumentCipher';
 
 
 describe('DB Persistence for Training Cycles and Planning', () => {
     let mockBatch: any;
+    const accountKey = new Uint8Array(32).fill(18);
+    const sealedRoot = (business: Record<string, unknown>) => sealCloudDocument(
+        accountKey, 'test-user-id', '', business, {
+            protocolVersion: 3, clock: {}, fields: {},
+            writer: { slot: 's00', replicaId: 'test-replica', generation: 1, seq: 0 },
+        },
+    );
 
     beforeEach(async () => {
         vi.clearAllMocks();
@@ -69,10 +77,8 @@ describe('DB Persistence for Training Cycles and Planning', () => {
         expect(mockBatch.commit).toHaveBeenCalled();
     });
 
-    it('DB.loadUserData retrieves trainingCycles and activeCycleId from Firestore', async () => {
-        const mockFirestoreDoc = {
-            _schemaVersion: 1,
-            _sync: { protocolVersion: 3, clock: {}, fields: {}, writer: { slot: 's00', replicaId: 'test-replica', generation: 1, seq: 0 } },
+    it('DB.loadCloudPayload retrieves trainingCycles and activeCycleId from a sealed Firestore root', async () => {
+        const mockFirestoreDoc = sealedRoot({
             profile: { name: 'Mario' },
             library: [],
             routines: [],
@@ -90,7 +96,7 @@ describe('DB Persistence for Training Cycles and Planning', () => {
                 }
             ],
             activeCycleId: 'cycle_loaded'
-        };
+        });
 
         vi.mocked(getDocFromServer).mockImplementation(async (ref: any) => {
                 if (typeof ref?.path !== 'string' || ref.path.endsWith('/sync_control/state')
@@ -103,11 +109,7 @@ describe('DB Persistence for Training Cycles and Planning', () => {
         } as any;
             });
 
-        vi.mocked(getDocs).mockResolvedValue({
-            forEach: () => {}
-        } as any);
-
-        const loadedData = await DB.loadUserData();
+        const loadedData = (await DB.loadCloudPayload({ cloudKey: accountKey }))?.data;
 
         expect(loadedData).not.toBeNull();
         const loadedCycles = loadedData?.trainingCycles ?? [];
@@ -120,7 +122,7 @@ describe('DB Persistence for Training Cycles and Planning', () => {
         expect(loadedData?.activeCycleId).toBe('cycle_loaded');
     });
 
-    it('DB.loadUserData defaults trainingCycles to [] and activeCycleId to null if absent', async () => {
+    it('DB.loadCloudPayload defaults trainingCycles to [] and activeCycleId to null if absent', async () => {
         vi.mocked(getDocFromServer).mockImplementation(async (ref: any) => {
                 if (typeof ref?.path !== 'string' || ref.path.endsWith('/sync_control/state')
                     || ref.path.includes('/history_months/') || ref.path.includes('/nutrition_months/')) {
@@ -128,19 +130,11 @@ describe('DB Persistence for Training Cycles and Planning', () => {
                 }
                 return {
             exists: () => true,
-            data: () => ({
-                profile: { name: 'Mario' },
-                _schemaVersion: 1,
-                _sync: { protocolVersion: 3, clock: {}, fields: {}, writer: { slot: 's00', replicaId: 'test-replica', generation: 1, seq: 0 } },
-            })
+            data: () => sealedRoot({ profile: { name: 'Mario' } })
         } as any;
             });
 
-        vi.mocked(getDocs).mockResolvedValue({
-            forEach: () => {}
-        } as any);
-
-        const loadedData = await DB.loadUserData();
+        const loadedData = (await DB.loadCloudPayload({ cloudKey: accountKey }))?.data;
 
         expect(loadedData).not.toBeNull();
         expect(loadedData?.trainingCycles).toEqual([]);

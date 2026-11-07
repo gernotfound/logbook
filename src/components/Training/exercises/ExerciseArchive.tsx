@@ -1,4 +1,4 @@
-import { useMemo, useState, type MouseEvent } from 'react';
+import { useEffect, useMemo, useState, type MouseEvent } from 'react';
 import {
     Activity,
     ChevronLeft,
@@ -107,6 +107,12 @@ export function ExerciseArchive({
         () => library.find(exercise => exercise.id === selectedExId) || null,
         [library, selectedExId]
     );
+
+    useEffect(() => {
+        // An ID selected in a previous library snapshot must not reopen an
+        // unrelated detail view if an item with that ID appears later.
+        if (selectedExId !== null && !selectedExercise) onSelectedExIdChange(null);
+    }, [selectedExId, selectedExercise, onSelectedExIdChange]);
 
     if (selectedExercise) {
         const routineCount = routineCounts.get(selectedExercise.id) || 0;
