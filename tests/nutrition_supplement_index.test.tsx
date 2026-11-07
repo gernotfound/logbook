@@ -6,7 +6,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { NutritionSupplementIntakes } from '../src/components/Nutrition/meals/NutritionSupplementIntakes';
 import NutritionSupplements from '../src/components/Nutrition/NutritionSupplements';
 import { useDialogStore } from '../src/store/useDialogStore';
-import { storageOwner } from '../src/lib/sync/session';
+import { storageOwner, invalidateSession } from '../src/lib/sync/session';
 import { useSupplements } from '../src/hooks/useSupplements';
 import { useAppStore } from '../src/store/useAppStore';
 import { emptyUserData } from './setup';
@@ -60,6 +60,71 @@ describe('supplement intake catalogue lookups', () => {
         expect(screen.getByText('Creatina B')).toBeDefined();
         expect(screen.getByText(/3 mg/)).toBeDefined();
     });
+    it('rejects a stale delete confirmation after a different Auth epoch, even with the same supplement ID', async () => {
+        const previous = useAppStore.getState();
+        const confirm = vi.mocked(useDialogStore.getState().showConfirm);
+        const originalConfirmImpl = confirm.getMockImplementation();
+        confirm.mockClear();
+        let finish!: (confirmed: boolean) => void;
+        confirm.mockImplementationOnce(() => new Promise<boolean>(resolve => { finish = resolve; }));
+        const dispatch = vi.fn().mockResolvedValue({ ok: true, status: 'synced' });
+        useAppStore.setState({
+            userData: { ...emptyUserData, supplements: [{ id: 'shared', name: 'Creatina A', unit: 'g' }] },
+            dataOwner: storageOwner(), dispatchDomainOperation: dispatch,
+        });
+        try {
+            render(<NutritionSupplements selectedDate="2026-09-14" />);
+            fireEvent.click(screen.getByRole('button', { name: 'Opzioni' }));
+            fireEvent.click(screen.getByRole('menuitem', { name: 'Elimina' }));
+            expect(confirm).toHaveBeenCalledOnce();
+            act(() => {
+                invalidateSession();
+                invalidateSession();
+                useAppStore.setState({
+                    userData: { ...emptyUserData, supplements: [{ id: 'shared', name: 'Creatina B', unit: 'g' }] },
+                });
+            });
+            await act(async () => { finish(true); });
+            expect(dispatch).not.toHaveBeenCalled();
+            expect(screen.getByText('Creatina B')).toBeDefined();
+        } finally {
+            useAppStore.setState({
+                userData: previous.userData, dataOwner: previous.dataOwner,
+                dispatchDomainOperation: previous.dispatchDomainOperation,
+            });
+            confirm.mockReset();
+            if (originalConfirmImpl) confirm.mockImplementation(originalConfirmImpl);
+            else confirm.mockResolvedValue(true);
+        }
+    });
+
+    it.each(['supplement', 'intake'] as const)(
+        'does not show stale %s deletion errors after the Auth epoch changes', async target => {
+            const previous = useAppStore.getState();
+            const dialogAlert = vi.mocked(useDialogStore.getState().showAlert);
+            let reject!: (reason: Error) => void;
+            const pending = new Promise<never>((_, rejectPromise) => { reject = rejectPromise; });
+            const dispatch = vi.fn(() => pending);
+            useAppStore.setState({ dispatchDomainOperation: dispatch as typeof previous.dispatchDomainOperation });
+            dialogAlert.mockClear();
+            try {
+                const { result } = renderHook(() => useSupplements('2026-09-14'));
+                let removing!: Promise<void>;
+                act(() => {
+                    removing = target === 'supplement'
+                        ? result.current.deleteSupplementFromLibrary('shared')
+                        : result.current.removeIntake('intake-shared');
+                });
+                expect(dispatch).toHaveBeenCalledOnce();
+                act(() => { invalidateSession(); invalidateSession(); });
+                await act(async () => { reject(new Error('failed old write')); await removing; });
+                expect(dialogAlert).not.toHaveBeenCalled();
+            } finally {
+                useAppStore.setState({ dispatchDomainOperation: previous.dispatchDomainOperation });
+            }
+        },
+    );
+
     it('does not treat a resolved but rejected supplement commit as successful', async () => {
         const previous = useAppStore.getState().dispatchDomainOperation;
         const dispatch = vi.fn().mockResolvedValue({ ok: false, status: 'failed', error: new Error('IDB unavailable') });

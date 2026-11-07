@@ -11,7 +11,7 @@ import CustomFoodForm from '../src/components/Nutrition/CustomFoodForm';
 import type { Exercise } from '../src/types';
 import { deviceKey, protectedDeviceKey, readDeviceValueStrict } from '../src/lib/sync/deviceStorage';
 import { readWorkoutRecoveryDraft, writeWorkoutRecoveryDraft } from '../src/lib/sync/workoutRecoveryDraft';
-import { captureSession } from '../src/lib/sync/session';
+import { captureSession, invalidateSession, isCurrentSession } from '../src/lib/sync/session';
 import { initializeLocal, readLocal } from '../src/lib/sync/localRepository';
 import { prepareUnlockedTestArchive } from './secureVaultFixture';
 
@@ -120,6 +120,57 @@ describe('Worker M2: Exercise Library UI & Food Form Real-Time Calorie Calculati
             expect(window.localStorage.getItem(protectedDeviceKey('draft_exercise', owner))).toBeNull();
             expect(readDeviceValueStrict('draft_exercise', owner)).toBeNull();
             expect(window.localStorage.getItem(deviceKey('draft_exercise', owner))).toBeNull();
+        });
+
+        it('does not discard unsaved exercise fields if the protected draft cannot be cleared', async () => {
+            const owner = captureSession().owner;
+            await prepareUnlockedTestArchive(owner);
+            if (owner.startsWith('user:')) {
+                localStorage.setItem(`logbook:v2:${owner}:health-consent-generation`, '3');
+            }
+            const { result } = renderHook(() => useTrainingExercises());
+            act(() => result.current.setExName('Modifica da preservare'));
+            const sealedKey = protectedDeviceKey('draft_exercise', owner);
+            const original = window.localStorage.getItem(sealedKey);
+            expect(original).toMatch(/^tlb-sealed:v1:/);
+
+            const originalRemove = vi.mocked(window.localStorage.removeItem).getMockImplementation();
+            if (!originalRemove) throw new Error('Storage mock non inizializzato.');
+            vi.mocked(window.localStorage.removeItem).mockImplementation((key) => {
+                if (key === sealedKey) throw new Error('quota');
+                originalRemove(key);
+            });
+            try {
+                let cancelled!: boolean;
+                act(() => { cancelled = result.current.handleCancelEdit(); });
+                expect(cancelled).toBe(false);
+                expect(result.current.exName).toBe('Modifica da preservare');
+                expect(window.localStorage.getItem(sealedKey)).toBe(original);
+                expect(useAppStore.getState().localPersistenceBlocked).toBe(true);
+            } finally {
+                vi.mocked(window.localStorage.removeItem).mockImplementation(originalRemove);
+            }
+        });
+
+        it('does not quarantine current storage or discard a previous Auth epoch\'s exercise draft', async () => {
+            const owner = captureSession().owner;
+            await prepareUnlockedTestArchive(owner);
+            if (owner.startsWith('user:')) {
+                localStorage.setItem(`logbook:v2:${owner}:health-consent-generation`, '3');
+            }
+            const { result } = renderHook(() => useTrainingExercises());
+            act(() => result.current.setExName('Esercizio della sessione precedente'));
+            const sealedKey = protectedDeviceKey('draft_exercise', owner);
+            const original = localStorage.getItem(sealedKey);
+            expect(original).toMatch(/^tlb-sealed:v1:/);
+
+            invalidateSession();
+            let cancelled!: boolean;
+            act(() => { cancelled = result.current.handleCancelEdit(); });
+            expect(cancelled).toBe(false);
+            expect(result.current.exName).toBe('Esercizio della sessione precedente');
+            expect(localStorage.getItem(sealedKey)).toBe(original);
+            expect(useAppStore.getState().localPersistenceBlocked).toBe(false);
         });
 
         it('handleSaveExercise creates new exercise with isBodyweight and equipmentWeight', async () => {
@@ -253,6 +304,68 @@ describe('Worker M2: Exercise Library UI & Food Form Real-Time Calorie Calculati
             expect((await readLocal(owner))?.data.library?.some(ex => ex.id === duplicate?.id)).toBe(true);
             expect(idbStore['logbook:v2:' + owner]).toMatch(/^tlb-sealed:v1:/);
         });
+
+        it.each(['delete', 'restore'] as const)(
+            'refuses stale %s confirmation even when the next Auth epoch reuses the exercise ID', async action => {
+                const owner = captureSession().owner;
+                const sameId = 'shared-exercise';
+                const original: Exercise = {
+                    id: sameId, name: 'Esercizio A', trackingType: 'weight_reps',
+                    setsCount: 3, sets: [], isDefault: action === 'restore',
+                };
+                if (action === 'restore') {
+                    await clearCatalogCache();
+                    await saveCatalogToCache({
+                        manifest: {
+                            version: 'stale-auth-test', updatedAt: '2026-10-20T00:00:00.000Z',
+                            schemaVersion: 1, docRefs: { exercises: 'ex-test', foods: 'food-test' },
+                            itemCounts: { exercises: 1, foods: 0 },
+                        },
+                        exercises: [original as any], foods: [], cachedAt: Date.now(),
+                    });
+                }
+                const previousDispatch = useAppStore.getState().dispatchDomainOperation;
+                const showConfirm = vi.mocked(useDialogStore.getState().showConfirm);
+                let confirm!: (choice: boolean) => void;
+                // The suite's dialog fixture has an inert setState; configure its callable mock.
+                showConfirm.mockReset().mockImplementationOnce(() => new Promise<boolean>(resolve => { confirm = resolve; }));
+                const dispatch = vi.fn().mockResolvedValue({ ok: true, status: 'synced' });
+                const initialData = { ...emptyUserData, library: [original] };
+                // This is a real owner-bound editor: its protected draft must be readable
+                // before testing the subsequent Auth-epoch transition.
+                await prepareUnlockedTestArchive(owner);
+                await initializeLocal(owner, initialData);
+                useAppStore.setState({
+                    dataOwner: owner,
+                    userData: initialData,
+                    dispatchDomainOperation: dispatch,
+                });
+                try {
+                    const sessionBeforeMount = captureSession();
+                    expect(isCurrentSession(sessionBeforeMount)).toBe(true);
+                    expect(useDialogStore.getState().showConfirm).toBe(showConfirm);
+                    const { result } = renderHook(() => useTrainingExercises());
+                    expect(isCurrentSession(sessionBeforeMount)).toBe(true);
+                    expect(useDialogStore.getState().showConfirm).toBe(showConfirm);
+                    expect(useAppStore.getState().dataOwner).toBe(owner);
+                    expect(useAppStore.getState().localPersistenceBlocked).toBe(false);
+                    let pending!: Promise<unknown>;
+                    act(() => {
+                        pending = action === 'delete'
+                            ? result.current.handleDelete(sameId, { stopPropagation: vi.fn() })
+                            : result.current.handleRestoreExercise(sameId);
+                    });
+                    expect(showConfirm).toHaveBeenCalledOnce();
+                    act(() => { invalidateSession(); invalidateSession(); });
+                    await act(async () => { confirm(true); await pending; });
+                    expect(dispatch).not.toHaveBeenCalled();
+                } finally {
+                    useAppStore.setState({ dispatchDomainOperation: previousDispatch });
+                    showConfirm.mockReset().mockResolvedValue(true);
+                    if (action === 'restore') await clearCatalogCache();
+                }
+            },
+        );
 
         it('handleDelete blocks catalog exercises and deletes personal exercises after confirmation', async () => {
             const catalogExercise: Exercise = {
