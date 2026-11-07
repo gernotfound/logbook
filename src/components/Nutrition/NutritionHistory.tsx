@@ -36,7 +36,16 @@ const NutritionHistory: React.FC<NutritionHistoryProps> = ({ nutritionHistory, o
                         <div 
                             key={`hist-nutr-${day.date}-${idx}`} 
                             className="card clickable-card" 
-                            onClick={() => onDayClick && onDayClick(day.date)}
+                            role={onDayClick ? 'button' : undefined}
+                            tabIndex={onDayClick ? 0 : undefined}
+                            aria-label={onDayClick ? `Apri il diario del ${Logic.formatItalianDate(day.date)}` : undefined}
+                            onClick={() => onDayClick?.(day.date)}
+                            onKeyDown={onDayClick ? event => {
+                                if (event.key === 'Enter' || event.key === ' ') {
+                                    event.preventDefault();
+                                    onDayClick(day.date);
+                                }
+                            } : undefined}
                             style={{ 
                                 padding: '15px', 
                                 marginBottom: 0, 
@@ -44,7 +53,7 @@ const NutritionHistory: React.FC<NutritionHistoryProps> = ({ nutritionHistory, o
                                 justifyContent: 'space-between', 
                                 alignItems: 'center',
                                 borderLeft: '1px solid var(--glass-border)',
-                                cursor: 'pointer'
+                                cursor: onDayClick ? 'pointer' : 'default'
                             }}
                         >
                             <div style={{ width: '100%' }}>
