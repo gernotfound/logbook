@@ -8,11 +8,13 @@ const state = vi.hoisted(() => ({
     currentSession: true,
     epoch: 1,
     owner: 'user:test',
+    dataOwner: 'user:test',
 }));
 
 vi.mock('../src/store/useAppStore', () => ({
     useAppStore: (select: (store: unknown) => unknown) => select({
         userData: { profile: state.profile },
+        dataOwner: state.dataOwner,
         dispatchDomainOperation: state.dispatch,
     }),
 }));
@@ -31,6 +33,7 @@ beforeEach(() => {
     state.currentSession = true;
     state.epoch = 1;
     state.owner = 'user:test';
+    state.dataOwner = 'user:test';
     state.profile = { dob: '2000-01-01', height: '170', gender: 'M' };
     state.dispatch.mockReset();
     state.dispatch.mockResolvedValue({ ok: true, status: 'synced' });
@@ -84,6 +87,7 @@ describe('biometric profile draft persistence', () => {
         expect(result.current.height).toBe('188');
 
         state.owner = 'user:second';
+        state.dataOwner = 'user:second';
         state.epoch++;
         state.profile = { dob: '2002-02-02', height: '164', gender: 'F' };
         rerender();
@@ -93,10 +97,25 @@ describe('biometric profile draft persistence', () => {
         expect(result.current.height).toBe('164');
 
         state.owner = 'user:test';
+        state.dataOwner = 'user:test';
         state.epoch++;
         state.profile = { dob: '2000-01-01', height: '170', gender: 'M' };
         rerender();
         expect(result.current.height).toBe('170');
+    });
+
+    it('hides a previous owner\'s profile while its store data has not been replaced', async () => {
+        const { result, rerender } = renderHook(() => useSettingsProfile());
+        state.owner = 'user:second';
+        state.epoch++;
+        rerender();
+        expect([result.current.dob, result.current.height, result.current.gender])
+            .toEqual(['', '', '']);
+        act(() => result.current.setHeight('199'));
+        expect(result.current.height).toBe('');
+        await act(async () => { await result.current.handleSaveProfile(); });
+        expect(state.dispatch).not.toHaveBeenCalled();
+        expect(state.showAlert).toHaveBeenCalledWith('Errore durante il salvataggio del profilo.');
     });
 
     it('does not clear the draft or show an old-session error after the session changes', async () => {
