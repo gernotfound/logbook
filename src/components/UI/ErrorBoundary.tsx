@@ -3,7 +3,7 @@ import { useDialogStore } from '../../store/useDialogStore';
 import { GlobalDialog } from './GlobalDialog';
 import { DB } from '../../lib/db';
 import { safeHardReload } from '../../lib/sync/safeReload';
-import { captureSession, isActiveGuestSession, isCurrentSession, revokeGuestSession } from '../../lib/sync/session';
+import { captureSession, captureSessionForOwner, isActiveGuestSession, isCurrentSession, revokeGuestSession } from '../../lib/sync/session';
 import { withGuestLifecycleLock } from '../../lib/sync/guestLifecycleLock';
 import { isAccountDeletionPending } from '../../lib/sync/accountGate';
 
@@ -74,6 +74,7 @@ class ErrorBoundary extends Component<Props, State> {
     );
     if (!confirmed) return;
 
+    let revokedGuestEpoch: number | null = null;
     try {
       if (!isCurrentSession(session)) throw new Error('Sessione cambiata prima della pulizia.');
       const owner = session.owner;
@@ -88,6 +89,7 @@ class ErrorBoundary extends Component<Props, State> {
           // Error recovery is also a destructive guest reset: fence every
           // other tab before removing IndexedDB and never race a new login.
           revokeGuestSession();
+          revokedGuestEpoch = captureSessionForOwner('guest').epoch;
           await DB.purgeAllLocalUserData('guest');
         });
       } else {
@@ -99,6 +101,18 @@ class ErrorBoundary extends Component<Props, State> {
       window.location.reload();
     } catch (error) {
       console.error('Pulizia locale di recovery non completata:', error);
+      // A superseded owner must not receive an alert from this attempt.
+      // Revoking this very guest session intentionally changes its epoch.
+      if (revokedGuestEpoch === null) {
+        if (!isCurrentSession(session)) return;
+      } else {
+        try {
+          if (captureSessionForOwner('guest').epoch !== revokedGuestEpoch
+              || captureSession().owner !== 'guest') return;
+        } catch {
+          return;
+        }
+      }
       await useDialogStore.getState().showAlert(
         'Pulizia locale non completata. I dati rimasti sul dispositivo non sono stati dichiarati eliminati. Riprova o ricarica la pagina.'
       );
