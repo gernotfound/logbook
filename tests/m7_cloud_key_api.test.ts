@@ -6,6 +6,8 @@ const harness = vi.hoisted(() => {
   }
   return {
     documents: new Map<string, Record<string, unknown>>(),
+    beforeTransaction: null as null | (() => void),
+    afterTransaction: null as null | (() => void),
     verify: vi.fn(async () => ({ uid: 'owner-a', emailVerified: true })),
     wrap: vi.fn(async (uid: string, secret: Buffer) => ({
       format: 'thelogbook-wrapped-account-key' as const, version: 1 as const,
@@ -37,15 +39,27 @@ const db = {
   runTransaction: async (work: (tx: {
     get: (r: ReturnType<typeof ref> | { prefix: string }) => Promise<unknown>;
     create: (r: ReturnType<typeof ref>, d: Record<string, unknown>) => void;
-  }) => Promise<unknown>) => work({
-    get: async (r) => 'prefix' in r
-      ? { empty: ![...harness.documents.keys()].some(k => k.startsWith(r.prefix)) }
-      : r.get(),
-    create: (r, d) => {
-      if (harness.documents.has(r.key)) throw new Error('Concurrent create without transaction retry');
-      harness.documents.set(r.key, d);
-    },
-  }),
+  }) => Promise<unknown>) => {
+    const before = harness.beforeTransaction;
+    harness.beforeTransaction = null;
+    before?.();
+    const pendingCreates: Array<{ key: string; data: Record<string, unknown> }> = [];
+    const result = await work({
+      get: async (r) => 'prefix' in r
+        ? { empty: ![...harness.documents.keys()].some(k => k.startsWith(r.prefix)) }
+        : r.get(),
+      create: (r, d) => {
+        if (harness.documents.has(r.key)) throw new Error('Concurrent create without transaction retry');
+        pendingCreates.push({ key: r.key, data: d });
+      },
+    });
+    // A rejected transaction must not publish staged credentials.
+    for (const entry of pendingCreates) harness.documents.set(entry.key, entry.data);
+    const after = harness.afterTransaction;
+    harness.afterTransaction = null;
+    after?.();
+    return result;
+  },
 };
 vi.mock('../server/accountDeletion/firebaseAdmin', () => ({ adminDb: () => db }));
 vi.mock('../server/cloudKeys/accountKeyEnvelope', () => ({
@@ -84,6 +98,8 @@ const request = (origin = 'https://thelogbook.web.app', withBody = false) => new
 
 beforeEach(() => {
   harness.documents.clear();
+  harness.beforeTransaction = null;
+  harness.afterTransaction = null;
   vi.clearAllMocks();
   harness.documents.set('health_consent_withdrawals/owner-a', consent());
   harness.verify.mockResolvedValue({ uid: 'owner-a', emailVerified: true });
@@ -191,11 +207,34 @@ describe('authenticated cloud account key API', () => {
     expect(harness.documents.has('user_data_keys/owner-a')).toBe(false);
   });
 
+  it('rechecks consent in its transaction after a preflight-to-transaction revocation', async () => {
+    harness.beforeTransaction = () => harness.documents.set(
+      'health_consent_withdrawals/owner-a', { ...consent(), status: 'withdrawn' },
+    );
+    const response = await POST(request());
+    expect(response.status).toBe(503);
+    expect(harness.wrap).toHaveBeenCalledTimes(1);
+    expect(harness.documents.has('user_data_keys/owner-a')).toBe(false);
+  });
+
+  it('never releases key bytes if consent is withdrawn immediately after transaction commit', async () => {
+    harness.afterTransaction = () => harness.documents.set(
+      'health_consent_withdrawals/owner-a', { ...consent(), status: 'withdrawn' },
+    );
+    const response = await POST(request());
+    expect(response.status).toBe(503);
+    expect((await response.text())).not.toMatch(/[A-Za-z0-9+/]{43}=/);
+    // Provisioning was atomic before withdrawal, but the final read must
+    // still reject releasing its bytes under now-withdrawn consent.
+    expect(harness.documents.has('user_data_keys/owner-a')).toBe(true);
+    expect((await POST(request())).status).toBe(503);
+  });
+
   it('ignores client-supplied uid/key and always uses verified caller identity', async () => {
     const result = await POST(request('https://thelogbook.web.app', true));
     expect(result.status).toBe(400);
 
-    // A client can send a body as a stream without declaring Content-Length.
+    // A request body without Content-Length must also be rejected before Auth.
     const withoutLength = new Request('https://backend.test/api/cloud-key', {
       method: 'POST',
       headers: { origin: 'https://thelogbook.web.app' },

@@ -14,30 +14,37 @@ const fakeDb = vi.hoisted(() => ({
       doc: (uid: string) => ({ id: uid, path: 'account_deletion_devices/' + uid }),
     };
     if (name !== 'account_deletions') throw new Error('Unexpected collection');
+    const millis = (value: unknown): number => value instanceof Timestamp ? value.toMillis() : Number.NaN;
     const query = (
       filters: Array<{ field: string; op: string; value: unknown }> = [],
       order: string | null = null,
-      afterId: string | null = null,
+      after: { id: string; expiry: number } | null = null,
     ): any => ({
       where(field: string, op: string, value: unknown) {
-        return query([...filters, { field, op, value }], order, afterId);
+        return query([...filters, { field, op, value }], order, after);
       },
       orderBy(field: string) {
         if (field !== 'purgeAfter') throw new Error('Unsupported Firestore ordering');
-        return query(filters, field, afterId);
+        return query(filters, field, after);
       },
-      startAfter(document: { id: string }) { return query(filters, order, document.id); },
+      // Firestore cursors carry the snapshot's ordered field values, even after
+      // the document has been deleted by the preceding transaction.
+      startAfter(document: { id: string; data: () => Record<string, unknown> }) {
+        return query(filters, order, { id: document.id, expiry: millis(document.data().purgeAfter) });
+      },
       limit(count: number) { return { async get() {
         if (order !== 'purgeAfter') throw new Error('Retention query must order by expiry');
-        const millis = (value: unknown): number => value instanceof Timestamp ? value.toMillis() : Number.NaN;
         const matching = state.jobs.filter(job => filters.every(({ field, op, value }) => {
           if (field === 'status' && op === '==') return job.data.status === value;
           if (field === 'purgeAfter' && op === '<=') return millis(job.data.purgeAfter) <= millis(value);
           throw new Error('Unsupported Firestore query predicate: ' + field + ' ' + op);
         })).sort((left, right) =>
           millis(left.data.purgeAfter) - millis(right.data.purgeAfter) || left.id.localeCompare(right.id));
-        const offset = afterId ? matching.findIndex(job => job.id === afterId) + 1 : 0;
-        const docs = matching.slice(offset, offset + count)
+        const remaining = after ? matching.filter(job => {
+          const expiry = millis(job.data.purgeAfter);
+          return expiry > after.expiry || (expiry === after.expiry && job.id > after.id);
+        }) : matching;
+        const docs = remaining.slice(0, count)
           .map(job => ({ id: job.id, ref: { id: job.id, path: 'account_deletions/' + job.id }, data: () => job.data }));
         return { docs, empty: docs.length === 0 };
       } }; },
@@ -144,6 +151,25 @@ describe('atomic completed account deletion retention', () => {
     expect(state.devices.has('another-user')).toBe(true);
     expect(state.devices.has('valid')).toBe(false);
     expect(state.jobs).toHaveLength(400);
+  });
+
+  it('continues past a deleted last-document cursor without skipping equal-expiry receipts', async () => {
+    state.jobs = Array.from({ length: 401 }, (_, index) => ({
+      id: `uid-${String(index).padStart(3, '0')}`,
+      data: { uid: `uid-${String(index).padStart(3, '0')}`, status: 'complete', purgeAfter: EXPIRED },
+    }));
+    const progress: AccountDeletionRetentionPage = { scanned: 0 };
+
+    expect(await purgeExpiredCompletedDeletionJobs(400, undefined, Infinity, progress)).toBe(400);
+    expect(progress.scanned).toBe(400);
+    expect(state.jobs.map(job => job.id)).toEqual(['uid-400']);
+
+    // The first page's last snapshot is gone from Firestore; the cursor must
+    // still compare its purgeAfter plus document ID, not query for the old ID.
+    expect(await purgeExpiredCompletedDeletionJobs(400, undefined, Infinity, progress)).toBe(1);
+    expect(progress.scanned).toBe(1);
+    expect(state.jobs).toEqual([]);
+    expect(state.deleted.filter(path => path.startsWith('account_deletions/'))).toHaveLength(401);
   });
 
   it('does no destructive work when budget is exhausted', async () => {
