@@ -92,7 +92,8 @@ export async function readHealthDataErasureStatus(uid: string): Promise<PublicEr
     const consent = consentSnap.data();
     // A 'complete' job cannot authorize irreversible local purge while the
     // server still retains the corresponding wrapped ADK.
-    localPurgeAuthorized = !accountKeySnap.exists && consent?.status === 'withdrawn'
+    localPurgeAuthorized = !accountKeySnap.exists && consent?.uid === uid && consent.status === 'withdrawn'
+      && job.completedRevision === job.consentRevision + 1
       && consent.revision === job.completedRevision
       && consent.erasedBeforeRevision === job.consentRevision;
   }

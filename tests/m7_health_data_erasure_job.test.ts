@@ -174,6 +174,9 @@ describe('trusted data-only erasure worker', () => {
     await createHealthDataErasureJob('a');
     expect(await processHealthDataErasure('a', Date.now() + 30000)).toBe('complete');
     expect((await readHealthDataErasureStatus('a'))?.localPurgeAuthorized).toBe(true);
+    fixture.records.get(consentPath('a'))!.uid = 'other-owner';
+    expect((await readHealthDataErasureStatus('a'))?.localPurgeAuthorized).toBe(false);
+    fixture.records.get(consentPath('a'))!.uid = 'a';
     fixture.records.set('user_data_keys/a', { uid: 'a', ciphertext: 'unexpected' });
     expect(await readHealthDataErasureStatus('a')).toMatchObject({
       complete: true, localPurgeAuthorized: false,
