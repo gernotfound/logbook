@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Exporter } from '../src/lib/export';
 import { Logic } from '../src/lib/logic';
+import { useAppStore } from '../src/store/useAppStore';
 import { CURRENT_BACKUP_SCHEMA, CURRENT_DATA_SCHEMA, CURRENT_SYNC_PROTOCOL } from '../src/lib/schemaEvolution';
 import type { UserData } from '../src/types';
 import { emptyUserData } from './setup';
@@ -19,6 +20,8 @@ describe('audit regression: emergency export local date', () => {
             }
         };
         let backupBlob!: Blob;
+        const before = useAppStore.getState();
+        useAppStore.setState({ userData, dataOwner: 'user:test-user-id' });
         vi.useFakeTimers();
         try {
             const date = vi.spyOn(Logic, 'getLocalDateString').mockReturnValue('2026-09-18');
@@ -55,6 +58,7 @@ describe('audit regression: emergency export local date', () => {
             expect(revoke).toHaveBeenCalledExactlyOnceWith('blob:logbook-test');
         } finally {
             vi.useRealTimers();
+            useAppStore.setState({ userData: before.userData, dataOwner: before.dataOwner });
         }
 
         const jsonText = await new Promise<string>((resolve, reject) => {
@@ -77,5 +81,22 @@ describe('audit regression: emergency export local date', () => {
         expect(backup).toHaveProperty('userData', userData);
         expect(backup).not.toHaveProperty('recovery.envelope');
         expect(backup).not.toHaveProperty('recovery.device');
+    });
+
+    it('rejects stale or mismatched owner data before creating a downloadable backup', () => {
+        const before = useAppStore.getState();
+        const userData = { ...structuredClone(emptyUserData), profile: { height: '175' } } as UserData;
+        const stale = structuredClone(userData);
+        const create = vi.spyOn(URL, 'createObjectURL');
+        try {
+            useAppStore.setState({ userData, dataOwner: 'user:test-user-id' });
+            expect(() => Exporter.exportEmergencyJSON(stale)).toThrow(/sessione cambiati/);
+
+            useAppStore.setState({ dataOwner: 'guest' });
+            expect(() => Exporter.exportEmergencyJSON(userData)).toThrow(/sessione cambiati/);
+            expect(create).not.toHaveBeenCalled();
+        } finally {
+            useAppStore.setState({ userData: before.userData, dataOwner: before.dataOwner });
+        }
     });
 });

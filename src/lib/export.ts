@@ -88,8 +88,15 @@ export function buildShareExportData(userData: UserData, options: ExportShareOpt
 
 export const Exporter = {
     exportEmergencyJSON(userData: UserData): void {
+        const session = captureSession();
+        const state = useAppStore.getState();
+        // An asynchronous dialog caller may hold an old owner's snapshot.
+        // Never label those bytes with the newly active owner's identity.
+        if (!isCurrentSession(session) || state.dataOwner !== session.owner || state.userData !== userData) {
+            throw new Error('Proprietario o sessione cambiati: esportazione annullata.');
+        }
         const payload = {
-            ...createBackup(userData, captureSession().owner, { scope: 'device', months: [] }),
+            ...createBackup(userData, session.owner, { scope: 'device', months: [] }),
             reason: 'logout-with-unsynced-data',
         };
 
