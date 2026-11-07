@@ -45,12 +45,14 @@ class FakeQuery {
       .map(([path, value]) => ({ id: path.split('/')[1], data: () => value }))
       .sort((a, b) => (a.data().lastSeenAt as Timestamp).toMillis() - (b.data().lastSeenAt as Timestamp).toMillis()
         || a.id.localeCompare(b.id));
-    const start = this.cursor ? docs.findIndex(x => x.id === this.cursor!.id) + 1 : 0;
-    // In real Firestore a deleted snapshot still supplies an order-by cursor.
-    const effectiveStart = this.cursor && start === 0
-      ? docs.findIndex(x => (x.data().lastSeenAt as Timestamp).toMillis() > (this.cursor!.data().lastSeenAt as Timestamp).toMillis())
-      : start;
-    const page = docs.slice(Math.max(0, effectiveStart), Math.max(0, effectiveStart) + this.limitCount);
+    // Firestore orders by lastSeenAt, then document ID. Its snapshot cursor
+    // retains both values when the previous page's document was deleted.
+    const cursorTime = this.cursor ? (this.cursor.data().lastSeenAt as Timestamp).toMillis() : null;
+    const remaining = cursorTime === null ? docs : docs.filter(item => {
+      const timestamp = (item.data().lastSeenAt as Timestamp).toMillis();
+      return timestamp > cursorTime || (timestamp === cursorTime && item.id > this.cursor!.id);
+    });
+    const page = remaining.slice(0, this.limitCount);
     const callback = state.onQuery;
     state.onQuery = null;
     callback?.();
@@ -204,8 +206,10 @@ describe('authenticated inactivity retention boundary', () => {
     for (let i = 0; i < 12; i++) {
       state.docs.set('account_activity/invalid-' + i, { uid: 'foreign', lastSeenAt: old });
     }
-    activity('eligible', Timestamp.fromMillis(old.toMillis() + 1));
+    // Use the exact same ordered timestamp: a cursor that compares only
+    // lastSeenAt would skip this eligible owner after the first full page.
+    activity('z-eligible', old);
     expect(await queueInactiveAccountDeletions(now, 12)).toEqual({ scanned: 13, queued: 1 });
-    expect(state.docs.has('account_deletions/eligible')).toBe(true);
+    expect(state.docs.has('account_deletions/z-eligible')).toBe(true);
   });
 });
