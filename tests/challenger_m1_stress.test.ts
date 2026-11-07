@@ -706,7 +706,7 @@ describe('Empirical Challenger: removeUndefinedValuesForFirestore & Firestore Se
             expect(customResult.items[0].date).toBeInstanceOf(Date);
             expect(typeof jsonResult.items[0].date).toBe('string');
             expect(sampleData.profile).toHaveProperty('notes');
-            expect(sampleData.items[0].sub).toHaveProperty('extra')
+            expect(sampleData.items[0].sub).toHaveProperty('extra');
         });
     });
 });
