@@ -13,13 +13,11 @@ export const GlobalDialog: React.FC = () => {
   const onCancel = useDialogStore(state => state.onCancel);
   const onAction = useDialogStore(state => state.onAction);
   const onInputConfirm = useDialogStore(state => state.onInputConfirm);
-  const [promptValue, setPromptValue] = useState('');
-
-  // A cancelled owner-bound prompt can be replaced without unmounting this portal.
-  // Never let an earlier password remain visible in the next prompt.
-  useEffect(() => {
-    setPromptValue('');
-  }, [isOpen, onInputConfirm]);
+  const [passwordInput, setPasswordInput] = useState({ prompt: onInputConfirm, value: '' });
+  // A queued password prompt can replace the previous owner without unmounting.
+  // Only the active prompt's input may be submitted.
+  const promptValue = passwordInput.prompt === onInputConfirm ? passwordInput.value : '';
+  const setPromptValue = (value: string) => setPasswordInput({ prompt: onInputConfirm, value });
 
   const syncHealth = useAppStore(state => state.syncHealth);
   const hasConflicts = useAppStore(state => !!state.userData?.pendingConflicts);
