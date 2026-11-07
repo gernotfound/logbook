@@ -6,7 +6,7 @@ import NutritionView from '../src/components/Nutrition/NutritionView';
 import SettingsView from '../src/components/SettingsView';
 import TrainingView from '../src/components/Training/TrainingView';
 import { BottomNav } from '../src/components/UI/BottomNav';
-import type { TrainingSubTab } from '../src/types';
+import type { NutritionSubTab, TrainingSubTab } from '../src/types';
 
 // Mock dependencies
 vi.mock('../src/store/useAppStore', () => ({
@@ -15,7 +15,7 @@ vi.mock('../src/store/useAppStore', () => ({
             userData: { pendingConflicts: {} },
             activeTab: 'home',
             setActiveTab: vi.fn(),
-            saveUserData: vi.fn().mockResolvedValue(true)
+            saveUserData: vi.fn().mockResolvedValue({ ok: true, status: 'synced' })
         };
         return selector(state);
     }),
@@ -58,8 +58,8 @@ describe('A11Y-01: Keyboard Accessibility for Sub-Navigation', () => {
 
     it('NutritionView sub-nav uses buttons with role="tab" and is keyboard accessible', async () => {
         const Wrapper = () => {
-            const [subTab, setSubTab] = useState('meals');
-            return <NutritionView subTab={subTab as any} setSubTab={setSubTab as any} />;
+            const [subTab, setSubTab] = useState<NutritionSubTab>('meals');
+            return <NutritionView subTab={subTab} setSubTab={setSubTab} />;
         };
         
         render(<Wrapper />);
