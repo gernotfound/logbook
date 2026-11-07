@@ -139,8 +139,8 @@ function numberValue(value: unknown): number | undefined {
 
 function positiveInt(value: unknown): number | undefined {
     const parsed = numberValue(value);
-    if (parsed === undefined || parsed < 0) return undefined;
-    return Math.trunc(parsed);
+    if (parsed === undefined || !Number.isSafeInteger(parsed) || parsed < 0) return undefined;
+    return parsed;
 }
 
 function parseTimeSeconds(value: unknown): number | undefined {
