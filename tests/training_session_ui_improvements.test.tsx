@@ -678,7 +678,8 @@ describe('Training Session UI Improvements Suite (R1, R2, R3)', () => {
             await act(async () => {
                 fireEvent.click(removeBtn);
             });
-            expect(currentWorkout?.exercises[0].sets).toHaveLength(0);
+            expect(useAppStore.getState().localWorkout?.exercises[0].sets).toHaveLength(0);
+            expect(showConfirmSpy).toHaveBeenCalledTimes(2);
         });
 
         it('Adversarial: verifies isometry detection and empty dropset handling', async () => {
