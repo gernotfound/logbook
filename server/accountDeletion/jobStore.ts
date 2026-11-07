@@ -169,7 +169,12 @@ export async function acquireDeletionLease(uidValue: string, leaseOwner: string,
       transaction.get(adminDb().collection('health_data_erasures').doc(uid)),
     ]);
     if (!snapshot.exists) return false;
-    const current = snapshot.data() as AccountDeletionJob;
+    const current = snapshot.data() as AccountDeletionJob | undefined;
+    // The document ID, not a mutable field in the document, owns the job.
+    // A mismatched record must never grant a lease for destructive work.
+    if (!current || current.uid !== uid) {
+      throw new NonRetryableDeletionError('Deletion job identity mismatch.');
+    }
     if (current.status === 'complete' || (current.status === 'failed' && current.retryable === false)) return false;
 
     // Both deletion workers purge the same shards but have independent leases.
@@ -202,16 +207,17 @@ export async function acquireDeletionLease(uidValue: string, leaseOwner: string,
  * same transaction that checks lease ownership. A read-only preflight check
  * is also used before externally managed Firebase Auth operations.
  */
-function requireLiveLease(job: AccountDeletionJob | undefined, owner: string): void {
-  if (!job || job.status === 'complete' || job.leaseOwner !== owner
+function requireLiveLease(job: AccountDeletionJob | undefined, owner: string, uid: string): void {
+  if (!job || job.uid !== uid || job.status === 'complete' || job.leaseOwner !== owner
     || (timestampMillis(job.leaseUntil) ?? 0) <= Date.now()) {
     throw new DeletionLeaseLostError();
   }
 }
 
 export async function assertDeletionLease(uidValue: string, leaseOwner: string): Promise<void> {
-  const snapshot = await jobRef(validateUid(uidValue)).get();
-  requireLiveLease(snapshot.exists ? snapshot.data() as AccountDeletionJob : undefined, leaseOwner);
+  const uid = validateUid(uidValue);
+  const snapshot = await jobRef(uid).get();
+  requireLiveLease(snapshot.exists ? snapshot.data() as AccountDeletionJob : undefined, leaseOwner, uid);
 }
 
 export async function parkDeletion(
@@ -220,10 +226,11 @@ export async function parkDeletion(
   cursor: AccountDeletionCursor,
   leaseOwner: string,
 ): Promise<void> {
-  const ref = jobRef(validateUid(uidValue));
+  const uid = validateUid(uidValue);
+  const ref = jobRef(uid);
   await adminDb().runTransaction(async (transaction: Transaction) => {
     const snapshot = await transaction.get(ref);
-    requireLiveLease(snapshot.exists ? snapshot.data() as AccountDeletionJob : undefined, leaseOwner);
+    requireLiveLease(snapshot.exists ? snapshot.data() as AccountDeletionJob : undefined, leaseOwner, uid);
     transaction.update(ref, {
       status, cursor, updatedAt: Timestamp.now(),
       leaseOwner: FieldValue.delete(),
@@ -256,7 +263,7 @@ export async function deletePrivateCollectionPage(
   await db.runTransaction(async (transaction: Transaction) => {
     const ref = jobRef(uid);
     const snapshot = await transaction.get(ref);
-    requireLiveLease(snapshot.exists ? snapshot.data() as AccountDeletionJob : undefined, leaseOwner);
+    requireLiveLease(snapshot.exists ? snapshot.data() as AccountDeletionJob : undefined, leaseOwner, uid);
     for (const item of page.docs) transaction.delete(item.ref);
     transaction.update(ref, {
       status: 'deleting',
@@ -272,7 +279,7 @@ export async function deleteUserRoot(uidValue: string, leaseOwner: string): Prom
   await adminDb().runTransaction(async (transaction: Transaction) => {
     const ref = jobRef(uid);
     const snapshot = await transaction.get(ref);
-    requireLiveLease(snapshot.exists ? snapshot.data() as AccountDeletionJob : undefined, leaseOwner);
+    requireLiveLease(snapshot.exists ? snapshot.data() as AccountDeletionJob : undefined, leaseOwner, uid);
     transaction.delete(adminDb().collection('users').doc(uid));
     // The session marker is server-owned, just like the consent marker. Do
     // not leave it orphaned after account deletion; the deletion job fences
@@ -286,7 +293,7 @@ export async function deleteUserRoot(uidValue: string, leaseOwner: string): Prom
     // A data-only erasure keeps Auth, but when the entire account is deleted
     // its server-owned erasure receipt must be removed as well.
     transaction.delete(adminDb().collection('health_data_erasures').doc(uid));
-    await removeHealthConsentStateForDeletedAccount(uid, transaction);
+    removeHealthConsentStateForDeletedAccount(uid, transaction);
     transaction.update(ref, {
       status: 'deleting', cursor: { phase: 'root' }, updatedAt: Timestamp.now(),
     });
@@ -294,10 +301,11 @@ export async function deleteUserRoot(uidValue: string, leaseOwner: string): Prom
 }
 
 export async function markVerifying(uidValue: string, leaseOwner: string): Promise<void> {
-  const ref = jobRef(validateUid(uidValue));
+  const uid = validateUid(uidValue);
+  const ref = jobRef(uid);
   await adminDb().runTransaction(async (transaction: Transaction) => {
     const snapshot = await transaction.get(ref);
-    requireLiveLease(snapshot.exists ? snapshot.data() as AccountDeletionJob : undefined, leaseOwner);
+    requireLiveLease(snapshot.exists ? snapshot.data() as AccountDeletionJob : undefined, leaseOwner, uid);
     transaction.update(ref, {
       status: 'verifying', cursor: { phase: 'verifying' }, updatedAt: Timestamp.now(),
     });
@@ -349,7 +357,7 @@ export async function deleteAccountKeyAfterVerification(uidValue: string, leaseO
   await db.runTransaction(async (transaction: Transaction) => {
     const ref = jobRef(uid);
     const snapshot = await transaction.get(ref);
-    requireLiveLease(snapshot.exists ? snapshot.data() as AccountDeletionJob : undefined, leaseOwner);
+    requireLiveLease(snapshot.exists ? snapshot.data() as AccountDeletionJob : undefined, leaseOwner, uid);
     transaction.delete(db.collection('user_data_keys').doc(uid));
   });
 }
@@ -361,7 +369,7 @@ export async function deleteAuthUserLast(uidValue: string, leaseOwner: string): 
   const ref = jobRef(uid);
   await adminDb().runTransaction(async (transaction: Transaction) => {
     const snapshot = await transaction.get(ref);
-    requireLiveLease(snapshot.exists ? snapshot.data() as AccountDeletionJob : undefined, leaseOwner);
+    requireLiveLease(snapshot.exists ? snapshot.data() as AccountDeletionJob : undefined, leaseOwner, uid);
     transaction.update(ref, {
       status: 'verifying', cursor: { phase: 'auth' }, updatedAt: Timestamp.now(),
     });
@@ -374,10 +382,11 @@ export async function deleteAuthUserLast(uidValue: string, leaseOwner: string): 
 }
 
 export async function markDeletionComplete(uidValue: string, leaseOwner: string): Promise<void> {
-  const ref = jobRef(validateUid(uidValue));
+  const uid = validateUid(uidValue);
+  const ref = jobRef(uid);
   await adminDb().runTransaction(async (transaction: Transaction) => {
     const snapshot = await transaction.get(ref);
-    requireLiveLease(snapshot.exists ? snapshot.data() as AccountDeletionJob : undefined, leaseOwner);
+    requireLiveLease(snapshot.exists ? snapshot.data() as AccountDeletionJob : undefined, leaseOwner, uid);
     const now = Timestamp.now();
     transaction.update(ref, {
       status: 'complete',
@@ -404,7 +413,7 @@ export async function markDeletionFailed(
   const ref = jobRef(uid);
   await adminDb().runTransaction(async (transaction: Transaction) => {
     const snapshot = await transaction.get(ref);
-    requireLiveLease(snapshot.exists ? snapshot.data() as AccountDeletionJob : undefined, leaseOwner);
+    requireLiveLease(snapshot.exists ? snapshot.data() as AccountDeletionJob : undefined, leaseOwner, uid);
     transaction.update(ref, {
       status: 'failed',
       retryable,

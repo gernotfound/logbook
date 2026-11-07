@@ -1,6 +1,7 @@
 import { afterEach, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { SecureVaultPrompt } from '../../src/lib/sync/SecureVaultPrompt';
+import { useScrollLock } from '../../src/hooks/useScrollLock';
 
 afterEach(() => {
     document.body.style.overflow = '';
@@ -62,4 +63,22 @@ it('keeps long recovery guidance scrollable inside a short viewport', () => {
     expect(panel instanceof HTMLElement && panel.style.maxHeight).toBe('calc(100dvh - 36px)');
     expect(screen.getByText('Storage unavailable').getAttribute('role')).toBe('alert');
     view.unmount();
+});
+
+function BackgroundOverlayLock() {
+    useScrollLock();
+    return null;
+}
+
+it('keeps the page locked when an earlier overlay exits beneath the recovery prompt', () => {
+    document.body.style.overflow = 'auto';
+    const first = render(<BackgroundOverlayLock />);
+    const vault = render(<SecureVaultPrompt error="Storage unavailable" retry={() => {}} />);
+
+    expect(document.body.style.overflow).toBe('hidden');
+    first.unmount();
+    expect(document.body.style.overflow).toBe('hidden');
+
+    vault.unmount();
+    expect(document.body.style.overflow).toBe('auto');
 });
