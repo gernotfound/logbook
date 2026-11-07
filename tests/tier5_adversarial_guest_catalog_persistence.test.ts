@@ -223,8 +223,9 @@ describe('Tier 5: Adversarial Coverage Hardening Suite', () => {
                 activeWorkout: null
             };
 
-            await DB.saveUserData(massiveState);
+            const result = await DB.saveUserData(massiveState);
 
+            expect(result).toMatchObject({ ok: true, status: 'synced' });
             expect(mockBatch.commit).toHaveBeenCalled();
             expect(capturedUserDocWrite).not.toBeNull();
             expect(capturedSealedUserDoc).not.toBeNull();
@@ -236,6 +237,22 @@ describe('Tier 5: Adversarial Coverage Hardening Suite', () => {
             // CRITICAL TEST 2: CustomFoods in user doc has length 100 (strictly custom), ZERO seed items!
             expect(capturedUserDocWrite.customFoods).toHaveLength(100);
             expect(capturedUserDocWrite.customFoods.every((f: any) => f.isCustom === true)).toBe(true);
+
+            // All monthly shards must be delivered. Checking only the root would let
+            // the test pass after silently losing the 200 workouts or 180 food days.
+            const openCapturedMonths = (writes: Record<string, unknown>) =>
+                Object.entries(writes).map(([ref, sealed]) => openTestCloudBusiness(
+                    sealed, ref.slice('users/test-user-id/'.length),
+                ));
+            const historyMonths = openCapturedMonths(capturedHistoryMonthWrites);
+            const nutritionMonths = openCapturedMonths(capturedNutritionMonthWrites);
+            expect(historyMonths).toHaveLength(10);
+            expect(nutritionMonths).toHaveLength(6);
+            const historyIds = historyMonths.flatMap(month => Object.values(month).map(workout => workout.id));
+            const nutritionDates = nutritionMonths.flatMap(month => Object.keys(month));
+            expect(historyIds).toHaveLength(200);
+            expect(new Set(historyIds).size).toBe(200);
+            expect(nutritionDates.sort()).toEqual(Object.keys(nutrition).sort());
 
             // Check the actual encrypted Firestore document including _sync metadata,
             // not its smaller decrypted business projection.
