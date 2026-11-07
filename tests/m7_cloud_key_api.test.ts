@@ -335,10 +335,11 @@ describe('authenticated cloud account key API', () => {
   });
 
   it('does not release an old ADK when a new active consent epoch replaces the transacted epoch', async () => {
-    let unwrapped: Buffer | null = null;
+    const unwrappedKeys: Buffer[] = [];
     harness.unwrap.mockImplementationOnce(async (_uid, wrapped) => {
-      unwrapped = Buffer.from(wrapped.ciphertext, 'base64');
-      return unwrapped;
+      const bytes = Buffer.from(wrapped.ciphertext, 'base64');
+      unwrappedKeys.push(bytes);
+      return bytes;
     });
     // Simulate a new, server-owned consent generation between the successful
     // Firestore transaction and the final release check. The same status is
@@ -349,8 +350,8 @@ describe('authenticated cloud account key API', () => {
     const response = await POST(request());
     expect(response.status).toBe(503);
     expect(await response.text()).not.toMatch(/[A-Za-z0-9+/]{43}=/);
-    expect(unwrapped).not.toBeNull();
-    expect(unwrapped?.every(byte => byte === 0)).toBe(true);
+    expect(unwrappedKeys).toHaveLength(1);
+    expect(unwrappedKeys[0].every(byte => byte === 0)).toBe(true);
     expect(harness.documents.has('user_data_keys/owner-a')).toBe(true);
     expect(harness.wrap).toHaveBeenCalledTimes(1);
   });
