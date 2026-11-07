@@ -339,7 +339,7 @@ export function useHomeView(isActive = true): HomeViewState {
     const fat = todayNutrition.fat || 0;
 
     // Get Targets from planning
-    let kcalTarget = nutritionPlanning?.normocalorica?.kcal || 2500;
+    let kcalTarget = nutritionPlanning?.normocalorica?.kcal || 0;
     
     if (nutritionPlanning) {
         const isDayOn = todayNutrition.isDayOn;
