@@ -59,7 +59,7 @@ describe('completed workout to reusable routine', () => {
     });
     it('does not convert partial, non-integer or non-positive repetitions into a routine target', () => {
         const workout: WorkoutSession = {
-            exercises: [{ exId: 'exercise', sets: [
+            exercises: [{ exId: 'exercise', sessionNote: '', sets: [
                 { id: 's1', reps: '8reps', kg: '20' },
                 { id: 's2', reps: '8.5', kg: '20' },
                 { id: 's3', reps: '-2', kg: '20' },
