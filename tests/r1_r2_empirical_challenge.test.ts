@@ -152,6 +152,26 @@ describe('EMPIRICAL ADVERSARIAL SUITE — R1 (TDEE Calculation) & R2 (Workout Vo
             expect(res.tdee).toBe(2500);
         });
 
+        it('R1.4b: rejects numeric prefixes and non-finite values instead of counting invalid days', () => {
+            const valid = Array.from({ length: 6 }, (_, i) => ({
+                date: `2026-06-${String(i + 10).padStart(2, '0')}`, weight: 80, kcal: 2500,
+            }));
+            const invalid = [
+                { date: '2026-06-16', weight: '80kg', kcal: 2500 },
+                { date: '2026-06-17', weight: 80, kcal: '2500 kcal' },
+                { date: '2026-06-18', weight: '0x50', kcal: 2500 },
+                { date: '2026-06-19', weight: 80, kcal: '1e309' },
+            ];
+            const input = [...valid, ...invalid];
+            const untouched = structuredClone(input);
+            expect(calculateTDEE(input)).toEqual({
+                error: true,
+                message: 'Raccolta dati in corso... (6/7 giorni richiesti)',
+            });
+            expect(input).toEqual(untouched);
+            expect(calculateTDEE([...valid, { date: '2026-06-16', weight: '80,5', kcal: '2500,5' }]).error).toBe(false);
+        });
+
         // 1.5 Invalid dates are excluded before arithmetic
         it('R1.5: rejects unparseable dates instead of producing NaN TDEE values', () => {
             const dataWithBadDate = [

@@ -7,13 +7,21 @@ export function calculateTDEE(nutritionHistoryList: { date?: string; weight?: st
     if (!Array.isArray(nutritionHistoryList)) {
         return { error: true, message: "Dati non validi" };
     }
+    const parsePositiveMeasurement = (value: string | number | undefined): number | null => {
+        if (typeof value !== 'number' && typeof value !== 'string') return null;
+        const numericText = String(value).trim().replace(',', '.');
+        // parseFloat accepts incomplete values such as "80kg", which are not valid measurements.
+        if (!/^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$/.test(numericText)) return null;
+        const parsed = Number(numericText);
+        return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+    };
     const validDays = nutritionHistoryList.flatMap((d) => {
         if (!d || typeof d.date !== 'string') return [];
         const date = parseDateInput(d.date);
-        const w = parseFloat(String(d.weight).replace(',', '.'));
-        const k = parseFloat(String(d.kcal).replace(',', '.'));
-        if (date !== d.date || !Number.isFinite(w) || w <= 0 || !Number.isFinite(k) || k <= 0) return [];
-        return [{ date, weight: d.weight as string | number, kcal: d.kcal as string | number }];
+        const weight = parsePositiveMeasurement(d.weight);
+        const kcal = parsePositiveMeasurement(d.kcal);
+        if (date !== d.date || weight === null || kcal === null) return [];
+        return [{ date, weight, kcal }];
     });
 
     const dayOrdinal = (date: string) => {
@@ -39,11 +47,11 @@ export function calculateTDEE(nutritionHistoryList: { date?: string; weight?: st
         return { error: true, message: 'Campione non valido: registrazioni duplicate per la stessa giornata.' };
     }
     const recentDays = recentCandidates.slice(-14);
-    const wFirst = parseFloat(String(recentDays[0].weight).replace(',', '.'));
-    const wLast = parseFloat(String(recentDays[recentDays.length - 1].weight).replace(',', '.'));
+    const wFirst = recentDays[0].weight;
+    const wLast = recentDays[recentDays.length - 1].weight;
     const diffDays = Math.abs(dayOrdinal(recentDays[recentDays.length - 1].date) - dayOrdinal(recentDays[0].date));
     if (diffDays === 0) return { error: true, message: "Dati insufficienti (stesso giorno)" };
-    const avgKcal = recentDays.reduce((sum, d) => sum + parseFloat(String(d.kcal).replace(',', '.')), 0) / recentDays.length;
+    const avgKcal = recentDays.reduce((sum, d) => sum + d.kcal, 0) / recentDays.length;
     const weightDiff = wLast - wFirst;
     const dailySurplusKcal = (weightDiff / diffDays) * 7700;
     const estimatedTDEE = avgKcal - dailySurplusKcal;
