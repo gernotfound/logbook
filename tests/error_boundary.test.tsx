@@ -220,6 +220,27 @@ describe('R2: ErrorBoundary & Dialog Hardening Suite', () => {
         spy.mockRestore();
     });
 
+    it('does not reload after the account session changes while local purge is pending', async () => {
+        const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+        vi.mocked(useDialogStore.getState().showConfirm).mockResolvedValueOnce(true);
+        let finishPurge!: () => void;
+        vi.mocked(DB.purgeAllLocalUserData).mockImplementationOnce(() =>
+            new Promise<void>(resolve => { finishPurge = resolve; })
+        );
+
+        render(<ErrorBoundary><ProblemChild shouldThrow={true} /></ErrorBoundary>);
+        await act(async () => { fireEvent.click(screen.getByText(/Azzera dati locali/i)); });
+        expect(DB.purgeAllLocalUserData).toHaveBeenCalledExactlyOnceWith('user:test-user-id');
+
+        // The owner label can be identical after A→B→A; the epoch still changed.
+        invalidateSession();
+        invalidateSession();
+        await act(async () => { finishPurge(); });
+
+        expect(window.location.reload).not.toHaveBeenCalled();
+        log.mockRestore();
+    });
+
     it('never calls local reset when the account has a pending server deletion', async () => {
         const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
         const owner = storageOwner();

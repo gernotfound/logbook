@@ -75,6 +75,9 @@ class ErrorBoundary extends Component<Props, State> {
       } else {
         await DB.purgeAllLocalUserData(owner);
       }
+      // Guest reset intentionally revokes its session; for account recovery,
+      // do not reload a newer session after the awaited owner-scoped purge.
+      if (owner !== 'guest' && !isCurrentSession(session)) return;
       window.location.reload();
     } catch (error) {
       console.error('Pulizia locale di recovery non completata:', error);

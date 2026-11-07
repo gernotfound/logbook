@@ -309,6 +309,8 @@ describe('durable health-consent client barrier', () => {
 
   it('keeps revocation durable across uncertain server failures', async () => {
     const uid = 'offline-' + crypto.randomUUID();
+    const actor = user(uid);
+    (auth as { currentUser: unknown }).currentUser = actor;
     await createAndMigrateVault('user:' + uid);
     await initializeLocal('user:' + uid, UserDataSchema.parse({ profile: { height: '180' } }) as any);
     expect(await get('logbook:v2:user:' + uid)).toMatch(/^tlb-sealed:v1:/);
@@ -316,8 +318,9 @@ describe('durable health-consent client barrier', () => {
       if (request.method === 'GET') return trustedConsentResponse({ status: 'active', revision: 1 });
       throw new Error('offline');
     }));
-    expect(await refreshHealthConsent(user(uid))).toBe('active');
-    await expect(withdrawHealthConsent(user(uid))).rejects.toThrow('offline');
+    beginHealthConsentVerification(uid);
+    expect(await refreshHealthConsent(actor)).toBe('active');
+    await expect(withdrawHealthConsent(actor)).rejects.toThrow('offline');
     expect(localStorage.getItem(key(uid))).toBe('pending:1');
     expect(isHealthConsentWritable('user:' + uid)).toBe(false);
     expect((await readLocal('user:' + uid))?.consentRevision).toBe(1);
@@ -463,6 +466,8 @@ describe('later reacceptance on another device', () => {
 describe('withdrawal acknowledgement racing with a newer consent', () => {
   it('offers an explicit stale-request decision instead of trapping the device in withdrawn state', async () => {
     const uid = 'late-ack-' + crypto.randomUUID();
+    const actor = user(uid);
+    (auth as { currentUser: unknown }).currentUser = actor;
     await createAndMigrateVault('user:' + uid);
     let latestRevision = 0;
     vi.stubGlobal('fetch', vi.fn(async (_url: string, init: RequestInit) => {
@@ -476,8 +481,9 @@ describe('withdrawal acknowledgement racing with a newer consent', () => {
         ? { status: 'active', revision: 1 }
         : { status: 'active', revision: 3, acceptedAt: '2026-10-12T05:00:00.000Z' });
     }));
-    expect(await refreshHealthConsent(user(uid))).toBe('active');
-    await withdrawHealthConsent(user(uid));
+    beginHealthConsentVerification(uid);
+    expect(await refreshHealthConsent(actor)).toBe('active');
+    await withdrawHealthConsent(actor);
     expect(localStorage.getItem(key(uid))).toBe('pending:1');
     expect(currentHealthConsentStatus(uid)).toBe('stale-request');
     expect(isHealthConsentWritable('user:' + uid)).toBe(false);
@@ -765,6 +771,53 @@ describe('consent responses across authenticated owner changes', () => {
     await expect(keep).rejects.toThrow('Sessione');
     expect(localStorage.getItem(key(uid))).toBe('pending:1');
     expect(localStorage.getItem('logbook:v2:user:' + uid + ':health-consent-generation')).toBeNull();
+  });
+});
+
+describe('withdrawal remains bound to the verified Auth generation', () => {
+  it('does not persist a revocation for an old account after a switch to another UID', async () => {
+    const uid = 'withdraw-stale-owner-' + crypto.randomUUID();
+    const actor = user(uid);
+    (auth as { currentUser: unknown }).currentUser = actor;
+    await createAndMigrateVault('user:' + uid);
+    const requests = vi.fn(async () => trustedConsentResponse({ status: 'active', revision: 1 }));
+    vi.stubGlobal('fetch', requests);
+    beginHealthConsentVerification(uid);
+    expect(await refreshHealthConsent(actor)).toBe('active');
+
+    (auth as { currentUser: unknown }).currentUser = user('other-' + crypto.randomUUID());
+    // Account A's in-memory approval is not write permission for A under B.
+    expect(isHealthConsentWritable('user:' + uid)).toBe(false);
+    invalidateSession();
+    await expect(withdrawHealthConsent(actor)).rejects.toThrow('Sessione cambiata');
+    expect(localStorage.getItem(key(uid))).toBeNull();
+    expect(requests).toHaveBeenCalledOnce();
+  });
+
+  it('rejects a revoked Auth epoch even after the same UID returns with the same User instance', async () => {
+    const uid = 'withdraw-stale-epoch-' + crypto.randomUUID();
+    const actor = user(uid);
+    (auth as { currentUser: unknown }).currentUser = actor;
+    await createAndMigrateVault('user:' + uid);
+    const requests = vi.fn(async () => trustedConsentResponse({ status: 'active', revision: 1 }));
+    vi.stubGlobal('fetch', requests);
+    beginHealthConsentVerification(uid);
+    expect(await refreshHealthConsent(actor)).toBe('active');
+    expect(isHealthConsentWritable('user:' + uid)).toBe(true);
+
+    (auth as { currentUser: unknown }).currentUser = user('other-' + crypto.randomUUID());
+    invalidateSession();
+    (auth as { currentUser: unknown }).currentUser = actor;
+    invalidateSession();
+    expect(isHealthConsentWritable('user:' + uid)).toBe(false);
+    expect(isHealthConsentCloudWritable('user:' + uid)).toBe(false);
+    await expect(withdrawHealthConsent(actor)).rejects.toThrow('Verifica prima il consenso');
+    expect(localStorage.getItem(key(uid))).toBeNull();
+    expect(requests).toHaveBeenCalledOnce();
+
+    beginHealthConsentVerification(uid);
+    expect(await refreshHealthConsent(actor)).toBe('active');
+    expect(isHealthConsentWritable('user:' + uid)).toBe(true);
   });
 });
 

@@ -112,6 +112,41 @@ describe('browser storage boundary', () => {
         expect(findPendingAccountDeletion()?.uid).toBe('test-user');
     });
 
+    it('rejects a partial deletion-receipt inventory when another tab adds a marker during reads', () => {
+        const firstKey = 'logbook:v2:' + OWNER + ':account-deletion';
+        const otherOwner = 'user:another-user';
+        const otherKey = 'logbook:v2:' + otherOwner + ':account-deletion';
+        markAccountDeletion(OWNER, { receiptToken: 'receipt-A' });
+        const originalRead = localStorageMock.getItem.getMockImplementation();
+        if (!originalRead) throw new Error('Missing localStorage mock read implementation');
+        let concurrentAddition = false;
+        localStorageMock.getItem.mockImplementation((storageKey: string) => {
+            if (storageKey === firstKey && !concurrentAddition) {
+                concurrentAddition = true;
+                localStorage.setItem(otherKey, JSON.stringify({
+                    owner: otherOwner,
+                    uid: 'another-user',
+                    startedAt: Date.now(),
+                    receiptToken: 'receipt-B',
+                }));
+            }
+            return originalRead(storageKey);
+        });
+        try {
+            expect(() => listPendingAccountDeletions()).toThrow('Inventario marker cancellazione account');
+        } finally {
+            localStorageMock.getItem.mockImplementation(originalRead);
+        }
+
+        expect(concurrentAddition).toBe(true);
+        // Neither durable receipt was removed or treated as an absent request.
+        expect(readAccountDeletionMarker(OWNER)?.receiptToken).toBe('receipt-A');
+        expect(readAccountDeletionMarker(otherOwner)?.receiptToken).toBe('receipt-B');
+        expect(listPendingAccountDeletions().markers.map(marker => marker.uid).sort()).toEqual([
+            'another-user', 'test-user',
+        ]);
+    });
+
     it('rejects an account-deletion marker whose UID does not match its owner key', () => {
         localStorage.setItem('logbook:v2:' + OWNER + ':account-deletion', JSON.stringify({
             uid: 'other-user',
@@ -158,6 +193,24 @@ describe('browser storage boundary', () => {
             owner: OWNER, uid: 'test-user', startedAt: marker.startedAt,
             receiptToken: 'receipt-A', serverAcceptedAt: 23,
         });
+    });
+
+    it('rejects writer inputs that would leave an unreadable account-deletion receipt', () => {
+        const storageKey = 'logbook:v2:' + OWNER + ':account-deletion';
+        markAccountDeletion(OWNER, { receiptToken: 'receipt-A' });
+        const original = localStorage.getItem(storageKey);
+        const writes = localStorageMock.setItem.mock.calls.length;
+
+        expect(() => markAccountDeletion('user:')).toThrow('account autenticato');
+        expect(() => markAccountDeletion(OWNER, { receiptToken: '' }))
+            .toThrow(AccountDeletionMarkerCorruptError);
+        expect(() => markAccountDeletion(OWNER, { serverAcceptedAt: 0 }))
+            .toThrow(AccountDeletionMarkerCorruptError);
+
+        expect(localStorageMock.setItem).toHaveBeenCalledTimes(writes);
+        expect(localStorage.getItem(storageKey)).toBe(original);
+        expect(localStorage.getItem('logbook:v2:user::account-deletion')).toBeNull();
+        expect(readAccountDeletionMarker(OWNER)?.receiptToken).toBe('receipt-A');
     });
 
     it('keeps valid receipts recoverable when reading another owner marker fails', () => {
