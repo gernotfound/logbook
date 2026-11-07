@@ -69,9 +69,9 @@ describe('Tier 5: Adversarial Coverage Hardening Suite', () => {
     });
 
     // =========================================================================
-    // 5.3: OFFLINE GUEST PERSISTENCE -> FIRESTORE PAYLOAD INSPECTION
+    // 5.3: CONSENTED ACCOUNT SNAPSHOT -> ENCRYPTED FIRESTORE PAYLOAD INSPECTION
     // =========================================================================
-    describe('5.3: Offline Guest Persistence -> Firestore Payload Inspection (Zero Seed Duplication & Strict Doc Size Bounds)', () => {
+    describe('5.3: Consented account stress-save and encrypted Firestore payload inspection', () => {
 
         it('T5.3.1: Massive user data stress (100 custom exercises, 100 custom foods, 50 routines, 200 history sessions, 180 nutrition days, 50 overrides) strictly excludes seed items and satisfies Firestore size limits', async () => {
             // Generate standard seed catalog fixture explicitly
@@ -98,6 +98,7 @@ describe('Tier 5: Adversarial Coverage Hardening Suite', () => {
             await saveCatalogToCache(seed as any);
 
             let capturedUserDocWrite: any = null;
+            let capturedSealedUserDoc: unknown = null;
             const capturedHistoryMonthWrites: Record<string, any> = {};
             const capturedNutritionMonthWrites: Record<string, any> = {};
 
@@ -105,6 +106,7 @@ describe('Tier 5: Adversarial Coverage Hardening Suite', () => {
                 set: vi.fn((ref: any, data: any) => {
                     // Inspect ref path to know destination
                     if (String(ref) === 'users/test-user-id' && data?._sealed) {
+                        capturedSealedUserDoc = data;
                         capturedUserDocWrite = openTestCloudBusiness(data);
                     } else if (ref && String(ref).includes('history_months')) {
                         capturedHistoryMonthWrites[String(ref)] = data;
@@ -145,7 +147,7 @@ describe('Tier 5: Adversarial Coverage Hardening Suite', () => {
                 exercises: [{ exId: `stress_custom_ex_${i % 100}`, setsCount: 3 }]
             }));
 
-            // 4. Generate 200 history sessions across 10 months (2025-11 to 2026-08)
+            // 4. Generate 200 history sessions across 10 months (2026-01 to 2026-10)
             const history: WorkoutSession[] = Array.from({ length: 200 }, (_, i) => {
                 const monthNum = (i % 10) + 1;
                 const monthStr = monthNum < 10 ? `0${monthNum}` : `${monthNum}`;
@@ -166,14 +168,12 @@ describe('Tier 5: Adversarial Coverage Hardening Suite', () => {
                 };
             });
 
-            // 5. Generate 180 nutrition days across 6 months (2026-03 to 2026-08)
+            // 5. Generate 180 DISTINCT nutrition days across 6 months (2026-03 to 2026-08).
+            // The old modulo-based fixture silently overwrote dates, exercising only 84 days.
             const nutrition: Record<string, NutritionDay> = {};
+            const nutritionStart = Date.UTC(2026, 2, 1);
             for (let i = 0; i < 180; i++) {
-                const monthNum = (i % 6) + 3; // 3 to 8
-                const monthStr = monthNum < 10 ? `0${monthNum}` : `${monthNum}`;
-                const dayNum = (i % 28) + 1;
-                const dayStr = dayNum < 10 ? `0${dayNum}` : `${dayNum}`;
-                const dateKey = `2026-${monthStr}-${dayStr}`;
+                const dateKey = new Date(nutritionStart + i * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
                 nutrition[dateKey] = {
                     date: dateKey,
                     kcal: 2200 + (i % 300),
@@ -186,6 +186,8 @@ describe('Tier 5: Adversarial Coverage Hardening Suite', () => {
                     ]
                 };
             }
+
+            expect(Object.keys(nutrition)).toHaveLength(180);
 
             // 6. Generate 50 overrides
             const exerciseOverrides: Record<string, any> = {};
@@ -221,33 +223,104 @@ describe('Tier 5: Adversarial Coverage Hardening Suite', () => {
                 activeWorkout: null
             };
 
-            await DB.saveUserData(massiveState);
+            const result = await DB.saveUserData(massiveState);
 
+            expect(result).toMatchObject({ ok: true, status: 'synced' });
             expect(mockBatch.commit).toHaveBeenCalled();
             expect(capturedUserDocWrite).not.toBeNull();
+            expect(capturedSealedUserDoc).not.toBeNull();
 
             // CRITICAL TEST 1: Library in user doc has length 100 (strictly custom), ZERO seed items!
             expect(capturedUserDocWrite.library).toHaveLength(100);
             expect(capturedUserDocWrite.library.every((e: any) => e.isDefault === false)).toBe(true);
+            expect(new Set(capturedUserDocWrite.library.map((e: Exercise) => e.id)))
+                .toEqual(new Set(customExercises.map(exercise => exercise.id)));
 
             // CRITICAL TEST 2: CustomFoods in user doc has length 100 (strictly custom), ZERO seed items!
             expect(capturedUserDocWrite.customFoods).toHaveLength(100);
             expect(capturedUserDocWrite.customFoods.every((f: any) => f.isCustom === true)).toBe(true);
+            expect(new Set(capturedUserDocWrite.customFoods.map((food: Food) => food.id)))
+                .toEqual(new Set(customFoods.map(food => food.id)));
 
-            // CRITICAL TEST 3: V3 includes causal _sync metadata; keep this stress payload below 20% of the production safety ceiling.
-            const userDocPayloadBytes = calculateDocSizeBytes(capturedUserDocWrite);
+            // All monthly shards must be delivered. Checking only the root would let
+            // the test pass after silently losing the 200 workouts or 180 food days.
+            const openCapturedMonths = (writes: Record<string, unknown>) =>
+                Object.entries(writes).map(([ref, sealed]) => openTestCloudBusiness(
+                    sealed, ref.slice('users/test-user-id/'.length),
+                ));
+            const historyMonths = openCapturedMonths(capturedHistoryMonthWrites);
+            const nutritionMonths = openCapturedMonths(capturedNutritionMonthWrites);
+            expect(historyMonths).toHaveLength(10);
+            expect(nutritionMonths).toHaveLength(6);
+            const historyIds = historyMonths.flatMap(month => Object.values(month).map(workout => workout.id));
+            const nutritionDates = nutritionMonths.flatMap(month => Object.keys(month));
+            expect(historyIds).toHaveLength(200);
+            expect(new Set(historyIds).size).toBe(200);
+            expect(nutritionDates.sort()).toEqual(Object.keys(nutrition).sort());
+
+            // Counts and IDs alone miss corruption or omission of nested training sets
+            // and meal entries. Inspect the decrypted business values of every sealed month.
+            const savedHistory = Object.assign({}, ...historyMonths) as Record<string, WorkoutSession>;
+            for (const session of history) {
+                const saved = savedHistory[String(session.id)];
+                expect(saved).toMatchObject({
+                    id: session.id,
+                    date: session.date,
+                    exercises: [{
+                        id: session.exercises[0].id,
+                        exId: session.exercises[0].exId,
+                        sets: [{ id: session.exercises[0].sets[0].id, kg: '80', reps: '10', done: true }],
+                    }],
+                });
+                expect(saved.exercises).toHaveLength(1);
+                expect(saved.exercises[0].sets).toHaveLength(1);
+            }
+            const savedNutrition = Object.assign({}, ...nutritionMonths) as Record<string, NutritionDay>;
+            for (const [date, day] of Object.entries(nutrition)) {
+                const saved = savedNutrition[date];
+                expect(saved).toMatchObject({
+                    date,
+                    // Semantic cloud projection recalculates these daily totals
+                    // from the logged meal; the input deliberately has stale totals.
+                    kcal: 500,
+                    pro: 40,
+                    carbs: 50,
+                    fat: 15,
+                    meals: [{ id: day.meals![0].id, name: 'Meal 1', quantity: 100,
+                        kcal: 500, pro: 40, carbs: 50, fat: 15 }],
+                });
+                expect(saved.meals).toHaveLength(1);
+                expect(Number(saved.weight)).toBeCloseTo(Number(day.weight));
+            }
+
+            // The Firestore size limit applies to each ciphertext shard, not just the root.
+            for (const [path, sealed] of [
+                ...Object.entries(capturedHistoryMonthWrites),
+                ...Object.entries(capturedNutritionMonthWrites),
+            ]) {
+                expect(calculateDocSizeBytes(sealed)).toBeLessThanOrEqual(DOC_SIZE_LIMIT_BYTES);
+                expect(() => checkDocSize(sealed, path)).not.toThrow();
+            }
+
+            // Check the actual encrypted Firestore document including _sync metadata,
+            // not its smaller decrypted business projection.
+            const userDocPayloadBytes = calculateDocSizeBytes(capturedSealedUserDoc);
             expect(userDocPayloadBytes).toBeLessThan(DOC_SIZE_LIMIT_BYTES * 0.20);
-            expect(() => checkDocSize(capturedUserDocWrite, "User Profile")).not.toThrow();
+            expect(() => checkDocSize(capturedSealedUserDoc, "User Profile")).not.toThrow();
         });
 
-        it('T5.3.2: Clean seed state (176 exercises and 130 foods resolved with 0 custom items) serializes empty arrays and tiny doc payload', async () => {
+        it('T5.3.2: Empty bundled seed state serializes empty custom collections into a small sealed root', async () => {
             const seed = getSeedCatalog();
             await saveCatalogToCache(seed);
 
             let capturedUserDocWrite: any = null;
+            let capturedSealedUserDoc: unknown = null;
             const mockBatch = {
                 set: vi.fn((_ref: any, data: any) => {
-                    if (String(_ref) === 'users/test-user-id' && data?._sealed) capturedUserDocWrite = openTestCloudBusiness(data);
+                    if (String(_ref) === 'users/test-user-id' && data?._sealed) {
+                        capturedSealedUserDoc = data;
+                        capturedUserDocWrite = openTestCloudBusiness(data);
+                    }
                 }),
                 delete: vi.fn(),
                 commit: vi.fn().mockResolvedValue(undefined)
@@ -268,12 +341,15 @@ describe('Tier 5: Adversarial Coverage Hardening Suite', () => {
                 activeWorkout: null
             };
 
-            await DB.saveUserData(cleanState);
+            const result = await DB.saveUserData(cleanState);
 
+            expect(result).toMatchObject({ ok: true, status: 'synced' });
             expect(capturedUserDocWrite).not.toBeNull();
             expect(capturedUserDocWrite.library).toEqual([]);
             expect(capturedUserDocWrite.customFoods).toEqual([]);
-            expect(JSON.stringify(capturedUserDocWrite).length).toBeLessThan(10000); // Less than 10KB!
+            expect(capturedSealedUserDoc).not.toBeNull();
+            expect(calculateDocSizeBytes(capturedSealedUserDoc)).toBeLessThan(10000);
+            expect(() => checkDocSize(capturedSealedUserDoc, 'User Profile')).not.toThrow();
         });
 
         it('T5.3.3: checkDocSize throws Error if serialized document size exceeds 950KB and passes for normal payloads', () => {

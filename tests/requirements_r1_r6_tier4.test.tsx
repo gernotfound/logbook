@@ -1,6 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { defaultMockUserData } from './setup';
-import { useAppStore } from '../src/store/useAppStore';
+import { describe, it, expect } from 'vitest';
 import type { NutritionDay } from '../src/types';
 import {
     getLatestUserWeightContract,
@@ -10,17 +8,6 @@ import {
 } from './requirements_r1_r6_contracts';
 
 describe('LogBook 4-Tier Automated Test Suite (Requirements R1 - R6)', () => {
-    beforeEach(() => {
-        window.localStorage.clear();
-        useAppStore.getState().resetStore();
-        vi.clearAllMocks();
-    });
-
-    afterEach(() => {
-        window.localStorage.clear();
-        useAppStore.getState().resetStore();
-        vi.restoreAllMocks();
-    });
 
     /* =========================================================================
      * TIER 4: MULTI-STEP PURE CALCULATION SCENARIOS (not E2E workflows)
@@ -113,14 +100,6 @@ describe('LogBook 4-Tier Automated Test Suite (Requirements R1 - R6)', () => {
                 }
             };
 
-            useAppStore.setState({
-                userData: {
-                    ...defaultMockUserData,
-                    nutrition: initialNutrition,
-                    activePains: ['dorso']
-                }
-            });
-
             // Day 1 Workout: Back & Biceps (Dorso)
             const library = [
                 { id: 'ex_row', isBodyweight: false, equipmentWeight: 0, muscles: ['dorso'] }
@@ -129,14 +108,14 @@ describe('LogBook 4-Tier Automated Test Suite (Requirements R1 - R6)', () => {
                 exercises: [{ exId: 'ex_row', sets: [{ kg: '70', reps: '10' }] }]
             };
 
-            const latestWeight = getLatestUserWeightContract(useAppStore.getState().userData?.nutrition);
+            const latestWeight = getLatestUserWeightContract(initialNutrition);
             expect(latestWeight).toBe(76.5);
 
             const vol = calculateWorkoutVolumeContract(backSession, library, latestWeight);
             expect(vol).toBe(700);
 
             // Completing the session must not imply that the existing pain resolved.
-            const resolvedPains = mergeActivePainsContract(useAppStore.getState().userData?.activePains, []);
+            const resolvedPains = mergeActivePainsContract(['dorso'], []);
             expect(resolvedPains).toEqual(['dorso']);
         });
 

@@ -5,7 +5,7 @@ import { doc } from 'firebase/firestore';
 vi.unmock('../src/lib/db');
 import { ConsentedTestDB as DB } from './testUtils';
 import { prepareUnlockedTestArchive } from './secureVaultFixture';
-import { initializeLocal } from '../src/lib/sync/localRepository';
+import { initializeLocal, readLocal } from '../src/lib/sync/localRepository';
 import { getCachedCatalog, clearCatalogCache } from '../src/lib/catalog/catalogService';
 import { storageOwner } from '../src/lib/sync/session';
 import { mergeUserData } from '../src/lib/merge';
@@ -59,6 +59,7 @@ describe('Tier 5: Adversarial Coverage Hardening Suite', () => {
 
     afterEach(() => {
         clearSyncTimers();
+        vi.useRealTimers();
     });
 
     // =========================================================================
@@ -100,7 +101,7 @@ describe('Tier 5: Adversarial Coverage Hardening Suite', () => {
             }
         });
 
-        it('T5.5.2: 10 rapid concurrent saveUserData() calls coalesce into a single batched DB.saveUserData call and all Promises resolve', async () => {
+        it('T5.5.2: Ten rapid store saves resolve and durably retain the latest state', async () => {
             const owner = storageOwner();
             await prepareUnlockedTestArchive(owner);
             vi.useFakeTimers();
@@ -138,14 +139,22 @@ describe('Tier 5: Adversarial Coverage Hardening Suite', () => {
             const results = await settledPromise;
 
             expect(results).toHaveLength(10);
-            for (let i = 0; i < 10; i++) {
-                expect(results[i].status).toBe('fulfilled');
+            for (const result of results) {
+                expect(result.status).toBe('fulfilled');
+                if (result.status === 'fulfilled') {
+                    // A fulfilled Promise can still carry a rejected SyncResult.
+                    // Offline local-pending is allowed only because the sealed archive is checked below.
+                    expect(['synced', 'local-pending']).toContain(result.value.status);
+                }
             }
 
             expect(useAppStore.getState().syncing).toBe(false);
             expect(useAppStore.getState().userData?.profile?.height).toBe('180');
-            // The 10 coalesced writes must be durable in the real owner vault.
+            // A ciphertext record alone does not prove that the final mutation was
+            // persisted. Reopen the real owner archive and inspect its business data.
             expect(idbStore['logbook:v2:' + owner]).toMatch(/^tlb-sealed:v1:/);
+            const persisted = await readLocal(owner);
+            expect(persisted?.data.profile?.height).toBe('180');
 
             vi.useRealTimers();
         });
@@ -195,7 +204,7 @@ describe('Tier 5: Adversarial Coverage Hardening Suite', () => {
             }
         });
 
-        it('T5.5.4: Account linking during pending debounced save merges freshest in-memory state without data loss', () => {
+        it('T5.5.4: Pure guest/cloud merge uses the freshest supplied guest snapshot', () => {
             const cloudData: UserData = {
                 profile: { height: '173' },
                 library: [{ id: 'cloud_ex_1', name: 'Cloud Ex', setsCount: 3, sets: [], isDefault: false }],
