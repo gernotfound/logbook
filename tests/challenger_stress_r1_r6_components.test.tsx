@@ -535,6 +535,11 @@ describe('EMPIRICAL CHALLENGER: Adversarial Stress Test Suite (Requirements R1 -
             };
             renderWithProviders(<HomeView onNavigate={vi.fn()} />, { userData });
             expect(screen.getByText('TheLogBook')).toBeDefined();
+            const activePainsToggle = screen.getByRole('button', { name: '2 dolori attivi' });
+            expect(activePainsToggle.getAttribute('aria-expanded')).toBe('false');
+            fireEvent.click(activePainsToggle);
+            expect(activePainsToggle.getAttribute('aria-expanded')).toBe('true');
+            expect(screen.getAllByRole('button', { name: /Rimuovi dolore/ })).toHaveLength(2);
         });
     });
 
