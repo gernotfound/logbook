@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { mapFirebaseErrorCode } from '../src/lib/errorHandler';
 import { AppCheckLimitedUseTokenError } from '../src/lib/appCheck';
+import { SyncTimeoutError } from '../src/lib/db/db_core';
+import { CloudKeyAccessUnavailableError } from '../src/lib/sync/cloudAccountKeyAccess';
 import { classifySyncFailure } from '../src/lib/sync/syncFailure';
 
 describe('Audit 21 App Check and rejected-sync semantics', () => {
@@ -111,7 +113,7 @@ describe('Audit 21 App Check and rejected-sync semantics', () => {
             Object.assign(new Error('Provider unsupported'), { code: 'appcheck/provider-unavailable' }),
         )],
         ['unknown failure', new Error('Unknown remote outcome')],
-    ])('fails closed when a transport wrapper hides an uninspected %s', (_, terminal) => {
+    ] as const)('fails closed when a transport wrapper hides an uninspected %s', (_, terminal) => {
         let cause: Error = terminal;
         for (let depth = 0; depth < 12; depth++) cause = new Error('Intermediate wrapper', { cause });
         const error = Object.assign(new Error('Transport wrapper', { cause }), { code: 'unavailable' });
@@ -120,6 +122,51 @@ describe('Audit 21 App Check and rejected-sync semantics', () => {
         expect(classifySyncFailure(error, { retryable: false }).status).toBe('failed');
         // This override belongs to callers which have independently re-read the retained batch.
         expect(classifySyncFailure(error, { retryable: true }).status).toBe('local-pending');
+    });
+
+    it.each([
+        ['sync timeout', new SyncTimeoutError(), 'local-pending'],
+        ['Firestore deadline', Object.assign(new Error('Deadline'), { code: 'deadline-exceeded' }), 'local-pending'],
+        ['permanent cloud-key failure', new CloudKeyAccessUnavailableError(), 'failed'],
+        ['transient cloud-key failure', new CloudKeyAccessUnavailableError(true), 'local-pending'],
+        ['Auth network failure', Object.assign(new Error('Auth network'), { code: 'auth/network-request-failed' }), 'local-pending'],
+        ['network wrapper around Auth', Object.assign(new Error('Unsafe wrapper', {
+            cause: Object.assign(new Error('Auth network'), { code: 'auth/network-request-failed' }),
+        }), { code: 'unavailable' }), 'failed'],
+        ['unknown runtime failure', new Error('Unexpected runtime failure'), 'failed'],
+    ] as const)('preserves the complete failure result for %s', (_, error, status) => {
+        const result = classifySyncFailure(error);
+        expect(result).toEqual({ ok: false, status, error });
+        expect(result.error).toBe(error);
+    });
+
+    it.each([null, undefined, 'provider rejected', 7])('fails closed for a non-object rejection: %s', error => {
+        expect(classifySyncFailure(error)).toEqual({ ok: false, status: 'failed', error });
+    });
+
+    it('does not mistake a timeout name or a wrapped timeout for a direct sync timeout', () => {
+        const named = Object.assign(new Error('Not a sync timeout'), { name: 'SyncTimeoutError' });
+        const wrapped = new Error('Unsafe wrapper', { cause: new SyncTimeoutError() });
+        expect(classifySyncFailure(named)).toEqual({ ok: false, status: 'failed', error: named });
+        expect(classifySyncFailure(wrapped)).toEqual({ ok: false, status: 'failed', error: wrapped });
+    });
+
+    it('retains a visible permission denial even when later causes remain uninspected', () => {
+        let cause: Error = new Error('Unknown outcome');
+        for (let depth = 0; depth < 12; depth++) cause = new Error('Intermediate wrapper', { cause });
+        const error = Object.assign(new Error('Denied', { cause }), { code: 'permission-denied' });
+
+        expect(classifySyncFailure(error)).toEqual({ ok: false, status: 'rejected', error });
+        expect(classifySyncFailure(error, { retryable: true }).status).toBe('rejected');
+    });
+
+    it('keeps completely inspected transport causes retryable, including a visited cycle', () => {
+        const short = Object.assign(new Error('Transport', { cause: new Error('Remote context') }), { code: 'unavailable' });
+        const cyclic = Object.assign(new Error('Transport'), { code: 'unavailable', cause: {} as unknown });
+        cyclic.cause = cyclic;
+
+        expect(classifySyncFailure(short)).toEqual({ ok: false, status: 'local-pending', error: short });
+        expect(classifySyncFailure(cyclic)).toEqual({ ok: false, status: 'local-pending', error: cyclic });
     });
 
     it('bounds cyclic error causes and fails closed on unknown failures', () => {
