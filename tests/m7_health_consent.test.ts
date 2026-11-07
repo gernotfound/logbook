@@ -291,6 +291,23 @@ describe('trusted health consent boundary', () => {
     expect((await readHealthConsentState('account-1')).status).toBe('withdrawn');
   });
 
+  it('rejects a mismatched completed erasure receipt even with a valid consent floor', async () => {
+    await recordHealthConsentWithdrawal('account-1', 0);
+    finishErasure(1);
+    const path = 'health_data_erasures/account-1';
+    const valid = storage.documents.get(path)!;
+    for (const patch of [
+      { uid: 'other-account' },
+      { consentRevision: 0 },
+      { completedRevision: 3 },
+    ]) {
+      storage.documents.set(path, { ...valid, ...patch });
+      await expect(recordHealthConsentReacceptance('account-1', acceptance, 2))
+        .rejects.toBeInstanceOf(HealthConsentRevisionConflictError);
+      expect((await readHealthConsentState('account-1')).status).toBe('withdrawn');
+    }
+  });
+
   it('accepts re-consent after completed receipt retention only with matching consent erasure proof', async () => {
     await recordHealthConsentWithdrawal('account-1', 0);
     finishErasure(1);
