@@ -64,6 +64,43 @@ describe('CSV portability contract', () => {
         expect(alert).toHaveBeenCalledWith('Esportazione fallita, riprova.');
     });
 
+    it.each(['createWritable', 'write', 'close'] as const)(
+        'never starts a fallback download when native %s fails after file selection',
+        async failingStep => {
+            // SecurityError / TypeError are also emitted by native file writes,
+            // not only by the picker before the user selects the destination.
+            const nativeError = Object.assign(new Error('native file operation failed'), {
+                name: failingStep === 'write' ? 'SecurityError' : 'TypeError',
+            });
+            const writable = {
+                write: vi.fn(async (_blob: Blob) => {
+                    if (failingStep === 'write') throw nativeError;
+                }),
+                close: vi.fn(async () => {
+                    if (failingStep === 'close') throw nativeError;
+                }),
+            };
+            const createWritable = vi.fn(async () => {
+                if (failingStep === 'createWritable') throw nativeError;
+                return writable;
+            });
+            vi.stubGlobal('showSaveFilePicker', vi.fn().mockResolvedValue({ createWritable }));
+            const fallback = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+            const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+            const warning = vi.spyOn(console, 'warn').mockImplementation(() => {});
+            const alert = vi.spyOn(useDialogStore.getState(), 'showAlert').mockResolvedValue(undefined);
+
+            expect(await Exporter.downloadFile('allenamenti.csv', 'content')).toBe(false);
+            expect(createWritable).toHaveBeenCalledOnce();
+            expect(writable.write).toHaveBeenCalledTimes(failingStep === 'createWritable' ? 0 : 1);
+            expect(writable.close).toHaveBeenCalledTimes(failingStep === 'close' ? 1 : 0);
+            expect(fallback).not.toHaveBeenCalled();
+            expect(warning).not.toHaveBeenCalled();
+            expect(error).toHaveBeenCalledWith('Esportazione fallita:', nativeError);
+            expect(alert).toHaveBeenCalledWith('Esportazione fallita, riprova.');
+        },
+    );
+
     it('uses the canonical workout business date and exports sessions even without sets', async () => {
         let csv = '';
         vi.spyOn(Exporter, 'downloadFile').mockImplementation(async (filename, content) => {
