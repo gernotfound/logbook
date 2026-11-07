@@ -84,7 +84,7 @@ describe('pure CSV export builder', () => {
         };
         const files = new Map(buildCsvFiles(history, nutrition));
         expect(files.get('allenamenti.csv')).toContain('"workout-overflow"');
-        expect(files.get('passi.csv')).toContain('2026-10-22,1000');
+        expect(files.get('passi.csv')).toContain('"2026-10-22",1000');
         expect(files.get('cardio.csv')).toContain('"cardio-overflow"');
         expect(files.get('allenamenti.csv')).not.toContain('Invalid Date');
         expect(files.get('cardio.csv')).not.toContain('Invalid Date');
