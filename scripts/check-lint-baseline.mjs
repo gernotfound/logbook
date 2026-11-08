@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process';
-import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync, unlinkSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 const baselinePath = 'config/lint-warning-baseline.json';
@@ -71,6 +71,65 @@ function normalize(items) {
       || a.count - b.count
     );
 }
+
+// A zero-warning baseline would also pass if tsgolint silently stopped
+// analyzing a directory. Inject known faults under each source boundary and
+// require the real rule to identify both locally typed and imported Promises.
+function verifyTypeAwareCoverage() {
+  const stem = '__logbook_typeaware_canary_' + process.pid;
+  const source = 'src/' + stem + '.ts';
+  const folders = ['api', 'server', 'tests', 'e2e'];
+  const paths = [source, ...folders.map(folder => folder + '/' + stem + '.ts')];
+  const written = [];
+  try {
+    const sourceCode = [
+      'export async function importedPromise(): Promise<number> { return 1; }',
+      'importedPromise();',
+      '',
+    ].join('\\n');
+    writeFileSync(source, sourceCode, { encoding: 'utf8', flag: 'wx' });
+    written.push(source);
+    for (const file of paths.slice(1)) {
+      const fixture = [
+        "import { importedPromise } from '../src/" + stem + ".js';",
+        'async function localPromise(): Promise<number> { return 1; }',
+        'localPromise();',
+        'importedPromise();',
+        '',
+      ].join('\\n');
+      writeFileSync(file, fixture, { encoding: 'utf8', flag: 'wx' });
+      written.push(file);
+    }
+    const lint = spawnSync(process.execPath, [
+      oxlintBin, '--config', '.oxlintrc.type-aware.json', '--format=json', ...paths,
+    ], { cwd: process.cwd(), encoding: 'utf8', maxBuffer: 8 * 1024 * 1024 });
+    if (lint.error || lint.status !== 0) {
+      throw new Error('Oxlint type-aware canary execution failed: '
+        + String(lint.error ?? lint.stderr ?? lint.stdout));
+    }
+    const diagnostics = JSON.parse(lint.stdout).diagnostics ?? [];
+    for (const path of paths) {
+      const expectedCount = path === source ? 1 : 2;
+      const actualCount = diagnostics.filter(item => {
+        const filename = String(item.filename ?? '').replaceAll('\\\\', '/');
+        return (filename === path || filename.endsWith('/' + path))
+          && String(item.code).includes('no-floating-promises')
+          && item.severity === 'warning';
+      }).length;
+      if (actualCount !== expectedCount) {
+        throw new Error('Type-aware lint coverage missing for ' + path + ': '
+          + actualCount + '/' + expectedCount
+          + ' expected floating-Promise diagnostics. Observed: '
+          + JSON.stringify(diagnostics.map(item => ({
+            file: item.filename, code: item.code, severity: item.severity,
+          })).slice(0, 25)));
+      }
+    }
+  } finally {
+    for (const file of written.reverse()) unlinkSync(file);
+  }
+}
+verifyTypeAwareCoverage();
 
 const actual = normalize(suites.flatMap(collectSuite));
 
