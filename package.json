@@ -108,7 +108,7 @@
     "fake-indexeddb": "6.2.7",
     "jsdom": "^30.1.3",
     "knip": "^6.44.1",
-    "oxlint": "^1.91.0",
+    "oxlint": "^1.87.0",
     "oxlint-tsgolint": "^7.0.2005",
     "rollup-plugin-visualizer": "^7.1.2",
     "sharp": "^0.35.5",
