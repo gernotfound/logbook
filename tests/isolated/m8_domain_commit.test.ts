@@ -133,6 +133,35 @@ describe('M8 domain commit durability', () => {
         expect((await readLocal('user:a'))?.pending).toEqual([]);
     });
 
+    it('preserves ciphertext and a retained journal when meal arithmetic cannot be represented', async () => {
+        const { initializeLocal, commitDomainOperations, readLocal } = await import('../../src/lib/sync/localRepository');
+        const initial = base();
+        await initializeLocal('user:a', initial);
+        await commitDomainOperations('user:a', { type: 'profile.patch', patch: { height: '171' } }, initial);
+        const before = await readLocal('user:a');
+        const ciphertext = await get('logbook:v2:user:a');
+        expect(before?.pending.length).toBeGreaterThan(0);
+
+        await expect(commitDomainOperations('user:a', {
+            type: 'nutrition-meal.upsert', date: '2026-09-15', meal: {
+                id: 'overflow', name: 'Overflow', meal: 'Pranzo', baseQty: 1, quantity: 2,
+                kcal: Number.MAX_VALUE, carbs: 0, pro: 0, fat: 0,
+            },
+        }, initial)).rejects.toThrow('Totali nutrizionali non rappresentabili');
+        expect(await get('logbook:v2:user:a')).toBe(ciphertext);
+        expect(await readLocal('user:a')).toEqual(before);
+
+        await commitDomainOperations('user:a', {
+            type: 'nutrition-meal.upsert', date: '2026-09-15', meal: {
+                id: 'valid', name: 'Valido', meal: 'Pranzo', baseQty: 100, quantity: 50,
+                kcal: 200, carbs: 10, pro: 20, fat: 4,
+            },
+        }, initial);
+        const recovered = await readLocal('user:a');
+        expect(recovered?.data.nutrition?.['2026-09-15']).toMatchObject({ kcal: 100, carbs: 5, pro: 10, fat: 2 });
+        expect(recovered?.pending.slice(0, before!.pending.length)).toEqual(before!.pending);
+    });
+
     it('serializes concurrent domain commits without losing either intent', async () => {
         const { initializeLocal, commitDomainOperations, readLocal } = await import('../../src/lib/sync/localRepository');
         const initial = base();

@@ -12,6 +12,15 @@ export function createLoggedMealItem(food: Food, meal: string, id: string, time:
     if (![food.kcal, food.carbs, food.pro, food.fat].every(value => Number.isFinite(value) && value >= 0)) {
         throw new Error('Valori nutrizionali non validi.');
     }
+    const nutrients = {
+        kcal: food.kcal * factor,
+        carbs: food.carbs * factor,
+        pro: food.pro * factor,
+        fat: food.fat * factor,
+    };
+    if (!Object.values(nutrients).every(Number.isFinite)) {
+        throw new Error('Valori nutrizionali non validi.');
+    }
     return {
         id,
         foodId: food.id,
@@ -20,10 +29,7 @@ export function createLoggedMealItem(food: Food, meal: string, id: string, time:
         quantity: isPiece ? 1 : baseQty,
         baseQty: isPiece ? 1 : baseQty,
         unit: isPiece ? 'pezzo' : (food.unit || 'g'),
-        kcal: food.kcal * factor,
-        carbs: food.carbs * factor,
-        pro: food.pro * factor,
-        fat: food.fat * factor,
+        ...nutrients,
         time,
     };
 }
