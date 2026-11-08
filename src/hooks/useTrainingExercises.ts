@@ -366,18 +366,16 @@ export function useTrainingExercises() {
         if (await showConfirm("Vuoi ripristinare questo esercizio ai valori originali? Le tue modifiche andranno perse.")) {
             if (!isCurrentSession(draftSession)) return;
             try {
-                await persistExercise({
-                    type: 'exercise.upsert',
-                    exercise: {
-                        ...originalEx,
-                        setsCount: originalEx.setsCount ?? 3,
-                        sets: []
-                    } as any
-                });
-                // Aggiorna anche il form corrente se è aperto
+                const restoredExercise: Exercise = {
+                    ...originalEx,
+                    setsCount: originalEx.setsCount ?? 3,
+                    sets: [],
+                };
+                await persistExercise({ type: 'exercise.upsert', exercise: restoredExercise });
+                // Show the same typed exercise that was actually committed.
                 if (!isCurrentSession(draftSession)) return;
                 if (editingExId === id) {
-                    handleEditClick(originalEx);
+                    handleEditClick(restoredExercise);
                 }
             } catch {
                 if (isCurrentSession(draftSession)) void showAlert("Errore durante il ripristino dell'esercizio.");

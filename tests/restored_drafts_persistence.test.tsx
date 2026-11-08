@@ -106,6 +106,22 @@ describe('restored owner-scoped drafts', () => {
             remove.mockRestore();
         }
     });
+    it.each([
+        ['invalid name', { name: 88, exercises: [] }],
+        ['invalid exercise collection', { name: 'Bozza', exercises: {} }],
+        ['invalid set plans', { name: 'Bozza', exercises: [{ exId: 'exercise-a', setsCount: 3, setPlans: {} }] }],
+    ])('preserves corrupted %s in an authenticated routine draft', async (_description, corrupted) => {
+        const owner = storageOwner();
+        writeWorkoutRecoveryDraft('draft_routine', owner, corrupted);
+        const sealedKey = protectedDeviceKey('draft_routine', owner);
+        const original = localStorage.getItem(sealedKey);
+        const editor = renderHook(() => useTrainingRoutines());
+        expect(useAppStore.getState().localPersistenceBlocked).toBe(true);
+        expect(editor.result.current.handleCancelEdit()).toBe(false);
+        expect(localStorage.getItem(sealedKey)).toBe(original);
+        editor.unmount();
+    });
+
     it('retains the last sealed exercise draft and refuses business save when a later physical write fails', async () => {
         const owner = storageOwner();
         writeWorkoutRecoveryDraft('draft_exercise', owner, { name: 'Recovered exercise', notes: 'Last durable note' });
