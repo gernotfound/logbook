@@ -118,8 +118,8 @@ describe('TrainingExercises decomposition parity', () => {
         expect((screen.getByLabelText('Nome esercizio') as HTMLInputElement).disabled).toBe(true);
         expect((screen.getByLabelText('Note di setup') as HTMLInputElement).disabled).toBe(true);
         expect((screen.getByRole('button', { name: 'Cardio' }) as HTMLButtonElement).disabled).toBe(true);
-        expect((screen.getByLabelText('Esercizio a corpo libero') as HTMLInputElement).disabled).toBe(true);
-        expect((screen.getByLabelText('Peso attrezzo, espresso in kg') as HTMLInputElement).disabled).toBe(true);
+        expect((screen.getByLabelText(/Esercizio a corpo libero/) as HTMLInputElement).disabled).toBe(true);
+        expect((screen.getByLabelText(/Peso attrezzo, espresso in kg/) as HTMLInputElement).disabled).toBe(true);
         expect((screen.getByRole('button', { name: 'Primari' }) as HTMLButtonElement).disabled).toBe(true);
         expect((screen.getByRole('searchbox', { name: 'Seleziona muscoli dall’elenco' }) as HTMLInputElement).disabled).toBe(true);
         expect(screen.getByTestId('muscle-model').getAttribute('data-interactive')).toBe('false');
