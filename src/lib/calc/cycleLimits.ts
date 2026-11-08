@@ -52,3 +52,8 @@ export function getCycleVolumeFrequencies(
         frequencies: frequencies.map(value => value * (sessionsPerWeek / sum)),
     };
 }
+
+/** Estimated set totals must remain representable even after frequency scaling. */
+export function isRepresentableCycleVolume(sets: number): boolean {
+    return Number.isFinite(sets) && sets >= 0 && sets <= Number.MAX_SAFE_INTEGER;
+}
