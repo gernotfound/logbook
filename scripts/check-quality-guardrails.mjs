@@ -1,5 +1,6 @@
 import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
+import { warningIdentity } from './lint-warning-identity.mjs';
 
 const failures = [];
 const root = process.cwd();
@@ -75,10 +76,6 @@ function readBase(path) {
   }
 }
 
-function identity(item) {
-  return JSON.stringify([item.suite, item.file, item.code, item.message, item.source]);
-}
-
 function warningCounts(items, label) {
   if (!Array.isArray(items)) {
     failures.push(label + ': warning baseline must be an array');
@@ -92,7 +89,7 @@ function warningCounts(items, label) {
       failures.push(label + ': malformed warning entry');
       continue;
     }
-    const key = identity(entry);
+    const key = warningIdentity(entry);
     if (counts.has(key)) failures.push(label + ': duplicate warning identity: ' + key);
     counts.set(key, entry.count);
   }
