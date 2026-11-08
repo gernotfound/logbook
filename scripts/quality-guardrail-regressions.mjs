@@ -40,7 +40,7 @@ function fixture(t) {
   save(root, '.oxlintrc.a11y.json', { plugins: ['jsx-a11y'], rules: { 'jsx-a11y/alt-text': 'error' } });
   save(root, '.oxlintrc.type-aware.json', {
     plugins: ['typescript'], options: { typeAware: true },
-    rules: { 'typescript/no-floating-promises': 'warn' },
+    rules: { 'typescript/no-floating-promises': 'error' },
   });
   save(root, 'tsconfig.json', { compilerOptions: { strict: true, noEmit: true } });
   save(root, 'tsconfig.m5-tests.json', { extends: './tsconfig.json', compilerOptions: { noEmit: true } });
@@ -130,6 +130,16 @@ await test('blocks lowering lint rule severity', t => {
   mustFail(run(ctx), /lint rules weakened/);
 });
 
+await test('blocks downgrading the type-aware Promise rule from error to warning', t => {
+  const ctx = fixture(t);
+  save(ctx.root, '.oxlintrc.type-aware.json', {
+    plugins: ['typescript'], options: { typeAware: true },
+    rules: { 'typescript/no-floating-promises': 'warn' },
+  });
+  commit(ctx.root);
+  mustFail(run(ctx), /lint rules weakened/);
+});
+
 await test('blocks introducing new lint ignore patterns', t => {
   const ctx = fixture(t);
   save(ctx.root, '.oxlintrc.json', {
@@ -201,7 +211,7 @@ await test('blocks disabling type-aware lint while leaving the rule text unchang
   const ctx = fixture(t);
   save(ctx.root, '.oxlintrc.type-aware.json', {
     plugins: ['typescript'], options: { typeAware: false },
-    rules: { 'typescript/no-floating-promises': 'warn' },
+    rules: { 'typescript/no-floating-promises': 'error' },
   });
   commit(ctx.root);
   mustFail(run(ctx), /type-aware lint analysis disabled/);

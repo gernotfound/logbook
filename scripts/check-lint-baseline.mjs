@@ -73,7 +73,8 @@ function normalize(items) {
 }
 
 // A zero-warning baseline would also pass if tsgolint silently stopped
-// analyzing a directory. Inject known faults under each source boundary and
+// analyzing a directory. Run the same whole-repository traversal as CI with
+// known faults under each source boundary and
 // require the real rule to identify both locally typed and imported Promises.
 function verifyTypeAwareCoverage() {
   const stem = '__logbook_typeaware_canary_' + process.pid;
@@ -101,9 +102,9 @@ function verifyTypeAwareCoverage() {
       written.push(file);
     }
     const lint = spawnSync(process.execPath, [
-      oxlintBin, '--config', '.oxlintrc.type-aware.json', '--format=json', ...paths,
+      oxlintBin, '--config', '.oxlintrc.type-aware.json', '--format=json',
     ], { cwd: process.cwd(), encoding: 'utf8', maxBuffer: 8 * 1024 * 1024 });
-    if (lint.error || lint.status !== 0) {
+    if (lint.error || lint.status !== 1) {
       throw new Error('Oxlint type-aware canary execution failed: '
         + String(lint.error ?? lint.stderr ?? lint.stdout));
     }
@@ -114,7 +115,7 @@ function verifyTypeAwareCoverage() {
         const filename = String(item.filename ?? '').replaceAll('\\', '/');
         return (filename === path || filename.endsWith('/' + path))
           && String(item.code).includes('no-floating-promises')
-          && item.severity === 'warning';
+          && item.severity === 'error';
       }).length;
       if (actualCount !== expectedCount) {
         throw new Error('Type-aware lint coverage missing for ' + path + ': '

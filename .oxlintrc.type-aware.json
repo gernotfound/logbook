@@ -8,6 +8,6 @@
     "typeAware": true
   },
   "rules": {
-    "typescript/no-floating-promises": "warn"
+    "typescript/no-floating-promises": "error"
   }
 }
