@@ -53,10 +53,11 @@ export function attachAuthRedirectRecovery({
     let guestRedirectResultPending = Boolean(expectedIntentId);
     const handleAuthVisibilityChange = async () => {
         if (!active || redirectLaunchFailedRef.current || guestRedirectResultPending) return;
-        if (recoveringRedirect && !isOriginalAttemptCurrent()) return;
+        // Only a redirect already pending at mount belongs to this listener.
+        // A newly launched redirect must retain its marker for its own SDK recovery.
+        if (!recoveringRedirect || !isOriginalAttemptCurrent()) return;
         if (environment.visibility() !== 'visible' || environment.read(awaitingRedirectKey) !== 'true') return;
-        if (!environment.remove(awaitingRedirectKey,
-            recoveringRedirect ? capturedAttempt : (environment.readAttempt?.() ?? null))) {
+        if (!environment.remove(awaitingRedirectKey, capturedAttempt)) {
             setSaveError('Accesso completato, ma non riesco ad aggiornare lo stato locale del dispositivo. Riprova.');
             return;
         }
