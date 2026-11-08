@@ -1,4 +1,3 @@
-import 'fake-indexeddb/auto';
 import { LEGAL_VERSIONS } from '../src/lib/legalVersions';
 import React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -18,24 +17,7 @@ import { createAndMigrateVault } from '../src/lib/sync/secureArchiveMigration';
 import { lockAllVaults } from '../src/lib/sync/secureArchiveSession';
 import { activateGuestSession, GUEST_SESSION_KEY } from '../src/lib/sync/session';
 import { CATALOG_CACHE_KEY, clearCatalogCache, getInMemoryCatalog, getSeedCatalog } from '../src/lib/catalog/catalogService';
-import { set as idbSet } from 'idb-keyval';
-
-// Simulate only a temporary catalog read failure; all owner vault and journal
-// operations continue through the real IndexedDB implementation.
-const catalogReadFault = vi.hoisted(() => ({ remaining: 0 }));
-vi.mock('idb-keyval', async importOriginal => {
-    const original = await importOriginal<typeof import('idb-keyval')>();
-    return {
-        ...original,
-        get: (...args: Parameters<typeof original.get>) => {
-            if (args[0] === 'logbook_cached_global_catalog' && catalogReadFault.remaining > 0) {
-                catalogReadFault.remaining--;
-                return Promise.reject(new Error('temporary catalog IndexedDB read failure'));
-            }
-            return original.get(...args);
-        },
-    };
-});
+import * as idbKeyval from 'idb-keyval';
 
 vi.mock('../src/lib/sync/cloudAccountKeyAccess', () => ({
     requireCloudAccountDataKey: vi.fn(async () => new Uint8Array(32).fill(18)),
@@ -61,7 +43,6 @@ function fixtures() {
 }
 
 beforeEach(async () => {
-    catalogReadFault.remaining = 0;
     lockAllVaults();
     vi.clearAllMocks();
     localStorage.clear();
@@ -138,7 +119,7 @@ describe('guest -> account V3 migration', () => {
         const globalFood = { id: 'catalog-migration-food', name: 'Global food', kcal: 150, pro: 5, carbs: 20, fat: 5 };
         // Simulate the stale in-memory seed that an earlier failed IDB read can leave.
         expect(getInMemoryCatalog().exercises).toEqual([]);
-        await idbSet(CATALOG_CACHE_KEY, {
+        await idbKeyval.set(CATALOG_CACHE_KEY, {
             ...seed,
             manifest: { ...seed.manifest, version: 'durable-migration-v1', itemCounts: { exercises: 1, foods: 1 } },
             exercises: [globalExercise],
@@ -159,13 +140,22 @@ describe('guest -> account V3 migration', () => {
         await beginGuestMigrationIntent('merge', 'recovery', { uid: user.uid });
         useAppStore.getState().setUserData(guest);
 
+        // Interpose on the existing transaction-serialized test double, rather
+        // than replacing it with another IndexedDB implementation.
+        const mockedGet = vi.mocked(idbKeyval.get);
+        const originalGet = mockedGet.getMockImplementation();
+        if (!originalGet) throw new Error('Expected the canonical idb-keyval test mock');
+        let failedCatalogReads = 2;
+        mockedGet.mockImplementation((...args) => {
+            if (args[0] === CATALOG_CACHE_KEY && failedCatalogReads > 0) {
+                failedCatalogReads--;
+                return Promise.reject(new Error('temporary catalog IndexedDB read failure'));
+            }
+            return originalGet(...args);
+        });
+
         vi.mocked(DB.loadCloudPayload)
-            .mockImplementationOnce(async () => {
-                // First migration catalog read exhausts its two attempts;
-                // hydrated account state must then retry the intact IDB cache.
-                catalogReadFault.remaining = 2;
-                return { data: cloud, completeMonths: [], cloudDocuments: new Map() };
-            })
+            .mockResolvedValueOnce({ data: cloud, completeMonths: [], cloudDocuments: new Map() })
             .mockImplementationOnce(async () => {
                 const durable = await readLocal('user:a');
                 const metadata = durable?.syncMetaByDocument[''];
@@ -176,20 +166,23 @@ describe('guest -> account V3 migration', () => {
                     cloudDocuments: new Map([['', { ...rootDocument(durable.data), _sync: metadata }]]),
                 };
             });
-        render(<AuthProvider><div>Catalog migration integrity check</div></AuthProvider>);
-
-        await waitFor(async () => {
-            const envelope = await readLocal('user:a');
-            expect(envelope?.data.profile).toMatchObject({ height: '176', gender: 'M' });
-            expect(envelope?.data.routines?.some(item => item.id === 'guest-routine')).toBe(true);
-            expect(envelope?.data.library?.filter(item =>
-                item.id === globalExercise.id && item.isDefault !== true)).toEqual([]);
-            expect(envelope?.data.customFoods?.filter(item =>
-                String(item.id) === globalFood.id && item.isCustom !== false)).toEqual([]);
-        }, { timeout: 8000 });
-        expect(catalogReadFault.remaining).toBe(0);
-        expect(localStorage.getItem('logbook_is_guest')).toBeNull();
-        await clearCatalogCache();
+        try {
+            render(<AuthProvider><div>Catalog migration integrity check</div></AuthProvider>);
+            await waitFor(async () => {
+                const envelope = await readLocal('user:a');
+                expect(envelope?.data.profile).toMatchObject({ height: '176', gender: 'M' });
+                expect(envelope?.data.routines?.some(item => item.id === 'guest-routine')).toBe(true);
+                expect(envelope?.data.library?.filter(item =>
+                    item.id === globalExercise.id && item.isDefault !== true)).toEqual([]);
+                expect(envelope?.data.customFoods?.filter(item =>
+                    String(item.id) === globalFood.id && item.isCustom !== false)).toEqual([]);
+            }, { timeout: 8000 });
+            expect(failedCatalogReads).toBe(0);
+            expect(localStorage.getItem('logbook_is_guest')).toBeNull();
+        } finally {
+            mockedGet.mockImplementation(originalGet);
+            await clearCatalogCache();
+        }
     });
 
     it('fences an existing account archive if guest migration encounters undecryptable cloud data', async () => {
