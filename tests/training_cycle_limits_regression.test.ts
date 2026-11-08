@@ -32,6 +32,27 @@ describe('training cycle bounded input and safe legacy evaluation', () => {
         }
     });
 
+    it('rejects malformed raw write values before permissive Zod fallbacks and sanitizers', () => {
+        for (const mutation of [
+            { durationWeeks: 'invalid' },
+            { durationWeeks: undefined },
+            { sessionsPerWeek: 'wrong' },
+            { sessionsPerWeek: NaN },
+            { routines: [{ routineId: 'r', frequencyPerWeek: 'bad' }] },
+            { routines: [{ routineId: 'r', frequencyPerWeek: undefined }, { routineId: 'r', frequencyPerWeek: 1 }] },
+            { routines: 'not-an-array' },
+            { routines: [{ routineId: '', frequencyPerWeek: 1 }] },
+            { id: '' },
+        ]) {
+            const raw = { ...cycle, ...mutation };
+            const before = structuredClone(raw);
+            expect(TrainingCycleWriteSchema.safeParse(raw).success).toBe(false);
+            expect(raw).toEqual(before);
+        }
+        expect(TrainingCycleWriteSchema.safeParse(cycle).success).toBe(true);
+        expect(TrainingCycleSchema.parse({ ...cycle, durationWeeks: 'invalid' }).durationWeeks).toBe(4);
+    });
+
     it('rejects invalid routine frequencies in both cycle and individual-routine writes', () => {
         const base = UserDataSchema.parse({ trainingCycles: [cycle] }) as UserData;
         const before = structuredClone(base);
