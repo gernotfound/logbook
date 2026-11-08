@@ -1,16 +1,18 @@
-import { useMemo, useState, type MouseEvent } from 'react';
+import { useMemo, useRef, useState, type MouseEvent } from 'react';
 import { Plus } from 'lucide-react';
 import { useLocalStorage } from '../../hooks/useLocalStorage';
 import { ownerUiPreferenceKey } from '../../lib/uiPreferenceKeys';
 import { storageOwner } from '../../lib/sync/session';
 import { useTrainingExercises } from '../../hooks/useTrainingExercises';
 import { z } from '../../lib/zod';
+import type { Exercise } from '../../types';
 import { ExerciseArchive } from './exercises/ExerciseArchive';
 import { ExerciseEditorForm } from './exercises/ExerciseEditorForm';
 
 const TrainingExercises = () => {
     const [isCreating, setIsCreating] = useLocalStorage<boolean>(ownerUiPreferenceKey(storageOwner(), 'creating-exercise'), false, z.boolean());
     const [isSaving, setIsSaving] = useState(false);
+    const operationPending = useRef(false);
     const [selectedExId, setSelectedExId] = useState<string | null>(null);
     const hook = useTrainingExercises();
     const { editingExId, library, routines } = hook;
@@ -26,32 +28,38 @@ const TrainingExercises = () => {
         window.scrollTo({ top: 0, behavior: 'smooth' });
     };
 
-    const handleEditItem = (exercise: any) => {
+    const handleEditItem = (exercise: Exercise) => {
         setIsCreating(false);
         setSelectedExId(exercise.id);
         hook.handleEditClick(exercise);
     };
 
     const handleCancel = () => {
+        if (operationPending.current) return;
         if (hook.handleCancelEdit()) setIsCreating(false);
     };
 
-    const handleSave = async () => {
-        if (isSaving) return;
+    const runExclusive = async (action: () => Promise<void>) => {
+        // The ref fences repeat clicks before React disables the form.
+        if (operationPending.current) return;
+        operationPending.current = true;
         setIsSaving(true);
         try {
-            const success = await hook.handleSaveExercise();
-            if (success) {
-                setIsCreating(false);
-            }
+            await action();
         } finally {
+            operationPending.current = false;
             setIsSaving(false);
         }
     };
 
-    const handleRestore = async () => {
+    const handleSave = () => runExclusive(async () => {
+        const success = await hook.handleSaveExercise();
+        if (success) setIsCreating(false);
+    });
+
+    const handleRestore = () => {
         if (!editingExId) return;
-        await hook.handleRestoreExercise(editingExId);
+        return runExclusive(() => hook.handleRestoreExercise(editingExId));
     };
 
     const handleDelete = async (id: string, event: MouseEvent) => {
