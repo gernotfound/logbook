@@ -158,6 +158,42 @@ describe('trusted data-only erasure worker', () => {
     expect(fixture.records.get(consentPath('a'))?.revision).toBe(4);
   });
 
+  it.each(['foreign-owner', 'active-consent', 'wrong-revision'] as const)(
+    'does not begin destructive erasure when queued consent has %s',
+    async scenario => {
+      await createHealthDataErasureJob('a');
+      const consent = fixture.records.get(consentPath('a'))!;
+      if (scenario === 'foreign-owner') consent.uid = 'b';
+      else if (scenario === 'active-consent') consent.status = 'active';
+      else consent.revision = 4;
+
+      await expect(processHealthDataErasure('a', Date.now() + 30_000))
+        .rejects.toThrow('Il consenso non corrisponde al job');
+      expect(fixture.records.has('users/a')).toBe(true);
+      expect(fixture.records.has('users/a/history_months/2026-09')).toBe(true);
+      expect(fixture.records.has('user_data_keys/a')).toBe(true);
+      expect(fixture.records.get(markerPath('a'))?.status).toBe('requested');
+      expect(fixture.records.has('users/b')).toBe(true);
+    },
+  );
+
+  it('stops physical deletes when consent changes after the lease but before the page transaction', async () => {
+    await createHealthDataErasureJob('a');
+    fixture.pauseQuery = {
+      path: 'users/a/history_months',
+      entered: () => { fixture.records.get(consentPath('a'))!.uid = 'b'; },
+      resume: Promise.resolve(),
+    };
+
+    expect(await processHealthDataErasure('a', Date.now() + 30_000)).toBe('failed');
+    expect(fixture.records.has('users/a/history_months/2026-09')).toBe(true);
+    expect(fixture.records.has('user_data_keys/a')).toBe(true);
+    expect(fixture.records.get(markerPath('a'))).toMatchObject({
+      status: 'failed', retryable: false,
+    });
+    expect(fixture.records.has('users/b')).toBe(true);
+  });
+
   it('fails closed on an unknown nested collection and preserves the wrapped key', async () => {
     fixture.records.set('users/a/unrecognized_records/one', { data: 'unexpected' });
     await createHealthDataErasureJob('a');

@@ -171,12 +171,17 @@ function requireLease(job: Job | undefined, leaseOwner: string): Job {
 async function acquireLease(uid: string, leaseOwner: string, deadlineMs: number): Promise<boolean> {
   return adminDb().runTransaction(async tx => {
     const ref = jobRef(uid);
-    const snap = await tx.get(ref);
+    const [snap, consentSnap] = await Promise.all([tx.get(ref), tx.get(consentRef(uid))]);
     if (!snap.exists) return false;
     const job = snap.data() as Job;
     if (job.uid !== uid || !isPositiveRevision(job.consentRevision)) throw new Error('Job cancellazione non valido.');
     if (job.status === 'complete' || (job.status === 'failed' && job.retryable === false)) return false;
     if (job.leaseOwner && job.leaseUntil instanceof Timestamp && job.leaseUntil.toMillis() > Date.now()) return false;
+    const consent = consentSnap.data();
+    if (consent?.uid !== uid || consent.status !== 'withdrawn'
+      || consent.revision !== job.consentRevision) {
+      throw new HealthDataErasureConflict('Il consenso non corrisponde al job di cancellazione.');
+    }
     tx.update(ref, {
       status: 'deleting', attempts: (job.attempts || 0) + 1,
       leaseOwner, leaseUntil: Timestamp.fromMillis(Math.max(Date.now() + 15000, deadlineMs + LEASE_GRACE_MS)),
@@ -191,8 +196,19 @@ async function updateUnderLease(uid: string, leaseOwner: string, update: Record<
   const db = adminDb();
   const ref = jobRef(uid);
   await db.runTransaction(async tx => {
-    const snap = await tx.get(ref);
-    requireLease(snap.exists ? snap.data() as Job : undefined, leaseOwner);
+    const [snap, consentSnap] = await Promise.all([
+      tx.get(ref), mutate ? tx.get(consentRef(uid)) : Promise.resolve(null),
+    ]);
+    const job = requireLease(snap.exists ? snap.data() as Job : undefined, leaseOwner);
+    if (mutate) {
+      // A trusted consent change during paginated deletion must fence all
+      // further physical deletes before any write is staged in this transaction.
+      const consent = consentSnap?.data();
+      if (consent?.uid !== uid || consent.status !== 'withdrawn'
+        || consent.revision !== job.consentRevision) {
+        throw new HealthDataErasureConflict('Il consenso è cambiato durante la cancellazione.');
+      }
+    }
     mutate?.(tx);
     tx.update(ref, { ...update, updatedAt: Timestamp.now() });
   });
@@ -231,7 +247,8 @@ async function completeErasure(uid: string, leaseOwner: string): Promise<void> {
     const [jobSnap, consentSnap] = await Promise.all([tx.get(jobRef(uid)), tx.get(consentRef(uid))]);
     const job = requireLease(jobSnap.exists ? jobSnap.data() as Job : undefined, leaseOwner);
     const state = consentSnap.data();
-    if (!state || state.status !== 'withdrawn' || state.revision !== job.consentRevision) {
+    if (state?.uid !== uid || state.status !== 'withdrawn'
+      || state.revision !== job.consentRevision) {
       throw new HealthDataErasureConflict('Il consenso è cambiato durante la cancellazione.');
     }
     const nextRevision = job.consentRevision + 1;
