@@ -110,16 +110,16 @@ export const CycleEditor: React.FC<CycleEditorProps> = ({
             onSubmit={handleSubmit}
             className="planning-editor"
             aria-busy={isSaving}
-            inert={isSaving}
         >
             <header className="planning-editor-header">
                 <h2>
                     {initialCycle ? 'Modifica ciclo' : 'Nuovo ciclo'}
                     {!initialCycle ? <span className="sr-only"> Crea ciclo di allenamento</span> : null}
                 </h2>
-                <button type="button" className="planning-close-button" onClick={onCancel} disabled={isSaving}>Chiudi</button>
+                <button type="button" className="planning-close-button" onClick={onCancel}>Chiudi</button>
             </header>
 
+            <div className="planning-editor-fields" inert={isSaving}>
             <label className="planning-field" htmlFor="cycle-name">
                 <span>Nome ciclo</span>
                 <input
@@ -293,9 +293,10 @@ export const CycleEditor: React.FC<CycleEditorProps> = ({
             />
 
             <CycleVolumeAccordion items={macroVolume} />
+            </div>
 
             <div className="planning-editor-actions">
-                <button type="button" className="btn" onClick={onCancel} disabled={isSaving}>Annulla</button>
+                <button type="button" className="btn" onClick={onCancel}>Annulla</button>
                 <button type="submit" className="btn btn-primary" disabled={isSaving}>
                     {isSaving ? 'Salvataggio in corso…' : initialCycle ? 'Salva modifiche' : 'Salva ciclo'}
                 </button>
