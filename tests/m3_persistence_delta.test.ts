@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { getDocFromServer, writeBatch } from 'firebase/firestore';
 
 vi.unmock('../src/lib/db');
-import { ConsentedTestDB as DB, openTestCloudBusiness } from './testUtils';
+import { ConsentedTestDB as DB, openTestCloudBusiness, sealTestCloudFixture, testCloudKey } from './testUtils';
 import {
     getSeedCatalog,
     clearCatalogCache,
@@ -311,11 +311,11 @@ describe('M3: Storage & Persistence Delta Isolation Suite', () => {
                 }
                 return {
                 exists: () => true,
-                data: () => mockFirestoreDoc
+                data: () => sealTestCloudFixture(mockFirestoreDoc)
             } as any;
             });
 
-            const loaded = await DB.loadUserData();
+            const loaded = await DB.loadUserData({ cloudKey: testCloudKey() });
 
             expect(loaded).not.toBeNull();
             expect(loaded?.profile?.height).toBe('180');
@@ -342,7 +342,7 @@ describe('M3: Storage & Persistence Delta Isolation Suite', () => {
             } as any;
             });
 
-            const loaded = await DB.loadUserData();
+            const loaded = await DB.loadUserData({ cloudKey: testCloudKey() });
 
             // When user doc is missing, standard catalog defaults are loaded from seeds (which are now empty).
             expect(loaded?.library?.length).toBe(0);
