@@ -219,14 +219,14 @@ describe('Logic Library Tests', () => {
             message: 'Raccolta dati in corso... (6/7 giorni richiesti)'
         });
 
-        // 7 measurements on the exact same date
+        // Seven entries for the same day are one calendar-day observation.
         const sameDay = [];
         for (let i = 0; i < 7; i++) {
             sameDay.push({ date: '2026-08-01', weight: 80, kcal: 2500 });
         }
         expect(Logic.calculateTDEE(sameDay)).toEqual({
             error: true,
-            message: 'Dati insufficienti (stesso giorno)'
+            message: 'Raccolta dati in corso... (1/7 giorni richiesti)'
         });
     });
 
