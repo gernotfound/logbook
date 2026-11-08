@@ -27,6 +27,13 @@ const recoveredRoutineExerciseSchema = z.object({
         segmentCount: z.number().int().positive().optional(),
     }).passthrough()).optional(),
     technicalStandard: z.string().optional(),
+    defaultTechnique: z.enum([
+        'none', 'dropset', 'isometrics', 'rest_pause', 'cluster', 'rep_match', 'diminishing',
+    ]).optional(),
+    progressionContract: z.object({
+        role: z.enum(['primary', 'secondary', 'support']).optional(),
+        metric: z.enum(['performance', 'volume', 'density', 'execution']).optional(),
+    }).passthrough().optional(),
 }).passthrough();
 
 const recoveredRoutineDraftSchema = z.object({

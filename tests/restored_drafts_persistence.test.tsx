@@ -110,6 +110,8 @@ describe('restored owner-scoped drafts', () => {
         ['invalid name', { name: 88, exercises: [] }],
         ['invalid exercise collection', { name: 'Bozza', exercises: {} }],
         ['invalid set plans', { name: 'Bozza', exercises: [{ exId: 'exercise-a', setsCount: 3, setPlans: {} }] }],
+        ['invalid default technique', { name: 'Bozza', exercises: [{ exId: 'exercise-a', setsCount: 3, defaultTechnique: 'unknown' }] }],
+        ['invalid progression contract', { name: 'Bozza', exercises: [{ exId: 'exercise-a', setsCount: 3, progressionContract: { role: 'owner' } }] }],
     ])('preserves corrupted %s in an authenticated routine draft', async (_description, corrupted) => {
         const owner = storageOwner();
         writeWorkoutRecoveryDraft('draft_routine', owner, corrupted);
