@@ -102,13 +102,22 @@ export const Exporter = {
 
         const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
         const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        const dateStr = Logic.getLocalDateString();
-        a.download = `logbook_emergency_backup_${dateStr}.json`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
+        try {
+            const a = document.createElement('a');
+            a.href = url;
+            const dateStr = Logic.getLocalDateString();
+            a.download = `logbook_emergency_backup_${dateStr}.json`;
+            document.body.appendChild(a);
+            try {
+                a.click();
+            } finally {
+                a.remove();
+            }
+        } catch (error) {
+            URL.revokeObjectURL(url);
+            throw error;
+        }
+        // The browser may start the download after the click handler returns.
         setTimeout(() => URL.revokeObjectURL(url), 1000);
     },
 

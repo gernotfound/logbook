@@ -83,6 +83,25 @@ describe('audit regression: emergency export local date', () => {
         expect(backup).not.toHaveProperty('recovery.device');
     });
 
+    it('releases the Blob URL and anchor when the browser refuses the emergency download', () => {
+        const before = useAppStore.getState();
+        const userData = structuredClone(emptyUserData) as UserData;
+        const create = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:blocked-emergency');
+        const revoke = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
+        vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {
+            throw new Error('Browser download denied');
+        });
+        try {
+            useAppStore.setState({ userData, dataOwner: 'user:test-user-id' });
+            expect(() => Exporter.exportEmergencyJSON(userData)).toThrow('Browser download denied');
+            expect(create).toHaveBeenCalledOnce();
+            expect(revoke).toHaveBeenCalledExactlyOnceWith('blob:blocked-emergency');
+            expect(document.querySelector('a[href="blob:blocked-emergency"]')).toBeNull();
+        } finally {
+            useAppStore.setState({ userData: before.userData, dataOwner: before.dataOwner });
+        }
+    });
+
     it('rejects stale or mismatched owner data before creating a downloadable backup', () => {
         const before = useAppStore.getState();
         const userData = { ...structuredClone(emptyUserData), profile: { height: '175' } } as UserData;

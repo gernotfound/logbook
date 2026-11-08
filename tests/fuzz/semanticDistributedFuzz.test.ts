@@ -265,6 +265,29 @@ describe('M2 distributed property fuzz', () => {
             const distributed = deliverPartitioned(initialState(), operations, rng);
 
             expect(snapshot(distributed)).toEqual(snapshot(canonical));
+
+            // Independently deducible from the generator's causal structure:
+            // the descendant dominates the ancestor; a concurrent deletion
+            // blocks all updates that did not observe its delete dot.
+            const [ancestor, descendant, concurrent] = operations;
+            const winner = concurrent.isDelete ? concurrent : descendant;
+            const path = 'profile/' + winner.path[1];
+            const stamp = distributed.syncMetas[''].fields[path];
+            expect(stamp).toMatchObject({ actorId: winner.actorId, seq: 1, clock: winner.clock });
+            expect(Boolean(stamp.deleted)).toBe(winner.isDelete);
+            expect(stamp.deleteClock).toEqual(
+                concurrent.isDelete ? { [concurrent.actorId]: concurrent.seq } : undefined
+            );
+            expect(distributed.syncMetas[''].clock).toEqual({
+                [ancestor.actorId]: 1,
+                [descendant.actorId]: 1,
+                [concurrent.actorId]: 1,
+            });
+            const profile = distributed.documents.get('')?.profile as Record<string, unknown> | undefined;
+            expect(profile?.[winner.path[1]]).toBe(winner.isDelete ? undefined : winner.value);
+
+            const replayed = applySemanticOperations(distributed.documents, operations, distributed.syncMetas);
+            expect(snapshot(replayed)).toEqual(snapshot(distributed));
         });
     });
 
