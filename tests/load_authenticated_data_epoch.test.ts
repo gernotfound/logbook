@@ -2,6 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { emptyUserData } from './setup';
 import { clear, get, update } from 'idb-keyval';
 import type { UserData } from '../src/types';
+import type { User } from 'firebase/auth';
+import type { ReplicaCheckpoint } from '../src/lib/sync/replicaProtocol';
 
 const authState = vi.hoisted(() => ({
     currentUser: { uid: 'user-a' } as { uid: string } | null,
@@ -17,6 +19,7 @@ const storeState = vi.hoisted(() => ({
 
 vi.mock('../src/lib/firebase', () => ({
     auth: authState,
+    getDb: vi.fn(() => ({})),
 }));
 
 vi.mock('../src/lib/db', () => ({
@@ -27,7 +30,7 @@ vi.mock('../src/lib/db', () => ({
 
 vi.mock('../src/lib/sync/replicaProtocol', async importOriginal => {
     const actual = await importOriginal<typeof import('../src/lib/sync/replicaProtocol')>();
-    return { ...actual, needsReplicaCheckpoint: () => false };
+    return { ...actual, needsReplicaCheckpoint: vi.fn(() => false) };
 });
 
 vi.mock('../src/store/useAppStore', () => ({
@@ -468,6 +471,112 @@ describe('authenticated hydration session fencing', () => {
         expect(storeState.current.userData?.profile?.height).toBe('190');
         expect(setSaveError).not.toHaveBeenCalled();
         await clear();
+    });
+
+    it.each([
+        { mode: 'renew', boundary: 'catalog' },
+        { mode: 'replace', boundary: 'catalog' },
+        { mode: 'renew', boundary: 'transaction' },
+        { mode: 'replace', boundary: 'transaction' },
+    ] as const)('preserves the journal when cloud permission is suspended during checkpoint $mode at $boundary', async ({ mode, boundary }) => {
+        await clear();
+        const { loadAuthenticatedData, initializeLocal, commitDomainOperations, readLocal, invalidateSession } = await loadModules();
+        const repository = await import('../src/lib/sync/localRepository');
+        const protocol = await import('../src/lib/sync/replicaProtocol');
+        const catalogModule = await import('../src/lib/catalog/catalogService');
+        const healthConsent = await import('../src/lib/healthConsent');
+        const { captureSession, isCurrentSession } = await import('../src/lib/sync/session');
+        const { projectDocuments } = await import('../src/lib/sync/documentProjection');
+        const { diffDocuments, applySemanticOperations } = await import('../src/lib/sync/semanticProjection');
+        invalidateSession();
+
+        const initial = data('170');
+        const catalog = await catalogModule.getCachedCatalog();
+        const documents = projectDocuments(initial, catalog);
+        const events = diffDocuments(new Map(), documents, 's02', 1, { s02: 1 });
+        const remote = applySemanticOperations(new Map(), events);
+        const cloudDocuments = new Map([...remote.documents].map(([path, business]) => [path, {
+            ...business, _schemaVersion: 1,
+            _sync: { ...remote.syncMetas[path], writer: {
+                slot: 's02', replicaId: 'remote-checkpoint-proof', generation: 1, seq: 1,
+            } },
+        }]));
+        const checkpoint = protocol.checkpointFromCloudDocuments(cloudDocuments);
+        const now = Date.now();
+        const originalIdentity = {
+            slot: 's00', replicaId: 'original-checkpoint', generation: 1,
+            checkpointAtMs: now - 1000, leaseUntilMs: now + 86_400_000,
+        };
+        await initializeLocal('user:user-a', initial);
+        await repository.adoptReplicaCheckpoint('user:user-a', { identity: originalIdentity, baseSeq: 0 }, checkpoint);
+        await commitDomainOperations('user:user-a', { type: 'profile.patch', patch: { height: '175' } }, initial);
+        expect((await readLocal('user:user-a'))?.pending.length).toBeGreaterThan(0);
+        const session = captureSession();
+        const claim: ReplicaCheckpoint = {
+            identity: mode === 'renew'
+                ? { ...originalIdentity, checkpointAtMs: now, leaseUntilMs: now + 172_800_000 }
+                : { ...originalIdentity, slot: 's01', replicaId: 'replacement-checkpoint', generation: 2 },
+            baseSeq: mode === 'renew' ? 1 : 7,
+        };
+        const release = deferred<void>();
+        let paused = false;
+        let cloudAllowed = true;
+        let beforeAdoption: Awaited<ReturnType<typeof readLocal>>;
+        let ciphertext: unknown;
+        const cloudGate = vi.mocked(healthConsent.isHealthConsentCloudWritable);
+        cloudGate.mockImplementation(() => cloudAllowed);
+        vi.mocked(protocol.needsReplicaCheckpoint).mockReturnValue(true);
+        const retire = vi.spyOn(protocol, 'retireExpiredReplicas').mockResolvedValue(undefined);
+        const catalogRead = vi.spyOn(catalogModule, 'getCachedCatalog');
+        const originalUpdate = vi.mocked(update).getMockImplementation();
+        if (!originalUpdate) throw new Error('Missing transactional IndexedDB adapter');
+        const claimCheckpoint = vi.spyOn(protocol, 'claimReplicaCheckpoint').mockImplementationOnce(async () => {
+            beforeAdoption = await readLocal('user:user-a');
+            ciphertext = await get('logbook:v2:user:user-a');
+            if (boundary === 'catalog') {
+                catalogRead.mockImplementationOnce(async () => {
+                    paused = true;
+                    await release.promise;
+                    return catalog;
+                });
+            } else {
+                vi.mocked(update).mockImplementationOnce(async (key, transform, store) => {
+                    paused = true;
+                    await release.promise;
+                    return originalUpdate(key, transform, store);
+                });
+            }
+            return claim;
+        });
+        dbState.loadCloudPayload.mockResolvedValueOnce({ data: initial, completeMonths: [], cloudDocuments });
+        const loading = loadAuthenticatedData({
+            user: { uid: 'user-a' } as User, isGuestActive: () => false,
+            setSyncing: vi.fn(), setSaveError: vi.fn(),
+        });
+
+        try {
+            await vi.waitFor(() => expect(paused).toBe(true));
+            // Cloud suspension/revalidation can leave Auth and durable consent markers unchanged.
+            cloudAllowed = false;
+            expect(isCurrentSession(session)).toBe(true);
+            release.resolve();
+            expect(await loading).toBe('blocked');
+            expect(await get('logbook:v2:user:user-a')).toBe(ciphertext);
+            expect(await readLocal('user:user-a')).toEqual(beforeAdoption);
+            expect(beforeAdoption?.pending.length).toBeGreaterThan(0);
+            expect(beforeAdoption?.data.profile?.height).toBe('175');
+            expect(claimCheckpoint).toHaveBeenCalledOnce();
+            expect(dbState.loadCloudPayload).toHaveBeenCalledWith(expect.objectContaining({ allMonths: true }));
+        } finally {
+            release.resolve();
+            await loading;
+            cloudGate.mockReturnValue(true);
+            vi.mocked(protocol.needsReplicaCheckpoint).mockReturnValue(false);
+            retire.mockRestore();
+            claimCheckpoint.mockRestore();
+            catalogRead.mockRestore();
+            await clear();
+        }
     });
 
 });
