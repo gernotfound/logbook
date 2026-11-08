@@ -153,13 +153,13 @@ describe('training planning residual regressions', () => {
         fireEvent.click(activate);
         fireEvent.click(activate);
         expect(onSetActive).toHaveBeenCalledTimes(1);
-        expect(activate).toBeDisabled();
-        expect(screen.getByRole('button', { name: 'Modifica' })).toBeDisabled();
+        expect((activate as HTMLButtonElement).disabled).toBe(true);
+        expect((screen.getByRole('button', { name: 'Modifica' }) as HTMLButtonElement).disabled).toBe(true);
         expect(container.querySelector('.planning-cycle-item')?.getAttribute('aria-busy')).toBe('true');
 
         fireEvent.click(screen.getByRole('button', { name: 'Opzioni' }));
         for (const action of ['Modifica', 'Duplica', 'Elimina']) {
-            expect(screen.getByRole('menuitem', { name: action })).toBeDisabled();
+            expect((screen.getByRole('menuitem', { name: action }) as HTMLButtonElement).disabled).toBe(true);
             fireEvent.click(screen.getByRole('menuitem', { name: action }));
         }
         expect(onEdit).not.toHaveBeenCalled();
@@ -167,7 +167,7 @@ describe('training planning residual regressions', () => {
         expect(onDelete).not.toHaveBeenCalled();
 
         await act(async () => { finish(); });
-        expect(activate).not.toBeDisabled();
+        expect((activate as HTMLButtonElement).disabled).toBe(false);
         expect(container.querySelector('.planning-cycle-item')?.getAttribute('aria-busy')).toBe('false');
         fireEvent.click(activate);
         expect(onSetActive).toHaveBeenCalledTimes(2);
@@ -188,15 +188,15 @@ describe('training planning residual regressions', () => {
         fireEvent.click(menu);
         fireEvent.click(screen.getByRole('menuitem', { name: 'Elimina' }));
         fireEvent.click(menu);
-        expect(screen.getByRole('menuitem', { name: 'Elimina' })).toBeDisabled();
-        expect(screen.getByRole('menuitem', { name: 'Duplica' })).toBeDisabled();
+        expect((screen.getByRole('menuitem', { name: 'Elimina' }) as HTMLButtonElement).disabled).toBe(true);
+        expect((screen.getByRole('menuitem', { name: 'Duplica' }) as HTMLButtonElement).disabled).toBe(true);
         fireEvent.click(screen.getByRole('menuitem', { name: 'Duplica' }));
         expect(onDelete).toHaveBeenCalledOnce();
         expect(onDuplicate).not.toHaveBeenCalled();
 
         await act(async () => { rejectDelete(new Error('write failed')); });
         expect(log).toHaveBeenCalledOnce();
-        expect(screen.getByRole('menuitem', { name: 'Elimina' })).not.toBeDisabled();
+        expect((screen.getByRole('menuitem', { name: 'Elimina' }) as HTMLButtonElement).disabled).toBe(false);
         fireEvent.click(screen.getByRole('menuitem', { name: 'Elimina' }));
         expect(onDelete).toHaveBeenCalledTimes(2);
     });
