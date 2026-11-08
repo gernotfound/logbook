@@ -374,6 +374,43 @@ describe.each(['input', 'textarea'] as const)('owner-scoped buffered %s recovery
         expect(localStorage.getItem(key)).toBe(ciphertext);
         expect(localStorage.getItem(deviceKey(name, owner))).toBeNull();
     });
+
+    it('preserves input Enter versus textarea blur semantics and clears only acknowledged drafts', async () => {
+        const owner = captureSession().owner;
+        await prepareUnlockedTestArchive(owner);
+        // Authenticated writers require a current, positive consent revision.
+        localStorage.setItem(`logbook:v2:${owner}:health-consent-generation`, '3');
+        const draftName = `draft:buffered:${kind}:stable-draft`;
+        const onChange = vi.fn();
+        const view = render(field(kind, onChange));
+
+        fireEvent.focus(editor());
+        fireEvent.change(editor(), { target: { value: '7,5' } });
+        expect(editor().value).toBe('7,5');
+        expect(readBufferedDraftSnapshot(draftName, owner).value).toBe('7,5');
+        expect(readBufferedWriterEvidence(owner, draftName)).toHaveLength(1);
+        expect(onChange).not.toHaveBeenCalled();
+
+        fireEvent.keyDown(editor(), { key: 'Enter' });
+        if (kind === 'input') {
+            expect(onChange).toHaveBeenCalledExactlyOnceWith('7.5');
+        } else {
+            // The multiline editor must not inherit the input's Enter-to-commit behavior.
+            expect(onChange).not.toHaveBeenCalled();
+        }
+
+        fireEvent.blur(editor());
+        const acknowledged = kind === 'input' ? '7.5' : '7,5';
+        expect(onChange).toHaveBeenCalledExactlyOnceWith(acknowledged);
+        expect(readBufferedDraftSnapshot(draftName, owner).value).toBe('7,5');
+
+        view.rerender(field(kind, onChange, acknowledged));
+        expect(readBufferedDraftSnapshot(draftName, owner).raw).toBeNull();
+        expect(readBufferedWriterEvidence(owner, draftName)).toEqual([]);
+        expect(useAppStore.getState().localPersistenceBlocked).toBe(false);
+        view.unmount();
+    });
+
 });
 
 describe.each(['input', 'textarea'] as const)('workout-scoped buffered %s recovery', kind => {
