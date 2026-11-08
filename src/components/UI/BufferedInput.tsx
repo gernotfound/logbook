@@ -248,7 +248,7 @@ export const BufferedInput = React.forwardRef<HTMLInputElement, BufferedInputPro
                 setLocalValue(value ?? '');
                 latestLocalValue.current = value ?? '';
             }
-        }, [value, workoutId]);
+        }, [value, workoutId, assertIndependentWitnesses]);
 
         const flush = useCallback(() => {
             if (isDirty.current) {
@@ -509,7 +509,7 @@ export const BufferedTextarea = React.forwardRef<HTMLTextAreaElement, BufferedTe
                 setLocalValue(value ?? '');
                 latestLocalValue.current = value ?? '';
             }
-        }, [value, workoutId]);
+        }, [value, workoutId, assertIndependentWitnesses]);
 
         const flush = useCallback(() => {
             if (isDirty.current) {
