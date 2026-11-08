@@ -444,7 +444,8 @@ function compareReferenceOutput(
             const previousSeconds = prev?.timeSeconds;
             // The primary set may be unmeasured when its segments carry the time.
             // Missing time in a recorded segment cannot prove stable duration.
-            if (index === 0 && currentSeconds === undefined && previousSeconds === undefined) continue;
+            if (index === 0 && !(currentSeconds !== undefined && currentSeconds > 0)
+                && !(previousSeconds !== undefined && previousSeconds > 0)) continue;
             if (currentSeconds === undefined || previousSeconds === undefined
                 || currentSeconds <= 0 || previousSeconds <= 0) return 'unknown';
             compared++;
@@ -536,9 +537,9 @@ export function formatProgressionReference(exposure?: NormalizedExposure): strin
     const set = exposure?.referenceSet;
     if (!set) return 'dati insufficienti';
     if (exposure?.trackingType === 'time') {
-        const main = set.timeSeconds !== undefined ? `${set.timeSeconds}s` : '';
+        const main = set.timeSeconds !== undefined && set.timeSeconds > 0 ? `${set.timeSeconds}s` : '';
         const segments = set.segments.length
-            ? `segmenti ${set.segments.map(segment => segment.timeSeconds !== undefined ? `${segment.timeSeconds}s` : '?').join(' + ')}`
+            ? `segmenti ${set.segments.map(segment => segment.timeSeconds !== undefined && segment.timeSeconds > 0 ? `${segment.timeSeconds}s` : '?').join(' + ')}`
             : '';
         return [main, segments].filter(Boolean).join(' · ') || 'tempo non disponibile';
     }
