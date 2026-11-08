@@ -208,7 +208,7 @@ describe('contextual progression engine', () => {
         expect(analysis.outputChange).toBe('longer');
         expect(analysis.classification).toBe('descriptive_change');
         expect(analysis.detail).toContain('segmenti 10s → segmenti 15s');
-        expect(analysis.detail).not.toContain('0s');
+        expect(analysis.detail).not.toContain('0s ·');
     });
 
     it('describes mixed timed segment changes without imposing a direction', () => {
