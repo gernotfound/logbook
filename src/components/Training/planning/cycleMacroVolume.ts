@@ -1,4 +1,5 @@
 import type { Exercise, TrainingCycle, WorkoutRoutine } from '../../../types';
+import { roundToTenth } from '../../../lib/utils/rounding';
 import { getCycleVolumeFrequencies, isRepresentableCycleVolume } from '../../../lib/calc/cycleLimits';
 
 export interface CycleMacroVolumeItem {
@@ -76,6 +77,6 @@ export function calculateCycleMacroVolume(
     }
 
     return Array.from(totals.values())
-        .map(item => ({ ...item, sets: Math.round(item.sets * 10) / 10 }))
+        .map(item => ({ ...item, sets: roundToTenth(item.sets) }))
         .sort((a, b) => b.sets - a.sets || a.label.localeCompare(b.label, 'it'));
 }

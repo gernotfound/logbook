@@ -1,4 +1,5 @@
 import type { LoggedMealItem } from '../../types';
+import { roundToTenth } from '../utils/rounding';
 
 /** Shared serving rules for the UI and the persisted domain projection. */
 export function getLoggedMealPortion(item: LoggedMealItem): { quantity: number; ratio: number } {
@@ -21,11 +22,6 @@ export function calculateRawLoggedMealTotals(meals: readonly LoggedMealItem[]) {
     return { kcal, carbs, pro, fat };
 }
 
-function roundMacro(value: number): number {
-    // Integers need no decimal rounding; scaling large finite values can lose precision or overflow.
-    return Number.isInteger(value) ? value : Math.round(value * 10) / 10;
-}
-
 /** Reject arithmetic loss before permissive schema fallbacks can replace it with zero. */
 export function calculateLoggedMealTotals(meals: readonly LoggedMealItem[]) {
     const { kcal, carbs, pro, fat } = calculateRawLoggedMealTotals(meals);
@@ -34,8 +30,8 @@ export function calculateLoggedMealTotals(meals: readonly LoggedMealItem[]) {
     }
     return {
         kcal: Math.round(kcal),
-        carbs: roundMacro(carbs),
-        pro: roundMacro(pro),
-        fat: roundMacro(fat),
+        carbs: roundToTenth(carbs),
+        pro: roundToTenth(pro),
+        fat: roundToTenth(fat),
     };
 }
