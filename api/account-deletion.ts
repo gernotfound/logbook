@@ -23,7 +23,8 @@ const ALLOWED_HEADERS = 'authorization, content-type, x-firebase-appcheck, x-acc
 function json(body: unknown, init: ResponseInit = {}, origin: string | null = null): Response {
   return Response.json(body, {
     ...init,
-    headers: { ...accountDeletionCorsHeaders(origin, ALLOWED_HEADERS), ...(init.headers || {}) },
+    // Owner-scoped deletion and recovery responses must not be reused by caches.
+    headers: { ...accountDeletionCorsHeaders(origin, ALLOWED_HEADERS), ...(init.headers || {}), 'cache-control': 'no-store' },
   });
 }
 
@@ -65,12 +66,18 @@ function errorResponse(error: unknown, origin: string | null = null): Response {
 }
 
 async function requestBody(request: Request): Promise<Record<string, unknown>> {
+  let body: unknown;
   try {
-    const body = await request.json();
-    return body && typeof body === 'object' ? body as Record<string, unknown> : {};
-  } catch {
-    return {};
+    body = await request.json();
+  } catch (error) {
+    if (error instanceof SyntaxError) throw new RequestInputError('Corpo JSON non valido.');
+    // An interrupted body stream is a transport failure, not invalid user input.
+    throw error;
   }
+  if (!body || typeof body !== 'object' || Array.isArray(body)) {
+    throw new RequestInputError('Corpo JSON non valido.');
+  }
+  return body as Record<string, unknown>;
 }
 
 export async function POST(request: Request): Promise<Response> {

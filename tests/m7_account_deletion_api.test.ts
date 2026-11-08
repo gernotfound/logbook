@@ -88,6 +88,61 @@ describe('M7 native account deletion HTTP boundary', () => {
     expect(response.headers.get('access-control-allow-origin')).toBeNull();
   });
 
+  it.each(['{not-json', '', 'null', '[]', '"receipt"', 'true'])(
+    'returns 400 for malformed or non-object JSON without creating a deletion job: %s',
+    async raw => {
+      const response = await POST(new Request('https://example.test/api/account-deletion', {
+        method: 'POST',
+        headers: { origin: 'https://thelogbook.web.app', 'content-type': 'application/json' },
+        body: raw,
+      }));
+      expect(response.status).toBe(400);
+      expect(await response.json()).toEqual({ error: 'Corpo JSON non valido.' });
+      expect(store.createOrRefreshDeletionJob).not.toHaveBeenCalled();
+      expect(runner.processAccountDeletion).not.toHaveBeenCalled();
+      expect(response.headers.get('cache-control')).toBe('no-store');
+    },
+  );
+
+  it('reports a failed request body stream as a backend failure, never as malformed input', async () => {
+    const input = request('POST', { receiptToken: 'receipt' });
+    const streamFailure = vi.spyOn(input, 'json').mockRejectedValueOnce(new TypeError('sensitive stream failure detail'));
+    const log = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    try {
+      const response = await POST(input);
+      expect(response.status).toBe(500);
+      expect(await response.json()).toEqual({
+        error: 'Servizio di cancellazione temporaneamente non disponibile. La copia locale è stata conservata.',
+      });
+      expect(log).toHaveBeenCalledWith('[account-deletion] backend failure', { kind: 'TypeError' });
+      expect(JSON.stringify(log.mock.calls)).not.toContain('sensitive stream failure detail');
+      expect(store.createOrRefreshDeletionJob).not.toHaveBeenCalled();
+      expect(runner.processAccountDeletion).not.toHaveBeenCalled();
+      expect(response.headers.get('cache-control')).toBe('no-store');
+    } finally {
+      streamFailure.mockRestore();
+      log.mockRestore();
+    }
+  });
+
+  it('prevents caching of successful, absent and rejected owner-specific responses', async () => {
+    const accepted = await POST(request('POST', { receiptToken: 'receipt' }));
+    const pending = await GET(request('GET'));
+    runner.progressAndReadStatus.mockResolvedValueOnce({ uid: 'u', status: 'complete', attempts: 2 });
+    const complete = await GET(request('GET'));
+    store.readAuthorizedDeletionJob.mockResolvedValueOnce(null);
+    const missing = await GET(request('GET'));
+    const invalid = await POST(request('POST', { receiptToken: 'bad' }));
+    auth.verifyStatusAppCheck.mockRejectedValueOnce(new auth.RequestAuthError('App Check invalid.', 403));
+    const denied = await GET(request('GET'));
+
+    expect([accepted.status, pending.status, complete.status, missing.status, invalid.status, denied.status])
+      .toEqual([202, 200, 200, 404, 400, 403]);
+    for (const response of [accepted, pending, complete, missing, invalid, denied]) {
+      expect(response.headers.get('cache-control')).toBe('no-store');
+    }
+  });
+
   it('returns 400 only for malformed client input', async () => {
     const response = await POST(request('POST', { receiptToken: 'bad' }));
     expect(response.status).toBe(400);
