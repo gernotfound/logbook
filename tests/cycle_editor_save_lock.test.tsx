@@ -1,5 +1,5 @@
 import React from 'react';
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { CycleEditor } from '../src/components/Training/planning/CycleEditor';
 import { useDialogStore } from '../src/store/useDialogStore';
@@ -27,7 +27,7 @@ afterEach(() => {
 describe('CycleEditor durable save boundaries', () => {
     it('prevents late edits, cancellation and repeated submissions while persistence is pending', async () => {
         let completeSave!: () => void;
-        const onSave = vi.fn(() => new Promise<void>(resolve => { completeSave = resolve; }));
+        const onSave = vi.fn((_cycle: TrainingCycle) => new Promise<void>(resolve => { completeSave = resolve; }));
         const onCancel = vi.fn();
         const { container } = render(
             <CycleEditor initialCycle={initialCycle} routines={routines} onSave={onSave} onCancel={onCancel} />,
@@ -41,7 +41,7 @@ describe('CycleEditor durable save boundaries', () => {
         fireEvent.submit(form);
         expect(onSave).toHaveBeenCalledTimes(1);
         expect(onSave.mock.calls[0]?.[0]?.name).toBe('Nome già inviato');
-        expect(form.inert).toBe(true);
+        expect(form.hasAttribute('inert')).toBe(true);
         expect(form.getAttribute('aria-busy')).toBe('true');
         expect(close.disabled).toBe(true);
         expect(submit.disabled).toBe(true);
@@ -55,7 +55,7 @@ describe('CycleEditor durable save boundaries', () => {
         expect(onCancel).not.toHaveBeenCalled();
 
         await act(async () => { completeSave(); });
-        expect(form.inert).toBe(false);
+        expect(form.hasAttribute('inert')).toBe(false);
         expect(form.getAttribute('aria-busy')).toBe('false');
         expect(close.disabled).toBe(false);
         expect(submit.disabled).toBe(false);
@@ -81,12 +81,12 @@ describe('CycleEditor durable save boundaries', () => {
             const nameInput = container.querySelector<HTMLInputElement>('#cycle-name')!;
             fireEvent.change(nameInput, { target: { value: 'Modifiche da conservare' } });
             fireEvent.submit(form);
-            expect(form.inert).toBe(true);
+            expect(form.hasAttribute('inert')).toBe(true);
 
             await act(async () => { rejectSave(new Error('write not durable')); });
             expect(log).toHaveBeenCalledOnce();
             expect(alert).toHaveBeenCalledWith(expect.stringContaining('Salvataggio del ciclo non riuscito'));
-            expect(form.inert).toBe(false);
+            expect(form.hasAttribute('inert')).toBe(false);
             expect(nameInput.value).toBe('Modifiche da conservare');
 
             fireEvent.submit(form);
