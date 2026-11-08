@@ -199,6 +199,64 @@ describe('Workout metronome', () => {
         expect(vi.getTimerCount()).toBe(0);
     });
 
+    it('skips missed beats when the Web Audio clock advances during a stalled scheduler', async () => {
+        vi.useFakeTimers();
+        setAudioContext(FakeAudioContext as unknown as typeof AudioContext);
+        const { result } = renderHook(() => useMetronome(120));
+
+        await act(async () => { expect(await result.current.start()).toBe(true); });
+        const context = audioContextInstance!;
+        expect(context.createOscillator).toHaveBeenCalledTimes(1);
+
+        act(() => {
+            // The audio clock advances independently of timer callbacks.
+            context.currentTime += 120;
+            vi.advanceTimersByTime(25);
+        });
+
+        expect(context.createOscillator).toHaveBeenCalledTimes(2);
+        expect(result.current.isRunning).toBe(true);
+        act(() => { result.current.stop(); });
+    });
+
+    it('stops and reports audio interruption if the context suspends during playback', async () => {
+        vi.useFakeTimers();
+        setAudioContext(FakeAudioContext as unknown as typeof AudioContext);
+        const { result } = renderHook(() => useMetronome(120));
+
+        await act(async () => { expect(await result.current.start()).toBe(true); });
+        act(() => {
+            audioContextInstance!.state = 'suspended';
+            vi.advanceTimersByTime(25);
+        });
+
+        expect(result.current.isRunning).toBe(false);
+        expect(result.current.error).toContain('Audio interrotto');
+        expect(vi.getTimerCount()).toBe(0);
+    });
+
+    it('stops the scheduler and exposes an audio-node failure without repeating it', async () => {
+        vi.useFakeTimers();
+        setAudioContext(FakeAudioContext as unknown as typeof AudioContext);
+        const { result } = renderHook(() => useMetronome(120));
+        const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+        await act(async () => { expect(await result.current.start()).toBe(true); });
+        const context = audioContextInstance!;
+        act(() => {
+            context.createOscillator.mockImplementationOnce(() => { throw new Error('audio unavailable'); });
+            context.currentTime += 0.5;
+            vi.advanceTimersByTime(25);
+        });
+
+        expect(result.current.isRunning).toBe(false);
+        expect(result.current.error).toContain('Audio interrotto');
+        expect(vi.getTimerCount()).toBe(0);
+        expect(log).toHaveBeenCalledTimes(1);
+        act(() => { vi.advanceTimersByTime(1000); });
+        expect(log).toHaveBeenCalledTimes(1);
+    });
+
     it('cancels a pending audio activation when the page becomes hidden', async () => {
         vi.useFakeTimers();
         setAudioContext(SlowAudioContext as unknown as typeof AudioContext);

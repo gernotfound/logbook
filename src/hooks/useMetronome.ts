@@ -83,18 +83,43 @@ export function useMetronome(bpm: number): MetronomeController {
         oscillator.stop(atTime + CLICK_DURATION_SECONDS);
     }, []);
 
-    const runScheduler = useCallback(() => {
+    const failPlayback = useCallback((cause?: unknown) => {
+        if (cause) console.error('Riproduzione metronomo interrotta:', cause);
+        runningRef.current = false;
+        clearScheduler();
+        stopScheduledClicks();
+        setIsRunning(false);
+        setError('Audio interrotto. Tocca di nuovo Avvia.');
+    }, [clearScheduler, stopScheduledClicks]);
+
+    const runScheduler = useCallback((): boolean => {
+        if (!runningRef.current) return false;
         const context = contextRef.current;
-        if (!context || !runningRef.current || context.state !== 'running') return;
-
-        const secondsPerBeat = 60 / bpmRef.current;
-        const schedulingLimit = context.currentTime + SCHEDULE_AHEAD_SECONDS;
-
-        while (nextBeatTimeRef.current < schedulingLimit) {
-            scheduleClick(context, nextBeatTimeRef.current);
-            nextBeatTimeRef.current += secondsPerBeat;
+        if (!context || context.state !== 'running') {
+            failPlayback();
+            return false;
         }
-    }, [scheduleClick]);
+
+        const now = context.currentTime;
+        const secondsPerBeat = 60 / bpmRef.current;
+        const schedulingLimit = now + SCHEDULE_AHEAD_SECONDS;
+        // The audio clock may advance while JavaScript is throttled. Missed
+        // beats must not be replayed in a burst when the scheduler wakes up.
+        if (nextBeatTimeRef.current < now) {
+            nextBeatTimeRef.current = now + 0.03;
+        }
+
+        try {
+            while (nextBeatTimeRef.current < schedulingLimit) {
+                scheduleClick(context, nextBeatTimeRef.current);
+                nextBeatTimeRef.current += secondsPerBeat;
+            }
+            return true;
+        } catch (cause) {
+            failPlayback(cause);
+            return false;
+        }
+    }, [failPlayback, scheduleClick]);
 
     const stop = useCallback(() => {
         startGenerationRef.current += 1;
@@ -141,7 +166,7 @@ export function useMetronome(bpm: number): MetronomeController {
                 runningRef.current = true;
                 setIsRunning(true);
                 nextBeatTimeRef.current = context.currentTime + 0.03;
-                runScheduler();
+                if (!runScheduler()) return false;
                 schedulerRef.current = window.setInterval(runScheduler, LOOKAHEAD_MS);
                 return true;
             } catch (cause) {

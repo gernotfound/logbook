@@ -158,15 +158,10 @@ service cloud.firestore {
         );
     }
 
-    function syncControlExistsAfter(userId) {
-      return existsAfter(/databases/$(database)/documents/users/$(userId)/sync_control/state);
-    }
-
     function hasProtocol3Writer(userId, docData) {
       let writer = docData._sync.writer;
       let control = getAfter(/databases/$(database)/documents/users/$(userId)/sync_control/state).data;
       return docData._sync.protocolVersion == 3
-        && syncControlExistsAfter(userId)
         && control.protocolVersion == 3
         && control.mutation is map
         && control.mutation.action == 'advance'
@@ -174,8 +169,11 @@ service cloud.firestore {
         // A prior advance does not authorize a new write. The nonce must
         // change in the same atomic request as the business document.
         && control.mutation.batchId != get(/databases/$(database)/documents/users/$(userId)/sync_control/state).data.mutation.get('batchId', '')
-        && matchesConsentEpoch(userId, writer)
+        // Control carries the trusted epoch; checking the writer against it
+        // avoids duplicate consent lookups in Protocol 3 business writes.
         && matchesConsentEpoch(userId, control)
+        && writer.consentRevision is int
+        && writer.consentRevision == control.consentRevision
         && writer.slot in control.replicas
         && control.replicas[writer.slot].status == 'active'
         && control.replicas[writer.slot].replicaId == writer.replicaId
