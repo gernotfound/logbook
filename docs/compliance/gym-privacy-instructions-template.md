@@ -6,7 +6,7 @@
 
 ## Perimetro del possibile accordo
 
-Nell'unico scenario B2B contemplato dall'architettura attuale, la palestra **potrebbe limitarsi a segnalare** ai propri iscritti maggiorenni l'esistenza e il link di TheLogBook, una volta approvato l'accordo. L'utente sceglie autonomamente se utilizzare la PWA, creare un account e inserire dati; la palestra non possiede né amministra l'account.
+Nello scenario B2B compatibile con le funzionalità oggi presenti, la palestra **potrebbe limitarsi a segnalare** ai propri iscritti maggiorenni l'esistenza e il link di TheLogBook, una volta approvato l'accordo. L'utente sceglie autonomamente se utilizzare la PWA, creare un account e inserire dati; la palestra non possiede né amministra l'account.
 
 TheLogBook non dispone di ruoli gym/coach/admin, dashboard o funzioni per associare gli account a una palestra. Non comunica automaticamente alla palestra i dati fitness degli utenti. I ruoli giuridici non si deducono da questa sola separazione tecnica: devono essere validati in base alle finalità e ai mezzi effettivi.
 
@@ -64,7 +64,7 @@ In caso di sospetto accesso indebito, esposizione, perdita di dati o credenziali
 3. informare **senza ritardo** il referente sicurezza/privacy concordato e verificato nel futuro accordo, usando il canale di incidente approvato; non attendere di accertare da soli la causa;
 4. preservare le evidenze strettamente necessarie e limitarne la diffusione; lasciare la valutazione del breach, la competenza delle notifiche e le comunicazioni ufficiali ai soggetti responsabili secondo i ruoli effettivi.
 
-Seguire il [runbook incidenti](incident-breach-runbook.md) per l'escalation applicabile. Il template non assegna alla palestra un ruolo di titolare, responsabile o autorità notificante e non sostituisce i suoi eventuali obblighi propri.
+Seguire il [runbook incidenti](incident-breach-runbook.md) per l'escalation applicabile. Il template non assegna alla palestra un ruolo privacy né la responsabilità delle notifiche per i dati TheLogBook e non sostituisce i suoi eventuali obblighi propri.
 
 ## Contatti da convalidare prima della consegna
 
