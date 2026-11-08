@@ -101,6 +101,42 @@ describe('account email operations', () => {
         expect(fetch).not.toHaveBeenCalled();
     });
 
+    it.each(['app-check', 'auth-id-token'] as const)(
+        'expires stalled %s acquisition without a late credential submission',
+        async phase => {
+            vi.useFakeTimers();
+            let release!: (token: string) => void;
+            const delayed = new Promise<string>(resolve => { release = resolve; });
+            const user = {
+                uid: 'u1',
+                getIdToken: vi.fn(phase === 'auth-id-token'
+                    ? () => delayed
+                    : async () => 'fresh-id-token'),
+            } as any;
+            if (phase === 'app-check') mockedGetAppCheckToken.mockImplementationOnce(() => delayed);
+            try {
+                const pending = linkEmailPasswordWithEnumerationProtection(user, 'user@example.com', 'Secret1!');
+                // Flush token-bootstrap microtasks before the preparation deadline.
+                await vi.advanceTimersByTimeAsync(0);
+                if (phase === 'app-check') expect(mockedGetAppCheckToken).toHaveBeenCalledOnce();
+                else expect(user.getIdToken).toHaveBeenCalledOnce();
+
+                await vi.advanceTimersByTimeAsync(12_100);
+                await expect(pending).rejects.toMatchObject({ code: 'auth/link-preparation-timeout' });
+                expect(fetch).not.toHaveBeenCalled();
+
+                // The SDK provider may still resolve after the UI has timed out.
+                // That continuation must be fenced instead of sending the password.
+                release('late-token');
+                await vi.advanceTimersByTimeAsync(0);
+                expect(fetch).not.toHaveBeenCalled();
+                expect(mockedReload).not.toHaveBeenCalled();
+            } finally {
+                vi.useRealTimers();
+            }
+        },
+    );
+
     it('keeps a confirmed remote link distinct from a failed local refresh', async () => {
         const user = { uid: 'u1', getIdToken: vi.fn().mockResolvedValue('fresh-id-token') } as any;
         vi.mocked(fetch).mockResolvedValueOnce(new Response(JSON.stringify({ localId: 'u1' }), { status: 200 }));
