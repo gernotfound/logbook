@@ -113,11 +113,14 @@ function verifyTypeAwareCoverage() {
         + String(lint.error ?? lint.stderr ?? lint.stdout));
     }
     const diagnostics = JSON.parse(lint.stdout).diagnostics ?? [];
+    const cwdPrefix = process.cwd().replaceAll('\\', '/') + '/';
     for (const path of paths) {
       const expectedCount = path === source ? 1 : 2;
       const actualCount = diagnostics.filter(item => {
         const filename = String(item.filename ?? '').replaceAll('\\', '/');
-        return (filename === path || filename.endsWith('/' + path))
+        const normalized = filename.startsWith(cwdPrefix)
+          ? filename.slice(cwdPrefix.length) : filename;
+        return normalized === path
           && String(item.code).includes('no-floating-promises')
           && item.severity === 'error';
       }).length;
