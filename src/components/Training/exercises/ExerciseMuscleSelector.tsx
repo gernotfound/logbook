@@ -5,6 +5,7 @@ import MuscleModel from '../MuscleModel';
 type TrainingExercisesHook = ReturnType<typeof useTrainingExercises>;
 
 interface ExerciseMuscleSelectorProps {
+    disabled: boolean;
     muscleSearch: TrainingExercisesHook['muscleSearch'];
     setMuscleSearch: TrainingExercisesHook['setMuscleSearch'];
     selectedMuscles: TrainingExercisesHook['selectedMuscles'];
@@ -18,6 +19,7 @@ interface ExerciseMuscleSelectorProps {
 }
 
 export function ExerciseMuscleSelector({
+    disabled,
     muscleSearch,
     setMuscleSearch,
     selectedMuscles,
@@ -42,6 +44,7 @@ export function ExerciseMuscleSelector({
                     type="button"
                     className={`exercise-muscle-mode-button primary ${selectionMode === 'primary' ? 'active' : ''}`}
                     aria-pressed={selectionMode === 'primary'}
+                    disabled={disabled}
                     onClick={() => setSelectionMode('primary')}
                 >
                     Primari
@@ -50,6 +53,7 @@ export function ExerciseMuscleSelector({
                     type="button"
                     className={`exercise-muscle-mode-button secondary ${selectionMode === 'secondary' ? 'active' : ''}`}
                     aria-pressed={selectionMode === 'secondary'}
+                    disabled={disabled}
                     onClick={() => setSelectionMode('secondary')}
                 >
                     Secondari
@@ -68,6 +72,7 @@ export function ExerciseMuscleSelector({
                         role="searchbox"
                         placeholder="Cerca muscolo"
                         value={muscleSearch}
+                        disabled={disabled}
                         onChange={event => setMuscleSearch(event.target.value)}
                     />
                     {muscleSearch && (
@@ -75,6 +80,7 @@ export function ExerciseMuscleSelector({
                             type="button"
                             className="exercise-muscle-search-clear"
                             onClick={() => setMuscleSearch('')}
+                            disabled={disabled}
                             aria-label="Cancella ricerca muscolo"
                         >
                             <X size={18} aria-hidden="true" />
@@ -98,6 +104,7 @@ export function ExerciseMuscleSelector({
                                         type="button"
                                         className={`exercise-muscle-option ${statusClass}`}
                                         aria-pressed={isPrimary || isSecondary}
+                                        disabled={disabled}
                                         onClick={() => toggleMuscle(muscle)}
                                     >
                                         <span>{muscle.name}</span>
@@ -116,7 +123,7 @@ export function ExerciseMuscleSelector({
                 <MuscleModel
                     selectedMuscles={selectedMuscleIds}
                     secondaryMuscles={secondaryMuscleIds}
-                    interactive
+                    interactive={!disabled}
                     onToggleMuscle={handleToggleMuscleById}
                     showLegend={false}
                     showTextSelection={false}
@@ -135,6 +142,7 @@ export function ExerciseMuscleSelector({
                         type="button"
                         className="exercise-muscle-tag primary"
                         onClick={() => removeMuscleById(muscle.id)}
+                        disabled={disabled}
                         aria-label={`Rimuovi ${muscle.name} dai muscoli primari`}
                     >
                         <span>{muscle.name}</span>
@@ -147,6 +155,7 @@ export function ExerciseMuscleSelector({
                         type="button"
                         className="exercise-muscle-tag secondary"
                         onClick={() => removeMuscleById(muscle.id)}
+                        disabled={disabled}
                         aria-label={`Rimuovi ${muscle.name} dai muscoli secondari`}
                     >
                         <span>{muscle.name}</span>
