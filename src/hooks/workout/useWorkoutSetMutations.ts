@@ -98,15 +98,16 @@ export function useWorkoutSetMutations({ setLocalWorkout, showConfirm }: UseWork
         if (!selected?.id || !initial) return;
         if (!(await showConfirm("Rimuovere questo esercizio dalla sessione corrente?"))) return;
         if (!isCurrentSession(session)) return;
-        let removedAt = -1;
-        setLocalWorkout(prev => {
-            if (!prev || prev.id !== initial.id || prev.isEditingHistory !== initial.isEditingHistory) return prev;
-            const index = prev.exercises.findIndex(exercise => exercise.id === selected.id);
-            if (index < 0) return prev;
-            removedAt = index;
-            return { ...prev, exercises: prev.exercises.filter((_, i) => i !== index) };
-        });
-        if (removedAt >= 0) closePanelsCallback?.(removedAt);
+        const before = useAppStore.getState().localWorkout;
+        if (!before || before.id !== initial.id || before.isEditingHistory !== initial.isEditingHistory) return;
+        const removedAt = before.exercises.findIndex(exercise => exercise.id === selected.id);
+        if (removedAt < 0) return;
+        // The synchronous device-persisting setter must commit the exact snapshot
+        // checked after confirmation; an intervening change leaves panels untouched.
+        setLocalWorkout(prev => prev === before
+            ? { ...prev, exercises: prev.exercises.filter((_, i) => i !== removedAt) }
+            : prev);
+        if (useAppStore.getState().localWorkout !== before) closePanelsCallback?.(removedAt);
     }, [showConfirm, setLocalWorkout]);
 
     // Sets Management - Sempre atomici con functional update

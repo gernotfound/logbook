@@ -73,7 +73,7 @@ const ReloadPrompt: React.FC = () => {
 
   // Al risveglio dell'app o cambio di visibilità, controlla la presenza di aggiornamenti
   useEffect(() => {
-    let cancelled = false;
+    const visibilityLifetime = new AbortController();
     const handleVisibilityChange = () => {
       const requestId = ++visibilityCheckRef.current;
       if (
@@ -85,12 +85,12 @@ const ReloadPrompt: React.FC = () => {
       ) {
         try {
           navigator.serviceWorker.getRegistration().then(reg => {
-            if (cancelled || requestId !== visibilityCheckRef.current || document.visibilityState !== 'visible') return;
+            if (visibilityLifetime.signal.aborted || requestId !== visibilityCheckRef.current || document.visibilityState !== 'visible') return;
             if (reg && typeof reg.update === 'function') {
               try {
                 void checkForWaitingServiceWorker(reg)
                   .then(waiting => {
-                    if (!cancelled && requestId === visibilityCheckRef.current
+                    if (!visibilityLifetime.signal.aborted && requestId === visibilityCheckRef.current
                       && document.visibilityState === 'visible' && waiting) {
                       setNeedRefresh(true);
                     }
@@ -108,7 +108,7 @@ const ReloadPrompt: React.FC = () => {
     };
     document.addEventListener('visibilitychange', handleVisibilityChange);
     return () => {
-      cancelled = true;
+      visibilityLifetime.abort();
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, [setNeedRefresh]);

@@ -121,6 +121,32 @@ describe('M5 logout protection through AuthProvider', () => {
         expect(result.current.isGuest).toBe(false);
     });
 
+    it('keeps the guest archive when Web Locks are unavailable instead of purging without coordination', async () => {
+        localStorage.setItem('logbook_is_guest', 'true');
+        localStorage.setItem(GUEST_SESSION_KEY, 'guest-no-locks');
+        activateGuestSession('guest-no-locks');
+        (auth as any).currentUser = null;
+        vi.mocked(onAuthStateChanged).mockImplementation((_auth, callback: any) => {
+            callback(null);
+            return () => {};
+        });
+        useAppStore.setState({ dataOwner: 'guest' });
+        const oldLocks = navigator.locks;
+        Object.defineProperty(navigator, 'locks', { configurable: true, value: undefined });
+        try {
+            const { result } = renderAuth();
+            await waitFor(() => expect(result.current.isGuest).toBe(true));
+            await act(async () => { await result.current.logout({ mode: 'normal', skipConfirm: true }); });
+            expect(dialogs.showAlert).toHaveBeenCalledWith(
+                expect.stringContaining('Impossibile coordinare la chiusura della modalità locale'),
+            );
+            expect(DB.purgeAllLocalUserData).not.toHaveBeenCalled();
+            expect(localStorage.getItem('logbook_is_guest')).toBe('true');
+        } finally {
+            Object.defineProperty(navigator, 'locks', { configurable: true, value: oldLocks });
+        }
+    });
+
     it('notifies about a durable pending journal even when volatile sync status says synced', async () => {
         const initial = userData();
         await initializeLocal('user:logout-user', initial);
