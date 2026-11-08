@@ -86,7 +86,7 @@ function verifyTypeAwareCoverage() {
       'export async function importedPromise(): Promise<number> { return 1; }',
       'importedPromise();',
       '',
-    ].join('\\n');
+    ].join('\n');
     writeFileSync(source, sourceCode, { encoding: 'utf8', flag: 'wx' });
     written.push(source);
     for (const file of paths.slice(1)) {
@@ -96,7 +96,7 @@ function verifyTypeAwareCoverage() {
         'localPromise();',
         'importedPromise();',
         '',
-      ].join('\\n');
+      ].join('\n');
       writeFileSync(file, fixture, { encoding: 'utf8', flag: 'wx' });
       written.push(file);
     }
@@ -111,7 +111,7 @@ function verifyTypeAwareCoverage() {
     for (const path of paths) {
       const expectedCount = path === source ? 1 : 2;
       const actualCount = diagnostics.filter(item => {
-        const filename = String(item.filename ?? '').replaceAll('\\\\', '/');
+        const filename = String(item.filename ?? '').replaceAll('\\', '/');
         return (filename === path || filename.endsWith('/' + path))
           && String(item.code).includes('no-floating-promises')
           && item.severity === 'warning';
