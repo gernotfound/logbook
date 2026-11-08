@@ -10,8 +10,8 @@ export class CloudDataIntegrityError extends Error {
 }
 
 export function assertCloudBusinessPreserved(path: string, raw: DocumentData, normalized: DocumentData): void {
-    // normalizeCloudDocument has already removed protocol/schema metadata. Any
-    // remaining root key is business data and must survive the canonical projection;
+    // Cloud input has already been authenticated and opened by the AEAD reader.
+    // Any remaining root key is business data and must survive the canonical projection;
     // unknown same-schema fields are therefore an integrity error, not silent loss.
     const mismatch = findLossyNormalization(raw, normalized);
     if (mismatch) throw new CloudDataIntegrityError(path, mismatch);

@@ -160,7 +160,7 @@ Il mese deriva dalla data locale della registrazione. Hydration parziale/complet
 
 `src/lib/sync/monthlyIntegrity.ts` è il boundary condiviso dalla scansione completa in `src/lib/db.ts` e dalle letture per finestra in `src/lib/db/db_training.ts` e `src/lib/db/db_nutrition.ts`.
 
-- **MUST:** normalizzare ogni shard con `normalizeCloudDocument()` prima di interpretarne i dati business. Versioni future o incompatibili falliscono chiuse, non diventano mesi vuoti.
+- **MUST:** ogni shard cloud corrente viene prima autenticato e decifrato mediante `readAccountCloudDocument()` → `openCloudDocument()` usando la ADK dell'account e la verifica di versione AEAD, poi validato con gli schema e con `requireCompleteHistoryMonthDocument()` / `requireCompleteNutritionMonthDocument()`. Il precedente percorso di normalizzazione plaintext `normalizeCloudDocument()` non è un'alternativa ammessa per la lettura cloud corrente. Versioni future o incompatibili falliscono chiuse, non diventano mesi vuoti.
 - **MUST:** `sanitizeHistoryMonthDocument()` ammette solo record con chiave e ID business validi/coerenti e data canonica appartenente al mese richiesto; `sanitizeNutritionMonthDocument()` ammette solo giornate con chiave data canonica del mese e `day.date` identica alla chiave.
 
 Le voci invalide sono scartate, senza inventare identità o spostare silenziosamente dati tra mesi.
