@@ -95,6 +95,12 @@ export async function migrateGuestAccount({ user, guestData, policy, setUserData
         setSyncing(true);
         const cloudKey = await requireCloudAccountDataKey(user.uid, assertCloudAllowed);
         assertCloudAllowed();
+        const { hydrateLocal, commitLocal, readLocal } = await import('../../lib/sync/localRepository');
+        assertCloudAllowed();
+        // A fence installed during this scan invalidates its recovery evidence.
+        // Never adopt a newer token returned by hydration after the read.
+        const expectedCloudIntegrityFence = (await readLocal(user.uid))?.cloudIntegrityFence ?? null;
+        assertCloudAllowed();
         const cloudPayload = await DB.loadCloudPayload({ allMonths: true, cloudKey });
         assertCloudAllowed();
         const cloudData = cloudPayload?.data || null;
@@ -117,7 +123,7 @@ export async function migrateGuestAccount({ user, guestData, policy, setUserData
             assertCloudAllowed();
             await adoptReplicaCheckpoint(user.uid, claim, checkpoint, cloudAllowed);
             assertCloudAllowed();
-            const recovered = await completeCloudIntegrityRecovery(user.uid, hydrated.cloudIntegrityFence ?? null, true, cloudAllowed);
+            const recovered = await completeCloudIntegrityRecovery(user.uid, expectedCloudIntegrityFence, true, cloudAllowed);
             if (hydrated.cloudIntegrityFence && isCurrent()) {
                 useAppStore.setState({ cloudIntegrityBlocked: false, syncHealth: recovered.pending.length ? 'local-pending' : 'synced', saveError: null });
             }
@@ -164,7 +170,6 @@ export async function migrateGuestAccount({ user, guestData, policy, setUserData
             return reflectDurableOutcome(replayResult, durable);
         };
 
-        const { hydrateLocal, commitLocal, readLocal } = await import('../../lib/sync/localRepository');
         assertCurrent();
         const authenticatedBase = await resolveAuthenticatedBase();
         let hydratedEnv = await hydrateLocal(user.uid, authenticatedBase, cloudPayload?.completeMonths || [], cloudPayload?.cloudDocuments, 'all', cloudAllowed);
