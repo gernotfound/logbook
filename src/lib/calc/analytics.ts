@@ -136,7 +136,8 @@ export function generateWeekIntervals(
     numWeeks: number = 8,
     referenceDate: Date | string = new Date()
 ): WeekInterval[] {
-    const validWeeks = Math.max(1, Math.min(52, numWeeks || 8));
+    const requestedWeeks = Number.isFinite(numWeeks) ? Math.trunc(numWeeks) : 8;
+    const validWeeks = Math.max(1, Math.min(52, requestedWeeks || 8));
     const ref = typeof referenceDate === 'string' ? parseISO(referenceDate) : referenceDate;
     const baseDate = isValid(ref) ? ref : new Date();
 
@@ -168,11 +169,25 @@ export function generateWeekIntervals(
 
 type WeeklyVolumeResult = { points: WeeklyVolumePoint[]; stats: WeeklyVolumeStats };
 
-// Each source may be finite while its sum is not. Never publish non-finite
-// tonnage to charts or correlation statistics.
-function addFiniteVolume(total: number, value: number): number {
+// Individually finite observations may overflow when added or rounded.
+// A failed addition is not a zero-valued measurement.
+function finiteSum(total: number, value: number): number | null {
     const next = total + value;
-    return Number.isFinite(next) ? next : total;
+    return Number.isFinite(next) ? next : null;
+}
+
+function addFiniteVolume(total: number, value: number): number {
+    return finiteSum(total, value) ?? total;
+}
+
+function roundFinite(value: number, factor: number): number {
+    const scaled = value * factor;
+    return Number.isFinite(scaled) ? Math.round(scaled) / factor : value;
+}
+
+function referenceDayFor(referenceDate: Date | string): string {
+    const parsed = typeof referenceDate === 'string' ? parseISO(referenceDate) : referenceDate;
+    return format(isValid(parsed) ? parsed : new Date(), 'yyyy-MM-dd');
 }
 
 function* computeWeeklyVolumeSteps(
@@ -194,10 +209,8 @@ function* computeWeeklyVolumeSteps(
 
     const firstDay = intervals[0].weekStart;
     const lastDay = intervals[intervals.length - 1].weekEnd;
-    const parsedReference = typeof referenceDate === 'string' ? parseISO(referenceDate) : referenceDate;
-    const referenceDay = format(isValid(parsedReference) ? parsedReference : new Date(), 'yyyy-MM-dd');
+    const referenceDay = referenceDayFor(referenceDate);
     // Bucket sessions once, preserving history order (including sessionIds).
-    // A binary search retains the original string-range behavior for legacy dates.
     const weeks: Array<Array<{ session: WorkoutSession; volume: number }>> = intervals.map(() => []);
     let scanned = 0;
     for (const session of safeHistory) {
@@ -313,8 +326,7 @@ export function computeWeeklyNutritionSeries(
 ): { points: WeeklyNutritionPoint[]; stats: { avgDailyKcalOverall: number; hasData: boolean } } {
     const safeNutrition = nutrition && typeof nutrition === 'object' ? nutrition : {};
     const intervals = generateWeekIntervals(numWeeks, referenceDate);
-    const parsedReference = typeof referenceDate === 'string' ? parseISO(referenceDate) : referenceDate;
-    const referenceDay = format(isValid(parsedReference) ? parsedReference : new Date(), 'yyyy-MM-dd');
+    const referenceDay = referenceDayFor(referenceDate);
 
     let overallKcalSum = 0;
     let overallLoggedDays = 0;
@@ -324,6 +336,9 @@ export function computeWeeklyNutritionSeries(
         let weekCarbsSum = 0;
         let weekProSum = 0;
         let weekFatSum = 0;
+        let carbsOverflow = false;
+        let proOverflow = false;
+        let fatOverflow = false;
         let loggedDays = 0;
 
         let cur = parseISO(interval.weekStart);
@@ -335,22 +350,29 @@ export function computeWeeklyNutritionSeries(
             const dayData = safeNutrition[dateStr];
 
             if (dayData && Number.isFinite(dayData.kcal) && dayData.kcal > 0) {
-                weekKcalSum += dayData.kcal;
-                weekCarbsSum += Number.isFinite(dayData.carbs) ? dayData.carbs : 0;
-                weekProSum += Number.isFinite(dayData.pro) ? dayData.pro : 0;
-                weekFatSum += Number.isFinite(dayData.fat) ? dayData.fat : 0;
-                loggedDays++;
+                const nextWeeklyKcal = finiteSum(weekKcalSum, dayData.kcal);
+                const nextOverallKcal = finiteSum(overallKcalSum, dayData.kcal);
+                if (nextWeeklyKcal !== null && nextOverallKcal !== null) {
+                    weekKcalSum = nextWeeklyKcal;
+                    overallKcalSum = nextOverallKcal;
+                    loggedDays++;
+                    overallLoggedDays++;
+
+                    const nextCarbs = finiteSum(weekCarbsSum, Number.isFinite(dayData.carbs) ? dayData.carbs : 0);
+                    const nextPro = finiteSum(weekProSum, Number.isFinite(dayData.pro) ? dayData.pro : 0);
+                    const nextFat = finiteSum(weekFatSum, Number.isFinite(dayData.fat) ? dayData.fat : 0);
+                    if (nextCarbs === null) carbsOverflow = true;
+                    else if (!carbsOverflow) weekCarbsSum = nextCarbs;
+                    if (nextPro === null) proOverflow = true;
+                    else if (!proOverflow) weekProSum = nextPro;
+                    if (nextFat === null) fatOverflow = true;
+                    else if (!fatOverflow) weekFatSum = nextFat;
+                }
             }
             cur = addDays(cur, 1);
         }
 
         const avgDailyKcal = loggedDays > 0 ? Math.round(weekKcalSum / loggedDays) : 0;
-        const avgCarbs = loggedDays > 0 ? Math.round((weekCarbsSum / loggedDays) * 10) / 10 : 0;
-        const avgPro = loggedDays > 0 ? Math.round((weekProSum / loggedDays) * 10) / 10 : 0;
-        const avgFat = loggedDays > 0 ? Math.round((weekFatSum / loggedDays) * 10) / 10 : 0;
-
-        overallKcalSum += weekKcalSum;
-        overallLoggedDays += loggedDays;
 
         return {
             weekIndex: idx,
@@ -360,9 +382,9 @@ export function computeWeeklyNutritionSeries(
             avgDailyKcal,
             totalKcal: Math.round(weekKcalSum),
             loggedDaysCount: loggedDays,
-            avgCarbs,
-            avgPro,
-            avgFat
+            ...(!carbsOverflow ? { avgCarbs: loggedDays > 0 ? roundFinite(weekCarbsSum / loggedDays, 10) : 0 } : {}),
+            ...(!proOverflow ? { avgPro: loggedDays > 0 ? roundFinite(weekProSum / loggedDays, 10) : 0 } : {}),
+            ...(!fatOverflow ? { avgFat: loggedDays > 0 ? roundFinite(weekFatSum / loggedDays, 10) : 0 } : {})
         };
     });
 
@@ -384,9 +406,7 @@ export function computeWeeklyActivitySeries(
 ): { points: WeeklyActivityPoint[]; stats: WeeklyActivityStats } {
     const safeNutrition = nutrition && typeof nutrition === 'object' ? nutrition : {};
     const intervals = generateWeekIntervals(numWeeks, referenceDate);
-    const parsedReference = typeof referenceDate === 'string' ? parseISO(referenceDate) : referenceDate;
-    const safeReference = isValid(parsedReference) ? parsedReference : new Date();
-    const referenceDateStr = format(safeReference, 'yyyy-MM-dd');
+    const referenceDateStr = referenceDayFor(referenceDate);
 
     const points = intervals.map((interval, weekIndex): WeeklyActivityPoint => {
         const effectiveEnd = interval.weekEnd < referenceDateStr ? interval.weekEnd : referenceDateStr;
@@ -405,13 +425,18 @@ export function computeWeeklyActivitySeries(
                 const dateStr = format(cur, 'yyyy-MM-dd');
                 const day = safeNutrition[dateStr];
                 if (day && typeof day.steps === 'number' && Number.isFinite(day.steps) && day.steps >= 0) {
-                    totalSteps += day.steps;
-                    stepDaysCount++;
+                    const nextSteps = finiteSum(totalSteps, day.steps);
+                    if (nextSteps !== null) {
+                        totalSteps = nextSteps;
+                        stepDaysCount++;
+                    }
                 }
                 for (const session of Array.isArray(day?.cardioSessions) ? day.cardioSessions : []) {
                     const duration = Number(session?.durationMinutes);
                     if (!Number.isFinite(duration) || duration <= 0) continue;
-                    cardioMinutes += duration;
+                    const nextMinutes = finiteSum(cardioMinutes, duration);
+                    if (nextMinutes === null) continue;
+                    cardioMinutes = nextMinutes;
                     cardioSessionsCount++;
                     if (session.intensity === 'low' || session.intensity === 'moderate' || session.intensity === 'high') {
                         cardioMinutesByIntensity[session.intensity] += duration;
@@ -432,7 +457,7 @@ export function computeWeeklyActivitySeries(
             totalSteps,
             stepDaysCount,
             daysConsidered,
-            cardioMinutes: Math.round(cardioMinutes * 10) / 10,
+            cardioMinutes: roundFinite(cardioMinutes, 10),
             cardioSessionsCount,
             cardioMinutesByIntensity,
         };
@@ -440,9 +465,9 @@ export function computeWeeklyActivitySeries(
 
     const stats = points.reduce<WeeklyActivityStats>((acc, point) => ({
         hasData: acc.hasData || point.stepDaysCount > 0 || point.cardioSessionsCount > 0,
-        totalSteps: acc.totalSteps + point.totalSteps,
+        totalSteps: addFiniteVolume(acc.totalSteps, point.totalSteps),
         stepDaysCount: acc.stepDaysCount + point.stepDaysCount,
-        cardioMinutes: Math.round((acc.cardioMinutes + point.cardioMinutes) * 10) / 10,
+        cardioMinutes: roundFinite(addFiniteVolume(acc.cardioMinutes, point.cardioMinutes), 10),
         cardioSessionsCount: acc.cardioSessionsCount + point.cardioSessionsCount,
     }), { hasData: false, totalSteps: 0, stepDaysCount: 0, cardioMinutes: 0, cardioSessionsCount: 0 });
 
@@ -456,9 +481,7 @@ export function computeWeeklyWeightSeries(
 ): { points: WeeklyWeightPoint[]; stats: WeeklyWeightStats } {
     const safeNutrition = nutrition && typeof nutrition === 'object' ? nutrition : {};
     const intervals = generateWeekIntervals(numWeeks, referenceDate);
-    const parsedReference = typeof referenceDate === 'string' ? parseISO(referenceDate) : referenceDate;
-    const safeReference = isValid(parsedReference) ? parsedReference : new Date();
-    const referenceDateStr = format(safeReference, 'yyyy-MM-dd');
+    const referenceDateStr = referenceDayFor(referenceDate);
 
     const points = intervals.map((interval, weekIndex): WeeklyWeightPoint => {
         const effectiveEnd = interval.weekEnd < referenceDateStr ? interval.weekEnd : referenceDateStr;
@@ -475,8 +498,11 @@ export function computeWeeklyWeightSeries(
                 const raw = safeNutrition[dateStr]?.weight;
                 const weight = parsePositiveWeight(raw);
                 if (weight !== null) {
-                    sumWeight += weight;
-                    recordedDaysCount++;
+                    const nextWeight = finiteSum(sumWeight, weight);
+                    if (nextWeight !== null) {
+                        sumWeight = nextWeight;
+                        recordedDaysCount++;
+                    }
                 }
                 cur = addDays(cur, 1);
             }
@@ -487,7 +513,7 @@ export function computeWeeklyWeightSeries(
             weekStart: interval.weekStart,
             weekEnd: interval.weekEnd,
             label: interval.label,
-            averageWeightKg: recordedDaysCount > 0 ? Math.round((sumWeight / recordedDaysCount) * 100) / 100 : null,
+            averageWeightKg: recordedDaysCount > 0 ? roundFinite(sumWeight / recordedDaysCount, 100) : null,
             recordedDaysCount,
             daysConsidered,
         };
@@ -590,33 +616,38 @@ export function calculatePearsonCorrelation(x: number[], y: number[]): number | 
     }
 
     const n = x.length;
-    let sumX = 0;
-    let sumY = 0;
+    let scaleX = 0;
+    let scaleY = 0;
     for (let i = 0; i < n; i++) {
-        sumX += x[i];
-        sumY += y[i];
+        if (!Number.isFinite(x[i]) || !Number.isFinite(y[i])) return null;
+        scaleX = Math.max(scaleX, Math.abs(x[i]));
+        scaleY = Math.max(scaleY, Math.abs(y[i]));
     }
-    const meanX = sumX / n;
-    const meanY = sumY / n;
+    if (scaleX === 0 || scaleY === 0) return 0;
+
+    // Normalizing before computing means and variance avoids overflow and keeps
+    // genuinely small changes measurable instead of applying an absolute cutoff.
+    let meanX = 0;
+    let meanY = 0;
+    for (let i = 0; i < n; i++) {
+        meanX += (x[i] / scaleX - meanX) / (i + 1);
+        meanY += (y[i] / scaleY - meanY) / (i + 1);
+    }
 
     let cov = 0;
     let varX = 0;
     let varY = 0;
-
     for (let i = 0; i < n; i++) {
-        const dx = x[i] - meanX;
-        const dy = y[i] - meanY;
+        const dx = x[i] / scaleX - meanX;
+        const dy = y[i] / scaleY - meanY;
         cov += dx * dy;
         varX += dx * dx;
         varY += dy * dy;
     }
-
-    if (varX <= 1e-8 || varY <= 1e-8) {
-        return 0;
-    }
+    if (varX === 0 || varY === 0) return 0;
 
     const r = cov / Math.sqrt(varX * varY);
-    if (isNaN(r)) return null;
+    if (!Number.isFinite(r)) return null;
     return Math.round(Math.max(-1, Math.min(1, r)) * 100) / 100;
 }
 
@@ -672,9 +703,11 @@ function correlateVolumeAndNutrition(
     const avgWeeklyVolumeKg = points.length > 0 ? Math.round(totalVol / points.length) : 0;
 
     const loggedKcalPoints = points.filter(p => p.avgDailyKcal > 0);
-    const avgDailyKcal = loggedKcalPoints.length > 0
-        ? Math.round(loggedKcalPoints.reduce((sum, p) => sum + p.avgDailyKcal, 0) / loggedKcalPoints.length)
-        : 0;
+    let averageKcal = 0;
+    for (let index = 0; index < loggedKcalPoints.length; index++) {
+        averageKcal += (loggedKcalPoints[index].avgDailyKcal - averageKcal) / (index + 1);
+    }
+    const avgDailyKcal = loggedKcalPoints.length > 0 ? Math.round(averageKcal) : 0;
 
     const stats: VolumeCaloriesCorrelationStats = {
         hasData,
