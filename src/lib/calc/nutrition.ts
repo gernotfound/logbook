@@ -366,7 +366,6 @@ export function validateCustomFood(foodData: any) {
     const name = String(foodData.name || '').trim();
     if (!name) errors.name = "Nome alimento obbligatorio";
 
-    // Input from editable fields must be entirely numeric: parseFloat accepts trailing garbage.
     const parseReq = (val: unknown, fieldName: string, label: string) => {
         const num = parseFiniteNumericInput(val);
         const rounded = num === null ? null : Math.round(num * 10) / 10;

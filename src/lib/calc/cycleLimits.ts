@@ -33,7 +33,7 @@ export function previewCycleCount(value: string, fallback: number, max: number):
         : Math.min(max, Math.max(1, fallback));
 }
 
- 
+
 // Read-only numerical guard. Never migrate or rewrite a historical cycle to
 // make a derived chart computable.
 export function getCycleVolumeFrequencies(
