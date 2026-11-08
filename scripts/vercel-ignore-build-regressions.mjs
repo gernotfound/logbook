@@ -65,12 +65,15 @@ await test('Vercel skips only frontend-only commits relative to the last success
     const legal = commit('src/lib/legalVersions.ts', 'new shared legal contract');
     assert.equal(evaluate(backend, legal).status, 1, 'shared legal versions used by the server must deploy');
 
+    const config = commit('vercel.json', JSON.stringify({ functions: { 'api/test.ts': { maxDuration: 30 } } }));
+    assert.equal(evaluate(legal, config).status, 1, 'Vercel function configuration changes must trigger backend deployment');
+
     put('package.json', JSON.stringify({ ...initialPackage, version: '2.170.0' }));
     const releaseBump = commit('package-lock.json', JSON.stringify({
       ...initialLock, version: '2.170.0',
       packages: { ...initialLock.packages, '': { ...initialLock.packages[''], version: '2.170.0' } },
     }));
-    assert.equal(evaluate(legal, releaseBump).status, 0, 'PWA version-only bump must not redeploy the backend');
+    assert.equal(evaluate(config, releaseBump).status, 0, 'PWA version-only bump must not redeploy the backend');
 
     const changedScript = commit('package.json', JSON.stringify({
       ...initialPackage, version: '2.170.0', scripts: { build: 'vite build' },
