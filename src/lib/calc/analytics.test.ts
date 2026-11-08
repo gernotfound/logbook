@@ -1050,9 +1050,9 @@ describe('analytics: representable aggregates and reliable numerical comparisons
             id, modality: 'bike', durationMinutes: 1e308, intensity: 'moderate' as const, source: 'manual' as const,
         });
         const nutrition = {
-            '2026-08-17': { date: '2026-08-17', steps: 1e308, cardioSessions: [cardio('one'), cardio('two')] },
-            '2026-08-18': { date: '2026-08-18', steps: 1e308 },
-            '2026-08-10': { date: '2026-08-10', steps: 1e308, cardioSessions: [cardio('three')] },
+            '2026-08-17': { date: '2026-08-17', kcal: 0, carbs: 0, pro: 0, fat: 0, steps: 1e308, cardioSessions: [cardio('one'), cardio('two')] },
+            '2026-08-18': { date: '2026-08-18', kcal: 0, carbs: 0, pro: 0, fat: 0, steps: 1e308 },
+            '2026-08-10': { date: '2026-08-10', kcal: 0, carbs: 0, pro: 0, fat: 0, steps: 1e308, cardioSessions: [cardio('three')] },
         } as Record<string, NutritionDay>;
 
         const { points, stats } = computeWeeklyActivitySeries(nutrition, 2, '2026-08-19');
@@ -1068,8 +1068,8 @@ describe('analytics: representable aggregates and reliable numerical comparisons
 
     it('keeps a weekly weight mean finite when individually valid measurements overflow in sum', () => {
         const nutrition = {
-            '2026-08-17': { date: '2026-08-17', weight: 1e308 },
-            '2026-08-18': { date: '2026-08-18', weight: 1e308 },
+            '2026-08-17': { date: '2026-08-17', kcal: 0, carbs: 0, pro: 0, fat: 0, weight: 1e308 },
+            '2026-08-18': { date: '2026-08-18', kcal: 0, carbs: 0, pro: 0, fat: 0, weight: 1e308 },
         } as Record<string, NutritionDay>;
         const { points, stats } = computeWeeklyWeightSeries(nutrition, 1, '2026-08-19');
         expect(points[0]).toMatchObject({ averageWeightKg: 1e308, recordedDaysCount: 1 });
