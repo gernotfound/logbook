@@ -83,7 +83,7 @@ export const trialCases = {
   },
   "journal-acknowledgement": {
     "mutate": ["src/lib/sync/localJournalAcknowledgement.ts"],
-    "testFiles": ["tests/isolated/localRepository.test.ts", "tests/isolated/lateCommit.test.ts", "tests/isolated/storeJournal.test.ts"],
+    "testFiles": ["tests/isolated/localRepository.test.ts", "tests/isolated/lateCommit.test.ts", "tests/isolated/storeJournal.test.ts", "tests/isolated/localJournalAcknowledgement.test.ts"],
     "runner": "isolated"
   },
   "pending-sequences": {
