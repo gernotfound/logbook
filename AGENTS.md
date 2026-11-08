@@ -73,6 +73,7 @@ Sono CRITICAL almeno: dati utente, IndexedDB/persistenza, sync, Firestore/Rules,
 - **MUST:** preparare un piano per lavori strutturali o CRITICAL; può restare nel reasoning o nella PR, senza una nuova approvazione per scelte tecniche ordinarie.
 - **MUST:** completare il perimetro pertinente, senza fermarsi al primo finding. Distinguere sintomo, causa immediata e root cause; cercare evidenze contrarie, cause concorrenti e pattern analoghi.
 - **MUST:** seguire stato, chiamanti, persistenza/backend, UI, tipi, test e configurazioni. Per i percorsi critici includere fallimenti, recovery, concorrenza e integrità.
+- **MUST (audit per-file):** prima di dichiarare concluso ogni file valutare anche architettura, responsabilità, duplicazioni, complessità, codice inutilizzato, tipi, manutenzione e qualità dei test, seguendo le dipendenze pertinenti. Registrare esplicitamente se occorrono correzioni, refactoring motivati o nessuna modifica; non passare al file successivo con percorsi o verifiche ingegneristiche ancora aperti. Evitare refactoring cosmetici e non correlati.
 - **MUST:** correggere la causa con il diff più semplice e coerente; evitare workaround fragili, refactor estranei e funzionalità speculative.
 - **MUST:** aggiungere regressioni quando appropriate. Mock e fixture rispettano i contratti production; test verdi da soli non provano correttezza.
 - **MUST:** commentare motivazioni, invarianti e casi limite non deducibili dal codice, vicino al boundary; aggiornare o eliminare commenti superati.
