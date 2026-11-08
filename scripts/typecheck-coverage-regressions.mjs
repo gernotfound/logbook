@@ -7,6 +7,8 @@ import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 
 const checker = fileURLToPath(new URL('./check-typecheck-coverage.mjs', import.meta.url));
+const serverConfig = fileURLToPath(new URL('../tsconfig.m7-server.json', import.meta.url));
+const compiler = fileURLToPath(new URL('../node_modules/typescript/bin/tsc', import.meta.url));
 
 function writeFixture(root, path, content = 'export {};\n') {
   const destination = join(root, path);
@@ -102,4 +104,42 @@ await test('ignores untracked TypeScript scratch files', t => {
 
   const result = run(root);
   assert.equal(result.status, 0, result.stderr);
+});
+
+await test('trusted M7 TypeScript accepts Node web APIs but rejects browser-only globals', t => {
+  // TypeScript must resolve the installed @types/node used by the real backend.
+  // A child configuration changes only the entrypoint; compiler options are inherited.
+  const scratchParent = fileURLToPath(new URL('../node_modules/.tmp/', import.meta.url));
+  mkdirSync(scratchParent, { recursive: true });
+  const cwd = mkdtempSync(join(scratchParent, 'logbook-m7-types-'));
+  t.after(() => rmSync(cwd, { recursive: true, force: true }));
+
+  writeFixture(cwd, 'tsconfig.json', JSON.stringify({
+    extends: serverConfig,
+    include: ['server-fixture.ts'],
+  }));
+  const compile = () => {
+    const result = spawnSync(process.execPath, [compiler, '--project', join(cwd, 'tsconfig.json')], {
+      cwd, encoding: 'utf8',
+    });
+    assert.equal(result.error, undefined, result.error?.message);
+    return { status: result.status, output: result.stdout + result.stderr };
+  };
+
+  // Native Node 24 Request/Response must work without browser DOM declarations.
+  writeFixture(cwd, 'server-fixture.ts', [
+    "const request: Request = new Request('https://example.invalid/api');",
+    "const response: Response = Response.json({ ok: true });",
+    "const bytes = Buffer.from('ok');",
+    'export const result = request.method + response.status + bytes.byteLength;',
+  ].join('\n') + '\n');
+  const supported = compile();
+  assert.equal(supported.status, 0, supported.output);
+
+  writeFixture(cwd, 'server-fixture.ts', 'export const browserOnly = [document, window];\n');
+  const forbidden = compile();
+  assert.notEqual(forbidden.status, 0, 'browser globals must not silently typecheck in Vercel Functions');
+  for (const name of ['document', 'window']) {
+    assert.match(forbidden.output, new RegExp("Cannot find name '" + name + "'"), forbidden.output);
+  }
 });
