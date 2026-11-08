@@ -7,6 +7,33 @@ import {
 
 export const maxDuration = 300;
 const HEADERS = 'authorization, content-type, x-firebase-appcheck';
+
+// This destructive endpoint accepts no client payload or operation selector.
+// Empty request streams are valid, but incomplete streams cannot enqueue work.
+async function inspectEmptyPostBody(request: Request): Promise<'empty' | 'payload' | 'incomplete'> {
+  const length = request.headers.get('content-length');
+  if (length !== null && (!/^\d+$/.test(length) || Number(length) > 0)) return 'payload';
+  if (!request.body) return 'empty';
+
+  const reader = request.body.getReader();
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  const deadline = new Promise<null>(resolve => {
+    timeout = setTimeout(() => resolve(null), 2_000);
+  });
+  try {
+    for (let emptyChunks = 0; emptyChunks < 16; emptyChunks++) {
+      const part = await Promise.race([reader.read(), deadline]);
+      if (part === null) return 'incomplete';
+      if (part.done) return 'empty';
+      if (part.value.byteLength > 0) return 'payload';
+    }
+    return 'incomplete';
+  } finally {
+    if (timeout !== undefined) clearTimeout(timeout);
+    void reader.cancel().catch(() => {});
+    reader.releaseLock();
+  }
+}
 const cors = (origin: string | null) => ({
   ...accountDeletionCorsHeaders(origin, HEADERS), 'cache-control': 'no-store',
 });
@@ -47,6 +74,16 @@ export async function POST(request: Request): Promise<Response> {
   const origin = request.headers.get('origin');
   try {
     requireAccountDeletionOrigin(request);
+    if (new URL(request.url).search !== '') {
+      return Response.json({ error: 'Parametri cancellazione non previsti.' }, { status: 400, headers: cors(origin) });
+    }
+    const body = await inspectEmptyPostBody(request);
+    if (body === 'payload') {
+      return Response.json({ error: 'La cancellazione non accetta dati da inviare.' }, { status: 400, headers: cors(origin) });
+    }
+    if (body === 'incomplete') {
+      return Response.json({ error: 'Lettura della richiesta scaduta. Riprova.' }, { status: 408, headers: cors(origin) });
+    }
     // Recent Firebase Auth and consumed limited-use App Check required.
     // The UID always comes from the verified ID token.
     const { uid } = await verifyDeletionRequester(request);
