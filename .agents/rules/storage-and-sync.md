@@ -19,7 +19,7 @@
 |---|---|---|
 | Valore soltanto in React/Zustand | Render o edit UI | Durabilità dopo crash/reload |
 | Envelope e journal in IndexedDB | Commit locale atomico autenticato | Firestore aggiornato o ACK cloud |
-| `local-pending` | Pending durevole e riproducibile secondo [Crash consistency](crash-consistency.md) | Che il cloud non abbia ricevuto una write: il timeout può seguire un commit |
+| `local-pending` | Per errori di consegna/trasporto serve la prova del batch durevole e riproducibile secondo [Crash consistency](crash-consistency.md); un blocco preliminare del consenso può invece restituire lo stesso status prima di leggere l'envelope | Lo status da solo non prova l'esistenza di pending né l'assenza di una write cloud: il timeout può seguire un commit |
 | Batch cloud confermato e ACK valido | Writer remoto e `acknowledgeThrough()` attestati per quel batch | Integrità di mesi non compresi nella scansione |
 | `replica-fenced` / `update-required` | Integrità o versione non provata | Permesso di reinizializzare o cancellare archivi |
 
@@ -214,7 +214,7 @@ Il sistema `replicateJournal` / `transactionWriter` gestisce l'esito:
 |---|---|
 | `synced` | Tentativo concluso senza pending da consegnare; per un batch account consegnato include conferma remota e ACK locale |
 | `rejected` | `permission-denied`: write rifiutata (App Check, Rules, dominio, auth); il client registra il rigetto |
-| `local-pending` | Offline o esito ambiguo per cui il batch completo è ancora provato durevole nel journal |
+| `local-pending` | Offline o esito ambiguo con batch completo provato durevole nel journal; oppure blocco preliminare del consenso, senza attestazione implicita di pending |
 | `failed` | Errore critico/non sicuro o stato locale incompatibile con un retry affidabile |
 
 La classificazione ispeziona solo proprietà proprie degli errori e una catena `cause` limitata. Se restano cause non ispezionate, un codice di rete esterno non basta a classificare l'esito come `local-pending`: serve la prova indipendente del batch ancora durevole, altrimenti l'esito è `failed`. Un `permission-denied` già osservato resta `rejected`, salvo il recupero di un ACK perso con prova indipendente; un rigetto diretto resta sempre `rejected`.
@@ -225,7 +225,7 @@ La classificazione ispeziona solo proprietà proprie degli errori e una catena `
 
 **MUST:** una write rifiutata (`rejected`) non deve mai essere esposta all'utente come confermata.
 
-**MUST:** un journal account con dati business non può replicarsi prima di un consenso account valido (`needsLegalUpdate` falso). La sospensione della replica è `local-pending` con motivo `legal-consent-required`, distinto dalla mancanza di rete; il journal resta durevole; la riapertura segue la riconciliazione trusted e, per pending di una revisione precedente, il recupero separato esplicito previsto da [Consenso salute](health-consent.md). Il consenso della sessione ospite non costituisce consenso dell'account. Le Rules e la revoca server-autorevole richiedono un gate separato e non si considerano risolte da questo controllo client.
+**MUST:** un journal account con dati business non può replicarsi prima di un consenso account valido (`needsLegalUpdate` falso). La sospensione della replica è `local-pending` con motivo `legal-consent-required`, distinto dalla mancanza di rete; eventuali pending già committate restano durevoli; la riapertura segue la riconciliazione trusted e, per pending di una revisione precedente, il recupero separato esplicito previsto da [Consenso salute](health-consent.md). Il consenso della sessione ospite non costituisce consenso dell'account. Le Rules e la revoca server-autorevole richiedono un gate separato e non si considerano risolte da questo controllo client.
 
 **MUST:** le funzioni di salvataggio devono rigettare se l'accodamento della transazione locale fallisce in maniera critica. Vietato risolvere silenziosamente nel catch.
 
@@ -258,7 +258,7 @@ Il salvataggio sincrono e i confronti sul workout osservato prima del flush sono
 
 Il componente di ricarica della PWA (`src/lib/sync/reloadBarrier.ts`) regola gli aggiornamenti del Service Worker per prevenire perdita/corruzione dati.
 
-**MUST:** se `state.userData` esiste in memoria ma l'envelope persistito è assente, incompatibile o corrotto, l'app deve bloccare l'aggiornamento (`isUnsaved = true`).
+**MUST:** se `state.userData` esiste in memoria ma l'envelope persistito è assente, incompatibile o corrotto, l'app deve bloccare il reload tramite un errore della barriera `prepareForReload()`, senza confondere memoria e copia durevole.
 
 **MUST:** dalla schermata di accesso, senza account né generazione guest attiva e senza dati business o salvataggi in memoria, l'aggiornamento PWA può procedere senza creare una sessione guest o leggere/azzerare archivi owner-scoped persistiti. Se esiste stato in memoria non attribuibile, la barriera resta fail-closed.
 

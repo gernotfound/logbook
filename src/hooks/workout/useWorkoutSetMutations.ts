@@ -131,14 +131,21 @@ export function useWorkoutSetMutations({ setLocalWorkout, showConfirm }: UseWork
         });
     }, [setLocalWorkout]);
 
-    const removeSet = useCallback((exIndex: number, setIndex: number) => {
+    const removeSet = useCallback((exIndex: number, setIndex: number, setId: string,
+        exerciseId?: string, workoutId?: string | null) => {
         setLocalWorkout((prev) => {
-            if (!prev) return prev;
-            const updatedExercises = prev.exercises.map((ex: any, i: number) => {
-                if (i !== exIndex) return ex;
-                return { ...ex, sets: ex.sets.filter((_: any, si: number) => si !== setIndex) };
-            });
-            return { ...prev, exercises: updatedExercises };
+            if (!prev || !setId || (workoutId && prev.id !== workoutId)) return prev;
+            const selected = prev.exercises[exIndex];
+            if (!selected || (exerciseId && selected.id !== exerciseId)
+                || selected.sets?.[setIndex]?.id !== setId) return prev;
+            // A confirmation can outlive a reorder or a replacement workout.
+            // Never delete the series that happened to inherit an old index.
+            return {
+                ...prev,
+                exercises: prev.exercises.map((exercise, index) => index === exIndex
+                    ? { ...exercise, sets: exercise.sets.filter(set => set.id !== setId) }
+                    : exercise),
+            };
         });
     }, [setLocalWorkout]);
 

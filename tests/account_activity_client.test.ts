@@ -125,6 +125,77 @@ describe('foreground activity observer (browser boundary)', () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
+  it('retries visible activity after a permanently stalled App Check preflight and rejects its late token', async () => {
+    vi.useFakeTimers();
+    try {
+      const account = user();
+      mocks.currentUser = account;
+      let resolveLate!: (token: string) => void;
+      mocks.getLimitedUseAppCheckToken.mockReturnValueOnce(
+        new Promise<string>(resolve => { resolveLate = resolve; }),
+      );
+      stop = await observe(account);
+      await Promise.resolve();
+      await Promise.resolve();
+      expect(mocks.getLimitedUseAppCheckToken).toHaveBeenCalledTimes(1);
+
+      await vi.advanceTimersByTimeAsync(15_001);
+      resolveLate('expired-one-use-token');
+      await Promise.resolve();
+      await Promise.resolve();
+      expect(fetchMock).not.toHaveBeenCalled();
+
+      await vi.advanceTimersByTimeAsync(60_001);
+      window.dispatchEvent(new Event('pointerdown'));
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('aborts a stalled HTTP report at its deadline and retries only after the retry delay', async () => {
+    vi.useFakeTimers();
+    try {
+      const account = user();
+      mocks.currentUser = account;
+      let signal: AbortSignal | undefined;
+      fetchMock.mockImplementationOnce(async (_url: string, init: { signal: AbortSignal }) => {
+        signal = init.signal;
+        return new Promise((_resolve, reject) => {
+          init.signal.addEventListener('abort', () => reject(new Error('request aborted')), { once: true });
+        });
+      });
+      stop = await observe(account);
+      await Promise.resolve();
+      await Promise.resolve();
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(signal?.aborted).toBe(false);
+
+      await vi.advanceTimersByTimeAsync(15_001);
+      expect(signal?.aborted).toBe(true);
+      window.dispatchEvent(new Event('focus'));
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+
+      await vi.advanceTimersByTimeAsync(60_001);
+      // Observe the actual retry instead of assuming a fixed number of
+      // microtask turns for App Check, Auth and the async fetch boundary.
+      const retried = new Promise<void>(resolve => {
+        fetchMock.mockImplementationOnce(async () => {
+          resolve();
+          return { status: 204 };
+        });
+      });
+      window.dispatchEvent(new Event('focus'));
+      await retried;
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('aborts in-flight reports when leaving the owner and unregisters listeners', async () => {
     const account = user();
     mocks.currentUser = account;

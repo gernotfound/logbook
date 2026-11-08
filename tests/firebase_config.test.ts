@@ -1,6 +1,9 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
+import { tmpdir } from 'node:os';
+import { loadEnv } from 'vite';
+import { assertIsolatedVitestEnvironment, SYNTHETIC_FIREBASE_TEST_ENV } from '../scripts/vitest-env-isolation';
 
 describe('R2: Firebase Config Security & Fail-Fast Suite', () => {
     const originalEnv = { ...import.meta.env };
@@ -28,6 +31,79 @@ describe('R2: Firebase Config Security & Fail-Fast Suite', () => {
                 delete (import.meta.env as any)[key];
             }
         }
+    });
+
+    describe('Synthetic test environment boundary', () => {
+        it('tracks only the exact non-Production Firebase test placeholders', () => {
+            const source = fs.readFileSync(path.resolve(__dirname, '../.env.test'), 'utf8');
+            const entries = source.split(/\r?\n/).filter(Boolean).map(line => {
+                const match = /^([A-Z][A-Z0-9_]*)=([^\r\n]+)$/.exec(line);
+                expect(match, 'unexpected .env.test entry').not.toBeNull();
+                return [match![1], match![2]] as const;
+            });
+            expect(entries).toHaveLength(Object.keys(SYNTHETIC_FIREBASE_TEST_ENV).length);
+            expect(Object.fromEntries(entries)).toEqual(SYNTHETIC_FIREBASE_TEST_ENV);
+            expect(new Set(entries.map(([key]) => key)).size).toBe(entries.length);
+        });
+
+        it('rejects actual Vite env-file precedence and inherited process overrides', () => {
+            const folder = fs.mkdtempSync(path.join(tmpdir(), 'logbook-env-test-'));
+            const key = 'VITE_FIREBASE_PROJECT_ID';
+            // Vitest mirrors import.meta.env mutations into process.env. Other
+            // tests in this suite deliberately install fake Firebase values;
+            // remove only those VITE_* overrides while testing actual loadEnv.
+            const inherited = Object.entries(process.env).filter(([name]) => name.startsWith('VITE_'));
+            for (const [name] of inherited) delete process.env[name];
+            try {
+                fs.writeFileSync(
+                    path.join(folder, '.env.test'),
+                    Object.entries(SYNTHETIC_FIREBASE_TEST_ENV).map(([name, value]) => name + '=' + value).join('\n') + '\n',
+                );
+                expect(() => assertIsolatedVitestEnvironment(loadEnv('test', folder, 'VITE_'))).not.toThrow();
+
+                // A nontracked local file outranks the tracked synthetic fixture.
+                fs.writeFileSync(path.join(folder, '.env.test.local'), key + '=demo-unapproved-project\n');
+                expect(() => assertIsolatedVitestEnvironment(loadEnv('test', folder, 'VITE_')))
+                    .toThrow(key);
+                fs.rmSync(path.join(folder, '.env.test.local'));
+
+                // An exported shell variable outranks even the .env.test fixture.
+                process.env[key] = 'demo-unapproved-project';
+                expect(() => assertIsolatedVitestEnvironment(loadEnv('test', folder, 'VITE_')))
+                    .toThrow(key);
+            } finally {
+                for (const name of Object.keys(process.env)) {
+                    if (name.startsWith('VITE_')) delete process.env[name];
+                }
+                for (const [name, value] of inherited) {
+                    if (value !== undefined) process.env[name] = value;
+                }
+                fs.rmSync(folder, { recursive: true, force: true });
+            }
+        });
+
+        it('fails closed for shell/.env.test.local overrides and unexpected VITE endpoints', () => {
+            const safe = { ...SYNTHETIC_FIREBASE_TEST_ENV };
+            expect(() => assertIsolatedVitestEnvironment(safe)).not.toThrow();
+            expect(() => assertIsolatedVitestEnvironment({
+                ...safe, VITE_ACCOUNT_DELETION_API_ORIGIN: 'http://127.0.0.1:9',
+            })).not.toThrow();
+
+            for (const key of Object.keys(safe)) {
+                expect(() => assertIsolatedVitestEnvironment({
+                    ...safe, [key]: 'https://unapproved.example.invalid',
+                })).toThrow(key);
+            }
+            expect(() => assertIsolatedVitestEnvironment({
+                ...safe, VITE_ACCOUNT_DELETION_API_ORIGIN: 'https://unapproved-backend.example.invalid',
+            })).toThrow('backend trusted');
+            expect(() => assertIsolatedVitestEnvironment({
+                ...safe, VITE_RECAPTCHA_ENTERPRISE_SITE_KEY: 'unreviewed-site-key',
+            })).toThrow('non prevista');
+            expect(() => assertIsolatedVitestEnvironment({
+                ...safe, VITE_FUTURE_ENDPOINT: 'https://production.example',
+            })).toThrow('non prevista');
+        });
     });
 
     describe('Static Code & Secret Audit', () => {

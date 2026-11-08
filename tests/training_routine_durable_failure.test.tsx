@@ -6,8 +6,8 @@ const mocks = vi.hoisted(() => ({
     showAlert: vi.fn(async (_message: string) => {}),
     showConfirm: vi.fn(async (_message: string) => true),
     blockStore: vi.fn(),
-    readDraft: vi.fn(() => null),
-    writeDraft: vi.fn(),
+    readDraft: vi.fn(() => ({ value: null, raw: null })),
+    writeDraft: vi.fn(() => null),
     currentSession: true,
 }));
 
@@ -32,7 +32,7 @@ vi.mock('../src/lib/sync/session', () => ({
     isCurrentSession: () => mocks.currentSession,
 }));
 vi.mock('../src/lib/sync/workoutRecoveryDraft', () => ({
-    readWorkoutRecoveryDraft: mocks.readDraft,
+    readWorkoutRecoveryDraftImage: mocks.readDraft,
     writeWorkoutRecoveryDraft: mocks.writeDraft,
 }));
 
@@ -141,6 +141,6 @@ describe('routine editor durable failures', () => {
         expect(mocks.writeDraft).toHaveBeenCalledWith('draft_routine', 'guest', {
             name: 'Scheda da salvare',
             exercises: [],
-        }, undefined);
+        }, undefined, null);
     });
 });

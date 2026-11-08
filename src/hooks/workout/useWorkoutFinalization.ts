@@ -3,7 +3,7 @@ import { Logic } from '../../lib/logic';
 import { auth } from '../../lib/firebase';
 import { draftRegistry } from '../../lib/utils/draftRegistry';
 import { resetGlobalWorkoutTimer } from '../../lib/utils/timer';
-import { writeWorkoutRecoveryDraft } from '../../lib/sync/workoutRecoveryDraft';
+import { readWorkoutRecoveryDraftImage, writeWorkoutRecoveryDraft } from '../../lib/sync/workoutRecoveryDraft';
 import { captureSession, isCurrentSession } from '../../lib/sync/session';
 import { isWorkoutClockAnomalyError, resetWorkoutClockGuard } from '../../lib/workoutClockGuard';
 import { applyWorkoutCompletionDraft, prepareCompletedWorkout, type WorkoutCompletionDraft } from './workoutSessionPreparation';
@@ -131,6 +131,8 @@ export function useWorkoutFinalization({
             expectedSession = captureSession();
             if (!(await showConfirm("Sei sicuro di voler eliminare questa sessione in corso? Non verrà salvata."))) return false;
             if (!isCurrentSession(expectedSession) || useAppStore.getState().localWorkout?.id !== deletedWorkoutId) return false;
+            const finalDraftName = 'draft:post-session:' + deletedWorkoutId;
+            const observedFinalDraft = readWorkoutRecoveryDraftImage(finalDraftName, expectedSession.owner).raw;
             const result = await dispatchDomainOperation({ type: 'active-workout.set', workout: null, deletedWorkoutId: String(deletedWorkoutId) });
             if (!result.ok && result.status !== 'local-pending') return false;
             if (!isCurrentSession(expectedSession) || useAppStore.getState().localWorkout?.id !== deletedWorkoutId) return false;
@@ -145,7 +147,8 @@ export function useWorkoutFinalization({
             // This draft belongs exclusively to the deleted session, not a new
             // workout. Failed best-effort cleanup must not undo a durable deletion.
             try {
-                writeWorkoutRecoveryDraft('draft:post-session:' + deletedWorkoutId, expectedSession.owner, null, expectedSession.consentGeneration);
+                writeWorkoutRecoveryDraft(finalDraftName, expectedSession.owner, null,
+                    expectedSession.consentGeneration, observedFinalDraft);
             } catch (error) {
                 console.warn('Impossibile pulire la bozza finale di una sessione eliminata:', error);
                 useAppStore.getState().setSaveError('Sessione eliminata, ma una copia locale della valutazione finale non è stata rimossa.');

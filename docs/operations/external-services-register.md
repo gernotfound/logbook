@@ -79,6 +79,8 @@ I domini Firebase predefiniti possono comunque essere presenti nelle configurazi
 
 Firebase Authentication è il provider identità del prodotto. TheLogBook supporta autenticazione Google e credenziali email/password.
 
+**Audit provider, 2026-11-08:** il collegamento email/password su un account esistente con protezione anti-enumerazione usa la REST Identity Toolkit `accounts:signUp` con `idToken`; le chiamate REST scritte direttamente dal client non ereditano l'header App Check delle richieste del Firebase SDK. `src/lib/auth/accountEmail.ts` ora acquisisce l'attestazione standard, la include nell'header `X-Firebase-AppCheck` e interrompe l'invio delle credenziali se manca, con test di session fencing. Il controllo del provider live su questo specifico percorso richiede una prova autenticata non distruttiva; l'enforcement registrato il 2026-10-02 non è una verifica live odierna.
+
 Stato live verificato il 2026-10-02 dopo il cutover:
 
 - Firebase Project e Web App hanno display name **TheLogBook**;
@@ -184,7 +186,7 @@ Ricognizione diretta dei **soli nomi, target e tipi** delle env del progetto Ver
 1. Ricontrollare inventario e `main` correnti, output e build command effettivi del deployment Vercel Production e disponibilità delle configurazioni del workflow Firebase Hosting; non basarsi soltanto sui file o su vecchie build. Confermare che non sia in corso una migrazione/rollback che richieda una ricostruzione storica del frontend su Vercel.
 2. Preservare un meccanismo di ripristino **fuori dal repository** per eventuali valori critici senza stamparli nei log o nei report; l'eliminazione delle env dal provider non viene annullata da un revert Git e potrebbe influire sui prossimi deploy.
 3. Solo con autorizzazione esplicita per le impostazioni live, rimuovere da Vercel prima le 4 env legacy, quindi le 5 copie frontend, rispettandone gli scope Production/Preview. **Non** toccare le 5 env runtime backend, le repository variables/secrets di GitHub, il provider Firebase o l'autenticazione App Check.
-4. Dopo la modifica e al successivo deploy backend legittimo da `main`, controllare gli endpoint consenso, sessioni, cancellazione/recovery e cron con richieste sicure, oltre a redirect HTTP 301 e Service Worker di ritiro. Verificare separatamente il successivo workflow Firebase Hosting e l'assenza di richieste diagnostiche; la sola CI verde non prova il comportamento live.
+4. Dopo la modifica e al successivo deploy backend legittimo da `main`, controllare gli endpoint consenso, sessioni, cancellazione/recovery e cron con richieste sicure, oltre al redirect HTTP 301 e all'assenza di un Service Worker PWA servito dall'origin Vercel, senza ripristinare il worker di ritiro pre-lancio. Verificare separatamente il successivo workflow Firebase Hosting e l'assenza di richieste diagnostiche; la sola CI verde non prova il comportamento live.
 
 **Stato dell'inventario:** prima di seguire questa procedura, verificare lo stato attuale del provider. La cancellazione live delle env non è rappresentabile da un commit Git.
 

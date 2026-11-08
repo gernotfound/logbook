@@ -66,7 +66,12 @@ export async function acknowledgeThrough(
         // Another tab may already have installed a causally newer acknowledgement.
         // Never let an older remote snapshot replace that durable business state after
         // the newer journal entries have already been acknowledged and removed.
-        if (incomingIsStale) return raw;
+        // An attested delivery cannot silently succeed while its ACK is still
+        // pending. Retain the legacy no-delivery reconciliation as a no-op.
+        if (incomingIsStale) {
+            if (delivery) throw new Error('Acknowledgement obsoleto rispetto al frontier locale; journal preservato.');
+            return raw;
+        }
         const newClock = { ...current.clock };
         if (syncMeta) for (const meta of Object.values(syncMeta)) for (const [actor, seq] of Object.entries(meta.clock)) newClock[actor] = Math.max(newClock[actor] || 0, seq);
         const newSyncMeta = { ...current.syncMetaByDocument, ...(syncMeta || {}) };

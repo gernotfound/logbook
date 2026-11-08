@@ -47,6 +47,12 @@ describe('pure CSV export builder', () => {
         expect(rows[2]).toContain('"seg-1"');
         expect(rows[3]).toContain('"drop-1"');
         expect(rows[4]).toContain('"iso-1"');
+        // Positional export regressions must not swap rest, RIR, kg or target
+        // between a primary set and its continuation.
+        expect(rows[1]).toContain(',1,"dropset",0,"8",0,"","70",');
+        expect(rows[2]).toContain(',1,"dropset",1,"4","","","50",45,');
+        expect(rows[3]).toContain(',1,"dropset",2,"5","","","45","",');
+        expect(rows[4]).toContain(',1,"isometry",3,"","","10","30","",');
         expect(byName.get('misurazioni.csv')).toContain(',98,');
         expect(byName.get('passi.csv')).toContain(',0,');
         expect(byName.get('cardio.csv')).toContain('"\'=do-not-run"');

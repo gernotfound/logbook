@@ -193,6 +193,23 @@ describe('trusted data-only erasure worker', () => {
     expect(fixture.records.has('user_data_keys/a')).toBe(true);
   });
 
+  it.each(['active-consent', 'wrong-revision'] as const)(
+    'refuses destructive work when the queued consent has %s', async scenario => {
+      await createHealthDataErasureJob('a');
+      const consent = fixture.records.get(consentPath('a'))!;
+      if (scenario === 'active-consent') consent.status = 'active';
+      else consent.revision = 4;
+
+      expect(await processHealthDataErasure('a', Date.now() + 30_000)).toBe('failed');
+      expect(fixture.records.get(markerPath('a'))).toMatchObject({
+        status: 'failed', retryable: false,
+      });
+      expect(fixture.records.has('users/a/history_months/2026-09')).toBe(true);
+      expect(fixture.records.has('user_data_keys/a')).toBe(true);
+      expect(fixture.records.has('users/b')).toBe(true);
+    },
+  );
+
   it('does not delete data when a queued erasure no longer belongs to its consent owner', async () => {
     await createHealthDataErasureJob('a');
     fixture.records.get(consentPath('a'))!.uid = 'other-account';
@@ -224,6 +241,7 @@ describe('trusted data-only erasure worker', () => {
       status: 'failed', complete: false, retryable: false, localPurgeAuthorized: false,
     });
     expect(fixture.records.has('user_data_keys/a')).toBe(true);
+    expect(fixture.records.has('users/a/history_months/2026-09')).toBe(true);
     expect(fixture.records.get(consentPath('a'))?.revision).toBe(3);
   });
 
@@ -307,6 +325,85 @@ describe('trusted data-only erasure worker', () => {
     expect(fixture.records.has(consentPath('a'))).toBe(true);
   });
 
+  it.each([
+    'foreign-consent-owner', 'missing-completion-epoch',
+    'inconsistent-completion-epoch', 'consent-before-completion',
+  ] as const)('preserves a receipt when retention proof has %s', async scenario => {
+    await createHealthDataErasureJob('a');
+    expect(await processHealthDataErasure('a', Date.now() + 30_000)).toBe('complete');
+    const job = fixture.records.get(markerPath('a'))!;
+    const consent = fixture.records.get(consentPath('a'))!;
+    const recordedJob = { ...job };
+    const recordedConsent = { ...consent };
+    const expired = Timestamp.fromMillis(Date.now() - 60_000);
+    job.purgeAfter = expired;
+
+    if (scenario === 'foreign-consent-owner') consent.uid = 'b';
+    if (scenario === 'missing-completion-epoch') delete job.completedRevision;
+    if (scenario === 'inconsistent-completion-epoch') job.completedRevision = 5;
+    if (scenario === 'consent-before-completion') consent.revision = 3;
+
+    expect(await purgeExpiredCompletedHealthErasures(Date.now() + 30_000)).toBe(0);
+    expect(fixture.records.has(markerPath('a'))).toBe(true);
+    expect((fixture.records.get(markerPath('a'))!.purgeAfter as Timestamp).toMillis())
+      .toBeGreaterThan(Date.now() + 6 * 24 * 60 * 60 * 1000);
+
+    // Repair the trusted evidence and retry after the deferral period.
+    fixture.records.set(consentPath('a'), recordedConsent);
+    fixture.records.set(markerPath('a'), { ...recordedJob, purgeAfter: expired });
+    expect(await purgeExpiredCompletedHealthErasures(Date.now() + 30_000)).toBe(1);
+    expect(fixture.records.has(markerPath('a'))).toBe(false);
+  });
+
+  it.each([
+    'orphaned-account-key', 'invalid-consent-status', 'active-without-new-epoch',
+    'active-without-acceptance-proof',
+  ] as const)('preserves an expired receipt with %s until the trusted state is repaired', async scenario => {
+    await createHealthDataErasureJob('a');
+    expect(await processHealthDataErasure('a', Date.now() + 30_000)).toBe('complete');
+    const consent = fixture.records.get(consentPath('a'))!;
+    const validConsent = { ...consent };
+    const expired = Timestamp.fromMillis(Date.now() - 60_000);
+    fixture.records.get(markerPath('a'))!.purgeAfter = expired;
+    if (scenario === 'orphaned-account-key') {
+      fixture.records.set('user_data_keys/a', { uid: 'a', ciphertext: 'unexpected-residue' });
+    } else if (scenario === 'active-without-acceptance-proof') {
+      // A forged higher revision is not an explicit acceptance: the legal
+      // evidence required by the trusted consent validator is missing.
+      consent.status = 'active';
+      consent.revision = 5;
+    } else {
+      consent.status = scenario === 'invalid-consent-status' ? 'unknown' : 'active';
+    }
+
+    expect(await purgeExpiredCompletedHealthErasures(Date.now() + 30_000)).toBe(0);
+    expect(fixture.records.has(markerPath('a'))).toBe(true);
+    expect((fixture.records.get(markerPath('a'))!.purgeAfter as Timestamp).toMillis())
+      .toBeGreaterThan(Date.now() + 6 * 24 * 60 * 60 * 1000);
+
+    fixture.records.set(consentPath('a'), validConsent);
+    fixture.records.delete('user_data_keys/a');
+    fixture.records.get(markerPath('a'))!.purgeAfter = expired;
+    expect(await purgeExpiredCompletedHealthErasures(Date.now() + 30_000)).toBe(1);
+    expect(fixture.records.has(markerPath('a'))).toBe(false);
+  });
+
+  it('retires an old completed receipt after a newer explicit consent', async () => {
+    await createHealthDataErasureJob('a');
+    expect(await processHealthDataErasure('a', Date.now() + 30_000)).toBe('complete');
+    await recordHealthConsentReacceptance('a', {
+      acceptedTerms: true, acceptedHealthData: true,
+      privacyVersion: LEGAL_VERSIONS.privacy, termsVersion: LEGAL_VERSIONS.terms,
+    }, 4);
+    fixture.records.set('user_data_keys/a', { uid: 'a', ciphertext: 'new-generation-key' });
+    fixture.records.get(markerPath('a'))!.purgeAfter = Timestamp.fromMillis(Date.now() - 60_000);
+    expect(await purgeExpiredCompletedHealthErasures(Date.now() + 30_000)).toBe(1);
+    expect(fixture.records.has(markerPath('a'))).toBe(false);
+    expect(fixture.records.get(consentPath('a'))).toMatchObject({
+      uid: 'a', status: 'active', revision: 5, erasedBeforeRevision: 3,
+    });
+  });
+
   it('recovers owner-scoped completion proof after the 30-day receipt expires and never reenqueues it', async () => {
     await createHealthDataErasureJob('a');
     expect(await processHealthDataErasure('a', Date.now() + 30_000)).toBe('complete');
@@ -361,8 +458,11 @@ describe('trusted data-only erasure worker', () => {
         uid, status: 'complete', consentRevision: 3, purgeAfter: expired,
       });
     }
+    // Real completed receipts persist the successor revision; only the
+    // 100 preceding malformed receipts deliberately omit that evidence.
     fixture.records.set(markerPath('valid'), {
-      uid: 'valid', status: 'complete', consentRevision: 3, purgeAfter: expired,
+      uid: 'valid', status: 'complete', consentRevision: 3, completedRevision: 4,
+      purgeAfter: expired,
     });
     fixture.records.set(consentPath('valid'), { uid: 'valid', status: 'withdrawn', revision: 4, erasedBeforeRevision: 3 });
     expect(await purgeExpiredCompletedHealthErasures(Date.now() + 30_000)).toBe(1);
@@ -379,7 +479,8 @@ describe('trusted data-only erasure worker', () => {
       });
     }
     fixture.records.set(markerPath('zz-valid'), {
-      uid: 'zz-valid', status: 'complete', consentRevision: 3, purgeAfter: expired,
+      uid: 'zz-valid', status: 'complete', consentRevision: 3, completedRevision: 4,
+      purgeAfter: expired,
     });
     fixture.records.set(consentPath('zz-valid'), {
       uid: 'zz-valid', status: 'withdrawn', revision: 4, erasedBeforeRevision: 3,
@@ -414,7 +515,9 @@ describe('trusted data-only erasure worker', () => {
     fixture.records.set(consentPath('blocked'), {
       uid: 'blocked', status: 'withdrawn', revision: 4, erasedBeforeRevision: 3,
     });
-    // Simulate the deferred retry window expiring; the proof now authorizes retirement.
+    // The repaired receipt needs its own completed epoch as well as
+    // the restored consent floor; a floor alone never proves completion.
+    deferred.completedRevision = 4;
     deferred.purgeAfter = expired;
     expect(await purgeExpiredCompletedHealthErasures(Date.now() + 30_000)).toBe(1);
     expect(fixture.records.has(markerPath('blocked'))).toBe(false);

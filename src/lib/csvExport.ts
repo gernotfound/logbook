@@ -52,24 +52,31 @@ export function buildCsvFiles(
         ];
         const workoutRows = [workoutHeaders.join(',') + '\n'];
 
+        type WorkoutSetColumns = {
+            setLabel?: string | number;
+            technique?: string;
+            segmentIndex?: string | number;
+            segmentId?: string;
+            reps?: string | number;
+            rir?: string | number;
+            time?: string;
+            kg?: string | number;
+            restBefore?: string | number;
+            targetReps?: string | number;
+            distance?: string;
+            speed?: string;
+            incline?: string;
+            kcal?: string | number;
+        };
         const appendWorkoutRow = (
             session: WorkoutSession,
             exercise?: SessionExercise,
             set?: SessionExerciseSet,
-            setLabel: string | number = '',
-            technique = '',
-            segmentIndex: string | number = '',
-            segmentId = '',
-            reps: string | number = '',
-            rir: string | number = '',
-            time = '',
-            kg: string | number = '',
-            restBefore: string | number = '',
-            targetReps: string | number = '',
-            distance = '',
-            speed = '',
-            incline = '',
-            kcal = '',
+            {
+                setLabel = '', technique = '', segmentIndex = '', segmentId = '',
+                reps = '', rir = '', time = '', kg = '', restBefore = '',
+                targetReps = '', distance = '', speed = '', incline = '', kcal = '',
+            }: WorkoutSetColumns = {},
         ) => {
             const readiness = session.readiness;
             const exName = exercise
@@ -133,18 +140,33 @@ export function buildCsvFiles(
                 }
                 exercise.sets.forEach((set, setIndex) => {
                     const technique = set.technique || 'straight';
-                    appendWorkoutRow(
-                        session, exercise, set, setIndex + 1, technique, 0, '',
-                        set.reps ?? '', set.rir ?? '', set.time ?? '', set.kg ?? '', '',
-                        set.target?.reps ?? '', set.distance ?? '', set.speed ?? '', set.incline ?? '', set.kcal ?? '',
-                    );
+                    appendWorkoutRow(session, exercise, set, {
+                        setLabel: setIndex + 1,
+                        technique,
+                        segmentIndex: 0,
+                        reps: set.reps ?? '',
+                        rir: set.rir ?? '',
+                        time: set.time ?? '',
+                        kg: set.kg ?? '',
+                        targetReps: set.target?.reps ?? '',
+                        distance: set.distance ?? '',
+                        speed: set.speed ?? '',
+                        incline: set.incline ?? '',
+                        kcal: set.kcal ?? '',
+                    });
 
                     set.segments?.forEach((segment, segmentIndex) => {
-                        appendWorkoutRow(
-                            session, exercise, set, setIndex + 1, segment.technique || set.technique || 'straight',
-                            segmentIndex + 1, segment.id, segment.reps ?? '', '', segment.time ?? '', segment.kg ?? '',
-                            segment.restBeforeSeconds ?? '', segment.target?.reps ?? set.target?.reps ?? '',
-                        );
+                        appendWorkoutRow(session, exercise, set, {
+                            setLabel: setIndex + 1,
+                            technique: segment.technique || set.technique || 'straight',
+                            segmentIndex: segmentIndex + 1,
+                            segmentId: segment.id,
+                            reps: segment.reps ?? '',
+                            time: segment.time ?? '',
+                            kg: segment.kg ?? '',
+                            restBefore: segment.restBeforeSeconds ?? '',
+                            targetReps: segment.target?.reps ?? set.target?.reps ?? '',
+                        });
                     });
 
                 });

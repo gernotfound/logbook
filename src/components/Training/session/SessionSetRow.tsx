@@ -1,6 +1,7 @@
 import React from 'react';
 import { MoreHorizontal, Trash2 } from 'lucide-react';
 import { BufferedInput } from '../../UI/BufferedInput';
+import { BufferedWorkoutScope } from '../../UI/bufferedWorkoutScope';
 import { continuationTechniqueLabel, getContinuationTechnique } from '../../../lib/advancedSets';
 import { useDialogStore } from '../../../store/useDialogStore';
 import { sessionSetHasMeaningfulData } from '../../../lib/workoutSetData';
@@ -14,7 +15,7 @@ interface SessionSetRowProps {
     trackingType?: string;
     isOpenMenu: boolean;
     onToggleMenu: (setId: string) => void;
-    onRemoveSet: (exIndex: number, sIndex: number) => void;
+    onRemoveSet: (exIndex: number, sIndex: number, setId: string, exerciseId?: string, workoutId?: string | null) => void;
     onUpdateSet: (exIndex: number, setId: string, field: string, value: unknown) => void;
     onAddSpecialSet: (exIndex: number, type: string, setId: string) => void;
     onUpdateSpecialSet: (exIndex: number, setId: string, type: 'segments', segmentId: string, field: string, value: unknown) => void;
@@ -40,6 +41,7 @@ const SessionSetRowInner: React.FC<SessionSetRowProps> = ({
     // Exercise instance + set + segment identity determines a recovery field.
     // Keep isolated component fixtures without an instance ID compatible.
     const recoveryPrefix = exerciseInstanceId ? `${exerciseInstanceId}-` : '';
+    const workoutId = React.useContext(BufferedWorkoutScope);
     const [isRirOpen, setIsRirOpen] = React.useState(false);
     const menuTriggerRef = React.useRef<HTMLButtonElement>(null);
     const rirTriggerRef = React.useRef<HTMLButtonElement>(null);
@@ -53,7 +55,7 @@ const SessionSetRowInner: React.FC<SessionSetRowProps> = ({
             );
             if (!confirmed) return;
         }
-        onRemoveSet(exIndex, sIndex);
+        onRemoveSet(exIndex, sIndex, s.id, exerciseInstanceId, workoutId);
         if (isOpenMenu) onToggleMenu(s.id);
     };
 

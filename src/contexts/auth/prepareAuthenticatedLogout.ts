@@ -100,11 +100,20 @@ export async function prepareAuthenticatedLogout(
         if (!stillCurrent()) return null;
 
         if (action === 'export') {
-            const { Exporter } = await import('../../lib/export');
-            if (!stillCurrent()) return null;
-            const currentState = useAppStore.getState().userData;
-            if (currentState) {
+            try {
+                const { Exporter } = await import('../../lib/export');
+                if (!stillCurrent()) return null;
+                const currentState = useAppStore.getState().userData;
+                if (!currentState) throw new Error('Nessuna copia corrente in memoria.');
                 Exporter.exportEmergencyJSON(currentState);
+            } catch {
+                // Failed browser download must never escalate into logout or
+                // leave the user without an actionable recovery message.
+                if (stillCurrent()) {
+                    await useDialogStore.getState().showAlert(
+                        'Esportazione non riuscita. Il logout è stato annullato e i dati sono preservati. Riprova il backup.'
+                    );
+                }
             }
             return null;
         }

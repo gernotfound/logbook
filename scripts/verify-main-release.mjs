@@ -8,6 +8,12 @@ function requireValid(condition, reason) {
   if (!condition) throw new Error('Main release rejected: ' + reason);
 }
 
+function isVerifiedBeforeMerge(timestamp, mergedAt) {
+  const observed = Date.parse(timestamp);
+  const merged = Date.parse(mergedAt);
+  return Number.isFinite(observed) && Number.isFinite(merged) && observed <= merged;
+}
+
 // The PR's exact file tree must be identical to main, and GitHub must have
 // checked the same PR head against the same main parent before squash merge.
 export async function verifyMainRelease({ repository, sha, api }) {
@@ -36,7 +42,7 @@ export async function verifyMainRelease({ repository, sha, api }) {
   for (const check of checks.check_runs) {
     if (check.name !== 'Canonical Verification' || check.app?.id !== 15368
       || check.head_sha !== head || check.status !== 'completed' || check.conclusion !== 'success'
-      || !check.check_suite?.id || !check.completed_at || Date.parse(check.completed_at) > Date.parse(pr.merged_at)) continue;
+      || !check.check_suite?.id || !isVerifiedBeforeMerge(check.completed_at, pr.merged_at)) continue;
     const match = RUN_URL.exec(check.details_url || '');
     if (!match) continue;
     const run = await api(root + '/actions/runs/' + match[1]);
@@ -44,8 +50,8 @@ export async function verifyMainRelease({ repository, sha, api }) {
       || run.name !== 'Milestone Verification' || run.path !== '.github/workflows/verification.yml'
       || run.event !== 'pull_request' || run.head_sha !== head
       || run.head_repository?.full_name !== repository || run.status !== 'completed'
-      || run.conclusion !== 'success' || !run.created_at
-      || Date.parse(run.created_at) > Date.parse(pr.merged_at)) continue;
+      || run.conclusion !== 'success'
+      || !isVerifiedBeforeMerge(run.created_at, pr.merged_at)) continue;
     accepted.push(run.id);
   }
   requireValid(accepted.length > 0, 'no completed trusted PR verification predating the merge');

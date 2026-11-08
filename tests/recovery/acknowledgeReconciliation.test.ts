@@ -13,6 +13,7 @@ import {
     acknowledgeThrough,
     adoptReplicaCheckpoint,
     commitLocal,
+    hydrateLocal,
     initializeLocal,
     readLocal,
 } from '../../src/lib/sync/localRepository';
@@ -77,6 +78,27 @@ describe('acknowledgeThrough reconciliation', () => {
         expect(after?.pending.every(operation => operation.seq > 1)).toBe(true);
         expect(after?.pending.some(operation => operation.seq === 2)).toBe(true);
     });
+    it('rejects an older remote acknowledgement after a newer cloud frontier is hydrated', async () => {
+        await commitLocal(owner, data(171), data(170));
+        const delivered = structuredClone((await readLocal(owner))!.pending);
+        await commitLocal(owner, data(172), data(171));
+
+        // A second tab observes a later cloud version while this delivery is
+        // still in flight. Its causal frontier must not be rolled back by the ACK.
+        await hydrateLocal(owner, data(172), [], new Map([['', {
+            _sync: { protocolVersion: 3, clock: { s00: 2 }, fields: {} },
+        }]]));
+        const before = await readLocal(owner);
+        expect(before?.syncMetaByDocument[''].clock).toEqual({ s00: 2 });
+        expect(before?.pending).toEqual(expect.arrayContaining(delivered));
+
+        await expect(acknowledgeThrough(owner, 1, data(171), [], {
+            '': { protocolVersion: 3, clock: { s00: 1 }, fields: {} },
+        }, { operations: delivered, replica })).rejects.toThrow('Acknowledgement obsoleto');
+
+        expect(await readLocal(owner)).toEqual(before);
+    });
+
     it.each(['altered-payload', 'wrong-replica', 'wrong-generation', 'wrong-prefix', 'wrong-sequence'] as const)(
         'preserves the complete local journal if delivered evidence is %s', async scenario => {
             await commitLocal(owner, data(171), data(170));

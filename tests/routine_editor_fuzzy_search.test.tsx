@@ -477,6 +477,10 @@ describe('Intelligent Exercise Search & Dropdown Suite (M3: R4 & R6)', () => {
             const searchInput = (container.querySelector('.exercise-search-container input') ||
                 container.querySelector('input[role="combobox"]')) as HTMLInputElement;
             expect(searchInput).not.toBeNull();
+            const visibleLabel = screen.getByText('Aggiungi esercizio');
+            expect(visibleLabel.tagName).toBe('LABEL');
+            expect(visibleLabel.getAttribute('for')).toBe(searchInput.id);
+            expect(screen.getByRole('combobox', { name: 'Aggiungi esercizio' })).toBe(searchInput);
 
             // Open dropdown by focusing
             fireEvent.focus(searchInput);

@@ -55,6 +55,37 @@ describe('restored owner-scoped drafts', () => {
         }
     });
 
+    it.each(['exercise', 'routine'] as const)(
+        'does not reseal a confirmed %s recovery draft without new input',
+        kind => {
+            const owner = storageOwner();
+            const name = kind === 'exercise' ? 'draft_exercise' : 'draft_routine';
+            const payload = kind === 'exercise' ? {
+                name: 'Unchanged exercise', notes: 'Keep witness',
+                trackingType: 'weight_reps', selectedMuscles: [], secondaryMuscles: [],
+                isBodyweight: false, equipmentWeight: '',
+            } : { name: 'Unchanged routine', exercises: [] };
+            const initialRaw = writeWorkoutRecoveryDraft(name, owner, payload, '3');
+            const key = protectedDeviceKey(name, owner);
+            const originalSealed = localStorage.getItem(key);
+            const editor = kind === 'exercise'
+                ? renderHook(() => useTrainingExercises())
+                : renderHook(() => useTrainingRoutines());
+            editor.rerender();
+            expect(readDeviceValueStrict(name, owner)).toBe(initialRaw);
+            expect(localStorage.getItem(key)).toBe(originalSealed);
+            expect(writeWorkoutRecoveryDraft(name, owner, payload, '3', initialRaw)).toBe(initialRaw);
+            expect(localStorage.getItem(key)).toBe(originalSealed);
+            editor.unmount();
+
+            // An equal payload from an old epoch must still fail closed.
+            localStorage.setItem(`logbook:v2:${owner}:health-consent-generation`, '4');
+            expect(() => writeWorkoutRecoveryDraft(name, owner, payload, '3', initialRaw))
+                .toThrow();
+            expect(localStorage.getItem(key)).toBe(originalSealed);
+        },
+    );
+
     it('does not clear the routine draft before hydration is reflected in React state', () => {
         const key = deviceKey('draft_routine', storageOwner());
         const draft = JSON.stringify({ name: 'Draft routine', exercises: [] });
@@ -75,6 +106,24 @@ describe('restored owner-scoped drafts', () => {
             remove.mockRestore();
         }
     });
+    it.each([
+        ['invalid name', { name: 88, exercises: [] }],
+        ['invalid exercise collection', { name: 'Bozza', exercises: {} }],
+        ['invalid set plans', { name: 'Bozza', exercises: [{ exId: 'exercise-a', setsCount: 3, setPlans: {} }] }],
+        ['invalid default technique', { name: 'Bozza', exercises: [{ exId: 'exercise-a', setsCount: 3, defaultTechnique: 'unknown' }] }],
+        ['invalid progression contract', { name: 'Bozza', exercises: [{ exId: 'exercise-a', setsCount: 3, progressionContract: { role: 'owner' } }] }],
+    ])('preserves corrupted %s in an authenticated routine draft', async (_description, corrupted) => {
+        const owner = storageOwner();
+        writeWorkoutRecoveryDraft('draft_routine', owner, corrupted);
+        const sealedKey = protectedDeviceKey('draft_routine', owner);
+        const original = localStorage.getItem(sealedKey);
+        const editor = renderHook(() => useTrainingRoutines());
+        expect(useAppStore.getState().localPersistenceBlocked).toBe(true);
+        expect(editor.result.current.handleCancelEdit()).toBe(false);
+        expect(localStorage.getItem(sealedKey)).toBe(original);
+        editor.unmount();
+    });
+
     it('retains the last sealed exercise draft and refuses business save when a later physical write fails', async () => {
         const owner = storageOwner();
         writeWorkoutRecoveryDraft('draft_exercise', owner, { name: 'Recovered exercise', notes: 'Last durable note' });
@@ -139,6 +188,110 @@ describe('restored owner-scoped drafts', () => {
         expect(hook.result.current.routineName).toBe('');
         hook.unmount();
     });
+
+    it.each(['routine', 'exercise'] as const)(
+        'preserves a concurrent %s draft and rejects a stale editor save or cleanup',
+        async kind => {
+            const owner = storageOwner();
+            const name = kind === 'routine' ? 'draft_routine' : 'draft_exercise';
+            const first = kind === 'routine'
+                ? { name: 'Bozza iniziale', exercises: [] }
+                : { name: 'Bozza iniziale', notes: '', trackingType: 'weight_reps',
+                    selectedMuscles: [], secondaryMuscles: [], isBodyweight: false, equipmentWeight: '' };
+            writeWorkoutRecoveryDraft(name, owner, first);
+            const dispatch = vi.fn(async () => ({ ok: true as const, status: 'synced' as const }));
+            const oldDispatch = useAppStore.getState().dispatchDomainOperation;
+            const oldAlert = useDialogStore.getState().showAlert;
+            useAppStore.setState({ dispatchDomainOperation: dispatch });
+            useDialogStore.setState({ showAlert: vi.fn(async () => {}) });
+            const hook = kind === 'routine'
+                ? renderHook(() => useTrainingRoutines())
+                : renderHook(() => useTrainingExercises());
+            try {
+                const competing = kind === 'routine'
+                    ? { name: 'Un’altra scheda', exercises: [] }
+                    : { ...first, name: 'Un’altra scheda' };
+                writeWorkoutRecoveryDraft(name, owner, competing);
+                const intact = localStorage.getItem(protectedDeviceKey(name, owner));
+                expect(intact).toMatch(/^tlb-sealed:v1:/);
+
+                if (kind === 'routine') {
+                    const editor = hook as ReturnType<typeof renderHook<ReturnType<typeof useTrainingRoutines>, unknown>>;
+                    act(() => editor.result.current.setRoutineName('Valore obsoleto'));
+                    await act(async () => { expect(await editor.result.current.handleSave()).toBe(false); });
+                    expect(editor.result.current.handleCancelEdit()).toBe(false);
+                } else {
+                    const editor = hook as ReturnType<typeof renderHook<ReturnType<typeof useTrainingExercises>, unknown>>;
+                    act(() => editor.result.current.setExName('Valore obsoleto'));
+                    await act(async () => { expect(await editor.result.current.handleSaveExercise()).toBe(false); });
+                    expect(editor.result.current.handleCancelEdit()).toBe(false);
+                }
+                expect(dispatch).not.toHaveBeenCalled();
+                expect(localStorage.getItem(protectedDeviceKey(name, owner))).toBe(intact);
+                expect(useAppStore.getState().localPersistenceBlocked).toBe(true);
+            } finally {
+                hook.unmount();
+                useAppStore.setState({ dispatchDomainOperation: oldDispatch });
+                useDialogStore.setState({ showAlert: oldAlert });
+            }
+        },
+    );
+
+    it.each(['routine', 'exercise'] as const)(
+        'retains newer %s edits made while an earlier domain commit is awaiting its result',
+        async kind => {
+            const owner = storageOwner();
+            const name = kind === 'routine' ? 'draft_routine' : 'draft_exercise';
+            const originalDispatch = useAppStore.getState().dispatchDomainOperation;
+            const originalAlert = useDialogStore.getState().showAlert;
+            let notifyCommitted!: () => void;
+            let releaseCommit!: () => void;
+            const committed = new Promise<void>(resolve => { notifyCommitted = resolve; });
+            const release = new Promise<void>(resolve => { releaseCommit = resolve; });
+            useAppStore.setState({ dispatchDomainOperation: async operation => {
+                const result = await originalDispatch(operation);
+                notifyCommitted();
+                await release;
+                return result;
+            } });
+            useDialogStore.setState({ showAlert: vi.fn(async () => {}) });
+            try {
+                if (kind === 'routine') {
+                    const hook = renderHook(() => useTrainingRoutines());
+                    try {
+                        act(() => hook.result.current.setRoutineName('Scheda confermata'));
+                        let saving!: Promise<boolean>;
+                        act(() => { saving = hook.result.current.handleSave(); });
+                        await committed;
+                        act(() => hook.result.current.setRoutineName('Modifica ancora aperta'));
+                        const latest = readDeviceValueStrict(name, owner);
+                        await act(async () => { releaseCommit(); expect(await saving).toBe(false); });
+                        expect(hook.result.current.routineName).toBe('Modifica ancora aperta');
+                        expect(readDeviceValueStrict(name, owner)).toBe(latest);
+                        expect((await readLocal(owner))?.data.routines?.some(r => r.name === 'Scheda confermata')).toBe(true);
+                    } finally { hook.unmount(); }
+                } else {
+                    const hook = renderHook(() => useTrainingExercises());
+                    try {
+                        act(() => hook.result.current.setExName('Esercizio confermato'));
+                        let saving!: Promise<boolean>;
+                        act(() => { saving = hook.result.current.handleSaveExercise(); });
+                        await committed;
+                        act(() => hook.result.current.setExNotes('Nuova nota da conservare'));
+                        const latest = readDeviceValueStrict(name, owner);
+                        await act(async () => { releaseCommit(); expect(await saving).toBe(false); });
+                        expect(hook.result.current.exNotes).toBe('Nuova nota da conservare');
+                        expect(readDeviceValueStrict(name, owner)).toBe(latest);
+                        expect((await readLocal(owner))?.data.library?.some(e => e.name === 'Esercizio confermato')).toBe(true);
+                    } finally { hook.unmount(); }
+                }
+            } finally {
+                releaseCommit?.();
+                useAppStore.setState({ dispatchDomainOperation: originalDispatch });
+                useDialogStore.setState({ showAlert: originalAlert });
+            }
+        },
+    );
 
     it('quarantines old exercise and routine drafts before hydration or mount cleanup', async () => {
         const owner = storageOwner();

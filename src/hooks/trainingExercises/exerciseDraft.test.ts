@@ -77,6 +77,25 @@ describe('exercise draft owner isolation', () => {
     expect(JSON.parse(readDeviceValueStrict(name, owner)!)).toMatchObject(draft);
   });
 
+  it.each([
+    ['invalid tracking type', { ...draft, trackingType: 'invalid' }],
+    ['invalid muscle list', { ...draft, selectedMuscles: 'not-an-array' }],
+    ['invalid weight type', { ...draft, equipmentWeight: 5 }],
+  ])('preserves malformed authenticated %s rather than rewriting its ciphertext', async (_reason, badDraft) => {
+    const owner = 'user:a';
+    await prepareUnlockedTestArchive(owner);
+    localStorage.setItem(`logbook:v2:${owner}:health-consent-generation`, '3');
+    const { writeWorkoutRecoveryDraft } = await import('../../lib/sync/workoutRecoveryDraft');
+    writeWorkoutRecoveryDraft('draft_exercise', owner, badDraft, '3');
+    const key = protectedDeviceKey('draft_exercise', owner);
+    const original = localStorage.getItem(key);
+    expect(original).toMatch(/^tlb-sealed:v1:/);
+    expect(() => readExerciseDraft(owner)).toThrow('Bozza esercizio non valida');
+    expect(() => persistExerciseDraft(draft, owner, '3')).toThrow('Bozza esercizio non valida');
+    expect(() => clearExerciseDraft(owner, '3')).toThrow('Bozza esercizio non valida');
+    expect(localStorage.getItem(key)).toBe(original);
+  });
+
   it('refuses unstamped new account drafts without a consent marker', async () => {
     const owner = 'user:a';
     await prepareUnlockedTestArchive(owner);

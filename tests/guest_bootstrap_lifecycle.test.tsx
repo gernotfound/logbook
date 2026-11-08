@@ -8,7 +8,8 @@ import { purgeAllLocalUserData as purgeRealLocalUserData } from '../src/lib/db/d
 import { useAuth } from '../src/hooks/useAuth';
 import { useAppStore } from '../src/store/useAppStore';
 import { useDialogStore } from '../src/store/useDialogStore';
-import { clearCatalogCache, saveCatalogToCache } from '../src/lib/catalog/catalogService';
+import { clearCatalogCache, getInMemoryCatalog, getSeedCatalog, saveCatalogToCache } from '../src/lib/catalog/catalogService';
+import { set as idbSet } from 'idb-keyval';
 import { resolveEffectiveExercises, resolveEffectiveFoods } from '../src/lib/catalog/deltaResolver';
 import type { UserData, Exercise, Food } from '../src/types';
 import { activateGuestSession, captureSession, GUEST_REVOCATION_KEY, GUEST_SESSION_KEY, isCurrentSession, invalidateSession } from '../src/lib/sync/session';
@@ -77,6 +78,34 @@ describe('Milestone M2: Guest Bootstrap & Cold Start Lifecycle', () => {
         expect(state?.customFoods?.length).toBe(0);
         expect(parseInt(screen.getByTestId('exercise-count').textContent || '0')).toBe(0);
         expect(parseInt(screen.getByTestId('food-count').textContent || '0')).toBe(0);
+    });
+
+    it('recovers a persisted global catalog instead of publishing an in-memory empty seed during guest activation', async () => {
+        // The prior bootstrap may have exposed a seed after a transient IDB
+        // failure. The guest UI must recheck durable cache before using it.
+        const seed = getSeedCatalog();
+        const persisted = {
+            ...seed,
+            manifest: { ...seed.manifest, version: 'durable-guest-v7', itemCounts: { exercises: 1, foods: 1 } },
+            exercises: [{ id: 'durable-ex', name: 'Esercizio disponibile offline', trackingType: 'weight_reps' as const }],
+            foods: [{ id: 'durable-food', name: 'Alimento disponibile offline', kcal: 100, pro: 5, carbs: 15, fat: 2 }],
+        };
+        await idbSet('logbook_cached_global_catalog', persisted);
+        expect(getInMemoryCatalog()?.exercises).toEqual([]);
+
+        render(
+            <AuthProvider>
+                <GuestTestComponent />
+            </AuthProvider>,
+        );
+
+        act(() => { screen.getByTestId('btn-guest').click(); });
+        await confirmRealGuestVault();
+        await waitFor(() => expect(screen.getByTestId('auth-mode').textContent).toBe('GUEST'));
+        await waitFor(() => expect(screen.getByTestId('exercise-count').textContent).toBe('1'));
+        expect(screen.getByTestId('food-count').textContent).toBe('1');
+        expect(useAppStore.getState().userData?.library?.map(item => item.id)).toEqual(['durable-ex']);
+        expect(useAppStore.getState().userData?.customFoods?.map(item => item.id)).toEqual(['durable-food']);
     });
 
     it.each(['lock', 'purge'] as const)(

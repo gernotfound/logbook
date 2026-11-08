@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { render, screen, fireEvent, renderHook, act } from '@testing-library/react';
+import { render, screen, fireEvent, renderHook, act, waitFor } from '@testing-library/react';
 import { renderWithProviders, emptyUserData, idbStore } from './setup';
 import { useAppStore } from '../src/store/useAppStore';
 import { useDialogStore } from '../src/store/useDialogStore';
 import { useTrainingExercises } from '../src/hooks/useTrainingExercises';
-import { clearCatalogCache, saveCatalogToCache } from '../src/lib/catalog/catalogService';
+import { clearCatalogCache, getInMemoryCatalog, saveCatalogToCache } from '../src/lib/catalog/catalogService';
+import { set as idbSet } from 'idb-keyval';
 import TrainingExercises from '../src/components/Training/TrainingExercises';
 import CustomFoodForm from '../src/components/Nutrition/CustomFoodForm';
 import type { Exercise } from '../src/types';
@@ -47,10 +48,10 @@ describe('Worker M2: Exercise Library UI & Food Form Real-Time Calorie Calculati
                 name: 'Trazioni zavorrate',
                 notes: 'Cintura da sovraccarico',
                 trackingType: 'weight_reps',
-                selectedMuscles: [{ id: 'back_latissimus' }],
-                secondaryMuscles: [{ id: 'arms_biceps' }],
+                selectedMuscles: [{ id: 'lats', name: 'Gran dorsale' }],
+                secondaryMuscles: [{ id: 'biceps', name: 'Bicipiti' }],
                 isBodyweight: true,
-                equipmentWeight: 5
+                equipmentWeight: '5'
             };
             writeWorkoutRecoveryDraft('draft_exercise', owner, draft);
             const sealedKey = protectedDeviceKey('draft_exercise', owner);
@@ -355,7 +356,8 @@ describe('Worker M2: Exercise Library UI & Food Form Real-Time Calorie Calculati
                             ? result.current.handleDelete(sameId, { stopPropagation: vi.fn() })
                             : result.current.handleRestoreExercise(sameId);
                     });
-                    expect(showConfirm).toHaveBeenCalledOnce();
+                    // Restore now verifies the durable catalog before presenting confirmation.
+                    await waitFor(() => expect(showConfirm).toHaveBeenCalledOnce());
                     act(() => { invalidateSession(); invalidateSession(); });
                     await act(async () => { confirm(true); await pending; });
                     expect(dispatch).not.toHaveBeenCalled();
@@ -434,7 +436,7 @@ describe('Worker M2: Exercise Library UI & Food Form Real-Time Calorie Calculati
             expect(idbStore['logbook:v2:' + owner]).toMatch(/^tlb-sealed:v1:/);
         });
 
-        it('handleRestoreExercise restores the in-memory catalog version after confirmation', async () => {
+        it('handleRestoreExercise retrieves the durable catalog despite a stale empty in-memory seed', async () => {
             await clearCatalogCache();
             const original: Exercise = {
                 id: 'catalog-restore',
@@ -447,7 +449,7 @@ describe('Worker M2: Exercise Library UI & Food Form Real-Time Calorie Calculati
                 trackingType: 'weight_reps',
                 isDefault: true
             };
-            await saveCatalogToCache({
+            await idbSet('logbook_cached_global_catalog', {
                 manifest: {
                     version: 'test-restore',
                     updatedAt: '2026-09-28T00:00:00.000Z',
@@ -459,6 +461,7 @@ describe('Worker M2: Exercise Library UI & Food Form Real-Time Calorie Calculati
                 foods: [],
                 cachedAt: Date.now()
             });
+            expect(getInMemoryCatalog().exercises).toEqual([]);
 
             const modified: Exercise = {
                 ...original,

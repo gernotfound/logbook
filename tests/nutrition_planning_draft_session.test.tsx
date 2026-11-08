@@ -1,6 +1,7 @@
-import { act, cleanup, renderHook } from '@testing-library/react';
+import { act, cleanup, render, renderHook, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useNutritionPlanning } from '../src/hooks/useNutritionPlanning';
+import NutritionPlanning from '../src/components/Nutrition/NutritionPlanning';
 import { captureSession, invalidateSession } from '../src/lib/sync/session';
 import { UserDataSchema } from '../src/lib/schema';
 import { useAppStore } from '../src/store/useAppStore';
@@ -31,6 +32,12 @@ afterEach(() => {
 });
 
 describe('nutrition planning edits and session ownership', () => {
+    it('associates the visible notes label with its textarea', () => {
+        render(<NutritionPlanning />);
+        const notes = screen.getByRole('textbox', { name: /Note/ });
+        expect((notes as HTMLTextAreaElement).id).toBe('nutrition-planning-notes');
+    });
+
     it('composes separate fields edited before React rerenders', () => {
         const { result } = renderHook(() => useNutritionPlanning());
         act(() => {

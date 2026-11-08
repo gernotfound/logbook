@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Exporter } from '../src/lib/export';
 import { Logic } from '../src/lib/logic';
+import { useAppStore } from '../src/store/useAppStore';
 import { CURRENT_BACKUP_SCHEMA, CURRENT_DATA_SCHEMA, CURRENT_SYNC_PROTOCOL } from '../src/lib/schemaEvolution';
 import type { UserData } from '../src/types';
 import { emptyUserData } from './setup';
@@ -10,7 +11,7 @@ afterEach(() => {
 });
 
 describe('audit regression: emergency export local date', () => {
-    it('downloads a complete owner-scoped emergency backup and revokes its temporary URL after the click', async () => {
+    it('exports only in-memory owner-scoped data and keeps the emergency download URL alive', async () => {
         const userData: UserData = {
             ...structuredClone(emptyUserData),
             history: [{ id: 'unsynced-session', date: '2026-09-18', exercises: [] }],
@@ -19,6 +20,8 @@ describe('audit regression: emergency export local date', () => {
             }
         };
         let backupBlob!: Blob;
+        const before = useAppStore.getState();
+        useAppStore.setState({ userData, dataOwner: 'user:test-user-id' });
         vi.useFakeTimers();
         try {
             const date = vi.spyOn(Logic, 'getLocalDateString').mockReturnValue('2026-09-18');
@@ -49,12 +52,13 @@ describe('audit regression: emergency export local date', () => {
             expect(clickedWhileAttached).toBe(true);
             expect(document.querySelector('a[download="logbook_emergency_backup_2026-09-18.json"]')).toBeNull();
 
-            await vi.advanceTimersByTimeAsync(99);
+            await vi.advanceTimersByTimeAsync(999);
             expect(revoke).not.toHaveBeenCalled();
             await vi.advanceTimersByTimeAsync(1);
             expect(revoke).toHaveBeenCalledExactlyOnceWith('blob:logbook-test');
         } finally {
             vi.useRealTimers();
+            useAppStore.setState({ userData: before.userData, dataOwner: before.dataOwner });
         }
 
         const jsonText = await new Promise<string>((resolve, reject) => {
@@ -75,5 +79,43 @@ describe('audit regression: emergency export local date', () => {
             reason: 'logout-with-unsynced-data'
         });
         expect(backup).toHaveProperty('userData', userData);
+        expect(backup).not.toHaveProperty('recovery.envelope');
+        expect(backup).not.toHaveProperty('recovery.device');
+    });
+
+    it('releases the Blob URL and anchor when the browser refuses the emergency download', () => {
+        const before = useAppStore.getState();
+        const userData = structuredClone(emptyUserData) as UserData;
+        const create = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:blocked-emergency');
+        const revoke = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
+        vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {
+            throw new Error('Browser download denied');
+        });
+        try {
+            useAppStore.setState({ userData, dataOwner: 'user:test-user-id' });
+            expect(() => Exporter.exportEmergencyJSON(userData)).toThrow('Browser download denied');
+            expect(create).toHaveBeenCalledOnce();
+            expect(revoke).toHaveBeenCalledExactlyOnceWith('blob:blocked-emergency');
+            expect(document.querySelector('a[href="blob:blocked-emergency"]')).toBeNull();
+        } finally {
+            useAppStore.setState({ userData: before.userData, dataOwner: before.dataOwner });
+        }
+    });
+
+    it('rejects stale or mismatched owner data before creating a downloadable backup', () => {
+        const before = useAppStore.getState();
+        const userData = { ...structuredClone(emptyUserData), profile: { height: '175' } } as UserData;
+        const stale = structuredClone(userData);
+        const create = vi.spyOn(URL, 'createObjectURL');
+        try {
+            useAppStore.setState({ userData, dataOwner: 'user:test-user-id' });
+            expect(() => Exporter.exportEmergencyJSON(stale)).toThrow(/sessione cambiati/);
+
+            useAppStore.setState({ dataOwner: 'guest' });
+            expect(() => Exporter.exportEmergencyJSON(userData)).toThrow(/sessione cambiati/);
+            expect(create).not.toHaveBeenCalled();
+        } finally {
+            useAppStore.setState({ userData: before.userData, dataOwner: before.dataOwner });
+        }
     });
 });

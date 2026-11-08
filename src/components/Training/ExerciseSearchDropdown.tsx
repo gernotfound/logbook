@@ -7,6 +7,7 @@ import { createExerciseLibrarySearcher } from '../../lib/calc/workout';
 export interface ExerciseSearchDropdownProps {
     library: ExerciseLibraryItem[];
     onSelectExercise: (exId: string) => void;
+    inputId?: string;
     placeholder?: string;
     excludeIds?: string[];
     style?: React.CSSProperties;
@@ -17,6 +18,7 @@ export interface ExerciseSearchDropdownProps {
 export const ExerciseSearchDropdown: React.FC<ExerciseSearchDropdownProps> = ({
     library = [],
     onSelectExercise,
+    inputId,
     placeholder = '🔍 Cerca esercizio da aggiungere...',
     excludeIds,
     style,
@@ -178,9 +180,10 @@ export const ExerciseSearchDropdown: React.FC<ExerciseSearchDropdownProps> = ({
             <div style={{ position: 'relative', width: '100%' }}>
                 <input
                     ref={inputRef}
+                    id={inputId}
                     type="text"
                     role="combobox"
-                    aria-label="Cerca esercizio"
+                    aria-label={inputId ? undefined : 'Cerca esercizio'}
                     aria-expanded={isOpen}
                     aria-autocomplete="list"
                     aria-controls={isOpen ? listboxId : undefined}

@@ -79,6 +79,12 @@ describe('M7 daily account deletion recovery cron', () => {
     const enabled = await GET(request('expected-secret'));
     expect(enabled.status).toBe(200);
     expect(inactivity.queueInactiveAccountDeletions).toHaveBeenCalledTimes(1);
+    expect(inactivity.queueInactiveAccountDeletions).toHaveBeenCalledWith(
+      undefined, undefined, expect.any(Number),
+    );
+    const phaseCutoff = inactivity.queueInactiveAccountDeletions.mock.calls[0][2] as number;
+    const accountDeadline = runner.processAccountDeletion.mock.calls.at(-1)?.[1] as number;
+    expect(phaseCutoff).toBe(accountDeadline - 10_000);
     expect(await enabled.json()).toMatchObject({
       inactiveScanned: 1, inactiveQueued: 1, inactivityErrors: 0,
     });
@@ -139,6 +145,10 @@ describe('M7 daily account deletion recovery cron', () => {
     expect(await response.json()).toMatchObject({
       scanned: 2,
       processed: 2,
+      accountCompleted: 2,
+      accountPending: 0,
+      accountBusy: 0,
+      accountFailed: 0,
       erasureScanned: 0,
       erasureProcessed: 0,
       erasureCompleted: 0,
@@ -157,6 +167,10 @@ describe('M7 daily account deletion recovery cron', () => {
     expect(info).toHaveBeenCalledWith('[account-deletion-cron] completed', {
       scanned: 2,
       processed: 2,
+      accountCompleted: 2,
+      accountPending: 0,
+      accountBusy: 0,
+      accountFailed: 0,
       erasureScanned: 0,
       erasureProcessed: 0,
       erasureCompleted: 0,
@@ -173,6 +187,36 @@ describe('M7 daily account deletion recovery cron', () => {
       purged: 0,
     });
     info.mockRestore();
+  });
+
+  it('counts account worker outcomes without exposing owner identifiers', async () => {
+    process.env.CRON_SECRET = 'test-secret';
+    store.listRecoverableDeletionJobs.mockResolvedValue([
+      { uid: 'private-owner-a' }, { uid: 'private-owner-b' },
+      { uid: 'private-owner-c' }, { uid: 'private-owner-d' },
+    ]);
+    runner.processAccountDeletion.mockResolvedValueOnce('complete')
+      .mockResolvedValueOnce('pending')
+      .mockResolvedValueOnce('busy')
+      .mockResolvedValueOnce('failed');
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const info = vi.spyOn(console, 'info').mockImplementation(() => undefined);
+    try {
+      const response = await GET(request('test-secret'));
+      expect(response.status).toBe(200);
+      const body = await response.json();
+      expect(body).toMatchObject({
+        scanned: 4, processed: 4, accountCompleted: 1, accountPending: 1,
+        accountBusy: 1, accountFailed: 1, recoveryErrors: 0,
+      });
+      expect(body).not.toHaveProperty('results');
+      expect(JSON.stringify(body)).not.toContain('private-owner-');
+      expect(info).toHaveBeenCalledWith('[account-deletion-cron] completed', body);
+      expect(errors).toHaveBeenCalledWith(
+        '[account-deletion-cron] recovery workers reported failed outcomes', { failed: 1 },
+      );
+      expect(retention.purgeExpiredCompletedDeletionJobs).toHaveBeenCalledOnce();
+    } finally { errors.mockRestore(); info.mockRestore(); }
   });
 
   it('reports busy/pending health attempts separately from completed receipt purges', async () => {
@@ -307,7 +351,9 @@ it('continues other jobs if one runner fails before lease acquisition', async ()
   const err = vi.spyOn(console, 'error').mockImplementation(() => undefined);
   try {
     const response = await GET(request('expected-secret'));
-    expect((await response.json())).toMatchObject({ recoveryErrors: 1, processed: 2 });
+    expect((await response.json())).toMatchObject({
+      recoveryErrors: 1, processed: 2, accountCompleted: 1, accountFailed: 0,
+    });
     expect(runner.processAccountDeletion).toHaveBeenCalledTimes(2);
   } finally { err.mockRestore(); }
 });
@@ -324,13 +370,18 @@ it('reports completed tombstone cleanup failure without stopping recovery', asyn
 
   it('gives account deletion the full cron budget without reducing the safety buffer', async () => {
     process.env.CRON_SECRET = 'expected-secret';
-    runner.processAccountDeletion.mockImplementation(async (_uid: string, deadline: number) => {
-      expect(deadline).toBeGreaterThan(Date.now() + 260_000);
-      expect(deadline).toBeLessThan(Date.now() + 270_000);
-      return 'pending';
-    });
+    runner.processAccountDeletion.mockResolvedValue('pending');
+    const startedAt = Date.now();
     const response = await GET(request('expected-secret'));
+    const finishedAt = Date.now();
     expect(response.status).toBe(200);
     expect(runner.processAccountDeletion).toHaveBeenCalledTimes(2);
+    const deadlines = runner.processAccountDeletion.mock.calls.map(call => call[1] as number);
+    expect(deadlines[0]).toBe(deadlines[1]);
+    expect(deadlines[0]).toBeGreaterThanOrEqual(startedAt + 270_000);
+    expect(deadlines[0]).toBeLessThanOrEqual(finishedAt + 270_000);
+    expect(await response.json()).toMatchObject({
+      processed: 2, accountPending: 2, accountFailed: 0, recoveryErrors: 0,
+    });
   });
 });
