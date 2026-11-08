@@ -163,8 +163,8 @@ export const ActiveWorkoutSession = ({ onNavigateToHistory, onRequestEnd }: Acti
     }, [addSet]);
 
     const handleRemoveSet = useCallback((exIndex: number, sIndex: number, setId: string,
-        exerciseId?: string, workoutId?: string | null) => {
-        removeSet(exIndex, sIndex, setId, exerciseId, workoutId);
+        exerciseId?: string, workoutId?: string | null, expectedSet?: SessionExerciseSet) => {
+        removeSet(exIndex, sIndex, setId, exerciseId, workoutId, expectedSet);
     }, [removeSet]);
 
     const handleRemoveLastSet = useCallback((exIndex: number) => {
@@ -282,8 +282,8 @@ export const ActiveWorkoutSession = ({ onNavigateToHistory, onRequestEnd }: Acti
                                 onUpdateSessionNote={(index, note) => applyToOriginalExercise(index, () => handleUpdateSessionNote(index, note))}
                                 onUpdateTechnicalStandard={(index, note) => applyToOriginalExercise(index, () => handleUpdateTechnicalStandard(index, note))}
                                 onAddSet={index => applyToOriginalExercise(index, () => handleAddSet(index))}
-                                onRemoveSet={(index, setIndex, setId, exerciseId, workoutId) => applyToOriginalExercise(index,
-                                    () => handleRemoveSet(index, setIndex, setId, exerciseId, workoutId))}
+                                onRemoveSet={(index, setIndex, setId, exerciseId, workoutId, expectedSet) => applyToOriginalExercise(index,
+                                    () => handleRemoveSet(index, setIndex, setId, exerciseId, workoutId, expectedSet))}
                                 onRemoveLastSet={index => applyToOriginalExercise(index, () => handleRemoveLastSet(index))}
                                 onUpdateSet={(index, setId, field, value) => applyToOriginalExercise(index,
                                     () => handleUpdateSet(index, setId, field, value))}

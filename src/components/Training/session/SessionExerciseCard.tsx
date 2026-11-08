@@ -6,6 +6,7 @@ import { BufferedInput, BufferedTextarea } from '../../UI/BufferedInput';
 import { BufferedWorkoutScope } from '../../UI/bufferedWorkoutScope';
 import { sessionSetHasMeaningfulData } from '../../../lib/workoutSetData';
 import { deriveCardioSpeed } from './deriveCardioSpeed';
+import { captureSession, isCurrentSession } from '../../../lib/sync/session';
 import type { Exercise, SessionExercise, SessionExerciseSet } from '../../../types';
 
 interface SessionExerciseCardProps {
@@ -26,7 +27,7 @@ interface SessionExerciseCardProps {
     onUpdateSessionNote: (exIndex: number, note: string) => void;
     onUpdateTechnicalStandard: (exIndex: number, value: string) => void;
     onAddSet: (exIndex: number) => void;
-    onRemoveSet: (exIndex: number, sIndex: number, setId: string, exerciseId?: string, workoutId?: string | null) => void;
+    onRemoveSet: (exIndex: number, sIndex: number, setId: string, exerciseId?: string, workoutId?: string | null, expectedSet?: SessionExerciseSet) => void;
     onUpdateSet: (exIndex: number, setId: string, field: string, value: unknown) => void;
     onAddSpecialSet: (exIndex: number, type: string, setId: string) => void;
     onUpdateSpecialSet: (exIndex: number, setId: string, type: 'segments', segmentId: string, field: string, value: unknown) => void;
@@ -103,14 +104,15 @@ const SessionExerciseCardInner: React.FC<SessionExerciseCardProps> = ({
         const isFilled = sessionSetHasMeaningfulData(lastSet);
 
         if (isFilled) {
+            const session = captureSession();
             const confirmed = await useDialogStore.getState().showConfirm(
                 "La serie contiene dei dati. Vuoi davvero rimuoverla?"
             );
-            if (!confirmed) return;
+            if (!confirmed || !isCurrentSession(session)) return;
         }
 
         if (!lastSet.id) return;
-        onRemoveSet(exIndex, lastIndex, lastSet.id, exItem.id, workoutId);
+        onRemoveSet(exIndex, lastIndex, lastSet.id, exItem.id, workoutId, lastSet);
     }, [exItem.sets, exItem.id, onRemoveSet, onRemoveLastSet, exIndex, workoutId]);
 
     const handleCardioChange = (field: 'time' | 'distance', value: string) => {
