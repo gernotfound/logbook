@@ -7,7 +7,7 @@ import type {
 import { UserDataSchema } from '../../schema';
 import { CardioSessionSchema } from '../../schemas/schema_nutrition';
 import { TrainingCycleWriteSchema } from '../../schemas/schema_training';
-import { isBoundedCycleCount, MAX_EDITABLE_CYCLE_WEEKS, MAX_CYCLE_SESSIONS_PER_WEEK } from '../../calc/cycleLimits';
+import { hasValidCycleWriteFrequencies, isBoundedCycleCount, MAX_EDITABLE_CYCLE_WEEKS, MAX_CYCLE_SESSIONS_PER_WEEK } from '../../calc/cycleLimits';
 import { calculateLoggedMealTotals } from '../../nutrition/calculateLoggedMealTotals';
 import { getLocalDateString } from '../../utils/date';
 import type { DomainOperation, DomainOperationBatch } from './contracts';
@@ -24,17 +24,7 @@ import {
 } from './validation';
 
 function assertNewCycleRoutineFrequencies(routines: ReadonlyArray<{ frequencyPerWeek?: unknown }>, sessionsPerWeek: unknown): void {
-    let totalFrequency = 0;
-    for (const routine of routines) {
-        const frequency = routine.frequencyPerWeek === undefined ? 1 : routine.frequencyPerWeek;
-        // The persisted reader is tolerant, but a new domain operation must not
-        // silently coerce an invalid weekly frequency into a plausible schedule.
-        if (!isBoundedCycleCount(frequency, MAX_CYCLE_SESSIONS_PER_WEEK)) {
-            throw new Error('Frequenza routine ciclo non valida');
-        }
-        totalFrequency += frequency;
-    }
-    if (sessionsPerWeek === undefined && totalFrequency > MAX_CYCLE_SESSIONS_PER_WEEK) {
+    if (!hasValidCycleWriteFrequencies(routines, sessionsPerWeek)) {
         throw new Error('Frequenza routine ciclo non valida');
     }
 }
