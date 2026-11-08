@@ -98,7 +98,8 @@ void test('hosting post-deploy asset probes avoid find|head SIGPIPE under pipefa
   const smoke = hosting.slice(hosting.indexOf('      - name: Verify public Hosting PWA cache policy'));
   assert.doesNotMatch(smoke, /\|\s*head\s+-n\s+1/);
   assert.match(smoke, /workbox_file="\$\(find dist[^\n]*-quit\)"/);
-  assert.match(smoke, /asset_file="\$\(find dist\/assets[^\n]*-quit\)"/);
+  assert.match(smoke, /build_assets=\(dist\/assets\/\*\*\/\*\.\{js,css\}\)/);
+  assert.match(smoke, /if \[ "\$\{#build_assets\[@\]\}" -eq 0 \]/);
 });
 
 
@@ -135,7 +136,11 @@ void test('Hosting smoke verifies served bytes and browser MIME for critical PWA
   assert.ok(smoke.includes('assert_served_bytes "/appearance.js" "dist/appearance.js" js'));
   assert.ok(smoke.includes('assert_served_bytes "/appearance.css" "dist/appearance.css" css'));
   assert.ok(smoke.includes('assert_served_bytes "/$workbox_file" "dist/$workbox_file" js'));
-  assert.ok(smoke.includes('assert_served_bytes "/assets/$asset_file" "dist/assets/$asset_file" "$asset_kind"'));
+  assert.ok(smoke.includes('for asset in "${build_assets[@]}"; do'));
+  assert.ok(smoke.includes('relative_path="${asset#dist/}"'));
+  assert.ok(smoke.includes('assert_served_bytes "/${relative_path}" "${asset}" "${asset##*.}"'));
+  assert.ok(smoke.includes('fetch_headers "/${relative_path}" /tmp/thelogbook-asset-headers.txt'));
+  assert.match(smoke, /cache-control: .*max-age=31536000.*immutable/);
   assert.match(smoke, /x-content-type-options: nosniff/);
   assert.match(smoke, /content-security-policy:/);
   assert.match(smoke, /cmp -s/);

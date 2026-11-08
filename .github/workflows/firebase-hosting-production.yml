@@ -254,10 +254,14 @@ jobs:
             assert_revalidated "/$workbox_file" /tmp/thelogbook-workbox-headers.txt
           fi
 
-          asset_file="$(find dist/assets -maxdepth 1 -type f \( -name '*.js' -o -name '*.css' \) -printf '%P\n' -quit)"
-          test -n "$asset_file"
-          fetch_headers "/assets/$asset_file" /tmp/thelogbook-asset-headers.txt
-          grep -iE '^cache-control: .*max-age=31536000.*immutable' /tmp/thelogbook-asset-headers.txt
+          # Verify every generated JavaScript/CSS chunk, not just a random
+          # representative: lazy imports may reference any hashed asset.
+          shopt -s nullglob globstar
+          build_assets=(dist/assets/**/*.{js,css})
+          if [ "${#build_assets[@]}" -eq 0 ]; then
+            echo "No generated JavaScript or CSS assets to validate" >&2
+            exit 1
+          fi
 
           assert_served_bytes() {
             local path="$1"
@@ -290,5 +294,9 @@ jobs:
           if [ -n "$workbox_file" ]; then
             assert_served_bytes "/$workbox_file" "dist/$workbox_file" js
           fi
-          asset_kind="${asset_file##*.}"
-          assert_served_bytes "/assets/$asset_file" "dist/assets/$asset_file" "$asset_kind"
+          for asset in "${build_assets[@]}"; do
+            relative_path="${asset#dist/}"
+            fetch_headers "/${relative_path}" /tmp/thelogbook-asset-headers.txt
+            grep -iE '^cache-control: .*max-age=31536000.*immutable' /tmp/thelogbook-asset-headers.txt
+            assert_served_bytes "/${relative_path}" "${asset}" "${asset##*.}"
+          done
