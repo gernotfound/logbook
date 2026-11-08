@@ -21,13 +21,21 @@ export function calculateRawLoggedMealTotals(meals: readonly LoggedMealItem[]) {
     return { kcal, carbs, pro, fat };
 }
 
-/** Historical persisted rounding semantics, unchanged. */
+function roundMacro(value: number): number {
+    // Integers need no decimal rounding; scaling large finite values can lose precision or overflow.
+    return Number.isInteger(value) ? value : Math.round(value * 10) / 10;
+}
+
+/** Reject arithmetic loss before permissive schema fallbacks can replace it with zero. */
 export function calculateLoggedMealTotals(meals: readonly LoggedMealItem[]) {
     const { kcal, carbs, pro, fat } = calculateRawLoggedMealTotals(meals);
+    if (![kcal, carbs, pro, fat].every(Number.isFinite)) {
+        throw new Error('Totali nutrizionali non rappresentabili.');
+    }
     return {
         kcal: Math.round(kcal),
-        carbs: Math.round(carbs * 10) / 10,
-        pro: Math.round(pro * 10) / 10,
-        fat: Math.round(fat * 10) / 10,
+        carbs: roundMacro(carbs),
+        pro: roundMacro(pro),
+        fat: roundMacro(fat),
     };
 }

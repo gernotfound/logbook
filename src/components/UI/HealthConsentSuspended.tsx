@@ -16,7 +16,7 @@ import { readLocal } from '../../lib/sync/localRepository';
 import { isLocalPurgeIncomplete } from '../../lib/sync/localPurgeFence';
 import { hasDeviceRecoveryBackupSource } from '../../lib/db/backupSnapshot';
 import { purgeCompletedHealthDataLocal } from '../../lib/db/db_account';
-import { readHealthDataErasureProgress, type HealthDataErasureOutcome } from '../../lib/healthDataErasure';
+import { assertCurrentHealthDataErasureCompleted, readHealthDataErasureProgress, type HealthDataErasureOutcome } from '../../lib/healthDataErasure';
 
 // The form has its own selection state: switching from pending to confirmed,
  // or back to pending, creates a fresh opt-in without a render-time reset.
@@ -84,7 +84,10 @@ export function HealthConsentSuspended({ status, user }: { status: HealthConsent
     };
   }, []);
   const initialAcceptance = status === 'unregistered' && user !== null;
-  const canReaccept = user !== null && localReadyUid === user.uid && (status === 'withdrawn' || status === 'reaccepting');
+  // A confirmed withdrawal may be invalidated while this component stays mounted.
+  // Keep the explicit reaccept retry separately available after its first POST.
+  const canReaccept = user !== null && localReadyUid === user.uid
+    && (status === 'reaccepting' || (status === 'withdrawn' && verifiedWithdrawal));
   const showReacceptForm = initialAcceptance || canReaccept;
 
   const verifyAutomaticErasure = useCallback(async () => {
@@ -125,6 +128,10 @@ export function HealthConsentSuspended({ status, user }: { status: HealthConsent
       const app = useAppStore.getState();
       hasLocalData ||= app.dataOwner === owner && app.userData !== null;
       if (!hasLocalData) {
+        // A completed job is not sufficient when a wrapped cloud key still exists.
+        // Require a fresh owner/epoch-fenced server proof even on a fresh device.
+        await assertCurrentHealthDataErasureCompleted(uid);
+        if (!isCurrentSession(session) || auth.currentUser?.uid !== uid) return;
         setLocalReadyUid(uid);
         return;
       }
@@ -139,7 +146,8 @@ export function HealthConsentSuspended({ status, user }: { status: HealthConsent
         'Dati cancellati',
       );
     } catch (cause) {
-      if (auth.currentUser?.uid === uid) {
+      // A→B→A can restore the same UID after this request became stale.
+      if (isCurrentSession(session) && auth.currentUser?.uid === uid) {
         setError(cause instanceof Error ? cause.message : 'Impossibile verificare la cancellazione.');
       }
     } finally {
@@ -267,7 +275,7 @@ export function HealthConsentSuspended({ status, user }: { status: HealthConsent
             : checkingErasure
               ? 'Verifica della cancellazione in corso…'
               : erasureProgress?.complete
-                ? 'Cloud cancellato. La pulizia locale deve ancora essere verificata.'
+                ? 'Il job cloud risulta concluso. Serve ancora la verifica finale di cancellazione.'
                 : erasureProgress?.status === 'failed'
                   ? 'Cancellazione cloud incompleta. È necessario riprendere o verificare il job.'
                   : 'Cancellazione richiesta: il server continua in modo riprendibile anche se chiudi la pagina.'}</p>

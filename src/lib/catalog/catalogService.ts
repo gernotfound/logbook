@@ -5,8 +5,8 @@
  * 
  * Architectural Highlights:
  * 1. Dedicated IndexedDB Key ('logbook_cached_global_catalog') completely separate from owner-scoped user envelopes.
- * 2. O(1) Manifest Verification: Single Firestore document read to check version freshness.
- *    If version matches, zero additional reads are performed (Spark 50k read limit preservation).
+ * 2. Manifest freshness: one Firestore read checks version, schema, references
+ *    and item counts. Unchanged catalogs need no additional data reads.
  * 3. Seed Fallback: Instantaneous offline/guest bootstrap using bundled seedExercises.json & seedFoods.json.
  * 4. Resilient Network Degradation: 4-second timeout protection; falls back silently to cache on network/App Check failure.
  * 5. Zero Realtime Listeners: Snapshot listeners are strictly prohibited to avoid billable read streams.
@@ -73,7 +73,7 @@ function validFoodItems(items: unknown, count: number): items is CatalogFood[] {
 }
 
 function withTimeout<T>(promise: Promise<T>, ms: number, errMsg = "Timeout operazione catalogo"): Promise<T> {
-    let timer: any;
+    let timer: ReturnType<typeof setTimeout> | undefined;
     const timeout = new Promise<never>((_, reject) => {
         timer = setTimeout(() => reject(new Error(errMsg)), ms);
     });
@@ -84,15 +84,10 @@ function withTimeout<T>(promise: Promise<T>, ms: number, errMsg = "Timeout opera
  * Returns the bundled static seed catalog for instantaneous cold starts.
  */
 export function getSeedCatalog(): CachedGlobalCatalog {
-    const exercises = (seedExercisesRaw as any[]).map(item => {
-        const parsed = CatalogExerciseSchema.safeParse(item);
-        return parsed.success ? parsed.data : (item as CatalogExercise);
-    });
-
-    const foods = (seedFoodsRaw as any[]).map(item => {
-        const parsed = CatalogFoodSchema.safeParse(item);
-        return parsed.success ? parsed.data : (item as CatalogFood);
-    });
+    // A bundled seed is build-time input, not a bypass around catalog schemas.
+    // Invalid entries must fail validation rather than become trusted defaults.
+    const exercises = (seedExercisesRaw as unknown[]).map(item => CatalogExerciseSchema.parse(item));
+    const foods = (seedFoodsRaw as unknown[]).map(item => CatalogFoodSchema.parse(item));
 
     return {
         manifest: {
