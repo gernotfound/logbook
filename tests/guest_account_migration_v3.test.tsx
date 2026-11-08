@@ -138,7 +138,9 @@ describe('guest -> account V3 migration', () => {
         localStorage.setItem(GUEST_SESSION_KEY, 'guest-migration-v3-generation');
         activateGuestSession('guest-migration-v3-generation');
         await beginGuestMigrationIntent('merge', 'recovery', { uid: user.uid });
-        useAppStore.getState().setUserData(guest);
+        // This is a pre-existing guest snapshot, not a new edit to persist
+        // concurrently with the authenticated owner handoff.
+        useAppStore.setState({ userData: guest, dataOwner: 'guest' });
 
         // Interpose on the existing transaction-serialized test double, rather
         // than replacing it with another IndexedDB implementation.
