@@ -1,18 +1,28 @@
 # Debug ripresa sincronizzazione
 
+## Ambito e precondizioni
+
+Questa guida riguarda la **replica cloud di un account autenticato** con sessione corrente, consenso salute verificato per il cloud e archivio locale accessibile. La modalità guest conserva i dati sul dispositivo, ma non effettua replica Firestore. Per una ripresa dopo un periodo offline devono già esistere le autorizzazioni e il checkpoint replica necessari: tornare online non li crea automaticamente.
+
+`local-pending` è uno **stato del client** (`syncHealth`), non il formato del journal e, da solo, **non prova** che un batch sia presente e durevole in IndexedDB. Una barriera preliminare può segnalare `local-pending` prima della lettura dell'envelope; dopo un errore di trasporto, la classificazione richiede invece la prova del batch riproducibile. Non usare un indicatore UI come attestazione di persistenza o consegna.
+
 ## Comportamento corrente
 
-Il journal owner-scoped rimane persistito localmente e il client gestisce i tentativi di replica. Il Service Worker non legge credenziali, stato utente o journal e non invia comandi di replay.
+Il journal owner-scoped rimane persistito nell'archivio locale cifrato e il client gestisce i tentativi di replica. Il Service Worker non legge credenziali, stato utente o journal e non invia comandi di replay.
 
-La ripresa può partire quando il browser torna online o quando TheLogBook torna visibile in primo piano. Inoltre, se il journal è ancora `local-pending` e la sessione autorizzata resta in primo piano e online, il client pianifica nuovi tentativi con backoff da 20 secondi fino a 5 minuti. Il timer non replica journal rifiutati o bloccati e non aggira i controlli di consenso, ownership e integrità.
+La ripresa viene tentata al ritorno della rete (`online`) e quando la pagina torna visibile (`visibilitychange`); all'accesso autenticato esiste anche il percorso di caricamento/checkpoint e successivo drenaggio delle pending. I tentativi restano soggetti ai controlli correnti di sessione, ownership, consenso, integrità e autorizzazione: un evento browser non equivale a un permesso di scrivere nel cloud.
 
-Il replay resta subordinato alla sessione e ai controlli di ownership, consenso, integrità e autorizzazione. I dati locali non vengono scartati a seguito di un errore remoto. L'assenza della Background Sync API su Safari/iOS non impedisce i due percorsi di ripresa.
+Quando `syncHealth` è `local-pending`, il client può pianificare retry con backoff da **20 secondi a 5 minuti**, soltanto se la sessione account è autorizzata, online e in primo piano, senza cancellazione account pendente, sync già attiva, blocco locale o aggiornamento obbligatorio. Il timer non ritenta stati `rejected` o `failed`; i browser possono sospendere o ritardare i timer, quindi l'intervallo non è una garanzia di consegna in background.
 
-## Verifica
+I dati locali non vengono scartati a seguito di un errore remoto. Un timeout può verificarsi **dopo** il commit Firestore: occorre preservare il journal e non inventare un ACK. Solo una consegna confermata con ACK locale verificato autorizza a dichiarare completata la replica del batch. Tornare online o vedere sparire un messaggio non è una prova sufficiente.
 
-1. Apri la PWA con una sessione valida e registra una modifica offline, accertando che sia stata persistita.
-2. Riattiva la rete oppure riporta la PWA in primo piano.
-3. Verifica che il client ritenti la replica soltanto per l'owner autorizzato, senza inventare conferme cloud in caso di errore.
-4. Dopo logout, revoca o cambio di sessione, verifica che il vecchio journal non venga replicato.
+Safari/iOS non deve supportare la Background Sync API per consentire la ripresa **quando la PWA è in esecuzione**; non è garantita una replica mentre l'app è sospesa o chiusa. Non è registrato alcun evento Background Sync `logbook-sync`: il precedente handler, destinato a installazioni pre-lancio, è stato rimosso.
 
-Non viene registrato alcun evento Background Sync `logbook-sync`. Il precedente handler serviva solo a notificare un browser con una registrazione pre-lancio; in assenza di installazioni storiche da supportare, è stato rimosso.
+## Verifica non distruttiva
+
+1. **Preparazione:** in ambiente di test con fixture/emulatori, usa un account autenticato con consenso cloud già confermato e replica inizializzata. Non usare la modalità guest né dati Production per provocare errori o revoche.
+2. **Durabilità offline:** disattiva la rete, effettua una modifica e attendi la conferma di persistenza locale; chiudi e riapri la pagina **ancora offline** per verificare che la modifica sopravviva. Nei test, controlla direttamente l'envelope cifrato e le pending in IndexedDB: la sola visualizzazione React non dimostra che il journal sia durevole.
+3. **Ripresa:** torna online o riporta la pagina in primo piano. Verifica che il replay interessi soltanto l'owner/sessione corrente e che la pending venga rimossa **solo dopo** l'ACK effettivo. In caso di errore remoto, controlla che il batch resti recuperabile, senza dichiarare un successo cloud.
+4. **Barriere e recovery:** copri rete assente, risposta remota persa dopo commit, rifiuto permanente, revoca del consenso, logout, cambio di sessione anche verso lo stesso UID e `update-required`. Nessun timer deve aggirare questi blocchi; il journal altrui non va adottato né cancellato.
+
+I test di riferimento sono `tests/isolated/journalRetry.test.ts` (timer e gate), `tests/isolated/cloudKeyJournalRecovery.test.ts` (ciphertext, retry, ACK e risposta perduta), oltre ai test di sessione e recovery collegati. Sono prove eseguibili con collaboratori controllati, **non** uno smoke autenticato della Production. Il contratto normativo resta in [Storage e sincronizzazione](../.agents/rules/storage-and-sync.md) e [Crash consistency](../.agents/rules/crash-consistency.md).

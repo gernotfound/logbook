@@ -45,13 +45,13 @@ La selezione completa dei contratti resta in [AGENTS](../AGENTS.md). Qui si indi
 |---|---|---|
 | [Debug ripresa sincronizzazione](BACKGROUND_SYNC_DEBUG.md) | Guida diagnostica al comportamento corrente | Replay journal, online/foreground, compatibilità browser |
 
-## Privacy, dati salute e rapporti con le palestre
+## Privacy, dati salute e accesso di utenti esterni
 
-Il [pacchetto compliance](compliance/README.md) contiene le decisioni aperte e le azioni pre-pilot. **Non certifica conformità GDPR** e richiede revisione professionale prima dell'uso contrattuale.
+Il [pacchetto compliance](compliance/README.md) distingue l'uso personale del progetto dalla prevista apertura gratuita ad altri utenti maggiorenni. **Il gate per l'accesso di utenti esterni con dati reali è ancora NO-GO**, anche senza accordi commerciali: prima dell'apertura restano da chiudere le verifiche tecniche, privacy e legali indicate nel dossier. I rapporti con le palestre sono uno **scenario futuro**, non il modello di utilizzo corrente. Il pacchetto **non certifica conformità GDPR** e richiede revisione professionale.
 
 | Documento | Stato | Per quale attività |
 |---|---|---|
-| [Pacchetto compliance / primo pilot](compliance/README.md) | Indice pre-pilot, revisione professionale aperta | Percorso per verifiche tecniche, legali e commerciali |
+| [Pacchetto compliance / utenti esterni](compliance/README.md) | Gate pre-utenti esterni NO-GO; scenario B2B futuro | Requisiti tecnici, privacy e legali prima di qualsiasi apertura a terzi |
 | [Allegato commerciale](compliance/commercial-schedule-template.md) | Template non approvato/firmato | Termini economici |
 | [Ruoli privacy provider / palestra](compliance/controller-role-decision.md) | Decisione non finalizzata | Titolare, responsabile e condizioni |
 | [Procedura diritti interessati](compliance/data-subject-rights-procedure.md) | Procedura interna da completare | Accesso, portabilità, rettifica, cancellazione |
@@ -61,8 +61,8 @@ Il [pacchetto compliance](compliance/README.md) contiene le decisioni aperte e l
 | [Exit e cancellazione B2B](compliance/exit-deletion-policy-template.md) | Template da validare | Cessazione palestra distinta dagli account utente |
 | [Checklist prima palestra](compliance/first-gym-b2b-checklist.md) | Gate pre-pilot ancora da verificare | Condizioni di go-live |
 | [Istruzioni privacy palestra](compliance/gym-privacy-instructions-template.md) | Template dipendente dai ruoli validati | Indicazioni per iscritti e palestra |
-| [Consenso salute: decisione e gate](compliance/health-consent-release-gate.md) | Decisione UX approvata; gate legale/manuale aperto | Revoca, diritti ed eventuale riaccettazione |
-| [Consenso salute: protocollo](compliance/health-consent-technical-protocol.md) | Comportamento tecnico descritto; verifica pre-pilot aperta | Fence, journal, offline e cross-device |
+| [Consenso salute: decisione e gate](compliance/health-consent-release-gate.md) | Revoca implementata; gate legale e collaudi autenticati aperti | Revoca, diritti ed eventuale riaccettazione |
+| [Consenso salute: protocollo](compliance/health-consent-technical-protocol.md) | Contratto tecnico implementato; verifiche Production e gate legale aperti | Fence, journal, offline e cross-device |
 | [Runbook incidenti / breach](compliance/incident-breach-runbook.md) | Procedura da assegnare e provare | Gestione, escalation e notifiche |
 | [Registro trattamenti](compliance/processing-record-template.md) | Template Art. 30 da completare | Attività e finalità del trattamento |
 | [Retention schedule](compliance/retention-schedule.md) | Policy da approvare e verificare | Conservazione e cancellazioni |
@@ -73,7 +73,7 @@ Il [pacchetto compliance](compliance/README.md) contiene le decisioni aperte e l
 
 ## Guide delle suite
 
-Le guide [tests/README.md](../tests/README.md), [fuzz](../tests/fuzz/README.md), [recovery](../tests/recovery/README.md), [GC](../tests/gc/README.md) e [hardening](../tests/hardening/README.md) spiegano suite e oracle. I comandi `verify:m2`–`verify:m5` descrivono sottogate storici; il candidato corrente richiede `verify:m8` o CI equivalente exact-SHA.
+Le guide [tests/README.md](../tests/README.md), [fuzz](../tests/fuzz/README.md), [recovery](../tests/recovery/README.md), [GC](../tests/gc/README.md) e [hardening](../tests/hardening/README.md) spiegano suite e oracle. I comandi `verify:m2`–`verify:m5` restano sottogate diagnostici inclusi nella catena corrente: non sostituiscono `verify:m8` o la CI equivalente exact-SHA.
 
 ## Regole per la manutenzione
 
