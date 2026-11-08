@@ -332,6 +332,7 @@ describe('trusted health consent boundary', () => {
       body: new ReadableStream<Uint8Array>({
         start(controller) {
           controller.enqueue(raw.subarray(0, 8));
+          controller.enqueue(new Uint8Array(0));
           controller.enqueue(raw.subarray(8));
           controller.close();
         },

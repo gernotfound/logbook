@@ -69,6 +69,7 @@ async function readConsentBody(request: Request): Promise<Record<string, unknown
       }
       buffer.set(result.value, bytesRead);
       bytesRead += result.value.byteLength;
+      emptyReads = 0;
     }
   } finally {
     if (timeout !== undefined) clearTimeout(timeout);
