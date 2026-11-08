@@ -45,7 +45,7 @@ export function accountDeletionCorsHeaders(origin: string | null, allowedHeaders
     // The request origin guard has already failed; emit no CORS authorization.
     return { vary: 'Origin' };
   }
-  if (!allowed) return { vary: 'Origin' };
+  if (!origin || !allowed) return { vary: 'Origin' };
   return {
     'access-control-allow-origin': origin,
     'access-control-allow-methods': 'GET, POST, OPTIONS',
