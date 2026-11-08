@@ -290,6 +290,7 @@ describe('trusted data-only erasure worker', () => {
 
   it.each([
     'orphaned-account-key', 'invalid-consent-status', 'active-without-new-epoch',
+    'active-without-acceptance-proof',
   ] as const)('preserves an expired receipt with %s until the trusted state is repaired', async scenario => {
     await createHealthDataErasureJob('a');
     expect(await processHealthDataErasure('a', Date.now() + 30_000)).toBe('complete');
@@ -299,6 +300,11 @@ describe('trusted data-only erasure worker', () => {
     fixture.records.get(markerPath('a'))!.purgeAfter = expired;
     if (scenario === 'orphaned-account-key') {
       fixture.records.set('user_data_keys/a', { uid: 'a', ciphertext: 'unexpected-residue' });
+    } else if (scenario === 'active-without-acceptance-proof') {
+      // A forged higher revision is not an explicit acceptance: the legal
+      // evidence required by the trusted consent validator is missing.
+      consent.status = 'active';
+      consent.revision = 5;
     } else {
       consent.status = scenario === 'invalid-consent-status' ? 'unknown' : 'active';
     }

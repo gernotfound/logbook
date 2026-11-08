@@ -386,7 +386,11 @@ export async function purgeExpiredCompletedHealthErasures(deadlineMs: number, ma
             (consent.status === 'withdrawn' && consent.revision === job.completedRevision
               && consent.erasedBeforeRevision === job.consentRevision && !keySnap.exists)
             // A later explicit acceptance may legitimately hold a new-generation key.
-            || (consent.status === 'active' && consent.revision > job.completedRevision)
+            || (consent.status === 'active' && consent.revision > job.completedRevision
+              && typeof consent.acceptedAt === 'string'
+              && Number.isFinite(Date.parse(consent.acceptedAt))
+              && typeof consent.privacyVersion === 'string' && consent.privacyVersion.length > 0
+              && typeof consent.termsVersion === 'string' && consent.termsVersion.length > 0)
           )) {
           tx.delete(item.ref);
           return true;
