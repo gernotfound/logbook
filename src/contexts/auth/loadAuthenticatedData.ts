@@ -151,7 +151,7 @@ export async function loadAuthenticatedData({
                         cloudAllowed,
                     );
                     if (!cloudAllowed()) return 'blocked';
-                    hydratedEnv = await adoptReplicaCheckpoint(expectedOwner, claim, checkpoint, isCurrent);
+                    hydratedEnv = await adoptReplicaCheckpoint(expectedOwner, claim, checkpoint, cloudAllowed);
                     if (!cloudAllowed()) return 'blocked';
                 }
 
