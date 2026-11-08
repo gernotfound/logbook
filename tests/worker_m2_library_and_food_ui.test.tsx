@@ -47,10 +47,10 @@ describe('Worker M2: Exercise Library UI & Food Form Real-Time Calorie Calculati
                 name: 'Trazioni zavorrate',
                 notes: 'Cintura da sovraccarico',
                 trackingType: 'weight_reps',
-                selectedMuscles: [{ id: 'back_latissimus' }],
-                secondaryMuscles: [{ id: 'arms_biceps' }],
+                selectedMuscles: [{ id: 'lats', name: 'Gran dorsale' }],
+                secondaryMuscles: [{ id: 'biceps', name: 'Bicipiti' }],
                 isBodyweight: true,
-                equipmentWeight: 5
+                equipmentWeight: '5'
             };
             writeWorkoutRecoveryDraft('draft_exercise', owner, draft);
             const sealedKey = protectedDeviceKey('draft_exercise', owner);

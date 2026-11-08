@@ -1,4 +1,6 @@
 import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
+import type { Exercise, WorkoutRoutine } from '../types';
+import type { MuscleDef } from '../lib/constants/muscles';
 import { useAppStore } from '../store/useAppStore';
 import { useDialogStore } from '../store/useDialogStore';
 import { Logic } from '../lib/logic';
@@ -16,7 +18,8 @@ import {
     type ExerciseTrackingType
 } from './trainingExercises/exerciseDraft';
 
-const EMPTY_ARRAY: any[] = [];
+const EMPTY_LIBRARY: Exercise[] = [];
+const EMPTY_ROUTINES: WorkoutRoutine[] = [];
 
 function blockExerciseDraft(error: unknown, session: ReturnType<typeof captureSession>): void {
     if (!isCurrentSession(session)) return;
@@ -30,8 +33,8 @@ function blockExerciseDraft(error: unknown, session: ReturnType<typeof captureSe
 }
 
 export function useTrainingExercises() {
-    const library = useAppStore(state => state.userData?.library || EMPTY_ARRAY);
-    const routines = useAppStore(state => state.userData?.routines || EMPTY_ARRAY);
+    const library = useAppStore(state => state.userData?.library || EMPTY_LIBRARY);
+    const routines = useAppStore(state => state.userData?.routines || EMPTY_ROUTINES);
     const dispatchDomainOperation = useAppStore(state => state.dispatchDomainOperation);
     const showAlert = useDialogStore(state => state.showAlert);
     const showConfirm = useDialogStore(state => state.showConfirm);
@@ -67,8 +70,8 @@ export function useTrainingExercises() {
     const [exName, setExName] = useState(() => initialDraft?.name || '');
     const [exNotes, setExNotes] = useState(() => initialDraft?.notes || '');
     const [muscleSearch, setMuscleSearch] = useState('');
-    const [selectedMuscles, setSelectedMuscles] = useState<any[]>(() => initialDraft?.selectedMuscles || []);
-    const [secondaryMuscles, setSecondaryMuscles] = useState<any[]>(() => initialDraft?.secondaryMuscles || []);
+    const [selectedMuscles, setSelectedMuscles] = useState<MuscleDef[]>(() => initialDraft?.selectedMuscles || []);
+    const [secondaryMuscles, setSecondaryMuscles] = useState<MuscleDef[]>(() => initialDraft?.secondaryMuscles || []);
     const [selectionMode, setSelectionMode] = useState<'primary' | 'secondary'>('primary');
     const [trackingType, setTrackingType] = useState<ExerciseTrackingType>(() => initialDraft?.trackingType || 'weight_reps');
     const [isBodyweight, setIsBodyweight] = useState(() => Boolean(initialDraft?.isBodyweight));
@@ -97,7 +100,7 @@ export function useTrainingExercises() {
 
     const filteredMuscles = useMemo(() => filterMuscles(muscleSearch), [muscleSearch]);
 
-    const toggleMuscle = (muscle: any) => {
+    const toggleMuscle = (muscle: MuscleDef) => {
         if (!muscle || !muscle.id) return;
         if (selectionMode === 'primary') {
             const newSelection = toggleSmartMuscleSelection(selectedMuscles, muscle);
@@ -134,7 +137,7 @@ export function useTrainingExercises() {
         if (!muscle) return;
 
         const idsToRemove = getExpandedMuscleIds([muscle]);
-        const removeFromSelection = (selection: any[]) => {
+        const removeFromSelection = (selection: MuscleDef[]) => {
             const expanded = getExpandedMuscleIds(selection);
             idsToRemove.forEach(id => expanded.delete(id));
             return toggleSmartMuscleSelection(Array.from(expanded).map(id => ({ id })));
@@ -144,7 +147,7 @@ export function useTrainingExercises() {
         setSecondaryMuscles(current => removeFromSelection(current));
     };
 
-    const handleDuplicate = async (ex: any) => {
+    const handleDuplicate = async (ex: Exercise) => {
         if (!isCurrentSession(draftSession)) return;
         const newName = Logic.generateUniqueName(ex.name, library.map(l => l.name));
         const duplicated = {
@@ -160,13 +163,13 @@ export function useTrainingExercises() {
         }
     };
 
-    const handleEditClick = (ex: any) => {
+    const handleEditClick = (ex: Exercise) => {
         setEditingExId(ex.id);
         setExName(ex.name || '');
         setExNotes(ex.notes || '');
 
         // Populate selected muscles
-        const exMuscles: any[] = [];
+        const exMuscles: MuscleDef[] = [];
         (ex.muscles || []).forEach((mId: string) => {
             const m = Logic.MUSCLES.find(mu => mu.id === mId);
             if (m) exMuscles.push(m);
@@ -174,7 +177,7 @@ export function useTrainingExercises() {
         setSelectedMuscles(exMuscles);
 
         // Populate secondary muscles
-        const exSecMuscles: any[] = [];
+        const exSecMuscles: MuscleDef[] = [];
         (ex.secondaryMuscles || []).forEach((mId: string) => {
             const m = Logic.MUSCLES.find(mu => mu.id === mId);
             if (m) exSecMuscles.push(m);
@@ -257,8 +260,8 @@ export function useTrainingExercises() {
                         ...ex,
                         name: trimmedName,
                         notes: exNotes.trim(),
-                        muscles: selectedMuscles.map((m: any) => m.id),
-                        secondaryMuscles: secondaryMuscles.map((m: any) => m.id),
+                        muscles: selectedMuscles.map(m => m.id),
+                        secondaryMuscles: secondaryMuscles.map(m => m.id),
                         trackingType,
                         isBodyweight: isBodyweight || undefined,
                         equipmentWeight: validEqWeight
@@ -273,8 +276,8 @@ export function useTrainingExercises() {
                 id: Logic.generateId('ex'),
                 name: trimmedName,
                 notes: exNotes.trim(),
-                muscles: selectedMuscles.map((m: any) => m.id),
-                secondaryMuscles: secondaryMuscles.map((m: any) => m.id),
+                muscles: selectedMuscles.map(m => m.id),
+                secondaryMuscles: secondaryMuscles.map(m => m.id),
                 trackingType,
                 setsCount: 3,
                 sets: [],
@@ -328,7 +331,7 @@ export function useTrainingExercises() {
         }
 
         const usedInRoutines = routines.filter(rtn =>
-            (rtn.exercises || []).some((ex: any) => ex.exId === id)
+            (rtn.exercises || []).some(ex => ex.exId === id)
         );
 
         let confirmMsg = "Sei sicuro di voler eliminare questo esercizio dall'archivio?";
