@@ -246,6 +246,8 @@ describe('contextual progression engine', () => {
         expect(analysis.comparison.level).toBe('high');
         expect(analysis.outputChange).toBe('unknown');
         expect(analysis.classification).toBe('insufficient_data');
+        expect(analysis.quality).toBe('limited');
+        expect(analysis.qualityReasons.join(' ')).toContain('Durata non verificabile');
         expect(analysis.trendDirection).toBe('insufficient');
         expect(analysis.isRecord).toBe(false);
     });
@@ -262,6 +264,8 @@ describe('contextual progression engine', () => {
 
         expect(analysis.trendDirection).toBe('insufficient');
         expect(analysis.classification).toBe('insufficient_data');
+        expect(analysis.quality).toBe('limited');
+        expect(analysis.qualityReasons.join(' ')).toContain('Durata non verificabile');
         expect(analysis.isRecord).toBe(false);
     });
 
