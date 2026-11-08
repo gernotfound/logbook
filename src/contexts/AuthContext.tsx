@@ -339,7 +339,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                     if (!confirmed) return;
                 }
 
-                const purgeOutcome = await withGuestLifecycleLock(async () => {
+                const purgeOutcome = await Promise.resolve().then(() => withGuestLifecycleLock(async () => {
                         // Confirmation and lock acquisition are both asynchronous.
                         // A different tab may have replaced or revoked this generation.
                         if (!isCurrentSession(requestedSession)) return { purgeError: undefined };
@@ -360,7 +360,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                         setGuestMigrationStatus('idle');
                         useAppStore.getState().resetStore({ force: true });
                         return { purgeError };
-                    }).then(
+                    })).then(
                         result => ({ ok: true as const, result }),
                         () => ({ ok: false as const }),
                     );
