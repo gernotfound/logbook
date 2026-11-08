@@ -3,7 +3,7 @@ import { useAppStore } from '../store/useAppStore';
 import { useDialogStore } from '../store/useDialogStore';
 import { Logic } from '../lib/logic';
 import { captureSession, isCurrentSession } from '../lib/sync/session';
-import { getInMemoryCatalog } from '../lib/catalog/catalogService';
+import { getCachedCatalog } from '../lib/catalog/catalogService';
 import {
     filterMuscles,
     getExpandedMuscleIds,
@@ -343,7 +343,8 @@ export function useTrainingExercises() {
 
     const handleRestoreExercise = async (id: string) => {
         if (!isCurrentSession(draftSession)) return;
-        const catalog = getInMemoryCatalog(true);
+        const catalog = await getCachedCatalog();
+        if (!isCurrentSession(draftSession)) return;
         const originalEx = catalog.exercises.find(e => e.id === id);
         if (!originalEx) {
             void showAlert("Errore: esercizio originale non trovato.");
