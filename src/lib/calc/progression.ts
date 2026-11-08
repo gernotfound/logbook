@@ -439,10 +439,12 @@ function compareReferenceOutput(
         let compared = 0;
         let anyLonger = false;
         let anyShorter = false;
-        for (const [curr, prev] of pairs) {
+        for (const [index, [curr, prev]] of pairs.entries()) {
             const currentSeconds = curr?.timeSeconds;
             const previousSeconds = prev?.timeSeconds;
-            if (currentSeconds === undefined && previousSeconds === undefined) continue;
+            // The primary set may be unmeasured when its segments carry the time.
+            // Missing time in a recorded segment cannot prove stable duration.
+            if (index === 0 && currentSeconds === undefined && previousSeconds === undefined) continue;
             if (currentSeconds === undefined || previousSeconds === undefined
                 || currentSeconds <= 0 || previousSeconds <= 0) return 'unknown';
             compared++;
@@ -593,6 +595,9 @@ function describe(
         case 'stable_more_effort':
             return { headline: 'Output stabile, effort maggiore', detail: `${currentRef}. Stesso output con RIR dichiarato più basso.` };
         case 'stable':
+            if (current.trackingType === 'time') {
+                return { headline: 'Durata registrata stabile', detail: `${previousRef} → ${currentRef}. La stessa durata non prova da sola una prestazione equivalente.` };
+            }
             return { headline: 'Prestazione stabile', detail: `${previousRef} → ${currentRef}.` };
         case 'output_lower':
             return { headline: 'Output di riferimento inferiore', detail: `${previousRef} → ${currentRef}. È una variazione osservata della prestazione, non una conclusione fisiologica.` };
