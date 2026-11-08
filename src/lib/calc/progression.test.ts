@@ -195,6 +195,22 @@ describe('contextual progression engine', () => {
         expect(analysis.detail).toContain('segmenti 10s + 15s → segmenti 12s + 17s');
     });
 
+    it('treats a zero-second parent as unmeasured when segments contain valid durations', () => {
+        const previous = workout({ id: 't1', date: '2026-09-01', exId: 'plank', sets: [
+            timedSet('0', { segments: [{ id: 'seg-1', kg: '', reps: '', time: '10' }] }),
+        ] });
+        const current = workout({ id: 't2', date: '2026-09-08', exId: 'plank', sets: [
+            timedSet('0', { segments: [{ id: 'seg-1', kg: '', reps: '', time: '15' }] }),
+        ] });
+        const analysis = computeProgressionEngine(current, [previous], library).exercises[0];
+
+        expect(analysis.comparison.level).toBe('high');
+        expect(analysis.outputChange).toBe('longer');
+        expect(analysis.classification).toBe('descriptive_change');
+        expect(analysis.detail).toContain('segmenti 10s → segmenti 15s');
+        expect(analysis.detail).not.toContain('0s');
+    });
+
     it('describes mixed timed segment changes without imposing a direction', () => {
         const previous = workout({ id: 't1', date: '2026-09-01', exId: 'plank', sets: [
             timedSet('30', { segments: [{ id: 'seg-1', kg: '', reps: '', time: '10' }, { id: 'seg-2', kg: '', reps: '', time: '15' }] }),
