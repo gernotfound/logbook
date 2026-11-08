@@ -23,12 +23,67 @@ function errorResponse(error: unknown, origin: string | null): Response {
   if (error instanceof HealthConsentRevisionConflictError || error instanceof HealthDataErasureConflict) {
     return json({ error: error.message }, 409, origin);
   }
-  if (error instanceof ConsentInputError) return json({ error: error.message }, 400, origin);
+  if (error instanceof ConsentInputError) return json({ error: error.message }, error.status, origin);
   console.error('[health-consent] trusted endpoint failure', { kind: error instanceof Error ? error.name : 'unknown' });
   return json({ error: 'Stato del consenso non disponibile. Accesso ai dati fitness sospeso.' }, 503, origin);
 }
 
-class ConsentInputError extends Error {}
+class ConsentInputError extends Error {
+  constructor(message: string, readonly status: 400 | 408 | 413 = 400) { super(message); }
+}
+
+const MAX_CONSENT_BODY_BYTES = 8 * 1024;
+const CONSENT_BODY_TIMEOUT_MS = 2_000;
+
+// A consent POST is a small JSON instruction, not a bulk upload. Bound both
+// memory and elapsed time: an unfinished stream must never block revocation
+// indefinitely or consume the one-shot App Check token before validation.
+async function readConsentBody(request: Request): Promise<Record<string, unknown>> {
+  const length = request.headers.get('content-length');
+  if (length !== null && !/^\d+$/.test(length)) throw new ConsentInputError('Lunghezza richiesta non valida.');
+  if (length !== null && Number(length) > MAX_CONSENT_BODY_BYTES) {
+    throw new ConsentInputError('Richiesta di consenso troppo grande.', 413);
+  }
+  if (!request.body) throw new ConsentInputError('Richiesta di consenso non valida.');
+
+  const reader = request.body.getReader();
+  const buffer = new Uint8Array(MAX_CONSENT_BODY_BYTES);
+  let bytesRead = 0;
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  const deadline = new Promise<null>(resolve => {
+    timeout = setTimeout(() => resolve(null), CONSENT_BODY_TIMEOUT_MS);
+  });
+  try {
+    let emptyReads = 0;
+    while (true) {
+      const result = await Promise.race([reader.read(), deadline]);
+      if (result === null) throw new ConsentInputError('Lettura della richiesta scaduta. Riprova.', 408);
+      if (result.done) break;
+      if (result.value.byteLength === 0) {
+        // Prevent a stream of synchronous zero-length chunks from starving the deadline.
+        if (++emptyReads >= 16) throw new ConsentInputError('Lettura della richiesta scaduta. Riprova.', 408);
+        continue;
+      }
+      if (result.value.byteLength > MAX_CONSENT_BODY_BYTES - bytesRead) {
+        throw new ConsentInputError('Richiesta di consenso troppo grande.', 413);
+      }
+      buffer.set(result.value, bytesRead);
+      bytesRead += result.value.byteLength;
+      emptyReads = 0;
+    }
+  } finally {
+    if (timeout !== undefined) clearTimeout(timeout);
+    void reader.cancel().catch(() => {});
+    reader.releaseLock();
+  }
+  try {
+    const parsed: unknown = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(buffer.subarray(0, bytesRead)));
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error();
+    return parsed as Record<string, unknown>;
+  } catch {
+    throw new ConsentInputError('Richiesta di consenso non valida.');
+  }
+}
 
 function requireExplicitAcceptance(value: unknown, message: string): asserts value is ExplicitConsentAcceptance {
   try { validateExplicitAcceptance(value); }
@@ -63,14 +118,9 @@ export async function POST(request: Request): Promise<Response> {
   const origin = request.headers.get('origin');
   try {
     requireAccountDeletionOrigin(request);
+    const body = await readConsentBody(request);
     const identity = await verifyHealthConsentRequester(request);
     const { uid } = identity;
-    let body: Record<string, unknown>;
-    try {
-      const parsed: unknown = await request.json();
-      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error();
-      body = parsed as Record<string, unknown>;
-    } catch { throw new ConsentInputError('Richiesta di consenso non valida.'); }
 
     if (body.action === 'accept-initial') {
       requireVerifiedHealthConsentWrite(identity);

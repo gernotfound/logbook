@@ -254,6 +254,100 @@ describe('trusted health consent boundary', () => {
     expect(erasureWorker.process).not.toHaveBeenCalled();
   });
 
+
+  it.each([
+    ['declared', new Request('https://backend.test/api/health-consent', {
+      method: 'POST',
+      headers: { origin: 'https://thelogbook.web.app', 'content-length': '9000' },
+    })],
+    ['actual', req('POST', { action: 'withdraw', expectedRevision: 0, padding: 'x'.repeat(9_000) })],
+  ])('rejects %s oversized body before consuming App Check or writing consent', async (_case, request) => {
+    const response = await POST(request);
+    expect(response.status).toBe(413);
+    expect(response.headers.get('cache-control')).toBe('no-store');
+    expect(await response.json()).toEqual({ error: 'Richiesta di consenso troppo grande.' });
+    expect(auth.verifyHealthConsentRequester).not.toHaveBeenCalled();
+    expect(storage.documents.size).toBe(0);
+    expect(erasureWorker.process).not.toHaveBeenCalled();
+  });
+
+  it('checks actual stream size rather than trusting a smaller declared length', async () => {
+    const request = new Request('https://backend.test/api/health-consent', {
+      method: 'POST',
+      headers: { origin: 'https://thelogbook.web.app', 'content-length': '1' },
+      body: JSON.stringify({ action: 'withdraw', expectedRevision: 0, padding: 'z'.repeat(9_000) }),
+    });
+    expect((await POST(request)).status).toBe(413);
+    expect(auth.verifyHealthConsentRequester).not.toHaveBeenCalled();
+    expect(storage.documents.size).toBe(0);
+  });
+
+  it.each(['stalled', 'empty-chunk-then-stalled'] as const)(
+    'refuses %s POST streams within the body deadline without changing consent',
+    async scenario => {
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+      try {
+        const stream = new ReadableStream<Uint8Array>({
+          start(controller) {
+            if (scenario === 'empty-chunk-then-stalled') controller.enqueue(new Uint8Array(0));
+          },
+        });
+        const request = new Request('https://backend.test/api/health-consent', {
+          method: 'POST', headers: { origin: 'https://thelogbook.web.app' },
+          body: stream, duplex: 'half',
+        } as RequestInit & { duplex: 'half' });
+        const pending = POST(request);
+        await vi.advanceTimersByTimeAsync(2_100);
+        const response = await pending;
+        expect(response.status).toBe(408);
+        expect(await response.json()).toEqual({ error: 'Lettura della richiesta scaduta. Riprova.' });
+        expect(auth.verifyHealthConsentRequester).not.toHaveBeenCalled();
+        expect(storage.documents.size).toBe(0);
+      } finally {
+        vi.useRealTimers();
+      }
+    },
+  );
+
+  it('bounds streams made solely of empty chunks without running consent transitions', async () => {
+    const request = new Request('https://backend.test/api/health-consent', {
+      method: 'POST', headers: { origin: 'https://thelogbook.web.app' },
+      body: new ReadableStream<Uint8Array>({
+        start(controller) {
+          for (let i = 0; i < 17; i++) controller.enqueue(new Uint8Array(0));
+          controller.close();
+        },
+      }),
+      duplex: 'half',
+    } as RequestInit & { duplex: 'half' });
+    expect((await POST(request)).status).toBe(408);
+    expect(auth.verifyHealthConsentRequester).not.toHaveBeenCalled();
+    expect(storage.documents.size).toBe(0);
+  });
+
+  it('accepts a valid consent instruction split across binary chunks', async () => {
+    const raw = new TextEncoder().encode(JSON.stringify({ action: 'withdraw', expectedRevision: 0 }));
+    const request = new Request('https://backend.test/api/health-consent', {
+      method: 'POST', headers: { origin: 'https://thelogbook.web.app' },
+      body: new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.enqueue(raw.subarray(0, 8));
+          controller.enqueue(new Uint8Array(0));
+          controller.enqueue(raw.subarray(8));
+          controller.close();
+        },
+      }),
+      duplex: 'half',
+    } as RequestInit & { duplex: 'half' });
+    const response = await POST(request);
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ status: 'withdrawn', revision: 1 });
+    expect(auth.verifyHealthConsentRequester).toHaveBeenCalledTimes(1);
+    expect(storage.documents.get('health_data_erasures/account-1')).toMatchObject({
+      uid: 'account-1', status: 'requested', consentRevision: 1,
+    });
+  });
+
   it('atomically queues health erasure with the withdrawal and keeps Auth/business data until the worker completes', async () => {
     const first = await POST(req('POST', { action: 'withdraw', expectedRevision: 0 }));
     expect(first.status).toBe(200);
