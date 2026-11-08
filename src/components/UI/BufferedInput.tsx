@@ -321,24 +321,28 @@ function useBufferedEditorDraft(
         }
     };
 
-    return { localValue, handleChange, flush, isFocused, editSession };
+    const setFocused = useCallback((focused: boolean) => {
+        isFocused.current = focused;
+    }, []);
+
+    return { localValue, handleChange, flush, setFocused, editSession };
 }
 
 export const BufferedInput = React.forwardRef<HTMLInputElement, BufferedInputProps>(
     ({ id, recoveryId, value, onChange, onBlur, onFocus, onKeyDown, type, inputMode, ...props }, ref) => {
         const workoutId = React.useContext(BufferedWorkoutScope);
-        const { localValue, handleChange, flush, isFocused, editSession } = useBufferedEditorDraft(
+        const { localValue, handleChange, flush, setFocused, editSession } = useBufferedEditorDraft(
             'input', recoveryId ?? id, workoutId, value, onChange,
             nextValue => normalizeInputValue(nextValue, type, inputMode),
         );
 
         const handleFocus = (e: React.FocusEvent<HTMLInputElement>) => {
-            isFocused.current = true;
+            setFocused(true);
             if (onFocus) onFocus(e);
         };
 
         const handleBlur = (e: React.FocusEvent<HTMLInputElement>) => {
-            isFocused.current = false;
+            setFocused(false);
             try {
                 flush();
                 if (!editSession.current || !isCurrentSession(editSession.current)
@@ -391,17 +395,17 @@ interface BufferedTextareaProps extends Omit<React.TextareaHTMLAttributes<HTMLTe
 export const BufferedTextarea = React.forwardRef<HTMLTextAreaElement, BufferedTextareaProps>(
     ({ id, value, onChange, onBlur, onFocus, ...props }, ref) => {
         const workoutId = React.useContext(BufferedWorkoutScope);
-        const { localValue, handleChange, flush, isFocused, editSession } = useBufferedEditorDraft(
+        const { localValue, handleChange, flush, setFocused, editSession } = useBufferedEditorDraft(
             'textarea', id, workoutId, value, onChange, nextValue => nextValue,
         );
 
         const handleFocus = (e: React.FocusEvent<HTMLTextAreaElement>) => {
-            isFocused.current = true;
+            setFocused(true);
             if (onFocus) onFocus(e);
         };
 
         const handleBlur = (e: React.FocusEvent<HTMLTextAreaElement>) => {
-            isFocused.current = false;
+            setFocused(false);
             try {
                 flush();
                 if (!editSession.current || !isCurrentSession(editSession.current)
