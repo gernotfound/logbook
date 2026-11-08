@@ -25,7 +25,7 @@ describe('live workout callback freshness with memoized set rows', () => {
         fireEvent.click(screen.getByRole('button', { name: 'Opzioni serie 3' }));
         fireEvent.click(screen.getByRole('button', { name: 'Rimuovi serie 3' }));
         expect(currentToggle).toHaveBeenCalledWith('set-1');
-        expect(currentRemove).toHaveBeenCalledWith(3, 2);
+        expect(currentRemove).toHaveBeenCalledWith(3, 2, 'set-1', undefined, null);
         expect(oldToggle).not.toHaveBeenCalled();
         expect(oldRemove).not.toHaveBeenCalled();
     });
@@ -63,7 +63,7 @@ describe('live workout callback freshness with memoized set rows', () => {
         const { rerender } = render(<SessionExerciseCard {...props} />);
         rerender(<SessionExerciseCard {...props} onRemoveSet={nextRemove} />);
         fireEvent.click(screen.getByRole('button', { name: 'Rimuovi serie 1' }));
-        expect(nextRemove).toHaveBeenCalledWith(5, 0);
+        expect(nextRemove.mock.calls[0].slice(0, 3)).toEqual([5, 0, 'set-3']);
         expect(originalRemove).not.toHaveBeenCalled();
     });
 });

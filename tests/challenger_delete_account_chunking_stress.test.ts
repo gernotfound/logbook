@@ -135,13 +135,16 @@ describe('M7 client boundary: durable server-coordinated account deletion', () =
         }
     });
 
-    it('clears a pre-request marker on definitive authentication/App Check rejection', async () => {
+    it('preserves the first receipt after Auth rejection because an earlier POST may have been accepted', async () => {
         vi.mocked(fetch).mockResolvedValueOnce(response(401, { error: 'Sessione non valida.' }));
         const ctx = context();
 
         await expect(deleteAccount(ctx)).rejects.toThrow('Sessione non valida.');
-        expect(isAccountDeletionPending('user:test-user-id')).toBe(false);
+        expect(readAccountDeletionMarker('user:test-user-id')?.receiptToken).toMatch(/^[A-Za-z0-9_-]{43}$/);
+        expect(isAccountDeletionPending('user:test-user-id')).toBe(true);
         expect(ctx.purgeAllLocalUserData).not.toHaveBeenCalled();
+        expect(boundary.signOut).not.toHaveBeenCalled();
+        expect(boundary.resetStore).not.toHaveBeenCalled();
     });
 
     it('fails closed with the mandatory partial-cloud warning when the durable job reports failed', async () => {

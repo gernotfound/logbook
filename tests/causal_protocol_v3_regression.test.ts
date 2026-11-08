@@ -192,6 +192,55 @@ describe('Sync Protocol 3 causal convergence regressions', () => {
         });
     });
 
+    it('uses the same session guard for visible and hidden descendants', () => {
+        const base = new Map<string, DocumentData>([['', {
+            activeWorkout: { id: 's2', moodRating: 0, exercises: [] },
+        }]]);
+        const guarded = (actorId: 'A' | 'B', value: number): SemanticOperation => ({
+            docPath: '', path: ['activeWorkout', 'moodRating'],
+            value, isDelete: false, actorId, seq: 1,
+            clock: { P: 1, [actorId]: 1 },
+            guard: { path: ['activeWorkout', 'id'], equals: 's2' },
+        });
+        const concurrent = applySemanticOperations(base, [guarded('A', 4), guarded('B', 5)]);
+        const beforeSessionChange = concurrent.documents.get('');
+        expect(beforeSessionChange).toBeDefined();
+        expect((beforeSessionChange!.activeWorkout as { moodRating: number }).moodRating).toBe(5);
+        expect(concurrent.syncMetas[''].fields['activeWorkout/moodRating'].candidates).toHaveLength(1);
+
+        // The parent event arrives late. Both descendant clocks observed P:1,
+        // but their guards refer to the former active session and must fail.
+        const changedSession: SemanticOperation = {
+            docPath: '', path: ['activeWorkout'],
+            value: { id: 's1', moodRating: 0, exercises: [] },
+            isDelete: false, actorId: 'P', seq: 1, clock: { P: 1 },
+        };
+        const reconciled = applySemanticOperations(
+            concurrent.documents, [changedSession], concurrent.syncMetas,
+        );
+        const afterSessionChange = reconciled.documents.get('');
+        expect(afterSessionChange).toBeDefined();
+        expect((afterSessionChange!.activeWorkout as { moodRating: number }).moodRating).toBe(0);
+        expect(reconciled.syncMetas[''].fields['activeWorkout/moodRating']).toBeUndefined();
+    });
+
+    it('does not satisfy a semantic guard through an inherited prototype property', () => {
+        const base = new Map<string, DocumentData>([['', { profile: { name: 'safe' } }]]);
+        const guarded: SemanticOperation = {
+            docPath: '', path: ['profile', 'name'], value: 'unsafe',
+            isDelete: false, actorId: 'A', seq: 1, clock: { A: 1 },
+            // Object.prototype.constructor.name is 'Object', but it is not
+            // an own property of the business document.
+            guard: { path: ['constructor', 'name'], equals: 'Object' },
+        };
+        const result = applySemanticOperations(base, [guarded]);
+        const root = result.documents.get('');
+        expect(root).toBeDefined();
+        expect((root!.profile as { name: string }).name).toBe('safe');
+        expect(result.syncMetas[''].fields['profile/name']).toBeUndefined();
+        expect(result.syncMetas[''].clock).toEqual({ A: 1 });
+    });
+
     it('observes a stale active-workout operation only at document frontier, never inside the current field stamp', () => {
         const base = new Map<string, DocumentData>([['', {
             activeWorkout: { id: 's2', date: '2026-09-14', moodRating: 0, exercises: [] },

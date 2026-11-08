@@ -169,6 +169,14 @@ function requireLease(job: Job | undefined, leaseOwner: string, uid: string): Jo
   return job;
 }
 
+function assertCurrentErasureConsent(uid: string, revision: number, consent: DocumentData | undefined): void {
+  // Reuse the same owner/epoch proof at each destructive transaction boundary.
+  // A preflight check outside a Firestore transaction alone is insufficient.
+  if (consent?.uid !== uid || consent.status !== 'withdrawn' || consent.revision !== revision) {
+    throw new HealthDataErasureConflict('Il consenso è cambiato durante la cancellazione.');
+  }
+}
+
 async function acquireLease(uid: string, leaseOwner: string, deadlineMs: number): Promise<boolean> {
   return adminDb().runTransaction(async tx => {
     const ref = jobRef(uid);
@@ -197,8 +205,12 @@ async function updateUnderLease(uid: string, leaseOwner: string, update: Record<
   const db = adminDb();
   const ref = jobRef(uid);
   await db.runTransaction(async tx => {
-    const snap = await tx.get(ref);
-    requireLease(snap.exists ? snap.data() as Job : undefined, leaseOwner, uid);
+    const [snap, consentSnap] = await Promise.all([
+      tx.get(ref),
+      mutate ? tx.get(consentRef(uid)) : Promise.resolve(null),
+    ]);
+    const job = requireLease(snap.exists ? snap.data() as Job : undefined, leaseOwner, uid);
+    if (mutate) assertCurrentErasureConsent(uid, job.consentRevision, consentSnap?.data());
     mutate?.(tx);
     tx.update(ref, { ...update, updatedAt: Timestamp.now() });
   });
@@ -241,10 +253,7 @@ async function completeErasure(uid: string, leaseOwner: string): Promise<void> {
   await db.runTransaction(async tx => {
     const [jobSnap, consentSnap] = await Promise.all([tx.get(jobRef(uid)), tx.get(consentRef(uid))]);
     const job = requireLease(jobSnap.exists ? jobSnap.data() as Job : undefined, leaseOwner, uid);
-    const state = consentSnap.data();
-    if (!state || state.uid !== uid || state.status !== 'withdrawn' || state.revision !== job.consentRevision) {
-      throw new HealthDataErasureConflict('Il consenso è cambiato durante la cancellazione.');
-    }
+    assertCurrentErasureConsent(uid, job.consentRevision, consentSnap.data());
     const nextRevision = job.consentRevision + 1;
     if (!Number.isSafeInteger(nextRevision)) throw new Error('Revisione consenso non rappresentabile.');
     const now = Timestamp.now();
@@ -282,11 +291,7 @@ export async function processHealthDataErasure(uid: string, deadlineMs: number):
     phase = 'consent';
     const [jobSnap, consentSnap] = await Promise.all([jobRef(uid).get(), consentRef(uid).get()]);
     const job = requireLease(jobSnap.exists ? jobSnap.data() as Job : undefined, leaseOwner, uid);
-    const consent = consentSnap.data();
-    if (!consentSnap.exists || consent?.uid !== uid || consent.status !== 'withdrawn'
-        || consent.revision !== job.consentRevision) {
-      throw new HealthDataErasureConflict('Il consenso non appartiene alla cancellazione richiesta.');
-    }
+    assertCurrentErasureConsent(uid, job.consentRevision, consentSnap.data());
     for (const name of PRIVATE_ACCOUNT_COLLECTIONS) {
       phase = name;
       for (;;) {
@@ -365,15 +370,37 @@ export async function purgeExpiredCompletedHealthErasures(deadlineMs: number, ma
     for (const item of page.docs) {
       if (Date.now() + SAFETY_BUFFER_MS >= deadlineMs || purged >= boundedLimit || scanned >= scanLimit) break;
       const deleted = await db.runTransaction(async tx => {
-        const [jobSnap, consentSnap] = await Promise.all([tx.get(item.ref), tx.get(consentRef(item.id))]);
+        const [jobSnap, consentSnap, keySnap] = await Promise.all([
+          tx.get(item.ref), tx.get(consentRef(item.id)),
+          tx.get(db.collection('user_data_keys').doc(item.id)),
+        ]);
         const job = jobSnap.data() as Job | undefined;
         const consent = consentSnap.data();
         if (!jobSnap.exists || !job || job.status !== 'complete'
           || !(job.purgeAfter instanceof Timestamp) || job.purgeAfter.toMillis() > Date.now()) return false;
+        // Retire a receipt only when the matching owner and the completed
+        // epoch are attested by the still-durable consent record. A higher
+        // erase floor alone cannot validate a damaged or foreign receipt.
         if (job.uid === item.id
           && isPositiveRevision(job.consentRevision)
-          && consent && isPositiveRevision(consent.erasedBeforeRevision)
-          && consent.erasedBeforeRevision >= job.consentRevision) {
+          && isPositiveRevision(job.completedRevision)
+          && job.completedRevision === job.consentRevision + 1
+          && consent?.uid === item.id
+          && Number.isSafeInteger(consent.revision)
+          && consent.revision >= job.completedRevision
+          && isPositiveRevision(consent.erasedBeforeRevision)
+          && consent.erasedBeforeRevision >= job.consentRevision
+          && (
+            // A withdrawn completion still holding its wrapped key is not attested.
+            (consent.status === 'withdrawn' && consent.revision === job.completedRevision
+              && consent.erasedBeforeRevision === job.consentRevision && !keySnap.exists)
+            // A later explicit acceptance may legitimately hold a new-generation key.
+            || (consent.status === 'active' && consent.revision > job.completedRevision
+              && typeof consent.acceptedAt === 'string'
+              && Number.isFinite(Date.parse(consent.acceptedAt))
+              && typeof consent.privacyVersion === 'string' && consent.privacyVersion.length > 0
+              && typeof consent.termsVersion === 'string' && consent.termsVersion.length > 0)
+          )) {
           tx.delete(item.ref);
           return true;
         }

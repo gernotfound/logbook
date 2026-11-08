@@ -145,8 +145,16 @@ for (const origin of requiredConnectOrigins) {
 if (!hostingWorkflow.includes('      - Firebase Firestore Production') || !hostingWorkflow.includes("github.event.workflow_run.event == 'workflow_run'") || !hostingWorkflow.includes("github.event.workflow_run.head_branch == 'main'")) {
   failures.push('Firebase Hosting workflow must activate only after the exact-main Firestore production reconciliation');
 }
-if (!hostingWorkflow.includes('git rev-parse origin/main') || !hostingWorkflow.includes('firebase-tools@15.30.2 deploy --only hosting')) {
-  failures.push('Firebase Hosting workflow must re-check exact main and deploy only Hosting with the pinned CLI');
+if (!hostingWorkflow.includes('git ls-remote --exit-code origin refs/heads/main') ||
+    !hostingWorkflow.includes('Recheck exact main SHA before Hosting deployment') ||
+    !hostingWorkflow.includes('firebase-tools@15.30.2 deploy --only hosting')) {
+  failures.push('Firebase Hosting workflow must re-check current main immediately before deploying Hosting with the pinned CLI');
+}
+if (!hostingWorkflow.includes('      contents: read\n      id-token: write') ||
+    !hostingWorkflow.includes('      - name: Download same-run verified frontend') ||
+    !hostingWorkflow.includes('      - name: Upload verified main frontend') ||
+    !hostingWorkflow.includes('      - name: Authenticate to Google Cloud with Workload Identity Federation')) {
+  failures.push('Firebase Hosting workflow must preserve isolated build/artifact/deploy and privileged WIF');
 }
 if (!hostingWorkflow.includes('thelogbook-index-headers.txt') || !hostingWorkflow.includes("^cache-control: .*no-cache.*no-store.*must-revalidate")) {
   failures.push('Firebase Hosting post-deploy smoke must verify app-shell cache revalidation');

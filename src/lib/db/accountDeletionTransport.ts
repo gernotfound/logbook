@@ -46,9 +46,20 @@ export async function appCheckToken(): Promise<string> {
     }
 }
 
+const VALID_DELETION_STATUSES = new Set<string>(['requested', 'deleting', 'verifying', 'complete', 'failed']);
+
+function isDeletionStatusForOwner(body: Record<string, unknown>, uid: string): body is Record<string, unknown> & ServerDeletionStatus {
+    return body.uid === uid && typeof body.status === 'string' && VALID_DELETION_STATUSES.has(body.status);
+}
+
 async function readJson(response: Response): Promise<Record<string, unknown>> {
-    try { return await response.json() as Record<string, unknown>; }
-    catch { return {}; }
+    try {
+        const body: unknown = await response.json();
+        return body !== null && typeof body === 'object' && !Array.isArray(body)
+            ? body as Record<string, unknown> : {};
+    } catch {
+        return {};
+    }
 }
 
 export async function requestServerDeletion(marker: AccountDeletionMarker, idToken: string, appToken: string): Promise<void> {
@@ -71,16 +82,13 @@ export async function requestServerDeletion(marker: AccountDeletionMarker, idTok
     }, ACCOUNT_DELETION_HTTP_TIMEOUT_MS, () => new AccountDeletionRequestTimeoutError());
     if (!response.ok) {
         const message = typeof body?.error === 'string' ? body.error : 'Impossibile avviare la cancellazione account.';
-        const error = new Error(message) as Error & { definitiveRejection?: boolean };
-        error.definitiveRejection = response.status === 400 || response.status === 401 || response.status === 403;
-        throw error;
+        throw new Error(message);
     }
     // HTTP success alone is not proof that the trusted backend accepted this
     // owner's durable receipt. Preserve the marker for reconciliation on an
     // unexpected or unparseable response rather than recording a false ACK.
     if ((response.status !== 200 && response.status !== 202)
-        || body?.uid !== marker.uid
-        || !['requested', 'deleting', 'verifying', 'complete', 'failed'].includes(String(body?.status))) {
+        || !isDeletionStatusForOwner(body, marker.uid)) {
         throw new Error('Conferma della cancellazione non verificabile. La ricevuta locale resta conservata per il recupero.');
     }
 }
@@ -112,9 +120,9 @@ export async function fetchAccountDeletionStatus(marker: AccountDeletionMarker, 
             : 'Impossibile verificare lo stato della cancellazione. Copia locale conservata.');
     }
     // A server receipt authorizes cleanup only for its exact owner.
-    if (body.uid !== marker.uid || !['requested', 'deleting', 'verifying', 'complete', 'failed'].includes(String(body.status))) {
+    if (!isDeletionStatusForOwner(body, marker.uid)) {
         throw new Error('Stato della cancellazione non coerente con l’account richiesto. Copia locale conservata.');
     }
-    return body as unknown as ServerDeletionStatus;
+    return body;
 }
 

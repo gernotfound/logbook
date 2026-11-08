@@ -31,6 +31,24 @@ describe('JSON Export/Import Logic', () => {
         }
     });
 
+    it('releases the temporary URL and DOM link if the ordinary download click fails', async () => {
+        const url = 'blob:blocked-regular-export';
+        const create = vi.spyOn(URL, 'createObjectURL').mockReturnValue(url);
+        const revoke = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
+        let wasAttached = false;
+        vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (this: HTMLAnchorElement) {
+            wasAttached = this.isConnected;
+            throw new Error('Browser rejected download');
+        });
+
+        await expect(Exporter.downloadFile('backup.json', '{}', 'application/json'))
+            .rejects.toThrow('Browser rejected download');
+        expect(wasAttached).toBe(true);
+        expect(create).toHaveBeenCalledOnce();
+        expect(revoke).toHaveBeenCalledExactlyOnceWith(url);
+        expect(document.querySelector('a[href="blob:blocked-regular-export"]')).toBeNull();
+    });
+
     it('exportShareJson uses the current versioned envelope and contains only shared fields', async () => {
         const mockUserData: any = {
             profile: { dob: '2000-01-01' },

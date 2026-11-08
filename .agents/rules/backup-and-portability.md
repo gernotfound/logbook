@@ -16,10 +16,12 @@ Applicare il fresh start e la protezione dei dati correnti di AGENTS. Fonti: `sr
 | Percorso | Prova di completezza | Cosa non autorizza |
 |---|---|---|
 | Backup JSON ordinario | Scansione cloud `all`, envelope locale riletto, pending riapplicate e copertura dichiarata | Non è uno snapshot atomico fra dispositivi |
-| Esportazione d'emergenza device-only | Prove owner-scoped stabili; file marcato **parziale** | Non abilita hydration, upload o reimport automatico |
+| Recupero protetto con UI bloccata | Prove owner-scoped stabili; file marcato **parziale** | Non abilita hydration, upload o reimport automatico |
 | Export diritti dopo revoca | Gate trusted rights-only, checkpoint e ADK esistente, **se** il job di erasure non è in corso | Non riattiva fitness o sincronizzazione; non garantisce un backup completo dopo l'avvio automatico del job |
 | Import/restore business | Validazione lossless e commit con esito `SyncResult` | `local-pending` non è ACK cloud; witness grezzi non sono bozze portabili |
 | CSV | Campi esplicitamente mappati e output salvati | Non equivale a un backup JSON recuperabile |
+
+Il percorso rapido `Exporter.exportEmergencyJSON()` richiamato dalla protezione del logout e dal dialogo dei conflitti nutrizionali è **distinto** dal recupero protetto della tabella: esporta il solo `userData` in memoria con copertura `device`, senza scansione cloud, envelope/journal o testimoni `recovery.device`. Non prova che tutte le modifiche e le copie device-only siano incluse e non costituisce conferma del salvataggio effettivo da parte del browser. L'azione «Esporta» nel dialogo di logout interrompe il logout; il file rapido non è una prova che un successivo logout forzato sia privo di rischio. Il download rapido MUST rifiutare un `userData` non più identico allo stato dell'owner/sessione corrente: un dialogo asincrono può conservare un riferimento del precedente account, che non deve essere etichettato come backup del nuovo proprietario. Non attribuire a questo percorso le garanzie del backup completo o del recupero protetto.
 
 La replica cloud automatica non costituisce un backup indipendente dalla custodia delle chiavi. Perdita del profilo con dati solo offline o della KEK cloud senza copia ripristinabile può rendere irrecuperabili i dati: vedere [Archivio e cifratura](secure-storage.md).
 

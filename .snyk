@@ -1,6 +1,8 @@
 version: v1.25.0
+# Test fixtures are not shipped with the application, but must remain
+# available to secret scanning: a global exclusion would hide leaked keys.
 exclude:
-  global:
+  code:
     - tests
     - "**/*.test.ts"
     - "**/*.test.tsx"

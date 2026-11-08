@@ -40,7 +40,7 @@ function fixture(t) {
   save(root, '.oxlintrc.a11y.json', { plugins: ['jsx-a11y'], rules: { 'jsx-a11y/alt-text': 'error' } });
   save(root, '.oxlintrc.type-aware.json', {
     plugins: ['typescript'], options: { typeAware: true },
-    rules: { 'typescript/no-floating-promises': 'warn' },
+    rules: { 'typescript/no-floating-promises': 'error' },
   });
   save(root, 'tsconfig.json', { compilerOptions: { strict: true, noEmit: true } });
   save(root, 'tsconfig.m5-tests.json', { extends: './tsconfig.json', compilerOptions: { noEmit: true } });
@@ -113,6 +113,39 @@ await test('blocks increasing an existing warning count', t => {
   mustFail(run(ctx), /New or increased warning forbidden/);
 });
 
+
+await test('a11y lint catches concrete failures of every configured rule', t => {
+  const root = mkdtempSync(join(tmpdir(), 'logbook-a11y-lint-'));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const oxlint = fileURLToPath(new URL('../node_modules/oxlint/bin/oxlint', import.meta.url));
+  const config = fileURLToPath(new URL('../.oxlintrc.a11y.json', import.meta.url));
+  const cases = {
+    'alt-text': '<img src="image.png" />',
+    'anchor-has-content': '<a href="/path" />',
+    'aria-props': '<div aria-unknown="value" />',
+    'aria-role': '<div role="invalid-role" />',
+    'aria-unsupported-elements': '<meta aria-label="invalid" />',
+    'heading-has-content': '<h2 />',
+    'label-has-associated-control': '<label>Unassociated field</label>',
+    'role-has-required-aria-props': '<div role="checkbox" />',
+  };
+  const runCase = (jsx) => {
+    save(root, 'case.tsx', 'export const Example = () => (' + jsx + ');\n');
+    return spawnSync(process.execPath, [oxlint, '--config', config, '--format=json', 'case.tsx'], {
+      cwd: root, encoding: 'utf8',
+    });
+  };
+  for (const [rule, jsx] of Object.entries(cases)) {
+    const result = runCase(jsx);
+    assert.equal(result.status, 1, rule + ' must reject invalid JSX: ' + result.stdout + result.stderr);
+    const report = JSON.parse(result.stdout);
+    assert.ok(report.diagnostics?.some(entry => String(entry.code).includes(rule)),
+      rule + ' was not actually executed: ' + result.stdout);
+  }
+  const valid = runCase('<div><label htmlFor="field">Name</label><input id="field" /><label>Consent<input type="checkbox" /></label><label><input type="radio" /><span><strong>Calcolo da misure</strong></span></label></div>');
+  assert.equal(valid.status, 0, valid.stdout + valid.stderr);
+});
+
 await test('blocks removal of a lint plugin', t => {
   const ctx = fixture(t);
   save(ctx.root, '.oxlintrc.json', { plugins: [], rules: { 'react/rules-of-hooks': 'error' } });
@@ -125,6 +158,16 @@ await test('blocks lowering lint rule severity', t => {
   save(ctx.root, '.oxlintrc.type-aware.json', {
     plugins: ['typescript'], options: { typeAware: true },
     rules: { 'typescript/no-floating-promises': 'off' },
+  });
+  commit(ctx.root);
+  mustFail(run(ctx), /lint rules weakened/);
+});
+
+await test('blocks downgrading the type-aware Promise rule from error to warning', t => {
+  const ctx = fixture(t);
+  save(ctx.root, '.oxlintrc.type-aware.json', {
+    plugins: ['typescript'], options: { typeAware: true },
+    rules: { 'typescript/no-floating-promises': 'warn' },
   });
   commit(ctx.root);
   mustFail(run(ctx), /lint rules weakened/);
@@ -201,7 +244,7 @@ await test('blocks disabling type-aware lint while leaving the rule text unchang
   const ctx = fixture(t);
   save(ctx.root, '.oxlintrc.type-aware.json', {
     plugins: ['typescript'], options: { typeAware: false },
-    rules: { 'typescript/no-floating-promises': 'warn' },
+    rules: { 'typescript/no-floating-promises': 'error' },
   });
   commit(ctx.root);
   mustFail(run(ctx), /type-aware lint analysis disabled/);

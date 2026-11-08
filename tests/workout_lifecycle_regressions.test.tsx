@@ -17,6 +17,7 @@ import { readWorkoutTimerSnapshot, writeWorkoutTimerSnapshot } from '../src/lib/
 import { readWorkoutRecoveryDraft, writeWorkoutRecoveryDraft } from '../src/lib/sync/workoutRecoveryDraft';
 import PreSessionCheckIn from '../src/components/Training/PreSessionCheckIn';
 import TrainingSession from '../src/components/Training/TrainingSession';
+import { isCurrentExerciseMutationTarget } from '../src/components/Training/session/exerciseMutationTarget';
 import WorkoutTimer from '../src/components/Training/WorkoutTimer';
 import { useWorkoutSession } from '../src/hooks/useWorkoutSession';
 import { commitDomainOperations, initializeLocal, readLocal } from '../src/lib/sync/localRepository';
@@ -247,6 +248,39 @@ describe('Workout lifecycle durable recovery regressions', () => {
         fireEvent.click(screen.getByRole('button', { name: 'Salta check-in e inizia' }));
         await waitFor(() => expect(useAppStore.getState().localPersistenceBlocked).toBe(true));
         expect(onStart).not.toHaveBeenCalled();
+        expect(readDeviceValueStrict(name, owner)).toBe(raw);
+    });
+
+    it('does not reseal an already persisted pre-session check-in during repeated update flushes', async () => {
+        const owner = captureSession().owner;
+        await prepareUnlockedTestArchive(owner);
+        localStorage.setItem(`logbook:v2:${owner}:health-consent-generation`, '3');
+        const name = 'draft:pre-session:checkin-noop-flush';
+        const onStart = vi.fn(async () => true);
+        render(<PreSessionCheckIn workoutId="checkin-noop-flush" onStart={onStart} onCancel={vi.fn(async () => true)} />);
+        fireEvent.click(screen.getByRole('button', { name: 'Energia: 3 su 5' }));
+        const originalRaw = readDeviceValueStrict(name, owner);
+        const sealed = localStorage.getItem(protectedDeviceKey(name, owner));
+        expect(originalRaw).toContain('"energy":3');
+        expect(sealed).toMatch(/^tlb-sealed:v1:/);
+        act(() => draftRegistry.flushAll({ strict: true }));
+        act(() => draftRegistry.flushAll({ strict: true }));
+        expect(readDeviceValueStrict(name, owner)).toBe(originalRaw);
+        expect(localStorage.getItem(protectedDeviceKey(name, owner))).toBe(sealed);
+        expect(onStart).not.toHaveBeenCalled();
+    });
+
+    it('refuses no-input update capture when a mounted pre-session draft belongs to a revoked epoch', async () => {
+        await prepareUnlockedTestArchive(owner);
+        const marker = `logbook:v2:${owner}:health-consent-generation`;
+        localStorage.setItem(marker, '3');
+        const name = 'draft:pre-session:stale-flush';
+        render(<PreSessionCheckIn workoutId="stale-flush"
+            onStart={vi.fn(async () => true)} onCancel={vi.fn(async () => true)} />);
+        fireEvent.click(screen.getByRole('button', { name: 'Energia: 4 su 5' }));
+        const raw = readDeviceValueStrict(name, owner);
+        localStorage.setItem(marker, '5');
+        expect(() => draftRegistry.flushAll({ strict: true })).toThrow(AggregateError);
         expect(readDeviceValueStrict(name, owner)).toBe(raw);
     });
 
@@ -1135,6 +1169,57 @@ describe('Workout lifecycle durable recovery regressions', () => {
         }
     });
 
+    it('preserves an abandoned historical editor context under the current consent epoch', async () => {
+        await prepareUnlockedTestArchive(owner);
+        if (owner.startsWith('user:')) localStorage.setItem(`logbook:v2:${owner}:health-consent-generation`, '1');
+        const historical = workout('history-new', true);
+        const live = workout('workout-live', true);
+        const existing = JSON.stringify({ version: 1, editorId: 'other-editor',
+            ...(owner.startsWith('user:') ? { consentRevision: 1 } : {}),
+            suspended: workout('unrestored-workout', true) });
+        writeDeviceValue('history-editor-context', existing, owner);
+        useAppStore.setState({ localWorkout: live, userData: userData({ history: [historical], activeWorkout: live }) });
+        vi.mocked(useDialogStore.getState().showConfirm).mockResolvedValueOnce(true);
+        const { result } = renderHook(() => useWorkoutSession());
+        await act(async () => { expect(await result.current.startEditHistoricalWorkout(historical)).toBe(false); });
+        expect(readDeviceValueStrict('history-editor-context', owner)).toBe(existing);
+        expect(useAppStore.getState().localWorkout?.id).toBe(live.id);
+    });
+
+    it('does not restore history without the previously persisted suspended-session context', async () => {
+        await prepareUnlockedTestArchive(owner);
+        const editor = { ...workout('history-unproved', true), isEditingHistory: true };
+        useAppStore.setState({ localWorkout: editor, userData: userData({ activeWorkout: workout('unproved-shadow', true) }) });
+        await expect(restoreSessionAfterHistoryEdit(editor.id)).rejects.toThrow('Contesto editor storico mancante');
+        expect(useAppStore.getState().localWorkout?.id).toBe(editor.id);
+    });
+
+    it('preserves a concurrent replacement of the historical editor context during cleanup', async () => {
+        await prepareUnlockedTestArchive(owner);
+        if (owner.startsWith('user:')) localStorage.setItem(`logbook:v2:${owner}:health-consent-generation`, '1');
+        const editor = { ...workout('old-history-editor', true), isEditingHistory: true };
+        const suspended = workout('suspended-during-history', true);
+        const initial = userData({ activeWorkout: suspended });
+        await initializeLocal(owner, initial);
+        const original = JSON.stringify({ version: 1, editorId: editor.id,
+            ...(owner.startsWith('user:') ? { consentRevision: 1 } : {}), suspended });
+        const newer = JSON.stringify({ version: 1, editorId: 'newer-editor',
+            ...(owner.startsWith('user:') ? { consentRevision: 1 } : {}),
+            suspended: workout('newer-suspended-workout', true) });
+        writeDeviceValue('history-editor-context', original, owner);
+        useAppStore.setState({ userData: initial, localWorkout: editor });
+        const unsubscribe = useAppStore.subscribe((state, previous) => {
+            if (previous.localWorkout?.isEditingHistory && state.localWorkout?.id === suspended.id) {
+                writeDeviceValue('history-editor-context', newer, owner);
+            }
+        });
+        try {
+            await act(async () => { await restoreSessionAfterHistoryEdit(editor.id); });
+            expect(readDeviceValueStrict('history-editor-context', owner)).toBe(newer);
+            expect(useAppStore.getState().saveError).toMatch(/contesto editor/);
+        } finally { unsubscribe(); }
+    });
+
     it('does not resurrect a suspended workout durably deleted in another tab', async () => {
         await prepareUnlockedTestArchive(owner);
         const previous = workout('closed-in-other-tab', true);
@@ -1173,6 +1258,20 @@ describe('Workout lifecycle durable recovery regressions', () => {
         useAppStore.setState({ userData: userData({ activeWorkout: staleCloud }), localWorkout: editor });
         await act(async () => { await restoreSessionAfterHistoryEdit(editor.id); });
         expect(useAppStore.getState().localWorkout?.id).toBe(suspended.id);
+    });
+
+    it('rejects stale exercise callback targets after reordering duplicate set IDs', () => {
+        const original = workout('captured-workout', true);
+        const first = { ...original.exercises[0], id: 'first-instance', sets: [{ id: 'shared-set', kg: '60', reps: '8' }] };
+        const second = { ...original.exercises[0], id: 'second-instance', sets: [{ id: 'shared-set', kg: '70', reps: '6' }] };
+        const initial = { ...original, exercises: [first, second] };
+        useAppStore.setState({ localWorkout: initial });
+        expect(isCurrentExerciseMutationTarget(original.id, 0, first.id)).toBe(true);
+        useAppStore.setState({ localWorkout: { ...initial, exercises: [second, first] } });
+        expect(isCurrentExerciseMutationTarget(original.id, 0, first.id)).toBe(false);
+        expect(isCurrentExerciseMutationTarget(original.id, 1, first.id)).toBe(true);
+        expect(isCurrentExerciseMutationTarget(original.id, 0, second.id)).toBe(true);
+        expect(isCurrentExerciseMutationTarget('replacement-workout', 0, second.id)).toBe(false);
     });
 
     it('never removes a different last set inserted while confirming deletion', async () => {
@@ -1302,6 +1401,35 @@ describe('Workout lifecycle durable recovery regressions', () => {
         expect(readDeviceValueStrict('draft:post-session:' + target.id, owner)).toBeNull();
     });
 
+
+    it('preserves a final-session draft modified by another tab after durable workout deletion', async () => {
+        await prepareUnlockedTestArchive(owner);
+        localStorage.setItem(`logbook:v2:${owner}:health-consent-generation`, '3');
+        const target = workout('delete-concurrent-final', true);
+        const initial = userData({ activeWorkout: target });
+        await initializeLocal(owner, initial);
+        useAppStore.setState({ userData: initial, dataOwner: owner, localWorkout: target });
+        const name = 'draft:post-session:' + target.id;
+        const original = writeWorkoutRecoveryDraft(name, owner, { draft: { workoutId: target.id, mood: '3' } }, '3');
+        const originalDispatch = useAppStore.getState().dispatchDomainOperation;
+        let competingRaw: string | null = null;
+        useAppStore.setState({ dispatchDomainOperation: async (...args) => {
+            const response = await originalDispatch(...args);
+            competingRaw = writeWorkoutRecoveryDraft(name, owner,
+                { draft: { workoutId: target.id, mood: '4' } }, '3', original);
+            return response;
+        } });
+        vi.mocked(useDialogStore.getState().showConfirm).mockResolvedValueOnce(true);
+        try {
+            const { result } = renderHook(() => useWorkoutSession());
+            await act(async () => { expect(await result.current.deleteWorkout()).toBe(true); });
+            expect((await readLocal(owner))?.data.activeWorkout).toBeNull();
+            expect(readDeviceValueStrict(name, owner)).toBe(competingRaw);
+            expect(useAppStore.getState().saveError).toMatch(/copia locale/i);
+        } finally {
+            useAppStore.setState({ dispatchDomainOperation: originalDispatch });
+        }
+    });
 
     it('serializes a rapid start after its preparation without requiring an explicit UI flush', async () => {
         if (owner.startsWith('user:')) localStorage.setItem(`logbook:v2:${owner}:health-consent-generation`, '1');

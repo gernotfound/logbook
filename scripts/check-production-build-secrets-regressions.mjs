@@ -14,14 +14,14 @@ void test('rejects an unreviewed diagnostic credential in the production build',
   const altered = hosting.replace('      FIREBASE_HOSTING_DEPLOY:',
     '      ERROR_MONITOR_AUTH_TOKEN: ${{ secrets.ERROR_MONITOR_AUTH_TOKEN }}\n      FIREBASE_HOSTING_DEPLOY:');
   assert.notEqual(altered, hosting);
-  assert.match(checkProductionBuildSecrets(altered, firestore).join('; '), /external error monitoring/);
+  assert.match(checkProductionBuildSecrets(altered, firestore).join('; '), /unreviewed job-level env binding/);
 });
 
 void test('rejects an unreviewed browser diagnostic DSN', () => {
   const altered = hosting.replace('      FIREBASE_HOSTING_DEPLOY:',
     '      VITE_DIAGNOSTIC_DSN: ${{ vars.VITE_DIAGNOSTIC_DSN }}\n      FIREBASE_HOSTING_DEPLOY:');
   assert.notEqual(altered, hosting);
-  assert.match(checkProductionBuildSecrets(altered, firestore).join('; '), /external error monitoring/);
+  assert.match(checkProductionBuildSecrets(altered, firestore).join('; '), /unreviewed job-level env binding/);
 });
 
 void test('rejects diagnostic secrets introduced in an action step outside the job env', () => {
@@ -79,6 +79,106 @@ void test('mutation tooling remains exactly pinned, dev-only and lockfile-matche
     assert.equal(packages['node_modules/' + name]?.version, '10.1.1');
     assert.equal(manifest.dependencies?.[name], undefined);
   }
+});
+
+
+void test('hosting revalidates live main after the build and immediately before deploy', () => {
+  const build = hosting.indexOf('      - name: Build exact production frontend');
+  const fence = hosting.indexOf('      - name: Recheck exact main SHA before Hosting deployment');
+  const deploy = hosting.indexOf('      - name: Deploy Firebase Hosting only');
+  assert.ok(build >= 0 && fence > build && deploy > fence, 'Expected post-build SHA fence immediately before deploy');
+  const preDeploy = hosting.slice(fence, deploy);
+  assert.match(preDeploy, /git ls-remote --exit-code origin refs\/heads\/main/);
+  assert.match(preDeploy, /git rev-parse HEAD/);
+  assert.ok(preDeploy.includes('[ "${current_main}" != "${EXPECTED_SHA}" ]'), 'Must compare freshly read main with exact expected SHA');
+  assert.match(preDeploy, /exit 1/);
+});
+
+void test('hosting post-deploy asset probes avoid find|head SIGPIPE under pipefail', () => {
+  const smoke = hosting.slice(hosting.indexOf('      - name: Verify public Hosting PWA cache policy'));
+  assert.doesNotMatch(smoke, /\|\s*head\s+-n\s+1/);
+  assert.match(smoke, /workbox_file="\$\(find dist[^\n]*-quit\)"/);
+  assert.match(smoke, /build_assets=\(dist\/assets\/\*\*\/\*\.\{js,css\}\)/);
+  assert.match(smoke, /if \[ "\$\{#build_assets\[@\]\}" -eq 0 \]/);
+});
+
+
+void test('Hosting build remains unprivileged and hands an exact SHA artifact to its deploy job', () => {
+  assert.deepEqual(checkProductionBuildSecrets(hosting, firestore), []);
+  for (const [replacement, finding] of [
+    [hosting.replace('    name: Build verified main frontend', '    name: Build verified main frontend\n    permissions:\n      id-token: write'),
+      /build can access cloud identity/],
+    [hosting.replace('    needs: build', '    needs: none'), /artifact handoff/],
+    [hosting.replace('      - name: Download same-run verified frontend', '      - name: Download discarded frontend'), /credentials or exact main SHA guard out of order/],
+  ]) {
+    assert.notEqual(replacement, hosting);
+    assert.match(checkProductionBuildSecrets(replacement, firestore).join('; '), finding);
+  }
+});
+
+void test('Hosting rejects additional privileged or unreviewed workflow jobs', () => {
+  const thirdJob = hosting + [
+    '  diagnostic-deploy:',
+    '    runs-on: ubuntu-24.04',
+    '    permissions:',
+    '      id-token: write',
+    '    steps:',
+    '      - run: echo bypass',
+    '',
+  ].join('\n');
+  assert.match(checkProductionBuildSecrets(thirdJob, firestore).join('; '),
+    /unexpected job outside the reviewed build\/deploy boundary/);
+});
+
+void test('Hosting independently requires the exact successful-main upstream gate on both jobs', () => {
+  assert.deepEqual(checkProductionBuildSecrets(hosting, firestore), []);
+  const deployOffset = hosting.indexOf('\n  deploy:\n');
+  assert.ok(deployOffset > 0);
+  const build = hosting.slice(0, deployOffset);
+  const deploy = hosting.slice(deployOffset);
+  const originalCondition = "github.event.workflow_run.head_branch == 'main'";
+  for (const [jobName, altered] of [
+    ['build', build.replace(originalCondition, "github.event.workflow_run.head_branch == 'release'") + deploy],
+    ['deploy', build + deploy.replace(originalCondition, "github.event.workflow_run.head_branch == 'release'")],
+    ['deploy', build + deploy.replace(originalCondition, originalCondition + ' || true')],
+  ]) {
+    assert.notEqual(altered, hosting);
+    assert.match(checkProductionBuildSecrets(altered, firestore).join('; '),
+      new RegExp('Hosting: ' + jobName + ' must require a successful upstream'));
+  }
+});
+
+void test('Hosting rejects unreviewed environment bindings in either job', () => {
+  const rogueDeployEnv = hosting.replace('      GCP_FIREBASE_DEPLOY_SERVICE_ACCOUNT: ${{ vars.GCP_FIREBASE_DEPLOY_SERVICE_ACCOUNT }}',
+    '      GCP_FIREBASE_DEPLOY_SERVICE_ACCOUNT: ${{ vars.GCP_FIREBASE_DEPLOY_SERVICE_ACCOUNT }}\n      UNREVIEWED_DEPLOY_FLAG: 1');
+  assert.notEqual(rogueDeployEnv, hosting);
+  assert.match(checkProductionBuildSecrets(rogueDeployEnv, firestore).join('; '), /deploy contains an unreviewed/);
+
+  const rogueBuildEnv = hosting.replace('      FIREBASE_HOSTING_DEPLOY: production',
+    '      FIREBASE_HOSTING_DEPLOY: production\n      UNREVIEWED_BUILD_FLAG: 1');
+  assert.notEqual(rogueBuildEnv, hosting);
+  assert.match(checkProductionBuildSecrets(rogueBuildEnv, firestore).join('; '), /build contains an unreviewed/);
+});
+
+void test('Hosting smoke verifies served bytes and browser MIME for critical PWA resources', () => {
+  const smoke = hosting.slice(hosting.indexOf('      - name: Verify public Hosting PWA cache policy'));
+  assert.ok(smoke.includes('assert_served_bytes "/" "dist/index.html" html'));
+  assert.ok(smoke.includes('assert_served_bytes "/sw.js" "dist/sw.js" js'));
+  assert.ok(smoke.includes('assert_served_bytes "/manifest.webmanifest" "dist/manifest.webmanifest" json'));
+  assert.ok(smoke.includes('assert_served_bytes "/appearance.js" "dist/appearance.js" js'));
+  assert.ok(smoke.includes('assert_served_bytes "/appearance.css" "dist/appearance.css" css'));
+  assert.ok(smoke.includes('assert_served_bytes "/$workbox_file" "dist/$workbox_file" js'));
+  assert.ok(smoke.includes('for asset in "${build_assets[@]}"; do'));
+  assert.ok(smoke.includes('relative_path="${asset#dist/}"'));
+  assert.ok(smoke.includes('assert_served_bytes "/${relative_path}" "${asset}" "${asset##*.}"'));
+  assert.ok(smoke.includes('fetch_headers "/${relative_path}" /tmp/thelogbook-asset-headers.txt'));
+  assert.match(smoke, /cache-control: .*max-age=31536000.*immutable/);
+  assert.match(smoke, /x-content-type-options: nosniff/);
+  assert.match(smoke, /content-security-policy:/);
+  assert.match(smoke, /cmp -s/);
+  assert.match(smoke, /Accept-Encoding: identity/);
+  assert.match(smoke, /content_type/);
+  assert.ok(smoke.includes('if [ "${attempt}" -lt 5 ]; then sleep 2; fi'));
 });
 
 function* clientSources(directory) {

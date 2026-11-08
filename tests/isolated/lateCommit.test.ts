@@ -4,8 +4,8 @@ import { clear, del, get } from 'idb-keyval';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 
 const catalogReader = vi.hoisted(() => ({ read: vi.fn() }));
-const remote = vi.hoisted(() => ({ apply: vi.fn(), auth: { currentUser: { uid: 'a' } } }));
-vi.mock('../../src/lib/firebase', () => ({ auth: remote.auth, getDb: () => ({}), ensureAppCheck: async () => {}, waitForPendingWrites: async () => {} }));
+const remote = vi.hoisted(() => ({ apply: vi.fn(), appCheck: vi.fn(), pendingWrites: vi.fn(), auth: { currentUser: { uid: 'a' } } }));
+vi.mock('../../src/lib/firebase', () => ({ auth: remote.auth, getDb: () => ({}), ensureAppCheck: () => remote.appCheck(), waitForPendingWrites: () => remote.pendingWrites() }));
 // Isolate server consent transport with a verified active revision. The durable
 // generation and session fences remain real for delayed-ACK interleavings.
 vi.mock('../../src/lib/healthConsent', async () => {
@@ -34,7 +34,7 @@ import { projectDocuments } from '../../src/lib/sync/documentProjection';
 import { applySemanticOperations } from '../../src/lib/sync/semanticProjection';
 import { markAccountDeletion, clearAccountDeletion } from '../../src/lib/sync/accountGate';
 import { replicateJournal, waitForJournalIdle } from '../../src/lib/sync/replicateJournal';
-import { adoptReplicaCheckpoint, initializeLocal, commitLocal, readLocal } from '../../src/lib/sync/localRepository';
+import { acknowledgeThrough, adoptReplicaCheckpoint, initializeLocal, commitLocal, readLocal } from '../../src/lib/sync/localRepository';
 import { UserDataSchema } from '../../src/lib/schema';
 import { invalidateSession } from '../../src/lib/sync/session';
 import { createAndMigrateVault } from '../../src/lib/sync/secureArchiveMigration';
@@ -61,6 +61,8 @@ beforeEach(async () => {
     invalidateSession();
     await clear();
     remote.auth.currentUser = { uid: 'a' }; remote.apply.mockReset();
+    remote.appCheck.mockReset().mockResolvedValue(undefined);
+    remote.pendingWrites.mockReset().mockResolvedValue(undefined);
     await createAndMigrateVault('user:a');
     await initializeLocal('user:a', data(170));
     const now = Date.now();
@@ -93,6 +95,38 @@ it('keeps the account journal pending when consent is missing, without starting 
 
     const after = await readLocal('user:a');
     expect(after?.pending).toEqual(before?.pending);
+});
+
+it('does not report a stale empty journal as synced after an A→B→A Auth transition during its IndexedDB read', async () => {
+    const delivered = (await readLocal('user:a'))!;
+    await acknowledgeThrough('user:a', delivered.actorSeq, data(171), [], undefined, {
+        operations: structuredClone(delivered.pending), replica: delivered.replica!,
+    });
+    const before = await readLocal('user:a');
+    const ciphertext = await get('logbook:v2:user:a');
+    expect(before?.pending).toHaveLength(0);
+
+    const originalGet = IDBObjectStore.prototype.get;
+    const spy = vi.spyOn(IDBObjectStore.prototype, 'get').mockImplementation(function (this: IDBObjectStore, key) {
+        const request = originalGet.call(this, key);
+        if (key === 'logbook:v2:user:a') {
+            request.addEventListener('success', () => {
+                spy.mockRestore();
+                remote.auth.currentUser = { uid: 'b' }; invalidateSession();
+                remote.auth.currentUser = { uid: 'a' }; invalidateSession();
+            }, { once: true });
+        }
+        return request;
+    });
+    try {
+        const result = await replicateJournal();
+        expect(result.status).toBe('failed');
+        expect(remote.apply).not.toHaveBeenCalled();
+        expect(await readLocal('user:a')).toEqual(before);
+        expect(await get('logbook:v2:user:a')).toEqual(ciphertext);
+    } finally {
+        spy.mockRestore();
+    }
 });
 
 it('retains one writer after timeout and acknowledges its late commit before retrying', async () => {
@@ -193,6 +227,26 @@ it('does not acknowledge a late result after A to B to A even though the uid mat
     expect((await first).status).toBe('failed');
     expect((await readLocal('user:a'))?.pending).toHaveLength(1);
 });
+
+it.each(['app-check', 'pending-writes'] as const)(
+    'rejects a retryable %s preflight error from an obsolete A→B→A Auth epoch', async boundary => {
+        const before = await readLocal('user:a');
+        const ciphertext = await get('logbook:v2:user:a');
+        const obsoleteNetworkFailure = async () => {
+            remote.auth.currentUser = { uid: 'b' }; invalidateSession();
+            remote.auth.currentUser = { uid: 'a' }; invalidateSession();
+            throw Object.assign(new Error('Transient network failure after session switch'), { code: 'unavailable' });
+        };
+        if (boundary === 'app-check') remote.appCheck.mockImplementationOnce(obsoleteNetworkFailure);
+        else remote.pendingWrites.mockImplementationOnce(obsoleteNetworkFailure);
+
+        const result = await replicateJournal();
+        expect(result.status).toBe('failed');
+        expect(remote.apply).not.toHaveBeenCalled();
+        expect(await get('logbook:v2:user:a')).toEqual(ciphertext);
+        expect(await readLocal('user:a')).toEqual(before);
+    },
+);
 
 it.each([
     ['catalog', 'owner-roundtrip'],

@@ -5,7 +5,7 @@ import { useAppStore } from '../../store/useAppStore';
 import { useDialogStore } from '../../store/useDialogStore';
 import { UserDataSchema } from '../../lib/schema';
 import type { UserData } from '../../types';
-import { getCachedCatalog, getInMemoryCatalog, isCatalogInMemory } from '../../lib/catalog/catalogService';
+import { getCachedCatalog } from '../../lib/catalog/catalogService';
 import { resolveEffectiveExercises, resolveEffectiveFoods } from '../../lib/catalog/deltaResolver';
 import { getResolvedDefaultUserData } from './defaultUserData';
 import { activateGuestSession, captureSession, isCurrentSession, type SessionSnapshot, GUEST_REVOCATION_KEY, GUEST_SESSION_KEY } from '../../lib/sync/session';
@@ -94,13 +94,13 @@ export function useGuestLogin({
         const currentData = useAppStore.getState().userData;
         let nextData: UserData | null = null;
         if (!currentData) {
-            const catalog = isCatalogInMemory() ? getInMemoryCatalog() : (await getCachedCatalog());
+            const catalog = await getCachedCatalog();
             nextData = UserDataSchema.parse(getResolvedDefaultUserData(catalog)) as unknown as UserData;
         } else {
             const hasCatalogExercises = Array.isArray(currentData.library) && currentData.library.some(e => e.isDefault === true);
             const hasCatalogFoods = Array.isArray(currentData.customFoods) && currentData.customFoods.some(f => f.isCustom === false);
             if (!hasCatalogExercises || !hasCatalogFoods) {
-                const catalog = isCatalogInMemory() ? getInMemoryCatalog() : (await getCachedCatalog());
+                const catalog = await getCachedCatalog();
                 const resolvedLibrary = !hasCatalogExercises
                     ? resolveEffectiveExercises(catalog.exercises, currentData.library || [], currentData.catalogOverrides)
                     : currentData.library;

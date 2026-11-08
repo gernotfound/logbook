@@ -1,3 +1,4 @@
+import equal from 'fast-deep-equal';
 import { readDeviceValueStrict, writeDeviceValue } from './deviceStorage';
 import { assertWorkoutSnapshotEpoch, readDeviceConsentRevision } from './workoutDeviceIntent';
 
@@ -77,6 +78,9 @@ export function writeWorkoutRecoveryDraft(
     if (owner.startsWith('user:') && origin === undefined) {
         throw new Error('Generazione consenso bozza workout non verificabile: originale conservato.');
     }
+    // Refreshing an unchanged draft must not invalidate a different mounted
+    // editor's observed ciphertext. Authentication and epoch gates still run.
+    if (current.raw !== null && equal(current.value, data)) return current.raw;
     const value: unknown = owner.startsWith('user:') && origin !== undefined
         ? { __logbookWorkoutRecoveryDraft: 1, owner, name, consentRevision: origin, data } satisfies RecoveryDraftWitness
         : data;

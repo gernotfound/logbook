@@ -1,17 +1,54 @@
 import { MAX_ROUTINE_SEGMENTS, MAX_ROUTINE_SETS, previewRoutineSets } from '../lib/routineSessionLimits';
 import { dispatchDurableOperation } from '../lib/sync/dispatchDurableOperation';
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useAppStore } from '../store/useAppStore';
 import { useDialogStore } from '../store/useDialogStore';
 import { Logic } from '../lib/logic';
 import { normalizeBusinessId } from '../lib/businessIdentity';
-import { readWorkoutRecoveryDraft, writeWorkoutRecoveryDraft } from '../lib/sync/workoutRecoveryDraft';
+import { z } from '../lib/zod';
+import { readWorkoutRecoveryDraftImage, writeWorkoutRecoveryDraft } from '../lib/sync/workoutRecoveryDraft';
 import { captureSession, isCurrentSession } from '../lib/sync/session';
 import type { Exercise, PlannedSetTechnique, ProgressionContract, RoutineExercise, SetTechnique, WorkoutRoutine } from '../types';
 
 const EMPTY_ROUTINES: WorkoutRoutine[] = [];
 const EMPTY_LIBRARY: Exercise[] = [];
 const ROUTINE_DRAFT_KEY = 'draft_routine';
+
+const recoveredRoutineExerciseSchema = z.object({
+    exId: z.string().refine(id => id.trim().length > 0),
+    setsCount: z.union([z.string(), z.number().finite()]),
+    minReps: z.union([z.string(), z.number().finite()]).optional(),
+    maxReps: z.union([z.string(), z.number().finite()]).optional(),
+    setPlans: z.array(z.object({
+        technique: z.enum(['straight', 'dropset', 'rest_pause', 'cluster', 'rep_match', 'diminishing']),
+        target: z.object({ type: z.literal('reps'), reps: z.number().int().nonnegative(),
+            sourceSetId: z.string().optional() }).optional(),
+        restSeconds: z.number().int().nonnegative().optional(),
+        segmentCount: z.number().int().positive().optional(),
+    }).passthrough()).optional(),
+    technicalStandard: z.string().optional(),
+    defaultTechnique: z.enum([
+        'none', 'dropset', 'isometrics', 'rest_pause', 'cluster', 'rep_match', 'diminishing',
+    ]).optional(),
+    progressionContract: z.object({
+        role: z.enum(['primary', 'secondary', 'support']).optional(),
+        metric: z.enum(['performance', 'volume', 'density', 'execution']).optional(),
+    }).passthrough().optional(),
+}).passthrough();
+
+const recoveredRoutineDraftSchema = z.object({
+    name: z.string().optional(),
+    exercises: z.array(recoveredRoutineExerciseSchema).optional(),
+}).passthrough();
+
+function parseRoutineRecovery(value: unknown | null): { name?: string; exercises?: RoutineExercise[] } | null {
+    if (value === null) return null;
+    const parsed = recoveredRoutineDraftSchema.safeParse(value);
+    if (!parsed.success) {
+        throw new Error('Bozza scheda non valida: originale cifrato conservato.');
+    }
+    return parsed.data;
+}
 
 function blockRoutineDraft(error: unknown, session: ReturnType<typeof captureSession>): void {
     if (!isCurrentSession(session)) return;
@@ -34,19 +71,22 @@ export function useTrainingRoutines() {
     const draftOwner = draftSession.owner;
     const [initialRecovery] = useState(() => {
         try {
-            const draft = readWorkoutRecoveryDraft(ROUTINE_DRAFT_KEY, draftOwner);
-            return { draft: draft as { name?: string; exercises?: RoutineExercise[] } | null, error: null as unknown };
+            const image = readWorkoutRecoveryDraftImage(ROUTINE_DRAFT_KEY, draftOwner);
+            return { draft: parseRoutineRecovery(image.value), raw: image.raw, error: null as unknown };
         } catch (error) {
-            return { draft: null, error };
+            return { draft: null, raw: null, error };
         }
     });
     const initialDraft = initialRecovery.draft;
+    const draftRaw = useRef<string | null>(initialRecovery.raw);
     const localPersistenceBlocked = useAppStore(state => state.localPersistenceBlocked);
     const assertCurrentDraft = useCallback(() => {
         if (initialRecovery.error || localPersistenceBlocked || !isCurrentSession(draftSession)) {
             throw new Error('Sessione, consenso o bozza scheda non più verificabili.');
         }
-        readWorkoutRecoveryDraft(ROUTINE_DRAFT_KEY, draftOwner);
+        if (readWorkoutRecoveryDraftImage(ROUTINE_DRAFT_KEY, draftOwner).raw !== draftRaw.current) {
+            throw new Error('Bozza scheda modificata da un’altra scheda: originale conservato.');
+        }
     }, [draftOwner, draftSession, initialRecovery.error, localPersistenceBlocked]);
     useEffect(() => {
         if (initialRecovery.error) blockRoutineDraft(initialRecovery.error, draftSession);
@@ -60,9 +100,10 @@ export function useTrainingRoutines() {
         if (editingRoutineId || initialRecovery.error || localPersistenceBlocked) return;
         try {
             assertCurrentDraft();
-            writeWorkoutRecoveryDraft(ROUTINE_DRAFT_KEY, draftOwner,
+            draftRaw.current = writeWorkoutRecoveryDraft(ROUTINE_DRAFT_KEY, draftOwner,
                 routineName.trim() !== '' || routineExercises.length > 0
-                    ? { name: routineName, exercises: routineExercises } : null, draftSession.consentGeneration);
+                    ? { name: routineName, exercises: routineExercises } : null,
+                draftSession.consentGeneration, draftRaw.current);
         } catch (error) {
             blockRoutineDraft(error, draftSession);
         }
@@ -72,7 +113,7 @@ export function useTrainingRoutines() {
     const clearRoutineDraft = (): boolean => {
         try {
             assertCurrentDraft();
-            writeWorkoutRecoveryDraft(ROUTINE_DRAFT_KEY, draftOwner, null, draftSession.consentGeneration);
+            draftRaw.current = writeWorkoutRecoveryDraft(ROUTINE_DRAFT_KEY, draftOwner, null, draftSession.consentGeneration, draftRaw.current);
             return true;
         } catch (error) {
             blockRoutineDraft(error, draftSession);
@@ -158,6 +199,9 @@ export function useTrainingRoutines() {
             return false;
         }
 
+        // A durable commit can finish after this form receives a newer edit.
+        // Its cleanup may only consume the exact draft submitted with this save.
+        const submittedDraftRaw = draftRaw.current;
         try {
             const sanitizedExercises: RoutineExercise[] = routineExercises.map(ex => {
                 const num = typeof ex.setsCount === 'number' ? ex.setsCount : parseInt(String(ex.setsCount), 10);
@@ -190,6 +234,10 @@ export function useTrainingRoutines() {
             }
 
             if (!isCurrentSession(draftSession)) return false;
+            if (draftRaw.current !== submittedDraftRaw) {
+                await showAlert('Una versione della scheda è stata salvata, ma ci sono modifiche successive ancora da salvare.');
+                return false;
+            }
             const cleared = clearRoutineDraft();
             if (!isCurrentSession(draftSession)) return false;
             setRoutineName('');

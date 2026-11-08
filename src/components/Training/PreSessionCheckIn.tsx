@@ -95,7 +95,8 @@ export default function PreSessionCheckIn({ workoutId, routineName, date, onStar
     const recoveryRaw = useRef(initialRecovery.raw);
     const [values, setValues] = useState<ReadinessDraft>(initialRecovery.recovered);
     const valuesRef = useRef<ReadinessDraft>(initialRecovery.recovered);
-    const dirtyRef = useRef(Object.keys(initialRecovery.recovered).length > 0);
+    // Recovered and synchronously acknowledged responses are already durable.
+    const dirtyRef = useRef(false);
     const [starting, setStarting] = useState(false);
     const sessionDate = date || Logic.getLocalDateString();
     const sleep = formatSleep(nutrition?.[sessionDate]?.sleepHours);
@@ -106,13 +107,17 @@ export default function PreSessionCheckIn({ workoutId, routineName, date, onStar
     }, [initialRecovery.error]);
 
     const persistDraft = useCallback(() => {
-        if (!dirtyRef.current) return;
         const activeSession = session.current;
         if (!activeSession || !isCurrentSession(activeSession)) throw new Error('Sessione cambiata prima del salvataggio del check-in.');
+        if (readWorkoutRecoveryDraftImage(recoveryName.current, activeSession.owner).raw !== recoveryRaw.current) {
+            throw new Error('Bozza check-in modificata durante il recupero: originale preservato.');
+        }
+        if (!dirtyRef.current) return;
         recoveryRaw.current = writeWorkoutRecoveryDraft(
             recoveryName.current, activeSession.owner, valuesRef.current,
             activeSession.consentGeneration, recoveryRaw.current,
         );
+        dirtyRef.current = false;
     }, []);
 
     const clearDraft = useCallback(() => {
@@ -149,7 +154,7 @@ export default function PreSessionCheckIn({ workoutId, routineName, date, onStar
             return;
         }
         valuesRef.current = next;
-        dirtyRef.current = true;
+        dirtyRef.current = false;
         setValues(next);
     };
 
