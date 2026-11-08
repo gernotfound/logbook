@@ -378,6 +378,8 @@ describe.each(['input', 'textarea'] as const)('owner-scoped buffered %s recovery
     it('preserves input Enter versus textarea blur semantics and clears only acknowledged drafts', async () => {
         const owner = captureSession().owner;
         await prepareUnlockedTestArchive(owner);
+        // Authenticated writers require a current, positive consent revision.
+        localStorage.setItem(`logbook:v2:${owner}:health-consent-generation`, '3');
         const draftName = `draft:buffered:${kind}:stable-draft`;
         const onChange = vi.fn();
         const view = render(field(kind, onChange));
