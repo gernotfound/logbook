@@ -216,6 +216,11 @@ export async function loadAuthenticatedData({
         if (integrityError) {
             if (!(await preserveUnsafeCloud())) return 'blocked';
             setSaveError('Dati cloud non verificabili: sincronizzazione sospesa, archivio locale preservato.');
+        } else if (error?.code === 'cloud-key-unavailable') {
+            // A failed ADK acquisition is not a confirmed cloud sync, even if
+            // the previous local UI state reported 'synced'.
+            useAppStore.setState({ syncHealth: 'failed' });
+            setSaveError('Chiave cloud non disponibile: sincronizzazione sospesa. I dati locali sono conservati.');
         } else if (error?.code === 'concurrent-cloud-read') {
             // A racing scan is not a verified missing document. Retry at the
             // next foreground sync without installing a destructive-exit fence.

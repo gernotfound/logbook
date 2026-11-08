@@ -75,10 +75,13 @@ vi.mock('../server/accountDeletion/httpAuth', () => ({
   },
 }));
 vi.mock('../server/healthConsent/withdrawal', () => ({
-  readHealthConsentState: async (uid: string) => ({
-    status: harness.documents.get('health_consent_withdrawals/' + uid)?.status ?? 'unregistered',
-    revision: 1,
-  }),
+  readHealthConsentState: async (uid: string) => {
+    const state = harness.documents.get('health_consent_withdrawals/' + uid);
+    if (state && (state.uid !== uid || !Number.isSafeInteger(state.revision))) {
+      throw new Error('Stato consenso server non valido.');
+    }
+    return { status: state?.status ?? 'unregistered', revision: state?.revision ?? 0 };
+  },
 }));
 
 import { OPTIONS, POST } from '../api/cloud-key';
@@ -127,6 +130,130 @@ describe('authenticated cloud account key API', () => {
     expect((await second.json()).key).toBe(a.key);
     expect(harness.wrap).toHaveBeenCalledTimes(1);
     expect(harness.unwrap).toHaveBeenCalledTimes(2);
+  });
+
+  it('accepts an empty POST body stream, but never accepts payload bytes', async () => {
+    // Vercel's Request adapter can expose a non-null body stream even when
+    // the browser sends a bodyless POST.
+    const empty = new Request('https://backend.test/api/cloud-key', {
+      method: 'POST', headers: { origin: 'https://thelogbook.web.app' }, body: '',
+    });
+    expect(empty.body).not.toBeNull();
+    expect((await POST(empty)).status).toBe(200);
+
+    const zeroChunk = new Request('https://backend.test/api/cloud-key', {
+      method: 'POST', headers: { origin: 'https://thelogbook.web.app' },
+      body: new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.enqueue(new Uint8Array(0));
+          controller.close();
+        },
+      }),
+      duplex: 'half',
+    } as RequestInit & { duplex: 'half' });
+    expect((await POST(zeroChunk)).status).toBe(200);
+    expect(harness.wrap).toHaveBeenCalledTimes(1);
+
+    const nonEmpty = new Request('https://backend.test/api/cloud-key', {
+      method: 'POST', headers: { origin: 'https://thelogbook.web.app' },
+      body: new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.enqueue(new TextEncoder().encode('{"uid":"attacker"}'));
+          controller.close();
+        },
+      }),
+      duplex: 'half',
+    } as RequestInit & { duplex: 'half' });
+    const verifyCalls = harness.verify.mock.calls.length;
+    expect((await POST(nonEmpty)).status).toBe(400);
+    expect(harness.verify).toHaveBeenCalledTimes(verifyCalls);
+
+    const declaredNonEmpty = new Request('https://backend.test/api/cloud-key', {
+      method: 'POST', headers: { origin: 'https://thelogbook.web.app', 'content-length': '1' },
+    });
+    expect((await POST(declaredNonEmpty)).status).toBe(400);
+    expect(harness.verify).toHaveBeenCalledTimes(verifyCalls);
+  });
+
+  it.each(['stalled', 'empty-chunk-then-stalled'] as const)(
+    'bounds %s request-body inspection without running Auth or key provisioning',
+    async scenario => {
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+      try {
+        const body = new ReadableStream<Uint8Array>({
+          start(controller) {
+            if (scenario === 'empty-chunk-then-stalled') controller.enqueue(new Uint8Array(0));
+          },
+        });
+        const stalled = new Request('https://backend.test/api/cloud-key', {
+          method: 'POST',
+          headers: { origin: 'https://thelogbook.web.app' },
+          body,
+          duplex: 'half',
+        } as RequestInit & { duplex: 'half' });
+
+        const responsePromise = POST(stalled);
+        await vi.advanceTimersByTimeAsync(2_100);
+        const response = await responsePromise;
+        expect(response.status).toBe(408);
+        expect(await response.json()).toEqual({ error: 'Lettura della richiesta scaduta. Riprova.' });
+        expect(response.headers.get('cache-control')).toContain('no-store');
+        expect(harness.verify).not.toHaveBeenCalled();
+        expect(harness.wrap).not.toHaveBeenCalled();
+        expect(harness.documents.has('user_data_keys/owner-a')).toBe(false);
+      } finally {
+        vi.useRealTimers();
+      }
+    },
+  );
+
+  it('keeps interrupted body reads fail-closed without authenticating or provisioning a key', async () => {
+    const interrupted = new Request('https://backend.test/api/cloud-key', {
+      method: 'POST', headers: { origin: 'https://thelogbook.web.app' },
+      body: new ReadableStream<Uint8Array>({
+        start(controller) { controller.error(new Error('body stream broken')); },
+      }),
+      duplex: 'half',
+    } as RequestInit & { duplex: 'half' });
+    const response = await POST(interrupted);
+    expect(response.status).toBe(503);
+    expect(await response.text()).not.toContain('body stream broken');
+    expect(harness.verify).not.toHaveBeenCalled();
+    expect(harness.wrap).not.toHaveBeenCalled();
+  });
+
+  it('accepts a delayed empty body that finishes before the inspection deadline', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    try {
+      const body = new ReadableStream<Uint8Array>({
+        start(controller) { setTimeout(() => controller.close(), 500); },
+      });
+      const delayed = new Request('https://backend.test/api/cloud-key', {
+        method: 'POST',
+        headers: { origin: 'https://thelogbook.web.app' },
+        body,
+        duplex: 'half',
+      } as RequestInit & { duplex: 'half' });
+
+      const responsePromise = POST(delayed);
+      await vi.advanceTimersByTimeAsync(500);
+      expect((await responsePromise).status).toBe(200);
+      expect(harness.wrap).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('accepts a bodyless rights export without provisioning a new key', async () => {
+    expect((await POST(request())).status).toBe(200);
+    harness.documents.set('health_consent_withdrawals/owner-a', { uid: 'owner-a', status: 'withdrawn', revision: 2 });
+    harness.verify.mockResolvedValue({ uid: 'owner-a', emailVerified: false });
+    const rights = new Request('https://backend.test/api/cloud-key?purpose=rights-export', {
+      method: 'POST', headers: { origin: 'https://thelogbook.web.app' }, body: '',
+    });
+    expect(rights.body).not.toBeNull();
+    expect((await POST(rights)).status).toBe(200);
+    expect(harness.wrap).toHaveBeenCalledTimes(1);
   });
 
   it('rejects foreign Origin and unverified email before any key material is accessed', async () => {
@@ -205,6 +332,67 @@ describe('authenticated cloud account key API', () => {
     }));
     expect(missing.status).toBe(503);
     expect(harness.documents.has('user_data_keys/owner-a')).toBe(false);
+  });
+
+  it('does not release an old ADK when a new active consent epoch replaces the transacted epoch', async () => {
+    const unwrappedKeys: Buffer[] = [];
+    harness.unwrap.mockImplementationOnce(async (_uid, wrapped) => {
+      const bytes = Buffer.from(wrapped.ciphertext, 'base64');
+      unwrappedKeys.push(bytes);
+      return bytes;
+    });
+    // Simulate a new, server-owned consent generation between the successful
+    // Firestore transaction and the final release check. The same status is
+    // insufficient evidence that the selected key still belongs to this epoch.
+    harness.afterTransaction = () => {
+      // Model the real trusted sequence: withdraw revision 2, complete erasure
+      // at revision 3 (destroying the old wrapped key), reaccept revision 4.
+      harness.documents.delete('user_data_keys/owner-a');
+      harness.documents.set('health_data_erasures/owner-a', {
+        uid: 'owner-a', consentRevision: 2, completedRevision: 3, status: 'complete',
+      });
+      harness.documents.set('health_consent_withdrawals/owner-a', {
+        ...consent(), revision: 4, erasedBeforeRevision: 2,
+      });
+    };
+    const response = await POST(request());
+    expect(response.status).toBe(503);
+    expect(await response.text()).not.toMatch(/[A-Za-z0-9+/]{43}=/);
+    expect(unwrappedKeys).toHaveLength(1);
+    expect(unwrappedKeys[0].every(byte => byte === 0)).toBe(true);
+    expect(harness.documents.has('user_data_keys/owner-a')).toBe(false);
+    expect(harness.wrap).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not release an ADK or provision new keys during the actual withdrawal/erasure protocol', async () => {
+    expect((await POST(request())).status).toBe(200);
+    const existingKey = harness.documents.get('user_data_keys/owner-a');
+    harness.documents.set('health_consent_withdrawals/owner-a', {
+      uid: 'owner-a', status: 'withdrawn', revision: 2,
+    });
+    // Production withdrawal atomically queues the erasure job; a synthetic
+    // withdrawn-only state is not a valid substitute for that transition.
+    harness.documents.set('health_data_erasures/owner-a', {
+      uid: 'owner-a', consentRevision: 2, status: 'requested',
+    });
+    harness.verify.mockResolvedValue({ uid: 'owner-a', emailVerified: false });
+    const rights = () => new Request('https://backend.test/api/cloud-key?purpose=rights-export', {
+      method: 'POST', headers: { origin: 'https://thelogbook.web.app' },
+    });
+    expect((await POST(rights())).status).toBe(503);
+    expect(harness.documents.get('user_data_keys/owner-a')).toEqual(existingKey);
+
+    // Successful erasure removes the wrapped key before a new consent.
+    harness.documents.delete('user_data_keys/owner-a');
+    harness.documents.set('health_data_erasures/owner-a', {
+      uid: 'owner-a', consentRevision: 2, completedRevision: 3, status: 'complete',
+    });
+    harness.documents.set('health_consent_withdrawals/owner-a', {
+      uid: 'owner-a', status: 'withdrawn', revision: 3, erasedBeforeRevision: 2,
+    });
+    expect((await POST(rights())).status).toBe(503);
+    expect(harness.documents.has('user_data_keys/owner-a')).toBe(false);
+    expect(harness.wrap).toHaveBeenCalledTimes(1);
   });
 
   it('rechecks consent in its transaction after a preflight-to-transaction revocation', async () => {
