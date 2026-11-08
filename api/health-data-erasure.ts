@@ -11,6 +11,18 @@ const cors = (origin: string | null) => ({
   ...accountDeletionCorsHeaders(origin, HEADERS), 'cache-control': 'no-store',
 });
 
+function verifiedErasureResponse(
+  status: NonNullable<Awaited<ReturnType<typeof readHealthDataErasureStatus>>>,
+  origin: string | null,
+): Response {
+  // Every success response must distinguish a durable 'complete' job from
+  // the live consent/key evidence authorizing local irreversible cleanup.
+  if (status.complete && !status.localPurgeAuthorized) {
+    throw new HealthDataErasureConflict('Completamento non attestato per il consenso corrente.');
+  }
+  return Response.json(status, { status: status.complete ? 200 : 202, headers: cors(origin) });
+}
+
 function errorResponse(error: unknown, origin: string | null): Response {
   if (error instanceof RequestAuthError) {
     return Response.json({ error: error.message }, { status: error.status, headers: cors(origin) });
@@ -42,13 +54,7 @@ export async function POST(request: Request): Promise<Response> {
     await processHealthDataErasure(uid, Date.now() + 5_000);
     const result = await readHealthDataErasureStatus(uid);
     if (!result) throw new Error('Job non reperibile dopo creazione.');
-    // The durable job status and the right to destroy local copies are distinct.
-    // Never acknowledge HTTP completion if the server-side consent/key proof
-    // no longer authorizes it (for example, after reacceptance or ADK residue).
-    if (result.complete && !result.localPurgeAuthorized) {
-      throw new HealthDataErasureConflict('Completamento non attestato per il consenso corrente.');
-    }
-    return Response.json(result, { status: result.complete ? 200 : 202, headers: cors(origin) });
+    return verifiedErasureResponse(result, origin);
   } catch (error) { return errorResponse(error, origin); }
 }
 
@@ -67,9 +73,9 @@ export async function GET(request: Request): Promise<Response> {
     const result = await readHealthDataErasureStatus(uid);
     // Account deletion and reacceptance may advance the server record while
     // this GET waits for its bounded worker; null is not a valid pending receipt.
-    if (!result || (result.complete && !result.localPurgeAuthorized)) {
+    if (!result) {
       throw new HealthDataErasureConflict('Stato cancellazione cambiato o completamento non attestato.');
     }
-    return Response.json(result, { status: result.complete ? 200 : 202, headers: cors(origin) });
+    return verifiedErasureResponse(result, origin);
   } catch (error) { return errorResponse(error, origin); }
 }
