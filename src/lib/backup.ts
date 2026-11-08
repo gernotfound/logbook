@@ -6,6 +6,7 @@ import { normalizeBusinessId } from './businessIdentity';
 import { requireCanonicalWorkoutDate } from './sync/monthlyIntegrity';
 import { assertWorkoutSessionIdentities } from './sync/domainOperations/validation';
 import { selectBackupDeviceDrafts } from './backupDeviceRecovery';
+import { calculateLoggedMealTotals } from './nutrition/calculateLoggedMealTotals';
 import { findLossyNormalization } from './sync/businessNormalizationIntegrity';
 import {
     CURRENT_BACKUP_SCHEMA,
@@ -299,19 +300,14 @@ export function prepareImport(current: UserData, incoming: Record<string, unknow
     }
     const raw = mode === 'restore' ? restoreWithCoverage(current, incoming, coverage) : mergeMissing(current, incoming);
     const data = parsePreservingImportBusiness({ ...(raw as Record<string, unknown>), legalConsent: current.legalConsent });
-    if (mode === 'merge') for (const [date, day] of Object.entries(data.nutrition ?? {})) {
-        if (!isRecord(incoming.nutrition) || !incoming.nutrition[date] || equal(day.meals, current.nutrition?.[date]?.meals) || !day.meals?.length) continue;
-        const totals = { kcal: 0, carbs: 0, pro: 0, fat: 0 };
-        for (const meal of day.meals) {
-            const base = meal.baseQty && meal.baseQty > 0 ? meal.baseQty : (meal.unit === 'porzione' || meal.meal === 'quick' ? 1 : 100);
-            for (const key of ['kcal', 'carbs', 'pro', 'fat'] as const) totals[key] += Number(meal[key]) * Number(meal.quantity) / base;
+    for (const [date, day] of Object.entries(data.nutrition ?? {})) {
+        if (!day.meals?.length) continue;
+        // Validate derived arithmetic in both modes; restore still preserves the recorded totals.
+        const totals = calculateLoggedMealTotals(day.meals);
+        if (mode === 'merge' && isRecord(incoming.nutrition) && incoming.nutrition[date]
+            && !equal(day.meals, current.nutrition?.[date]?.meals)) {
+            Object.assign(day, totals);
         }
-        Object.assign(day, {
-            kcal: Math.round(totals.kcal),
-            carbs: Math.round(totals.carbs * 10) / 10,
-            pro: Math.round(totals.pro * 10) / 10,
-            fat: Math.round(totals.fat * 10) / 10
-        });
     }
     return { data, collisions };
 }

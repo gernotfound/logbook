@@ -11,6 +11,19 @@ describe('logged food reference quantities', () => {
         expect(calculateLoggedMealTotals([{ ...item, quantity: 2 }])).toEqual({ kcal: 144, carbs: 18, pro: 6, fat: 4.8 });
     });
 
+    it.each(['kcal', 'carbs', 'pro', 'fat'] as const)('rejects overflow in converted %s before it can be sanitized to zero', field => {
+        const source = { ...food, baseQty: 1, servingWeight: 2, [field]: Number.MAX_VALUE };
+        const before = structuredClone(source);
+        expect(() => createLoggedMealItem(source, 'Pranzo', 'overflow', 4)).toThrow('Valori nutrizionali');
+        expect(source).toEqual(before);
+    });
+
+    it('rejects an overflowing portion ratio even for zero-valued nutrients', () => {
+        const source = { ...food, baseQty: Number.MIN_VALUE, servingWeight: Number.MAX_VALUE,
+            kcal: 0, carbs: 0, pro: 0, fat: 0 };
+        expect(() => createLoggedMealItem(source, 'Pranzo', 'overflow', 4)).toThrow('Valori nutrizionali');
+    });
+
     it('preserves gram and millilitre reference quantities', () => {
         for (const unit of ['g', 'ml']) {
             const item = createLoggedMealItem({ ...food, unit }, 'Pranzo', 'meal-2', 4);
