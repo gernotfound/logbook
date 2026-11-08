@@ -977,7 +977,7 @@ describe('Workout lifecycle durable recovery regressions', () => {
             useAppStore.setState(state => ({
                 userData: {
                     ...state.userData!,
-                    history: state.userData!.history.map(item => item.id === stale.id
+                    history: (state.userData!.history ?? []).map(item => item.id === stale.id
                         ? { ...item, routineName: 'Versione aggiornata durante la conferma' }
                         : item),
                 },
@@ -985,7 +985,7 @@ describe('Workout lifecycle durable recovery regressions', () => {
         });
         await act(async () => { confirm(true); expect(await opening).toBe(false); });
         expect(useAppStore.getState().localWorkout?.id).toBe(live.id);
-        expect(useAppStore.getState().userData?.history.find(item => item.id === stale.id)?.routineName)
+        expect(useAppStore.getState().userData?.history?.find(item => item.id === stale.id)?.routineName)
             .toBe('Versione aggiornata durante la conferma');
         expect(readDeviceValueStrict('history-editor-context', owner)).toBeNull();
         expect(stale.routineName).toBe('Prima versione');
