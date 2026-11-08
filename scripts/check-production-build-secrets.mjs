@@ -6,6 +6,16 @@ export function checkProductionBuildSecrets(hosting, firestore) {
   if (!build || !deploy) {
     issues.push('Hosting: expected separate unprivileged build and privileged deploy jobs');
   } else {
+    const requiredGate = "github.event.workflow_run.conclusion == 'success' && " +
+      "github.event.workflow_run.event == 'workflow_run' && " +
+      "github.event.workflow_run.head_branch == 'main'";
+    for (const [jobName, section] of [['build', build], ['deploy', deploy]]) {
+      const conditions = section.match(/^    if: >-\r?\n((?:      [^\r\n]*(?:\r?\n|$))+)/m)?.[1];
+      const actualGate = conditions?.trim().replace(/\s+/g, ' ');
+      if (actualGate !== requiredGate) {
+        issues.push(`Hosting: ${jobName} must require a successful upstream workflow_run for main`);
+      }
+    }
     if (!/^    permissions:\s*\r?\n      contents: read\s*$/m.test(build) ||
         /\bid-token:\s*write\b/.test(build) ||
         /\bGCP_[A-Z_]+\b|google-github-actions\/auth/.test(build)) {

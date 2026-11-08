@@ -116,6 +116,24 @@ void test('Hosting build remains unprivileged and hands an exact SHA artifact to
   }
 });
 
+void test('Hosting independently requires the exact successful-main upstream gate on both jobs', () => {
+  assert.deepEqual(checkProductionBuildSecrets(hosting, firestore), []);
+  const deployOffset = hosting.indexOf('\n  deploy:\n');
+  assert.ok(deployOffset > 0);
+  const build = hosting.slice(0, deployOffset);
+  const deploy = hosting.slice(deployOffset);
+  const originalCondition = "github.event.workflow_run.head_branch == 'main'";
+  for (const [jobName, altered] of [
+    ['build', build.replace(originalCondition, "github.event.workflow_run.head_branch == 'release'") + deploy],
+    ['deploy', build + deploy.replace(originalCondition, "github.event.workflow_run.head_branch == 'release'")],
+    ['deploy', build + deploy.replace(originalCondition, originalCondition + ' || true')],
+  ]) {
+    assert.notEqual(altered, hosting);
+    assert.match(checkProductionBuildSecrets(altered, firestore).join('; '),
+      new RegExp('Hosting: ' + jobName + ' must require a successful upstream'));
+  }
+});
+
 void test('Hosting rejects unreviewed environment bindings in either job', () => {
   const rogueDeployEnv = hosting.replace('      GCP_FIREBASE_DEPLOY_SERVICE_ACCOUNT: ${{ vars.GCP_FIREBASE_DEPLOY_SERVICE_ACCOUNT }}',
     '      GCP_FIREBASE_DEPLOY_SERVICE_ACCOUNT: ${{ vars.GCP_FIREBASE_DEPLOY_SERVICE_ACCOUNT }}\n      UNREVIEWED_DEPLOY_FLAG: 1');
