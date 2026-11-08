@@ -170,6 +170,19 @@ describe('guest -> account V3 migration', () => {
             render(<AuthProvider><div>Catalog migration integrity check</div></AuthProvider>);
             await waitFor(async () => {
                 const envelope = await readLocal('user:a');
+                if (envelope?.data.profile?.gender !== 'M') {
+                    const state = useAppStore.getState();
+                    throw new Error('Migration did not publish cloud profile: ' + JSON.stringify({
+                        profile: envelope?.data.profile,
+                        hasEnvelope: Boolean(envelope),
+                        guestMarker: localStorage.getItem('logbook_is_guest'),
+                        owner: state.dataOwner,
+                        syncHealth: state.syncHealth,
+                        saveError: state.saveError,
+                        cloudReads: vi.mocked(DB.loadCloudPayload).mock.calls.length,
+                        remainingCatalogFaults: failedCatalogReads,
+                    }));
+                }
                 expect(envelope?.data.profile).toMatchObject({ height: '176', gender: 'M' });
                 expect(envelope?.data.routines?.some(item => item.id === 'guest-routine')).toBe(true);
                 expect(envelope?.data.library?.filter(item =>
