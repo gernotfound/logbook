@@ -46,7 +46,9 @@ export async function completeCloudIntegrityRecovery(
             throw new ReplicaFencedError('La divergenza cloud richiede un checkpoint completo prima dello sblocco.');
         }
         saved = expectedFence ? { ...current, cloudIntegrityFence: undefined, revision: current.revision + 1 } : current;
-        return saved;
+        // Validation returns a new view; a no-op must retain the raw object so
+        // the encrypted gateway does not reseal unchanged archive bytes.
+        return expectedFence ? saved : raw;
     });
     if (!saved) throw new Error('Recupero cloud invalidato dal cambio di sessione');
     return saved;
@@ -61,12 +63,12 @@ export async function markReplicaCheckpointRequired(
     await updateArchiveRecord<any>(owner, raw => {
         if (guard && !guard()) throw new Error('Checkpoint locale invalidato dal cambio sessione; journal preservato.');
         const current = validateLocalEnvelope(raw, owner);
-        if (!current?.replica) return current;
+        if (!current?.replica) return raw;
         if (expectedReplica && (
             current.replica.slot !== expectedReplica.slot
             || current.replica.replicaId !== expectedReplica.replicaId
             || current.replica.generation !== expectedReplica.generation
-        )) return current;
+        )) return raw;
 
         return {
             ...current,
