@@ -64,7 +64,7 @@ vi.mock('../server/accountDeletion/firebaseAdmin', () => ({
   } }),
 }));
 
-import { GET } from '../api/health-consent-export';
+import { GET, OPTIONS } from '../api/health-consent-export';
 import { readWithdrawnHealthExportPage } from '../server/healthConsent/export';
 vi.mock('../src/lib/appCheck', () => ({
   getLimitedUseAppCheckToken: vi.fn(async () => 'test-consumable-appcheck-token'),
@@ -245,6 +245,42 @@ describe('server-mediated cloud export during consent withdrawal', () => {
       'collection=history_months&after=../admin', 'collection=root&after=2026-01',
     ]) expect((await GET(request(query))).status).toBe(400);
   });
+
+  it.each([
+    'collection=root&collection=history_months',
+    'collection=history_months&collection=history_months',
+    'collection=history_months&after=2026-01&after=2026-02',
+    'collection=root&unexpected=1',
+    'collection=root&uid=other',
+    'collection=root&after=',
+    'after=2026-01',
+  ])('rejects ambiguous or unrecognized query %s before authentication and data access', async query => {
+    const response = await GET(request(query));
+    expect(response.status).toBe(400);
+    expect(response.headers.get('cache-control')).toBe('no-store');
+    expect(await response.json()).toEqual({ error: 'Parametri esportazione non validi.' });
+    expect(mock.verify).not.toHaveBeenCalled();
+  });
+
+  it('conceals internal deployment errors in OPTIONS and GET responses', async () => {
+    vi.stubEnv('PUBLIC_APP_ORIGIN', 'http://not-https.example/invalid-path');
+    try {
+      const preflight = await OPTIONS(new Request('https://backend.example/api/health-consent-export', {
+        method: 'OPTIONS', headers: { origin: 'https://thelogbook.web.app' },
+      }));
+      const exported = await GET(request('collection=root'));
+      for (const response of [preflight, exported]) {
+        expect(response.status).toBe(503);
+        expect(response.headers.get('cache-control')).toBe('no-store');
+        expect(response.headers.get('access-control-allow-origin')).toBeNull();
+        expect(await response.json()).toEqual({ error: 'Esportazione completa temporaneamente non disponibile.' });
+      }
+      expect(mock.verify).not.toHaveBeenCalled();
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
   it('never reads another account even when it has similarly named documents', async () => {
     const response = await readWithdrawnHealthExportPage('owner-1','history_months',null);
     expect(response.documents.every(doc=>doc.data.value !== 'Private')).toBe(true);
