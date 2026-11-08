@@ -82,7 +82,7 @@ export const resetGlobalWorkoutTimer = (owner = storageOwner()): boolean => {
         // Persist an explicit stopped snapshot instead of deleting the canonical key.
         writeWorkoutTimerSnapshot(stoppedWorkoutTimer(), owner);
         if (typeof window !== 'undefined') {
-            window.dispatchEvent(new CustomEvent('logbook_reset_timer'));
+            window.dispatchEvent(new CustomEvent('logbook_reset_timer', { detail: { owner } }));
         }
         return true;
     } catch (error) {

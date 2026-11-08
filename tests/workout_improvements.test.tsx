@@ -89,6 +89,52 @@ describe('Workout Improvements & History Edit Suite', () => {
   });
 
   describe('2. Top Timer Reset on Session Actions', () => {
+    test('ignores a reset event for another owner without falsifying the displayed timer', async () => {
+      const owner = captureSession().owner;
+      await prepareUnlockedTestArchive(owner);
+      const running = {
+        version: 1 as const, state: 'running' as const,
+        startTime: Date.now() - 70000, accumulated: 0,
+      };
+      writeWorkoutTimerSnapshot(running, owner);
+      const { container } = renderWithAuthenticatedTestOwner(<WorkoutTimer />, { dataOwner: owner });
+      expect(container.textContent).toContain('01:10');
+
+      act(() => {
+        window.dispatchEvent(new CustomEvent('logbook_reset_timer', {
+          detail: { owner: 'user:another-account' },
+        }));
+      });
+      expect(container.textContent).toContain('01:10');
+      expect(readWorkoutTimerSnapshot(owner)).toEqual(running);
+    });
+
+    test('refuses a stale timer action instead of overwriting a newer device snapshot', async () => {
+      const owner = captureSession().owner;
+      await prepareUnlockedTestArchive(owner);
+      writeWorkoutTimerSnapshot({ version: 1, state: 'stopped', startTime: 0, accumulated: 0 }, owner);
+      renderWithAuthenticatedTestOwner(<WorkoutTimer />, { dataOwner: owner });
+      expect(screen.getByRole('button', { name: 'Avvia recupero' })).toBeDefined();
+
+      // Another tab wrote this state without notifying the mounted React component.
+      const newer = {
+        version: 1 as const, state: 'running' as const,
+        startTime: Date.now() - 6000, accumulated: 0,
+      };
+      writeWorkoutTimerSnapshot(newer, owner);
+      fireEvent.click(screen.getByRole('button', { name: 'Avvia recupero' }));
+
+      expect(readWorkoutTimerSnapshot(owner)).toEqual(newer);
+      expect(screen.getByRole('status').textContent).toContain('Timer aggiornato da un\'altra scheda');
+      expect(screen.getByRole('button', { name: 'Pausa recupero' })).toBeDefined();
+
+      fireEvent.click(screen.getByRole('button', { name: 'Pausa recupero' }));
+      expect(readWorkoutTimerSnapshot(owner)).toMatchObject({
+        version: 1, state: 'paused', startTime: 0,
+      });
+      expect(screen.queryByRole('status')).toBeNull();
+    });
+
     test('resetGlobalWorkoutTimer persists stopped snapshot and updates displayed timer', async () => {
       const owner = captureSession().owner;
       await prepareUnlockedTestArchive(owner);
