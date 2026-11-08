@@ -49,7 +49,11 @@ describe('R2: Firebase Config Security & Fail-Fast Suite', () => {
         it('rejects actual Vite env-file precedence and inherited process overrides', () => {
             const folder = fs.mkdtempSync(path.join(tmpdir(), 'logbook-env-test-'));
             const key = 'VITE_FIREBASE_PROJECT_ID';
-            const original = process.env[key];
+            // Vitest mirrors import.meta.env mutations into process.env. Other
+            // tests in this suite deliberately install fake Firebase values;
+            // remove only those VITE_* overrides while testing actual loadEnv.
+            const inherited = Object.entries(process.env).filter(([name]) => name.startsWith('VITE_'));
+            for (const [name] of inherited) delete process.env[name];
             try {
                 fs.writeFileSync(
                     path.join(folder, '.env.test'),
@@ -68,8 +72,12 @@ describe('R2: Firebase Config Security & Fail-Fast Suite', () => {
                 expect(() => assertIsolatedVitestEnvironment(loadEnv('test', folder, 'VITE_')))
                     .toThrow(key);
             } finally {
-                if (original === undefined) delete process.env[key];
-                else process.env[key] = original;
+                for (const name of Object.keys(process.env)) {
+                    if (name.startsWith('VITE_')) delete process.env[name];
+                }
+                for (const [name, value] of inherited) {
+                    if (value !== undefined) process.env[name] = value;
+                }
                 fs.rmSync(folder, { recursive: true, force: true });
             }
         });
