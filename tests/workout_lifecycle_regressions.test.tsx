@@ -1087,11 +1087,13 @@ describe('Workout lifecycle durable recovery regressions', () => {
             useAppStore.setState(state => ({ localWorkout: updater(state.localWorkout) }));
         };
         const { result } = renderHook(() => useWorkoutSetMutations({ setLocalWorkout: update, showConfirm }));
+        const closePanels = vi.fn();
         let removal!: Promise<void>;
-        act(() => { removal = result.current.removeActiveExercise(0); });
+        act(() => { removal = result.current.removeActiveExercise(0, closePanels); });
         act(() => { useAppStore.setState({ localWorkout: { ...initial, exercises: [...initial.exercises].reverse() } }); });
         await act(async () => { confirm(true); await removal; });
         expect(useAppStore.getState().localWorkout?.exercises.map(ex => ex.id)).toEqual(['second']);
+        expect(closePanels).toHaveBeenCalledExactlyOnceWith(1);
     });
 
     it('drops an obsolete post-session draft when the displayed session identity changes', async () => {

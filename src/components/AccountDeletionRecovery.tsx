@@ -29,8 +29,8 @@ const UNKNOWN_RECOVERY_MESSAGE =
 export function AccountDeletionRecovery() {
     useEffect(() => {
         let disposed = false;
-        let running = false;
-        let nextDeviceRecoveryAt = 0;
+        const reconciliation = { active: false };
+        const deviceRecoveryRetry = { nextAt: 0 };
         const diagnostics = new RecoveryDiagnosticTracker();
         const lastAlertAt = new Map<string, number>();
 
@@ -41,17 +41,17 @@ export function AccountDeletionRecovery() {
 
         const recoverByDevice = async (force: boolean) => {
             const now = Date.now();
-            if (!force && now < nextDeviceRecoveryAt) return null;
+            if (!force && now < deviceRecoveryRetry.nextAt) return null;
 
-            nextDeviceRecoveryAt = now + DEVICE_RECOVERY_FAILURE_RETRY_MS;
+            deviceRecoveryRetry.nextAt = now + DEVICE_RECOVERY_FAILURE_RETRY_MS;
             try {
                 const outcome = await recoverDeletedAccountOnThisDevice(
                     uid => finalizeCompletedDeletionForUid(uid, completionContext),
                 );
-                nextDeviceRecoveryAt = Date.now() + DEVICE_RECOVERY_RECHECK_INTERVAL_MS;
+                deviceRecoveryRetry.nextAt = Date.now() + DEVICE_RECOVERY_RECHECK_INTERVAL_MS;
                 return outcome;
             } catch (error) {
-                nextDeviceRecoveryAt = Date.now() + DEVICE_RECOVERY_FAILURE_RETRY_MS;
+                deviceRecoveryRetry.nextAt = Date.now() + DEVICE_RECOVERY_FAILURE_RETRY_MS;
                 throw error;
             }
         };
@@ -71,10 +71,10 @@ export function AccountDeletionRecovery() {
             });
 
         const reconcile = async (forceDeviceRecovery = false) => {
-            if (disposed || running) return;
+            if (disposed || reconciliation.active) return;
             if (typeof navigator !== 'undefined' && !navigator.onLine) return;
 
-            running = true;
+            reconciliation.active = true;
             try {
                 let pendingDeletion = false;
                 let markerError: unknown;
@@ -136,7 +136,7 @@ export function AccountDeletionRecovery() {
                 }
 
             } finally {
-                running = false;
+                reconciliation.active = false;
             }
         };
 

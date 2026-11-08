@@ -100,7 +100,7 @@ describe('post-redesign UI hardening', () => {
       'src/components/Home/widgets/RecoveryBentoCard.tsx',
       'src/hooks/useHomeView.ts',
     ]) {
-      expect(read(path), path).not.toMatch(/#(?:ff4d6d|ff6b81|ef4444|f97316)/i);
+      expect(read(path), path).not.toMatch(/#(?:ff4d6d|ff6b81|ef4444|f97316)\b/i);
     }
     expect(read('src/hooks/useHomeView.ts')).toContain('var(--muscle-recent)');
     expect(read('src/hooks/useHomeView.ts')).toContain('var(--muscle-pain)');

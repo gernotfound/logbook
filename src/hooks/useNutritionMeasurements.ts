@@ -146,7 +146,7 @@ export function useNutritionMeasurements(selectedDate?: string) {
                     return false;
                 }
 
-                bf = Logic.calculateBodyFatByMethod(female ? 'navy_female' : 'navy_male', {
+                const calculatedBf = Logic.calculateBodyFatByMethod(female ? 'navy_female' : 'navy_male', {
                     gender: profile.gender || 'M',
                     height,
                     weight: Number(weight),
@@ -154,13 +154,13 @@ export function useNutritionMeasurements(selectedDate?: string) {
                     neck: Number(neck),
                     hip: hip ? Number(hip) : undefined
                 });
-                if (bf === null || !Number.isFinite(bf)) {
+                if (calculatedBf === null || !Number.isFinite(calculatedBf)) {
                     await showAlert(female
                         ? 'Impossibile calcolare la massa grassa. Verifica vita, collo e fianchi.'
                         : 'Impossibile calcolare la massa grassa. Verifica che la vita sia maggiore del collo.');
                     return false;
                 }
-                bfProvenance = {
+                const calculatedProvenance: BodyFatProvenance = {
                     method: 'us_navy',
                     inputs: {
                         heightCm: height,
@@ -170,7 +170,7 @@ export function useNutritionMeasurements(selectedDate?: string) {
                         gender: profile.gender || 'M',
                     },
                 };
-                return true;
+                return { bf: calculatedBf, provenance: calculatedProvenance };
             };
 
             if (bodyFatMode === 'manual') {
@@ -179,7 +179,10 @@ export function useNutritionMeasurements(selectedDate?: string) {
                     bfProvenance = { method: 'manual' };
                 }
             } else if (bodyFatMode === 'calculate') {
-                if (!(await calculateUsNavy())) return false;
+                const calculation = await calculateUsNavy();
+                if (!calculation) return false;
+                bf = calculation.bf;
+                bfProvenance = calculation.provenance;
             } else if (manualBf && !isNaN(Number(manualBf))) {
                 bf = Number(manualBf);
                 bfProvenance = { method: 'manual' };
@@ -187,7 +190,10 @@ export function useNutritionMeasurements(selectedDate?: string) {
                 const legacyBf = Number(targetDayData.bf);
                 if (Number.isFinite(legacyBf)) bf = legacyBf;
             } else if (waist && neck && !isNaN(Number(waist)) && !isNaN(Number(neck))) {
-                if (!(await calculateUsNavy())) return false;
+                const calculation = await calculateUsNavy();
+                if (!calculation) return false;
+                bf = calculation.bf;
+                bfProvenance = calculation.provenance;
             }
 
             const targetDate = targetDateStr;
