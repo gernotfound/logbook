@@ -21,6 +21,8 @@ interface WorkoutReportModalProps {
 const WorkoutReportModal: React.FC<WorkoutReportModalProps> = ({ workout, history, library, onClose, fromEndWorkout }) => {
     const titleId = useId();
     const closeButtonRef = useRef<HTMLButtonElement>(null);
+    // React's loading state is not an immediate cross-event exclusion guard.
+    const routineSaveInFlightRef = useRef(false);
     const dialogRef = useRef<HTMLDivElement>(null);
     const onCloseRef = useRef(onClose);
     const dispatchDomainOperation = useAppStore(state => state.dispatchDomainOperation);
@@ -81,13 +83,15 @@ const WorkoutReportModal: React.FC<WorkoutReportModalProps> = ({ workout, histor
     }, []);
 
     const handleSaveAsRoutine = async () => {
+        if (routineSaveInFlightRef.current) return;
         if (!newRoutineName.trim()) {
             void showAlert("Inserisci un nome per la scheda.");
             return;
         }
         
+        routineSaveInFlightRef.current = true;
         setIsSavingRoutineLoading(true);
-        
+
         try {
             const newRoutineId = Logic.generateId('r');
             
@@ -101,6 +105,7 @@ const WorkoutReportModal: React.FC<WorkoutReportModalProps> = ({ workout, histor
             // An error message cannot turn a rejected/unsafe save into confirmation.
             void showAlert("Errore durante il salvataggio della scheda.");
         } finally {
+            routineSaveInFlightRef.current = false;
             setIsSavingRoutineLoading(false);
         }
     };
