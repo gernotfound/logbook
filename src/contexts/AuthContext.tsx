@@ -172,14 +172,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }, [currentUser, guestMigrationStatus]);
 
     useEffect(() => {
-        let isMounted = true;
+        const authEffectLifetime = new AbortController();
         const detachRedirectRecovery = attachAuthRedirectRecovery({
             awaitingRedirectKey: AWAITING_REDIRECT_KEY,
             redirectLaunchFailedRef, setSaveError,
         });
 
         const unsubscribe = onAuthStateChanged(auth, async (user: any) => {
-            if (!isMounted) return;
+            if (authEffectLifetime.signal.aborted) return;
 
             try {
             const nextUid = user?.uid ?? null;
@@ -200,7 +200,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             setSyncing(false);
             if (previousUid !== nextUid) setLoading(true);
             const expectedUid = nextUid;
-            const isCurrentRun = () => isMounted
+            const isCurrentRun = () => !authEffectLifetime.signal.aborted
                 && authRunRef.current === authRun
                 && (expectedUid ? auth.currentUser?.uid === expectedUid : auth.currentUser === null);
 
@@ -245,7 +245,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         });
 
         const { handleConsentReactivated, handleVisibilityChange, handleOffline } = createAuthConsentLifecycleHandlers({
-            isMounted: () => isMounted,
+            isMounted: () => !authEffectLifetime.signal.aborted,
             isGuestActiveStrict, isBootstrapInFlight: () => authBootstrapInFlightRef.current,
             loadData, setLoading, setSaveError,
         });
@@ -257,7 +257,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         window.addEventListener('offline', handleOffline);
 
         return () => {
-            isMounted = false;
+            authEffectLifetime.abort();
             authRunRef.current += 1;
             // A pending automatic vault operation or failure dialog belongs to
             // THIS auth provider lifecycle. Never strand it above later login,
@@ -339,15 +339,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                     if (!confirmed) return;
                 }
 
-                let purgeError: unknown;
-                try {
-                    await withGuestLifecycleLock(async () => {
+                const purgeOutcome = await withGuestLifecycleLock(async () => {
                         // Confirmation and lock acquisition are both asynchronous.
                         // A different tab may have replaced or revoked this generation.
-                        if (!isCurrentSession(requestedSession)) return;
+                        if (!isCurrentSession(requestedSession)) return { purgeError: undefined };
                         revokeGuestSession();
                         useDialogStore.getState().cancelAll();
                         useAppStore.getState().cancelPendingSyncs();
+                        let purgeError: unknown;
                         try {
                             await DB.purgeAllLocalUserData('guest');
                             // Keep the public logout postcondition explicit.
@@ -360,14 +359,18 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                         setIsGuest(false);
                         setGuestMigrationStatus('idle');
                         useAppStore.getState().resetStore({ force: true });
-                    });
-                } catch {
+                        return { purgeError };
+                    }).then(
+                        result => ({ ok: true as const, result }),
+                        () => ({ ok: false as const }),
+                    );
+                if (!purgeOutcome.ok) {
                     await useDialogStore.getState().showAlert(
                         'Impossibile coordinare la chiusura della modalità locale. Nessuna nuova cancellazione viene avviata senza la protezione tra schede.'
                     );
                     return;
                 }
-                if (purgeError) {
+                if (purgeOutcome.result.purgeError) {
                     await useDialogStore.getState().showAlert(
                         'Uscita dalla modalità locale, ma pulizia del dispositivo incompleta. I dati rimasti non sono accessibili dalla vecchia sessione; riprova dopo aver riaperto LogBook.'
                     );
