@@ -280,6 +280,24 @@ describe('durable cloud integrity fencing and recovery', () => {
         expect(await get(key)).toBe(ciphertext);
     });
 
+    it.each([{ checkpointAtMs: 1 }, { leaseUntilMs: 1 }])(
+        'expires both replica timestamps when only one is already expired: %j', async partial => {
+            await pendingArchive();
+            await updateArchiveRecord<LocalEnvelope>('user:a', current => ({
+                ...current!, replica: { ...current!.replica!, ...partial },
+            }));
+            const before = (await readLocal('a'))!;
+            const ciphertext = await get(key);
+
+            await markReplicaCheckpointRequired('a', identity(), () => true);
+            expect(await readLocal('a')).toEqual({
+                ...before, revision: before.revision + 1,
+                replica: { ...before.replica, checkpointAtMs: 1, leaseUntilMs: 1 },
+            });
+            expect(await get(key)).not.toBe(ciphertext);
+        },
+    );
+
     it('leaves an archive without a replica intact when a checkpoint is requested', async () => {
         const before = await pendingArchive(false);
         const ciphertext = await get(key);

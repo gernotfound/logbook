@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { UserDataSchema, TrainingCycleSchema, TrainingCycleWriteSchema } from '../src/lib/schema';
 import { applyDomainOperations } from '../src/lib/sync/domainOperations';
 import { calculateCycleSchedule, calculateCycleTimeline } from '../src/lib/calc/planning';
-import { getCycleVolumeFrequencies, hasValidCycleWriteFrequencies, isBoundedCycleCount, previewCycleCount, MAX_EDITABLE_CYCLE_WEEKS, MAX_CYCLE_SESSIONS_PER_WEEK } from '../src/lib/calc/cycleLimits';
+import { getCycleVolumeFrequencies, hasValidCycleWriteFrequencies, isBoundedCycleCount, isRepresentableCycleVolume, previewCycleCount, MAX_EDITABLE_CYCLE_WEEKS, MAX_CYCLE_SESSIONS_PER_WEEK } from '../src/lib/calc/cycleLimits';
 import type { TrainingCycle, UserData, WorkoutRoutine } from '../src/types';
 
 const routine: WorkoutRoutine = { id: 'r', name: 'A', exercises: [] };
@@ -124,6 +124,27 @@ describe('training cycle bounded input and safe legacy evaluation', () => {
         expect(base.trainingCycles).toHaveLength(0);
     });
 
+    it('preserves the default weekly frequency before strict validation and after domain writes', () => {
+        const base = UserDataSchema.parse({ trainingCycles: [{ ...cycle, routines: [] }] }) as UserData;
+        const before = structuredClone(base);
+        for (const item of [{ routineId: 'r' }, { routineId: 'r', frequencyPerWeek: undefined }]) {
+            const input = { ...cycle, sessionsPerWeek: undefined, routines: [item] };
+            const source = structuredClone(input);
+            expect(hasValidCycleWriteFrequencies(input.routines, input.sessionsPerWeek)).toBe(true);
+            const parsed = TrainingCycleWriteSchema.parse(input);
+            expect(parsed.routines[0].frequencyPerWeek).toBe(1);
+            // Domain operations consume the normalized routine type, whose frequency is required.
+            const created = applyDomainOperations(base, { type: 'training-cycle.upsert', cycle: parsed });
+            expect(created.trainingCycles?.[0].routines[0].frequencyPerWeek).toBe(1);
+            const updated = applyDomainOperations(base, {
+                type: 'training-cycle-routine.upsert', cycleId: cycle.id, routine: parsed.routines[0],
+            });
+            expect(updated.trainingCycles?.[0].routines[0].frequencyPerWeek).toBe(1);
+            expect(input).toEqual(source);
+            expect(base).toEqual(before);
+        }
+    });
+
     it('bounds preview work without silently changing a saved input', () => {
         expect(previewCycleCount('1000000', 4, MAX_EDITABLE_CYCLE_WEEKS)).toBe(52);
         expect(previewCycleCount('1.5', 4, MAX_EDITABLE_CYCLE_WEEKS)).toBe(4);
@@ -187,6 +208,15 @@ describe('training cycle bounded input and safe legacy evaluation', () => {
         expect(getCycleVolumeFrequencies([
             { frequencyPerWeek: Number.MAX_SAFE_INTEGER }, { frequencyPerWeek: 1 },
         ], 4)).toBeNull();
+    });
+
+    it('keeps fractional and exact-boundary volumes but refuses negative or unrepresentable estimates', () => {
+        for (const value of [0, -0, 0.5, 1, Number.MAX_SAFE_INTEGER]) {
+            expect(isRepresentableCycleVolume(value)).toBe(true);
+        }
+        for (const value of [-Number.EPSILON, -1, Number.MAX_SAFE_INTEGER + 1, NaN, Infinity, -Infinity]) {
+            expect(isRepresentableCycleVolume(value)).toBe(false);
+        }
     });
 
 });

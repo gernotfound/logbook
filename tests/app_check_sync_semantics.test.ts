@@ -113,6 +113,16 @@ describe('cloud sync failure classification', () => {
         expect(classifySyncFailure(error, { retryable: true }).status).toBe('local-pending');
     });
 
+    it('does not authorize retry when the last unknown cause is just beyond the bounded scan', () => {
+        let cause: Error = new Error('Unknown remote outcome');
+        for (let depth = 0; depth < 5; depth++) cause = new Error('Remote context', { cause });
+        const error = Object.assign(new Error('Transport wrapper', { cause }), { code: 'unavailable' });
+
+        expect(classifySyncFailure(error)).toEqual({ ok: false, status: 'failed', error });
+        expect(classifySyncFailure(error, { retryable: false }).status).toBe('failed');
+        expect(classifySyncFailure(error, { retryable: true }).status).toBe('local-pending');
+    });
+
     it.each([
         ['sync timeout', new SyncTimeoutError(), 'local-pending'],
         ['Firestore deadline', Object.assign(new Error('Deadline'), { code: 'deadline-exceeded' }), 'local-pending'],
