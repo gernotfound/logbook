@@ -55,6 +55,7 @@ export const CycleEditor: React.FC<CycleEditorProps> = ({
             cycleRoutines,
             showSchedulePreview,
             setShowSchedulePreview,
+            isSaving,
             tempWeeks,
             tempFreq
         },
@@ -103,13 +104,20 @@ export const CycleEditor: React.FC<CycleEditorProps> = ({
     );
 
     return (
-        <form id="cycle-editor-form" onSubmit={handleSubmit} className="planning-editor">
+        <>
+        <form
+            id="cycle-editor-form"
+            onSubmit={handleSubmit}
+            className="planning-editor"
+            aria-busy={isSaving}
+            inert={isSaving}
+        >
             <header className="planning-editor-header">
                 <h2>
                     {initialCycle ? 'Modifica ciclo' : 'Nuovo ciclo'}
                     {!initialCycle ? <span className="sr-only"> Crea ciclo di allenamento</span> : null}
                 </h2>
-                <button type="button" className="planning-close-button" onClick={onCancel}>Chiudi</button>
+                <button type="button" className="planning-close-button" onClick={onCancel} disabled={isSaving}>Chiudi</button>
             </header>
 
             <label className="planning-field" htmlFor="cycle-name">
@@ -287,11 +295,13 @@ export const CycleEditor: React.FC<CycleEditorProps> = ({
             <CycleVolumeAccordion items={macroVolume} />
 
             <div className="planning-editor-actions">
-                <button type="button" className="btn" onClick={onCancel}>Annulla</button>
-                <button type="submit" className="btn btn-primary">
-                    {initialCycle ? 'Salva modifiche' : 'Salva ciclo'}
+                <button type="button" className="btn" onClick={onCancel} disabled={isSaving}>Annulla</button>
+                <button type="submit" className="btn btn-primary" disabled={isSaving}>
+                    {isSaving ? 'Salvataggio in corso…' : initialCycle ? 'Salva modifiche' : 'Salva ciclo'}
                 </button>
             </div>
         </form>
+        {isSaving ? <p className="sr-only" role="status">Salvataggio del ciclo in corso.</p> : null}
+        </>
     );
 };
