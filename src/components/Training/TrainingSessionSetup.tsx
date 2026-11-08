@@ -135,9 +135,10 @@ export const TrainingSessionSetup = ({ onNavigateToPlanning }: TrainingSessionSe
     const nextPlannedItem = nextRoutine
         ? plannedRoutines.find(item => item.routine.id === nextRoutine.id)
         : undefined;
-    const selectedRotationId = selectedPlannedRoutine?.cycleId === activeCycle?.id
-        && plannedRoutines.some(item => item.routine.id === selectedPlannedRoutine.routineId)
-        ? selectedPlannedRoutine.routineId
+    const selectedForCycle = selectedPlannedRoutine?.cycleId === activeCycle?.id
+        ? selectedPlannedRoutine?.routineId : null;
+    const selectedRotationId = selectedForCycle && plannedRoutines.some(item => item.routine.id === selectedForCycle)
+        ? selectedForCycle
         : (nextRoutine?.id || plannedRoutines[0]?.routine.id || '');
     const selectedRotationRoutine = plannedRoutines.find(item => item.routine.id === selectedRotationId)?.routine;
 
