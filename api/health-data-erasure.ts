@@ -42,6 +42,12 @@ export async function POST(request: Request): Promise<Response> {
     await processHealthDataErasure(uid, Date.now() + 5_000);
     const result = await readHealthDataErasureStatus(uid);
     if (!result) throw new Error('Job non reperibile dopo creazione.');
+    // The durable job status and the right to destroy local copies are distinct.
+    // Never acknowledge HTTP completion if the server-side consent/key proof
+    // no longer authorizes it (for example, after reacceptance or ADK residue).
+    if (result.complete && !result.localPurgeAuthorized) {
+      throw new HealthDataErasureConflict('Completamento non attestato per il consenso corrente.');
+    }
     return Response.json(result, { status: result.complete ? 200 : 202, headers: cors(origin) });
   } catch (error) { return errorResponse(error, origin); }
 }
@@ -59,6 +65,11 @@ export async function GET(request: Request): Promise<Response> {
       await processHealthDataErasure(uid, Date.now() + 5_000);
     }
     const result = await readHealthDataErasureStatus(uid);
-    return Response.json(result, { status: result?.complete ? 200 : 202, headers: cors(origin) });
+    // Account deletion and reacceptance may advance the server record while
+    // this GET waits for its bounded worker; null is not a valid pending receipt.
+    if (!result || (result.complete && !result.localPurgeAuthorized)) {
+      throw new HealthDataErasureConflict('Stato cancellazione cambiato o completamento non attestato.');
+    }
+    return Response.json(result, { status: result.complete ? 200 : 202, headers: cors(origin) });
   } catch (error) { return errorResponse(error, origin); }
 }

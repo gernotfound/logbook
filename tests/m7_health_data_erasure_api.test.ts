@@ -29,7 +29,9 @@ describe('data-only erasure trusted API', () => {
     auth.verifyDeletionRequester.mockResolvedValue({ uid: 'owner-A' });
     auth.verifyRecoveryRegistrationRequester.mockResolvedValue({ uid: 'owner-A' });
     erasure.processHealthDataErasure.mockResolvedValue('complete');
-    erasure.readHealthDataErasureStatus.mockResolvedValue({ status: 'complete', complete: true });
+    erasure.readHealthDataErasureStatus.mockResolvedValue({
+      status: 'complete', complete: true, localPurgeAuthorized: true,
+    });
   });
 
   it('delegates destructive-job authorization to the recent-Auth/App Check verifier before creating the job', async () => {
@@ -53,6 +55,72 @@ describe('data-only erasure trusted API', () => {
       status: 'failed', complete: false, retryable: false,
     });
     expect((await POST(request('POST'))).status).toBe(202);
+  });
+
+  it.each(['POST', 'GET'] as const)(
+    'never advertises HTTP completion on %s without the trusted purge proof',
+    async method => {
+      erasure.readHealthDataErasureStatus.mockResolvedValue({
+        status: 'complete', complete: true, localPurgeAuthorized: false,
+      });
+      const response = method === 'POST' ? await POST(request(method)) : await GET(request(method));
+      expect(response.status).toBe(409);
+      expect(response.headers.get('cache-control')).toBe('no-store');
+      expect(await response.json()).toMatchObject({ error: expect.any(String) });
+      if (method === 'GET') expect(erasure.processHealthDataErasure).not.toHaveBeenCalled();
+    },
+  );
+
+  it('rejects a receipt that disappears between GET reads rather than returning 202 null', async () => {
+    erasure.readHealthDataErasureStatus
+      .mockResolvedValueOnce({ status: 'deleting', complete: false, localPurgeAuthorized: false })
+      .mockResolvedValueOnce(null);
+    erasure.processHealthDataErasure.mockResolvedValueOnce('pending');
+
+    const response = await GET(request('GET'));
+    expect(response.status).toBe(409);
+    expect(await response.json()).toMatchObject({ error: expect.any(String) });
+    expect(erasure.readHealthDataErasureStatus).toHaveBeenCalledTimes(2);
+    expect(erasure.processHealthDataErasure).toHaveBeenCalledWith('owner-A', expect.any(Number));
+  });
+
+  it('returns an explicit not-requested status without starting a destructive worker', async () => {
+    erasure.readHealthDataErasureStatus.mockResolvedValueOnce(null);
+    const response = await GET(request('GET'));
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ status: 'not-requested', complete: false });
+    expect(erasure.processHealthDataErasure).not.toHaveBeenCalled();
+    expect(erasure.readHealthDataErasureStatus).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([
+    { status: 'failed', retryable: false, expectedProcess: false },
+    { status: 'failed', retryable: true, expectedProcess: true },
+    { status: 'deleting', retryable: undefined, expectedProcess: true },
+  ])('preserves pending/failed state and recovery semantics for $status retryable=$retryable',
+    async ({ status, retryable, expectedProcess }) => {
+      erasure.readHealthDataErasureStatus.mockResolvedValue({
+        status, complete: false, localPurgeAuthorized: false,
+        ...(retryable === undefined ? {} : { retryable }),
+      });
+      erasure.processHealthDataErasure.mockResolvedValueOnce('busy');
+      const response = await GET(request('GET'));
+      expect(response.status).toBe(202);
+      expect(await response.json()).toMatchObject({ status, complete: false });
+      expect(erasure.processHealthDataErasure).toHaveBeenCalledTimes(expectedProcess ? 1 : 0);
+    },
+  );
+
+  it('does not report completion when a worker fails after the request was durably queued', async () => {
+    erasure.processHealthDataErasure.mockRejectedValueOnce(new Error('provider-internal-private'));
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      const response = await POST(request('POST'));
+      expect(response.status).toBe(503);
+      expect(JSON.stringify(await response.json())).not.toContain('provider-internal-private');
+      expect(erasure.createHealthDataErasureJob).toHaveBeenCalledWith('owner-A');
+      expect(erasure.readHealthDataErasureStatus).not.toHaveBeenCalled();
+    } finally { log.mockRestore(); }
   });
 
   it('authenticates status GET independently and never accepts a caller UID', async () => {
