@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type MouseEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type MouseEvent } from 'react';
 import {
     Activity,
     ChevronLeft,
@@ -67,13 +67,30 @@ export function ExerciseArchive({
     onDelete,
 }: ExerciseArchiveProps) {
     const [query, setQuery] = useState('');
+    const [detailActionPending, setDetailActionPending] = useState(false);
+    const detailActionPendingRef = useRef(false);
+
+    const runDetailAction = async (action: () => void | Promise<void>) => {
+        // The ref closes the repeat-click window before React commits disabled controls.
+        if (detailActionPendingRef.current) return;
+        detailActionPendingRef.current = true;
+        setDetailActionPending(true);
+        try {
+            await action();
+        } catch (error) {
+            console.error('Azione sulla libreria esercizi non completata:', error);
+        } finally {
+            detailActionPendingRef.current = false;
+            setDetailActionPending(false);
+        }
+    };
 
     const routineCounts = useMemo(() => {
         const counts = new Map<string, number>();
         routines.forEach(routine => {
             const exerciseIds = new Set<string>(
                 (routine.exercises || [])
-                    .map((exercise: any) => exercise.exId)
+                    .map(exercise => exercise.exId)
                     .filter((id: unknown): id is string => typeof id === 'string')
             );
             exerciseIds.forEach(id => counts.set(id, (counts.get(id) || 0) + 1));
@@ -123,6 +140,7 @@ export function ExerciseArchive({
                         className="exercise-icon-button"
                         type="button"
                         aria-label="Torna all’elenco"
+                        disabled={detailActionPending}
                         onClick={() => onSelectedExIdChange(null)}
                     >
                         <ChevronLeft size={20} aria-hidden="true" />
@@ -185,6 +203,7 @@ export function ExerciseArchive({
                     <button
                         className="btn exercise-action-button"
                         type="button"
+                        disabled={detailActionPending}
                         onClick={() => onEditItem(selectedExercise)}
                     >
                         <Pencil size={17} aria-hidden="true" />
@@ -193,7 +212,8 @@ export function ExerciseArchive({
                     <button
                         className="btn exercise-action-button"
                         type="button"
-                        onClick={() => onDuplicate(selectedExercise)}
+                        disabled={detailActionPending}
+                        onClick={() => { void runDetailAction(() => onDuplicate(selectedExercise)); }}
                     >
                         <Copy size={17} aria-hidden="true" />
                         Duplica
@@ -202,7 +222,8 @@ export function ExerciseArchive({
                         <button
                             className="btn exercise-action-button exercise-action-danger"
                             type="button"
-                            onClick={event => onDelete(selectedExercise.id, event)}
+                            disabled={detailActionPending}
+                            onClick={event => { void runDetailAction(() => onDelete(selectedExercise.id, event)); }}
                         >
                             <Trash2 size={17} aria-hidden="true" />
                             Elimina
