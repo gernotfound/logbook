@@ -48,13 +48,50 @@ export function scanRange() {
   return `${base}..HEAD`;
 }
 
+// GitHub Releases can transiently return 5xx. Retry transport failures only;
+// invalid requests and checksum mismatches always fail without another download.
+const DOWNLOAD_RETRY_DELAYS_MS = [300, 1000, 2500];
+
+export async function fetchVerifiedToolArchive(tool, request = fetch, pause = ms => new Promise(resolve => setTimeout(resolve, ms))) {
+  for (let attempt = 0; attempt <= DOWNLOAD_RETRY_DELAYS_MS.length; attempt += 1) {
+    let response;
+    try {
+      response = await request(tool.url, { redirect: 'follow', signal: AbortSignal.timeout(30000) });
+    } catch (error) {
+      if (attempt === DOWNLOAD_RETRY_DELAYS_MS.length) {
+        throw new Error(`Unable to download ${tool.binary} ${tool.version}: transport failure`, { cause: error });
+      }
+      await pause(DOWNLOAD_RETRY_DELAYS_MS[attempt]);
+      continue;
+    }
+    if (!response.ok) {
+      const retryable = response.status === 429 || (response.status >= 500 && response.status < 600);
+      if (!retryable || attempt === DOWNLOAD_RETRY_DELAYS_MS.length) {
+        throw new Error(`Unable to download ${tool.binary} ${tool.version}: HTTP ${response.status}`);
+      }
+      await pause(DOWNLOAD_RETRY_DELAYS_MS[attempt]);
+      continue;
+    }
+    let bytes;
+    try {
+      bytes = Buffer.from(await response.arrayBuffer());
+    } catch (error) {
+      if (attempt === DOWNLOAD_RETRY_DELAYS_MS.length) {
+        throw new Error(`Unable to read ${tool.binary} ${tool.version} archive`, { cause: error });
+      }
+      await pause(DOWNLOAD_RETRY_DELAYS_MS[attempt]);
+      continue;
+    }
+    const digest = createHash('sha256').update(bytes).digest('hex');
+    if (digest !== tool.sha256) throw new Error(`${tool.binary} ${tool.version} checksum mismatch`);
+    return bytes;
+  }
+  throw new Error(`Unable to download ${tool.binary} ${tool.version} within the retry budget`);
+}
+
 async function installTool(tool, root) {
   const archivePath = join(root, tool.archive);
-  const response = await fetch(tool.url, { redirect: 'follow' });
-  if (!response.ok) throw new Error(`Unable to download ${tool.binary} ${tool.version}: HTTP ${response.status}`);
-  const bytes = Buffer.from(await response.arrayBuffer());
-  const digest = createHash('sha256').update(bytes).digest('hex');
-  if (digest !== tool.sha256) throw new Error(`${tool.binary} ${tool.version} checksum mismatch`);
+  const bytes = await fetchVerifiedToolArchive(tool);
   await writeFile(archivePath, bytes);
   run('tar', [tool.archive.endsWith('.tar.gz') ? '-xzf' : '-xf', archivePath, '-C', root]);
   return join(root, tool.binary);
