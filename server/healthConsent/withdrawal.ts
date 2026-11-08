@@ -185,8 +185,9 @@ export async function recordHealthConsentReacceptance(
     const deletion = db.collection('account_deletions').doc(uid);
     const state = consentRef(uid);
     const erasure = db.collection('health_data_erasures').doc(uid);
-    const [job, previousSnap, erasureJob] = await Promise.all([
-      tx.get(deletion), tx.get(state), tx.get(erasure),
+    const key = db.collection('user_data_keys').doc(uid);
+    const [job, previousSnap, erasureJob, wrappedKey] = await Promise.all([
+      tx.get(deletion), tx.get(state), tx.get(erasure), tx.get(key),
     ]);
     if (job.exists) throw new Error('Cancellazione account in corso.');
     if (erasureJob.exists && erasureJob.data()?.status !== 'complete') {
@@ -206,6 +207,10 @@ export async function recordHealthConsentReacceptance(
     if (!previousSnap.exists || previous?.status !== 'withdrawn' || previous.revision !== expectedRevision) {
       throw new HealthConsentRevisionConflictError();
     }
+    // A completion receipt alone does not prove old encrypted data is gone:
+    // refuse a new processing epoch if the wrapped account key still exists.
+    // Already-active retry above is unaffected by a key provisioned after reacceptance.
+    if (wrappedKey.exists) throw new HealthConsentRevisionConflictError();
     // Erasure receipts expire after 30 days; the monotonic consent floor is
     // the durable proof that the immediately preceding withdrawal was erased.
     if (!Number.isSafeInteger(previous.erasedBeforeRevision)

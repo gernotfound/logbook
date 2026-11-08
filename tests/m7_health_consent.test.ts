@@ -198,6 +198,57 @@ describe('trusted health consent boundary', () => {
     expect(auth.requireVerifiedHealthConsentWrite).toHaveBeenCalledTimes(2);
   });
 
+  it('maps a terminal erasure job conflict to 409 without retrying the worker', async () => {
+    await recordHealthConsentWithdrawal('account-1', 0);
+    const jobPath = 'health_data_erasures/account-1';
+    const job = storage.documents.get(jobPath)!;
+    storage.documents.set(jobPath, { ...job, status: 'failed', retryable: false });
+
+    const response = await POST(req('POST', { action: 'withdraw', expectedRevision: 0 }));
+
+    expect(response.status).toBe(409);
+    expect(response.headers.get('cache-control')).toBe('no-store');
+    expect(await response.json()).toHaveProperty('error', expect.stringContaining('controllo'));
+    expect(erasureWorker.process).not.toHaveBeenCalled();
+    expect(storage.documents.get('health_consent_withdrawals/account-1')).toMatchObject({
+      uid: 'account-1', status: 'withdrawn', revision: 1,
+    });
+    expect(storage.documents.get(jobPath)).toMatchObject({ status: 'failed', retryable: false });
+  });
+
+  it('confirms a durably queued withdrawal even if immediate erasure processing fails', async () => {
+    erasureWorker.process.mockRejectedValueOnce(new Error('injected worker failure'));
+    const errorLog = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      const response = await POST(req('POST', { action: 'withdraw', expectedRevision: 0 }));
+      expect(response.status).toBe(200);
+      expect(await response.json()).toEqual({ status: 'withdrawn', revision: 1 });
+      expect(storage.documents.get('health_data_erasures/account-1')).toMatchObject({
+        uid: 'account-1', status: 'requested', consentRevision: 1,
+      });
+      expect(errorLog).toHaveBeenCalledWith('[health-consent] erasure handoff failed', { kind: 'Error' });
+    } finally {
+      errorLog.mockRestore();
+    }
+  });
+
+  it.each([
+    ['missing JSON body', undefined],
+    ['array JSON body', []],
+    ['unknown action', { action: 'unknown' }],
+    ['withdraw without revision', { action: 'withdraw' }],
+    ['withdraw with fractional revision', { action: 'withdraw', expectedRevision: 0.5 }],
+    ['withdraw with negative revision', { action: 'withdraw', expectedRevision: -1 }],
+    ['initial consent with incorrect revision', { action: 'accept-initial', expectedRevision: 1, acceptance }],
+    ['reacceptance without revision', { action: 'reaccept', acceptance }],
+  ])('rejects %s without changing consent or enqueuing erasure', async (_case, body) => {
+    const response = await POST(req('POST', body));
+    expect(response.status).toBe(400);
+    expect(response.headers.get('cache-control')).toBe('no-store');
+    expect(storage.documents.size).toBe(0);
+    expect(erasureWorker.process).not.toHaveBeenCalled();
+  });
+
   it('atomically queues health erasure with the withdrawal and keeps Auth/business data until the worker completes', async () => {
     const first = await POST(req('POST', { action: 'withdraw', expectedRevision: 0 }));
     expect(first.status).toBe(200);
@@ -307,6 +358,30 @@ describe('trusted health consent boundary', () => {
         .rejects.toBeInstanceOf(HealthConsentRevisionConflictError);
       expect((await readHealthConsentState('account-1')).status).toBe('withdrawn');
     }
+  });
+
+  it('refuses re-consent if the old wrapped cloud key remains after a completed erasure', async () => {
+    storage.documents.clear();
+    await recordHealthConsentWithdrawal('account-1', 0);
+    finishErasure(1);
+    storage.documents.set('user_data_keys/account-1', { uid: 'account-1', ciphertext: 'orphaned-key' });
+
+    const blocked = await POST(req('POST', { action: 'reaccept', expectedRevision: 2, acceptance }));
+    expect(blocked.status).toBe(409);
+    expect(storage.documents.get('health_consent_withdrawals/account-1')).toMatchObject({
+      uid: 'account-1', status: 'withdrawn', revision: 2, erasedBeforeRevision: 1,
+    });
+    expect(storage.documents.get('user_data_keys/account-1')).toMatchObject({ ciphertext: 'orphaned-key' });
+
+    storage.documents.delete('user_data_keys/account-1');
+    const accepted = await POST(req('POST', { action: 'reaccept', expectedRevision: 2, acceptance }));
+    expect(accepted.status).toBe(200);
+    // A legitimate key provisioned under the new active consent must not
+    // invalidate an idempotent retry of that already-confirmed acceptance.
+    storage.documents.set('user_data_keys/account-1', { uid: 'account-1', ciphertext: 'new-key' });
+    const retry = await POST(req('POST', { action: 'reaccept', expectedRevision: 2, acceptance }));
+    expect(retry.status).toBe(200);
+    expect(await retry.json()).toEqual(await accepted.json());
   });
 
   it('accepts re-consent after completed receipt retention only with matching consent erasure proof', async () => {
