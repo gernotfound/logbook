@@ -134,12 +134,6 @@ export async function migrateGuestAccount({ user, guestData, policy, setUserData
             return recovered;
         };
 
-        const resolveAuthenticatedBase = async (): Promise<UserData> => {
-            assertCurrent();
-            if (cloudData) return cloudData;
-            return UserDataSchema.parse(getResolvedDefaultUserData(catalog)) as unknown as UserData;
-        };
-
         const reflectDurableOutcome = (result: SyncResult, durable: LocalEnvelope): SyncResult => {
             assertCurrent();
             // A confirmed replay may leave another tab's newer operations pending.
@@ -173,7 +167,9 @@ export async function migrateGuestAccount({ user, guestData, policy, setUserData
         };
 
         assertCurrent();
-        const authenticatedBase = await resolveAuthenticatedBase();
+        assertCurrent();
+        const authenticatedBase: UserData = cloudData
+            ?? (UserDataSchema.parse(getResolvedDefaultUserData(catalog)) as unknown as UserData);
         let hydratedEnv = await hydrateLocal(user.uid, authenticatedBase, cloudPayload?.completeMonths || [], cloudPayload?.cloudDocuments, 'all', cloudAllowed);
         assertCloudAllowed();
         hydratedEnv = await prepareReplica(hydratedEnv);
