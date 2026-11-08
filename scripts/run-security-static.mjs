@@ -48,11 +48,44 @@ export function scanRange() {
   return `${base}..HEAD`;
 }
 
+const RETRYABLE_DOWNLOAD_STATUSES = new Set([408, 429, 500, 502, 503, 504]);
+
+class ToolDownloadHttpError extends Error {
+  constructor(tool, status) {
+    super(`Unable to download ${tool.binary} ${tool.version}: HTTP ${status}`);
+    this.status = status;
+  }
+}
+
+// Retry only transient transport failures. All attempts use the same pinned URL;
+// installTool still verifies SHA-256 before extracting or running either scanner.
+export async function fetchToolArchive(
+  tool,
+  fetchImpl = fetch,
+  wait = ms => new Promise(resolve => setTimeout(resolve, ms)),
+) {
+  let lastError;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      const response = await fetchImpl(tool.url, {
+        redirect: 'follow',
+        signal: AbortSignal.timeout(20_000),
+      });
+      if (!response.ok) throw new ToolDownloadHttpError(tool, response.status);
+      return Buffer.from(await response.arrayBuffer());
+    } catch (error) {
+      lastError = error;
+      if (attempt === 2 || (error instanceof ToolDownloadHttpError && !RETRYABLE_DOWNLOAD_STATUSES.has(error.status))) break;
+      await wait((attempt + 1) * 1_000);
+    }
+  }
+  if (lastError instanceof ToolDownloadHttpError) throw lastError;
+  throw new Error(`Unable to download ${tool.binary} ${tool.version}: ${lastError instanceof Error ? lastError.message : String(lastError)}`, { cause: lastError });
+}
+
 async function installTool(tool, root) {
   const archivePath = join(root, tool.archive);
-  const response = await fetch(tool.url, { redirect: 'follow' });
-  if (!response.ok) throw new Error(`Unable to download ${tool.binary} ${tool.version}: HTTP ${response.status}`);
-  const bytes = Buffer.from(await response.arrayBuffer());
+  const bytes = await fetchToolArchive(tool);
   const digest = createHash('sha256').update(bytes).digest('hex');
   if (digest !== tool.sha256) throw new Error(`${tool.binary} ${tool.version} checksum mismatch`);
   await writeFile(archivePath, bytes);
