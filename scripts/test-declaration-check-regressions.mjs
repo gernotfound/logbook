@@ -47,3 +47,15 @@ for (const source of [
     assert.deepEqual(findDisabledTests(source), []);
   });
 }
+
+await test('keeps source locations when parsing TS satisfies and JSX syntax', () => {
+  const source = [
+    "import { test as check } from 'vitest';",
+    'const view = <div data-value={1} />;',
+    'const result = (1 satisfies number);',
+    "check.skip('disabled', () => {});",
+  ].join('\\n');
+  assert.deepEqual(findDisabledTests(source, 'fixture.test.tsx').map(({ line, label, expression }) => ({
+    line, label, expression,
+  })), [{ line: 4, label: 'skip', expression: 'check.skip' }]);
+});

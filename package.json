@@ -1,11 +1,11 @@
 {
   "name": "logbook",
   "private": true,
-  "version": "2.251.0",
+  "version": "2.252.0",
   "type": "module",
   "packageManager": "npm@11.21.0",
   "engines": {
-    "node": "24.x",
+    "node": ">=24.11.0 <25",
     "npm": "11.x"
   },
   "scripts": {
