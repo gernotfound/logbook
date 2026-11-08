@@ -125,14 +125,14 @@ describe('Workout Improvements & History Edit Suite', () => {
       fireEvent.click(screen.getByRole('button', { name: 'Avvia recupero' }));
 
       expect(readWorkoutTimerSnapshot(owner)).toEqual(newer);
-      expect(screen.getByRole('status').textContent).toContain('Timer aggiornato da un\'altra scheda');
+      expect(screen.getByText("Timer aggiornato da un'altra scheda. Ripeti l'azione per modificarlo.")).toBeDefined();
       expect(screen.getByRole('button', { name: 'Pausa recupero' })).toBeDefined();
 
       fireEvent.click(screen.getByRole('button', { name: 'Pausa recupero' }));
       expect(readWorkoutTimerSnapshot(owner)).toMatchObject({
         version: 1, state: 'paused', startTime: 0,
       });
-      expect(screen.queryByRole('status')).toBeNull();
+      expect(screen.queryByText("Timer aggiornato da un'altra scheda. Ripeti l'azione per modificarlo.")).toBeNull();
     });
 
     test('resetGlobalWorkoutTimer persists stopped snapshot and updates displayed timer', async () => {
