@@ -18,6 +18,9 @@ import { lockAllVaults } from '../src/lib/sync/secureArchiveSession';
 import { activateGuestSession, GUEST_SESSION_KEY } from '../src/lib/sync/session';
 import { CATALOG_CACHE_KEY, clearCatalogCache, getInMemoryCatalog, getSeedCatalog } from '../src/lib/catalog/catalogService';
 import * as idbKeyval from 'idb-keyval';
+import { firestoreMockStore } from './setup';
+import { sealCloudDocument } from '../src/lib/sync/cloudDocumentCipher';
+import { CURRENT_SYNC_PROTOCOL } from '../src/lib/schemaEvolution';
 
 vi.mock('../src/lib/sync/cloudAccountKeyAccess', () => ({
     requireCloudAccountDataKey: vi.fn(async () => new Uint8Array(32).fill(18)),
@@ -113,6 +116,18 @@ describe('guest -> account V3 migration', () => {
 
     it('classifies persisted global items through the real guest-to-account migration, not an empty memory seed', async () => {
         const { cloud } = fixtures();
+        // The mocked cloud reader and mocked Firestore transaction must describe
+        // the same persisted root. Otherwise journal replay sees a nonexistent
+        // server document and legitimately replaces the root with a partial edit.
+        const cloudRootSync = {
+            protocolVersion: CURRENT_SYNC_PROTOCOL,
+            clock: {},
+            fields: {},
+            writer: { slot: 's00', replicaId: 'test-replica', generation: 1, seq: 0 },
+        };
+        firestoreMockStore['users/a'] = sealCloudDocument(
+            new Uint8Array(32).fill(18), user.uid, '', rootDocument(cloud), cloudRootSync,
+        );
         await clearCatalogCache();
         const seed = getSeedCatalog();
         const globalExercise = { id: 'catalog-migration-ex', name: 'Global exercise', trackingType: 'weight_reps' as const };
@@ -157,15 +172,6 @@ describe('guest -> account V3 migration', () => {
         });
 
         let preSecondCloudProfile: unknown = null;
-        const commitProfiles: unknown[] = [];
-        const originalCommit = localRepository.commitLocal;
-        const commitSpy = vi.spyOn(localRepository, 'commitLocal').mockImplementation(async (...args) => {
-            const before = { desired: args[1].profile, callerBase: args[2].profile };
-            const result = await originalCommit(...args);
-            const durable = await readLocal('user:a');
-            commitProfiles.push({ ...before, durableAfter: durable?.data.profile, pending: durable?.pending.length });
-            return result;
-        });
         const hydrateProfiles: unknown[] = [];
         const originalHydrate = localRepository.hydrateLocal;
         const hydrateSpy = vi.spyOn(localRepository, 'hydrateLocal').mockImplementation(async (...args) => {
@@ -174,7 +180,10 @@ describe('guest -> account V3 migration', () => {
             return hydrated;
         });
         vi.mocked(DB.loadCloudPayload)
-            .mockResolvedValueOnce({ data: cloud, completeMonths: [], cloudDocuments: new Map() })
+            .mockResolvedValueOnce({
+                data: cloud, completeMonths: [],
+                cloudDocuments: new Map([['', { ...rootDocument(cloud), _sync: cloudRootSync }]]),
+            })
             .mockImplementationOnce(async () => {
                 const durable = await readLocal('user:a');
                 preSecondCloudProfile = durable?.data.profile;
@@ -202,7 +211,6 @@ describe('guest -> account V3 migration', () => {
                         cloudReads: vi.mocked(DB.loadCloudPayload).mock.calls.length,
                         preSecondCloudProfile,
                         hydrateProfiles,
-                        commitProfiles,
                         cloudFixtureProfile: cloud.profile,
                         userProfile: state.userData?.profile,
                         pending: envelope?.pending.length,
@@ -220,7 +228,6 @@ describe('guest -> account V3 migration', () => {
             expect(localStorage.getItem('logbook_is_guest')).toBeNull();
         } finally {
             hydrateSpy.mockRestore();
-            commitSpy.mockRestore();
             mockedGet.mockImplementation(originalGet);
             await clearCatalogCache();
         }
