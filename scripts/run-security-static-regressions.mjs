@@ -1,10 +1,10 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
-import { createHash } from 'node:crypto';
 import { fetchVerifiedToolArchive, scanRange } from './run-security-static.mjs';
 
 function git(...args) {
@@ -40,65 +40,75 @@ void test('Gitleaks scans from the explicit base and fails closed when that base
   }
 });
 
-const toolBytes = Buffer.from('trusted security binary archive');
-const archiveTool = {
-  binary: 'security-tool',
+const trustedBytes = Buffer.from('pinned scanner archive fixture');
+const downloadedTool = {
+  binary: 'fixture-scanner',
   version: '1.0.0',
-  url: 'https://example.invalid/security-tool.tar.gz',
-  sha256: createHash('sha256').update(toolBytes).digest('hex'),
+  url: 'https://github.com/vendor/scanner/releases/download/v1/scanner.tar.gz',
+  assetApiUrl: 'https://api.github.com/repos/vendor/scanner/releases/assets/123',
+  sha256: createHash('sha256').update(trustedBytes).digest('hex'),
 };
-const response = (status, contents = toolBytes) => new Response(contents, { status });
-
-void test('retries temporary 504 then verifies the downloaded archive checksum', async () => {
-  let requests = 0;
-  const pauses = [];
-  const bytes = await fetchVerifiedToolArchive(archiveTool, async () => {
-    requests += 1;
-    return requests === 1 ? response(504) : response(200);
-  }, async ms => { pauses.push(ms); });
-  assert.deepEqual(bytes, toolBytes);
-  assert.equal(requests, 2);
-  assert.deepEqual(pauses, [300]);
+const archiveResponse = (status, bytes = trustedBytes) => ({
+  ok: status >= 200 && status < 300,
+  status,
+  arrayBuffer: async () => bytes,
 });
 
-void test('retries connection failure and 503 within the bounded attempt budget', async () => {
-  let attempts = 0;
-  const pauses = [];
-  const bytes = await fetchVerifiedToolArchive(archiveTool, async () => {
-    attempts += 1;
-    if (attempts === 1) throw new TypeError('Connection reset');
-    return attempts === 2 ? response(503) : response(200);
-  }, async ms => { pauses.push(ms); });
-  assert.deepEqual(bytes, toolBytes);
-  assert.equal(attempts, 3);
-  assert.deepEqual(pauses, [300, 1000]);
+void test('security tool download uses the pinned release asset on success', async () => {
+  let calls = 0;
+  const bytes = await fetchVerifiedToolArchive(downloadedTool, async (url, options) => {
+    calls += 1;
+    assert.equal(url, downloadedTool.url);
+    assert.equal(options.redirect, 'follow');
+    return archiveResponse(200);
+  });
+  assert.deepEqual(bytes, trustedBytes);
+  assert.equal(calls, 1);
 });
 
-void test('fails closed on non-transient HTTP errors without retrying', async () => {
-  let requests = 0;
-  await assert.rejects(fetchVerifiedToolArchive(archiveTool, async () => {
-    requests += 1;
-    return response(403);
-  }, async () => { throw new Error('No retry should occur'); }), /HTTP 403/);
-  assert.equal(requests, 1);
+void test('HTTP 504 recovers only through the official asset API with identical SHA-256', async () => {
+  const calls = [];
+  const bytes = await fetchVerifiedToolArchive(downloadedTool, async (url, options) => {
+    calls.push({ url, options });
+    return archiveResponse(calls.length === 1 ? 504 : 200);
+  });
+  assert.deepEqual(bytes, trustedBytes);
+  assert.deepEqual(calls.map(call => call.url), [downloadedTool.url, downloadedTool.assetApiUrl]);
+  assert.equal(calls[1].options.headers.Accept, 'application/octet-stream');
+  assert.equal(calls[1].options.headers['X-GitHub-Api-Version'], '2022-11-28');
 });
 
-void test('fails closed when every bounded retry returns HTTP 504', async () => {
-  let requests = 0;
-  const pauses = [];
-  await assert.rejects(fetchVerifiedToolArchive(archiveTool, async () => {
-    requests += 1;
-    return response(504);
-  }, async ms => { pauses.push(ms); }), /HTTP 504/);
-  assert.equal(requests, 4);
-  assert.deepEqual(pauses, [300, 1000, 2500]);
+void test('checksum mismatch fails closed without trying the alternate download', async () => {
+  let calls = 0;
+  await assert.rejects(
+    fetchVerifiedToolArchive(downloadedTool, async () => {
+      calls += 1;
+      return archiveResponse(200, Buffer.from('untrusted binary'));
+    }),
+    /checksum mismatch/,
+  );
+  assert.equal(calls, 1);
 });
 
-void test('never accepts an archive with the wrong SHA-256 even after a successful HTTP response', async () => {
-  let requests = 0;
-  await assert.rejects(fetchVerifiedToolArchive(archiveTool, async () => {
-    requests += 1;
-    return response(200, Buffer.from('tampered archive'));
-  }, async () => { throw new Error('No retry on integrity failure'); }), /checksum mismatch/);
-  assert.equal(requests, 1);
+void test('HTTP 403 and exhausted transfer failures never authorize a scanner skip', async () => {
+  for (const statuses of [[403], [504, 504]]) {
+    let calls = 0;
+    await assert.rejects(
+      fetchVerifiedToolArchive(downloadedTool, async () => archiveResponse(statuses[calls++])),
+      /Unable to download.*HTTP (403|504)/,
+    );
+    assert.equal(calls, statuses.length);
+  }
+});
+
+void test('unexpected JSON returned by GitHub asset API fails checksum verification', async () => {
+  let calls = 0;
+  await assert.rejects(
+    fetchVerifiedToolArchive(downloadedTool, async () => {
+      calls += 1;
+      return calls === 1 ? archiveResponse(504) : archiveResponse(200, Buffer.from('{"message":"asset metadata"}'));
+    }),
+    /checksum mismatch/,
+  );
+  assert.equal(calls, 2);
 });
