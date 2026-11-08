@@ -159,7 +159,9 @@ export function useTrainingExercises() {
         try {
             await persistExercise({ type: 'exercise.upsert', exercise: duplicated });
         } catch (err) {
+            if (!isCurrentSession(draftSession)) return;
             console.error(err);
+            void showAlert("Errore durante la duplicazione dell'esercizio.");
         }
     };
 
