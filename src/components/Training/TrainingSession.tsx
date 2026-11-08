@@ -140,29 +140,25 @@ const TrainingSession = ({ onNavigateToHistory, onNavigateToPlanning }: Training
     useEffect(() => {
         const workoutId = String(activeWorkout?.id ?? '');
         postSessionRawRef.current = undefined;
-        if (!workoutId || activeWorkout?.isEditingHistory || !postSessionRecoveryName) {
-            postSessionDraftRef.current = null;
-            pendingEndTimeRef.current = null;
-            return;
-        }
-        const session = captureSession();
-        postSessionSessionRef.current = session;
-        let recovered: ReturnType<typeof parsePostSessionRecovery>;
-        try {
-            const image = readWorkoutRecoveryDraftImage(postSessionRecoveryName, session.owner);
-            recovered = parsePostSessionRecovery(image.value, workoutId);
-            postSessionRawRef.current = image.raw;
-        } catch (error) {
-            blockPostSessionPersistence(error);
-            return;
-        }
-        if (!recovered) {
-            if (postSessionDraftRef.current?.workoutId !== workoutId) {
-                postSessionDraftRef.current = null;
-                pendingEndTimeRef.current = null;
+        postSessionDraftRef.current = null;
+        pendingEndTimeRef.current = null;
+        let recovered: { pendingEndTime: number | null; draft: PostSessionDraft | null } = {
+            pendingEndTime: null,
+            draft: null,
+        };
+        if (workoutId && !activeWorkout?.isEditingHistory && postSessionRecoveryName) {
+            const session = captureSession();
+            postSessionSessionRef.current = session;
+            try {
+                const image = readWorkoutRecoveryDraftImage(postSessionRecoveryName, session.owner);
+                recovered = parsePostSessionRecovery(image.value, workoutId) ?? recovered;
+                postSessionRawRef.current = image.raw;
+            } catch (error) {
+                blockPostSessionPersistence(error);
+                return;
             }
-            return;
         }
+        // A previously displayed workout is not evidence of a current device draft.
         postSessionDraftRef.current = recovered.draft;
         setPostSessionDraft(recovered.draft);
         pendingEndTimeRef.current = recovered.pendingEndTime;
