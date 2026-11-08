@@ -123,6 +123,7 @@ export async function getCachedCatalog(): Promise<CachedGlobalCatalog> {
         return inMemoryCatalogCache;
     }
 
+    let cacheReadFailed = false;
     try {
         const rawCached = await idbGet<unknown>(CATALOG_CACHE_KEY);
         // A network update or explicit save may complete while the IDB read is pending.
@@ -146,6 +147,7 @@ export async function getCachedCatalog(): Promise<CachedGlobalCatalog> {
             console.warn("[CatalogService] Cache IndexedDB corrotta, ripristino seed predefinito.");
         }
     } catch (err) {
+        cacheReadFailed = true;
         console.warn("[CatalogService] Errore lettura cache IndexedDB:", err);
     }
 
@@ -155,7 +157,9 @@ export async function getCachedCatalog(): Promise<CachedGlobalCatalog> {
     // Fallback to static bundled seed
     const seedCatalog = getSeedCatalog();
     inMemoryCatalogCache = seedCatalog;
-    isLoadedFromPersistentCache = true;
+    // A transient read error must not pin the empty seed for this session:
+    // the existing durable catalog might be readable on the next attempt.
+    isLoadedFromPersistentCache = !cacheReadFailed;
 
     // The bundled seed is reproducible and needs no IndexedDB write. A delayed
     // seed write could overwrite a newly downloaded catalog or a failed read's

@@ -1,6 +1,7 @@
 import 'fake-indexeddb/auto';
 const storageFault = vi.hoisted(() => ({
     failNextSet: false,
+    failNextGet: false,
     stallNextGet: false,
     resolveGet: null as null | ((value: unknown) => void),
     rejectGet: null as null | ((reason: Error) => void),
@@ -11,6 +12,10 @@ vi.mock('idb-keyval', async (importOriginal) => {
     return {
         ...original,
         get: (...args: Parameters<typeof original.get>) => {
+            if (storageFault.failNextGet) {
+                storageFault.failNextGet = false;
+                return Promise.reject(new Error('temporary IndexedDB read failure'));
+            }
             if (storageFault.stallNextGet) {
                 storageFault.stallNextGet = false;
                 return new Promise((resolve, reject) => {
@@ -42,6 +47,7 @@ beforeEach(async () => {
     await clearCatalogCache();
     remote.get.mockReset();
     storageFault.failNextSet = false;
+    storageFault.failNextGet = false;
     storageFault.stallNextGet = false;
     storageFault.resolveGet = null;
     storageFault.rejectGet = null;
@@ -58,6 +64,29 @@ it('does not persist the reproducible empty seed or overwrite the cache on a fai
     expect(empty.exercises).toEqual([]);
     expect(storageFault.setCalls).toBe(0);
     expect(await (await import('idb-keyval')).get('logbook_cached_global_catalog')).toBeUndefined();
+});
+
+it('recovers a preserved catalog after a transient IndexedDB read failure without persisting empty seed', async () => {
+    const previous = getSeedCatalog();
+    const durable = {
+        ...previous,
+        manifest: { ...previous.manifest, version: 'persisted-v7', itemCounts: { exercises: 1, foods: 1 } },
+        exercises: [exercise],
+        foods: [food],
+    };
+    await (await import('idb-keyval')).set('logbook_cached_global_catalog', durable);
+    storageFault.setCalls = 0;
+    storageFault.failNextGet = true;
+
+    const fallback = await getCachedCatalog();
+    expect(fallback.manifest.version).toBe('1.0.0');
+    expect(fallback.exercises).toEqual([]);
+
+    const recovered = await getCachedCatalog();
+    expect(recovered.manifest.version).toBe('persisted-v7');
+    expect(recovered.exercises.map(item => item.id)).toEqual(['a']);
+    expect(recovered.foods.map(item => item.id)).toEqual(['0']);
+    expect(storageFault.setCalls).toBe(0);
 });
 
 it.each(['fulfilled', 'rejected'] as const)('a stale %s IndexedDB read cannot undo a concurrent catalog save', async outcome => {
