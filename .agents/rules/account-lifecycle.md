@@ -26,7 +26,7 @@ La tabella è un indice delle decisioni, non sostituisce i guard di transazione,
 
 ## Verifica email e accesso account
 
-L'accesso account/cloud richiede che Firebase Auth riporti `emailVerified === true`. Una sessione non verificata non deve avviare idratazione Firestore, replica, registrazione del dispositivo né migrazione guest→account. Per gli account email/password, la registrazione richiede l'invio del link di verifica; alla conferma il client esegue `reload(user)`, aggiorna il token ID con `getIdToken(true)` e riprende il bootstrap tramite ricaricamento protetto.
+L'accesso account/cloud richiede che Firebase Auth riporti `emailVerified === true`. Il bootstrap client di una sessione non verificata non deve avviare idratazione Firestore, replica, **registrazione automatica** del dispositivo né migrazione guest→account. L'endpoint trusted per la registrazione delle credenziali di recovery resta distinto dal bootstrap e accetta un Firebase ID token valido e non revocato anche senza email verificata: non abilita l'accesso fitness, richiede App Check limited-use e rifiuta qualsiasi registrazione dopo la creazione del job di cancellazione. Per gli account email/password, la registrazione richiede l'invio del link di verifica; alla conferma il client esegue `reload(user)`, aggiorna il token ID con `getIdToken(true)` e riprende il bootstrap tramite ricaricamento protetto.
 
 **MUST:** il blocco UI precede tutte le schermate di dati account; le Security Rules richiedono `request.auth.token.email_verified == true` su root e collezioni private e non si affidano soltanto alla UI. Le letture pubbliche del catalogo restano accessibili senza account.
 
