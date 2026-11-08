@@ -1,7 +1,7 @@
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, act, waitFor } from '@testing-library/react';
-import { captureSession } from '../src/lib/sync/session';
+import { captureSession, invalidateSession } from '../src/lib/sync/session';
 import { prepareUnlockedTestArchive } from './secureVaultFixture';
 import { initializeLocal } from '../src/lib/sync/localRepository';
 import SessionExerciseCard from '../src/components/Training/session/SessionExerciseCard';
@@ -775,6 +775,136 @@ describe('Training Session UI Improvements Suite (R1, R2, R3)', () => {
             });
             expect(useAppStore.getState().localWorkout?.exercises[0].sets).toHaveLength(0);
             expect(showConfirmSpy).toHaveBeenCalledTimes(2);
+        });
+
+        it('preserves newly edited set data while a row deletion confirmation is pending', async () => {
+            const activeWorkout: WorkoutSession = {
+                id: 'pending-row-delete',
+                routineId: 'routine_1',
+                routineName: 'Scheda Petto',
+                date: '2026-08-20',
+                globalStartTime: Date.now(),
+                exercises: [{
+                    id: 'session-bench',
+                    exId: 'ex_bench',
+                    sets: [{ id: 'set-one', kg: '80', reps: '10' }],
+                    sessionNote: ''
+                }]
+            };
+            const owner = captureSession().owner;
+            const initialData = {
+                ...emptyUserData,
+                library: mockLibrary,
+                routines: [{ id: 'routine_1', name: 'Scheda Petto', exercises: [{ exId: 'ex_bench', setsCount: 3 }] }],
+                activeWorkout
+            };
+            await prepareUnlockedTestArchive(owner);
+            await initializeLocal(owner, initialData);
+            let confirmDeletion!: (accepted: boolean) => void;
+            const pendingConfirmation = new Promise<boolean>(resolve => { confirmDeletion = resolve; });
+            const showConfirm = vi.spyOn(useDialogStore.getState(), 'showConfirm')
+                .mockReturnValue(pendingConfirmation);
+            renderWithAuthenticatedTestOwner(<TrainingSession />, {
+                localWorkout: activeWorkout,
+                userData: initialData
+            });
+
+            await act(async () => {
+                fireEvent.click(screen.getByLabelText('Rimuovi serie 1'));
+            });
+            expect(showConfirm).toHaveBeenCalledTimes(1);
+
+            await act(async () => {
+                const input = screen.getByPlaceholderText('Kg');
+                fireEvent.change(input, { target: { value: '85' } });
+                fireEvent.blur(input);
+            });
+            await waitFor(() => {
+                expect(useAppStore.getState().localWorkout?.exercises[0].sets[0].kg).toBe('85');
+            });
+
+            await act(async () => { confirmDeletion(true); });
+            expect(useAppStore.getState().localWorkout?.exercises[0].sets).toHaveLength(1);
+            expect(useAppStore.getState().localWorkout?.exercises[0].sets[0]).toMatchObject({
+                id: 'set-one',
+                kg: '85',
+                reps: '10'
+            });
+        });
+
+
+        it('deletes a confirmed set if only another set changes while the dialog is open', async () => {
+            const activeWorkout: WorkoutSession = {
+                id: 'unrelated-edit-confirmation', routineId: 'routine_1',
+                routineName: 'Scheda Petto', date: '2026-08-20', globalStartTime: Date.now(),
+                exercises: [{ id: 'session-bench', exId: 'ex_bench', sessionNote: '',
+                    sets: [
+                        { id: 'set-one', kg: '80', reps: '10' },
+                        { id: 'set-two', kg: '70', reps: '12' }
+                    ]
+                }]
+            };
+            const owner = captureSession().owner;
+            const initialData = {
+                ...emptyUserData, library: mockLibrary,
+                routines: [{ id: 'routine_1', name: 'Scheda Petto',
+                    exercises: [{ exId: 'ex_bench', setsCount: 3 }] }],
+                activeWorkout
+            };
+            await prepareUnlockedTestArchive(owner);
+            await initializeLocal(owner, initialData);
+            let accept!: (ok: boolean) => void;
+            const confirm = vi.spyOn(useDialogStore.getState(), 'showConfirm')
+                .mockReturnValue(new Promise<boolean>(resolve => { accept = resolve; }));
+            renderWithAuthenticatedTestOwner(<TrainingSession />, {
+                localWorkout: activeWorkout, userData: initialData
+            });
+            await act(async () => { fireEvent.click(screen.getByLabelText('Rimuovi serie 1')); });
+            expect(confirm).toHaveBeenCalledOnce();
+            await act(async () => {
+                const weight = screen.getAllByPlaceholderText('Kg')[1];
+                fireEvent.change(weight, { target: { value: '75' } });
+                fireEvent.blur(weight);
+            });
+            await waitFor(() =>
+                expect(useAppStore.getState().localWorkout?.exercises[0].sets[1].kg).toBe('75')
+            );
+            await act(async () => { accept(true); });
+            expect(useAppStore.getState().localWorkout?.exercises[0].sets).toEqual([
+                expect.objectContaining({ id: 'set-two', kg: '75', reps: '12' })
+            ]);
+        });
+
+        it('rejects an obsolete Auth epoch before deleting a confirmed set', async () => {
+            const activeWorkout: WorkoutSession = {
+                id: 'stale-confirmation', routineId: 'routine_1',
+                routineName: 'Scheda Petto', date: '2026-08-20', globalStartTime: Date.now(),
+                exercises: [{ id: 'session-bench', exId: 'ex_bench', sessionNote: '',
+                    sets: [{ id: 'set-one', kg: '80', reps: '10' }]
+                }]
+            };
+            const owner = captureSession().owner;
+            const initialData = {
+                ...emptyUserData, library: mockLibrary,
+                routines: [{ id: 'routine_1', name: 'Scheda Petto',
+                    exercises: [{ exId: 'ex_bench', setsCount: 3 }] }],
+                activeWorkout
+            };
+            await prepareUnlockedTestArchive(owner);
+            await initializeLocal(owner, initialData);
+            let accept!: (ok: boolean) => void;
+            const confirm = vi.spyOn(useDialogStore.getState(), 'showConfirm')
+                .mockReturnValue(new Promise<boolean>(resolve => { accept = resolve; }));
+            renderWithAuthenticatedTestOwner(<TrainingSession />, {
+                localWorkout: activeWorkout, userData: initialData
+            });
+            await act(async () => { fireEvent.click(screen.getByLabelText('Rimuovi serie 1')); });
+            expect(confirm).toHaveBeenCalledOnce();
+            act(() => { invalidateSession(); invalidateSession(); });
+            await act(async () => { accept(true); });
+            expect(useAppStore.getState().localWorkout?.exercises[0].sets).toEqual([
+                expect.objectContaining({ id: 'set-one', kg: '80', reps: '10' })
+            ]);
         });
 
         it('Adversarial: verifies isometry detection and empty dropset handling', async () => {
