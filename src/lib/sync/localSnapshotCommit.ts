@@ -4,6 +4,7 @@ import { enforceMonthlyEntityTombstones } from './monthlyEntityTombstones';
 import { UserDataSchema } from '../schema';
 import type { UserData } from '../../types';
 import { generateId } from '../utils/date';
+import { removeUndefinedValuesForFirestore } from '../utils/object';
 import equal from 'fast-deep-equal';
 import { type SemanticOperation, diffDocuments, applySemanticOperations } from './semanticProjection';
 import { projectDocuments, applyRemoteDocuments } from './documentProjection';
@@ -27,9 +28,15 @@ export function assertWorkoutNotClosed(id: string, envelope: LocalEnvelope | und
     }
 }
 
-export async function commitLocal(owner: string, data: UserData, initialBase: UserData, guard?: () => boolean, expectedRevision?: number): Promise<SemanticOperation[]> {
+export async function commitLocal(owner: string, data: UserData, initialBase: UserData, guard?: () => boolean, expectedRevision?: number, localMetadata?: { pendingConflicts: UserData['pendingConflicts'] }): Promise<SemanticOperation[]> {
     owner = normalizeStorageOwner(owner);
-    const desired = structuredClone(parse(data));
+    // Only an explicit bulk merge may adopt local-only conflicts. The captured
+    // revision fences concurrent edits or a conflict already resolved elsewhere.
+    if (localMetadata !== undefined && expectedRevision === undefined) {
+        throw new Error('Il merge dei metadati locali richiede una revisione verificata');
+    }
+    const desired = structuredClone(parse(localMetadata === undefined
+        ? data : { ...data, pendingConflicts: localMetadata.pendingConflicts }));
     const callerBase = structuredClone(parse(initialBase));
     let operations: SemanticOperation[] = [];
     const catalog = await getCachedCatalog();
@@ -44,6 +51,9 @@ export async function commitLocal(owner: string, data: UserData, initialBase: Us
             throw new StaleLocalRevisionError(expectedRevision, current?.revision ?? null);
         }
         const currentData = structuredClone(parse(current?.data ?? callerBase));
+        const pendingConflicts = localMetadata === undefined
+            ? currentData.pendingConflicts
+            : removeUndefinedValuesForFirestore(desired.pendingConflicts);
         const baseDocs = projectDocuments(callerBase, catalog);
         const desiredDocs = projectDocuments(desired, catalog);
         const actorId = current?.replica?.slot ?? current?.actorId ?? generateId('actor');
@@ -55,7 +65,11 @@ export async function commitLocal(owner: string, data: UserData, initialBase: Us
 
         if (operations.length === 0) {
             // A no-op must not reseal or rewrite a validated durable journal.
-            if (current) return raw;
+            if (current) {
+                if (localMetadata === undefined || equal(removeUndefinedValuesForFirestore(currentData.pendingConflicts), pendingConflicts)) return raw;
+                // A local-only merge changes the preview token, never the cloud dot.
+                return { ...current, data: parse({ ...currentData, pendingConflicts }), revision: current.revision + 1 };
+            }
             return { ...currentEnvelopeVersions(), owner, actorId, actorSeq: 0, clock: {}, data: desired, baseline: callerBase, completeMonths: [], pending: [], syncMetaByDocument: {}, replica: null, revision: 0 };
         }
 
@@ -75,7 +89,7 @@ export async function commitLocal(owner: string, data: UserData, initialBase: Us
         const currentDocs = projectDocuments(currentData, catalog);
         const { documents: reconciledDocs } = applySemanticOperations(currentDocs, operations);
         const reconciled = applyRemoteDocuments(currentData, reconciledDocs, catalog);
-        reconciled.pendingConflicts = currentData.pendingConflicts;
+        reconciled.pendingConflicts = pendingConflicts;
         const savedData = parse(reconciled);
         if (savedData.activeWorkout?.id) assertWorkoutNotClosed(String(savedData.activeWorkout.id), current);
 
