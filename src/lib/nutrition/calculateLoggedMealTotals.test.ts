@@ -37,6 +37,13 @@ describe('shared meal totals', () => {
         },
     );
 
+    it('still rounds to a tenth below the coarse-precision boundary', () => {
+        const value = 562949953421311.94;
+        expect(calculateLoggedMealTotals([meal({ carbs: value, pro: value, fat: value })])).toEqual({
+            kcal: 0, carbs: 562949953421311.9, pro: 562949953421311.9, fat: 562949953421311.9,
+        });
+    });
+
     it('retains quick-meal and gram serving defaults', () => {
         const portion = meal({ meal: 'quick', unit: 'porzione', quantity: 2, kcal: 120, carbs: 10 });
         expect(getLoggedMealPortion(portion)).toEqual({ quantity: 2, ratio: 2 });
