@@ -344,7 +344,10 @@ export async function purgeExpiredCompletedHealthErasures(deadlineMs: number, ma
     for (const item of page.docs) {
       if (Date.now() + SAFETY_BUFFER_MS >= deadlineMs || purged >= boundedLimit || scanned >= scanLimit) break;
       const deleted = await db.runTransaction(async tx => {
-        const [jobSnap, consentSnap] = await Promise.all([tx.get(item.ref), tx.get(consentRef(item.id))]);
+        const [jobSnap, consentSnap, keySnap] = await Promise.all([
+          tx.get(item.ref), tx.get(consentRef(item.id)),
+          tx.get(db.collection('user_data_keys').doc(item.id)),
+        ]);
         const job = jobSnap.data() as Job | undefined;
         const consent = consentSnap.data();
         if (!jobSnap.exists || !job || job.status !== 'complete'
@@ -360,7 +363,14 @@ export async function purgeExpiredCompletedHealthErasures(deadlineMs: number, ma
           && Number.isSafeInteger(consent.revision)
           && consent.revision >= job.completedRevision
           && isPositiveRevision(consent.erasedBeforeRevision)
-          && consent.erasedBeforeRevision >= job.consentRevision) {
+          && consent.erasedBeforeRevision >= job.consentRevision
+          && (
+            // A withdrawn completion still holding its wrapped key is not attested.
+            (consent.status === 'withdrawn' && consent.revision === job.completedRevision
+              && consent.erasedBeforeRevision === job.consentRevision && !keySnap.exists)
+            // A later explicit acceptance may legitimately hold a new-generation key.
+            || (consent.status === 'active' && consent.revision > job.completedRevision)
+          )) {
           tx.delete(item.ref);
           return true;
         }

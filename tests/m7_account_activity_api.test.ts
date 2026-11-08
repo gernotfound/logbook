@@ -97,6 +97,30 @@ describe('account activity trusted HTTP boundary', () => {
     }
   });
 
+  it.each(['not-an-origin', 'http://thelogbook.web.app'])(
+    'fails closed without rethrowing for invalid PUBLIC_APP_ORIGIN %s',
+    async invalidOrigin => {
+      const previous = process.env.PUBLIC_APP_ORIGIN;
+      try {
+        process.env.PUBLIC_APP_ORIGIN = invalidOrigin;
+        process.env.ACCOUNT_INACTIVITY_TRACKING_ENABLED = 'true';
+        const response = await POST(request());
+        expect(response.status).toBe(503);
+        expect(response.headers.get('access-control-allow-origin')).toBeNull();
+        expect(verified.verifyRecoveryRegistrationRequester).not.toHaveBeenCalled();
+        expect(tracker.recordAccountActivity).not.toHaveBeenCalled();
+        const preflight = await OPTIONS(new Request('https://backend.test/api/account-activity', {
+          method: 'OPTIONS', headers: { origin: 'https://thelogbook.web.app' },
+        }));
+        expect(preflight.status).toBe(500);
+        expect(preflight.headers.get('access-control-allow-origin')).toBeNull();
+      } finally {
+        if (previous === undefined) delete process.env.PUBLIC_APP_ORIGIN;
+        else process.env.PUBLIC_APP_ORIGIN = previous;
+      }
+    },
+  );
+
   it('preflights only the configured HTTPS origin', async () => {
     expect((await OPTIONS(new Request('https://backend.test/api/account-activity', {
       method: 'OPTIONS', headers: { origin: 'https://thelogbook.web.app' },

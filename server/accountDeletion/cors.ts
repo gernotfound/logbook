@@ -37,7 +37,15 @@ export function requireAccountDeletionOrigin(request: Request): string {
 }
 
 export function accountDeletionCorsHeaders(origin: string | null, allowedHeaders: string): HeadersInit {
-  if (!origin || !allowedAccountDeletionOrigins().has(origin)) return { vary: 'Origin' };
+  let allowed = false;
+  try {
+    allowed = origin !== null && allowedAccountDeletionOrigins().has(origin);
+  } catch {
+    // An invalid deployment origin must never make the error handler throw again.
+    // The request origin guard has already failed; emit no CORS authorization.
+    return { vary: 'Origin' };
+  }
+  if (!allowed) return { vary: 'Origin' };
   return {
     'access-control-allow-origin': origin,
     'access-control-allow-methods': 'GET, POST, OPTIONS',

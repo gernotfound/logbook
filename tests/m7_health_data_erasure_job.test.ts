@@ -252,6 +252,33 @@ describe('trusted data-only erasure worker', () => {
     expect(fixture.records.has(markerPath('a'))).toBe(false);
   });
 
+  it.each([
+    'orphaned-account-key', 'invalid-consent-status', 'active-without-new-epoch',
+  ] as const)('preserves an expired receipt with %s until the trusted state is repaired', async scenario => {
+    await createHealthDataErasureJob('a');
+    expect(await processHealthDataErasure('a', Date.now() + 30_000)).toBe('complete');
+    const consent = fixture.records.get(consentPath('a'))!;
+    const validConsent = { ...consent };
+    const expired = Timestamp.fromMillis(Date.now() - 60_000);
+    fixture.records.get(markerPath('a'))!.purgeAfter = expired;
+    if (scenario === 'orphaned-account-key') {
+      fixture.records.set('user_data_keys/a', { uid: 'a', ciphertext: 'unexpected-residue' });
+    } else {
+      consent.status = scenario === 'invalid-consent-status' ? 'unknown' : 'active';
+    }
+
+    expect(await purgeExpiredCompletedHealthErasures(Date.now() + 30_000)).toBe(0);
+    expect(fixture.records.has(markerPath('a'))).toBe(true);
+    expect((fixture.records.get(markerPath('a'))!.purgeAfter as Timestamp).toMillis())
+      .toBeGreaterThan(Date.now() + 6 * 24 * 60 * 60 * 1000);
+
+    fixture.records.set(consentPath('a'), validConsent);
+    fixture.records.delete('user_data_keys/a');
+    fixture.records.get(markerPath('a'))!.purgeAfter = expired;
+    expect(await purgeExpiredCompletedHealthErasures(Date.now() + 30_000)).toBe(1);
+    expect(fixture.records.has(markerPath('a'))).toBe(false);
+  });
+
   it('retires an old completed receipt after a newer explicit consent', async () => {
     await createHealthDataErasureJob('a');
     expect(await processHealthDataErasure('a', Date.now() + 30_000)).toBe('complete');
@@ -259,6 +286,7 @@ describe('trusted data-only erasure worker', () => {
       acceptedTerms: true, acceptedHealthData: true,
       privacyVersion: LEGAL_VERSIONS.privacy, termsVersion: LEGAL_VERSIONS.terms,
     }, 4);
+    fixture.records.set('user_data_keys/a', { uid: 'a', ciphertext: 'new-generation-key' });
     fixture.records.get(markerPath('a'))!.purgeAfter = Timestamp.fromMillis(Date.now() - 60_000);
     expect(await purgeExpiredCompletedHealthErasures(Date.now() + 30_000)).toBe(1);
     expect(fixture.records.has(markerPath('a'))).toBe(false);
