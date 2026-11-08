@@ -22,13 +22,9 @@ describe('shared meal totals', () => {
         expect(items).toEqual(before);
     });
 
-    it('rounds large finite macros without overflowing the temporary decimal scale', () => {
-        const items = [meal({ kcal: Number.MAX_VALUE, carbs: Number.MAX_VALUE,
-            pro: Number.MAX_VALUE, fat: Number.MAX_VALUE })];
-        expect(calculateLoggedMealTotals(items)).toEqual({
-            kcal: Number.MAX_VALUE, carbs: Number.MAX_VALUE,
-            pro: Number.MAX_VALUE, fat: Number.MAX_VALUE,
-        });
+    it.each([Number.MAX_SAFE_INTEGER, Number.MAX_VALUE])('preserves large finite integer macros without rounding loss: %s', value => {
+        const items = [meal({ kcal: value, carbs: value, pro: value, fat: value })];
+        expect(calculateLoggedMealTotals(items)).toEqual({ kcal: value, carbs: value, pro: value, fat: value });
     });
 
     it('retains quick-meal and gram serving defaults', () => {

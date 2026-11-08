@@ -22,8 +22,8 @@ export function calculateRawLoggedMealTotals(meals: readonly LoggedMealItem[]) {
 }
 
 function roundMacro(value: number): number {
-    // Finite values this large are already integral in IEEE-754; scaling can overflow.
-    return Math.abs(value) >= Number.MAX_SAFE_INTEGER ? value : Math.round(value * 10) / 10;
+    // Integers need no decimal rounding; scaling large finite values can lose precision or overflow.
+    return Number.isInteger(value) ? value : Math.round(value * 10) / 10;
 }
 
 /** Reject arithmetic loss before permissive schema fallbacks can replace it with zero. */
