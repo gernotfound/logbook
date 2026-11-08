@@ -51,13 +51,16 @@ export function checkProductionBuildSecrets(hosting, firestore) {
 
   // An explicit env allowlist keeps retired diagnostics credentials out of the
   // production build without coupling the rule to any particular vendor.
-  const permittedHostingEnv = new Set([
-    'EXPECTED_SHA', 'LOGBOOK_BUILD_SHA', 'FIREBASE_HOSTING_DEPLOY',
+  const permittedGithubBindings = new Set([
     'GCP_WORKLOAD_IDENTITY_PROVIDER', 'GCP_FIREBASE_DEPLOY_SERVICE_ACCOUNT',
     'VITE_FIREBASE_API_KEY', 'VITE_FIREBASE_AUTH_DOMAIN',
     'VITE_FIREBASE_PROJECT_ID', 'VITE_FIREBASE_APP_ID',
     'VITE_ACCOUNT_DELETION_API_ORIGIN', 'VITE_RECAPTCHA_ENTERPRISE_SITE_KEY',
     'VITE_ACCOUNT_INACTIVITY_TRACKING',
+  ]);
+  const permittedHostingEnv = new Set([
+    'EXPECTED_SHA', 'LOGBOOK_BUILD_SHA', 'FIREBASE_HOSTING_DEPLOY',
+    ...permittedGithubBindings,
   ]);
   for (const [jobName, section] of [['build', build], ['deploy', deploy]]) {
     const jobEnv = section?.match(/^ {4}env:\s*\r?\n([\s\S]*?)^ {4}steps:/m)?.[1];
@@ -66,13 +69,6 @@ export function checkProductionBuildSecrets(hosting, firestore) {
       issues.push(`Hosting: ${jobName} contains an unreviewed job-level env binding`);
     }
   }
-  const permittedGithubBindings = new Set([
-    'GCP_WORKLOAD_IDENTITY_PROVIDER', 'GCP_FIREBASE_DEPLOY_SERVICE_ACCOUNT',
-    'VITE_FIREBASE_API_KEY', 'VITE_FIREBASE_AUTH_DOMAIN',
-    'VITE_FIREBASE_PROJECT_ID', 'VITE_FIREBASE_APP_ID',
-    'VITE_ACCOUNT_DELETION_API_ORIGIN', 'VITE_RECAPTCHA_ENTERPRISE_SITE_KEY',
-    'VITE_ACCOUNT_INACTIVITY_TRACKING',
-  ]);
   // Step-level env and arguments also resolve vars/secrets. Inspect the entire
   // workflow, not just the job env block, to catch unauthorized integrations.
   const bindings = [...hosting.matchAll(/\$\{\{\s*(?:vars|secrets)\.([A-Z][A-Z0-9_]*)\s*\}\}/g)];

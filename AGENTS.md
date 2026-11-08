@@ -68,6 +68,8 @@ Classificare il task come **STANDARD**, **SENSITIVE** o **CRITICAL** e motivare 
 
 **MUST:** aumentare profondità di analisi, test e review in proporzione al rischio del task e dei boundary coinvolti.
 
+**MUST:** per ogni file esaminato in audit valutare anche qualità ingegneristica e refactoring nel perimetro collegato: responsabilità, coesione, accoppiamento, duplicazioni, complessità, tipi, errori/recovery, leggibilità, test e documentazione. Distinguere difetti dimostrati, debito tecnico e opportunità; correggere solo ciò che migliora robustezza o manutenibilità senza cambi non richiesti. Non dichiarare un file concluso senza questa valutazione.
+
 Sono CRITICAL almeno: dati utente, IndexedDB/persistenza, sync, Firestore/Rules, Auth, guest→account, schema/migrazioni, import/export, cancellazione, update/reload, sicurezza e rischio di perdita/corruzione dati.
 
 - **MUST:** preparare un piano per lavori strutturali o CRITICAL; può restare nel reasoning o nella PR, senza una nuova approvazione per scelte tecniche ordinarie.
