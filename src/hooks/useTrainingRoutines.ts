@@ -15,7 +15,7 @@ const EMPTY_LIBRARY: Exercise[] = [];
 const ROUTINE_DRAFT_KEY = 'draft_routine';
 
 const recoveredRoutineExerciseSchema = z.object({
-    exId: z.string().trim().min(1),
+    exId: z.string().refine(id => id.trim().length > 0),
     setsCount: z.union([z.string(), z.number().finite()]),
     minReps: z.union([z.string(), z.number().finite()]).optional(),
     maxReps: z.union([z.string(), z.number().finite()]).optional(),
