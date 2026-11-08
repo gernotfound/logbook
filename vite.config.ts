@@ -11,6 +11,20 @@ const buildSha = process.env.LOGBOOK_BUILD_SHA || process.env.EXPECTED_SHA || pr
 const buildHash = buildSha.slice(0, 7)
 const buildTime = new Date().toISOString()
 
+// Only Firebase's account/data SDKs belong in the client. Even when installed
+// transitively, Crashlytics and OpenTelemetry exporters/instrumentation must not
+// be included in any production chunk (including a lazy-loaded chunk).
+const forbiddenDiagnosticModule = /(?:^|\/)node_modules\/(?:@firebase\/crashlytics(?:\/|$)|firebase\/crashlytics(?:\/|$)|@opentelemetry\/(?!api(?:\/|$))[^/]+(?:\/|$))/i;
+
+export function assertNoBundledClientDiagnostics(moduleIds: Iterable<string>): void {
+  for (const id of moduleIds) {
+    const normalized = id.replaceAll('\\', '/');
+    if (forbiddenDiagnosticModule.test(normalized)) {
+      throw new Error(`External client error monitoring module forbidden in production bundle: ${normalized}`);
+    }
+  }
+}
+
 const basePath = '/'
 
 export default defineConfig({
@@ -24,6 +38,15 @@ export default defineConfig({
   base: basePath,
   plugins: [
     react(),
+    {
+      name: 'thelogbook-no-client-error-monitoring',
+      generateBundle(_output, bundle) {
+        const modules = Object.values(bundle).flatMap(entry =>
+          entry.type === 'chunk' ? Object.keys(entry.modules) : [],
+        );
+        assertNoBundledClientDiagnostics(modules);
+      },
+    },
     VitePWA({
       strategies: 'buildSW',
       filename: 'sw.js',
