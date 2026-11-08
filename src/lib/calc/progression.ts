@@ -768,8 +768,15 @@ export function computeProgressionEngine(
             : comparison.level === 'none' && latestExposure
                 ? 'new_baseline'
                 : classificationFor(current, previousComparable, outputChange, isRecord);
-        const quality = qualityFor(comparison, recentComparable.length, recentLimitations.length > 0);
-        const qualityReasons = [...comparison.reasons];
+        const timedOutputUnverified = current.trackingType === 'time'
+            && Boolean(previousComparable) && outputChange === 'unknown';
+        const quality = timedOutputUnverified
+            ? 'limited'
+            : qualityFor(comparison, recentComparable.length, recentLimitations.length > 0);
+        const qualityReasons = [
+            ...comparison.reasons,
+            ...(timedOutputUnverified ? ['Durata non verificabile per tutti i segmenti temporizzati confrontati.'] : []),
+        ];
         for (const limitation of recentLimitations) {
             if (limitation.exposure.sessionId === previousComparable?.sessionId) continue;
             qualityReasons.push(
