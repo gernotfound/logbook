@@ -40,7 +40,10 @@ export const CycleCard: React.FC<CycleCardProps> = ({
         actionPendingRef.current = true;
         setActionPending(true);
         try {
-            await action();
+            const result = action();
+            // Synchronous callbacks have already completed; only a pending
+            // Promise needs to hold the lock across React event boundaries.
+            if (result) await result;
         } catch (error) {
             console.error('Operazione sul ciclo non completata:', error);
         } finally {
