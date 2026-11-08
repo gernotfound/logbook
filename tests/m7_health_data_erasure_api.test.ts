@@ -35,6 +35,77 @@ describe('data-only erasure trusted API', () => {
     });
   });
 
+  it.each([
+    ['unexpected query', 'https://backend.example/api/health-data-erasure?uid=other'],
+    ['duplicate query', 'https://backend.example/api/health-data-erasure?token=a&token=b'],
+  ])('rejects %s before authentication or job creation', async (_name, url) => {
+    const response = await POST(new Request(url, { method: 'POST', headers: { origin: 'https://thelogbook.web.app' } }));
+    expect(response.status).toBe(400);
+    expect(response.headers.get('cache-control')).toBe('no-store');
+    expect(auth.verifyDeletionRequester).not.toHaveBeenCalled();
+    expect(erasure.createHealthDataErasureJob).not.toHaveBeenCalled();
+  });
+
+  it('rejects an unexpected POST payload before starting an irreversible job', async () => {
+    for (const value of ['{"action":"purge"}', 'x']) {
+      const response = await POST(new Request('https://backend.example/api/health-data-erasure', {
+        method: 'POST', headers: { origin: 'https://thelogbook.web.app' }, body: value,
+      }));
+      expect(response.status).toBe(400);
+      expect(response.headers.get('cache-control')).toBe('no-store');
+      expect(await response.json()).toEqual({ error: 'La cancellazione non accetta dati da inviare.' });
+    }
+    const declared = await POST(new Request('https://backend.example/api/health-data-erasure', {
+      method: 'POST', headers: { origin: 'https://thelogbook.web.app', 'content-length': '9000' },
+    }));
+    expect(declared.status).toBe(400);
+    expect(auth.verifyDeletionRequester).not.toHaveBeenCalled();
+    expect(erasure.createHealthDataErasureJob).not.toHaveBeenCalled();
+    expect(erasure.processHealthDataErasure).not.toHaveBeenCalled();
+  });
+
+  it.each(['stalled', 'empty-chunk-then-stalled'] as const)(
+    'rejects %s POST streams without consuming App Check or creating a job',
+    async scenario => {
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+      try {
+        const request = new Request('https://backend.example/api/health-data-erasure', {
+          method: 'POST', headers: { origin: 'https://thelogbook.web.app' },
+          body: new ReadableStream<Uint8Array>({
+            start(controller) {
+              if (scenario === 'empty-chunk-then-stalled') controller.enqueue(new Uint8Array(0));
+            },
+          }),
+          duplex: 'half',
+        } as RequestInit & { duplex: 'half' });
+        const pending = POST(request);
+        await vi.advanceTimersByTimeAsync(2_100);
+        const response = await pending;
+        expect(response.status).toBe(408);
+        expect(await response.json()).toEqual({ error: 'Lettura della richiesta scaduta. Riprova.' });
+        expect(auth.verifyDeletionRequester).not.toHaveBeenCalled();
+        expect(erasure.createHealthDataErasureJob).not.toHaveBeenCalled();
+      } finally {
+        vi.useRealTimers();
+      }
+    },
+  );
+
+  it('accepts a bodyless streamed POST from an HTTP adapter', async () => {
+    const response = await POST(new Request('https://backend.example/api/health-data-erasure', {
+      method: 'POST', headers: { origin: 'https://thelogbook.web.app' },
+      body: new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.enqueue(new Uint8Array(0));
+          controller.close();
+        },
+      }),
+      duplex: 'half',
+    } as RequestInit & { duplex: 'half' }));
+    expect(response.status).toBe(200);
+    expect(erasure.createHealthDataErasureJob).toHaveBeenCalledWith('owner-A');
+  });
+
   it('delegates destructive-job authorization to the recent-Auth/App Check verifier before creating the job', async () => {
     auth.verifyDeletionRequester.mockRejectedValueOnce(new Error('Authentication failed'));
     const denied = await POST(request('POST'));

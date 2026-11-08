@@ -59,7 +59,9 @@ async function inspectRequestBody(request: Request): Promise<BodyInspection> {
       if (chunk.done) return 'empty';
       if (chunk.value.byteLength > 0) return 'payload';
     }
-    return 'payload';
+    // The empty-chunk budget proves neither a payload nor an empty body.
+    // Treat an inconclusive inspection as retryable without reaching key storage.
+    return 'timed-out';
   } finally {
     if (timeout !== undefined) clearTimeout(timeout);
     void reader.cancel().catch(() => {});
