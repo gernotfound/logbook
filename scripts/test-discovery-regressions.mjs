@@ -79,3 +79,31 @@ await test('isolated runner rejects unsafe Firebase configuration before executi
   assert.notEqual(probe.status, 0, 'unsafe configuration was accepted');
   assert.match(probe.stderr + probe.stdout, /Configurazione test non isolata: VITE_FIREBASE_PROJECT_ID/);
 });
+
+await test('gc runner preserves causal test discovery and rejects external client endpoints', async () => {
+  const root = fileURLToPath(new URL('..', import.meta.url));
+  const gc = await loadConfigFromFile({ command: 'serve', mode: 'test' }, resolve(root, 'vitest.gc.config.ts'));
+  assert.ok(gc?.config.test);
+  assert.equal(gc.config.test.environment, 'node');
+  assert.deepEqual(gc.config.test.setupFiles, ['./tests/isolated/browserStorageSetup.ts']);
+  assert.deepEqual(gc.config.test.include, ['tests/gc/**/*.test.ts']);
+  assert.equal(gc.config.test.maxWorkers, 1);
+  assert.equal(gc.config.test.testTimeout, 30000);
+
+  const { spawnSync } = await import('node:child_process');
+  for (const [key, value] of [
+    ['VITE_FIREBASE_PROJECT_ID', 'unapproved-gc-project'],
+    ['VITE_ACCOUNT_DELETION_API_ORIGIN', 'https://unapproved-gc.example.invalid'],
+  ]) {
+    const probe = spawnSync(process.execPath, ['--input-type=module', '-e',
+      "import { loadConfigFromFile } from 'vite'; await loadConfigFromFile({ command: 'serve', mode: 'test' }, 'vitest.gc.config.ts');",
+    ], {
+      cwd: root,
+      encoding: 'utf8',
+      env: { ...process.env, [key]: value },
+    });
+    if (probe.error) throw probe.error;
+    assert.notEqual(probe.status, 0, key + ' must be rejected before GC tests load');
+    assert.match(probe.stderr + probe.stdout, /Configurazione test non isolata/);
+  }
+});

@@ -13,7 +13,8 @@ export const trialCases = {
   },
   "meal-totals": {
     "mutate": [
-      "src/lib/nutrition/calculateLoggedMealTotals.ts"
+      "src/lib/nutrition/calculateLoggedMealTotals.ts",
+      "src/lib/utils/rounding.ts"
     ],
     "testFiles": [
       "src/lib/nutrition/calculateLoggedMealTotals.test.ts",
@@ -67,7 +68,7 @@ export const trialCases = {
   },
   "journal-retry": {
     "mutate": ["src/lib/sync/journalRetry.ts"],
-    "testFiles": ["tests/isolated/journalRetry.test.ts"],
+    "testFiles": ["tests/isolated/journalRetry.test.ts", "tests/isolated/cloudKeyJournalRecovery.test.ts"],
     "runner": "isolated"
   },
   "replica-checkpoint": {
