@@ -48,7 +48,6 @@ interface SearchableExercise {
 
 function buildExerciseLibrarySearcher<T extends SearchableExercise>(library: T[]): (query: string) => T[] {
     if (!Array.isArray(library)) return () => [];
-    const sortedLibrary = [...library].sort((a, b) => (a?.name || '').localeCompare(b?.name || '', 'it'));
 
     const muscleMap = new Map<string, string>();
     if (Array.isArray(MUSCLES)) {
@@ -100,8 +99,7 @@ function buildExerciseLibrarySearcher<T extends SearchableExercise>(library: T[]
 
 
     return (query: string): T[] => {
-        if (!query || typeof query !== 'string' || !query.trim()) return [...sortedLibrary];
-
+        // Public search entry points handle empty queries before building the index.
         const q = query.trim().toLowerCase();
         const stemmedQ = normalizeStem(q);
         const tokens = q.split(/\s+/).filter(t => t.length >= 1);
@@ -115,6 +113,7 @@ function buildExerciseLibrarySearcher<T extends SearchableExercise>(library: T[]
             // Direct match in muscles
             if (item._searchMuscles.includes(q) || item._searchMuscles.includes(stemmedQ)) return true;
             if (item._searchSecMuscles.includes(q) || item._searchSecMuscles.includes(stemmedQ)) return true;
+            if (item._searchType.includes(q)) return true;
             // Direct match in notes
             if (item._searchNotes.includes(q)) return true;
             // Multi-token: each token matches either name, muscles, notes, or type
@@ -175,10 +174,6 @@ export function createExerciseLibrarySearcher<T extends SearchableExercise>(libr
 }
 
 export function searchExerciseLibrary<T extends SearchableExercise>(library: T[], query: string): T[] {
-    if (!Array.isArray(library)) return [];
-    if (!query || typeof query !== 'string' || !query.trim()) {
-        return [...library].sort((a, b) => (a?.name || '').localeCompare(b?.name || '', 'it'));
-    }
     return createExerciseLibrarySearcher(library)(query);
 }
 
@@ -306,18 +301,29 @@ export function getLatestUserWeight(
     return 80;
 }
 
+// Assisted sets can have signed loads; malformed or non-finite numeric
+// text must not contaminate the tonnage of otherwise valid workout sets.
+function parseFiniteSetLoad(raw: string | number | undefined | null): number {
+    if (typeof raw === 'number') return Number.isFinite(raw) ? raw : 0;
+    if (typeof raw !== 'string') return 0;
+    const normalized = raw.trim().replace(',', '.');
+    if (!/^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?$/i.test(normalized)) return 0;
+    const value = Number(normalized);
+    return Number.isFinite(value) ? value : 0;
+}
+
 export function calculateEffectiveSetWeight(
     setKg: string | number | undefined | null,
     exercise?: VolumeExerciseRef | null,
     userWeight: number = 80
 ): number {
-    const raw = typeof setKg === 'string' ? setKg.trim().replace(',', '.') : setKg;
-    const baseKg = parseFloat(String(raw ?? '')) || 0;
-    const bw = (exercise?.isBodyweight && userWeight > 0) ? userWeight : 0;
-    const eq = (exercise?.equipmentWeight && Number(exercise.equipmentWeight) > 0)
-        ? (typeof exercise.equipmentWeight === 'string' ? parseFloat(String(exercise.equipmentWeight).replace(',', '.')) || 0 : exercise.equipmentWeight)
-        : 0;
-    return baseKg + bw + eq;
+    const baseKg = parseFiniteSetLoad(setKg);
+    const bw = exercise?.isBodyweight && Number.isFinite(userWeight) && userWeight > 0 ? userWeight : 0;
+    const eq = typeof exercise?.equipmentWeight === 'number'
+        && Number.isFinite(exercise.equipmentWeight) && exercise.equipmentWeight > 0
+        ? exercise.equipmentWeight : 0;
+    const total = baseKg + bw + eq;
+    return Number.isFinite(total) ? total : 0;
 }
 
 function observedReps(raw: unknown): number {
@@ -325,6 +331,14 @@ function observedReps(raw: unknown): number {
     if (!/^-?\d+$/.test(text)) return 0;
     const value = Number(text);
     return Number.isSafeInteger(value) ? value : 0;
+}
+
+// An invalid/overflowing stage cannot erase valid mechanical work in the
+// same set or workout. Preserve signed contributions and fractional kilograms.
+function addRepresentableVolume(total: number, contribution: number): number {
+    const next = total + contribution;
+    return Number.isFinite(contribution) && Math.abs(contribution) <= Number.MAX_SAFE_INTEGER
+        && Number.isFinite(next) && Math.abs(next) <= Number.MAX_SAFE_INTEGER ? next : total;
 }
 
 export function calculateSetVolume(
@@ -340,12 +354,12 @@ export function calculateSetVolume(
     if (!set) return 0;
     const reps = observedReps(set.reps);
     const effectiveWeight = calculateEffectiveSetWeight(set.kg, exercise, userWeight);
-    let volume = effectiveWeight * reps;
+    let volume = addRepresentableVolume(0, effectiveWeight * reps);
 
     for (const segment of getSetSegments(set as any)) {
         const segmentReps = observedReps(segment.reps);
         const segmentEffectiveWeight = calculateEffectiveSetWeight(segment.kg, exercise, userWeight);
-        volume += segmentEffectiveWeight * segmentReps;
+        volume = addRepresentableVolume(volume, segmentEffectiveWeight * segmentReps);
     }
     return volume;
 }
@@ -375,8 +389,9 @@ export function calculateWorkoutVolume(
         const libEx = ex.exId ? libMap.get(ex.exId) : null;
         // Numeric set fields on cardio/time exercises must not contribute mechanical tonnage.
         if (libEx?.trackingType === 'cardio' || libEx?.trackingType === 'time') continue;
-        for (const s of (ex.sets || [])) {
-            totalVolume += calculateSetVolume(s, libEx, userWeight);
+        if (!Array.isArray(ex.sets)) continue;
+        for (const s of ex.sets) {
+            totalVolume = addRepresentableVolume(totalVolume, calculateSetVolume(s, libEx, userWeight));
         }
     }
     return totalVolume;
