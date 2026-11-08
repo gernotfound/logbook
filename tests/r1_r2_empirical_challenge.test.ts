@@ -152,6 +152,26 @@ describe('EMPIRICAL ADVERSARIAL SUITE — R1 (TDEE Calculation) & R2 (Workout Vo
             expect(res.tdee).toBe(2500);
         });
 
+        it('R1.4b: rejects numeric prefixes and non-finite values instead of counting invalid days', () => {
+            const valid = Array.from({ length: 6 }, (_, i) => ({
+                date: `2026-06-${String(i + 10).padStart(2, '0')}`, weight: 80, kcal: 2500,
+            }));
+            const invalid = [
+                { date: '2026-06-16', weight: '80kg', kcal: 2500 },
+                { date: '2026-06-17', weight: 80, kcal: '2500 kcal' },
+                { date: '2026-06-18', weight: '0x50', kcal: 2500 },
+                { date: '2026-06-19', weight: 80, kcal: '1e309' },
+            ];
+            const input = [...valid, ...invalid];
+            const untouched = structuredClone(input);
+            expect(calculateTDEE(input)).toEqual({
+                error: true,
+                message: 'Raccolta dati in corso... (6/7 giorni richiesti)',
+            });
+            expect(input).toEqual(untouched);
+            expect(calculateTDEE([...valid, { date: '2026-06-16', weight: '80,5', kcal: '2500,5' }]).error).toBe(false);
+        });
+
         // 1.5 Invalid dates are excluded before arithmetic
         it('R1.5: rejects unparseable dates instead of producing NaN TDEE values', () => {
             const dataWithBadDate = [
@@ -211,8 +231,46 @@ describe('EMPIRICAL ADVERSARIAL SUITE — R1 (TDEE Calculation) & R2 (Workout Vo
             expect(result.timeSpanDays).toBe(13);
         });
 
+        it('R1.6c: rejects duplicates without inflating the seven-day sample or mutating input', () => {
+            const sixDays = Array.from({ length: 6 }, (_, index) => ({
+                date: `2026-08-${String(index + 1).padStart(2, '0')}`,
+                weight: 80, kcal: 2400,
+            }));
+            const duplicate = { ...sixDays[0], weight: 100, kcal: 9000 };
+            const insufficient = [...sixDays, duplicate];
+            const original = structuredClone(insufficient);
+            expect(calculateTDEE(insufficient)).toEqual({
+                error: true,
+                message: 'Raccolta dati in corso... (6/7 giorni richiesti)',
+            });
+            expect(insufficient).toEqual(original);
+
+            const sevenDays = [...sixDays, { date: '2026-08-07', weight: 80, kcal: 2400 }];
+            expect(calculateTDEE(sevenDays).error).toBe(false);
+            const ambiguous = [...sevenDays, duplicate];
+            expect(calculateTDEE(ambiguous)).toEqual({
+                error: true,
+                message: 'Campione non valido: registrazioni duplicate per la stessa giornata.',
+            });
+            expect(ambiguous).toEqual([...sevenDays, duplicate]);
+        });
+
+        it('R1.6d: ignores duplicate days outside the sampled calendar window', () => {
+            const recent = Array.from({ length: 7 }, (_, index) => ({
+                date: `2026-08-${String(index + 1).padStart(2, '0')}`, weight: 80, kcal: 2400,
+            }));
+            const distantDuplicates = [
+                { date: '2026-01-01', weight: 60, kcal: 1000 },
+                { date: '2026-01-01', weight: 100, kcal: 7000 },
+            ];
+            const result = calculateTDEE([...recent, ...distantDuplicates]);
+            expect(result.error).toBe(false);
+            expect(result.tdee).toBe(2400);
+            expect(result.daysTracked).toBe(7);
+        });
+
         // 1.7 Identical dates scenario
-        it('R1.7: Returns clear error when all valid measurements share the exact same date (diffDays = 0)', () => {
+        it('R1.7: counts seven repeated records as one valid calendar day', () => {
             const sameDayData = [
                 { date: '2026-08-15', weight: 80.0, kcal: 2500 },
                 { date: '2026-08-15', weight: 80.1, kcal: 2600 },
@@ -226,7 +284,7 @@ describe('EMPIRICAL ADVERSARIAL SUITE — R1 (TDEE Calculation) & R2 (Workout Vo
             const res = calculateTDEE(sameDayData);
             expect(res).toEqual({
                 error: true,
-                message: 'Dati insufficienti (stesso giorno)'
+                message: 'Raccolta dati in corso... (1/7 giorni richiesti)'
             });
         });
 
