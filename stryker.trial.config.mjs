@@ -91,6 +91,11 @@ export const trialCases = {
     "testFiles": ["tests/isolated/localRepository.test.ts", "tests/isolated/lateCommit.test.ts", "tests/isolated/storeJournal.test.ts", "tests/isolated/localJournalAcknowledgement.test.ts"],
     "runner": "isolated"
   },
+  "consent-journal-recovery": {
+    "mutate": ["src/lib/sync/localConsentJournalRecovery.ts"],
+    "testFiles": ["tests/isolated/consentEpochRecovery.test.ts"],
+    "runner": "isolated"
+  },
   "pending-sequences": {
     "mutate": ["src/lib/sync/localPendingSequences.ts"],
     "testFiles": ["tests/isolated/localPendingSequences.test.ts"],
