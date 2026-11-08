@@ -164,7 +164,11 @@ export async function GET(request: Request): Promise<Response> {
     }
   }
 
-  console.info('[account-deletion-cron] completed', {
+  // Every count is emitted from one summary so diagnostics and the protected
+  // JSON response cannot silently diverge when another phase is added.
+  // "processed" counts attempted account workers, while accountFailed counts
+  // returned failures and recoveryErrors counts exceptions.
+  const summary = {
     scanned: jobs.length,
     processed: accountProcessed,
     accountCompleted,
@@ -185,31 +189,8 @@ export async function GET(request: Request): Promise<Response> {
     recoveryErrors,
     retentionErrors,
     purged,
-  });
+  };
+  console.info('[account-deletion-cron] completed', summary);
 
-  return Response.json({
-    scanned: jobs.length,
-    processed: accountProcessed,
-    accountCompleted,
-    accountPending,
-    accountBusy,
-    accountFailed,
-    // Only aggregates are returned. "processed" counts attempted account
-    // workers; accountFailed counts returned outcomes, recoveryErrors throws.
-    // Health erasures retain their separate returned/throwing counters.
-    erasureScanned,
-    erasureProcessed,
-    erasureCompleted,
-    erasurePending,
-    erasureBusy,
-    erasureFailed,
-    erasureErrors,
-    erasureReceiptsPurged,
-    inactiveScanned,
-    inactiveQueued,
-    inactivityErrors,
-    recoveryErrors,
-    retentionErrors,
-    purged,
-  });
+  return Response.json(summary);
 }

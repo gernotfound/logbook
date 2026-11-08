@@ -200,6 +200,7 @@ describe('M7 daily account deletion recovery cron', () => {
       .mockResolvedValueOnce('busy')
       .mockResolvedValueOnce('failed');
     const errors = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const info = vi.spyOn(console, 'info').mockImplementation(() => undefined);
     try {
       const response = await GET(request('test-secret'));
       expect(response.status).toBe(200);
@@ -210,11 +211,12 @@ describe('M7 daily account deletion recovery cron', () => {
       });
       expect(body).not.toHaveProperty('results');
       expect(JSON.stringify(body)).not.toContain('private-owner-');
+      expect(info).toHaveBeenCalledWith('[account-deletion-cron] completed', body);
       expect(errors).toHaveBeenCalledWith(
         '[account-deletion-cron] recovery workers reported failed outcomes', { failed: 1 },
       );
       expect(retention.purgeExpiredCompletedDeletionJobs).toHaveBeenCalledOnce();
-    } finally { errors.mockRestore(); }
+    } finally { errors.mockRestore(); info.mockRestore(); }
   });
 
   it('reports busy/pending health attempts separately from completed receipt purges', async () => {
