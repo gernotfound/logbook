@@ -458,8 +458,11 @@ describe('trusted data-only erasure worker', () => {
         uid, status: 'complete', consentRevision: 3, purgeAfter: expired,
       });
     }
+    // Real completed receipts persist the successor revision; only the
+    // 100 preceding malformed receipts deliberately omit that evidence.
     fixture.records.set(markerPath('valid'), {
-      uid: 'valid', status: 'complete', consentRevision: 3, purgeAfter: expired,
+      uid: 'valid', status: 'complete', consentRevision: 3, completedRevision: 4,
+      purgeAfter: expired,
     });
     fixture.records.set(consentPath('valid'), { uid: 'valid', status: 'withdrawn', revision: 4, erasedBeforeRevision: 3 });
     expect(await purgeExpiredCompletedHealthErasures(Date.now() + 30_000)).toBe(1);
@@ -476,7 +479,8 @@ describe('trusted data-only erasure worker', () => {
       });
     }
     fixture.records.set(markerPath('zz-valid'), {
-      uid: 'zz-valid', status: 'complete', consentRevision: 3, purgeAfter: expired,
+      uid: 'zz-valid', status: 'complete', consentRevision: 3, completedRevision: 4,
+      purgeAfter: expired,
     });
     fixture.records.set(consentPath('zz-valid'), {
       uid: 'zz-valid', status: 'withdrawn', revision: 4, erasedBeforeRevision: 3,
@@ -511,7 +515,9 @@ describe('trusted data-only erasure worker', () => {
     fixture.records.set(consentPath('blocked'), {
       uid: 'blocked', status: 'withdrawn', revision: 4, erasedBeforeRevision: 3,
     });
-    // Simulate the deferred retry window expiring; the proof now authorizes retirement.
+    // The repaired receipt needs its own completed epoch as well as
+    // the restored consent floor; a floor alone never proves completion.
+    deferred.completedRevision = 4;
     deferred.purgeAfter = expired;
     expect(await purgeExpiredCompletedHealthErasures(Date.now() + 30_000)).toBe(1);
     expect(fixture.records.has(markerPath('blocked'))).toBe(false);
