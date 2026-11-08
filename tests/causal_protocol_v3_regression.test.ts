@@ -192,7 +192,7 @@ describe('Sync Protocol 3 causal convergence regressions', () => {
         });
     });
 
-    it('uses the same own-property guard semantics for visible and hidden descendants', () => {
+    it('uses the same session guard for visible and hidden descendants', () => {
         const base = new Map<string, DocumentData>([['', {
             activeWorkout: { id: 's2', moodRating: 0, exercises: [] },
         }]]);
@@ -218,6 +218,21 @@ describe('Sync Protocol 3 causal convergence regressions', () => {
         );
         expect((reconciled.documents.get('')?.activeWorkout as any).moodRating).toBe(0);
         expect(reconciled.syncMetas[''].fields['activeWorkout/moodRating']).toBeUndefined();
+    });
+
+    it('does not satisfy a semantic guard through an inherited prototype property', () => {
+        const base = new Map<string, DocumentData>([['', { profile: { name: 'safe' } }]]);
+        const guarded: SemanticOperation = {
+            docPath: '', path: ['profile', 'name'], value: 'unsafe',
+            isDelete: false, actorId: 'A', seq: 1, clock: { A: 1 },
+            // Object.prototype.constructor.name is 'Object', but it is not
+            // an own property of the business document.
+            guard: { path: ['constructor', 'name'], equals: 'Object' },
+        };
+        const result = applySemanticOperations(base, [guarded]);
+        expect((result.documents.get('')?.profile as any).name).toBe('safe');
+        expect(result.syncMetas[''].fields['profile/name']).toBeUndefined();
+        expect(result.syncMetas[''].clock).toEqual({ A: 1 });
     });
 
     it('observes a stale active-workout operation only at document frontier, never inside the current field stamp', () => {
