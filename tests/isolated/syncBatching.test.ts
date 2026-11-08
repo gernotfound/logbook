@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { SemanticOperation } from '../../src/lib/sync/semanticProjection';
+import type { SemanticOperation, VectorClock } from '../../src/lib/sync/semanticProjection';
 import {
     distinctDocumentCount,
     boundedPendingTransactionBatch,
@@ -19,10 +19,11 @@ const operation = (docPath: string, seq: number, actorId = 's00'): SemanticOpera
 });
 
 describe('bounded causal sync batching', () => {
-    it.each([
+    const emptyChanges: Array<{ baseSeq: number; baseClock: VectorClock }> = [
         { baseSeq: 0, baseClock: { s01: 5 } },
         { baseSeq: 3, baseClock: { s00: 5, s01: 9 } },
-    ])('keeps an empty change a causal no-op without normalizing its observed frontier: %j', ({ baseSeq, baseClock }) => {
+    ];
+    it.each(emptyChanges)('keeps an empty change a causal no-op without normalizing its observed frontier: %j', ({ baseSeq, baseClock }) => {
         const before = structuredClone(baseClock);
         const result = sequenceOperationsForBoundedTransactions([], 's00', baseSeq, baseClock);
         expect(result).toEqual({ operations: [], actorSeq: baseSeq, clock: before });
