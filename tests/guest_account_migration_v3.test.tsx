@@ -157,6 +157,15 @@ describe('guest -> account V3 migration', () => {
         });
 
         let preSecondCloudProfile: unknown = null;
+        const commitProfiles: unknown[] = [];
+        const originalCommit = localRepository.commitLocal;
+        const commitSpy = vi.spyOn(localRepository, 'commitLocal').mockImplementation(async (...args) => {
+            const before = { desired: args[1].profile, callerBase: args[2].profile };
+            const result = await originalCommit(...args);
+            const durable = await readLocal('user:a');
+            commitProfiles.push({ ...before, durableAfter: durable?.data.profile, pending: durable?.pending.length });
+            return result;
+        });
         const hydrateProfiles: unknown[] = [];
         const originalHydrate = localRepository.hydrateLocal;
         const hydrateSpy = vi.spyOn(localRepository, 'hydrateLocal').mockImplementation(async (...args) => {
@@ -193,6 +202,7 @@ describe('guest -> account V3 migration', () => {
                         cloudReads: vi.mocked(DB.loadCloudPayload).mock.calls.length,
                         preSecondCloudProfile,
                         hydrateProfiles,
+                        commitProfiles,
                         cloudFixtureProfile: cloud.profile,
                         userProfile: state.userData?.profile,
                         pending: envelope?.pending.length,
@@ -210,6 +220,7 @@ describe('guest -> account V3 migration', () => {
             expect(localStorage.getItem('logbook_is_guest')).toBeNull();
         } finally {
             hydrateSpy.mockRestore();
+            commitSpy.mockRestore();
             mockedGet.mockImplementation(originalGet);
             await clearCatalogCache();
         }
