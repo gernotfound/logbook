@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
+import { assertIsolatedVitestEnvironment, SYNTHETIC_FIREBASE_TEST_ENV } from '../scripts/vitest-env-isolation';
 
 describe('R2: Firebase Config Security & Fail-Fast Suite', () => {
     const originalEnv = { ...import.meta.env };
@@ -28,6 +29,43 @@ describe('R2: Firebase Config Security & Fail-Fast Suite', () => {
                 delete (import.meta.env as any)[key];
             }
         }
+    });
+
+    describe('Synthetic test environment boundary', () => {
+        it('tracks only the exact non-Production Firebase test placeholders', () => {
+            const source = fs.readFileSync(path.resolve(__dirname, '../.env.test'), 'utf8');
+            const entries = source.split(/\r?\n/).filter(Boolean).map(line => {
+                const match = /^([A-Z][A-Z0-9_]*)=([^\r\n]+)$/.exec(line);
+                expect(match, 'unexpected .env.test entry').not.toBeNull();
+                return [match![1], match![2]] as const;
+            });
+            expect(entries).toHaveLength(Object.keys(SYNTHETIC_FIREBASE_TEST_ENV).length);
+            expect(Object.fromEntries(entries)).toEqual(SYNTHETIC_FIREBASE_TEST_ENV);
+            expect(new Set(entries.map(([key]) => key)).size).toBe(entries.length);
+        });
+
+        it('fails closed for shell/.env.test.local overrides and unexpected VITE endpoints', () => {
+            const safe = { ...SYNTHETIC_FIREBASE_TEST_ENV };
+            expect(() => assertIsolatedVitestEnvironment(safe)).not.toThrow();
+            expect(() => assertIsolatedVitestEnvironment({
+                ...safe, VITE_ACCOUNT_DELETION_API_ORIGIN: 'http://127.0.0.1:9',
+            })).not.toThrow();
+
+            for (const key of Object.keys(safe)) {
+                expect(() => assertIsolatedVitestEnvironment({
+                    ...safe, [key]: 'https://thelogbook.web.app',
+                })).toThrow(key);
+            }
+            expect(() => assertIsolatedVitestEnvironment({
+                ...safe, VITE_ACCOUNT_DELETION_API_ORIGIN: 'https://logbook-gnf.vercel.app',
+            })).toThrow('backend trusted');
+            expect(() => assertIsolatedVitestEnvironment({
+                ...safe, VITE_RECAPTCHA_ENTERPRISE_SITE_KEY: 'unreviewed-site-key',
+            })).toThrow('non prevista');
+            expect(() => assertIsolatedVitestEnvironment({
+                ...safe, VITE_FUTURE_ENDPOINT: 'https://production.example',
+            })).toThrow('non prevista');
+        });
     });
 
     describe('Static Code & Secret Audit', () => {
