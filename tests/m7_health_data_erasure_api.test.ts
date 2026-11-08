@@ -25,7 +25,8 @@ const request = (method: string) => new Request('https://backend.example/api/hea
 
 describe('data-only erasure trusted API', () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    // Mock implementations queued in one test must not leak to the next.
+    vi.resetAllMocks();
     auth.verifyDeletionRequester.mockResolvedValue({ uid: 'owner-A' });
     auth.verifyRecoveryRegistrationRequester.mockResolvedValue({ uid: 'owner-A' });
     erasure.processHealthDataErasure.mockResolvedValue('complete');
@@ -103,7 +104,7 @@ describe('data-only erasure trusted API', () => {
         status, complete: false, localPurgeAuthorized: false,
         ...(retryable === undefined ? {} : { retryable }),
       });
-      erasure.processHealthDataErasure.mockResolvedValueOnce('busy');
+      if (expectedProcess) erasure.processHealthDataErasure.mockResolvedValueOnce('busy');
       const response = await GET(request('GET'));
       expect(response.status).toBe(202);
       expect(await response.json()).toMatchObject({ status, complete: false });
