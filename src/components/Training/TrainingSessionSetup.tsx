@@ -24,6 +24,17 @@ function routineExerciseLabel(routine: WorkoutRoutine): string {
     return `${count} ${count === 1 ? 'esercizio' : 'esercizi'}`;
 }
 
+function rotationLetter(position: number): string {
+    let remaining = position;
+    let label = '';
+    while (remaining > 0) {
+        remaining -= 1;
+        label = String.fromCharCode(65 + remaining % 26) + label;
+        remaining = Math.floor(remaining / 26);
+    }
+    return label;
+}
+
 export const TrainingSessionSetup = ({ onNavigateToPlanning }: TrainingSessionSetupProps) => {
     const trainingCycles = useAppStore(state => state.userData?.trainingCycles || EMPTY_CYCLES);
     const activeCycleId = useAppStore(state => state.userData?.activeCycleId ?? null);
@@ -31,22 +42,21 @@ export const TrainingSessionSetup = ({ onNavigateToPlanning }: TrainingSessionSe
     const { routines, history, startWorkout, startFreeWorkout } = useWorkoutSession();
 
     const [searchQuery, setSearchQuery] = useState('');
-    const [selectedPlannedRoutine, setSelectedPlannedRoutine] = useState('');
+    const [selectedPlannedRoutine, setSelectedPlannedRoutine] = useState<{ cycleId: string; routineId: string } | null>(null);
 
     const plannedRoutines: PlannedRoutineItem[] = useMemo(() => {
         if (!activeCycle?.routines) return [];
         const routineMap = new Map(routines.map(routine => [routine.id, routine]));
-        return activeCycle.routines
-            .map((item, index) => {
-                const routine = routineMap.get(item.routineId);
-                if (!routine) return null;
-                return {
-                    routine,
-                    letter: String.fromCharCode(65 + (index % 26)),
-                    position: index + 1,
-                };
-            })
-            .filter((item): item is PlannedRoutineItem => item !== null);
+        // The rotation engine excludes unavailable routines before assigning positions.
+        const available = activeCycle.routines.flatMap(item => {
+            const routine = routineMap.get(item.routineId);
+            return routine ? [routine] : [];
+        });
+        return available.map((routine, index) => ({
+            routine,
+            letter: rotationLetter(index + 1),
+            position: index + 1,
+        }));
     }, [activeCycle, routines]);
 
     const nextScheduled = useMemo(
@@ -125,8 +135,9 @@ export const TrainingSessionSetup = ({ onNavigateToPlanning }: TrainingSessionSe
     const nextPlannedItem = nextRoutine
         ? plannedRoutines.find(item => item.routine.id === nextRoutine.id)
         : undefined;
-    const selectedRotationId = plannedRoutines.some(item => item.routine.id === selectedPlannedRoutine)
-        ? selectedPlannedRoutine
+    const selectedRotationId = selectedPlannedRoutine?.cycleId === activeCycle?.id
+        && plannedRoutines.some(item => item.routine.id === selectedPlannedRoutine.routineId)
+        ? selectedPlannedRoutine.routineId
         : (nextRoutine?.id || plannedRoutines[0]?.routine.id || '');
     const selectedRotationRoutine = plannedRoutines.find(item => item.routine.id === selectedRotationId)?.routine;
 
@@ -189,7 +200,7 @@ export const TrainingSessionSetup = ({ onNavigateToPlanning }: TrainingSessionSe
                                 id="rotation-routine-select"
                                 aria-label="Seleziona scheda della rotazione"
                                 value={selectedRotationId}
-                                onChange={event => setSelectedPlannedRoutine(event.target.value)}
+                                onChange={event => setSelectedPlannedRoutine({ cycleId: activeCycle.id, routineId: event.target.value })}
                             >
                                 {plannedRoutines.map(item => (
                                     <option key={item.routine.id} value={item.routine.id}>
@@ -234,7 +245,7 @@ export const TrainingSessionSetup = ({ onNavigateToPlanning }: TrainingSessionSe
                             id="completed-cycle-routine-select"
                             aria-label="Seleziona scheda del ciclo"
                             value={selectedRotationId}
-                            onChange={event => setSelectedPlannedRoutine(event.target.value)}
+                            onChange={event => setSelectedPlannedRoutine({ cycleId: activeCycle.id, routineId: event.target.value })}
                         >
                             {plannedRoutines.map(item => (
                                 <option key={`${item.routine.id}-${item.position}`} value={item.routine.id}>
