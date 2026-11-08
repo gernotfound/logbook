@@ -174,6 +174,20 @@ describe('Empirical Challenger Suite: Edge Cases & Stress Verification', () => {
       expect(Logic.validateCustomFood({ ...food, fat: '.5' }).cleanData?.fat).toBe(0.5);
     });
 
+    test('strict numeric parsing remains consistent for TDEE and custom-food input', () => {
+      const food = { name: 'Test', baseQty: 100, unit: 'g', kcal: '2500,5', carbs: '15', pro: '5', fat: '4' };
+      const before = structuredClone(food);
+      expect(Logic.validateCustomFood(food).cleanData?.kcal).toBe(2501);
+      expect(Logic.validateCustomFood({ ...food, kcal: '2500 kcal' }).isValid).toBe(false);
+      expect(Logic.validateCustomFood({ ...food, kcal: '1e309' }).isValid).toBe(false);
+      const days = Array.from({ length: 7 }, (_, i) => ({
+        date: `2026-09-0${i + 1}`, weight: '80,5', kcal: '2500,5',
+      }));
+      expect(Logic.calculateTDEE(days)).toMatchObject({ error: false, avgKcal: 2501 });
+      expect(Logic.calculateTDEE([...days.slice(0, 6), { ...days[6], kcal: '2500 kcal' }]).error).toBe(true);
+      expect(food).toEqual(before);
+    });
+
     test('filled optional nutrients must be finite and nonnegative rather than silently discarded', () => {
       const food = { name: 'Test', baseQty: 100, unit: 'g', kcal: 120, carbs: 15, pro: 5, fat: 4 };
       for (const field of ['satFat', 'unSatFat', 'sugars', 'fiber', 'salt', 'sodium', 'vitA', 'vitC', 'calcium', 'iron'] as const) {
