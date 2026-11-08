@@ -192,6 +192,34 @@ describe('Sync Protocol 3 causal convergence regressions', () => {
         });
     });
 
+    it('uses the same own-property guard semantics for visible and hidden descendants', () => {
+        const base = new Map<string, DocumentData>([['', {
+            activeWorkout: { id: 's2', moodRating: 0, exercises: [] },
+        }]]);
+        const guarded = (actorId: 'A' | 'B', value: number): SemanticOperation => ({
+            docPath: '', path: ['activeWorkout', 'moodRating'],
+            value, isDelete: false, actorId, seq: 1,
+            clock: { P: 1, [actorId]: 1 },
+            guard: { path: ['activeWorkout', 'id'], equals: 's2' },
+        });
+        const concurrent = applySemanticOperations(base, [guarded('A', 4), guarded('B', 5)]);
+        expect((concurrent.documents.get('')?.activeWorkout as any).moodRating).toBe(5);
+        expect(concurrent.syncMetas[''].fields['activeWorkout/moodRating'].candidates).toHaveLength(1);
+
+        // The parent event arrives late. Both descendant clocks observed P:1,
+        // but their guards refer to the former active session and must fail.
+        const changedSession: SemanticOperation = {
+            docPath: '', path: ['activeWorkout'],
+            value: { id: 's1', moodRating: 0, exercises: [] },
+            isDelete: false, actorId: 'P', seq: 1, clock: { P: 1 },
+        };
+        const reconciled = applySemanticOperations(
+            concurrent.documents, [changedSession], concurrent.syncMetas,
+        );
+        expect((reconciled.documents.get('')?.activeWorkout as any).moodRating).toBe(0);
+        expect(reconciled.syncMetas[''].fields['activeWorkout/moodRating']).toBeUndefined();
+    });
+
     it('observes a stale active-workout operation only at document frontier, never inside the current field stamp', () => {
         const base = new Map<string, DocumentData>([['', {
             activeWorkout: { id: 's2', date: '2026-09-14', moodRating: 0, exercises: [] },
