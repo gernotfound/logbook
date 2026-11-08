@@ -1,7 +1,8 @@
 import { LEGAL_VERSIONS } from '../src/lib/legalVersions';
 import { DB as RealDB } from '../src/lib/db';
 import { auth as __testAuth } from '../src/lib/firebase';
-import { openCloudDocument } from '../src/lib/sync/cloudDocumentCipher';
+import { openCloudDocument, sealCloudDocument } from '../src/lib/sync/cloudDocumentCipher';
+import type { SyncMeta } from '../src/lib/sync/semanticProjection/contracts';
 import {
     adoptReplicaCheckpoint as __testAdoptReplicaCheckpoint,
     commitLocal as __testCommitLocal,
@@ -59,6 +60,21 @@ export const ConsentedTestDB = {
             },
     }, revision),
 };
+
+/** Test-only ADK matching the local sync writer fixture. Never persisted. */
+export const testCloudKey = (): Uint8Array => new Uint8Array(32).fill(18);
+
+/** Wrap a business fixture with the same authenticated envelope as Production. */
+export function sealTestCloudFixture(raw: Record<string, unknown>, path = '') {
+    const uid = __testAuth.currentUser?.uid;
+    if (!uid) throw new Error('Test cloud owner assente');
+    if (Object.hasOwn(raw, '_sealed')) return raw;
+    const { _schemaVersion, _sync, ...business } = raw;
+    if (_schemaVersion !== 1 || !_sync || typeof _sync !== 'object') {
+        throw new Error('Fixture cloud non valida');
+    }
+    return sealCloudDocument(testCloudKey(), uid, path, business, _sync as SyncMeta);
+}
 
 /** Inspect an authenticated production-format AEAD envelope, never a plaintext proxy. */
 export function openTestCloudDocument(document: unknown, path = '') {

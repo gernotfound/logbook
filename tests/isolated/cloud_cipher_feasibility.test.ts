@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { applySemanticOperations } from '../../src/lib/sync/semanticProjection/apply';
+import { readAccountCloudDocument } from '../../src/lib/sync/cloudDocumentRead';
 import { parseSyncMeta } from '../../src/lib/sync/semanticProjection/metadata';
 import type { SemanticOperation, SyncMeta } from '../../src/lib/sync/semanticProjection/contracts';
 import {
@@ -32,6 +33,21 @@ const privateDocument = (): { business: Record<string, unknown>; sync: SyncMeta 
 });
 
 describe('cloud document cipher — isolated contract (#620)', () => {
+    it('rejects keyless plaintext, keyless ciphertext and plaintext with a valid ADK', () => {
+        const accountKey = key();
+        const source = privateDocument();
+        const plaintext = { ...source.business, _schemaVersion: 1, _sync: source.sync };
+        const sealed = sealCloudDocument(accountKey, 'owner-a', '', source.business, source.sync);
+        expect(() => readAccountCloudDocument(plaintext, 'cloud test', 'owner-a', ''))
+            .toThrow(CloudCiphertextError);
+        expect(() => readAccountCloudDocument(sealed, 'cloud test', 'owner-a', ''))
+            .toThrow(CloudCiphertextError);
+        expect(() => readAccountCloudDocument(plaintext, 'cloud test', 'owner-a', '', accountKey))
+            .toThrow(CloudCiphertextError);
+        expect(readAccountCloudDocument(sealed, 'cloud test', 'owner-a', '', accountKey).business)
+            .toEqual(source.business);
+    });
+
     it('hides business AND causal candidates/guards while preserving Protocol 3 metadata', () => {
         const original = privateDocument();
         const sealed = sealCloudDocument(key(), 'owner-a', '', original.business, original.sync);
