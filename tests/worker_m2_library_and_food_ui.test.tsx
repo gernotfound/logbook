@@ -271,6 +271,37 @@ describe('Worker M2: Exercise Library UI & Food Form Real-Time Calorie Calculati
             });
         });
 
+        it('notifies the current session when an exercise duplicate cannot be persisted', async () => {
+            const original: Exercise = {
+                id: 'ex-original', name: 'Panca inclinata', setsCount: 3, sets: [],
+                trackingType: 'weight_reps', isDefault: true,
+            };
+            const owner = captureSession().owner;
+            const initialData = { ...emptyUserData, library: [original] };
+            await prepareUnlockedTestArchive(owner);
+            await initializeLocal(owner, initialData);
+            useAppStore.setState({ dataOwner: owner, userData: initialData });
+
+            const originalDispatch = useAppStore.getState().dispatchDomainOperation;
+            const failedDispatch = vi.fn().mockResolvedValue({
+                ok: false, status: 'failed', error: new Error('Disk unavailable'),
+            });
+            useAppStore.setState({ dispatchDomainOperation: failedDispatch });
+            const alert = vi.spyOn(useDialogStore.getState(), 'showAlert').mockResolvedValue(undefined);
+            const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+            try {
+                const { result } = renderHook(() => useTrainingExercises());
+                await act(async () => { await result.current.handleDuplicate(original); });
+                expect(failedDispatch).toHaveBeenCalledOnce();
+                expect(alert).toHaveBeenCalledWith("Errore durante la duplicazione dell'esercizio.");
+                expect(useAppStore.getState().userData?.library).toHaveLength(1);
+            } finally {
+                useAppStore.setState({ dispatchDomainOperation: originalDispatch });
+                alert.mockRestore();
+                log.mockRestore();
+            }
+        });
+
         it('handleDuplicate creates a unique personal exercise through Domain Operations', async () => {
             const original: Exercise = {
                 id: 'ex-original',

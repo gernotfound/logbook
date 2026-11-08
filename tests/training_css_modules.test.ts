@@ -28,6 +28,14 @@ describe('Training stylesheet module boundaries', () => {
     }
   });
 
+  it('keeps planning cycle menus outside card clipping with a stacking layer', () => {
+    const planning = readFileSync(path.join(directory, 'planning', 'planning-redesign.css'), 'utf8');
+    expect(planning).toMatch(/\.planning-cycle-item\s*\{\s*overflow:\s*visible;/);
+    expect(planning).toMatch(/\.planning-cycle-item:has\(\.context-menu-dropdown\)\s*\{[^}]*position:\s*relative;[^}]*z-index:\s*2;/);
+    expect(planning).toMatch(/\.planning-cycle-row\s*>\s*\.context-menu-container\s*\{/);
+    expect(planning).not.toMatch(/\.planning-cycle-item\s*\{\s*overflow:\s*hidden;/);
+  });
+
   it('keeps all training sections visible to existing UI regressions', () => {
     // Node's readFileSync does not expand CSS @imports. Inspect the actual
     // imported modules in the order verified by the preceding test.
