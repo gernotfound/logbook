@@ -62,13 +62,13 @@ describe('R2: Firebase Config Security & Fail-Fast Suite', () => {
                 expect(() => assertIsolatedVitestEnvironment(loadEnv('test', folder, 'VITE_'))).not.toThrow();
 
                 // A nontracked local file outranks the tracked synthetic fixture.
-                fs.writeFileSync(path.join(folder, '.env.test.local'), key + '=logbook-db-98cc4\n');
+                fs.writeFileSync(path.join(folder, '.env.test.local'), key + '=demo-unapproved-project\n');
                 expect(() => assertIsolatedVitestEnvironment(loadEnv('test', folder, 'VITE_')))
                     .toThrow(key);
                 fs.rmSync(path.join(folder, '.env.test.local'));
 
                 // An exported shell variable outranks even the .env.test fixture.
-                process.env[key] = 'logbook-db-98cc4';
+                process.env[key] = 'demo-unapproved-project';
                 expect(() => assertIsolatedVitestEnvironment(loadEnv('test', folder, 'VITE_')))
                     .toThrow(key);
             } finally {
@@ -91,11 +91,11 @@ describe('R2: Firebase Config Security & Fail-Fast Suite', () => {
 
             for (const key of Object.keys(safe)) {
                 expect(() => assertIsolatedVitestEnvironment({
-                    ...safe, [key]: 'https://thelogbook.web.app',
+                    ...safe, [key]: 'https://unapproved.example.invalid',
                 })).toThrow(key);
             }
             expect(() => assertIsolatedVitestEnvironment({
-                ...safe, VITE_ACCOUNT_DELETION_API_ORIGIN: 'https://logbook-gnf.vercel.app',
+                ...safe, VITE_ACCOUNT_DELETION_API_ORIGIN: 'https://unapproved-backend.example.invalid',
             })).toThrow('backend trusted');
             expect(() => assertIsolatedVitestEnvironment({
                 ...safe, VITE_RECAPTCHA_ENTERPRISE_SITE_KEY: 'unreviewed-site-key',
