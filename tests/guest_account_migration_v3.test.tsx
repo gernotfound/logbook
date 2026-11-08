@@ -19,6 +19,23 @@ import { activateGuestSession, GUEST_SESSION_KEY } from '../src/lib/sync/session
 import { CATALOG_CACHE_KEY, clearCatalogCache, getInMemoryCatalog, getSeedCatalog } from '../src/lib/catalog/catalogService';
 import { set as idbSet } from 'idb-keyval';
 
+// Simulate only a temporary catalog read failure; all owner vault and journal
+// operations continue through the real IndexedDB implementation.
+const catalogReadFault = vi.hoisted(() => ({ remaining: 0 }));
+vi.mock('idb-keyval', async importOriginal => {
+    const original = await importOriginal<typeof import('idb-keyval')>();
+    return {
+        ...original,
+        get: (...args: Parameters<typeof original.get>) => {
+            if (args[0] === 'logbook_cached_global_catalog' && catalogReadFault.remaining > 0) {
+                catalogReadFault.remaining--;
+                return Promise.reject(new Error('temporary catalog IndexedDB read failure'));
+            }
+            return original.get(...args);
+        },
+    };
+});
+
 vi.mock('../src/lib/sync/cloudAccountKeyAccess', () => ({
     requireCloudAccountDataKey: vi.fn(async () => new Uint8Array(32).fill(18)),
     requireRightsExportAccountDataKey: vi.fn(async () => new Uint8Array(32).fill(18)),
@@ -43,6 +60,7 @@ function fixtures() {
 }
 
 beforeEach(async () => {
+    catalogReadFault.remaining = 0;
     lockAllVaults();
     vi.clearAllMocks();
     localStorage.clear();
@@ -141,7 +159,12 @@ describe('guest -> account V3 migration', () => {
         useAppStore.getState().setUserData(guest);
 
         vi.mocked(DB.loadCloudPayload)
-            .mockResolvedValueOnce({ data: cloud, completeMonths: [], cloudDocuments: new Map() })
+            .mockImplementationOnce(async () => {
+                // First migration catalog read exhausts its two attempts;
+                // hydrated account state must then retry the intact IDB cache.
+                catalogReadFault.remaining = 2;
+                return { data: cloud, completeMonths: [], cloudDocuments: new Map() };
+            })
             .mockImplementationOnce(async () => {
                 const durable = await readLocal('user:a');
                 const metadata = durable?.syncMetaByDocument[''];
@@ -163,6 +186,7 @@ describe('guest -> account V3 migration', () => {
             expect(envelope?.data.customFoods?.filter(item =>
                 String(item.id) === globalFood.id && item.isCustom !== false)).toEqual([]);
         }, { timeout: 8000 });
+        expect(catalogReadFault.remaining).toBe(0);
         expect(localStorage.getItem('logbook_is_guest')).toBeNull();
         await clearCatalogCache();
     });
