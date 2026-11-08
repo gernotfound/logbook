@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 
 const failures = [];
 const packageJson = JSON.parse(readFileSync('package.json', 'utf8'));
@@ -34,12 +34,35 @@ if (!swSource.includes("{ denylist: [/^\\/__\\//] }")) failures.push('service wo
 if (!packageJson.dependencies?.['firebase-admin']) failures.push('firebase-admin must be a runtime dependency for native Vercel Functions');
 if (packageJson.devDependencies?.['firebase-admin']) failures.push('firebase-admin must not remain dev-only');
 
-for (const path of ['api/account-deletion.ts', 'api/account-deletion-cron.ts']) {
-  if (!existsSync(path)) failures.push(`missing native Vercel Function: ${path}`);
-  if (vercel.functions?.[path]?.maxDuration !== 300) failures.push(`${path} must have maxDuration 300`);
+// Every native API must have an explicit, reviewed timeout. In Other-framework
+// projects, vercel.json is authoritative; a source-level maxDuration export alone
+// is not evidence of the deployed function configuration.
+const expectedFunctionDurations = {
+  'api/account-activity.ts': 30,
+  'api/account-deletion-cron.ts': 300,
+  'api/account-deletion-device.ts': 30,
+  'api/account-deletion.ts': 300,
+  'api/account-sessions.ts': 30,
+  'api/cloud-key.ts': 30,
+  'api/health-consent-export.ts': 30,
+  'api/health-consent.ts': 30,
+  'api/health-data-erasure.ts': 300,
+};
+const apiEntrypoints = readdirSync('api').filter(name => name.endsWith('.ts')).map(name => `api/${name}`).sort();
+const expectedEntrypoints = Object.keys(expectedFunctionDurations).sort();
+const configuredEntrypoints = Object.keys(vercel.functions ?? {}).sort();
+if (JSON.stringify(apiEntrypoints) !== JSON.stringify(expectedEntrypoints)) {
+  failures.push('Native Vercel API inventory changed without reviewing its execution budget');
 }
-if (!existsSync('api/account-deletion-device.ts')) failures.push('missing native Vercel Function: api/account-deletion-device.ts');
-if (vercel.functions?.['api/account-deletion-device.ts']?.maxDuration !== 30) failures.push('api/account-deletion-device.ts must have maxDuration 30');
+if (JSON.stringify(configuredEntrypoints) !== JSON.stringify(expectedEntrypoints)) {
+  failures.push('Vercel Functions configuration must cover exactly the reviewed native API entrypoints');
+}
+for (const [path, maxDuration] of Object.entries(expectedFunctionDurations)) {
+  if (!existsSync(path)) failures.push(`missing native Vercel Function: ${path}`);
+  if (vercel.functions?.[path]?.maxDuration !== maxDuration) {
+    failures.push(`${path} must have maxDuration ${maxDuration}`);
+  }
+}
 if (existsSync('api/legacy-service-worker.ts')) failures.push('pre-launch Vercel service-worker retirement endpoint must stay removed');
 if (vercel.functions?.['api/legacy-service-worker.ts']) failures.push('Vercel must not deploy the retired worker endpoint');
 if (vercel.git?.deploymentEnabled?.main !== true || vercel.git?.deploymentEnabled?.['**'] !== false) failures.push('Vercel Git deployments must remain enabled only for main');

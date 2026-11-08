@@ -71,6 +71,10 @@ jobs:
             printf 'Missing Firestore production configuration: %s\n' "${missing[*]}" >&2
             exit 1
           fi
+          if [ "${FIREBASE_PROJECT_ID}" != "logbook-db-98cc4" ]; then
+            echo "Unexpected Firebase Firestore Production project" >&2
+            exit 1
+          fi
 
       - name: Setup Node.js
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
@@ -138,15 +142,30 @@ jobs:
         if: steps.reconcile.outputs.deploy == 'true'
         env:
           GCP_ACCESS_TOKEN: ${{ steps.gcp_auth.outputs.access_token }}
-        run: node scripts/retire-firestore-field-overrides.mjs
+        shell: bash
+        run: |
+          set -euo pipefail
+          current_main="$(git ls-remote --exit-code origin refs/heads/main | awk '{print $1}')"
+          if [ "${current_main}" != "${EXPECTED_SHA}" ]; then
+            echo "Refusing to mutate Firestore from a stale main SHA" >&2
+            exit 1
+          fi
+          node scripts/retire-firestore-field-overrides.mjs
       - name: Deploy Firestore Rules and indexes
         if: steps.reconcile.outputs.deploy == 'true'
-        run: >-
-          npx --yes firebase-tools@15.30.2 deploy
-          --only firestore:rules,firestore:indexes
-          --project "${FIREBASE_PROJECT_ID}"
-          --non-interactive
-          -m "GitHub ${EXPECTED_SHA}"
+        shell: bash
+        run: |
+          set -euo pipefail
+          current_main="$(git ls-remote --exit-code origin refs/heads/main | awk '{print $1}')"
+          if [ "${current_main}" != "${EXPECTED_SHA}" ]; then
+            echo "Refusing to deploy Firestore from a stale main SHA" >&2
+            exit 1
+          fi
+          npx --yes firebase-tools@15.30.2 deploy \
+            --only firestore:rules,firestore:indexes \
+            --project "${FIREBASE_PROJECT_ID}" \
+            --non-interactive \
+            -m "GitHub ${EXPECTED_SHA}"
 
       - name: Verify live Firestore Rules and indexes
         if: steps.reconcile.outputs.verify == 'true'

@@ -104,7 +104,6 @@ Questa distinzione è già applicata alle collezioni che hanno ricevuto hardenin
 Il controllo è condiviso con `transactionWriter.ts`, che lo applica prima delle write semantiche. Le conversioni scalari comprovabilmente reversibili restano consentite.
 - **MUST:** dopo il merge semantico, `transactionWriter` verifica nuovamente con `assertCloudBusinessPreserved()` che la normalizzazione finale non perda o sostituisca valori business. Validare il remoto iniziale non prova la validità del risultato delle operazioni. Un fallimento impedisce l'intero commit business/control; il journal locale non viene acknowledged.
 
-Le conversioni scalari reversibili restano consentite.
 - **MUST:** `TransactionOutcome.documents` restituisce **in memoria e in chiaro** il business normalizzato che è stato passato a `sealCloudDocument()` e cifrato nella transazione; non contiene ciphertext Firestore. I metadati causali scritti sono restituiti separatamente in `TransactionOutcome.syncMeta`. L'ACK deve usare questi stessi documenti normalizzati e metadati; lo snapshot precedente alla normalizzazione non è una prova valida.
 - **MUST:** un `activeWorkout` cloud non nullo ma privo di identità valida è un errore di integrità, mai un'autorizzazione a cancellare la sessione corrente.
 - **Versioni future:** fail-closed / `update-required` secondo `storage-and-sync.md`.
@@ -182,7 +181,7 @@ La classificazione storage non cambia il mutation boundary M8. Le normali mutazi
 
 ## Limiti dei cicli di allenamento
 
-La forma persistita `TrainingCycleSchema` resta tollerante per leggere e conservare cicli importati o già presenti senza eliminarli a causa di un solo numero fuori limite. Le nuove scritture tramite `training-cycle.upsert` validano invece **prima di qualsiasi fallback** settimane intere fra 1 e 52 e sedute settimanali intere fra 1 e 14, con `TrainingCycleWriteSchema` e un controllo dell'input raw in `domainOperations/reducer.ts`. Non trasformare un valore invalido in una correzione silenziosa durante il commit.
+La forma persistita `TrainingCycleSchema` resta tollerante per leggere e conservare cicli importati o già presenti senza eliminarli a causa di un solo numero fuori limite. Le nuove scritture tramite `training-cycle.upsert` validano invece **prima di qualsiasi fallback** settimane intere fra 1 e 52 e sedute settimanali intere fra 1 e 14, con `TrainingCycleWriteSchema` e un controllo dell'input raw in `src/lib/sync/domainOperations/reducer.ts`. Non trasformare un valore invalido in una correzione silenziosa durante il commit.
 
 Anche la validazione diretta con `TrainingCycleWriteSchema` deve respingere valori raw non validi, ID mancanti/duplicati e frequenze difettose **prima** dei fallback Zod, senza convertire una scrittura malformata in un ciclo plausibile. Le frequenze delle routine nei nuovi upsert del ciclo e della singola routine devono essere interi positivi non superiori a 14, prima dei fallback Zod; quando il totale settimanale non è esplicito, la somma delle frequenze non deve superare 14. La lettura di cicli già memorizzati resta tollerante senza riscritture.
  

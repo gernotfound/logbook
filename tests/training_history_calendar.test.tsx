@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi, beforeEach } from 'vitest';
-import { fireEvent, screen, within } from '@testing-library/react';
+import { act, fireEvent, screen, within } from '@testing-library/react';
 import TrainingHistory from '../src/components/Training/TrainingHistory';
+import { useAppStore } from '../src/store/useAppStore';
 import { createMockUserData, renderWithProviders } from './setup';
 import { prepareUnlockedTestArchive } from './secureVaultFixture';
 import type { WorkoutSession } from '../src/types';
@@ -88,6 +89,63 @@ describe('TrainingHistory calendar', () => {
     expect(container.querySelector('input[type="month"]')).toBeNull();
     expect(screen.queryByText(/Vai all'allenamento precedente/i)).toBeNull();
     expect(screen.queryByText(/Vai direttamente al mese/i)).toBeNull();
+  });
+
+
+  it('uses manually corrected duration in monthly totals and workout rows, consistently with the report', () => {
+    const corrected: WorkoutSession[] = [
+      { ...history[0], manualDurationStr: '00:35:00', globalDurationStr: '01:10:00' },
+      history[1],
+      history[2],
+    ];
+    renderWithProviders(<TrainingHistory />, {
+      userData: createMockUserData({ history: corrected }),
+    });
+
+    const summary = screen.getByRole('region', { name: 'Riepilogo del mese' });
+    expect(within(summary).getByText('1 h 10 min')).toBeDefined();
+
+    const open = screen.getByRole('button', { name: /Apri il dettaglio di Scheda con un nome volutamente molto lungo/i });
+    expect(open.textContent).toContain('35 min');
+    fireEvent.click(open);
+    expect(within(screen.getByRole('dialog')).getByText('00:35:00')).toBeDefined();
+  });
+
+  it('updates an open report from the current history and closes it when the workout disappears', () => {
+    const initial = createMockUserData({ history });
+    renderWithProviders(<TrainingHistory />, { userData: initial });
+    fireEvent.click(screen.getByRole('button', { name: 'Apri il dettaglio di Seconda sessione' }));
+    expect(within(screen.getByRole('dialog')).getByRole('heading', { name: 'Seconda sessione' })).toBeDefined();
+
+    const updated = history.map(workout => workout.id === 'w-sep-b'
+      ? { ...workout, routineName: 'Seconda sessione aggiornata', manualDurationStr: '00:20:00' }
+      : workout);
+    act(() => {
+      useAppStore.setState({ userData: { ...initial, history: updated } });
+    });
+    expect(within(screen.getByRole('dialog')).getByRole('heading', { name: 'Seconda sessione aggiornata' })).toBeDefined();
+    expect(within(screen.getByRole('dialog')).getByText('00:20:00')).toBeDefined();
+
+    act(() => {
+      useAppStore.setState({ userData: { ...initial, history: updated.filter(workout => workout.id !== 'w-sep-b') } });
+    });
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
+
+  it('does not interpret out-of-range timestamps as a date or crash while formatting a saved day', () => {
+    const corruptedTime: WorkoutSession[] = [
+      { id: 'valid-date', date: '2026-09-28', routineName: 'Data valida con orario invalido',
+        globalStartTime: Number.MAX_VALUE, exercises: [] },
+      { id: 'no-date', routineName: 'Senza data rappresentabile',
+        globalStartTime: Number.MAX_VALUE, exercises: [] },
+    ];
+    renderWithProviders(<TrainingHistory />, {
+      userData: createMockUserData({ history: corruptedTime }),
+    });
+    expect(screen.getByText('Data valida con orario invalido')).toBeDefined();
+    const open = screen.getByRole('button', { name: 'Apri il dettaglio di Data valida con orario invalido' });
+    expect(open.textContent).toContain('Orario n.d.');
+    expect(screen.queryByText('Senza data rappresentabile')).toBeNull();
   });
 
   it('navigates months and uses the internal month/year picker', () => {

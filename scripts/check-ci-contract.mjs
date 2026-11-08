@@ -158,6 +158,8 @@ if (!pushBlock) failures.push('push trigger: missing push block');
 else requirePattern('push main target', pushBlock, /^      - main\s*$/m);
 
 forbidPattern('privileged PR trigger', workflow, /^\s*pull_request_target:\s*$/m);
+// Manual dispatch would run CodeQL alone: PR shards/canonical and main release are event-gated.
+forbidPattern('manual trigger without canonical verification', workflow, /^  workflow_dispatch:\s*$/m);
 forbidPattern('secret references', workflow, /\$\{\{\s*secrets\./);
 forbidPattern('continue-on-error', workflow, /^\s+continue-on-error\s*:/m);
 

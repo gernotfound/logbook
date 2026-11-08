@@ -11,6 +11,8 @@ export const maxDuration = 300;
 
 const CRON_BUDGET_MS = 270_000;
 const SAFETY_BUFFER_MS = 10_000;
+const ACCOUNT_RECEIPT_RETENTION_BUDGET_MS = 60_000;
+const HEALTH_RECEIPT_RETENTION_RESERVE_MS = 20_000;
 
 function authorized(request: Request): boolean {
   const secret = process.env.CRON_SECRET;
@@ -132,12 +134,20 @@ export async function GET(request: Request): Promise<Response> {
     }
   }
 
+  // Do not let a large account-receipt backlog consume the whole cron window:
+  // the independent health-erasure receipt sweep needs its own opportunity.
+  // The retention worker itself stops starting work near this deadline,
+  // without aborting a transaction already in flight.
+  const accountRetentionDeadlineMs = Math.min(
+    deletionDeadlineMs - HEALTH_RECEIPT_RETENTION_RESERVE_MS,
+    Date.now() + ACCOUNT_RECEIPT_RETENTION_BUDGET_MS,
+  );
   let purged = 0;
   const retentionPage = { scanned: 0 } as import('../server/accountDeletion/retention.js').AccountDeletionRetentionPage;
-  while (Date.now() + SAFETY_BUFFER_MS < deletionDeadlineMs) {
+  while (Date.now() + SAFETY_BUFFER_MS < accountRetentionDeadlineMs) {
     try {
       const deleted = await purgeExpiredCompletedDeletionJobs(
-        ACCOUNT_DELETION_RETENTION_PAGE_SIZE, undefined, deletionDeadlineMs, retentionPage,
+        ACCOUNT_DELETION_RETENTION_PAGE_SIZE, undefined, accountRetentionDeadlineMs, retentionPage,
       );
       purged += deleted;
       // Continue after a full page even when every receipt was skipped because

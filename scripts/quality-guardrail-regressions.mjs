@@ -146,6 +146,43 @@ await test('a11y lint catches concrete failures of every configured rule', t => 
   assert.equal(valid.status, 0, valid.stdout + valid.stderr);
 });
 
+await test('default React lint executes the hook and Fast Refresh rules with their configured severities', t => {
+  const root = mkdtempSync(join(tmpdir(), 'logbook-react-lint-'));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const oxlint = fileURLToPath(new URL('../node_modules/oxlint/bin/oxlint', import.meta.url));
+  const config = fileURLToPath(new URL('../.oxlintrc.json', import.meta.url));
+  const runCase = source => {
+    save(root, 'case.tsx', source);
+    const result = spawnSync(process.execPath, [oxlint, '--config', config, '--format=json', 'case.tsx'], {
+      cwd: root, encoding: 'utf8',
+    });
+    assert.ok(result.stdout, result.stderr);
+    return { result, diagnostics: JSON.parse(result.stdout).diagnostics ?? [] };
+  };
+
+  const invalidHooks = runCase(
+    "import { useState } from 'react'; export function Example({ enabled }: { enabled: boolean }) { if (enabled) useState(0); return <div />; }",
+  );
+  assert.equal(invalidHooks.result.status, 1, invalidHooks.result.stdout + invalidHooks.result.stderr);
+  assert.ok(invalidHooks.diagnostics.some(item =>
+    String(item.code).includes('rules-of-hooks') && item.severity === 'error'),
+  'Conditional hooks must be rejected by the configured rule');
+
+  const unsafeExport = runCase('export const helper = () => 1; export const Example = () => <div />;');
+  assert.equal(unsafeExport.result.status, 0, unsafeExport.result.stdout + unsafeExport.result.stderr);
+  assert.ok(unsafeExport.diagnostics.some(item =>
+    String(item.code).includes('only-export-components') && item.severity === 'warning'),
+  'Non-component exports must trigger the configured Fast Refresh warning');
+
+  const valid = runCase(
+    "import { useState } from 'react'; export const VERSION = '1'; export function Example() { const [count] = useState(0); return <div>{count}</div>; }",
+  );
+  assert.equal(valid.result.status, 0, valid.result.stdout + valid.result.stderr);
+  assert.equal(valid.diagnostics.filter(item =>
+    /rules-of-hooks|only-export-components/.test(String(item.code))).length, 0,
+  'Top-level hooks and allowed constant exports must remain valid');
+});
+
 await test('blocks removal of a lint plugin', t => {
   const ctx = fixture(t);
   save(ctx.root, '.oxlintrc.json', { plugins: [], rules: { 'react/rules-of-hooks': 'error' } });

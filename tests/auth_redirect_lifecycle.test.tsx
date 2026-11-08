@@ -7,6 +7,7 @@ import { useAuth } from '../src/hooks/useAuth';
 import { safeHardReload } from '../src/lib/sync/safeReload';
 import { sessionStorageMock } from './setup';
 import { useAppStore } from '../src/store/useAppStore';
+import { writeAuthRedirectMarker } from '../src/lib/auth/authRedirectMarker';
 
 vi.mock('../src/lib/sync/safeReload', () => ({
   safeHardReload: vi.fn().mockResolvedValue(undefined),
@@ -139,10 +140,33 @@ describe('Google redirect lifecycle', () => {
     expect(sessionStorage.getItem(REDIRECT_KEY)).toBeNull();
   });
 
-  it('fails closed when foreground redirect marker cleanup cannot be persisted', async () => {
+  it('does not consume a Google redirect launched after provider mount on foreground', async () => {
+    vi.mocked(signInWithRedirect).mockImplementationOnce(() => new Promise<never>(() => {}));
+    const { result } = renderHook(() => useAuth(), { wrapper });
+    await act(async () => { await Promise.resolve(); });
+    await act(async () => {
+      void result.current.login();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(sessionStorage.getItem(REDIRECT_KEY)).toBe('true');
+    const attempt = sessionStorage.getItem('logbook_awaiting_redirect_attempt');
+    expect(attempt).toMatch(/^[a-f0-9]{32}$/);
+
+    document.dispatchEvent(new Event('visibilitychange'));
+    await act(async () => { await Promise.resolve(); });
+    expect(sessionStorage.getItem(REDIRECT_KEY)).toBe('true');
+    expect(sessionStorage.getItem('logbook_awaiting_redirect_attempt')).toBe(attempt);
+    expect(safeHardReload).not.toHaveBeenCalled();
+    expect(useAppStore.getState().saveError).toBeNull();
+  });
+
+  it('fails closed when an originally pending redirect marker cannot be persisted as removed', async () => {
+    writeAuthRedirectMarker('true');
+    // Keep SDK recovery pending so foreground owns the cleanup attempt.
+    vi.mocked(getRedirectResult).mockImplementationOnce(() => new Promise<never>(() => {}));
     renderHook(() => useAuth(), { wrapper });
     await act(async () => { await Promise.resolve(); });
-    sessionStorage.setItem(REDIRECT_KEY, 'true');
     sessionStorageMock.removeItem.mockImplementationOnce(() => {
       throw new Error('storage cleanup denied');
     });

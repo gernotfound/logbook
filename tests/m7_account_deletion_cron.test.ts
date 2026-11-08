@@ -333,6 +333,54 @@ describe('M7 daily account deletion recovery cron', () => {
     expect((await response.json())).toMatchObject({ purged: 1, retentionErrors: 0 });
   });
 
+  it('reserves time for health receipts when account receipt retention has an unbounded backlog', async () => {
+    process.env.CRON_SECRET = 'expected-secret';
+    let clockMs = 1_000_000;
+    const clock = vi.spyOn(Date, 'now').mockImplementation(() => clockMs);
+    retention.purgeExpiredCompletedDeletionJobs.mockImplementation(
+      async (_limit: number, _now: unknown, _deadline: number, page: { scanned: number }) => {
+        page.scanned = 400;
+        clockMs += 30_000;
+        return 1;
+      },
+    );
+    healthErasure.purgeExpiredCompletedHealthErasures.mockResolvedValue(2);
+    try {
+      const response = await GET(request('expected-secret'));
+      expect(response.status).toBe(200);
+      expect(retention.purgeExpiredCompletedDeletionJobs).toHaveBeenCalledTimes(2);
+      expect(retention.purgeExpiredCompletedDeletionJobs.mock.calls.map(call => call[2]))
+        .toEqual([1_060_000, 1_060_000]);
+      expect(healthErasure.purgeExpiredCompletedHealthErasures).toHaveBeenCalledWith(1_270_000);
+      expect(await response.json()).toMatchObject({
+        purged: 2, erasureReceiptsPurged: 2, retentionErrors: 0, erasureErrors: 0,
+      });
+    } finally {
+      clock.mockRestore();
+    }
+  });
+
+  it('gives the final available window to health receipts after lengthy account recovery', async () => {
+    process.env.CRON_SECRET = 'expected-secret';
+    let clockMs = 1_000_000;
+    const clock = vi.spyOn(Date, 'now').mockImplementation(() => clockMs);
+    runner.processAccountDeletion.mockImplementation(async () => {
+      clockMs = 1_250_000;
+      return 'pending';
+    });
+    try {
+      const response = await GET(request('expected-secret'));
+      expect(response.status).toBe(200);
+      expect(retention.purgeExpiredCompletedDeletionJobs).not.toHaveBeenCalled();
+      expect(healthErasure.purgeExpiredCompletedHealthErasures).toHaveBeenCalledWith(1_270_000);
+      expect(await response.json()).toMatchObject({
+        accountPending: 2, erasureReceiptsPurged: 0,
+      });
+    } finally {
+      clock.mockRestore();
+    }
+  });
+
   it('continues independent cron phases if job selection fails', async () => {
   process.env.CRON_SECRET = 'expected-secret';
   store.listRecoverableDeletionJobs.mockRejectedValueOnce(new Error('list unavailable'));

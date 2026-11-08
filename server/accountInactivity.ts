@@ -102,7 +102,10 @@ export async function queueInactiveAccountDeletions(
   const outOfBudget = () => Date.now() >= deadlineMs;
   if (outOfBudget()) return { scanned: 0, queued: 0 };
   const db = adminDb();
-  const cutoffMs = inactivityCutoffMillis(now.toMillis());
+  // An acknowledged foreground visit may be newer than lastSeenAt by almost
+  // the write-throttle interval. Preserve the full twelve months from that
+  // visit, even when the throttled request did not write a new timestamp.
+  const cutoffMs = inactivityCutoffMillis(now.toMillis()) - SERVER_TOUCH_MIN_INTERVAL_MS;
   const limit = Math.max(1, Math.min(MAX_CANDIDATES_PER_RUN, Math.floor(maxCandidates)));
   let queued = 0;
   let scanned = 0;

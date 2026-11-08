@@ -5,6 +5,7 @@ import { BufferedWorkoutScope } from '../../UI/bufferedWorkoutScope';
 import { continuationTechniqueLabel, getContinuationTechnique } from '../../../lib/advancedSets';
 import { useDialogStore } from '../../../store/useDialogStore';
 import { sessionSetHasMeaningfulData } from '../../../lib/workoutSetData';
+import { captureSession, isCurrentSession } from '../../../lib/sync/session';
 import type { SessionExerciseSet } from '../../../types';
 
 interface SessionSetRowProps {
@@ -15,7 +16,7 @@ interface SessionSetRowProps {
     trackingType?: string;
     isOpenMenu: boolean;
     onToggleMenu: (setId: string) => void;
-    onRemoveSet: (exIndex: number, sIndex: number, setId: string, exerciseId?: string, workoutId?: string | null) => void;
+    onRemoveSet: (exIndex: number, sIndex: number, setId: string, exerciseId?: string, workoutId?: string | null, expectedSet?: SessionExerciseSet) => void;
     onUpdateSet: (exIndex: number, setId: string, field: string, value: unknown) => void;
     onAddSpecialSet: (exIndex: number, type: string, setId: string) => void;
     onUpdateSpecialSet: (exIndex: number, setId: string, type: 'segments', segmentId: string, field: string, value: unknown) => void;
@@ -50,12 +51,13 @@ const SessionSetRowInner: React.FC<SessionSetRowProps> = ({
 
     const handleRemoveSetSafely = async () => {
         if (sessionSetHasMeaningfulData(s)) {
+            const session = captureSession();
             const confirmed = await useDialogStore.getState().showConfirm(
                 'La serie contiene dei dati. Vuoi davvero rimuoverla?'
             );
-            if (!confirmed) return;
+            if (!confirmed || !isCurrentSession(session)) return;
         }
-        onRemoveSet(exIndex, sIndex, s.id, exerciseInstanceId, workoutId);
+        onRemoveSet(exIndex, sIndex, s.id, exerciseInstanceId, workoutId, s);
         if (isOpenMenu) onToggleMenu(s.id);
     };
 

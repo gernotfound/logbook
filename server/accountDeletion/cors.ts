@@ -36,7 +36,7 @@ export function requireAccountDeletionOrigin(request: Request): string {
   return origin;
 }
 
-export function accountDeletionCorsHeaders(origin: string | null, allowedHeaders: string): HeadersInit {
+export function accountDeletionCorsHeaders(origin: string | null, allowedHeaders: string): Record<string, string> {
   let allowed = false;
   try {
     allowed = origin !== null && allowedAccountDeletionOrigins().has(origin);

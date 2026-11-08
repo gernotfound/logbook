@@ -137,6 +137,25 @@ describe('authenticated inactivity retention boundary', () => {
     expect(state.writes.map(x => x.path)).toEqual(['account_activity/owner', 'account_activity/owner']);
   });
 
+  it('cannot schedule deletion before twelve months from a throttled but acknowledged visit', async () => {
+    const firstVisit = Timestamp.fromDate(new Date('2025-11-06T15:30:00.000Z'));
+    const lastAcknowledgedVisit = Timestamp.fromMillis(firstVisit.toMillis() + 9 * 60_000);
+    await recordAccountActivity('owner', firstVisit);
+    await recordAccountActivity('owner', lastAcknowledgedVisit);
+
+    // The server acknowledged the second visit without writing a new timestamp.
+    expect(state.docs.get('account_activity/owner')?.lastSeenAt).toEqual(firstVisit);
+    expect(await queueInactiveAccountDeletions(now)).toEqual({ scanned: 0, queued: 0 });
+    expect(await queueInactiveAccountDeletions(Timestamp.fromMillis(now.toMillis() + 9 * 60_000)))
+      .toEqual({ scanned: 0, queued: 0 });
+    expect(state.docs.has('account_deletions/owner')).toBe(false);
+
+    // Once the entire throttle uncertainty has elapsed, deletion is eligible.
+    expect(await queueInactiveAccountDeletions(Timestamp.fromMillis(now.toMillis() + 10 * 60_000)))
+      .toEqual({ scanned: 1, queued: 1 });
+    expect(state.docs.has('account_deletions/owner')).toBe(true);
+  });
+
   it('rejects concurrent account-deletion fences without restoring activity', async () => {
     activity('owner', old);
     state.docs.set('account_deletions/owner', { uid: 'owner', status: 'requested' });

@@ -1,7 +1,7 @@
 import { useCallback } from 'react';
 import { Logic } from '../../lib/logic';
 import { useAppStore } from '../../store/useAppStore';
-import type { WorkoutSession } from '../../types';
+import type { SessionExerciseSet, WorkoutSession } from '../../types';
 import { sessionSetHasMeaningfulData } from '../../lib/workoutSetData';
 import { captureSession, isCurrentSession } from '../../lib/sync/session';
 
@@ -133,14 +133,15 @@ export function useWorkoutSetMutations({ setLocalWorkout, showConfirm }: UseWork
     }, [setLocalWorkout]);
 
     const removeSet = useCallback((exIndex: number, setIndex: number, setId: string,
-        exerciseId?: string, workoutId?: string | null) => {
+        exerciseId?: string, workoutId?: string | null, expectedSet?: SessionExerciseSet) => {
         setLocalWorkout((prev) => {
             if (!prev || !setId || (workoutId && prev.id !== workoutId)) return prev;
             const selected = prev.exercises[exIndex];
             if (!selected || (exerciseId && selected.id !== exerciseId)
-                || selected.sets?.[setIndex]?.id !== setId) return prev;
-            // A confirmation can outlive a reorder or a replacement workout.
-            // Never delete the series that happened to inherit an old index.
+                || selected.sets?.[setIndex]?.id !== setId
+                || (expectedSet && JSON.stringify(selected.sets[setIndex]) !== JSON.stringify(expectedSet))) return prev;
+            // Device normalization recreates set objects and can materialize
+            // optional undefined fields. Compare the serialized confirmed values.
             return {
                 ...prev,
                 exercises: prev.exercises.map((exercise, index) => index === exIndex
