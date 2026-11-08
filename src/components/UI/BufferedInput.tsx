@@ -85,6 +85,29 @@ function createInitialRecovery(
     }
 }
 
+function assertBufferedWitnessesUnchanged(
+    key: string | null,
+    session: ReturnType<typeof captureSession> | null,
+    sourceLineage: readonly BufferedWriterEvidence[],
+    writerName: string | null,
+    writerRaw: string | null,
+): void {
+    if (!key || !session) throw new Error('Testimonianze della bozza non verificabili.');
+    // A partially persisted private writer cannot prove ownership of a later
+    // business commit, even when the shared draft image remains unchanged.
+    if ((writerName === null) !== (writerRaw === null)) {
+        throw new Error('Testimonianza privata incompleta: originale preservato.');
+    }
+    const present = traceWriterLineage(readBufferedWriterEvidence(session.owner, key));
+    const expected = [...sourceLineage,
+        ...(writerName && writerRaw ? [{ name: writerName, raw: writerRaw }] : [])];
+    if (present.length !== expected.length
+        || present.some(entry => !expected.some(item =>
+            entry.name === item.name && entry.raw === item.raw))) {
+        throw new Error('Testimonianze concorrenti: modifica locale non pubblicabile.');
+    }
+}
+
 export const BufferedInput = React.forwardRef<HTMLInputElement, BufferedInputProps>(
     ({ id, recoveryId, value, onChange, onBlur, onFocus, onKeyDown, type, inputMode, ...props }, ref) => {
         const workoutId = React.useContext(BufferedWorkoutScope);
@@ -122,18 +145,8 @@ export const BufferedInput = React.forwardRef<HTMLInputElement, BufferedInputPro
         });
 
         const assertIndependentWitnesses = useCallback(() => {
-            const key = recoveryKey.current;
-            const session = editSession.current;
-            if (!key || !session) throw new Error('Testimonianze della bozza non verificabili.');
-            const present = traceWriterLineage(readBufferedWriterEvidence(session.owner, key));
-            const expected = [...sourceLineage.current,
-                ...(writerIntentName.current && writerIntentRaw.current
-                    ? [{ name: writerIntentName.current, raw: writerIntentRaw.current }] : [])];
-            if (present.length !== expected.length
-                || present.some(entry => !expected.some(item =>
-                    item.name === entry.name && item.raw === entry.raw))) {
-                throw new Error('Testimonianze concorrenti: modifica locale non pubblicabile.');
-            }
+            assertBufferedWitnessesUnchanged(recoveryKey.current, editSession.current,
+                sourceLineage.current, writerIntentName.current, writerIntentRaw.current);
         }, []);
 
         const persistRecovery = useCallback(() => {
@@ -203,17 +216,7 @@ export const BufferedInput = React.forwardRef<HTMLInputElement, BufferedInputPro
                         if (!isCurrentSession(session) || !isCurrentWorkoutScope(workoutId)) {
                             throw new Error('Sessione workout cambiata prima della pulizia della bozza.');
                         }
-                        const present = traceWriterLineage(
-                            readBufferedWriterEvidence(session.owner, recoveryKey.current),
-                        );
-                        const expected = [...sourceLineage.current,
-                            ...(writerIntentName.current && writerIntentRaw.current
-                                ? [{ name: writerIntentName.current, raw: writerIntentRaw.current }] : [])];
-                        if (present.length !== expected.length
-                            || present.some(entry => !expected.some(item =>
-                                item.name === entry.name && item.raw === entry.raw))) {
-                            throw new Error('Testimonianze modificate da un altro editor: originale preservato.');
-                        }
+                        assertIndependentWitnesses();
                         observedRaw.current = writeBufferedDraft(
                             recoveryKey.current, session.owner, null,
                             session.consentGeneration, observedRaw.current,
@@ -410,18 +413,8 @@ export const BufferedTextarea = React.forwardRef<HTMLTextAreaElement, BufferedTe
         });
 
         const assertIndependentWitnesses = useCallback(() => {
-            const key = recoveryKey.current;
-            const session = editSession.current;
-            if (!key || !session) throw new Error('Testimonianze della bozza non verificabili.');
-            const present = traceWriterLineage(readBufferedWriterEvidence(session.owner, key));
-            const expected = [...sourceLineage.current,
-                ...(writerIntentName.current && writerIntentRaw.current
-                    ? [{ name: writerIntentName.current, raw: writerIntentRaw.current }] : [])];
-            if (present.length !== expected.length
-                || present.some(entry => !expected.some(item =>
-                    item.name === entry.name && item.raw === entry.raw))) {
-                throw new Error('Testimonianze concorrenti: modifica locale non pubblicabile.');
-            }
+            assertBufferedWitnessesUnchanged(recoveryKey.current, editSession.current,
+                sourceLineage.current, writerIntentName.current, writerIntentRaw.current);
         }, []);
 
         const persistRecovery = useCallback(() => {
@@ -484,17 +477,7 @@ export const BufferedTextarea = React.forwardRef<HTMLTextAreaElement, BufferedTe
                         if (!isCurrentSession(session) || !isCurrentWorkoutScope(workoutId)) {
                             throw new Error('Sessione workout cambiata prima della pulizia della bozza.');
                         }
-                        const present = traceWriterLineage(
-                            readBufferedWriterEvidence(session.owner, recoveryKey.current),
-                        );
-                        const expected = [...sourceLineage.current,
-                            ...(writerIntentName.current && writerIntentRaw.current
-                                ? [{ name: writerIntentName.current, raw: writerIntentRaw.current }] : [])];
-                        if (present.length !== expected.length
-                            || present.some(entry => !expected.some(item =>
-                                item.name === entry.name && item.raw === entry.raw))) {
-                            throw new Error('Testimonianze modificate da un altro editor: originale preservato.');
-                        }
+                        assertIndependentWitnesses();
                         observedRaw.current = writeBufferedDraft(
                             recoveryKey.current, session.owner, null,
                             session.consentGeneration, observedRaw.current,

@@ -462,6 +462,24 @@ it('purges server-confirmed deleted account ciphertext without unlocking its pro
     expect(await get('logbook:v2:user:b')).toEqual({ original: 'other owner' });
 });
 
+it.each([
+    { status: 503, json: 'null', error: 'Impossibile verificare lo stato' },
+    { status: 200, json: 'null', error: 'Stato della cancellazione non coerente' },
+    { status: 200, json: '[]', error: 'Stato della cancellazione non coerente' },
+    { status: 200, json: '"complete"', error: 'Stato della cancellazione non coerente' },
+    { status: 200, json: '{"uid":"a","status":"unexpected"}', error: 'Stato della cancellazione non coerente' },
+])('preserves receipt and archive when deletion GET returns invalid JSON ($status: $json)', async ({ status, json, error }) => {
+    const marker = markAccountDeletion('user:a', { receiptToken: 'durable-client-receipt' });
+    boundary.fetch.mockResolvedValueOnce(new Response(json, {
+        status, headers: { 'content-type': 'application/json' },
+    }));
+    await expect(resumeAccountDeletion(context)).rejects.toThrow(error);
+    expect(readAccountDeletionMarker('user:a')?.receiptToken).toBe(marker.receiptToken);
+    expect(await get('logbook:v2:user:a')).toEqual({ original: 'recoverable' });
+    expect(boundary.auth.signOut).not.toHaveBeenCalled();
+    expect(boundary.reset).not.toHaveBeenCalled();
+});
+
 it('persists a recovery receipt before POST and purges only after server completion', async () => {
     installSuccessfulServerFlow();
 
