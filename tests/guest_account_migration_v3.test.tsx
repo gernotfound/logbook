@@ -154,10 +154,12 @@ describe('guest -> account V3 migration', () => {
             return originalGet(...args);
         });
 
+        let preSecondCloudProfile: unknown = null;
         vi.mocked(DB.loadCloudPayload)
             .mockResolvedValueOnce({ data: cloud, completeMonths: [], cloudDocuments: new Map() })
             .mockImplementationOnce(async () => {
                 const durable = await readLocal('user:a');
+                preSecondCloudProfile = durable?.data.profile;
                 const metadata = durable?.syncMetaByDocument[''];
                 if (!durable || !metadata) throw new Error('Missing authenticated root checkpoint in migration fixture');
                 return {
@@ -180,6 +182,10 @@ describe('guest -> account V3 migration', () => {
                         syncHealth: state.syncHealth,
                         saveError: state.saveError,
                         cloudReads: vi.mocked(DB.loadCloudPayload).mock.calls.length,
+                        preSecondCloudProfile,
+                        cloudFixtureProfile: cloud.profile,
+                        userProfile: state.userData?.profile,
+                        pending: envelope?.pending.length,
                         remainingCatalogFaults: failedCatalogReads,
                     }));
                 }
