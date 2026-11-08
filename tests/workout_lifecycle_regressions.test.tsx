@@ -1146,6 +1146,39 @@ describe('Workout lifecycle durable recovery regressions', () => {
         expect(localStorage.getItem(protectedDeviceKey('draft:post-session:post-next', owner))).not.toBeNull();
     });
 
+    it('does not revive a stale final-rating screen when A returns after its draft was removed', async () => {
+        await prepareUnlockedTestArchive(owner);
+        localStorage.setItem(`logbook:v2:${owner}:health-consent-generation`, '3');
+        const first = workout('post-return-a', true);
+        const second = workout('post-return-b', true);
+        const name = 'draft:post-session:' + first.id;
+        useAppStore.setState({ userData: userData({ activeWorkout: first }), localWorkout: first });
+        renderOwnedWorkoutSession();
+
+        fireEvent.click(screen.getByRole('button', { name: 'Termina allenamento' }));
+        fireEvent.click(screen.getByRole('button', { name: 'Umore: 5 su 5' }));
+        const previous = readDeviceValueStrict(name, owner);
+        expect(previous).not.toBeNull();
+
+        act(() => {
+            useAppStore.setState({ localWorkout: second, userData: userData({ activeWorkout: second }) });
+        });
+        expect(screen.queryByRole('heading', { name: 'Com’è andato l’allenamento?' })).toBeNull();
+
+        // Another editor removed A's verified device draft while B was displayed.
+        writeWorkoutRecoveryDraft(name, owner, null, '3', previous);
+        act(() => {
+            useAppStore.setState({ localWorkout: first, userData: userData({ activeWorkout: first }) });
+        });
+
+        expect(screen.queryByRole('heading', { name: 'Com’è andato l’allenamento?' })).toBeNull();
+        expect(screen.getByRole('button', { name: 'Termina allenamento' })).toBeTruthy();
+        expect(readDeviceValueStrict(name, owner)).toBeNull();
+        fireEvent.click(screen.getByRole('button', { name: 'Termina allenamento' }));
+        expect(screen.getByRole('heading', { name: 'Com’è andato l’allenamento?' })).toBeTruthy();
+        expect(readDeviceValueStrict(name, owner)).not.toBeNull();
+    });
+
     it('does not reset the timer if the workout start never reaches IndexedDB', async () => {
         await prepareUnlockedTestArchive(owner);
         const pending = workout('start-should-fail');
