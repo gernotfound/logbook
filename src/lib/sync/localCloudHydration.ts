@@ -1,6 +1,7 @@
 import equal from 'fast-deep-equal';
 import type { UserData } from '../../types';
 import { UserDataSchema } from '../schema';
+import { removeUndefinedValuesForFirestore } from '../utils/object';
 import { generateId } from '../utils/date';
 import { getCachedCatalog } from '../catalog/catalogService';
 import { CURRENT_DATA_SCHEMA, CURRENT_LOCAL_ENVELOPE, CURRENT_SYNC_PROTOCOL } from '../schemaEvolution';
@@ -15,7 +16,9 @@ import { type SyncMeta, applySemanticOperations, coversVectorClock, parseSyncMet
 
 export type CloudCoverageMode = 'window' | 'all';
 type LocalWriteGuard = () => boolean;
-const parse = (value: unknown) => UserDataSchema.parse(value) as unknown as UserData;
+// The archive's JSON omits undefined object fields. Use that same representation
+// before comparing snapshots, so optional keys do not invent a new local revision.
+const parse = (value: unknown) => removeUndefinedValuesForFirestore(UserDataSchema.parse(value) as unknown as UserData);
 const currentEnvelopeVersions = () => ({
     version: CURRENT_LOCAL_ENVELOPE,
     dataSchemaVersion: CURRENT_DATA_SCHEMA,

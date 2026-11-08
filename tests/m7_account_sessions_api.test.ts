@@ -68,6 +68,38 @@ describe('global session revocation API', () => {
     });
   });
 
+  it.each(['not-an-origin', 'http://thelogbook.web.app'])(
+    'reports invalid server origin configuration as unavailable rather than blaming the caller: %s',
+    async invalidOrigin => {
+      const original = process.env.PUBLIC_APP_ORIGIN;
+      const log = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+      try {
+        process.env.PUBLIC_APP_ORIGIN = invalidOrigin;
+        const preflight = await OPTIONS(request('https://thelogbook.web.app', 'OPTIONS'));
+        const post = await POST(request());
+
+        expect(preflight.status).toBe(503);
+        expect(await preflight.json()).toEqual({ error: 'Servizio di revoca sessioni temporaneamente non disponibile.' });
+        expect(post.status).toBe(503);
+        expect(await post.json()).toEqual({
+          error: 'Revoca non confermata. Potrebbe essere stata eseguita; rieffettua l’accesso per verificare.',
+        });
+        for (const response of [preflight, post]) {
+          expect(response.headers.get('access-control-allow-origin')).toBeNull();
+          expect(response.headers.get('cache-control')).toBe('no-store');
+        }
+        expect(auth.verifyDeletionRequester).not.toHaveBeenCalled();
+        expect(sessions.revokeAllUserSessions).not.toHaveBeenCalled();
+        expect(log).toHaveBeenCalledWith('[account-sessions] preflight failed', { kind: 'Error' });
+        expect(JSON.stringify(log.mock.calls)).not.toContain(invalidOrigin);
+      } finally {
+        if (original === undefined) delete process.env.PUBLIC_APP_ORIGIN;
+        else process.env.PUBLIC_APP_ORIGIN = original;
+        log.mockRestore();
+      }
+    },
+  );
+
   it('exposes a strict CORS preflight only to the authorized app origin', async () => {
     const response = await OPTIONS(request());
     expect(response.status).toBe(204);

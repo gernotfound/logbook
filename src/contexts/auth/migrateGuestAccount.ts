@@ -177,7 +177,10 @@ export async function migrateGuestAccount({ user, guestData, policy, setUserData
         if (policy === 'skip' || !guestHasData) return await finishWithoutGuestMerge();
 
         const mergedData = mergeUserData(hydratedEnv.data, guestData);
-        await commitLocal(user.uid, mergedData, hydratedEnv.data, cloudAllowed);
+        const localMetadata = mergedData.pendingConflicts
+            ? { pendingConflicts: mergedData.pendingConflicts } : undefined;
+        await commitLocal(user.uid, mergedData, hydratedEnv.data, cloudAllowed,
+            localMetadata ? hydratedEnv.revision : undefined, localMetadata);
         assertCloudAllowed();
         await markLocalReady();
 

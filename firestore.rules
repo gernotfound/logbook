@@ -32,20 +32,27 @@ service cloud.firestore {
         && hasCurrentSession(userId);
     }
 
-    // A server-only revocation record cannot be undone by a stale client update
-    // to users/{uid}. Reads remain available for lawful export and account rights.
+    // A server-owned proof that is malformed must not authorize direct client
+    // access even when the trusted API correctly rejects the same record.
+    function isValidActiveConsentProof(data, userId) {
+      return data.keys().hasAll(['status', 'revision', 'uid', 'acceptedAt', 'privacyVersion', 'termsVersion'])
+        && data.status == 'active'
+        && data.revision is int
+        && data.revision >= 1
+        && data.uid == userId
+        && data.acceptedAt is string
+        && data.acceptedAt.matches('^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])T([01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9][.][0-9]{3}Z$')
+        && data.privacyVersion is string
+        && data.privacyVersion.size() > 0
+        && data.termsVersion is string
+        && data.termsVersion.size() > 0;
+    }
+
+    // Keep the trusted document read on the existing cached path: multi-doc
+    // Protocol 3 transactions operate near the Rules expression budget.
     function consentWithdrawn(userId) {
-      // Keep this check expression-bounded: Protocol 3 transactions approach
-      // the Firestore Rules evaluation limit. Full timestamp/version validation
-      // happens in the server-only status reader and in the client proof parser.
       let record = /databases/$(database)/documents/health_consent_withdrawals/$(userId);
-      return !exists(record) || (
-        !get(record).data.keys().hasAll(['status', 'revision', 'uid', 'acceptedAt', 'privacyVersion', 'termsVersion'])
-        || get(record).data.status != 'active'
-        || !(get(record).data.revision is int)
-        || get(record).data.revision < 1
-        || get(record).data.uid != userId
-      );
+      return !exists(record) || !isValidActiveConsentProof(get(record).data, userId);
     }
 
     // A revoked consent record is permanent across reacceptance cycles.
@@ -119,8 +126,10 @@ service cloud.firestore {
         && writer.replicaId.size() <= 128
         && writer.generation is int
         && writer.generation >= 1
+        && writer.generation <= 9007199254740991
         && writer.seq is int
         && writer.seq >= 0
+        && writer.seq <= 9007199254740991
         && (!('consentRevision' in writer)
             || (writer.consentRevision is int && writer.consentRevision >= 0));
     }
@@ -149,15 +158,10 @@ service cloud.firestore {
         );
     }
 
-    function syncControlExistsAfter(userId) {
-      return existsAfter(/databases/$(database)/documents/users/$(userId)/sync_control/state);
-    }
-
     function hasProtocol3Writer(userId, docData) {
       let writer = docData._sync.writer;
       let control = getAfter(/databases/$(database)/documents/users/$(userId)/sync_control/state).data;
       return docData._sync.protocolVersion == 3
-        && syncControlExistsAfter(userId)
         && control.protocolVersion == 3
         && control.mutation is map
         && control.mutation.action == 'advance'
@@ -165,8 +169,11 @@ service cloud.firestore {
         // A prior advance does not authorize a new write. The nonce must
         // change in the same atomic request as the business document.
         && control.mutation.batchId != get(/databases/$(database)/documents/users/$(userId)/sync_control/state).data.mutation.get('batchId', '')
-        && matchesConsentEpoch(userId, writer)
+        // Control carries the trusted epoch; checking the writer against it
+        // avoids duplicate consent lookups in Protocol 3 business writes.
         && matchesConsentEpoch(userId, control)
+        && writer.consentRevision is int
+        && writer.consentRevision == control.consentRevision
         && writer.slot in control.replicas
         && control.replicas[writer.slot].status == 'active'
         && control.replicas[writer.slot].replicaId == writer.replicaId
@@ -188,25 +195,37 @@ service cloud.firestore {
       return seq is int && seq >= 0 && seq <= 9007199254740991;
     }
 
+    // A checkpoint normally has 0-2 actors. Validate those present actors
+    // directly to keep Protocol 3 batches under the Firestore expression limit;
+    // the exhaustive fallback preserves the 16-slot bound for larger clocks.
     function isValidCheckpointClock(clock) {
       return clock is map
         && clock.keys().hasOnly(['s00', 's01', 's02', 's03', 's04', 's05', 's06', 's07', 's08', 's09', 's10', 's11', 's12', 's13', 's14', 's15'])
-        && isValidCheckpointCoordinate(clock, 's00')
-        && isValidCheckpointCoordinate(clock, 's01')
-        && isValidCheckpointCoordinate(clock, 's02')
-        && isValidCheckpointCoordinate(clock, 's03')
-        && isValidCheckpointCoordinate(clock, 's04')
-        && isValidCheckpointCoordinate(clock, 's05')
-        && isValidCheckpointCoordinate(clock, 's06')
-        && isValidCheckpointCoordinate(clock, 's07')
-        && isValidCheckpointCoordinate(clock, 's08')
-        && isValidCheckpointCoordinate(clock, 's09')
-        && isValidCheckpointCoordinate(clock, 's10')
-        && isValidCheckpointCoordinate(clock, 's11')
-        && isValidCheckpointCoordinate(clock, 's12')
-        && isValidCheckpointCoordinate(clock, 's13')
-        && isValidCheckpointCoordinate(clock, 's14')
-        && isValidCheckpointCoordinate(clock, 's15');
+        && (
+          clock.size() == 0
+          || (clock.size() == 1 && isValidCheckpointCoordinate(clock, clock.keys()[0]))
+          || (clock.size() == 2
+            && isValidCheckpointCoordinate(clock, clock.keys()[0])
+            && isValidCheckpointCoordinate(clock, clock.keys()[1]))
+          || (
+            isValidCheckpointCoordinate(clock, 's00')
+            && isValidCheckpointCoordinate(clock, 's01')
+            && isValidCheckpointCoordinate(clock, 's02')
+            && isValidCheckpointCoordinate(clock, 's03')
+            && isValidCheckpointCoordinate(clock, 's04')
+            && isValidCheckpointCoordinate(clock, 's05')
+            && isValidCheckpointCoordinate(clock, 's06')
+            && isValidCheckpointCoordinate(clock, 's07')
+            && isValidCheckpointCoordinate(clock, 's08')
+            && isValidCheckpointCoordinate(clock, 's09')
+            && isValidCheckpointCoordinate(clock, 's10')
+            && isValidCheckpointCoordinate(clock, 's11')
+            && isValidCheckpointCoordinate(clock, 's12')
+            && isValidCheckpointCoordinate(clock, 's13')
+            && isValidCheckpointCoordinate(clock, 's14')
+            && isValidCheckpointCoordinate(clock, 's15')
+          )
+        );
     }
 
     function isValidReplicaEntry(entry) {
@@ -225,9 +244,11 @@ service cloud.firestore {
         && entry.replicaId.size() <= 128
         && entry.generation is int
         && entry.generation >= 1
+        && entry.generation <= 9007199254740991
         && (entry.status == 'active' || entry.status == 'retired')
         && entry.lastSeq is int
         && entry.lastSeq >= 0
+        && entry.lastSeq <= 9007199254740991
         && entry.leaseUntilMs is int
         && entry.leaseUntilMs >= 1
         && entry.checkpointAtMs is int

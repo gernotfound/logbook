@@ -32,7 +32,7 @@ const user = {
     providerData: [{ providerId: 'password' }], getIdToken: vi.fn(async () => 'synthetic-token'),
 } as any;
 
-function fixtures() {
+function fixtures(withNutritionConflict = false) {
     const cloud = parse({
         profile: { gender: 'M' },
         routines: [{ id: 'cloud-routine', name: 'Cloud', exercises: [] }],
@@ -42,6 +42,12 @@ function fixtures() {
         profile: { height: '175' },
         routines: [{ id: 'guest-routine', name: 'Guest', exercises: [] }]
     });
+    if (withNutritionConflict) {
+        cloud.nutritionPlanning = { avgMacros: { carbsPerKg: 3, proPerKg: 2, fatPerKg: 1 } };
+        cloud.nutritionPlanningOrigin = 'user-edited';
+        guest.nutritionPlanning = { avgMacros: { carbsPerKg: 4, proPerKg: 2, fatPerKg: 1 } };
+        guest.nutritionPlanningOrigin = 'user-edited';
+    }
     return { cloud, guest, merged: mergeUserData(cloud, guest) };
 }
 
@@ -65,8 +71,23 @@ afterEach(() => {
 });
 
 describe('guest -> account V3 migration', () => {
-    it('stages SemanticOperations, drains the authenticated journal, and keeps cloud + guest data', async () => {
-        const { cloud, guest, merged } = fixtures();
+    it.each([false, true])('stages the authenticated merge and preserves its local nutrition alternative (conflict=%s)', async withConflict => {
+        const { cloud, guest, merged } = fixtures(withConflict);
+        const now = Date.now();
+        const cloudRootSync = {
+            protocolVersion: CURRENT_SYNC_PROTOCOL, clock: { s01: 1 }, fields: {},
+            writer: { slot: 's01', replicaId: 'existing-cloud', generation: 1, seq: 1, consentRevision: 1 },
+        };
+        firestoreMockStore['users/a'] = sealCloudDocument(
+            new Uint8Array(32).fill(18), user.uid, '', rootDocument(cloud), cloudRootSync,
+        );
+        firestoreMockStore['users/a/sync_control/state'] = {
+            protocolVersion: CURRENT_SYNC_PROTOCOL, consentRevision: 1,
+            replicas: { s01: { replicaId: 'existing-cloud', generation: 1, status: 'active',
+                lastSeq: 1, checkpointClock: { s01: 1 }, checkpointAtMs: now,
+                leaseUntilMs: now + 360 * 24 * 60 * 60 * 1000 } },
+            mutation: { slot: 's01', action: 'advance', batchId: 'existing-cloud-batch' },
+        };
         localStorage.setItem('logbook_is_guest', 'true');
         localStorage.setItem(GUEST_SESSION_KEY, 'guest-migration-v3-generation');
         activateGuestSession('guest-migration-v3-generation');
@@ -74,15 +95,19 @@ describe('guest -> account V3 migration', () => {
         useAppStore.getState().setUserData(guest);
 
         vi.mocked(DB.loadCloudPayload)
-            .mockResolvedValueOnce({ data: cloud, completeMonths: [], cloudDocuments: new Map() })
+            .mockResolvedValueOnce({
+                data: cloud, completeMonths: [],
+                cloudDocuments: new Map([['', { ...rootDocument(cloud), _sync: cloudRootSync }]]),
+            })
             .mockImplementationOnce(async () => {
                 // A real post-flush cloud response includes the root document's
                 // causal metadata, not merely the merged business snapshot.
                 const durable = await readLocal('user:a');
                 const sync = durable?.syncMetaByDocument[''];
                 if (!sync) throw new Error('Post-flush fixture missing durable root _sync');
+                const { pendingConflicts: _localOnly, ...cloudData } = merged;
                 return {
-                    data: merged,
+                    data: parse(cloudData),
                     completeMonths: [],
                     cloudDocuments: new Map([['', { ...rootDocument(merged), _sync: sync }]]),
                 };
@@ -111,6 +136,12 @@ describe('guest -> account V3 migration', () => {
         expect(routines.map(routine => routine.id)).toEqual(expect.arrayContaining(['cloud-routine', 'guest-routine']));
         expect(DB.loadCloudPayload).toHaveBeenNthCalledWith(1, expect.objectContaining({ allMonths: true, cloudKey: expect.any(Uint8Array) }));
         expect(DB.loadCloudPayload).toHaveBeenCalledTimes(2);
+        expect(useAppStore.getState().userData?.pendingConflicts).toEqual(merged.pendingConflicts);
+        expect((await readLocal('user:a'))?.data.pendingConflicts).toEqual(merged.pendingConflicts);
+        if (withConflict) {
+            expect(merged.pendingConflicts?.nutritionPlanning?.avgMacros?.carbsPerKg).toBe(4);
+            expect(useAppStore.getState().userData?.nutritionPlanning?.avgMacros?.carbsPerKg).toBe(3);
+        }
         expect(localStorage.getItem('logbook_is_guest')).toBeNull();
     });
 

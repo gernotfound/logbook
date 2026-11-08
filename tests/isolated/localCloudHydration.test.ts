@@ -67,7 +67,7 @@ function serverSnapshot(input: UserData, clocks: Record<string, VectorClock> = {
         if (!writerDot) throw new Error('Missing diagnostic server writer');
         const sync: SyncMeta = {
             protocolVersion: CURRENT_SYNC_PROTOCOL, clock, fields: {},
-            writer: { slot: writerDot[0], replicaId: 'hydration-server', generation: 1,
+            writer: { slot: writerDot[0], replicaId: `hydration-server-${writerDot[0]}`, generation: 1,
                 seq: writerDot[1], consentRevision: 1 },
         };
         const sealed = sealCloudDocument(accountKey, 'a', path, value, sync);
@@ -100,7 +100,8 @@ async function registerAndEdit(): Promise<LocalEnvelope> {
     if (!edited.profile) throw new Error('Missing diagnostic profile');
     edited.profile.height = '181';
     edited.pendingConflicts = { nutritionPlanning: { weight: 78 } };
-    await commitLocal(owner, edited, current.data);
+    await commitLocal(owner, edited, current.data, undefined, current.revision,
+        { pendingConflicts: edited.pendingConflicts });
     const pending = await snapshot();
     expect(pending.pending.length).toBeGreaterThan(0);
     return pending;
