@@ -474,11 +474,13 @@ describe('authenticated hydration session fencing', () => {
     });
 
     it.each([
-        { mode: 'renew', boundary: 'catalog' },
-        { mode: 'replace', boundary: 'catalog' },
-        { mode: 'renew', boundary: 'transaction' },
-        { mode: 'replace', boundary: 'transaction' },
-    ] as const)('preserves the journal when cloud permission is suspended during checkpoint $mode at $boundary', async ({ mode, boundary }) => {
+        { mode: 'renew', boundary: 'catalog', suspend: true },
+        { mode: 'replace', boundary: 'catalog', suspend: true },
+        { mode: 'renew', boundary: 'transaction', suspend: true },
+        { mode: 'replace', boundary: 'transaction', suspend: true },
+        { mode: 'renew', boundary: 'catalog', suspend: false },
+        { mode: 'replace', boundary: 'transaction', suspend: false },
+    ] as const)('honors cloud authorization during checkpoint $mode at $boundary (suspend=$suspend)', async ({ mode, boundary, suspend }) => {
         await clear();
         const { loadAuthenticatedData, initializeLocal, commitDomainOperations, readLocal, invalidateSession } = await loadModules();
         const repository = await import('../src/lib/sync/localRepository');
@@ -557,14 +559,26 @@ describe('authenticated hydration session fencing', () => {
         try {
             await vi.waitFor(() => expect(paused).toBe(true));
             // Cloud suspension/revalidation can leave Auth and durable consent markers unchanged.
-            cloudAllowed = false;
+            cloudAllowed = !suspend;
             expect(isCurrentSession(session)).toBe(true);
             release.resolve();
-            expect(await loading).toBe('blocked');
-            expect(await get('logbook:v2:user:user-a')).toBe(ciphertext);
-            expect(await readLocal('user:user-a')).toEqual(beforeAdoption);
+            expect(await loading).toBe(suspend ? 'blocked' : 'ready');
+            const afterAdoption = await readLocal('user:user-a');
             expect(beforeAdoption?.pending.length).toBeGreaterThan(0);
             expect(beforeAdoption?.data.profile?.height).toBe('175');
+            if (suspend) {
+                expect(await get('logbook:v2:user:user-a')).toBe(ciphertext);
+                expect(afterAdoption).toEqual(beforeAdoption);
+            } else {
+                expect(afterAdoption?.replica).toEqual(claim.identity);
+                expect(afterAdoption?.actorId).toBe(claim.identity.slot);
+                expect(afterAdoption?.actorSeq).toBe(mode === 'renew' ? 1 : 8);
+                expect(afterAdoption?.data).toEqual(beforeAdoption?.data);
+                expect(afterAdoption?.pending.map(op => [op.docPath, op.path, op.isDelete, op.value, op.guard]))
+                    .toEqual(beforeAdoption?.pending.map(op => [op.docPath, op.path, op.isDelete, op.value, op.guard]));
+                expect(afterAdoption?.revision).toBe(beforeAdoption!.revision + 1);
+                expect(storeState.current.userData?.profile?.height).toBe('175');
+            }
             expect(claimCheckpoint).toHaveBeenCalledOnce();
             expect(dbState.loadCloudPayload).toHaveBeenCalledWith(expect.objectContaining({ allMonths: true }));
         } finally {
