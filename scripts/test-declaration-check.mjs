@@ -81,7 +81,7 @@ export function findDisabledTests(source, name = 'fixture.test.ts') {
       sourceFilename: name,
       // JSX is only valid in JSX/TSX files. On .ts the generic <T>() arrow is
       // TypeScript syntax, which Babel 8 otherwise misreads as a JSX element.
-      plugins: ['typescript', ...(/\\.[jt]sx$/i.test(name) ? ['jsx'] : []), 'decorators-legacy'],
+      plugins: ['typescript', ...(/\.[jt]sx$/i.test(name) ? ['jsx'] : []), 'decorators-legacy'],
       errorRecovery: false,
     });
   } catch (error) {
