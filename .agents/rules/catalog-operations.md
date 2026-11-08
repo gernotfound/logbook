@@ -55,7 +55,7 @@ Progetto e versione sono obbligatori. Una scrittura richiede inoltre `--confirm`
 
 La pubblicazione crea `exercises_<versione>` e `foods_<versione>`, conserva l'eventuale manifest precedente in `previous_manifest_<versione>` e aggiorna il manifest in un'unica transazione. Il riuso di una versione esistente fallisce: i documenti letti dai client precedenti non vengono sovrascritti.
 
-Il percorso di scrittura richiede una verifica isolata con Admin SDK prima dell'uso operativo; i test correnti coprono validazione e dry-run. L'assenza di un test end-to-end contro produzione non autorizza a saltare i guardrail.
+Il percorso di scrittura richiede una verifica isolata con Admin SDK reale prima dell'uso operativo. I test correnti coprono validazione, dry-run e ordine delle scritture di una transazione simulata con mock; non verificano una pubblicazione su Firestore reale. L'assenza di un test end-to-end contro produzione non autorizza a saltare i guardrail.
 
 Per il rollback, dopo verifica dei documenti referenziati, ripristinare il manifest archiviato mediante una procedura amministrativa approvata. Non cancellare i documenti delle versioni precedenti mentre possono essere letti da client ancora attivi.
 
