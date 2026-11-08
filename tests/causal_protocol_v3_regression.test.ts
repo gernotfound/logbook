@@ -203,7 +203,9 @@ describe('Sync Protocol 3 causal convergence regressions', () => {
             guard: { path: ['activeWorkout', 'id'], equals: 's2' },
         });
         const concurrent = applySemanticOperations(base, [guarded('A', 4), guarded('B', 5)]);
-        expect((concurrent.documents.get('')?.activeWorkout as any).moodRating).toBe(5);
+        const beforeSessionChange = concurrent.documents.get('');
+        expect(beforeSessionChange).toBeDefined();
+        expect((beforeSessionChange!.activeWorkout as { moodRating: number }).moodRating).toBe(5);
         expect(concurrent.syncMetas[''].fields['activeWorkout/moodRating'].candidates).toHaveLength(1);
 
         // The parent event arrives late. Both descendant clocks observed P:1,
@@ -216,7 +218,9 @@ describe('Sync Protocol 3 causal convergence regressions', () => {
         const reconciled = applySemanticOperations(
             concurrent.documents, [changedSession], concurrent.syncMetas,
         );
-        expect((reconciled.documents.get('')?.activeWorkout as any).moodRating).toBe(0);
+        const afterSessionChange = reconciled.documents.get('');
+        expect(afterSessionChange).toBeDefined();
+        expect((afterSessionChange!.activeWorkout as { moodRating: number }).moodRating).toBe(0);
         expect(reconciled.syncMetas[''].fields['activeWorkout/moodRating']).toBeUndefined();
     });
 
@@ -230,7 +234,9 @@ describe('Sync Protocol 3 causal convergence regressions', () => {
             guard: { path: ['constructor', 'name'], equals: 'Object' },
         };
         const result = applySemanticOperations(base, [guarded]);
-        expect((result.documents.get('')?.profile as any).name).toBe('safe');
+        const root = result.documents.get('');
+        expect(root).toBeDefined();
+        expect((root!.profile as { name: string }).name).toBe('safe');
         expect(result.syncMetas[''].fields['profile/name']).toBeUndefined();
         expect(result.syncMetas[''].clock).toEqual({ A: 1 });
     });
