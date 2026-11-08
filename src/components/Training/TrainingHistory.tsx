@@ -11,6 +11,7 @@ import {
 import { ContextMenu } from '../UI/ContextMenu';
 import { useTrainingHistory } from '../../hooks/useTrainingHistory';
 import { Logic } from '../../lib/logic';
+import { getWorkoutDurationSeconds } from '../../lib/calc/workoutDuration';
 import type { WorkoutSession } from '../../types';
 import WorkoutReportModal from './WorkoutReportModal';
 
@@ -33,7 +34,8 @@ function workoutDateKey(workout: WorkoutSession): string | null {
     const explicitDate = workout.date ? Logic.parseDateInput(workout.date) : null;
     if (explicitDate && explicitDate === workout.date) return explicitDate;
     if (typeof workout.globalStartTime === 'number' && Number.isFinite(workout.globalStartTime)) {
-        return Logic.getLocalDateString(workout.globalStartTime);
+        const startedAt = new Date(workout.globalStartTime);
+        if (Number.isFinite(startedAt.getTime())) return Logic.getLocalDateString(startedAt);
     }
     return null;
 }
@@ -62,22 +64,6 @@ function dayLabel(key: string): string {
     return label.charAt(0).toUpperCase() + label.slice(1);
 }
 
-function durationSeconds(workout: WorkoutSession): number {
-    if (
-        typeof workout.globalStartTime === 'number'
-        && Number.isFinite(workout.globalStartTime)
-        && typeof workout.globalEndTime === 'number'
-        && Number.isFinite(workout.globalEndTime)
-    ) {
-        return Math.max(0, Math.floor((workout.globalEndTime - workout.globalStartTime) / 1000));
-    }
-
-    const normalized = Logic.normalizeDuration(workout.manualDurationStr || workout.globalDurationStr || '');
-    const [hours = 0, minutes = 0, seconds = 0] = normalized.split(':').map(Number);
-    if (![hours, minutes, seconds].every(Number.isFinite)) return 0;
-    return Math.max(0, hours * 3600 + minutes * 60 + seconds);
-}
-
 function formatCompactDuration(seconds: number): string {
     const totalMinutes = Math.max(0, Math.round(seconds / 60));
     const hours = Math.floor(totalMinutes / 60);
@@ -90,15 +76,22 @@ function workoutStartTime(workout: WorkoutSession): string {
     if (typeof workout.globalStartTime !== 'number' || !Number.isFinite(workout.globalStartTime)) {
         return 'Orario n.d.';
     }
+    const startedAt = new Date(workout.globalStartTime);
+    if (!Number.isFinite(startedAt.getTime())) return 'Orario n.d.';
     return new Intl.DateTimeFormat('it-IT', {
         hour: '2-digit',
         minute: '2-digit',
-    }).format(new Date(workout.globalStartTime));
+    }).format(startedAt);
 }
 
 const TrainingHistory = ({ onEditWorkout }: TrainingHistoryProps) => {
     const { userData, history, deleteWorkout } = useTrainingHistory();
     const [selectedReportWorkout, setSelectedReportWorkout] = useState<WorkoutSession | null>(null);
+    const currentReportWorkout = selectedReportWorkout
+        ? history.find(workout => selectedReportWorkout.id
+            ? workout.id === selectedReportWorkout.id
+            : workout === selectedReportWorkout)
+        : undefined;
 
     const library = useMemo(() => userData?.library || [], [userData?.library]);
     const today = Logic.getLocalDateString();
@@ -158,7 +151,7 @@ const TrainingHistory = ({ onEditWorkout }: TrainingHistoryProps) => {
     const monthWorkouts = workoutsByMonth.get(viewMonth) || [];
     const selectedWorkouts = workoutsByDate.get(selectedDate) || [];
     const totalMonthSeconds = monthWorkouts.reduce(
-        (sum, entry) => sum + durationSeconds(entry.workout),
+        (sum, entry) => sum + (getWorkoutDurationSeconds(entry.workout) ?? 0),
         0
     );
     const [viewYear, viewMonthNumber] = viewMonth.split('-').map(Number);
@@ -198,9 +191,9 @@ const TrainingHistory = ({ onEditWorkout }: TrainingHistoryProps) => {
 
     return (
         <div className="training-sub-view active training-history">
-            {selectedReportWorkout && (
+            {currentReportWorkout && (
                 <WorkoutReportModal
-                    workout={selectedReportWorkout}
+                    workout={currentReportWorkout}
                     history={history}
                     library={library}
                     onClose={() => setSelectedReportWorkout(null)}
@@ -371,7 +364,7 @@ const TrainingHistory = ({ onEditWorkout }: TrainingHistoryProps) => {
                         {selectedWorkouts.map((workout, index) => {
                             const name = workout.routineName || 'Sessione personalizzata';
                             const exerciseCount = workout.exercises?.length || 0;
-                            const info = `${workoutStartTime(workout)} · ${formatCompactDuration(durationSeconds(workout))} · ${exerciseCount} ${exerciseCount === 1 ? 'esercizio' : 'esercizi'}`;
+                            const info = `${workoutStartTime(workout)} · ${formatCompactDuration(getWorkoutDurationSeconds(workout) ?? 0)} · ${exerciseCount} ${exerciseCount === 1 ? 'esercizio' : 'esercizi'}`;
                             return (
                                 <article
                                     className="history-workout-card"
