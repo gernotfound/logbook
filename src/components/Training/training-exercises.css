@@ -722,6 +722,11 @@
   color: var(--accent-color);
 }
 
+.exercise-muscle-option.is-partial {
+  border-style: dashed;
+  border-color: var(--border-strong);
+}
+
 .exercise-muscle-empty {
   grid-column: 1 / -1;
   padding: .75rem;

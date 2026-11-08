@@ -22,6 +22,7 @@
   display: grid;
   gap: .5rem;
   min-width: 0;
+  container: metronome / inline-size;
   padding: .625rem .75rem .75rem;
   border-top: 1px solid var(--glass-border);
   border-radius: var(--radius-control, .875rem);
@@ -147,5 +148,18 @@
 
   .workout-metronome-toggle {
     padding-inline: .5rem;
+  }
+}
+
+/* The four 44px controls cannot remain in one row inside narrow containers
+   (e.g. enlarged text or a split-screen panel). Preserve full hit targets. */
+@container metronome (max-width: 16rem) {
+  .workout-metronome-controls {
+    grid-template-columns: 2.75rem minmax(0, 1fr) 2.75rem;
+  }
+
+  .workout-metronome-toggle {
+    grid-column: 1 / -1;
+    width: 100%;
   }
 }
