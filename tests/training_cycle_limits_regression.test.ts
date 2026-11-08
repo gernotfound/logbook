@@ -124,6 +124,25 @@ describe('training cycle bounded input and safe legacy evaluation', () => {
         expect(base.trainingCycles).toHaveLength(0);
     });
 
+    it('preserves the default weekly frequency before strict validation and after domain writes', () => {
+        const base = UserDataSchema.parse({ trainingCycles: [{ ...cycle, routines: [] }] }) as UserData;
+        const before = structuredClone(base);
+        for (const item of [{ routineId: 'r' }, { routineId: 'r', frequencyPerWeek: undefined }]) {
+            const input: TrainingCycle = { ...cycle, sessionsPerWeek: undefined, routines: [item] };
+            const source = structuredClone(input);
+            expect(hasValidCycleWriteFrequencies(input.routines, input.sessionsPerWeek)).toBe(true);
+            expect(TrainingCycleWriteSchema.parse(input).routines[0].frequencyPerWeek).toBe(1);
+            const created = applyDomainOperations(base, { type: 'training-cycle.upsert', cycle: input });
+            expect(created.trainingCycles?.[0].routines[0].frequencyPerWeek).toBe(1);
+            const updated = applyDomainOperations(base, {
+                type: 'training-cycle-routine.upsert', cycleId: cycle.id, routine: item,
+            });
+            expect(updated.trainingCycles?.[0].routines[0].frequencyPerWeek).toBe(1);
+            expect(input).toEqual(source);
+            expect(base).toEqual(before);
+        }
+    });
+
     it('bounds preview work without silently changing a saved input', () => {
         expect(previewCycleCount('1000000', 4, MAX_EDITABLE_CYCLE_WEEKS)).toBe(52);
         expect(previewCycleCount('1.5', 4, MAX_EDITABLE_CYCLE_WEEKS)).toBe(4);
