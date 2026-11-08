@@ -377,12 +377,17 @@ export function validateCustomFood(foodData: any) {
         }
         return rounded;
     };
-    const parseOpt = (val: unknown) => {
+    const parseOpt = (val: unknown, field: string, label: string) => {
         if (val === undefined || val === null || val === '') return null;
         const num = parseNumeric(val);
-        if (num === null || num < 0) return null;
-        const rounded = Math.round(num * 100) / 100;
-        return Number.isFinite(rounded) ? rounded : null;
+        const rounded = num === null ? null : Math.round(num * 100) / 100;
+        if (num === null || num < 0 || rounded === null || !Number.isFinite(rounded)) {
+            // A blank optional field may be omitted. A malformed supplied value
+            // must not silently disappear from a durable custom-food write.
+            errors[field] = `${label} deve essere un numero finito >= 0`;
+            return null;
+        }
+        return rounded;
     };
     const kcal = parseReq(foodData.kcal, 'kcal', 'Calorie');
     const carbs = parseReq(foodData.carbs, 'carbs', 'Carboidrati');
@@ -393,10 +398,22 @@ export function validateCustomFood(foodData: any) {
         errors.baseQty = "Porzione base deve essere > 0";
     }
     const unit = String(foodData.unit || 'g').trim();
-    const servingWeight = parseOpt(foodData.servingWeight);
+    const servingWeight = parseOpt(foodData.servingWeight, 'servingWeight', 'Peso porzione');
     if ((unit === 'pezzo' || unit === 'pcs') && (servingWeight === null || servingWeight <= 0)) {
         errors.servingWeight = "Il peso di un pezzo deve essere maggiore di 0 g";
     }
+    const optionalNutrients = {
+        satFat: parseOpt(foodData.satFat, 'satFat', 'Grassi saturi'),
+        unSatFat: parseOpt(foodData.unSatFat, 'unSatFat', 'Grassi insaturi'),
+        sugars: parseOpt(foodData.sugars, 'sugars', 'Zuccheri'),
+        fiber: parseOpt(foodData.fiber, 'fiber', 'Fibre'),
+        salt: parseOpt(foodData.salt, 'salt', 'Sale'),
+        sodium: parseOpt(foodData.sodium, 'sodium', 'Sodio'),
+        vitA: parseOpt(foodData.vitA, 'vitA', 'Vitamina A'),
+        vitC: parseOpt(foodData.vitC, 'vitC', 'Vitamina C'),
+        calcium: parseOpt(foodData.calcium, 'calcium', 'Calcio'),
+        iron: parseOpt(foodData.iron, 'iron', 'Ferro'),
+    };
     if (Object.keys(errors).length > 0) {
         return { isValid: false, errors, cleanData: null };
     }
@@ -412,16 +429,7 @@ export function validateCustomFood(foodData: any) {
         carbs,
         pro,
         fat,
-        satFat: parseOpt(foodData.satFat),
-        unSatFat: parseOpt(foodData.unSatFat),
-        sugars: parseOpt(foodData.sugars),
-        fiber: parseOpt(foodData.fiber),
-        salt: parseOpt(foodData.salt),
-        sodium: parseOpt(foodData.sodium),
-        vitA: parseOpt(foodData.vitA),
-        vitC: parseOpt(foodData.vitC),
-        calcium: parseOpt(foodData.calcium),
-        iron: parseOpt(foodData.iron)
+        ...optionalNutrients
     };
     return { isValid: true, errors: {}, cleanData };
 }

@@ -174,6 +174,25 @@ describe('Empirical Challenger Suite: Edge Cases & Stress Verification', () => {
       expect(Logic.validateCustomFood({ ...food, fat: '.5' }).cleanData?.fat).toBe(0.5);
     });
 
+    test('filled optional nutrients must be finite and nonnegative rather than silently discarded', () => {
+      const food = { name: 'Test', baseQty: 100, unit: 'g', kcal: 120, carbs: 15, pro: 5, fat: 4 };
+      for (const field of ['satFat', 'unSatFat', 'sugars', 'fiber', 'salt', 'sodium', 'vitA', 'vitC', 'calcium', 'iron'] as const) {
+        for (const value of ['1g', '-0.01', '1e309', '1,2,3']) {
+          const raw = { ...food, [field]: value };
+          const before = structuredClone(raw);
+          const result = Logic.validateCustomFood(raw);
+          expect(result.isValid).toBe(false);
+          expect(result.errors).toHaveProperty(field);
+          expect(result.cleanData).toBeNull();
+          expect(raw).toEqual(before);
+        }
+      }
+      expect(Logic.validateCustomFood({ ...food, satFat: '', fiber: null }).isValid).toBe(true);
+      expect(Logic.validateCustomFood({ ...food, satFat: '1,25', fiber: '0' }).cleanData)
+        .toMatchObject({ satFat: 1.25, fiber: 0 });
+      expect(Logic.validateCustomFood({ ...food, servingWeight: '50g' }).isValid).toBe(false);
+    });
+
     test('piece-based custom foods require their actual piece weight', () => {
       const food = { name: 'Porzione', baseQty: 100, unit: 'pezzo', kcal: 120, carbs: 15, pro: 5, fat: 4 };
       expect(Logic.validateCustomFood(food).errors).toHaveProperty('servingWeight');
