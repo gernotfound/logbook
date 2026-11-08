@@ -190,9 +190,11 @@ describe('durable cloud integrity fencing and recovery', () => {
 
     it.each([false, true])('does not invent a fence or checkpoint when no recovery is needed (full=%s)', async full => {
         const before = await pendingArchive(false);
+        const ciphertext = await get(key);
         const recovered = await completeCloudIntegrityRecovery('a', null, full);
         expect(recovered).toEqual(before);
         expect(await readLocal('a')).toEqual(before);
+        expect(await get(key)).toBe(ciphertext);
     });
 
     it.each(['missing-observation', 'wrong-token', 'already-cleared'] as const)(
@@ -252,8 +254,10 @@ describe('durable cloud integrity fencing and recovery', () => {
         { slot: 's01' }, { replicaId: 'replacement' }, { generation: 2 },
     ])('ignores a checkpoint request for an independently mismatched identity %j', async mismatch => {
         const before = await pendingArchive();
+        const ciphertext = await get(key);
         await markReplicaCheckpointRequired('a', { ...identity(), ...mismatch });
         expect(await readLocal('a')).toEqual(before);
+        expect(await get(key)).toBe(ciphertext);
     });
 
     it.each([false, true])('expires the matching replica without changing causality (explicit identity=%s)', async explicit => {
@@ -267,8 +271,10 @@ describe('durable cloud integrity fencing and recovery', () => {
 
     it('leaves an archive without a replica intact when a checkpoint is requested', async () => {
         const before = await pendingArchive(false);
+        const ciphertext = await get(key);
         await markReplicaCheckpointRequired('a', identity());
         expect(await readLocal('a')).toEqual(before);
+        expect(await get(key)).toBe(ciphertext);
     });
 
     it.each(mutations)('preserves an absent archive during %s', async kind => {
@@ -293,20 +299,31 @@ describe('durable cloud integrity fencing and recovery', () => {
         expect(await get(key)).toBe(ciphertext);
     });
 
-    it('propagates an IndexedDB failure, preserves the journal, and permits a later retry', async () => {
-        const before = await pendingArchive();
+    it.each(mutations)('propagates an IndexedDB failure during %s and permits a later retry', async kind => {
+        await pendingArchive();
+        if (kind === 'recover') {
+            await markCloudIntegrityBlocked('a');
+            await renewReplica();
+        }
+        const before = (await readLocal('a'))!;
         const ciphertext = await get(key);
+        const work = () => kind === 'recover'
+            ? completeCloudIntegrityRecovery('a', before.cloudIntegrityFence!, true)
+            : mutate(kind);
         const failure = new Error('IndexedDB transaction unavailable');
         vi.mocked(indexedDb.update).mockRejectedValueOnce(failure);
 
-        await expect(markCloudIntegrityBlocked('a')).rejects.toBe(failure);
+        await expect(work()).rejects.toBe(failure);
         expect(await get(key)).toBe(ciphertext);
         expect(await readLocal('a')).toEqual(before);
 
-        await markCloudIntegrityBlocked('a');
+        await work();
         const recovered = (await readLocal('a'))!;
         expect(recovered.pending).toEqual(before.pending);
-        expect(recovered.cloudIntegrityFence).toEqual(expect.any(String));
+        expect(recovered.data).toEqual(before.data);
         expect(recovered.revision).toBe(before.revision + 1);
+        if (kind === 'block') expect(recovered.cloudIntegrityFence).toEqual(expect.any(String));
+        else if (kind === 'recover') expect(recovered.cloudIntegrityFence).toBeUndefined();
+        else expect(recovered.replica).toEqual({ ...before.replica, checkpointAtMs: 1, leaseUntilMs: 1 });
     });
 });
