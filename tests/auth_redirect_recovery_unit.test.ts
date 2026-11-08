@@ -280,6 +280,55 @@ describe('isolated foreground redirect recovery', () => {
         expect(marker).toBe('true');
     });
 
+    it.each(['resolved', 'rejected', 'detached'] as const)(
+        'preserves a redirect launched after mount when foreground fires (SDK: %s)',
+        async outcome => {
+            let marker: string | null = null;
+            let attempt: string | null = null;
+            let foreground = () => {};
+            let resolve!: (value: unknown) => void;
+            let reject!: (reason: unknown) => void;
+            const pending = new Promise<unknown>((yes, no) => { resolve = yes; reject = no; });
+            const remove = vi.fn(() => { marker = null; attempt = null; return true; });
+            const reload = vi.fn(async () => {});
+            const setSaveError = vi.fn();
+            const detach = attachAuthRedirectRecovery({
+                awaitingRedirectKey: AWAITING_REDIRECT_KEY,
+                redirectLaunchFailedRef: { current: false },
+                setSaveError,
+            }, {
+                visibility: () => 'visible',
+                listen: handler => { foreground = handler; return () => { foreground = () => {}; }; },
+                read: () => marker,
+                readAttempt: () => attempt,
+                remove, reload,
+                getRedirect: () => pending,
+            });
+            detachAll.push(detach);
+
+            // The listener predates this login; neither foreground nor its old SDK
+            // probe can take ownership of the new attempt's evidence.
+            marker = 'true';
+            attempt = 'new-attempt';
+            foreground();
+            expect(remove).not.toHaveBeenCalled();
+            expect(reload).not.toHaveBeenCalled();
+            if (outcome === 'detached') detach();
+            if (outcome === 'rejected') reject(new Error('old SDK probe rejected'));
+            else resolve(null);
+            await pending.catch(() => {});
+            await Promise.resolve();
+            await Promise.resolve();
+            foreground();
+
+            expect(marker).toBe('true');
+            expect(attempt).toBe('new-attempt');
+            expect(remove).not.toHaveBeenCalled();
+            expect(reload).not.toHaveBeenCalled();
+            expect(setSaveError).not.toHaveBeenCalled();
+        },
+    );
+
     it('consumes the active marker once and calls the safe reload barrier only once', async () => {
         const { stored, remove, reload, foreground } = setup();
         foreground();

@@ -40,6 +40,32 @@ void test('rejects an unexpected Firebase deploy identity in either workflow', (
   assert.match(checkProductionBuildSecrets(hosting, other).join('; '), /Firestore: unexpected WIF/);
 });
 
+void test('rejects missing Firestore production project pin before provider authentication', () => {
+  const changed = firestore.replace(
+    'if [ "${FIREBASE_PROJECT_ID}" != "logbook-db-98cc4" ]; then',
+    'if [ "${FIREBASE_PROJECT_ID}" != "another-project" ]; then',
+  );
+  assert.notEqual(changed, firestore);
+  assert.match(checkProductionBuildSecrets(hosting, changed).join('; '), /production project/);
+});
+
+void test('rejects a stale-main guard removed from either Firestore mutation step', () => {
+  const steps = [
+    ['Retire explicitly removed Firestore single-field indexes', 'Deploy Firestore Rules and indexes'],
+    ['Deploy Firestore Rules and indexes', 'Verify live Firestore Rules and indexes'],
+  ];
+  for (const [name, next] of steps) {
+    const start = firestore.indexOf('      - name: ' + name);
+    const end = firestore.indexOf('      - name: ' + next, start);
+    assert.ok(start >= 0 && end > start);
+    const section = firestore.slice(start, end);
+    const damaged = section.replace('git ls-remote --exit-code origin refs/heads/main', 'echo unverified-main');
+    assert.notEqual(section, damaged);
+    const changed = firestore.slice(0, start) + damaged + firestore.slice(end);
+    assert.match(checkProductionBuildSecrets(hosting, changed).join('; '), /recheck exact main SHA/);
+  }
+});
+
 void test('direct dependencies require explicit review before a new runtime or build SDK can be installed', () => {
   const manifest = JSON.parse(readFileSync('package.json', 'utf8'));
   const lockRoot = JSON.parse(readFileSync('package-lock.json', 'utf8')).packages[''];
