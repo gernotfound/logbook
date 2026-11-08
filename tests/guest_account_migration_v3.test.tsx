@@ -1,3 +1,4 @@
+import 'fake-indexeddb/auto';
 import { LEGAL_VERSIONS } from '../src/lib/legalVersions';
 import React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
