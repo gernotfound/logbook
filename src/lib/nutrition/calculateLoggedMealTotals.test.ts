@@ -12,6 +12,25 @@ describe('shared meal totals', () => {
         expect(calculateRawLoggedMealTotals(items)).toEqual({ kcal: 1.45, carbs: 0.4, pro: 1.45, fat: 0.4 });
         expect(calculateLoggedMealTotals(items)).toEqual({ kcal: 1, carbs: 0.4, pro: 1.5, fat: 0.4 });
     });
+    it.each([
+        ['multiplication', [meal({ baseQty: 1, quantity: 2, kcal: Number.MAX_VALUE })]],
+        ['division', [meal({ baseQty: Number.MIN_VALUE, quantity: Number.MAX_VALUE })]],
+        ['accumulation', [meal({ kcal: Number.MAX_VALUE }), meal({ kcal: Number.MAX_VALUE })]],
+    ] as const)('rejects non-representable totals after finite-input %s', (_, items) => {
+        const before = structuredClone(items);
+        expect(() => calculateLoggedMealTotals(items)).toThrow('Totali nutrizionali non rappresentabili');
+        expect(items).toEqual(before);
+    });
+
+    it('rounds large finite macros without overflowing the temporary decimal scale', () => {
+        const items = [meal({ kcal: Number.MAX_VALUE, carbs: Number.MAX_VALUE,
+            pro: Number.MAX_VALUE, fat: Number.MAX_VALUE })];
+        expect(calculateLoggedMealTotals(items)).toEqual({
+            kcal: Number.MAX_VALUE, carbs: Number.MAX_VALUE,
+            pro: Number.MAX_VALUE, fat: Number.MAX_VALUE,
+        });
+    });
+
     it('retains quick-meal and gram serving defaults', () => {
         const portion = meal({ meal: 'quick', unit: 'porzione', quantity: 2, kcal: 120, carbs: 10 });
         expect(getLoggedMealPortion(portion)).toEqual({ quantity: 2, ratio: 2 });

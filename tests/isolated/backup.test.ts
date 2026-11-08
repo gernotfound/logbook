@@ -103,6 +103,34 @@ describe('versioned backup and non-mutating restore', () => {
         expect(incoming.nutrition['2026-09-01'].meals).toHaveLength(2);
     });
 
+    it.each(['merge', 'restore'] as const)('rejects finite-input meal overflow during %s without changing either archive', mode => {
+        const current = parse({ profile: { height: '170' } });
+        const incoming = { nutrition: { '2026-09-01': {
+            date: '2026-09-01', kcal: 0, carbs: 0, pro: 0, fat: 0,
+            meals: [
+                { id: 'a', name: 'A', quantity: 1, baseQty: 1, kcal: Number.MAX_VALUE, carbs: 0, pro: 0, fat: 0 },
+                { id: 'b', name: 'B', quantity: 1, baseQty: 1, kcal: Number.MAX_VALUE, carbs: 0, pro: 0, fat: 0 },
+            ],
+        } } };
+        const beforeCurrent = structuredClone(current);
+        const beforeIncoming = structuredClone(incoming);
+        expect(() => prepareImport(current, incoming, mode)).toThrow('Totali nutrizionali non rappresentabili');
+        expect(current).toEqual(beforeCurrent);
+        expect(incoming).toEqual(beforeIncoming);
+    });
+
+    it('preserves representable imported totals without overflowing an intermediate product', () => {
+        const current = parse({});
+        const incoming = { nutrition: { '2026-09-01': {
+            date: '2026-09-01', meals: [{ id: 'portion', name: 'Porzione', quantity: 2, baseQty: 2,
+                kcal: Number.MAX_VALUE, carbs: Number.MAX_VALUE, pro: Number.MAX_VALUE, fat: Number.MAX_VALUE }],
+        } } };
+        const result = prepareImport(current, incoming, 'merge');
+        expect(result.data.nutrition?.['2026-09-01']).toMatchObject({
+            kcal: Number.MAX_VALUE, carbs: Number.MAX_VALUE, pro: Number.MAX_VALUE, fat: Number.MAX_VALUE,
+        });
+    });
+
     it('restore replaces only included current fields and never imports legal acceptance', () => {
         const current = parse({ profile: { height: 170 }, activeCycleId: 'retained' });
         const result = prepareImport(current, { profile: { height: 180 }, legalConsent: { acceptedAt: '2026-09-01', termsVersion: '999' } }, 'restore');

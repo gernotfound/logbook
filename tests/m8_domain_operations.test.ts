@@ -68,6 +68,19 @@ describe('M8 Domain Operations V4', () => {
         expect(before).toEqual(original);
     });
 
+    it('rejects non-representable meal totals without publishing a partially applied domain batch', () => {
+        const before = base({ profile: { height: '170' } });
+        const original = structuredClone(before);
+        expect(() => applyDomainOperations(before, [
+            { type: 'profile.patch', patch: { height: '180' } },
+            { type: 'nutrition-meal.upsert', date: '2026-09-15', meal: {
+                id: 'overflow', name: 'Overflow', meal: 'Pranzo', baseQty: 1, quantity: 2,
+                kcal: Number.MAX_VALUE, carbs: 0, pro: 0, fat: 0,
+            } },
+        ])).toThrow('Totali nutrizionali non rappresentabili');
+        expect(before).toEqual(original);
+    });
+
     it('keeps all persisted version dimensions unchanged', () => {
         expect(CURRENT_DATA_SCHEMA).toBe(1);
         expect(CURRENT_SYNC_PROTOCOL).toBe(3);
