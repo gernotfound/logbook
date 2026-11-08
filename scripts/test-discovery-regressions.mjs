@@ -107,3 +107,60 @@ await test('gc runner preserves causal test discovery and rejects external clien
     assert.match(probe.stderr + probe.stdout, /Configurazione test non isolata/);
   }
 });
+
+await test('emulator runner rejects inherited Firebase endpoints before loading Rules tests', async () => {
+  const root = fileURLToPath(new URL('..', import.meta.url));
+  const emulator = await loadConfigFromFile({ command: 'serve', mode: 'test' }, resolve(root, 'vitest.emulator.config.ts'));
+  assert.ok(emulator?.config.test);
+  assert.equal(emulator.config.test.environment, 'node');
+  assert.deepEqual(emulator.config.test.include, ['tests/emulator/**/*.test.ts']);
+  assert.deepEqual(emulator.config.test.setupFiles, ['tests/emulator/setup.ts']);
+  assert.equal(emulator.config.test.maxWorkers, 1);
+  assert.equal(emulator.config.test.testTimeout, 15000);
+  assert.equal(emulator.config.test.hookTimeout, 30000);
+
+  const { spawnSync } = await import('node:child_process');
+  for (const [key, value] of [
+    ['VITE_FIREBASE_PROJECT_ID', 'unapproved-emulator-project'],
+    ['VITE_ACCOUNT_DELETION_API_ORIGIN', 'https://unapproved-emulator.example.invalid'],
+  ]) {
+    const probe = spawnSync(process.execPath, ['--input-type=module', '-e',
+      "import { loadConfigFromFile } from 'vite'; await loadConfigFromFile({ command: 'serve', mode: 'test' }, 'vitest.emulator.config.ts');",
+    ], {
+      cwd: root,
+      encoding: 'utf8',
+      env: { ...process.env, [key]: value },
+    });
+    if (probe.error) throw probe.error;
+    assert.notEqual(probe.status, 0, key + ' must be rejected before Rules tests load');
+    assert.match(probe.stderr + probe.stdout, /Configurazione test non isolata/);
+  }
+});
+
+await test('jsdom runner rejects unsafe client endpoints before UI test setup', async () => {
+  const root = fileURLToPath(new URL('..', import.meta.url));
+  const base = await loadConfigFromFile({ command: 'serve', mode: 'test' }, resolve(root, 'vitest.config.ts'));
+  assert.ok(base?.config.test);
+  assert.equal(base.config.test.environment, 'jsdom');
+  assert.deepEqual(base.config.test.setupFiles, ['./tests/cssReadCompat.ts', './tests/setup.tsx']);
+  assert.equal(base.config.test.maxWorkers, 2);
+  assert.equal(base.config.test.env.VITE_ACCOUNT_DELETION_API_ORIGIN, 'http://127.0.0.1:9');
+
+  const { spawnSync } = await import('node:child_process');
+  for (const [key, value] of [
+    ['VITE_FIREBASE_PROJECT_ID', 'external-project'],
+    ['VITE_ACCOUNT_DELETION_API_ORIGIN', 'https://external.example.invalid'],
+    ['VITE_RECAPTCHA_ENTERPRISE_SITE_KEY', 'unexpected-site-key'],
+  ]) {
+    const probe = spawnSync(process.execPath, ['--input-type=module', '-e',
+      "import { loadConfigFromFile } from 'vite'; await loadConfigFromFile({ command: 'serve', mode: 'test' }, 'vitest.config.ts');",
+    ], {
+      cwd: root,
+      encoding: 'utf8',
+      env: { ...process.env, [key]: value },
+    });
+    if (probe.error) throw probe.error;
+    assert.notEqual(probe.status, 0, key + ' must be rejected before UI test setup');
+    assert.match(probe.stderr + probe.stdout, /Configurazione test non isolata/);
+  }
+});

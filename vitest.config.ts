@@ -49,8 +49,6 @@ export default defineConfig({
     setupFiles: ['./tests/cssReadCompat.ts', './tests/setup.tsx'],
     testTimeout: 10000,
     maxWorkers: 2,
-    coverage: {
-    },
     exclude: [
       ...configDefaults.exclude,
       '**/e2e/**',
