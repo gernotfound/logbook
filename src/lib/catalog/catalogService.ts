@@ -124,8 +124,12 @@ export async function getCachedCatalog(): Promise<CachedGlobalCatalog> {
     }
 
     let cacheReadFailed = false;
-    try {
+    // The first IDB read may fail transiently during startup. Retry once in
+    // this boundary so a single failure cannot publish an empty catalog UI.
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
         const rawCached = await idbGet<unknown>(CATALOG_CACHE_KEY);
+        cacheReadFailed = false;
         // A network update or explicit save may complete while the IDB read is pending.
         // Never publish an older IDB snapshot over that newer in-memory catalog.
         if (inMemoryCatalogCache && isLoadedFromPersistentCache) return inMemoryCatalogCache;
@@ -146,9 +150,13 @@ export async function getCachedCatalog(): Promise<CachedGlobalCatalog> {
             }
             console.warn("[CatalogService] Cache IndexedDB corrotta, ripristino seed predefinito.");
         }
-    } catch (err) {
+        // A successful empty or invalid read is not a transport failure.
+        break;
+      } catch (err) {
         cacheReadFailed = true;
         console.warn("[CatalogService] Errore lettura cache IndexedDB:", err);
+        if (inMemoryCatalogCache && isLoadedFromPersistentCache) return inMemoryCatalogCache;
+      }
     }
 
     // The read may also fail after another caller has published a fresh catalog.

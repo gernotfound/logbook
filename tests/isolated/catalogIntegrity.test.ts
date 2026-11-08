@@ -1,7 +1,7 @@
 import 'fake-indexeddb/auto';
 const storageFault = vi.hoisted(() => ({
     failNextSet: false,
-    failNextGet: false,
+    failGetCount: 0,
     stallNextGet: false,
     resolveGet: null as null | ((value: unknown) => void),
     rejectGet: null as null | ((reason: Error) => void),
@@ -12,8 +12,8 @@ vi.mock('idb-keyval', async (importOriginal) => {
     return {
         ...original,
         get: (...args: Parameters<typeof original.get>) => {
-            if (storageFault.failNextGet) {
-                storageFault.failNextGet = false;
+            if (storageFault.failGetCount > 0) {
+                storageFault.failGetCount -= 1;
                 return Promise.reject(new Error('temporary IndexedDB read failure'));
             }
             if (storageFault.stallNextGet) {
@@ -48,7 +48,7 @@ beforeEach(async () => {
     await clearCatalogCache();
     remote.get.mockReset();
     storageFault.failNextSet = false;
-    storageFault.failNextGet = false;
+    storageFault.failGetCount = 0;
     storageFault.stallNextGet = false;
     storageFault.resolveGet = null;
     storageFault.rejectGet = null;
@@ -67,7 +67,7 @@ it('does not persist the reproducible empty seed or overwrite the cache on a fai
     expect(await (await import('idb-keyval')).get('logbook_cached_global_catalog')).toBeUndefined();
 });
 
-it('recovers a preserved catalog after a transient IndexedDB read failure without persisting empty seed', async () => {
+it('recovers the persisted catalog within the first call after one transient IndexedDB read failure', async () => {
     const previous = getSeedCatalog();
     const durable = {
         ...previous,
@@ -77,11 +77,7 @@ it('recovers a preserved catalog after a transient IndexedDB read failure withou
     };
     await (await import('idb-keyval')).set('logbook_cached_global_catalog', durable);
     storageFault.setCalls = 0;
-    storageFault.failNextGet = true;
-
-    const fallback = await getCachedCatalog();
-    expect(fallback.manifest.version).toBe('1.0.0');
-    expect(fallback.exercises).toEqual([]);
+    storageFault.failGetCount = 1;
 
     const recovered = await getCachedCatalog();
     expect(recovered.manifest.version).toBe('persisted-v7');
@@ -99,7 +95,7 @@ it('rechecks durable catalog before classifying unflagged global entries during 
         foods: [food],
     };
     await (await import('idb-keyval')).set('logbook_cached_global_catalog', preserved);
-    storageFault.failNextGet = true;
+    storageFault.failGetCount = 2;
     await getCachedCatalog();
 
     const unflaggedExercise = [{ ...exercise }] as Parameters<typeof filterCustomExercises>[0];
