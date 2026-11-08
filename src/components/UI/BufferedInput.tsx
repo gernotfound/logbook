@@ -108,10 +108,17 @@ function assertBufferedWitnessesUnchanged(
     }
 }
 
-export const BufferedInput = React.forwardRef<HTMLInputElement, BufferedInputProps>(
-    ({ id, recoveryId, value, onChange, onBlur, onFocus, onKeyDown, type, inputMode, ...props }, ref) => {
-        const workoutId = React.useContext(BufferedWorkoutScope);
-        const [initialRecovery] = useState(() => createInitialRecovery('input', recoveryId ?? id, workoutId));
+// Both field types must enforce the same owner, consent, writer-lineage and
+// recovery-acknowledgement invariants. Only their normalization/UI differs.
+function useBufferedEditorDraft(
+    kind: 'input' | 'textarea',
+    recoveryIdentity: string | undefined,
+    workoutId: string | null,
+    value: string | number | undefined,
+    onChange: (value: string) => void,
+    normalizeValue: (value: string) => string,
+) {
+        const [initialRecovery] = useState(() => createInitialRecovery(kind, recoveryIdentity, workoutId));
         const initialValue = initialRecovery.recovered ?? value ?? '';
         const [localValue, setLocalValue] = useState(initialValue);
         const recoveryKey = useRef(initialRecovery.key);
@@ -134,14 +141,12 @@ export const BufferedInput = React.forwardRef<HTMLInputElement, BufferedInputPro
         }, [initialRecovery.error]);
 
         const onChangeRef = useRef(onChange);
-        const typeRef = useRef(type);
-        const inputModeRef = useRef(inputMode);
+        const normalizeRef = useRef(normalizeValue);
 
         useLayoutEffect(() => {
             latestLocalValue.current = localValue;
             onChangeRef.current = onChange;
-            typeRef.current = type;
-            inputModeRef.current = inputMode;
+            normalizeRef.current = normalizeValue;
         });
 
         const assertIndependentWitnesses = useCallback(() => {
@@ -204,11 +209,7 @@ export const BufferedInput = React.forwardRef<HTMLInputElement, BufferedInputPro
         // visible until its parent confirms the same value, then its recovery key is cleared.
         useEffect(() => {
             if (recoveryValue.current !== null && !isDirty.current && recoveryKey.current) {
-                const recoveredNormalized = normalizeInputValue(
-                    recoveryValue.current,
-                    typeRef.current,
-                    inputModeRef.current,
-                );
+                const recoveredNormalized = normalizeRef.current(recoveryValue.current);
                 if (String(value ?? '') === recoveredNormalized) {
                     try {
                         const session = editSession.current;
@@ -283,11 +284,7 @@ export const BufferedInput = React.forwardRef<HTMLInputElement, BufferedInputPro
                     );
                     assertIndependentWitnesses();
                 }
-                const finalVal = normalizeInputValue(
-                    String(latestLocalValue.current),
-                    typeRef.current,
-                    inputModeRef.current,
-                );
+                const finalVal = normalizeRef.current(String(latestLocalValue.current));
                 onChangeRef.current(finalVal);
                 isDirty.current = false;
             }
@@ -304,9 +301,9 @@ export const BufferedInput = React.forwardRef<HTMLInputElement, BufferedInputPro
             };
         }, [flush, persistRecovery]);
 
-        const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-            setLocalValue(e.target.value);
-            latestLocalValue.current = e.target.value;
+        const handleChange = (nextValue: string) => {
+            setLocalValue(nextValue);
+            latestLocalValue.current = nextValue;
             isDirty.current = true;
             needsDeviceWrite.current = true;
             try {
@@ -323,6 +320,17 @@ export const BufferedInput = React.forwardRef<HTMLInputElement, BufferedInputPro
                 }
             }
         };
+
+        return { localValue, handleChange, flush, isFocused, editSession };
+}
+
+export const BufferedInput = React.forwardRef<HTMLInputElement, BufferedInputProps>(
+    ({ id, recoveryId, value, onChange, onBlur, onFocus, onKeyDown, type, inputMode, ...props }, ref) => {
+        const workoutId = React.useContext(BufferedWorkoutScope);
+        const { localValue, handleChange, flush, isFocused, editSession } = useBufferedEditorDraft(
+            'input', recoveryId ?? id, workoutId, value, onChange,
+            nextValue => normalizeInputValue(nextValue, type, inputMode),
+        );
 
         const handleFocus = (e: React.FocusEvent<HTMLInputElement>) => {
             isFocused.current = true;
@@ -364,7 +372,7 @@ export const BufferedInput = React.forwardRef<HTMLInputElement, BufferedInputPro
                 type={type}
                 inputMode={inputMode}
                 value={localValue}
-                onChange={handleChange}
+                onChange={event => handleChange(event.target.value)}
                 onFocus={handleFocus}
                 onBlur={handleBlur}
                 onKeyDown={handleKeyDown}
@@ -383,202 +391,9 @@ interface BufferedTextareaProps extends Omit<React.TextareaHTMLAttributes<HTMLTe
 export const BufferedTextarea = React.forwardRef<HTMLTextAreaElement, BufferedTextareaProps>(
     ({ id, value, onChange, onBlur, onFocus, ...props }, ref) => {
         const workoutId = React.useContext(BufferedWorkoutScope);
-        const [initialRecovery] = useState(() => createInitialRecovery('textarea', id, workoutId));
-        const initialValue = initialRecovery.recovered ?? value ?? '';
-        const [localValue, setLocalValue] = useState(initialValue);
-        const recoveryKey = useRef(initialRecovery.key);
-        const isDirty = useRef(initialRecovery.recovered !== null);
-        // Recovered text may still need a parent commit, but it is already
-        // durable: only a new keystroke requires another encrypted witness.
-        const needsDeviceWrite = useRef(false);
-        const editSession = useRef(initialRecovery.session);
-        const isFocused = useRef(false);
-        const latestLocalValue = useRef(initialValue);
-        const recoveryValue = useRef<string | null>(initialRecovery.recovered);
-        const observedRaw = useRef<string | null>(initialRecovery.observedRaw);
-        const writerIntentName = useRef<string | null>(null);
-        const writerIntentRaw = useRef<string | null>(null);
-        const sourceIntent = useRef(initialRecovery.sourceIntent);
-        const sourceLineage = useRef(initialRecovery.sourceLineage);
-
-        useEffect(() => {
-            if (initialRecovery.error) blockBufferedPersistence(initialRecovery.error);
-        }, [initialRecovery.error]);
-
-        const onChangeRef = useRef(onChange);
-
-        useLayoutEffect(() => {
-            latestLocalValue.current = localValue;
-            onChangeRef.current = onChange;
-        });
-
-        const assertIndependentWitnesses = useCallback(() => {
-            assertBufferedWitnessesUnchanged(recoveryKey.current, editSession.current,
-                sourceLineage.current, writerIntentName.current, writerIntentRaw.current);
-        }, []);
-
-        const persistRecovery = useCallback(() => {
-            if (!isDirty.current) return;
-            const key = recoveryKey.current;
-            const session = editSession.current;
-            if (!key) throw new Error('Bozza volatile senza identificativo stabile.');
-            if (!session || !isCurrentSession(session)) throw new Error('Sessione cambiata prima del recupero della bozza.');
-            if (!isCurrentWorkoutScope(workoutId)) {
-                throw new Error('Allenamento cambiato prima di salvare la bozza.');
-            }
-            const raw = String(latestLocalValue.current);
-            if (useAppStore.getState().localPersistenceBlocked) {
-                throw new Error('Persistenza delle bozze del workout bloccata.');
-            }
-            if (!needsDeviceWrite.current) {
-                // Read-only captures still authenticate the source generation and
-                // observed image. A consent change must block reload, not be
-                // mistaken for an already-secured current draft.
-                assertBufferedDraftUnchanged(key, session.owner, observedRaw.current);
-                assertIndependentWitnesses();
-                return;
-            }
-            // Every editor has its own device key: preserve input synchronously
-            // before the shared canonical key can lose a truly simultaneous race.
-            writerIntentName.current ??= createBufferedWriterIntentName();
-            try {
-                writerIntentRaw.current = writeBufferedWriterIntent(
-                    writerIntentName.current, session.owner, key, raw,
-                    writerIntentRaw.current, session.consentGeneration,
-                    writerIntentRaw.current === null ? writerParentReference(sourceIntent.current) : undefined,
-                );
-            } catch (error) {
-                // Another editor can durably acknowledge and consume a source
-                // witness while its original editor remains mounted. Never
-                // reuse that consumed key or overwrite a different writer.
-                // Preserve this new input under a fresh independent key first;
-                // the subsequent canonical preflight still rejects stale state.
-                if (!(error instanceof BufferedWriterConsumedError)) throw error;
-                const fresh = createBufferedWriterIntentName();
-                const written = writeBufferedWriterIntent(
-                    fresh, session.owner, key, raw, null, session.consentGeneration,
-                );
-                writerIntentName.current = fresh;
-                writerIntentRaw.current = written;
-            }
-            observedRaw.current = writeBufferedDraft(
-                key, session.owner, raw, session.consentGeneration, observedRaw.current,
-            );
-            recoveryValue.current = raw;
-            needsDeviceWrite.current = false;
-        }, [workoutId, assertIndependentWitnesses]);
-
-        useEffect(() => {
-            if (recoveryValue.current !== null && !isDirty.current && recoveryKey.current) {
-                if (String(value ?? '') === recoveryValue.current) {
-                    try {
-                        const session = editSession.current;
-                        if (!session) throw new Error('Sessione iniziale della bozza non disponibile.');
-                        if (!isCurrentSession(session) || !isCurrentWorkoutScope(workoutId)) {
-                            throw new Error('Sessione workout cambiata prima della pulizia della bozza.');
-                        }
-                        assertIndependentWitnesses();
-                        observedRaw.current = writeBufferedDraft(
-                            recoveryKey.current, session.owner, null,
-                            session.consentGeneration, observedRaw.current,
-                        );
-                        // Only after the parent confirms this value do we remove
-                        // this editor's independent recovery witness. Any
-                        // failure preserves the remaining witness for export.
-                        if (writerIntentName.current && writerIntentRaw.current) {
-                            clearBufferedWriterIntent(
-                                writerIntentName.current, session.owner,
-                                writerIntentRaw.current, session.consentGeneration,
-                            );
-                            writerIntentRaw.current = null;
-                        }
-                        for (const ancestor of [...sourceLineage.current].reverse()) {
-                            clearBufferedWriterIntent(
-                                ancestor.name, session.owner, ancestor.raw, session.consentGeneration,
-                            );
-                        }
-                        sourceLineage.current = [];
-                        sourceIntent.current = null;
-                        recoveryValue.current = null;
-                    } catch (error) {
-                        blockBufferedPersistence(error);
-                    }
-                }
-            }
-            if (!isFocused.current && !isDirty.current && recoveryValue.current === null) {
-                setLocalValue(value ?? '');
-                latestLocalValue.current = value ?? '';
-            }
-        }, [value, workoutId, assertIndependentWitnesses]);
-
-        const flush = useCallback(() => {
-            if (isDirty.current) {
-                if (!isCurrentWorkoutScope(workoutId)) {
-                    // The source copy is already owner+workout scoped and is
-                    // preserved for recovery. Never mutate a different workout.
-                    isDirty.current = false;
-                    return;
-                }
-                const session = editSession.current;
-                if (!session) throw new Error('Sessione della bozza non disponibile.');
-                if (!isCurrentSession(session)) {
-                    isDirty.current = false;
-                    // Switching identities must not update a new owner's UI. A
-                    // consent transition for the same owner, however, is a
-                    // blocked recovery requiring an explicit warning.
-                    const current = captureSession();
-                    if (current.owner === session.owner
-                        && current.consentGeneration !== session.consentGeneration) {
-                        throw new Error('Consenso modificato: bozza workout precedente conservata.');
-                    }
-                    return;
-                }
-                if (useAppStore.getState().localPersistenceBlocked) {
-                    throw new Error('Persistenza delle bozze del workout bloccata.');
-                }
-                if (recoveryKey.current) {
-                    // Before promoting an in-memory edit, verify the source copy
-                    // has not been invalidated or replaced by another tab.
-                    assertBufferedDraftUnchanged(
-                        recoveryKey.current, session.owner, observedRaw.current,
-                    );
-                    assertIndependentWitnesses();
-                }
-                onChangeRef.current(String(latestLocalValue.current));
-                isDirty.current = false;
-            }
-        }, [workoutId, assertIndependentWitnesses]);
-
-        useEffect(() => {
-            draftRegistry.register(flush);
-            const unregisterRecovery = requiredUpdateRecoveryRegistry.register(persistRecovery);
-            return () => {
-                unregisterRecovery();
-                draftRegistry.unregister(flush);
-                try { flush(); }
-                catch (error) { blockBufferedPersistence(error); }
-            };
-        }, [flush, persistRecovery]);
-
-        const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-            setLocalValue(e.target.value);
-            latestLocalValue.current = e.target.value;
-            isDirty.current = true;
-            needsDeviceWrite.current = true;
-            try {
-                persistRecovery();
-            } catch (error) {
-                if (!recoveryKey.current || !editSession.current || !isCurrentSession(editSession.current)) {
-                    // Inputs without a stable key have always flushed to their
-                    // parent on blur/unmount, but cannot guarantee PWA reload.
-                    // Preserve that UI contract; the required-update capture
-                    // still rejects an unsaved device draft with no key.
-                    useAppStore.getState().setSaveError('Bozza non ancora protetta nello storage del dispositivo.');
-                } else {
-                    blockBufferedPersistence(error);
-                }
-            }
-        };
+        const { localValue, handleChange, flush, isFocused, editSession } = useBufferedEditorDraft(
+            'textarea', id, workoutId, value, onChange, nextValue => nextValue,
+        );
 
         const handleFocus = (e: React.FocusEvent<HTMLTextAreaElement>) => {
             isFocused.current = true;
@@ -603,7 +418,7 @@ export const BufferedTextarea = React.forwardRef<HTMLTextAreaElement, BufferedTe
                 {...props}
                 id={id}
                 value={localValue}
-                onChange={handleChange}
+                onChange={event => handleChange(event.target.value)}
                 onFocus={handleFocus}
                 onBlur={handleBlur}
             />
