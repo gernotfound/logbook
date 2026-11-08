@@ -957,7 +957,7 @@ describe('Workout lifecycle durable recovery regressions', () => {
         expect(stale.routineName).toBe('Prima versione');
     });
 
-    it('does not copy outdated history into the editor after a pending confirmation', async () => {
+    it('refuses to open an editor when the history record changes during confirmation', async () => {
         await prepareUnlockedTestArchive(owner);
         if (owner.startsWith('user:')) localStorage.setItem(`logbook:v2:${owner}:health-consent-generation`, '1');
         const live = workout('live-while-history-changes', true);
@@ -983,11 +983,11 @@ describe('Workout lifecycle durable recovery regressions', () => {
                 },
             }));
         });
-        await act(async () => { confirm(true); expect(await opening).toBe(true); });
-        expect(useAppStore.getState().localWorkout).toMatchObject({
-            id: stale.id, routineName: 'Versione aggiornata durante la conferma',
-            isEditingHistory: true,
-        });
+        await act(async () => { confirm(true); expect(await opening).toBe(false); });
+        expect(useAppStore.getState().localWorkout?.id).toBe(live.id);
+        expect(useAppStore.getState().userData?.history.find(item => item.id === stale.id)?.routineName)
+            .toBe('Versione aggiornata durante la conferma');
+        expect(readDeviceValueStrict('history-editor-context', owner)).toBeNull();
         expect(stale.routineName).toBe('Prima versione');
     });
 
