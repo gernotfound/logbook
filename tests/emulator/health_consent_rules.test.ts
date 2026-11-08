@@ -109,6 +109,39 @@ it('rejects active consent records missing owner-matched evidence fields', async
   await assertSucceeds(getDoc(doc(db, 'users/u')));
 });
 
+it('rejects malformed present consent proofs without affecting other accounts', async () => {
+  const owner = env.authenticatedContext('u', { email_verified: true }).firestore();
+  const unrelated = env.authenticatedContext('other', { email_verified: true }).firestore();
+  await env.withSecurityRulesDisabled(async context => {
+    const admin = context.firestore();
+    await setDoc(doc(admin, 'users/u'), { profile: { name: 'Preserved' } });
+    await setDoc(doc(admin, 'users/other'), { profile: { name: 'Unrelated' } });
+    await setDoc(doc(admin, 'health_consent_withdrawals/other'), proof('other', 1));
+  });
+
+  for (const malformed of [
+    { ...proof('u', 1), acceptedAt: null },
+    { ...proof('u', 1), acceptedAt: 'not-a-date' },
+    { ...proof('u', 1), acceptedAt: 123 },
+    { ...proof('u', 1), privacyVersion: null },
+    { ...proof('u', 1), privacyVersion: '' },
+    { ...proof('u', 1), termsVersion: false },
+    { ...proof('u', 1), termsVersion: '' },
+  ]) {
+    await env.withSecurityRulesDisabled(async context => {
+      await setDoc(doc(context.firestore(), 'health_consent_withdrawals/u'), malformed);
+    });
+    await assertFails(getDoc(doc(owner, 'users/u')));
+    await assertFails(getDoc(doc(owner, 'users/u/history_months/2026-09')));
+    await assertFails(getDoc(doc(owner, 'users/u/sync_control/state')));
+    await assertSucceeds(getDoc(doc(unrelated, 'users/other')));
+  }
+  await env.withSecurityRulesDisabled(async context => {
+    await setDoc(doc(context.firestore(), 'health_consent_withdrawals/u'), proof('u', 1));
+  });
+  await assertSucceeds(getDoc(doc(owner, 'users/u')));
+});
+
 it('rejects private shards and replica-control reads during withdrawal', async () => {
   await env.withSecurityRulesDisabled(async context => {
     await setDoc(doc(context.firestore(), 'health_consent_withdrawals/u'), mark('withdrawn'));

@@ -306,6 +306,33 @@ it('rejects malformed checkpoint coordinates before they can influence causal GC
     expect((await getDoc(controlRef)).data()?.replicas.s00.checkpointClock).toEqual({ s00: 0, s15: 3 });
 });
 
+it('rejects replica generation and sequence counters outside the safe-integer range', async () => {
+    const db = asModularFirestore(env.authenticatedContext('a', { email_verified: true }).firestore());
+    const controlRef = doc(db, 'users/a/sync_control/state');
+    const now = Date.now();
+    const entry = {
+        replicaId: 'bounded-replica', generation: 1, status: 'active',
+        lastSeq: 0, checkpointAtMs: now,
+        leaseUntilMs: now + 360 * 24 * 60 * 60 * 1000,
+        checkpointClock: {},
+    };
+    const registration = (candidate: typeof entry) => ({
+        protocolVersion: 3, consentRevision: 1,
+        replicas: { s00: candidate },
+        mutation: { slot: 's00', action: 'register' },
+    });
+
+    for (const invalid of [
+        { ...entry, generation: Number.MAX_SAFE_INTEGER + 1 },
+        { ...entry, lastSeq: Number.MAX_SAFE_INTEGER + 1 },
+    ]) await assertFails(setDoc(controlRef, registration(invalid)));
+    expect((await getDoc(controlRef)).exists()).toBe(false);
+    await assertSucceeds(setDoc(controlRef, registration({
+        ...entry, lastSeq: Number.MAX_SAFE_INTEGER,
+    })));
+    expect((await getDoc(controlRef)).data()?.replicas.s00.lastSeq).toBe(Number.MAX_SAFE_INTEGER);
+});
+
 it('retires an expired replica without dropping the verified consent generation', async () => {
     const db = asModularFirestore(env.authenticatedContext('a', { email_verified: true }).firestore());
     const controlRef = doc(db, 'users/a/sync_control/state');
