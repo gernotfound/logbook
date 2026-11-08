@@ -22,7 +22,9 @@ export async function OPTIONS(request: Request): Promise<Response> {
     });
   } catch (error) {
     if (error instanceof RequestAuthError) return json({ error: error.message }, error.status, origin);
-    return json({ error: 'Richiesta non valida.' }, 403, origin);
+    // Invalid deployment origin configuration is a server failure, not a client rejection.
+    console.error('[account-sessions] preflight failed', { kind: error instanceof Error ? error.name : 'UnknownError' });
+    return json({ error: 'Servizio di revoca sessioni temporaneamente non disponibile.' }, 503, origin);
   }
 }
 

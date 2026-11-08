@@ -19,8 +19,6 @@ import { lockAllVaults } from '../../src/lib/sync/secureArchiveSession';
 import { updateArchiveRecord } from '../../src/lib/sync/secureArchiveRepository';
 import type { LocalEnvelope } from '../../src/lib/sync/localEnvelopeValidation';
 import { activateGuestSession, GUEST_SESSION_KEY } from '../../src/lib/sync/session';
-
-
 import { CURRENT_SYNC_PROTOCOL } from '../../src/lib/schemaEvolution';
 import { rootDocument } from '../../src/lib/sync/documentProjection';
 import { sealCloudDocument } from '../../src/lib/sync/cloudDocumentCipher';
