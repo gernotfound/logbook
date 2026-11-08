@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { test } from 'node:test';
+import { warningIdentity } from './lint-warning-identity.mjs';
 
 const checker = fileURLToPath(new URL('./check-quality-guardrails.mjs', import.meta.url));
 const warning = {
@@ -88,6 +89,24 @@ await test('accepts unchanged warning identities and unchanged controls', t => {
   const ctx = fixture(t);
   const result = run(ctx);
   assert.equal(result.status, 0, result.stderr);
+});
+
+await test('identifies warnings independently of JSON property order without hiding new warnings', t => {
+  const reordered = {
+    count: warning.count, source: warning.source, message: warning.message,
+    code: warning.code, file: warning.file, suite: warning.suite,
+  };
+  assert.equal(warningIdentity(reordered), JSON.stringify([
+    'default', 'src/App.tsx', 'react(set-state-in-effect)',
+    'Reviewed warning', 'setVisible(false);',
+  ]));
+  assert.equal(warningIdentity(reordered), warningIdentity(warning));
+  assert.notEqual(warningIdentity({ ...reordered, source: 'setVisible(true);' }), warningIdentity(warning));
+
+  const ctx = fixture(t);
+  save(ctx.root, 'config/lint-warning-baseline.json', [reordered]);
+  commit(ctx.root);
+  assert.equal(run(ctx).status, 0);
 });
 
 await test('permits reductions in the existing warning count', t => {

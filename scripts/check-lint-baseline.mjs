@@ -1,6 +1,7 @@
 import { spawnSync } from 'node:child_process';
 import { existsSync, readFileSync, writeFileSync, unlinkSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import { warningIdentity } from './lint-warning-identity.mjs';
 
 const baselinePath = 'config/lint-warning-baseline.json';
 const oxlintBin = fileURLToPath(new URL('../node_modules/oxlint/bin/oxlint', import.meta.url));
@@ -153,14 +154,14 @@ if (!existsSync(baselinePath)) {
 }
 
 const expected = JSON.parse(readFileSync(baselinePath, 'utf8'));
-const actualMap = new Map(actual.map(item => [JSON.stringify({ ...item, count: undefined }), item]));
-const expectedMap = new Map(expected.map(item => [JSON.stringify({ ...item, count: undefined }), item]));
+const actualMap = new Map(actual.map(item => [warningIdentity(item), item]));
+const expectedMap = new Map(expected.map(item => [warningIdentity(item), item]));
 const added = actual.filter(item => {
-  const match = expectedMap.get(JSON.stringify({ ...item, count: undefined }));
+  const match = expectedMap.get(warningIdentity(item));
   return !match || match.count !== item.count;
 });
 const removed = expected.filter(item => {
-  const match = actualMap.get(JSON.stringify({ ...item, count: undefined }));
+  const match = actualMap.get(warningIdentity(item));
   return !match || match.count !== item.count;
 });
 
