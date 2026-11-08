@@ -21,7 +21,7 @@ const reservedPaths = [
 beforeAll(async () => {
   if (process.env.FIRESTORE_EMULATOR_HOST !== '127.0.0.1:8080') throw new Error('Isolated emulator required');
   env = await initializeTestEnvironment({
-    projectId: 'demo-owner-isolation',
+    projectId: 'demo-logbook-audit',
     firestore: { host: '127.0.0.1', port: 8080, rules: readFileSync('firestore.rules', 'utf8') },
   });
 });
