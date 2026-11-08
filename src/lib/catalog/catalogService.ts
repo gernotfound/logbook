@@ -16,7 +16,6 @@ import { get as idbGet, set as idbSet, del as idbDel } from 'idb-keyval';
 import { doc, getDoc, type Firestore } from 'firebase/firestore';
 import {
     type CatalogManifest,
-    type CatalogExercise,
     type CatalogFood,
     type CachedGlobalCatalog
 } from '../../types';
