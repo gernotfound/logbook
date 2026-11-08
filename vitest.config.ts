@@ -1,7 +1,7 @@
 import { configDefaults, defineConfig } from 'vitest/config';
 import { loadEnv } from 'vite';
 import { fileURLToPath } from 'node:url';
-import { assertIsolatedVitestEnvironment } from './scripts/vitest-env-isolation';
+import { assertIsolatedVitestEnvironment, TEST_BACKEND_ORIGIN } from './scripts/vitest-env-isolation';
 import react from '@vitejs/plugin-react';
 import { VitePWA } from '@unplugin-pwa/vite';
 
@@ -43,7 +43,7 @@ export default defineConfig({
   ],
   test: {
     // All network tests use a non-routable loopback backend; Production config is injected by Hosting.
-    env: { VITE_ACCOUNT_DELETION_API_ORIGIN: 'http://127.0.0.1:9' },
+    env: { VITE_ACCOUNT_DELETION_API_ORIGIN: TEST_BACKEND_ORIGIN },
     globals: true,
     environment: 'jsdom',
     setupFiles: ['./tests/cssReadCompat.ts', './tests/setup.tsx'],
