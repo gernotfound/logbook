@@ -157,6 +157,10 @@ describe('contextual progression engine', () => {
             expect(analysis.bestHistorical).toBeUndefined();
             expect(analysis.detail).toContain(`${previousTime}s → ${currentTime}s`);
             if (change !== 'same') expect(analysis.detail).toContain('non indica automaticamente');
+            else {
+                expect(analysis.headline).toBe('Durata registrata stabile');
+                expect(analysis.detail).toContain('non prova da sola');
+            }
         },
     );
 
@@ -229,6 +233,36 @@ describe('contextual progression engine', () => {
         expect(analysis.comparison.level).toBe('high');
         expect(analysis.outputChange).toBe('unknown');
         expect(analysis.classification).toBe('insufficient_data');
+    });
+
+    it('does not claim stable timed performance when neither exposure recorded segment durations', () => {
+        const withoutSegmentTime = timedSet('30', {
+            segments: [{ id: 'seg-1', kg: '', reps: '' }],
+        });
+        const previous = workout({ id: 't1', date: '2026-09-01', exId: 'plank', sets: [withoutSegmentTime] });
+        const current = workout({ id: 't2', date: '2026-09-08', exId: 'plank', sets: [structuredClone(withoutSegmentTime)] });
+        const analysis = computeProgressionEngine(current, [previous], library).exercises[0];
+
+        expect(analysis.comparison.level).toBe('high');
+        expect(analysis.outputChange).toBe('unknown');
+        expect(analysis.classification).toBe('insufficient_data');
+        expect(analysis.trendDirection).toBe('insufficient');
+        expect(analysis.isRecord).toBe(false);
+    });
+
+    it('does not produce a stable time trend when comparable exposures omit segment measurements', () => {
+        const timed = (id: string, date: string) => workout({
+            id, date, exId: 'plank', sets: [timedSet('30', {
+                segments: [{ id: 'seg-1', kg: '', reps: '' }],
+            })],
+        });
+        const history = [timed('t1', '2026-09-01'), timed('t2', '2026-09-08')];
+        const current = timed('t3', '2026-09-15');
+        const analysis = computeProgressionEngine(current, history, library).exercises[0];
+
+        expect(analysis.trendDirection).toBe('insufficient');
+        expect(analysis.classification).toBe('insufficient_data');
+        expect(analysis.isRecord).toBe(false);
     });
 
     it('recognizes +1 rep at the same load and RIR as a strong performance record', () => {
