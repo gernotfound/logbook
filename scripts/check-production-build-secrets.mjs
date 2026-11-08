@@ -83,5 +83,28 @@ export function checkProductionBuildSecrets(hosting, firestore) {
       /\bGCP_FIREBASE_DEPLOY_SERVICE_ACCOUNT\b/.test(firestore)) {
     issues.push('Firestore: unexpected WIF service account binding');
   }
+  const projectConfig = firestore.match(/^      - name: Require Firestore production configuration\r?\n([\s\S]*?)(?=^      - name: Setup Node\.js)/m)?.[1] ?? '';
+  if (!projectConfig.includes('if [ "${FIREBASE_PROJECT_ID}" != "logbook-db-98cc4" ]; then')) {
+    issues.push('Firestore: production project must match the pinned project');
+  }
+  const stepBody = (name, next) => {
+    const start = firestore.indexOf('      - name: ' + name);
+    const end = firestore.indexOf('      - name: ' + next, start);
+    return start < 0 || end <= start ? '' : firestore.slice(start, end);
+  };
+  for (const [name, next, command] of [
+    ['Retire explicitly removed Firestore single-field indexes', 'Deploy Firestore Rules and indexes', 'node scripts/retire-firestore-field-overrides.mjs'],
+    ['Deploy Firestore Rules and indexes', 'Verify live Firestore Rules and indexes', 'npx --yes firebase-tools@15.30.2 deploy'],
+  ]) {
+    const step = stepBody(name, next);
+    const fetchMain = step.indexOf('git ls-remote --exit-code origin refs/heads/main');
+    const compareSha = step.indexOf('if [ "${current_main}" != "${EXPECTED_SHA}" ]; then', fetchMain);
+    const failClosed = step.indexOf('exit 1', compareSha);
+    const mutate = step.indexOf(command);
+    if (!step.includes('set -euo pipefail') || fetchMain < 0 || compareSha <= fetchMain ||
+        failClosed <= compareSha || mutate <= failClosed) {
+      issues.push('Firestore: ' + name + ' must recheck exact main SHA before mutation');
+    }
+  }
   return issues;
 }
