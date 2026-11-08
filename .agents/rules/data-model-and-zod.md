@@ -51,6 +51,8 @@ L'helper di formattazione non valida input persistiti: i gateway devono rifiutar
 
 Le formule specifiche restano nel codice; qui si preserva la proprietà di non pubblicare risultati fuorvianti.
 
+I nutrienti per porzione e i totali persistiti del diario devono restare finiti anche dopo moltiplicazione, divisione e somma di input finiti. `createLoggedMealItem` rifiuta conversioni non rappresentabili e `calculateLoggedMealTotals` interrompe reducer, replay e merge prima che i fallback Zod sostituiscano il risultato con zero. `prepareImport` verifica gli stessi calcoli sia in merge sia in restore, preservando entrambi gli archivi in caso di errore; il restore conserva i totali registrati quando il calcolo è rappresentabile. L'arrotondamento delle macro non introduce overflow temporaneo su valori grandi già interi in IEEE-754. Il calcolo raw usato dalla visualizzazione resta distinto dal boundary di scrittura.
+
 ## Durata manuale del workout storico
 
 L'input manuale dello storico attraversa `parseManualDuration()` in `src/lib/utils/date.ts` prima della Domain Operation. Un input invalido resta visibile e non viene trasformato dal blur o dal salvataggio in una durata valida inventata; `null` dal parser interrompe il salvataggio prima del commit business durevole. La normalizzazione tollerante usata in altri contesti non sostituisce questo boundary UI strict. Conservare la bozza, la sessione sospesa e i guard del commit come definiti in [Bozze e stato device](device-drafts.md).
