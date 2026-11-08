@@ -74,13 +74,15 @@ function normalize(items) {
 
 // A zero-warning baseline would also pass if tsgolint silently stopped
 // analyzing a directory. Run the same whole-repository traversal as CI with
-// known faults under each source boundary and
+// known faults under each source boundary (including root TS and TSX) and
 // require the real rule to identify both locally typed and imported Promises.
 function verifyTypeAwareCoverage() {
   const stem = '__logbook_typeaware_canary_' + process.pid;
   const source = 'src/' + stem + '.ts';
   const folders = ['api', 'server', 'tests', 'e2e'];
-  const paths = [source, ...folders.map(folder => folder + '/' + stem + '.ts')];
+  const paths = [source, stem + '.ts', 'src/' + stem + '_jsx.tsx',
+    ...folders.map(folder => folder + '/' + stem + '.ts'),
+    'tests/' + stem + '_jsx.tsx'];
   const written = [];
   try {
     const sourceCode = [
@@ -91,8 +93,10 @@ function verifyTypeAwareCoverage() {
     writeFileSync(source, sourceCode, { encoding: 'utf8', flag: 'wx' });
     written.push(source);
     for (const file of paths.slice(1)) {
+      const sourcePrefix = file.startsWith('src/') ? './'
+        : file.includes('/') ? '../src/' : './src/';
       const fixture = [
-        "import { importedPromise } from '../src/" + stem + ".js';",
+        "import { importedPromise } from '" + sourcePrefix + stem + ".js';",
         'async function localPromise(): Promise<number> { return 1; }',
         'localPromise();',
         'importedPromise();',
