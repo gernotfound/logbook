@@ -25,7 +25,7 @@ afterEach(() => {
 });
 
 describe('CycleEditor durable save boundaries', () => {
-    it('prevents late edits, cancellation and repeated submissions while persistence is pending', async () => {
+    it('blocks late edits and duplicate submissions but preserves intentional closing during a pending save', async () => {
         let completeSave!: () => void;
         const onSave = vi.fn((_cycle: TrainingCycle) => new Promise<void>(resolve => { completeSave = resolve; }));
         const onCancel = vi.fn();
@@ -36,26 +36,28 @@ describe('CycleEditor durable save boundaries', () => {
         const nameInput = container.querySelector<HTMLInputElement>('#cycle-name')!;
         const close = container.querySelector<HTMLButtonElement>('.planning-close-button')!;
         const submit = form.querySelector<HTMLButtonElement>('button[type="submit"]')!;
+        const fields = form.querySelector<HTMLElement>('.planning-editor-fields')!;
+        const cancel = form.querySelector<HTMLButtonElement>('.planning-editor-actions button[type="button"]')!;
 
         fireEvent.change(nameInput, { target: { value: 'Nome già inviato' } });
         fireEvent.submit(form);
         expect(onSave).toHaveBeenCalledTimes(1);
         expect(onSave.mock.calls[0]?.[0]?.name).toBe('Nome già inviato');
-        expect(form.hasAttribute('inert')).toBe(true);
+        expect(fields.hasAttribute('inert')).toBe(true);
         expect(form.getAttribute('aria-busy')).toBe('true');
-        expect(close.disabled).toBe(true);
+        expect(close.disabled).toBe(false);
+        expect(cancel.disabled).toBe(false);
         expect(submit.disabled).toBe(true);
         expect(submit.textContent).toBe('Salvataggio in corso…');
-        expect(container.querySelector('[role="status"]')?.textContent).toContain('Salvataggio del ciclo');
+        expect(container.querySelector('.sr-only[role="status"]')?.textContent).toContain('Salvataggio del ciclo');
 
         fireEvent.submit(form);
-        fireEvent.click(close);
-        fireEvent.click(form.querySelector<HTMLButtonElement>('.planning-editor-actions button[type="button"]')!);
         expect(onSave).toHaveBeenCalledTimes(1);
-        expect(onCancel).not.toHaveBeenCalled();
+        fireEvent.click(close);
+        expect(onCancel).toHaveBeenCalledOnce();
 
         await act(async () => { completeSave(); });
-        expect(form.hasAttribute('inert')).toBe(false);
+        expect(fields.hasAttribute('inert')).toBe(false);
         expect(form.getAttribute('aria-busy')).toBe('false');
         expect(close.disabled).toBe(false);
         expect(submit.disabled).toBe(false);
@@ -68,9 +70,9 @@ describe('CycleEditor durable save boundaries', () => {
         const onSave = vi.fn()
             .mockImplementationOnce(() => new Promise<void>((_, reject) => { rejectSave = reject; }))
             .mockResolvedValue(undefined);
-        const alert = vi.fn().mockResolvedValue(undefined);
-        const priorAlert = useDialogStore.getState().showAlert;
-        useDialogStore.setState({ showAlert: alert });
+        const alert = vi.mocked(useDialogStore.getState().showAlert);
+        alert.mockReset();
+        alert.mockResolvedValue(undefined);
         const log = vi.spyOn(console, 'error').mockImplementation(() => {});
 
         try {
@@ -81,19 +83,20 @@ describe('CycleEditor durable save boundaries', () => {
             const nameInput = container.querySelector<HTMLInputElement>('#cycle-name')!;
             fireEvent.change(nameInput, { target: { value: 'Modifiche da conservare' } });
             fireEvent.submit(form);
-            expect(form.hasAttribute('inert')).toBe(true);
+            const fields = form.querySelector<HTMLElement>('.planning-editor-fields')!;
+            expect(fields.hasAttribute('inert')).toBe(true);
 
             await act(async () => { rejectSave(new Error('write not durable')); });
             expect(log).toHaveBeenCalledOnce();
             expect(alert).toHaveBeenCalledWith(expect.stringContaining('Salvataggio del ciclo non riuscito'));
-            expect(form.hasAttribute('inert')).toBe(false);
+            expect(fields.hasAttribute('inert')).toBe(false);
             expect(nameInput.value).toBe('Modifiche da conservare');
 
             fireEvent.submit(form);
             await waitFor(() => expect(onSave).toHaveBeenCalledTimes(2));
             expect(onSave.mock.calls[1]?.[0]?.name).toBe('Modifiche da conservare');
         } finally {
-            useDialogStore.setState({ showAlert: priorAlert });
+            alert.mockClear();
         }
     });
 });
