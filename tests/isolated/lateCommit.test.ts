@@ -34,7 +34,7 @@ import { projectDocuments } from '../../src/lib/sync/documentProjection';
 import { applySemanticOperations } from '../../src/lib/sync/semanticProjection';
 import { markAccountDeletion, clearAccountDeletion } from '../../src/lib/sync/accountGate';
 import { replicateJournal, waitForJournalIdle } from '../../src/lib/sync/replicateJournal';
-import { adoptReplicaCheckpoint, initializeLocal, commitLocal, readLocal } from '../../src/lib/sync/localRepository';
+import { acknowledgeThrough, adoptReplicaCheckpoint, initializeLocal, commitLocal, readLocal } from '../../src/lib/sync/localRepository';
 import { UserDataSchema } from '../../src/lib/schema';
 import { invalidateSession } from '../../src/lib/sync/session';
 import { createAndMigrateVault } from '../../src/lib/sync/secureArchiveMigration';
@@ -95,6 +95,38 @@ it('keeps the account journal pending when consent is missing, without starting 
 
     const after = await readLocal('user:a');
     expect(after?.pending).toEqual(before?.pending);
+});
+
+it('does not report a stale empty journal as synced after an A→B→A Auth transition during its IndexedDB read', async () => {
+    const delivered = (await readLocal('user:a'))!;
+    await acknowledgeThrough('user:a', delivered.actorSeq, data(171), [], undefined, {
+        operations: structuredClone(delivered.pending), replica: delivered.replica!,
+    });
+    const before = await readLocal('user:a');
+    const ciphertext = await get('logbook:v2:user:a');
+    expect(before?.pending).toHaveLength(0);
+
+    const originalGet = IDBObjectStore.prototype.get;
+    const spy = vi.spyOn(IDBObjectStore.prototype, 'get').mockImplementation(function (this: IDBObjectStore, key) {
+        const request = originalGet.call(this, key);
+        if (key === 'logbook:v2:user:a') {
+            request.addEventListener('success', () => {
+                spy.mockRestore();
+                remote.auth.currentUser = { uid: 'b' }; invalidateSession();
+                remote.auth.currentUser = { uid: 'a' }; invalidateSession();
+            }, { once: true });
+        }
+        return request;
+    });
+    try {
+        const result = await replicateJournal();
+        expect(result.status).toBe('failed');
+        expect(remote.apply).not.toHaveBeenCalled();
+        expect(await readLocal('user:a')).toEqual(before);
+        expect(await get('logbook:v2:user:a')).toEqual(ciphertext);
+    } finally {
+        spy.mockRestore();
+    }
 });
 
 it('retains one writer after timeout and acknowledges its late commit before retrying', async () => {

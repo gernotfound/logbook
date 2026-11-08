@@ -208,7 +208,12 @@ export async function replicateJournal(expectedOwner?: string): Promise<SyncResu
         if (!isHealthConsentWritable(session.owner) || (session.owner !== 'guest' && !isHealthConsentCloudWritable(session.owner))) return { ok: false, status: 'local-pending', error: new LegalConsentRequiredError() };
         if (isAccountDeletionPending(session.owner)) throw new Error('Cancellazione account in sospeso. Riprendila dalle impostazioni; copia locale conservata.');
         const envelope = await readLocal(session.owner);
-        if (expectedOwner && session.owner !== expectedOwner) throw new Error('Sessione cambiata');
+        // Even an empty journal is not a synced result after an async read
+        // crossed an Auth/consent epoch (including a same-UID A→B→A roundtrip).
+        if (!isCurrentSession(session)
+            || (session.owner !== 'guest' && !isWritableSession(session))) {
+            throw new Error('Sessione cambiata');
+        }
         if (!envelope) throw new Error('Copia locale non disponibile');
         if (envelope.cloudIntegrityFence) throw new ReplicaFencedError('Snapshot cloud incompleto: verifica completa richiesta prima di sincronizzare.');
         if (session.owner === 'guest' || !envelope.pending?.length) return { ok: true, status: 'synced' };
