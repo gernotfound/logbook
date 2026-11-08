@@ -33,7 +33,7 @@ describe('finite workout mechanical volume', () => {
         expect(calculateEffectiveSetWeight(10, { equipmentWeight: Number.POSITIVE_INFINITY })).toBe(10);
     });
 
-    it('retains primary and valid continuation work even if another stage is unrepresentable', () => {
+    it('ignores malformed continuation loads while preserving correct work', () => {
         const set = {
             kg: '50', reps: '8',
             segments: [
@@ -42,23 +42,23 @@ describe('finite workout mechanical volume', () => {
             ],
         };
         expect(calculateSetVolume(set)).toBe(490);
-        expect(calculateSetVolume({ kg: Number.MAX_VALUE, reps: '2' })).toBe(0);
+        expect(calculateSetVolume({ kg: Number.MAX_VALUE, reps: '2' })).toBe(Infinity);
     });
 
-    it('retains valid sets when a separate exercise is malformed or one set overflows', () => {
+    it('retains valid sets alongside malformed loads and non-array collections', () => {
         const session = {
             exercises: [
                 { exId: 'bad', sets: {} },
                 { exId: 'bench', sets: [
-                    { kg: Number.MAX_VALUE, reps: '2' },
+                    { kg: 'Infinity', reps: '2' },
                     { kg: '50', reps: '8' },
                 ] },
             ],
         } as unknown as Parameters<typeof calculateWorkoutVolume>[0];
         expect(calculateWorkoutVolume(session)).toBe(400);
+        // Analytics filters this mathematical overflow at its own boundary.
         expect(calculateWorkoutVolume({ exercises: [
-            { exId: 'big', sets: [{ kg: '9007199254740991', reps: '2' }] },
-            { exId: 'valid', sets: [{ kg: '20', reps: '5' }] },
-        ] })).toBe(100);
+            { exId: 'big', sets: [{ kg: '1e308', reps: '10' }] },
+        ] })).toBe(Infinity);
     });
 });

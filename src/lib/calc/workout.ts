@@ -333,14 +333,6 @@ function observedReps(raw: unknown): number {
     return Number.isSafeInteger(value) ? value : 0;
 }
 
-// An invalid/overflowing stage cannot erase valid mechanical work in the
-// same set or workout. Preserve signed contributions and fractional kilograms.
-function addRepresentableVolume(total: number, contribution: number): number {
-    const next = total + contribution;
-    return Number.isFinite(contribution) && Math.abs(contribution) <= Number.MAX_SAFE_INTEGER
-        && Number.isFinite(next) && Math.abs(next) <= Number.MAX_SAFE_INTEGER ? next : total;
-}
-
 export function calculateSetVolume(
     set: {
         kg?: string | number;
@@ -354,12 +346,12 @@ export function calculateSetVolume(
     if (!set) return 0;
     const reps = observedReps(set.reps);
     const effectiveWeight = calculateEffectiveSetWeight(set.kg, exercise, userWeight);
-    let volume = addRepresentableVolume(0, effectiveWeight * reps);
+    let volume = effectiveWeight * reps;
 
     for (const segment of getSetSegments(set as any)) {
         const segmentReps = observedReps(segment.reps);
         const segmentEffectiveWeight = calculateEffectiveSetWeight(segment.kg, exercise, userWeight);
-        volume = addRepresentableVolume(volume, segmentEffectiveWeight * segmentReps);
+        volume += segmentEffectiveWeight * segmentReps;
     }
     return volume;
 }
@@ -391,7 +383,7 @@ export function calculateWorkoutVolume(
         if (libEx?.trackingType === 'cardio' || libEx?.trackingType === 'time') continue;
         if (!Array.isArray(ex.sets)) continue;
         for (const s of ex.sets) {
-            totalVolume = addRepresentableVolume(totalVolume, calculateSetVolume(s, libEx, userWeight));
+            totalVolume += calculateSetVolume(s, libEx, userWeight);
         }
     }
     return totalVolume;
