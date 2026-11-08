@@ -54,6 +54,12 @@ export async function releaseAccountDataKey(uid: string, purpose: 'sync' | 'righ
   }
   let wrappedCandidate: Awaited<ReturnType<typeof wrapAccountDataKey>> | null = null;
   if (!existingKey.exists && purpose === 'sync') {
+    // Query.get() hides missing parent documents whose nested subcollections
+    // survive deletion. A new key must not strand any such ciphertext or
+    // unknown private collection under an apparently empty user root.
+    // This scan precedes expensive wrapping; transactional root/consent reads
+    // below still fence concurrent supported business writes and withdrawals.
+    if ((await root.listCollections()).length > 0) throw new CloudKeyProvisioningConflictError();
     // Secret-dependent operations MUST stay outside the Firestore retry callback.
     // A race loser discards its candidate and uses the persisted winner.
     const candidate = randomBytes(32);

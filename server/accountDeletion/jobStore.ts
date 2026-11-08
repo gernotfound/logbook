@@ -320,8 +320,14 @@ export async function verifyNoAccountResidue(uidValue: string, allowAccountKey =
   if (!rootSnapshot.empty) throw new Error('User root document still exists after deletion.');
 
   for (const name of PRIVATE_ACCOUNT_COLLECTIONS) {
-    const residual = await root.collection(name).limit(1).select().get();
+    const collection = root.collection(name);
+    const residual = await collection.limit(1).select().get();
     if (!residual.empty) throw new Error(`Residual documents remain in ${name}.`);
+    // Queries exclude deleted parent documents even if deeper subcollections remain.
+    // listDocuments returns those missing parents, so Auth/keys cannot be retired early.
+    if ((await collection.listDocuments()).length > 0) {
+      throw new NonRetryableDeletionError(`Unexpected nested residual documents in ${name}.`);
+    }
   }
 
   const erasureMarker = await adminDb().collection('health_data_erasures').doc(uid).get();
@@ -344,7 +350,7 @@ export async function verifyNoAccountResidue(uidValue: string, allowAccountKey =
   for (const collection of collections) {
     if (known.has(collection.id)) continue;
     const residual = await collection.limit(1).select().get();
-    if (!residual.empty) {
+    if (!residual.empty || (await collection.listDocuments()).length > 0) {
       throw new NonRetryableDeletionError(`Unexpected residual collection: ${collection.id}.`);
     }
   }

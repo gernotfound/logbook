@@ -8,7 +8,7 @@ import {
   validateExplicitAcceptance,
   HealthConsentRevisionConflictError,
 } from '../server/healthConsent/withdrawal.js';
-import { processHealthDataErasure } from '../server/healthConsent/erasure.js';
+import { HealthDataErasureConflict, processHealthDataErasure } from '../server/healthConsent/erasure.js';
 
 export const maxDuration = 30;
 const HEADERS = 'authorization, content-type, x-firebase-appcheck';
@@ -19,7 +19,9 @@ function json(body: unknown, status: number, origin: string | null): Response {
 
 function errorResponse(error: unknown, origin: string | null): Response {
   if (error instanceof RequestAuthError) return json({ error: error.message }, error.status, origin);
-  if (error instanceof HealthConsentRevisionConflictError) return json({ error: error.message }, 409, origin);
+  if (error instanceof HealthConsentRevisionConflictError || error instanceof HealthDataErasureConflict) {
+    return json({ error: error.message }, 409, origin);
+  }
   if (error instanceof ConsentInputError) return json({ error: error.message }, 400, origin);
   console.error('[health-consent] trusted endpoint failure', { kind: error instanceof Error ? error.name : 'unknown' });
   return json({ error: 'Stato del consenso non disponibile. Accesso ai dati fitness sospeso.' }, 503, origin);
