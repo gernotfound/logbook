@@ -65,6 +65,40 @@ for (const viewport of viewports) {
       await page.getByRole('button', { name: 'Salta check-in e inizia' }).click();
       await expect(page.locator('.workout-sticky-timer')).toBeVisible();
       await capture(page, testInfo, 'active-workout');
+
+      await page.getByRole('button', { name: 'Opzioni timer' }).click();
+      await page.getByRole('menuitem', { name: 'Metronomo' }).click();
+      const metronome = page.locator('.workout-metronome-panel');
+      await expect(metronome).toBeVisible();
+      const timerShell = page.locator('.workout-timer-shell');
+      await timerShell.evaluate(element => { element.style.width = '224px'; });
+      const metronomeGeometry = await metronome.evaluate(panel => {
+        const controls = panel.querySelector('.workout-metronome-controls');
+        if (!controls) throw new Error('Metronome controls not found');
+        const area = controls.getBoundingClientRect();
+        return {
+          buttons: [...controls.querySelectorAll('button, input')].map(control => {
+            const rect = control.getBoundingClientRect();
+            return {
+              left: rect.left, right: rect.right,
+              top: rect.top, height: rect.height,
+            };
+          }),
+          left: area.left, right: area.right,
+        };
+      });
+      expect(metronomeGeometry.buttons).toHaveLength(4);
+      for (const control of metronomeGeometry.buttons) {
+        expect(control.left).toBeGreaterThanOrEqual(metronomeGeometry.left - 1);
+        expect(control.right).toBeLessThanOrEqual(metronomeGeometry.right + 1);
+        expect(control.height).toBeGreaterThanOrEqual(44);
+      }
+      expect(metronomeGeometry.buttons[3].top)
+        .toBeGreaterThan(metronomeGeometry.buttons[0].top + 20);
+      await timerShell.evaluate(element => { element.style.removeProperty('width'); });
+      await page.getByRole('button', { name: 'Opzioni timer' }).click();
+      await page.getByRole('menuitem', { name: 'Chiudi metronomo' }).click();
+
       await page.getByRole('button', { name: /Termina/ }).click();
       await page.getByRole('button', { name: 'Salva e termina' }).click();
       const report = page.getByRole('dialog');
