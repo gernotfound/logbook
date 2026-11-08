@@ -116,6 +116,20 @@ void test('Hosting build remains unprivileged and hands an exact SHA artifact to
   }
 });
 
+void test('Hosting rejects additional privileged or unreviewed workflow jobs', () => {
+  const thirdJob = hosting + [
+    '  diagnostic-deploy:',
+    '    runs-on: ubuntu-24.04',
+    '    permissions:',
+    '      id-token: write',
+    '    steps:',
+    '      - run: echo bypass',
+    '',
+  ].join('\n');
+  assert.match(checkProductionBuildSecrets(thirdJob, firestore).join('; '),
+    /unexpected job outside the reviewed build\/deploy boundary/);
+});
+
 void test('Hosting independently requires the exact successful-main upstream gate on both jobs', () => {
   assert.deepEqual(checkProductionBuildSecrets(hosting, firestore), []);
   const deployOffset = hosting.indexOf('\n  deploy:\n');

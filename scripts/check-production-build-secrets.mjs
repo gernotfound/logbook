@@ -1,6 +1,11 @@
 // Check privileged production deployment identities without contacting providers.
 export function checkProductionBuildSecrets(hosting, firestore) {
   const issues = [];
+  const jobNames = [...hosting.matchAll(/^  ([A-Za-z_][A-Za-z0-9_-]*):\s*$/gm)]
+    .map(match => match[1]);
+  if (jobNames.length !== 2 || jobNames[0] !== 'build' || jobNames[1] !== 'deploy') {
+    issues.push('Hosting: unexpected job outside the reviewed build/deploy boundary');
+  }
   const build = hosting.match(/^  build:\s*\r?\n([\s\S]*?)(?=^  deploy:\s*$)/m)?.[1];
   const deploy = hosting.match(/^  deploy:\s*\r?\n([\s\S]*)$/m)?.[1];
   if (!build || !deploy) {
