@@ -81,6 +81,11 @@ export const trialCases = {
     "testFiles": ["tests/isolated/localCloudIntegrity.test.ts"],
     "runner": "isolated"
   },
+  "journal-acknowledgement": {
+    "mutate": ["src/lib/sync/localJournalAcknowledgement.ts"],
+    "testFiles": ["tests/isolated/localRepository.test.ts", "tests/isolated/lateCommit.test.ts", "tests/isolated/storeJournal.test.ts"],
+    "runner": "isolated"
+  },
   "pending-sequences": {
     "mutate": ["src/lib/sync/localPendingSequences.ts"],
     "testFiles": ["tests/isolated/localPendingSequences.test.ts"],
