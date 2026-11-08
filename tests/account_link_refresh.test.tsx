@@ -28,6 +28,12 @@ vi.mock('../src/lib/auth/recentAuth', async importOriginal => ({
     ...await importOriginal<typeof import('../src/lib/auth/recentAuth')>(),
     reauthenticateForSensitiveAction: vi.fn(async () => 'reauthenticated'),
 }));
+vi.mock('../src/lib/appCheck', async importOriginal => ({
+    ...await importOriginal<typeof import('../src/lib/appCheck')>(),
+    // The real App Check provider is external; supply the standard Firebase
+    // service token required by this direct Auth REST request.
+    getAppCheckToken: vi.fn(async () => 'standard-app-check-token'),
+}));
 vi.mock('../src/lib/auth/passwordPolicy', () => ({
     validatePasswordAgainstPolicy: vi.fn(async () => null),
 }));
@@ -60,6 +66,12 @@ describe('confirmed credential link with a failed local refresh', () => {
         await waitFor(() => expect(safeHardReload).toHaveBeenCalledOnce());
         await waitFor(() => expect(screen.queryByPlaceholderText('Nuova Password')).toBeNull());
         expect(fetch).toHaveBeenCalledTimes(1);
+        expect(fetch).toHaveBeenCalledWith(
+            expect.stringContaining('/v1/accounts:signUp?key='),
+            expect.objectContaining({
+                headers: expect.objectContaining({ 'X-Firebase-AppCheck': 'standard-app-check-token' }),
+            }),
+        );
         expect(reload).toHaveBeenCalledExactlyOnceWith(fixture.user);
         expect(screen.queryByRole('button', { name: 'Crea Password per accedere con Email' })).toBeNull();
         expect(screen.getByRole('button', { name: 'Cambia Password' })).toBeTruthy();

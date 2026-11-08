@@ -14,33 +14,33 @@ export function useWakeLock(enabled: boolean): void {
     const sentinelRef = useRef<WakeLockSentinel | null>(null);
     useEffect(() => {
         // Each effect instance retains its own cancellation state.
-        let cancelled = false;
+        const lifecycle = { isCancelled: false, retryHandle: null as ReturnType<typeof setTimeout> | null, acquiring: false, retryCount: 0 };
 
         // Verifica supporto API
         if (typeof navigator === 'undefined' || !('wakeLock' in navigator)) {
             return;
         }
 
-        let retryTimer: ReturnType<typeof setTimeout> | null = null;
-        let spontaneousRetries = 0;
-        let acquireInFlight = false;
+        
+        
+        
         const MAX_SPONTANEOUS_RETRIES = 2;
 
         const clearRetry = () => {
-            if (retryTimer) clearTimeout(retryTimer);
-            retryTimer = null;
+            if (lifecycle.retryHandle) clearTimeout(lifecycle.retryHandle);
+            lifecycle.retryHandle = null;
         };
 
         const acquire = async () => {
             // Non acquisire se disabilitato, già acquisito/in-flight o documento non visibile.
-            if (!enabled || acquireInFlight || sentinelRef.current || document.visibilityState !== 'visible') return;
-            acquireInFlight = true;
+            if (!enabled || lifecycle.acquiring || sentinelRef.current || document.visibilityState !== 'visible') return;
+            lifecycle.acquiring = true;
 
             try {
                 const sentinel = await navigator.wakeLock.request('screen');
 
                 // Race condition: se nel frattempo è stato disabilitato/smontato, rilascia subito.
-                if (cancelled || !enabled || document.visibilityState !== 'visible') {
+                if (lifecycle.isCancelled || !enabled || document.visibilityState !== 'visible') {
                     sentinel.release().catch(() => {});
                     return;
                 }
@@ -54,23 +54,23 @@ export function useWakeLock(enabled: boolean): void {
                     if (sentinelRef.current !== sentinel) return;
                     sentinelRef.current = null;
                     if (
-                        cancelled
+                        lifecycle.isCancelled
                         || !enabled
                         || document.visibilityState !== 'visible'
-                        || spontaneousRetries >= MAX_SPONTANEOUS_RETRIES
+                        || lifecycle.retryCount >= MAX_SPONTANEOUS_RETRIES
                     ) return;
 
-                    spontaneousRetries += 1;
+                    lifecycle.retryCount += 1;
                     clearRetry();
-                    retryTimer = setTimeout(() => {
-                        retryTimer = null;
+                    lifecycle.retryHandle = setTimeout(() => {
+                        lifecycle.retryHandle = null;
                         void acquire();
-                    }, 500 * spontaneousRetries);
+                    }, 500 * lifecycle.retryCount);
                 });
             } catch {
                 // Rifiuto dell'OS, API non disponibile, PWA su iOS < 18.4: silenzioso.
             } finally {
-                acquireInFlight = false;
+                lifecycle.acquiring = false;
             }
         };
 
@@ -83,7 +83,7 @@ export function useWakeLock(enabled: boolean): void {
 
         const handleVisibilityChange = () => {
             if (document.visibilityState === 'visible' && enabled) {
-                spontaneousRetries = 0;
+                lifecycle.retryCount = 0;
                 void acquire();
             } else {
                 release();
@@ -100,7 +100,7 @@ export function useWakeLock(enabled: boolean): void {
 
         return () => {
             // Segnala che qualsiasi Promise pendente è obsoleta
-            cancelled = true;
+            lifecycle.isCancelled = true;
             clearRetry();
             document.removeEventListener('visibilitychange', handleVisibilityChange);
             release();

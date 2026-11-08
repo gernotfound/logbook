@@ -92,6 +92,11 @@ export interface ExposureComparison {
     reasons: string[];
 }
 
+interface HistoricalExposureComparison {
+    exposure: NormalizedExposure;
+    comparison: ExposureComparison;
+}
+
 export interface ExerciseProgressionAnalysis {
     exId: string;
     exName: string;
@@ -235,14 +240,20 @@ function normalizeSet(
 }
 
 function hasObservedSet(set: NormalizedSet, trackingType: Exercise['trackingType']): boolean {
-    if (trackingType === 'time') return (set.timeSeconds ?? 0) > 0;
-    if (trackingType === 'cardio') return (set.timeSeconds ?? 0) > 0 || (set.reps ?? 0) > 0;
-    return (set.reps ?? 0) > 0;
+    if (trackingType === 'time') {
+        return (set.timeSeconds ?? 0) > 0 || set.segments.some(segment => (segment.timeSeconds ?? 0) > 0);
+    }
+    if (trackingType === 'cardio') {
+        return (set.timeSeconds ?? 0) > 0 || (set.reps ?? 0) > 0
+            || set.segments.some(segment => (segment.timeSeconds ?? 0) > 0 || (segment.reps ?? 0) > 0);
+    }
+    return (set.reps ?? 0) > 0
+        || set.segments.some(segment => (segment.reps ?? 0) > 0 || (segment.timeSeconds ?? 0) > 0);
 }
 
 function referenceSet(sets: NormalizedSet[], trackingType: Exercise['trackingType']): NormalizedSet | undefined {
     const observed = sets.filter(set => hasObservedSet(set, trackingType));
-    if (observed.length === 0) return sets[0];
+    if (observed.length === 0) return undefined;
     if (trackingType !== 'weight_reps') return observed[0];
     return observed.reduce<NormalizedSet | undefined>((best, candidate) => {
         if (!best) return candidate;
@@ -268,12 +279,14 @@ export function normalizeExerciseExposure(
     let tonnage = 0;
     let tonnageComplete = true;
     for (const set of observedSets) {
+        if (set.timeSeconds && !set.reps) tonnageComplete = false;
         if (set.reps) {
             totalReps += set.reps;
             if (set.effectiveKg === undefined) tonnageComplete = false;
             else tonnage += set.effectiveKg * set.reps;
         }
         for (const segment of set.segments) {
+            if (segment.timeSeconds && !segment.reps) tonnageComplete = false;
             if (!segment.reps) continue;
             totalReps += segment.reps;
             if (segment.effectiveKg === undefined) tonnageComplete = false;
@@ -446,20 +459,16 @@ function rirChange(current?: NormalizedSet, previous?: NormalizedSet): 'less' | 
     return 'same';
 }
 
-function strongRecord(current: NormalizedExposure, historical: NormalizedExposure[]): boolean {
+function strongRecord(current: NormalizedExposure, comparisons: HistoricalExposureComparison[]): boolean {
     if (current.trackingType !== 'weight_reps' || !current.referenceSet || current.referenceSet.rir === undefined) return false;
-    const compatibility = historical.map(previous => ({
-        previous,
-        comparison: compareExposureCompatibility(current, previous),
-    }));
-    const recentComparable = compatibility
+    const recentComparable = comparisons
         .filter(item => item.comparison.level !== 'none')
         .slice(-3);
     if (recentComparable.some(item => item.comparison.level === 'medium')) return false;
 
-    const candidates = compatibility
+    const candidates = comparisons
         .filter(item => item.comparison.level === 'high')
-        .map(item => item.previous);
+        .map(item => item.exposure);
     if (!candidates.length) return false;
     return candidates.every(previous => {
         const change = compareReferenceOutput(current.referenceSet, previous.referenceSet);
@@ -468,14 +477,10 @@ function strongRecord(current: NormalizedExposure, historical: NormalizedExposur
     });
 }
 
-function selectBestHistorical(current: NormalizedExposure, historical: NormalizedExposure[]): NormalizedExposure | undefined {
-    const compatibility = historical.map(previous => ({
-        previous,
-        comparison: compareExposureCompatibility(current, previous),
-    }));
-    const candidates = compatibility
+function selectBestHistorical(comparisons: HistoricalExposureComparison[]): NormalizedExposure | undefined {
+    const candidates = comparisons
         .filter(item => item.comparison.level === 'high')
-        .map(item => item.previous);
+        .map(item => item.exposure);
     if (!candidates.length) return undefined;
     return candidates.find(candidate => candidates.every(other => {
         if (candidate.sessionId === other.sessionId) return true;
@@ -643,6 +648,15 @@ function densityAnalysis(
     }
     const currentSets = observedSessionWorkSets(current, libraryMap, context);
     const previousSets = observedSessionWorkSets(previous, libraryMap, context);
+    if (currentSets === 0 || previousSets === 0) {
+        return {
+            quality: 'limited',
+            headline: 'Confronto densità senza lavoro osservabile',
+            detail: 'Serve almeno una serie eseguita osservabile in entrambe le sessioni; la sola durata non misura la densità.',
+            previousDurationSeconds: previousDuration,
+            currentDurationSeconds: currentDuration,
+        };
+    }
     const similarWork = Math.abs(currentSets - previousSets) <= Math.max(1, Math.round(previousSets * 0.1));
     if (!similarWork) {
         return { quality: 'limited', headline: 'Durata cambiata con lavoro diverso', detail: `${Math.round(previousDuration / 60)} → ${Math.round(currentDuration / 60)} min, ma il numero di serie è cambiato: non dichiaro una progressione di densità.`, previousDurationSeconds: previousDuration, currentDurationSeconds: currentDuration };
@@ -676,27 +690,24 @@ export function computeProgressionEngine(
             return found ? [normalizeExerciseExposure(session, found, exercise, historicalContext)] : [];
         });
 
+        const comparisons: HistoricalExposureComparison[] = historical.map(exposure => ({
+            exposure,
+            comparison: compareExposureCompatibility(current, exposure),
+        }));
         const latestExposure = historical.at(-1);
-        const comparable = historical.filter(previous => compareExposureCompatibility(current, previous).level !== 'none');
-        const previousComparable = comparable.at(-1);
-        const comparison = previousComparable
-            ? compareExposureCompatibility(current, previousComparable)
-            : latestExposure
-                ? compareExposureCompatibility(current, latestExposure)
-                : { level: 'none' as const, reasons: ['Nessuna esposizione precedente disponibile.'] };
+        const comparable = comparisons.filter(item => item.comparison.level !== 'none');
+        const previousComparable = comparable.at(-1)?.exposure;
+        const comparison = comparable.at(-1)?.comparison
+            ?? comparisons.at(-1)?.comparison
+            ?? { level: 'none' as const, reasons: ['Nessuna esposizione precedente disponibile.'] };
         const recentHistorical = comparable.slice(-3);
-        const recentComparable = [...recentHistorical, current];
-        const recentLimitations = recentHistorical
-            .map(exposure => ({
-                exposure,
-                comparison: compareExposureCompatibility(current, exposure),
-            }))
-            .filter(item => item.comparison.level === 'medium');
+        const recentComparable = [...recentHistorical.map(item => item.exposure), current];
+        const recentLimitations = recentHistorical.filter(item => item.comparison.level === 'medium');
         const cycleBaseline = current.cycleId
-            ? comparable.find(item => item.cycleId === current.cycleId)
+            ? comparable.find(item => item.exposure.cycleId === current.cycleId)?.exposure
             : undefined;
-        const bestHistorical = selectBestHistorical(current, historical);
-        const isRecord = strongRecord(current, historical);
+        const bestHistorical = selectBestHistorical(comparisons);
+        const isRecord = strongRecord(current, comparisons);
         const outputChange = previousComparable
             ? compareReferenceOutput(current.referenceSet, previousComparable.referenceSet)
             : 'unknown';
@@ -716,8 +727,8 @@ export function computeProgressionEngine(
             );
         }
         if (latestExposure && previousComparable && latestExposure.sessionId !== previousComparable.sessionId) {
-            const latestComparison = compareExposureCompatibility(current, latestExposure);
-            qualityReasons.unshift(...latestComparison.reasons.map(reason => `Esposizione più recente esclusa: ${reason}`));
+            const latestComparison = comparisons.at(-1)?.comparison;
+            if (latestComparison) qualityReasons.unshift(...latestComparison.reasons.map(reason => `Esposizione più recente esclusa: ${reason}`));
         }
         const description = describe(classification, current, previousComparable ?? latestExposure);
         analyses.push({

@@ -1,5 +1,5 @@
 import type { Exercise, TrainingCycle, WorkoutRoutine } from '../../../types';
-import { getCycleVolumeFrequencies } from '../../../lib/calc/cycleLimits';
+import { getCycleVolumeFrequencies, isRepresentableCycleVolume } from '../../../lib/calc/cycleLimits';
 
 export interface CycleMacroVolumeItem {
     key: string;
@@ -57,7 +57,7 @@ export function calculateCycleMacroVolume(
             const setsCount = Number(routineExercise.setsCount || 3);
             if (!Number.isSafeInteger(setsCount) || setsCount < 1) return [];
             const weeklySets = setsCount * effectiveFrequency;
-            if (!Number.isFinite(weeklySets)) return [];
+            if (!isRepresentableCycleVolume(weeklySets)) return [];
             const uniqueAreas = new Map<string, { key: string; label: string }>();
 
             for (const muscleId of exercise.muscles ?? []) {
@@ -69,7 +69,7 @@ export function calculateCycleMacroVolume(
             for (const area of uniqueAreas.values()) {
                 const previous = totals.get(area.key)?.sets ?? 0;
                 const nextSets = previous + weeklySets;
-                if (!Number.isFinite(nextSets)) return [];
+                if (!isRepresentableCycleVolume(nextSets)) return [];
                 totals.set(area.key, { ...area, sets: nextSets });
             }
         }

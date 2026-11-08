@@ -50,7 +50,9 @@ export async function restoreSessionAfterHistoryEdit(editorId: string): Promise<
     const raw = readDeviceValueStrict(HISTORY_EDITOR_CONTEXT, session.owner);
     let suspended: WorkoutSession | null;
     if (raw === null) {
-        suspended = useAppStore.getState().userData?.activeWorkout ?? null;
+        // The supported lifecycle writes this context before mounting the
+        // historical editor; absence cannot authenticate a suspended workout.
+        throw new Error('Contesto editor storico mancante: sessione sospesa non verificabile.');
     } else {
         const parsed: unknown = JSON.parse(raw);
         if (!parsed || typeof parsed !== 'object') throw new Error('Contesto editor storico non valido.');
@@ -71,6 +73,9 @@ export async function restoreSessionAfterHistoryEdit(editorId: string): Promise<
     // Keep the historical context and its suspended workout in the source epoch.
     // A new consent cannot relabel the context by calling setLocalWorkout().
     assertHistoryEditorContextEpoch(raw, session.owner, durable?.consentRevision);
+    if (readDeviceValueStrict(HISTORY_EDITOR_CONTEXT, session.owner) !== raw) {
+        throw new Error('Contesto editor modificato durante il ripristino: originale preservato.');
+    }
     const wasClosed = (id: string) => durable && (
         durable.lastClosedWorkoutId === id
         || durable.closedWorkoutIds?.includes(id)
@@ -85,8 +90,12 @@ export async function restoreSessionAfterHistoryEdit(editorId: string): Promise<
     }
     useAppStore.getState().setLocalWorkout(suspended);
     try {
+        if (readDeviceValueStrict(HISTORY_EDITOR_CONTEXT, session.owner) !== raw) {
+            throw new Error('Un’altra scheda ha sostituito il contesto editor: non rimuovere la nuova copia.');
+        }
         writeDeviceValue(HISTORY_EDITOR_CONTEXT, null, session.owner);
     } catch (error) {
         console.warn('Sessione ripristinata; impossibile pulire il contesto storico:', error);
+        useAppStore.getState().setSaveError('Sessione ripristinata, ma il contesto editor non è stato pulito: originale conservato.');
     }
 }

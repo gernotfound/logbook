@@ -9,27 +9,26 @@ on:
 
 permissions:
   contents: read
-  id-token: write
 
 concurrency:
   group: firebase-hosting-production
   cancel-in-progress: false
 
 jobs:
-  deploy:
-    name: Deploy exact main SHA
+  build:
+    name: Build verified main frontend
     if: >-
       github.event.workflow_run.conclusion == 'success' &&
       github.event.workflow_run.event == 'workflow_run' &&
       github.event.workflow_run.head_branch == 'main'
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: 20
+    permissions:
+      contents: read
     env:
       EXPECTED_SHA: ${{ github.event.workflow_run.head_sha }}
       LOGBOOK_BUILD_SHA: ${{ github.event.workflow_run.head_sha }}
       FIREBASE_HOSTING_DEPLOY: production
-      GCP_WORKLOAD_IDENTITY_PROVIDER: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
-      GCP_FIREBASE_DEPLOY_SERVICE_ACCOUNT: ${{ vars.GCP_FIREBASE_DEPLOY_SERVICE_ACCOUNT }}
       VITE_FIREBASE_API_KEY: ${{ vars.VITE_FIREBASE_API_KEY }}
       VITE_FIREBASE_AUTH_DOMAIN: ${{ vars.VITE_FIREBASE_AUTH_DOMAIN }}
       VITE_FIREBASE_PROJECT_ID: ${{ vars.VITE_FIREBASE_PROJECT_ID }}
@@ -46,14 +45,12 @@ jobs:
           ref: ${{ github.event.workflow_run.head_sha }}
           fetch-depth: 0
           persist-credentials: false
-
       - name: Verify exact main SHA
         shell: bash
         run: |
           set -euo pipefail
           actual_sha="$(git rev-parse HEAD)"
-          git fetch origin main --depth=1
-          current_main="$(git rev-parse origin/main)"
+          current_main="$(git ls-remote --exit-code origin refs/heads/main | awk '{print $1}')"
           echo "Verified workflow SHA: ${EXPECTED_SHA}"
           echo "Checkout SHA:          ${actual_sha}"
           echo "Current origin/main:    ${current_main}"
@@ -61,14 +58,11 @@ jobs:
             echo "Refusing to deploy a stale or mismatched main SHA" >&2
             exit 1
           fi
-
       - name: Require production build configuration
         shell: bash
         run: |
           set -euo pipefail
           required=(
-            GCP_WORKLOAD_IDENTITY_PROVIDER
-            GCP_FIREBASE_DEPLOY_SERVICE_ACCOUNT
             VITE_FIREBASE_API_KEY
             VITE_FIREBASE_AUTH_DOMAIN
             VITE_FIREBASE_PROJECT_ID
@@ -84,6 +78,10 @@ jobs:
             printf 'Missing Firebase Hosting production configuration: %s\n' "${missing[*]}" >&2
             exit 1
           fi
+          if [ "${VITE_FIREBASE_PROJECT_ID}" != "logbook-db-98cc4" ]; then
+            echo "Unexpected Firebase Production project" >&2
+            exit 1
+          fi
           if [ "${VITE_ACCOUNT_DELETION_API_ORIGIN}" != "https://logbook-gnf.vercel.app" ]; then
             echo "Unexpected trusted backend origin" >&2
             exit 1
@@ -92,20 +90,11 @@ jobs:
             echo "Production Firebase Auth must use the Firebase Hosting origin as authDomain" >&2
             exit 1
           fi
-
       - name: Setup Node.js
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
           node-version: '24'
           cache: npm
-
-      - name: Authenticate to Google Cloud with Workload Identity Federation
-        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3
-        with:
-          project_id: ${{ vars.VITE_FIREBASE_PROJECT_ID }}
-          workload_identity_provider: ${{ env.GCP_WORKLOAD_IDENTITY_PROVIDER }}
-          service_account: ${{ env.GCP_FIREBASE_DEPLOY_SERVICE_ACCOUNT }}
-
       - name: Verify npm 11 runtime
         shell: bash
         run: |
@@ -116,19 +105,118 @@ jobs:
             echo "Expected npm 11.x; found ${npm_version}" >&2
             exit 1
           fi
-
       - name: Reject unreviewed dependency install scripts
         run: node scripts/check-install-scripts.mjs
-
       - name: Install dependencies
         run: npm ci
-
       - name: Build exact production frontend
         run: npm run build
+      - name: Upload verified main frontend
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: hosting-frontend-${{ env.EXPECTED_SHA }}
+          path: dist/
+          if-no-files-found: error
+          retention-days: 1
 
+  deploy:
+    name: Deploy exact main SHA
+    needs: build
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'workflow_run' &&
+      github.event.workflow_run.head_branch == 'main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      EXPECTED_SHA: ${{ github.event.workflow_run.head_sha }}
+      VITE_FIREBASE_PROJECT_ID: ${{ vars.VITE_FIREBASE_PROJECT_ID }}
+      GCP_WORKLOAD_IDENTITY_PROVIDER: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+      GCP_FIREBASE_DEPLOY_SERVICE_ACCOUNT: ${{ vars.GCP_FIREBASE_DEPLOY_SERVICE_ACCOUNT }}
+
+    steps:
+      - name: Checkout exact verified main SHA
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify exact main SHA
+        shell: bash
+        run: |
+          set -euo pipefail
+          actual_sha="$(git rev-parse HEAD)"
+          current_main="$(git ls-remote --exit-code origin refs/heads/main | awk '{print $1}')"
+          echo "Verified workflow SHA: ${EXPECTED_SHA}"
+          echo "Checkout SHA:          ${actual_sha}"
+          echo "Current origin/main:    ${current_main}"
+          if [ "${actual_sha}" != "${EXPECTED_SHA}" ] || [ "${current_main}" != "${EXPECTED_SHA}" ]; then
+            echo "Refusing to deploy a stale or mismatched main SHA" >&2
+            exit 1
+          fi
+      - name: Require Hosting deploy identity configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+          for name in GCP_WORKLOAD_IDENTITY_PROVIDER GCP_FIREBASE_DEPLOY_SERVICE_ACCOUNT VITE_FIREBASE_PROJECT_ID; do
+            if [ -z "${!name:-}" ]; then
+              echo "Missing Firebase Hosting deploy configuration: ${name}" >&2
+              exit 1
+            fi
+          done
+          if [ "${VITE_FIREBASE_PROJECT_ID}" != "logbook-db-98cc4" ]; then
+            echo "Unexpected Firebase Production project" >&2
+            exit 1
+          fi
+      - name: Setup Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: '24'
+      - name: Verify npm 11 runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm_version="$(npm --version)"
+          echo "npm runtime: ${npm_version}"
+          if [[ "${npm_version}" != 11.* ]]; then
+            echo "Expected npm 11.x; found ${npm_version}" >&2
+            exit 1
+          fi
+      - name: Download same-run verified frontend
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+        with:
+          name: hosting-frontend-${{ env.EXPECTED_SHA }}
+          path: dist/
+      - name: Validate downloaded frontend artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          for path in dist/index.html dist/sw.js dist/manifest.webmanifest; do
+            if [ ! -s "${path}" ]; then
+              echo "Missing or empty verified frontend artifact: ${path}" >&2
+              exit 1
+            fi
+          done
+      - name: Authenticate to Google Cloud with Workload Identity Federation
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3
+        with:
+          project_id: ${{ vars.VITE_FIREBASE_PROJECT_ID }}
+          workload_identity_provider: ${{ env.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ env.GCP_FIREBASE_DEPLOY_SERVICE_ACCOUNT }}
+      - name: Recheck exact main SHA before Hosting deployment
+        shell: bash
+        run: |
+          set -euo pipefail
+          current_main="$(git ls-remote --exit-code origin refs/heads/main | awk '{print $1}')"
+          if [ "$(git rev-parse HEAD)" != "${EXPECTED_SHA}" ] || [ "${current_main}" != "${EXPECTED_SHA}" ]; then
+            echo "Refusing to deploy a superseded or mismatched main SHA" >&2
+            exit 1
+          fi
       - name: Deploy Firebase Hosting only
         run: npx --yes firebase-tools@15.30.2 deploy --only hosting --project "${VITE_FIREBASE_PROJECT_ID}" --non-interactive -m "GitHub ${EXPECTED_SHA}"
-
       - name: Verify public Hosting PWA cache policy
         shell: bash
         run: |
@@ -152,6 +240,8 @@ jobs:
             -D /tmp/thelogbook-root-headers.txt https://thelogbook.web.app/ -o /tmp/thelogbook-index.html
           grep -F 'rel="canonical" href="https://thelogbook.web.app/"' /tmp/thelogbook-index.html
           grep -iE '^cache-control: .*no-cache.*no-store.*must-revalidate' /tmp/thelogbook-root-headers.txt
+          grep -iE '^x-content-type-options: nosniff' /tmp/thelogbook-root-headers.txt
+          grep -iE '^content-security-policy: ' /tmp/thelogbook-root-headers.txt
 
           assert_revalidated "/index.html" /tmp/thelogbook-index-headers.txt
           assert_revalidated "/manifest.webmanifest" /tmp/thelogbook-manifest-headers.txt
@@ -159,12 +249,54 @@ jobs:
           assert_revalidated "/appearance.js" /tmp/thelogbook-appearance-js-headers.txt
           assert_revalidated "/appearance.css" /tmp/thelogbook-appearance-css-headers.txt
 
-          workbox_file="$(find dist -maxdepth 1 -type f -name 'workbox-*.js' -printf '%f\n' | head -n 1 || true)"
+          workbox_file="$(find dist -maxdepth 1 -type f -name 'workbox-*.js' -printf '%f\n' -quit)"
           if [ -n "$workbox_file" ]; then
             assert_revalidated "/$workbox_file" /tmp/thelogbook-workbox-headers.txt
           fi
 
-          asset_file="$(find dist/assets -maxdepth 1 -type f \( -name '*.js' -o -name '*.css' \) -printf '%P\n' | head -n 1)"
-          test -n "$asset_file"
-          fetch_headers "/assets/$asset_file" /tmp/thelogbook-asset-headers.txt
-          grep -iE '^cache-control: .*max-age=31536000.*immutable' /tmp/thelogbook-asset-headers.txt
+          # Verify every generated JavaScript/CSS chunk, not just a random
+          # representative: lazy imports may reference any hashed asset.
+          shopt -s nullglob globstar
+          build_assets=(dist/assets/**/*.{js,css})
+          if [ "${#build_assets[@]}" -eq 0 ]; then
+            echo "No generated JavaScript or CSS assets to validate" >&2
+            exit 1
+          fi
+
+          assert_served_bytes() {
+            local path="$1"
+            local local_file="$2"
+            local kind="$3"
+            local mime=""
+            local attempt
+            for attempt in 1 2 3 4 5; do
+              mime="$(curl --fail --location --silent --show-error --retry 3 --retry-delay 2 --retry-all-errors \
+                --header 'Accept-Encoding: identity' --write-out '%{content_type}' \
+                --output /tmp/thelogbook-served-resource "https://thelogbook.web.app${path}")"
+              case "${kind}:${mime}" in
+                html:text/html*|js:text/javascript*|js:application/javascript*|json:application/manifest+json*|json:application/json*|css:text/css*)
+                  if cmp -s "${local_file}" /tmp/thelogbook-served-resource; then
+                    return 0
+                  fi
+                  ;;
+              esac
+              if [ "${attempt}" -lt 5 ]; then sleep 2; fi
+            done
+            echo "Hosting response has wrong MIME or differs from the exact verified build: ${path}" >&2
+            exit 1
+          }
+
+          assert_served_bytes "/" "dist/index.html" html
+          assert_served_bytes "/sw.js" "dist/sw.js" js
+          assert_served_bytes "/manifest.webmanifest" "dist/manifest.webmanifest" json
+          assert_served_bytes "/appearance.js" "dist/appearance.js" js
+          assert_served_bytes "/appearance.css" "dist/appearance.css" css
+          if [ -n "$workbox_file" ]; then
+            assert_served_bytes "/$workbox_file" "dist/$workbox_file" js
+          fi
+          for asset in "${build_assets[@]}"; do
+            relative_path="${asset#dist/}"
+            fetch_headers "/${relative_path}" /tmp/thelogbook-asset-headers.txt
+            grep -iE '^cache-control: .*max-age=31536000.*immutable' /tmp/thelogbook-asset-headers.txt
+            assert_served_bytes "/${relative_path}" "${asset}" "${asset##*.}"
+          done

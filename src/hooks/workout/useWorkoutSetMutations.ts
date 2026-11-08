@@ -98,15 +98,16 @@ export function useWorkoutSetMutations({ setLocalWorkout, showConfirm }: UseWork
         if (!selected?.id || !initial) return;
         if (!(await showConfirm("Rimuovere questo esercizio dalla sessione corrente?"))) return;
         if (!isCurrentSession(session)) return;
-        let removedAt = -1;
-        setLocalWorkout(prev => {
-            if (!prev || prev.id !== initial.id || prev.isEditingHistory !== initial.isEditingHistory) return prev;
-            const index = prev.exercises.findIndex(exercise => exercise.id === selected.id);
-            if (index < 0) return prev;
-            removedAt = index;
-            return { ...prev, exercises: prev.exercises.filter((_, i) => i !== index) };
-        });
-        if (removedAt >= 0) closePanelsCallback?.(removedAt);
+        const before = useAppStore.getState().localWorkout;
+        if (!before || before.id !== initial.id || before.isEditingHistory !== initial.isEditingHistory) return;
+        const removedAt = before.exercises.findIndex(exercise => exercise.id === selected.id);
+        if (removedAt < 0) return;
+        // The synchronous device-persisting setter must commit the exact snapshot
+        // checked after confirmation; an intervening change leaves panels untouched.
+        setLocalWorkout(prev => prev === before
+            ? { ...prev, exercises: prev.exercises.filter((_, i) => i !== removedAt) }
+            : prev);
+        if (useAppStore.getState().localWorkout !== before) closePanelsCallback?.(removedAt);
     }, [showConfirm, setLocalWorkout]);
 
     // Sets Management - Sempre atomici con functional update
@@ -131,14 +132,21 @@ export function useWorkoutSetMutations({ setLocalWorkout, showConfirm }: UseWork
         });
     }, [setLocalWorkout]);
 
-    const removeSet = useCallback((exIndex: number, setIndex: number) => {
+    const removeSet = useCallback((exIndex: number, setIndex: number, setId: string,
+        exerciseId?: string, workoutId?: string | null) => {
         setLocalWorkout((prev) => {
-            if (!prev) return prev;
-            const updatedExercises = prev.exercises.map((ex: any, i: number) => {
-                if (i !== exIndex) return ex;
-                return { ...ex, sets: ex.sets.filter((_: any, si: number) => si !== setIndex) };
-            });
-            return { ...prev, exercises: updatedExercises };
+            if (!prev || !setId || (workoutId && prev.id !== workoutId)) return prev;
+            const selected = prev.exercises[exIndex];
+            if (!selected || (exerciseId && selected.id !== exerciseId)
+                || selected.sets?.[setIndex]?.id !== setId) return prev;
+            // A confirmation can outlive a reorder or a replacement workout.
+            // Never delete the series that happened to inherit an old index.
+            return {
+                ...prev,
+                exercises: prev.exercises.map((exercise, index) => index === exIndex
+                    ? { ...exercise, sets: exercise.sets.filter(set => set.id !== setId) }
+                    : exercise),
+            };
         });
     }, [setLocalWorkout]);
 

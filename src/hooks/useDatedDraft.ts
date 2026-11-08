@@ -115,7 +115,7 @@ export function useDatedDraft<T extends Record<string, string>>(kind: string, da
         current.current = {
             key, name: key ? name : null, scope: readScope, values,
             // A recovered snapshot is already durable; only new edits need a flush.
-            dirty: Boolean(key) && edited?.scope === readScope && edited.values !== null,
+            dirty: sameScope ? current.current.dirty : false,
             session,
             observedRaw: sameScope ? current.current.observedRaw : image.raw,
             writerName: sameScope ? current.current.writerName : null,
@@ -212,6 +212,9 @@ export function useDatedDraft<T extends Record<string, string>>(kind: string, da
             draft.observedRaw = writeFencedDatedDraft(
                 draft.name, draft.session.owner, draft.values, draft.observedRaw,
             );
+            // The synchronous canonical write has acknowledged the latest edit.
+            // A later update/background flush must not rewrite this same input.
+            draft.dirty = false;
         } catch (error) {
             if (error instanceof UnverifiedDatedDraftEpochError || error instanceof DatedDraftConflictError) {
                 blockProvenance(error);
@@ -273,15 +276,23 @@ export function useDatedDraft<T extends Record<string, string>>(kind: string, da
     };
 
     const persistRef = useRef(persist);
+    const verifyRef = useRef(verifyCurrentDraft);
     useLayoutEffect(() => {
         persistRef.current = persist;
+        verifyRef.current = verifyCurrentDraft;
     });
 
     useEffect(() => {
         const flush = () => {
             const draft = current.current;
-            if (!draft.dirty) return;
-            if (!draft.key || !draft.name || !draft.session || !isCurrentSession(draft.session)) {
+            if (!draft.key) return;
+            if (!draft.dirty) {
+                // A successful synchronous edit needs no second write, but a
+                // required-update reload still has to authenticate its source.
+                verifyRef.current();
+                return;
+            }
+            if (!draft.name || !draft.session || !isCurrentSession(draft.session)) {
                 throw new Error('Sessione cambiata prima del salvataggio della bozza.');
             }
             persistRef.current(draft);

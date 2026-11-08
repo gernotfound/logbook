@@ -3,7 +3,6 @@ import { get } from 'idb-keyval';
 import { act, renderHook } from '@testing-library/react';
 import { auth } from '../../src/lib/firebase';
 import { DB } from '../../src/lib/db';
-import { Logic } from '../../src/lib/logic';
 import { UserDataSchema } from '../../src/lib/schema';
 import { calculateLoggedMealTotals } from '../../src/lib/nutrition/calculateLoggedMealTotals';
 import { activateGuestSession, captureSession, GUEST_SESSION_KEY, invalidateSession } from '../../src/lib/sync/session';
@@ -16,6 +15,9 @@ import { useAppStore } from '../../src/store/useAppStore';
 import type { UserData } from '../../src/types';
 
 const DATE = '2026-09-14';
+// This Firebase Auth test double supports a writable currentUser seam;
+// its complete production User interface is not represented by the fixture.
+const authFixture = auth as unknown as { currentUser: { uid: string } | null };
 const parse = (value: unknown) => UserDataSchema.parse(value) as unknown as UserData;
 
 function fixture(): UserData {
@@ -25,6 +27,8 @@ function fixture(): UserData {
         customFoods: [
             { id: 'food-chicken', name: 'Petto di Pollo', brand: 'Fixture', category: 'Carne', baseQty: 100, unit: 'g', kcal: 200, carbs: 40, pro: 10, fat: 2, isCustom: true },
             { id: 'food-rice', name: 'Riso Basmati', brand: 'Fixture', category: 'Cereali', baseQty: 100, unit: 'g', kcal: 350, carbs: 77, pro: 8, fat: 1, isCustom: true },
+            { id: 'food-grilled', name: 'Pollo grigliato', brand: 'Fixture', category: 'Carne', baseQty: 100, unit: 'g', kcal: 175, carbs: 0, pro: 25, fat: 7, isCustom: true },
+            { id: 'food-steamed', name: 'Pollo al vapore', brand: 'Fixture', category: 'Carne', baseQty: 100, unit: 'g', kcal: 165, carbs: 0, pro: 26, fat: 6, isCustom: true },
         ],
     });
 }
@@ -43,7 +47,7 @@ async function runMutation(action: () => Promise<unknown>) {
 beforeEach(async () => {
     useAppStore.getState().resetStore();
     vi.clearAllMocks();
-    (auth as any).currentUser = { uid: 'nutrition-hardening-user' };
+    authFixture.currentUser = { uid: 'nutrition-hardening-user' };
     vi.mocked(DB.saveUserData).mockResolvedValue({ ok: true, status: 'synced' });
     useAppStore.setState({
         userData: fixture(),
@@ -63,10 +67,10 @@ afterEach(() => lockAllVaults());
 
 describe('M5 nutrition account flow through useNutritionMeals', () => {
     it('writes current nutrition only to the active guest archive, not the previous account owner', async () => {
-        const previousUser = (auth as any).currentUser;
+        const previousUser = authFixture.currentUser;
         const guestSessionId = 'chat14-nutrition-guest';
         try {
-            (auth as any).currentUser = null;
+            authFixture.currentUser = null;
             localStorage.setItem('logbook_is_guest', 'true');
             localStorage.setItem(GUEST_SESSION_KEY, guestSessionId);
             activateGuestSession(guestSessionId);
@@ -88,7 +92,7 @@ describe('M5 nutrition account flow through useNutritionMeals', () => {
             // authenticated storage bytes instead of reading without authorization.
             expect(await get('logbook:v2:user:nutrition-hardening-user')).toBe(previousArchiveBytes);
         } finally {
-            (auth as any).currentUser = previousUser;
+            authFixture.currentUser = previousUser;
             localStorage.removeItem('logbook_is_guest');
             localStorage.removeItem(GUEST_SESSION_KEY);
             invalidateSession();
@@ -121,19 +125,19 @@ describe('M5 nutrition account flow through useNutritionMeals', () => {
         expect(disk?.data.nutrition?.[DATE]?.meals?.map(meal => meal.id)).toEqual(['meal-a']);
     });
 
-    it('returns the same ranked production results using the prepared search index', () => {
+    it('returns independently expected food IDs through the prepared hook index across queries', () => {
         const { result } = renderHook(() => useNutritionMeals(DATE));
 
-        act(() => {
-            result.current.handleSearch('pollo');
-        });
-
-        expect(result.current.searchResults).toEqual(
-            Logic.searchFoods(useAppStore.getState().userData?.customFoods ?? [], 'pollo').slice(0, 15)
-        );
+        act(() => { result.current.handleSearch('pollo'); });
         expect(result.current.searchQuery).toBe('pollo');
-        expect(result.current.searchResults.map(food => food.id)).toContain('food-chicken');
-        expect(result.current.searchResults.map(food => food.id)).not.toContain('food-rice');
+        expect(result.current.searchResults.map(food => food.id)).toEqual(['food-steamed', 'food-grilled', 'food-chicken']);
+
+        act(() => { result.current.handleSearch('basmati'); });
+        expect(result.current.searchQuery).toBe('basmati');
+        expect(result.current.searchResults.map(food => food.id)).toEqual(['food-rice']);
+
+        act(() => { result.current.handleSearch('zzzzzzzzzz'); });
+        expect(result.current.searchResults).toEqual([]);
     });
 
     it('adds, rescales and removes a meal through the real store mutation path', async () => {
@@ -152,7 +156,8 @@ describe('M5 nutrition account flow through useNutritionMeals', () => {
         expect(day?.isDayOn).toBeUndefined();
         expect({ kcal: day?.kcal, carbs: day?.carbs, pro: day?.pro, fat: day?.fat }).toEqual(calculateLoggedMealTotals(day?.meals ?? []));
 
-        const added = day!.meals![0] as any;
+        const added = day?.meals?.[0];
+        if (!added) throw new Error('Expected an added meal before editing');
         await runMutation(() => result.current.updateMealItem({ ...added, quantity: 50 }));
 
         day = useAppStore.getState().userData?.nutrition?.[DATE];
@@ -162,7 +167,8 @@ describe('M5 nutrition account flow through useNutritionMeals', () => {
         expect(day?.fat).toBe(1);
         expect({ kcal: day?.kcal, carbs: day?.carbs, pro: day?.pro, fat: day?.fat }).toEqual(calculateLoggedMealTotals(day?.meals ?? []));
 
-        const updated = day!.meals![0] as any;
+        const updated = day?.meals?.[0];
+        if (!updated) throw new Error('Expected an updated meal before removal');
         await runMutation(() => result.current.removeFood(updated.id));
 
         day = useAppStore.getState().userData?.nutrition?.[DATE];

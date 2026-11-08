@@ -212,7 +212,7 @@ describe('Training Session UI Improvements Suite (R1, R2, R3)', () => {
             expect(summary?.getAttribute('aria-controls')).toBe(`session-exercise-body-${identity}`);
             expect(body?.id).toBe(`session-exercise-body-${identity}`);
             for (const field of ['time', 'distance', 'speed', 'incline', 'kcal']) {
-                const id = `cardio-${field}-${identity}`;
+                const id = `cardio-${field}-${identity}-${index === 0 ? 'set-one' : 'set-two'}`;
                 const input = shell.querySelector(`input[id="${id}"]`);
                 const label = shell.querySelector(`label[for="${id}"]`) as HTMLLabelElement | null;
                 expect(input).not.toBeNull();
@@ -330,7 +330,7 @@ describe('Training Session UI Improvements Suite (R1, R2, R3)', () => {
 
             // Must call onRemoveSet with index 2 (last element of 3 sets)
             expect(onRemoveSetSpy).toHaveBeenCalledTimes(1);
-            expect(onRemoveSetSpy).toHaveBeenCalledWith(0, 2);
+            expect(onRemoveSetSpy.mock.calls[0].slice(0, 2)).toEqual([0, 2]);
         });
 
         it('R2.3: "Rimuovi serie" is disabled when sets array is empty', async () => {
@@ -428,7 +428,7 @@ describe('Training Session UI Improvements Suite (R1, R2, R3)', () => {
             });
 
             expect(showConfirmSpy).not.toHaveBeenCalled();
-            expect(onRemoveSetSpy).toHaveBeenCalledWith(0, 1);
+            expect(onRemoveSetSpy.mock.calls[0].slice(0, 2)).toEqual([0, 1]);
         });
 
         it('R3.2: Shows confirmation dialog when last set contains weight/reps, and deletes when confirmed', async () => {
@@ -478,7 +478,7 @@ describe('Training Session UI Improvements Suite (R1, R2, R3)', () => {
             });
 
             expect(showConfirmSpy).toHaveBeenCalledTimes(1);
-            expect(onRemoveSetSpy).toHaveBeenCalledWith(0, 1);
+            expect(onRemoveSetSpy.mock.calls[0].slice(0, 2)).toEqual([0, 1]);
         });
 
         it('R3.3: Cancels deletion when user declines confirmation dialog', async () => {
@@ -574,7 +574,7 @@ describe('Training Session UI Improvements Suite (R1, R2, R3)', () => {
             });
 
             expect(showConfirmSpy).toHaveBeenCalledTimes(1);
-            expect(onRemoveSetSpy).toHaveBeenCalledWith(0, 0);
+            expect(onRemoveSetSpy.mock.calls[0].slice(0, 2)).toEqual([0, 0]);
             unmount();
             showConfirmSpy.mockClear();
             onRemoveSetSpy.mockClear();
@@ -626,7 +626,7 @@ describe('Training Session UI Improvements Suite (R1, R2, R3)', () => {
             });
 
             expect(showConfirmSpy).toHaveBeenCalledTimes(1);
-            expect(onRemoveSetSpy).toHaveBeenCalledWith(0, 0);
+            expect(onRemoveSetSpy.mock.calls[0].slice(0, 2)).toEqual([0, 0]);
         });
 
         it('R3.5: protects isometry-only and RIR-zero sets before deleting the last series', async () => {
@@ -674,7 +674,7 @@ describe('Training Session UI Improvements Suite (R1, R2, R3)', () => {
             await act(async () => {
                 fireEvent.click(screen.getByText('- Rimuovi serie'));
             });
-            expect(onRemoveSet).toHaveBeenCalledWith(0, 0);
+            expect(onRemoveSet.mock.calls[0].slice(0, 3)).toEqual([0, 0, 's_iso']);
 
             showConfirm.mockClear();
             onRemoveSet.mockClear();
@@ -686,7 +686,7 @@ describe('Training Session UI Improvements Suite (R1, R2, R3)', () => {
                 fireEvent.click(screen.getByText('- Rimuovi serie'));
             });
             expect(showConfirm).toHaveBeenCalledTimes(1);
-            expect(onRemoveSet).toHaveBeenCalledWith(0, 0);
+            expect(onRemoveSet.mock.calls[0].slice(0, 3)).toEqual([0, 0, 's_rir']);
         });
     });
 
@@ -700,6 +700,7 @@ describe('Training Session UI Improvements Suite (R1, R2, R3)', () => {
                 globalStartTime: Date.now(),
                 exercises: [
                     {
+                        id: 'session-instance-bench',
                         exId: 'ex_bench',
                         sets: [
                             { id: 's1', kg: '80', reps: '10' },
@@ -827,7 +828,7 @@ describe('Training Session UI Improvements Suite (R1, R2, R3)', () => {
             });
 
             expect(showConfirmSpy).toHaveBeenCalledTimes(1);
-            expect(onRemoveSetSpy).toHaveBeenCalledWith(0, 0);
+            expect(onRemoveSetSpy.mock.calls[0].slice(0, 2)).toEqual([0, 0]);
 
             unmount();
             showConfirmSpy.mockClear();
@@ -883,7 +884,7 @@ describe('Training Session UI Improvements Suite (R1, R2, R3)', () => {
 
             // No confirmation prompt since all values are 0 or empty
             expect(showConfirmSpy).not.toHaveBeenCalled();
-            expect(onRemoveSetSpy).toHaveBeenCalledWith(0, 0);
+            expect(onRemoveSetSpy.mock.calls[0].slice(0, 2)).toEqual([0, 0]);
         });
 
         it('Adversarial: verifies numeric zeroes and Italian comma decimal formatting', async () => {
@@ -930,7 +931,7 @@ describe('Training Session UI Improvements Suite (R1, R2, R3)', () => {
             });
 
             expect(showConfirmSpy).not.toHaveBeenCalled();
-            expect(onRemoveSetSpy).toHaveBeenCalledWith(0, 0);
+            expect(onRemoveSetSpy.mock.calls[0].slice(0, 2)).toEqual([0, 0]);
             unmount();
             showConfirmSpy.mockClear();
             onRemoveSetSpy.mockClear();
@@ -974,7 +975,7 @@ describe('Training Session UI Improvements Suite (R1, R2, R3)', () => {
             });
 
             expect(showConfirmSpy).toHaveBeenCalledTimes(1);
-            expect(onRemoveSetSpy).toHaveBeenCalledWith(0, 0);
+            expect(onRemoveSetSpy.mock.calls[0].slice(0, 2)).toEqual([0, 0]);
         });
 
         it('Adversarial: verifies onRemoveLastSet prop delegation when provided', async () => {

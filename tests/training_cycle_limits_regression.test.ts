@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { UserDataSchema, TrainingCycleSchema, TrainingCycleWriteSchema } from '../src/lib/schema';
 import { applyDomainOperations } from '../src/lib/sync/domainOperations';
 import { calculateCycleSchedule, calculateCycleTimeline } from '../src/lib/calc/planning';
-import { getCycleVolumeFrequencies, hasValidCycleWriteFrequencies, isBoundedCycleCount, previewCycleCount, MAX_EDITABLE_CYCLE_WEEKS, MAX_CYCLE_SESSIONS_PER_WEEK } from '../src/lib/calc/cycleLimits';
+import { getCycleVolumeFrequencies, hasValidCycleWriteFrequencies, isBoundedCycleCount, isRepresentableCycleVolume, previewCycleCount, MAX_EDITABLE_CYCLE_WEEKS, MAX_CYCLE_SESSIONS_PER_WEEK } from '../src/lib/calc/cycleLimits';
 import type { TrainingCycle, UserData, WorkoutRoutine } from '../src/types';
 
 const routine: WorkoutRoutine = { id: 'r', name: 'A', exercises: [] };
@@ -208,6 +208,15 @@ describe('training cycle bounded input and safe legacy evaluation', () => {
         expect(getCycleVolumeFrequencies([
             { frequencyPerWeek: Number.MAX_SAFE_INTEGER }, { frequencyPerWeek: 1 },
         ], 4)).toBeNull();
+    });
+
+    it('keeps fractional and exact-boundary volumes but refuses negative or unrepresentable estimates', () => {
+        for (const value of [0, -0, 0.5, 1, Number.MAX_SAFE_INTEGER]) {
+            expect(isRepresentableCycleVolume(value)).toBe(true);
+        }
+        for (const value of [-Number.EPSILON, -1, Number.MAX_SAFE_INTEGER + 1, NaN, Infinity, -Infinity]) {
+            expect(isRepresentableCycleVolume(value)).toBe(false);
+        }
     });
 
 });

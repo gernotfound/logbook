@@ -7,7 +7,7 @@ import { getDb } from '../../lib/firebase';
 import { UserDataSchema } from '../../lib/schema';
 import { hasUserData, mergeUserData } from '../../lib/merge';
 import { useAppStore } from '../../store/useAppStore';
-import { getCachedCatalog, getInMemoryCatalog, isCatalogInMemory } from '../../lib/catalog/catalogService';
+import { getCachedCatalog } from '../../lib/catalog/catalogService';
 import { replicateJournal } from '../../lib/sync/replicateJournal';
 import { requireCloudAccountDataKey } from '../../lib/sync/cloudAccountKeyAccess';
 import { captureSession, isCurrentSession, userOwner } from '../../lib/sync/session';
@@ -104,6 +104,10 @@ export async function migrateGuestAccount({ user, guestData, policy, setUserData
         const cloudPayload = await DB.loadCloudPayload({ allMonths: true, cloudKey });
         assertCloudAllowed();
         const cloudData = cloudPayload?.data || null;
+        // Unflagged guest catalog entries must be classified using the durable
+        // catalog, not a transient empty seed from a failed IndexedDB read.
+        const catalog = await getCachedCatalog();
+        assertCloudAllowed();
         const guestHasData = hasUserData(guestData);
         const prepareReplica = async (hydrated: LocalEnvelope): Promise<LocalEnvelope> => {
             assertCloudAllowed();
@@ -128,14 +132,6 @@ export async function migrateGuestAccount({ user, guestData, policy, setUserData
                 useAppStore.setState({ cloudIntegrityBlocked: false, syncHealth: recovered.pending.length ? 'local-pending' : 'synced', saveError: null });
             }
             return recovered;
-        };
-
-        const resolveAuthenticatedBase = async (): Promise<UserData> => {
-            assertCurrent();
-            if (cloudData) return cloudData;
-            const catalog = isCatalogInMemory() ? getInMemoryCatalog() : (await getCachedCatalog());
-            assertCurrent();
-            return UserDataSchema.parse(getResolvedDefaultUserData(catalog)) as unknown as UserData;
         };
 
         const reflectDurableOutcome = (result: SyncResult, durable: LocalEnvelope): SyncResult => {
@@ -171,7 +167,9 @@ export async function migrateGuestAccount({ user, guestData, policy, setUserData
         };
 
         assertCurrent();
-        const authenticatedBase = await resolveAuthenticatedBase();
+        assertCurrent();
+        const authenticatedBase: UserData = cloudData
+            ?? (UserDataSchema.parse(getResolvedDefaultUserData(catalog)) as unknown as UserData);
         let hydratedEnv = await hydrateLocal(user.uid, authenticatedBase, cloudPayload?.completeMonths || [], cloudPayload?.cloudDocuments, 'all', cloudAllowed);
         assertCloudAllowed();
         hydratedEnv = await prepareReplica(hydratedEnv);

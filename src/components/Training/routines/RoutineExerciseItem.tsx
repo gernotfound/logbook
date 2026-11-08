@@ -235,9 +235,9 @@ export const RoutineExerciseItem: React.FC<RoutineExerciseItemProps> = ({
                         </div>
                     ) : (
                         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                            <label style={{ fontSize: 'var(--font-size-meta)', color: 'var(--text-muted)', fontWeight: 600, width: '75px', flexShrink: 0 }}>
+                            <span style={{ fontSize: 'var(--font-size-meta)', color: 'var(--text-muted)', fontWeight: 600, width: '75px', flexShrink: 0 }}>
                                 Tipo:
-                            </label>
+                            </span>
                             <span className="text-muted text-xs italic">Tracciamento a tempo</span>
                         </div>
                     )}

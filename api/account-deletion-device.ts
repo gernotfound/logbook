@@ -12,7 +12,12 @@ export const maxDuration = 30;
 const ALLOWED_HEADERS = 'authorization, content-type, x-firebase-appcheck, x-account-deletion-uid, x-account-deletion-device';
 
 function json(body: unknown, status: number, origin: string | null): Response {
-  return Response.json(body, { status, headers: accountDeletionCorsHeaders(origin, ALLOWED_HEADERS) });
+  // Device status is owner-specific and can change from none to complete.
+  // Prevent intermediaries from reusing an earlier credential-bearing response.
+  return Response.json(body, {
+    status,
+    headers: { ...accountDeletionCorsHeaders(origin, ALLOWED_HEADERS), 'cache-control': 'no-store' },
+  });
 }
 
 function errorResponse(error: unknown, origin: string | null): Response {

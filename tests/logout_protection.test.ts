@@ -121,6 +121,32 @@ describe('M5 logout protection through AuthProvider', () => {
         expect(result.current.isGuest).toBe(false);
     });
 
+    it('keeps the guest archive when Web Locks are unavailable instead of purging without coordination', async () => {
+        localStorage.setItem('logbook_is_guest', 'true');
+        localStorage.setItem(GUEST_SESSION_KEY, 'guest-no-locks');
+        activateGuestSession('guest-no-locks');
+        (auth as any).currentUser = null;
+        vi.mocked(onAuthStateChanged).mockImplementation((_auth, callback: any) => {
+            callback(null);
+            return () => {};
+        });
+        useAppStore.setState({ dataOwner: 'guest' });
+        const oldLocks = navigator.locks;
+        Object.defineProperty(navigator, 'locks', { configurable: true, value: undefined });
+        try {
+            const { result } = renderAuth();
+            await waitFor(() => expect(result.current.isGuest).toBe(true));
+            await act(async () => { await result.current.logout({ mode: 'normal', skipConfirm: true }); });
+            expect(dialogs.showAlert).toHaveBeenCalledWith(
+                expect.stringContaining('Impossibile coordinare la chiusura della modalità locale'),
+            );
+            expect(DB.purgeAllLocalUserData).not.toHaveBeenCalled();
+            expect(localStorage.getItem('logbook_is_guest')).toBe('true');
+        } finally {
+            Object.defineProperty(navigator, 'locks', { configurable: true, value: oldLocks });
+        }
+    });
+
     it('notifies about a durable pending journal even when volatile sync status says synced', async () => {
         const initial = userData();
         await initializeLocal('user:logout-user', initial);
@@ -192,6 +218,25 @@ describe('M5 logout protection through AuthProvider', () => {
 
         expect(dialogs.showUnsyncedDataLogout).toHaveBeenCalledWith('failed');
         expect(exporter.exportEmergencyJSON).toHaveBeenCalledWith(expectedSnapshot);
+        expect(DB.secureLogOut).not.toHaveBeenCalled();
+        expect(useAppStore.getState().userData?.routines?.[0]?.id).toBe('routine-1');
+    });
+
+    it('keeps the authenticated archive and shows an error when the emergency export is blocked', async () => {
+        useAppStore.setState({ syncHealth: 'failed' });
+        dialogs.showUnsyncedDataLogout.mockResolvedValueOnce('export');
+        exporter.exportEmergencyJSON.mockImplementationOnce(() => { throw new Error('Browser download denied'); });
+        const { result } = renderAuth();
+        await waitFor(() => expect(result.current.currentUser?.uid).toBe('logout-user'));
+
+        await act(async () => {
+            await result.current.logout({ mode: 'normal' });
+        });
+
+        expect(exporter.exportEmergencyJSON).toHaveBeenCalledTimes(1);
+        expect(dialogs.showAlert).toHaveBeenCalledWith(
+            'Esportazione non riuscita. Il logout è stato annullato e i dati sono preservati. Riprova il backup.'
+        );
         expect(DB.secureLogOut).not.toHaveBeenCalled();
         expect(useAppStore.getState().userData?.routines?.[0]?.id).toBe('routine-1');
     });

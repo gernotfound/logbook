@@ -620,4 +620,96 @@ describe('contextual progression engine', () => {
         expect(computeProgressionEngine(current, [], library).exercises[0].isRecord).toBe(false);
     });
 
+    it('does not use unperformed planned sets as reference exposures', () => {
+        const previous = workout({
+            id: 'empty-previous', date: '2026-09-01',
+            sets: [{ id: 'planned-previous', kg: '80', reps: '', rir: 2 }],
+        });
+        const current = workout({
+            id: 'empty-current', date: '2026-09-08',
+            sets: [{ id: 'planned-current', kg: '80', reps: '', rir: 2 }],
+        });
+
+        const analysis = computeProgressionEngine(current, [previous], library).exercises[0];
+
+        expect(analysis.current.workSets).toBe(0);
+        expect(analysis.current.referenceSet).toBeUndefined();
+        expect(analysis.previousComparable).toBeUndefined();
+        expect(analysis.comparison.level).toBe('none');
+        expect(analysis.classification).toBe('insufficient_data');
+        expect(analysis.isRecord).toBe(false);
+    });
+
+    it('counts completed continuation reps even when the parent set is blank', () => {
+        const current = workout({
+            id: 'segment-only', date: '2026-09-08',
+            sets: [{
+                id: 'parent', kg: '', reps: '', technique: 'dropset',
+                segments: [{ id: 'drop', technique: 'dropset', kg: '50', reps: '6' }],
+            }],
+        });
+
+        const exposure = normalizeExerciseExposure(current, current.exercises[0], bench);
+
+        expect(exposure.workSets).toBe(1);
+        expect(exposure.totalReps).toBe(6);
+        expect(exposure.tonnageComplete).toBe(true);
+        expect(exposure.tonnageKg).toBe(300);
+        expect(exposure.referenceSet?.segments[0]?.reps).toBe(6);
+    });
+
+    it('observes timed isometry continuations without inventing a complete tonnage', () => {
+        const current = workout({
+            id: 'isometry-only', date: '2026-09-08',
+            sets: [{
+                id: 'parent', kg: '', reps: '',
+                segments: [{ id: 'iso', technique: 'isometry', kg: '30', reps: '', time: '30' }],
+            }],
+        });
+
+        const exposure = normalizeExerciseExposure(current, current.exercises[0], bench);
+
+        expect(exposure.workSets).toBe(1);
+        expect(exposure.totalReps).toBe(0);
+        expect(exposure.tonnageComplete).toBe(false);
+        expect(exposure.tonnageKg).toBeUndefined();
+        expect(exposure.referenceSet?.segments[0]?.timeSeconds).toBe(30);
+    });
+
+    it('does not infer density improvement from two sessions containing only planned sets', () => {
+        const blank = [{ id: 'planned', kg: '100', reps: '', rir: 2 }];
+        const previous = workout({
+            id: 'zero-work-prev', date: '2026-09-01', routineId: 'density-r',
+            focus: 'density', duration: '01:10:00', sets: blank,
+        });
+        const current = workout({
+            id: 'zero-work-current', date: '2026-09-08', routineId: 'density-r',
+            focus: 'density', duration: '00:45:00', sets: blank,
+        });
+
+        const result = computeProgressionEngine(current, [previous], library);
+
+        expect(result.density?.quality).toBe('limited');
+        expect(result.density?.headline).toContain('senza lavoro osservabile');
+        expect(result.density?.currentDurationSeconds).toBe(45 * 60);
+        expect(result.density?.previousDurationSeconds).toBe(70 * 60);
+        expect(result.exercises[0].current.workSets).toBe(0);
+    });
+
+    it('preserves historical comparability and exclusion reasons across mixed evidence', () => {
+        const old = workout({ id: 'old-high', date: '2026-08-01', routineId: 'same', sets: [set(100, 8, 2)] });
+        const limited = workout({ id: 'recent-limited', date: '2026-08-15', routineId: 'same', sets: [set(100, 9)] });
+        const excluded = workout({ id: 'latest-other-routine', date: '2026-08-22', routineId: 'other', sets: [set(100, 10, 2)] });
+        const current = workout({ id: 'current', date: '2026-09-01', routineId: 'same', sets: [set(100, 10, 2)] });
+
+        const analysis = computeProgressionEngine(current, [excluded, old, limited], library).exercises[0];
+
+        expect(analysis.latestExposure?.sessionId).toBe('latest-other-routine');
+        expect(analysis.previousComparable?.sessionId).toBe('recent-limited');
+        expect(analysis.bestHistorical?.sessionId).toBe('old-high');
+        expect(analysis.comparison.level).toBe('medium');
+        expect(analysis.qualityReasons.join(' ')).toContain('Esposizione più recente esclusa');
+        expect(analysis.isRecord).toBe(false);
+    });
+
 });

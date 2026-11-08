@@ -49,7 +49,6 @@ docs/ai/
 TEST_INFRA.md
 TEST_READY.md
 ORIGINAL_REQUEST.md
-# AGENTS.md removed from gitignore because it should be tracked
 
 # Editor directories and files
 .vscode/*
@@ -62,6 +61,6 @@ ORIGINAL_REQUEST.md
 *.sln
 *.sw?
 coverage/
-bundle-stats.html 
-playwright-report/  
-test-results/ 
+bundle-stats.html
+playwright-report/
+test-results/

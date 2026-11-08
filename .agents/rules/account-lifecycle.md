@@ -26,7 +26,7 @@ La tabella è un indice delle decisioni, non sostituisce i guard di transazione,
 
 ## Verifica email e accesso account
 
-L'accesso account/cloud richiede che Firebase Auth riporti `emailVerified === true`. Una sessione non verificata non deve avviare idratazione Firestore, replica, registrazione del dispositivo né migrazione guest→account. Per gli account email/password, la registrazione richiede l'invio del link di verifica; alla conferma il client esegue `reload(user)`, aggiorna il token ID con `getIdToken(true)` e riprende il bootstrap tramite ricaricamento protetto.
+L'accesso account/cloud richiede che Firebase Auth riporti `emailVerified === true`. Il bootstrap client di una sessione non verificata non deve avviare idratazione Firestore, replica, **registrazione automatica** del dispositivo né migrazione guest→account. L'endpoint trusted per la registrazione delle credenziali di recovery resta distinto dal bootstrap e accetta un Firebase ID token valido e non revocato anche senza email verificata: non abilita l'accesso fitness, richiede App Check limited-use e rifiuta qualsiasi registrazione dopo la creazione del job di cancellazione. Per gli account email/password, la registrazione richiede l'invio del link di verifica; alla conferma il client esegue `reload(user)`, aggiorna il token ID con `getIdToken(true)` e riprende il bootstrap tramite ricaricamento protetto.
 
 **MUST:** il blocco UI precede tutte le schermate di dati account; le Security Rules richiedono `request.auth.token.email_verified == true` su root e collezioni private e non si affidano soltanto alla UI. Le letture pubbliche del catalogo restano accessibili senza account.
 
@@ -144,9 +144,9 @@ Non introdurre Nitro, Workflow, `waitUntil` come sostituto di durability, o una 
 
 **MUST:** il cron seleziona i job recuperabili in ordine persistente server-side per evitare starvation oltre il limite di pagina; le query ordinate dipendono dagli indici `account_deletions(status, updatedAt)` e `account_deletions(status, retryable, updatedAt)` che devono essere `READY` prima della distribuzione del backend.
 
-**MUST:** il purge di un tombstone scaduto e del corrispondente registro delle credenziali device usa una singola transazione Firestore; un errore non può eliminare solo uno dei due record. Le fasi indipendenti del cron devono proseguire se una query o una manutenzione fallisce, conservando log aggregati privi di dati personali.
+**MUST:** il purge di un tombstone scaduto e del corrispondente registro delle credenziali device usa una singola transazione Firestore; un errore non può eliminare solo uno dei due record. Le fasi indipendenti del cron devono proseguire se una query o una manutenzione fallisce, conservando un unico riepilogo aggregato, identico nei log e nella risposta JSON, privo di UID e credenziali. Per la cancellazione account, i worker che restituiscono `failed` sono conteggiati separatamente dalle eccezioni lanciate; `processed` indica tentativi, non il numero di cancellazioni completate.
 
-**MUST:** il cron mantiene un budget limitato e un margine di sicurezza per job di cancellazione account, erasure sanitaria e retention delle ricevute, senza interrompere deliberatamente una transazione Firestore in corso.
+**MUST:** il cron mantiene un budget limitato e un margine di sicurezza per job di cancellazione account, erasure sanitaria e retention delle ricevute, senza interrompere deliberatamente una transazione Firestore in corso. Anche lo scheduler dell'inattività, se abilitato, riceve il limite temporale per avviare nuove query/transazioni e conserva il cursore già verificato nel margine riservato; non può consumare senza controllo tutto il tempo residuo del cron.
 
 ## Logout e pulizia locale
 

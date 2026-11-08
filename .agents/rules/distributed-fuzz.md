@@ -43,6 +43,12 @@ La suite deve esercitare almeno:
 6. **Vector-clock algebra** — `mergeVectors` deve essere commutativo, associativo, idempotente e coprire causalmente ogni input.
 7. **Projection round-trip** — per domini generati supportati, `diffDocuments(base, desired)` seguito da `applySemanticOperations(base, ops)` deve ricostruire il business state desiderato.
 
+## Perimetro delle prove
+
+La suite generativa corrente `tests/fuzz/semanticDistributedFuzz.test.ts` esercita direttamente il motore di produzione `applySemanticOperations`, `diffDocuments` e `mergeVectors` con documenti root e campi `profile` generati. Gli attori sintetici utilizzano slot validi del Protocollo 3 (`s00`–`s15`) anziché nomi fittizi non accettati dalle Firestore Rules; ciò non sostituisce la validazione dei metadata né le transazioni reali. Verifica proprietà del merge semantico in memoria: **non** esegue transazioni Firestore, persistenza IndexedDB, checkpoint, autenticazione/consenso o causal GC. Tali boundary richiedono le regressioni deterministiche, emulator, recovery e GC nei rispettivi gate; il solo esito verde del fuzz non certifica la sincronizzazione end-to-end.
+
+**MUST (qualità dell'oracle):** il confronto tra una consegna canonica e consegne riordinate/partizionate è una proprietà *metamorfica*: entrambe le esecuzioni attraversano lo stesso algoritmo e possono concordare su un risultato sbagliato. Affiancare ai confronti di parità assert indipendenti sui casi con esito deducibile dal generatore, per esempio una catena totalmente causale in cui l'ultimo evento determina il valore o la cancellazione e mantiene il proprio `FieldStamp.clock`. Verificare sia business state sia causal state, senza copiare la logica di arbitraggio del runtime dentro il test.
+
 ## Causal state, non solo business state
 
 **MUST:** i test di convergenza confrontano sia `documents` sia `syncMetas`. Due repliche con lo stesso valore visibile ma `FieldStamp.clock` differenti non sono considerate convergenti, perché una mutation futura può risolvere diversamente il conflitto.

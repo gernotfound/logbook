@@ -15,7 +15,7 @@ type MergeState = {
     syncMetas: Record<string, SyncMeta>;
 };
 
-const ACTORS = ['A', 'B', 'C', 'D', 'E'] as const;
+const ACTORS = ['s00', 's01', 's02', 's03', 's04'] as const;
 const PROFILE_PATHS = [
     ['profile', 'name'],
     ['profile', 'height'],
@@ -184,6 +184,25 @@ describe('M2 distributed property fuzz', () => {
             const distributed = deliverPartitioned(initialState(), operations, rng);
 
             expect(snapshot(distributed)).toEqual(snapshot(canonical));
+
+            // All contenders have independent single-event clocks. The
+            // protocol's delete barrier beats unseen updates; absent deletes,
+            // the lexical actor tie-break decides the visible value.
+            const deletes = operations.filter(operation => operation.isDelete);
+            const contenders = deletes.length ? deletes : operations;
+            const expectedWinner = contenders.reduce((winner, contender) =>
+                contender.actorId > winner.actorId ? contender : winner);
+            const stamp = distributed.syncMetas[''].fields['profile/name'];
+            expect(stamp).toMatchObject({
+                actorId: expectedWinner.actorId,
+                seq: expectedWinner.seq,
+                clock: { [expectedWinner.actorId]: 1 },
+            });
+            expect(Boolean(stamp.deleted)).toBe(expectedWinner.isDelete);
+            expect(distributed.syncMetas[''].clock).toEqual(
+                Object.fromEntries(operations.map(operation => [operation.actorId, 1])));
+            const profile = distributed.documents.get('')?.profile as Record<string, unknown> | undefined;
+            expect(profile?.name).toBe(expectedWinner.isDelete ? undefined : expectedWinner.value);
         });
     });
 
@@ -194,6 +213,16 @@ describe('M2 distributed property fuzz', () => {
             const distributed = deliverPartitioned(initialState(), operations, rng);
 
             expect(snapshot(distributed)).toEqual(snapshot(canonical));
+            // This is an independent oracle, not another comparison between
+            // two executions of the same merge algorithm: every event in a
+            // causal chain observes all predecessors.
+            const last = operations[operations.length - 1];
+            const stamp = distributed.syncMetas[''].fields['profile/height'];
+            expect(stamp).toMatchObject({ actorId: last.actorId, seq: last.seq, clock: last.clock });
+            expect(Boolean(stamp.deleted)).toBe(last.isDelete);
+            expect(distributed.syncMetas[''].clock).toEqual(last.clock);
+            const profile = distributed.documents.get('')?.profile as Record<string, unknown> | undefined;
+            expect(profile?.height).toBe(last.isDelete ? undefined : last.value);
         });
     });
 
@@ -236,6 +265,29 @@ describe('M2 distributed property fuzz', () => {
             const distributed = deliverPartitioned(initialState(), operations, rng);
 
             expect(snapshot(distributed)).toEqual(snapshot(canonical));
+
+            // Independently deducible from the generator's causal structure:
+            // the descendant dominates the ancestor; a concurrent deletion
+            // blocks all updates that did not observe its delete dot.
+            const [ancestor, descendant, concurrent] = operations;
+            const winner = concurrent.isDelete ? concurrent : descendant;
+            const path = 'profile/' + winner.path[1];
+            const stamp = distributed.syncMetas[''].fields[path];
+            expect(stamp).toMatchObject({ actorId: winner.actorId, seq: 1, clock: winner.clock });
+            expect(Boolean(stamp.deleted)).toBe(winner.isDelete);
+            expect(stamp.deleteClock).toEqual(
+                concurrent.isDelete ? { [concurrent.actorId]: concurrent.seq } : undefined
+            );
+            expect(distributed.syncMetas[''].clock).toEqual({
+                [ancestor.actorId]: 1,
+                [descendant.actorId]: 1,
+                [concurrent.actorId]: 1,
+            });
+            const profile = distributed.documents.get('')?.profile as Record<string, unknown> | undefined;
+            expect(profile?.[winner.path[1]]).toBe(winner.isDelete ? undefined : winner.value);
+
+            const replayed = applySemanticOperations(distributed.documents, operations, distributed.syncMetas);
+            expect(snapshot(replayed)).toEqual(snapshot(distributed));
         });
     });
 
@@ -261,7 +313,7 @@ describe('M2 distributed property fuzz', () => {
             const desiredProfile = randomProfile(rng, seed ^ 0x5bd1e995);
             const base = new Map<string, DocumentData>([['', { profile: baseProfile }]]);
             const desired = new Map<string, DocumentData>([['', { profile: desiredProfile }]]);
-            const operations = diffDocuments(base, desired, 'A', 1, { A: 1 });
+            const operations = diffDocuments(base, desired, ACTORS[0], 1, { [ACTORS[0]]: 1 });
             const result = applySemanticOperations(base, operations);
 
             expect(result.documents.get('')?.profile).toEqual(desiredProfile);

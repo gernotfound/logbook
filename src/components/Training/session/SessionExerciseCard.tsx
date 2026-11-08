@@ -3,6 +3,7 @@ import { Trash2, Settings, MessageSquareText, History } from 'lucide-react';
 import { useDialogStore } from '../../../store/useDialogStore';
 import SessionSetRow from './SessionSetRow';
 import { BufferedInput, BufferedTextarea } from '../../UI/BufferedInput';
+import { BufferedWorkoutScope } from '../../UI/bufferedWorkoutScope';
 import { sessionSetHasMeaningfulData } from '../../../lib/workoutSetData';
 import { deriveCardioSpeed } from './deriveCardioSpeed';
 import type { Exercise, SessionExercise, SessionExerciseSet } from '../../../types';
@@ -25,7 +26,7 @@ interface SessionExerciseCardProps {
     onUpdateSessionNote: (exIndex: number, note: string) => void;
     onUpdateTechnicalStandard: (exIndex: number, value: string) => void;
     onAddSet: (exIndex: number) => void;
-    onRemoveSet: (exIndex: number, sIndex: number) => void;
+    onRemoveSet: (exIndex: number, sIndex: number, setId: string, exerciseId?: string, workoutId?: string | null) => void;
     onUpdateSet: (exIndex: number, setId: string, field: string, value: unknown) => void;
     onAddSpecialSet: (exIndex: number, type: string, setId: string) => void;
     onUpdateSpecialSet: (exIndex: number, setId: string, type: 'segments', segmentId: string, field: string, value: unknown) => void;
@@ -68,6 +69,7 @@ const SessionExerciseCardInner: React.FC<SessionExerciseCardProps> = ({
     // Runtime session instances have their own ID; the fallback mirrors the
     // existing accordion key for older in-memory snapshots lacking one.
     const exerciseInstanceId = exItem.id || `${exItem.exId}_${exIndex}`;
+    const workoutId = React.useContext(BufferedWorkoutScope);
     const lastNote = pastWorkouts[0]?.note?.trim() || '';
 
     const [showPositionMenu, setShowPositionMenu] = React.useState(false);
@@ -107,8 +109,9 @@ const SessionExerciseCardInner: React.FC<SessionExerciseCardProps> = ({
             if (!confirmed) return;
         }
 
-        onRemoveSet(exIndex, lastIndex);
-    }, [exItem.sets, onRemoveSet, onRemoveLastSet, exIndex]);
+        if (!lastSet.id) return;
+        onRemoveSet(exIndex, lastIndex, lastSet.id, exItem.id, workoutId);
+    }, [exItem.sets, exItem.id, onRemoveSet, onRemoveLastSet, exIndex, workoutId]);
 
     const handleCardioChange = (field: 'time' | 'distance', value: string) => {
         const setId = exItem.sets[0]?.id;
@@ -271,12 +274,12 @@ const SessionExerciseCardInner: React.FC<SessionExerciseCardProps> = ({
             )}
 
             {libDef?.trackingType === 'cardio' ? (
-                <div style={{ background: 'var(--surface-light)', padding: '15px', borderRadius: '12px', border: '1px solid var(--glass-border)', marginTop: '10px' }}>
+                exItem.sets?.[0]?.id ? <div key={exItem.sets[0].id} style={{ background: 'var(--surface-light)', padding: '15px', borderRadius: '12px', border: '1px solid var(--glass-border)', marginTop: '10px' }}>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '10px' }}>
                         <div>
-                            <label className="text-muted text-xs mb-4 block" htmlFor={`cardio-time-${exerciseInstanceId}`}>Durata (min)</label>
+                            <label className="text-muted text-xs mb-4 block" htmlFor={`cardio-time-${exerciseInstanceId}-${exItem.sets[0].id}`}>Durata (min)</label>
                             <BufferedInput 
-                                id={`cardio-time-${exerciseInstanceId}`}
+                                id={`cardio-time-${exerciseInstanceId}-${exItem.sets[0].id}`}
                                 type="text" 
                                 inputMode="decimal"
                                 value={exItem.sets[0]?.time || ''} 
@@ -287,9 +290,9 @@ const SessionExerciseCardInner: React.FC<SessionExerciseCardProps> = ({
                             />
                         </div>
                         <div>
-                            <label className="text-muted text-xs mb-4 block" htmlFor={`cardio-distance-${exerciseInstanceId}`}>Distanza (km)</label>
+                            <label className="text-muted text-xs mb-4 block" htmlFor={`cardio-distance-${exerciseInstanceId}-${exItem.sets[0].id}`}>Distanza (km)</label>
                             <BufferedInput 
-                                id={`cardio-distance-${exerciseInstanceId}`}
+                                id={`cardio-distance-${exerciseInstanceId}-${exItem.sets[0].id}`}
                                 type="text" 
                                 inputMode="decimal"
                                 value={exItem.sets[0]?.distance || ''} 
@@ -300,9 +303,9 @@ const SessionExerciseCardInner: React.FC<SessionExerciseCardProps> = ({
                             />
                         </div>
                         <div>
-                            <label className="text-muted text-xs mb-4 block" htmlFor={`cardio-speed-${exerciseInstanceId}`}>Velocità media</label>
+                            <label className="text-muted text-xs mb-4 block" htmlFor={`cardio-speed-${exerciseInstanceId}-${exItem.sets[0].id}`}>Velocità media</label>
                             <BufferedInput 
-                                id={`cardio-speed-${exerciseInstanceId}`}
+                                id={`cardio-speed-${exerciseInstanceId}-${exItem.sets[0].id}`}
                                 type="text" 
                                 inputMode="decimal"
                                 value={exItem.sets[0]?.speed || ''} 
@@ -313,9 +316,9 @@ const SessionExerciseCardInner: React.FC<SessionExerciseCardProps> = ({
                             />
                         </div>
                         <div>
-                            <label className="text-muted text-xs mb-4 block" htmlFor={`cardio-incline-${exerciseInstanceId}`}>Inclinazione (%)</label>
+                            <label className="text-muted text-xs mb-4 block" htmlFor={`cardio-incline-${exerciseInstanceId}-${exItem.sets[0].id}`}>Inclinazione (%)</label>
                             <BufferedInput 
-                                id={`cardio-incline-${exerciseInstanceId}`}
+                                id={`cardio-incline-${exerciseInstanceId}-${exItem.sets[0].id}`}
                                 type="text" 
                                 inputMode="decimal"
                                 value={exItem.sets[0]?.incline || ''} 
@@ -327,9 +330,9 @@ const SessionExerciseCardInner: React.FC<SessionExerciseCardProps> = ({
                         </div>
                     </div>
                     <div>
-                        <label className="text-muted text-xs mb-4 block" htmlFor={`cardio-kcal-${exerciseInstanceId}`}>Kcal stimate</label>
+                        <label className="text-muted text-xs mb-4 block" htmlFor={`cardio-kcal-${exerciseInstanceId}-${exItem.sets[0].id}`}>Kcal stimate</label>
                         <BufferedInput 
-                            id={`cardio-kcal-${exerciseInstanceId}`}
+                            id={`cardio-kcal-${exerciseInstanceId}-${exItem.sets[0].id}`}
                             type="text" 
                             inputMode="decimal"
                             value={exItem.sets[0]?.kcal || ''} 
@@ -339,7 +342,7 @@ const SessionExerciseCardInner: React.FC<SessionExerciseCardProps> = ({
                             style={{ fontSize: '16px', boxSizing: 'border-box' }}
                         />
                     </div>
-                </div>
+                </div> : <p role="alert">Serie cardio senza identificativo: dati di recupero non modificabili.</p>
             ) : (
                 <>
                     {(exItem.sets || []).map((s, sIndex: number) => (
