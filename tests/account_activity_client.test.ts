@@ -180,9 +180,16 @@ describe('foreground activity observer (browser boundary)', () => {
       expect(fetchMock).toHaveBeenCalledTimes(1);
 
       await vi.advanceTimersByTimeAsync(60_001);
+      // Observe the actual retry instead of assuming a fixed number of
+      // microtask turns for App Check, Auth and the async fetch boundary.
+      const retried = new Promise<void>(resolve => {
+        fetchMock.mockImplementationOnce(async () => {
+          resolve();
+          return { status: 204 };
+        });
+      });
       window.dispatchEvent(new Event('focus'));
-      await Promise.resolve();
-      await Promise.resolve();
+      await retried;
       expect(fetchMock).toHaveBeenCalledTimes(2);
     } finally {
       vi.useRealTimers();
