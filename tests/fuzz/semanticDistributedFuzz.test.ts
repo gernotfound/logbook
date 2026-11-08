@@ -15,7 +15,7 @@ type MergeState = {
     syncMetas: Record<string, SyncMeta>;
 };
 
-const ACTORS = ['A', 'B', 'C', 'D', 'E'] as const;
+const ACTORS = ['s00', 's01', 's02', 's03', 's04'] as const;
 const PROFILE_PATHS = [
     ['profile', 'name'],
     ['profile', 'height'],
@@ -313,7 +313,7 @@ describe('M2 distributed property fuzz', () => {
             const desiredProfile = randomProfile(rng, seed ^ 0x5bd1e995);
             const base = new Map<string, DocumentData>([['', { profile: baseProfile }]]);
             const desired = new Map<string, DocumentData>([['', { profile: desiredProfile }]]);
-            const operations = diffDocuments(base, desired, 'A', 1, { A: 1 });
+            const operations = diffDocuments(base, desired, ACTORS[0], 1, { [ACTORS[0]]: 1 });
             const result = applySemanticOperations(base, operations);
 
             expect(result.documents.get('')?.profile).toEqual(desiredProfile);
