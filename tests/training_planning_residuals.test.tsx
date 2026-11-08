@@ -257,3 +257,34 @@ describe('training planning derived-value safeguards', () => {
         ]);
     });
 });
+
+describe('large cycle volume rounding', () => {
+    it.each([
+        { setsCount: Number.MAX_SAFE_INTEGER, otherFrequency: 0, expected: Number.MAX_SAFE_INTEGER, total: Number.MAX_SAFE_INTEGER },
+        { setsCount: Number.MAX_SAFE_INTEGER, otherFrequency: 1, expected: 4503599627370495.5, total: 4503599627370496 },
+        { setsCount: 1801439850948199, otherFrequency: 1, expected: 900719925474099.5, total: 900719925474100 },
+        { setsCount: 5, otherFrequency: 3, expected: 1.3, total: 1 },
+    ])('preserves the representable weekly estimate: %j', ({ setsCount, otherFrequency, expected, total }) => {
+        const planned: TrainingCycle = {
+            ...cycle, sessionsPerWeek: 1,
+            routines: [
+                { routineId: 'r', frequencyPerWeek: 1 },
+                ...(otherFrequency ? [{ routineId: 'rest', frequencyPerWeek: otherFrequency }] : []),
+            ],
+        };
+        const sourceRoutines: WorkoutRoutine[] = [
+            { id: 'r', name: 'A', exercises: [{ exId: 'bench', setsCount }] },
+            { id: 'rest', name: 'Riposo', exercises: [] },
+        ];
+        const original = structuredClone({ planned, sourceRoutines, library });
+
+        const volume = calculateCycleVolume(planned, sourceRoutines, library);
+        expect(volume.totalSetsPerWeek).toBe(total);
+        expect(volume.muscleVolumes).toHaveLength(1);
+        expect(volume.muscleVolumes[0].sets).toBe(expected);
+        expect(calculateCycleMacroVolume(planned, sourceRoutines, library)).toEqual([
+            { key: 'chest', label: 'Petto', sets: expected },
+        ]);
+        expect({ planned, sourceRoutines, library }).toEqual(original);
+    });
+});

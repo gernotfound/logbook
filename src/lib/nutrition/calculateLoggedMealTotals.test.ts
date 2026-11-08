@@ -27,6 +27,16 @@ describe('shared meal totals', () => {
         expect(calculateLoggedMealTotals(items)).toEqual({ kcal: value, carbs: value, pro: value, fat: value });
     });
 
+    it.each([900719925474099.5, 4503599627370495.5, 562949953421312.1, 562949953421312.5])(
+        'preserves large finite fractional macros whose representable value already rounds to a tenth: %s',
+        value => {
+            const items = [meal({ carbs: value, pro: value, fat: value })];
+            const original = structuredClone(items);
+            expect(calculateLoggedMealTotals(items)).toEqual({ kcal: 0, carbs: value, pro: value, fat: value });
+            expect(items).toEqual(original);
+        },
+    );
+
     it('retains quick-meal and gram serving defaults', () => {
         const portion = meal({ meal: 'quick', unit: 'porzione', quantity: 2, kcal: 120, carbs: 10 });
         expect(getLoggedMealPortion(portion)).toEqual({ quantity: 2, ratio: 2 });
