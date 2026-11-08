@@ -157,6 +157,13 @@ describe('guest -> account V3 migration', () => {
         });
 
         let preSecondCloudProfile: unknown = null;
+        const hydrateProfiles: unknown[] = [];
+        const originalHydrate = localRepository.hydrateLocal;
+        const hydrateSpy = vi.spyOn(localRepository, 'hydrateLocal').mockImplementation(async (...args) => {
+            const hydrated = await originalHydrate(...args);
+            hydrateProfiles.push({ input: args[1]?.profile, result: hydrated.data.profile });
+            return hydrated;
+        });
         vi.mocked(DB.loadCloudPayload)
             .mockResolvedValueOnce({ data: cloud, completeMonths: [], cloudDocuments: new Map() })
             .mockImplementationOnce(async () => {
@@ -185,6 +192,7 @@ describe('guest -> account V3 migration', () => {
                         saveError: state.saveError,
                         cloudReads: vi.mocked(DB.loadCloudPayload).mock.calls.length,
                         preSecondCloudProfile,
+                        hydrateProfiles,
                         cloudFixtureProfile: cloud.profile,
                         userProfile: state.userData?.profile,
                         pending: envelope?.pending.length,
@@ -201,6 +209,7 @@ describe('guest -> account V3 migration', () => {
             expect(failedCatalogReads).toBe(0);
             expect(localStorage.getItem('logbook_is_guest')).toBeNull();
         } finally {
+            hydrateSpy.mockRestore();
             mockedGet.mockImplementation(originalGet);
             await clearCatalogCache();
         }
