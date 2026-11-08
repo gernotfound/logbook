@@ -139,6 +139,10 @@ describe('M7 daily account deletion recovery cron', () => {
     expect(await response.json()).toMatchObject({
       scanned: 2,
       processed: 2,
+      accountCompleted: 2,
+      accountPending: 0,
+      accountBusy: 0,
+      accountFailed: 0,
       erasureScanned: 0,
       erasureProcessed: 0,
       erasureCompleted: 0,
@@ -157,6 +161,10 @@ describe('M7 daily account deletion recovery cron', () => {
     expect(info).toHaveBeenCalledWith('[account-deletion-cron] completed', {
       scanned: 2,
       processed: 2,
+      accountCompleted: 2,
+      accountPending: 0,
+      accountBusy: 0,
+      accountFailed: 0,
       erasureScanned: 0,
       erasureProcessed: 0,
       erasureCompleted: 0,
@@ -173,6 +181,34 @@ describe('M7 daily account deletion recovery cron', () => {
       purged: 0,
     });
     info.mockRestore();
+  });
+
+  it('counts account worker outcomes without exposing owner identifiers', async () => {
+    process.env.CRON_SECRET = 'test-secret';
+    store.listRecoverableDeletionJobs.mockResolvedValue([
+      { uid: 'private-owner-a' }, { uid: 'private-owner-b' },
+      { uid: 'private-owner-c' }, { uid: 'private-owner-d' },
+    ]);
+    runner.processAccountDeletion.mockResolvedValueOnce('complete')
+      .mockResolvedValueOnce('pending')
+      .mockResolvedValueOnce('busy')
+      .mockResolvedValueOnce('failed');
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    try {
+      const response = await GET(request('test-secret'));
+      expect(response.status).toBe(200);
+      const body = await response.json();
+      expect(body).toMatchObject({
+        scanned: 4, processed: 4, accountCompleted: 1, accountPending: 1,
+        accountBusy: 1, accountFailed: 1, recoveryErrors: 0,
+      });
+      expect(body).not.toHaveProperty('results');
+      expect(JSON.stringify(body)).not.toContain('private-owner-');
+      expect(errors).toHaveBeenCalledWith(
+        '[account-deletion-cron] recovery workers reported failed outcomes', { failed: 1 },
+      );
+      expect(retention.purgeExpiredCompletedDeletionJobs).toHaveBeenCalledOnce();
+    } finally { errors.mockRestore(); }
   });
 
   it('reports busy/pending health attempts separately from completed receipt purges', async () => {
@@ -307,7 +343,9 @@ it('continues other jobs if one runner fails before lease acquisition', async ()
   const err = vi.spyOn(console, 'error').mockImplementation(() => undefined);
   try {
     const response = await GET(request('expected-secret'));
-    expect((await response.json())).toMatchObject({ recoveryErrors: 1, processed: 2 });
+    expect((await response.json())).toMatchObject({
+      recoveryErrors: 1, processed: 2, accountCompleted: 1, accountFailed: 0,
+    });
     expect(runner.processAccountDeletion).toHaveBeenCalledTimes(2);
   } finally { err.mockRestore(); }
 });

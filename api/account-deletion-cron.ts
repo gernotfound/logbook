@@ -28,7 +28,11 @@ export async function GET(request: Request): Promise<Response> {
 
   const deletionDeadlineMs = Date.now() + CRON_BUDGET_MS;
   let jobs: Awaited<ReturnType<typeof listRecoverableDeletionJobs>> = [];
-  const results: Array<{ uid: string; result: string }> = [];
+  let accountProcessed = 0;
+  let accountCompleted = 0;
+  let accountPending = 0;
+  let accountBusy = 0;
+  let accountFailed = 0;
   let recoveryErrors = 0;
   let retentionErrors = 0;
   let erasureScanned = 0;
@@ -84,16 +88,28 @@ export async function GET(request: Request): Promise<Response> {
 
   for (const job of jobs) {
     if (Date.now() + SAFETY_BUFFER_MS >= deletionDeadlineMs) break;
+    accountProcessed++;
     try {
-      const result = await processAccountDeletion(job.uid, deletionDeadlineMs);
-      results.push({ uid: job.uid, result });
+      const outcome = await processAccountDeletion(job.uid, deletionDeadlineMs);
+      switch (outcome) {
+        case 'complete': accountCompleted++; break;
+        case 'pending': accountPending++; break;
+        case 'busy': accountBusy++; break;
+        case 'failed': accountFailed++; break;
+      }
     } catch (error) {
-      recoveryErrors += 1;
-      results.push({ uid: job.uid, result: 'failed' });
+      recoveryErrors++;
       console.error('[account-deletion-cron] recovery job failed', {
         kind: error instanceof Error ? error.name : typeof error,
       });
     }
+  }
+  if (accountFailed > 0) {
+    // The worker persists these failures and returns normally. Emit a warning
+    // without revealing account identities.
+    console.error('[account-deletion-cron] recovery workers reported failed outcomes', {
+      failed: accountFailed,
+    });
   }
 
   // Do not schedule irreversible account deletion until the legal rollout is enabled.
@@ -146,7 +162,11 @@ export async function GET(request: Request): Promise<Response> {
 
   console.info('[account-deletion-cron] completed', {
     scanned: jobs.length,
-    processed: results.length,
+    processed: accountProcessed,
+    accountCompleted,
+    accountPending,
+    accountBusy,
+    accountFailed,
     erasureScanned,
     erasureProcessed,
     erasureCompleted,
@@ -165,10 +185,14 @@ export async function GET(request: Request): Promise<Response> {
 
   return Response.json({
     scanned: jobs.length,
-    processed: results.length,
-    // Aggregate counters only; no health-erasure owner IDs are returned.
-    // "Processed" counts non-throwing worker invocations, including failed;
-    // erasureErrors counts thrown exceptions, erasureFailed returned failures.
+    processed: accountProcessed,
+    accountCompleted,
+    accountPending,
+    accountBusy,
+    accountFailed,
+    // Only aggregates are returned. "processed" counts attempted account
+    // workers; accountFailed counts returned outcomes, recoveryErrors throws.
+    // Health erasures retain their separate returned/throwing counters.
     erasureScanned,
     erasureProcessed,
     erasureCompleted,
@@ -183,6 +207,5 @@ export async function GET(request: Request): Promise<Response> {
     recoveryErrors,
     retentionErrors,
     purged,
-    results,
   });
 }
