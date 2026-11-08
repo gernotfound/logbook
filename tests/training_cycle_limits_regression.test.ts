@@ -128,14 +128,16 @@ describe('training cycle bounded input and safe legacy evaluation', () => {
         const base = UserDataSchema.parse({ trainingCycles: [{ ...cycle, routines: [] }] }) as UserData;
         const before = structuredClone(base);
         for (const item of [{ routineId: 'r' }, { routineId: 'r', frequencyPerWeek: undefined }]) {
-            const input: TrainingCycle = { ...cycle, sessionsPerWeek: undefined, routines: [item] };
+            const input = { ...cycle, sessionsPerWeek: undefined, routines: [item] };
             const source = structuredClone(input);
             expect(hasValidCycleWriteFrequencies(input.routines, input.sessionsPerWeek)).toBe(true);
-            expect(TrainingCycleWriteSchema.parse(input).routines[0].frequencyPerWeek).toBe(1);
-            const created = applyDomainOperations(base, { type: 'training-cycle.upsert', cycle: input });
+            const parsed = TrainingCycleWriteSchema.parse(input);
+            expect(parsed.routines[0].frequencyPerWeek).toBe(1);
+            // Domain operations consume the normalized routine type, whose frequency is required.
+            const created = applyDomainOperations(base, { type: 'training-cycle.upsert', cycle: parsed });
             expect(created.trainingCycles?.[0].routines[0].frequencyPerWeek).toBe(1);
             const updated = applyDomainOperations(base, {
-                type: 'training-cycle-routine.upsert', cycleId: cycle.id, routine: item,
+                type: 'training-cycle-routine.upsert', cycleId: cycle.id, routine: parsed.routines[0],
             });
             expect(updated.trainingCycles?.[0].routines[0].frequencyPerWeek).toBe(1);
             expect(input).toEqual(source);
