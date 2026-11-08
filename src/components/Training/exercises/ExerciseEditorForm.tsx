@@ -31,7 +31,7 @@ type ExerciseEditorHook = Pick<TrainingExercisesHook,
 interface ExerciseEditorFormProps {
     hook: ExerciseEditorHook;
     isSaving: boolean;
-    editingExercise: any;
+    editingExercise: TrainingExercisesHook['library'][number] | undefined;
     onCancel: () => void;
     onSave: () => void | Promise<void>;
     onRestore: () => void | Promise<void>;
@@ -94,6 +94,7 @@ export function ExerciseEditorForm({
                     id="exercise-name"
                     type="text"
                     value={exName}
+                    disabled={isSaving}
                     aria-invalid={isDuplicateName || undefined}
                     onChange={event => setExName(event.target.value)}
                 />
@@ -110,6 +111,7 @@ export function ExerciseEditorForm({
                     id="exercise-notes"
                     type="text"
                     value={exNotes}
+                    disabled={isSaving}
                     placeholder="Opzionale"
                     onChange={event => setExNotes(event.target.value)}
                 />
@@ -122,6 +124,7 @@ export function ExerciseEditorForm({
                         type="button"
                         className={`exercise-tracking-option ${trackingType === 'weight_reps' ? 'active' : ''}`}
                         aria-pressed={trackingType === 'weight_reps'}
+                        disabled={isSaving}
                         onClick={() => setTrackingType('weight_reps')}
                     >
                         Peso e ripetizioni
@@ -130,6 +133,7 @@ export function ExerciseEditorForm({
                         type="button"
                         className={`exercise-tracking-option ${trackingType === 'time' ? 'active' : ''}`}
                         aria-pressed={trackingType === 'time'}
+                        disabled={isSaving}
                         onClick={() => setTrackingType('time')}
                     >
                         Tempo
@@ -138,6 +142,7 @@ export function ExerciseEditorForm({
                         type="button"
                         className={`exercise-tracking-option ${trackingType === 'cardio' ? 'active' : ''}`}
                         aria-pressed={trackingType === 'cardio'}
+                        disabled={isSaving}
                         onClick={() => setTrackingType('cardio')}
                     >
                         Cardio
@@ -157,6 +162,7 @@ export function ExerciseEditorForm({
                                 id="ex-bodyweight"
                                 type="checkbox"
                                 checked={isBodyweight}
+                                disabled={isSaving}
                                 onChange={event => setIsBodyweight(event.target.checked)}
                             />
                             <span className="exercise-switch-track" aria-hidden="true" />
@@ -178,6 +184,7 @@ export function ExerciseEditorForm({
                                 min="0"
                                 placeholder="0"
                                 value={equipmentWeight}
+                                disabled={isSaving}
                                 onChange={event => setEquipmentWeight(event.target.value)}
                                 onFocus={event => event.target.select()}
                             />
@@ -188,6 +195,7 @@ export function ExerciseEditorForm({
             )}
 
             <ExerciseMuscleSelector
+                disabled={isSaving}
                 muscleSearch={muscleSearch}
                 setMuscleSearch={setMuscleSearch}
                 selectedMuscles={selectedMuscles}

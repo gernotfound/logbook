@@ -55,6 +55,7 @@ export const CycleEditor: React.FC<CycleEditorProps> = ({
             cycleRoutines,
             showSchedulePreview,
             setShowSchedulePreview,
+            isSaving,
             tempWeeks,
             tempFreq
         },
@@ -103,7 +104,13 @@ export const CycleEditor: React.FC<CycleEditorProps> = ({
     );
 
     return (
-        <form id="cycle-editor-form" onSubmit={handleSubmit} className="planning-editor">
+        <>
+        <form
+            id="cycle-editor-form"
+            onSubmit={handleSubmit}
+            className="planning-editor"
+            aria-busy={isSaving}
+        >
             <header className="planning-editor-header">
                 <h2>
                     {initialCycle ? 'Modifica ciclo' : 'Nuovo ciclo'}
@@ -112,6 +119,7 @@ export const CycleEditor: React.FC<CycleEditorProps> = ({
                 <button type="button" className="planning-close-button" onClick={onCancel}>Chiudi</button>
             </header>
 
+            <div className="planning-editor-fields" inert={isSaving}>
             <label className="planning-field" htmlFor="cycle-name">
                 <span>Nome ciclo</span>
                 <input
@@ -281,17 +289,22 @@ export const CycleEditor: React.FC<CycleEditorProps> = ({
             <CycleMuscleMap
                 title="Mappa muscolare del ciclo"
                 highlightedMuscles={highlightedMuscles}
-                emptyMessage="Aggiungi una scheda al ciclo per evidenziare i muscoli allenati."
+                emptyMessage={cycleRoutines.length === 0
+                    ? 'Aggiungi una scheda al ciclo per evidenziare i muscoli allenati.'
+                    : 'Nessun muscolo evidenziato per le schede selezionate. Verifica gli esercizi e i parametri del ciclo.'}
             />
 
             <CycleVolumeAccordion items={macroVolume} />
+            </div>
 
             <div className="planning-editor-actions">
                 <button type="button" className="btn" onClick={onCancel}>Annulla</button>
-                <button type="submit" className="btn btn-primary">
-                    {initialCycle ? 'Salva modifiche' : 'Salva ciclo'}
+                <button type="submit" className="btn btn-primary" disabled={isSaving}>
+                    {isSaving ? 'Salvataggio in corso…' : initialCycle ? 'Salva modifiche' : 'Salva ciclo'}
                 </button>
             </div>
         </form>
+        {isSaving ? <p className="sr-only" role="status">Salvataggio del ciclo in corso.</p> : null}
+        </>
     );
 };

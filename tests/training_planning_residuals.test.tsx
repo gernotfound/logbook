@@ -136,6 +136,71 @@ describe('training planning residual regressions', () => {
         expect(screen.getByText('Settimana 1')).toBeDefined();
     });
 
+    it('serializes activation and disables all cycle mutations until persistence settles', async () => {
+        let finish!: () => void;
+        const onSetActive = vi.fn()
+            .mockImplementationOnce(() => new Promise<void>(resolve => { finish = resolve; }))
+            .mockResolvedValue(undefined);
+        const onEdit = vi.fn();
+        const onDuplicate = vi.fn();
+        const onDelete = vi.fn();
+        const { container } = render(<CycleCard cycle={cycle} isActive={false} routines={routines}
+            onSetActive={onSetActive} onDeactivate={vi.fn()} onEdit={onEdit}
+            onDuplicate={onDuplicate} onDelete={onDelete} />);
+
+        fireEvent.click(screen.getByRole('button', { name: /Ciclo storico/ }));
+        const activate = screen.getByRole('button', { name: 'Imposta come ciclo attivo' });
+        fireEvent.click(activate);
+        fireEvent.click(activate);
+        expect(onSetActive).toHaveBeenCalledTimes(1);
+        expect((activate as HTMLButtonElement).disabled).toBe(true);
+        expect((screen.getByRole('button', { name: 'Modifica' }) as HTMLButtonElement).disabled).toBe(true);
+        expect(container.querySelector('.planning-cycle-item')?.getAttribute('aria-busy')).toBe('true');
+
+        fireEvent.click(screen.getByRole('button', { name: 'Opzioni' }));
+        for (const action of ['Modifica', 'Duplica', 'Elimina']) {
+            expect((screen.getByRole('menuitem', { name: action }) as HTMLButtonElement).disabled).toBe(true);
+            fireEvent.click(screen.getByRole('menuitem', { name: action }));
+        }
+        expect(onEdit).not.toHaveBeenCalled();
+        expect(onDuplicate).not.toHaveBeenCalled();
+        expect(onDelete).not.toHaveBeenCalled();
+
+        await act(async () => { finish(); });
+        expect((activate as HTMLButtonElement).disabled).toBe(false);
+        expect(container.querySelector('.planning-cycle-item')?.getAttribute('aria-busy')).toBe('false');
+        fireEvent.click(activate);
+        expect(onSetActive).toHaveBeenCalledTimes(2);
+    });
+
+    it('keeps the delete dialog exclusive and unlocks cycle actions after rejection', async () => {
+        let rejectDelete!: (error: Error) => void;
+        const onDelete = vi.fn()
+            .mockImplementationOnce(() => new Promise<void>((_, reject) => { rejectDelete = reject; }))
+            .mockResolvedValue(undefined);
+        const onDuplicate = vi.fn();
+        const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+        render(<CycleCard cycle={cycle} isActive={false} routines={routines}
+            onSetActive={vi.fn()} onDeactivate={vi.fn()} onEdit={vi.fn()}
+            onDuplicate={onDuplicate} onDelete={onDelete} />);
+
+        const menu = screen.getByRole('button', { name: 'Opzioni' });
+        fireEvent.click(menu);
+        fireEvent.click(screen.getByRole('menuitem', { name: 'Elimina' }));
+        fireEvent.click(menu);
+        expect((screen.getByRole('menuitem', { name: 'Elimina' }) as HTMLButtonElement).disabled).toBe(true);
+        expect((screen.getByRole('menuitem', { name: 'Duplica' }) as HTMLButtonElement).disabled).toBe(true);
+        fireEvent.click(screen.getByRole('menuitem', { name: 'Duplica' }));
+        expect(onDelete).toHaveBeenCalledOnce();
+        expect(onDuplicate).not.toHaveBeenCalled();
+
+        await act(async () => { rejectDelete(new Error('write failed')); });
+        expect(log).toHaveBeenCalledOnce();
+        expect((screen.getByRole('menuitem', { name: 'Elimina' }) as HTMLButtonElement).disabled).toBe(false);
+        fireEvent.click(screen.getByRole('menuitem', { name: 'Elimina' }));
+        expect(onDelete).toHaveBeenCalledTimes(2);
+    });
+
     it('labels legacy invalid cycle cards without displaying raw Infinity or fabricated frequencies', () => {
         render(<CycleCard
             cycle={{ ...cycle, durationWeeks: Number.POSITIVE_INFINITY, sessionsPerWeek: Number.POSITIVE_INFINITY }}

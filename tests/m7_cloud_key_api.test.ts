@@ -216,6 +216,47 @@ describe('authenticated cloud account key API', () => {
     },
   );
 
+  it('treats an exhausted zero-byte inspection budget as retryable, not client payload', async () => {
+    const tooManyEmptyChunks = new Request('https://backend.test/api/cloud-key', {
+      method: 'POST',
+      headers: { origin: 'https://thelogbook.web.app' },
+      body: new ReadableStream<Uint8Array>({
+        start(controller) {
+          for (let i = 0; i < 17; i++) controller.enqueue(new Uint8Array(0));
+          controller.close();
+        },
+      }),
+      duplex: 'half',
+    } as RequestInit & { duplex: 'half' });
+    const response = await POST(tooManyEmptyChunks);
+    expect(response.status).toBe(408);
+    expect(await response.json()).toEqual({ error: 'Lettura della richiesta scaduta. Riprova.' });
+    expect(response.headers.get('cache-control')).toContain('no-store');
+    expect(harness.verify).not.toHaveBeenCalled();
+    expect(harness.wrap).not.toHaveBeenCalled();
+    expect(harness.documents.has('user_data_keys/owner-a')).toBe(false);
+  });
+
+  it('returns 503 for invalid public-origin configuration without leaking an account key', async () => {
+    vi.stubEnv('PUBLIC_APP_ORIGIN', 'http://invalid.example/path');
+    try {
+      const preflight = await OPTIONS(new Request('https://backend.test/api/cloud-key', {
+        method: 'OPTIONS', headers: { origin: 'https://thelogbook.web.app' },
+      }));
+      const actual = await POST(request());
+      for (const response of [preflight, actual]) {
+        expect(response.status).toBe(503);
+        expect(response.headers.get('access-control-allow-origin')).toBeNull();
+        expect(response.headers.get('cache-control')).toContain('no-store');
+        expect(await response.text()).not.toMatch(/[A-Za-z0-9+/]{43}=/);
+      }
+      expect(harness.verify).not.toHaveBeenCalled();
+      expect(harness.wrap).not.toHaveBeenCalled();
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
   it('keeps interrupted body reads fail-closed without authenticating or provisioning a key', async () => {
     const interrupted = new Request('https://backend.test/api/cloud-key', {
       method: 'POST', headers: { origin: 'https://thelogbook.web.app' },

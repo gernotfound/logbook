@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import { ChevronDown, Copy, Pencil, Repeat2, Trash2 } from 'lucide-react';
 import { Logic } from '../../../lib/logic';
 import type { TrainingCycle, WorkoutRoutine } from '../../../types';
@@ -11,11 +11,11 @@ interface CycleCardProps {
     cycle: TrainingCycle;
     isActive: boolean;
     routines: WorkoutRoutine[];
-    onSetActive: (cycleId: string) => void;
-    onDeactivate: (cycleId: string) => void;
-    onEdit: (cycle: TrainingCycle) => void;
-    onDuplicate: (cycle: TrainingCycle) => void;
-    onDelete: (cycle: TrainingCycle) => void;
+    onSetActive: (cycleId: string) => void | Promise<void>;
+    onDeactivate: (cycleId: string) => void | Promise<void>;
+    onEdit: (cycle: TrainingCycle) => void | Promise<void>;
+    onDuplicate: (cycle: TrainingCycle) => void | Promise<void>;
+    onDelete: (cycle: TrainingCycle) => void | Promise<void>;
 }
 
 export const CycleCard: React.FC<CycleCardProps> = ({
@@ -30,6 +30,27 @@ export const CycleCard: React.FC<CycleCardProps> = ({
 }) => {
     const [isExpanded, setIsExpanded] = useState(false);
     const [showSchedule, setShowSchedule] = useState(false);
+    const [actionPending, setActionPending] = useState(false);
+    const actionPendingRef = useRef(false);
+
+    const runAction = async (action: () => void | Promise<void>) => {
+        // Guard before React re-renders: two taps must not dispatch the same
+        // cycle mutation or open overlapping confirmations.
+        if (actionPendingRef.current) return;
+        actionPendingRef.current = true;
+        setActionPending(true);
+        try {
+            const result = action();
+            // Synchronous callbacks have already completed; only a pending
+            // Promise needs to hold the lock across React event boundaries.
+            if (result) await result;
+        } catch (error) {
+            console.error('Operazione sul ciclo non completata:', error);
+        } finally {
+            actionPendingRef.current = false;
+            setActionPending(false);
+        }
+    };
     const timeline = Logic.calculateCycleTimeline(cycle);
     const routineNames = useMemo(() => new Map(routines.map(routine => [routine.id, routine.name])), [routines]);
     // Inactive cards only compute the bounded summary. The compiler can
@@ -42,13 +63,13 @@ export const CycleCard: React.FC<CycleCardProps> = ({
         ? String(timeline.totalWeeks) : '—';
 
     const menuItems: ContextMenuItem[] = [
-        { id: 'edit-cycle', label: 'Modifica', icon: <Pencil size={16} />, onClick: () => onEdit(cycle) },
-        { id: 'duplicate-cycle', label: 'Duplica', icon: <Copy size={16} />, onClick: () => onDuplicate(cycle) },
-        { id: 'delete-cycle', label: 'Elimina', icon: <Trash2 size={16} />, variant: 'danger', onClick: () => onDelete(cycle) }
+        { id: 'edit-cycle', label: 'Modifica', icon: <Pencil size={16} />, disabled: actionPending, onClick: () => { void runAction(() => onEdit(cycle)); } },
+        { id: 'duplicate-cycle', label: 'Duplica', icon: <Copy size={16} />, disabled: actionPending, onClick: () => { void runAction(() => onDuplicate(cycle)); } },
+        { id: 'delete-cycle', label: 'Elimina', icon: <Trash2 size={16} />, variant: 'danger', disabled: actionPending, onClick: () => { void runAction(() => onDelete(cycle)); } }
     ];
 
     return (
-        <article className={isActive ? 'planning-cycle-item is-active' : 'planning-cycle-item'}>
+        <article className={isActive ? 'planning-cycle-item is-active' : 'planning-cycle-item'} aria-busy={actionPending}>
             <div className="planning-cycle-row">
                 <button
                     type="button"
@@ -92,11 +113,11 @@ export const CycleCard: React.FC<CycleCardProps> = ({
                 ) : null}
 
                 <div className="planning-cycle-actions">
-                    <button type="button" className="btn" onClick={() => onEdit(cycle)}>Modifica</button>
+                    <button type="button" className="btn" disabled={actionPending} onClick={() => { void runAction(() => onEdit(cycle)); }}>Modifica</button>
                     {isActive ? (
-                        <button type="button" className="btn" onClick={() => onDeactivate(cycle.id)}>Disattiva ciclo</button>
+                        <button type="button" className="btn" disabled={actionPending} onClick={() => { void runAction(() => onDeactivate(cycle.id)); }}>Disattiva ciclo</button>
                     ) : (
-                        <button type="button" className="btn btn-primary" onClick={() => onSetActive(cycle.id)}>Imposta come ciclo attivo</button>
+                        <button type="button" className="btn btn-primary" disabled={actionPending} onClick={() => { void runAction(() => onSetActive(cycle.id)); }}>Imposta come ciclo attivo</button>
                     )}
                 </div>
             </div>

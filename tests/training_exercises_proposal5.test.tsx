@@ -100,6 +100,80 @@ describe('TrainingExercises proposal 5', () => {
     expect(container.querySelectorAll('.exercise-muscle-tag.secondary').length).toBeGreaterThan(0);
   });
 
+  it('shows both sides as selected when a saved exercise uses the compact bilateral muscle ID', () => {
+    const library: Exercise[] = [{
+      id: 'stored-bilateral', name: 'Esercizio bilaterale',
+      setsCount: 3, sets: [], muscles: ['chest_upper'],
+      trackingType: 'weight_reps',
+    }];
+    renderWithProviders(<TrainingExercises />, {
+      userData: { ...emptyUserData, library },
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Apri dettaglio di Esercizio bilaterale' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Modifica' }));
+    expect(screen.getByRole('group', { name: 'Tipo di muscolo' })).toBeDefined();
+
+    fireEvent.change(screen.getByRole('searchbox', { name: 'Seleziona muscoli dall’elenco' }), {
+      target: { value: 'clavicolare' },
+    });
+    const base = () => screen.getByRole('button', { name: /^Fascio clavicolare \(petto alto\)/ });
+    const left = () => screen.getByRole('button', { name: /^Fascio clavicolare sinistro/ });
+    const right = () => screen.getByRole('button', { name: /^Fascio clavicolare destro/ });
+
+    expect(base().getAttribute('aria-pressed')).toBe('true');
+    expect(left().getAttribute('aria-pressed')).toBe('true');
+    expect(left().className).toContain('is-primary');
+    expect(right().getAttribute('aria-pressed')).toBe('true');
+
+    fireEvent.click(left());
+    expect(left().getAttribute('aria-pressed')).toBe('false');
+    expect(right().getAttribute('aria-pressed')).toBe('true');
+    expect(base().getAttribute('aria-pressed')).toBe('mixed');
+    expect(base().textContent).toContain('Parziale');
+    expect(base().className).toContain('is-partial');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Secondari' }));
+    fireEvent.click(left());
+    expect(left().getAttribute('aria-pressed')).toBe('true');
+    expect(left().className).toContain('is-secondary');
+    expect(right().className).toContain('is-primary');
+    expect(base().getAttribute('aria-pressed')).toBe('mixed');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Primari' }));
+    fireEvent.click(base());
+    expect(base().getAttribute('aria-pressed')).toBe('true');
+    expect(left().getAttribute('aria-pressed')).toBe('true');
+    expect(right().getAttribute('aria-pressed')).toBe('true');
+    expect(screen.queryByRole('button', { name: /Rimuovi .* dai muscoli secondari/ })).toBeNull();
+  });
+
+  it('marks only one side as selected in a recovered split bilateral assignment', () => {
+    const library: Exercise[] = [{
+      id: 'split-bilateral', name: 'Esercizio asimmetrico',
+      setsCount: 3, sets: [],
+      muscles: ['chest_upper_left'], secondaryMuscles: ['chest_upper_right'],
+      trackingType: 'weight_reps',
+    }];
+    renderWithProviders(<TrainingExercises />, {
+      userData: { ...emptyUserData, library },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Apri dettaglio di Esercizio asimmetrico' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Modifica' }));
+    fireEvent.change(screen.getByRole('searchbox', { name: 'Seleziona muscoli dall’elenco' }), {
+      target: { value: 'clavicolare' },
+    });
+
+    const base = screen.getByRole('button', { name: /^Fascio clavicolare \(petto alto\)/ });
+    const left = screen.getByRole('button', { name: /^Fascio clavicolare sinistro/ });
+    const right = screen.getByRole('button', { name: /^Fascio clavicolare destro/ });
+    expect(base.getAttribute('aria-pressed')).toBe('mixed');
+    expect(left.getAttribute('aria-pressed')).toBe('true');
+    expect(left.className).toContain('is-primary');
+    expect(right.getAttribute('aria-pressed')).toBe('true');
+    expect(right.className).toContain('is-secondary');
+  });
+
   it('opens and closes the dedicated detail view while preserving catalog action rules', () => {
     const library: Exercise[] = [
       {

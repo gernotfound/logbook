@@ -93,7 +93,7 @@ export const trialCases = {
   },
   "consent-journal-recovery": {
     "mutate": ["src/lib/sync/localConsentJournalRecovery.ts"],
-    "testFiles": ["tests/isolated/consentEpochRecovery.test.ts"],
+    "testFiles": ["tests/isolated/consentEpochRecovery.test.ts", "tests/isolated/localConsentJournalRecovery.test.ts"],
     "runner": "isolated"
   },
   "pending-sequences": {

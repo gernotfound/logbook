@@ -17,7 +17,7 @@ const mark = (status: 'active' | 'withdrawn') => ({
 beforeAll(async () => {
   if (process.env.FIRESTORE_EMULATOR_HOST !== '127.0.0.1:8080') throw new Error('Only the isolated local emulator is allowed.');
   env = await initializeTestEnvironment({
-    projectId: 'demo-consent-privacy',
+    projectId: 'demo-logbook-audit',
     firestore: { host: '127.0.0.1', port: 8080, rules: readFileSync('firestore.rules', 'utf8') },
   });
 });

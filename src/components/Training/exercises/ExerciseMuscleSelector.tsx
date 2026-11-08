@@ -1,10 +1,12 @@
 import { Search, X } from 'lucide-react';
 import type { useTrainingExercises } from '../../../hooks/useTrainingExercises';
+import { getExpandedMuscleIds } from '../../../hooks/trainingExercises/muscleSelection';
 import MuscleModel from '../MuscleModel';
 
 type TrainingExercisesHook = ReturnType<typeof useTrainingExercises>;
 
 interface ExerciseMuscleSelectorProps {
+    disabled: boolean;
     muscleSearch: TrainingExercisesHook['muscleSearch'];
     setMuscleSearch: TrainingExercisesHook['setMuscleSearch'];
     selectedMuscles: TrainingExercisesHook['selectedMuscles'];
@@ -18,6 +20,7 @@ interface ExerciseMuscleSelectorProps {
 }
 
 export function ExerciseMuscleSelector({
+    disabled,
     muscleSearch,
     setMuscleSearch,
     selectedMuscles,
@@ -31,17 +34,20 @@ export function ExerciseMuscleSelector({
 }: ExerciseMuscleSelectorProps) {
     const selectedMuscleIds = selectedMuscles.map(muscle => muscle.id);
     const secondaryMuscleIds = secondaryMuscles.map(muscle => muscle.id);
+    const primaryExpandedIds = getExpandedMuscleIds(selectedMuscles);
+    const secondaryExpandedIds = getExpandedMuscleIds(secondaryMuscles);
     const hasSearch = Boolean(muscleSearch.trim());
 
     return (
         <section className="exercise-muscle-selector" aria-labelledby="exercise-muscle-title">
             <h3 id="exercise-muscle-title">Muscoli coinvolti</h3>
 
-            <div className="exercise-muscle-mode" aria-label="Tipo di muscolo">
+            <div className="exercise-muscle-mode" role="group" aria-label="Tipo di muscolo">
                 <button
                     type="button"
                     className={`exercise-muscle-mode-button primary ${selectionMode === 'primary' ? 'active' : ''}`}
                     aria-pressed={selectionMode === 'primary'}
+                    disabled={disabled}
                     onClick={() => setSelectionMode('primary')}
                 >
                     Primari
@@ -50,6 +56,7 @@ export function ExerciseMuscleSelector({
                     type="button"
                     className={`exercise-muscle-mode-button secondary ${selectionMode === 'secondary' ? 'active' : ''}`}
                     aria-pressed={selectionMode === 'secondary'}
+                    disabled={disabled}
                     onClick={() => setSelectionMode('secondary')}
                 >
                     Secondari
@@ -68,6 +75,7 @@ export function ExerciseMuscleSelector({
                         role="searchbox"
                         placeholder="Cerca muscolo"
                         value={muscleSearch}
+                        disabled={disabled}
                         onChange={event => setMuscleSearch(event.target.value)}
                     />
                     {muscleSearch && (
@@ -75,6 +83,7 @@ export function ExerciseMuscleSelector({
                             type="button"
                             className="exercise-muscle-search-clear"
                             onClick={() => setMuscleSearch('')}
+                            disabled={disabled}
                             aria-label="Cancella ricerca muscolo"
                         >
                             <X size={18} aria-hidden="true" />
@@ -88,21 +97,26 @@ export function ExerciseMuscleSelector({
                             <div className="exercise-muscle-empty">Nessun muscolo trovato.</div>
                         ) : (
                             filteredMuscles.map(muscle => {
-                                const isPrimary = selectedMuscleIds.includes(muscle.id);
-                                const isSecondary = secondaryMuscleIds.includes(muscle.id);
-                                const statusClass = isPrimary ? 'is-primary' : isSecondary ? 'is-secondary' : '';
+                                // Bilateral selections are stored as a base ID when both sides are selected.
+                                const representedIds = getExpandedMuscleIds([muscle]);
+                                const isPrimary = [...representedIds].every(id => primaryExpandedIds.has(id));
+                                const isSecondary = [...representedIds].every(id => secondaryExpandedIds.has(id));
+                                const isPartial = !isPrimary && !isSecondary &&
+                                    [...representedIds].some(id => primaryExpandedIds.has(id) || secondaryExpandedIds.has(id));
+                                const statusClass = isPrimary ? 'is-primary' : isSecondary ? 'is-secondary' : isPartial ? 'is-partial' : '';
 
                                 return (
                                     <button
                                         key={muscle.id}
                                         type="button"
                                         className={`exercise-muscle-option ${statusClass}`}
-                                        aria-pressed={isPrimary || isSecondary}
+                                        aria-pressed={isPrimary || isSecondary ? true : isPartial ? 'mixed' : false}
+                                        disabled={disabled}
                                         onClick={() => toggleMuscle(muscle)}
                                     >
                                         <span>{muscle.name}</span>
-                                        {(isPrimary || isSecondary) && (
-                                            <small>{isPrimary ? 'Primario' : 'Secondario'}</small>
+                                        {(isPrimary || isSecondary || isPartial) && (
+                                            <small>{isPrimary ? 'Primario' : isSecondary ? 'Secondario' : 'Parziale'}</small>
                                         )}
                                     </button>
                                 );
@@ -116,7 +130,7 @@ export function ExerciseMuscleSelector({
                 <MuscleModel
                     selectedMuscles={selectedMuscleIds}
                     secondaryMuscles={secondaryMuscleIds}
-                    interactive
+                    interactive={!disabled}
                     onToggleMuscle={handleToggleMuscleById}
                     showLegend={false}
                     showTextSelection={false}
@@ -135,6 +149,7 @@ export function ExerciseMuscleSelector({
                         type="button"
                         className="exercise-muscle-tag primary"
                         onClick={() => removeMuscleById(muscle.id)}
+                        disabled={disabled}
                         aria-label={`Rimuovi ${muscle.name} dai muscoli primari`}
                     >
                         <span>{muscle.name}</span>
@@ -147,6 +162,7 @@ export function ExerciseMuscleSelector({
                         type="button"
                         className="exercise-muscle-tag secondary"
                         onClick={() => removeMuscleById(muscle.id)}
+                        disabled={disabled}
                         aria-label={`Rimuovi ${muscle.name} dai muscoli secondari`}
                     >
                         <span>{muscle.name}</span>
