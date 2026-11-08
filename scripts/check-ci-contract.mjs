@@ -204,7 +204,7 @@ const actualShaAssignments = workflow.match(/^\s*actual_sha=/gm) ?? [];
 if (actualShaAssignments.length !== 3) failures.push(`runtime SHA guard: expected matrix + E2E + CodeQL assignments, found ${actualShaAssignments.length}`);
 requirePattern('release exact checkout', workflow, /^          test "\$\(git rev-parse HEAD\)" = "\$EXPECTED_SHA"\s*$/m);
 requirePattern('conditional Java setup', workflow, /^        if: matrix\.java == true\s*$/m);
-requirePattern('Java setup action pin', workflow, /^        uses: actions\/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6\s*$/m);
+requirePattern('Java setup action pin', workflow, /^        uses: actions\/setup-java@77dd5b2ce225ea11469928ac317850245a74ae78 # v6.2.0\s*$/m);
 requirePattern('Temurin distribution', workflow, /^          distribution: temurin\s*$/m);
 requirePattern('Java 21 runtime', workflow, /^          java-version: ['"]?21['"]?\s*$/m);
 requirePattern('dedicated Playwright E2E job', workflow, /^  e2e:\s*$/m);
@@ -224,8 +224,8 @@ requirePattern('matrix command execution', workflow, /^          \$\{\{ matrix\.
 requirePattern('CodeQL job', workflow, /^  codeql:\s*$/m);
 requirePattern('CodeQL JavaScript-TypeScript language', workflow, /^          languages: javascript-typescript\s*$/m);
 requirePattern('CodeQL extended security queries', workflow, /^          queries: security-extended\s*$/m);
-requirePattern('CodeQL init action pin', workflow, /^        uses: github\/codeql-action\/init@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4\s*$/m);
-requirePattern('CodeQL analyze action pin', workflow, /^        uses: github\/codeql-action\/analyze@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4\s*$/m);
+requirePattern('CodeQL init action pin', workflow, /^        uses: github\/codeql-action\/init@33d7b85da1a04171e211befe2c739303b9a4c066 # v4\s*$/m);
+requirePattern('CodeQL analyze action pin', workflow, /^        uses: github\/codeql-action\/analyze@33d7b85da1a04171e211befe2c739303b9a4c066 # v4\s*$/m);
 
 const allowedIfLines = new Set([
   "if: github.event_name == 'pull_request'",

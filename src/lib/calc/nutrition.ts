@@ -3,17 +3,23 @@ import { calculateBodyFat } from './bodyFat';
 import type { UserData } from '../../types';
 import { parseDateInput } from '../utils/date';
 
+// Require complete numeric input: parseFloat incorrectly accepts strings with
+// units or suffixes. Callers independently enforce positivity and optionality.
+function parseFiniteNumericInput(value: unknown): number | null {
+    if (typeof value !== 'number' && typeof value !== 'string') return null;
+    const normalized = String(value).trim().replace(',', '.');
+    if (!/^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$/.test(normalized)) return null;
+    const parsed = Number(normalized);
+    return Number.isFinite(parsed) ? parsed : null;
+}
+
 export function calculateTDEE(nutritionHistoryList: { date?: string; weight?: string | number; kcal?: string | number }[]) {
     if (!Array.isArray(nutritionHistoryList)) {
         return { error: true, message: "Dati non validi" };
     }
     const parsePositiveMeasurement = (value: string | number | undefined): number | null => {
-        if (typeof value !== 'number' && typeof value !== 'string') return null;
-        const numericText = String(value).trim().replace(',', '.');
-        // parseFloat accepts incomplete values such as "80kg", which are not valid measurements.
-        if (!/^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$/.test(numericText)) return null;
-        const parsed = Number(numericText);
-        return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+        const parsed = parseFiniteNumericInput(value);
+        return parsed !== null && parsed > 0 ? parsed : null;
     };
     const validDays = nutritionHistoryList.flatMap((d) => {
         if (!d || typeof d.date !== 'string') return [];
@@ -360,16 +366,8 @@ export function validateCustomFood(foodData: any) {
     const name = String(foodData.name || '').trim();
     if (!name) errors.name = "Nome alimento obbligatorio";
 
-    // Input from editable fields must be entirely numeric: parseFloat accepts trailing garbage.
-    const parseNumeric = (value: unknown): number | null => {
-        if (typeof value !== 'number' && typeof value !== 'string') return null;
-        const normalized = String(value).trim().replace(',', '.');
-        if (!/^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$/.test(normalized)) return null;
-        const numeric = Number(normalized);
-        return Number.isFinite(numeric) ? numeric : null;
-    };
     const parseReq = (val: unknown, fieldName: string, label: string) => {
-        const num = parseNumeric(val);
+        const num = parseFiniteNumericInput(val);
         const rounded = num === null ? null : Math.round(num * 10) / 10;
         if (num === null || num < 0 || rounded === null || !Number.isFinite(rounded)) {
             errors[fieldName] = `${label} obbligatorio e >= 0`;
@@ -379,7 +377,7 @@ export function validateCustomFood(foodData: any) {
     };
     const parseOpt = (val: unknown, field: string, label: string) => {
         if (val === undefined || val === null || val === '') return null;
-        const num = parseNumeric(val);
+        const num = parseFiniteNumericInput(val);
         const rounded = num === null ? null : Math.round(num * 100) / 100;
         if (num === null || num < 0 || rounded === null || !Number.isFinite(rounded)) {
             // A blank optional field may be omitted. A malformed supplied value
@@ -393,7 +391,7 @@ export function validateCustomFood(foodData: any) {
     const carbs = parseReq(foodData.carbs, 'carbs', 'Carboidrati');
     const pro = parseReq(foodData.pro, 'pro', 'Proteine');
     const fat = parseReq(foodData.fat, 'fat', 'Grassi');
-    const baseQty = parseNumeric(foodData.baseQty);
+    const baseQty = parseFiniteNumericInput(foodData.baseQty);
     if (baseQty === null || baseQty <= 0) {
         errors.baseQty = "Porzione base deve essere > 0";
     }
