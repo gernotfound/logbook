@@ -434,7 +434,17 @@ export async function markDeletionFailed(
   });
 }
 
-function publicStatus(job: AccountDeletionJob): AccountDeletionPublicStatus {
+function publicStatus(uid: string, job: AccountDeletionJob): AccountDeletionPublicStatus {
+  // An unverified "complete" field must never authorize irreversible local purge.
+  // The final leased worker writes the terminal cursor and receipt expiry
+  // atomically with completion; a damaged record must fail closed.
+  const terminal = job.status === 'complete';
+  if (job.uid !== uid
+    || !['requested', 'deleting', 'verifying', 'complete', 'failed'].includes(job.status)
+    || terminal !== (job.cursor?.phase === 'complete')
+    || (terminal && timestampMillis(job.purgeAfter) === null)) {
+    throw new Error('Account deletion status integrity check failed.');
+  }
   return {
     uid: job.uid,
     status: job.status,
@@ -452,7 +462,7 @@ function publicStatus(job: AccountDeletionJob): AccountDeletionPublicStatus {
 export async function readDeletionStatusForUid(uidValue: string): Promise<AccountDeletionPublicStatus | null> {
   const uid = validateUid(uidValue);
   const snapshot = await jobRef(uid).get();
-  return snapshot.exists ? publicStatus(snapshot.data() as AccountDeletionJob) : null;
+  return snapshot.exists ? publicStatus(uid, snapshot.data() as AccountDeletionJob) : null;
 }
 
 export async function readDeletionStatus(uidValue: string, receiptValue: string): Promise<AccountDeletionPublicStatus | null> {
@@ -463,7 +473,7 @@ export async function readDeletionStatus(uidValue: string, receiptValue: string)
   const job = snapshot.data() as AccountDeletionJob;
   if (!receiptMatchesJob(receipt, job)) return null;
 
-  return publicStatus(job);
+  return publicStatus(uid, job);
 }
 
 export async function listRecoverableDeletionJobs(limitCount = 20): Promise<AccountDeletionJob[]> {
