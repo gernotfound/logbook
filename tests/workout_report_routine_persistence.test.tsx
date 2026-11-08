@@ -120,7 +120,7 @@ describe('workout report routine persistence result', () => {
 
         await act(async () => { complete(classifySyncFailure(new Error('Commit locale non confermato'))); });
         await waitFor(() => expect(useDialogStore.getState().showAlert).toHaveBeenCalledOnce());
-        expect(screen.getByRole('button', { name: 'Salva' })).not.toBeDisabled();
+        expect((screen.getByRole('button', { name: 'Salva' }) as HTMLButtonElement).disabled).toBe(false);
 
         fireEvent.click(screen.getByRole('button', { name: 'Salva' }));
         await waitFor(() => expect(screen.queryByRole('textbox', { name: 'Nome nuova scheda' })).toBeNull());
