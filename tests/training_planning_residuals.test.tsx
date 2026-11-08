@@ -6,7 +6,7 @@ import { CycleCard } from '../src/components/Training/planning/CycleCard';
 import { GlobalTimer } from '../src/components/Training/ActiveWorkoutSession';
 import * as clockGuard from '../src/lib/workoutClockGuard';
 import { useAppStore } from '../src/store/useAppStore';
-import type { Exercise, TrainingCycle, WorkoutRoutine } from '../src/types';
+import type { Exercise, TrainingCycle, WorkoutRoutine, WorkoutSession } from '../src/types';
 
 const library: Exercise[] = [{ id: 'bench', name: 'Panca', muscles: ['chest'], setsCount: 4, sets: [] }];
 const routines: WorkoutRoutine[] = [{ id: 'r', name: 'Scheda', exercises: [{ exId: 'bench', setsCount: 4 }] }];
@@ -162,5 +162,98 @@ describe('training planning residual regressions', () => {
         });
         expect(errorSpy).toHaveBeenCalledTimes(1);
         expect(screen.getByRole('alert').textContent).toContain('Orologio del dispositivo');
+    });
+});
+
+describe('training planning derived-value safeguards', () => {
+    it('rejects an overlong explicit end date consistently across timeline, schedule and suggestion', () => {
+        const malformed: TrainingCycle = {
+            ...cycle, startDate: '2026-01-01', endDate: '2030-01-01',
+        };
+        const original = structuredClone(malformed);
+
+        const timeline = calculateCycleTimeline(malformed, '2026-06-01');
+        expect(timeline).toMatchObject({
+            totalWeeks: 0, currentWeek: 0, progressPercent: 0,
+            isStarted: false, isEnded: false,
+            statusLabel: 'Parametri del ciclo da correggere',
+        });
+        expect(timeline.formattedRange).toContain('non valido');
+        expect(calculateCycleSchedule(malformed, routines)).toMatchObject({
+            weeks: [], totalSessions: 0, summaryText: 'Parametri del ciclo da correggere',
+        });
+        expect(getNextScheduledRoutine(malformed, routines, [])).toBeNull();
+        expect(malformed).toEqual(original);
+    });
+
+    it('ignores a finite but invalid calendar timestamp when selecting the last performed routine', () => {
+        const planned: WorkoutRoutine[] = [
+            { id: 'a', name: 'A', exercises: [] },
+            { id: 'b', name: 'B', exercises: [] },
+            { id: 'c', name: 'C', exercises: [] },
+        ];
+        const active: TrainingCycle = {
+            ...cycle,
+            routines: planned.map(item => ({ routineId: item.id, frequencyPerWeek: 1 })),
+        };
+        const history: WorkoutSession[] = [
+            { id: 'old-a', cycleId: active.id, routineId: 'a', date: '2026-10-01', exercises: [] },
+            { id: 'bad-b', cycleId: active.id, routineId: 'b', date: '2026-10-02',
+                globalEndTime: 1e100, exercises: [] },
+            { id: 'latest-c', cycleId: active.id, routineId: 'c', date: '2026-10-03', exercises: [] },
+        ];
+
+        expect(getNextScheduledRoutine(active, planned, history)?.nextRoutineId).toBe('a');
+        const updated = [...history];
+        updated[1] = {
+            ...updated[1],
+            globalStartTime: new Date('2026-10-04T10:00:00Z').getTime(),
+        };
+        expect(getNextScheduledRoutine(active, planned, updated)?.nextRoutineId).toBe('c');
+        expect(history[1].globalEndTime).toBe(1e100);
+    });
+
+    it('rejects weekly set estimates above safe integer precision in both volume consumers', () => {
+        const hugeRoutine: WorkoutRoutine[] = [{
+            id: 'r', name: 'Scheda grande',
+            exercises: [{ exId: 'bench', setsCount: Number.MAX_SAFE_INTEGER }],
+        }];
+        const highFrequency: TrainingCycle = {
+            ...cycle, sessionsPerWeek: 14,
+        };
+
+        expect(calculateCycleVolume(highFrequency, hugeRoutine, library).muscleVolumes).toEqual([]);
+        expect(calculateCycleVolume(highFrequency, hugeRoutine, library).totalSetsPerWeek).toBe(0);
+        expect(calculateCycleMacroVolume(highFrequency, hugeRoutine, library)).toEqual([]);
+
+        const twoExercises: WorkoutRoutine[] = [{
+            ...hugeRoutine[0],
+            exercises: [
+                { exId: 'bench', setsCount: Number.MAX_SAFE_INTEGER },
+                { exId: 'bench', setsCount: Number.MAX_SAFE_INTEGER },
+            ],
+        }];
+        const oncePerWeek: TrainingCycle = { ...cycle, sessionsPerWeek: 1 };
+        expect(calculateCycleVolume(oncePerWeek, twoExercises, library).muscleVolumes).toEqual([]);
+        expect(calculateCycleMacroVolume(oncePerWeek, twoExercises, library)).toEqual([]);
+    });
+
+    it('preserves valid fractional estimates when routines share a weekly session', () => {
+        const split: TrainingCycle = {
+            ...cycle, sessionsPerWeek: 1,
+            routines: [
+                { routineId: 'a', frequencyPerWeek: 1 },
+                { routineId: 'b', frequencyPerWeek: 1 },
+            ],
+        };
+        const splitRoutines: WorkoutRoutine[] = [
+            { id: 'a', name: 'A', exercises: [{ exId: 'bench', setsCount: 3 }] },
+            { id: 'b', name: 'B', exercises: [{ exId: 'bench', setsCount: 3 }] },
+        ];
+
+        expect(calculateCycleVolume(split, splitRoutines, library).totalSetsPerWeek).toBe(3);
+        expect(calculateCycleMacroVolume(split, splitRoutines, library)).toEqual([
+            { key: 'chest', label: 'Petto', sets: 3 },
+        ]);
     });
 });

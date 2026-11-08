@@ -1,6 +1,6 @@
 import { format, isValid, parseISO, addDays, startOfDay, differenceInCalendarDays } from 'date-fns';
 import { GROUP_MAP } from '../constants/muscles';
-import { getCycleVolumeFrequencies, isBoundedCycleCount, MAX_CALCULATED_CYCLE_WEEKS, MAX_CYCLE_SESSIONS_PER_WEEK } from './cycleLimits';
+import { getCycleVolumeFrequencies, isBoundedCycleCount, isRepresentableCycleVolume, MAX_CALCULATED_CYCLE_WEEKS, MAX_CYCLE_SESSIONS_PER_WEEK } from './cycleLimits';
 import type { TrainingCycle, WorkoutRoutine, Exercise, WorkoutSession } from '../../types';
 
 interface MuscleVolumeDetail {
@@ -33,18 +33,27 @@ export interface CycleTimelineInfo {
     daysRemaining?: number;
 }
 
+function invalidCycleTimeline(formattedRange: string): CycleTimelineInfo {
+    return {
+        formattedStartDate: '',
+        formattedEndDate: '',
+        formattedRange,
+        currentWeek: 0,
+        totalWeeks: 0,
+        isStarted: false,
+        isEnded: false,
+        progressPercent: 0,
+        statusLabel: 'Parametri del ciclo da correggere',
+    };
+}
+
 export function calculateCycleTimeline(
     cycle: TrainingCycle | null | undefined,
     currentDate: Date | string = new Date()
 ): CycleTimelineInfo {
     let totalWeeks = cycle?.durationWeeks ?? 4;
     if (!isBoundedCycleCount(totalWeeks, MAX_CALCULATED_CYCLE_WEEKS)) {
-        return {
-            formattedStartDate: '', formattedEndDate: '',
-            formattedRange: 'Parametri del ciclo non validi',
-            currentWeek: 0, totalWeeks: 0, isStarted: false, isEnded: false,
-            progressPercent: 0, statusLabel: 'Parametri del ciclo da correggere',
-        };
+        return invalidCycleTimeline('Parametri del ciclo non validi');
     }
 
     if (!cycle?.startDate) {
@@ -70,12 +79,7 @@ export function calculateCycleTimeline(
         // An invalid persisted date must not be misrepresented as starting today.
     }
     if (!parsedStart || !isValid(parsedStart)) {
-        return {
-            formattedStartDate: '', formattedEndDate: '',
-            formattedRange: 'Data di inizio del ciclo non valida',
-            currentWeek: 0, totalWeeks: 0, isStarted: false, isEnded: false,
-            progressPercent: 0, statusLabel: 'Parametri del ciclo da correggere',
-        };
+        return invalidCycleTimeline('Data di inizio del ciclo non valida');
     }
 
     let today: Date;
@@ -113,6 +117,11 @@ export function calculateCycleTimeline(
     const diffDays = differenceInCalendarDays(now, start);
     const totalDays = differenceInCalendarDays(end, start) + 1;
     totalWeeks = Math.ceil(totalDays / 7);
+    // An explicit end date can extend a valid duration beyond the safe
+    // computation window; the timeline and schedule must reject it together.
+    if (!isBoundedCycleCount(totalWeeks, MAX_CALCULATED_CYCLE_WEEKS)) {
+        return invalidCycleTimeline('Periodo del ciclo non valido');
+    }
 
     if (diffDays < 0) {
         const daysToStart = Math.abs(diffDays);
@@ -403,7 +412,7 @@ export function getNextScheduledRoutine(
         const routineIndex = routineIndexById.get(workout.routineId ?? '');
         if (routineIndex === undefined) return;
         const recordedTime = [workout.globalEndTime, workout.globalStartTime]
-            .find(time => typeof time === 'number' && Number.isFinite(time));
+            .find(time => typeof time === 'number' && Number.isFinite(time) && isValid(new Date(time)));
         const parsedDate = typeof workout.date === 'string' ? parseISO(workout.date) : null;
         const time = recordedTime ?? (parsedDate && isValid(parsedDate) ? parsedDate.getTime() : 0);
         if (time > lastTime || (time === lastTime && index > lastArrayIndex)) {
@@ -501,7 +510,7 @@ export function calculateCycleVolume(
             const sets = Number(routineEx.setsCount || 3);
             if (!Number.isSafeInteger(sets) || sets < 1) { invalidVolume = true; return; }
             const weeklySetsForEx = sets * effectiveFreq;
-            if (!Number.isFinite(weeklySetsForEx)) { invalidVolume = true; return; }
+            if (!isRepresentableCycleVolume(weeklySetsForEx)) { invalidVolume = true; return; }
             totalSetsPerWeek += weeklySetsForEx;
 
             // Process primary muscles only (as chosen by user)
@@ -532,14 +541,14 @@ export function calculateCycleVolume(
     });
 
     const allVolumeValues = [...volumeMap.values()].map(value => value.sets);
-    if (invalidVolume || !Number.isFinite(totalSetsPerWeek)
-        || allVolumeValues.some(value => !Number.isFinite(value))
-        || [...rawMuscleSets.values()].some(value => !Number.isFinite(value))) {
+    if (invalidVolume || !isRepresentableCycleVolume(totalSetsPerWeek)
+        || allVolumeValues.some(value => !isRepresentableCycleVolume(value))
+        || [...rawMuscleSets.values()].some(value => !isRepresentableCycleVolume(value))) {
         return { totalWorkoutsPerWeek: 0, totalSetsPerWeek: 0, muscleVolumes: [], muscleColors: {}, highlightedMuscles: [] };
     }
     const roundedTotalSets = Math.round(totalSetsPerWeek);
     const totalCalculatedSets = allVolumeValues.reduce((sum, value) => sum + value, 0);
-    if (!Number.isFinite(totalCalculatedSets)) {
+    if (!isRepresentableCycleVolume(totalCalculatedSets)) {
         return { totalWorkoutsPerWeek: 0, totalSetsPerWeek: 0, muscleVolumes: [], muscleColors: {}, highlightedMuscles: [] };
     }
 
