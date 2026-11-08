@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { UserDataSchema, TrainingCycleSchema, TrainingCycleWriteSchema } from '../src/lib/schema';
 import { applyDomainOperations } from '../src/lib/sync/domainOperations';
 import { calculateCycleSchedule, calculateCycleTimeline } from '../src/lib/calc/planning';
-import { getCycleVolumeFrequencies, isBoundedCycleCount, previewCycleCount, MAX_EDITABLE_CYCLE_WEEKS, MAX_CYCLE_SESSIONS_PER_WEEK } from '../src/lib/calc/cycleLimits';
+import { getCycleVolumeFrequencies, hasValidCycleWriteFrequencies, isBoundedCycleCount, previewCycleCount, MAX_EDITABLE_CYCLE_WEEKS, MAX_CYCLE_SESSIONS_PER_WEEK } from '../src/lib/calc/cycleLimits';
 import type { TrainingCycle, UserData, WorkoutRoutine } from '../src/types';
 
 const routine: WorkoutRoutine = { id: 'r', name: 'A', exercises: [] };
@@ -97,6 +97,31 @@ describe('training cycle bounded input and safe legacy evaluation', () => {
             routine: { routineId: 'r2', frequencyPerWeek: 1 },
         })).toThrow(/Frequenza routine ciclo non valida/);
         expect(existing.trainingCycles?.[0]?.routines).toHaveLength(1);
+    });
+
+    it('shares a single weekly-frequency contract between Zod and domain writes', () => {
+        const base = UserDataSchema.parse({}) as UserData;
+        const samples = [
+            { routines: [{ routineId: 'r', frequencyPerWeek: 14 }], sessionsPerWeek: undefined, valid: true },
+            { routines: [{ routineId: 'r', frequencyPerWeek: 14 }, { routineId: 's', frequencyPerWeek: 1 }], sessionsPerWeek: undefined, valid: false },
+            { routines: [{ routineId: 'r', frequencyPerWeek: 14 }, { routineId: 's', frequencyPerWeek: 1 }], sessionsPerWeek: 14, valid: true },
+            { routines: [{ routineId: 'r', frequencyPerWeek: 0 }], sessionsPerWeek: 3, valid: false },
+            { routines: [{ routineId: 'r', frequencyPerWeek: '1' }], sessionsPerWeek: 3, valid: false },
+            { routines: [{ routineId: 'r', frequencyPerWeek: null }], sessionsPerWeek: 3, valid: false },
+        ];
+        for (const { routines, sessionsPerWeek, valid } of samples) {
+            const input = { ...cycle, routines, sessionsPerWeek };
+            expect(hasValidCycleWriteFrequencies(routines, sessionsPerWeek)).toBe(valid);
+            expect(TrainingCycleWriteSchema.safeParse(input).success).toBe(valid);
+            if (valid) {
+                expect(applyDomainOperations(base, { type: 'training-cycle.upsert', cycle: input as unknown as TrainingCycle }).trainingCycles)
+                    .toHaveLength(1);
+            } else {
+                expect(() => applyDomainOperations(base, { type: 'training-cycle.upsert', cycle: input as unknown as TrainingCycle }))
+                    .toThrow(/Frequenza routine ciclo non valida/);
+            }
+        }
+        expect(base.trainingCycles).toHaveLength(0);
     });
 
     it('bounds preview work without silently changing a saved input', () => {
