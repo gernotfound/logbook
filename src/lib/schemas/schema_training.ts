@@ -9,7 +9,7 @@ import {
     safeOptionalNullableNumber,
 } from './schema_utils';
 import { normalizeBusinessId } from '../businessIdentity';
-import { MAX_EDITABLE_CYCLE_WEEKS, MAX_CYCLE_SESSIONS_PER_WEEK } from '../calc/cycleLimits';
+import { isBoundedCycleCount, MAX_EDITABLE_CYCLE_WEEKS, MAX_CYCLE_SESSIONS_PER_WEEK } from '../calc/cycleLimits';
 
 export const ExerciseSetSchema = z.object({
     weight: safeString(''),
@@ -241,16 +241,45 @@ export const TrainingCycleSchema = z.object({
     return { id: '', name: '', durationWeeks: 4, routines: [] };
 }).default({ id: '', name: '', durationWeeks: 4, routines: [] });
 
-// Persisted/imported cycles retain their original values for recovery. Only a
-// new domain write must satisfy the stricter editor contract: do not let the
-// tolerant read schema quarantine a historical cycle just for being out of range.
-export const TrainingCycleWriteSchema = TrainingCycleSchema.refine(
+// Persisted/imported cycles must remain readable. The write gateway validates
+// raw input BEFORE safeNumber/default and routine-identity sanitization, which
+// otherwise turn rejected user edits into plausible but different cycles.
+const RawTrainingCycleWriteSchema = z.unknown().refine(input => {
+    if (!input || typeof input !== 'object' || Array.isArray(input)) return false;
+    const raw = input as Record<string, unknown>;
+    if (!normalizeBusinessId(raw.id)
+        || !isBoundedCycleCount(raw.durationWeeks, MAX_EDITABLE_CYCLE_WEEKS)
+        || (raw.sessionsPerWeek !== undefined
+            && !isBoundedCycleCount(raw.sessionsPerWeek, MAX_CYCLE_SESSIONS_PER_WEEK))) return false;
+    if (raw.routines === undefined) return true;
+    if (!Array.isArray(raw.routines)) return false;
+
+    const seen = new Set<string>();
+    let totalFrequency = 0;
+    for (const value of raw.routines) {
+        if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+        const routine = value as Record<string, unknown>;
+        const id = normalizeBusinessId(routine.routineId);
+        const frequency = routine.frequencyPerWeek === undefined ? 1 : routine.frequencyPerWeek;
+        if (!id || seen.has(id) || !isBoundedCycleCount(frequency, MAX_CYCLE_SESSIONS_PER_WEEK)) return false;
+        seen.add(id);
+        totalFrequency += frequency;
+    }
+    return raw.sessionsPerWeek !== undefined || totalFrequency <= MAX_CYCLE_SESSIONS_PER_WEEK;
+}, { message: 'Durata, frequenza o identità del ciclo non valida' });
+
+export const TrainingCycleWriteSchema = RawTrainingCycleWriteSchema.pipe(TrainingCycleSchema.refine(
     cycle => Number.isSafeInteger(cycle.durationWeeks)
         && cycle.durationWeeks >= 1
         && cycle.durationWeeks <= MAX_EDITABLE_CYCLE_WEEKS
         && (cycle.sessionsPerWeek === undefined
             || (Number.isSafeInteger(cycle.sessionsPerWeek)
                 && cycle.sessionsPerWeek >= 1
-                && cycle.sessionsPerWeek <= MAX_CYCLE_SESSIONS_PER_WEEK)),
+                && cycle.sessionsPerWeek <= MAX_CYCLE_SESSIONS_PER_WEEK))
+        && cycle.routines.every(routine => routine.frequencyPerWeek === undefined
+            || isBoundedCycleCount(routine.frequencyPerWeek, MAX_CYCLE_SESSIONS_PER_WEEK))
+        && (cycle.sessionsPerWeek !== undefined
+            || cycle.routines.reduce((total, routine) => total + (routine.frequencyPerWeek ?? 1), 0)
+                <= MAX_CYCLE_SESSIONS_PER_WEEK),
     { message: 'Durata o frequenza del ciclo non valida' },
-);
+));

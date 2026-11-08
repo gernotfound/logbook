@@ -8,6 +8,8 @@ import { mockFirebaseAuth } from './setup';
 import { safeHardReload } from '../src/lib/sync/safeReload';
 import { UnverifiedTabSnapshotError } from '../src/lib/sync/reloadBarrier';
 import { useDialogStore } from '../src/store/useDialogStore';
+import { useAppStore } from '../src/store/useAppStore';
+import { invalidateSession } from '../src/lib/sync/session';
 vi.mock('../src/lib/sync/safeReload', () => ({ safeHardReload: vi.fn(async () => {}) }));
 
 const backupUi = vi.hoisted(() => ({
@@ -32,14 +34,23 @@ vi.mock('../src/hooks/useSettings', () => ({
 
 const automaticPurge = vi.hoisted(() => ({
   progress: vi.fn(async () => ({ status: 'complete', complete: true } as const)),
+  verifyServerCompletion: vi.fn(async (_uid: string) => {}),
   local: vi.fn(async (owner: string) => {
     // Mirror the real purge's durable postcondition, not just a resolved Promise.
     localStorage.setItem('logbook:local-purge-fence:v1:' + owner, 'purge-complete:v1');
   }),
 }));
+// The empty-device branch requires a successful, readable local archive scan.
+// A missing locked vault is NOT proof of emptiness and must remain fail-closed in production.
+const localArchive = vi.hoisted(() => ({ read: vi.fn(async () => undefined) }));
+vi.mock('../src/lib/sync/localRepository', async importOriginal => ({
+  ...(await importOriginal<typeof import('../src/lib/sync/localRepository')>()),
+  readLocal: localArchive.read,
+}));
 vi.mock('../src/lib/healthDataErasure', async importOriginal => ({
   ...(await importOriginal<typeof import('../src/lib/healthDataErasure')>()),
   readHealthDataErasureProgress: automaticPurge.progress,
+  assertCurrentHealthDataErasureCompleted: automaticPurge.verifyServerCompletion,
 }));
 vi.mock('../src/lib/db/db_account', async importOriginal => ({
   ...(await importOriginal<typeof import('../src/lib/db/db_account')>()),
@@ -48,6 +59,11 @@ vi.mock('../src/lib/db/db_account', async importOriginal => ({
 
 const account = { uid: 'consent-ui-account' } as User;
 const checkboxInputs = () => screen.getAllByRole('checkbox') as HTMLInputElement[];
+const temporarilyEmptyAccountMemory = () => {
+  const { userData, dataOwner } = useAppStore.getState();
+  useAppStore.setState({ userData: null, dataOwner: null });
+  return () => useAppStore.setState({ userData, dataOwner });
+};
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -87,6 +103,78 @@ describe('suspended health-consent screen', () => {
     await waitFor(() => expect(automaticPurge.local).toHaveBeenCalledWith(owner));
     expect(automaticPurge.progress).toHaveBeenCalledTimes(1);
     expect(localStorage.getItem(fence)).toBe('purge-complete:v1');
+  });
+
+  it('does not offer a new account consent from a completed job without purge authorization', async () => {
+    const actor = mockFirebaseAuth.currentUser as unknown as User;
+    vi.mocked(isVerifiedHealthWithdrawal).mockReturnValue(true);
+    automaticPurge.verifyServerCompletion.mockRejectedValueOnce(new Error('Prova trusted incompleta'));
+    const restoreStore = temporarilyEmptyAccountMemory();
+    try {
+      render(<HealthConsentSuspended status="withdrawn" user={actor} />);
+
+      await waitFor(() => expect(automaticPurge.verifyServerCompletion).toHaveBeenCalledWith(actor.uid));
+      await waitFor(() => expect(screen.getByRole('alert').textContent).toContain('Prova trusted incompleta'));
+      expect(screen.queryByRole('button', { name: 'Presta un nuovo consenso' })).toBeNull();
+      expect(screen.queryByRole('checkbox')).toBeNull();
+      expect(automaticPurge.local).not.toHaveBeenCalled();
+      expect(screen.getByText(/Serve ancora la verifica finale di cancellazione/)).toBeDefined();
+    } finally {
+      restoreStore();
+    }
+  });
+
+  it('allows a new account consent only after a fresh trusted proof on an empty device', async () => {
+    const actor = mockFirebaseAuth.currentUser as unknown as User;
+    vi.mocked(isVerifiedHealthWithdrawal).mockReturnValue(true);
+    const restoreStore = temporarilyEmptyAccountMemory();
+    try {
+      render(<HealthConsentSuspended status="withdrawn" user={actor} />);
+
+      await waitFor(() => expect(automaticPurge.verifyServerCompletion).toHaveBeenCalledWith(actor.uid));
+      await waitFor(() => expect(screen.getByRole('button', { name: 'Presta un nuovo consenso' })).toBeDefined());
+      expect(screen.getAllByRole('checkbox')).toHaveLength(3);
+    } finally {
+      restoreStore();
+    }
+  });
+
+  it('hides an old reacceptance authorization if current withdrawal proof is invalidated', async () => {
+    const actor = mockFirebaseAuth.currentUser as unknown as User;
+    vi.mocked(isVerifiedHealthWithdrawal).mockReturnValue(true);
+    const restoreStore = temporarilyEmptyAccountMemory();
+    try {
+      const { rerender } = render(<HealthConsentSuspended status="withdrawn" user={actor} />);
+      await waitFor(() => expect(screen.getByRole('button', { name: 'Presta un nuovo consenso' })).toBeDefined());
+      expect(automaticPurge.verifyServerCompletion).toHaveBeenCalledWith(actor.uid);
+
+      vi.mocked(isVerifiedHealthWithdrawal).mockReturnValue(false);
+      rerender(<HealthConsentSuspended status="withdrawn" user={actor} />);
+      expect(screen.queryByRole('button', { name: 'Presta un nuovo consenso' })).toBeNull();
+      expect(screen.queryByRole('checkbox')).toBeNull();
+    } finally {
+      restoreStore();
+    }
+  });
+
+  it('does not display a stale erasure failure after a same-UID session replacement', async () => {
+    const actor = mockFirebaseAuth.currentUser as unknown as User;
+    vi.mocked(isVerifiedHealthWithdrawal).mockReturnValue(true);
+    let rejectProgress!: (error: Error) => void;
+    automaticPurge.progress.mockImplementationOnce(() => new Promise((_resolve, reject) => {
+      rejectProgress = reject;
+    }));
+
+    render(<HealthConsentSuspended status="withdrawn" user={actor} />);
+    await waitFor(() => expect(automaticPurge.progress).toHaveBeenCalledTimes(1));
+    invalidateSession();
+    rejectProgress(new Error('Errore della sessione precedente'));
+
+    await waitFor(() => expect(
+      (screen.getByRole('button', { name: 'Verifica stato cancellazione' }) as HTMLButtonElement).disabled,
+    ).toBe(false));
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(screen.queryByText('Errore della sessione precedente')).toBeNull();
   });
 
   it('allows guest deletion after withdrawal without submitting a cloud erasure', () => {

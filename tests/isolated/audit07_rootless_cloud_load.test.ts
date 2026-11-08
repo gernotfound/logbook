@@ -28,8 +28,20 @@ vi.mock('firebase/firestore', () => ({
     doc: (_db: unknown, ...path: string[]) => path.join('/'),
     collection: (_db: unknown, ...path: string[]) => path.join('/'),
     getDoc: harness.cacheRoot,
-    getDocFromServer: harness.root,
-    getDocsFromServer: harness.page,
+    getDocFromServer: async (path: string) => {
+        const snap = await harness.root(path);
+        if (!snap?.exists?.() || path.endsWith('/sync_control/state')) return snap;
+        const raw = snap.data();
+        const docPath = path === 'users/a' ? '' : path.slice('users/a/'.length);
+        return { ...snap, data: () => sealFixture(docPath, raw) };
+    },
+    getDocsFromServer: async (request: { path: string }) => {
+        const page = await harness.page(request);
+        const collectionName = request.path.split('/').at(-1);
+        return { ...page, docs: page.docs.map((item: { id: string; data: () => Record<string, unknown> }) => ({
+            ...item, data: () => sealFixture(collectionName + '/' + item.id, item.data()),
+        })) };
+    },
     documentId: () => 'id',
     orderBy: () => ({}),
     limit: (count: number) => ({ count }),
@@ -41,6 +53,16 @@ vi.mock('firebase/firestore', () => ({
 import { DB } from '../../src/lib/db';
 import { sealCloudDocument, CloudCiphertextError } from '../../src/lib/sync/cloudDocumentCipher';
 import type { SyncMeta } from '../../src/lib/sync/semanticProjection/contracts';
+
+const TEST_ADK = new Uint8Array(32).fill(18);
+
+function sealFixture(path: string, raw: Record<string, unknown>) {
+    if (Object.hasOwn(raw, '_sealed')) return raw;
+    const { _schemaVersion, _sync, ...business } = raw;
+    const sealed = sealCloudDocument(TEST_ADK, 'a', path, business, _sync as SyncMeta);
+    // A future schema stays unsupported, even in an authenticated fixture.
+    return _schemaVersion === 1 ? sealed : { ...sealed, _schemaVersion };
+}
 
 
 
@@ -88,6 +110,12 @@ it('hydrates encrypted root and full history+nutrition scans, refusing a missing
     } finally { silentConsole.mockRestore(); }
 });
 
+it('does not fetch even an absent root without an authenticated ADK', async () => {
+    await expect(DB.loadCloudPayload()).rejects.toBeInstanceOf(CloudCiphertextError);
+    expect(harness.root).not.toHaveBeenCalled();
+    expect(harness.page).not.toHaveBeenCalled();
+});
+
 it('requires a server-confirmed root even when the memory cache reports a miss', async () => {
     harness.cacheRoot.mockResolvedValue({ exists: () => false });
     harness.root.mockResolvedValue({
@@ -100,7 +128,7 @@ it('requires a server-confirmed root even when the memory cache reports a miss',
         }),
     });
 
-    const payload = await DB.loadCloudPayload();
+    const payload = await DB.loadCloudPayload({ cloudKey: TEST_ADK });
     expect(payload?.data.profile?.height).toBe('180');
     expect(payload?.cloudDocuments.get('')?._sync).toBeDefined();
     expect(harness.root).toHaveBeenCalledTimes(3);
@@ -112,7 +140,7 @@ it('rejects an unavailable authoritative root instead of treating a cached miss 
     harness.root.mockRejectedValueOnce(new Error('Firestore server unavailable'));
     const warning = vi.spyOn(console, 'error').mockImplementation(() => {});
     try {
-        await expect(DB.loadCloudPayload()).rejects.toThrow('Firestore server unavailable');
+        await expect(DB.loadCloudPayload({ cloudKey: TEST_ADK })).rejects.toThrow('Firestore server unavailable');
         expect(harness.historyWindow).not.toHaveBeenCalled();
         expect(harness.nutritionWindow).not.toHaveBeenCalled();
         expect(harness.cacheRoot).not.toHaveBeenCalled();
@@ -129,7 +157,7 @@ it('continues window hydration when the root document is absent', async () => {
         state.nutrition[months[0] + '-01'] = { date: months[0] + '-01', weight: 75 };
     });
 
-    const payload = await DB.loadCloudPayload();
+    const payload = await DB.loadCloudPayload({ cloudKey: TEST_ADK });
 
     expect(payload).not.toBeNull();
     expect(harness.historyWindow).toHaveBeenCalledOnce();
@@ -171,7 +199,7 @@ it('performs the exhaustive monthly scan when the root document is absent', asyn
         };
     });
 
-    const payload = await DB.loadCloudPayload({ allMonths: true });
+    const payload = await DB.loadCloudPayload({ allMonths: true, cloudKey: TEST_ADK });
 
     expect(payload?.data.history?.map(item => item.id)).toEqual(['rootless-workout']);
     expect(payload?.data.nutrition?.['2023-12-05']?.weight).toBe(70);
@@ -210,11 +238,11 @@ it('fails closed on incomplete full-month snapshots and recovers only after all 
         }] });
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
     try {
-        await expect(DB.loadCloudPayload({ allMonths: true })).rejects.toThrow('Shard storico 2024-01 non integro');
+        await expect(DB.loadCloudPayload({ allMonths: true, cloudKey: TEST_ADK })).rejects.toThrow('Shard storico 2024-01 non integro');
         damagedHistory = false;
-        await expect(DB.loadCloudPayload({ allMonths: true })).rejects.toThrow('Shard nutrizione 2024-01 non integro');
+        await expect(DB.loadCloudPayload({ allMonths: true, cloudKey: TEST_ADK })).rejects.toThrow('Shard nutrizione 2024-01 non integro');
         damagedNutrition = false;
-        const payload = await DB.loadCloudPayload({ allMonths: true });
+        const payload = await DB.loadCloudPayload({ allMonths: true, cloudKey: TEST_ADK });
         expect(payload?.completeMonths).toEqual(['2024-01']);
         expect(payload?.data.history?.map(record => record.id)).toEqual(['good']);
         expect(payload?.data.nutrition?.['2024-01-11']?.weight).toBe(72);
@@ -243,10 +271,10 @@ it('blocks lossy full-month normalizations but permits safe numeric conversions'
         }] });
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
     try {
-        await expect(DB.loadCloudPayload({ allMonths: true }))
+        await expect(DB.loadCloudPayload({ allMonths: true, cloudKey: TEST_ADK }))
             .rejects.toThrow('Dati cloud non validi in Firestore nutrition_months/2024-01');
         weight = '72.5';
-        const recovered = await DB.loadCloudPayload({ allMonths: true });
+        const recovered = await DB.loadCloudPayload({ allMonths: true, cloudKey: TEST_ADK });
         expect(recovered?.data.nutrition?.['2024-01-11']?.weight).toBe(72.5);
     } finally {
         consoleError.mockRestore();
@@ -264,9 +292,9 @@ it('rejects malformed root collections without publishing sanitized partial user
     }));
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
     try {
-        await expect(DB.loadCloudPayload()).rejects.toThrow('Dati cloud non validi in Firestore root (routines)');
+        await expect(DB.loadCloudPayload({ cloudKey: TEST_ADK })).rejects.toThrow('Dati cloud non validi in Firestore root (routines)');
         routines = [{ id: 'routine-1', name: 'Valid routine', exercises: [] }];
-        const result = await DB.loadCloudPayload();
+        const result = await DB.loadCloudPayload({ cloudKey: TEST_ADK });
         expect(result?.data.routines?.map(routine => routine.id)).toEqual(['routine-1']);
     } finally {
         consoleError.mockRestore();
@@ -285,7 +313,7 @@ it('preserves an explicitly absent legacy nutrition plan during root integrity v
                 writer: { slot: 's00', replicaId: 'root-seed', generation: 1, seq: 0 } },
         }),
     });
-    const payload = await DB.loadCloudPayload();
+    const payload = await DB.loadCloudPayload({ cloudKey: TEST_ADK });
     expect(payload?.data.profile?.height).toBe('178');
     expect(payload?.data.nutritionPlanning).toBeNull();
 });
@@ -300,7 +328,7 @@ it('does not silently clear a remote active workout with an invalid identity', a
     });
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
     try {
-        await expect(DB.loadCloudPayload()).rejects.toThrow('Dati cloud non validi in Firestore root (activeWorkout)');
+        await expect(DB.loadCloudPayload({ cloudKey: TEST_ADK })).rejects.toThrow('Dati cloud non validi in Firestore root (activeWorkout)');
     } finally {
         consoleError.mockRestore();
     }
@@ -311,7 +339,7 @@ it('loads history and nutrition month windows concurrently', async () => {
     let finishNutrition: (() => void) | undefined;
     harness.historyWindow.mockImplementation(() => new Promise<void>(resolve => { finishHistory = resolve; }));
     harness.nutritionWindow.mockImplementation(() => new Promise<void>(resolve => { finishNutrition = resolve; }));
-    const loading = DB.loadCloudPayload();
+    const loading = DB.loadCloudPayload({ cloudKey: TEST_ADK });
     try {
         await vi.waitFor(() => {
             expect(harness.historyWindow).toHaveBeenCalledOnce();
@@ -328,7 +356,7 @@ it('loads history and nutrition month windows concurrently', async () => {
 it('publishes the freshly downloaded catalog instead of the stale initial cache', async () => {
     let releaseCatalog: ((value: unknown) => void) | undefined;
     harness.catalogSync.mockImplementation(() => new Promise(resolve => { releaseCatalog = resolve; }));
-    const loading = DB.loadCloudPayload();
+    const loading = DB.loadCloudPayload({ cloudKey: TEST_ADK });
     await vi.waitFor(() => {
         expect(harness.root).toHaveBeenCalledTimes(2);
         expect(harness.catalogSync).toHaveBeenCalledOnce();
@@ -370,7 +398,7 @@ it('retries a mixed full read, publishing only the stable server epoch', async (
             }),
         }] };
     });
-    const snapshot = await DB.loadCloudPayload({ allMonths: true });
+    const snapshot = await DB.loadCloudPayload({ allMonths: true, cloudKey: TEST_ADK });
     expect(controlReads).toBe(4);
     expect(pages).toBe(2);
     expect(snapshot?.data.history?.map(item => item.id)).toEqual(['w2']);
@@ -381,7 +409,7 @@ it('fails closed when the cloud changes throughout both full-read attempts', asy
     harness.root.mockImplementation(async (path: string) => path.endsWith('sync_control/state')
         ? { exists: () => true, data: () => ({ epoch: ++epoch }) }
         : { exists: () => false });
-    await expect(DB.loadCloudPayload({ allMonths: true })).rejects.toMatchObject({
+    await expect(DB.loadCloudPayload({ allMonths: true, cloudKey: TEST_ADK })).rejects.toMatchObject({
         code: 'concurrent-cloud-read',
     });
     expect(harness.page).toHaveBeenCalledTimes(4);
@@ -389,7 +417,7 @@ it('fails closed when the cloud changes throughout both full-read attempts', asy
 
 it('retains the offline cached catalog when the remote catalog update rejects', async () => {
     harness.catalogSync.mockRejectedValueOnce(new Error('offline'));
-    const payload = await DB.loadCloudPayload();
+    const payload = await DB.loadCloudPayload({ cloudKey: TEST_ADK });
     expect(payload).not.toBeNull();
     expect(payload?.data.library).toEqual([]);
     expect(payload?.data.customFoods).toEqual([]);

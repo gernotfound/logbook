@@ -26,6 +26,14 @@ function ref(key: string) {
       const found = harness.documents.get(key);
       return { exists: Boolean(found), data: () => found };
     },
+    async listCollections() {
+      const prefix = key + '/';
+      // Include ghost parents: Firestore can retain descendants of a deleted doc.
+      const names = new Set([...harness.documents.keys()]
+        .filter(path => path.startsWith(prefix))
+        .map(path => path.slice(prefix.length).split('/')[0]));
+      return [...names].map(name => ({ id: name }));
+    },
     collection(name: string) {
       return {
         doc: (id: string) => ref(key + '/' + name + '/' + id),
@@ -46,7 +54,8 @@ const db = {
     const pendingCreates: Array<{ key: string; data: Record<string, unknown> }> = [];
     const result = await work({
       get: async (r) => 'prefix' in r
-        ? { empty: ![...harness.documents.keys()].some(k => k.startsWith(r.prefix)) }
+        ? { empty: ![...harness.documents.keys()].some(k => k.startsWith(r.prefix)
+          && k.slice(r.prefix.length).split('/').length === 1) }
         : r.get(),
       create: (r, d) => {
         if (harness.documents.has(r.key)) throw new Error('Concurrent create without transaction retry');
@@ -279,6 +288,21 @@ describe('authenticated cloud account key API', () => {
       expect(harness.documents.has('user_data_keys/owner-a')).toBe(false);
       harness.documents.delete(path);
     }
+  });
+
+  it.each([
+    ['known history', 'users/owner-a/history_months/2026-10/orphan/secret'],
+    ['known nutrition', 'users/owner-a/nutrition_months/2026-10/orphan/secret'],
+    ['unexpected', 'users/owner-a/undocumented/ghost/private/secret'],
+  ])('refuses key provisioning over missing parent documents in %s collections', async (_type, path) => {
+    harness.documents.set(path, { _sealed: 'orphaned-health-data' });
+
+    const result = await POST(request());
+
+    expect(result.status).toBe(409);
+    expect(harness.documents.has('user_data_keys/owner-a')).toBe(false);
+    expect(harness.documents.get(path)).toMatchObject({ _sealed: 'orphaned-health-data' });
+    expect(harness.wrap).not.toHaveBeenCalled();
   });
 
   it('blocks missing/withdrawn consent, account deletion and incomplete erasure', async () => {
