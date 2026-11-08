@@ -195,25 +195,37 @@ service cloud.firestore {
       return seq is int && seq >= 0 && seq <= 9007199254740991;
     }
 
+    // A checkpoint normally has 0-2 actors. Validate those present actors
+    // directly to keep Protocol 3 batches under the Firestore expression limit;
+    // the exhaustive fallback preserves the 16-slot bound for larger clocks.
     function isValidCheckpointClock(clock) {
       return clock is map
         && clock.keys().hasOnly(['s00', 's01', 's02', 's03', 's04', 's05', 's06', 's07', 's08', 's09', 's10', 's11', 's12', 's13', 's14', 's15'])
-        && isValidCheckpointCoordinate(clock, 's00')
-        && isValidCheckpointCoordinate(clock, 's01')
-        && isValidCheckpointCoordinate(clock, 's02')
-        && isValidCheckpointCoordinate(clock, 's03')
-        && isValidCheckpointCoordinate(clock, 's04')
-        && isValidCheckpointCoordinate(clock, 's05')
-        && isValidCheckpointCoordinate(clock, 's06')
-        && isValidCheckpointCoordinate(clock, 's07')
-        && isValidCheckpointCoordinate(clock, 's08')
-        && isValidCheckpointCoordinate(clock, 's09')
-        && isValidCheckpointCoordinate(clock, 's10')
-        && isValidCheckpointCoordinate(clock, 's11')
-        && isValidCheckpointCoordinate(clock, 's12')
-        && isValidCheckpointCoordinate(clock, 's13')
-        && isValidCheckpointCoordinate(clock, 's14')
-        && isValidCheckpointCoordinate(clock, 's15');
+        && (
+          clock.size() == 0
+          || (clock.size() == 1 && isValidCheckpointCoordinate(clock, clock.keys()[0]))
+          || (clock.size() == 2
+            && isValidCheckpointCoordinate(clock, clock.keys()[0])
+            && isValidCheckpointCoordinate(clock, clock.keys()[1]))
+          || (
+            isValidCheckpointCoordinate(clock, 's00')
+            && isValidCheckpointCoordinate(clock, 's01')
+            && isValidCheckpointCoordinate(clock, 's02')
+            && isValidCheckpointCoordinate(clock, 's03')
+            && isValidCheckpointCoordinate(clock, 's04')
+            && isValidCheckpointCoordinate(clock, 's05')
+            && isValidCheckpointCoordinate(clock, 's06')
+            && isValidCheckpointCoordinate(clock, 's07')
+            && isValidCheckpointCoordinate(clock, 's08')
+            && isValidCheckpointCoordinate(clock, 's09')
+            && isValidCheckpointCoordinate(clock, 's10')
+            && isValidCheckpointCoordinate(clock, 's11')
+            && isValidCheckpointCoordinate(clock, 's12')
+            && isValidCheckpointCoordinate(clock, 's13')
+            && isValidCheckpointCoordinate(clock, 's14')
+            && isValidCheckpointCoordinate(clock, 's15')
+          )
+        );
     }
 
     function isValidReplicaEntry(entry) {
