@@ -29,7 +29,7 @@ const UNKNOWN_RECOVERY_MESSAGE =
 export function AccountDeletionRecovery() {
     useEffect(() => {
         let disposed = false;
-        let running = false;
+        const reconciliation = { active: false };
         const deviceRecoveryRetry = { nextAt: 0 };
         const diagnostics = new RecoveryDiagnosticTracker();
         const lastAlertAt = new Map<string, number>();
@@ -71,10 +71,10 @@ export function AccountDeletionRecovery() {
             });
 
         const reconcile = async (forceDeviceRecovery = false) => {
-            if (disposed || running) return;
+            if (disposed || reconciliation.active) return;
             if (typeof navigator !== 'undefined' && !navigator.onLine) return;
 
-            running = true;
+            reconciliation.active = true;
             try {
                 let pendingDeletion = false;
                 let markerError: unknown;
@@ -136,7 +136,7 @@ export function AccountDeletionRecovery() {
                 }
 
             } finally {
-                running = false;
+                reconciliation.active = false;
             }
         };
 

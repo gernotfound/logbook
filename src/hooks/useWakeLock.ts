@@ -14,7 +14,7 @@ export function useWakeLock(enabled: boolean): void {
     const sentinelRef = useRef<WakeLockSentinel | null>(null);
     useEffect(() => {
         // Each effect instance retains its own cancellation state.
-        const lifecycle = { isCancelled: false, retryHandle: null as ReturnType<typeof setTimeout> | null, acquiring: false };
+        const lifecycle = { isCancelled: false, retryHandle: null as ReturnType<typeof setTimeout> | null, acquiring: false, retryCount: 0 };
 
         // Verifica supporto API
         if (typeof navigator === 'undefined' || !('wakeLock' in navigator)) {
@@ -22,7 +22,7 @@ export function useWakeLock(enabled: boolean): void {
         }
 
         
-        let spontaneousRetries = 0;
+        
         
         const MAX_SPONTANEOUS_RETRIES = 2;
 
@@ -57,15 +57,15 @@ export function useWakeLock(enabled: boolean): void {
                         lifecycle.isCancelled
                         || !enabled
                         || document.visibilityState !== 'visible'
-                        || spontaneousRetries >= MAX_SPONTANEOUS_RETRIES
+                        || lifecycle.retryCount >= MAX_SPONTANEOUS_RETRIES
                     ) return;
 
-                    spontaneousRetries += 1;
+                    lifecycle.retryCount += 1;
                     clearRetry();
                     lifecycle.retryHandle = setTimeout(() => {
                         lifecycle.retryHandle = null;
                         void acquire();
-                    }, 500 * spontaneousRetries);
+                    }, 500 * lifecycle.retryCount);
                 });
             } catch {
                 // Rifiuto dell'OS, API non disponibile, PWA su iOS < 18.4: silenzioso.
@@ -83,7 +83,7 @@ export function useWakeLock(enabled: boolean): void {
 
         const handleVisibilityChange = () => {
             if (document.visibilityState === 'visible' && enabled) {
-                spontaneousRetries = 0;
+                lifecycle.retryCount = 0;
                 void acquire();
             } else {
                 release();
