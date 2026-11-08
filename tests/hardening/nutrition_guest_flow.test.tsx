@@ -15,6 +15,9 @@ import { useAppStore } from '../../src/store/useAppStore';
 import type { UserData } from '../../src/types';
 
 const DATE = '2026-09-14';
+// This Firebase Auth test double supports a writable currentUser seam;
+// its complete production User interface is not represented by the fixture.
+const authFixture = auth as unknown as { currentUser: { uid: string } | null };
 const parse = (value: unknown) => UserDataSchema.parse(value) as unknown as UserData;
 
 function fixture(): UserData {
@@ -44,7 +47,7 @@ async function runMutation(action: () => Promise<unknown>) {
 beforeEach(async () => {
     useAppStore.getState().resetStore();
     vi.clearAllMocks();
-    (auth as any).currentUser = { uid: 'nutrition-hardening-user' };
+    authFixture.currentUser = { uid: 'nutrition-hardening-user' };
     vi.mocked(DB.saveUserData).mockResolvedValue({ ok: true, status: 'synced' });
     useAppStore.setState({
         userData: fixture(),
@@ -64,10 +67,10 @@ afterEach(() => lockAllVaults());
 
 describe('M5 nutrition account flow through useNutritionMeals', () => {
     it('writes current nutrition only to the active guest archive, not the previous account owner', async () => {
-        const previousUser = (auth as any).currentUser;
+        const previousUser = authFixture.currentUser;
         const guestSessionId = 'chat14-nutrition-guest';
         try {
-            (auth as any).currentUser = null;
+            authFixture.currentUser = null;
             localStorage.setItem('logbook_is_guest', 'true');
             localStorage.setItem(GUEST_SESSION_KEY, guestSessionId);
             activateGuestSession(guestSessionId);
@@ -89,7 +92,7 @@ describe('M5 nutrition account flow through useNutritionMeals', () => {
             // authenticated storage bytes instead of reading without authorization.
             expect(await get('logbook:v2:user:nutrition-hardening-user')).toBe(previousArchiveBytes);
         } finally {
-            (auth as any).currentUser = previousUser;
+            authFixture.currentUser = previousUser;
             localStorage.removeItem('logbook_is_guest');
             localStorage.removeItem(GUEST_SESSION_KEY);
             invalidateSession();
@@ -153,7 +156,8 @@ describe('M5 nutrition account flow through useNutritionMeals', () => {
         expect(day?.isDayOn).toBeUndefined();
         expect({ kcal: day?.kcal, carbs: day?.carbs, pro: day?.pro, fat: day?.fat }).toEqual(calculateLoggedMealTotals(day?.meals ?? []));
 
-        const added = day!.meals![0] as any;
+        const added = day?.meals?.[0];
+        if (!added) throw new Error('Expected an added meal before editing');
         await runMutation(() => result.current.updateMealItem({ ...added, quantity: 50 }));
 
         day = useAppStore.getState().userData?.nutrition?.[DATE];
@@ -163,7 +167,8 @@ describe('M5 nutrition account flow through useNutritionMeals', () => {
         expect(day?.fat).toBe(1);
         expect({ kcal: day?.kcal, carbs: day?.carbs, pro: day?.pro, fat: day?.fat }).toEqual(calculateLoggedMealTotals(day?.meals ?? []));
 
-        const updated = day!.meals![0] as any;
+        const updated = day?.meals?.[0];
+        if (!updated) throw new Error('Expected an updated meal before removal');
         await runMutation(() => result.current.removeFood(updated.id));
 
         day = useAppStore.getState().userData?.nutrition?.[DATE];
