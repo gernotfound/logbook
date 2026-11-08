@@ -75,10 +75,13 @@ vi.mock('../server/accountDeletion/httpAuth', () => ({
   },
 }));
 vi.mock('../server/healthConsent/withdrawal', () => ({
-  readHealthConsentState: async (uid: string) => ({
-    status: harness.documents.get('health_consent_withdrawals/' + uid)?.status ?? 'unregistered',
-    revision: 1,
-  }),
+  readHealthConsentState: async (uid: string) => {
+    const state = harness.documents.get('health_consent_withdrawals/' + uid);
+    if (state && (state.uid !== uid || !Number.isSafeInteger(state.revision))) {
+      throw new Error('Stato consenso server non valido.');
+    }
+    return { status: state?.status ?? 'unregistered', revision: state?.revision ?? 0 };
+  },
 }));
 
 import { OPTIONS, POST } from '../api/cloud-key';
@@ -192,8 +195,9 @@ describe('authenticated cloud account key API', () => {
         const responsePromise = POST(stalled);
         await vi.advanceTimersByTimeAsync(2_100);
         const response = await responsePromise;
-        expect(response.status).toBe(400);
-        expect(await response.json()).toEqual({ error: 'Questa operazione non accetta dati da inviare.' });
+        expect(response.status).toBe(408);
+        expect(await response.json()).toEqual({ error: 'Lettura della richiesta scaduta. Riprova.' });
+        expect(response.headers.get('cache-control')).toContain('no-store');
         expect(harness.verify).not.toHaveBeenCalled();
         expect(harness.wrap).not.toHaveBeenCalled();
         expect(harness.documents.has('user_data_keys/owner-a')).toBe(false);
@@ -202,6 +206,21 @@ describe('authenticated cloud account key API', () => {
       }
     },
   );
+
+  it('keeps interrupted body reads fail-closed without authenticating or provisioning a key', async () => {
+    const interrupted = new Request('https://backend.test/api/cloud-key', {
+      method: 'POST', headers: { origin: 'https://thelogbook.web.app' },
+      body: new ReadableStream<Uint8Array>({
+        start(controller) { controller.error(new Error('body stream broken')); },
+      }),
+      duplex: 'half',
+    } as RequestInit & { duplex: 'half' });
+    const response = await POST(interrupted);
+    expect(response.status).toBe(503);
+    expect(await response.text()).not.toContain('body stream broken');
+    expect(harness.verify).not.toHaveBeenCalled();
+    expect(harness.wrap).not.toHaveBeenCalled();
+  });
 
   it('accepts a delayed empty body that finishes before the inspection deadline', async () => {
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
@@ -313,6 +332,67 @@ describe('authenticated cloud account key API', () => {
     }));
     expect(missing.status).toBe(503);
     expect(harness.documents.has('user_data_keys/owner-a')).toBe(false);
+  });
+
+  it('does not release an old ADK when a new active consent epoch replaces the transacted epoch', async () => {
+    const unwrappedKeys: Buffer[] = [];
+    harness.unwrap.mockImplementationOnce(async (_uid, wrapped) => {
+      const bytes = Buffer.from(wrapped.ciphertext, 'base64');
+      unwrappedKeys.push(bytes);
+      return bytes;
+    });
+    // Simulate a new, server-owned consent generation between the successful
+    // Firestore transaction and the final release check. The same status is
+    // insufficient evidence that the selected key still belongs to this epoch.
+    harness.afterTransaction = () => {
+      // Model the real trusted sequence: withdraw revision 2, complete erasure
+      // at revision 3 (destroying the old wrapped key), reaccept revision 4.
+      harness.documents.delete('user_data_keys/owner-a');
+      harness.documents.set('health_data_erasures/owner-a', {
+        uid: 'owner-a', consentRevision: 2, completedRevision: 3, status: 'complete',
+      });
+      harness.documents.set('health_consent_withdrawals/owner-a', {
+        ...consent(), revision: 4, erasedBeforeRevision: 2,
+      });
+    };
+    const response = await POST(request());
+    expect(response.status).toBe(503);
+    expect(await response.text()).not.toMatch(/[A-Za-z0-9+/]{43}=/);
+    expect(unwrappedKeys).toHaveLength(1);
+    expect(unwrappedKeys[0].every(byte => byte === 0)).toBe(true);
+    expect(harness.documents.has('user_data_keys/owner-a')).toBe(false);
+    expect(harness.wrap).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not release an ADK or provision new keys during the actual withdrawal/erasure protocol', async () => {
+    expect((await POST(request())).status).toBe(200);
+    const existingKey = harness.documents.get('user_data_keys/owner-a');
+    harness.documents.set('health_consent_withdrawals/owner-a', {
+      uid: 'owner-a', status: 'withdrawn', revision: 2,
+    });
+    // Production withdrawal atomically queues the erasure job; a synthetic
+    // withdrawn-only state is not a valid substitute for that transition.
+    harness.documents.set('health_data_erasures/owner-a', {
+      uid: 'owner-a', consentRevision: 2, status: 'requested',
+    });
+    harness.verify.mockResolvedValue({ uid: 'owner-a', emailVerified: false });
+    const rights = () => new Request('https://backend.test/api/cloud-key?purpose=rights-export', {
+      method: 'POST', headers: { origin: 'https://thelogbook.web.app' },
+    });
+    expect((await POST(rights())).status).toBe(503);
+    expect(harness.documents.get('user_data_keys/owner-a')).toEqual(existingKey);
+
+    // Successful erasure removes the wrapped key before a new consent.
+    harness.documents.delete('user_data_keys/owner-a');
+    harness.documents.set('health_data_erasures/owner-a', {
+      uid: 'owner-a', consentRevision: 2, completedRevision: 3, status: 'complete',
+    });
+    harness.documents.set('health_consent_withdrawals/owner-a', {
+      uid: 'owner-a', status: 'withdrawn', revision: 3, erasedBeforeRevision: 2,
+    });
+    expect((await POST(rights())).status).toBe(503);
+    expect(harness.documents.has('user_data_keys/owner-a')).toBe(false);
+    expect(harness.wrap).toHaveBeenCalledTimes(1);
   });
 
   it('rechecks consent in its transaction after a preflight-to-transaction revocation', async () => {
