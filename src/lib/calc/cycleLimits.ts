@@ -11,6 +11,21 @@ export function isBoundedCycleCount(value: unknown, max: number): value is numbe
     return typeof value === 'number' && Number.isSafeInteger(value) && value >= 1 && value <= max;
 }
 
+// Write paths share this guard; the tolerant persisted-data reader may accept
+// values that must never be silently coerced during a new user mutation.
+export function hasValidCycleWriteFrequencies(
+    routines: ReadonlyArray<{ frequencyPerWeek?: unknown }>,
+    sessionsPerWeek: unknown,
+): boolean {
+    let total = 0;
+    for (const routine of routines) {
+        const frequency = routine.frequencyPerWeek === undefined ? 1 : routine.frequencyPerWeek;
+        if (!isBoundedCycleCount(frequency, MAX_CYCLE_SESSIONS_PER_WEEK)) return false;
+        total += frequency;
+    }
+    return sessionsPerWeek !== undefined || total <= MAX_CYCLE_SESSIONS_PER_WEEK;
+}
+
 export function previewCycleCount(value: string, fallback: number, max: number): number {
     const parsed = Number(value);
     return Number.isSafeInteger(parsed) && parsed >= 1
@@ -18,7 +33,7 @@ export function previewCycleCount(value: string, fallback: number, max: number):
         : Math.min(max, Math.max(1, fallback));
 }
 
- 
+
 // Read-only numerical guard. Never migrate or rewrite a historical cycle to
 // make a derived chart computable.
 export function getCycleVolumeFrequencies(
