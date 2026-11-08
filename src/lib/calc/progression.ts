@@ -37,8 +37,8 @@ type ProgressionClassification =
     | 'descriptive_change'
     | 'insufficient_data';
 
-type OutputChange = 'better' | 'same' | 'worse' | 'mixed' | 'unknown';
-type TrendDirection = 'up' | 'stable' | 'down' | 'mixed' | 'insufficient';
+type OutputChange = 'better' | 'same' | 'worse' | 'longer' | 'shorter' | 'mixed' | 'unknown';
+type TrendDirection = 'up' | 'stable' | 'down' | 'duration_up' | 'duration_down' | 'mixed' | 'insufficient';
 
 export interface ProgressionBodyweightContext {
     nutrition?: Record<string, NutritionDay>;
@@ -427,10 +427,37 @@ function partPairs(current?: NormalizedSet, previous?: NormalizedSet) {
     ];
 }
 
-function compareReferenceOutput(current?: NormalizedSet, previous?: NormalizedSet): OutputChange {
+function compareReferenceOutput(
+    current?: NormalizedSet,
+    previous?: NormalizedSet,
+    trackingType: Exercise['trackingType'] = 'weight_reps',
+): OutputChange {
     if (!current || !previous) return 'unknown';
     const pairs = partPairs(current, previous);
     if (!pairs.length) return 'unknown';
+    if (trackingType === 'time') {
+        let compared = 0;
+        let anyLonger = false;
+        let anyShorter = false;
+        for (const [index, [curr, prev]] of pairs.entries()) {
+            const currentSeconds = curr?.timeSeconds;
+            const previousSeconds = prev?.timeSeconds;
+            // The primary set may be unmeasured when its segments carry the time.
+            // Missing time in a recorded segment cannot prove stable duration.
+            if (index === 0 && !(currentSeconds !== undefined && currentSeconds > 0)
+                && !(previousSeconds !== undefined && previousSeconds > 0)) continue;
+            if (currentSeconds === undefined || previousSeconds === undefined
+                || currentSeconds <= 0 || previousSeconds <= 0) return 'unknown';
+            compared++;
+            if (currentSeconds > previousSeconds) anyLonger = true;
+            if (currentSeconds < previousSeconds) anyShorter = true;
+        }
+        if (compared === 0) return 'unknown';
+        if (anyLonger && anyShorter) return 'mixed';
+        if (anyLonger) return 'longer';
+        if (anyShorter) return 'shorter';
+        return 'same';
+    }
     let anyBetter = false;
     let anyWorse = false;
     for (const [curr, prev] of pairs) {
@@ -477,7 +504,12 @@ function strongRecord(current: NormalizedExposure, comparisons: HistoricalExposu
     });
 }
 
-function selectBestHistorical(comparisons: HistoricalExposureComparison[]): NormalizedExposure | undefined {
+function selectBestHistorical(
+    comparisons: HistoricalExposureComparison[],
+    trackingType: Exercise['trackingType'],
+): NormalizedExposure | undefined {
+    // No best duration exists without knowing whether the exercise rewards more or less time.
+    if (trackingType === 'time') return undefined;
     const candidates = comparisons
         .filter(item => item.comparison.level === 'high')
         .map(item => item.exposure);
@@ -504,7 +536,13 @@ function qualityFor(
 export function formatProgressionReference(exposure?: NormalizedExposure): string {
     const set = exposure?.referenceSet;
     if (!set) return 'dati insufficienti';
-    if (exposure?.trackingType === 'time') return set.timeSeconds !== undefined ? `${set.timeSeconds}s` : 'tempo non disponibile';
+    if (exposure?.trackingType === 'time') {
+        const main = set.timeSeconds !== undefined && set.timeSeconds > 0 ? `${set.timeSeconds}s` : '';
+        const segments = set.segments.length
+            ? `segmenti ${set.segments.map(segment => segment.timeSeconds !== undefined && segment.timeSeconds > 0 ? `${segment.timeSeconds}s` : '?').join(' + ')}`
+            : '';
+        return [main, segments].filter(Boolean).join(' · ') || 'tempo non disponibile';
+    }
     const load = set.effectiveKg ?? set.kg;
     const output = `${load !== undefined ? load : '?'} kg × ${set.reps ?? '?'}`;
     return set.rir === undefined ? output : `${output} · RIR ${set.rir}`;
@@ -558,6 +596,9 @@ function describe(
         case 'stable_more_effort':
             return { headline: 'Output stabile, effort maggiore', detail: `${currentRef}. Stesso output con RIR dichiarato più basso.` };
         case 'stable':
+            if (current.trackingType === 'time') {
+                return { headline: 'Durata registrata stabile', detail: `${previousRef} → ${currentRef}. La stessa durata non prova da sola una prestazione equivalente.` };
+            }
             return { headline: 'Prestazione stabile', detail: `${previousRef} → ${currentRef}.` };
         case 'output_lower':
             return { headline: 'Output di riferimento inferiore', detail: `${previousRef} → ${currentRef}. È una variazione osservata della prestazione, non una conclusione fisiologica.` };
@@ -579,6 +620,12 @@ function describe(
         case 'new_baseline':
             return { headline: 'Nuova baseline', detail: previous ? 'Le condizioni registrate sono sostanzialmente diverse; evito un confronto diretto.' : `Prima esposizione confrontabile registrata: ${currentRef}.` };
         case 'descriptive_change':
+            if (current.trackingType === 'time') {
+                return {
+                    headline: 'Variazione della durata registrata',
+                    detail: `${previousRef} → ${currentRef}. La durata è cambiata, ma senza una direzione-obiettivo non indica automaticamente un miglioramento o un peggioramento.`,
+                };
+            }
             return { headline: 'Variazione descrittiva', detail: `${previousRef} → ${currentRef}. Carico e ripetizioni sono cambiati in direzioni che non supportano una conclusione univoca.` };
         default:
             return { headline: 'Dati insufficienti', detail: 'Le informazioni disponibili non supportano una conclusione diretta robusta.' };
@@ -591,11 +638,17 @@ function trendFor(exposures: NormalizedExposure[]): TrendDirection {
     for (let index = 1; index < exposures.length; index++) {
         const current = exposures[index];
         const previous = exposures[index - 1];
-        const output = compareReferenceOutput(current.referenceSet, previous.referenceSet);
+        const output = compareReferenceOutput(current.referenceSet, previous.referenceSet, current.trackingType);
         if (output === 'better' && rirChange(current.referenceSet, previous.referenceSet) === 'more') directions.push('mixed');
         else directions.push(output);
     }
     if (directions.every(value => value === 'same')) return 'stable';
+    if (exposures.at(-1)?.trackingType === 'time') {
+        if (directions.includes('unknown')) return 'insufficient';
+        if (directions.every(value => value === 'longer' || value === 'same')) return 'duration_up';
+        if (directions.every(value => value === 'shorter' || value === 'same')) return 'duration_down';
+        return 'mixed';
+    }
     if (directions.every(value => value === 'better' || value === 'same') && directions.some(value => value === 'better')) return 'up';
     if (directions.every(value => value === 'worse' || value === 'same') && directions.some(value => value === 'worse')) return 'down';
     return 'mixed';
@@ -706,18 +759,25 @@ export function computeProgressionEngine(
         const cycleBaseline = current.cycleId
             ? comparable.find(item => item.exposure.cycleId === current.cycleId)?.exposure
             : undefined;
-        const bestHistorical = selectBestHistorical(comparisons);
+        const bestHistorical = selectBestHistorical(comparisons, current.trackingType);
         const isRecord = strongRecord(current, comparisons);
         const outputChange = previousComparable
-            ? compareReferenceOutput(current.referenceSet, previousComparable.referenceSet)
+            ? compareReferenceOutput(current.referenceSet, previousComparable.referenceSet, current.trackingType)
             : 'unknown';
         const classification = !current.referenceSet
             ? 'insufficient_data'
             : comparison.level === 'none' && latestExposure
                 ? 'new_baseline'
                 : classificationFor(current, previousComparable, outputChange, isRecord);
-        const quality = qualityFor(comparison, recentComparable.length, recentLimitations.length > 0);
-        const qualityReasons = [...comparison.reasons];
+        const timedOutputUnverified = current.trackingType === 'time'
+            && Boolean(previousComparable) && outputChange === 'unknown';
+        const quality = timedOutputUnverified
+            ? 'limited'
+            : qualityFor(comparison, recentComparable.length, recentLimitations.length > 0);
+        const qualityReasons = [
+            ...comparison.reasons,
+            ...(timedOutputUnverified ? ['Durata non verificabile per tutti i segmenti temporizzati confrontati.'] : []),
+        ];
         for (const limitation of recentLimitations) {
             if (limitation.exposure.sessionId === previousComparable?.sessionId) continue;
             qualityReasons.push(
@@ -774,6 +834,8 @@ export function progressionTrendLabel(
 ): string {
     if (intent === 'deload') return 'Deload: andamento descrittivo';
     if (intent === 'maintenance') return 'Andamento in mantenimento';
+    if (direction === 'duration_up') return 'Durata in aumento';
+    if (direction === 'duration_down') return 'Durata in diminuzione';
     if (direction === 'up') return 'Trend in crescita';
     if (direction === 'stable') return 'Trend stabile';
     if (direction === 'down') return 'Trend in calo';
