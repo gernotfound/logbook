@@ -8,6 +8,28 @@ describe('Firestore Security Rules Whitelist & Parity Verification', () => {
   const rulesPath = path.resolve(process.cwd(), 'firestore.rules');
   const rulesContent = fs.readFileSync(rulesPath, 'utf-8');
 
+
+  it('keeps the Firestore emulator suites on one isolated demo project', () => {
+    const emulator = JSON.parse(fs.readFileSync('firebase.emulator.json', 'utf8'));
+    expect(emulator.firestore.rules).toBe('firestore.rules');
+    expect(emulator.emulators).toMatchObject({
+      firestore: { host: '127.0.0.1', port: 8080 },
+      singleProjectMode: true,
+    });
+
+    const runner = fs.readFileSync('scripts/run-firestore-rules-tests.mjs', 'utf8');
+    const projectId = runner.match(/const PROJECT_ID = '([^']+)'/)?.[1];
+    expect(projectId).toBe('demo-logbook-audit');
+    const suites = fs.readdirSync('tests/emulator').filter(name => name.endsWith('.test.ts'));
+    expect(suites.length).toBeGreaterThan(0);
+    for (const suite of suites) {
+      const source = fs.readFileSync(path.join('tests/emulator', suite), 'utf8');
+      if (!source.includes('initializeTestEnvironment(')) continue;
+      const projectIds = [...source.matchAll(/projectId:\s*['"]([^'"]+)['"]/g)].map(match => match[1]);
+      expect(projectIds, suite).toEqual([projectId]);
+    }
+  });
+
   it('rules file exists and specifies rules_version = 2', () => {
     expect(fs.existsSync(rulesPath)).toBe(true);
     expect(rulesContent).toContain("rules_version = '2'");
