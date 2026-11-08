@@ -151,6 +151,7 @@ import {
   markDeletionComplete,
   readAuthorizedDeletionJob,
   readDeletionStatus,
+  readDeletionStatusForUid,
   validateReceipt,
   verifyNoAccountResidue,
 } from '../server/accountDeletion/jobStore';
@@ -430,6 +431,51 @@ describe('M7 native deletion job store', () => {
     expect(stored.receiptHashes).toContain(hashReceipt(receiptB));
     expect(JSON.stringify(stored)).not.toContain(receiptA);
     expect(JSON.stringify(stored)).not.toContain(receiptB);
+  });
+
+  it('rejects false completion for both device and receipt polling, then accepts the leased worker proof', async () => {
+    const receipt = 'A'.repeat(43);
+    await createOrRefreshDeletionJob('u', receipt);
+    const path = 'account_deletions/u';
+    const initial = state.jobData.get(path);
+
+    // A stale or damaged status field is not a worker-produced completion proof.
+    state.jobData.set(path, { ...initial, status: 'complete', cursor: { phase: 'verifying' } });
+    await expect(readDeletionStatusForUid('u')).rejects.toThrow('status integrity check failed');
+    await expect(readDeletionStatus('u', receipt)).rejects.toThrow('status integrity check failed');
+
+    // The cursor alone is also insufficient without the receipt-retention marker.
+    state.jobData.set(path, { ...initial, status: 'complete', cursor: { phase: 'complete' } });
+    await expect(readDeletionStatusForUid('u')).rejects.toThrow('status integrity check failed');
+    await expect(readDeletionStatus('u', receipt)).rejects.toThrow('status integrity check failed');
+
+    state.jobData.set(path, initial);
+    await acquireDeletionLease('u', 'worker', Date.now() + 60_000);
+    await markDeletionComplete('u', 'worker');
+    await expect(readDeletionStatusForUid('u')).resolves.toMatchObject({ uid: 'u', status: 'complete' });
+    await expect(readDeletionStatus('u', receipt)).resolves.toMatchObject({ uid: 'u', status: 'complete' });
+  });
+
+  it('does not return a foreign or malformed job as this owner account state', async () => {
+    const receipt = 'B'.repeat(43);
+    await createOrRefreshDeletionJob('u', receipt);
+    const path = 'account_deletions/u';
+    const original = state.jobData.get(path);
+
+    state.jobData.set(path, { ...original, uid: 'other-owner' });
+    await expect(readDeletionStatusForUid('u')).rejects.toThrow('status integrity check failed');
+    await expect(readDeletionStatus('u', receipt)).rejects.toThrow('status integrity check failed');
+
+    state.jobData.set(path, { ...original, status: 'unexpected' });
+    await expect(readDeletionStatusForUid('u')).rejects.toThrow('status integrity check failed');
+    await expect(readDeletionStatus('u', receipt)).rejects.toThrow('status integrity check failed');
+
+    state.jobData.set(path, { ...original, status: 'deleting', cursor: { phase: 'complete' } });
+    await expect(readDeletionStatusForUid('u')).rejects.toThrow('status integrity check failed');
+    await expect(readDeletionStatus('u', receipt)).rejects.toThrow('status integrity check failed');
+
+    state.jobData.set(path, original);
+    await expect(readDeletionStatusForUid('u')).resolves.toMatchObject({ uid: 'u', status: 'requested' });
   });
 
   it('keeps the original receipt stable while bounding additional recovery proofs', async () => {
