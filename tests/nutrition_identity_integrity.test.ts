@@ -15,6 +15,8 @@ import { applyDomainOperations } from '../src/lib/sync/domainOperations';
 import { applyRemoteDocuments, projectDocuments } from '../src/lib/sync/documentProjection';
 import { requireCompleteNutritionMonthDocument, IncompleteCloudMonthError } from '../src/lib/sync/monthlyIntegrity';
 import { loadNutritionMonths } from '../src/lib/db/db_nutrition';
+import { sealCloudDocument } from '../src/lib/sync/cloudDocumentCipher';
+import type { SyncMeta } from '../src/lib/sync/semanticProjection/contracts';
 
 const catalog: CachedGlobalCatalog = {
     manifest: {
@@ -81,6 +83,25 @@ describe('F-003 nutrition identity integrity', () => {
         expect(SupplementIntakeSchema.parse({ ...validIntake, id: 7, supplementId: 9 })).toMatchObject({ id: '7', supplementId: '9' });
     });
 
+    it('rejects invalid calendar keys and mismatched day identity at the authoritative parser', () => {
+        const specialKey = JSON.parse('{"__proto__":{"date":"__proto__","kcal":2400}}') as Record<string, unknown>;
+        const before = structuredClone(specialKey);
+        expect(() => DomainParsers.parseNutrition(specialKey)).toThrow(/Giornata nutrizione non valida/);
+        expect(specialKey).toEqual(before);
+        expect(Object.hasOwn(specialKey, '__proto__')).toBe(true);
+
+        const invalidDate = { '2026-9-29': { date: '2026-9-29', kcal: 2400 } };
+        expect(() => DomainParsers.parseNutrition(invalidDate)).toThrow(/Giornata nutrizione non valida/);
+
+        const mismatchedDay = { '2026-09-29': { date: '2026-09-30', kcal: 2400 } };
+        expect(() => DomainParsers.parseNutrition(mismatchedDay)).toThrow(/Giornata nutrizione incoerente/);
+        expect(mismatchedDay['2026-09-29'].date).toBe('2026-09-30');
+
+        const valid = DomainParsers.parseNutrition({ '2026-09-29': { date: '2026-09-29', kcal: 2400 } });
+        expect(Object.keys(valid)).toEqual(['2026-09-29']);
+        expect(valid['2026-09-29'].kcal).toBe(2400);
+    });
+
     it('quarantines malformed nested records while preserving valid siblings during hydration parsing', () => {
         const nutrition = DomainParsers.parseNutrition({ '2026-09-29': malformedDay });
 
@@ -128,18 +149,18 @@ describe('F-003 nutrition identity integrity', () => {
 
 
     it('aborts an entire multi-month Firestore read without publishing partial nutrition or sync metadata', async () => {
-        const sync = {
+        const sync: SyncMeta = {
             protocolVersion: 3, clock: {}, fields: {},
             writer: { slot: 's00', replicaId: 'nutrition-test', generation: 1, seq: 1 },
         };
-        const monthlyDocument = (entries: Record<string, unknown>) => ({
-            _schemaVersion: 1, _sync: sync, ...entries,
-        });
+        const accountKey = new Uint8Array(32).fill(18);
+        const monthlyDocument = (month: string, entries: Record<string, unknown>) =>
+            sealCloudDocument(accountKey, 'account-14', 'nutrition_months/' + month, entries, sync);
         const docs = [
-            monthlyDocument({ '2026-08-03': {
+            monthlyDocument('2026-08', { '2026-08-03': {
                 date: '2026-08-03', kcal: 120, carbs: 10, pro: 15, fat: 2, meals: [validMeal],
             } }),
-            monthlyDocument({ '2026-09-29': malformedDay }),
+            monthlyDocument('2026-09', { '2026-09-29': malformedDay }),
         ];
         const firestore = vi.mocked(getDocFromServer);
         firestore.mockClear();
@@ -151,7 +172,7 @@ describe('F-003 nutrition identity integrity', () => {
         const state = { nutrition: { '2026-07-01': { date: '2026-07-01', kcal: 0 } as unknown } };
         const initial = structuredClone(state.nutrition);
         const cloudDocuments = new Map<string, Record<string, unknown>>();
-        await expect(loadNutritionMonths({ uid: 'account-14' }, ['2026-08', '2026-09'], state, cloudDocuments))
+        await expect(loadNutritionMonths({ uid: 'account-14' }, ['2026-08', '2026-09'], state, cloudDocuments, accountKey))
             .rejects.toThrow(IncompleteCloudMonthError);
         expect(firestore).toHaveBeenCalledTimes(2);
         expect(state.nutrition).toEqual(initial);

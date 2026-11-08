@@ -46,7 +46,7 @@ L'helper di formattazione non valida input persistiti: i gateway devono rifiutar
 
 **MUST:** i calcoli derivati non presentano campioni insufficienti o numeri non rappresentabili come statistiche affidabili. Un risultato rifiutato non autorizza a modificare misurazioni, workout, diario o target manuali.
 
-- `calculateTDEE()` richiede almeno **sette giornate valide in 14 giorni di calendario**, ancorati all'ultima data registrata: sette voci sparse in mesi diversi non costituiscono un campione recente. Una stima rifiutata non sostituisce un obiettivo calorico manuale. Regressioni: `src/lib/logic.test.ts` e `tests/r1_r2_empirical_challenge.test.ts`.
+- `calculateTDEE()` richiede almeno **sette date distinte con registrazioni valide in 14 giorni di calendario**, ancorati all'ultima data registrata: sette voci sparse in mesi diversi non costituiscono un campione recente. Peso e calorie devono essere numeri finiti, positivi e interamente interpretabili (virgola decimale ammessa): prefissi con suffissi non numerici non sono misurazioni valide. Registrazioni duplicate della stessa giornata non possono essere conteggiate più volte e un campione altrimenti sufficiente con date duplicate va rifiutato, non aggregato arbitrariamente. Una stima rifiutata non sostituisce un obiettivo calorico manuale. Regressioni: `src/lib/logic.test.ts` e `tests/r1_r2_empirical_challenge.test.ts`.
 - Statistiche e correlazioni del volume settimanale non pubblicano `NaN`, `Infinity`, somme o variazioni percentuali non finite, anche quando i singoli addendi erano finiti. Il conteggio delle sessioni e la parità del percorso cooperativo restano corretti; il calcolatore meccanico di base conserva il proprio contratto. Regressioni: `src/lib/calc/analytics.test.ts`.
 
 Le formule specifiche restano nel codice; qui si preserva la proprietà di non pubblicare risultati fuorvianti.
@@ -103,7 +103,7 @@ Il controllo è condiviso con `transactionWriter.ts`, che lo applica prima delle
 - **MUST:** dopo il merge semantico, `transactionWriter` verifica nuovamente con `assertCloudBusinessPreserved()` che la normalizzazione finale non perda o sostituisca valori business. Validare il remoto iniziale non prova la validità del risultato delle operazioni. Un fallimento impedisce l'intero commit business/control; il journal locale non viene acknowledged.
 
 Le conversioni scalari reversibili restano consentite.
-- **MUST:** `TransactionOutcome.documents` contiene esattamente il business normalizzato cifrato e scritto nella transazione, insieme ai metadati causali scritti. Lo snapshot precedente alla normalizzazione non è una prova valida per l'ACK.
+- **MUST:** `TransactionOutcome.documents` restituisce **in memoria e in chiaro** il business normalizzato che è stato passato a `sealCloudDocument()` e cifrato nella transazione; non contiene ciphertext Firestore. I metadati causali scritti sono restituiti separatamente in `TransactionOutcome.syncMeta`. L'ACK deve usare questi stessi documenti normalizzati e metadati; lo snapshot precedente alla normalizzazione non è una prova valida.
 - **MUST:** un `activeWorkout` cloud non nullo ma privo di identità valida è un errore di integrità, mai un'autorizzazione a cancellare la sessione corrente.
 - **Versioni future:** fail-closed / `update-required` secondo `storage-and-sync.md`.
 
@@ -129,7 +129,7 @@ Per ogni nuovo campo business del root cifrato Firestore verificare e aggiornare
 
 3. `src/lib/sync/documentProjection.ts` — `rootKeys`, projection e hydration root;
 
-4. `src/contexts/AuthContext.tsx` — bootstrap/hydration/merge quando il campo partecipa a quei flussi;
+4. `src/contexts/AuthContext.tsx` e `src/contexts/auth/bootstrapAuthenticatedSession.ts`, `loadAuthenticatedData.ts`, `migrateGuestAccount.ts` — orchestrazione, bootstrap/hydration e merge guest→account quando il campo partecipa a quei flussi;
 
 5. `src/lib/db.ts` e moduli DB correlati — boundary Firestore;
 
@@ -160,7 +160,7 @@ Il mese deriva dalla data locale della registrazione. Hydration parziale/complet
 
 `src/lib/sync/monthlyIntegrity.ts` è il boundary condiviso dalla scansione completa in `src/lib/db.ts` e dalle letture per finestra in `src/lib/db/db_training.ts` e `src/lib/db/db_nutrition.ts`.
 
-- **MUST:** normalizzare ogni shard con `normalizeCloudDocument()` prima di interpretarne i dati business. Versioni future o incompatibili falliscono chiuse, non diventano mesi vuoti.
+- **MUST:** ogni shard cloud corrente viene prima autenticato e decifrato mediante `readAccountCloudDocument()` → `openCloudDocument()` usando la ADK dell'account e la verifica di versione AEAD, poi validato con gli schema e con `requireCompleteHistoryMonthDocument()` / `requireCompleteNutritionMonthDocument()`. Il precedente percorso di normalizzazione plaintext `normalizeCloudDocument()` non è un'alternativa ammessa per la lettura cloud corrente. Versioni future o incompatibili falliscono chiuse, non diventano mesi vuoti.
 - **MUST:** `sanitizeHistoryMonthDocument()` ammette solo record con chiave e ID business validi/coerenti e data canonica appartenente al mese richiesto; `sanitizeNutritionMonthDocument()` ammette solo giornate con chiave data canonica del mese e `day.date` identica alla chiave.
 
 Le voci invalide sono scartate, senza inventare identità o spostare silenziosamente dati tra mesi.
@@ -170,7 +170,7 @@ Conservare nel `cloudDocuments` i metadati causali `_sync` dei documenti validi;
 - **MUST:** anche dopo la verifica di completezza, confrontare i record mensili raw con quelli normalizzati usando `assertCloudBusinessPreserved()`; date/ID integri non bastano se un valore business annidato viene silenziosamente sostituito o perso.
 
 Applicare lo stesso contratto alla finestra mensile e a `allMonths`, prima di pubblicare qualsiasi snapshot autorevole.
-- **MUST:** preservare la validazione finale `DomainParsers.parseHistory()` e `DomainParsers.parseNutrition()` nel caricamento cloud, oltre al gateway `UserDataSchema` nell'hydration/commit locale. Gli oggetti Firestore intermedi restano non attendibili anche se hanno tipi TypeScript.
+- **MUST:** preservare la validazione finale `DomainParsers.parseHistory()` e `DomainParsers.parseNutrition()` nel caricamento cloud, oltre al gateway `UserDataSchema` nell'hydration/commit locale. `parseNutrition()` rifiuta chiavi data non canoniche e `day.date` incoerenti prima di costruire lo stato autorevole, senza trattare chiavi speciali come proprietà del prototipo. Gli oggetti Firestore intermedi restano non attendibili anche se hanno tipi TypeScript.
 
 **MUST:** un mese non caricato, un documento assente e una voce scartata per integrità sono casi distinti; nessuno giustifica da solo una cancellazione cloud o la sostituzione distruttiva di mesi locali. Rimangono obbligatori la copertura `window`/`all`, il journal e il replay causale. Ogni modifica di questi boundary richiede regressioni per dati incompleti, date/mese incoerenti, versioni future, fallimenti e retry.
 
@@ -182,8 +182,10 @@ La classificazione storage non cambia il mutation boundary M8. Le normali mutazi
 
 La forma persistita `TrainingCycleSchema` resta tollerante per leggere e conservare cicli importati o già presenti senza eliminarli a causa di un solo numero fuori limite. Le nuove scritture tramite `training-cycle.upsert` validano invece **prima di qualsiasi fallback** settimane intere fra 1 e 52 e sedute settimanali intere fra 1 e 14, con `TrainingCycleWriteSchema` e un controllo dell'input raw in `domainOperations/reducer.ts`. Non trasformare un valore invalido in una correzione silenziosa durante il commit.
 
+Anche la validazione diretta con `TrainingCycleWriteSchema` deve respingere valori raw non validi, ID mancanti/duplicati e frequenze difettose **prima** dei fallback Zod, senza convertire una scrittura malformata in un ciclo plausibile. Le frequenze delle routine nei nuovi upsert del ciclo e della singola routine devono essere interi positivi non superiori a 14, prima dei fallback Zod; quando il totale settimanale non è esplicito, la somma delle frequenze non deve superare 14. La lettura di cicli già memorizzati resta tollerante senza riscritture.
+ 
 Le anteprime dell'editor hanno gli stessi limiti di lavoro ma lasciano visibile l'input originale finché non viene corretto. `calculateCycleSchedule`, `calculateCycleTimeline` e `getNextScheduledRoutine` non elaborano quantità malformate o superiori a 104 settimane/14 sedute; il limite storico di 104 conserva la possibilità di leggere cicli di 100 settimane già coperti dai test. In caso di dati non sicuri, evitare di generare sessioni; non cancellare o riscrivere il ciclo persistito. Ogni modifica a queste soglie richiede test di lettura, scrittura, import ed editor.
 
 ## Nuove scritture di alimenti custom
 
-Il boundary `validateCustomFood` in `src/lib/calc/nutrition.ts`, usato dal flusso `useNutritionMeals`, valida gli input raw prima della write durevole: numeri richiesti interamente interpretabili e finiti, nutrienti non negativi e quantità base positiva. Un prefisso numerico seguito da testo non è un numero valido; la virgola decimale UI è normalizzata. Per unità a pezzo (`pezzo`/`pcs`) serve il peso reale positivo del pezzo, senza inventare una conversione. Input non valido lascia il form e non invia Domain Operations; i test devono provare anche questo boundary, non soltanto il calcolo successivo.
+Il boundary `validateCustomFood` in `src/lib/calc/nutrition.ts`, usato dal flusso `useNutritionMeals`, valida gli input raw prima della write durevole: numeri richiesti interamente interpretabili e finiti, nutrienti non negativi e quantità base positiva. Anche i campi nutrizionali facoltativi, se compilati, devono contenere numeri validi e non possono essere scartati in silenzio; un campo vuoto continua a essere facoltativo. Un prefisso numerico seguito da testo non è un numero valido; la virgola decimale UI è normalizzata. Per unità a pezzo (`pezzo`/`pcs`) serve il peso reale positivo del pezzo, senza inventare una conversione. Input non valido lascia il form e non invia Domain Operations; i test devono provare anche questo boundary, non soltanto il calcolo successivo.

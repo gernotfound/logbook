@@ -7,37 +7,51 @@ export function calculateTDEE(nutritionHistoryList: { date?: string; weight?: st
     if (!Array.isArray(nutritionHistoryList)) {
         return { error: true, message: "Dati non validi" };
     }
+    const parsePositiveMeasurement = (value: string | number | undefined): number | null => {
+        if (typeof value !== 'number' && typeof value !== 'string') return null;
+        const numericText = String(value).trim().replace(',', '.');
+        // parseFloat accepts incomplete values such as "80kg", which are not valid measurements.
+        if (!/^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$/.test(numericText)) return null;
+        const parsed = Number(numericText);
+        return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+    };
     const validDays = nutritionHistoryList.flatMap((d) => {
         if (!d || typeof d.date !== 'string') return [];
         const date = parseDateInput(d.date);
-        const w = parseFloat(String(d.weight).replace(',', '.'));
-        const k = parseFloat(String(d.kcal).replace(',', '.'));
-        if (date !== d.date || !Number.isFinite(w) || w <= 0 || !Number.isFinite(k) || k <= 0) return [];
-        return [{ date, weight: d.weight as string | number, kcal: d.kcal as string | number }];
+        const weight = parsePositiveMeasurement(d.weight);
+        const kcal = parsePositiveMeasurement(d.kcal);
+        if (date !== d.date || weight === null || kcal === null) return [];
+        return [{ date, weight, kcal }];
     });
 
     const dayOrdinal = (date: string) => {
         const [year, month, day] = date.split('-').map(Number);
         return Date.UTC(year, month - 1, day) / (1000 * 60 * 60 * 24);
     };
+    // One business day is one observation. Duplicate dates cannot inflate
+    // the sample size or bias its average and weight trend.
+    const distinctDateCount = new Set(validDays.map(day => day.date)).size;
+    if (distinctDateCount < 7) {
+        return { error: true, message: `Raccolta dati in corso... (${distinctDateCount}/7 giorni richiesti)` };
+    }
     const sortedValidDays = [...validDays].sort((a, b) => dayOrdinal(a.date) - dayOrdinal(b.date));
-
-    if (sortedValidDays.length < 7) {
-        return { error: true, message: `Raccolta dati in corso... (${sortedValidDays.length}/7 giorni richiesti)` };
-    }
-    // A sample of the last 14 *entries* can span months when logging is sparse.
-    // Require at least seven recorded days within 14 calendar days ending on
-    // the latest recorded date, rather than treating missing days as observed.
+    // The sample is anchored to the most recent recorded calendar day.
+    // Duplicates outside this window cannot invalidate an otherwise valid estimate.
     const latestDay = dayOrdinal(sortedValidDays[sortedValidDays.length - 1].date);
-    const recentDays = sortedValidDays.filter(d => dayOrdinal(d.date) >= latestDay - 13).slice(-14);
-    if (recentDays.length < 7) {
-        return { error: true, message: `Dati insufficienti: ${recentDays.length}/7 giornate valide negli ultimi 14 giorni.` };
+    const recentCandidates = sortedValidDays.filter(d => dayOrdinal(d.date) >= latestDay - 13);
+    const recentDistinctCount = new Set(recentCandidates.map(day => day.date)).size;
+    if (recentDistinctCount < 7) {
+        return { error: true, message: `Dati insufficienti: ${recentDistinctCount}/7 giornate valide negli ultimi 14 giorni.` };
     }
-    const wFirst = parseFloat(String(recentDays[0].weight).replace(',', '.'));
-    const wLast = parseFloat(String(recentDays[recentDays.length - 1].weight).replace(',', '.'));
+    if (recentDistinctCount !== recentCandidates.length) {
+        return { error: true, message: 'Campione non valido: registrazioni duplicate per la stessa giornata.' };
+    }
+    const recentDays = recentCandidates.slice(-14);
+    const wFirst = recentDays[0].weight;
+    const wLast = recentDays[recentDays.length - 1].weight;
     const diffDays = Math.abs(dayOrdinal(recentDays[recentDays.length - 1].date) - dayOrdinal(recentDays[0].date));
     if (diffDays === 0) return { error: true, message: "Dati insufficienti (stesso giorno)" };
-    const avgKcal = recentDays.reduce((sum, d) => sum + parseFloat(String(d.kcal).replace(',', '.')), 0) / recentDays.length;
+    const avgKcal = recentDays.reduce((sum, d) => sum + d.kcal, 0) / recentDays.length;
     const weightDiff = wLast - wFirst;
     const dailySurplusKcal = (weightDiff / diffDays) * 7700;
     const estimatedTDEE = avgKcal - dailySurplusKcal;
@@ -363,12 +377,17 @@ export function validateCustomFood(foodData: any) {
         }
         return rounded;
     };
-    const parseOpt = (val: unknown) => {
+    const parseOpt = (val: unknown, field: string, label: string) => {
         if (val === undefined || val === null || val === '') return null;
         const num = parseNumeric(val);
-        if (num === null || num < 0) return null;
-        const rounded = Math.round(num * 100) / 100;
-        return Number.isFinite(rounded) ? rounded : null;
+        const rounded = num === null ? null : Math.round(num * 100) / 100;
+        if (num === null || num < 0 || rounded === null || !Number.isFinite(rounded)) {
+            // A blank optional field may be omitted. A malformed supplied value
+            // must not silently disappear from a durable custom-food write.
+            errors[field] = `${label} deve essere un numero finito >= 0`;
+            return null;
+        }
+        return rounded;
     };
     const kcal = parseReq(foodData.kcal, 'kcal', 'Calorie');
     const carbs = parseReq(foodData.carbs, 'carbs', 'Carboidrati');
@@ -379,10 +398,22 @@ export function validateCustomFood(foodData: any) {
         errors.baseQty = "Porzione base deve essere > 0";
     }
     const unit = String(foodData.unit || 'g').trim();
-    const servingWeight = parseOpt(foodData.servingWeight);
+    const servingWeight = parseOpt(foodData.servingWeight, 'servingWeight', 'Peso porzione');
     if ((unit === 'pezzo' || unit === 'pcs') && (servingWeight === null || servingWeight <= 0)) {
         errors.servingWeight = "Il peso di un pezzo deve essere maggiore di 0 g";
     }
+    const optionalNutrients = {
+        satFat: parseOpt(foodData.satFat, 'satFat', 'Grassi saturi'),
+        unSatFat: parseOpt(foodData.unSatFat, 'unSatFat', 'Grassi insaturi'),
+        sugars: parseOpt(foodData.sugars, 'sugars', 'Zuccheri'),
+        fiber: parseOpt(foodData.fiber, 'fiber', 'Fibre'),
+        salt: parseOpt(foodData.salt, 'salt', 'Sale'),
+        sodium: parseOpt(foodData.sodium, 'sodium', 'Sodio'),
+        vitA: parseOpt(foodData.vitA, 'vitA', 'Vitamina A'),
+        vitC: parseOpt(foodData.vitC, 'vitC', 'Vitamina C'),
+        calcium: parseOpt(foodData.calcium, 'calcium', 'Calcio'),
+        iron: parseOpt(foodData.iron, 'iron', 'Ferro'),
+    };
     if (Object.keys(errors).length > 0) {
         return { isValid: false, errors, cleanData: null };
     }
@@ -398,16 +429,7 @@ export function validateCustomFood(foodData: any) {
         carbs,
         pro,
         fat,
-        satFat: parseOpt(foodData.satFat),
-        unSatFat: parseOpt(foodData.unSatFat),
-        sugars: parseOpt(foodData.sugars),
-        fiber: parseOpt(foodData.fiber),
-        salt: parseOpt(foodData.salt),
-        sodium: parseOpt(foodData.sodium),
-        vitA: parseOpt(foodData.vitA),
-        vitC: parseOpt(foodData.vitC),
-        calcium: parseOpt(foodData.calcium),
-        iron: parseOpt(foodData.iron)
+        ...optionalNutrients
     };
     return { isValid: true, errors: {}, cleanData };
 }

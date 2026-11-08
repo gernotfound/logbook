@@ -23,6 +23,22 @@ import {
     assertNeverDomainOperation,
 } from './validation';
 
+function assertNewCycleRoutineFrequencies(routines: ReadonlyArray<{ frequencyPerWeek?: unknown }>, sessionsPerWeek: unknown): void {
+    let totalFrequency = 0;
+    for (const routine of routines) {
+        const frequency = routine.frequencyPerWeek === undefined ? 1 : routine.frequencyPerWeek;
+        // The persisted reader is tolerant, but a new domain operation must not
+        // silently coerce an invalid weekly frequency into a plausible schedule.
+        if (!isBoundedCycleCount(frequency, MAX_CYCLE_SESSIONS_PER_WEEK)) {
+            throw new Error('Frequenza routine ciclo non valida');
+        }
+        totalFrequency += frequency;
+    }
+    if (sessionsPerWeek === undefined && totalFrequency > MAX_CYCLE_SESSIONS_PER_WEEK) {
+        throw new Error('Frequenza routine ciclo non valida');
+    }
+}
+
 function ensureNutritionDay(data: UserData, date: string): NutritionDay {
     const validDate = requireDate(date);
     return data.nutrition?.[validDate] ?? {
@@ -244,6 +260,7 @@ function applyOne(data: UserData, operation: DomainOperation): UserData {
                     item && typeof item === 'object' && 'routineId' in item ? item.routineId : undefined,
                     'Routine ciclo',
                 ), 'Routine ciclo');
+                assertNewCycleRoutineFrequencies(inputRoutines, operation.cycle.sessionsPerWeek);
             }
             const cycle = TrainingCycleWriteSchema.parse({ ...operation.cycle, id: requireId(operation.cycle.id, 'Ciclo') });
             if (Array.isArray(inputRoutines) && cycle.routines.length !== inputRoutines.length) {
@@ -262,6 +279,7 @@ function applyOne(data: UserData, operation: DomainOperation): UserData {
             const { index, value } = findCycle(data, operation.cycleId);
             const routine = { ...operation.routine, routineId: requireId(operation.routine.routineId, 'Routine ciclo') };
             const routines = upsertById(value.routines, routine, item => requireId(item.routineId, 'Routine ciclo'), 'Routine ciclo');
+            assertNewCycleRoutineFrequencies(routines, value.sessionsPerWeek);
             data.trainingCycles = [...(data.trainingCycles ?? [])];
             data.trainingCycles[index] = { ...value, routines };
             break;

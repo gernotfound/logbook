@@ -5,7 +5,7 @@ import fs from 'fs';
 import path from 'path';
 
 vi.unmock('../src/lib/db');
-import { ConsentedTestDB as DB, openTestCloudBusiness } from './testUtils';
+import { ConsentedTestDB as DB, openTestCloudBusiness, sealTestCloudFixture, testCloudKey } from './testUtils';
 import { mergeUserData } from '../src/lib/merge';
 import { readLocal } from '../src/lib/sync/localRepository';
 import { DomainParsers } from '../src/lib/schema';
@@ -557,10 +557,10 @@ describe('Empirical Challenger: Architectural Hardening Stress Suite', () => {
                     || path.includes('/nutrition_months/')) {
                     return { exists: () => false, data: () => undefined } as any;
                 }
-                return { exists: () => true, data: () => mockUserDoc } as any;
+                return { exists: () => true, data: () => sealTestCloudFixture(mockUserDoc) } as any;
             });
 
-            const loaded = await DB.loadUserData();
+            const loaded = await DB.loadUserData({ cloudKey: testCloudKey() });
 
             expect(loaded).not.toBeNull();
             expect(loaded?.profile?.height).toBe('180');
