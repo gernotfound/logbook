@@ -18,7 +18,7 @@ export const CycleMuscleMap = memo(function CycleMuscleMap({
         <section className="cycle-muscle-map" aria-labelledby={titleId}>
             <h3 id={titleId} className="cycle-muscle-map-title">{title}</h3>
             <div className="cycle-muscle-map-model">
-                <MuscleModel selectedMuscles={highlightedMuscles} />
+                <MuscleModel selectedMuscles={highlightedMuscles} selectedMusclesLabel="Muscoli evidenziati dalle schede" />
             </div>
             {highlightedMuscles.length === 0 && emptyMessage ? (
                 <p className="cycle-muscle-map-empty">{emptyMessage}</p>
