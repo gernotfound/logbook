@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { TrainingSessionSetup } from '../src/components/Training/TrainingSessionSetup';
 import TrainingPlanning from '../src/components/Training/planning/TrainingPlanning';
@@ -200,6 +200,59 @@ describe('flexible training cycles', () => {
         render(<TrainingSessionSetup />);
         expect(screen.getByRole('heading', { name: 'Scheda A' })).toBeDefined();
         expect(screen.getByRole('button', { name: /Avvia Scheda A/ })).toBeDefined();
+    });
+
+    it('numbers only available routines consistently with the suggested rotation', () => {
+        const withMissing = {
+            ...cycle, routines: [
+                { routineId: 'deleted', frequencyPerWeek: 1 },
+                { routineId: 'first', frequencyPerWeek: 1 },
+                { routineId: 'second', frequencyPerWeek: 1 },
+            ],
+        };
+        setup(0, withMissing);
+        render(<TrainingSessionSetup />);
+        expect(getNextScheduledRoutine(withMissing, routines, [])?.positionInRotation).toBe(1);
+        expect(screen.getByText('A di 2')).toBeDefined();
+        expect(screen.getByRole('option', { name: 'A. Scheda A' })).toBeDefined();
+        expect(screen.getByRole('option', { name: 'B. Scheda B' })).toBeDefined();
+        expect(screen.queryByText('B di 2')).toBeNull();
+        expect(withMissing.routines[0].routineId).toBe('deleted');
+    });
+
+    it('does not apply the previous cycle manual selection to a newly active cycle', () => {
+        setup(0);
+        render(<TrainingSessionSetup />);
+        fireEvent.change(screen.getByRole('combobox', { name: 'Seleziona scheda della rotazione' }), {
+            target: { value: 'second' },
+        });
+        expect(screen.getByRole('button', { name: 'Avvia Scheda B' })).toBeDefined();
+        const nextCycle: TrainingCycle = { ...cycle, id: 'another-cycle', name: 'Altro ciclo' };
+        act(() => {
+            useAppStore.setState(state => ({
+                userData: { ...state.userData!, activeCycleId: nextCycle.id, trainingCycles: [nextCycle] },
+            }));
+        });
+        expect(screen.getByRole('heading', { name: 'Scheda A' })).toBeDefined();
+        expect(screen.queryByRole('button', { name: 'Avvia Scheda B' })).toBeNull();
+        fireEvent.click(screen.getByRole('button', { name: /Avvia Scheda A/ }));
+        expect(startWorkout).toHaveBeenLastCalledWith('first', {
+            cycleId: nextCycle.id, cycleName: nextCycle.name,
+        });
+    });
+
+    it('uses unique alphabetic rotation labels beyond Z', () => {
+        const manyRoutines: WorkoutRoutine[] = Array.from({ length: 27 }, (_, index) => ({
+            id: `r-${index}`, name: `Scheda ${index + 1}`, exercises: [],
+        }));
+        const largeCycle: TrainingCycle = {
+            ...cycle, sessionsPerWeek: 14,
+            routines: manyRoutines.map(routine => ({ routineId: routine.id, frequencyPerWeek: 1 })),
+        };
+        setup(0, largeCycle, manyRoutines);
+        render(<TrainingSessionSetup />);
+        expect(screen.getByRole('option', { name: 'Z. Scheda 26' })).toBeDefined();
+        expect(screen.getByRole('option', { name: 'AA. Scheda 27' })).toBeDefined();
     });
 
     it('reports the absence of any usable cycle routine while preserving archive access', () => {
