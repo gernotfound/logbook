@@ -86,6 +86,28 @@ export function buildShareExportData(userData: UserData, options: ExportShareOpt
     };
 }
 
+// A browser can consume the blob URL after the click handler has returned.
+// Both the regular and emergency download paths must share the same cleanup.
+function triggerAnchorDownload(blob: Blob, filename: string): void {
+    const url = URL.createObjectURL(blob);
+    try {
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = filename;
+        link.style.visibility = 'hidden';
+        document.body.appendChild(link);
+        try {
+            link.click();
+        } finally {
+            link.remove();
+        }
+    } catch (error) {
+        URL.revokeObjectURL(url);
+        throw error;
+    }
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
 export const Exporter = {
     exportEmergencyJSON(userData: UserData): void {
         const session = captureSession();
@@ -101,24 +123,7 @@ export const Exporter = {
         };
 
         const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-        try {
-            const a = document.createElement('a');
-            a.href = url;
-            const dateStr = Logic.getLocalDateString();
-            a.download = `logbook_emergency_backup_${dateStr}.json`;
-            document.body.appendChild(a);
-            try {
-                a.click();
-            } finally {
-                a.remove();
-            }
-        } catch (error) {
-            URL.revokeObjectURL(url);
-            throw error;
-        }
-        // The browser may start the download after the click handler returns.
-        setTimeout(() => URL.revokeObjectURL(url), 1000);
+        triggerAnchorDownload(blob, `logbook_emergency_backup_${Logic.getLocalDateString()}.json`);
     },
 
     formatCsvField(value: unknown): string {
@@ -181,17 +186,7 @@ export const Exporter = {
             }
         }
 
-        const link = document.createElement("a");
-        const url = URL.createObjectURL(blob);
-        link.setAttribute("href", url);
-        link.setAttribute("download", filename);
-        link.style.visibility = 'hidden';
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        // The browser may start processing the download after the click handler
-        // returns. Immediate revocation can invalidate the URL before that step.
-        setTimeout(() => URL.revokeObjectURL(url), 1000);
+        triggerAnchorDownload(blob, filename);
         return true;
     },
 
