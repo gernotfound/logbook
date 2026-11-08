@@ -74,12 +74,17 @@ function declarationModifiers(expression, references) {
 }
 
 export function findDisabledTests(source, name = 'fixture.test.ts') {
-  const ast = parse(source, {
-    sourceType: 'unambiguous',
-    sourceFilename: name,
-    plugins: ['typescript', 'jsx', 'decorators-legacy'],
-    errorRecovery: false,
-  });
+  let ast;
+  try {
+    ast = parse(source, {
+      sourceType: 'unambiguous',
+      sourceFilename: name,
+      plugins: ['typescript', 'jsx', 'decorators-legacy'],
+      errorRecovery: false,
+    });
+  } catch (error) {
+    throw new Error(`Cannot parse test source ${name}: ${error instanceof Error ? error.message : String(error)}`, { cause: error });
+  }
   const findings = [];
   const references = importedTestReferences(ast.program);
   const visit = node => {

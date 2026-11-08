@@ -59,3 +59,10 @@ await test('keeps source locations when parsing TS satisfies and JSX syntax', ()
     line, label, expression,
   })), [{ line: 4, label: 'skip', expression: 'check.skip' }]);
 });
+
+await test('reports the source path rather than silently losing an unparseable test', () => {
+  assert.throws(
+    () => findDisabledTests('const view = <div>', 'tests/example.test.tsx'),
+    /Cannot parse test source tests\/example\.test\.tsx:/,
+  );
+});
