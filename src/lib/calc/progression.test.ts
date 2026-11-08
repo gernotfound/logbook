@@ -178,10 +178,10 @@ describe('contextual progression engine', () => {
 
     it('compares timed segments even without a parent set duration', () => {
         const previous = workout({ id: 't1', date: '2026-09-01', exId: 'plank', sets: [
-            timedSet(undefined, { segments: [{ id: 'seg-1', time: '10' }, { id: 'seg-2', time: '15' }] }),
+            timedSet(undefined, { segments: [{ id: 'seg-1', kg: '', reps: '', time: '10' }, { id: 'seg-2', kg: '', reps: '', time: '15' }] }),
         ] });
         const current = workout({ id: 't2', date: '2026-09-08', exId: 'plank', sets: [
-            timedSet(undefined, { segments: [{ id: 'seg-1', time: '12' }, { id: 'seg-2', time: '17' }] }),
+            timedSet(undefined, { segments: [{ id: 'seg-1', kg: '', reps: '', time: '12' }, { id: 'seg-2', kg: '', reps: '', time: '17' }] }),
         ] });
         const analysis = computeProgressionEngine(current, [previous], library).exercises[0];
 
@@ -193,10 +193,10 @@ describe('contextual progression engine', () => {
 
     it('describes mixed timed segment changes without imposing a direction', () => {
         const previous = workout({ id: 't1', date: '2026-09-01', exId: 'plank', sets: [
-            timedSet('30', { segments: [{ id: 'seg-1', time: '10' }, { id: 'seg-2', time: '15' }] }),
+            timedSet('30', { segments: [{ id: 'seg-1', kg: '', reps: '', time: '10' }, { id: 'seg-2', kg: '', reps: '', time: '15' }] }),
         ] });
         const current = workout({ id: 't2', date: '2026-09-08', exId: 'plank', sets: [
-            timedSet('30', { segments: [{ id: 'seg-1', time: '12' }, { id: 'seg-2', time: '13' }] }),
+            timedSet('30', { segments: [{ id: 'seg-1', kg: '', reps: '', time: '12' }, { id: 'seg-2', kg: '', reps: '', time: '13' }] }),
         ] });
         const analysis = computeProgressionEngine(current, [previous], library).exercises[0];
 
@@ -219,10 +219,10 @@ describe('contextual progression engine', () => {
 
     it('does not silently ignore one missing duration in an otherwise observed segmented set', () => {
         const previous = workout({ id: 't1', date: '2026-09-01', exId: 'plank', sets: [
-            timedSet('30', { segments: [{ id: 'seg-1', time: '10' }] }),
+            timedSet('30', { segments: [{ id: 'seg-1', kg: '', reps: '', time: '10' }] }),
         ] });
         const current = workout({ id: 't2', date: '2026-09-08', exId: 'plank', sets: [
-            timedSet('30', { segments: [{ id: 'seg-1' }] }),
+            timedSet('30', { segments: [{ id: 'seg-1', kg: '', reps: '' }] }),
         ] });
         const analysis = computeProgressionEngine(current, [previous], library).exercises[0];
 
