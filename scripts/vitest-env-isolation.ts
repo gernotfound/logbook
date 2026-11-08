@@ -8,7 +8,7 @@ export const SYNTHETIC_FIREBASE_TEST_ENV = Object.freeze({
     VITE_FIREBASE_APP_ID: '1:123456789:web:testappid',
 });
 
-const TEST_BACKEND_ORIGIN = 'http://127.0.0.1:9';
+export const TEST_BACKEND_ORIGIN = 'http://127.0.0.1:9';
 const allowedKeys = new Set([...Object.keys(SYNTHETIC_FIREBASE_TEST_ENV), 'VITE_ACCOUNT_DELETION_API_ORIGIN']);
 
 export function assertIsolatedVitestEnvironment(effective: Record<string, string | undefined>): void {
