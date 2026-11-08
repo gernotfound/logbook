@@ -71,6 +71,7 @@ Classificare il task come **STANDARD**, **SENSITIVE** o **CRITICAL** e motivare 
 Sono CRITICAL almeno: dati utente, IndexedDB/persistenza, sync, Firestore/Rules, Auth, guest→account, schema/migrazioni, import/export, cancellazione, update/reload, sicurezza e rischio di perdita/corruzione dati.
 
 - **MUST:** preparare un piano per lavori strutturali o CRITICAL; può restare nel reasoning o nella PR, senza una nuova approvazione per scelte tecniche ordinarie.
+- **MUST:** completare per ogni file target di audit sia la verifica funzionale sia una valutazione ingegneristica esplicita di responsabilità, accoppiamento, duplicazioni, complessità, tipi, gestione degli errori, codice inutilizzato, test e manutenibilità nei percorsi pertinenti. Distinguere difetti dimostrati, refactoring utile e scelte architetturali da preservare; non dichiarare chiuso il file se manca una delle due valutazioni.
 - **MUST:** completare il perimetro pertinente, senza fermarsi al primo finding. Distinguere sintomo, causa immediata e root cause; cercare evidenze contrarie, cause concorrenti e pattern analoghi.
 - **MUST:** seguire stato, chiamanti, persistenza/backend, UI, tipi, test e configurazioni. Per i percorsi critici includere fallimenti, recovery, concorrenza e integrità.
 - **MUST:** correggere la causa con il diff più semplice e coerente; evitare workaround fragili, refactor estranei e funzionalità speculative.

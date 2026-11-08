@@ -20,6 +20,7 @@ import { assertCloudBusinessPreserved, CloudDataIntegrityError } from './sync/cl
 import { syncGlobalCatalog, getCachedCatalog } from './catalog/catalogService';
 import { resolveEffectiveExercises, resolveEffectiveFoods } from './catalog/deltaResolver';
 import { readAccountCloudDocument } from './sync/cloudDocumentRead';
+import { CloudCiphertextError } from './sync/cloudDocumentCipher';
 import { withTimeout } from './db/db_core';
 import { loadHistoryMonths } from './db/db_training';
 import { loadNutritionMonths } from './db/db_nutrition';
@@ -55,6 +56,11 @@ async function loadCloudPayload(options?: { allMonths?: boolean; cloudKey?: Uint
 } | null> {
     const user = auth.currentUser;
     if (!user) return null;
+    // Missing ADK cannot authorize even a rootless/empty cloud snapshot.
+    // Reject before server reads or publishing a default business state.
+    if (!(options?.cloudKey instanceof Uint8Array) || options.cloudKey.length !== 32) {
+        throw new CloudCiphertextError();
+    }
 
     const cloudDocuments = new Map<string, Record<string, unknown>>();
     let completeMonths: string[] = [];
@@ -219,7 +225,7 @@ async function loadCloudPayload(options?: { allMonths?: boolean; cloudKey?: Uint
 export const DB = {
     ...baseDB,
     loadCloudPayload,
-    async loadUserData(options?: { allMonths?: boolean }): Promise<UserData | null> {
+    async loadUserData(options?: { allMonths?: boolean; cloudKey?: Uint8Array }): Promise<UserData | null> {
         const payload = await loadCloudPayload(options);
         return payload ? payload.data : null;
     },

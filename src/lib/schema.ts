@@ -2,6 +2,7 @@ import { z } from './zod';
 import type { UserData } from '../types';
 import { createDefaultNutritionPlanning } from './nutritionDefaults';
 import { isValidBusinessId, normalizeBusinessId } from './businessIdentity';
+import { parseDateInput } from './utils/date';
 import { safeString } from './schemas/schema_utils';
 
 export * from './schemas/schema_utils';
@@ -202,7 +203,12 @@ export const DomainParsers = {
         }
         const result: Record<string, z.infer<typeof NutritionDaySchema>> = {};
         for (const [key, val] of Object.entries(data as Record<string, unknown>)) {
-            result[key] = NutritionDaySchema.parse(val);
+            // The final authoritative gateway must reject invalid dates before
+            // a dynamic key such as "__proto__" can disappear into an object prototype.
+            if (parseDateInput(key) !== key) throw new Error(`Giornata nutrizione non valida: ${key}`);
+            const day = NutritionDaySchema.parse(val);
+            if (day.date !== key) throw new Error(`Giornata nutrizione incoerente: ${key}`);
+            Object.defineProperty(result, key, { value: day, enumerable: true, writable: true, configurable: true });
         }
         return result;
     },

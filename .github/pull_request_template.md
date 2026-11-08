@@ -9,6 +9,10 @@ Descrivere problema, comportamento atteso e root cause se pertinente.
 - Invarianti preservati (dati, sync, Auth, sicurezza, accessibilità, UX, ecc.).
 - Dipendenze / PR concorrenti o modifiche a versioni persistite e contratti.
 
+## Revisione ingegneristica e refactoring
+- Per ogni file target di audit: responsabilità, modularità, accoppiamento, duplicazioni, complessità, tipi, errori, codice inutilizzato e qualità dei test; verificare i chiamanti e i contratti collegati.
+- Distinguere difetti dimostrati, opportunità di refactoring e scelte intenzionali da mantenere. Documentare beneficio, rischio ed esito delle modifiche proposte; non introdurre refactoring cosmetici.
+
 ## Modifiche e regressioni
 - File e componenti coinvolti; test aggiunti o modificati.
 - Eventuali migrazioni, rollback o recovery (se applicabili).

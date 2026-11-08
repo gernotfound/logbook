@@ -7,6 +7,7 @@ import { DeviceWorkoutCorruptError, getInitialLocalWorkout } from '../src/store/
 
 vi.unmock('../src/lib/db');
 import { DB } from '../src/lib/db';
+import { sealTestCloudFixture, testCloudKey } from './testUtils';
 import {
     UserDataSchema,
     UserProfileSchema,
@@ -461,13 +462,14 @@ describe('Zod Schema Resilience & Defensive Catches', () => {
                 profile: { height: 175 },
                 routines: 'corrupted string',
             };
-            firestoreMockStore[rootPath] = cloudRoot;
+            const encryptedRoot = sealTestCloudFixture(cloudRoot);
+            firestoreMockStore[rootPath] = encryptedRoot;
             try {
-                await expect(DB.loadUserData()).rejects.toThrow(/dati cloud non validi/i);
+                await expect(DB.loadUserData({ cloudKey: testCloudKey() })).rejects.toThrow(/dati cloud non validi/i);
                 expect(vi.mocked(getDocFromServer).mock.calls.some(([ref]) =>
                     (ref as { path?: string }).path === rootPath
                 )).toBe(true);
-                expect(firestoreMockStore[rootPath]).toBe(cloudRoot);
+                expect(firestoreMockStore[rootPath]).toBe(encryptedRoot);
             } finally {
                 if (original === undefined) delete firestoreMockStore[rootPath];
                 else firestoreMockStore[rootPath] = original;

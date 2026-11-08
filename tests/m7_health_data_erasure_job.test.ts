@@ -15,7 +15,16 @@ vi.mock('../server/accountDeletion/firebaseAdmin', () => {
       id: path.split('/').at(-1), ref: document(path) };
   };
   const collection = (path: string) => ({
+    id: path.split('/').at(-1),
     doc: (id: string) => document(path + '/' + id),
+    // Match the Admin SDK's showMissing=true behavior for orphan parent refs.
+    listDocuments: async () => {
+      const prefix = path + '/';
+      const ids = new Set([...fixture.records.keys()]
+        .filter(key => key.startsWith(prefix))
+        .map(key => key.slice(prefix.length).split('/')[0]));
+      return [...ids].map(id => document(prefix + id));
+    },
     ...query(path, []),
   });
   function query(path: string, constraints: Array<[string, string, unknown]>, max = 1000, after: { path: string; time: number } | null = null) {
@@ -80,7 +89,7 @@ vi.mock('../server/accountDeletion/firebaseAdmin', () => {
         const names = new Set([...fixture.records.keys()]
           .filter(key => key.startsWith(path + '/') && key.split('/').length >= depth)
           .map(key => key.split('/')[path.split('/').length]));
-        return [...names].map(name => ({ id: name, ...query(path + '/' + name, []) }));
+        return [...names].map(name => collection(path + '/' + name));
       },
     };
   }
@@ -158,6 +167,66 @@ describe('trusted data-only erasure worker', () => {
     expect(fixture.records.get(consentPath('a'))?.revision).toBe(4);
   });
 
+  it.each([
+    ['unknown status', { status: 'unsupported' }],
+    ['noninteger attempts', { attempts: 'invalid' }],
+    ['negative attempts', { attempts: -1 }],
+  ])('rejects a malformed %s before acquiring a destructive lease', async (_label, patch) => {
+    await createHealthDataErasureJob('a');
+    Object.assign(fixture.records.get(markerPath('a'))!, patch);
+
+    await expect(processHealthDataErasure('a', Date.now() + 30_000)).rejects.toThrow('Job cancellazione non valido.');
+    expect(fixture.records.get(markerPath('a'))).toMatchObject(patch);
+    expect(fixture.records.has('users/a/history_months/2026-09')).toBe(true);
+    expect(fixture.records.has('user_data_keys/a')).toBe(true);
+  });
+
+  it('never retries a failed job unless retryability is explicitly authorized', async () => {
+    await createHealthDataErasureJob('a');
+    const job = fixture.records.get(markerPath('a'))!;
+    job.status = 'failed';
+    delete job.retryable;
+
+    expect(await processHealthDataErasure('a', Date.now() + 30_000)).toBe('busy');
+    expect(fixture.records.get(markerPath('a'))).toMatchObject({ status: 'failed', attempts: 0 });
+    expect(fixture.records.has('users/a/history_months/2026-09')).toBe(true);
+    expect(fixture.records.has('user_data_keys/a')).toBe(true);
+  });
+
+  it('does not delete data when a queued erasure no longer belongs to its consent owner', async () => {
+    await createHealthDataErasureJob('a');
+    fixture.records.get(consentPath('a'))!.uid = 'other-account';
+
+    expect(await processHealthDataErasure('a', Date.now() + 30_000)).toBe('failed');
+    expect(await readHealthDataErasureStatus('a')).toMatchObject({
+      status: 'failed', complete: false, retryable: false, localPurgeAuthorized: false,
+    });
+    expect(fixture.records.has('users/a')).toBe(true);
+    expect(fixture.records.has('users/a/history_months/2026-09')).toBe(true);
+    expect(fixture.records.has('user_data_keys/a')).toBe(true);
+    expect(fixture.records.get(consentPath('a'))?.revision).toBe(3);
+  });
+
+  it('preserves the cloud key if consent ownership changes during a leased erasure', async () => {
+    await createHealthDataErasureJob('a');
+    let onEntered!: () => void;
+    let allowResume!: () => void;
+    const entered = new Promise<void>(resolve => { onEntered = resolve; });
+    const resume = new Promise<void>(resolve => { allowResume = resolve; });
+    fixture.pauseQuery = { path: 'users/a/history_months', entered: onEntered, resume };
+    const running = processHealthDataErasure('a', Date.now() + 30_000);
+    await entered;
+    fixture.records.get(consentPath('a'))!.uid = 'other-account';
+    allowResume();
+
+    expect(await running).toBe('failed');
+    expect(await readHealthDataErasureStatus('a')).toMatchObject({
+      status: 'failed', complete: false, retryable: false, localPurgeAuthorized: false,
+    });
+    expect(fixture.records.has('user_data_keys/a')).toBe(true);
+    expect(fixture.records.get(consentPath('a'))?.revision).toBe(3);
+  });
+
   it('fails closed on an unknown nested collection and preserves the wrapped key', async () => {
     fixture.records.set('users/a/unrecognized_records/one', { data: 'unexpected' });
     await createHealthDataErasureJob('a');
@@ -166,6 +235,22 @@ describe('trusted data-only erasure worker', () => {
       status: 'failed', complete: false, localPurgeAuthorized: false,
     });
     expect(fixture.records.has('users/a/unrecognized_records/one')).toBe(true);
+    expect(fixture.records.has('user_data_keys/a')).toBe(true);
+    expect(fixture.records.get(consentPath('a'))).toMatchObject({ status: 'withdrawn', revision: 3 });
+  });
+
+  it.each([
+    ['known', 'users/a/history_months/2026-09/legacy_private/secret'],
+    ['unknown', 'users/a/undocumented/ghost/deep/secret'],
+  ])('fails closed when %s subcollections outlive missing parent documents', async (_kind, residualPath) => {
+    fixture.records.set(residualPath, { medical: 'retained for inspection' });
+    await createHealthDataErasureJob('a');
+
+    expect(await processHealthDataErasure('a', Date.now() + 30_000)).toBe('failed');
+    expect(await readHealthDataErasureStatus('a')).toMatchObject({
+      status: 'failed', complete: false, localPurgeAuthorized: false, retryable: false,
+    });
+    expect(fixture.records.has(residualPath)).toBe(true);
     expect(fixture.records.has('user_data_keys/a')).toBe(true);
     expect(fixture.records.get(consentPath('a'))).toMatchObject({ status: 'withdrawn', revision: 3 });
   });
@@ -412,6 +497,24 @@ describe('trusted data-only erasure worker', () => {
     expect(await processHealthDataErasure('a', Date.now() + 500)).toBe('pending');
     expect(fixture.records.has('users/a/history_months/2026-09')).toBe(true);
     expect(fixture.records.get(markerPath('a'))).toMatchObject({ status: 'requested' });
+    expect(fixture.records.get(consentPath('a'))?.revision).toBe(3);
+  });
+
+  it('fences page deletion if the leased job is reassigned to a foreign UID', async () => {
+    await createHealthDataErasureJob('a');
+    let onEntered!: () => void;
+    let allowResume!: () => void;
+    const entered = new Promise<void>(resolve => { onEntered = resolve; });
+    const resume = new Promise<void>(resolve => { allowResume = resolve; });
+    fixture.pauseQuery = { path: 'users/a/history_months', entered: onEntered, resume };
+    const running = processHealthDataErasure('a', Date.now() + 30_000);
+    await entered;
+    fixture.records.get(markerPath('a'))!.uid = 'other-account';
+    allowResume();
+
+    expect(await running).toBe('busy');
+    expect(fixture.records.has('users/a/history_months/2026-09')).toBe(true);
+    expect(fixture.records.has('user_data_keys/a')).toBe(true);
     expect(fixture.records.get(consentPath('a'))?.revision).toBe(3);
   });
 
