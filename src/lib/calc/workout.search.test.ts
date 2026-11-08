@@ -84,3 +84,18 @@ describe('typed workout search contracts', () => {
         expect(filterItems(items, '', 'label')).toBe(items);
     });
 });
+
+describe('single-token exercise category search', () => {
+    it('includes the tracking-type field in direct search while keeping name matching', () => {
+        const library = [
+            { id: 'erg', name: 'Ergometro', trackingType: 'cardio' as const },
+            { id: 'plank', name: 'Plank', trackingType: 'time' as const },
+            { id: 'bench', name: 'Panca', trackingType: 'weight_reps' as const },
+        ];
+        const searcher = createExerciseLibrarySearcher(library);
+        expect(searcher('cardio').map(item => item.id)).toEqual(['erg']);
+        expect(searchExerciseLibrary(library, 'isometria').map(item => item.id)).toEqual(['plank']);
+        expect(searcher('peso').map(item => item.id)).toEqual(['bench']);
+        expect(searcher('Panca').map(item => item.id)).toContain('bench');
+    });
+});
