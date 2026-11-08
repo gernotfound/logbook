@@ -992,3 +992,87 @@ describe('weekly analytics tolerate invalid non-finite records without contamina
             .toBe(getLocalDateString(new Date('2026-08-18T12:00:00Z')));
     });
 });
+
+describe('analytics: representable aggregates and reliable numerical comparisons', () => {
+    it('normalizes fractional and non-finite week counts before iterating', () => {
+        expect(generateWeekIntervals(2.9, '2026-08-23')).toHaveLength(2);
+        expect(generateWeekIntervals(Infinity, '2026-08-23')).toHaveLength(8);
+        expect(generateWeekIntervals(NaN, '2026-08-23')).toHaveLength(8);
+        expect(generateWeekIntervals(-Infinity, '2026-08-23')).toHaveLength(8);
+    });
+
+    it('does not invent a Pearson coefficient from non-finite inputs', () => {
+        expect(calculatePearsonCorrelation([1, 1, 1], [Infinity, 2, 3])).toBeNull();
+        expect(calculatePearsonCorrelation([1, 2, 3], [1, NaN, 3])).toBeNull();
+        expect(calculatePearsonCorrelation([1, 2, 3], [1, -Infinity, 3])).toBeNull();
+    });
+
+    it('computes Pearson reliably for perfectly correlated tiny and huge magnitudes', () => {
+        expect(calculatePearsonCorrelation([1e-6, 2e-6, 3e-6], [10, 20, 30])).toBe(1);
+        expect(calculatePearsonCorrelation([1e200, 2e200, 3e200], [10, 20, 30])).toBe(1);
+        expect(calculatePearsonCorrelation([1e200, 2e200, 3e200], [30, 20, 10])).toBe(-1);
+        expect(calculatePearsonCorrelation([10, 10, 10], [30, 20, 10])).toBe(0);
+    });
+
+    it('does not publish overflowing calorie sums or count discarded records as logged', () => {
+        const nutrition = {
+            '2026-08-17': { date: '2026-08-17', kcal: 1e308, carbs: 0, pro: 0, fat: 0 },
+            '2026-08-18': { date: '2026-08-18', kcal: 1e308, carbs: 0, pro: 0, fat: 0 },
+        } as Record<string, NutritionDay>;
+
+        const { points, stats } = computeWeeklyNutritionSeries(nutrition, 1, '2026-08-19');
+        expect(points[0].loggedDaysCount).toBe(1);
+        expect(points[0].totalKcal).toBe(1e308);
+        expect(points[0].avgDailyKcal).toBe(1e308);
+        expect(stats.avgDailyKcalOverall).toBe(1e308);
+        expect(Number.isFinite(points[0].totalKcal)).toBe(true);
+        expect(Number.isFinite(stats.avgDailyKcalOverall)).toBe(true);
+    });
+
+    it('omits macro averages when finite values overflow together instead of publishing infinity', () => {
+        const nutrition = {
+            '2026-08-17': { date: '2026-08-17', kcal: 2000, carbs: 1e308, pro: 20, fat: 10 },
+            '2026-08-18': { date: '2026-08-18', kcal: 2000, carbs: 1e308, pro: 20, fat: 10 },
+        } as Record<string, NutritionDay>;
+
+        const point = computeWeeklyNutritionSeries(nutrition, 1, '2026-08-19').points[0];
+        expect(point).toMatchObject({ loggedDaysCount: 2, totalKcal: 4000, avgPro: 20, avgFat: 10 });
+        expect(point).not.toHaveProperty('avgCarbs');
+        const single = computeWeeklyNutritionSeries({
+            '2026-08-17': nutrition['2026-08-17'],
+        }, 1, '2026-08-19').points[0];
+        expect(single.avgCarbs).toBe(1e308);
+    });
+
+    it('keeps weekly and cross-week activity totals finite when observations overflow in combination', () => {
+        const cardio = (id: string) => ({
+            id, modality: 'bike', durationMinutes: 1e308, intensity: 'moderate' as const, source: 'manual' as const,
+        });
+        const nutrition = {
+            '2026-08-17': { date: '2026-08-17', steps: 1e308, cardioSessions: [cardio('one'), cardio('two')] },
+            '2026-08-18': { date: '2026-08-18', steps: 1e308 },
+            '2026-08-10': { date: '2026-08-10', steps: 1e308, cardioSessions: [cardio('three')] },
+        } as Record<string, NutritionDay>;
+
+        const { points, stats } = computeWeeklyActivitySeries(nutrition, 2, '2026-08-19');
+        expect(points[1]).toMatchObject({
+            totalSteps: 1e308, stepDaysCount: 1, cardioMinutes: 1e308, cardioSessionsCount: 1,
+        });
+        expect(points[1].cardioMinutesByIntensity.moderate).toBe(1e308);
+        expect(Number.isFinite(stats.totalSteps)).toBe(true);
+        expect(Number.isFinite(stats.cardioMinutes)).toBe(true);
+        expect(stats.stepDaysCount).toBe(2);
+        expect(stats.cardioSessionsCount).toBe(2);
+    });
+
+    it('keeps a weekly weight mean finite when individually valid measurements overflow in sum', () => {
+        const nutrition = {
+            '2026-08-17': { date: '2026-08-17', weight: 1e308 },
+            '2026-08-18': { date: '2026-08-18', weight: 1e308 },
+        } as Record<string, NutritionDay>;
+        const { points, stats } = computeWeeklyWeightSeries(nutrition, 1, '2026-08-19');
+        expect(points[0]).toMatchObject({ averageWeightKg: 1e308, recordedDaysCount: 1 });
+        expect(stats.latestAverageWeightKg).toBe(1e308);
+        expect(Number.isFinite(points[0].averageWeightKg)).toBe(true);
+    });
+});
