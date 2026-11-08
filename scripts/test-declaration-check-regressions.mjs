@@ -66,3 +66,18 @@ await test('reports the source path rather than silently losing an unparseable t
     /Cannot parse test source tests\/example\.test\.tsx:/,
   );
 });
+
+await test('preserves generic arrow functions in .ts without interpreting them as JSX', () => {
+  const source = [
+    'const deferred = <T>() => new Promise<T>(() => {});',
+    "it.skip('disabled', () => {});",
+  ].join('\n');
+  assert.deepEqual(findDisabledTests(source, 'tests/isolated/lateCommit.test.ts').map(f => f.label), ['skip']);
+});
+
+await test('rejects JSX in .ts rather than silently misparsing test declarations', () => {
+  assert.throws(
+    () => findDisabledTests('const view = <div />;', 'invalid.test.ts'),
+    /Cannot parse test source invalid\.test\.ts:/,
+  );
+});
