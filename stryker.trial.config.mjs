@@ -13,7 +13,8 @@ export const trialCases = {
   },
   "meal-totals": {
     "mutate": [
-      "src/lib/nutrition/calculateLoggedMealTotals.ts"
+      "src/lib/nutrition/calculateLoggedMealTotals.ts",
+      "src/lib/utils/rounding.ts"
     ],
     "testFiles": [
       "src/lib/nutrition/calculateLoggedMealTotals.test.ts",
