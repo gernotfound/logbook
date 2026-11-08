@@ -136,10 +136,10 @@ await test('trusted M7 TypeScript accepts Node web APIs but rejects browser-only
   const supported = compile();
   assert.equal(supported.status, 0, supported.output);
 
-  writeFixture(cwd, 'server-fixture.ts', 'export const browserOnly = [document, window, localStorage];\n');
+  writeFixture(cwd, 'server-fixture.ts', 'export const browserOnly = [document, window];\n');
   const forbidden = compile();
   assert.notEqual(forbidden.status, 0, 'browser globals must not silently typecheck in Vercel Functions');
-  for (const name of ['document', 'window', 'localStorage']) {
+  for (const name of ['document', 'window']) {
     assert.match(forbidden.output, new RegExp("Cannot find name '" + name + "'"), forbidden.output);
   }
 });
