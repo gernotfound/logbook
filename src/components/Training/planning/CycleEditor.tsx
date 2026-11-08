@@ -289,7 +289,9 @@ export const CycleEditor: React.FC<CycleEditorProps> = ({
             <CycleMuscleMap
                 title="Mappa muscolare del ciclo"
                 highlightedMuscles={highlightedMuscles}
-                emptyMessage="Aggiungi una scheda al ciclo per evidenziare i muscoli allenati."
+                emptyMessage={cycleRoutines.length === 0
+                    ? 'Aggiungi una scheda al ciclo per evidenziare i muscoli allenati.'
+                    : 'Nessun muscolo evidenziato per le schede selezionate. Verifica gli esercizi e i parametri del ciclo.'}
             />
 
             <CycleVolumeAccordion items={macroVolume} />
