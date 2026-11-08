@@ -50,6 +50,7 @@ export interface UseCycleFormProps {
 export function useCycleForm({ initialCycle, routines, onSave, showAlert }: UseCycleFormProps) {
     const startDatePickerRef = useRef<HTMLInputElement>(null);
     const saveInFlightRef = useRef(false);
+    const [isSaving, setIsSaving] = useState(false);
     const endDatePickerRef = useRef<HTMLInputElement>(null);
 
     const initialIso = initialCycle?.startDate || Logic.getLocalDateString();
@@ -247,6 +248,7 @@ export function useCycleForm({ initialCycle, routines, onSave, showAlert }: UseC
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+        if (saveInFlightRef.current) return;
         const trimmedName = name.trim();
         if (!trimmedName) {
             await showAlert("Inserisci un nome per il ciclo di allenamento.");
@@ -318,10 +320,15 @@ export function useCycleForm({ initialCycle, routines, onSave, showAlert }: UseC
         // a different ID for a new cycle) before the first durable save settles.
         if (saveInFlightRef.current) return;
         saveInFlightRef.current = true;
+        setIsSaving(true);
         try {
             await onSave(cycle);
+        } catch (error) {
+            console.error('Errore salvataggio ciclo:', error);
+            await showAlert('Salvataggio del ciclo non riuscito. Le modifiche sono ancora nel form: riprova.');
         } finally {
             saveInFlightRef.current = false;
+            setIsSaving(false);
         }
     };
 
@@ -371,6 +378,7 @@ export function useCycleForm({ initialCycle, routines, onSave, showAlert }: UseC
             secondaryMuscles,
             cycleRoutines, setCycleRoutines,
             showSchedulePreview, setShowSchedulePreview,
+            isSaving,
             tempWeeks, tempFreq
         },
         computed: { timeline, schedule },

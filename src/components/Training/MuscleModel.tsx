@@ -28,6 +28,7 @@ interface MuscleModelProps {
     interactive?: boolean;
     onToggleMuscle?: (muscleId: string) => void;
     showLegend?: boolean;
+    selectedMusclesLabel?: string;
     showTextSelection?: boolean;
 }
 
@@ -38,6 +39,7 @@ export default function MuscleModel({
     interactive = false,
     onToggleMuscle,
     showLegend = true,
+    selectedMusclesLabel = 'Primari',
     showTextSelection = true,
 }: MuscleModelProps) {
     const [tooltip, setTooltip] = useState({ visible: false, text: '', x: 0, y: 0 });
@@ -178,7 +180,7 @@ export default function MuscleModel({
                         ? 'Nessun muscolo evidenziato.'
                         : (
                             <>
-                                {selectedMuscles.length > 0 ? `Primari: ${selectedMuscles.map(Logic.getMuscleName).join(', ')}. ` : ''}
+                                {selectedMuscles.length > 0 ? `${selectedMusclesLabel}: ${selectedMuscles.map(Logic.getMuscleName).join(', ')}. ` : ''}
                                 {secondaryMuscles.length > 0 ? `Secondari: ${secondaryMuscles.map(Logic.getMuscleName).join(', ')}.` : ''}
                             </>
                         )}
