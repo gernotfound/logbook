@@ -172,6 +172,40 @@ describe('authenticated inactivity retention boundary', () => {
     expect(state.writes).toHaveLength(0);
   });
 
+  it('does not start inactivity scheduling after the allotted cron phase deadline', async () => {
+    activity('eligible', old);
+    const outcome = await queueInactiveAccountDeletions(now, 12, Date.now() - 1);
+    expect(outcome).toEqual({ scanned: 0, queued: 0 });
+    expect(state.docs.has('account_deletions/eligible')).toBe(false);
+    expect(state.writes).toHaveLength(0);
+  });
+
+  it('saves the last examined cursor when the phase deadline expires between query pages', async () => {
+    for (let i = 0; i < 12; i++) {
+      state.docs.set('account_activity/a-' + String(i).padStart(3, '0'), {
+        uid: 'foreign-owner', firstSeenAt: old, lastSeenAt: old,
+      });
+    }
+    activity('z-eligible', old);
+    let clockMs = 1000;
+    const clock = vi.spyOn(Date, 'now').mockImplementation(() => clockMs);
+    state.onQuery = () => { state.onQuery = () => { clockMs = 2000; }; };
+    try {
+      const first = await queueInactiveAccountDeletions(now, 12, 2000);
+      expect(first).toEqual({ scanned: 12, queued: 0 });
+      expect(state.docs.get('account_inactivity_scan/state')).toMatchObject({
+        revision: 1, cursor: { uid: 'a-011', lastSeenAt: old },
+      });
+      expect(state.docs.has('account_deletions/z-eligible')).toBe(false);
+    } finally {
+      clock.mockRestore();
+      state.onQuery = null;
+    }
+    const next = await queueInactiveAccountDeletions(now, 12);
+    expect(next).toEqual({ scanned: 1, queued: 1 });
+    expect(state.docs.has('account_deletions/z-eligible')).toBe(true);
+  });
+
   it('queues only truly expired markers, with an atomic fence and opaque recovery receipt', async () => {
     activity('expired', old);
     activity('recent', recent);

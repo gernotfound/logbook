@@ -79,6 +79,12 @@ describe('M7 daily account deletion recovery cron', () => {
     const enabled = await GET(request('expected-secret'));
     expect(enabled.status).toBe(200);
     expect(inactivity.queueInactiveAccountDeletions).toHaveBeenCalledTimes(1);
+    expect(inactivity.queueInactiveAccountDeletions).toHaveBeenCalledWith(
+      undefined, undefined, expect.any(Number),
+    );
+    const phaseCutoff = inactivity.queueInactiveAccountDeletions.mock.calls[0][2] as number;
+    expect(phaseCutoff).toBeGreaterThan(Date.now() + 250_000);
+    expect(phaseCutoff).toBeLessThanOrEqual(Date.now() + 260_000);
     expect(await enabled.json()).toMatchObject({
       inactiveScanned: 1, inactiveQueued: 1, inactivityErrors: 0,
     });

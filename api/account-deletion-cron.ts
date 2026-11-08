@@ -117,7 +117,11 @@ export async function GET(request: Request): Promise<Response> {
     && process.env.ACCOUNT_INACTIVITY_DELETION_ENABLED === 'true'
     && Date.now() + SAFETY_BUFFER_MS < deletionDeadlineMs) {
     try {
-      const outcome = await queueInactiveAccountDeletions();
+      // Stop starting new inactivity transactions before the cron safety margin;
+      // the scanner may still persist its last verified cursor.
+      const outcome = await queueInactiveAccountDeletions(
+        undefined, undefined, deletionDeadlineMs - SAFETY_BUFFER_MS,
+      );
       inactiveScanned = outcome.scanned;
       inactiveQueued = outcome.queued;
     } catch (error) {
