@@ -333,6 +333,38 @@ it('rejects replica generation and sequence counters outside the safe-integer ra
     expect((await getDoc(controlRef)).data()?.replicas.s00.lastSeq).toBe(Number.MAX_SAFE_INTEGER);
 });
 
+it('keeps full 16-slot checkpoint validation while optimizing sparse clocks', async () => {
+    const db = asModularFirestore(env.authenticatedContext('a', { email_verified: true }).firestore());
+    const controlRef = doc(db, 'users/a/sync_control/state');
+    const now = Date.now();
+    const denseClock = Object.fromEntries(Array.from({ length: 16 }, (_, index) =>
+        [`s${String(index).padStart(2, '0')}`, 0]));
+    const entry = {
+        replicaId: 'dense-checkpoint-replica', generation: 1, status: 'active',
+        lastSeq: 0, checkpointAtMs: now, leaseUntilMs: now + 360 * 24 * 60 * 60 * 1000,
+        checkpointClock: denseClock,
+    };
+    const initial = {
+        protocolVersion: 3, consentRevision: 1,
+        replicas: { s00: entry },
+        mutation: { slot: 's00', action: 'register' },
+    };
+    await assertSucceeds(setDoc(controlRef, initial));
+    const saved = (await getDoc(controlRef)).data()!;
+
+    for (const malformed of [
+        { ...denseClock, s07: 'invalid' },
+        { ...denseClock, s15: Number.MAX_SAFE_INTEGER + 1 },
+    ]) {
+        await assertFails(setDoc(controlRef, {
+            ...saved,
+            replicas: { ...saved.replicas, s00: { ...saved.replicas.s00, checkpointClock: malformed } },
+            mutation: { slot: 's00', action: 'checkpoint' },
+        }));
+        expect((await getDoc(controlRef)).data()).toEqual(saved);
+    }
+});
+
 it('retires an expired replica without dropping the verified consent generation', async () => {
     const db = asModularFirestore(env.authenticatedContext('a', { email_verified: true }).firestore());
     const controlRef = doc(db, 'users/a/sync_control/state');
