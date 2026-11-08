@@ -83,7 +83,7 @@ export const trialCases = {
   },
   "cloud-hydration": {
     "mutate": ["src/lib/sync/localCloudHydration.ts"],
-    "testFiles": ["tests/isolated/localRepository.test.ts", "tests/isolated/consentEpochRecovery.test.ts"],
+    "testFiles": ["tests/isolated/localRepository.test.ts", "tests/isolated/consentEpochRecovery.test.ts", "tests/isolated/localCloudHydration.test.ts"],
     "runner": "isolated"
   },
   "journal-acknowledgement": {
