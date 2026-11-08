@@ -16,6 +16,8 @@ import { beginGuestMigrationIntent } from '../src/lib/auth/guestMigrationIntent'
 import { createAndMigrateVault } from '../src/lib/sync/secureArchiveMigration';
 import { lockAllVaults } from '../src/lib/sync/secureArchiveSession';
 import { activateGuestSession, GUEST_SESSION_KEY } from '../src/lib/sync/session';
+import { CATALOG_CACHE_KEY, clearCatalogCache, getInMemoryCatalog, getSeedCatalog } from '../src/lib/catalog/catalogService';
+import { set as idbSet } from 'idb-keyval';
 
 vi.mock('../src/lib/sync/cloudAccountKeyAccess', () => ({
     requireCloudAccountDataKey: vi.fn(async () => new Uint8Array(32).fill(18)),
@@ -107,6 +109,62 @@ describe('guest -> account V3 migration', () => {
         expect(DB.loadCloudPayload).toHaveBeenNthCalledWith(1, expect.objectContaining({ allMonths: true, cloudKey: expect.any(Uint8Array) }));
         expect(DB.loadCloudPayload).toHaveBeenCalledTimes(2);
         expect(localStorage.getItem('logbook_is_guest')).toBeNull();
+    });
+
+    it('classifies persisted global items through the real guest-to-account migration, not an empty memory seed', async () => {
+        const { cloud } = fixtures();
+        await clearCatalogCache();
+        const seed = getSeedCatalog();
+        const globalExercise = { id: 'catalog-migration-ex', name: 'Global exercise', trackingType: 'weight_reps' as const };
+        const globalFood = { id: 'catalog-migration-food', name: 'Global food', kcal: 150, pro: 5, carbs: 20, fat: 5 };
+        // Simulate the stale in-memory seed that an earlier failed IDB read can leave.
+        expect(getInMemoryCatalog().exercises).toEqual([]);
+        await idbSet(CATALOG_CACHE_KEY, {
+            ...seed,
+            manifest: { ...seed.manifest, version: 'durable-migration-v1', itemCounts: { exercises: 1, foods: 1 } },
+            exercises: [globalExercise],
+            foods: [globalFood],
+        });
+
+        const guest = parse({
+            profile: { height: '176' },
+            library: [globalExercise],
+            customFoods: [globalFood],
+            routines: [{ id: 'guest-routine', name: 'Guest', exercises: [] }],
+        });
+        expect(guest.library?.[0]?.isDefault).toBeUndefined();
+        expect(guest.customFoods?.[0]?.isCustom).toBeUndefined();
+        localStorage.setItem('logbook_is_guest', 'true');
+        localStorage.setItem(GUEST_SESSION_KEY, 'guest-migration-v3-generation');
+        activateGuestSession('guest-migration-v3-generation');
+        await beginGuestMigrationIntent('merge', 'recovery', { uid: user.uid });
+        useAppStore.getState().setUserData(guest);
+
+        vi.mocked(DB.loadCloudPayload)
+            .mockResolvedValueOnce({ data: cloud, completeMonths: [], cloudDocuments: new Map() })
+            .mockImplementationOnce(async () => {
+                const durable = await readLocal('user:a');
+                const metadata = durable?.syncMetaByDocument[''];
+                if (!durable || !metadata) throw new Error('Missing authenticated root checkpoint in migration fixture');
+                return {
+                    data: durable.data,
+                    completeMonths: [],
+                    cloudDocuments: new Map([['', { ...rootDocument(durable.data), _sync: metadata }]]),
+                };
+            });
+        render(<AuthProvider><div>Catalog migration integrity check</div></AuthProvider>);
+
+        await waitFor(async () => {
+            const envelope = await readLocal('user:a');
+            expect(envelope?.data.profile).toMatchObject({ height: '176', gender: 'M' });
+            expect(envelope?.data.routines?.some(item => item.id === 'guest-routine')).toBe(true);
+            expect(envelope?.data.library?.filter(item =>
+                item.id === globalExercise.id && item.isDefault !== true)).toEqual([]);
+            expect(envelope?.data.customFoods?.filter(item =>
+                String(item.id) === globalFood.id && item.isCustom !== false)).toEqual([]);
+        }, { timeout: 8000 });
+        expect(localStorage.getItem('logbook_is_guest')).toBeNull();
+        await clearCatalogCache();
     });
 
     it('fences an existing account archive if guest migration encounters undecryptable cloud data', async () => {
