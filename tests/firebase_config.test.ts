@@ -1,6 +1,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
+import { tmpdir } from 'node:os';
+import { loadEnv } from 'vite';
 import { assertIsolatedVitestEnvironment, SYNTHETIC_FIREBASE_TEST_ENV } from '../scripts/vitest-env-isolation';
 
 describe('R2: Firebase Config Security & Fail-Fast Suite', () => {
@@ -42,6 +44,34 @@ describe('R2: Firebase Config Security & Fail-Fast Suite', () => {
             expect(entries).toHaveLength(Object.keys(SYNTHETIC_FIREBASE_TEST_ENV).length);
             expect(Object.fromEntries(entries)).toEqual(SYNTHETIC_FIREBASE_TEST_ENV);
             expect(new Set(entries.map(([key]) => key)).size).toBe(entries.length);
+        });
+
+        it('rejects actual Vite env-file precedence and inherited process overrides', () => {
+            const folder = fs.mkdtempSync(path.join(tmpdir(), 'logbook-env-test-'));
+            const key = 'VITE_FIREBASE_PROJECT_ID';
+            const original = process.env[key];
+            try {
+                fs.writeFileSync(
+                    path.join(folder, '.env.test'),
+                    Object.entries(SYNTHETIC_FIREBASE_TEST_ENV).map(([name, value]) => name + '=' + value).join('\n') + '\n',
+                );
+                expect(() => assertIsolatedVitestEnvironment(loadEnv('test', folder, 'VITE_'))).not.toThrow();
+
+                // A nontracked local file outranks the tracked synthetic fixture.
+                fs.writeFileSync(path.join(folder, '.env.test.local'), key + '=logbook-db-98cc4\n');
+                expect(() => assertIsolatedVitestEnvironment(loadEnv('test', folder, 'VITE_')))
+                    .toThrow(key);
+                fs.rmSync(path.join(folder, '.env.test.local'));
+
+                // An exported shell variable outranks even the .env.test fixture.
+                process.env[key] = 'logbook-db-98cc4';
+                expect(() => assertIsolatedVitestEnvironment(loadEnv('test', folder, 'VITE_')))
+                    .toThrow(key);
+            } finally {
+                if (original === undefined) delete process.env[key];
+                else process.env[key] = original;
+                fs.rmSync(folder, { recursive: true, force: true });
+            }
         });
 
         it('fails closed for shell/.env.test.local overrides and unexpected VITE endpoints', () => {
