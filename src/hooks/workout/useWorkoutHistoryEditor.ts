@@ -45,7 +45,9 @@ export function useWorkoutHistoryEditor({
         const selectedHistory = state.userData?.history?.find(item => item.id === workout.id);
         if (!selectedHistory || latest.userData?.history?.find(item => item.id === workout.id) !== selectedHistory) return false;
 
-        const editingWorkout = prepareHistoricalWorkoutForEditing(workout);
+        // The history item supplied by the UI may predate an async confirmation.
+        // Prepare from the verified current record, not that stale event payload.
+        const editingWorkout = prepareHistoricalWorkoutForEditing(selectedHistory);
         try {
             // The history editor temporarily takes over the same device workout
             // key. First durably journal any outstanding authenticated intent;

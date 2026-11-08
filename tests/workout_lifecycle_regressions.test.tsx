@@ -938,6 +938,59 @@ describe('Workout lifecycle durable recovery regressions', () => {
         expect(localStorage.getItem(deviceKey('history-editor-context', owner))).toBeNull();
     });
 
+    it('opens the current history version when the view passes an outdated item', async () => {
+        await prepareUnlockedTestArchive(owner);
+        if (owner.startsWith('user:')) localStorage.setItem(`logbook:v2:${owner}:health-consent-generation`, '1');
+        const stale = { ...workout('stale-history-record', true), routineName: 'Prima versione' };
+        const updated = { ...stale, routineName: 'Versione aggiornata' };
+        useAppStore.setState({
+            userData: userData({ history: [updated], activeWorkout: null }),
+            localWorkout: null,
+        });
+        const { result } = renderHook(() => useWorkoutSession());
+        await act(async () => {
+            expect(await result.current.startEditHistoricalWorkout(stale)).toBe(true);
+        });
+        expect(useAppStore.getState().localWorkout).toMatchObject({
+            id: stale.id, routineName: 'Versione aggiornata', isEditingHistory: true,
+        });
+        expect(stale.routineName).toBe('Prima versione');
+    });
+
+    it('does not copy outdated history into the editor after a pending confirmation', async () => {
+        await prepareUnlockedTestArchive(owner);
+        if (owner.startsWith('user:')) localStorage.setItem(`logbook:v2:${owner}:health-consent-generation`, '1');
+        const live = workout('live-while-history-changes', true);
+        const stale = { ...workout('history-updated-during-confirmation', true), routineName: 'Prima versione' };
+        useAppStore.setState({
+            userData: userData({ history: [stale], activeWorkout: live }),
+            localWorkout: live,
+        });
+        let confirm!: (choice: boolean) => void;
+        vi.mocked(useDialogStore.getState().showConfirm).mockImplementationOnce(
+            () => new Promise(resolve => { confirm = resolve; }),
+        );
+        const { result } = renderHook(() => useWorkoutSession());
+        let opening!: Promise<boolean>;
+        act(() => { opening = result.current.startEditHistoricalWorkout(stale); });
+        act(() => {
+            useAppStore.setState(state => ({
+                userData: {
+                    ...state.userData!,
+                    history: state.userData!.history.map(item => item.id === stale.id
+                        ? { ...item, routineName: 'Versione aggiornata durante la conferma' }
+                        : item),
+                },
+            }));
+        });
+        await act(async () => { confirm(true); expect(await opening).toBe(true); });
+        expect(useAppStore.getState().localWorkout).toMatchObject({
+            id: stale.id, routineName: 'Versione aggiornata durante la conferma',
+            isEditingHistory: true,
+        });
+        expect(stale.routineName).toBe('Prima versione');
+    });
+
     it('rejects invalid history duration before any durable history operation', async () => {
         const historical = workout('invalid-duration', true);
         const editor = {
