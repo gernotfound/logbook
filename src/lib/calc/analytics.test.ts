@@ -6,6 +6,7 @@ import {
     computeWeeklyNutritionSeries,
     computeVolumeCaloriesCorrelation,
     computeWeeklyWeightSeries,
+    computeWeeklyActivitySeries,
     computeReadinessTrends,
     computeWeeklyTrainingActivityContext,
     calculatePearsonCorrelation,
