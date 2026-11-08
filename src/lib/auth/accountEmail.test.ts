@@ -121,8 +121,11 @@ describe('account email operations', () => {
                 if (phase === 'app-check') expect(mockedGetAppCheckToken).toHaveBeenCalledOnce();
                 else expect(user.getIdToken).toHaveBeenCalledOnce();
 
+                // Observe rejection before advancing fake timers: the deadline
+                // intentionally rejects, and no rejection may go unobserved.
+                const rejected = expect(pending).rejects.toMatchObject({ code: 'auth/link-preparation-timeout' });
                 await vi.advanceTimersByTimeAsync(12_100);
-                await expect(pending).rejects.toMatchObject({ code: 'auth/link-preparation-timeout' });
+                await rejected;
                 expect(fetch).not.toHaveBeenCalled();
 
                 // The SDK provider may still resolve after the UI has timed out.
