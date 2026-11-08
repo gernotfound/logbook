@@ -11,6 +11,10 @@ node_modules
 dist
 dist-ssr
 vercel-backend-static
+
+# Local deployment CLI state and Firebase Hosting cache
+/.vercel/
+/.firebase/
 *.local
 *.tsbuildinfo
 
