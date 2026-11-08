@@ -11,10 +11,10 @@ const buildSha = process.env.LOGBOOK_BUILD_SHA || process.env.EXPECTED_SHA || pr
 const buildHash = buildSha.slice(0, 7)
 const buildTime = new Date().toISOString()
 
-// Only Firebase's account/data SDKs belong in the client. Even when installed
-// transitively, Crashlytics and OpenTelemetry exporters/instrumentation must not
-// be included in any production chunk (including a lazy-loaded chunk).
-const forbiddenDiagnosticModule = /(?:^|\/)node_modules\/(?:@firebase\/crashlytics(?:\/|$)|firebase\/crashlytics(?:\/|$)|@opentelemetry\/(?!api(?:\/|$))[^/]+(?:\/|$))/i;
+// Only Firebase's account/data/App Check SDKs belong in the client. Reject
+// Firebase analytics/monitoring (including compat entry points) and OpenTelemetry
+// instrumentation/exporters in every emitted chunk, including lazy-loaded ones.
+const forbiddenDiagnosticModule = /(?:^|\/)node_modules\/(?:(?:@firebase\/|firebase\/(?:compat\/)?)(?:analytics|crashlytics|performance)(?:-compat)?(?:\/|$)|@opentelemetry\/(?!api(?:\/|$))[^/]+(?:\/|$))/i;
 
 export function assertNoBundledClientDiagnostics(moduleIds: Iterable<string>): void {
   for (const id of moduleIds) {
