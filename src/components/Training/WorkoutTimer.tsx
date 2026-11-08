@@ -15,6 +15,10 @@ import './metronome.css';
 
 const TIMER_REPAINT_MS = 500;
 
+const sameTimerSnapshot = (a: WorkoutTimerSnapshot, b: WorkoutTimerSnapshot): boolean =>
+    a.version === b.version && a.state === b.state
+    && a.startTime === b.startTime && a.accumulated === b.accumulated;
+
 export default function WorkoutTimer() {
     const { currentUser, isGuest } = useAuth();
     const owner = !isGuest && currentUser ? `user:${currentUser.uid}` : 'guest';
@@ -33,6 +37,7 @@ function OwnerWorkoutTimer({ owner }: { owner: string }) {
     const [timerUnreadable, setTimerUnreadable] = useState(initialTimer.unreadable);
     const [displayNow, setDisplayNow] = useState(() => Date.now());
     const [metronomeOpen, setMetronomeOpen] = useState(false);
+    const [timerConflict, setTimerConflict] = useState(false);
 
     useEffect(() => {
         if (!initialTimer.unreadable) return;
@@ -52,10 +57,20 @@ function OwnerWorkoutTimer({ owner }: { owner: string }) {
     const commitTimer = (next: WorkoutTimerSnapshot): boolean => {
         if (timerUnreadable) return false;
         try {
+            // A second tab can replace the timer while this UI is mounted.
+            // Refuse to overwrite a newer snapshot with an action based on stale state.
+            const current = readWorkoutTimerSnapshot(owner);
+            if (!sameTimerSnapshot(current, restTimer)) {
+                setRestTimer(current);
+                setDisplayNow(Date.now());
+                setTimerConflict(true);
+                return false;
+            }
             // Device-critical timer transitions are persisted synchronously before
             // the UI confirms them. A failed write therefore cannot look saved.
             writeWorkoutTimerSnapshot(next, owner);
             setRestTimer(next);
+            setTimerConflict(false);
             if (next.state === 'running') setDisplayNow(Date.now());
             return true;
         } catch (error) {
@@ -72,14 +87,16 @@ function OwnerWorkoutTimer({ owner }: { owner: string }) {
     };
 
     useEffect(() => {
-        const handleReset = () => {
-            // resetGlobalWorkoutTimer dispatches only after its stopped snapshot has
-            // been written successfully, so this event is safe to reflect in memory.
+        const handleReset = (event: Event) => {
+            // A reset for a different owner must not alter this owner's rendered timer.
+            if (!(event instanceof CustomEvent) || event.detail?.owner !== owner) return;
+            // resetGlobalWorkoutTimer publishes the owner only after its write succeeds.
             setRestTimer(stoppedWorkoutTimer());
+            setTimerConflict(false);
         };
         window.addEventListener('logbook_reset_timer', handleReset);
         return () => window.removeEventListener('logbook_reset_timer', handleReset);
-    }, []);
+    }, [owner]);
 
     // The timeout chain is only a repaint trigger. Elapsed time always derives
     // from absolute timestamps, so mobile background throttling cannot make the
@@ -155,6 +172,9 @@ function OwnerWorkoutTimer({ owner }: { owner: string }) {
                 </div>
                 {timerUnreadable && (
                     <p role="alert" className="text-muted">Timer non disponibile finché lo storage del dispositivo non viene riletto correttamente.</p>
+                )}
+                {timerConflict && !timerUnreadable && (
+                    <p role="status" className="text-muted">Timer aggiornato da un'altra scheda. Ripeti l'azione per modificarlo.</p>
                 )}
                 <div className="timer-controls">
                     {restTimer.state !== 'running' ? (
