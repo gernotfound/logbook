@@ -72,6 +72,14 @@ function fakeCollection(path: string): any {
     doc(id: string) {
       return fakeDocument(`${path}/${id}`);
     },
+    // Include nonexistent parent refs with descendants, like Firestore showMissing.
+    async listDocuments() {
+      const prefix = path + '/';
+      const ids = new Set([...state.docs]
+        .filter(candidate => candidate.startsWith(prefix))
+        .map(candidate => candidate.slice(prefix.length).split('/')[0]));
+      return [...ids].map(id => fakeDocument(prefix + id));
+    },
     ...query(),
   };
 }
@@ -305,6 +313,19 @@ describe('M7 native deletion job store', () => {
     await acquireDeletionLease('u', 'worker-residue', Date.now() + 60_000);
     await deleteUserRoot('u', 'worker-residue');
     await expect(verifyNoAccountResidue('u', true)).rejects.toThrow('Unexpected residual collection');
+    expect(state.docs.has('user_data_keys/u')).toBe(true);
+  });
+
+  it.each([
+    ['known', 'users/u/history_months/2026-09/private_nested/secret'],
+    ['unknown', 'users/u/unknown_private/missing_parent/deep/secret'],
+  ])('refuses to verify %s orphan nested documents before retiring the account key', async (_kind, residualPath) => {
+    stageDeletionJob('u');
+    state.docs.add('user_data_keys/u');
+    state.docs.add(residualPath);
+
+    await expect(verifyNoAccountResidue('u', true)).rejects.toBeInstanceOf(NonRetryableDeletionError);
+    expect(state.docs.has(residualPath)).toBe(true);
     expect(state.docs.has('user_data_keys/u')).toBe(true);
   });
 
