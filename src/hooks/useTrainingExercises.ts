@@ -1,9 +1,11 @@
-import { useState, useMemo, useEffect, useCallback } from 'react';
+import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
+import type { Exercise, WorkoutRoutine } from '../types';
+import type { MuscleDef } from '../lib/constants/muscles';
 import { useAppStore } from '../store/useAppStore';
 import { useDialogStore } from '../store/useDialogStore';
 import { Logic } from '../lib/logic';
 import { captureSession, isCurrentSession } from '../lib/sync/session';
-import { getInMemoryCatalog } from '../lib/catalog/catalogService';
+import { getCachedCatalog } from '../lib/catalog/catalogService';
 import {
     filterMuscles,
     getExpandedMuscleIds,
@@ -12,11 +14,12 @@ import {
 import {
     clearExerciseDraft,
     persistExerciseDraft,
-    readExerciseDraft,
+    readExerciseDraftImage,
     type ExerciseTrackingType
 } from './trainingExercises/exerciseDraft';
 
-const EMPTY_ARRAY: any[] = [];
+const EMPTY_LIBRARY: Exercise[] = [];
+const EMPTY_ROUTINES: WorkoutRoutine[] = [];
 
 function blockExerciseDraft(error: unknown, session: ReturnType<typeof captureSession>): void {
     if (!isCurrentSession(session)) return;
@@ -30,8 +33,8 @@ function blockExerciseDraft(error: unknown, session: ReturnType<typeof captureSe
 }
 
 export function useTrainingExercises() {
-    const library = useAppStore(state => state.userData?.library || EMPTY_ARRAY);
-    const routines = useAppStore(state => state.userData?.routines || EMPTY_ARRAY);
+    const library = useAppStore(state => state.userData?.library || EMPTY_LIBRARY);
+    const routines = useAppStore(state => state.userData?.routines || EMPTY_ROUTINES);
     const dispatchDomainOperation = useAppStore(state => state.dispatchDomainOperation);
     const showAlert = useDialogStore(state => state.showAlert);
     const showConfirm = useDialogStore(state => state.showConfirm);
@@ -44,17 +47,21 @@ export function useTrainingExercises() {
     const [draftSession] = useState(() => captureSession());
     const draftOwner = draftSession.owner;
     const [initialRecovery] = useState(() => {
-        try { return { draft: readExerciseDraft(draftOwner), error: null as unknown }; }
-        catch (error) { return { draft: null, error }; }
+        try { return { ...readExerciseDraftImage(draftOwner), error: null as unknown }; }
+        catch (error) { return { draft: null, raw: null, error }; }
     });
     const initialDraft = initialRecovery.draft;
+    const draftRaw = useRef<string | null>(initialRecovery.raw);
     const localPersistenceBlocked = useAppStore(state => state.localPersistenceBlocked);
     const assertCurrentDraft = useCallback(() => {
         if (initialRecovery.error || localPersistenceBlocked || !isCurrentSession(draftSession)) {
             throw new Error('Sessione, consenso o bozza esercizio non più verificabili.');
         }
-        // A different tab may have replaced the stored draft since the form mounted.
-        readExerciseDraft(draftOwner);
+        // Owner and consent can match even when a second editor has replaced
+        // the canonical draft. Keep the exact image observed by this form.
+        if (readExerciseDraftImage(draftOwner).raw !== draftRaw.current) {
+            throw new Error('Bozza esercizio modificata da un’altra scheda: originale conservato.');
+        }
     }, [draftOwner, draftSession, initialRecovery.error, localPersistenceBlocked]);
     useEffect(() => {
         if (initialRecovery.error) blockExerciseDraft(initialRecovery.error, draftSession);
@@ -63,8 +70,8 @@ export function useTrainingExercises() {
     const [exName, setExName] = useState(() => initialDraft?.name || '');
     const [exNotes, setExNotes] = useState(() => initialDraft?.notes || '');
     const [muscleSearch, setMuscleSearch] = useState('');
-    const [selectedMuscles, setSelectedMuscles] = useState<any[]>(() => initialDraft?.selectedMuscles || []);
-    const [secondaryMuscles, setSecondaryMuscles] = useState<any[]>(() => initialDraft?.secondaryMuscles || []);
+    const [selectedMuscles, setSelectedMuscles] = useState<MuscleDef[]>(() => initialDraft?.selectedMuscles || []);
+    const [secondaryMuscles, setSecondaryMuscles] = useState<MuscleDef[]>(() => initialDraft?.secondaryMuscles || []);
     const [selectionMode, setSelectionMode] = useState<'primary' | 'secondary'>('primary');
     const [trackingType, setTrackingType] = useState<ExerciseTrackingType>(() => initialDraft?.trackingType || 'weight_reps');
     const [isBodyweight, setIsBodyweight] = useState(() => Boolean(initialDraft?.isBodyweight));
@@ -75,7 +82,7 @@ export function useTrainingExercises() {
         if (editingExId || initialRecovery.error || localPersistenceBlocked) return;
         try {
             assertCurrentDraft();
-            persistExerciseDraft({
+            draftRaw.current = persistExerciseDraft({
                 name: exName,
                 notes: exNotes,
                 trackingType,
@@ -83,7 +90,7 @@ export function useTrainingExercises() {
                 secondaryMuscles,
                 isBodyweight,
                 equipmentWeight,
-            }, draftOwner, draftSession.consentGeneration);
+            }, draftOwner, draftSession.consentGeneration, draftRaw.current);
         } catch (error) {
             blockExerciseDraft(error, draftSession);
         }
@@ -93,7 +100,7 @@ export function useTrainingExercises() {
 
     const filteredMuscles = useMemo(() => filterMuscles(muscleSearch), [muscleSearch]);
 
-    const toggleMuscle = (muscle: any) => {
+    const toggleMuscle = (muscle: MuscleDef) => {
         if (!muscle || !muscle.id) return;
         if (selectionMode === 'primary') {
             const newSelection = toggleSmartMuscleSelection(selectedMuscles, muscle);
@@ -130,7 +137,7 @@ export function useTrainingExercises() {
         if (!muscle) return;
 
         const idsToRemove = getExpandedMuscleIds([muscle]);
-        const removeFromSelection = (selection: any[]) => {
+        const removeFromSelection = (selection: MuscleDef[]) => {
             const expanded = getExpandedMuscleIds(selection);
             idsToRemove.forEach(id => expanded.delete(id));
             return toggleSmartMuscleSelection(Array.from(expanded).map(id => ({ id })));
@@ -140,7 +147,7 @@ export function useTrainingExercises() {
         setSecondaryMuscles(current => removeFromSelection(current));
     };
 
-    const handleDuplicate = async (ex: any) => {
+    const handleDuplicate = async (ex: Exercise) => {
         if (!isCurrentSession(draftSession)) return;
         const newName = Logic.generateUniqueName(ex.name, library.map(l => l.name));
         const duplicated = {
@@ -156,13 +163,13 @@ export function useTrainingExercises() {
         }
     };
 
-    const handleEditClick = (ex: any) => {
+    const handleEditClick = (ex: Exercise) => {
         setEditingExId(ex.id);
         setExName(ex.name || '');
         setExNotes(ex.notes || '');
 
         // Populate selected muscles
-        const exMuscles: any[] = [];
+        const exMuscles: MuscleDef[] = [];
         (ex.muscles || []).forEach((mId: string) => {
             const m = Logic.MUSCLES.find(mu => mu.id === mId);
             if (m) exMuscles.push(m);
@@ -170,7 +177,7 @@ export function useTrainingExercises() {
         setSelectedMuscles(exMuscles);
 
         // Populate secondary muscles
-        const exSecMuscles: any[] = [];
+        const exSecMuscles: MuscleDef[] = [];
         (ex.secondaryMuscles || []).forEach((mId: string) => {
             const m = Logic.MUSCLES.find(mu => mu.id === mId);
             if (m) exSecMuscles.push(m);
@@ -193,7 +200,7 @@ export function useTrainingExercises() {
     const handleCancelEdit = () => {
         try {
             assertCurrentDraft();
-            clearExerciseDraft(draftOwner, draftSession.consentGeneration);
+            draftRaw.current = clearExerciseDraft(draftOwner, draftSession.consentGeneration, draftRaw.current);
         } catch (error) {
             blockExerciseDraft(error, draftSession);
             return false;
@@ -253,8 +260,8 @@ export function useTrainingExercises() {
                         ...ex,
                         name: trimmedName,
                         notes: exNotes.trim(),
-                        muscles: selectedMuscles.map((m: any) => m.id),
-                        secondaryMuscles: secondaryMuscles.map((m: any) => m.id),
+                        muscles: selectedMuscles.map(m => m.id),
+                        secondaryMuscles: secondaryMuscles.map(m => m.id),
                         trackingType,
                         isBodyweight: isBodyweight || undefined,
                         equipmentWeight: validEqWeight
@@ -269,8 +276,8 @@ export function useTrainingExercises() {
                 id: Logic.generateId('ex'),
                 name: trimmedName,
                 notes: exNotes.trim(),
-                muscles: selectedMuscles.map((m: any) => m.id),
-                secondaryMuscles: secondaryMuscles.map((m: any) => m.id),
+                muscles: selectedMuscles.map(m => m.id),
+                secondaryMuscles: secondaryMuscles.map(m => m.id),
                 trackingType,
                 setsCount: 3,
                 sets: [],
@@ -288,6 +295,8 @@ export function useTrainingExercises() {
             return false;
         }
 
+        // A later edit in this same form must outlive an earlier business commit.
+        const submittedDraftRaw = draftRaw.current;
         try {
             const savedExercise = editingExId
                 ? updatedLibrary.find(ex => ex.id === editingExId)
@@ -295,6 +304,10 @@ export function useTrainingExercises() {
             if (!savedExercise) throw new Error('Esercizio non trovato dopo la modifica');
             await persistExercise({ type: 'exercise.upsert', exercise: savedExercise });
             if (!isCurrentSession(draftSession)) return false;
+            if (draftRaw.current !== submittedDraftRaw) {
+                await showAlert('Una versione dell’esercizio è stata salvata, ma ci sono modifiche successive ancora da salvare.');
+                return false;
+            }
             const cleared = handleCancelEdit();
             if (!isCurrentSession(draftSession)) return false;
             if (!cleared) {
@@ -318,7 +331,7 @@ export function useTrainingExercises() {
         }
 
         const usedInRoutines = routines.filter(rtn =>
-            (rtn.exercises || []).some((ex: any) => ex.exId === id)
+            (rtn.exercises || []).some(ex => ex.exId === id)
         );
 
         let confirmMsg = "Sei sicuro di voler eliminare questo esercizio dall'archivio?";
@@ -343,7 +356,8 @@ export function useTrainingExercises() {
 
     const handleRestoreExercise = async (id: string) => {
         if (!isCurrentSession(draftSession)) return;
-        const catalog = getInMemoryCatalog(true);
+        const catalog = await getCachedCatalog();
+        if (!isCurrentSession(draftSession)) return;
         const originalEx = catalog.exercises.find(e => e.id === id);
         if (!originalEx) {
             void showAlert("Errore: esercizio originale non trovato.");
@@ -353,18 +367,16 @@ export function useTrainingExercises() {
         if (await showConfirm("Vuoi ripristinare questo esercizio ai valori originali? Le tue modifiche andranno perse.")) {
             if (!isCurrentSession(draftSession)) return;
             try {
-                await persistExercise({
-                    type: 'exercise.upsert',
-                    exercise: {
-                        ...originalEx,
-                        setsCount: originalEx.setsCount ?? 3,
-                        sets: []
-                    } as any
-                });
-                // Aggiorna anche il form corrente se è aperto
+                const restoredExercise: Exercise = {
+                    ...originalEx,
+                    setsCount: originalEx.setsCount ?? 3,
+                    sets: [],
+                };
+                await persistExercise({ type: 'exercise.upsert', exercise: restoredExercise });
+                // Show the same typed exercise that was actually committed.
                 if (!isCurrentSession(draftSession)) return;
                 if (editingExId === id) {
-                    handleEditClick(originalEx);
+                    handleEditClick(restoredExercise);
                 }
             } catch {
                 if (isCurrentSession(draftSession)) void showAlert("Errore durante il ripristino dell'esercizio.");

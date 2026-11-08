@@ -6,6 +6,7 @@ import { Logic } from '../../lib/logic';
 import { parseManualDuration } from '../../lib/utils/date';
 import SessionHeader from './SessionHeader';
 import SessionExerciseAccordion from './session/SessionExerciseAccordion';
+import { isCurrentExerciseMutationTarget } from './session/exerciseMutationTarget';
 import SessionRatings from './session/SessionRatings';
 import { BufferedWorkoutScope } from '../UI/bufferedWorkoutScope';
 import { ExerciseSearchDropdown } from './ExerciseSearchDropdown';
@@ -161,8 +162,9 @@ export const ActiveWorkoutSession = ({ onNavigateToHistory, onRequestEnd }: Acti
         addSet(exIndex);
     }, [addSet]);
 
-    const handleRemoveSet = useCallback((exIndex: number, sIndex: number) => {
-        removeSet(exIndex, sIndex);
+    const handleRemoveSet = useCallback((exIndex: number, sIndex: number, setId: string,
+        exerciseId?: string, workoutId?: string | null) => {
+        removeSet(exIndex, sIndex, setId, exerciseId, workoutId);
     }, [removeSet]);
 
     const handleRemoveLastSet = useCallback((exIndex: number) => {
@@ -256,6 +258,9 @@ export const ActiveWorkoutSession = ({ onNavigateToHistory, onRequestEnd }: Acti
                     activeWorkout.exercises.map((exItem, exIndex: number) => {
                         const libDef = libraryMap.get(exItem.exId);
                         const pastWorkouts = exerciseHistoryMap.get(exItem.exId) || EMPTY_HISTORY_ARRAY;
+                        const applyToOriginalExercise = (index: number, action: () => void) => {
+                            if (isCurrentExerciseMutationTarget(String(activeWorkout.id), index, exItem.id)) action();
+                        };
 
                         return (
                             <SessionExerciseAccordion
@@ -268,26 +273,32 @@ export const ActiveWorkoutSession = ({ onNavigateToHistory, onRequestEnd }: Acti
                                 isHistoryOpen={openHistoryExIndex === exIndex}
                                 isSetupOpen={openSetupExIndex === exIndex}
                                 openSpecialMenuId={openSpecialMenuId}
-                                onMoveExercise={handleMoveExercise}
-                                onMoveToPosition={handleMoveToPosition}
-                                onToggleHistory={handleToggleHistory}
-                                onToggleSetup={handleToggleSetup}
-                                onRemoveExercise={handleRemoveExercise}
-                                onUpdateSetupNote={handleUpdateSetupNote}
-                                onUpdateSessionNote={handleUpdateSessionNote}
-                                onUpdateTechnicalStandard={handleUpdateTechnicalStandard}
-                                onAddSet={handleAddSet}
-                                onRemoveSet={handleRemoveSet}
-                                onRemoveLastSet={handleRemoveLastSet}
-                                onUpdateSet={handleUpdateSet}
-                                onAddSpecialSet={handleAddSpecialSet}
-                                onUpdateSpecialSet={handleUpdateSpecialSet}
-                                onRemoveSpecialSet={handleRemoveSpecialSet}
-                                onUpdateSetTarget={handleUpdateSetTarget}
-                                onToggleSpecialMenu={handleToggleSpecialMenu}
+                                onMoveExercise={(index, direction) => applyToOriginalExercise(index, () => handleMoveExercise(index, direction))}
+                                onMoveToPosition={(index, target) => applyToOriginalExercise(index, () => handleMoveToPosition(index, target))}
+                                onToggleHistory={index => applyToOriginalExercise(index, () => handleToggleHistory(index))}
+                                onToggleSetup={index => applyToOriginalExercise(index, () => handleToggleSetup(index))}
+                                onRemoveExercise={index => applyToOriginalExercise(index, () => handleRemoveExercise(index))}
+                                onUpdateSetupNote={(exId, note) => applyToOriginalExercise(exIndex, () => handleUpdateSetupNote(exId, note))}
+                                onUpdateSessionNote={(index, note) => applyToOriginalExercise(index, () => handleUpdateSessionNote(index, note))}
+                                onUpdateTechnicalStandard={(index, note) => applyToOriginalExercise(index, () => handleUpdateTechnicalStandard(index, note))}
+                                onAddSet={index => applyToOriginalExercise(index, () => handleAddSet(index))}
+                                onRemoveSet={(index, setIndex, setId, exerciseId, workoutId) => applyToOriginalExercise(index,
+                                    () => handleRemoveSet(index, setIndex, setId, exerciseId, workoutId))}
+                                onRemoveLastSet={index => applyToOriginalExercise(index, () => handleRemoveLastSet(index))}
+                                onUpdateSet={(index, setId, field, value) => applyToOriginalExercise(index,
+                                    () => handleUpdateSet(index, setId, field, value))}
+                                onAddSpecialSet={(index, type, setId) => applyToOriginalExercise(index,
+                                    () => handleAddSpecialSet(index, type, setId))}
+                                onUpdateSpecialSet={(index, setId, type, segmentId, field, value) => applyToOriginalExercise(index,
+                                    () => handleUpdateSpecialSet(index, setId, type, segmentId, field, value))}
+                                onRemoveSpecialSet={(index, setId, type, segmentId) => applyToOriginalExercise(index,
+                                    () => handleRemoveSpecialSet(index, setId, type, segmentId))}
+                                onUpdateSetTarget={(index, setId, reps) => applyToOriginalExercise(index,
+                                    () => handleUpdateSetTarget(index, setId, reps))}
+                                onToggleSpecialMenu={setId => applyToOriginalExercise(exIndex, () => handleToggleSpecialMenu(setId))}
                                 isCurrent={safeCurrentExerciseIndex === exIndex}
                                 initiallyExpanded={Boolean(activeWorkout.isEditingHistory)}
-                                onActivate={setCurrentExerciseIndex}
+                                onActivate={index => applyToOriginalExercise(index, () => setCurrentExerciseIndex(index))}
                             />
                         );
                     })

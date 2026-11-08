@@ -1,6 +1,13 @@
 import { configDefaults, defineConfig } from 'vitest/config';
+import { loadEnv } from 'vite';
+import { fileURLToPath } from 'node:url';
+import { assertIsolatedVitestEnvironment, TEST_BACKEND_ORIGIN } from './scripts/vitest-env-isolation';
 import react from '@vitejs/plugin-react';
 import { VitePWA } from '@unplugin-pwa/vite';
+
+// Vite's shell and .env.test.local precedence can override the tracked test
+// placeholders. Reject that effective configuration before test setup imports SDKs.
+assertIsolatedVitestEnvironment(loadEnv('test', fileURLToPath(new URL('.', import.meta.url)), 'VITE_'));
 
 export const stressPatterns = ['**/challenger_*.test.{ts,tsx}', '**/*adversarial*.test.{ts,tsx}', '**/*stress*.test.{ts,tsx}'];
 
@@ -36,7 +43,7 @@ export default defineConfig({
   ],
   test: {
     // All network tests use a non-routable loopback backend; Production config is injected by Hosting.
-    env: { VITE_ACCOUNT_DELETION_API_ORIGIN: 'http://127.0.0.1:9' },
+    env: { VITE_ACCOUNT_DELETION_API_ORIGIN: TEST_BACKEND_ORIGIN },
     globals: true,
     environment: 'jsdom',
     setupFiles: ['./tests/cssReadCompat.ts', './tests/setup.tsx'],

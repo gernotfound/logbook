@@ -239,6 +239,11 @@ describe('trusted health consent boundary', () => {
     ['withdraw without revision', { action: 'withdraw' }],
     ['withdraw with fractional revision', { action: 'withdraw', expectedRevision: 0.5 }],
     ['withdraw with negative revision', { action: 'withdraw', expectedRevision: -1 }],
+    ['withdraw with string revision', { action: 'withdraw', expectedRevision: '0' }],
+    ['withdraw with unsafe revision', { action: 'withdraw', expectedRevision: Number.MAX_SAFE_INTEGER + 1 }],
+    ['reacceptance with zero revision', { action: 'reaccept', expectedRevision: 0, acceptance }],
+    ['reacceptance with fractional revision', { action: 'reaccept', expectedRevision: 1.5, acceptance }],
+    ['reacceptance with string revision', { action: 'reaccept', expectedRevision: '1', acceptance }],
     ['initial consent with incorrect revision', { action: 'accept-initial', expectedRevision: 1, acceptance }],
     ['reacceptance without revision', { action: 'reaccept', acceptance }],
   ])('rejects %s without changing consent or enqueuing erasure', async (_case, body) => {

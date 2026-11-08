@@ -85,7 +85,7 @@ import {
   registerDeletionRecoveryDevice,
   verifyDeletionRecoveryDevice,
 } from '../server/accountDeletion/deviceRecovery';
-import { GET, POST } from '../api/account-deletion-device';
+import { GET, POST, OPTIONS } from '../api/account-deletion-device';
 
 function token(character: string): string {
   return character.repeat(43);
@@ -238,6 +238,107 @@ describe('M7 account deletion recovery device registry', () => {
     const response = await POST(request('POST', { origin: 'https://evil.example' }));
     expect(response.status).toBe(403);
     expect(auth.verifyRecoveryRegistrationRequester).not.toHaveBeenCalled();
+  });
+
+  it('restricts CORS preflight to the exact app origin before any authentication', async () => {
+    const allowed = await OPTIONS(new Request('https://backend.example/api/account-deletion-device', {
+      method: 'OPTIONS',
+      headers: { origin: 'https://thelogbook.web.app', 'access-control-request-method': 'GET' },
+    }));
+    expect(allowed.status).toBe(204);
+    expect(allowed.headers.get('access-control-allow-origin')).toBe('https://thelogbook.web.app');
+    expect(allowed.headers.get('access-control-allow-headers')).toContain('x-account-deletion-device');
+
+    const denied = await OPTIONS(new Request('https://backend.example/api/account-deletion-device', {
+      method: 'OPTIONS',
+      headers: { origin: 'https://evil.example', 'access-control-request-method': 'GET' },
+    }));
+    expect(denied.status).toBe(403);
+    expect(denied.headers.get('access-control-allow-origin')).toBeNull();
+    expect(auth.verifyStatusAppCheck).not.toHaveBeenCalled();
+    expect(auth.verifyRecoveryRegistrationRequester).not.toHaveBeenCalled();
+  });
+
+  it('rejects a foreign GET origin before App Check or UID/token lookup', async () => {
+    const response = await GET(request('GET', { origin: 'https://evil.example' }));
+    expect(response.status).toBe(403);
+    expect(response.headers.get('access-control-allow-origin')).toBeNull();
+    expect(auth.verifyStatusAppCheck).not.toHaveBeenCalled();
+    expect(store.readDeletionStatusForUid).not.toHaveBeenCalled();
+  });
+
+  it('binds registration to the verified token UID rather than a forged body UID', async () => {
+    const response = await POST(new Request('https://backend.example/api/account-deletion-device', {
+      method: 'POST',
+      headers: { origin: 'https://thelogbook.web.app', 'content-type': 'application/json' },
+      body: JSON.stringify({ uid: 'user-b', deviceToken: token('A') }),
+    }));
+    expect(response.status).toBe(200);
+    expect(registry('user-a')?.uid).toBe('user-a');
+    expect(registry('user-b')).toBeNull();
+  });
+
+  it('refuses credentials when a Firestore transaction retries after a concurrent deletion job', async () => {
+    const original = fakeDb.runTransaction.bind(fakeDb);
+    const retry = vi.spyOn(fakeDb, 'runTransaction').mockImplementationOnce(async work => {
+      // Firestore aborts a transaction if a read document changes before commit.
+      // Simulate that retry, rather than pretending the first read was authoritative.
+      await expect(original(async tx => {
+        await work(tx);
+        state.deletionJobUid = 'user-a';
+        throw new Error('ABORTED: concurrent deletion job');
+      })).rejects.toThrow('ABORTED');
+      return original(work);
+    });
+    try {
+      const response = await POST(request('POST'));
+      expect(response.status).toBe(409);
+      expect(registry()).toBeNull();
+    } finally {
+      retry.mockRestore();
+    }
+  });
+
+  it('does not overwrite malformed recovery registry state', async () => {
+    state.registries.set('user-a', { uid: 'user-a', tokenHashes: ['invalid'] });
+    const before = registry();
+    const registration = await POST(request('POST'));
+    expect(registration.status).toBe(500);
+    expect(await registration.json()).toEqual({ error: 'Servizio recovery temporaneamente non disponibile.' });
+    expect(registry()).toBe(before);
+
+    const status = await GET(request('GET'));
+    expect(status.status).toBe(404);
+    expect(store.readDeletionStatusForUid).not.toHaveBeenCalled();
+    expect(registry()).toBe(before);
+  });
+
+  it('never caches positive, absent or rejected device-recovery status responses', async () => {
+    await registerDeletionRecoveryDevice('user-a', token('A'));
+    store.readDeletionStatusForUid.mockResolvedValueOnce(null);
+    const none = await GET(request('GET'));
+    expect(none.status).toBe(200);
+    expect(await none.json()).toEqual({ status: 'none' });
+    expect(none.headers.get('cache-control')).toBe('no-store');
+
+    const complete = await GET(request('GET'));
+    expect(complete.status).toBe(200);
+    expect((await complete.json()).status).toBe('complete');
+    expect(complete.headers.get('cache-control')).toBe('no-store');
+
+    const missing = await GET(request('GET', { deviceToken: token('B') }));
+    expect(missing.status).toBe(404);
+    expect(missing.headers.get('cache-control')).toBe('no-store');
+
+    const registered = await POST(request('POST'));
+    expect(registered.status).toBe(200);
+    expect(registered.headers.get('cache-control')).toBe('no-store');
+
+    auth.verifyStatusAppCheck.mockRejectedValueOnce(new auth.RequestAuthError('App Check non valido.', 403));
+    const denied = await GET(request('GET'));
+    expect(denied.status).toBe(403);
+    expect(denied.headers.get('cache-control')).toBe('no-store');
+    expect(store.readDeletionStatusForUid).toHaveBeenCalledTimes(2);
   });
 
   it('returns 404 for an invalid recovery credential without exposing account state', async () => {

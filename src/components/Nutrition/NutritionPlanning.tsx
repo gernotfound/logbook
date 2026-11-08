@@ -128,8 +128,9 @@ const NutritionPlanning = () => {
 
             {/* NOTE */}
             <div className="card" style={{ marginTop: '5px' }}>
-                <div style={{ fontSize: 'var(--font-size-section)', fontWeight: 'bold', marginBottom: '10px', color: 'var(--text-main)' }}>📝 Note</div>
-                <textarea 
+                <label htmlFor="nutrition-planning-notes" style={{ fontSize: 'var(--font-size-section)', fontWeight: 'bold', marginBottom: '10px', color: 'var(--text-main)', display: 'block' }}>📝 Note</label>
+                <textarea
+                    id="nutrition-planning-notes" 
                     placeholder="Scrivi qui eventuali note (es. integratori, orari dei pasti, variazioni nei giorni off...)"
                     value={planning.notes || ''}
                     onChange={e => handleUpdate('notes', e.target.value)}

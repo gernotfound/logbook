@@ -46,15 +46,15 @@ function fieldStamp(stamp: FieldStamp): StampLike {
     };
 }
 
-function guardMatches(doc: DocumentData, operation: SemanticOperation): boolean {
-    if (!operation.guard) return true;
+function guardMatches(doc: DocumentData, guard: SemanticOperation['guard'] | undefined): boolean {
+    if (!guard) return true;
     let target: any = doc;
-    for (const segment of operation.guard.path) {
+    for (const segment of guard.path) {
         if (target === null || target === undefined) return false;
         if (!Object.hasOwn(target, segment)) return false;
         target = target[segment];
     }
-    return target === operation.guard.equals;
+    return target === guard.equals;
 }
 
 function deleteBarrier(stamp: FieldStamp | undefined): VectorClock | undefined {
@@ -213,17 +213,6 @@ function maxCandidate<T extends { stamp: StampLike }>(candidates: T[]): T {
     return winner;
 }
 
-function candidateGuardMatches(doc: DocumentData, guard: SemanticOperation['guard'] | undefined): boolean {
-    if (!guard) return true;
-    let target: any = doc;
-    for (const segment of guard.path) {
-        if (target === null || target === undefined) return false;
-        if (!Object.hasOwn(target, segment)) return false;
-        target = target[segment];
-    }
-    return target === guard.equals;
-}
-
 function normalizeUpdateCandidates(
     candidates: UpdateCandidate[],
     barrier: VectorClock | undefined,
@@ -232,7 +221,7 @@ function normalizeUpdateCandidates(
     const byDot = new Map<string, UpdateCandidate>();
     for (const candidate of candidates) {
         if (barrier && !coversVectorClock(candidate.stamp.clock, barrier)) continue;
-        if (!candidateGuardMatches(doc, candidate.guard)) continue;
+        if (!guardMatches(doc, candidate.guard)) continue;
         const key = `${candidate.stamp.actorId}:${candidate.stamp.seq}`;
         const existing = byDot.get(key);
         if (!existing || candidate.source === 'visible' || (existing.source === 'hidden' && candidate.source === 'new')) {
@@ -315,7 +304,7 @@ function reconcileCapturedDescendant(
     const stamp = captured.stamp;
 
     if (stamp.deleted) {
-        if (!coversVectorClock(stamp.clock, required) || !candidateGuardMatches(doc, stamp.guard)) return undefined;
+        if (!coversVectorClock(stamp.clock, required) || !guardMatches(doc, stamp.guard)) return undefined;
         return { key: captured.key, path: captured.path, stamp: canonicalStamp(stamp) };
     }
 
@@ -414,7 +403,7 @@ export function applySemanticOperations(
         meta.clock = mergeVectors(meta.clock, ...opList.map(operation => operation.clock));
 
         const eligible = opList.filter(operation =>
-            guardMatches(doc, operation) && !blockedByAncestor(meta, operation));
+            guardMatches(doc, operation.guard) && !blockedByAncestor(meta, operation));
 
         if (!eligible.length) {
             resultDocs.set(docPath, doc);

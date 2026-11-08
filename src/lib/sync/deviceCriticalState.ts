@@ -26,6 +26,9 @@ export function persistOwnerBoundWorkoutSnapshot(
     if (session.owner.startsWith('user:')) {
         const intent = readWorkoutDeviceIntent(session.owner);
         if (intent) {
+            // An equivalent value still belongs to an invalid consent epoch
+            // after revocation/reacceptance. Do not treat it as safe for reload.
+            assertWorkoutSnapshotEpoch(session.owner, intent.consentRevision);
             if (!equivalentWorkoutSnapshot(intent.workout, localWorkout)) {
                 throw new Error('Snapshot workout non coerente con la copia di recupero sul dispositivo.');
             }

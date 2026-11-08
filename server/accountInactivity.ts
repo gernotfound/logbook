@@ -92,7 +92,15 @@ export async function recordAccountActivity(uidValue: string, now = Timestamp.no
  */
 export async function queueInactiveAccountDeletions(
   now = Timestamp.now(), maxCandidates = MAX_CANDIDATES_PER_RUN,
+  deadlineMs = Number.POSITIVE_INFINITY,
 ): Promise<{ scanned: number; queued: number }> {
+  if (Number.isNaN(deadlineMs) || deadlineMs === Number.NEGATIVE_INFINITY) {
+    throw new Error('Invalid inactivity scheduling deadline.');
+  }
+  // The deadline stops NEW work; never cancel an in-flight Firestore transaction.
+  // The caller reserves time for the final durable scan checkpoint.
+  const outOfBudget = () => Date.now() >= deadlineMs;
+  if (outOfBudget()) return { scanned: 0, queued: 0 };
   const db = adminDb();
   const cutoffMs = inactivityCutoffMillis(now.toMillis());
   const limit = Math.max(1, Math.min(MAX_CANDIDATES_PER_RUN, Math.floor(maxCandidates)));
@@ -107,19 +115,22 @@ export async function queueInactiveAccountDeletions(
 
   // Preserve the scan position across cron invocations: permanently malformed
   // records must not occupy the entire bounded window on every daily run.
-  for (let page = 0; page < MAX_PAGES_PER_RUN && queued < limit; page++) {
+  scan: for (let page = 0; page < MAX_PAGES_PER_RUN && queued < limit; page++) {
+    if (outOfBudget()) break;
     let query = db.collection(ACTIVITY_COLLECTION)
       .where('lastSeenAt', '<=', Timestamp.fromMillis(cutoffMs))
       .orderBy('lastSeenAt', 'asc')
       .orderBy(FieldPath.documentId(), 'asc').limit(limit);
     if (cursor) query = query.startAfter(cursor.lastSeenAt, cursor.uid);
     const candidates = await query.get();
+    if (outOfBudget()) break;
     if (candidates.size === 0) {
       // On reaching EOF, wrap to records that arrived behind the saved cursor.
       if (cursor) { cursor = null; continue; }
       break;
     }
     for (const candidate of candidates.docs) {
+      if (outOfBudget()) break scan;
       const lastSeenAt = candidate.data().lastSeenAt;
       if (lastSeenAt === undefined) throw new Error('Inactivity query returned a record without lastSeenAt.');
       cursor = { lastSeenAt, uid: candidate.id };

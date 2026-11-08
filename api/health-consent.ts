@@ -7,6 +7,7 @@ import {
   recordInitialHealthConsentAcceptance,
   validateExplicitAcceptance,
   HealthConsentRevisionConflictError,
+  type ExplicitConsentAcceptance,
 } from '../server/healthConsent/withdrawal.js';
 import { HealthDataErasureConflict, processHealthDataErasure } from '../server/healthConsent/erasure.js';
 
@@ -28,6 +29,18 @@ function errorResponse(error: unknown, origin: string | null): Response {
 }
 
 class ConsentInputError extends Error {}
+
+function requireExplicitAcceptance(value: unknown, message: string): asserts value is ExplicitConsentAcceptance {
+  try { validateExplicitAcceptance(value); }
+  catch { throw new ConsentInputError(message); }
+}
+
+function requireRevision(value: unknown, minimum: number, message: string): number {
+  if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < minimum) {
+    throw new ConsentInputError(message);
+  }
+  return value;
+}
 
 export async function OPTIONS(request: Request): Promise<Response> {
   const origin = request.headers.get('origin');
@@ -61,16 +74,13 @@ export async function POST(request: Request): Promise<Response> {
 
     if (body.action === 'accept-initial') {
       requireVerifiedHealthConsentWrite(identity);
-      try { validateExplicitAcceptance(body.acceptance); }
-      catch { throw new ConsentInputError('È richiesta la prima accettazione esplicita dei documenti correnti.'); }
+      requireExplicitAcceptance(body.acceptance, 'È richiesta la prima accettazione esplicita dei documenti correnti.');
       if (body.expectedRevision !== 0) throw new ConsentInputError('Revisione iniziale non valida.');
       return json(await recordInitialHealthConsentAcceptance(uid, body.acceptance), 200, origin);
     }
     if (body.action === 'withdraw') {
-      if (typeof body.expectedRevision !== 'number' || !Number.isSafeInteger(body.expectedRevision) || body.expectedRevision < 0) {
-        throw new ConsentInputError('Revisione consenso mancante o non valida.');
-      }
-      const state = await recordHealthConsentWithdrawal(uid, body.expectedRevision);
+      const expectedRevision = requireRevision(body.expectedRevision, 0, 'Revisione consenso mancante o non valida.');
+      const state = await recordHealthConsentWithdrawal(uid, expectedRevision);
       // The erasure job was durably enqueued in the same Firestore transaction.
       // Best-effort immediate progress must not turn a confirmed withdrawal into
       // an HTTP failure: the existing cron recovers unfinished work.
@@ -82,12 +92,9 @@ export async function POST(request: Request): Promise<Response> {
     }
     if (body.action === 'reaccept') {
       requireVerifiedHealthConsentWrite(identity);
-      try { validateExplicitAcceptance(body.acceptance); }
-      catch { throw new ConsentInputError('È richiesta una nuova accettazione esplicita dei documenti correnti.'); }
-      if (typeof body.expectedRevision !== 'number' || !Number.isSafeInteger(body.expectedRevision) || body.expectedRevision < 1) {
-        throw new ConsentInputError('Revisione della revoca mancante o non valida.');
-      }
-      return json(await recordHealthConsentReacceptance(uid, body.acceptance, body.expectedRevision), 200, origin);
+      requireExplicitAcceptance(body.acceptance, 'È richiesta una nuova accettazione esplicita dei documenti correnti.');
+      const expectedRevision = requireRevision(body.expectedRevision, 1, 'Revisione della revoca mancante o non valida.');
+      return json(await recordHealthConsentReacceptance(uid, body.acceptance, expectedRevision), 200, origin);
     }
     throw new ConsentInputError('Azione non valida.');
   } catch (error) { return errorResponse(error, origin); }

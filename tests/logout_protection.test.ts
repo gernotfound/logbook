@@ -222,6 +222,25 @@ describe('M5 logout protection through AuthProvider', () => {
         expect(useAppStore.getState().userData?.routines?.[0]?.id).toBe('routine-1');
     });
 
+    it('keeps the authenticated archive and shows an error when the emergency export is blocked', async () => {
+        useAppStore.setState({ syncHealth: 'failed' });
+        dialogs.showUnsyncedDataLogout.mockResolvedValueOnce('export');
+        exporter.exportEmergencyJSON.mockImplementationOnce(() => { throw new Error('Browser download denied'); });
+        const { result } = renderAuth();
+        await waitFor(() => expect(result.current.currentUser?.uid).toBe('logout-user'));
+
+        await act(async () => {
+            await result.current.logout({ mode: 'normal' });
+        });
+
+        expect(exporter.exportEmergencyJSON).toHaveBeenCalledTimes(1);
+        expect(dialogs.showAlert).toHaveBeenCalledWith(
+            'Esportazione non riuscita. Il logout è stato annullato e i dati sono preservati. Riprova il backup.'
+        );
+        expect(DB.secureLogOut).not.toHaveBeenCalled();
+        expect(useAppStore.getState().userData?.routines?.[0]?.id).toBe('routine-1');
+    });
+
     it('rechecks state before safe-exit and proceeds only after the store becomes synced', async () => {
         useAppStore.setState({ syncHealth: 'local-pending' });
         dialogs.showUnsyncedDataLogout.mockImplementationOnce(async () => {

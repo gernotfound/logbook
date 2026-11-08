@@ -269,6 +269,17 @@ describe('durable cloud integrity fencing and recovery', () => {
         });
     });
 
+    it.each([false, true])('preserves ciphertext and revision when the checkpoint is already required (explicit identity=%s)', async explicit => {
+        await pendingArchive();
+        await markReplicaCheckpointRequired('a', explicit ? identity() : undefined, () => true);
+        const before = (await readLocal('a'))!;
+        const ciphertext = await get(key);
+
+        await markReplicaCheckpointRequired('a', explicit ? identity() : undefined, () => true);
+        expect(await readLocal('a')).toEqual(before);
+        expect(await get(key)).toBe(ciphertext);
+    });
+
     it('leaves an archive without a replica intact when a checkpoint is requested', async () => {
         const before = await pendingArchive(false);
         const ciphertext = await get(key);

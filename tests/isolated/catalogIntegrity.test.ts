@@ -1,6 +1,7 @@
 import 'fake-indexeddb/auto';
 const storageFault = vi.hoisted(() => ({
     failNextSet: false,
+    failGetCount: 0,
     stallNextGet: false,
     resolveGet: null as null | ((value: unknown) => void),
     rejectGet: null as null | ((reason: Error) => void),
@@ -11,6 +12,10 @@ vi.mock('idb-keyval', async (importOriginal) => {
     return {
         ...original,
         get: (...args: Parameters<typeof original.get>) => {
+            if (storageFault.failGetCount > 0) {
+                storageFault.failGetCount -= 1;
+                return Promise.reject(new Error('temporary IndexedDB read failure'));
+            }
             if (storageFault.stallNextGet) {
                 storageFault.stallNextGet = false;
                 return new Promise((resolve, reject) => {
@@ -35,6 +40,7 @@ const remote = vi.hoisted(() => ({ get: vi.fn() }));
 vi.mock('firebase/firestore', () => ({ doc: (_db: unknown, collection: string, id: string) => collection + '/' + id, getDoc: remote.get }));
 import { clearCatalogCache, getSeedCatalog, saveCatalogToCache, syncGlobalCatalog, getCachedCatalog } from '../../src/lib/catalog/catalogService';
 import { resolveEffectiveExercises, resolveEffectiveFoods } from '../../src/lib/catalog/deltaResolver';
+import { filterCustomExercises, filterCustomFoods } from '../../src/lib/merge';
 const snap = (data: unknown) => ({ exists: () => data !== undefined, data: () => data });
 const exercise = { id: 'a', name: 'Omonimo', trackingType: 'weight_reps' as const };
 const food = { id: '0', name: 'Omonimo', kcal: 100, pro: 0, carbs: 25, fat: 0 };
@@ -42,6 +48,7 @@ beforeEach(async () => {
     await clearCatalogCache();
     remote.get.mockReset();
     storageFault.failNextSet = false;
+    storageFault.failGetCount = 0;
     storageFault.stallNextGet = false;
     storageFault.resolveGet = null;
     storageFault.rejectGet = null;
@@ -58,6 +65,47 @@ it('does not persist the reproducible empty seed or overwrite the cache on a fai
     expect(empty.exercises).toEqual([]);
     expect(storageFault.setCalls).toBe(0);
     expect(await (await import('idb-keyval')).get('logbook_cached_global_catalog')).toBeUndefined();
+});
+
+it('recovers the persisted catalog within the first call after one transient IndexedDB read failure', async () => {
+    const previous = getSeedCatalog();
+    const durable = {
+        ...previous,
+        manifest: { ...previous.manifest, version: 'persisted-v7', itemCounts: { exercises: 1, foods: 1 } },
+        exercises: [exercise],
+        foods: [food],
+    };
+    await (await import('idb-keyval')).set('logbook_cached_global_catalog', durable);
+    storageFault.setCalls = 0;
+    storageFault.failGetCount = 1;
+
+    const recovered = await getCachedCatalog();
+    expect(recovered.manifest.version).toBe('persisted-v7');
+    expect(recovered.exercises.map(item => item.id)).toEqual(['a']);
+    expect(recovered.foods.map(item => item.id)).toEqual(['0']);
+    expect(storageFault.setCalls).toBe(0);
+});
+
+it('rechecks durable catalog before classifying unflagged global entries during guest migration', async () => {
+    const seed = getSeedCatalog();
+    const preserved = {
+        ...seed,
+        manifest: { ...seed.manifest, version: 'catalog-global-v8', itemCounts: { exercises: 1, foods: 1 } },
+        exercises: [exercise],
+        foods: [food],
+    };
+    await (await import('idb-keyval')).set('logbook_cached_global_catalog', preserved);
+    storageFault.failGetCount = 2;
+    await getCachedCatalog();
+
+    const unflaggedExercise = [{ ...exercise }] as Parameters<typeof filterCustomExercises>[0];
+    const unflaggedFood = [{ ...food }] as Parameters<typeof filterCustomFoods>[0];
+    expect(filterCustomExercises(unflaggedExercise)).toHaveLength(1);
+    expect(filterCustomFoods(unflaggedFood)).toHaveLength(1);
+
+    await getCachedCatalog();
+    expect(filterCustomExercises(unflaggedExercise)).toEqual([]);
+    expect(filterCustomFoods(unflaggedFood)).toEqual([]);
 });
 
 it.each(['fulfilled', 'rejected'] as const)('a stale %s IndexedDB read cannot undo a concurrent catalog save', async outcome => {
