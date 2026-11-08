@@ -1,6 +1,6 @@
 import { LEGAL_VERSIONS } from '../../src/lib/legalVersions';
 import 'fake-indexeddb/auto';
-import { clear, get } from 'idb-keyval';
+import { clear, del, get } from 'idb-keyval';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('../../src/lib/catalog/catalogService', () => ({
@@ -19,6 +19,10 @@ import { lockAllVaults } from '../../src/lib/sync/secureArchiveSession';
 import { updateArchiveRecord } from '../../src/lib/sync/secureArchiveRepository';
 import type { LocalEnvelope } from '../../src/lib/sync/localEnvelopeValidation';
 import { activateGuestSession, GUEST_SESSION_KEY } from '../../src/lib/sync/session';
+import { CURRENT_SYNC_PROTOCOL } from '../../src/lib/schemaEvolution';
+import { rootDocument } from '../../src/lib/sync/documentProjection';
+import { sealCloudDocument } from '../../src/lib/sync/cloudDocumentCipher';
+import { readAccountCloudDocument } from '../../src/lib/sync/cloudDocumentRead';
 
 const owner = 'user:consent-recovery-user';
 function state(height: string, acceptedAt?: string): UserData {
@@ -30,6 +34,18 @@ function state(height: string, acceptedAt?: string): UserData {
     } } : {}),
   }) as unknown as UserData;
 }
+
+function verifiedRoot(data: UserData, sequence: number) {
+  const key = new Uint8Array(32).fill(31);
+  const uid = owner.slice(5);
+  const sealed = sealCloudDocument(key, uid, '', rootDocument(data), {
+    protocolVersion: CURRENT_SYNC_PROTOCOL, clock: { s01: sequence }, fields: {},
+    writer: { slot: 's01', replicaId: 'consent-cloud', generation: 1, seq: sequence, consentRevision: sequence },
+  });
+  const opened = readAccountCloudDocument(sealed, 'consent recovery root', uid, '', key);
+  return new Map([['', { ...opened.business, _sync: opened.sync }]]);
+}
+
 beforeEach(async () => {
   lockAllVaults();
   localStorage.clear();
@@ -146,6 +162,30 @@ describe('explicit consent-epoch journal recovery', () => {
       owner, 2, original.revision, state('175'), state('180'), new Map(), () => true,
     )).rejects.toBeInstanceOf(StaleLocalRevisionError);
     expect(await readLocal(owner)).toEqual(concurrent);
+  });
+
+
+  it('keeps a consent-recovery preview usable across an unchanged verified cloud refresh', async () => {
+    const cloud = state('170', '2026-10-11T10:00:00.000Z');
+    await del('logbook:v2:' + owner);
+    localStorage.setItem('logbook:v2:' + owner + ':health-consent-generation', '1');
+    await initializeLocal(owner, cloud);
+    await commitLocal(owner, state('180', '2026-10-11T10:00:00.000Z'), cloud);
+    const documents = verifiedRoot(cloud, 1);
+    await hydrateLocal(owner, cloud, [], documents, 'all', () => true);
+    const preview = (await readLocal(owner))!;
+    expect(preview.pending.length).toBeGreaterThan(0);
+
+    await hydrateLocal(owner, cloud, [], documents, 'all', () => true);
+    const reacceptedCloud = state('170', '2026-11-08T10:00:00.000Z');
+    await expect(rebaseConsentRecoveryWithExplicitChoice(
+      owner, 2, preview.revision, reacceptedCloud, state('180'),
+      verifiedRoot(reacceptedCloud, 2), () => true,
+    )).resolves.toBeUndefined();
+    const recovered = (await readLocal(owner))!;
+    expect(recovered.consentRevision).toBe(2);
+    expect(recovered.data.profile?.height).toBe('180');
+    expect(recovered.archivedConsentJournals?.[0].pending).toEqual(preview.pending);
   });
 
   it('rejects a recovery preview captured before a changed cloud hydration', async () => {

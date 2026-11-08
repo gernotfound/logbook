@@ -196,6 +196,8 @@ Esistono due coperture distinte e non intercambiabili:
 
 **MUST:** una scansione `all` non deve essere trattata come una semplice finestra parziale.
 
+**MUST:** il confronto per un no-op usa la stessa rappresentazione JSON dell'archivio: una proprietà opzionale assente e una proprietà oggetto con valore `undefined` non sono una modifica business. Una hydration identica deve conservare revisione e ciphertext, così le anteprime di recovery restano valide; cambi effettivi a dati, baseline, copertura o frontiera causale devono invece invalidarle.
+
 **MUST:** se hydration o checkpoint non forniscono una base cloud validata per la sessione, il caricatore autenticato deve segnalare l'esito bloccato al chiamante e non avviare il replay automatico del journal. Il fallimento non elimina alcuna pending locale; il recovery riprova soltanto dopo una nuova base validata.
 
 **MUST (CRITICAL):** se una lettura cloud fallisce e non esiste un envelope locale owner-scoped, l'assenza della copia sul dispositivo NON prova che l'account remoto sia vuoto. Il bootstrap autenticato non deve costruire e salvare uno snapshot business predefinito come fallback, né generare un journal causale su una base remota non verificata; espone un errore recuperabile e riprova dopo una lettura cloud riuscita. In presenza di envelope valido, resta accessibile la copia locale senza attribuire un ACK remoto.
@@ -284,7 +286,7 @@ Al collegamento di un account, se esistono dati guest locali:
 
 La policy business di `mergeUserData()` conserva l'unione deduplicata degli array con ID con priorità guest in collisione, il merge per data/ID dei record giornalieri e i valori scalari guest valorizzati. **Eccezione di sicurezza:** `legalConsent` resta quello dell'account; il guest non autorizza il trattamento account. “Guest wins” non dimostra maggiore recenza: verificare implementazione e test prima di cambiarlo. La pianificazione nutrizionale mantiene il proprio conflitto e le regole di origine in [Modello dati](data-model-and-zod.md).
 
-`pendingConflicts.nutritionPlanning` resta un conflitto di prodotto separato dal generic causal merge e non è cloud-root.
+`pendingConflicts.nutritionPlanning` resta un conflitto di prodotto separato dal generic causal merge e non è cloud-root. Il merge guest adotta questi metadati locali attraverso l'opzione esplicita di `commitLocal`, con la revisione dell'envelope osservato e il guard di sessione verificati nello stesso update IndexedDB. Anche un merge dei soli metadati deve diventare durevole e avanzare la revisione locale, senza inventare sequence, clock o operation cloud. Uno snapshot ordinario conserva invece i conflitti della copia durevole corrente: non può cancellare un'alternativa concorrente o ripristinarne una già risolta.
 
 ## Offline e riconnessione
 
