@@ -1,5 +1,6 @@
 import { format, isValid, parseISO, addDays, startOfDay, differenceInCalendarDays } from 'date-fns';
 import { GROUP_MAP } from '../constants/muscles';
+import { roundToTenth } from '../utils/rounding';
 import { getCycleVolumeFrequencies, isBoundedCycleCount, isRepresentableCycleVolume, MAX_CALCULATED_CYCLE_WEEKS, MAX_CYCLE_SESSIONS_PER_WEEK } from './cycleLimits';
 import type { TrainingCycle, WorkoutRoutine, Exercise, WorkoutSession } from '../../types';
 
@@ -556,7 +557,7 @@ export function calculateCycleVolume(
         .map(([key, data]) => ({
             key,
             label: data.label,
-            sets: Math.round(data.sets * 10) / 10,
+            sets: roundToTenth(data.sets),
             percentage: totalCalculatedSets > 0 ? Math.round((data.sets / totalCalculatedSets) * 100) : 0
         }))
         .sort((a, b) => b.sets - a.sets);
