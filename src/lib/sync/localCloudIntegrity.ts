@@ -69,6 +69,7 @@ export async function markReplicaCheckpointRequired(
             || current.replica.replicaId !== expectedReplica.replicaId
             || current.replica.generation !== expectedReplica.generation
         )) return raw;
+        if (current.replica.checkpointAtMs === 1 && current.replica.leaseUntilMs === 1) return raw;
 
         return {
             ...current,
