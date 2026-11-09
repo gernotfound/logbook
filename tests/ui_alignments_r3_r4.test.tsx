@@ -12,9 +12,10 @@ import { storageOwner } from '../src/lib/sync/session';
 import { prepareUnlockedTestArchive } from './secureVaultFixture';
 
 describe('UI Alignments - R3 & R4', () => {
-    beforeEach(() => {
+    beforeEach(async () => {
         localStorage.clear();
         localStorage.setItem(`logbook:v2:${storageOwner()}:health-consent-generation`, '1');
+        await prepareUnlockedTestArchive(storageOwner());
         useAppStore.setState({
             dataOwner: storageOwner(),
             userData: {
@@ -179,7 +180,6 @@ describe('UI Alignments - R3 & R4', () => {
         });
 
         it('useNutritionMeasurements saves to selectedDate without a blocking success dialog', async () => {
-            await prepareUnlockedTestArchive(storageOwner());
             const showAlertSpy = vi.spyOn(useDialogStore.getState(), 'showAlert');
             const { result } = renderHook(() => useNutritionMeasurements('2026-08-05'));
             
@@ -202,7 +202,6 @@ describe('UI Alignments - R3 & R4', () => {
         });
 
         it('explicit calculate mode uses US Navy even when a manual BF draft is preserved', async () => {
-            await prepareUnlockedTestArchive(storageOwner());
             const { result } = renderHook(() => useNutritionMeasurements('2026-08-06'));
 
             act(() => {
@@ -223,7 +222,6 @@ describe('UI Alignments - R3 & R4', () => {
         });
 
         it('explicit manual mode does not silently derive BF from circumference fields', async () => {
-            await prepareUnlockedTestArchive(storageOwner());
             const { result } = renderHook(() => useNutritionMeasurements('2026-08-07'));
 
             act(() => {
