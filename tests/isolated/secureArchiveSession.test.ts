@@ -216,6 +216,19 @@ describe('resident owner and guest capabilities', () => {
         guest.dataKey.fill(0);
     });
 
+    it('keeps authenticated owner unlock independent of unreadable active-guest consent metadata', async () => {
+        localStorage.setItem('logbook_is_guest', 'true');
+        localStorage.setItem(GUEST_SESSION_KEY, 'other-active-guest');
+        activateGuestSession('other-active-guest');
+        const getItem = localStorage.getItem.bind(localStorage);
+        vi.spyOn(localStorage, 'getItem').mockImplementation(key => {
+            if (key === 'logbook:v2:guest:health-consent-withdrawal') throw new Error('guest consent metadata unavailable');
+            return getItem(key);
+        });
+        await unlockVaultForOwner(owner);
+        expect(requireUnlockedLocalKey(owner)).toEqual(originalKey);
+    });
+
     it('refuses inactive guest unlock before doing Web Crypto work', async () => {
         const guest = await install('guest');
         localStorage.setItem('logbook_is_guest', 'true');
