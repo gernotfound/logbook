@@ -52,7 +52,7 @@
 - test periodico di export, account deletion e restore se vengono attivati backup;
 - review annuale o su cambiamento significativo di DPIA/TOM.
 
-## Evidenza minima per il pilot
+## Evidenza minima prima dell'accesso di utenti esterni
 
 Allegare/archiviare:
 

@@ -27,6 +27,7 @@ jobs:
       matrix:
         # Overlap slow sync classification with the shorter diagnostic areas.
         area:
+          - secure-archive-session
           - secure-archive-repository
           - archive-bootstrap
           - consent-reconciliation

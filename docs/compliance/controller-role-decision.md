@@ -1,50 +1,33 @@
-# Decisione sui ruoli privacy — uso amatoriale corrente ed eventuale palestra
+# Valutazione dei ruoli GDPR — TheLogBook
 
-> Documento di accountability. I ruoli GDPR dipendono dai fatti, non dall'etichetta contrattuale. Validare con un professionista prima della firma.
+> Documento interno da validare professionalmente prima dell'accesso di utenti esterni. I ruoli dipendono dalle finalità e dai mezzi effettivi del trattamento; questa scheda non è una qualifica legale approvata.
 
-## Modello di utilizzo corrente e previsto
+## Modello di utilizzo da valutare
 
 - TheLogBook è un progetto amatoriale gratuito gestito da Gerardo Califano, persona fisica (dichiarazione del product owner del 5 novembre 2026).
-- È previsto l'accesso di altri utenti maggiorenni che creano un account e inseriscono autonomamente i loro dati. Non è documentata una collaborazione commerciale o un pagamento con palestre.
-- Non esistono oggi ruoli applicativi palestra/coach/admin con accesso ai dati degli utenti; non esiste una funzione di reporting verso una palestra.
-- La qualificazione del ruolo di titolare dipende dalle finalità e dai mezzi effettivi: la dichiarazione personale non sostituisce la valutazione giuridica.
+- È prevista la registrazione autonoma di altri utenti maggiorenni per inserire i propri dati di allenamento, nutrizione e misurazioni.
+- Il gestore stabilisce il funzionamento dell'applicazione; Firebase/Google e Vercel prestano servizi tecnici secondo ruoli e condizioni da verificare nei rispettivi documenti contrattuali e nel [registro fornitori](vendor-transfer-register.md).
+- L'assenza di una società o di corrispettivi economici non esonera automaticamente dagli obblighi GDPR. Non dedurre i ruoli giuridici dalla sola architettura o dalla dichiarazione del gestore.
 
-Il modello con palestre descritto sotto è **uno scenario futuro**, non il modello corrente.
+## Verifica fattuale
 
-## Domande decisive
-
-| Domanda | Risposta | Evidenza |
+| Questione | Stato da documentare | Fonte |
 |---|---|---|
-| Chi decide le finalità del trattamento dentro TheLogBook? | `[TO_VALIDATE]` | `[CONTRACT / PRODUCT FACTS]` |
-| Chi decide gli elementi essenziali dei mezzi di trattamento? | `[TO_VALIDATE]` | Architettura/contratto |
-| La palestra impartisce istruzioni al provider su dati personali TheLogBook? | `[YES/NO]` | `[EVIDENCE]` |
-| Il provider tratta dati TheLogBook per finalità proprie di erogazione/sicurezza? | `[YES/NO]` | `[EVIDENCE]` |
-| La palestra riceve dati o report TheLogBook? | Attualmente: no | Codice/prodotto |
-| La palestra può cercare o amministrare utenti TheLogBook? | Attualmente: no | Codice/prodotto |
-| Esiste una finalità congiuntamente determinata? | `[TO_VALIDATE]` | `[EVIDENCE]` |
+| Chi determina le finalità del trattamento dei dati degli utenti? | `[DA VALIDARE]` | Funzioni del servizio, informativa e decisioni del gestore |
+| Chi determina i mezzi essenziali del trattamento? | `[DA VALIDARE]` | Architettura, configurazioni, scelte di prodotto |
+| Quali fornitori trattano dati personali per erogare i servizi tecnici? | `[DA VERIFICARE]` | [Registro fornitori](vendor-transfer-register.md), contratti e configurazioni live |
+| Quali dati e metadati possono essere accessibili ai fornitori? | `[DA VERIFICARE]` | [Registro trattamenti](processing-record-template.md), [misure tecniche](technical-organizational-measures.md) |
+| Quali accordi Art. 28 o altre garanzie sono applicabili ai fornitori? | `[DA VALIDARE]` | Termini e DPA effettivamente applicabili a Firebase/Google e Vercel |
+| Esistono altre finalità autonome dei fornitori (es. log tecnici)? | `[DA VALIDARE]` | Informative, registro fornitori e [retention](retention-schedule.md) |
 
-## Scenari
+L'eventuale responsabilità del gestore come titolare va valutata per le finalità e i mezzi da lui determinati. La qualifica dei fornitori non si può dedurre automaticamente dal nome del servizio, dalla presenza di Firebase Admin o dalla cifratura.
 
-### Scenario A — palestra distributore/cliente commerciale senza accesso dati
+## Esito da approvare
 
-È uno scenario futuro, non quello operativo corrente. Non presumere automaticamente un rapporto Art. 28: verificare chi determina finalità e mezzi del trattamento TheLogBook. Il contratto deve chiarire che l'acquisto/distribuzione non attribuisce alla palestra accesso ai dati dell'utente.
+- Ruolo del gestore rispetto alle attività rilevate: `[TITOLARE / ALTRO / DA VALIDARE]`.
+- Motivazione, finalità e mezzi: `[FATTI E PROVE]`.
+- Ruolo e garanzie per ciascun fornitore: `[FORNITORE / TRATTAMENTO / DOCUMENTO APPLICABILE]`.
+- Impatto su informativa, registro trattamenti e trasferimenti: `[MODIFICHE NECESSARIE]`.
+- Data, valutazione professionale e approvazione: `[DATA / RESPONSABILE / REVISORE]`.
 
-### Scenario B — palestra impartisce istruzioni e TheLogBook tratta dati per suo conto
-
-Se viene introdotto, valutare un rapporto titolare → responsabile e un accordo Art. 28 con istruzioni documentate, subprocessori, assistenza diritti/DPIA/breach, sicurezza e cancellazione/restituzione.
-
-### Scenario C — finalità/mezzi essenziali determinati congiuntamente
-
-Se i fatti portano a una determinazione congiunta, valutare Art. 26 e trasparenza verso gli interessati.
-
-## Decisione da firmare
-
-- Scenario scelto: `[A/B/C/OTHER]`
-- Motivazione fattuale: `[TEXT]`
-- Impatto su Privacy Policy: `[TEXT]`
-- DPA Art. 28 necessario: `[YES/NO/TO_VALIDATE]`
-- Accordo Art. 26 necessario: `[YES/NO/TO_VALIDATE]`
-- Data revisione: `[DATE]`
-- Validazione professionale: `[NAME/ROLE]`
-
-Rivalutare questo documento prima di introdurre tenant gym, coach, dashboard, inviti gestiti dalla palestra, analytics per palestra o condivisione di dati fitness.
+Riesaminare la valutazione quando cambiano finalità, accessi ai dati, fornitori, condivisione o modalità effettive di trattamento. Non presentare i segnaposto come conclusioni già approvate.
