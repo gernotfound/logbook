@@ -67,6 +67,12 @@ afterEach(() => {
 });
 
 describe('persisted vault control trust boundary', () => {
+    it('preserves the actionable error identity for callers handling a locked vault', () => {
+        const error = new LocalVaultLockedError();
+        expect(error).toMatchObject({ code: 'local-vault-locked', name: 'LocalVaultLockedError' });
+        expect(error.message).toMatch(/conservati.*recupero/);
+    });
+
     it.each([undefined, null, false, 0, '', 'metadata', []])('rejects a non-record control: %s', value => {
         expect(() => parsePersistedVaultControl(owner, value)).toThrow(LocalVaultLockedError);
     });

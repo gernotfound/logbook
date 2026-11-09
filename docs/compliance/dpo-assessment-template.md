@@ -4,11 +4,11 @@
 
 ## Ambito effettivo e documenti di riferimento
 
-- **Modello dichiarato:** TheLogBook è attualmente un progetto amatoriale gestito da una persona fisica, con possibile apertura futura ad altri utenti maggiorenni. **Nessuna palestra o funzione coach/gym è attualmente prevista nel runtime come soggetto con accesso ai dati.** Un'offerta tramite palestre è uno scenario futuro, non un'attività già avviata.
+- **Modello dichiarato:** TheLogBook è attualmente un progetto amatoriale gestito da una persona fisica, con possibile apertura futura ad altri utenti maggiorenni.
 - **Trattamenti da valutare:** misurazioni, alimentazione, allenamenti, sonno e annotazioni potenzialmente riferibili alla salute; account Firebase; dati locali guest; sincronizzazione cifrata, consenso, diritti, cancellazione e log tecnici dei fornitori. La cifratura non elimina di per sé la natura personale dei dati.
 - **Monitoraggio:** il client corrente non include analytics comportamentali o invio automatico di diagnostica; ciò **non esclude** da solo il «monitoraggio regolare e sistematico» ai sensi dell'art. 37. Distinguere l'autotracciamento richiesto dall'utente dalle eventuali osservazioni, analisi o valutazioni sistematiche effettuate per finalità dell'operatore. Non presumere che calcoli fitness, frequenza di registrazione o dati di sensori costituiscano, da soli, monitoraggio dell'interessato da parte del titolare.
-- **Stato delle prove:** numero effettivo di utenti e organizzazioni, durata/scala e configurazioni dei provider devono essere verificati e datati; dichiarazioni di prodotto, test e codice non sono un censimento live.
-- **Perimetro della valutazione:** valutare l'obbligo di **ciascun soggetto** rispetto ai propri ruoli e trattamenti, come titolare e/o responsabile; non derivare automaticamente l'obbligo di TheLogBook da quello di Google, Vercel o di una futura palestra.
+- **Stato delle prove:** numero effettivo di utenti, durata/scala e configurazioni dei provider devono essere verificati e datati; dichiarazioni di prodotto, test e codice non sono un censimento live.
+- **Perimetro della valutazione:** valutare l'obbligo di **ciascun soggetto** rispetto ai propri ruoli e trattamenti, come titolare e/o responsabile; non derivare automaticamente l'obbligo di TheLogBook da quello di Google, Vercel o di altri soggetti in astratto.
 
 Fonti interne: [dossier e gate per utenti esterni](README.md), [ruoli GDPR](controller-role-decision.md), [registro trattamenti](processing-record-template.md), [screening DPIA](dpia-screening-template.md), [retention](retention-schedule.md), [fornitori](vendor-transfer-register.md), [informativa corrente](../../src/pages/PrivacyPolicy.tsx). Il presente template non sostituisce quei documenti e non ne duplica le decisioni.
 
@@ -16,12 +16,12 @@ Fonti interne: [dossier e gate per utenti esterni](README.md), [ruoli GDPR](cont
 
 | Campo | Da compilare |
 |---|---|
-| Soggetto valutato e forma effettiva | `[SOGGETTO/FORMA]` — non presumere una società o un contratto con palestra |
+| Soggetto valutato e forma effettiva | `[SOGGETTO/FORMA]` — non presumere una società |
 | Ruolo rispetto ai trattamenti esaminati | `[TITOLARE / RESPONSABILE / CONTITOLARE / DA VERIFICARE]`, con rinvio alla decisione sui ruoli |
 | Attività principali e trattamenti concretamente eseguiti | `[ATTIVITÀ / FINALITÀ / FLUSSI / RIFERIMENTI]` |
 | Ambito geografico e popolazione interessata | `[GEOGRAFIA / MAGGIORENNI / ALTRE CATEGORIE]` |
 | Utenti/account realmente osservati e periodo | `[NUMERO / DATA / FONTE / NON VERIFICATO]` |
-| Organizzazioni, palestre o clienti con accesso ai dati | `[NUMERO / TIPO DI ACCESSO / EVIDENZA]` |
+| Eventuali altri soggetti con accesso ai dati | `[SOGGETTO / TIPO DI ACCESSO / EVIDENZA]` |
 | Data, baseline repository e fonti esterne consultate | `[DATA / MAIN_SHA / DOCUMENTI E PROVE LIVE]` |
 
 ## Verifica autonoma delle condizioni dell'art. 37 GDPR
@@ -70,7 +70,7 @@ Verificare competenza, risorse, coinvolgimento tempestivo, autonomia e assenza d
 
 ## Eventi che impongono un riesame
 
-Rivalutare prima di aprire il servizio a terzi e quando cambiano in modo significativo utenti, frequenza/scala del trattamento, categorie di dati, trattamenti automatizzati, dati da wearable, finalità, accesso di coach/palestre, eventuale modello B2B, ruoli, geografia o diritto applicabile. Annotare `[DATA DEL PROSSIMO CONTROLLO / EVENTO / RESPONSABILE]` e aggiornare registro, ruoli e DPIA se coinvolti.
+Rivalutare prima di aprire il servizio a terzi e quando cambiano in modo significativo utenti, frequenza/scala del trattamento, categorie di dati, trattamenti automatizzati, dati da wearable, finalità, accesso di soggetti terzi ai dati, ruoli, geografia o diritto applicabile. Annotare `[DATA DEL PROSSIMO CONTROLLO / EVENTO / RESPONSABILE]` e aggiornare registro, ruoli e DPIA se coinvolti.
 
 ## Fonti istituzionali
 
