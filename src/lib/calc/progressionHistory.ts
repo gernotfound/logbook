@@ -7,7 +7,7 @@ function sessionTimestamp(session: WorkoutSession, preferEnd = false): number | 
     return candidates.find(value => typeof value === 'number' && Number.isFinite(value));
 }
 
-export function isSessionEarlier(candidate: WorkoutSession, current: WorkoutSession): boolean {
+function isSessionEarlier(candidate: WorkoutSession, current: WorkoutSession): boolean {
     if (candidate.id && current.id && candidate.id === current.id) return false;
     if (candidate.date && current.date) {
         if (candidate.date < current.date) return true;

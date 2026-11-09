@@ -121,19 +121,38 @@ export function applyRemoteDocuments(local: UserData, documents: Map<string, Doc
             customFoods: resolveEffectiveFoods(catalog.foods, parsed.customFoods, parsed.catalogOverrides),
         } as UserData;
     }
+    const replacedHistoryMonths = new Set<string>();
+    const replacedNutritionMonths = new Set<string>();
+    const incomingHistory: NonNullable<UserData['history']> = [];
+    const incomingNutrition: NonNullable<UserData['nutrition']> = {};
     for (const [path, data] of documents) {
         const [collection, month] = path.split('/');
         if (collection === 'history_months') {
             const sanitized = sanitizeHistoryMonthDocument(month, data);
-            const preserved = (next.history ?? []).filter(workout => {
-                try { return requireCanonicalWorkoutDate(workout).slice(0, 7) !== month; }
-                catch { return true; }
-            });
-            next.history = [...preserved, ...Object.values(sanitized)] as UserData['history'];
+            replacedHistoryMonths.add(month);
+            incomingHistory.push(...Object.values(sanitized) as NonNullable<UserData['history']>);
         } else if (collection === 'nutrition_months') {
             const sanitized = sanitizeNutritionMonthDocument(month, data);
-            next.nutrition = { ...Object.fromEntries(Object.entries(next.nutrition ?? {}).filter(([date]) => date.slice(0, 7) !== month)), ...sanitized } as UserData['nutrition'];
+            replacedNutritionMonths.add(month);
+            Object.assign(incomingNutrition, sanitized);
         }
+    }
+    // Apply all monthly replacements together: retaining the original order of
+    // untouched records and the document traversal order of incoming records.
+    // This avoids a full history scan and nutrition copy for every cloud month.
+    if (replacedHistoryMonths.size) {
+        const preserved = (next.history ?? []).filter(workout => {
+            try { return !replacedHistoryMonths.has(requireCanonicalWorkoutDate(workout).slice(0, 7)); }
+            catch { return true; }
+        });
+        next.history = [...preserved, ...incomingHistory];
+    }
+    if (replacedNutritionMonths.size) {
+        next.nutrition = {
+            ...Object.fromEntries(Object.entries(next.nutrition ?? {})
+                .filter(([date]) => !replacedNutritionMonths.has(date.slice(0, 7)))),
+            ...incomingNutrition,
+        };
     }
     return UserDataSchema.parse(next) as unknown as UserData;
 }
