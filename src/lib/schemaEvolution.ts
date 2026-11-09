@@ -184,7 +184,7 @@ function normalizeSyncProtocol(sync: unknown, sourceVersion: number | undefined,
     if (sync === undefined || sourceVersion === undefined) return undefined;
     if (!isRecord(sync)) throw new Error(`${kind} non valido.`);
     const migrated = migrateFromBaseline<SyncProtocolMigrationCarrier>(
-        { scope: 'cloud', sync: structuredClone(sync) },
+        { scope: 'cloud', sync },
         sourceVersion,
         BASELINE_SYNC_PROTOCOL,
         CURRENT_SYNC_PROTOCOL,
@@ -206,8 +206,14 @@ function normalizePersistedDimensions(
     const sourceDataVersion = assertVersionNumber(record.dataSchemaVersion, `${kind} data schema`);
     const sourceSyncVersion = assertVersionNumber(record.syncProtocolVersion, `${kind} sync protocol`);
 
+    // The supported current format needs no migration: retain the single
+    // detached snapshot made at the outer persisted-record boundary.
+    if (sourceDataVersion === CURRENT_DATA_SCHEMA && sourceSyncVersion === CURRENT_SYNC_PROTOCOL) {
+        return { ...record, dataSchemaVersion: CURRENT_DATA_SCHEMA, syncProtocolVersion: CURRENT_SYNC_PROTOCOL };
+    }
+
     const dataCarrier = migrateFromBaseline<DataMigrationCarrier>(
-        { scope, record: structuredClone(record) },
+        { scope, record },
         sourceDataVersion,
         BASELINE_DATA_SCHEMA,
         CURRENT_DATA_SCHEMA,
@@ -217,7 +223,7 @@ function normalizePersistedDimensions(
     if (dataCarrier.scope !== scope) throw new Error(`${kind}: data migration scope non valido.`);
 
     const syncCarrier = migrateFromBaseline<SyncProtocolMigrationCarrier>(
-        { scope, record: structuredClone(dataCarrier.record) },
+        { scope, record: dataCarrier.record },
         sourceSyncVersion,
         BASELINE_SYNC_PROTOCOL,
         CURRENT_SYNC_PROTOCOL,
@@ -253,7 +259,7 @@ export function normalizeCloudDocument(raw: unknown, kind = 'Firestore data sche
         const migrated = migrateFromBaseline<DataMigrationCarrier>(
             {
                 scope: 'cloud',
-                state: { business: structuredClone(business), sync: _sync === undefined ? undefined : structuredClone(_sync) },
+                state: { business, sync: _sync },
             },
             sourceVersion,
             BASELINE_DATA_SCHEMA,

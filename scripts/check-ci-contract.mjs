@@ -183,10 +183,37 @@ requirePattern('CodeQL scoped security-events permission', workflow, /^      sec
 requirePattern('concurrency cancellation', workflow, /^  cancel-in-progress: true\s*$/m);
 requirePattern('matrix fail-fast disabled', workflow, /^      fail-fast: false\s*$/m);
 requirePattern('Ubuntu 24.04 shard runner', workflow, /^    runs-on: ubuntu-24\.04\s*$/m);
-requirePattern('checkout action pin', workflow, /^        uses: actions\/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7\s*$/m);
-requirePattern('full checkout history', workflow, /^          fetch-depth: 0\s*$/m);
-const checkoutCredentialGuards = workflow.match(/^          persist-credentials: false\s*$/gm) ?? [];
-if (checkoutCredentialGuards.length !== 4) failures.push(`checkout credential persistence: expected four disabled checkout credentials, found ${checkoutCredentialGuards.length}`);
+// Check each checkout step, not a global count of isolated safe-looking lines.
+// Otherwise an unguarded checkout could coexist with four protected ones.
+const checkoutSteps = workflow.split(/^      - /m)
+  .filter(step => /^\s*uses:\s*actions\/checkout@/m.test(step));
+if (checkoutSteps.length !== 4) failures.push(`Expected four pinned, credential-free checkout steps, got ${checkoutSteps.length}`);
+let prCheckouts = 0;
+let mainCheckouts = 0;
+for (const step of checkoutSteps) {
+  const action = step.match(/^\s*uses:\s*(actions\/checkout@[^\s#]+)/m)?.[1];
+  const options = new Map([...step.matchAll(/^          ([a-z][\w-]*):\s*(.*?)\s*$/gm)]
+    .map(([, key, value]) => [key, value]));
+  if (action !== 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1') {
+    failures.push('Checkout must remain pinned to the reviewed commit');
+  }
+  if (options.get('persist-credentials') !== 'false') {
+    failures.push('Every checkout must disable credential persistence');
+  }
+  const ref = options.get('ref');
+  if (ref === '${{ github.event.pull_request.head.sha || github.sha }}') {
+    prCheckouts += 1;
+    if (options.get('fetch-depth') !== '0') failures.push('PR checkout must fetch full history for main-relative checks');
+  } else if (ref === '${{ github.sha }}') {
+    mainCheckouts += 1;
+    if (options.get('fetch-depth') !== '1') failures.push('Main release checkout must use bounded history');
+  } else {
+    failures.push('Checkout ref must be exact PR head or exact main SHA');
+  }
+}
+if (prCheckouts !== 3 || mainCheckouts !== 1) {
+  failures.push('Checkout policy: expected three PR SHA checkouts and one main release checkout');
+}
 requirePattern('Node setup action pin', workflow, /^        uses: actions\/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7\s*$/m);
 requirePattern('Node 24 runtime', workflow, /^          node-version: ['"]?24['"]?\s*$/m);
 requirePattern('npm cache', workflow, /^          cache: npm\s*$/m);
@@ -198,7 +225,6 @@ requirePattern('failure artifact action pin', workflow, /^        uses: actions\
 requirePattern('exact event SHA binding', workflow, /^      EXPECTED_SHA: \$\{\{ github\.event\.pull_request\.head\.sha \|\| github\.sha \}\}\s*$/m);
 requirePattern('Gitleaks event base binding', workflow, /^      GITLEAKS_BASE_SHA: \$\{\{ github\.event\.pull_request\.base\.sha \|\| github\.event\.before \}\}\s*$/m);
 requirePattern('trusted quality baseline event binding', workflow, /^      QUALITY_BASE_SHA: \$\{\{ github\.event\.pull_request\.base\.sha \|\| '' \}\}\s*$/m);
-requirePattern('exact checkout ref', workflow, /^          ref: \$\{\{ github\.event\.pull_request\.head\.sha \|\| github\.sha \}\}\s*$/m);
 requirePattern('runtime SHA read', workflow, /^          actual_sha="\$\(git rev-parse HEAD\)"\s*$/m);
 requirePattern('container runtime SHA read', workflow, /^          actual_sha="\$\(git -c safe\.directory="\$\{GITHUB_WORKSPACE\}" rev-parse HEAD\)"\s*$/m);
 requirePattern('runtime SHA comparison', workflow, /^          if \[ "\$\{actual_sha\}" != "\$\{EXPECTED_SHA\}" \]; then\s*$/m);

@@ -222,7 +222,7 @@ describe('JSON Export/Import Logic', () => {
         expect(file.size).toBeGreaterThan(MAX_JSON_IMPORT_BYTES);
         const slices = vi.spyOn(file, 'slice');
         const readText = vi.spyOn(FileReader.prototype, 'readAsText');
-        const readChunk = vi.spyOn(FileReader.prototype, 'readAsArrayBuffer');
+        const readChunk = vi.spyOn(Blob.prototype, 'arrayBuffer');
         const save = vi.fn();
         await expect(Exporter.importFromJson(file, null, save))
             .rejects.toThrow('Non puoi importare il backup di un altro utente');

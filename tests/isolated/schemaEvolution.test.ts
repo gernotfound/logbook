@@ -17,6 +17,35 @@ import {
 } from '../../src/lib/schemaEvolution';
 
 describe('Schema Evolution registry', () => {
+    it('keeps accepted current-format records detached from authenticated input', () => {
+        const local = {
+            version: 5, dataSchemaVersion: CURRENT_DATA_SCHEMA, syncProtocolVersion: CURRENT_SYNC_PROTOCOL,
+            data: { profile: { name: 'original' } }, pending: [{ seq: 1 }],
+        };
+        const normalizedLocal = normalizeLocalEnvelopeRecord(local);
+        expect(normalizedLocal).toEqual(local);
+        expect(normalizedLocal).not.toBe(local);
+        expect(normalizedLocal.data).not.toBe(local.data);
+        ((normalizedLocal.data as { profile: { name: string } }).profile).name = 'edited';
+        expect(local.data.profile.name).toBe('original');
+
+        const backup = { version: 3, dataSchemaVersion: CURRENT_DATA_SCHEMA,
+            syncProtocolVersion: CURRENT_SYNC_PROTOCOL, userData: { profile: { name: 'original' } } };
+        const normalizedBackup = normalizeBackupRecord(backup);
+        expect(normalizedBackup).toEqual(backup);
+        ((normalizedBackup.userData as { profile: { name: string } }).profile).name = 'edited';
+        expect(backup.userData.profile.name).toBe('original');
+
+        const sync = { protocolVersion: CURRENT_SYNC_PROTOCOL, clock: { s00: 2 }, fields: {},
+            writer: { slot: 's00', replicaId: 'replica', generation: 1, seq: 2 } };
+        const cloud = { profile: { name: 'original' }, _schemaVersion: CURRENT_DATA_SCHEMA, _sync: sync };
+        const normalizedCloud = normalizeCloudDocument(cloud);
+        (normalizedCloud.business.profile as { name: string }).name = 'edited';
+        (normalizedCloud.sync as { clock: { s00: number } }).clock.s00 = 9;
+        expect(cloud.profile.name).toBe('original');
+        expect(sync.clock.s00).toBe(2);
+    });
+
     it('runs migrations sequentially without mutating the source', () => {
         const source = { value: 1, nested: { seen: [] as number[] } };
         const result = migrateSequential(
