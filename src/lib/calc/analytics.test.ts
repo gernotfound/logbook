@@ -1115,3 +1115,38 @@ describe('Weekly volume bounded accumulation', () => {
             .toEqual(result);
     });
 });
+
+describe('Readiness chronology precomputation', () => {
+    it('evaluates workout dates once per session while selecting the same newest check-ins', () => {
+        let dateReads = 0;
+        const history: WorkoutSession[] = Array.from({ length: 48 }, (_, index) => ({
+            id: `readiness-${index}`,
+            get date() {
+                dateReads++;
+                return '2026-08-20';
+            },
+            globalStartTime: index + 1,
+            readiness: { capturedAt: index + 1, energy: index === 47 ? 5 : 2 },
+            exercises: [],
+        }));
+
+        const result = computeReadinessTrends(history, 2);
+        expect(result.sessionsWithReadiness).toBe(2);
+        expect(result.energy).toMatchObject({ latest: 5, previous: 2, average: 3.5 });
+        // Each normalized date is read a bounded number of times, not per sort comparison.
+        expect(dateReads).toBeLessThanOrEqual(3 * history.length);
+    });
+
+    it('preserves the original history order when date and timestamps tie exactly', () => {
+        const makeSession = (id: string, energy: number): WorkoutSession => ({
+            id, date: '2026-08-20', globalStartTime: 1_000,
+            readiness: { capturedAt: 1_000, energy },
+            exercises: [],
+        });
+        const result = computeReadinessTrends([
+            makeSession('first', 1), makeSession('second', 4),
+        ], 2);
+
+        expect(result.energy).toMatchObject({ latest: 1, previous: 4 });
+    });
+});

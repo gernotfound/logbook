@@ -560,10 +560,14 @@ export function computeReadinessTrends(
 ): ReadinessTrendStats {
     const sessions = (Array.isArray(history) ? history : [])
         .filter(session => session?.readiness)
-        .sort((a, b) =>
-            (getWorkoutDateString(b) ?? '').localeCompare(getWorkoutDateString(a) ?? '')
-            || readinessChronologyTimestamp(b) - readinessChronologyTimestamp(a))
-        .slice(0, Math.max(1, maxSessions));
+        .map(session => ({
+            session,
+            day: getWorkoutDateString(session) ?? '',
+            time: readinessChronologyTimestamp(session),
+        }))
+        .sort((a, b) => b.day.localeCompare(a.day) || b.time - a.time)
+        .slice(0, Math.max(1, maxSessions))
+        .map(({ session }) => session);
 
     const dimension = (key: 'energy' | 'stress' | 'motivation' | 'muscleRecovery'): ReadinessTrendDimension => {
         const values = sessions
