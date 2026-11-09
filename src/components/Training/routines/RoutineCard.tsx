@@ -59,6 +59,9 @@ export const RoutineCard: React.FC<RoutineCardProps> = ({
         ? `${primaryMuscleNames.slice(0, 2).join(', ')}${primaryMuscleNames.length > 2 ? ` +${primaryMuscleNames.length - 2}` : ''}`
         : '';
 
+    const exerciseCount = (routine.exercises || []).length;
+    const routineDescription = `${exerciseCount} esercizi${focusSummary ? ` · ${focusSummary}` : ''}`;
+
     const menuItems: ContextMenuItem[] = [
         {
             id: 'edit-routine',
@@ -93,7 +96,7 @@ export const RoutineCard: React.FC<RoutineCardProps> = ({
                     onClick={() => onToggleExpand(routine.id)}
                     aria-expanded={isExpanded}
                     aria-controls={detailsId}
-                    aria-label={`${isExpanded ? 'Chiudi' : 'Apri'} scheda ${routine.name}`}
+                    aria-label={`${isExpanded ? 'Chiudi' : 'Apri'} scheda ${routine.name} ${routineDescription}`}
                 >
                     <span className="routine-card-icon" aria-hidden="true">
                         <ClipboardList size={20} />
@@ -101,11 +104,10 @@ export const RoutineCard: React.FC<RoutineCardProps> = ({
                     <span className="routine-card-copy">
                         <strong className="routine-card-name">{routine.name}</strong>
                         <span className="routine-card-meta">
-                            {(routine.exercises || []).length} esercizi
-                            {focusSummary ? ` · ${focusSummary}` : ''}
+                            {routineDescription}
                         </span>
                         <span className="routine-card-count-assistive" aria-hidden="true">
-                            {(routine.exercises || []).length} esercizi
+                            {exerciseCount} esercizi
                         </span>
                     </span>
                     <ChevronDown className="routine-card-chevron" size={20} aria-hidden="true" />

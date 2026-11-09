@@ -73,7 +73,7 @@ test('keyboard-opened routine menu retains focus and fits a narrow real viewport
   await page.locator('#routine-creation-form').getByRole('button', { name: 'Salva', exact: true }).click();
 
   const card = page.locator('.routine-library-card').filter({
-    has: page.getByRole('button', { name: 'Apri scheda Scheda accessibile', exact: true }),
+    has: page.getByRole('button', { name: 'Apri scheda Scheda accessibile 0 esercizi', exact: true }),
   });
   const trigger = card.getByRole('button', { name: 'Opzioni' });
   await trigger.focus();
@@ -93,7 +93,7 @@ test('keyboard-opened routine menu retains focus and fits a narrow real viewport
   await page.getByPlaceholder('Nome scheda').fill('Seconda scheda accessibile');
   await page.locator('#routine-creation-form').getByRole('button', { name: 'Salva', exact: true }).click();
   const secondCard = page.locator('.routine-library-card').filter({
-    has: page.getByRole('button', { name: 'Apri scheda Seconda scheda accessibile', exact: true }),
+    has: page.getByRole('button', { name: 'Apri scheda Seconda scheda accessibile 0 esercizi', exact: true }),
   });
   const secondTrigger = secondCard.getByRole('button', { name: 'Opzioni' });
 
