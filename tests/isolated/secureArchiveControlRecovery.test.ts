@@ -39,6 +39,7 @@ afterEach(() => {
 
 describe('control mirror publication', () => {
     it('normalizes the owner without sharing another identity namespace', () => {
+        expect(mirror()).toBe('logbook:v2:user:control-recovery:secure-vault-control-mirror');
         expect(vaultControlMirrorId('control-recovery')).toBe(mirror());
         expect(vaultControlMirrorId('guest')).not.toBe(mirror());
         expect(vaultControlMirrorId('user:other')).not.toBe(mirror());
@@ -377,6 +378,44 @@ describe('mirror I/O failures and post-write verification', () => {
         await expect(reconcileVaultControl(owner)).rejects.toBeInstanceOf(LocalPurgePendingError);
         spy.mockRestore();
         expect(localStorage.getItem(primary())).toBeNull();
+        expect(await get(mirror())).toEqual(control);
+    });
+});
+
+
+describe('single-copy publication and readback integrity', () => {
+    it('refuses to replace a primary with a different epoch when no mirror exists', async () => {
+        persist(control);
+        const changed = { ...control, epoch: 'b'.repeat(32) };
+        await expect(publishVaultControl(owner, changed)).rejects.toBeInstanceOf(LocalVaultLockedError);
+        expect(readVaultControl(owner)).toEqual(control);
+        expect(await get(mirror())).toBeUndefined();
+    });
+
+    it('fails with the locked-vault error if primary verification observes missing metadata', async () => {
+        const nativeGet = localStorage.getItem.bind(localStorage);
+        let reads = 0;
+        const missing = vi.spyOn(localStorage, 'getItem').mockImplementation(key => {
+            if (key === primary() && ++reads === 2) return null;
+            return nativeGet(key);
+        });
+        await expect(publishVaultControl(owner, control)).rejects.toBeInstanceOf(LocalVaultLockedError);
+        missing.mockRestore();
+        expect(await get(mirror())).toEqual(control);
+        expect(readVaultControl(owner)).toEqual(control);
+    });
+
+    it('rejects recovery when the restored primary disappears on verification', async () => {
+        await set(mirror(), control);
+        const nativeGet = localStorage.getItem.bind(localStorage);
+        let reads = 0;
+        const missing = vi.spyOn(localStorage, 'getItem').mockImplementation(key => {
+            if (key === primary() && ++reads === 3) return null;
+            return nativeGet(key);
+        });
+        await expect(reconcileVaultControl(owner)).rejects.toBeInstanceOf(LocalVaultLockedError);
+        missing.mockRestore();
+        expect(readVaultControl(owner)).toEqual(control);
         expect(await get(mirror())).toEqual(control);
     });
 });

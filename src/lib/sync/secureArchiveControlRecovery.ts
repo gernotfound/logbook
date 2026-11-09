@@ -47,7 +47,7 @@ function assertPublishPermitted(owner: string, allowRetiredFence: boolean): void
 }
 
 /** Never replace unrelated epochs or wrapped keys, even across crashes. */
-async function writeMirror(owner: string, control: PersistedVaultControl, allowRetiredFence = false): Promise<void> {
+async function writeMirror(owner: string, control: PersistedVaultControl, allowRetiredFence: boolean): Promise<void> {
     assertPublishPermitted(owner, allowRetiredFence);
     const previous = await readMirror(owner);
     if (previous && !sameGeneration(previous, control)) throw new LocalVaultLockedError();
