@@ -13,6 +13,7 @@ async function collectBlockingAccessibilityViolations(page: Page, surface: strin
       id: violation.id,
       impact: violation.impact,
       targets: violation.nodes.flatMap(node => node.target),
+      details: violation.nodes.map(node => ({ html: node.html, failureSummary: node.failureSummary })),
     }));
 }
 

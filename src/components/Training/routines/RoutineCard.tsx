@@ -96,18 +96,15 @@ export const RoutineCard: React.FC<RoutineCardProps> = ({
                     onClick={() => onToggleExpand(routine.id)}
                     aria-expanded={isExpanded}
                     aria-controls={detailsId}
-                    aria-label={`${isExpanded ? 'Chiudi' : 'Apri'} scheda ${routine.name} ${routineDescription}`}
                 >
                     <span className="routine-card-icon" aria-hidden="true">
                         <ClipboardList size={20} />
                     </span>
                     <span className="routine-card-copy">
+                        <span className="sr-only">{isExpanded ? 'Chiudi scheda ' : 'Apri scheda '}</span>
                         <strong className="routine-card-name">{routine.name}</strong>
                         <span className="routine-card-meta">
                             {routineDescription}
-                        </span>
-                        <span className="routine-card-count-assistive" aria-hidden="true">
-                            {exerciseCount} esercizi
                         </span>
                     </span>
                     <ChevronDown className="routine-card-chevron" size={20} aria-hidden="true" />
