@@ -490,6 +490,7 @@ details[open] > .technique-summary::after {
     font-size: var(--font-size-body);
 }
 
+.muscle-priority-option[aria-selected="true"],
 .muscle-priority-option:hover,
 .muscle-priority-option:focus-visible {
     background: var(--surface-light);
