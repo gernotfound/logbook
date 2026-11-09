@@ -31,6 +31,7 @@ async function sample(page: Page, selector: string) {
     const headingCss = getComputedStyle(wordmark.querySelector('h1')!);
     return {
       screen: rect(screen), image: rect(image), wordmark: rect(wordmark),
+      mascotSrc: image.currentSrc,
       background: screenCss.backgroundColor, color: screenCss.color,
       filter: getComputedStyle(image).filter,
       text: wordmark.textContent, weight: headingCss.fontWeight, size: headingCss.fontSize,
@@ -82,15 +83,19 @@ for (const scenario of cases) {
     try {
       await page.goto('/');
       expect(entryBlocked).toBe(true);
+      const theme = scenario.preference === 'system' ? scenario.system : scenario.preference;
+      await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
+      await expect(page.locator('html')).toHaveAttribute('data-theme-preference', scenario.preference);
       const initial = page.locator('#initial-loader');
       await expect(initial).toBeVisible();
       await expect(initial).toHaveCSS('position', 'fixed');
+      await expect(initial).toHaveAttribute('role', 'status');
+      await expect(initial).toHaveAttribute('aria-busy', 'true');
       await expect.poll(() => initial.locator('img').evaluate(image =>
         (image as HTMLImageElement).complete && (image as HTMLImageElement).naturalWidth > 0,
       )).toBe(true);
       const bootstrap = await sample(page, '#initial-loader');
       expectFits(bootstrap, scenario);
-      const theme = scenario.preference === 'system' ? scenario.system : scenario.preference;
       const foreground = theme === 'light' ? 'rgb(0, 0, 0)' : 'rgb(255, 255, 255)';
       expect(bootstrap.background).toBe(theme === 'light' ? 'rgb(255, 255, 255)' : 'rgb(0, 0, 0)');
       expect(bootstrap.color).toBe(foreground);
@@ -117,9 +122,16 @@ for (const scenario of cases) {
       await expect.poll(() => dataHeld).toBe(true);
       const lazy = page.getByRole('status', { name: 'Caricamento sezione in corso', exact: true });
       await expect(lazy).toBeVisible();
+      await expect(lazy).toHaveAttribute('aria-busy', 'true');
+      await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
+      await expect(page.locator('html')).toHaveAttribute('data-theme-preference', scenario.preference);
+      await expect.poll(() => lazy.locator('img.brand-loading-screen__mascot').evaluate(image =>
+        (image as HTMLImageElement).complete && (image as HTMLImageElement).naturalWidth > 0,
+      )).toBe(true);
       const runtime = await sample(page, '.brand-loading-screen--content');
       expectFits(runtime, scenario);
       expect(runtime.scale).toBe(0.72);
+      expect(runtime.mascotSrc).toBe(bootstrap.mascotSrc);
       for (const key of ['background', 'color', 'filter', 'weight', 'size', 'gap', 'animation', 'duration', 'timing', 'borderTop', 'text'] as const) {
         expect(runtime[key], key).toBe(bootstrap[key]);
       }
