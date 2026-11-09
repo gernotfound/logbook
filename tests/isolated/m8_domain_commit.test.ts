@@ -82,6 +82,33 @@ describe('M8 domain commit durability', () => {
         expect(stored?.clock[stored.actorId]).toBe(1);
     });
 
+    it('uses the authenticated durable archive without reading a redundant caller fallback', async () => {
+        const { initializeLocal, commitDomainOperations, readLocal } = await import('../../src/lib/sync/localRepository');
+        const initial = base();
+        await initializeLocal('user:a', initial);
+        const unusedFallback = new Proxy(initial, {
+            get() { throw new Error('Il fallback non deve essere letto se l’archivio è presente'); },
+        });
+        const result = await commitDomainOperations(
+            'user:a', { type: 'profile.patch', patch: { height: '173' } }, unusedFallback,
+        );
+        const stored = await readLocal('user:a');
+        expect(result.data.profile?.height).toBe('173');
+        expect(stored?.data.profile?.height).toBe('173');
+        expect(stored?.pending).toEqual(result.operations);
+    });
+
+    it('still validates and persists the fallback atomically when no archive exists', async () => {
+        const { commitDomainOperations, readLocal } = await import('../../src/lib/sync/localRepository');
+        const initial = base();
+        const result = await commitDomainOperations('user:a', { type: 'profile.patch', patch: { height: '171' } }, initial);
+        const stored = await readLocal('user:a');
+        expect(stored?.baseline.profile?.height).toBe('170');
+        expect(stored?.data.profile?.height).toBe('171');
+        expect(stored?.pending).toEqual(result.operations);
+        expect(await get('logbook:v2:user:a')).toMatch(/^tlb-sealed:v1:/);
+    });
+
     it('persists training-cycle strategy in IndexedDB with its semantic journal', async () => {
         const { initializeLocal, commitDomainOperations, readLocal } = await import('../../src/lib/sync/localRepository');
         const initial = base();

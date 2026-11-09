@@ -210,8 +210,8 @@ function* computeWeeklyVolumeSteps(
     const firstDay = intervals[0].weekStart;
     const lastDay = intervals[intervals.length - 1].weekEnd;
     const referenceDay = referenceDayFor(referenceDate);
-    // Bucket sessions once, preserving history order (including sessionIds).
-    const weeks: Array<Array<{ session: WorkoutSession; volume: number }>> = intervals.map(() => []);
+    // Aggregate in history order: session IDs and guarded finite sums keep their original semantics.
+    const weeks = intervals.map(() => ({ volume: 0, workoutCount: 0, sessionIds: [] as string[] }));
     let scanned = 0;
     for (const session of safeHistory) {
         // Keep the main thread responsive when the Worker is unavailable.
@@ -227,18 +227,19 @@ function* computeWeeklyVolumeSteps(
             else if (dateStr > interval.weekEnd) low = mid + 1;
             else {
                 const volume = calculateWorkoutVolume(session, libraryLookup, safeUserWeight);
-                weeks[mid].push({ session, volume: Number.isFinite(volume) ? volume : 0 });
+                const bucket = weeks[mid];
+                bucket.volume = addFiniteVolume(bucket.volume, Number.isFinite(volume) ? volume : 0);
+                bucket.workoutCount++;
+                if (session.id) bucket.sessionIds.push(session.id);
                 break;
             }
         }
     }
 
     const points: WeeklyVolumePoint[] = intervals.map((interval, idx) => {
-        const matching = weeks[idx];
-
-        const volumeKg = Math.round(matching.reduce((acc, curr) => addFiniteVolume(acc, curr.volume), 0));
+        const bucket = weeks[idx];
+        const volumeKg = Math.round(bucket.volume);
         const volumeTon = Math.round((volumeKg / 1000) * 100) / 100;
-        const sessionIds = matching.map(m => m.session.id || '').filter(Boolean);
 
         return {
             weekIndex: idx,
@@ -247,8 +248,8 @@ function* computeWeeklyVolumeSteps(
             label: interval.label,
             volumeKg,
             volumeTon,
-            workoutCount: matching.length,
-            sessionIds
+            workoutCount: bucket.workoutCount,
+            sessionIds: bucket.sessionIds
         };
     });
 
