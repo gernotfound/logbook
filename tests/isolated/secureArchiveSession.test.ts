@@ -73,6 +73,11 @@ describe('persisted vault control trust boundary', () => {
         expect(error.message).toMatch(/conservati.*recupero/);
     });
 
+    it('rejects callable metadata spoofing all current control fields', () => {
+        const callable = Object.assign(() => undefined, control);
+        expect(() => parsePersistedVaultControl(owner, callable)).toThrow(LocalVaultLockedError);
+    });
+
     it.each([undefined, null, false, 0, '', 'metadata', []])('rejects a non-record control: %s', value => {
         expect(() => parsePersistedVaultControl(owner, value)).toThrow(LocalVaultLockedError);
     });
