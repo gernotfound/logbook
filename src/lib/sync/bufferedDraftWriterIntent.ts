@@ -2,6 +2,7 @@ import { deviceKey, readDeviceValueStrict, writeDeviceValue } from './deviceStor
 import { readDeviceConsentRevision, assertWorkoutSnapshotEpoch } from './workoutDeviceIntent';
 import { stableStorageKeyInventory } from './stableStorageKeyInventory';
 import { newWriterRevisionId, type WriterLineageReference } from './writerLineage';
+import { assertStableWriterEvidence } from './writerEvidenceConsistency';
 
 const INTENT_PREFIX = 'draft:buffered-intent:';
 const INTENT_ID_PATTERN = /^[a-f0-9]{32}$/;
@@ -115,21 +116,10 @@ export function inspectBufferedRecoveryEvidence(owner: string): BufferedRecovery
         scanned.push({ name, draftName, value: parsed.value,
             consentRevision: parsed.revision ?? null, provenance, raw });
     }
-    // Detect changes to all bytes and membership while reading across tabs.
-    const after = ownerWriterNames(owner);
-    if (after.size !== names.size || [...names].some(name => !after.has(name))
-        || readDeviceConsentRevision(owner) !== revision) {
-        throw new Error('Copie o consenso cambiati durante la verifica. Riprova.');
-    }
-    for (const record of scanned) {
-        if (readDeviceValueStrict(record.name, owner) !== record.raw) {
-            throw new Error('Copia modificata durante la verifica. Riprova.');
-        }
-    }
-    // The consent epoch may change in another tab during the final value reads.
-    if (readDeviceConsentRevision(owner) !== revision) {
-        throw new Error('Copie o consenso cambiati durante la verifica. Riprova.');
-    }
+    assertStableWriterEvidence(owner, names, revision, scanned, () => ownerWriterNames(owner), {
+        inventory: 'Copie o consenso cambiati durante la verifica. Riprova.',
+        value: 'Copia modificata durante la verifica. Riprova.',
+    });
     return scanned.map(({ raw: _raw, ...entry }) => entry)
         .sort((a, b) => a.draftName.localeCompare(b.draftName) || a.name.localeCompare(b.name));
 }
@@ -154,24 +144,10 @@ export function readBufferedWriterEvidence(owner: string, draftName: string): Bu
             if (matches.length > 64) throw new Error('Troppe bozze concorrenti: esportazione di recupero necessaria.');
         }
     }
-    // Another tab may add a witness after the first stable inventory but
-    // before its values have been authenticated. Never infer uniqueness from
-    // that outdated list, including when the new witness is for this field.
-    const after = ownerWriterNames(owner);
-    if (after.size !== names.size || [...names].some(name => !after.has(name))
-        || readDeviceConsentRevision(owner) !== revision) {
-        throw new Error('Copie bufferizzate o consenso cambiati durante la lettura.');
-    }
-    for (const evidence of scanned) {
-        if (readDeviceValueStrict(evidence.name, owner) !== evidence.raw) {
-            throw new Error('Copia bufferizzata modificata durante la verifica.');
-        }
-    }
-    // Keep the same final epoch invariant as dated writer recovery: a new
-    // consent revision cannot adopt witnesses authenticated under the old one.
-    if (readDeviceConsentRevision(owner) !== revision) {
-        throw new Error('Copie bufferizzate o consenso cambiati durante la lettura.');
-    }
+    assertStableWriterEvidence(owner, names, revision, scanned, () => ownerWriterNames(owner), {
+        inventory: 'Copie bufferizzate o consenso cambiati durante la lettura.',
+        value: 'Copia bufferizzata modificata durante la verifica.',
+    });
     return matches;
 }
 

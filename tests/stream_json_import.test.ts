@@ -39,6 +39,18 @@ describe('bounded-source JSON backup reader', () => {
         await expect(parseLargeBackupJson(file)).rejects.toThrow('Lettura JSON incompleta');
     });
 
+    it('reports an unreadable chunk without treating it as an empty or partial backup', async () => {
+        class UnreadableBlob extends Blob {
+            override slice(start?: number, end?: number, contentType?: string): Blob {
+                const part = super.slice(start, end, contentType);
+                part.arrayBuffer = async () => { throw new Error('device read failed'); };
+                return part;
+            }
+        }
+        await expect(parseLargeBackupJson(new UnreadableBlob(['{"x":1}']), undefined, 2))
+            .rejects.toThrow('Impossibile leggere il file.');
+    });
+
     it('rejects a changed session before parsing an asynchronously read chunk', async () => {
         let isCurrent = true;
         class SwitchingBlob extends Blob {

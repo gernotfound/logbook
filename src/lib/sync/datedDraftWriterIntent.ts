@@ -2,6 +2,7 @@ import { deviceKey, readDeviceValueStrict, writeDeviceValue } from './deviceStor
 import { assertWorkoutSnapshotEpoch, readDeviceConsentRevision } from './workoutDeviceIntent';
 import { stableStorageKeyInventory } from './stableStorageKeyInventory';
 import { newWriterRevisionId, type WriterLineageReference } from './writerLineage';
+import { assertStableWriterEvidence } from './writerEvidenceConsistency';
 
 const PREFIX = 'draft:dated-intent:';
 const ID = /^[a-f0-9]{32}$/;
@@ -124,23 +125,10 @@ export function readDatedWriterEvidence(owner: string, draftName: string): Dated
             throw new Error('Troppe copie concorrenti: recupero esplicito necessario.');
         }
     }
-    // Authenticate the entire owner-scoped inventory, not just today's
-    // matching field: another tab can change an existing witness while its key
-    // membership remains stable. The consent epoch must also remain unchanged.
-    const after = ownerNames(owner);
-    if (after.size !== names.size || [...names].some(name => !after.has(name))
-        || readDeviceConsentRevision(owner) !== revision) {
-        throw new Error('Copie datate o consenso cambiati durante la lettura.');
-    }
-    for (const witness of scanned) {
-        if (readDeviceValueStrict(witness.name, owner) !== witness.raw) {
-            throw new Error('Copia datata modificata durante la verifica.');
-        }
-    }
-    // Consent may also change during the final authenticated value reads.
-    if (readDeviceConsentRevision(owner) !== revision) {
-        throw new Error('Copie datate o consenso cambiati durante la lettura.');
-    }
+    assertStableWriterEvidence(owner, names, revision, scanned, () => ownerNames(owner), {
+        inventory: 'Copie datate o consenso cambiati durante la lettura.',
+        value: 'Copia datata modificata durante la verifica.',
+    });
     return matches;
 }
 
@@ -229,21 +217,10 @@ export function inspectDatedRecoveryEvidence(owner: string): DatedRecoveryEntry[
         scanned.push({ name, raw, draftName: parsed.draftName, value,
             consentRevision: parsed.consentRevision ?? null, provenance });
     }
-    const after = ownerNames(owner);
-    if (after.size !== names.size || [...names].some(name => !after.has(name))
-        || readDeviceConsentRevision(owner) !== revision) {
-        throw new Error('Copie o consenso cambiati durante la verifica.');
-    }
-    for (const x of scanned) {
-        if (readDeviceValueStrict(x.name, owner) !== x.raw) {
-            throw new Error('Copia datata cambiata durante la verifica.');
-        }
-    }
-    // The reported provenance must refer to the same consent epoch as
-    // the final authenticated witness reads, not an earlier inspection pass.
-    if (readDeviceConsentRevision(owner) !== revision) {
-        throw new Error('Copie o consenso cambiati durante la verifica.');
-    }
+    assertStableWriterEvidence(owner, names, revision, scanned, () => ownerNames(owner), {
+        inventory: 'Copie o consenso cambiati durante la verifica.',
+        value: 'Copia datata cambiata durante la verifica.',
+    });
     return scanned.map(({ raw: _raw, ...entry }) => entry)
         .sort((a, b) => a.draftName.localeCompare(b.draftName) || a.name.localeCompare(b.name));
 }
