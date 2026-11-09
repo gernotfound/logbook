@@ -439,6 +439,63 @@ describe('Intelligent Exercise Search & Dropdown Suite (M3: R4 & R6)', () => {
             expect(container.textContent).not.toContain('Panca Piana Bilanciere');
             expect(container.textContent).not.toContain('Squat con Bilanciere');
         });
+        it('2.12: renders a bounded list and reveals the remaining results only on scroll', () => {
+            const largeLibrary: ExerciseLibraryItem[] = Array.from({ length: 95 }, (_, index) => ({
+                id: `large-${index + 1}`,
+                name: index === 94 ? 'Speciale corpo libero' : `Esercizio ${String(index + 1).padStart(3, '0')}`,
+                muscles: [],
+                setsCount: 3,
+                sets: [],
+            }));
+            const { container } = render(<ExerciseSearchDropdown library={largeLibrary} onSelectExercise={vi.fn()} />);
+            const input = container.querySelector('input') as HTMLInputElement;
+            expect(container.querySelector('[role="listbox"]')).toBeNull();
+
+            fireEvent.focus(input);
+            const listbox = container.querySelector('[role="listbox"]') as HTMLElement;
+            expect(listbox.querySelectorAll('[role="option"]')).toHaveLength(40);
+            expect(listbox.querySelector('[role="option"]')?.getAttribute('aria-setsize')).toBe('95');
+
+            Object.defineProperties(listbox, {
+                scrollTop: { configurable: true, value: 200 },
+                clientHeight: { configurable: true, value: 200 },
+                scrollHeight: { configurable: true, value: 350 },
+            });
+            fireEvent.scroll(listbox);
+            expect(listbox.querySelectorAll('[role="option"]')).toHaveLength(80);
+            fireEvent.scroll(listbox);
+            expect(listbox.querySelectorAll('[role="option"]')).toHaveLength(95);
+
+            fireEvent.change(input, { target: { value: 'speciale' } });
+            expect(listbox.querySelectorAll('[role="option"]')).toHaveLength(1);
+            expect(listbox.textContent).toContain('Speciale corpo libero');
+            fireEvent.change(input, { target: { value: '' } });
+            expect(listbox.querySelectorAll('[role="option"]')).toHaveLength(40);
+        });
+
+        it('2.13: keyboard wrap expands the list before referring to the last option', () => {
+            const largeLibrary: ExerciseLibraryItem[] = Array.from({ length: 95 }, (_, index) => ({
+                id: `key-${index + 1}`,
+                name: `Esercizio ${String(index + 1).padStart(3, '0')}`,
+                muscles: [],
+                setsCount: 3,
+                sets: [],
+            }));
+            const onSelect = vi.fn();
+            const { container } = render(<ExerciseSearchDropdown library={largeLibrary} onSelectExercise={onSelect} />);
+            const input = container.querySelector('input') as HTMLInputElement;
+            fireEvent.focus(input);
+            expect(container.querySelectorAll('[role="option"]')).toHaveLength(40);
+
+            fireEvent.keyDown(input, { key: 'ArrowUp' });
+            const activeId = input.getAttribute('aria-activedescendant');
+            expect(activeId).toBeTruthy();
+            expect(document.getElementById(activeId!)?.getAttribute('role')).toBe('option');
+            expect(container.querySelectorAll('[role="option"]')).toHaveLength(95);
+            fireEvent.keyDown(input, { key: 'Enter' });
+            expect(onSelect).toHaveBeenCalledExactlyOnceWith('key-95');
+        });
+
     });
 
     // =========================================================================

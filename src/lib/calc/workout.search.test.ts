@@ -22,6 +22,16 @@ describe('typed workout search contracts', () => {
         expect(exercises.map(item => item.id)).toEqual(originalIds);
     });
 
+    it('returns independent alphabetically sorted arrays from a reused searcher', () => {
+        const searcher = createExerciseLibrarySearcher(exercises);
+        const first = searcher('');
+        const second = searcher('   ');
+        expect(first).toEqual(second);
+        expect(first).not.toBe(second);
+        first.reverse();
+        expect(searcher('').map(item => item.id)).toEqual(second.map(item => item.id));
+    });
+
     it('preserves arbitrary item fields in filterItems and direct-first deduplication', () => {
         const items = [
             { id: 'one', name: 'Panca piana', priority: 9 },
