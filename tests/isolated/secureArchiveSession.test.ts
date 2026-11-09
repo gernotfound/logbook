@@ -74,7 +74,7 @@ describe('persisted vault control trust boundary', () => {
     it.each([
         ['format', 'other-vault'], ['version', 1], ['version', 3], ['version', '2'],
         ['owner', 'user:another'], ['phase', 'ready'], ['phase', undefined],
-        ['epoch', undefined], ['epoch', 123], ['epoch', ''],
+        ['epoch', undefined], ['epoch', 123], ['epoch', ['a'.repeat(32)]], ['epoch', ''],
         ['epoch', 'a'.repeat(31)], ['epoch', 'a'.repeat(33)], ['epoch', 'A'.repeat(32)],
         ['epoch', 'g'.repeat(32)], ['epoch', 'a'.repeat(32) + '\n'],
         ['wrappedKey', null], ['wrappedKey', {}], ['wrappedKey', { owner: 'user:another' }],
@@ -108,6 +108,40 @@ describe('persisted vault control trust boundary', () => {
 });
 
 describe('resident owner and guest capabilities', () => {
+    it('provides a recovery explanation when the active control has no unlocked capability', async () => {
+        await expect(unlockVaultForOwner(owner, () => false)).rejects.toThrow(/conservati.*recupero/);
+    });
+
+    it.each(['missing', 'migrating'] as const)('rejects %s control before decrypting any DEK', async reason => {
+        if (reason === 'missing') localStorage.removeItem(vaultControlKey(owner));
+        else persist({ ...control, phase: 'migrating' });
+        const saved = localStorage.getItem(vaultControlKey(owner));
+        const decrypt = vi.spyOn(crypto.subtle, 'decrypt');
+        await expect(unlockVaultForOwner(owner)).rejects.toBeInstanceOf(LocalVaultLockedError);
+        expect(decrypt).not.toHaveBeenCalled();
+        expect(localStorage.getItem(vaultControlKey(owner))).toBe(saved);
+        expect(isVaultUnlocked(owner)).toBe(false);
+    });
+
+    it('rejects an existing purge fence before decrypting any DEK', async () => {
+        beginLocalPurge(owner);
+        const decrypt = vi.spyOn(crypto.subtle, 'decrypt');
+        await expect(unlockVaultForOwner(owner)).rejects.toBeInstanceOf(LocalPurgePendingError);
+        expect(decrypt).not.toHaveBeenCalled();
+        expect(isVaultUnlocked(owner)).toBe(false);
+    });
+
+    it('zeroes a superseded resident key before publishing a successful same-key unlock', async () => {
+        await unlockVaultForOwner(owner);
+        const superseded = requireUnlockedLocalKey(owner);
+        await unlockVaultForOwner(owner);
+        const current = requireUnlockedLocalKey(owner);
+        expectZeroed(superseded);
+        expect(current).not.toBe(superseded);
+        expect(current).toEqual(originalKey);
+        expect(localStorage.getItem(vaultControlKey(owner))).toBe(JSON.stringify(control));
+    });
+
     it('zeroes a locked owner key, preserves other owners, and zeroes all remaining keys on lockAll', async () => {
         const other = await install('user:other-session');
         await unlockVaultForOwner(owner);
