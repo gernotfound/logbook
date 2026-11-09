@@ -17,7 +17,7 @@ describe('secondary tab loading', () => {
         expect(screen.getByRole('tabpanel', { name: 'Misurazioni' })).toBeDefined();
         fireEvent.click(screen.getByRole('tab', { name: 'Attività' }));
         await act(async () => { await import('../src/components/Data/DataActivity'); });
-        expect(await screen.findByRole('heading', { name: 'Attività — questa settimana' }, {}, { timeout: 5000 })).toBeDefined();
+        expect(await screen.findByRole('heading', { name: 'Attività — questa settimana' }, { timeout: 5000 })).toBeDefined();
         fireEvent.click(screen.getByRole('tab', { name: 'Storico' }));
         expect(await screen.findByRole('heading', { name: 'Storico Dati' })).toBeDefined();
         fireEvent.click(screen.getByRole('tab', { name: 'Misurazioni' }));
