@@ -5,7 +5,7 @@ import { assertIsolatedVitestEnvironment, TEST_BACKEND_ORIGIN } from './scripts/
 
 // Recovery imports Firebase transitively through the repository and replica modules.
 // Reject inherited client endpoints before test modules can initialize the SDK.
-assertIsolatedVitestEnvironment(loadEnv('test', fileURLToPath(new URL('.', import.meta.url)), 'VITE_');
+assertIsolatedVitestEnvironment(loadEnv('test', fileURLToPath(new URL('.', import.meta.url)), 'VITE_'));
 
 const appVersion = process.env.npm_package_version || '0.0.0-test';
 
