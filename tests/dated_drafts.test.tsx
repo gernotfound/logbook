@@ -1218,6 +1218,7 @@ it('leaves the sleep historical editor accessible but closes it after measuremen
         return <DataView subTab={tab} setSubTab={setTab} />;
     };
     const view = render(<Harness />);
+    await act(async () => { await import('../src/components/Data/DataHistory'); });
     fireEvent.click(screen.getByRole('button', { name: 'Opzioni' }));
     fireEvent.click(screen.getByRole('menuitem', { name: 'Modifica misurazione' }));
     fireEvent.click(screen.getByRole('tab', { name: 'Sonno' }));
@@ -1250,6 +1251,7 @@ it('stays in the measurement editor when draft cancellation fails and navigates 
         return <DataView subTab={tab} setSubTab={setTab} />;
     };
     const view = render(<Harness />);
+    await act(async () => { await import('../src/components/Data/DataHistory'); });
     fireEvent.click(screen.getByRole('button', { name: 'Opzioni' }));
     fireEvent.click(screen.getByRole('menuitem', { name: 'Modifica misurazione' }));
     expect(view.container.querySelector('#data-panel-measurements')).not.toBeNull();

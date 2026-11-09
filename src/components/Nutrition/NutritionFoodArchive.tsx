@@ -13,6 +13,7 @@ import { FoodItemRow } from './archive/FoodItemRow';
 
 const MEAL_TYPES = ['Colazione', 'Pranzo', 'Cena', 'Spuntini'];
 const EMPTY_FOODS: any[] = [];
+const ARCHIVE_PAGE_SIZE = 50;
 
 interface NutritionFoodArchiveProps {
     onEditFood?: (food: any) => void;
@@ -25,7 +26,12 @@ export default function NutritionFoodArchive({ onEditFood }: NutritionFoodArchiv
     const showConfirm = useDialogStore(state => state.showConfirm);
 
     const [searchQuery, setSearchQuery] = useState('');
-    
+    const [page, setPage] = useState(() => ({ query: '', source: customFoods, count: ARCHIVE_PAGE_SIZE }));
+    const updateSearchQuery = (value: string) => {
+        setSearchQuery(value);
+        setPage({ query: value, source: customFoods, count: ARCHIVE_PAGE_SIZE });
+    };
+
     // Modal states (used if onEditFood not provided)
     const [showModal, setShowModal] = useState(false);
     const [editingFoodId, setEditingFoodId] = useState<string | number | null>(null);
@@ -36,6 +42,8 @@ export default function NutritionFoodArchive({ onEditFood }: NutritionFoodArchiv
 
     const searchFoods = useMemo(() => createFoodSearcher(customFoods), [customFoods]);
     const filteredFoods = useMemo(() => searchFoods(searchQuery), [searchFoods, searchQuery]);
+    const visibleCount = page.query === searchQuery && page.source === customFoods ? page.count : ARCHIVE_PAGE_SIZE;
+    const visibleFoods = filteredFoods.slice(0, visibleCount);
 
     const openCreateModal = () => {
         setEditingFoodId(null);
@@ -177,7 +185,7 @@ export default function NutritionFoodArchive({ onEditFood }: NutritionFoodArchiv
                 {/* Search Bar */}
                 <FoodArchiveSearch 
                     searchQuery={searchQuery}
-                    setSearchQuery={setSearchQuery}
+                    setSearchQuery={updateSearchQuery}
                 />
             </div>
 
@@ -203,18 +211,30 @@ export default function NutritionFoodArchive({ onEditFood }: NutritionFoodArchiv
                         <p className="m-0 text-sm">Nessun alimento trovato per "{searchQuery}".</p>
                     </div>
                 ) : (
-                    filteredFoods.map((f: any, idx: number) => (
+                    <>
+                    {visibleFoods.map((f: any, idx: number) => (
                         <FoodItemRow
                             key={f.id || idx}
                             food={f}
-                            isLast={idx === filteredFoods.length - 1}
+                            isLast={idx === visibleFoods.length - 1}
                             mealTypes={MEAL_TYPES}
                             onEdit={openEditModal}
                             onDelete={handleDeleteFood}
                                 onDuplicate={handleDuplicateFood}
                             onQuickAddToMeal={handleQuickAddToMeal}
                         />
-                    ))
+                    ))}
+                    {visibleFoods.length < filteredFoods.length && (
+                        <button
+                            type="button"
+                            className="btn btn-secondary"
+                            onClick={() => setPage({ query: searchQuery, source: customFoods, count: visibleCount + ARCHIVE_PAGE_SIZE })}
+                            aria-label={`Mostra altri alimenti (${filteredFoods.length - visibleFoods.length} rimanenti)`}
+                        >
+                            Mostra altri alimenti
+                        </button>
+                    )}
+                    </>
                 )}
             </div>
         </div>

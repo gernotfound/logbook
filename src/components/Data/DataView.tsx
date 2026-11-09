@@ -1,15 +1,18 @@
-import { useState } from 'react';
+import { lazy, Suspense, useState } from 'react';
 import { useNutritionMeasurements } from '../../hooks/useNutritionMeasurements';
 import { useSleepMeasurements } from '../../hooks/useSleepMeasurements';
 import DataMeasurements from './DataMeasurements';
 import DataBiometry from './DataBiometry';
 import DataSleep from './DataSleep';
-import DataActivity from './DataActivity';
-import DataHistory from './DataHistory';
+
 import type { DataSubTab, MeasurementHistoryDay } from '../../types';
 import { useLocalToday } from '../../hooks/useLocalToday';
 import SubNav from '../UI/SubNav';
 import './data.css';
+
+const DataActivity = lazy(() => import('./DataActivity'));
+const DataHistory = lazy(() => import('./DataHistory'));
+const SUBTAB_LOADING = <p role="status" className="text-muted">Caricamento sottosezione in corso…</p>;
 
 const DATA_TABS: ReadonlyArray<{ id: DataSubTab; label: string }> = [
     { id: 'measurements', label: 'Misurazioni' },
@@ -121,7 +124,7 @@ const DataView: React.FC<DataViewProps> = ({
 
             {currentSubTab === 'activity' && (
                 <div id="data-panel-activity" role="tabpanel" aria-labelledby="data-tab-activity" className="data-sub-view active">
-                    <DataActivity />
+                    <Suspense fallback={SUBTAB_LOADING}><DataActivity /></Suspense>
                 </div>
             )}
 
@@ -138,12 +141,14 @@ const DataView: React.FC<DataViewProps> = ({
 
             {currentSubTab === 'history' && (
                 <div id="data-panel-history" role="tabpanel" aria-labelledby="data-tab-history" className="data-sub-view active">
-                    <DataHistory
-                        measurementsHistory={measurementsHook.measurementsHistory}
-                        editingDate={measurementsHook.editingDate}
-                        onSelectEdit={handleSelectEdit}
-                        onDeleteMeasurement={measurementsHook.handleDeleteMeasurement}
-                    />
+                    <Suspense fallback={SUBTAB_LOADING}>
+                        <DataHistory
+                            measurementsHistory={measurementsHook.measurementsHistory}
+                            editingDate={measurementsHook.editingDate}
+                            onSelectEdit={handleSelectEdit}
+                            onDeleteMeasurement={measurementsHook.handleDeleteMeasurement}
+                        />
+                    </Suspense>
                 </div>
             )}
         </div>
