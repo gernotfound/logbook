@@ -48,7 +48,8 @@ export default defineConfig({
     environment: 'jsdom',
     setupFiles: ['./tests/cssReadCompat.ts', './tests/setup.tsx'],
     testTimeout: 10000,
-    maxWorkers: 2,
+    // Only general CI shards gain a third worker; stress and instrumented coverage retain their limits.
+    maxWorkers: process.env.CI && process.env.npm_lifecycle_event === 'test' ? 3 : 2,
     exclude: [
       ...configDefaults.exclude,
       '**/e2e/**',

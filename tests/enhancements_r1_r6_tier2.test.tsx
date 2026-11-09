@@ -24,7 +24,6 @@ describe('LogBook PWA Enhancements Integration Suite (Requirements R1 - R6)', ()
     beforeEach(async () => {
         window.localStorage.clear();
         localStorage.setItem(`logbook:v2:${captureSession().owner}:health-consent-generation`, '1');
-        await prepareUnlockedTestArchive('user:test-user-id');
         useAppStore.getState().resetStore();
         useAppStore.setState({ dataOwner: captureSession().owner });
         vi.clearAllMocks();
@@ -46,9 +45,9 @@ describe('LogBook PWA Enhancements Integration Suite (Requirements R1 - R6)', ()
         // ---------------------------------------------------------------------
         describe('R1 Boundaries (Sleep Formats & Edge Values)', () => {
             it('T2.1.1: Zero and empty sleep strings handle cleanly without throwing NaN', async () => {
+                await prepareUnlockedTestArchive('user:test-user-id');
                 const owner = captureSession().owner;
                 const initialData = { ...emptyUserData, nutrition: {} };
-                await prepareUnlockedTestArchive(owner);
                 await initializeLocal(owner, initialData);
                 useAppStore.setState({ userData: initialData, dataOwner: owner });
                 const { result } = renderHook(() => useSleepMeasurements());
@@ -70,10 +69,10 @@ describe('LogBook PWA Enhancements Integration Suite (Requirements R1 - R6)', ()
 
 
             it('T2.1.4: Incomplete sleep phase inputs (only total sleep provided, phases empty) save cleanly', async () => {
+                await prepareUnlockedTestArchive('user:test-user-id');
                 const today = Logic.getLocalDateString();
                 const owner = captureSession().owner;
                 const initialData = { ...emptyUserData, nutrition: {} };
-                await prepareUnlockedTestArchive(owner);
                 await initializeLocal(owner, initialData);
                 useAppStore.setState({ userData: initialData, dataOwner: owner });
                 const { result } = renderHook(() => useSleepMeasurements());
@@ -298,6 +297,10 @@ describe('LogBook PWA Enhancements Integration Suite (Requirements R1 - R6)', ()
         // R3 Boundaries
         // ---------------------------------------------------------------------
         describe('R3 Boundaries (Library Synchronization Edge Cases)', () => {
+            beforeEach(async () => {
+                await prepareUnlockedTestArchive('user:test-user-id');
+            });
+
             it('T2.3.1: Library item with special characters and quotes renders safely without DOM break', () => {
                 const specialLib: Exercise[] = [
                     { id: 'ex_special', name: 'Curl 45° con Manubri & Bilanciere (A/B) "Pro"', setsCount: 3, sets: [] }
@@ -485,6 +488,7 @@ describe('LogBook PWA Enhancements Integration Suite (Requirements R1 - R6)', ()
             });
 
             it('T2.4.3b: repeated routine exercise identities fail validation without locking the local archive', async () => {
+                await prepareUnlockedTestArchive('user:test-user-id');
                 const owner = captureSession().owner;
                 const initialData = { ...emptyUserData, routines: [] };
                 delete idbStore['logbook:v2:' + owner];
@@ -754,7 +758,8 @@ describe('LogBook PWA Enhancements Integration Suite (Requirements R1 - R6)', ()
                 expect(localWorkout?.exercises[1].exId).toBe('ex_main');
             });
 
-            it('T2.6.4: Cardio input derives speed from stored distance and edited time', () => {
+            it('T2.6.4: Cardio input derives speed from stored distance and edited time', async () => {
+                await prepareUnlockedTestArchive('user:test-user-id');
                 localStorage.setItem(`logbook:v2:${captureSession().owner}:health-consent-generation`, '3');
                 const libDef = { id: 'ex_bike', name: 'Cyclette', trackingType: 'cardio' as const };
                 const exItem = {
@@ -800,6 +805,7 @@ describe('LogBook PWA Enhancements Integration Suite (Requirements R1 - R6)', ()
             });
 
             it('T2.6.5: Cancelling history edit (cancelHistoryEdit) discards ad-hoc edits cleanly', async () => {
+                await prepareUnlockedTestArchive('user:test-user-id');
                 const originalHistory: WorkoutSession[] = [
                     {
                         id: 'w_saved',
@@ -810,7 +816,6 @@ describe('LogBook PWA Enhancements Integration Suite (Requirements R1 - R6)', ()
 
                 const owner = captureSession().owner;
                 const initialData = { ...emptyUserData, history: originalHistory, activeWorkout: null };
-                await prepareUnlockedTestArchive(owner);
                 if (owner.startsWith('user:')) {
                     localStorage.setItem(`logbook:v2:${owner}:health-consent-generation`, '1');
                 }
