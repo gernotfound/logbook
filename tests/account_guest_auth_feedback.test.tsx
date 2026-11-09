@@ -20,12 +20,8 @@ vi.mock('../src/hooks/useSettings', () => ({
 vi.mock('../src/store/useDialogStore', () => ({
   useDialogStore: () => ({ showAlert: fixture.showAlert }),
 }));
-vi.mock('../src/lib/auth/passwordPolicy', () => ({
-  validatePasswordAgainstPolicy: vi.fn(async () => null),
-}));
 import { auth } from '../src/lib/firebase';
 import { activateGuestSession, GUEST_SESSION_KEY } from '../src/lib/sync/session';
-import { validatePasswordAgainstPolicy } from '../src/lib/auth/passwordPolicy';
 import { safeHardReload } from '../src/lib/sync/safeReload';
 vi.mock('../src/lib/sync/safeReload', () => ({ safeHardReload: vi.fn(async () => {}) }));
 import { AccountCard } from '../src/components/UI/AccountCard';
@@ -72,7 +68,7 @@ describe('guest account actions surface pre-provider coordination failures', () 
     fireEvent.click(submit);
 
     await waitFor(() => expect(fixture.registerWithEmail).toHaveBeenCalledExactlyOnceWith(
-      'guest@example.test', 'SyntheticPassword123!', 'merge',
+      'guest@example.test', 'SyntheticPassword123!', 'merge', expect.any(Function),
     ));
     await waitFor(() => expect(fixture.showAlert).toHaveBeenCalledWith(expect.stringContaining('Impossibile completare la registrazione')));
     await waitFor(() => expect(submit.hasAttribute('disabled')).toBe(false));
@@ -93,21 +89,33 @@ it('leaves verification and navigation to AuthProvider after a guest registratio
   expect(safeHardReload).not.toHaveBeenCalled();
 });
 
-it('does not register from an old guest generation after password policy returns', async () => {
-  let finish!: () => void;
-  vi.mocked(validatePasswordAgainstPolicy).mockImplementationOnce(() => new Promise<null>(resolve => { finish = () => resolve(null); }));
+it('passes a guest generation fence to the single registration validator', async () => {
   render(<AccountCard />);
   fireEvent.click(screen.getByRole('button', { name: 'Crea account con Email e Password' }));
   fireEvent.change(screen.getByPlaceholderText('La tua Email'), { target: { value: 'guest@example.test' } });
   fireEvent.change(screen.getByPlaceholderText('Nuova Password'), { target: { value: 'SyntheticPassword123!' } });
   fireEvent.click(screen.getByRole('button', { name: 'Registrati' }));
-  expect(validatePasswordAgainstPolicy).toHaveBeenCalledOnce();
+  await waitFor(() => expect(fixture.registerWithEmail).toHaveBeenCalledOnce());
+  const isCurrent = fixture.registerWithEmail.mock.calls[0][3] as () => boolean;
+  expect(isCurrent()).toBe(true);
   localStorage.setItem(GUEST_SESSION_KEY, 'next-guest-generation');
   activateGuestSession('next-guest-generation');
-  await act(async () => { finish(); });
-  expect(fixture.registerWithEmail).not.toHaveBeenCalled();
+  expect(isCurrent()).toBe(false);
   expect(fixture.showAlert).not.toHaveBeenCalled();
   expect(safeHardReload).not.toHaveBeenCalled();
+});
+
+it('cancels a guest registration when its account modal closes', async () => {
+  render(<AccountCard />);
+  fireEvent.click(screen.getByRole('button', { name: 'Crea account con Email e Password' }));
+  fireEvent.change(screen.getByPlaceholderText('La tua Email'), { target: { value: 'guest@example.test' } });
+  fireEvent.change(screen.getByPlaceholderText('Nuova Password'), { target: { value: 'SyntheticPassword123!' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Registrati' }));
+  await waitFor(() => expect(fixture.registerWithEmail).toHaveBeenCalledOnce());
+  const isCurrent = fixture.registerWithEmail.mock.calls[0][3] as () => boolean;
+  expect(isCurrent()).toBe(true);
+  fireEvent.click(screen.getByRole('button', { name: 'Annulla' }));
+  expect(isCurrent()).toBe(false);
 });
 
 it.each(['auth-owner', 'guest-generation'] as const)(

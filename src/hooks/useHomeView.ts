@@ -170,40 +170,53 @@ export function useHomeView(isActive = true): HomeViewState {
     // Pre-calcola una Map per cercare gli esercizi in O(1) invece di O(n) ad ogni iterazione dello storico
     const libraryMap = useMemo(() => new Map(library.map((l: any) => [l.id, l])), [library]);
 
-    // The Home recovery map only uses factual exposure within the last 72 hours.
-    // Weekly volume for charts is calculated separately by the analytics engine.
-    const muscleColors = useMemo(() => {
-        const recentExposure = new Set<string>();
-        history.forEach((w: any) => {
-            const workoutTime = getWorkoutTimestamp(w);
-            if (!workoutTime) return;
-            const hoursPassed = (homeClockNow - workoutTime) / (1000 * 60 * 60);
-            if (!(hoursPassed >= 0 && hoursPassed <= 72)) return;
-
-            (w.exercises || []).forEach((ex: any) => {
-                const libEx = libraryMap.get(ex.exId);
-                if (!libEx) return;
-                const hasWorkSet = (ex.sets || []).some((s: any) => {
-                    const hasValues = (s.kg !== undefined && s.kg !== '') || (s.reps !== undefined && s.reps !== '') || (s.time !== undefined && s.time !== '');
-                    return s.done === true || hasValues || s.done === undefined;
+    // Build the factual muscle-exposure index only when training data changes.
+    // A clock tick must not repeatedly inspect every historical exercise and set.
+    const exposureIndex = useMemo(() => {
+        const entries: { time: number; muscles: string[] }[] = [];
+        for (const workout of history) {
+            const time = getWorkoutTimestamp(workout);
+            if (!time) continue;
+            const muscles = new Set<string>();
+            for (const exercise of workout.exercises || []) {
+                const libraryExercise = libraryMap.get(exercise.exId);
+                if (!libraryExercise) continue;
+                const hasWorkSet = (exercise.sets || []).some((set: any) => {
+                    const hasValues = (set.kg !== undefined && set.kg !== '') || (set.reps !== undefined && set.reps !== '') || (set.time !== undefined && set.time !== '');
+                    return set.done === true || hasValues || set.done === undefined;
                 });
-                if (!hasWorkSet) return;
-
-                for (const mId of [...(libEx.muscles || []), ...(libEx.secondaryMuscles || [])]) {
-                    if (!mId || typeof mId !== 'string') continue;
-                    const atomicPaths = (Logic.GROUP_MAP as any)[mId] || [mId];
-                    atomicPaths.forEach((path: string) => recentExposure.add(path));
-                    recentExposure.add(mId);
+                if (!hasWorkSet) continue;
+                for (const muscleId of [...(libraryExercise.muscles || []), ...(libraryExercise.secondaryMuscles || [])]) {
+                    if (!muscleId || typeof muscleId !== 'string') continue;
+                    const atomicPaths = (Logic.GROUP_MAP as any)[muscleId] || [muscleId];
+                    for (const path of atomicPaths) muscles.add(path);
+                    muscles.add(muscleId);
                 }
-            });
-        });
+            }
+            if (muscles.size) entries.push({ time, muscles: [...muscles] });
+        }
+        return entries.sort((a, b) => a.time - b.time);
+    }, [history, libraryMap]);
 
+    // The 72-hour window is inclusive, and future-dated sessions must not
+    // count until the clock reaches them. Weekly chart volume is separate.
+    const muscleColors = useMemo(() => {
         const colors: Record<string, string> = {};
-        recentExposure.forEach(pathOrId => {
-            colors[pathOrId] = 'var(--muscle-recent)';
-        });
+        const earliest = homeClockNow - 72 * 60 * 60 * 1000;
+        let low = 0;
+        let high = exposureIndex.length;
+        while (low < high) {
+            const mid = Math.floor((low + high) / 2);
+            if (exposureIndex[mid].time <= homeClockNow) low = mid + 1;
+            else high = mid;
+        }
+        for (let index = low - 1; index >= 0 && exposureIndex[index].time >= earliest; index--) {
+            for (const muscleId of exposureIndex[index].muscles) {
+                colors[muscleId] = 'var(--muscle-recent)';
+            }
+        }
         return colors;
-    }, [history, libraryMap, homeClockNow]);
+    }, [exposureIndex, homeClockNow]);
 
     // Persisted nutrition keys use the same canonical local dates as monthly shards.
     const { recentWeight, recentNutritionWithBf } = useMemo(() => {

@@ -403,25 +403,25 @@ export function getNextScheduledRoutine(
     // Suggestions follow the last actually performed planned routine, not a
     // mandatory quota or sequence. Older sessions lacking routineId retain
     // the original count-based fallback.
-    const cycleHistory = Array.isArray(history) ? history.filter(w => w?.cycleId === cycle.id) : [];
-    const completedCount = cycleHistory.length;
+    let completedCount = 0;
     let lastRoutineIndex: number | undefined;
     let lastTime = Number.NEGATIVE_INFINITY;
-    let lastArrayIndex = -1;
     const routineIndexById = new Map(availableCycleRoutines.map((item, index) => [item.routineId, index]));
-    cycleHistory.forEach((workout, index) => {
+    for (const workout of Array.isArray(history) ? history : []) {
+        if (workout?.cycleId !== cycle.id) continue;
+        completedCount++;
         const routineIndex = routineIndexById.get(workout.routineId ?? '');
-        if (routineIndex === undefined) return;
+        if (routineIndex === undefined) continue;
         const recordedTime = [workout.globalEndTime, workout.globalStartTime]
             .find(time => typeof time === 'number' && Number.isFinite(time) && isValid(new Date(time)));
         const parsedDate = typeof workout.date === 'string' ? parseISO(workout.date) : null;
         const time = recordedTime ?? (parsedDate && isValid(parsedDate) ? parsedDate.getTime() : 0);
-        if (time > lastTime || (time === lastTime && index > lastArrayIndex)) {
+        // For equal timestamps, the later entry in history still wins.
+        if (time >= lastTime) {
             lastTime = time;
-            lastArrayIndex = index;
             lastRoutineIndex = routineIndex;
         }
-    });
+    }
 
     const nextSessionIndex = completedCount + 1;
     const isCycleCompleted = completedCount >= totalSessions;

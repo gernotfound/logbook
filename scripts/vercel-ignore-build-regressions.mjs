@@ -58,9 +58,51 @@ await test('Vercel skips only frontend-only commits relative to the last success
     assert.equal(evaluate(deployed, frontendOnly).status, 0, 'frontend-only changes should skip');
     assert.equal(evaluate(deployed, deployed).status, 0, 'identical SHAs should skip');
 
+    // A shallow Vercel checkout only includes the current commit. The selector
+    // must recover the exact prior production SHA without broadening its trust.
+    const checkoutParent = mkdtempSync(join(tmpdir(), 'logbook-vercel-shallow-'));
+    try {
+      const checkout = join(checkoutParent, 'checkout');
+      const cloned = command(checkoutParent, 'git', ['clone', '--quiet', '--depth=1', `file://${cwd}`, checkout]);
+      assert.equal(cloned.status, 0, cloned.stderr);
+      assert.notEqual(command(checkout, 'git', ['cat-file', '-e', `${deployed}^{commit}`]).status, 0,
+        'a depth-one checkout must initially be missing the prior deployed SHA');
+      const restored = command(checkout, process.execPath, [script], {
+        ...process.env, VERCEL_GIT_PREVIOUS_SHA: deployed, VERCEL_GIT_COMMIT_SHA: frontendOnly,
+      });
+      assert.equal(restored.status, 0, `shallow frontend-only checkout should skip: ${restored.stderr}\n${restored.stdout}`);
+      assert.equal(command(checkout, 'git', ['cat-file', '-e', `${deployed}^{commit}`]).status, 0,
+        'the selector must fetch and verify the missing commit');
+
+      const withoutOrigin = join(checkoutParent, 'without-origin');
+      const secondClone = command(checkoutParent, 'git', ['clone', '--quiet', '--depth=1', `file://${cwd}`, withoutOrigin]);
+      assert.equal(secondClone.status, 0, secondClone.stderr);
+      git(withoutOrigin, 'remote', 'remove', 'origin');
+      const unavailable = command(withoutOrigin, process.execPath, [script], {
+        ...process.env, VERCEL_GIT_PREVIOUS_SHA: deployed, VERCEL_GIT_COMMIT_SHA: frontendOnly,
+      });
+      assert.equal(unavailable.status, 1, 'unverifiable prior deployment must still deploy');
+    } finally {
+      rmSync(checkoutParent, { recursive: true, force: true });
+    }
+
     const backend = commit('server/accountDeletion/service.ts', 'new backend behavior');
     assert.equal(evaluate(deployed, backend).status, 1, 'server changes after skipped commits must deploy');
     assert.equal(evaluate(frontendOnly, backend).status, 1, 'direct server changes must deploy');
+
+    const backendCheckoutParent = mkdtempSync(join(tmpdir(), 'logbook-vercel-shallow-backend-'));
+    try {
+      const checkout = join(backendCheckoutParent, 'checkout');
+      const cloned = command(backendCheckoutParent, 'git', ['clone', '--quiet', '--depth=1', `file://${cwd}`, checkout]);
+      assert.equal(cloned.status, 0, cloned.stderr);
+      assert.notEqual(command(checkout, 'git', ['cat-file', '-e', `${deployed}^{commit}`]).status, 0);
+      const mustDeploy = command(checkout, process.execPath, [script], {
+        ...process.env, VERCEL_GIT_PREVIOUS_SHA: deployed, VERCEL_GIT_COMMIT_SHA: backend,
+      });
+      assert.equal(mustDeploy.status, 1, 'fetching an absent baseline must not conceal backend changes');
+    } finally {
+      rmSync(backendCheckoutParent, { recursive: true, force: true });
+    }
 
     const legal = commit('src/lib/legalVersions.ts', 'new shared legal contract');
     assert.equal(evaluate(backend, legal).status, 1, 'shared legal versions used by the server must deploy');
