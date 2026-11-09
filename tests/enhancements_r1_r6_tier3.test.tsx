@@ -1,6 +1,6 @@
 import React from 'react';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { act, renderHook } from '@testing-library/react';
+import { act, fireEvent, renderHook } from '@testing-library/react';
 import { renderWithAuthenticatedTestOwner, renderWithProviders, emptyUserData } from './setup';
 import { useAppStore } from '../src/store/useAppStore';
 import { captureSession } from '../src/lib/sync/session';
@@ -162,7 +162,7 @@ describe('LogBook PWA Enhancements Integration Suite (Requirements R1 - R6)', ()
                 userData: { ...emptyUserData, nutrition: nutritionData }
             });
 
-            const { container } = renderWithProviders(
+            const { container, getByRole } = renderWithProviders(
                 <DataHistory
                     measurementsHistory={Object.values(nutritionData)}
                     editingDate={null}
@@ -170,6 +170,7 @@ describe('LogBook PWA Enhancements Integration Suite (Requirements R1 - R6)', ()
                 />
             );
             expect(container.querySelectorAll('.history-day.has-data')).toHaveLength(7);
+            fireEvent.click(getByRole('button', { name: /2 agosto 2026, 1 rilevazione/i }));
             expect(container.textContent).toContain('Sonno 08:00');
             expect(container.textContent).toContain('78,5 kg');
 
