@@ -28,6 +28,7 @@ function getMacroArea(muscleId: string): { key: string; label: string } {
     }
     if (value.includes('adductor') || value.includes('addutt')) return { key: 'adductors', label: 'Adduttori' };
     if (value.includes('polp') || value.includes('calv')) return { key: 'calves', label: 'Polpacci' };
+    if (value === 'legs_general') return { key: 'legs', label: 'Gambe (generale)' };
     return { key: 'other', label: 'Altro' };
 }
 
