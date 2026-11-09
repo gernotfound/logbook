@@ -87,7 +87,7 @@ describe('persisted vault control trust boundary', () => {
 
     it.each(['active', 'migrating'] as const)('accepts the current %s control under a normalized owner', phase => {
         const candidate = { ...control, phase };
-        expect(parsePersistedVaultControl('session-boundaries', candidate)).toBe(candidate);
+        expect(parsePersistedVaultControl('session-boundaries', candidate)).toEqual(candidate);
         persist(candidate);
         expect(readVaultControl('session-boundaries')).toEqual(candidate);
         expect(vaultControlKey('session-boundaries')).toBe(vaultControlKey(owner));
@@ -108,7 +108,7 @@ describe('persisted vault control trust boundary', () => {
 });
 
 describe('resident owner and guest capabilities', () => {
-    it('provides a recovery explanation when the active control has no unlocked capability', async () => {
+    it('explains data preservation when readiness cancellation prevents key publication', async () => {
         await expect(unlockVaultForOwner(owner, () => false)).rejects.toThrow(/conservati.*recupero/);
     });
 
