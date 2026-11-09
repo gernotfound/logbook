@@ -17,7 +17,6 @@ async function collectBlockingAccessibilityViolations(page: Page, surface: strin
 }
 
 async function continueAsGuest(page: Page) {
-  await page.goto('/');
   await page.getByRole('button', { name: 'Continua senza account' }).click();
   await page.getByText('Aggiornamento Termini e Privacy').waitFor();
   for (const checkbox of await page.locator('input[type="checkbox"]').all()) {
@@ -34,6 +33,7 @@ test(`representative guest surfaces have no serious automated accessibility viol
   await page.emulateMedia({ colorScheme: theme });
   await page.goto('/');
   await expect(page.getByRole('heading', { name: 'TheLogBook' })).toBeVisible();
+  await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
   const blocking = await collectBlockingAccessibilityViolations(page, 'login');
 
   await continueAsGuest(page);
@@ -64,6 +64,7 @@ test(`representative guest surfaces have no serious automated accessibility viol
 
 test('keyboard-opened routine menu retains focus and fits a narrow real viewport', async ({ page }) => {
   await page.setViewportSize({ width: 320, height: 850 });
+  await page.goto('/');
   await continueAsGuest(page);
   await page.getByRole('button', { name: 'Allenamento', exact: true }).click();
   await page.getByRole('tab', { name: 'Schede', exact: true }).click();
@@ -107,4 +108,6 @@ test('keyboard-opened routine menu retains focus and fits a narrow real viewport
   await expect(secondMenu).toBeVisible();
   await expect(secondMenu.getByRole('menuitem').last()).toBeFocused();
   await expect(page.getByRole('menu')).toHaveCount(1);
+  expect(await collectBlockingAccessibilityViolations(page, 'keyboard-routine-menu'),
+    'axe found critical/serious WCAG violations in the open routine menu').toEqual([]);
 });
