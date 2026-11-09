@@ -4,7 +4,7 @@ import { sendPasswordResetEmail, auth } from '../../lib/firebase';
 import { useDialogStore } from '../../store/useDialogStore';
 import { Eye, EyeOff } from 'lucide-react';
 import { useModalFocusTrap } from '../../hooks/useModalFocusTrap';
-import { getPasswordRequirements, loadPasswordRuleConfig, validatePasswordAgainstPolicy, type PasswordRuleConfig } from '../../lib/auth/passwordPolicy';
+import { getPasswordRequirements, loadPasswordRuleConfig, type PasswordRuleConfig } from '../../lib/auth/passwordPolicy';
 import { describeEmailAuthError } from '../../lib/auth/emailAuthError';
 import { useAppStore } from '../../store/useAppStore';
 import { BrowserStorageError } from '../../lib/sync/browserStorage';
@@ -88,15 +88,17 @@ export const LoginBox: React.FC<LoginBoxProps> = ({ onCancel }) => {
                     setFormError('Le password non coincidono.');
                     return;
                 }
-                const weakError = await validatePasswordAgainstPolicy(password);
-                // A closed login overlay must not launch a new registration after
-                // the asynchronous password policy check completes.
-                if (!mountedRef.current) return;
-                if (weakError) {
-                    setFormError(weakError);
+                // Immediate feedback needs no Firebase request. The Auth action
+                // performs the single authoritative remote validation and checks
+                // this form's lifetime again before it can create an account.
+                const weakLocalRule = getPasswordRequirements(password).find(rule => !rule.met);
+                if (weakLocalRule) {
+                    setFormError(`La password richiede: ${weakLocalRule.label.toLowerCase()}.`);
                     return;
                 }
-                await handleAuthAction(() => registerWithEmail(email, password, isGuest ? migrationPolicy : undefined));
+                await handleAuthAction(() => registerWithEmail(
+                    email, password, isGuest ? migrationPolicy : undefined, () => mountedRef.current,
+                ));
             } else if (mode === 'forgot') {
                 if (!email) {
                     setFormError('Inserisci la tua email.');
