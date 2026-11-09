@@ -452,9 +452,11 @@ describe('LogBook 4-Tier Automated Test Suite (Requirements R1 - R6)', () => {
                 expect((parsed as any).activePains).toEqual([]);
             });
 
-            it('T2.5.2: optional activePains field in supported UserData defaults safely', () => {
-                const parsed = UserDataSchema.parse(emptyUserData);
-                expect((parsed as any).activePains === undefined || Array.isArray((parsed as any).activePains)).toBe(true);
+            it('T2.5.2: omitted or undefined activePains normalizes to an empty array', () => {
+                const withoutPains = { ...emptyUserData };
+                delete withoutPains.activePains;
+                expect(UserDataSchema.parse(withoutPains).activePains).toEqual([]);
+                expect(UserDataSchema.parse({ ...emptyUserData, activePains: undefined }).activePains).toEqual([]);
             });
 
             it('T2.5.3: MuscleModel handles non-existent or unknown muscle IDs without throwing', () => {
