@@ -27,6 +27,7 @@ jobs:
       matrix:
         # Overlap slow sync classification with the shorter diagnostic areas.
         area:
+          - consent-reconciliation
           - nutrition-conflict
           - monthly-tombstones
           - business-normalization
