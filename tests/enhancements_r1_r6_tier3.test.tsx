@@ -17,10 +17,9 @@ import TrainingSession from '../src/components/Training/TrainingSession';
 import type { WorkoutSession, WorkoutRoutine, TrainingCycle, Exercise } from '../src/types';
 
 describe('LogBook PWA Enhancements Integration Suite (Requirements R1 - R6)', () => {
-    beforeEach(async () => {
+    beforeEach(() => {
         window.localStorage.clear();
         localStorage.setItem(`logbook:v2:${captureSession().owner}:health-consent-generation`, '1');
-        await prepareUnlockedTestArchive('user:test-user-id');
         useAppStore.getState().resetStore();
         useAppStore.setState({ dataOwner: captureSession().owner });
         vi.clearAllMocks();
@@ -37,7 +36,9 @@ describe('LogBook PWA Enhancements Integration Suite (Requirements R1 - R6)', ()
      * ========================================================================= */
     describe('Tier 3: Cross-Feature Interactions & Combinations', () => {
 
-        it('T3.1: Ad-Hoc Exercise Addition + Live Reordering + Real-Time Library Sync', () => {
+        it('T3.1: Ad-Hoc Exercise Addition + Live Reordering + Real-Time Library Sync', async () => {
+            // TrainingSession mounts encrypted BufferedInput drafts even when only names are asserted.
+            await prepareUnlockedTestArchive('user:test-user-id');
             const library: Exercise[] = [
                 { id: 'ex_bench', name: 'Panca Piana', setsCount: 3, sets: [] },
                 { id: 'ex_flyes', name: 'Croci Manubri', setsCount: 3, sets: [] }
@@ -184,6 +185,7 @@ describe('LogBook PWA Enhancements Integration Suite (Requirements R1 - R6)', ()
         });
 
         it('T3.4: Routine Builder + Active Session Launch + Ad-Hoc Modification + History Save', async () => {
+            await prepareUnlockedTestArchive('user:test-user-id');
             const library: Exercise[] = [
                 { id: 'ex_squat', name: 'Squat', setsCount: 3, sets: [] },
                 { id: 'ex_calves', name: 'Polpacci in Piedi', setsCount: 3, sets: [] }
@@ -201,7 +203,6 @@ describe('LogBook PWA Enhancements Integration Suite (Requirements R1 - R6)', ()
                     routines,
                     history: []
                 };
-            await prepareUnlockedTestArchive(owner);
             await initializeLocal(owner, initialData);
             useAppStore.setState({ dataOwner: owner, userData: initialData });
 
@@ -301,6 +302,7 @@ describe('LogBook PWA Enhancements Integration Suite (Requirements R1 - R6)', ()
         });
 
         it('T3.6: Comprehensive Multi-Module Flow: Cycle Planning -> Session Execution -> Ad-Hoc Finisher -> Sleep Log -> Export', async () => {
+            await prepareUnlockedTestArchive('user:test-user-id');
             const downloadFileSpy = vi.spyOn(Exporter, 'downloadFile').mockResolvedValue(true);
 
             // 1. Setup complete UserData with library and routines
@@ -330,7 +332,6 @@ describe('LogBook PWA Enhancements Integration Suite (Requirements R1 - R6)', ()
                     history: [],
                     nutrition: {}
                 };
-            await prepareUnlockedTestArchive(owner);
             await initializeLocal(owner, initialData);
             useAppStore.setState({ dataOwner: owner, userData: initialData });
 
