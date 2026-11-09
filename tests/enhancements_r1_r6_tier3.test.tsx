@@ -36,7 +36,9 @@ describe('LogBook PWA Enhancements Integration Suite (Requirements R1 - R6)', ()
      * ========================================================================= */
     describe('Tier 3: Cross-Feature Interactions & Combinations', () => {
 
-        it('T3.1: Ad-Hoc Exercise Addition + Live Reordering + Real-Time Library Sync', () => {
+        it('T3.1: Ad-Hoc Exercise Addition + Live Reordering + Real-Time Library Sync', async () => {
+            // TrainingSession mounts encrypted BufferedInput drafts even when only names are asserted.
+            await prepareUnlockedTestArchive('user:test-user-id');
             const library: Exercise[] = [
                 { id: 'ex_bench', name: 'Panca Piana', setsCount: 3, sets: [] },
                 { id: 'ex_flyes', name: 'Croci Manubri', setsCount: 3, sets: [] }
