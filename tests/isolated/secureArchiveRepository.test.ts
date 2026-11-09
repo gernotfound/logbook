@@ -1,6 +1,6 @@
 import 'fake-indexeddb/auto';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { clear, del, get, set } from 'idb-keyval';
+import { clear, del, get, set, update } from 'idb-keyval';
 import { UserDataSchema } from '../../src/lib/schema';
 import type { UserData } from '../../src/types';
 import { initializeLocal, readLocal, type LocalEnvelope } from '../../src/lib/sync/localRepository';
@@ -16,7 +16,7 @@ import { getArchiveRecord, updateArchiveRecord } from '../../src/lib/sync/secure
 
 vi.mock('idb-keyval', async importOriginal => {
     const actual = await importOriginal<typeof import('idb-keyval')>();
-    return { ...actual, get: vi.fn(actual.get) };
+    return { ...actual, get: vi.fn(actual.get), update: vi.fn(actual.update) };
 });
 
 const owner = 'user:archive-repository';
@@ -147,6 +147,25 @@ describe('secure archive repository capability and transaction boundaries', () =
         expect(localStorage.getItem(controlKey)).toBe(control);
         expect(await get(archive)).toBe(ciphertext);
         expect(await readLocal(owner)).toEqual(expected);
+    });
+
+    it('rejects an update started before a real same-key unlock publishes its new capability', async () => {
+        const ciphertext = await get(archive);
+        const expected = await readLocal(owner);
+        const transform = vi.fn(changeHeight);
+        const actual = await vi.importActual<typeof import('idb-keyval')>('idb-keyval');
+        // Unlock during the asynchronous wait before the real IDB transaction starts.
+        vi.mocked(update).mockImplementationOnce(async (key, updater, store) => {
+            await unlockVaultForOwner(owner);
+            return actual.update(key, updater, store);
+        });
+        await expect(updateArchiveRecord(owner, transform)).rejects.toBeInstanceOf(LocalVaultLockedError);
+        expect(transform).not.toHaveBeenCalled();
+        expect(localStorage.getItem(controlKey)).toBe(control);
+        expect(await get(archive)).toBe(ciphertext);
+        expect(await readLocal(owner)).toEqual(expected);
+        await updateArchiveRecord(owner, changeHeight);
+        expect((await readLocal(owner))?.data.profile?.height).toBe('171');
     });
 
     it.each(['epoch', 'lock', 'purge'] as const)('rechecks %s before invoking the atomic transformation', async reason => {
