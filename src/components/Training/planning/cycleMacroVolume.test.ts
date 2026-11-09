@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Exercise, TrainingCycle, WorkoutRoutine } from '../../../types';
+import { MUSCLES } from '../../../lib/constants/muscles';
 import { calculateCycleMacroVolume } from './cycleMacroVolume';
 
 describe('cycle macro volume - canonical muscle IDs', () => {
@@ -40,5 +41,71 @@ describe('cycle macro volume - canonical muscle IDs', () => {
         expect(result.find(item => item.key === 'glutes')?.sets).toBe(3);
         expect(result.find(item => item.key === 'other')).toBeUndefined();
         expect(result).toHaveLength(5);
+    });
+    it('maps every current canonical muscle ID to a named macroarea', () => {
+        const cycle: TrainingCycle = {
+            id: 'catalog-cycle', name: 'Catalogo muscolare',
+            durationWeeks: 4, sessionsPerWeek: 1,
+            routines: [{ routineId: 'catalog-routine', frequencyPerWeek: 1 }],
+        };
+        const unclassified = MUSCLES.filter(({ id, name }) => {
+            const routines: WorkoutRoutine[] = [{
+                id: 'catalog-routine', name: 'Catalogo',
+                exercises: [{ exId: id, setsCount: 1 }],
+            }];
+            const library: Exercise[] = [{
+                id, name, muscles: [id], setsCount: 1, sets: [],
+            }];
+            const result = calculateCycleMacroVolume(cycle, routines, library);
+            return result.length !== 1 || result[0].key === 'other' || result[0].sets !== 1;
+        }).map(muscle => muscle.id);
+
+        expect(unclassified).toEqual([]);
+        const generalLegs: Exercise[] = [{
+            id: 'general-legs', name: 'Gambe (generale)',
+            muscles: ['legs_general'], setsCount: 1, sets: [],
+        }];
+        const legsRoutine: WorkoutRoutine[] = [{
+            id: 'catalog-routine', name: 'Catalogo',
+            exercises: [{ exId: 'general-legs', setsCount: 1 }],
+        }];
+        expect(calculateCycleMacroVolume(cycle, legsRoutine, generalLegs)).toEqual([
+            { key: 'legs', label: 'Gambe (generale)', sets: 1 },
+        ]);
+    });
+
+    it('counts each macroarea once per exercise while keeping independent areas and weekly totals', () => {
+        const cycle: TrainingCycle = {
+            id: 'mixed-cycle', name: 'Volume misto',
+            durationWeeks: 4, sessionsPerWeek: 1,
+            routines: [{ routineId: 'mixed', frequencyPerWeek: 1 }],
+        };
+        const routines: WorkoutRoutine[] = [{
+            id: 'mixed', name: 'Mista',
+            exercises: [
+                { exId: 'press', setsCount: 3 },
+                { exId: 'pull', setsCount: 2 },
+            ],
+        }];
+        const library: Exercise[] = [
+            {
+                id: 'press', name: 'Spinta',
+                muscles: ['biceps_long_left', 'triceps_lateral', 'chest_upper'],
+                setsCount: 3, sets: [],
+            },
+            {
+                id: 'pull', name: 'Trazione',
+                muscles: ['hand_flexors_right', 'lats_right', 'rhomboids'],
+                setsCount: 2, sets: [],
+            },
+        ];
+        const original = structuredClone({ cycle, routines, library });
+
+        expect(calculateCycleMacroVolume(cycle, routines, library)).toEqual([
+            { key: 'arms', label: 'Braccia', sets: 5 },
+            { key: 'chest', label: 'Petto', sets: 3 },
+            { key: 'back', label: 'Dorso', sets: 2 },
+        ]);
+        expect({ cycle, routines, library }).toEqual(original);
     });
 });
