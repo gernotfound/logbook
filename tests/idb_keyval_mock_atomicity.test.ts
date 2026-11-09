@@ -1,3 +1,4 @@
+import { idbStore } from './setup';
 import { describe, expect, it } from 'vitest';
 import { clear, del, get, set, update } from 'idb-keyval';
 
@@ -48,4 +49,14 @@ describe('shared IndexedDB test adapter follows idb-keyval transaction semantics
         await set(key, 7);
         expect(await get<number>(key)).toBe(7);
     });
+    it('distinguishes a stored null from an absent key', async () => {
+        const key = 'explicit-null-regression';
+        expect(await get(key)).toBeUndefined();
+        await set(key, null);
+        expect(Object.prototype.hasOwnProperty.call(idbStore, key)).toBe(true);
+        expect(await get(key)).toBeNull();
+        await del(key);
+        expect(await get(key)).toBeUndefined();
+    });
+
 });

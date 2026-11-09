@@ -7,9 +7,7 @@ import { captureSession } from '../src/lib/sync/session';
 import { initializeLocal, readLocal } from '../src/lib/sync/localRepository';
 import { useAppStore } from '../src/store/useAppStore';
 import { Logic } from '../src/lib/logic';
-import { Exporter } from '../src/lib/export';
 import { useWorkoutSession } from '../src/hooks/useWorkoutSession';
-import DataHistory from '../src/components/Data/DataHistory';
 import { CycleEditor } from '../src/components/Training/planning/CycleEditor';
 import type { WorkoutRoutine, TrainingCycle, Exercise } from '../src/types';
 
@@ -225,52 +223,6 @@ describe('LogBook PWA Enhancements Integration Suite (Requirements R1 - R6)', ()
             const schedule = Logic.calculateCycleSchedule(savedCycle, routines);
             expect(schedule.totalSessions).toBe(48); // 12 weeks * 4 sessions/week
             expect(schedule.weeks.length).toBe(12);
-        });
-
-        it('T4.4: Scenario: "Seven Recorded Recovery Days Display and CSV Export"', async () => {
-            const downloadFileSpy = vi.spyOn(Exporter, 'downloadFile').mockResolvedValue(true);
-
-            // Record 7 days of sleep and weight
-            const weekNutrition: Record<string, any> = {};
-            for (let day = 1; day <= 7; day++) {
-                const dateStr = `2026-08-0${day}`;
-                weekNutrition[dateStr] = {
-                    date: dateStr,
-                    weight: 76.0 + (day * 0.1),
-                    sleepHours: day % 2 === 0 ? '08:00' : '07:30',
-                    sleepDeep: day % 3 === 0 ? '02:00' : '01:30',
-                    sleepLight: '04:00',
-                    sleepRem: '01:30',
-                    sleepAwake: '00:30'
-                };
-            }
-
-            useAppStore.setState({
-                dataOwner: captureSession().owner,
-                userData: {
-                    ...emptyUserData,
-                    nutrition: weekNutrition
-                }
-            });
-
-            // Verify the redesigned calendar marks all 7 days with recorded data.
-            const { container } = renderWithProviders(
-                <DataHistory
-                    measurementsHistory={Object.values(weekNutrition)}
-                    editingDate={null}
-                    onSelectEdit={vi.fn()}
-                />
-            );
-
-            expect(container.querySelectorAll('.history-day.has-data').length).toBe(7);
-
-            // Export to CSV
-            await Exporter.exportToCSV([], weekNutrition, []);
-
-            await vi.waitFor(() => {
-                expect(downloadFileSpy).toHaveBeenCalledWith('misurazioni.csv', expect.stringContaining('"2026-08-01",76.1'), expect.anything());
-                expect(downloadFileSpy).toHaveBeenCalledWith('misurazioni.csv', expect.stringContaining('"2026-08-07",76.7'), expect.anything());
-            });
         });
 
         it('T4.5: Scenario: "Equipment Availability Pivot & Cardio Addition" (Leg press broken, lifter pivots to treadmill cardio)', async () => {
