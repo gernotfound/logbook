@@ -86,6 +86,22 @@ describe('control mirror publication', () => {
         expect(readVaultControl(owner)).toEqual(control);
     });
 
+    it.each([
+        ['format', 'outdated-device-vault'], ['version', 3],
+        ['nonce', 'x'.repeat(24)], ['nonce', 'a'.repeat(23)],
+        ['wrappedDek', 'b'.repeat(94)], ['wrappedDek', 'x'.repeat(96)],
+    ] as const)('rejects an invalid nested %s before writing either copy', async (field, value) => {
+        const invalid = {
+            ...control, wrappedKey: { ...control.wrappedKey, [field]: value },
+        } as PersistedVaultControl;
+        await expect(publishVaultControl(owner, invalid)).rejects.toBeInstanceOf(LocalVaultLockedError);
+        expect(await get(mirror())).toBeUndefined();
+        expect(readVaultControl(owner)).toBeNull();
+        await publishVaultControl(owner, control);
+        expect(await get(mirror())).toEqual(control);
+        expect(readVaultControl(owner)).toEqual(control);
+    });
+
     it('keeps the verified mirror after interrupted synchronous publication', async () => {
         const original = localStorage.setItem.bind(localStorage);
         const interrupt = vi.spyOn(localStorage, 'setItem').mockImplementation((key, value) => {

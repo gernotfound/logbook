@@ -228,6 +228,10 @@
   color: var(--text-main);
   text-align: left;
 }
+.planning-search-result[aria-selected="true"] {
+  outline: 2px solid var(--primary-color);
+  outline-offset: -2px;
+}
 .planning-search-result strong { font-size: var(--font-size-meta); }
 .planning-search-result span { overflow: hidden; color: var(--text-muted); font-size: var(--font-size-micro); text-overflow: ellipsis; white-space: nowrap; }
 .planning-search-empty { padding: .75rem; text-align: center; }
