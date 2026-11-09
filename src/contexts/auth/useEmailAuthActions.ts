@@ -66,13 +66,16 @@ export function useEmailAuthActions({
         }
     }, [handleAuthError, isGuestActiveStrict, setSaveError]);
 
-    const registerWithEmail = useCallback(async (email: string, pass: string, guestPolicy?: GuestMigrationPolicy) => {
+    const registerWithEmail = useCallback(async (email: string, pass: string, guestPolicy?: GuestMigrationPolicy, isRequestCurrent?: () => boolean) => {
         setSaveError(null);
         const stillOriginalAttempt = captureAuthAttemptGuard(isGuestActiveStrict());
+        // The initiating form can disappear while Firebase validates its policy.
+        // The Auth epoch and form lifetime are independent cancellation gates.
+        const stillRequested = () => stillOriginalAttempt() && (isRequestCurrent?.() ?? true);
         const weakError = await validatePasswordAgainstPolicy(pass);
-        if (!stillOriginalAttempt()) return;
+        if (!stillRequested()) return;
         if (weakError) {
-            const error = Object.assign(new Error(weakError), { code: 'auth/weak-password' });
+            const error = Object.assign(new Error(weakError), { code: 'auth/weak-password', policyFeedback: weakError });
             handleAuthError(error);
             return;
         }
@@ -82,11 +85,11 @@ export function useEmailAuthActions({
         if (isGuestActiveStrict()) {
             if (!guestPolicy) throw new Error('Scelta di trasferimento guest richiesta.');
             intentId = (await beginGuestMigrationIntent(guestPolicy, 'email', {
-                email, assertCurrent: () => isGuestActiveStrict() && stillOriginalAttempt(),
+                email, assertCurrent: () => isGuestActiveStrict() && stillRequested(),
             })).id;
         }
 
-        if (!stillOriginalAttempt()) { await abandonOwnGuestIntent(intentId); return; }
+        if (!stillRequested()) { await abandonOwnGuestIntent(intentId); return; }
         let credential: Awaited<ReturnType<typeof createUserWithEmailAndPassword>>;
         try {
             credential = await createUserWithEmailAndPassword(auth, email, pass);

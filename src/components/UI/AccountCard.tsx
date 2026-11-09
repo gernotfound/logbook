@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useRef, useEffect } from 'react';
 import { useAuth } from '../../hooks/useAuth';
 import { useSettings } from '../../hooks/useSettings';
 import { useDialogStore } from '../../store/useDialogStore';
@@ -8,6 +8,7 @@ import { safeHardReload } from '../../lib/sync/safeReload';
 import { captureSession, isCurrentSession } from '../../lib/sync/session';
 import { Eye, EyeOff } from 'lucide-react';
 import { validatePasswordAgainstPolicy } from '../../lib/auth/passwordPolicy';
+import { describeEmailAuthError } from '../../lib/auth/emailAuthError';
 import { linkEmailPasswordWithEnumerationProtection, requestVerifiedEmailChange } from '../../lib/auth/accountEmail';
 import { captureAuthAttemptGuard } from '../../lib/auth/authAttemptGuard';
 import { classifyGooglePopupFailure } from '../../contexts/auth/googlePopup';
@@ -24,6 +25,8 @@ export const AccountCard = () => {
     const [newPasswordInput, setNewPasswordInput] = useState('');
     const [showCurrentPassword, setShowCurrentPassword] = useState(false);
     const [showNewPassword, setShowNewPassword] = useState(false);
+    const guestRegistrationGeneration = useRef(0);
+    useEffect(() => () => { guestRegistrationGeneration.current += 1; }, []);
 
     const [passwordLinkedFor, setPasswordLinkedFor] = useState<string | null>(null);
 
@@ -208,26 +211,22 @@ export const AccountCard = () => {
 
     const onGuestRegister = async () => {
         let stillOriginalAttempt = () => true;
+        const generation = guestRegistrationGeneration.current;
+        const stillRequested = () => stillOriginalAttempt() && guestRegistrationGeneration.current === generation;
         try {
             stillOriginalAttempt = captureAuthAttemptGuard(true);
-            const weakError = await validatePasswordAgainstPolicy(newPasswordInput);
-            if (!stillOriginalAttempt()) return;
-            if (weakError) {
-                await showAlert(weakError);
-                return;
-            }
             if (!newEmailInput || !newEmailInput.includes('@')) {
                 await showAlert("Email non valida.");
                 return;
             }
             setLoadingAction('guestRegister');
-            await registerWithEmail(newEmailInput, newPasswordInput, 'merge');
-            // AuthProvider owns verification and the later guest handoff. A
-            // registration result (including an obsolete attempt) must not
-            // trigger navigation from the old guest component.
-        } catch {
-            if (!stillOriginalAttempt()) return;
-            await showAlert('Impossibile completare la registrazione. Completa eventuali tentativi già aperti e riprova. I dati locali sono conservati.');
+            await registerWithEmail(newEmailInput, newPasswordInput, 'merge', stillRequested);
+            // AuthProvider owns verification and the later guest handoff.
+        } catch (error) {
+            if (!stillRequested()) return;
+            await showAlert((error as { code?: unknown } | null)?.code === 'auth/weak-password'
+                ? describeEmailAuthError(error)
+                : 'Impossibile completare la registrazione. Completa eventuali tentativi già aperti e riprova. I dati locali sono conservati.');
         } finally {
             setLoadingAction(null);
         }
@@ -268,7 +267,7 @@ export const AccountCard = () => {
                                 </div>
 
                                 <div style={{ display: "flex", gap: "0.625rem", marginTop: "0.625rem" }}>
-                                    <button className="btn ui-account-card-12" style={{ flex: 1 }} onClick={() => { setShowReauthModal(null); setNewEmailInput(''); setNewPasswordInput(''); }}>Annulla</button>
+                                    <button className="btn ui-account-card-12" style={{ flex: 1 }} onClick={() => { guestRegistrationGeneration.current += 1; setShowReauthModal(null); setNewEmailInput(''); setNewPasswordInput(''); }}>Annulla</button>
                                     <button className="btn btn-primary" style={{ flex: 1 }} onClick={onGuestRegister} disabled={loadingAction === 'guestRegister'}>
                                         {loadingAction === 'guestRegister' ? 'Attendere...' : 'Registrati'}
                                     </button>
