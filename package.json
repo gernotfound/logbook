@@ -1,7 +1,7 @@
 {
   "name": "logbook",
   "private": true,
-  "version": "2.303.0",
+  "version": "2.304.0",
   "type": "module",
   "packageManager": "npm@11.21.0",
   "engines": {
@@ -24,11 +24,14 @@
     "lint:baseline:update": "node scripts/check-lint-baseline.mjs --update",
     "preview": "vite preview",
     "test": "vitest run",
+    "test:ci": "npm run test:unit && npm run test:integration",
     "test:stress": "vitest run --config vitest.stress.config.ts",
     "test:fuzz": "vitest run --config vitest.fuzz.config.ts",
     "test:recovery": "vitest run --config vitest.recovery.config.ts",
     "test:gc": "vitest run --config vitest.gc.config.ts",
     "test:hardening": "vitest run --config vitest.hardening.config.ts",
+    "test:unit": "vitest run src/",
+    "test:integration": "vitest run tests/",
     "test:e2e": "node scripts/run-e2e.mjs",
     "test:isolated": "vitest run --config vitest.isolated.config.ts",
     "test:rules": "node scripts/run-firestore-rules-tests.mjs",
@@ -89,8 +92,7 @@
     "@grpc/grpc-js": "1.14.5",
     "@grpc/proto-loader": "0.8.1",
     "source-map-js": "1.2.2",
-    "glob": "14.0.3",
-    "qs": "6.16.1"
+    "glob": "14.0.3"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.14.0",
@@ -122,6 +124,7 @@
   },
   "allowScripts": {
     "@firebase/util": true,
-    "protobufjs": true
+    "protobufjs": true,
+    "re2": true
   }
 }
