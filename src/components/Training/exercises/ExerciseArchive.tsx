@@ -17,6 +17,7 @@ import MuscleModel from '../MuscleModel';
 
 type TrainingExercisesHook = ReturnType<typeof useTrainingExercises>;
 type ExerciseItem = TrainingExercisesHook['library'][number];
+const ARCHIVE_PAGE_SIZE = 50;
 
 interface ExerciseArchiveProps {
     library: TrainingExercisesHook['library'];
@@ -67,6 +68,11 @@ export function ExerciseArchive({
     onDelete,
 }: ExerciseArchiveProps) {
     const [query, setQuery] = useState('');
+    const [page, setPage] = useState(() => ({ query: '', source: library, count: ARCHIVE_PAGE_SIZE }));
+    const updateQuery = (value: string) => {
+        setQuery(value);
+        setPage({ query: value, source: library, count: ARCHIVE_PAGE_SIZE });
+    };
     const [detailActionPending, setDetailActionPending] = useState(false);
     const detailActionPendingRef = useRef(false);
 
@@ -119,6 +125,9 @@ export function ExerciseArchive({
             .filter(({ searchable }) => terms.every(term => searchable.includes(term)))
             .map(({ exercise }) => exercise);
     }, [library, searchableLibrary, query]);
+
+    const visibleCount = page.query === query && page.source === library ? page.count : ARCHIVE_PAGE_SIZE;
+    const visibleLibrary = filteredLibrary.slice(0, visibleCount);
 
     const selectedExercise = useMemo(
         () => library.find(exercise => exercise.id === selectedExId) || null,
@@ -244,7 +253,7 @@ export function ExerciseArchive({
                     inputMode="search"
                     role="searchbox"
                     value={query}
-                    onChange={event => setQuery(event.target.value)}
+                    onChange={event => updateQuery(event.target.value)}
                     placeholder="Cerca esercizio"
                     aria-label="Cerca esercizio"
                 />
@@ -253,7 +262,7 @@ export function ExerciseArchive({
                         className="exercise-search-clear"
                         type="button"
                         aria-label="Cancella ricerca"
-                        onClick={() => setQuery('')}
+                        onClick={() => updateQuery('')}
                     >
                         <X size={18} aria-hidden="true" />
                     </button>
@@ -270,8 +279,9 @@ export function ExerciseArchive({
                     {library.length === 0 ? 'Nessun esercizio disponibile.' : 'Nessun esercizio trovato.'}
                 </div>
             ) : (
+                <>
                 <div className="exercise-compact-list">
-                    {filteredLibrary.map(exercise => {
+                    {visibleLibrary.map(exercise => {
                         const routineCount = routineCounts.get(exercise.id) || 0;
                         const primaryMuscle = exercise.muscles?.[0]
                             ? muscleName(exercise.muscles[0])
@@ -299,6 +309,17 @@ export function ExerciseArchive({
                         );
                     })}
                 </div>
+                {visibleLibrary.length < filteredLibrary.length && (
+                    <button
+                        type="button"
+                        className="btn btn-secondary"
+                        onClick={() => setPage({ query, source: library, count: visibleCount + ARCHIVE_PAGE_SIZE })}
+                        aria-label={`Mostra altri esercizi (${filteredLibrary.length - visibleLibrary.length} rimanenti)`}
+                    >
+                        Mostra altri esercizi
+                    </button>
+                )}
+                </>
             )}
         </section>
     );

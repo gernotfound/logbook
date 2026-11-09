@@ -328,7 +328,7 @@ describe('NutritionMeals decomposition parity', () => {
                     isCustom: true,
                 }] },
             });
-            fireEvent.click(screen.getByRole('button', { name: 'Opzioni' }));
+            fireEvent.click(await screen.findByRole('button', { name: 'Opzioni' }));
             fireEvent.click(screen.getByRole('menuitem', { name: 'Modifica' }));
             expect(screen.getByTestId('nutrition-tab').textContent).toBe('meals');
             expect(screen.getByRole('heading', { name: 'Modifica alimento' })).toBeDefined();

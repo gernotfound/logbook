@@ -5,7 +5,7 @@ import { useWorkoutSession } from '../../hooks/useWorkoutSession';
 import { Logic } from '../../lib/logic';
 import { useLocalToday } from '../../hooks/useLocalToday';
 import type { TrainingCycle, WorkoutRoutine } from '../../types';
-import { getRoutineDurationEstimate, type RoutineDurationEstimate } from './session/sessionDurationEstimate';
+import { getRoutineDurationEstimates } from './session/sessionDurationEstimate';
 
 const EMPTY_CYCLES: TrainingCycle[] = [];
 
@@ -77,14 +77,10 @@ export const TrainingSessionSetup = ({ onNavigateToPlanning }: TrainingSessionSe
         [activeCycle, routines],
     );
 
-    const durationEstimates = useMemo(() => {
-        const estimates = new Map<string, RoutineDurationEstimate>();
-        for (const routine of routines) {
-            const estimate = getRoutineDurationEstimate(routine.id, history);
-            if (estimate) estimates.set(routine.id, estimate);
-        }
-        return estimates;
-    }, [routines, history]);
+    const durationEstimates = useMemo(
+        () => getRoutineDurationEstimates(routines.map(routine => routine.id), history),
+        [routines, history],
+    );
 
     const normalizedQuery = searchQuery.trim().toLocaleLowerCase('it');
     const filteredRoutines = useMemo(() => (
