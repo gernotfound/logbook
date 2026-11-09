@@ -144,19 +144,15 @@ export async function parseLargeBackupJson(
         }
     };
 
-    const read = (part: Blob) => new Promise<ArrayBuffer>((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => reader.result instanceof ArrayBuffer
-            ? resolve(reader.result) : reject(new Error('Lettura JSON non valida.'));
-        reader.onerror = () => reject(new Error('Impossibile leggere il file.'));
-        reader.onabort = () => reject(new Error('Lettura del file annullata.'));
-        reader.readAsArrayBuffer(part);
-    });
-
     const decoder = new TextDecoder('utf-8', { fatal: true });
     for (let offset = 0; offset < file.size; offset += chunkBytes) {
         assertCurrent();
-        const bytes = await read(file.slice(offset, Math.min(offset + chunkBytes, file.size)));
+        let bytes: ArrayBuffer;
+        try {
+            bytes = await file.slice(offset, Math.min(offset + chunkBytes, file.size)).arrayBuffer();
+        } catch {
+            throw new Error('Impossibile leggere il file.');
+        }
         // The owner can change while FileReader is pending. Do not decode or
         // validate bytes from a session that no longer owns this import.
         assertCurrent();
