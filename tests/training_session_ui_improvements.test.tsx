@@ -718,7 +718,6 @@ describe('Training Session UI Improvements Suite (R1, R2, R3)', () => {
                 routines: [{ id: 'routine_1', name: 'Scheda Petto', exercises: [{ exId: 'ex_bench', setsCount: 3 }] }],
                 activeWorkout,
             };
-            await prepareUnlockedTestArchive(owner);
             await initializeLocal(owner, initialData);
             renderWithAuthenticatedTestOwner(<TrainingSession />, {
                 localWorkout: activeWorkout,
@@ -798,7 +797,6 @@ describe('Training Session UI Improvements Suite (R1, R2, R3)', () => {
                 routines: [{ id: 'routine_1', name: 'Scheda Petto', exercises: [{ exId: 'ex_bench', setsCount: 3 }] }],
                 activeWorkout
             };
-            await prepareUnlockedTestArchive(owner);
             await initializeLocal(owner, initialData);
             let confirmDeletion!: (accepted: boolean) => void;
             const pendingConfirmation = new Promise<boolean>(resolve => { confirmDeletion = resolve; });
@@ -851,7 +849,6 @@ describe('Training Session UI Improvements Suite (R1, R2, R3)', () => {
                     exercises: [{ exId: 'ex_bench', setsCount: 3 }] }],
                 activeWorkout
             };
-            await prepareUnlockedTestArchive(owner);
             await initializeLocal(owner, initialData);
             let accept!: (ok: boolean) => void;
             const confirm = vi.spyOn(useDialogStore.getState(), 'showConfirm')
@@ -890,7 +887,6 @@ describe('Training Session UI Improvements Suite (R1, R2, R3)', () => {
                     exercises: [{ exId: 'ex_bench', setsCount: 3 }] }],
                 activeWorkout
             };
-            await prepareUnlockedTestArchive(owner);
             await initializeLocal(owner, initialData);
             let accept!: (ok: boolean) => void;
             const confirm = vi.spyOn(useDialogStore.getState(), 'showConfirm')
