@@ -133,10 +133,6 @@ describe('TheLogBook 4-Tier Automated Test Suite (Requirements R1 - R6)', () => 
         // Requirement R2: Food Real-time Calories Calculation
         // ---------------------------------------------------------------------
         describe('R2: Food Real-time Calories Calculation', () => {
-            beforeEach(async () => {
-                await prepareUnlockedTestArchive('user:test-user-id');
-            });
-
             it('T1.2.1: calculates 170 kcal for 10g Carbs, 10g Protein, 10g Fat (ORIGINAL_REQUEST verification formula)', () => {
                 const kcal = calculateRealtimeKcalContract(10, 10, 10);
                 expect(kcal).toBe(170); // 10*4 + 10*4 + 10*9 = 40 + 40 + 90 = 170
