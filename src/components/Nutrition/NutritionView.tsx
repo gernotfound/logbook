@@ -1,10 +1,7 @@
-import { useState, type ComponentProps } from 'react';
+import { lazy, Suspense, useState, type ComponentProps } from 'react';
 import { useNutritionMeals } from '../../hooks/useNutritionMeals';
-import NutritionPlanning from './NutritionPlanning';
 import NutritionMeals from './NutritionMeals';
-import NutritionFoodArchive from './NutritionFoodArchive';
 import NutritionHistory, { NUTRITION_HISTORY_PAGE_SIZE } from './NutritionHistory';
-import NutritionSupplements from './NutritionSupplements';
 import { NutritionConflictBanner } from './NutritionConflictBanner';
 import { NutritionConflictDialog } from '../UI/NutritionConflictDialog';
 import { useNutritionHistory } from '../../hooks/useNutritionHistory';
@@ -16,6 +13,11 @@ import { useDialogStore } from '../../store/useDialogStore';
 import type { NutritionSubTab } from '../../types';
 import './TrackingViews.css';
 import SubNav from '../UI/SubNav';
+
+const NutritionPlanning = lazy(() => import('./NutritionPlanning'));
+const NutritionFoodArchive = lazy(() => import('./NutritionFoodArchive'));
+const NutritionSupplements = lazy(() => import('./NutritionSupplements'));
+const SUBTAB_LOADING = <p role="status" className="text-muted">Caricamento sottosezione in corso…</p>;
 
 const NUTRITION_TABS: ReadonlyArray<{ id: NutritionSubTab; label: string }> = [
     { id: 'meals', label: 'Pasti' },
@@ -130,13 +132,13 @@ const NutritionView = ({ subTab = 'meals', setSubTab }: NutritionViewProps) => {
 
             {activeSubTab === 'planning' && (
                 <div id="nutrition-panel-planning" role="tabpanel" aria-labelledby="nutrition-tab-planning" className="nutrition-sub-view active">
-                    <NutritionPlanning />
+                    <Suspense fallback={SUBTAB_LOADING}><NutritionPlanning /></Suspense>
                 </div>
             )}
 
             {activeSubTab === 'archive' && (
                 <div id="nutrition-panel-archive" role="tabpanel" aria-labelledby="nutrition-tab-archive" className="nutrition-sub-view active">
-                    <NutritionFoodArchive onEditFood={handleEditFoodFromArchive} />
+                    <Suspense fallback={SUBTAB_LOADING}><NutritionFoodArchive onEditFood={handleEditFoodFromArchive} /></Suspense>
                 </div>
             )}
 
@@ -152,10 +154,9 @@ const NutritionView = ({ subTab = 'meals', setSubTab }: NutritionViewProps) => {
 
             {activeSubTab === 'supplements' && (
                 <div id="nutrition-panel-supplements" role="tabpanel" aria-labelledby="nutrition-tab-supplements" className="nutrition-sub-view active">
-                    <NutritionSupplements
-                        selectedDate={selectedDate}
-                        setSelectedDate={setSelectedDate}
-                    />
+                    <Suspense fallback={SUBTAB_LOADING}>
+                        <NutritionSupplements selectedDate={selectedDate} setSelectedDate={setSelectedDate} />
+                    </Suspense>
                 </div>
             )}
 
