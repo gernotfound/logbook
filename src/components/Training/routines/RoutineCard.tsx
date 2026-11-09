@@ -101,8 +101,8 @@ export const RoutineCard: React.FC<RoutineCardProps> = ({
                         <ClipboardList size={20} />
                     </span>
                     <span className="routine-card-copy">
-                        <span className="sr-only">{isExpanded ? 'Chiudi scheda ' : 'Apri scheda '}</span>
-                        <strong className="routine-card-name">{routine.name}</strong>
+                        <span className="sr-only">{isExpanded ? 'Chiudi scheda' : 'Apri scheda'}</span>{' '}
+                        <strong className="routine-card-name">{routine.name}</strong>{' '}
                         <span className="routine-card-meta">
                             {routineDescription}
                         </span>
