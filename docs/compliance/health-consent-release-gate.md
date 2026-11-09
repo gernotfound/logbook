@@ -1,4 +1,4 @@
-# Dati salute e revoca del consenso — decisione e gate pre-pilot
+# Dati salute e revoca del consenso — decisione e gate pre-utenti esterni
 
 > Stato tecnico al **6 novembre 2026**, issue [#824](https://github.com/gernotfound/logbook/issues/824). L'implementazione è integrata tramite [PR #826](https://github.com/gernotfound/logbook/pull/826) e [PR #829](https://github.com/gernotfound/logbook/pull/829). La CI non dimostra il collaudo autenticato in Production.
 > **Gate pre-utenti esterni: NO-GO.** Restano aperti collaudi multi-dispositivo, configurazioni e contratti dei fornitori, validazione giuridica delle basi e della conservazione residua. Questo documento non è un parere legale né una DPIA.
@@ -49,7 +49,7 @@ L'endpoint rights-only può continuare a gestire stati di revoca previsti dal pr
 - Guest, guest→account, logout, export precedente alla revoca e account deletion separata.
 - Rules Emulator, CI canonica exact-SHA, accessibilità e UI su dispositivi, temi e viewport pertinenti.
 
-## Gate pre-pilot — aperto
+## Gate pre-utenti esterni — aperto
 
 - [x] Decisione prodotto e implementazione integrate: PR #826 (revoca con cancellazione automatica e backup precedente facoltativo), PR #829 (rimozione riaccettazione offline obsoleta).
 - [ ] Collaudo end-to-end **autenticato** con dati sintetici su dispositivi distinti, inclusi fallimenti, retry, copie offline e verifica delle raccolte/chiave cloud. CI e deploy non sostituiscono la prova runtime.
