@@ -256,14 +256,14 @@ describe('email verification lifecycle', () => {
         const { result } = renderHook(() => useAuth(), { wrapper });
         await waitFor(() => expect(result.current.emailVerificationRequired).toBe(true));
 
-        let finish!: (status: unknown) => void;
+        let finish!: (status: Awaited<ReturnType<typeof validatePassword>>) => void;
         vi.mocked(validatePassword).mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
         let mounted = true;
         const pending = result.current.registerWithEmail('next@example.test', 'SecurePassword123!', undefined, () => mounted);
         await waitFor(() => expect(validatePassword).toHaveBeenCalledOnce());
         mounted = false;
         await act(async () => {
-            finish({ isValid: true });
+            finish({ isValid: true } as Awaited<ReturnType<typeof validatePassword>>);
             await pending;
         });
         expect(createUserWithEmailAndPassword).not.toHaveBeenCalled();
