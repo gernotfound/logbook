@@ -3,7 +3,7 @@ import { act, renderHook, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { AuthProvider } from '../src/contexts/AuthContext';
 import { useAuth } from '../src/hooks/useAuth';
-import { auth, createUserWithEmailAndPassword, onAuthStateChanged, reload, sendEmailVerification, signInWithEmailAndPassword, signOut } from '../src/lib/firebase';
+import { auth, createUserWithEmailAndPassword, onAuthStateChanged, reload, sendEmailVerification, signInWithEmailAndPassword, signOut, validatePassword } from '../src/lib/firebase';
 import { DB } from '../src/lib/db';
 import { useAppStore } from '../src/store/useAppStore';
 import { idbStore } from './setup';
@@ -248,6 +248,44 @@ describe('email verification lifecycle', () => {
         expect(DB.purgeAllLocalUserData).not.toHaveBeenCalled();
     });
 
+    it('cancels a registration whose initiating form disappears during Firebase policy validation', async () => {
+        const user = account(false);
+        const archive = { privateDraft: 'untouched' };
+        idbStore['logbook:v2:user:unverified-user'] = archive;
+        startWith(user);
+        const { result } = renderHook(() => useAuth(), { wrapper });
+        await waitFor(() => expect(result.current.emailVerificationRequired).toBe(true));
+
+        let finish!: (status: Awaited<ReturnType<typeof validatePassword>>) => void;
+        vi.mocked(validatePassword).mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+        let mounted = true;
+        const pending = result.current.registerWithEmail('next@example.test', 'SecurePassword123!', undefined, () => mounted);
+        await waitFor(() => expect(validatePassword).toHaveBeenCalledOnce());
+        mounted = false;
+        await act(async () => {
+            finish({ isValid: true } as Awaited<ReturnType<typeof validatePassword>>);
+            await pending;
+        });
+        expect(createUserWithEmailAndPassword).not.toHaveBeenCalled();
+        expect(idbStore['logbook:v2:user:unverified-user']).toBe(archive);
+    });
+
+    it('keeps actionable feedback from a stricter Firebase password policy', async () => {
+        startWith(account(false));
+        const { result } = renderHook(() => useAuth(), { wrapper });
+        await waitFor(() => expect(result.current.emailVerificationRequired).toBe(true));
+        vi.mocked(validatePassword).mockResolvedValueOnce({
+            isValid: false, meetsMinPasswordLength: false,
+            passwordPolicy: { customStrengthOptions: { minPasswordLength: 20 } },
+        } as any);
+        await act(async () => {
+            await expect(result.current.registerWithEmail('next@example.test', 'SecurePassword123!')).rejects.toThrow();
+        });
+        expect(validatePassword).toHaveBeenCalledExactlyOnceWith(auth, 'SecurePassword123!');
+        expect(createUserWithEmailAndPassword).not.toHaveBeenCalled();
+        expect(useAppStore.getState().saveError).toContain('20 caratteri');
+    });
+
     it('sends verification mail after creating an unverified password account', async () => {
         const createdUser = account(false);
         vi.mocked(createUserWithEmailAndPassword).mockImplementationOnce(async () => {
@@ -262,6 +300,8 @@ describe('email verification lifecycle', () => {
             await result.current.registerWithEmail('unverified@example.com', 'SecurePassword123!');
         });
 
+        expect(validatePassword).toHaveBeenCalledExactlyOnceWith(auth, 'SecurePassword123!');
+        expect(createUserWithEmailAndPassword).toHaveBeenCalledTimes(1);
         expect(sendEmailVerification).toHaveBeenCalledWith(createdUser);
         expect(useAppStore.getState().saveError).toContain('Verifica la tua email');
     });
