@@ -283,8 +283,8 @@ describe('Challenger 2: Zustand Fine-Grained Selectors & Background Render Isola
         });
     });
 
-    describe('3. Multi-Tab Background Mount Simulation', () => {
-        it('simulates both Training and Nutrition tabs mounted in DOM and verifies zero crosstalk', async () => {
+    describe('3. Hidden View Render Isolation', () => {
+        it('renders training and hidden nutrition views together without crosstalk', async () => {
             await prepareUnlockedTestArchive('user:test-user-id');
             let nutritionComponentRenders = 0;
 

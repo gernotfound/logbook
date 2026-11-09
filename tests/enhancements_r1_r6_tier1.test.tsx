@@ -44,11 +44,8 @@ describe('LogBook PWA Enhancements Integration Suite (Requirements R1 - R6)', ()
         // Requirement R1: Formato Sonno in HH:MM
         // ---------------------------------------------------------------------
         describe('R1: Formato Sonno in HH:MM', () => {
-            beforeEach(async () => {
-                await prepareUnlockedTestArchive('user:test-user-id');
-            });
-
             it('T1.1.1: useSleepMeasurements sets and persists sleep duration into userData.nutrition[date] in canonical HH:MM format', async () => {
+                await prepareUnlockedTestArchive('user:test-user-id');
                 const today = Logic.getLocalDateString();
                 const owner = captureSession().owner;
                 const initialData = { ...emptyUserData, nutrition: {} };
@@ -131,7 +128,7 @@ describe('LogBook PWA Enhancements Integration Suite (Requirements R1 - R6)', ()
                 expect(mockSleepHook.saveSleep).toHaveBeenCalledTimes(1);
             });
 
-            it('T1.1.4: DataHistory rehydrates and displays recorded sleep metrics in history list formatted in HH:MM', () => {
+            it('T1.1.4: DataHistory displays supplied sleep metrics in history list formatted in HH:MM', () => {
                 const historyDays = [
                     { date: '2026-08-10', sleepHours: '07:30', weight: 75.0 },
                     { date: '2026-08-11', sleepHours: '08:00', weight: 75.2 }
@@ -763,10 +760,6 @@ describe('LogBook PWA Enhancements Integration Suite (Requirements R1 - R6)', ()
         // Requirement R6: Esercizi Ad-Hoc in Sessione
         // ---------------------------------------------------------------------
         describe('R6: Esercizi Ad-Hoc in Sessione', () => {
-            beforeEach(async () => {
-                await prepareUnlockedTestArchive('user:test-user-id');
-            });
-
             it('T1.6.1: addExtraExercise adds an ad-hoc exercise to localWorkout without modifying routines blueprint', () => {
                 let localWorkout: WorkoutSession | null = {
                     id: 'w1',
@@ -849,6 +842,7 @@ describe('LogBook PWA Enhancements Integration Suite (Requirements R1 - R6)', ()
             });
 
             it('T1.6.4: Completing workout (endWorkout) saves ad-hoc exercises into history', async () => {
+                await prepareUnlockedTestArchive('user:test-user-id');
                 const initialRoutines: WorkoutRoutine[] = [
                     { id: 'r1', name: 'Upper Pure', exercises: [{ exId: 'ex_bench', setsCount: 3 }] }
                 ];
@@ -904,6 +898,7 @@ describe('LogBook PWA Enhancements Integration Suite (Requirements R1 - R6)', ()
             });
 
             it('T1.6.5: Original routine blueprint in userData.routines remains strictly unchanged after session ends with ad-hoc exercises', async () => {
+                await prepareUnlockedTestArchive('user:test-user-id');
                 const originalRoutines: WorkoutRoutine[] = [
                     { id: 'r1', name: 'Upper Pure', exercises: [{ exId: 'ex_bench', setsCount: 3 }] }
                 ];
