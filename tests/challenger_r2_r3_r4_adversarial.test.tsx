@@ -402,57 +402,30 @@ describe('EMPIRICAL CHALLENGER: Adversarial Stress & Robustness Suite (R2, R3, R
             { label: 'newlines and tabs "\\n\\t\\r"', payload: '\n\t\r' }
         ];
 
-        for (const { label, payload } of adversarialCorruptInputs) {
-            it(`CORRUPTION MATRIX [String fallback]: rejects ${label} and returns initialValue`, () => {
+        // Parsing depends on the raw JSON, not the erased TypeScript fallback type.
+        // Exercise each hostile input once and rotate all four fallback shapes.
+        const fallbackCases = [
+            { name: 'String', value: 'STRICT_SAFE_DEFAULT' },
+            { name: 'Object', value: { safe: true, count: 100, tags: ['a', 'b'] } },
+            { name: 'Array', value: ['item1', 'item2'] },
+            { name: 'Number', value: 42 },
+        ];
+
+        for (const [index, { label, payload }] of adversarialCorruptInputs.entries()) {
+            const fallback = fallbackCases[index % fallbackCases.length];
+            it(`CORRUPTION MATRIX [${fallback.name} fallback]: rejects ${label} and preserves the fallback`, () => {
                 const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-                const testKey = `corrupt_test_${encodeURIComponent(label)}`;
+                const testKey = `corrupt_test_${index}`;
                 window.localStorage.setItem(testKey, payload);
 
-                const initialVal = 'STRICT_SAFE_DEFAULT';
-                const { result } = renderHook(() => useLocalStorage<string>(testKey, initialVal));
+                const { result } = renderHook(() => useLocalStorage(testKey, fallback.value));
 
-                // Must return initialValue, NEVER the corrupt raw string
-                expect(result.current[0]).toBe(initialVal);
+                expect(result.current[0]).toEqual(fallback.value);
                 expect(consoleErrorSpy).toHaveBeenCalledWith(
                     expect.stringContaining(`Errore di parsing del localStorage key "${testKey}":`),
                     expect.any(Error)
                 );
-            });
-
-            it(`CORRUPTION MATRIX [Object fallback]: rejects ${label} and returns initial object`, () => {
-                const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-                const testKey = `corrupt_obj_${encodeURIComponent(label)}`;
-                window.localStorage.setItem(testKey, payload);
-
-                const initialObj = { safe: true, count: 100, tags: ['a', 'b'] };
-                const { result } = renderHook(() => useLocalStorage(testKey, initialObj));
-
-                expect(result.current[0]).toEqual(initialObj);
-                expect(consoleErrorSpy).toHaveBeenCalled();
-            });
-
-            it(`CORRUPTION MATRIX [Array fallback]: rejects ${label} and returns initial array`, () => {
-                const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-                const testKey = `corrupt_arr_${encodeURIComponent(label)}`;
-                window.localStorage.setItem(testKey, payload);
-
-                const initialArr = ['item1', 'item2'];
-                const { result } = renderHook(() => useLocalStorage<string[]>(testKey, initialArr));
-
-                expect(result.current[0]).toEqual(initialArr);
-                expect(consoleErrorSpy).toHaveBeenCalled();
-            });
-
-            it(`CORRUPTION MATRIX [Number fallback]: rejects ${label} and returns initial number`, () => {
-                const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-                const testKey = `corrupt_num_${encodeURIComponent(label)}`;
-                window.localStorage.setItem(testKey, payload);
-
-                const initialNum = 42;
-                const { result } = renderHook(() => useLocalStorage<number>(testKey, initialNum));
-
-                expect(result.current[0]).toBe(initialNum);
-                expect(consoleErrorSpy).toHaveBeenCalled();
+                expect(window.localStorage.getItem(testKey)).toBe(JSON.stringify(fallback.value));
             });
         }
 

@@ -47,27 +47,20 @@ La selezione completa dei contratti resta in [AGENTS](../AGENTS.md). Qui si indi
 
 ## Privacy, dati salute e accesso di utenti esterni
 
-Il [pacchetto compliance](compliance/README.md) distingue l'uso personale del progetto dalla prevista apertura gratuita ad altri utenti maggiorenni. **Il gate per l'accesso di utenti esterni con dati reali è ancora NO-GO**, anche senza accordi commerciali: prima dell'apertura restano da chiudere le verifiche tecniche, privacy e legali indicate nel dossier. I rapporti con le palestre sono uno **scenario futuro**, non il modello di utilizzo corrente. Il pacchetto **non certifica conformità GDPR** e richiede revisione professionale.
+Il [pacchetto compliance](compliance/README.md) distingue l'uso personale del progetto dalla prevista apertura gratuita ad altri utenti maggiorenni. **Il gate per l'accesso di utenti esterni con dati reali è ancora NO-GO**, anche senza accordi commerciali: prima dell'apertura restano da chiudere le verifiche tecniche, privacy e legali indicate nel dossier. Il pacchetto **non certifica conformità GDPR** e richiede revisione professionale.
 
 | Documento | Stato | Per quale attività |
 |---|---|---|
-| [Pacchetto compliance / utenti esterni](compliance/README.md) | Gate pre-utenti esterni NO-GO; scenario B2B futuro | Requisiti tecnici, privacy e legali prima di qualsiasi apertura a terzi |
-| [Allegato commerciale](compliance/commercial-schedule-template.md) | Template non approvato/firmato | Termini economici |
-| [Ruoli privacy provider / palestra](compliance/controller-role-decision.md) | Decisione non finalizzata | Titolare, responsabile e condizioni |
+| [Pacchetto compliance / utenti esterni](compliance/README.md) | Gate pre-utenti esterni NO-GO | Requisiti tecnici, privacy e legali prima di qualsiasi apertura a terzi |
+| [Ruolo privacy del gestore e dei fornitori](compliance/controller-role-decision.md) | Valutazione da validare | Finalità, ruoli e fornitori tecnici |
 | [Procedura diritti interessati](compliance/data-subject-rights-procedure.md) | Procedura interna da completare | Accesso, portabilità, rettifica, cancellazione |
-| [DPA Art. 28](compliance/dpa-art28-template.md) | Template condizionale non firmato | Solo se i ruoli giuridici richiedono un DPA |
 | [Screening DPIA](compliance/dpia-screening-template.md) | Template da completare | Screening dei rischi e decisione DPIA |
 | [Valutazione DPO](compliance/dpo-assessment-template.md) | Template da completare | Obbligo di nomina |
-| [Exit e cancellazione B2B](compliance/exit-deletion-policy-template.md) | Template da validare | Cessazione palestra distinta dagli account utente |
-| [Checklist prima palestra](compliance/first-gym-b2b-checklist.md) | Gate pre-pilot ancora da verificare | Condizioni di go-live |
-| [Istruzioni privacy palestra](compliance/gym-privacy-instructions-template.md) | Template dipendente dai ruoli validati | Indicazioni per iscritti e palestra |
 | [Consenso salute: decisione e gate](compliance/health-consent-release-gate.md) | Revoca implementata; gate legale e collaudi autenticati aperti | Revoca, diritti ed eventuale riaccettazione |
 | [Consenso salute: protocollo](compliance/health-consent-technical-protocol.md) | Contratto tecnico implementato; verifiche Production e gate legale aperti | Fence, journal, offline e cross-device |
 | [Runbook incidenti / breach](compliance/incident-breach-runbook.md) | Procedura da assegnare e provare | Gestione, escalation e notifiche |
 | [Registro trattamenti](compliance/processing-record-template.md) | Template Art. 30 da completare | Attività e finalità del trattamento |
 | [Retention schedule](compliance/retention-schedule.md) | Policy da approvare e verificare | Conservazione e cancellazioni |
-| [Accordo SaaS palestra](compliance/saas-agreement-template.md) | Bozza non firmata | Contratto commerciale |
-| [Supporto e SLA](compliance/support-sla-policy-template.md) | Template da approvare | Impegni di servizio sostenibili |
 | [Misure tecniche/organizzative](compliance/technical-organizational-measures.md) | Scheda da verificare sul live | Sicurezza tecnica vs provider |
 | [Fornitori e trasferimenti](compliance/vendor-transfer-register.md) | Registro da validare | Ruoli fornitori e trasferimenti |
 
