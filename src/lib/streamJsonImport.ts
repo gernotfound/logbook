@@ -153,7 +153,7 @@ export async function parseLargeBackupJson(
         } catch {
             throw new Error('Impossibile leggere il file.');
         }
-        // The owner can change while FileReader is pending. Do not decode or
+        // The owner can change while the asynchronous chunk read is pending. Do not decode or
         // validate bytes from a session that no longer owns this import.
         assertCurrent();
         if (bytes.byteLength === 0) throw new Error('Lettura JSON incompleta. Il file originale resta intatto.');
