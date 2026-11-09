@@ -12,6 +12,7 @@ import { CycleMuscleMap } from './CycleMuscleMap';
 import { CycleStrategySummary } from './CycleStrategySummary';
 import { CycleVolumeAccordion } from './CycleVolumeAccordion';
 import { calculateCycleMacroVolume } from './cycleMacroVolume';
+import { getCycleRotationItems } from '../../../lib/calc/cycleRotationLabels';
 import { ContextMenu, type ContextMenuItem } from '../../UI/ContextMenu';
 import type { DomainOperation } from '../../../lib/sync/domainOperations';
 import type { Exercise, TrainingCycle, WorkoutRoutine, WorkoutSession } from '../../../types';
@@ -322,14 +323,11 @@ export default function TrainingPlanning({ onOpenSession }: TrainingPlanningProp
 
                     <div className="planning-active-details" hidden={!isDetailsOpen}>
                         <div className="planning-routine-chips" aria-label="Sequenza schede del ciclo attivo">
-                            {(activeCycle.routines ?? []).map((item, index) => {
-                                const routine = routines.find(candidate => candidate.id === item.routineId);
-                                return (
-                                    <span key={`${item.routineId}-${index}`}>
-                                        <b>{String.fromCharCode(65 + (index % 26))}</b> {routine?.name ?? 'Scheda non disponibile'}
-                                    </span>
-                                );
-                            })}
+                            {getCycleRotationItems(activeCycle, routines).map(({ routineId, routine, letter }, index) => (
+                                <span key={`${routineId}-${index}`}>
+                                    <b>{letter ?? '—'}</b> {routine?.name ?? 'Scheda non disponibile'}
+                                </span>
+                            ))}
                         </div>
                         <CycleMuscleMap
                             title="Mappa muscolare del ciclo"

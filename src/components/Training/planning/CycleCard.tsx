@@ -6,6 +6,7 @@ import { isBoundedCycleCount, MAX_CALCULATED_CYCLE_WEEKS } from '../../../lib/ca
 import { ContextMenu, type ContextMenuItem } from '../../UI/ContextMenu';
 import { CycleStrategySummary } from './CycleStrategySummary';
 import { CycleSchedulePreview } from './CycleSchedulePreview';
+import { getCycleRotationItems } from '../../../lib/calc/cycleRotationLabels';
 
 interface CycleCardProps {
     cycle: TrainingCycle;
@@ -52,7 +53,7 @@ export const CycleCard: React.FC<CycleCardProps> = ({
         }
     };
     const timeline = Logic.calculateCycleTimeline(cycle);
-    const routineNames = useMemo(() => new Map(routines.map(routine => [routine.id, routine.name])), [routines]);
+    const rotationItems = useMemo(() => getCycleRotationItems(cycle, routines), [cycle, routines]);
     // Inactive cards only compute the bounded summary. The compiler can
     // memoize this pure calculation without an explicit useMemo dependency list.
     const schedule = Logic.calculateCycleSchedule(cycle, routines, isExpanded && showSchedule);
@@ -94,14 +95,11 @@ export const CycleCard: React.FC<CycleCardProps> = ({
                 {cycle.notes ? <p className="planning-cycle-notes">“{cycle.notes}”</p> : null}
 
                 <div className="planning-routine-chips" aria-label="Sequenza schede del ciclo">
-                    {(cycle.routines ?? []).map((item, index) => {
-                        const routineName = routineNames.get(item.routineId);
-                        return (
-                            <span key={`${item.routineId}-${index}`}>
-                                <b>{String.fromCharCode(65 + (index % 26))}</b> {routineName ?? 'Scheda non disponibile'}
-                            </span>
-                        );
-                    })}
+                    {rotationItems.map(({ routineId, routine, letter }, index) => (
+                        <span key={`${routineId}-${index}`}>
+                            <b>{letter ?? '—'}</b> {routine?.name ?? 'Scheda non disponibile'}
+                        </span>
+                    ))}
                 </div>
 
                 {cycle.routines?.length ? (
