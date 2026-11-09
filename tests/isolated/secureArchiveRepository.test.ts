@@ -14,6 +14,11 @@ import {
 import { LocalCiphertextError } from '../../src/lib/sync/secureArchiveCipher';
 import { getArchiveRecord, updateArchiveRecord } from '../../src/lib/sync/secureArchiveRepository';
 
+vi.mock('idb-keyval', async importOriginal => {
+    const actual = await importOriginal<typeof import('idb-keyval')>();
+    return { ...actual, get: vi.fn(actual.get) };
+});
+
 const owner = 'user:archive-repository';
 const archive = 'logbook:v2:' + owner;
 const controlKey = vaultControlKey(owner);
@@ -130,11 +135,10 @@ describe('secure archive repository capability and transaction boundaries', () =
     it('rejects a read completed after the same wrapped key was unlocked into a new capability', async () => {
         const ciphertext = await get(archive);
         const expected = await readLocal(owner);
-        const idb = await import('idb-keyval');
-        const originalGet = idb.get;
+        const actual = await vi.importActual<typeof import('idb-keyval')>('idb-keyval');
         // Delay only delivery of the real read result across a real same-device unlock.
-        vi.spyOn(idb, 'get').mockImplementationOnce(async (key, store) => {
-            const observed = await originalGet(key, store);
+        vi.mocked(get).mockImplementationOnce(async (key, store) => {
+            const observed = await actual.get(key, store);
             await unlockVaultForOwner(owner);
             return observed;
         });
