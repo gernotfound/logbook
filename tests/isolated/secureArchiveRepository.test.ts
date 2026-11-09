@@ -127,6 +127,24 @@ describe('secure archive repository capability and transaction boundaries', () =
         else expect(await getArchiveRecord(owner)).toBeUndefined();
     });
 
+    it('rejects a read completed after the same wrapped key was unlocked into a new capability', async () => {
+        const ciphertext = await get(archive);
+        const expected = await readLocal(owner);
+        const idb = await import('idb-keyval');
+        const originalGet = idb.get;
+        // Delay only delivery of the real read result across a real same-device unlock.
+        vi.spyOn(idb, 'get').mockImplementationOnce(async (key, store) => {
+            const observed = await originalGet(key, store);
+            await unlockVaultForOwner(owner);
+            return observed;
+        });
+        await expect(getArchiveRecord(owner)).rejects.toBeInstanceOf(LocalVaultLockedError);
+        vi.restoreAllMocks();
+        expect(localStorage.getItem(controlKey)).toBe(control);
+        expect(await get(archive)).toBe(ciphertext);
+        expect(await readLocal(owner)).toEqual(expected);
+    });
+
     it.each(['epoch', 'lock', 'purge'] as const)('rechecks %s before invoking the atomic transformation', async reason => {
         const ciphertext = await get(archive);
         const transform = vi.fn(changeHeight);
