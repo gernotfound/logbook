@@ -29,11 +29,14 @@ const userData: UserData = {
 
 describe('audit regression: TrainingPlanning persistence failures', () => {
     const showAlert = vi.mocked(useDialogStore.getState().showAlert);
+    const showConfirm = vi.mocked(useDialogStore.getState().showConfirm);
     const dispatchDomainOperation = vi.fn().mockRejectedValue(new Error('write failed'));
 
     beforeEach(() => {
         showAlert.mockReset();
         showAlert.mockResolvedValue(undefined);
+        showConfirm.mockReset();
+        showConfirm.mockResolvedValue(true);
         dispatchDomainOperation.mockReset();
         dispatchDomainOperation.mockRejectedValue(new Error('write failed'));
         useAppStore.setState({
@@ -181,5 +184,102 @@ describe('audit regression: TrainingPlanning persistence failures', () => {
         expect(screen.getByDisplayValue('Mai persistito')).toBeDefined();
         expect(useAppStore.getState().userData).toEqual(original);
         expect(updateIndexedDb).not.toHaveBeenCalled();
+    });
+    it('serializes duplicate actions on the active-cycle menu until the durable result settles', async () => {
+        let finish!: (value: { ok: true; status: 'synced' }) => void;
+        const pending = new Promise<{ ok: true; status: 'synced' }>(resolve => { finish = resolve; });
+        dispatchDomainOperation.mockReturnValueOnce(pending).mockResolvedValue({ ok: true, status: 'synced' });
+        render(<TrainingPlanning />);
+
+        fireEvent.click(screen.getByTitle('Opzioni'));
+        fireEvent.click(screen.getByRole('menuitem', { name: 'Duplica' }));
+        expect(dispatchDomainOperation).toHaveBeenCalledOnce();
+        const deactivate = screen.getByRole('button', { name: 'Disattiva ciclo' }) as HTMLButtonElement;
+        expect(deactivate.disabled).toBe(true);
+        fireEvent.click(screen.getByTitle('Opzioni'));
+        const duplicate = screen.getByRole('menuitem', { name: 'Duplica' }) as HTMLButtonElement;
+        expect(duplicate.disabled).toBe(true);
+        fireEvent.click(duplicate);
+        expect(dispatchDomainOperation).toHaveBeenCalledOnce();
+
+        await act(async () => { finish({ ok: true, status: 'synced' }); await pending; });
+        expect(deactivate.disabled).toBe(false);
+    });
+
+    it('does not deactivate a different cycle after confirmation was delayed', async () => {
+        let confirm!: (accepted: boolean) => void;
+        showConfirm.mockImplementationOnce(() => new Promise(resolve => { confirm = resolve; }));
+        dispatchDomainOperation.mockResolvedValue({ ok: true, status: 'synced' });
+        render(<TrainingPlanning />);
+        fireEvent.click(screen.getByRole('button', { name: 'Disattiva ciclo' }));
+        expect(showConfirm).toHaveBeenCalledOnce();
+
+        act(() => {
+            const data = useAppStore.getState().userData!;
+            useAppStore.setState({ userData: {
+                ...data,
+                trainingCycles: [...data.trainingCycles!, { ...data.trainingCycles![0], id: 'cycle-2', name: 'Altro ciclo', isActive: false }],
+                activeCycleId: 'cycle-2',
+            } });
+        });
+        await act(async () => { confirm(true); });
+        expect(dispatchDomainOperation).not.toHaveBeenCalled();
+        expect(useAppStore.getState().userData?.activeCycleId).toBe('cycle-2');
+    });
+
+    it('deletes the confirmed cycle without overwriting a newer active-cycle selection', async () => {
+        const original = userData.trainingCycles![0];
+        useAppStore.setState({ userData: {
+            ...structuredClone(userData),
+            trainingCycles: [
+                original,
+                { ...original, id: 'cycle-2', name: 'Secondo ciclo', isActive: false },
+                { ...original, id: 'cycle-3', name: 'Terzo ciclo', isActive: false },
+            ],
+        } });
+        let confirm!: (accepted: boolean) => void;
+        showConfirm.mockImplementationOnce(() => new Promise(resolve => { confirm = resolve; }));
+        dispatchDomainOperation.mockResolvedValue({ ok: true, status: 'synced' });
+        render(<TrainingPlanning />);
+        fireEvent.click(screen.getAllByTitle('Opzioni')[0]);
+        fireEvent.click(screen.getByRole('menuitem', { name: 'Elimina' }));
+        expect(showConfirm).toHaveBeenCalledOnce();
+
+        act(() => {
+            const data = useAppStore.getState().userData!;
+            useAppStore.setState({ userData: { ...data, activeCycleId: 'cycle-3' } });
+        });
+        await act(async () => { confirm(true); });
+        expect(dispatchDomainOperation).toHaveBeenCalledOnce();
+        expect(dispatchDomainOperation).toHaveBeenCalledWith([
+            { type: 'training-cycle.delete', id: 'cycle-1' },
+        ]);
+    });
+
+    it('does not replace a newer unsaved editor after an older edit confirmation', async () => {
+        const original = userData.trainingCycles![0];
+        useAppStore.setState({ userData: {
+            ...structuredClone(userData),
+            trainingCycles: [original, { ...original, id: 'cycle-2', name: 'Secondo ciclo', isActive: false }],
+        } });
+        render(<TrainingPlanning />);
+        fireEvent.click(screen.getAllByTitle('Opzioni')[0]);
+        fireEvent.click(screen.getByRole('menuitem', { name: 'Modifica' }));
+        expect(screen.getByDisplayValue('Ciclo persistente')).toBeDefined();
+
+        let confirm!: (accepted: boolean) => void;
+        showConfirm.mockImplementationOnce(() => new Promise(resolve => { confirm = resolve; }));
+        fireEvent.click(screen.getAllByTitle('Opzioni')[1]);
+        fireEvent.click(screen.getByRole('menuitem', { name: 'Modifica' }));
+        expect(showConfirm).toHaveBeenCalledOnce();
+        fireEvent.click(screen.getByRole('button', { name: 'Chiudi' }));
+        fireEvent.click(screen.getByRole('button', { name: 'Crea ciclo' }));
+        fireEvent.change(screen.getByPlaceholderText('Es. Mesociclo ipertrofia 4 giorni'), {
+            target: { value: 'Nuovo ciclo in lavorazione' },
+        });
+        await act(async () => { confirm(true); });
+        expect(screen.getByRole('heading', { name: /Nuovo ciclo/ })).toBeDefined();
+        expect(screen.getByDisplayValue('Nuovo ciclo in lavorazione')).toBeDefined();
+        expect(dispatchDomainOperation).not.toHaveBeenCalled();
     });
 });
