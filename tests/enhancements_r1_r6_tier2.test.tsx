@@ -48,7 +48,6 @@ describe('LogBook PWA Enhancements Integration Suite (Requirements R1 - R6)', ()
             it('T2.1.1: Zero and empty sleep strings handle cleanly without throwing NaN', async () => {
                 const owner = captureSession().owner;
                 const initialData = { ...emptyUserData, nutrition: {} };
-                await prepareUnlockedTestArchive(owner);
                 await initializeLocal(owner, initialData);
                 useAppStore.setState({ userData: initialData, dataOwner: owner });
                 const { result } = renderHook(() => useSleepMeasurements());
@@ -73,7 +72,6 @@ describe('LogBook PWA Enhancements Integration Suite (Requirements R1 - R6)', ()
                 const today = Logic.getLocalDateString();
                 const owner = captureSession().owner;
                 const initialData = { ...emptyUserData, nutrition: {} };
-                await prepareUnlockedTestArchive(owner);
                 await initializeLocal(owner, initialData);
                 useAppStore.setState({ userData: initialData, dataOwner: owner });
                 const { result } = renderHook(() => useSleepMeasurements());
@@ -810,7 +808,6 @@ describe('LogBook PWA Enhancements Integration Suite (Requirements R1 - R6)', ()
 
                 const owner = captureSession().owner;
                 const initialData = { ...emptyUserData, history: originalHistory, activeWorkout: null };
-                await prepareUnlockedTestArchive(owner);
                 if (owner.startsWith('user:')) {
                     localStorage.setItem(`logbook:v2:${owner}:health-consent-generation`, '1');
                 }

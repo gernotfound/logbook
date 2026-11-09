@@ -635,7 +635,6 @@ describe('Intelligent Exercise Search & Dropdown Suite (M3: R4 & R6)', () => {
                 history: [],
                 activeWorkout,
             };
-            await prepareUnlockedTestArchive(owner);
             await initializeLocal(owner, initialData);
             useAppStore.setState({
                 localWorkout: activeWorkout,

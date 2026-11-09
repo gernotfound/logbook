@@ -201,7 +201,6 @@ describe('LogBook PWA Enhancements Integration Suite (Requirements R1 - R6)', ()
                     routines,
                     history: []
                 };
-            await prepareUnlockedTestArchive(owner);
             await initializeLocal(owner, initialData);
             useAppStore.setState({ dataOwner: owner, userData: initialData });
 
@@ -330,7 +329,6 @@ describe('LogBook PWA Enhancements Integration Suite (Requirements R1 - R6)', ()
                     history: [],
                     nutrition: {}
                 };
-            await prepareUnlockedTestArchive(owner);
             await initializeLocal(owner, initialData);
             useAppStore.setState({ dataOwner: owner, userData: initialData });
 

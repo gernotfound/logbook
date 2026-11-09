@@ -116,7 +116,6 @@ describe('Workout Reorder (R2) and Live Sync & Badges (R3) Suite', () => {
 
         it('1.3: startWorkout automatically generates stable id (se_...) for each exercise', async () => {
             const owner = captureSession().owner;
-            await prepareUnlockedTestArchive(owner);
             const { result } = renderHook(() => useWorkoutSession());
 
             await act(async () => {
@@ -137,7 +136,6 @@ describe('Workout Reorder (R2) and Live Sync & Badges (R3) Suite', () => {
 
         it('1.4: addExtraExercise assigns new unique id (se_...)', async () => {
             const owner = captureSession().owner;
-            await prepareUnlockedTestArchive(owner);
             const initialWorkout: WorkoutSession = {
                 id: 'ws_1',
                 routineId: 'rot_1',
@@ -168,7 +166,6 @@ describe('Workout Reorder (R2) and Live Sync & Badges (R3) Suite', () => {
         it('1.5: startEditHistoricalWorkout ensures all exercises have id', async () => {
             const owner = captureSession().owner;
             if (owner.startsWith('user:')) localStorage.setItem(`logbook:v2:${owner}:health-consent-generation`, '1');
-            await prepareUnlockedTestArchive(owner);
             const historicalWorkout: WorkoutSession = {
                 id: 'w_hist_1',
                 date: '2026-08-10',
@@ -197,7 +194,6 @@ describe('Workout Reorder (R2) and Live Sync & Badges (R3) Suite', () => {
         it('1.6: preserves malformed authenticated snapshot without generating new persisted identities', async () => {
             const owner = captureSession().owner;
             expect(owner.startsWith('user:')).toBe(true);
-            await prepareUnlockedTestArchive(owner);
             const malformedWorkout = {
                 id: 'w_malformed',
                 routineName: 'Malformed',
@@ -364,7 +360,6 @@ describe('Workout Reorder (R2) and Live Sync & Badges (R3) Suite', () => {
 
         it('2.6: moveExercise works via useWorkoutSession hook', async () => {
             const owner = captureSession().owner;
-            await prepareUnlockedTestArchive(owner);
             const initialWorkout: WorkoutSession = {
                 id: 'w1',
                 exercises: [
@@ -540,7 +535,6 @@ describe('Workout Reorder (R2) and Live Sync & Badges (R3) Suite', () => {
     describe('4. TrainingSession View Integration & Accordion Synchronization', () => {
         it('4.1: Moving an exercise updates its position in TrainingSession UI', async () => {
             const owner = captureSession().owner;
-            await prepareUnlockedTestArchive(owner);
             const activeWorkout: WorkoutSession = {
                 id: 'ws_active_1',
                 routineId: 'rot_1',
@@ -586,7 +580,6 @@ describe('Workout Reorder (R2) and Live Sync & Badges (R3) Suite', () => {
 
         it('4.2: Accordion panel (Storico/Setup) index synchronizes when exercise is moved', async () => {
             const owner = captureSession().owner;
-            await prepareUnlockedTestArchive(owner);
             const activeWorkout: WorkoutSession = {
                 id: 'ws_active_1',
                 routineId: 'rot_1',
