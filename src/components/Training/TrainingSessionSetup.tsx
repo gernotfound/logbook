@@ -6,6 +6,7 @@ import { Logic } from '../../lib/logic';
 import { useLocalToday } from '../../hooks/useLocalToday';
 import type { TrainingCycle, WorkoutRoutine } from '../../types';
 import { getRoutineDurationEstimates } from './session/sessionDurationEstimate';
+import { getCycleRotationItems } from '../../lib/calc/cycleRotationLabels';
 
 const EMPTY_CYCLES: TrainingCycle[] = [];
 
@@ -24,17 +25,6 @@ function routineExerciseLabel(routine: WorkoutRoutine): string {
     return `${count} ${count === 1 ? 'esercizio' : 'esercizi'}`;
 }
 
-function rotationLetter(position: number): string {
-    let remaining = position;
-    let label = '';
-    while (remaining > 0) {
-        remaining -= 1;
-        label = String.fromCharCode(65 + remaining % 26) + label;
-        remaining = Math.floor(remaining / 26);
-    }
-    return label;
-}
-
 export const TrainingSessionSetup = ({ onNavigateToPlanning }: TrainingSessionSetupProps) => {
     const trainingCycles = useAppStore(state => state.userData?.trainingCycles || EMPTY_CYCLES);
     const activeCycleId = useAppStore(state => state.userData?.activeCycleId ?? null);
@@ -44,20 +34,12 @@ export const TrainingSessionSetup = ({ onNavigateToPlanning }: TrainingSessionSe
     const [searchQuery, setSearchQuery] = useState('');
     const [selectedPlannedRoutine, setSelectedPlannedRoutine] = useState<{ cycleId: string; routineId: string } | null>(null);
 
-    const plannedRoutines: PlannedRoutineItem[] = useMemo(() => {
-        if (!activeCycle?.routines) return [];
-        const routineMap = new Map(routines.map(routine => [routine.id, routine]));
-        // The rotation engine excludes unavailable routines before assigning positions.
-        const available = activeCycle.routines.flatMap(item => {
-            const routine = routineMap.get(item.routineId);
-            return routine ? [routine] : [];
-        });
-        return available.map((routine, index) => ({
-            routine,
-            letter: rotationLetter(index + 1),
-            position: index + 1,
-        }));
-    }, [activeCycle, routines]);
+    const plannedRoutines: PlannedRoutineItem[] = useMemo(
+        () => getCycleRotationItems(activeCycle, routines).flatMap(({ routine, letter, position }) =>
+            routine && letter && position !== null ? [{ routine, letter, position }] : []
+        ),
+        [activeCycle, routines],
+    );
 
     const nextScheduled = useMemo(
         () => Logic.getNextScheduledRoutine(activeCycle, routines, history),
