@@ -129,8 +129,8 @@ export function calculateTDEEAndMacros(state: Partial<UserData> | null) {
     }
     const nutrition = state.nutrition;
     if (nutrition && typeof nutrition === 'object') {
-        const dates = Object.keys(nutrition).sort((a,b) => new Date(a).getTime() - new Date(b).getTime());
-        const historyList = dates.map(d => ({ date: d, weight: nutrition[d].weight, kcal: nutrition[d].kcal }));
+        // calculateTDEE validates and sorts canonical dates; an earlier sort would only duplicate that work.
+        const historyList = Object.keys(nutrition).map(d => ({ date: d, weight: nutrition[d].weight, kcal: nutrition[d].kcal }));
         const tdeeRes = calculateTDEE(historyList);
         if (!tdeeRes.error && tdeeRes.tdee) {
             tdeeVal = tdeeRes.tdee;
