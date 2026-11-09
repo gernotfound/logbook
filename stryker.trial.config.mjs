@@ -98,7 +98,7 @@ export const trialCases = {
   },
   "nutrition-conflict": {
     "mutate": ["src/lib/sync/localNutritionConflict.ts"],
-    "testFiles": ["tests/isolated/secure_archive_indexeddb.test.ts", "tests/isolated/localSnapshotMergeMetadata.test.ts", "tests/isolated/m8_domain_commit.test.ts", "tests/isolated/storeJournal.test.ts"],
+    "testFiles": ["tests/isolated/secure_archive_indexeddb.test.ts", "tests/isolated/localSnapshotMergeMetadata.test.ts", "tests/isolated/m8_domain_commit.test.ts", "tests/isolated/storeJournal.test.ts", "tests/isolated/localNutritionConflict.test.ts"],
     "runner": "isolated"
   },
   "pending-sequences": {
