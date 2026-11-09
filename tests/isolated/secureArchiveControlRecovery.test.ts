@@ -7,6 +7,12 @@ import { createLocalKeyVault, deviceVaultKeyId, unlockLocalKeyVault } from '../.
 import { publishVaultControl, reconcileVaultControl, vaultControlMirrorId } from '../../src/lib/sync/secureArchiveControlRecovery';
 import { LocalVaultLockedError, lockAllVaults, readVaultControl, vaultControlKey, type PersistedVaultControl } from '../../src/lib/sync/secureArchiveSession';
 
+// Real IndexedDB runs by default; only individual failure/race tests replace a single I/O.
+vi.mock('idb-keyval', async importOriginal => {
+    const actual = await importOriginal<typeof import('idb-keyval')>();
+    return { ...actual, get: vi.fn(actual.get), set: vi.fn(actual.set) };
+});
+
 const owner = 'user:control-recovery';
 const mirror = () => vaultControlMirrorId(owner);
 const primary = () => vaultControlKey(owner);
@@ -239,6 +245,138 @@ describe('control recovery after partial persistence', () => {
         await expect(reconcileVaultControl(owner)).rejects.toBeInstanceOf(LocalPurgePendingError);
         race.mockRestore();
         expect(readVaultControl(owner)).toEqual(control);
+        expect(await get(mirror())).toEqual(control);
+    });
+});
+
+
+describe('mirror I/O failures and post-write verification', () => {
+    it('rejects an IndexedDB read failure without replacing a missing primary', async () => {
+        vi.mocked(get).mockRejectedValueOnce(new Error('IDB read failed'));
+        await expect(reconcileVaultControl(owner)).rejects.toBeInstanceOf(LocalVaultLockedError);
+        expect(localStorage.getItem(primary())).toBeNull();
+    });
+
+    it('rejects an IndexedDB write failure before publishing localStorage metadata', async () => {
+        vi.mocked(set).mockRejectedValueOnce(new Error('IDB write failed'));
+        await expect(publishVaultControl(owner, control)).rejects.toBeInstanceOf(LocalVaultLockedError);
+        expect(localStorage.getItem(primary())).toBeNull();
+        expect(await get(mirror())).toBeUndefined();
+    });
+
+    it('rejects a conflicting mirror even when no localStorage control exists', async () => {
+        await set(mirror(), control);
+        const changed = { ...control, epoch: 'b'.repeat(32) };
+        await expect(publishVaultControl(owner, changed)).rejects.toBeInstanceOf(LocalVaultLockedError);
+        expect(await get(mirror())).toEqual(control);
+        expect(localStorage.getItem(primary())).toBeNull();
+    });
+
+    it('rejects an absent mirror on readback without publishing the primary', async () => {
+        const nativeGet = vi.mocked(get).getMockImplementation()!;
+        vi.mocked(get).mockImplementationOnce(nativeGet).mockResolvedValueOnce(undefined);
+        await expect(publishVaultControl(owner, control)).rejects.toBeInstanceOf(LocalVaultLockedError);
+        expect(await get(mirror())).toEqual(control);
+        expect(localStorage.getItem(primary())).toBeNull();
+    });
+
+    it('rejects a mirror phase mismatch on readback before publishing the primary', async () => {
+        const nativeGet = vi.mocked(get).getMockImplementation()!;
+        vi.mocked(get).mockImplementationOnce(nativeGet)
+            .mockResolvedValueOnce({ ...control, phase: 'migrating' });
+        await expect(publishVaultControl(owner, control)).rejects.toBeInstanceOf(LocalVaultLockedError);
+        expect(await get(mirror())).toEqual(control);
+        expect(localStorage.getItem(primary())).toBeNull();
+    });
+
+    it('rejects a primary phase mismatch after the synchronous write', async () => {
+        const nativeSet = localStorage.setItem.bind(localStorage);
+        const replaced = vi.spyOn(localStorage, 'setItem').mockImplementation((key, value) => {
+            nativeSet(key, key === primary()
+                ? JSON.stringify({ ...control, phase: 'migrating' }) : value);
+        });
+        await expect(publishVaultControl(owner, control)).rejects.toBeInstanceOf(LocalVaultLockedError);
+        replaced.mockRestore();
+        expect(readVaultControl(owner)?.phase).toBe('migrating');
+        expect(await get(mirror())).toEqual(control);
+    });
+
+    it('rejects an altered primary on mirror-only restoration', async () => {
+        await set(mirror(), control);
+        const nativeSet = localStorage.setItem.bind(localStorage);
+        const changed = vi.spyOn(localStorage, 'setItem').mockImplementation((key, value) => {
+            nativeSet(key, key === primary()
+                ? JSON.stringify({ ...control, phase: 'migrating' }) : value);
+        });
+        await expect(reconcileVaultControl(owner)).rejects.toBeInstanceOf(LocalVaultLockedError);
+        changed.mockRestore();
+        expect(readVaultControl(owner)?.phase).toBe('migrating');
+        expect(await get(mirror())).toEqual(control);
+    });
+
+    it('zeroes the authenticated temporary DEK after verifying a missing mirror', async () => {
+        persist(control);
+        const decrypt = crypto.subtle.decrypt.bind(crypto.subtle);
+        let plaintext: ArrayBuffer | undefined;
+        const spy = vi.spyOn(crypto.subtle, 'decrypt').mockImplementationOnce(async (...args) => {
+            plaintext = await decrypt(...args);
+            return plaintext;
+        });
+        await reconcileVaultControl(owner);
+        spy.mockRestore();
+        expect(plaintext).toBeDefined();
+        expect([...new Uint8Array(plaintext!)]).toEqual(Array(32).fill(0));
+        expect(await get(mirror())).toEqual(control);
+    });
+
+    it.each(['active', 'migrating'] as const)(
+        'does not decrypt unnecessarily when both controls already match as %s', async phase => {
+            const matching = { ...control, phase };
+            persist(matching);
+            await set(mirror(), matching);
+            const decrypt = vi.spyOn(crypto.subtle, 'decrypt');
+            await reconcileVaultControl(owner);
+            expect(decrypt).not.toHaveBeenCalled();
+            decrypt.mockRestore();
+        },
+    );
+
+    it('does not write a mirror if purge begins after reading the primary', async () => {
+        const nativeGet = localStorage.getItem.bind(localStorage);
+        const switched = vi.spyOn(localStorage, 'getItem').mockImplementation(key => {
+            const value = nativeGet(key);
+            if (key === primary()) beginLocalPurge(owner);
+            return value;
+        });
+        await expect(publishVaultControl(owner, control)).rejects.toBeInstanceOf(LocalPurgePendingError);
+        switched.mockRestore();
+        expect(await get(mirror())).toBeUndefined();
+        expect(localStorage.getItem(primary())).toBeNull();
+    });
+
+    it('does not publish the primary when purge begins after the mirror readback', async () => {
+        const nativeGet = vi.mocked(get).getMockImplementation()!;
+        vi.mocked(get).mockImplementationOnce(nativeGet).mockImplementationOnce(async (...args) => {
+            const result = await nativeGet(...args);
+            beginLocalPurge(owner);
+            return result;
+        });
+        await expect(publishVaultControl(owner, control)).rejects.toBeInstanceOf(LocalPurgePendingError);
+        expect(await get(mirror())).toEqual(control);
+        expect(localStorage.getItem(primary())).toBeNull();
+    });
+
+    it('does not restore mirror-only metadata if purge starts while authenticating the key', async () => {
+        await set(mirror(), control);
+        const decrypt = crypto.subtle.decrypt.bind(crypto.subtle);
+        const spy = vi.spyOn(crypto.subtle, 'decrypt').mockImplementationOnce(async (...args) => {
+            const result = await decrypt(...args);
+            beginLocalPurge(owner);
+            return result;
+        });
+        await expect(reconcileVaultControl(owner)).rejects.toBeInstanceOf(LocalPurgePendingError);
+        spy.mockRestore();
+        expect(localStorage.getItem(primary())).toBeNull();
         expect(await get(mirror())).toEqual(control);
     });
 });
