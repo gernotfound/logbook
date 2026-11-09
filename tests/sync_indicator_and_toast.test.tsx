@@ -77,109 +77,46 @@ describe('LogBook Background Sync & Error Toast 4-Tier Test Suite', () => {
   };
 
   // ============================================================================
-  // TIER 1: FEATURE COVERAGE (≥5 tests per feature: R1, R2, R3)
+  // TIER 1: FEATURE COVERAGE (shared render paths grouped by UI lifecycle)
   // ============================================================================
   describe('Tier 1: Feature Coverage', () => {
 
     // --- Feature R1: Rimozione Overlay Bloccante ---
     describe('R1: Full Blocking Overlay Elimination', () => {
-      test('T1.1_R1: #sync-overlay is absent from DOM when syncing is false', async () => {
+      test('T1.1-T1.5_R1: syncing never mounts the blocking overlay or unmounts navigation', async () => {
         const { container } = await renderSettledApp();
         expect(container.querySelector('#sync-overlay')).toBeNull();
         expect(document.querySelector('#sync-overlay')).toBeNull();
-      });
 
-      test('T1.2_R1: #sync-overlay is completely absent from DOM when syncing is true', async () => {
-        const { container } = await renderSettledApp();
         act(() => {
           useAppStore.setState({ syncing: true });
         });
         expect(container.querySelector('#sync-overlay')).toBeNull();
         expect(document.querySelector('#sync-overlay')).toBeNull();
-      });
-
-      test('T1.3_R1: Legacy sync-overlay ID is absent from the rendered subtree during sync', async () => {
-        const { container } = await renderSettledApp();
-        act(() => {
-          useAppStore.setState({ syncing: true });
-        });
-        const allElements = container.querySelectorAll('*');
-        allElements.forEach((el: Element) => {
-          expect(el.id).not.toBe('sync-overlay');
-        });
-      });
-
-      test('T1.4_R1: Main application container remains mounted during syncing', async () => {
-        const { container } = await renderSettledApp();
-        act(() => {
-          useAppStore.setState({ syncing: true });
-        });
-        const mainContainer = container.querySelector('#app-container');
-        expect(mainContainer).not.toBeNull();
-      });
-
-      test('T1.5_R1: Bottom navigation remains mounted during syncing', async () => {
-        const { container } = await renderSettledApp();
-        act(() => {
-          useAppStore.setState({ syncing: true });
-        });
-        const nav = container.querySelector('nav') || screen.queryByRole('navigation');
-        expect(nav).not.toBeNull();
+        expect(container.querySelector('#app-container')).not.toBeNull();
+        expect(container.querySelector('nav') || screen.queryByRole('navigation')).not.toBeNull();
       });
     });
 
     // --- Feature R2: Indicatore Sincronizzazione Non Bloccante ---
     describe('R2: Non-Blocking Background Sync Indicator', () => {
-      test('T1.6_R2: .sync-indicator does not render when syncing is false', async () => {
+      test('T1.6-T1.10_R2: status mounts with text and spinner, then unmounts after sync', async () => {
         const { container } = await renderSettledApp();
-        const indicator = querySyncIndicator(container);
-        expect(indicator).toBeNull();
-      });
+        expect(querySyncIndicator(container)).toBeNull();
 
-      test('T1.7_R2: .sync-indicator renders when syncing is true', async () => {
-        const { container } = await renderSettledApp();
-        act(() => {
-          useAppStore.setState({ syncing: true });
-        });
-        const indicator = querySyncIndicator(container);
-        expect(indicator).not.toBeNull();
-      });
-
-      test('T1.8_R2: .sync-indicator contains Italian sentence case text "Salvataggio in corso..."', async () => {
-        await renderSettledApp();
-        act(() => {
-          useAppStore.setState({ syncing: true });
-        });
-        const textEl = screen.getByText(/Salvataggio in corso\.\.\./i);
-        expect(textEl).toBeDefined();
-      });
-
-      test('T1.9_R2: .sync-indicator contains a spinner element', async () => {
-        const { container } = await renderSettledApp();
         act(() => {
           useAppStore.setState({ syncing: true });
         });
         const indicator = container.querySelector('.sync-indicator');
-        if (indicator) {
-          const spinner = indicator.querySelector('.spinner, .sync-indicator-spinner, [class*="spinner"]');
-          expect(spinner).not.toBeNull();
-        } else {
-          expect(screen.getByText(/Salvataggio in corso/i)).toBeDefined();
-        }
-      });
-
-      test('T1.10_R2: .sync-indicator cleanly unmounts when syncing transitions back to false', async () => {
-        const { container } = await renderSettledApp();
-        act(() => {
-          useAppStore.setState({ syncing: true });
-        });
-        expect(screen.queryByText(/Salvataggio in corso/i)).not.toBeNull();
+        expect(indicator).not.toBeNull();
+        expect(screen.getByRole('status', { name: 'Salvataggio in corso' })).toBe(indicator);
+        expect(screen.getByText('Salvataggio in corso...')).toBeDefined();
+        expect(indicator?.querySelector('.sync-indicator-spinner')).not.toBeNull();
 
         act(() => {
           useAppStore.setState({ syncing: false });
         });
-        const indicator = querySyncIndicator(container);
-        expect(indicator).toBeNull();
+        expect(querySyncIndicator(container)).toBeNull();
       });
 
       test('T1.10a_R2: active-workout background sync stays visually quiet during set entry', async () => {
@@ -291,10 +228,24 @@ describe('LogBook Background Sync & Error Toast 4-Tier Test Suite', () => {
 
     // --- Feature R3: Gestione Errori (Toast Auto-scomparente) ---
     describe('R3: Auto-Dismissing Error Toast', () => {
-      test('T1.11_R3: .sync-error-toast is not visible when saveError is null', async () => {
+      test('T1.11-T1.15_R3: transient error alert mounts, can be dismissed, and unmounts', async () => {
         const { container } = await renderSettledApp();
-        const toast = querySyncErrorToast(container);
-        expect(toast).toBeNull();
+        expect(querySyncErrorToast(container)).toBeNull();
+
+        const errorMsg = 'Errore sincronizzazione. Verifica la connessione.';
+        act(() => {
+          useAppStore.setState({ saveError: errorMsg });
+        });
+        const toast = container.querySelector('.sync-error-toast');
+        expect(toast).not.toBeNull();
+        expect(screen.getByRole('alert')).toBe(toast);
+        expect(toast?.querySelector('.sync-error-text')?.textContent).toBe(errorMsg);
+        expect(toast?.querySelector('.sync-error-close')).not.toBeNull();
+
+        act(() => {
+          useAppStore.setState({ saveError: null });
+        });
+        expect(querySyncErrorToast(container)).toBeNull();
       });
 
       test('T1.11a_R3: durable offline workout pending state does not distract during set entry', async () => {
@@ -324,47 +275,6 @@ describe('LogBook Background Sync & Error Toast 4-Tier Test Suite', () => {
         expect(screen.getByText(/Sincronizzazione rifiutata dal server/i)).toBeDefined();
       });
 
-      test('T1.12_R3: .sync-error-toast renders with error message when saveError is set', async () => {
-        await renderSettledApp();
-        const errorMsg = 'Errore sincronizzazione. Verifica la connessione.';
-        act(() => {
-          useAppStore.setState({ saveError: errorMsg });
-        });
-        expect(screen.getByText(new RegExp(errorMsg, 'i'))).toBeDefined();
-      });
-
-      test('T1.13_R3: .sync-error-toast renders with danger/error styling class', async () => {
-        const { container } = await renderSettledApp();
-        act(() => {
-          useAppStore.setState({ saveError: 'Errore durante il salvataggio' });
-        });
-        const toast = container.querySelector('.sync-error-toast') || screen.getByText(/Errore durante il salvataggio/i).closest('div');
-        expect(toast).not.toBeNull();
-      });
-
-      test('T1.14_R3: .sync-error-toast contains manual close button', async () => {
-        const { container } = await renderSettledApp();
-        act(() => {
-          useAppStore.setState({ saveError: 'Connessione persa' });
-        });
-        const toast = container.querySelector('.sync-error-toast') || screen.getByText(/Connessione persa/i).closest('div');
-        expect(toast).not.toBeNull();
-        const closeBtn = toast?.querySelector('.sync-error-close, button');
-        expect(closeBtn).not.toBeNull();
-      });
-
-      test('T1.15_R3: .sync-error-toast unmounts when saveError is reset to null', async () => {
-        await renderSettledApp();
-        act(() => {
-          useAppStore.setState({ saveError: 'Errore temporaneo' });
-        });
-        expect(screen.getByText(/Errore temporaneo/i)).toBeDefined();
-
-        act(() => {
-          useAppStore.setState({ saveError: null });
-        });
-        expect(screen.queryByText(/Errore temporaneo/i)).toBeNull();
-      });
     });
   });
 

@@ -52,12 +52,15 @@ describe('Challenger 1: UI & Chart Component Stress Testing', () => {
         expect(values.map(value => Number(value)).reduce((sum, value) => sum + value, 0)).toBe(500000);
     });
 
-    it('handles interactive period toggling across 4, 8, 12, and 24 weeks without error', () => {
-        const history: WorkoutSession[] = [{
-            id: 'w1',
-            date: '2026-08-18',
-            exercises: [{ exId: 'ex_bench', sessionNote: '', sets: [{ id: 's1', kg: '100', reps: '10' }] }]
-        }];
+    it('recalculates chart buckets and totals across 4, 8, 12, and 24 weeks', async () => {
+        const today = new Date();
+        today.setHours(12, 0, 0, 0);
+        const sixWeeksAgo = new Date(today);
+        sixWeeksAgo.setDate(sixWeeksAgo.getDate() - 42);
+        const history: WorkoutSession[] = [
+            { id: 'w1', date: getLocalDateString(today), exercises: [{ exId: 'ex_bench', sessionNote: '', sets: [{ id: 's1', kg: '100', reps: '10' }] }] },
+            { id: 'w2', date: getLocalDateString(sixWeeksAgo), exercises: [{ exId: 'ex_bench', sessionNote: '', sets: [{ id: 's2', kg: '200', reps: '10' }] }] }
+        ];
 
         renderWithProviders(
             <WeeklyVolumeChart
@@ -72,22 +75,36 @@ describe('Challenger 1: UI & Chart Component Stress Testing', () => {
         const btn8 = screen.getByText('8 sett');
         const btn12 = screen.getByText('12 sett');
         const btn24 = screen.getByText('24 sett');
+        const expectChart = async (weeks: number, totalKg: number) => {
+            await waitFor(() => {
+                const canvas = screen.getByRole('img', { name: /Volume settimanale/i }) as HTMLCanvasElement;
+                const chart = ChartJS.getChart(canvas);
+                expect(chart?.data.labels).toHaveLength(weeks);
+                const total = chart!.data.datasets[0].data.map(value => Number(value)).reduce((sum, value) => sum + value, 0);
+                expect(total).toBe(totalKg);
+            });
+        };
 
+        await expectChart(8, 3000);
         fireEvent.click(btn4);
         expect(btn4.getAttribute('aria-pressed')).toBe('true');
         expect(btn8.getAttribute('aria-pressed')).toBe('false');
+        await expectChart(4, 1000);
 
         fireEvent.click(btn12);
         expect(btn12.getAttribute('aria-pressed')).toBe('true');
         expect(btn4.getAttribute('aria-pressed')).toBe('false');
+        await expectChart(12, 3000);
 
         fireEvent.click(btn24);
         expect(btn24.getAttribute('aria-pressed')).toBe('true');
         expect(btn12.getAttribute('aria-pressed')).toBe('false');
+        await expectChart(24, 3000);
 
         fireEvent.click(btn8);
         expect(btn8.getAttribute('aria-pressed')).toBe('true');
         expect(btn24.getAttribute('aria-pressed')).toBe('false');
+        await expectChart(8, 3000);
     });
 
     it('renders VolumeCaloriesCorrelationChart empty and non-empty states correctly', async () => {
