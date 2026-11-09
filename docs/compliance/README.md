@@ -58,8 +58,8 @@ La PWA gestisce dati potenzialmente rientranti nelle categorie particolari dell'
 | [`technical-organizational-measures.md`](technical-organizational-measures.md) | TOM / misure Art. 32 | Verificare elementi esterni |
 | [`dpo-assessment-template.md`](dpo-assessment-template.md) | Valutazione obbligo DPO | Compilare e riesaminare su aumento scala |
 | [`data-subject-rights-procedure.md`](data-subject-rights-procedure.md) | Accesso, rettifica, portabilità, cancellazione, revoche | Assegnare canale privacy |
-| [`health-consent-release-gate.md`](health-consent-release-gate.md) | Decisione corrente revoca → cancellazione automatica dati fitness, distinta da account deletion | PR #826/#829 integrate; collaudo autenticato multi-dispositivo e validazione legale pre-pilot aperti |
-| [`health-consent-technical-protocol.md`](health-consent-technical-protocol.md) | Protocollo tecnico revoca/riaccettazione e fence | Implementazione descritta; smoke autenticato multi-dispositivo e gate legale pre-pilot aperti |
+| [`health-consent-release-gate.md`](health-consent-release-gate.md) | Decisione corrente revoca → cancellazione automatica dati fitness, distinta da account deletion | PR #826/#829 integrate; collaudo autenticato multi-dispositivo e validazione legale ancora da completare prima dell'accesso di utenti esterni |
+| [`health-consent-technical-protocol.md`](health-consent-technical-protocol.md) | Protocollo tecnico revoca/riaccettazione e fence | Implementazione descritta; smoke autenticato multi-dispositivo e gate legale ancora aperti prima dell'accesso di utenti esterni |
 
 ## Regola di aggiornamento
 

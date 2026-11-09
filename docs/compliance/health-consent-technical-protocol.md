@@ -1,4 +1,4 @@
-# Revoca consenso salute — protocollo tecnico distribuito, gate legale pre-pilot aperto
+# Revoca consenso salute — protocollo tecnico distribuito, gate legale pre-utenti esterni aperto
 
 **Fonte normativa tecnica:** [AGENTS](../../AGENTS.md) e [Consenso salute](../../.agents/rules/health-consent.md). Le prove delle PR storiche citate sotto non attestano la release attuale; l'indice compliance mantiene separate approvazione legale e verifiche tecniche.
 
@@ -8,7 +8,7 @@ Decisione corrente del product owner (6 novembre 2026): dopo la revoca nessuna f
 
 `health_consent_withdrawals/{uid}` è esclusivamente server-managed. Il backend autentica UID Firebase, verifica App Check limited-use e origini consentite. Lo stato `withdrawn` blocca tramite Security Rules tutte le nuove scritture della zona fitness e della telemetria; le letture dirette dell'owner sono bloccate in stato revocato anche per client obsoleti; per esercitare i diritti e produrre il backup cloud il server espone un endpoint separato autenticato e paginato, senza aprire Firestore ai vecchi client. `active` richiede una nuova scelta esplicita con versioni legali correnti, mai un ripristino automatico da backup o da `legalConsent` client. La registrazione della revoca è idempotente. La revoca trusted accoda nella stessa transazione un job di cancellazione dei dati business; il record dell'account Firebase Auth rimane. L'account deletion separata elimina anche l'identità di accesso.
 
-## Verifiche ancora richieste prima del pilot con utenti reali
+## Verifiche ancora richieste prima dell'accesso di utenti esterni
 
 - Enforcement locale e cross-tab del blocco; avvio autenticato, offline, dispositivi secondari e sospensione di writer in-flight.
 - Riattivazione di un account revocato: il fence di generazione è implementato nelle Rules e coperto da regressioni; verificare il percorso autenticato multi-dispositivo e l'assenza di replay dei journal precedenti nel runtime Production.
@@ -24,7 +24,7 @@ Durante la revoca, tutte le letture dirette delle collection `users/{uid}` sono 
 
 Il parser dei metadati cloud accetta e valida `_sync.writer.consentRevision` opzionale nel Sync Protocol 3, coerentemente con il writer e le Rules: un account riattivato con revisione positiva non deve essere classificato erroneamente come documento incompatibile. Valori malformati o fuori range vengono rifiutati senza conversione permissiva.
 
-Le regole di accesso e il fence delle revisioni sono stati integrati con la PR #366 e successivamente rafforzati. Il job automatico può impedire l'export rights-only completo dopo la revoca: proporre il backup **prima** della conferma e non promettere una copia cloud completa durante un job attivo. Il collaudo con account fittizio autenticato, la revisione giuridica e la retention residua restano da validare prima del pilot.
+Le regole di accesso e il fence delle revisioni sono stati integrati con la PR #366 e successivamente rafforzati. Il job automatico può impedire l'export rights-only completo dopo la revoca: proporre il backup **prima** della conferma e non promettere una copia cloud completa durante un job attivo. Il collaudo con account fittizio autenticato, la revisione giuridica e la retention residua restano da validare prima dell'accesso di utenti esterni.
 
 ## Cancellazione automatica dei dati dopo revoca trusted (integrata; smoke autenticato aperto)
 
@@ -36,7 +36,7 @@ La ricevuta completa non basta a garantire la cancellazione di copie su disposit
 
 Dopo la prima revoca, il marker server non viene eliminato al re-consenso: la revisione cresce monotonicamente. Le Rules accettano un nuovo `sync_control` e le scritture con `_sync.writer` soltanto se dichiarano esplicitamente `consentRevision` uguale alla revisione server `active`. Un vecchio client Protocol 3 privo di tale campo non può né ri-registrare la replica né scrivere un vecchio journal. Il parser TypeScript riconosce il campo opzionale senza incrementare artificialmente il Sync Protocol 3.
 
-Il client conserva la revisione in IndexedDB e nel marker browser. Il journal precedente resta isolato; se la revisione è coperta da `erasedBeforeRevision`, **non è eleggibile per una ripresa**, neppure dopo nuovo consenso. La replica di una nuova generazione apre soltanto un archivio vuoto dopo prova trusted di completamento e cleanup locale. Il collaudo autenticato multi-dispositivo resta obbligatorio prima del pilot con utenti reali.
+Il client conserva la revisione in IndexedDB e nel marker browser. Il journal precedente resta isolato; se la revisione è coperta da `erasedBeforeRevision`, **non è eleggibile per una ripresa**, neppure dopo nuovo consenso. La replica di una nuova generazione apre soltanto un archivio vuoto dopo prova trusted di completamento e cleanup locale. Il collaudo autenticato multi-dispositivo resta obbligatorio prima dell'accesso di utenti esterni.
 
 ## Quarantena non distruttiva del journal locale
 
@@ -58,7 +58,7 @@ Il recupero del journal non è un modo per aggirare il job di erasure. Anche se 
 ## Concorrenza fra revoca e nuove scelte
 
 Ogni richiesta trusted confronta la revisione attesa **dentro** la transazione Firestore, con idempotenza limitata alla stessa transizione. Una risposta in ritardo non può sovrascrivere uno stato locale più recente né riaprire dati di una generazione cancellata. La revoca offline conserva il marker pending fino a riconciliazione server; non può essere sostituita da una riaccettazione offline del vecchio archivio. Il re-consenso è ammesso soltanto dopo job `complete`, controllo dell'epoch e purge della generazione precedente. Errori, conflitti o sessioni cambiate richiedono riconciliazione, non consenso implicito.
-**Residuo prima del pilot con utenti reali:** verifica effettiva multi-dispositivo, smoke autenticato backend/Rules/Hosting coordinati, verifica accessibilità UI/viewport e approvazione della base giuridica, del trattamento dopo revoca e dei contatti/documenti privacy. CI, codice e compliance non sono equivalenti.
+**Residuo prima dell'accesso di utenti esterni:** verifica effettiva multi-dispositivo, smoke autenticato backend/Rules/Hosting coordinati, verifica accessibilità UI/viewport e approvazione della base giuridica, del trattamento dopo revoca e dei contatti/documenti privacy. CI, codice e compliance non sono equivalenti.
 
 ## Revoca offline e nuovo consenso (contratto corrente, 6 novembre 2026)
 
