@@ -55,7 +55,7 @@ describe('CycleSchedulePreview: states and accessibility', () => {
         expect(region.getAttribute('aria-labelledby')).toBe(expanded.id);
         expect(within(region).getByText('Settimana 1')).toBeDefined();
         expect(within(region).getByText('Settimana 2')).toBeDefined();
-        expect(within(region).getByText(/#1.*Upper body/).textContent).toContain('Upper body');
+        expect(region.querySelector('.planning-schedule-sessions span')?.textContent).toBe('#1 Upper body');
         expect(within(region).getByText(/Anteprima indicativa:/)).toBeDefined();
 
         rerender(
