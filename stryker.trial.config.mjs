@@ -96,6 +96,11 @@ export const trialCases = {
     "testFiles": ["tests/isolated/consentEpochRecovery.test.ts", "tests/isolated/localConsentJournalRecovery.test.ts"],
     "runner": "isolated"
   },
+  "nutrition-conflict": {
+    "mutate": ["src/lib/sync/localNutritionConflict.ts"],
+    "testFiles": ["tests/isolated/secure_archive_indexeddb.test.ts", "tests/isolated/localSnapshotMergeMetadata.test.ts", "tests/isolated/m8_domain_commit.test.ts", "tests/isolated/storeJournal.test.ts"],
+    "runner": "isolated"
+  },
   "pending-sequences": {
     "mutate": ["src/lib/sync/localPendingSequences.ts"],
     "testFiles": ["tests/isolated/localPendingSequences.test.ts"],

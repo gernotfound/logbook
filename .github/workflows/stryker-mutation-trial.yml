@@ -17,7 +17,7 @@ concurrency:
 
 jobs:
   mutation:
-    if: startsWith(github.head_ref, 'test/stryker-') && github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.head.sha != github.event.pull_request.base.sha
+    if: (startsWith(github.head_ref, 'test/stryker-') || startsWith(github.head_ref, 'D-stryker-')) && github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.head.sha != github.event.pull_request.base.sha
     name: Mutation diagnostic / ${{ matrix.area }}
     runs-on: ubuntu-24.04
     timeout-minutes: 30
@@ -27,6 +27,7 @@ jobs:
       matrix:
         # Overlap slow sync classification with the shorter diagnostic areas.
         area:
+          - nutrition-conflict
           - monthly-tombstones
           - business-normalization
           - sync-failure
