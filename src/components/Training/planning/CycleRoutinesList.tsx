@@ -1,4 +1,4 @@
-import { memo, useId, useMemo, useState } from 'react';
+import { memo, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { ChevronDown, ChevronUp, Search, Trash2 } from 'lucide-react';
 import type { Exercise, TrainingCycleRoutineItem, WorkoutRoutine } from '../../../types';
 
@@ -23,13 +23,15 @@ export const CycleRoutinesList = memo(function CycleRoutinesList({
 }: CycleRoutinesListProps) {
     const [query, setQuery] = useState('');
     const [isSearchOpen, setIsSearchOpen] = useState(false);
+    const [activeRoutineId, setActiveRoutineId] = useState<string | null>(null);
+    const resultsRef = useRef<HTMLDivElement>(null);
     const resultsId = useId();
     const exerciseNames = useMemo(() => new Map(library.map(exercise => [exercise.id, exercise.name])), [library]);
     const routineMap = useMemo(() => new Map(routines.map(routine => [routine.id, routine])), [routines]);
+    const selectedIds = useMemo(() => new Set(cycleRoutines.map(item => item.routineId)), [cycleRoutines]);
 
     const matches = useMemo(() => {
         const normalized = query.trim().toLocaleLowerCase('it');
-        const selectedIds = new Set(cycleRoutines.map(item => item.routineId));
         return routines.filter(routine => {
             if (selectedIds.has(routine.id)) return false;
             if (!normalized) return true;
@@ -41,11 +43,22 @@ export const CycleRoutinesList = memo(function CycleRoutinesList({
                 .toLocaleLowerCase('it')
                 .includes(normalized);
         });
-    }, [cycleRoutines, exerciseNames, query, routines]);
+    }, [exerciseNames, query, routines, selectedIds]);
+    const activeIndex = matches.findIndex(routine => routine.id === activeRoutineId);
+
+    useEffect(() => {
+        if (!isSearchOpen || activeIndex < 0) return;
+        const activeOption = resultsRef.current?.children[activeIndex];
+        if (typeof activeOption?.scrollIntoView === 'function') {
+            activeOption.scrollIntoView({ block: 'nearest' });
+        }
+    }, [activeIndex, isSearchOpen]);
 
     const addRoutine = (routineId: string) => {
+        if (selectedIds.has(routineId)) return;
         onAdd(routineId);
         setQuery('');
+        setActiveRoutineId(null);
         setIsSearchOpen(false);
     };
 
@@ -65,24 +78,41 @@ export const CycleRoutinesList = memo(function CycleRoutinesList({
                         type="search"
                         role="combobox"
                         aria-label="Aggiungi scheda alla sequenza"
-                        aria-controls={resultsId}
+                        aria-controls={isSearchOpen ? resultsId : undefined}
                         aria-expanded={isSearchOpen}
+                        aria-activedescendant={isSearchOpen && activeIndex >= 0 ? `${resultsId}-option-${activeIndex}` : undefined}
                         aria-autocomplete="list"
                         autoComplete="off"
                         placeholder="Cerca scheda o esercizio"
                         value={query}
                         onFocus={() => setIsSearchOpen(true)}
                         onKeyDown={event => {
-                            if (event.key === 'Escape') setIsSearchOpen(false);
+                            if (event.key === 'Escape') {
+                                setIsSearchOpen(false);
+                                setActiveRoutineId(null);
+                            } else if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+                                event.preventDefault();
+                                setIsSearchOpen(true);
+                                if (matches.length === 0) return;
+                                const nextIndex = event.key === 'ArrowDown'
+                                    ? (activeIndex + 1) % matches.length
+                                    : activeIndex < 0 ? matches.length - 1 : (activeIndex - 1 + matches.length) % matches.length;
+                                setActiveRoutineId(matches[nextIndex].id);
+                            } else if (event.key === 'Enter') {
+                                // The search input must not submit the enclosing cycle form.
+                                event.preventDefault();
+                                if (isSearchOpen && activeIndex >= 0) addRoutine(matches[activeIndex].id);
+                            }
                         }}
                         onChange={event => {
                             const value = event.target.value;
                             const exactRoutine = routineMap.get(value);
-                            if (exactRoutine) {
+                            if (exactRoutine && !selectedIds.has(exactRoutine.id)) {
                                 addRoutine(exactRoutine.id);
                                 return;
                             }
                             setQuery(value);
+                            setActiveRoutineId(null);
                             setIsSearchOpen(true);
                         }}
                     />
@@ -90,20 +120,29 @@ export const CycleRoutinesList = memo(function CycleRoutinesList({
                 <span className="planning-helper">Puoi cercare anche il nome di un esercizio contenuto nella scheda.</span>
 
                 {isSearchOpen ? (
-                    <div id={resultsId} className="planning-search-results" role="listbox" aria-label="Risultati schede">
+                    <div id={resultsId} ref={resultsRef} className="planning-search-results" role="listbox" aria-label="Risultati schede">
                         {matches.length === 0 ? (
-                            <p className="planning-search-empty">Nessuna scheda contiene questa ricerca.</p>
-                        ) : matches.map(routine => {
+                            <p className="planning-search-empty">
+                                {routines.length === 0
+                                    ? 'Crea una scheda prima di aggiungerla al ciclo.'
+                                    : routines.every(routine => selectedIds.has(routine.id))
+                                        ? 'Tutte le schede disponibili sono già nella sequenza.'
+                                        : 'Nessuna scheda contiene questa ricerca.'}
+                            </p>
+                        ) : matches.map((routine, index) => {
                             const names = (routine.exercises ?? [])
                                 .map(item => exerciseNames.get(item.exId) ?? '')
                                 .filter(Boolean);
                             return (
                                 <button
                                     key={routine.id}
+                                    id={`${resultsId}-option-${index}`}
                                     type="button"
                                     role="option"
-                                    aria-selected="false"
+                                    aria-selected={routine.id === activeRoutineId}
+                                    tabIndex={-1}
                                     className="planning-search-result"
+                                    onMouseEnter={() => setActiveRoutineId(routine.id)}
                                     onClick={() => addRoutine(routine.id)}
                                 >
                                     <strong>{routine.name}</strong>
