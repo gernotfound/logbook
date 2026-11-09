@@ -1,6 +1,6 @@
 import 'fake-indexeddb/auto';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { clear, del, get } from 'idb-keyval';
+import { clear, del, get, set } from 'idb-keyval';
 import { UserDataSchema } from '../../src/lib/schema';
 import type { UserData } from '../../src/types';
 import { initializeLocal, readLocal, type LocalEnvelope } from '../../src/lib/sync/localRepository';
@@ -11,6 +11,7 @@ import {
 import {
     beginLocalPurge, cancelUnstartedLocalPurge, LocalPurgePendingError,
 } from '../../src/lib/sync/localPurgeFence';
+import { LocalCiphertextError } from '../../src/lib/sync/secureArchiveCipher';
 import { getArchiveRecord, updateArchiveRecord } from '../../src/lib/sync/secureArchiveRepository';
 
 const owner = 'user:archive-repository';
@@ -157,6 +158,18 @@ describe('secure archive repository capability and transaction boundaries', () =
         expect((await readLocal(owner))?.data.profile?.height).toBe('170');
         await updateArchiveRecord(owner, changeHeight);
         expect((await readLocal(owner))?.data.profile?.height).toBe('171');
+    });
+
+    it.each(['read', 'write'] as const)('rejects invalid persisted records during %s with an active vault', async mode => {
+        const envelope = await readLocal(owner);
+        for (const raw of [envelope, null, 42, 'plaintext-local-data']) {
+            await set(archive, raw);
+            const transform = vi.fn(changeHeight);
+            await expect(mode === 'read' ? getArchiveRecord(owner) : updateArchiveRecord(owner, transform))
+                .rejects.toBeInstanceOf(LocalCiphertextError);
+            expect(transform).not.toHaveBeenCalled();
+            expect(await get(archive)).toEqual(raw);
+        }
     });
 
     it('rejects function thenables without sealing or executing their continuation', async () => {
