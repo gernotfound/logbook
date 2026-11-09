@@ -3,7 +3,7 @@ import { assertNoLocalPurge } from './localPurgeFence';
 import { normalizeStorageOwner } from './owner';
 import { captureSessionForOwner, isActiveGuestSession } from './session';
 import {
-    type LocalKeyVault, unlockLocalKeyVault,
+    type LocalKeyVault, unlockLocalKeyVault, validateLocalKeyVault,
 } from './secureArchiveKeys';
 
 type VaultPhase = 'migrating' | 'active';
@@ -44,8 +44,9 @@ export function parsePersistedVaultControl(owner: string, value: unknown): Persi
         || parsed.owner !== normalized
         || (parsed.phase !== 'migrating' && parsed.phase !== 'active')
         || typeof parsed.epoch !== 'string' || !/^[0-9a-f]{32}$/.test(parsed.epoch)
-        || !parsed.wrappedKey || parsed.wrappedKey.owner !== normalized
     ) throw new LocalVaultLockedError();
+    try { validateLocalKeyVault(parsed.wrappedKey, normalized); }
+    catch { throw new LocalVaultLockedError(); }
     return parsed as PersistedVaultControl;
 }
 

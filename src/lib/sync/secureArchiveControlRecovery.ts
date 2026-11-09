@@ -47,7 +47,7 @@ function assertPublishPermitted(owner: string, allowRetiredFence: boolean): void
 }
 
 /** Never replace unrelated epochs or wrapped keys, even across crashes. */
-async function writeMirror(owner: string, control: PersistedVaultControl, allowRetiredFence = false): Promise<void> {
+async function writeMirror(owner: string, control: PersistedVaultControl, allowRetiredFence: boolean): Promise<void> {
     assertPublishPermitted(owner, allowRetiredFence);
     const previous = await readMirror(owner);
     if (previous && !sameGeneration(previous, control)) throw new LocalVaultLockedError();
@@ -69,6 +69,8 @@ export async function publishVaultControl(
 ): Promise<void> {
     const normalized = normalizeStorageOwner(owner);
     assertPublishPermitted(normalized, allowRetiredFence);
+    // Invalid controls must not poison the recovery copy before validation fails.
+    parsePersistedVaultControl(normalized, control);
     const primary = readVaultControl(normalized);
     if (primary && !sameGeneration(primary, control)) throw new LocalVaultLockedError();
     await writeMirror(normalized, control, allowRetiredFence);
