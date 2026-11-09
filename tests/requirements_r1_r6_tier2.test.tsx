@@ -483,13 +483,18 @@ describe('LogBook 4-Tier Automated Test Suite (Requirements R1 - R6)', () => {
                 expect(UserDataSchema.parse({ ...emptyUserData, activePains: undefined }).activePains).toEqual([]);
             });
 
-            it('T2.5.3: MuscleModel handles non-existent or unknown muscle IDs without throwing', () => {
-                expect(() => render(
-                    <MuscleModel 
-                        selectedMuscles={['unknown_alien_muscle', 'fake_quad']} 
-                        interactive={false} 
+            it('T2.5.3: unknown muscle IDs do not highlight unrelated body paths', () => {
+                const { container } = render(
+                    <MuscleModel
+                        selectedMuscles={['unknown_alien_muscle', 'fake_quad']}
+                        interactive={false}
                     />
-                )).not.toThrow();
+                );
+                const paths = Array.from(container.querySelectorAll<SVGPathElement>('[data-muscle-path]'));
+                expect(paths.length).toBeGreaterThan(20);
+                for (const path of paths) {
+                    expect(path.style.fill).toBe('var(--surface-light)');
+                }
             });
 
             it('T2.5.4: duplicate muscle IDs in activePains list are handled safely', () => {
@@ -512,7 +517,8 @@ describe('LogBook 4-Tier Automated Test Suite (Requirements R1 - R6)', () => {
                 const expectedPaths = new Set(allMuscles.flatMap(id => Logic.GROUP_MAP[id] ?? []));
                 const highlighted = Array.from(container.querySelectorAll<SVGPathElement>('[data-muscle-path]'))
                     .filter(path => expectedPaths.has(path.dataset.musclePath ?? ''));
-                expect(highlighted.length).toBeGreaterThan(20);
+                expect(highlighted).toHaveLength(expectedPaths.size);
+                expect(new Set(highlighted.map(path => path.dataset.musclePath))).toEqual(expectedPaths);
                 for (const path of highlighted) {
                     expect(['#ff4d6d', 'rgb(255, 77, 109)']).toContain(path.style.fill);
                 }
