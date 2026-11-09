@@ -68,9 +68,9 @@ export async function publishVaultControl(
     owner: string, control: PersistedVaultControl, allowRetiredFence = false,
 ): Promise<void> {
     const normalized = normalizeStorageOwner(owner);
+    assertPublishPermitted(normalized, allowRetiredFence);
     // Invalid controls must not poison the recovery copy before validation fails.
     parsePersistedVaultControl(normalized, control);
-    assertPublishPermitted(normalized, allowRetiredFence);
     const primary = readVaultControl(normalized);
     if (primary && !sameGeneration(primary, control)) throw new LocalVaultLockedError();
     await writeMirror(normalized, control, allowRetiredFence);

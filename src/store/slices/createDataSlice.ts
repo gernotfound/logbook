@@ -207,6 +207,9 @@ export const createDataSlice: StateCreator<AppState, [], [], DataSlice> = (set, 
         if (!expectedUid || session.owner !== `user:${expectedUid}`) {
             return { ok: false, status: 'failed', error: new Error('Sessione utente non corrispondente') };
         }
+        if (state.dataOwner !== session.owner) {
+            return { ok: false, status: 'failed', error: new Error('Dati locali non allineati con la sessione corrente.') };
+        }
 
         const currentFingerprint = getNutritionConflictFingerprint(userData.pendingConflicts.nutritionPlanning);
 

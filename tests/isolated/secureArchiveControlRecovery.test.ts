@@ -100,6 +100,14 @@ describe('control mirror publication', () => {
         expect(readVaultControl(owner)).toEqual(control);
     });
 
+    it('retains purge error precedence even if the offered control is malformed', async () => {
+        beginLocalPurge(owner);
+        const invalid = { ...control, epoch: 'invalid-epoch' };
+        await expect(publishVaultControl(owner, invalid)).rejects.toBeInstanceOf(LocalPurgePendingError);
+        expect(await get(mirror())).toBeUndefined();
+        expect(readVaultControl(owner)).toBeNull();
+    });
+
     it('denies publication during a purge before changing either control', async () => {
         beginLocalPurge(owner);
         await expect(publishVaultControl(owner, control)).rejects.toBeInstanceOf(LocalPurgePendingError);
