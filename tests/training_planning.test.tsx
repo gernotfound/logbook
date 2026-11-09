@@ -269,7 +269,7 @@ describe('Training Planning & Volume Calculations', () => {
             expect(muscleModel?.querySelectorAll('path').length).toBeGreaterThan(0);
 
             // Volume section: bottone accordion deve essere presente
-            const volumeBtn = screen.getByRole('button', { name: /Volume settimanale per muscolo/i });
+            const volumeBtn = screen.getByRole('button', { name: 'Volume settimanale per macroarea' });
             expect(volumeBtn).toBeDefined();
 
             // Apertura della tendina per verificare il contenuto del volume
