@@ -81,6 +81,21 @@ export const trialCases = {
     "testFiles": ["tests/isolated/localCloudIntegrity.test.ts"],
     "runner": "isolated"
   },
+  "cloud-hydration": {
+    "mutate": ["src/lib/sync/localCloudHydration.ts"],
+    "testFiles": ["tests/isolated/localRepository.test.ts", "tests/isolated/consentEpochRecovery.test.ts", "tests/isolated/localCloudHydration.test.ts"],
+    "runner": "isolated"
+  },
+  "journal-acknowledgement": {
+    "mutate": ["src/lib/sync/localJournalAcknowledgement.ts"],
+    "testFiles": ["tests/isolated/localRepository.test.ts", "tests/isolated/lateCommit.test.ts", "tests/isolated/storeJournal.test.ts", "tests/isolated/localJournalAcknowledgement.test.ts"],
+    "runner": "isolated"
+  },
+  "consent-journal-recovery": {
+    "mutate": ["src/lib/sync/localConsentJournalRecovery.ts"],
+    "testFiles": ["tests/isolated/consentEpochRecovery.test.ts", "tests/isolated/localConsentJournalRecovery.test.ts"],
+    "runner": "isolated"
+  },
   "pending-sequences": {
     "mutate": ["src/lib/sync/localPendingSequences.ts"],
     "testFiles": ["tests/isolated/localPendingSequences.test.ts"],

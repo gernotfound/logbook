@@ -43,6 +43,9 @@ jobs:
           - pending-sequences
           - replica-checkpoint
           - cloud-integrity
+          - cloud-hydration
+          - journal-acknowledgement
+          - consent-journal-recovery
     env:
       EXPECTED_SHA: ${{ github.event.pull_request.head.sha }}
       BASE_SHA: ${{ github.event.pull_request.base.sha }}
