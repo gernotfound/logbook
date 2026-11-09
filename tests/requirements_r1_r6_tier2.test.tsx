@@ -524,6 +524,19 @@ describe('LogBook 4-Tier Automated Test Suite (Requirements R1 - R6)', () => {
                 }
             });
 
+            it('T2.5.8: two mounted muscle maps keep SVG ids unique and logical paths stable', () => {
+                const { container } = render(
+                    <>
+                        <MuscleModel selectedMuscles={['petto']} />
+                        <MuscleModel selectedMuscles={['petto']} />
+                    </>
+                );
+                const ids = Array.from(container.querySelectorAll<HTMLElement>('[id]')).map(node => node.id);
+                expect(ids.length).toBeGreaterThan(0);
+                expect(new Set(ids).size).toBe(ids.length);
+                expect(container.querySelectorAll('[data-muscle-path="chest-upper-left"]')).toHaveLength(2);
+            });
+
             it('T2.5.6: validateWorkoutRatings validates numeric bounds (1-5)', () => {
                 const valid = Logic.validateWorkoutRatings(4, 3, 5);
                 expect(valid.isValid).toBe(true);
