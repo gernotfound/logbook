@@ -58,8 +58,8 @@ describe('Challenger 1: UI & Chart Component Stress Testing', () => {
         const sixWeeksAgo = new Date(today);
         sixWeeksAgo.setDate(sixWeeksAgo.getDate() - 42);
         const history: WorkoutSession[] = [
-            { id: 'w1', date: getLocalDateString(today), exercises: [{ exId: 'ex_bench', sets: [{ id: 's1', kg: '100', reps: '10' }] }] },
-            { id: 'w2', date: getLocalDateString(sixWeeksAgo), exercises: [{ exId: 'ex_bench', sets: [{ id: 's2', kg: '200', reps: '10' }] }] }
+            { id: 'w1', date: getLocalDateString(today), exercises: [{ exId: 'ex_bench', sessionNote: '', sets: [{ id: 's1', kg: '100', reps: '10' }] }] },
+            { id: 'w2', date: getLocalDateString(sixWeeksAgo), exercises: [{ exId: 'ex_bench', sessionNote: '', sets: [{ id: 's2', kg: '200', reps: '10' }] }] }
         ];
 
         renderWithProviders(
