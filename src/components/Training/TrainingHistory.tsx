@@ -95,21 +95,6 @@ const TrainingHistory = ({ onEditWorkout }: TrainingHistoryProps) => {
 
     const library = useMemo(() => userData?.library || [], [userData?.library]);
     const today = Logic.getLocalDateString();
-    const initialHistoryDate = useMemo(() => {
-        let latestDate: string | null = null;
-        for (const workout of history) {
-            const date = workoutDateKey(workout);
-            if (date && (!latestDate || date > latestDate)) latestDate = date;
-        }
-        return latestDate || today;
-    }, [history, today]);
-
-    const [viewMonth, setViewMonth] = useState(() => initialHistoryDate.slice(0, 7));
-    const [selectedDate, setSelectedDate] = useState(() => initialHistoryDate);
-    const [periodOpen, setPeriodOpen] = useState(false);
-    const [pickerYear, setPickerYear] = useState(() => Number(initialHistoryDate.slice(0, 4)));
-    const adoptedInitialHistory = useRef(history.some(workout => workoutDateKey(workout) !== null));
-
     const datedHistory = useMemo<DatedWorkout[]>(() => history
         .map(workout => ({ workout, date: workoutDateKey(workout) }))
         .filter((entry): entry is DatedWorkout => Boolean(entry.date))
@@ -117,6 +102,13 @@ const TrainingHistory = ({ onEditWorkout }: TrainingHistoryProps) => {
             b.date.localeCompare(a.date)
             || (b.workout.globalStartTime || 0) - (a.workout.globalStartTime || 0)
         )), [history]);
+    const initialHistoryDate = datedHistory[0]?.date || today;
+
+    const [viewMonth, setViewMonth] = useState(() => initialHistoryDate.slice(0, 7));
+    const [selectedDate, setSelectedDate] = useState(() => initialHistoryDate);
+    const [periodOpen, setPeriodOpen] = useState(false);
+    const [pickerYear, setPickerYear] = useState(() => Number(initialHistoryDate.slice(0, 4)));
+    const adoptedInitialHistory = useRef(datedHistory.length > 0);
 
     useEffect(() => {
         if (adoptedInitialHistory.current || datedHistory.length === 0) return;
@@ -127,25 +119,20 @@ const TrainingHistory = ({ onEditWorkout }: TrainingHistoryProps) => {
         adoptedInitialHistory.current = true;
     }, [datedHistory]);
 
-    const workoutsByDate = useMemo(() => {
-        const map = new Map<string, WorkoutSession[]>();
-        datedHistory.forEach(({ workout, date }) => {
-            const current = map.get(date);
-            if (current) current.push(workout);
-            else map.set(date, [workout]);
-        });
-        return map;
-    }, [datedHistory]);
+    const { workoutsByDate, workoutsByMonth } = useMemo(() => {
+        const workoutsByDate = new Map<string, WorkoutSession[]>();
+        const workoutsByMonth = new Map<string, DatedWorkout[]>();
+        for (const entry of datedHistory) {
+            const currentDay = workoutsByDate.get(entry.date);
+            if (currentDay) currentDay.push(entry.workout);
+            else workoutsByDate.set(entry.date, [entry.workout]);
 
-    const workoutsByMonth = useMemo(() => {
-        const map = new Map<string, DatedWorkout[]>();
-        datedHistory.forEach(entry => {
-            const key = entry.date.slice(0, 7);
-            const current = map.get(key);
-            if (current) current.push(entry);
-            else map.set(key, [entry]);
-        });
-        return map;
+            const month = entry.date.slice(0, 7);
+            const currentMonth = workoutsByMonth.get(month);
+            if (currentMonth) currentMonth.push(entry);
+            else workoutsByMonth.set(month, [entry]);
+        }
+        return { workoutsByDate, workoutsByMonth };
     }, [datedHistory]);
 
     const monthWorkouts = workoutsByMonth.get(viewMonth) || [];

@@ -1077,3 +1077,76 @@ describe('analytics: representable aggregates and reliable numerical comparisons
         expect(Number.isFinite(points[0].averageWeightKg)).toBe(true);
     });
 });
+
+describe('Weekly volume bounded accumulation', () => {
+    it('preserves input-order IDs, duplicate sessions, skipped overflow and cooperative parity', async () => {
+        const catalog: Exercise[] = [{
+            id: 'bench', name: 'Panca', muscles: [], setsCount: 1, sets: [],
+            trackingType: 'weight_reps',
+        }];
+        const session = (id: string, date: string, kg: string, reps: string): WorkoutSession => ({
+            id, date, exercises: [{
+                exId: 'bench', sessionNote: '',
+                sets: [{ id: `set-${id}-${date}`, kg, reps }],
+            }],
+        });
+        const history = [
+            session('late', '2026-08-18', '80', '2'),
+            session('duplicate', '2026-08-11', '10', '3'),
+            session('overflow', '2026-08-19', '1e308', '10'),
+            session('duplicate', '2026-08-20', '100', '4'),
+            session('', '2026-08-20', '-50', '2'),
+            session('future', '2026-08-23', '100', '10'),
+            session('invalid-day', 'not-a-day', '100', '10'),
+        ];
+        const result = computeWeeklyVolumeSeries(history, catalog, 80, 4, '2026-08-22');
+
+        expect(result.points.map(({ workoutCount, volumeKg, sessionIds }) => ({
+            workoutCount, volumeKg, sessionIds,
+        }))).toEqual([
+            { workoutCount: 0, volumeKg: 0, sessionIds: [] },
+            { workoutCount: 0, volumeKg: 0, sessionIds: [] },
+            { workoutCount: 1, volumeKg: 30, sessionIds: ['duplicate'] },
+            { workoutCount: 4, volumeKg: 460, sessionIds: ['late', 'overflow', 'duplicate'] },
+        ]);
+        expect(result.stats.totalWorkouts).toBe(5);
+        expect(result.stats.totalVolumeKg).toBe(490);
+        expect(await computeWeeklyVolumeSeriesCooperative(history, catalog, 80, 4, '2026-08-22'))
+            .toEqual(result);
+    });
+});
+
+describe('Readiness chronology precomputation', () => {
+    it('evaluates workout dates once per session while selecting the same newest check-ins', () => {
+        let dateReads = 0;
+        const history: WorkoutSession[] = Array.from({ length: 48 }, (_, index) => ({
+            id: `readiness-${index}`,
+            get date() {
+                dateReads++;
+                return '2026-08-20';
+            },
+            globalStartTime: index + 1,
+            readiness: { capturedAt: index + 1, energy: index === 47 ? 5 : 2 },
+            exercises: [],
+        }));
+
+        const result = computeReadinessTrends(history, 2);
+        expect(result.sessionsWithReadiness).toBe(2);
+        expect(result.energy).toMatchObject({ latest: 5, previous: 2, average: 3.5 });
+        // Each normalized date is read a bounded number of times, not per sort comparison.
+        expect(dateReads).toBeLessThanOrEqual(3 * history.length);
+    });
+
+    it('preserves the original history order when date and timestamps tie exactly', () => {
+        const makeSession = (id: string, energy: number): WorkoutSession => ({
+            id, date: '2026-08-20', globalStartTime: 1_000,
+            readiness: { capturedAt: 1_000, energy },
+            exercises: [],
+        });
+        const result = computeReadinessTrends([
+            makeSession('first', 1), makeSession('second', 4),
+        ], 2);
+
+        expect(result.energy).toMatchObject({ latest: 1, previous: 4 });
+    });
+});

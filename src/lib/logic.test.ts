@@ -867,3 +867,65 @@ describe('Logic Library Tests', () => {
 
 
 
+
+describe('Linear planning history and TDEE feed regressions', () => {
+    it('counts only the chosen cycle and selects the last comparable workout on timestamp ties', () => {
+        const cycle = {
+            id: 'selected', name: 'Ciclo', durationWeeks: 4, sessionsPerWeek: 3,
+            routines: ['first', 'second', 'third'].map(routineId => ({ routineId, frequencyPerWeek: 1 })),
+        };
+        const routines = ['first', 'second', 'third'].map(id => ({ id, name: id, exercises: [] }));
+        const unrelated = Array.from({ length: 512 }, (_, index) => ({
+            id: `other-${index}`, cycleId: 'different', routineId: 'third',
+            date: '2026-10-31', exercises: [],
+        }));
+        const workout = (id: string, routineId: string, timestamp: number) => ({
+            id, cycleId: cycle.id, routineId,
+            date: '2026-08-01', globalStartTime: timestamp, exercises: [],
+        });
+        const history = [
+            workout('early-in-array', 'first', 2_000),
+            ...unrelated,
+            workout('unknown-routine', 'removed', 9_000),
+            workout('later-in-array', 'second', 2_000),
+            { id: 'without-routine', cycleId: cycle.id, date: '2026-08-01', exercises: [] },
+        ];
+        const before = JSON.stringify(history);
+        const result = Logic.getNextScheduledRoutine(cycle, routines, history);
+        expect(result).toMatchObject({
+            completedCount: 4, nextSessionIndex: 5, nextRoutineId: 'third',
+            nextRoutineName: 'third', totalSessions: 12, isCycleCompleted: false,
+        });
+        expect(JSON.stringify(history)).toBe(before);
+
+        const reverseTie = [
+            workout('later-in-array', 'second', 2_000),
+            ...unrelated,
+            workout('early-in-array', 'first', 2_000),
+        ];
+        expect(Logic.getNextScheduledRoutine(cycle, routines, reverseTie)?.nextRoutineId).toBe('second');
+        const noKnownRoutine = [{ id: 'unknown', cycleId: cycle.id, routineId: 'removed', exercises: [] }];
+        expect(Logic.getNextScheduledRoutine(cycle, routines, noKnownRoutine))
+            .toMatchObject({ completedCount: 1, nextRoutineId: 'second' });
+    });
+
+    it('estimates the same nutrition TDEE for reversed days and ignores noncanonical keys', () => {
+        const recentDays = Array.from({ length: 7 }, (_, i) => ({
+            date: `2026-10-${String(i + 1).padStart(2, '0')}`,
+            weight: 80, kcal: 2_200,
+        }));
+        const map = Object.fromEntries([
+            ...recentDays.map(day => [day.date, day]),
+            ['2026-01-01', { date: '2026-01-01', weight: 100, kcal: 9_000 }],
+            ['2026-10-8', { date: '2026-10-8', weight: 100, kcal: 9_000 }],
+        ]);
+        const original = JSON.stringify(map);
+        const plan = { weight: 80, normocalorica: { kcal: 2_400 } };
+        for (const nutrition of [map, Object.fromEntries(Object.entries(map).reverse())]) {
+            const result = Logic.calculateTDEEAndMacros({ nutrition, nutritionPlanning: plan } as any);
+            expect(result.tdee).toBe(2_200);
+            expect(result.carbs).toBe(280);
+        }
+        expect(JSON.stringify(map)).toBe(original);
+    });
+});

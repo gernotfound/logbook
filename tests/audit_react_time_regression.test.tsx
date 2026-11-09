@@ -49,6 +49,47 @@ describe('Audit regression: React time boundaries', () => {
         expect(screen.getByText('00:01').textContent).toBe(pausedDisplay);
     });
 
+    test('useHomeView updates the recovery window without rescanning historical workout sets', () => {
+        const now = Date.now();
+        const exercises = [{ exId: 'ex_test', sets: [{ id: 'set-1', kg: '60', reps: '10' }] }];
+        let exerciseReads = 0;
+        const oldWorkout = {
+            id: 'old-workout', globalStartTime: now - 365 * 24 * 60 * 60 * 1000,
+            get exercises() { exerciseReads++; return exercises; },
+        };
+        const upcomingWorkout = {
+            id: 'upcoming', globalStartTime: now + 30_000,
+            exercises,
+        };
+        let current: ReturnType<typeof useHomeView> | null = null;
+        function Consumer() {
+            const value = useHomeView();
+            React.useEffect(() => { current = value; });
+            return <div />;
+        }
+        renderWithProviders(<Consumer />, {
+            userData: {
+                ...emptyUserData,
+                library: [{ id: 'ex_test', name: 'Panca', muscles: ['chest_lower'], secondaryMuscles: [], setsCount: 1, sets: [] }],
+                history: [oldWorkout, upcomingWorkout],
+            } as any,
+        });
+        expect(exerciseReads).toBeGreaterThan(0);
+        const readsAtInitialRender = exerciseReads;
+        expect((current as any).muscleColors.chest_lower).toBeUndefined();
+
+        act(() => { vi.advanceTimersByTime(60_000); });
+        expect((current as any).muscleColors.chest_lower).toBe('var(--muscle-recent)');
+        expect(exerciseReads).toBe(readsAtInitialRender);
+
+        act(() => {
+            vi.setSystemTime(new Date(now + 73 * 60 * 60 * 1000));
+            vi.advanceTimersByTime(60_000);
+        });
+        expect((current as any).muscleColors.chest_lower).toBeUndefined();
+        expect(exerciseReads).toBe(readsAtInitialRender);
+    });
+
     test('useHomeView expires recent exposure at the factual 72-hour boundary without store mutations', () => {
         const now = Date.now();
         const workoutTime = now - (((71 * 60 + 59) * 60 + 30) * 1000);
