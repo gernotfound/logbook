@@ -2,6 +2,11 @@
 // This selection is deliberately bounded: Stryker's Vitest runner cannot run Playwright
 // browser tests or the dedicated Firestore Emulator suite.
 export const trialCases = {
+  "archive-bootstrap": {
+    "mutate": ["src/lib/sync/localArchiveBootstrap.ts"],
+    "testFiles": ["tests/isolated/localRepository.test.ts", "tests/isolated/localArchiveBootstrap.test.ts"],
+    "runner": "isolated"
+  },
   "consent-reconciliation": {
     "mutate": ["src/lib/sync/localConsentReconciliation.ts"],
     "testFiles": ["tests/isolated/localRepository.test.ts", "tests/isolated/audit_03_rejected_consent.test.ts", "tests/isolated/localConsentReconciliation.test.ts"],
