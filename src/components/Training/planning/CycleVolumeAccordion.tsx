@@ -17,7 +17,6 @@ export function CycleVolumeAccordion({ items, defaultOpen = false }: CycleVolume
                 type="button"
                 className="planning-accordion"
                 aria-expanded={isOpen}
-                aria-label="Volume settimanale per muscolo, per macroarea"
                 onClick={() => setIsOpen(open => !open)}
             >
                 <span>Volume settimanale per macroarea</span>
@@ -38,7 +37,7 @@ export function CycleVolumeAccordion({ items, defaultOpen = false }: CycleVolume
                                     <span className="planning-volume-track" aria-hidden="true">
                                         <span style={{ width: `${Math.max(6, (item.sets / maxSets) * 100)}%` }} />
                                     </span>
-                                    <span>{item.sets}</span>
+                                    <span>{item.sets.toLocaleString('it-IT')}</span>
                                 </div>
                             ))}
                         </div>
