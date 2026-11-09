@@ -4,7 +4,7 @@
 export const trialCases = {
   "consent-reconciliation": {
     "mutate": ["src/lib/sync/localConsentReconciliation.ts"],
-    "testFiles": ["tests/isolated/localRepository.test.ts", "tests/isolated/audit_03_rejected_consent.test.ts"],
+    "testFiles": ["tests/isolated/localRepository.test.ts", "tests/isolated/audit_03_rejected_consent.test.ts", "tests/isolated/localConsentReconciliation.test.ts"],
     "runner": "isolated"
   },
   "csv": {
