@@ -17,7 +17,7 @@ export interface AuthContextType {
     retryGuestMigration: (policy?: GuestMigrationPolicy) => Promise<void>;
     logout: (options?: LogoutOptions) => Promise<void>;
     loginWithEmail: (email: string, pass: string, guestPolicy?: GuestMigrationPolicy) => Promise<void>;
-    registerWithEmail: (email: string, pass: string, guestPolicy?: GuestMigrationPolicy) => Promise<void>;
+    registerWithEmail: (email: string, pass: string, guestPolicy?: GuestMigrationPolicy, isRequestCurrent?: () => boolean) => Promise<void>;
     resendEmailVerification: () => Promise<void>;
     refreshEmailVerification: () => Promise<void>;
     continueUnverifiedLocally: () => Promise<void>;
