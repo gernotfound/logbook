@@ -34,7 +34,6 @@ describe('TheLogBook 4-Tier Automated Test Suite (Requirements R1 - R6)', () => 
     beforeEach(async () => {
         window.localStorage.clear();
         localStorage.setItem(`logbook:v2:${captureSession().owner}:health-consent-generation`, '1');
-        await prepareUnlockedTestArchive('user:test-user-id');
         useAppStore.getState().resetStore();
         useAppStore.setState({ dataOwner: captureSession().owner });
         vi.clearAllMocks();
@@ -134,6 +133,10 @@ describe('TheLogBook 4-Tier Automated Test Suite (Requirements R1 - R6)', () => 
         // Requirement R2: Food Real-time Calories Calculation
         // ---------------------------------------------------------------------
         describe('R2: Food Real-time Calories Calculation', () => {
+            beforeEach(async () => {
+                await prepareUnlockedTestArchive('user:test-user-id');
+            });
+
             it('T1.2.1: calculates 170 kcal for 10g Carbs, 10g Protein, 10g Fat (ORIGINAL_REQUEST verification formula)', () => {
                 const kcal = calculateRealtimeKcalContract(10, 10, 10);
                 expect(kcal).toBe(170); // 10*4 + 10*4 + 10*9 = 40 + 40 + 90 = 170
@@ -202,6 +205,10 @@ describe('TheLogBook 4-Tier Automated Test Suite (Requirements R1 - R6)', () => 
         // Requirement R3: Measurements Date Selector Relocation
         // ---------------------------------------------------------------------
         describe('R3: Measurements Date Selector', () => {
+            beforeEach(async () => {
+                await prepareUnlockedTestArchive('user:test-user-id');
+            });
+
             it('T1.3.1: DataMeasurements renders main measurement card with weight and circumference inputs', () => {
                 const mockSave = vi.fn().mockResolvedValue(undefined);
                 render(
@@ -260,7 +267,6 @@ describe('TheLogBook 4-Tier Automated Test Suite (Requirements R1 - R6)', () => 
                         }
                     }
                 });
-                await prepareUnlockedTestArchive(owner);
                 await initializeLocal(owner, initial);
                 const initialCiphertext = idbStore['logbook:v2:' + owner];
                 expect(initialCiphertext).toMatch(/^tlb-sealed:v1:/);
@@ -412,6 +418,10 @@ describe('TheLogBook 4-Tier Automated Test Suite (Requirements R1 - R6)', () => 
         // Requirement R4: Session Set Dot Vertical Centering
         // ---------------------------------------------------------------------
         describe('R4: Session Set Dot Vertical Centering', () => {
+            beforeEach(async () => {
+                await prepareUnlockedTestArchive('user:test-user-id');
+            });
+
             it('T1.4.1: SessionSetRow renders S1 and an accessible options button', () => {
                 const set = { id: 's1', kg: '80', reps: '10' };
                 render(
@@ -634,6 +644,10 @@ describe('TheLogBook 4-Tier Automated Test Suite (Requirements R1 - R6)', () => 
         // Requirement R5: DOMS Muscle Pain Tracking UI
         // ---------------------------------------------------------------------
         describe('R5: DOMS Muscle Pain Tracking UI', () => {
+            beforeEach(async () => {
+                await prepareUnlockedTestArchive('user:test-user-id');
+            });
+
             it('T1.5.1: UserDataSchema validates activePains array', () => {
                 const data = {
                     ...emptyUserData,

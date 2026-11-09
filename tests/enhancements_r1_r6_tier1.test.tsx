@@ -49,7 +49,6 @@ describe('LogBook PWA Enhancements Integration Suite (Requirements R1 - R6)', ()
                 const today = Logic.getLocalDateString();
                 const owner = captureSession().owner;
                 const initialData = { ...emptyUserData, nutrition: {} };
-                await prepareUnlockedTestArchive(owner);
                 await initializeLocal(owner, initialData);
                 useAppStore.setState({ userData: initialData, dataOwner: owner });
 
@@ -858,7 +857,6 @@ describe('LogBook PWA Enhancements Integration Suite (Requirements R1 - R6)', ()
                 // encrypted session flow; a completion must not operate against
                 // an empty/stale LocalEnvelope from a prior test.
                 const owner = captureSession().owner;
-                await prepareUnlockedTestArchive(owner);
                 const initialData = {
                     ...emptyUserData, routines: initialRoutines,
                     history: [], activeWorkout: activeSession,
@@ -911,7 +909,6 @@ describe('LogBook PWA Enhancements Integration Suite (Requirements R1 - R6)', ()
                 };
 
                 const owner = captureSession().owner;
-                await prepareUnlockedTestArchive(owner);
                 const initialData = {
                     ...emptyUserData, routines: originalRoutines,
                     history: [], activeWorkout: activeSession,

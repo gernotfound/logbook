@@ -217,10 +217,6 @@ describe('EMPIRICAL CHALLENGER: Adversarial Stress Test Suite (Requirements R1 -
      * ========================================================================= */
     describe('R2: Food Real-time Calories Calculation - Boundaries & UI Reactivity', () => {
 
-        it('adheres precisely to the formula: 10g C, 10g P, 10g F = 170 kcal', () => {
-            expect(calculateCustomFoodKcal(10, 10, 10)).toBe(170);
-        });
-
         it('handles boundary zeroes, empty strings, commas, and decimals correctly', () => {
             expect(calculateCustomFoodKcal(0, 0, 0)).toBe(0);
             expect(calculateCustomFoodKcal('', '', '')).toBe(0);
