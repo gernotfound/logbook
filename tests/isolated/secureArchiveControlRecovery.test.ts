@@ -139,6 +139,15 @@ describe('control mirror publication', () => {
 });
 
 describe('control recovery after partial persistence', () => {
+    it.each([false, true])('refuses no-control reconciliation during an incomplete purge (retired override: %s)', async override => {
+        beginLocalPurge(owner);
+        await expect(reconcileVaultControl(owner, override)).rejects.toBeInstanceOf(
+            override ? LocalVaultLockedError : LocalPurgePendingError,
+        );
+        expect(localStorage.getItem(primary())).toBeNull();
+        expect(await get(mirror())).toBeUndefined();
+    });
+
     it('does nothing when both controls are genuinely absent', async () => {
         await reconcileVaultControl(owner);
         expect(readVaultControl(owner)).toBeNull();
@@ -264,6 +273,14 @@ describe('mirror I/O failures and post-write verification', () => {
         vi.mocked(get).mockRejectedValueOnce(new Error('IDB read failed'));
         await expect(reconcileVaultControl(owner)).rejects.toBeInstanceOf(LocalVaultLockedError);
         expect(localStorage.getItem(primary())).toBeNull();
+    });
+
+    it('fails closed on an IDB write error even when an existing valid mirror matches', async () => {
+        await publishVaultControl(owner, control);
+        vi.mocked(set).mockRejectedValueOnce(new Error('IndexedDB write unavailable'));
+        await expect(publishVaultControl(owner, control)).rejects.toBeInstanceOf(LocalVaultLockedError);
+        expect(await get(mirror())).toEqual(control);
+        expect(readVaultControl(owner)).toEqual(control);
     });
 
     it('rejects an IndexedDB write failure before publishing localStorage metadata', async () => {
