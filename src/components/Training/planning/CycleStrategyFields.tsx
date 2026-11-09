@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import type { TrainingCycleIntent, TrainingCycleProgressionFocus } from '../../../types';
 import { MUSCLES, type MuscleDef } from '../../../lib/constants/muscles';
 import { CYCLE_FOCUS_LABELS, CYCLE_INTENT_LABELS, getMuscleName } from '../../../lib/trainingCycleStrategy';
@@ -52,18 +52,33 @@ function MusclePriorityPicker({
 }: MusclePriorityPickerProps) {
     const [query, setQuery] = useState('');
     const [open, setOpen] = useState(false);
+    const [activeMuscleId, setActiveMuscleId] = useState<string | null>(null);
+    const resultsRef = useRef<HTMLDivElement>(null);
+    const id = useId();
     const label = priority === 'primary' ? 'Focus primario' : 'Focus secondario';
-    const inputId = `cycle-${priority}-muscle-search`;
-    const listId = `cycle-${priority}-muscle-results`;
+    const inputId = `${id}-input`;
+    const listId = `${id}-results`;
 
     const availableMuscles = useMemo(
         () => PRIORITY_MUSCLES.filter(muscle => !ids.includes(muscle.id) && matchesMuscleSearch(muscle, query)),
         [ids, query],
     );
 
+    const activeIndex = availableMuscles.findIndex(muscle => muscle.id === activeMuscleId);
+
+    useEffect(() => {
+        if (!open || activeIndex < 0) return;
+        const option = resultsRef.current?.children[activeIndex];
+        if (typeof option?.scrollIntoView === 'function') {
+            option.scrollIntoView({ block: 'nearest' });
+        }
+    }, [activeIndex, open]);
+
     const selectMuscle = (muscleId: string) => {
+        if (ids.includes(muscleId)) return;
         onAddMuscle(priority, muscleId);
         setQuery('');
+        setActiveMuscleId(null);
         setOpen(false);
     };
 
@@ -76,7 +91,10 @@ function MusclePriorityPicker({
                 className="muscle-priority-picker"
                 onBlur={event => {
                     const nextTarget = event.relatedTarget as Node | null;
-                    if (!nextTarget || !event.currentTarget.contains(nextTarget)) setOpen(false);
+                    if (!nextTarget || !event.currentTarget.contains(nextTarget)) {
+                        setOpen(false);
+                        setActiveMuscleId(null);
+                    }
                 }}
             >
                 <input
@@ -86,25 +104,50 @@ function MusclePriorityPicker({
                     aria-label={`Cerca ${label.toLocaleLowerCase('it')}`}
                     aria-autocomplete="list"
                     aria-expanded={open}
-                    aria-controls={listId}
+                    aria-controls={open ? listId : undefined}
+                    aria-activedescendant={open && activeIndex >= 0 ? `${listId}-option-${activeIndex}` : undefined}
                     autoComplete="off"
                     value={query}
                     onChange={event => {
                         setQuery(event.target.value);
+                        setActiveMuscleId(null);
                         setOpen(true);
                     }}
                     onFocus={() => setOpen(true)}
+                    onKeyDown={event => {
+                        if (event.key === 'Escape') {
+                            event.preventDefault();
+                            setOpen(false);
+                            setActiveMuscleId(null);
+                        } else if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+                            event.preventDefault();
+                            setOpen(true);
+                            if (availableMuscles.length === 0) return;
+                            const nextIndex = event.key === 'ArrowDown'
+                                ? (activeIndex + 1) % availableMuscles.length
+                                : activeIndex < 0 ? availableMuscles.length - 1
+                                    : (activeIndex - 1 + availableMuscles.length) % availableMuscles.length;
+                            setActiveMuscleId(availableMuscles[nextIndex].id);
+                        } else if (event.key === 'Enter') {
+                            // A search action must never submit the enclosing cycle editor.
+                            event.preventDefault();
+                            if (open && activeIndex >= 0) selectMuscle(availableMuscles[activeIndex].id);
+                        }
+                    }}
                     placeholder="Cerca muscolo (es. deltoide, polpaccio...)"
                     className="muscle-priority-search"
                 />
                 {open && (
-                    <div id={listId} role="listbox" aria-label={`Risultati ${label.toLocaleLowerCase('it')}`} className="muscle-priority-results">
-                        {availableMuscles.length > 0 ? availableMuscles.map(muscle => (
+                    <div id={listId} ref={resultsRef} role="listbox" aria-label={`Risultati ${label.toLocaleLowerCase('it')}`} className="muscle-priority-results">
+                        {availableMuscles.length > 0 ? availableMuscles.map((muscle, index) => (
                             <button
                                 key={muscle.id}
+                                id={`${listId}-option-${index}`}
                                 type="button"
                                 role="option"
-                                aria-selected={false}
+                                aria-selected={muscle.id === activeMuscleId}
+                                tabIndex={-1}
+                                onMouseEnter={() => setActiveMuscleId(muscle.id)}
                                 className="muscle-priority-option"
                                 onClick={() => selectMuscle(muscle.id)}
                             >
@@ -146,10 +189,12 @@ export function CycleStrategyFields({
     onAddMuscle,
     onRemoveMuscle,
 }: CycleStrategyFieldsProps) {
+    const titleId = useId();
+
     return (
-        <section className="mb-15" aria-labelledby="cycle-strategy-title">
+        <section className="mb-15" aria-labelledby={titleId}>
             <div className="mb-8">
-                <h3 id="cycle-strategy-title" className="m-0 text-sm" style={{ color: 'var(--text-main)' }}>Obiettivo</h3>
+                <h3 id={titleId} className="m-0 text-sm" style={{ color: 'var(--text-main)' }}>Obiettivo</h3>
                 <p className="text-base text-muted mt-4 mb-0">
                     Descrive l'intenzione del ciclo. Non modifica automaticamente schede, serie o frequenza.
                 </p>
