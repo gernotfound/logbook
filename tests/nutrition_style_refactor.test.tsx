@@ -1,8 +1,7 @@
 import React from 'react';
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { act, fireEvent, screen, render } from '@testing-library/react';
 import { renderWithProviders } from './setup';
-import { prepareUnlockedTestArchive } from './secureVaultFixture';
 
 import CustomFoodForm from '../src/components/Nutrition/CustomFoodForm';
 import InlineEditMealItem from '../src/components/Nutrition/InlineEditMealItem';
@@ -15,8 +14,6 @@ import { FoodItemRow } from '../src/components/Nutrition/archive/FoodItemRow';
 import HomeNutritionWidget from '../src/components/Home/widgets/HomeNutritionWidget';
 
 describe('Nutrition Section Style & Color Refactoring Suite', () => {
-    beforeEach(async () => { await prepareUnlockedTestArchive(); });
-
     describe('R1 & R2: CustomFoodForm', () => {
         it('renders title with var(--text-main)', () => {
             const cfData = { name: '', brand: '', unit: 'g', pieceWeight: '', kcal: '', carbs: '', pro: '', fat: '' };

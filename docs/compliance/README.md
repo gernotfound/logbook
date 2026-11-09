@@ -1,4 +1,4 @@
-# TheLogBook — compliance per i primi utenti esterni e per un eventuale futuro pilot B2B
+# TheLogBook — compliance per l'accesso di utenti esterni
 
 > Stato: struttura operativa per eventuali utenti esterni, da completare e far revisionare prima del loro primo utilizzo reale.
 > Ultimo aggiornamento tecnico del dossier sulla revoca: 6 novembre 2026 (PR #826/#829 integrate); validazione privacy pre-utenti esterni ancora aperta.
@@ -8,25 +8,25 @@
 
 ## Obiettivo
 
-Questa cartella raccoglie i documenti operativi che servono per trasformare le scelte tecniche di TheLogBook in un processo dimostrabile: registro dei trattamenti, screening DPIA, retention, incident response, fornitori/trasferimenti, misure tecniche e organizzative, gestione dei diritti e documentazione B2B.
+Questa cartella raccoglie i documenti operativi che servono per trasformare le scelte tecniche di TheLogBook in un processo dimostrabile: registro dei trattamenti, screening DPIA, retention, incident response, fornitori/trasferimenti, misure tecniche e organizzative, gestione dei diritti.
 
-La fonte di verità tecnica resta il repository corrente. Le configurazioni esterne — Firebase/Google Cloud, Vercel, GitHub e relativi account amministrativi — devono essere verificate direttamente prima del pilot e non vanno dedotte da questi template.
+La fonte di verità tecnica resta il repository corrente. Le configurazioni esterne — Firebase/Google Cloud, Vercel, GitHub e relativi account amministrativi — devono essere verificate direttamente prima dell'apertura a utenti esterni e non vanno dedotte da questi template.
 
 ## Modello di utilizzo deciso dal product owner — 5 novembre 2026
 
-TheLogBook è, allo stato dichiarato, un **progetto amatoriale**, non erogato attraverso un'impresa o società. Il product owner **intende permettere anche ad altre persone di creare un account e registrare i propri dati**, senza che ciò implichi una distribuzione commerciale o un accordo con palestre. Questa è una decisione per l'utilizzo previsto, **non una prova che altri utenti siano già iscritti**. Non attribuire al progetto ragione sociale, partita IVA, forma societaria, contratti palestra o finalità commerciali inesistenti. Le sezioni B2B sotto descrivono **uno scenario futuro**.
+TheLogBook è, allo stato dichiarato, un **progetto amatoriale**, non erogato attraverso un'impresa o società. Il product owner **intende permettere anche ad altre persone di creare un account e registrare i propri dati**, senza un modello di distribuzione commerciale. Questa è una decisione per l'utilizzo previsto, **non una prova che altri utenti siano già iscritti**. Non attribuire al progetto ragione sociale, partita IVA, forma societaria o finalità commerciali inesistenti.
 
 **Identità e contatto comunicati dal product owner:** Gerardo Califano (persona fisica), thelogbook.privacy@gmail.com. **Il product owner ha confermato il 5 novembre 2026 che la casella funziona**; questa è un'attestazione dell'interessato, non un test indipendente né una verifica del suo monitoraggio continuativo. Rimane da valutare un recapito postale appropriato, se richiesto per il modello di comunicazione adottato.
 
 La natura amatoriale o gratuita **non determina un'esenzione GDPR**: l'art. 2, par. 2, lett. c e il considerando 18 delimitano l'eccezione alle attività esclusivamente personali o domestiche. **Dato il previsto accesso di utenti esterni, non assumere l'applicabilità di tale eccezione per erogare la PWA**. Una persona fisica può essere titolare del trattamento anche senza società, ma identità, recapiti, basi giuridiche, misure e obblighi applicabili devono essere determinati prima di acquisire dati reali di altri utenti. Riferimenti: [Regolamento UE 2016/679, art. 2 e considerando 18](https://eur-lex.europa.eu/legal-content/IT/TXT/?uri=CELEX:32016R0679) e [Commissione europea — ambito di applicazione del GDPR](https://commission.europa.eu/law/law-topic/data-protection/information-business-and-organisations/application-gdpr_en).
 
-**Decisione di prodotto presa:** consentire in prospettiva la registrazione di persone diverse dall'autore, in una fase amatoriale senza accordo con palestre. **Stato di rilascio per utenti esterni: NO-GO** fino alla chiusura documentata dei punti del gate seguente, incluse verifiche legali e tecniche. Questa decisione non costituisce autorizzazione a iscrivere utenti reali né cambia configurazioni, accessi, registrazioni, consent gate o deployment Production.
+**Decisione di prodotto presa:** consentire in prospettiva la registrazione di persone diverse dall'autore, in una fase amatoriale gratuita. **Stato di rilascio per utenti esterni: NO-GO** fino alla chiusura documentata dei punti del gate seguente, incluse verifiche legali e tecniche. Questa decisione non costituisce autorizzazione a iscrivere utenti reali né cambia configurazioni, accessi, registrazioni, consent gate o deployment Production.
 
 **Distinzione operativa:** NO-GO è una decisione di rilascio/compliance, **non una prova che la registrazione sia tecnicamente disabilitata** o che il sito non sia raggiungibile. La presenza dei moduli di registrazione, dei testi legali nell'app o di una release Production non autorizza né attesta il trattamento di dati reali di utenti esterni. Prima di dichiarare GO occorre verificare separatamente l'esposizione effettiva della registrazione, la documentazione approvata e i controlli del runtime; non usare utenti reali per collaudi distruttivi.
 
 ## Gate legale prima del primo utilizzatore esterno
 
-**Stato: NON PRONTO per trattare dati reali di terzi.** Questo gate riguarda anche un pilot gratuito con una sola persona e non nasce soltanto al momento della vendita a una palestra. L'uso personale del product owner non dimostra che siano soddisfatti gli obblighi applicabili a un servizio offerto ad altre persone.
+**Stato: NON PRONTO per trattare dati reali di terzi.** Questo gate riguarda anche una fase gratuita con una sola persona esterna. L'uso personale del product owner non dimostra che siano soddisfatti gli obblighi applicabili a un servizio offerto ad altre persone.
 
 La PWA gestisce dati potenzialmente rientranti nelle categorie particolari dell'art. 9 GDPR. Il codice prova alcuni comportamenti tecnici; l'identità del titolare e il recapito email sono ora dichiarati dal product owner, mentre le basi giuridiche e la conservazione delle **prove residue** dopo revoca, nonché gli obblighi contrattuali, restano da accertare. La cancellazione automatica degli archivi fitness alla revoca trusted è già implementata, ma il collaudo autenticato completo non è attestato. Non rimuovere i segnaposto pubblici sostituendoli con dati presunti e non definire una policy legale sulla sola base dei test.
 
@@ -38,32 +38,19 @@ La PWA gestisce dati potenzialmente rientranti nelle categorie particolari dell'
 | Periodi di conservazione, log e copie dei fornitori | `retention-schedule.md`, `vendor-transfer-register.md` | Durate reali, configurazioni, eventuali backup, localizzazioni e limiti delle cancellazioni verificati nei provider; non assimilare la retention tecnica delle ricevute alla giustificazione giuridica |
 | Ruoli, fornitori e trasferimenti internazionali | `controller-role-decision.md`, `vendor-transfer-register.md` | Identificazione dei ruoli fattuali, DPA quando richiesti, elenco fornitori e verifica dei meccanismi applicabili ai trasferimenti |
 | Valutazioni e procedure organizzative | `dpia-screening-template.md`, `dpo-assessment-template.md`, `incident-breach-runbook.md` | Screening DPIA e DPO documentati, eventuali ulteriori adempimenti eseguiti, canale diritti e gestione incidenti assegnati |
-| Consegna tecnica a utenti reali (beta gratuita) | `health-consent-release-gate.md`, `technical-organizational-measures.md`, `../operations/e2e-reliability.md` | Collaudi autenticati autorizzati con dati sintetici, evidenze Production distinte dalla CI e decisione GO documentata. I gate **commerciali** di `first-gym-b2b-checklist.md` sono esclusivi dell'eventuale futuro pilot con palestra, non prerequisiti della beta gratuita |
+| Consegna tecnica a utenti reali (beta gratuita) | `health-consent-release-gate.md`, `technical-organizational-measures.md`, `../operations/e2e-reliability.md` | Collaudi autenticati autorizzati con dati sintetici, evidenze Production distinte dalla CI e decisione GO documentata |
 | Possibile cancellazione per inattività | `retention-schedule.md`, `src/lib/accountActivity.ts`, `api/account-activity.ts`, `api/account-deletion-cron.ts` | Codice di tracciamento/accodamento presente ma subordinato a feature flag client e server, con scheduler disabilitato di default; l'effettiva configurazione Production non è attestata da questi file. Prima di qualsiasi attivazione: revisione legale della soglia di 12 mesi senza email, aggiornamento informativa/versioni, valutazione del rischio per chi resta offline e collaudi fail-closed ([issue #835](https://github.com/gernotfound/logbook/issues/835)) |
 
 **Regola di chiusura:** i segnaposto e le annotazioni di lavoro restano nella documentazione interna, non nei testi pubblicati nella PWA. I componenti pubblici attuali contengono già identità del titolare, contatto e dichiarazioni sulle basi giuridiche: **la pubblicazione non equivale all'approvazione professionale**. Prima dei primi utenti esterni completare e validare tutte le informazioni mancanti, adeguare il comportamento tecnico dove necessario e incrementare le versioni legali applicabili in `src/lib/legalVersions.ts` se cambiano i testi. La rimozione dei segnaposto pubblici non rende conforme il trattamento né sana una retention priva di giustificazione. La decisione GO/NO-GO per terzi va registrata con chi l'ha approvata e le prove pertinenti. Per la revoca vedi [issue #824](https://github.com/gernotfound/logbook/issues/824).
 
 **Fonti istituzionali per la revisione:** [GDPR, artt. 6, 7, 9, 13, 17 e 35 (EUR-Lex)](https://eur-lex.europa.eu/legal-content/IT/TXT/?uri=CELEX:32016R0679), [Garante — informativa agli interessati](https://www.garanteprivacy.it/web/guest/home/docweb/-/docweb-display/docweb/8981258), [EDPB — Linee guida 05/2020 sul consenso](https://www.edpb.europa.eu/documents/guideline/guidelines-052020-on-consent-under-regulation-2016679_it).
 
-## Scenario B2B futuro — non parte dell'attuale utilizzo amatoriale
-
-Le seguenti assunzioni sono riferite soltanto all'eventuale futura distribuzione tramite palestre; non descrivono una collaborazione o un rapporto commerciale oggi esistente.
-
-- Se previsto in futuro, il pagamento palestra → fornitore avviene tramite rapporto commerciale esterno alla PWA.
-- La palestra rende TheLogBook disponibile agli iscritti ma, nell'architettura attuale, non dispone di ruoli gym/coach/admin e non accede ai dati TheLogBook degli utenti.
-- TheLogBook resta destinato a maggiorenni.
-- Google Analytics 4/Firebase Analytics è dismesso: integrazione e preferenza rimosse dal client, Firebase scollegato dalla proprietà e configurazione GitHub Analytics ritirata. Restano operativi i servizi Firebase necessari al funzionamento.
-- Vercel Analytics e Speed Insights sono ritirati dal frontend Production.
-- Il client non invia automaticamente segnalazioni diagnostiche a fornitori esterni: i controlli di integrità e recupero restano nella PWA; i log tecnici Firebase/Vercel costituiscono trattamenti separati.
-
-Queste assunzioni devono essere riconfermate nella documentazione firmata; se cambiano, vanno rivalutati ruoli privacy, contratti, informativa e DPIA.
-
 ## Documenti
 
-| File | Scopo | Stato prima del pilot |
+| File | Scopo | Stato prima dell'apertura a utenti esterni |
 |---|---|---|
 | [`processing-record-template.md`](processing-record-template.md) | Registro trattamenti / RoPA | Compilare e firmare |
-| [`controller-role-decision.md`](controller-role-decision.md) | Decisione documentata sui ruoli provider/palestra | Validare professionalmente |
+| [`controller-role-decision.md`](controller-role-decision.md) | Valutazione del ruolo del gestore e dei fornitori | Validare professionalmente |
 | [`dpia-screening-template.md`](dpia-screening-template.md) | Screening Art. 35 e decisione DPIA | Completare e firmare |
 | [`retention-schedule.md`](retention-schedule.md) | Durate, trigger di cancellazione e verifiche | Approvare e allineare al runtime |
 | [`incident-breach-runbook.md`](incident-breach-runbook.md) | Gestione incidenti e data breach | Assegnare contatti e provare il flusso |
@@ -73,34 +60,10 @@ Queste assunzioni devono essere riconfermate nella documentazione firmata; se ca
 | [`data-subject-rights-procedure.md`](data-subject-rights-procedure.md) | Accesso, rettifica, portabilità, cancellazione, revoche | Assegnare canale privacy |
 | [`health-consent-release-gate.md`](health-consent-release-gate.md) | Decisione corrente revoca → cancellazione automatica dati fitness, distinta da account deletion | PR #826/#829 integrate; collaudo autenticato multi-dispositivo e validazione legale pre-pilot aperti |
 | [`health-consent-technical-protocol.md`](health-consent-technical-protocol.md) | Protocollo tecnico revoca/riaccettazione e fence | Implementazione descritta; smoke autenticato multi-dispositivo e gate legale pre-pilot aperti |
-| [`support-sla-policy-template.md`](support-sla-policy-template.md) | Supporto, severità e impegni di servizio | Definire solo promesse sostenibili |
-| [`exit-deletion-policy-template.md`](exit-deletion-policy-template.md) | Cessazione B2B e dati | Allineare al ruolo privacy |
-| [`gym-privacy-instructions-template.md`](gym-privacy-instructions-template.md) | Istruzioni operative alla palestra | Consegnare/adattare al pilot |
-| [`first-gym-b2b-checklist.md`](first-gym-b2b-checklist.md) | Gate di consegna alla palestra | Chiudere tutti i blocker |
-| [`saas-agreement-template.md`](saas-agreement-template.md) | Struttura contratto commerciale | Revisione legale + dati reali |
-| [`commercial-schedule-template.md`](commercial-schedule-template.md) | Allegato economico separato | Compilare con dati commerciali |
-| [`dpa-art28-template.md`](dpa-art28-template.md) | Allegato Art. 28 condizionale | Usare solo se il ruolo processor è confermato |
-
-## Placeholder standard
-
-I segnaposto seguenti sono destinati **solo ai template contrattuali per un eventuale futuro B2B**. Non implicano che il titolare del progetto abbia una società o una partita IVA, né sostituiscono l'identità e il contatto già dichiarati nell'informativa corrente.
-
-- `[PROVIDER_LEGAL_NAME]`
-- `[PROVIDER_LEGAL_FORM]`
-- `[PROVIDER_ADDRESS]`
-- `[PRIVACY_EMAIL]` (solo template per futuri contratti; il contatto corrente è già definito)
-- `[SUPPORT_EMAIL]`
-- `[TAX_DETAILS]`
-- `[GYM_LEGAL_NAME]`
-- `[GYM_ADDRESS]`
-- `[FEE]`
-- `[TERM]`
-- `[NOTICE_PERIOD]`
-- `[SUPPORT_COMMITMENT]`
 
 ## Regola di aggiornamento
 
-Quando cambia un flusso dati, un fornitore, una base giuridica, una retention, un accesso amministrativo o una funzione di condivisione, aggiornare almeno il registro trattamenti, il registro fornitori/trasferimenti, lo screening DPIA e la documentazione pubblica/contrattuale interessata.
+Quando cambia un flusso dati, un fornitore, una base giuridica, una retention, un accesso amministrativo o una funzione di condivisione, aggiornare almeno il registro trattamenti, il registro fornitori/trasferimenti, lo screening DPIA e la documentazione pubblica interessata.
 
 ## Riferimenti normativi da usare nella revisione
 

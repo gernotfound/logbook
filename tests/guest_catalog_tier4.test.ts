@@ -32,7 +32,6 @@ describe('Integration Suite: Guest Mode & Global Catalog Resolution', () => {
         await clearCatalogCache();
         DB.resetCache();
         useAppStore.getState().resetStore();
-        await prepareUnlockedTestArchive('user:test-user-id');
     });
 
     // =========================================================================
@@ -135,6 +134,7 @@ describe('Integration Suite: Guest Mode & Global Catalog Resolution', () => {
         });
 
         it('T4.2: Persistence isolation: DB.saveUserData serializes ONLY custom deltas, never the global seed items', async () => {
+            await prepareUnlockedTestArchive('user:test-user-id');
             // Local fixture catalog (seed is empty — commit e61a133).
             // We inject 5 global exercises + 5 global foods to make the "stripping" behavior observable.
             const globalExFixture: CatalogExercise[] = Array.from({ length: 5 }, (_, i) => ({
@@ -243,6 +243,7 @@ describe('Integration Suite: Guest Mode & Global Catalog Resolution', () => {
         });
 
         it('T4.3: Merging guest deltas into an empty cloud document avoids seed bloat', async () => {
+            await prepareUnlockedTestArchive('user:test-user-id');
             const seed = getSeedCatalog();
             await saveCatalogToCache(seed);
 

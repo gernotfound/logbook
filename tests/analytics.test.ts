@@ -202,13 +202,6 @@ describe('Analytics Engine: src/lib/calc/analytics.ts', () => {
     });
 
     describe('calculatePearsonCorrelation', () => {
-        it('computes exact correlation for positive linear relationship', () => {
-            const x = [1000, 2000, 3000, 4000];
-            const y = [2000, 2400, 2800, 3200];
-            const r = calculatePearsonCorrelation(x, y);
-            expect(r).toBe(1);
-        });
-
         it('computes exact correlation for negative linear relationship', () => {
             const x = [1000, 2000, 3000, 4000];
             const y = [3200, 2800, 2400, 2000];

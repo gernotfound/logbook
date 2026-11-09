@@ -79,7 +79,6 @@ describe('Intelligent Exercise Search & Dropdown Suite (M3: R4 & R6)', () => {
     beforeEach(async () => {
         window.localStorage.clear();
         localStorage.setItem('logbook:v2:user:test-user-id:health-consent-generation', '1');
-        await prepareUnlockedTestArchive('user:test-user-id');
         useAppStore.getState().resetStore();
         vi.clearAllMocks();
 
@@ -446,6 +445,10 @@ describe('Intelligent Exercise Search & Dropdown Suite (M3: R4 & R6)', () => {
     // SECTION 3: RoutineEditor Integration Tests (R4)
     // =========================================================================
     describe('3. RoutineEditor Integration with ExerciseSearchDropdown', () => {
+        beforeEach(async () => {
+            await prepareUnlockedTestArchive('user:test-user-id');
+        });
+
         it('3.1: RoutineEditor contains ExerciseSearchDropdown instead of legacy select', () => {
             const onAddExercise = vi.fn();
             const { container } = renderWithProviders(
@@ -537,6 +540,10 @@ describe('Intelligent Exercise Search & Dropdown Suite (M3: R4 & R6)', () => {
     // SECTION 4: TrainingSession Extra Exercise Integration Tests (R6)
     // =========================================================================
     describe('4. TrainingSession Ad-Hoc Extra Exercise Integration', () => {
+        beforeEach(async () => {
+            await prepareUnlockedTestArchive('user:test-user-id');
+        });
+
         it('4.1: TrainingSession renders ExerciseSearchDropdown for extra exercises', () => {
             const activeWorkout: WorkoutSession = {
                 id: 'w_test_1',
@@ -635,7 +642,6 @@ describe('Intelligent Exercise Search & Dropdown Suite (M3: R4 & R6)', () => {
                 history: [],
                 activeWorkout,
             };
-            await prepareUnlockedTestArchive(owner);
             await initializeLocal(owner, initialData);
             useAppStore.setState({
                 localWorkout: activeWorkout,
