@@ -2,6 +2,11 @@
 // This selection is deliberately bounded: Stryker's Vitest runner cannot run Playwright
 // browser tests or the dedicated Firestore Emulator suite.
 export const trialCases = {
+  "secure-archive-repository": {
+    "mutate": ["src/lib/sync/secureArchiveRepository.ts"],
+    "testFiles": ["tests/isolated/secure_archive_indexeddb.test.ts", "tests/isolated/secureArchiveRepository.test.ts"],
+    "runner": "isolated"
+  },
   "archive-bootstrap": {
     "mutate": ["src/lib/sync/localArchiveBootstrap.ts"],
     "testFiles": ["tests/isolated/localRepository.test.ts", "tests/isolated/localArchiveBootstrap.test.ts"],
