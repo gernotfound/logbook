@@ -96,6 +96,23 @@ describe('persisted vault control trust boundary', () => {
         expect(localStorage.getItem(vaultControlKey(owner))).toBe(saved);
     });
 
+    it.each([
+        ['format', 'unknown-device-vault'], ['version', 3], ['owner', 'user:foreign'],
+        ['nonce', undefined], ['nonce', '0'.repeat(22)], ['nonce', 'g'.repeat(24)],
+        ['wrappedDek', null], ['wrappedDek', '0'.repeat(94)], ['wrappedDek', 'z'.repeat(96)],
+    ] as const)('rejects invalid nested wrapped-key %s before accepting persisted control', (field, value) => {
+        const invalid = { ...control, wrappedKey: { ...control.wrappedKey, [field]: value } };
+        expect(() => parsePersistedVaultControl(owner, invalid)).toThrow(LocalVaultLockedError);
+        persist(invalid as PersistedVaultControl);
+        expect(() => readVaultControl(owner)).toThrow(LocalVaultLockedError);
+        expect(localStorage.getItem(vaultControlKey(owner))).toBe(JSON.stringify(invalid));
+    });
+
+    it('rejects a callable wrapped-key object even when it spoofs the correct owner', () => {
+        const invalid = { ...control, wrappedKey: Object.assign(() => undefined, control.wrappedKey) };
+        expect(() => parsePersistedVaultControl(owner, invalid)).toThrow(LocalVaultLockedError);
+    });
+
     it.each(['active', 'migrating'] as const)('accepts the current %s control under a normalized owner', phase => {
         const candidate = { ...control, phase };
         expect(parsePersistedVaultControl('session-boundaries', candidate)).toEqual(candidate);
