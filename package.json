@@ -24,14 +24,11 @@
     "lint:baseline:update": "node scripts/check-lint-baseline.mjs --update",
     "preview": "vite preview",
     "test": "vitest run",
-    "test:ci": "npm run test:unit && npm run test:integration",
     "test:stress": "vitest run --config vitest.stress.config.ts",
     "test:fuzz": "vitest run --config vitest.fuzz.config.ts",
     "test:recovery": "vitest run --config vitest.recovery.config.ts",
     "test:gc": "vitest run --config vitest.gc.config.ts",
     "test:hardening": "vitest run --config vitest.hardening.config.ts",
-    "test:unit": "vitest run src/",
-    "test:integration": "vitest run tests/",
     "test:e2e": "node scripts/run-e2e.mjs",
     "test:isolated": "vitest run --config vitest.isolated.config.ts",
     "test:rules": "node scripts/run-firestore-rules-tests.mjs",
@@ -125,7 +122,6 @@
   },
   "allowScripts": {
     "@firebase/util": true,
-    "protobufjs": true,
-    "re2": true
+    "protobufjs": true
   }
 }
