@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 import SessionExerciseAccordion from '../src/components/Training/session/SessionExerciseAccordion';
 import SessionExerciseCard from '../src/components/Training/session/SessionExerciseCard';
 import SessionSetRow from '../src/components/Training/session/SessionSetRow';
-import { getRoutineDurationEstimate } from '../src/components/Training/session/sessionDurationEstimate';
+import { getRoutineDurationEstimate, getRoutineDurationEstimates } from '../src/components/Training/session/sessionDurationEstimate';
 import { useDialogStore } from '../src/store/useDialogStore';
 import type { WorkoutSession } from '../src/types';
 import { sessionSetHasMeaningfulData } from '../src/lib/workoutSetData';
@@ -221,6 +221,30 @@ describe('training session redesign', () => {
             minutes: 40,
             sampleSize: 5,
         });
+    });
+
+    it('calculates independent routine medians in one pass, preserving recent-five ordering and invalid durations', () => {
+        const history = [
+            completedWorkout('a', 10, 1),
+            completedWorkout('b', 20, 2),
+            completedWorkout('a', 20, 3),
+            completedWorkout('a', 30, 4),
+            completedWorkout('b', 40, 5),
+            completedWorkout('a', 40, 6),
+            completedWorkout('a', 50, 7),
+            completedWorkout('a', 55, 8),
+            completedWorkout('b', 55, 9),
+            completedWorkout('other', 600, 10),
+            { id: 'bad-a', routineId: 'a', globalDurationStr: 'invalid', exercises: [] },
+        ] satisfies WorkoutSession[];
+
+        const estimates = getRoutineDurationEstimates(['a', 'b', 'missing'], history);
+        expect([...estimates.entries()]).toEqual([
+            ['a', { minutes: 40, sampleSize: 5 }],
+            ['b', { minutes: 40, sampleSize: 3 }],
+        ]);
+        expect(getRoutineDurationEstimate('a', history)).toEqual({ minutes: 40, sampleSize: 5 });
+        expect(estimates.has('missing')).toBe(false);
     });
 
     it('does not invent a duration estimate with fewer than three usable sessions', () => {
