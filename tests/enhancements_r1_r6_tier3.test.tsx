@@ -1,7 +1,7 @@
 import React from 'react';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { act, fireEvent, renderHook } from '@testing-library/react';
-import { renderWithAuthenticatedTestOwner, renderWithProviders, emptyUserData } from './setup';
+import { act, fireEvent, render, renderHook } from '@testing-library/react';
+import { renderWithAuthenticatedTestOwner, emptyUserData } from './setup';
 import { useAppStore } from '../src/store/useAppStore';
 import { captureSession } from '../src/lib/sync/session';
 import { prepareUnlockedTestArchive } from './secureVaultFixture';
@@ -158,11 +158,7 @@ describe('LogBook PWA Enhancements Integration Suite (Requirements R1 - R6)', ()
                 }];
             }));
 
-            useAppStore.setState({
-                userData: { ...emptyUserData, nutrition: nutritionData }
-            });
-
-            const { container, getByRole } = renderWithProviders(
+            const { container, getByRole } = render(
                 <DataHistory
                     measurementsHistory={Object.values(nutritionData)}
                     editingDate={null}
