@@ -22,6 +22,8 @@ const owner = 'user:archive-bootstrap';
 const key = 'logbook:v2:' + owner;
 const state = (height: string): UserData => UserDataSchema.parse({
     profile: { height },
+    // Traverse planning defaults now so this fixture is stable across persisted reads.
+    nutritionPlanning: {},
     history: [{ id: 'bootstrap-workout', date: '2026-11-09', routineName: 'seed', exercises: [] }],
 }) as unknown as UserData;
 const catalog: CachedGlobalCatalog = {
