@@ -108,6 +108,36 @@ await test('gc runner preserves causal test discovery and rejects external clien
   }
 });
 
+await test('recovery runner rejects inherited Firebase and backend endpoints before loading tests', async () => {
+  const root = fileURLToPath(new URL('..', import.meta.url));
+  const recovery = await loadConfigFromFile({ command: 'serve', mode: 'test' }, resolve(root, 'vitest.recovery.config.ts'));
+  assert.ok(recovery?.config.test);
+  assert.equal(recovery.config.test.environment, 'node');
+  assert.deepEqual(recovery.config.test.setupFiles, ['./tests/isolated/browserStorageSetup.ts']);
+  assert.deepEqual(recovery.config.test.include, ['tests/recovery/**/*.test.ts']);
+  assert.equal(recovery.config.test.maxWorkers, 1);
+  assert.equal(recovery.config.test.testTimeout, 15000);
+  assert.equal(recovery.config.test.env.VITE_ACCOUNT_DELETION_API_ORIGIN, 'http://127.0.0.1:9');
+
+  const { spawnSync } = await import('node:child_process');
+  for (const [key, value] of [
+    ['VITE_FIREBASE_PROJECT_ID', 'external-recovery-project'],
+    ['VITE_ACCOUNT_DELETION_API_ORIGIN', 'https://external-recovery.example.invalid'],
+    ['VITE_RECAPTCHA_ENTERPRISE_SITE_KEY', 'unexpected-recovery-site-key'],
+  ]) {
+    const probe = spawnSync(process.execPath, ['--input-type=module', '-e',
+      "import { loadConfigFromFile } from 'vite'; await loadConfigFromFile({ command: 'serve', mode: 'test' }, 'vitest.recovery.config.ts');",
+    ], {
+      cwd: root,
+      encoding: 'utf8',
+      env: { ...process.env, [key]: value },
+    });
+    if (probe.error) throw probe.error;
+    assert.notEqual(probe.status, 0, key + ' must be rejected before recovery tests load');
+    assert.match(probe.stderr + probe.stdout, /Configurazione test non isolata/);
+  }
+});
+
 await test('emulator runner rejects inherited Firebase endpoints before loading Rules tests', async () => {
   const root = fileURLToPath(new URL('..', import.meta.url));
   const emulator = await loadConfigFromFile({ command: 'serve', mode: 'test' }, resolve(root, 'vitest.emulator.config.ts'));
