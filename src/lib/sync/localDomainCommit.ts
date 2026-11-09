@@ -86,10 +86,11 @@ export async function commitDomainOperations(owner: string, batch: DomainOperati
 ): Promise<DomainCommitResult> {
     owner = normalizeStorageOwner(owner);
     const domainOperations = normalizeDomainOperationBatch(batch);
-    const fallback = structuredClone(parse(initialBase));
+    let fallbackData: UserData | undefined;
+    const fallback = (): UserData => fallbackData ??= structuredClone(parse(initialBase));
     const catalog = await getCachedCatalog();
     let operations: SemanticOperation[] = [];
-    let savedData = fallback;
+    let savedData = initialBase;
     await updateArchiveRecord<any>(owner, raw => {
         if (guard && !guard()) throw new Error('Commit locale invalidato dal cambio sessione');
         const current = validateLocalEnvelope(raw, owner);
@@ -153,7 +154,7 @@ export async function commitDomainOperations(owner: string, batch: DomainOperati
                 ...(workoutIntent.parentIntentId ? { parentIntentId: workoutIntent.parentIntentId } : {}),
                 ...(workoutIntent.ancestorIds ? { ancestorIds: workoutIntent.ancestorIds } : {}) } }
             : {};
-        const base = current?.data ?? fallback;
+        const base = current?.data ?? fallback();
         // A retry after a durable local completion can deliver an outstanding
         // journal without completing the same workout twice.
         const effectiveDomainOperations = domainOperations.map(operation => {
@@ -221,10 +222,10 @@ export async function commitDomainOperations(owner: string, batch: DomainOperati
         // operations, and unprojected business changes still require a write.
         if (operations.length === 0 && current && !closureChanged && !workoutIntent
             && equal(current.data, desired)) return raw;
-        if (operations.length === 0) return { ...(current ?? { completeMonths: [], replica: null }), ...currentEnvelopeVersions(), ...closure, ...intentPatch, owner, actorId, actorSeq: current?.actorSeq ?? 0, clock: current?.clock ?? {}, data: desired, baseline: current?.baseline ?? fallback, completeMonths: current?.completeMonths ?? [], pending: current?.pending ?? [], syncMetaByDocument: current?.syncMetaByDocument ?? {}, replica: current?.replica ?? null, revision: (current?.revision ?? 0) + (closureChanged || workoutIntent ? 1 : 0) };
+        if (operations.length === 0) return { ...(current ?? { completeMonths: [], replica: null }), ...currentEnvelopeVersions(), ...closure, ...intentPatch, owner, actorId, actorSeq: current?.actorSeq ?? 0, clock: current?.clock ?? {}, data: desired, baseline: current?.baseline ?? fallback(), completeMonths: current?.completeMonths ?? [], pending: current?.pending ?? [], syncMetaByDocument: current?.syncMetaByDocument ?? {}, replica: current?.replica ?? null, revision: (current?.revision ?? 0) + (closureChanged || workoutIntent ? 1 : 0) };
         const sequenced = sequenceOperationsForBoundedTransactions(operations, actorId, baseSeq, current?.clock ?? {});
         operations = sequenced.operations;
-        return { ...(current ?? { completeMonths: [], replica: null }), ...currentEnvelopeVersions(), ...closure, ...intentPatch, owner, actorId, actorSeq: sequenced.actorSeq, clock: sequenced.clock, data: desired, baseline: current?.baseline ?? fallback, completeMonths: current?.completeMonths ?? [], pending: owner === 'guest' ? [] : [...(current?.pending ?? []), ...operations], syncMetaByDocument: current?.syncMetaByDocument ?? {}, replica: current?.replica ?? null, revision: (current?.revision ?? 0) + 1 };
+        return { ...(current ?? { completeMonths: [], replica: null }), ...currentEnvelopeVersions(), ...closure, ...intentPatch, owner, actorId, actorSeq: sequenced.actorSeq, clock: sequenced.clock, data: desired, baseline: current?.baseline ?? fallback(), completeMonths: current?.completeMonths ?? [], pending: owner === 'guest' ? [] : [...(current?.pending ?? []), ...operations], syncMetaByDocument: current?.syncMetaByDocument ?? {}, replica: current?.replica ?? null, revision: (current?.revision ?? 0) + 1 };
     });
     return { operations, data: savedData };
 }
