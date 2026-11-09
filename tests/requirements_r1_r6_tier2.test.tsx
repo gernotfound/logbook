@@ -11,7 +11,6 @@ import { useAppStore } from '../src/store/useAppStore';
 import { Logic } from '../src/lib/logic';
 import {
     UserDataSchema,
-    NutritionDaySchema,
 } from '../src/lib/schema';
 import SessionSetRow from '../src/components/Training/session/SessionSetRow';
 import MuscleModel from '../src/components/Training/MuscleModel';
@@ -203,18 +202,43 @@ describe('LogBook 4-Tier Automated Test Suite (Requirements R1 - R6)', () => {
             });
 
 
-            it('T2.3.5: saving measurements with all optional circumferences left blank saves cleanly', () => {
-                const dayData = {
-                    date: '2026-08-15',
-                    kcal: 0,
-                    carbs: 0,
-                    pro: 0,
-                    fat: 0,
-                    weight: 75.0
-                };
-                const parsed = NutritionDaySchema.parse(dayData);
-                expect(parsed.weight).toBe(75.0);
-                expect(parsed.waist).toBeUndefined();
+            it('T2.3.5: saving weight without optional circumferences persists a sealed nutrition day', async () => {
+                const date = '2026-08-15';
+                const owner = captureSession().owner;
+                localStorage.setItem(deviceKey('health-consent-generation', owner), '1');
+                const initial = UserDataSchema.parse({
+                    ...emptyUserData,
+                    nutrition: {
+                        [date]: {
+                            date, kcal: 2200, carbs: 240, pro: 150, fat: 65,
+                            meals: [{ id: 'm1', name: 'Pranzo', meal: 'Pranzo', quantity: 1, kcal: 800, carbs: 90, pro: 40, fat: 20 }]
+                        }
+                    }
+                });
+                await prepareUnlockedTestArchive(owner);
+                await initializeLocal(owner, initial);
+                const sealedBefore = idbStore['logbook:v2:' + owner];
+                expect(sealedBefore).toMatch(/^tlb-sealed:v1:/);
+                useAppStore.setState({ userData: initial, dataOwner: owner, localPersistenceBlocked: false });
+
+                const { result } = renderHook(() => useNutritionMeasurements(date));
+                act(() => result.current.setWeight('75'));
+                await act(async () => {
+                    expect(await result.current.calculateAndSave()).toBe(true);
+                });
+
+                const memory = useAppStore.getState().userData?.nutrition?.[date];
+                const durable = (await readLocal(owner))?.data.nutrition?.[date];
+                for (const saved of [memory, durable]) {
+                    expect(saved?.weight).toBe(75);
+                    expect(saved?.kcal).toBe(2200);
+                    expect(saved?.meals?.[0]?.id).toBe('m1');
+                    for (const field of ['waist', 'neck', 'hip', 'chest', 'shoulders', 'biceps', 'thighs', 'calves'] as const) {
+                        expect(saved?.[field]).toBeUndefined();
+                    }
+                }
+                expect(idbStore['logbook:v2:' + owner]).toMatch(/^tlb-sealed:v1:/);
+                expect(idbStore['logbook:v2:' + owner]).not.toBe(sealedBefore);
             });
 
             it('T2.3.6: parseDateInput handles YYYY-MM-DD, DD/MM/YYYY, and single digit dates', () => {
