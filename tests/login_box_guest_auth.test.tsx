@@ -366,9 +366,9 @@ describe('LoginBox guest Google authentication', () => {
         await waitFor(() => expect(authMocks.registerWithEmail).toHaveBeenCalledWith(
             'valid@example.com', 'SecurePassword123!', undefined, expect.any(Function),
         ));
-        // The view requests only advisory password rules; authoritative
-        // validation is owned by the actual Auth action.
-        expect(validatePassword).toHaveBeenCalledTimes(1);
+        // No policy request may validate the submitted credentials in the
+        // UI: the real Auth action owns that single authoritative check.
+        expect(validatePassword).not.toHaveBeenCalledWith(expect.anything(), 'SecurePassword123!');
         expect(screen.queryByRole('alert')).toBeNull();
     });
 
