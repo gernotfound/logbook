@@ -1,7 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useAppStore } from '../src/store/useAppStore';
 import { UserDataSchema } from '../src/lib/schema';
-import { applyDomainOperations, type DomainOperationBatch } from '../src/lib/sync/domainOperations';
 import * as repo from '../src/lib/sync/localRepository';
 import { prepareUnlockedTestArchive } from './secureVaultFixture';
 import { lockAllVaults } from '../src/lib/sync/secureArchiveSession';
@@ -24,27 +23,28 @@ describe('PR 4: Nutrition Conflict Resolution (Store Unit Tests)', () => {
     beforeEach(async () => {
         vi.clearAllMocks();
         const initial = initialConflictData();
-        useAppStore.setState({ userData: initial, dispatchDomainOperation: originalDispatchDomainOperation });
+        useAppStore.setState({
+            userData: initial,
+            dataOwner: OWNER,
+            dispatchDomainOperation: originalDispatchDomainOperation,
+            localPersistenceBlocked: false,
+            compatibilityStatus: 'ok',
+        });
         await prepareUnlockedTestArchive(OWNER);
         await repo.initializeLocal(OWNER, initial);
 
-        vi.spyOn(useAppStore.getState(), 'dispatchDomainOperation').mockImplementation(async (operation: DomainOperationBatch) => {
-            const current = useAppStore.getState().userData;
-            if (!current) throw new Error('Dati utente non caricati');
-
-            // Mirror the M8 runtime boundary: optimistic Zustand state plus durable
-            // DomainOperation commit in the same repository used by the conflict CAS.
-            const next = applyDomainOperations(current, operation);
-            useAppStore.setState({ userData: next });
-            await repo.commitDomainOperations(OWNER, operation, current);
-            return { ok: true, status: 'synced' };
-        });
+        // Observe the real dispatcher, including its identity guard and durable commit.
+        vi.spyOn(useAppStore.getState(), 'dispatchDomainOperation');
     });
 
     afterEach(() => {
         lockAllVaults();
         vi.restoreAllMocks();
-        useAppStore.setState({ dispatchDomainOperation: originalDispatchDomainOperation });
+        useAppStore.setState({
+            dispatchDomainOperation: originalDispatchDomainOperation,
+            userData: null,
+            dataOwner: null,
+        });
     });
 
     it('Mantieni Cloud: should remove the local conflict from memory and the durable repository without a domain dispatch', async () => {
@@ -98,6 +98,25 @@ describe('PR 4: Nutrition Conflict Resolution (Store Unit Tests)', () => {
         const stored = await repo.readLocal(OWNER);
         expect(stored?.data.pendingConflicts?.nutritionPlanning).toBeUndefined();
         expect(stored?.data.nutritionPlanning?.normocalorica?.kcal).toBe(3000);
+    });
+
+    it.each([
+        { resolution: 'cloud' as const, dataOwner: null },
+        { resolution: 'local' as const, dataOwner: null },
+        { resolution: 'cloud' as const, dataOwner: 'user:another-account' },
+        { resolution: 'local' as const, dataOwner: 'user:another-account' },
+    ])('refuses $resolution for ownerless or foreign data ($dataOwner)', async ({ resolution, dataOwner }) => {
+        const before = await repo.readLocal(OWNER);
+        useAppStore.setState({ dataOwner });
+        const result = await useAppStore.getState().resolveNutritionConflict({
+            resolution,
+            expectedUid: 'test-user-id',
+            expectedConflictFingerprint: getNutritionConflictFingerprint(before?.data.pendingConflicts?.nutritionPlanning),
+        });
+        expect(result).toMatchObject({ ok: false, status: 'failed' });
+        expect(useAppStore.getState().dispatchDomainOperation).not.toHaveBeenCalled();
+        expect(useAppStore.getState().userData?.pendingConflicts).toEqual(before?.data.pendingConflicts);
+        expect(await repo.readLocal(OWNER)).toEqual(before);
     });
 
     it('Stale Conflict Prevention: should fail if fingerprint differs', async () => {
