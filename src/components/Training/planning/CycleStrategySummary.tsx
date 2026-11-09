@@ -2,7 +2,7 @@ import type { TrainingCycleStrategy } from '../../../types';
 import { getCycleStrategyLabel, getMuscleName } from '../../../lib/trainingCycleStrategy';
 
 function muscleNames(ids: string[] | undefined): string {
-    return ids?.map(getMuscleName).join(', ') ?? '';
+    return ids ? [...new Set(ids)].map(getMuscleName).join(', ') : '';
 }
 
 export function CycleStrategySummary({ strategy }: { strategy?: TrainingCycleStrategy }) {
