@@ -478,12 +478,20 @@ describe('LogBook 4-Tier Automated Test Suite (Requirements R1 - R6)', () => {
                 const allMuscles = Logic.MUSCLES.map(m => m.id);
                 const colorMap = Object.fromEntries(allMuscles.map(m => [m, '#ff4d6d']));
 
-                expect(() => render(
-                    <MuscleModel 
-                        muscleColors={colorMap} 
-                        interactive={false} 
+                const { container } = render(
+                    <MuscleModel
+                        muscleColors={colorMap}
+                        interactive={false}
                     />
-                )).not.toThrow();
+                );
+
+                const expectedPaths = new Set(allMuscles.flatMap(id => Logic.GROUP_MAP[id] ?? []));
+                const highlighted = Array.from(container.querySelectorAll<SVGPathElement>('[data-muscle-path]'))
+                    .filter(path => expectedPaths.has(path.dataset.musclePath ?? ''));
+                expect(highlighted.length).toBeGreaterThan(20);
+                for (const path of highlighted) {
+                    expect(['#ff4d6d', 'rgb(255, 77, 109)']).toContain(path.style.fill);
+                }
             });
 
             it('T2.5.6: validateWorkoutRatings validates numeric bounds (1-5)', () => {
