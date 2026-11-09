@@ -70,7 +70,6 @@ describe('Challenger 2: Zustand Fine-Grained Selectors & Background Render Isola
 
     beforeEach(async () => {
         localStorage.setItem('logbook:v2:user:test-user-id:health-consent-generation', '1');
-        await prepareUnlockedTestArchive('user:test-user-id');
         vi.clearAllMocks();
         useAppStore.setState({
             userData: JSON.parse(JSON.stringify(initialTestUserData)),
@@ -84,7 +83,8 @@ describe('Challenger 2: Zustand Fine-Grained Selectors & Background Render Isola
     afterEach(() => { vi.restoreAllMocks(); });
 
     describe('1. useNutritionMeals Hook Isolation during Live Workout Inputs', () => {
-        it('does NOT re-render or re-sort nutrition dates when workout session updates occur', () => {
+        it('does NOT re-render or re-sort nutrition dates when workout session updates occur', async () => {
+            await prepareUnlockedTestArchive('user:test-user-id');
             let hookRenderCount = 0;
             const sortSpy = vi.spyOn(Array.prototype, 'sort');
 
@@ -184,7 +184,8 @@ describe('Challenger 2: Zustand Fine-Grained Selectors & Background Render Isola
         });
 
     describe('2. useNutritionPlanning Hook Isolation & TDEE Calculation Insulation', () => {
-        it('does NOT trigger TDEE recalculation or hook re-renders during active workout keystrokes', () => {
+        it('does NOT trigger TDEE recalculation or hook re-renders during active workout keystrokes', async () => {
+            await prepareUnlockedTestArchive('user:test-user-id');
             let hookRenderCount = 0;
             const tdeeSpy = vi.spyOn(Logic, 'calculateTDEEAndMacros');
 
@@ -283,7 +284,8 @@ describe('Challenger 2: Zustand Fine-Grained Selectors & Background Render Isola
     });
 
     describe('3. Multi-Tab Background Mount Simulation', () => {
-        it('simulates both Training and Nutrition tabs mounted in DOM and verifies zero crosstalk', () => {
+        it('simulates both Training and Nutrition tabs mounted in DOM and verifies zero crosstalk', async () => {
+            await prepareUnlockedTestArchive('user:test-user-id');
             let nutritionComponentRenders = 0;
 
             const MockNutritionComponent = React.memo(() => {

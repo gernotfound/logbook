@@ -24,7 +24,6 @@ describe('LogBook PWA Enhancements Integration Suite (Requirements R1 - R6)', ()
     beforeEach(async () => {
         window.localStorage.clear();
         localStorage.setItem(`logbook:v2:${captureSession().owner}:health-consent-generation`, '1');
-        await prepareUnlockedTestArchive('user:test-user-id');
         useAppStore.getState().resetStore();
         useAppStore.setState({ dataOwner: captureSession().owner });
         vi.clearAllMocks();
@@ -45,6 +44,10 @@ describe('LogBook PWA Enhancements Integration Suite (Requirements R1 - R6)', ()
         // Requirement R1: Formato Sonno in HH:MM
         // ---------------------------------------------------------------------
         describe('R1: Formato Sonno in HH:MM', () => {
+            beforeEach(async () => {
+                await prepareUnlockedTestArchive('user:test-user-id');
+            });
+
             it('T1.1.1: useSleepMeasurements sets and persists sleep duration into userData.nutrition[date] in canonical HH:MM format', async () => {
                 const today = Logic.getLocalDateString();
                 const owner = captureSession().owner;
@@ -332,6 +335,10 @@ describe('LogBook PWA Enhancements Integration Suite (Requirements R1 - R6)', ()
         // Requirement R3: Sincronizzazione in Tempo Reale Esercizi
         // ---------------------------------------------------------------------
         describe('R3: Sincronizzazione in Tempo Reale Esercizi', () => {
+            beforeEach(async () => {
+                await prepareUnlockedTestArchive('user:test-user-id');
+            });
+
             it('T1.3.1: TrainingSession resolves exercise name dynamically from userData.library via exId', () => {
                 const mockLibrary: Exercise[] = [
                     { id: 'ex_bench', name: 'Panca Piana Bilanciere', setsCount: 3, sets: [] }
@@ -756,6 +763,10 @@ describe('LogBook PWA Enhancements Integration Suite (Requirements R1 - R6)', ()
         // Requirement R6: Esercizi Ad-Hoc in Sessione
         // ---------------------------------------------------------------------
         describe('R6: Esercizi Ad-Hoc in Sessione', () => {
+            beforeEach(async () => {
+                await prepareUnlockedTestArchive('user:test-user-id');
+            });
+
             it('T1.6.1: addExtraExercise adds an ad-hoc exercise to localWorkout without modifying routines blueprint', () => {
                 let localWorkout: WorkoutSession | null = {
                     id: 'w1',

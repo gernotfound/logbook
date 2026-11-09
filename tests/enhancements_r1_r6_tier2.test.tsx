@@ -24,7 +24,6 @@ describe('LogBook PWA Enhancements Integration Suite (Requirements R1 - R6)', ()
     beforeEach(async () => {
         window.localStorage.clear();
         localStorage.setItem(`logbook:v2:${captureSession().owner}:health-consent-generation`, '1');
-        await prepareUnlockedTestArchive('user:test-user-id');
         useAppStore.getState().resetStore();
         useAppStore.setState({ dataOwner: captureSession().owner });
         vi.clearAllMocks();
@@ -45,6 +44,10 @@ describe('LogBook PWA Enhancements Integration Suite (Requirements R1 - R6)', ()
         // R1 Boundaries
         // ---------------------------------------------------------------------
         describe('R1 Boundaries (Sleep Formats & Edge Values)', () => {
+            beforeEach(async () => {
+                await prepareUnlockedTestArchive('user:test-user-id');
+            });
+
             it('T2.1.1: Zero and empty sleep strings handle cleanly without throwing NaN', async () => {
                 const owner = captureSession().owner;
                 const initialData = { ...emptyUserData, nutrition: {} };
@@ -296,6 +299,10 @@ describe('LogBook PWA Enhancements Integration Suite (Requirements R1 - R6)', ()
         // R3 Boundaries
         // ---------------------------------------------------------------------
         describe('R3 Boundaries (Library Synchronization Edge Cases)', () => {
+            beforeEach(async () => {
+                await prepareUnlockedTestArchive('user:test-user-id');
+            });
+
             it('T2.3.1: Library item with special characters and quotes renders safely without DOM break', () => {
                 const specialLib: Exercise[] = [
                     { id: 'ex_special', name: 'Curl 45° con Manubri & Bilanciere (A/B) "Pro"', setsCount: 3, sets: [] }
@@ -411,6 +418,10 @@ describe('LogBook PWA Enhancements Integration Suite (Requirements R1 - R6)', ()
         // R4 Boundaries
         // ---------------------------------------------------------------------
         describe('R4 Boundaries (Routine Editor Search & Add Edge Cases)', () => {
+            beforeEach(async () => {
+                await prepareUnlockedTestArchive('user:test-user-id');
+            });
+
             it('T2.4.1: Empty library in RoutineEditor displays empty message without crashing', () => {
                 const { container } = renderWithProviders(
                     <RoutineEditor
@@ -676,6 +687,10 @@ describe('LogBook PWA Enhancements Integration Suite (Requirements R1 - R6)', ()
         // R6 Boundaries
         // ---------------------------------------------------------------------
         describe('R6 Boundaries (Ad-Hoc Session Modifications)', () => {
+            beforeEach(async () => {
+                await prepareUnlockedTestArchive('user:test-user-id');
+            });
+
             it('T2.6.1: Adding multiple ad-hoc exercises of the same library item creates distinct instances', () => {
                 let localWorkout: WorkoutSession | null = {
                     id: 'w1',
