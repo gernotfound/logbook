@@ -218,14 +218,15 @@ it('retries when an edit is acknowledged while the cloud scan is in flight', asy
             }, { clock: {}, syncMetaByDocument: {} });
             const delivered = (await readLocal('user:a'))!;
             expect(delivered.pending.length).toBeGreaterThan(0);
-            if (!delivered.replica) throw new Error('Prova replica mancante nel test backup');
+            const replica = delivered.replica;
+            if (!replica) throw new Error('Prova replica mancante nel test backup');
             sdk.root.mockResolvedValue({ exists: () => true, data: () => currentCloudDoc(
                 { profile: { height: '175', gender: 'M' } },
                 { protocolVersion: CURRENT_SYNC_PROTOCOL, clock: { s00: delivered.actorSeq }, fields: {},
-                    writer: { slot: 's00', replicaId: delivered.replica.replicaId, generation: 1, seq: delivered.actorSeq } },
+                    writer: { slot: 's00', replicaId: replica.replicaId, generation: 1, seq: delivered.actorSeq } },
             ) });
             await acknowledgeThrough('user:a', delivered.pending.at(-1)!.seq, updated, [], undefined, {
-                operations: structuredClone(delivered.pending), replica: delivered.replica,
+                operations: structuredClone(delivered.pending), replica,
             });
             expect((await readLocal('user:a'))?.pending).toHaveLength(0);
         }
