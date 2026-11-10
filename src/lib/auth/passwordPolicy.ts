@@ -7,6 +7,10 @@ export const PASSWORD_POLICY_SUMMARY =
 // Firebase is authoritative for additional requirements until the server cutover.
 export const MIN_NEW_PASSWORD_LENGTH = 15;
 
+// Firebase accepts only this listed punctuation set for its optional special-character rule.
+// Spaces and arbitrary Unicode punctuation must not be displayed as satisfying it.
+const FIREBASE_SPECIAL_CHARACTERS = new Set("^$*.[]{}()?\\\"!@#%&/\\\\,><':;|_~");
+
 export type PasswordRuleConfig = {
     minPasswordLength?: number;
     maxPasswordLength?: number;
@@ -46,7 +50,7 @@ export function getPasswordRequirements(password: string, rules: PasswordRuleCon
     if (rules.containsLowercaseLetter === true) requirements.push({ label: 'Una lettera minuscola', met: /[a-z]/.test(password) });
     if (rules.containsUppercaseLetter === true) requirements.push({ label: 'Una lettera maiuscola', met: /[A-Z]/.test(password) });
     if (rules.containsNumericCharacter === true) requirements.push({ label: 'Un numero', met: /[0-9]/.test(password) });
-    if (rules.containsNonAlphanumericCharacter === true) requirements.push({ label: 'Un carattere speciale', met: /[^a-zA-Z0-9]/.test(password) });
+    if (rules.containsNonAlphanumericCharacter === true) requirements.push({ label: 'Un carattere speciale', met: Array.from(password).some(char => FIREBASE_SPECIAL_CHARACTERS.has(char)) });
     return requirements;
 }
 

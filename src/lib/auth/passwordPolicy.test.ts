@@ -67,6 +67,15 @@ describe('password policy', () => {
             .toEqual({ label: 'Almeno 15 caratteri', met: true });
     });
 
+    it('matches Firebase special characters in transitional composition hints, not whitespace or arbitrary punctuation', () => {
+        const rules = { containsNonAlphanumericCharacter: true };
+        const special = (password: string) => getPasswordRequirements(password, rules).find(rule => rule.label === 'Un carattere speciale')?.met;
+        expect(special('passworddiquindici   ')).toBe(false);
+        expect(special('passworddiquindici—')).toBe(false);
+        expect(special('passworddiquindici!')).toBe(true);
+        expect(special('passworddiquindici\\\\')).toBe(true);
+    });
+
     it('accepts 15+ character lowercase passphrases after the Firebase policy is changed', async () => {
         const password = 'una frase senza numeri';
         mockedValidatePassword.mockResolvedValueOnce(providerStatus(true, futureFirebaseRules) as any);
