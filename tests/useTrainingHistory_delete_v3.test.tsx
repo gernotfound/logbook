@@ -50,7 +50,7 @@ describe('useTrainingHistory deleteWorkout', () => {
         });
     });
 
-    it('removes the workout, preserves recovery pains, and clears matching localWorkout', async () => {
+    it('removes history but never drops a live device workout solely for an ID match', async () => {
         const { result } = renderHook(() => useTrainingHistory());
 
         await act(async () => {
@@ -60,7 +60,7 @@ describe('useTrainingHistory deleteWorkout', () => {
         const state = useAppStore.getState();
         expect(state.userData?.history).toEqual([]);
         expect(state.userData?.activePains).toEqual(['knee', 'shoulder']);
-        expect(state.localWorkout).toBeNull();
+        expect(state.localWorkout?.id).toBe('w-to-delete');
         expect(state.dispatchDomainOperation).toHaveBeenCalledTimes(1);
         expect(state.dispatchDomainOperation).toHaveBeenCalledWith({
             type: 'history.delete',
