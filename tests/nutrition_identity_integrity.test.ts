@@ -93,6 +93,16 @@ describe('F-003 nutrition identity integrity', () => {
         const invalidDate = { '2026-9-29': { date: '2026-9-29', kcal: 2400 } };
         expect(() => DomainParsers.parseNutrition(invalidDate)).toThrow(/Giornata nutrizione non valida/);
 
+        // The supported daily-data parser, not a retired measurement form,
+        // owns canonical local-calendar validation including leap years.
+        expect(() => DomainParsers.parseNutrition({
+            '2025-02-29': { date: '2025-02-29', kcal: 2400 },
+        })).toThrow(/Giornata nutrizione non valida/);
+        const leapDay = DomainParsers.parseNutrition({
+            '2024-02-29': { date: '2024-02-29', kcal: 2400 },
+        });
+        expect(Object.keys(leapDay)).toEqual(['2024-02-29']);
+
         const mismatchedDay = { '2026-09-29': { date: '2026-09-30', kcal: 2400 } };
         expect(() => DomainParsers.parseNutrition(mismatchedDay)).toThrow(/Giornata nutrizione incoerente/);
         expect(mismatchedDay['2026-09-29'].date).toBe('2026-09-30');

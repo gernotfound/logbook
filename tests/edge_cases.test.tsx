@@ -75,12 +75,6 @@ describe('Empirical Challenger Suite: Edge Cases & Stress Verification', () => {
       expect(Logic.calculateBodyFat(-70, profile)).toBeNull();
     });
 
-    test('Logic.calculateBodyComposition handles zero weight / bodyfat', () => {
-      expect(Logic.calculateBodyComposition(0, 15)).toEqual({ fatMass: 0, leanMass: 0 });
-      expect(Logic.calculateBodyComposition(80, 0)).toEqual({ fatMass: 0, leanMass: 80 });
-      expect(Logic.calculateBodyComposition(80, 100)).toEqual({ fatMass: 80, leanMass: 0 });
-      expect(Logic.calculateBodyComposition(80, 105)).toEqual({ fatMass: 0, leanMass: 0 }); // out of bounds
-    });
 
     test('Logic.calculateMacroRatio handles zero fat or zero carbs without divide-by-zero crashes', () => {
       const zeroFat = Logic.calculateMacroRatio(100, 0);
@@ -152,15 +146,6 @@ describe('Empirical Challenger Suite: Edge Cases & Stress Verification', () => {
       expect(withUnsupportedAliases).toEqual(withoutTargets);
     });
 
-    test('Logic.validateMeasurementData handles null, empty, or missing profile fields', () => {
-      const invalidData = Logic.validateMeasurementData(null);
-      expect(invalidData.isValid).toBe(false);
-
-      const emptyObj = Logic.validateMeasurementData({});
-      expect(emptyObj.isValid).toBe(false);
-      expect(emptyObj.errors).toHaveProperty('date');
-      expect(emptyObj.errors).toHaveProperty('weight');
-    });
 
     test('custom-food numeric validation rejects partial, non-finite and empty required values', () => {
       const food = { name: 'Test', baseQty: 100, unit: 'g', kcal: '120', carbs: '15', pro: '5', fat: '4' };

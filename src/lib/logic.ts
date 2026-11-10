@@ -13,12 +13,7 @@ import {
     isSleepTimeValid
 } from './utils/date';
 import { generateUniqueName } from './utils/string';
-import { 
-    calculateBodyFatByMethod, 
-    calculateBodyFat, 
-    calculateBodyComposition, 
-    validateMeasurementData 
-} from './calc/bodyFat';
+import { calculateBodyFatByMethod, calculateBodyFat } from './calc/bodyFat';
 import {
     calculateTDEE,
     calculateMacrosFromKg,
@@ -78,11 +73,9 @@ export const Logic = {
     isSleepTimeValid,
     generateUniqueName,
 
-    // Body Fat & Composition
+    // Body Fat
     calculateBodyFatByMethod,
     calculateBodyFat,
-    calculateBodyComposition,
-    validateMeasurementData,
 
     // Nutrition & Foods
     calculateTDEE,
