@@ -50,6 +50,23 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('routine editor durable failures', () => {
+    it('rejects an empty set count rather than saving an invented three-set routine', async () => {
+        const { result } = renderHook(() => useTrainingRoutines());
+        act(() => result.current.setRoutineName('Scheda'));
+        act(() => result.current.handleAddExerciseToRoutine('bench'));
+        act(() => result.current.handleUpdateSetsCount(0, ''));
+
+        let saved!: boolean;
+        await act(async () => { saved = await result.current.handleSave(); });
+
+        expect(saved).toBe(false);
+        expect(result.current.routineExercises[0].setsCount).toBe('');
+        expect(mocks.showAlert).toHaveBeenCalledWith(
+            'Ogni esercizio può contenere da 1 a 20 serie. Correggi il valore prima di salvare la scheda.',
+        );
+        expect(mocks.dispatch).not.toHaveBeenCalled();
+    });
+
     it('does not quarantine the next session when a previous editor fails its ownership check', () => {
         const { result } = renderHook(() => useTrainingRoutines());
         act(() => result.current.setRoutineName('Bozza precedente'));
