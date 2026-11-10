@@ -145,6 +145,61 @@ describe('M7 native account deletion runner', () => {
     );
   });
 
+
+  it('fails closed when wrapped-key retirement fails and resumes on a later attempt', async () => {
+    mocked.deleteAccountKeyAfterVerification.mockRejectedValueOnce(new Error('key storage unavailable'));
+    await expect(processAccountDeletion('uid-key', Date.now() + 60_000, {
+      leaseOwner: 'lease-key',
+    })).resolves.toBe('failed');
+
+    expect(mocked.verifyNoAccountResidue).toHaveBeenCalledWith('uid-key', true);
+    expect(mocked.verifyNoAccountResidue).not.toHaveBeenCalledWith('uid-key');
+    expect(mocked.deleteAuthUserLast).not.toHaveBeenCalled();
+    expect(mocked.markDeletionComplete).not.toHaveBeenCalled();
+    expect(mocked.markDeletionFailed).toHaveBeenCalledWith(
+      'uid-key', 'verification', expect.any(Error), true, 'lease-key',
+    );
+
+    await expect(processAccountDeletion('uid-key', Date.now() + 60_000, {
+      leaseOwner: 'lease-key-retry',
+    })).resolves.toBe('complete');
+    expect(mocked.deleteAuthUserLast).toHaveBeenCalledTimes(1);
+    expect(mocked.markDeletionComplete).toHaveBeenCalledWith('uid-key', 'lease-key-retry');
+  });
+
+  it('never deletes Auth if a final residue check fails after key retirement', async () => {
+    mocked.verifyNoAccountResidue
+      .mockResolvedValueOnce(undefined)
+      .mockRejectedValueOnce(new Error('Unexpected private residue'));
+
+    await expect(processAccountDeletion('uid-residue', Date.now() + 60_000, {
+      leaseOwner: 'lease-residue',
+    })).resolves.toBe('failed');
+
+    expect(mocked.deleteAccountKeyAfterVerification).toHaveBeenCalledOnce();
+    expect(mocked.deleteAuthUserLast).not.toHaveBeenCalled();
+    expect(mocked.markDeletionComplete).not.toHaveBeenCalled();
+  });
+
+  it('retries after an interrupted completion write without reporting a false success', async () => {
+    mocked.markDeletionComplete.mockRejectedValueOnce(new Error('Firestore unavailable after Auth delete'));
+    await expect(processAccountDeletion('uid-auth', Date.now() + 60_000, {
+      leaseOwner: 'lease-auth',
+    })).resolves.toBe('failed');
+    expect(mocked.deleteAuthUserLast).toHaveBeenCalledOnce();
+    expect(mocked.markDeletionFailed).toHaveBeenCalledWith(
+      'uid-auth', 'auth', expect.any(Error), true, 'lease-auth',
+    );
+
+    await expect(processAccountDeletion('uid-auth', Date.now() + 60_000, {
+      leaseOwner: 'lease-auth-retry',
+    })).resolves.toBe('complete');
+    // The real Admin boundary treats auth/user-not-found as idempotent success.
+    expect(mocked.deleteAuthUserLast).toHaveBeenCalledTimes(2);
+    expect(mocked.markDeletionComplete).toHaveBeenCalledTimes(2);
+    expect(mocked.markDeletionComplete).toHaveBeenLastCalledWith('uid-auth', 'lease-auth-retry');
+  });
+
   it('does no destructive work when another invocation owns the lease', async () => {
     mocked.acquireDeletionLease.mockResolvedValueOnce(false);
 
