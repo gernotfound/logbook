@@ -90,10 +90,11 @@ export async function migrateGuestAccount({ user, guestData, policy, setUserData
         }
     };
 
+    let cloudKey: Uint8Array | undefined;
     try {
         assertCloudAllowed();
         setSyncing(true);
-        const cloudKey = await requireCloudAccountDataKey(user.uid, assertCloudAllowed);
+        cloudKey = await requireCloudAccountDataKey(user.uid, assertCloudAllowed);
         assertCloudAllowed();
         const { hydrateLocal, commitLocal, readLocal } = await import('../../lib/sync/localRepository');
         assertCloudAllowed();
@@ -235,6 +236,8 @@ export async function migrateGuestAccount({ user, guestData, policy, setUserData
         if (!localReady) throw error;
         return { ok: false, status: 'failed', error };
     } finally {
+        // Both full and post-replica cloud reads share this operation-scoped ADK.
+        cloudKey?.fill(0);
         if (isCurrent()) setSyncing(false);
     }
 }

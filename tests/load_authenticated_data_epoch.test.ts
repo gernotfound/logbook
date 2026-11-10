@@ -245,6 +245,33 @@ describe('authenticated hydration session fencing', () => {
         await clear();
     });
 
+    it('zeroizes the newly acquired ADK when a cloud read rejects, preserving the local archive', async () => {
+        await clear();
+        const { loadAuthenticatedData, initializeLocal, readLocal, invalidateSession } = await loadModules();
+        invalidateSession();
+        await initializeLocal('user:user-a', data('170'));
+        storeState.current = { userData: data('170'), localWorkout: null, localPersistenceBlocked: false };
+        const { requireCloudAccountDataKey } = await import('../src/lib/sync/cloudAccountKeyAccess');
+        const cloudKey = new Uint8Array(32).fill(18);
+        vi.mocked(requireCloudAccountDataKey).mockResolvedValueOnce(cloudKey);
+        dbState.loadCloudPayload.mockImplementationOnce(async ({ cloudKey: supplied }: { cloudKey: Uint8Array }) => {
+            expect(supplied).toBe(cloudKey);
+            expect(supplied[0]).toBe(18);
+            throw new Error('Injected cloud read failure');
+        });
+
+        const status = await loadAuthenticatedData({
+            user: { uid: 'user-a' } as any,
+            isGuestActive: () => false,
+            setSyncing: vi.fn(),
+            setSaveError: vi.fn(),
+        });
+        expect(status).toBe('blocked');
+        expect(cloudKey).toEqual(new Uint8Array(32));
+        expect((await readLocal('user:user-a'))?.data.profile?.height).toBe('170');
+        await clear();
+    });
+
     it('does not create an empty account journal when a cloud read fails without a local envelope', async () => {
         await clear();
         const { loadAuthenticatedData, readLocal, invalidateSession } = await loadModules();
