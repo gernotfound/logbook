@@ -10,14 +10,14 @@ async function continueAsGuest(page: Page) {
 }
 
 test('history detail exposes scrollable geometry and a reachable close action on a short mobile viewport', async ({ page }, testInfo) => {
-  await page.setViewportSize({ width: 320, height: 420 });
+  await page.setViewportSize({ width: 320, height: 400 });
   await continueAsGuest(page);
 
   await page.getByRole('button', { name: 'Dati e statistiche', exact: true }).click();
   await page.getByRole('tab', { name: 'Misurazioni', exact: true }).click();
 
   await page.locator('#measure-weight').fill('81.4');
-  await page.locator('#measure-bf').fill('16.7');
+  await expect(page.locator('#measure-bf')).toHaveCount(0);
   await page.getByText('Altre misurazioni', { exact: true }).click();
   await page.locator('#measure-waist').fill('84.2');
   await page.locator('#measure-neck').fill('38');
@@ -38,7 +38,7 @@ test('history detail exposes scrollable geometry and a reachable close action on
   await expect(dialog).toBeVisible();
   await expect(scrollArea).toBeVisible();
   for (const [label, value] of [
-    ['Peso', '81,4 kg'], ['BF · manuale', '16,7%'], ['Vita', '84,2 cm'],
+    ['Peso', '81,4 kg'], ['Vita', '84,2 cm'],
     ['Collo', '38 cm'], ['Torace', '101 cm'], ['Spalle', '118 cm'],
     ['Braccia', '37,5 cm'], ['Cosce', '59 cm'], ['Polpacci', '38,5 cm'],
   ]) {
