@@ -136,6 +136,8 @@ describe('guest -> account V3 migration', () => {
         expect(routines.map(routine => routine.id)).toEqual(expect.arrayContaining(['cloud-routine', 'guest-routine']));
         expect(DB.loadCloudPayload).toHaveBeenNthCalledWith(1, expect.objectContaining({ allMonths: true, cloudKey: expect.any(Uint8Array) }));
         expect(DB.loadCloudPayload).toHaveBeenCalledTimes(2);
+        // The key is still live for the post-replica read, but no longer after handoff.
+        expect(vi.mocked(DB.loadCloudPayload).mock.calls[0][0]?.cloudKey).toEqual(new Uint8Array(32));
         expect(useAppStore.getState().userData?.pendingConflicts).toEqual(merged.pendingConflicts);
         expect((await readLocal('user:a'))?.data.pendingConflicts).toEqual(merged.pendingConflicts);
         if (withConflict) {

@@ -121,8 +121,13 @@ export async function loadAuthenticatedData({
         const cloudKey = await requireCloudAccountDataKey(user.uid, () => {
             if (!cloudAllowed()) throw new Error('Consenso o sessione cloud cambiati.');
         });
-        if (!cloudAllowed()) return 'blocked';
-        const payload = await DB.loadCloudPayload({ allMonths: checkpointDue, cloudKey });
+        let payload: Awaited<ReturnType<typeof DB.loadCloudPayload>>;
+        try {
+            if (!cloudAllowed()) return 'blocked';
+            payload = await DB.loadCloudPayload({ allMonths: checkpointDue, cloudKey });
+        } finally {
+            cloudKey.fill(0);
+        }
         if (!cloudAllowed()) return 'blocked';
 
         if (payload) {

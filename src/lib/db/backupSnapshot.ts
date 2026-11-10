@@ -98,6 +98,10 @@ export async function collectBackupSnapshot(fallback: UserData, includeCloud: bo
     };
     const coverage: BackupCoverage = { scope: 'device', months: [] };
     let effectiveCloudKey = accountKey;
+    // accountKey is borrowed (including by test/recovery callers); only an ADK
+    // acquired by this invocation is ours to wipe, even across recursive retries.
+    let acquiredCloudKey: Uint8Array | undefined;
+    try {
     const documents = new Map<string, DocumentData>();
     const businessDocuments = new Map<string, DocumentData>();
     const syncMetaByDocument: Record<string, SyncMeta> = {};
@@ -159,12 +163,14 @@ export async function collectBackupSnapshot(fallback: UserData, includeCloud: bo
             // scan, solely in the owner's browser. The rights-specific key
             // endpoint permits *existing* ADK retrieval while withdrawn but
             // never provisions a new key or re-enables cloud writes.
-            effectiveCloudKey = await requireRightsExportAccountDataKey(uid, assertCurrent);
+            acquiredCloudKey = await requireRightsExportAccountDataKey(uid, assertCurrent);
+            effectiveCloudKey = acquiredCloudKey;
             assertCurrent();
             const withdrawnDocuments = await fetchWithdrawnCloudBackup(uid, assertCurrent);
             for (const [path, raw] of withdrawnDocuments) { assertCurrent(); addRawDoc(path, raw); }
         } else {
-            effectiveCloudKey = await requireCloudAccountDataKey(uid, assertCurrent);
+            acquiredCloudKey = await requireCloudAccountDataKey(uid, assertCurrent);
+            effectiveCloudKey = acquiredCloudKey;
             assertCurrent();
             const db = getDb();
             // Every supported client business transaction also advances the
@@ -245,4 +251,7 @@ export async function collectBackupSnapshot(fallback: UserData, includeCloud: bo
     assertCurrent();
     return { owner: session.owner, data: UserDataSchema.parse(mergedValue) as unknown as UserData, coverage,
         recovery: { envelope, device, cloudDocuments: Object.fromEntries(documents) } };
+    } finally {
+        acquiredCloudKey?.fill(0);
+    }
 }

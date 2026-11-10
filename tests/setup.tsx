@@ -428,7 +428,6 @@ vi.mock('firebase/auth', () => ({
   browserLocalPersistence: {},
   browserPopupRedirectResolver: { name: 'browser-popup-redirect-resolver' },
   indexedDBLocalPersistence: {},
-  deleteUser: vi.fn(),
 }));
 
 // UI tests must not register real recovery devices as an incidental mount effect.

@@ -28,6 +28,10 @@ Realtime Database, Firebase Storage e Cloud Messaging non sono importati dal run
 
 Le chiavi Firebase Web sono configurazione pubblica inclusa nel bundle client; la protezione dei dati dipende da Security Rules, autenticazione, App Check e configurazione backend.
 
+## Eliminazione account in Firebase Authentication
+
+Il lifecycle supportato è **server-mediated**: il job trusted elimina dati e chiave account prima di eliminare la Firebase Auth identity con Admin SDK (`server/accountDeletion/jobStore.ts`). **VERIFY provider:** la console Firebase Auth può consentire separatamente la cancellazione self-service degli utenti. Se è abilitata, una chiamata client SDK/API diretta può eliminare l'identità senza la prova di completamento del job trusted; il solo pulsante della PWA non è una protezione sufficiente. Trattare questa configurazione come rischio di dati orfani prima del rilascio pubblico, valutare disabilitazione della cancellazione self-service (non della registrazione) e verificare il percorso Admin e i failure path prima di qualunque cambiamento live. Lo stato osservato e il razionale operativo sono nel [registro servizi esterni](../../docs/operations/external-services-register.md). Non considerare la policy provider già corretta finché non è effettivamente cambiata e collaudata.
+
 ## App Check — reCAPTCHA Enterprise
 
 Google Cloud può presentare reCAPTCHA Enterprise dentro il prodotto più ampio **Fraud Defense**. Nel contratto TheLogBook corrente non esiste una seconda integrazione applicativa Fraud Defense: il client usa esclusivamente `ReCaptchaEnterpriseProvider` tramite Firebase App Check. Non dichiarare attive funzioni Account/SMS/Transaction defense o API assessment dirette senza evidenza live e codice corrispondente.
