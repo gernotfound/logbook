@@ -27,7 +27,7 @@ const getEmptyUserData = (): UserData => ({
     activePains: [],
 });
 
-describe('ARCH-01: Non-destructive Cache Merge', () => {
+describe('ARCH-01: Authenticated hydration and recovery integrity', () => {
     describe('Integration: loadData Flow', () => {
         beforeEach(async () => {
             useAppStore.getState().resetStore();
