@@ -321,6 +321,25 @@ describe('contextual progression engine', () => {
         expect(analysis.quality).toBe('preliminary');
     });
 
+    it('selects a dominant historical reference despite many lower-RIR candidates', () => {
+        const history = Array.from({ length: 31 }, (_, index) => workout({
+            id: `low-${index}`, date: `2026-07-${String(index + 1).padStart(2, '0')}`,
+            sets: [set(80 + index, 6 + index, index % 4)],
+        }));
+        const strongest = workout({ id: 'strongest', date: '2026-08-01', sets: [set(125, 40, 6)] });
+        const current = workout({ id: 'current', date: '2026-08-10', sets: [set(130, 41, 6)] });
+        const analysis = computeProgressionEngine(current, [...history, strongest], library).exercises[0];
+        expect(analysis.bestHistorical?.sessionId).toBe('strongest');
+    });
+
+    it('does not mistake higher output at greater effort for a dominant historical reference', () => {
+        const easier = workout({ id: 'easier', date: '2026-08-01', sets: [set(100, 8, 5)] });
+        const harder = workout({ id: 'harder', date: '2026-08-08', sets: [set(110, 9, 1)] });
+        const current = workout({ id: 'current', date: '2026-08-15', sets: [set(112, 10, 5)] });
+        const analysis = computeProgressionEngine(current, [easier, harder], library).exercises[0];
+        expect(analysis.bestHistorical).toBeUndefined();
+    });
+
     it('recovers clear record analysis after old incomplete RIR ages out of the recent comparable window', () => {
         const incomplete = workout({ id: 'w0', date: '2026-08-01', sets: [set(120, 10)] });
         const first = workout({ id: 'w1', date: '2026-08-15', sets: [set(100, 8, 2)] });
