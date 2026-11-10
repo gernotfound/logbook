@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { calculateCycleSchedule, calculateCycleTimeline, calculateCycleVolume, getNextScheduledRoutine } from '../src/lib/calc/planning';
 import { calculateCycleMacroVolume } from '../src/components/Training/planning/cycleMacroVolume';
 import { CycleCard } from '../src/components/Training/planning/CycleCard';
+import { RoutineCard } from '../src/components/Training/routines/RoutineCard';
 import { GlobalTimer } from '../src/components/Training/ActiveWorkoutSession';
 import * as clockGuard from '../src/lib/workoutClockGuard';
 import { useAppStore } from '../src/store/useAppStore';
@@ -119,10 +120,22 @@ describe('training planning residual regressions', () => {
         }
         const historicalZero = [{ ...routines[0], exercises: [{ exId: 'bench', setsCount: 0 }] }];
         const historicalBlank = [{ ...routines[0], exercises: [{ exId: 'bench', setsCount: '' }] }];
-        expect(calculateCycleVolume(cycle, historicalZero, library).totalSetsPerWeek).toBe(9);
-        expect(calculateCycleMacroVolume(cycle, historicalBlank, library)[0]?.sets).toBe(9);
+        expect(calculateCycleVolume(cycle, historicalZero, library).totalSetsPerWeek).toBe(0);
+        expect(calculateCycleVolume(cycle, historicalBlank, library).muscleVolumes).toEqual([]);
+        expect(calculateCycleMacroVolume(cycle, historicalZero, library)).toEqual([]);
+        expect(calculateCycleMacroVolume(cycle, historicalBlank, library)).toEqual([]);
         expect(calculateCycleVolume(cycle, routines, library).totalSetsPerWeek).toBe(12);
         expect(calculateCycleMacroVolume(cycle, routines, library)[0]?.sets).toBe(12);
+    });
+
+    it('shows invalid routine set counts without inventing three series', () => {
+        render(<RoutineCard
+            routine={{ id: 'invalid-count', name: 'Scheda da correggere', exercises: [{ exId: 'bench', setsCount: 0 }] }}
+            isExpanded library={library}
+            onToggleExpand={vi.fn()} onEdit={vi.fn()} onDelete={vi.fn()} onDuplicate={vi.fn()}
+        />);
+        expect(screen.getByText('Serie da correggere')).toBeDefined();
+        expect(screen.queryByText('3 serie')).toBeNull();
     });
 
     it('builds the inactive-cycle schedule only after its preview is opened', () => {

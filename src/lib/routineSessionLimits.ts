@@ -1,5 +1,5 @@
 // The routine editor already caps sets at 20. Apply the same bounded-work
-// contract at session preparation so legacy/imported plans cannot allocate
+// contract at session preparation so malformed imported plans cannot allocate
 // unbounded arrays. These are execution limits, not read-schema migrations.
 export const MAX_ROUTINE_SETS = 20;
 export const MAX_ROUTINE_SEGMENTS = 20;

@@ -180,7 +180,7 @@ export function useTrainingRoutines() {
         }
 
         if (routineExercises.some(ex => {
-            const count = Number(ex.setsCount || 3);
+            const count = Number(ex.setsCount);
             return !Number.isSafeInteger(count) || count < 1 || count > MAX_ROUTINE_SETS;
         })) {
             await showAlert('Ogni esercizio può contenere da 1 a 20 serie. Correggi il valore prima di salvare la scheda.');
@@ -203,13 +203,10 @@ export function useTrainingRoutines() {
         // Its cleanup may only consume the exact draft submitted with this save.
         const submittedDraftRaw = draftRaw.current;
         try {
-            const sanitizedExercises: RoutineExercise[] = routineExercises.map(ex => {
-                const num = typeof ex.setsCount === 'number' ? ex.setsCount : parseInt(String(ex.setsCount), 10);
-                return {
-                    ...ex,
-                    setsCount: !isNaN(num) && num >= 1 ? Math.min(MAX_ROUTINE_SETS, Math.floor(num)) : 3
-                };
-            });
+            const sanitizedExercises: RoutineExercise[] = routineExercises.map(ex => ({
+                ...ex,
+                setsCount: Number(ex.setsCount),
+            }));
 
             if (editingRoutineId) {
                 const existing = routines.find(r => r.id === editingRoutineId);
