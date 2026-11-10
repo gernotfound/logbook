@@ -2,6 +2,7 @@ import React from 'react';
 import MuscleModel from '../MuscleModel';
 import { ExerciseLibraryItem, Routine, RoutineExercise } from '../../../types';
 import { Logic } from '../../../lib/logic';
+import { MAX_ROUTINE_SETS } from '../../../lib/routineSessionLimits';
 import { ContextMenu, ContextMenuItem } from '../../UI/ContextMenu';
 import { ChevronDown, ClipboardList, Copy, Pencil, Trash2 } from 'lucide-react';
 
@@ -17,8 +18,8 @@ interface RoutineCardProps {
 }
 
 const formatExerciseTarget = (exercise: RoutineExercise, libraryItem?: ExerciseLibraryItem) => {
-    const parsedSets = Number.parseInt(String(exercise.setsCount ?? 3), 10);
-    const sets = Number.isFinite(parsedSets) && parsedSets > 0 ? parsedSets : 3;
+    const sets = Number(exercise.setsCount);
+    if (!Number.isSafeInteger(sets) || sets < 1 || sets > MAX_ROUTINE_SETS) return 'Serie da correggere';
 
     if (libraryItem?.trackingType === 'cardio') return `${sets} serie · cardio`;
     if (libraryItem?.trackingType === 'time') return `${sets} serie · a tempo`;

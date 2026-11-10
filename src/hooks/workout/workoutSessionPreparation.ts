@@ -110,9 +110,9 @@ export function buildRoutineWorkout(
             }
             const libDef = libraryMap.get(ex.exId);
             const isCardio = libDef?.trackingType === 'cardio';
-            // Preserve the legacy default for absent/zero values, but reject
-            // oversized counts before creating sets or per-set segments.
-            const setsCount = isCardio ? 1 : requireRoutineSessionCount(Number(ex.setsCount || 3), MAX_ROUTINE_SETS);
+            // A routine with no usable set count must be corrected, not silently
+            // converted into a different workout.
+            const setsCount = isCardio ? 1 : requireRoutineSessionCount(Number(ex.setsCount), MAX_ROUTINE_SETS);
             const sets = [];
             for (let i = 0; i < setsCount; i++) {
                 const setObj: any = { id: runtime.generateId('s'), kg: '', reps: '' };

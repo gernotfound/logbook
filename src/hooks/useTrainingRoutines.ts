@@ -1,4 +1,4 @@
-import { MAX_ROUTINE_SEGMENTS, MAX_ROUTINE_SETS, previewRoutineSets } from '../lib/routineSessionLimits';
+import { MAX_ROUTINE_SEGMENTS, parseRoutineSetCount, previewRoutineSets } from '../lib/routineSessionLimits';
 import { dispatchDurableOperation } from '../lib/sync/dispatchDurableOperation';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useAppStore } from '../store/useAppStore';
@@ -179,10 +179,7 @@ export function useTrainingRoutines() {
             seenExerciseIds.add(id);
         }
 
-        if (routineExercises.some(ex => {
-            const count = Number(ex.setsCount || 3);
-            return !Number.isSafeInteger(count) || count < 1 || count > MAX_ROUTINE_SETS;
-        })) {
+        if (routineExercises.some(ex => parseRoutineSetCount(ex.setsCount) === null)) {
             await showAlert('Ogni esercizio può contenere da 1 a 20 serie. Correggi il valore prima di salvare la scheda.');
             return false;
         }
@@ -203,13 +200,10 @@ export function useTrainingRoutines() {
         // Its cleanup may only consume the exact draft submitted with this save.
         const submittedDraftRaw = draftRaw.current;
         try {
-            const sanitizedExercises: RoutineExercise[] = routineExercises.map(ex => {
-                const num = typeof ex.setsCount === 'number' ? ex.setsCount : parseInt(String(ex.setsCount), 10);
-                return {
-                    ...ex,
-                    setsCount: !isNaN(num) && num >= 1 ? Math.min(MAX_ROUTINE_SETS, Math.floor(num)) : 3
-                };
-            });
+            const sanitizedExercises: RoutineExercise[] = routineExercises.map(ex => ({
+                ...ex,
+                setsCount: Number(ex.setsCount),
+            }));
 
             if (editingRoutineId) {
                 const existing = routines.find(r => r.id === editingRoutineId);
@@ -285,13 +279,15 @@ export function useTrainingRoutines() {
                 return newExs;
             }
 
-            const parsed = parseInt(count.toString(), 10);
-            if (isNaN(parsed)) {
-                newExs[index] = { ...currentExercise, setsCount: '' };
+            const parsed = parseRoutineSetCount(count);
+            if (parsed === null) {
+                // Keep the uncommitted input and set plans intact until the user
+                // corrects it; truncating it would silently change the workout.
+                newExs[index] = { ...currentExercise, setsCount: String(count) };
                 return newExs;
             }
 
-            const normalizedCount = Math.max(1, Math.min(MAX_ROUTINE_SETS, parsed));
+            const normalizedCount = parsed;
             const currentPlans = Array.isArray(currentExercise.setPlans) ? currentExercise.setPlans : [];
             const setPlans: PlannedSetTechnique[] = Array.from({ length: normalizedCount }, (_, setIndex) => ({
                 ...(currentPlans[setIndex] || { technique: 'straight' as const }),
@@ -329,7 +325,8 @@ export function useTrainingRoutines() {
         setRoutineExercises(prev => {
             const exercises = [...prev];
             const exercise = { ...exercises[exerciseIndex] };
-            const count = previewRoutineSets(exercise.setsCount);
+            const count = previewRoutineSets(exercise.setsCount, exercise.setPlans ?? []);
+            if (setIndex < 0 || setIndex >= count) return prev;
             const plans: PlannedSetTechnique[] = Array.from({ length: count }, (_, index) => ({
                 ...(exercise.setPlans?.[index] || { technique: 'straight' as const }),
             }));
@@ -349,7 +346,8 @@ export function useTrainingRoutines() {
         setRoutineExercises(prev => {
             const exercises = [...prev];
             const exercise = { ...exercises[exerciseIndex] };
-            const count = previewRoutineSets(exercise.setsCount);
+            const count = previewRoutineSets(exercise.setsCount, exercise.setPlans ?? []);
+            if (setIndex < 0 || setIndex >= count) return prev;
             const plans: PlannedSetTechnique[] = Array.from({ length: count }, (_, index) => ({
                 ...(exercise.setPlans?.[index] || { technique: 'straight' as const }),
             }));

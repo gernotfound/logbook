@@ -50,6 +50,59 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('routine editor durable failures', () => {
+    it('preserves invalid set counts for correction without changing plans or committing them', async () => {
+        const { result } = renderHook(() => useTrainingRoutines());
+        act(() => result.current.setRoutineName('Scheda'));
+        act(() => result.current.handleAddExerciseToRoutine('bench'));
+        act(() => result.current.handleUpdateSetsCount(0, '4'));
+        expect(result.current.routineExercises[0].setPlans).toHaveLength(4);
+
+        for (const rawCount of ['2.5', '2,5', '2e0', '1e2', '0x2', '21', '0', '-1', 'invalid']) {
+            act(() => result.current.handleUpdateSetsCount(0, rawCount));
+            expect(result.current.routineExercises[0].setsCount).toBe(rawCount);
+            expect(result.current.routineExercises[0].setPlans).toHaveLength(4);
+            await act(async () => { expect(await result.current.handleSave()).toBe(false); });
+            expect(mocks.dispatch).not.toHaveBeenCalled();
+        }
+
+        act(() => result.current.handleUpdateSetsCount(0, '2.5'));
+        act(() => result.current.handleUpdateSetPlan(0, 3, 'dropset'));
+        expect(result.current.routineExercises[0].setPlans).toHaveLength(4);
+        expect(result.current.routineExercises[0].setPlans?.[3]?.technique).toBe('dropset');
+
+        act(() => result.current.handleUpdateSetsCount(0, '2'));
+        expect(result.current.routineExercises[0].setsCount).toBe(2);
+        expect(result.current.routineExercises[0].setPlans).toHaveLength(2);
+
+        mocks.dispatch.mockResolvedValue({ ok: true, status: 'synced' });
+        await act(async () => { expect(await result.current.handleSave()).toBe(true); });
+        expect(mocks.dispatch).toHaveBeenCalledWith(expect.arrayContaining([
+            expect.objectContaining({
+                type: 'routine.upsert',
+                routine: expect.objectContaining({
+                    exercises: [expect.objectContaining({ exId: 'bench', setsCount: 2 })],
+                }),
+            }),
+        ]));
+    });
+
+    it('rejects an empty set count rather than saving an invented three-set routine', async () => {
+        const { result } = renderHook(() => useTrainingRoutines());
+        act(() => result.current.setRoutineName('Scheda'));
+        act(() => result.current.handleAddExerciseToRoutine('bench'));
+        act(() => result.current.handleUpdateSetsCount(0, ''));
+
+        let saved!: boolean;
+        await act(async () => { saved = await result.current.handleSave(); });
+
+        expect(saved).toBe(false);
+        expect(result.current.routineExercises[0].setsCount).toBe('');
+        expect(mocks.showAlert).toHaveBeenCalledWith(
+            'Ogni esercizio può contenere da 1 a 20 serie. Correggi il valore prima di salvare la scheda.',
+        );
+        expect(mocks.dispatch).not.toHaveBeenCalled();
+    });
+
     it('does not quarantine the next session when a previous editor fails its ownership check', () => {
         const { result } = renderHook(() => useTrainingRoutines());
         act(() => result.current.setRoutineName('Bozza precedente'));

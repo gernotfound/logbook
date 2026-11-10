@@ -28,9 +28,16 @@ function setup(
     currentRoutines = routines,
     storedHistory?: WorkoutSession[],
 ) {
-    const history = storedHistory ?? Array.from({ length: historyCount }, (_, index) =>
-        ({ id: `completed-${index}`, cycleId: currentCycle.id }) as WorkoutSession
-    );
+    const plannedRoutineIds = currentCycle.routines
+        .map(item => item.routineId)
+        .filter(routineId => currentRoutines.some(routine => routine.id === routineId));
+    const history = storedHistory ?? Array.from({ length: historyCount }, (_, index): WorkoutSession => ({
+        id: `completed-${index}`,
+        cycleId: currentCycle.id,
+        routineId: plannedRoutineIds[index % plannedRoutineIds.length],
+        date: `2026-10-${String(index + 1).padStart(2, '0')}`,
+        exercises: [],
+    }));
     useAppStore.setState({
         userData: {
             library: [], routines: currentRoutines, history,
@@ -190,10 +197,16 @@ describe('flexible training cycles', () => {
         expect(first?.nextRoutineId).toBe('first');
         expect(first?.totalSessions).toBe(8);
         expect(first?.totalRoutinesInCycle).toBe(2);
-        const afterFirst = getNextScheduledRoutine(withMissing, routines, [
-            { id: 'w1', cycleId: withMissing.id } as WorkoutSession,
+        const afterDeleted = getNextScheduledRoutine(withMissing, routines, [
+            { id: 'w1', cycleId: withMissing.id, routineId: 'deleted', exercises: [] },
         ]);
-        expect(afterFirst?.nextRoutineId).toBe('second');
+        expect(afterDeleted?.nextRoutineId).toBe('second');
+        expect(afterDeleted?.completedCount).toBe(1);
+        const withoutRoutine = getNextScheduledRoutine(withMissing, routines, [
+            { id: 'unknown', cycleId: withMissing.id, exercises: [] },
+        ]);
+        expect(withoutRoutine?.nextRoutineId).toBe('first');
+        expect(withoutRoutine?.completedCount).toBe(0);
         expect(withMissing.routines[0]?.routineId).toBe('deleted');
 
         setup(0, withMissing);

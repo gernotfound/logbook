@@ -163,7 +163,7 @@ Le Rules rendono autorevoli membership, generation e scadenza lease tramite `req
 
 ## Acknowledge causale e race remote commit → local edit → acknowledge
 
-`acknowledgeThrough(owner, expectedSeq, remote, ..., syncMeta)` è un boundary CRITICAL.
+`acknowledgeThrough(owner, expectedSeq, remote, months, syncMeta, delivery, guard?)` è un boundary CRITICAL. Il `delivery` è obbligatorio: senza prefisso effettivamente consegnato e identità della replica, il journal non può essere acknowledged o riconciliato tramite snapshot.
 
 Dopo che Firestore ha accettato un batch, una nuova modifica locale può essere committata prima che arrivi l'ack locale. In quel caso lo snapshot remoto appena confermato è causalmente più nuovo per il batch inviato ma più vecchio rispetto alla nuova modifica locale.
 
@@ -175,7 +175,7 @@ Dopo che Firestore ha accettato un batch, una nuova modifica locale può essere 
 4. prende lo snapshot remoto confermato come nuova baseline;
 5. rigioca semanticamente sopra tale snapshot soltanto le operation ancora pending;
 6. preserva `pendingConflicts` local-only;
-7. **MUST:** aggiorna `syncMetaByDocument` esclusivamente con le prove `_sync` ricevute dal server o già verificate e conservate fuori scope: i metadati derivati dal replay delle operazioni ancora `pending` non sono una conferma remota e non possono diventare un falso storico di documenti cloud esistenti. Mantiene separati stato business in memoria/IDB e metadati di delivery effettiva.
+7. **MUST:** aggiorna `syncMetaByDocument` esclusivamente con le prove `_sync` ricevute dal server o già verificate e conservate fuori scope: i metadati derivati dal replay delle operazioni ancora `pending` non sono una conferma remota e non possono diventare un falso storico di documenti cloud esistenti. Per ogni documento con frontier durevole locale, i metadati dell'ACK devono coprirlo causalmente; un frontier precedente **o incomparabile** fa rifiutare l'intero ACK senza toccare il journal. Mantiene separati stato business in memoria/IDB e metadati di delivery effettiva.
 
 **MUST:** non usare `current.data` tal quale come sostituto del replay e non sostituire `data` con lo snapshot remoto quando `actorSeq`/pending sono avanzati: entrambi gli approcci possono perdere rispettivamente modifiche remote o modifiche locali.
 

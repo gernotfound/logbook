@@ -34,7 +34,7 @@ vi.mock('firebase/firestore', () => ({
 }));
 import { collectBackupSnapshot, hasDeviceRecoveryBackupSource } from '../../src/lib/db/backupSnapshot';
 import { createBackup, decodeImport } from '../../src/lib/backup';
-import { acknowledgeThrough, initializeLocal, commitLocal, readLocal } from '../../src/lib/sync/localRepository';
+import { acknowledgeThrough, adoptReplicaCheckpoint, hydrateLocal, initializeLocal, commitLocal, readLocal } from '../../src/lib/sync/localRepository';
 import { createAndMigrateVault } from '../../src/lib/sync/secureArchiveMigration';
 import { LocalVaultLockedError, lockAllVaults } from '../../src/lib/sync/secureArchiveSession';
 import { SEALED_LOCAL_PREFIX } from '../../src/lib/sync/secureArchiveCipher';
@@ -241,10 +241,24 @@ it('retries when an edit is acknowledged while the cloud scan is in flight', asy
         if (!advanced && path.endsWith('history_months')) {
             advanced = true;
             await commitLocal('user:a', updated, base);
-            const envelope = await readLocal('user:a');
-            expect(envelope?.pending.length).toBeGreaterThan(0);
-            sdk.root.mockResolvedValue({ exists: () => true, data: () => currentCloudDoc({ profile: { height: '175', gender: 'M' } }) });
-            await acknowledgeThrough('user:a', envelope!.actorSeq, updated);
+            const now = Date.now();
+            await adoptReplicaCheckpoint('user:a', {
+                identity: { slot: 's00', replicaId: 'backup-ack', generation: 1,
+                    checkpointAtMs: now, leaseUntilMs: now + 31_104_000_000 },
+                baseSeq: 0,
+            }, { clock: {}, syncMetaByDocument: {} });
+            const delivered = (await readLocal('user:a'))!;
+            expect(delivered.pending.length).toBeGreaterThan(0);
+            const replica = delivered.replica;
+            if (!replica) throw new Error('Prova replica mancante nel test backup');
+            sdk.root.mockResolvedValue({ exists: () => true, data: () => currentCloudDoc(
+                { profile: { height: '175', gender: 'M' } },
+                { protocolVersion: CURRENT_SYNC_PROTOCOL, clock: { s00: delivered.actorSeq }, fields: {},
+                    writer: { slot: 's00', replicaId: replica.replicaId, generation: 1, seq: delivered.actorSeq } },
+            ) });
+            await acknowledgeThrough('user:a', delivered.pending.at(-1)!.seq, updated, [], undefined, {
+                operations: structuredClone(delivered.pending), replica,
+            });
             expect((await readLocal('user:a'))?.pending).toHaveLength(0);
         }
         return { size: 0, docs: [] };
@@ -628,9 +642,17 @@ it('retains a crash-only private workout witness in an explicit partial backup w
 it('refuses a full backup when a locally acknowledged month is absent on server', async () => {
     const data = parse({ nutrition: { '2025-01-01': { date: '2025-01-01', weight: 70 } } });
     await initializeSealedLocal(data);
-    await acknowledgeThrough('user:a', 0, data, [], {
-        'nutrition_months/2025-01': { protocolVersion: CURRENT_SYNC_PROTOCOL, clock: {}, fields: {} },
-    });
+    const knownMonth = 'nutrition_months/2025-01';
+    const confirmedMeta: SyncMeta = {
+        protocolVersion: CURRENT_SYNC_PROTOCOL,
+        clock: { s00: 1 },
+        fields: { '2025-01-01': { actorId: 's00', seq: 1, clock: { s00: 1 } } },
+        writer: { slot: 's00', replicaId: 'backup-seed', generation: 1, seq: 1 },
+    };
+    await hydrateLocal('user:a', data, ['2025-01'], new Map([[knownMonth, {
+        '2025-01-01': data.nutrition?.['2025-01-01'], _sync: confirmedMeta,
+    }]]));
+    expect((await readLocal('user:a'))?.syncMetaByDocument[knownMonth]).toEqual(confirmedMeta);
     await expect(collectBackupSnapshot(data, true)).rejects.toThrow(/Backup cloud incompleto/);
     const device = await collectBackupSnapshot(data, false);
     expect(device.coverage.scope).toBe('device');

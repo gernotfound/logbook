@@ -140,7 +140,9 @@ describe('acknowledgeThrough reconciliation', () => {
         await createAndMigrateVault(unknownOwner);
         expect(await readLocal(unknownOwner)).toBeUndefined();
 
-        await expect(acknowledgeThrough(unknownOwner, 0, data(171)))
+        await expect(acknowledgeThrough(unknownOwner, 0, data(171), [], undefined, {
+            operations: [], replica,
+        }))
             .rejects.toThrow('Archivio locale non trovato');
 
         expect(await readLocal(unknownOwner)).toBeUndefined();
@@ -154,24 +156,22 @@ describe('acknowledgeThrough reconciliation', () => {
             const before = await readLocal(owner);
             expect(before?.pending.length).toBeGreaterThan(0);
 
-            await expect(acknowledgeThrough(owner, 1, invalidRemote as unknown as UserData))
+            await expect(acknowledgeThrough(owner, 1, invalidRemote as unknown as UserData,
+                [], undefined, { operations: structuredClone(before!.pending), replica }))
                 .rejects.toThrow('Snapshot cloud non valido');
 
             expect(await readLocal(owner)).toEqual(before);
         },
     );
 
-    it('retains the compatibility reconciliation path when no delivery proof is supplied', async () => {
-        const incoming = data(173, '39');
+    it('rejects an unproven acknowledgement before it can retire or replace pending journal data', async () => {
+        await commitLocal(owner, data(171), data(170));
         const before = await readLocal(owner);
-        expect(before?.pending).toEqual([]);
+        expect(before?.pending.length).toBeGreaterThan(0);
 
-        await acknowledgeThrough(owner, 0, incoming);
-        const after = await readLocal(owner);
-        expect(after?.baseline.profile).toEqual(incoming.profile);
-        expect(after?.data.profile).toEqual(incoming.profile);
-        expect(after?.pending).toEqual([]);
-        expect(after?.replica).toEqual(before?.replica);
+        await expect(acknowledgeThrough(owner, before!.actorSeq, data(199),
+            [], undefined, undefined as never)).rejects.toThrow('senza prova del batch e della replica');
+        expect(await readLocal(owner)).toEqual(before);
     });
 
 });

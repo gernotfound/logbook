@@ -214,7 +214,7 @@ describe('diagnostic acknowledgement invariants with a real encrypted journal', 
         expect(await snapshot()).toEqual(before);
     });
 
-    it('rejects the whole attested ACK when only one delivered document has a newer durable frontier', async () => {
+    it('rejects the whole attested ACK when a delivered document has a newer or incomparable durable frontier', async () => {
         const base = data(170);
         const first = data(171, { '2026-09-01': { date: '2026-09-01', weight: 71 } });
         await initialize(base);
@@ -241,10 +241,16 @@ describe('diagnostic acknowledgement invariants with a real encrypted journal', 
         expect(before.syncMetaByDocument[''].clock).toEqual({ s00: 1, s01: 1 });
         expect(before.syncMetaByDocument['nutrition_months/2026-09']).toBeUndefined();
 
-        await expect(acknowledgeThrough(owner, lastSequence(sent.operations), confirmed.remote,
-            ['2026-09'], confirmed.syncMeta, sent)).rejects.toThrow('Acknowledgement obsoleto rispetto al frontier locale');
-        expect(await get(key)).toBe(ciphertext);
-        expect(await snapshot()).toEqual(before);
+        const incomparable: Record<string, SyncMeta> = {
+            ...confirmed.syncMeta,
+            '': { ...confirmed.syncMeta[''], clock: { s00: 1, s02: 1 } },
+        };
+        for (const incoming of [confirmed.syncMeta, incomparable]) {
+            await expect(acknowledgeThrough(owner, lastSequence(sent.operations), confirmed.remote,
+                ['2026-09'], incoming, sent)).rejects.toThrow('Acknowledgement obsoleto rispetto al frontier locale');
+            expect(await get(key)).toBe(ciphertext);
+            expect(await snapshot()).toEqual(before);
+        }
     });
 
     it('retains the newer pending causal dot and advances revision when a partial ACK leaves business unchanged', async () => {

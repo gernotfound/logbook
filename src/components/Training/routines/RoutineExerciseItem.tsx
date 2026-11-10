@@ -1,4 +1,4 @@
-import { MAX_ROUTINE_SEGMENTS, MAX_ROUTINE_SETS, previewRoutineSets } from '../../../lib/routineSessionLimits';
+import { MAX_ROUTINE_SEGMENTS, previewRoutineSets } from '../../../lib/routineSessionLimits';
 import React, { useId } from 'react';
 import { ArrowUp, ArrowDown, Trash2, Activity, CircleHelp } from 'lucide-react';
 import type { ExerciseLibraryItem, PlannedSetTechnique, ProgressionContract, RoutineExercise, SetTechnique } from '../../../types';
@@ -150,10 +150,13 @@ export const RoutineExerciseItem: React.FC<RoutineExerciseItemProps> = ({
                         </label>
                         <input
                             id={setsId}
-                            type="number" min="1" max={MAX_ROUTINE_SETS}
+                            type="text" inputMode="numeric" pattern="[0-9]*"
                             placeholder="3"
                             value={exercise.setsCount !== undefined && exercise.setsCount !== null ? exercise.setsCount : ''}
-                            onChange={e => onUpdateSetsCount(index, e.target.value)}
+                            onChange={e => {
+                                const value = e.target.value;
+                                if (/^[0-9]*$/.test(value)) onUpdateSetsCount(index, value);
+                            }}
                             onFocus={e => e.target.select()}
                             style={{
                                 width: '90px',
@@ -255,7 +258,7 @@ export const RoutineExerciseItem: React.FC<RoutineExerciseItemProps> = ({
                     {!isCardio && (
                         <div>
                             <div className="routine-technique-set-list">
-                                {Array.from({ length: previewRoutineSets(exercise.setsCount) }, (_, setIndex) => {
+                                {Array.from({ length: previewRoutineSets(exercise.setsCount, exercise.setPlans ?? []) }, (_, setIndex) => {
                                     const plan: PlannedSetTechnique | undefined = exercise.setPlans?.[setIndex];
                                     const technique: SetTechnique = plan?.technique || 'straight';
                                     const hasParameters = technique !== 'straight' && technique !== 'dropset';
