@@ -25,21 +25,22 @@ const DATA_TABS: ReadonlyArray<{ id: DataSubTab; label: string }> = [
 interface DataViewProps {
     subTab?: DataSubTab;
     setSubTab?: (tab: DataSubTab) => void;
+    isActive?: boolean;
 }
 
 const DataView: React.FC<DataViewProps> = ({
     subTab = 'measurements',
-    setSubTab
+    setSubTab,
+    isActive = true,
 }) => {
     const today = useLocalToday();
     const [chosenDate, setChosenDate] = useState<string | null>(null);
     const selectedDate = chosenDate ?? today;
     const setSelectedDate = (date: string) => setChosenDate(date === today ? null : date);
-    const measurementsHook = useNutritionMeasurements(selectedDate);
-    const sleepHook = useSleepMeasurements();
     const [localSubTab, setLocalSubTab] = useState<DataSubTab>('measurements');
-
     const currentSubTab = setSubTab ? subTab : localSubTab;
+    const measurementsHook = useNutritionMeasurements(selectedDate, isActive && currentSubTab === 'history');
+    const sleepHook = useSleepMeasurements();
     const changeSubTab = setSubTab || setLocalSubTab;
 
     const handleSelectEdit = (day: MeasurementHistoryDay) => {

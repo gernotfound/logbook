@@ -4,6 +4,7 @@ import WorkoutTimer from './WorkoutTimer';
 
 interface SessionHeaderProps {
     isEditingHistory?: boolean;
+    isActive?: boolean;
     routineName?: string;
     date?: string;
     onCancelHistory: () => void;
@@ -14,6 +15,7 @@ interface SessionHeaderProps {
 
 const SessionHeader: React.FC<SessionHeaderProps> = ({
     isEditingHistory,
+    isActive = true,
     routineName,
     date,
     onCancelHistory,
@@ -59,7 +61,7 @@ const SessionHeader: React.FC<SessionHeaderProps> = ({
 
             {!isEditingHistory && (
                 <div className="workout-sticky-timer">
-                    <WorkoutTimer />
+                    <WorkoutTimer isActive={isActive} />
                     <div
                         className="workout-exercise-progress"
                         role="progressbar"

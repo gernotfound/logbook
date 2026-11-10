@@ -75,4 +75,25 @@ describe('Home nutrition summary efficiency', () => {
         expect(screen.getByTestId('home-equal-day').textContent).toBe('80|20.0|US Navy');
     });
 
+    it('selects the latest valid weight and the latest BF independently of insertion order', () => {
+        function HomeSummary() {
+            const home = useHomeView();
+            if (home.loading) return <output>Caricamento</output>;
+            return <output data-testid="unordered-weight-bf">{[home.userWeight, home.bf, home.bfSource].join('|')}</output>;
+        }
+        const day = (date: string, weight: string, bf: string): NutritionDay => ({
+            date, kcal: 0, carbs: 0, pro: 0, fat: 0, weight, bf, bfProvenance: { method: 'us_navy' },
+        });
+        renderWithProviders(<HomeSummary />, { userData: {
+            ...emptyUserData,
+            nutrition: {
+                '2026-10-16': day('2026-10-16', '-3', ''),
+                '2026-10-14': day('2026-10-14', '82', '18'),
+                '2026-10-17': day('2026-10-17', 'invalid', '17.5'),
+                '2026-10-15': day('2026-10-15', '83', ''),
+            },
+        } });
+        expect(screen.getByTestId('unordered-weight-bf').textContent).toBe('83|17.5|US Navy');
+    });
+
 });

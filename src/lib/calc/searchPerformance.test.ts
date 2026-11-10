@@ -37,6 +37,12 @@ describe('catalog search index equivalence', () => {
         const preparedFoods = createFoodSearcher(foods);
         const preparedExercises = createExerciseLibrarySearcher(exercises);
         expect(preparedFoods('')).toHaveLength(600);
+        for (const query of ['p', 'pollo', 'polo', 'riso', 'greco', 'rossi', 'not-found']) {
+            const complete = preparedFoods(query).map(item => item.id);
+            for (const limit of [1, 5, 15]) {
+                expect(preparedFoods(query, limit).map(item => item.id)).toEqual(complete.slice(0, limit));
+            }
+        }
         expect(preparedExercises('')).toHaveLength(600);
 
         for (const [query, expectedId] of foodExamples) {
