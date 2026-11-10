@@ -966,4 +966,30 @@ describe('contextual progression engine', () => {
         expect(result.density?.quality).toBe('preliminary');
     });
 
+    it('keeps the first duplicate historical exercise and never reuses a current-only bodyweight override for history', () => {
+        const previous = workout({
+            id: 'duplicate-history', date: '2026-03-05',
+            exercises: [
+                { exId: 'pullup', sessionNote: '', sets: [set(5, 8, 2)] },
+                { exId: 'pullup', sessionNote: '', sets: [set(30, 8, 2)] },
+            ],
+        });
+        const current = workout({
+            id: 'today', date: '2026-06-10', exId: 'pullup', sets: [set(10, 8, 2)],
+        });
+        const nutrition = {
+            '2026-01-20': { date: '2026-01-20', kcal: 0, carbs: 0, pro: 0, fat: 0, weight: 80 },
+            '2026-03-01': { date: '2026-03-01', kcal: 0, carbs: 0, pro: 0, fat: 0, weight: 0 },
+            '2026-05-01': { date: '2026-05-01', kcal: 0, carbs: 0, pro: 0, fat: 0, weight: 90 },
+            '2026-07-01': { date: '2026-07-01', kcal: 0, carbs: 0, pro: 0, fat: 0, weight: 110 },
+        };
+        const analysis = computeProgressionEngine(current, [previous], library, {
+            nutrition, explicitBodyweightKg: 95,
+        }).exercises[0];
+        expect(analysis.current.bodyweightKg).toBe(95);
+        expect(analysis.previousComparable?.bodyweightKg).toBe(80);
+        expect(analysis.previousComparable?.referenceSet?.kg).toBe(5);
+        expect(analysis.previousComparable?.referenceSet?.effectiveKg).toBe(85);
+    });
+
 });

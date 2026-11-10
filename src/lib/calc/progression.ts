@@ -13,7 +13,7 @@ import type {
 } from '../../types';
 import { getSetSegments, getSetTechnique } from '../advancedSets';
 import { getWorkoutDurationSeconds } from './workoutDuration';
-import { compareSessionChronology, isSessionEarlier, orderedEarlierSessions } from './progressionHistory';
+import { compareSessionChronology, orderedEarlierSessions } from './progressionHistory';
 
 export type ProgressionExerciseRef = Pick<Exercise, 'id' | 'name' | 'trackingType' | 'isBodyweight' | 'equipmentWeight' | 'muscles' | 'secondaryMuscles'>;
 
@@ -184,6 +184,30 @@ function historicalBodyweight(
     return latestWeight;
 }
 
+
+function createHistoricalBodyweightLookup(nutrition: ProgressionBodyweightContext['nutrition']): (date: string) => number | undefined {
+    // Standalone normalisation keeps its existing lookup contract. A complete
+    // report can index dated weigh-ins once rather than sort them per exercise.
+    const measurements = Object.keys(nutrition ?? {})
+        .filter(date => /^\d{4}-\d{2}-\d{2}$/.test(date))
+        .sort()
+        .flatMap(date => {
+            const weight = numberValue(nutrition?.[date]?.weight);
+            return weight !== undefined && weight > 0 ? [{ date, weight }] : [];
+        });
+    return (date: string) => {
+        if (!date) return undefined;
+        let low = 0;
+        let high = measurements.length;
+        while (low < high) {
+            const mid = Math.floor((low + high) / 2);
+            if (measurements[mid].date <= date) low = mid + 1;
+            else high = mid;
+        }
+        return low ? measurements[low - 1].weight : undefined;
+    };
+}
+
 function effectiveLoad(
     kg: number | undefined,
     exercise: ProgressionExerciseRef | undefined,
@@ -266,14 +290,13 @@ function referenceSet(sets: NormalizedSet[], trackingType: Exercise['trackingTyp
     }, undefined);
 }
 
-export function normalizeExerciseExposure(
+function normalizeExerciseExposureWithWeight(
     session: WorkoutSession,
     sessionExercise: SessionExercise,
     exercise: ProgressionExerciseRef | undefined,
-    context: ProgressionBodyweightContext = {},
+    bodyweightKg: number | undefined,
 ): NormalizedExposure {
     const date = session.date ?? '';
-    const bodyweightKg = exercise?.isBodyweight ? historicalBodyweight(date, context) : undefined;
     const trackingType = exercise?.trackingType ?? 'weight_reps';
     const sets = (sessionExercise.sets ?? []).map(set => normalizeSet(set, exercise, bodyweightKg));
     const observedSets = sets.filter(set => hasObservedSet(set, trackingType));
@@ -319,6 +342,16 @@ export function normalizeExerciseExposure(
         tonnageComplete,
         ...(ref ? { referenceSet: ref } : {}),
     };
+}
+
+export function normalizeExerciseExposure(
+    session: WorkoutSession,
+    sessionExercise: SessionExercise,
+    exercise: ProgressionExerciseRef | undefined,
+    context: ProgressionBodyweightContext = {},
+): NormalizedExposure {
+    const bodyweightKg = exercise?.isBodyweight ? historicalBodyweight(session.date ?? '', context) : undefined;
+    return normalizeExerciseExposureWithWeight(session, sessionExercise, exercise, bodyweightKg);
 }
 
 function setShape(set?: NormalizedSet): string {
@@ -682,21 +715,20 @@ function observedSessionWorkSets(
 
 function densityAnalysis(
     current: WorkoutSession,
-    history: WorkoutSession[],
+    orderedHistory: WorkoutSession[],
     libraryMap: Map<string, ProgressionExerciseRef>,
     context: ProgressionBodyweightContext,
 ): DensityProgressionAnalysis | undefined {
     if (current.cycleStrategy?.progressionFocus !== 'density') return undefined;
     const currentDuration = getWorkoutDurationSeconds(current);
     let previous: WorkoutSession | undefined;
-    for (const item of history) {
-        if (
-            item.id === current.id
+    for (const item of orderedHistory) {
+        if (item.id === current.id
             || item.routineId !== current.routineId
-            || !isSessionEarlier(item, current)
             || item.cycleStrategy?.progressionFocus !== 'density'
-            || (current.cycleId && item.cycleId !== current.cycleId)
-        ) continue;
+            || (current.cycleId && item.cycleId !== current.cycleId)) continue;
+        // Earlier sessions are already ordered. Preserve the first input
+        // occurrence when multiple sessions have identical chronology.
         if (!previous || compareSessionChronology(item, previous) > 0) previous = item;
     }
     const previousDuration = previous ? getWorkoutDurationSeconds(previous) : undefined;
@@ -736,27 +768,37 @@ export function computeProgressionEngine(
 ): ProgressionEngineResult {
     const analyses: ExerciseProgressionAnalysis[] = [];
     const orderedHistory = orderedEarlierSessions(history, currentWorkout);
-    const currentExIds = new Set((currentWorkout.exercises ?? []).map(item => item.exId).filter(Boolean));
-    const historyByExercise = new Map<string, Array<{ session: WorkoutSession; exercise: SessionExercise }>>();
+    const requestedIds = new Set((currentWorkout.exercises ?? [])
+        .filter(item => Boolean(item?.exId))
+        .map(item => item.exId));
+    const historicalById = new Map<string, { session: WorkoutSession; exercise: SessionExercise }[]>();
+    // Search each historical session's exercise list once; the first matching
+    // exercise in a session remains authoritative if legacy duplicates exist.
     for (const session of orderedHistory) {
         const seen = new Set<string>();
         for (const exercise of session.exercises ?? []) {
-            // Preserve Array.find semantics if a session contains duplicate exercise IDs.
-            if (!currentExIds.has(exercise.exId) || seen.has(exercise.exId)) continue;
-            seen.add(exercise.exId);
-            const exposures = historyByExercise.get(exercise.exId);
-            if (exposures) exposures.push({ session, exercise });
-            else historyByExercise.set(exercise.exId, [{ session, exercise }]);
+            const id = exercise?.exId;
+            if (!id || !requestedIds.has(id) || seen.has(id)) continue;
+            seen.add(id);
+            const matches = historicalById.get(id) ?? [];
+            matches.push({ session, exercise });
+            historicalById.set(id, matches);
         }
     }
-    // A current-only bodyweight fallback must never be substituted for historical weigh-ins.
-    const historicalContext: ProgressionBodyweightContext = { nutrition: context.nutrition };
+    const usesBodyweight = [...requestedIds].some(id => libraryMap.get(id)?.isBodyweight);
+    const weightAtDate = usesBodyweight ? createHistoricalBodyweightLookup(context.nutrition) : undefined;
+    const currentBodyweight = usesBodyweight
+        ? historicalBodyweight(currentWorkout.date ?? '', context)
+        : undefined;
     for (const currentExercise of currentWorkout.exercises ?? []) {
         if (!currentExercise?.exId) continue;
         const exercise = libraryMap.get(currentExercise.exId);
-        const current = normalizeExerciseExposure(currentWorkout, currentExercise, exercise, context);
-        const historical = (historyByExercise.get(currentExercise.exId) ?? []).map(({ session, exercise: prior }) =>
-            normalizeExerciseExposure(session, prior, exercise, historicalContext),
+        const current = normalizeExerciseExposureWithWeight(currentWorkout, currentExercise, exercise,
+            exercise?.isBodyweight ? currentBodyweight : undefined);
+        // A current-only explicit weight is never used to rewrite historic loads.
+        const historical = (historicalById.get(currentExercise.exId) ?? []).map(({ session, exercise: prior }) =>
+            normalizeExerciseExposureWithWeight(session, prior, exercise,
+                exercise?.isBodyweight ? weightAtDate?.(session.date ?? '') : undefined)
         );
 
         const comparisons: HistoricalExposureComparison[] = historical.map(exposure => ({
@@ -834,7 +876,7 @@ export function computeProgressionEngine(
 
     const priorityOrder = { primary: 0, secondary: 1, other: 2 } as const;
     analyses.sort((a, b) => priorityOrder[a.priority] - priorityOrder[b.priority]);
-    const density = densityAnalysis(currentWorkout, history, libraryMap, context);
+    const density = densityAnalysis(currentWorkout, orderedHistory, libraryMap, context);
     return { exercises: analyses, ...(density ? { density } : {}) };
 }
 
