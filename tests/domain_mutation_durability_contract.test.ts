@@ -13,6 +13,7 @@ describe('domain mutation durability boundary', () => {
     it('accepts a dispatcher-reported local-pending result, not proof of journal persistence', async () => {
         const dispatch = vi.fn().mockResolvedValue({ ok: false, status: 'local-pending', error: new Error('offline') } satisfies SyncResult);
         await expect(dispatchDurableOperation(dispatch, operation)).resolves.toBeUndefined();
+        expect(dispatch).toHaveBeenCalledExactlyOnceWith(operation);
     });
     it.each(['failed', 'rejected'] as const)('rejects %s outcomes instead of reporting success', async status => {
         const error = new Error('not durable');

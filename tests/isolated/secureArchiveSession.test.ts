@@ -233,6 +233,32 @@ describe('resident owner and guest capabilities', () => {
         guest.dataKey.fill(0);
     });
 
+    it('permits a new guest generation to unlock the same wrapped key without retaining a revoked capability', async () => {
+        localStorage.setItem('logbook_is_guest', 'true');
+        localStorage.setItem(GUEST_SESSION_KEY, 'guest-before');
+        localStorage.removeItem(GUEST_REVOCATION_KEY);
+        activateGuestSession('guest-before');
+        const guest = await install('guest');
+        await unlockVaultForOwner('guest');
+        const oldCapability = requireUnlockedLocalKey('guest');
+        expect(oldCapability).toEqual(guest.dataKey);
+
+        localStorage.setItem(GUEST_SESSION_KEY, 'guest-after');
+        activateGuestSession('guest-after');
+        expect(() => requireUnlockedLocalKey('guest')).toThrow(LocalVaultLockedError);
+        expectZeroed(oldCapability);
+
+        await unlockVaultForOwner('guest');
+        const newCapability = requireUnlockedLocalKey('guest');
+        expect(newCapability).toEqual(guest.dataKey);
+        expect(newCapability).not.toBe(oldCapability);
+
+        revokeGuestSession();
+        expect(() => requireUnlockedLocalKey('guest')).toThrow(LocalVaultLockedError);
+        expectZeroed(newCapability);
+        guest.dataKey.fill(0);
+    });
+
     it('keeps authenticated owner unlock independent of unreadable active-guest consent metadata', async () => {
         localStorage.setItem('logbook_is_guest', 'true');
         localStorage.setItem(GUEST_SESSION_KEY, 'other-active-guest');
