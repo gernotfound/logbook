@@ -281,14 +281,24 @@ export const idbStore: Record<string, any> = {};
 // The shared object store orders overlapping readonly/readwrite transactions
 // by creation, including get after a write and set/del/clear after update.
 let idbTransactionTail: Promise<void> = Promise.resolve();
-function queueIdbTransaction<T>(write: () => T): Promise<T> {
+function queueIdbTransaction<T>(work: () => T): Promise<T> {
   const previous = idbTransactionTail;
   let release!: () => void;
   const pending = new Promise<void>(resolve => { release = resolve; });
   idbTransactionTail = pending;
-  return previous.then(write).finally(() => {
+  return previous.then(work).finally(() => {
     release();
     if (idbTransactionTail === pending) idbTransactionTail = Promise.resolve();
+  });
+}
+
+// IndexedDB clones both stored and retrieved values. Without this isolation,
+// an updater that mutates its input and throws could change the mock's data.
+export function readMockIdbValue<T = unknown>(key: IDBValidKey): Promise<T | undefined> {
+  return queueIdbTransaction(() => {
+    const storageKey = String(key);
+    return Object.prototype.hasOwnProperty.call(idbStore, storageKey)
+      ? structuredClone(idbStore[storageKey]) as T : undefined;
   });
 }
 beforeEach(() => {
@@ -298,19 +308,20 @@ beforeEach(() => {
   sessionStorageMock.clear();
 });
 vi.mock('idb-keyval', () => ({
-  get: vi.fn((key: string) => queueIdbTransaction(() =>
-    Object.prototype.hasOwnProperty.call(idbStore, key) ? idbStore[key] : undefined)),
+  get: vi.fn(readMockIdbValue),
   set: vi.fn((key: string, value: any) => queueIdbTransaction(() => {
-    idbStore[key] = value;
+    idbStore[key] = structuredClone(value);
   })),
   update: vi.fn((key: string, updater: (value: any) => any) => queueIdbTransaction(() => {
-    const next = updater(idbStore[key]);
-    // The updater executes inside a readwrite transaction: it cannot be async.
+    const previous = Object.prototype.hasOwnProperty.call(idbStore, key)
+      ? structuredClone(idbStore[key]) : undefined;
+    const next = updater(previous);
+    // An IndexedDB updater cannot persist an async result or an uncloneable value.
     if (next !== null && (typeof next === 'object' || typeof next === 'function')
       && typeof next.then === 'function') {
       throw new DOMException('Asynchronous IndexedDB update result', 'DataCloneError');
     }
-    idbStore[key] = next;
+    idbStore[key] = structuredClone(next);
   })),
   del: vi.fn((key: string) => queueIdbTransaction(() => {
     delete idbStore[key];

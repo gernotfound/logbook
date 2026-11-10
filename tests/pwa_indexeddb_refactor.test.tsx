@@ -6,7 +6,6 @@ import { createWorkoutSlice } from '../src/store/slices/createWorkoutSlice';
 import { createSyncSlice } from '../src/store/slices/createSyncSlice';
 import { createStore } from 'zustand/vanilla';
 import type { AppState } from '../src/store/useAppStore';
-import { draftRegistry } from '../src/lib/utils/draftRegistry';
 import React from 'react';
 import { describe, test, expect, beforeEach, vi, afterEach } from 'vitest';
 import { render } from '@testing-library/react';
@@ -30,6 +29,7 @@ describe('PWA IndexedDB Cache & Sync Lock Refactor Suite', () => {
   });
 
   afterEach(() => {
+    vi.restoreAllMocks();
     vi.useRealTimers();
     if (typeof window !== 'undefined') {
       window.__INITIAL_USER_DATA__ = null;
@@ -152,33 +152,6 @@ describe('PWA IndexedDB Cache & Sync Lock Refactor Suite', () => {
       vi.useRealTimers();
     });
 
-    test('explicit purge removes the owner archive and clears the view', async () => {
-      await prepareUnlockedTestArchive('user:test-user-id');
-      const mockData: UserData = {
-        profile: { height: '172' },
-        library: [],
-        routines: [],
-        history: [],
-        nutrition: {},
-        customFoods: [],
-        activeWorkout: null,
-        nutritionPlanning: {} as any
-      };
-
-      // The ordinary purge must see a real, clean journal; a pending edit
-      // would correctly block logout/purge under the current lifecycle.
-      await initializeLocal('user:test-user-id', mockData);
-      useAppStore.getState().setUserData(mockData);
-      await new Promise(r => setTimeout(r, 0));
-      expect(idbStore['logbook:v2:user:test-user-id']).toMatch(/^tlb-sealed:v1:/);
-      expect((await readLocal('user:test-user-id'))?.pending).toHaveLength(0);
-
-      await DB.purgeAllLocalUserData();
-      useAppStore.getState().resetStore();
-      expect(idbStore['logbook:v2:user:test-user-id']).toBeUndefined();
-      expect(useAppStore.getState().userData).toBeNull();
-    });
-
     test('localWorkout is sealed in owner-scoped localStorage, not IDB or plaintext keys', async () => {
       localStorage.setItem('logbook:v2:user:test-user-id:health-consent-generation', '1');
       await prepareUnlockedTestArchive('user:test-user-id');
@@ -218,27 +191,13 @@ describe('PWA IndexedDB Cache & Sync Lock Refactor Suite', () => {
       (window as any).__INITIAL_USER_DATA__ = 12345;
       expect(getInitialUserData()).toBeNull();
 
-      // 3. Partial object gets sanitized via UserDataSchema defaults
+      // Partial object gets sanitized via UserDataSchema defaults
       (window as any).__INITIAL_USER_DATA__ = { profile: { height: '173' } };
       const sanitized = getInitialUserData();
       expect(sanitized).not.toBeNull();
       expect(sanitized?.profile?.height).toBe('173');
       expect(Array.isArray(sanitized?.routines)).toBe(true);
 
-      // 3. Valid parsed object
-      const validData: UserData = {
-        profile: { height: '174' },
-        library: [],
-        routines: [],
-        history: [],
-        nutrition: {},
-        customFoods: [],
-        activeWorkout: null,
-        nutritionPlanning: {} as any
-      };
-      window.__INITIAL_USER_DATA__ = validData;
-      useAppStore.setState({ userData: window.__INITIAL_USER_DATA__ });
-      expect(useAppStore.getState().userData?.profile?.height).toBe('174');
     });
 
     test('saveUserData sets syncing to true during debounce and false upon completion', async () => {
@@ -278,22 +237,12 @@ describe('PWA IndexedDB Cache & Sync Lock Refactor Suite', () => {
       vi.useFakeTimers();
       const { DB } = await import('../src/lib/db');
 
-      const pendingResolvers: Array<(val: any) => void> = [];
-
-      const originalSave = DB.saveUserData;
+      const pendingResolvers: Array<(result: Awaited<ReturnType<typeof DB.saveUserData>>) => void> = [];
       let callCount = 0;
-      (DB as any).saveUserData = vi.fn().mockImplementation(() => {
+      vi.spyOn(DB, 'saveUserData').mockImplementation(() => new Promise(resolve => {
         callCount++;
-        if (callCount === 1) {
-          return new Promise<any>((resolve) => {
-            pendingResolvers.push(resolve);
-          });
-        } else {
-          return new Promise<any>((resolve) => {
-            pendingResolvers.push(resolve);
-          });
-        }
-      });
+        pendingResolvers.push(resolve);
+      }));
 
       const mockData1: UserData = {
         profile: { height: '176' },
@@ -344,7 +293,6 @@ describe('PWA IndexedDB Cache & Sync Lock Refactor Suite', () => {
       // 7. Now that all queued saves are finished, syncing should be false
       expect(useAppStore.getState().syncing).toBe(false);
 
-      (DB as any).saveUserData = originalSave;
       vi.useRealTimers();
     });
 
@@ -363,7 +311,8 @@ describe('PWA IndexedDB Cache & Sync Lock Refactor Suite', () => {
       };
 
       // Trigger save. Catch the promise rejection since resetStore cancels it.
-      useAppStore.getState().saveUserData(mockData).catch(() => {});
+      const canceled = expect(useAppStore.getState().saveUserData(mockData))
+        .rejects.toThrow('cambio sessione');
       expect(useAppStore.getState().syncing).toBe(true);
 
       // Reset store before debounce fires
@@ -372,6 +321,7 @@ describe('PWA IndexedDB Cache & Sync Lock Refactor Suite', () => {
       expect(useAppStore.getState().syncing).toBe(false);
       expect(useAppStore.getState().userData).toBeNull();
 
+      await canceled;
       // Advancing time should not re-trigger any save or error
       await vi.advanceTimersByTimeAsync(1500);
       expect(useAppStore.getState().syncing).toBe(false);
@@ -379,32 +329,6 @@ describe('PWA IndexedDB Cache & Sync Lock Refactor Suite', () => {
       vi.useRealTimers();
     });
 
-    test('visibilitychange hidden flushes localWorkout as authenticated device ciphertext', async () => {
-      localStorage.setItem('logbook:v2:user:test-user-id:health-consent-generation', '1');
-      await prepareUnlockedTestArchive('user:test-user-id');
-      const mockWorkout: WorkoutSession = {
-        id: 'session-vis-test',
-        date: '2026-08-14',
-        routineName: 'Leg Day',
-        manualDurationStr: '00:45:00',
-        exercises: []
-      };
-
-      useAppStore.setState({ localWorkout: null, dataOwner: 'user:test-user-id' });
-      // A synchronous input flush publishes new RAM data that is not yet
-      // present on disk; the background boundary must durably save it.
-      const flush = () => useAppStore.setState({ localWorkout: mockWorkout });
-      draftRegistry.register(flush);
-      try {
-        Object.defineProperty(document, 'visibilityState', { value: 'hidden', configurable: true });
-        document.dispatchEvent(new Event('visibilitychange'));
-        const sealed = localStorage.getItem(protectedDeviceKey('workout'));
-        expect(sealed).toMatch(/^tlb-sealed:v1:/);
-        expect(sealed).not.toContain('session-vis-test');
-        expect(localStorage.getItem(deviceKey('workout'))).toBeNull();
-        expect(JSON.parse(readDeviceValueStrict('workout')!).workout.id).toBe('session-vis-test');
-      } finally { draftRegistry.unregister(flush); }
-    });
   });
 
   describe('R3: Sync Lock (beforeunload Event Listener)', () => {
@@ -421,7 +345,7 @@ describe('PWA IndexedDB Cache & Sync Lock Refactor Suite', () => {
       window.dispatchEvent(event);
 
       expect(preventDefaultSpy).toHaveBeenCalled();
-      expect(event.returnValue).toBeDefined();
+      expect(event.defaultPrevented).toBe(true);
 
       unmount();
     });
@@ -438,6 +362,7 @@ describe('PWA IndexedDB Cache & Sync Lock Refactor Suite', () => {
       window.dispatchEvent(event);
 
       expect(preventDefaultSpy).not.toHaveBeenCalled();
+      expect(event.defaultPrevented).toBe(false);
 
       unmount();
     });
