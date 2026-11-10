@@ -95,6 +95,8 @@ Questa distinzione è già applicata alle collezioni che hanno ricevuto hardenin
 
 **MUST:** un record scartato per identità invalida non deve riapparire come ghost object in projection, merge, UI o successiva sincronizzazione.
 
+Le identità correnti di pasti registrati (`LoggedMealItem.id`) e assunzioni di integratori (`SupplementIntake.id` e `supplementId`) sono stringhe valide; il parser non promuove ID numerici pre-lancio in identità persistite. Un input non valido viene quarantinato nelle viste transitorie; i gateway degli archivi autorevoli rifiutano la perdita prima della riscrittura. `foodId`, invece, rimane `string | number` perché identifica una voce del catalogo alimentare corrente.
+
 **MUST (distinzione di boundary):** la quarantena Zod serve a produrre viste transitorie sicure da input non autorevoli, non è autorizzazione a risigillare un Local Envelope IndexedDB autenticato dopo avere perso dati. Nel vault corrente, se `data`, `baseline` o uno snapshot di recupero subiscono una normalizzazione con perdita, lettura e scrittura si fermano preservando il ciphertext originario; la riapertura di dati validi richiede recupero esplicito e non una cancellazione silenziosa. Il controllo non cambia il comportamento di `UserDataSchema` per ingressi transitori.
 
 ### Cache corrotta vs dati cloud invalidi
