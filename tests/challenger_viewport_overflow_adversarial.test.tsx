@@ -275,8 +275,6 @@ describe('EMPIRICAL CHALLENGER: Viewport & Overflow Adversarial Stress Suite (m2
                     setNeck={vi.fn()}
                     hip=""
                     setHip={vi.fn()}
-                    manualBf="14.5"
-                    setManualBf={vi.fn()}
                     chest="102"
                     setChest={vi.fn()}
                     shoulders="120"
@@ -293,12 +291,13 @@ describe('EMPIRICAL CHALLENGER: Viewport & Overflow Adversarial Stress Suite (m2
             );
 
             const weightInput = mContainer.querySelector('#measure-weight') as HTMLInputElement;
-            const bfInput = mContainer.querySelector('#measure-bf') as HTMLInputElement;
+            const estimateCheckbox = mContainer.querySelector('.data-method-option input[type="checkbox"]') as HTMLInputElement;
             const waistInput = mContainer.querySelector('#measure-waist') as HTMLInputElement;
             const neckInput = mContainer.querySelector('#measure-neck') as HTMLInputElement;
 
             expect(weightInput.parentElement!.style.minWidth).toBe('0px');
-            expect(bfInput.parentElement!.style.minWidth).toBe('0px');
+            expect(mContainer.querySelector('#measure-bf')).toBeNull();
+            expect(estimateCheckbox.checked).toBe(false);
             expect(waistInput.parentElement!.style.minWidth).toBe('0px');
             expect(neckInput.parentElement!.style.minWidth).toBe('0px');
 
