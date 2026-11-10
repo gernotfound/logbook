@@ -57,13 +57,18 @@ describe('routine editor durable failures', () => {
         act(() => result.current.handleUpdateSetsCount(0, '4'));
         expect(result.current.routineExercises[0].setPlans).toHaveLength(4);
 
-        for (const rawCount of ['2.5', '1e2', '21', '0', '-1', 'invalid']) {
+        for (const rawCount of ['2.5', '2,5', '2e0', '1e2', '0x2', '21', '0', '-1', 'invalid']) {
             act(() => result.current.handleUpdateSetsCount(0, rawCount));
             expect(result.current.routineExercises[0].setsCount).toBe(rawCount);
             expect(result.current.routineExercises[0].setPlans).toHaveLength(4);
             await act(async () => { expect(await result.current.handleSave()).toBe(false); });
             expect(mocks.dispatch).not.toHaveBeenCalled();
         }
+
+        act(() => result.current.handleUpdateSetsCount(0, '2.5'));
+        act(() => result.current.handleUpdateSetPlan(0, 3, 'dropset'));
+        expect(result.current.routineExercises[0].setPlans).toHaveLength(4);
+        expect(result.current.routineExercises[0].setPlans?.[3]?.technique).toBe('dropset');
 
         act(() => result.current.handleUpdateSetsCount(0, '2'));
         expect(result.current.routineExercises[0].setsCount).toBe(2);

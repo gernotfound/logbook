@@ -255,7 +255,7 @@ export const RoutineExerciseItem: React.FC<RoutineExerciseItemProps> = ({
                     {!isCardio && (
                         <div>
                             <div className="routine-technique-set-list">
-                                {Array.from({ length: previewRoutineSets(exercise.setsCount) }, (_, setIndex) => {
+                                {Array.from({ length: previewRoutineSets(exercise.setsCount, exercise.setPlans ?? []) }, (_, setIndex) => {
                                     const plan: PlannedSetTechnique | undefined = exercise.setPlans?.[setIndex];
                                     const technique: SetTechnique = plan?.technique || 'straight';
                                     const hasParameters = technique !== 'straight' && technique !== 'dropset';

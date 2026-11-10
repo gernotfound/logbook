@@ -19,7 +19,20 @@ export function requireRoutineSessionCount(value: unknown, max: number): number 
 }
 
  
-export function previewRoutineSets(value: unknown): number {
+export function parseRoutineSetCount(value: unknown): number | null {
+    if (typeof value !== 'string' && typeof value !== 'number') return null;
+    const text = String(value);
+    if (!/^[1-9]\d*$/.test(text)) return null;
+    const parsed = Number(text);
+    return Number.isSafeInteger(parsed) && parsed <= MAX_ROUTINE_SETS ? parsed : null;
+}
+
+export function previewRoutineSets(value: unknown, currentPlans?: readonly unknown[]): number {
+    if (currentPlans && parseRoutineSetCount(value) === null) {
+        // A draft with invalid input keeps the existing per-set editors visible,
+        // rather than truncating or silently replacing their configured plans.
+        return Math.min(MAX_ROUTINE_SETS, currentPlans.length);
+    }
     const parsed = Number.parseInt(String(value || 3), 10);
     return Number.isSafeInteger(parsed) ? Math.max(1, Math.min(MAX_ROUTINE_SETS, parsed)) : 3;
 }

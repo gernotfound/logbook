@@ -1,4 +1,4 @@
-import { MAX_ROUTINE_SEGMENTS, MAX_ROUTINE_SETS, previewRoutineSets } from '../lib/routineSessionLimits';
+import { MAX_ROUTINE_SEGMENTS, MAX_ROUTINE_SETS, parseRoutineSetCount, previewRoutineSets } from '../lib/routineSessionLimits';
 import { dispatchDurableOperation } from '../lib/sync/dispatchDurableOperation';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useAppStore } from '../store/useAppStore';
@@ -179,10 +179,7 @@ export function useTrainingRoutines() {
             seenExerciseIds.add(id);
         }
 
-        if (routineExercises.some(ex => {
-            const count = Number(ex.setsCount);
-            return !Number.isSafeInteger(count) || count < 1 || count > MAX_ROUTINE_SETS;
-        })) {
+        if (routineExercises.some(ex => parseRoutineSetCount(ex.setsCount) === null)) {
             await showAlert('Ogni esercizio può contenere da 1 a 20 serie. Correggi il valore prima di salvare la scheda.');
             return false;
         }
@@ -282,8 +279,8 @@ export function useTrainingRoutines() {
                 return newExs;
             }
 
-            const parsed = Number(count);
-            if (!Number.isSafeInteger(parsed) || parsed < 1 || parsed > MAX_ROUTINE_SETS) {
+            const parsed = parseRoutineSetCount(count);
+            if (parsed === null) {
                 // Keep the uncommitted input and set plans intact until the user
                 // corrects it; truncating it would silently change the workout.
                 newExs[index] = { ...currentExercise, setsCount: String(count) };
@@ -328,7 +325,8 @@ export function useTrainingRoutines() {
         setRoutineExercises(prev => {
             const exercises = [...prev];
             const exercise = { ...exercises[exerciseIndex] };
-            const count = previewRoutineSets(exercise.setsCount);
+            const count = previewRoutineSets(exercise.setsCount, exercise.setPlans ?? []);
+            if (setIndex < 0 || setIndex >= count) return prev;
             const plans: PlannedSetTechnique[] = Array.from({ length: count }, (_, index) => ({
                 ...(exercise.setPlans?.[index] || { technique: 'straight' as const }),
             }));
@@ -348,7 +346,8 @@ export function useTrainingRoutines() {
         setRoutineExercises(prev => {
             const exercises = [...prev];
             const exercise = { ...exercises[exerciseIndex] };
-            const count = previewRoutineSets(exercise.setsCount);
+            const count = previewRoutineSets(exercise.setsCount, exercise.setPlans ?? []);
+            if (setIndex < 0 || setIndex >= count) return prev;
             const plans: PlannedSetTechnique[] = Array.from({ length: count }, (_, index) => ({
                 ...(exercise.setPlans?.[index] || { technique: 'straight' as const }),
             }));
