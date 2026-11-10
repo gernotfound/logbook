@@ -183,12 +183,41 @@ export function createFoodSearcher<T extends SearchableFood>(foodsList: T[], cat
     const normalizedNames = new Map<T, string>();
     let fuse: Fuse<T> | undefined;
     const nameOf = (item: T) => normalizedNames.get(item) ?? normalizeFoodStr(item.name);
-    return (query: string): T[] => {
+    const sortMatches = (items: T[], q: string, maxResults?: number): T[] => {
+        const compare = (a: T, b: T): number => {
+            const aName = nameOf(a);
+            const bName = nameOf(b);
+            const aStarts = aName.startsWith(q);
+            const bStarts = bName.startsWith(q);
+            if (aStarts && !bStarts) return -1;
+            if (!aStarts && bStarts) return 1;
+            return aName.localeCompare(bName, 'it');
+        };
+        if (!maxResults || !Number.isSafeInteger(maxResults) || maxResults < 1 || items.length <= maxResults) {
+            return items.sort(compare);
+        }
+        // Insertion after equal-ranked entries retains the same stable order as a full sort.
+        const top: T[] = [];
+        for (const item of items) {
+            let low = 0;
+            let high = top.length;
+            while (low < high) {
+                const mid = Math.floor((low + high) / 2);
+                if (compare(item, top[mid]) < 0) high = mid;
+                else low = mid + 1;
+            }
+            if (low >= maxResults) continue;
+            top.splice(low, 0, item);
+            if (top.length > maxResults) top.pop();
+        }
+        return top;
+    };
+    return (query: string, maxResults?: number): T[] => {
         if (!query || typeof query !== 'string' || !query.trim()) {
-            return results;
+            return maxResults ? results.slice(0, maxResults) : results;
         }
         const q = normalizeFoodStr(query);
-        if (!q) return results;
+        if (!q) return maxResults ? results.slice(0, maxResults) : results;
 
         if (!prepared) {
             prepared = results.map(item => item ? {
@@ -213,15 +242,7 @@ export function createFoodSearcher<T extends SearchableFood>(foodsList: T[], cat
         }
 
         if (q.length < 2) {
-            return directMatched.sort((a, b) => {
-                const aName = nameOf(a);
-                const bName = nameOf(b);
-                const aStarts = aName.startsWith(q);
-                const bStarts = bName.startsWith(q);
-                if (aStarts && !bStarts) return -1;
-                if (!aStarts && bStarts) return 1;
-                return aName.localeCompare(bName, 'it');
-            });
+            return sortMatches(directMatched, q, maxResults);
         }
 
         // Build Fuse only if the query actually needs fuzzy matching.
@@ -249,15 +270,7 @@ export function createFoodSearcher<T extends SearchableFood>(foodsList: T[], cat
             }
         }
 
-        return merged.sort((a, b) => {
-            const aName = nameOf(a);
-            const bName = nameOf(b);
-            const aStarts = aName.startsWith(q);
-            const bStarts = bName.startsWith(q);
-            if (aStarts && !bStarts) return -1;
-            if (!aStarts && bStarts) return 1;
-            return aName.localeCompare(bName, 'it');
-        });
+        return sortMatches(merged, q, maxResults);
     };
 }
 

@@ -126,8 +126,11 @@ function OwnerWorkoutTimer({ owner, isActive }: { owner: string; isActive: boole
         };
 
         if (document.visibilityState === 'visible') {
-            setDisplayNow(Date.now());
-            scheduleNextTick();
+            timeoutId = setTimeout(() => {
+                if (!active) return;
+                setDisplayNow(Date.now());
+                scheduleNextTick();
+            }, 0);
         }
         document.addEventListener('visibilitychange', handleVisibilityChange);
 

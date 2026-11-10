@@ -55,8 +55,12 @@ describe('Audit regression: React time boundaries', () => {
             const [active, setActive] = React.useState(true);
             return <><button onClick={() => setActive(value => !value)}>Cambia sezione</button><WorkoutTimer isActive={active} /></>;
         }
-        renderWithProviders(<Host />);
-        await waitFor(() => expect(screen.getByRole('button', { name: 'Avvia recupero' })).toBeDefined());
+        function AuthReady() {
+            const { currentUser, loading } = useAuth();
+            return <output data-testid="hidden-timer-auth-ready">{!loading ? currentUser?.uid : ''}</output>;
+        }
+        renderWithProviders(<><AuthReady /><Host /></>);
+        await waitFor(() => expect(screen.getByTestId('hidden-timer-auth-ready').textContent).toBe('test-user-id'));
         vi.useFakeTimers();
         vi.setSystemTime(new Date('2026-09-18T12:00:00'));
         fireEvent.click(screen.getByRole('button', { name: 'Avvia recupero' }));
@@ -66,6 +70,7 @@ describe('Audit regression: React time boundaries', () => {
         act(() => { vi.advanceTimersByTime(3000); });
         expect(screen.getByText('00:01')).toBeDefined();
         fireEvent.click(screen.getByRole('button', { name: 'Cambia sezione' }));
+        act(() => { vi.advanceTimersByTime(0); });
         expect(screen.getByText('00:04')).toBeDefined();
     });
 
