@@ -270,3 +270,57 @@ it('keeps correlation independent when a shared volume calculation fails', async
     volumeHook.unmount();
     correlationHook.unmount();
 });
+
+it('reuses the cached volume during a correlation-worker fallback', async () => {
+    const volumeHook = renderHook(() => useAnalyticsWorker(true, true));
+    const volumeWorker = worker.instance;
+    const correlationHook = renderHook(() => useAnalyticsWorker(true, true));
+    const correlationWorker = worker.instance;
+    const history = [{ id: 'w-shared-fallback', date: '2026-11-09', exercises: [] }];
+    const library: unknown[] = [];
+    const volume = volumeHook.result.current.calculateVolumeStats(history, library, 80, 8);
+    const correlation = correlationHook.result.current.calculateCorrelationStats(history, {}, library, 80, 8);
+    const volumeId = worker.post.mock.lastCall![0].id;
+    await act(async () => {
+        volumeWorker.onmessage({ data: { id: volumeId, type: 'SUCCESS', result: worker.volumeResult } });
+        await volume;
+    });
+    const corrRequest = worker.post.mock.lastCall![0];
+    expect(corrRequest.type).toBe('CALCULATE_CORRELATION_FROM_VOLUME');
+    await act(async () => {
+        correlationWorker.onmessage({ data: { id: corrRequest.id, type: 'ERROR', error: 'worker unavailable' } });
+    });
+    expect(await correlation).toEqual(worker.correlationResult);
+    expect(worker.fromVolume).toHaveBeenCalledTimes(1);
+    expect(worker.correlation).not.toHaveBeenCalled();
+    volumeHook.unmount();
+    correlationHook.unmount();
+});
+
+it('never dispatches an outdated correlation after awaiting the shared volume', async () => {
+    const volumeHook = renderHook(() => useAnalyticsWorker(true, true));
+    const volumeWorker = worker.instance;
+    const correlationHook = renderHook(() => useAnalyticsWorker(true, true));
+    const correlationWorker = worker.instance;
+    const history = [{ id: 'w-waiting', date: '2026-11-09', exercises: [] }];
+    const library: unknown[] = [];
+    const volume = volumeHook.result.current.calculateVolumeStats(history, library, 80, 8);
+    const obsolete = correlationHook.result.current.calculateCorrelationStats(history, {}, library, 80, 8)
+        .then(() => 'unexpected success', (error: Error) => error.message);
+    const latest = correlationHook.result.current.calculateCorrelationStats(history, {}, library, 80, 12);
+    expect(worker.post).toHaveBeenCalledTimes(2);
+    const volumeId = worker.post.mock.calls[0][0].id;
+    const latestId = worker.post.mock.calls[1][0].id;
+    await act(async () => {
+        volumeWorker.onmessage({ data: { id: volumeId, type: 'SUCCESS', result: worker.volumeResult } });
+        await volume;
+    });
+    expect(await obsolete).toContain('superata');
+    expect(worker.post).toHaveBeenCalledTimes(2);
+    await act(async () => {
+        correlationWorker.onmessage({ data: { id: latestId, type: 'SUCCESS', result: worker.correlationResult } });
+    });
+    expect(await latest).toEqual(worker.correlationResult);
+    volumeHook.unmount();
+    correlationHook.unmount();
+});

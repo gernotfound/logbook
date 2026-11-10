@@ -226,9 +226,9 @@ describe('Analytics Engine: src/lib/calc/analytics.ts', () => {
                 { id: 'b', date: '2026-08-08', exercises: [{ exId: 'ex-pullup', sessionNote: '', sets: [{ id: 's2', kg: '10', reps: '6', done: true }] }] },
                 { id: 'c', date: '2026-08-15', exercises: [{ exId: 'ex-bench', sessionNote: '', sets: [{ id: 's3', kg: '70', reps: '10', done: true }] }] },
             ];
-            const nutrition: Record<string, NutritionDay> = Object.fromEntries([
+            const nutrition: Record<string, NutritionDay> = Object.fromEntries(([
                 ['2026-08-01', 2200], ['2026-08-08', 2500], ['2026-08-15', 2800],
-            ].map(([date, kcal]) => [date, { date, kcal, carbs: 0, pro: 0, fat: 0 }]));
+            ] as const).map(([date, kcal]) => [date, { date, kcal, carbs: 0, pro: 0, fat: 0 }]));
             for (const period of [4, 8, 12, 24]) {
                 const volume = computeWeeklyVolumeSeries(history, mockLibrary, 80, period, '2026-08-22');
                 expect(computeVolumeCaloriesCorrelationFromVolume(volume.points, nutrition, period, '2026-08-22'))
