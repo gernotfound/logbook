@@ -1,4 +1,4 @@
-import { MAX_ROUTINE_SEGMENTS, MAX_ROUTINE_SETS, previewRoutineSets } from '../../../lib/routineSessionLimits';
+import { MAX_ROUTINE_SEGMENTS, previewRoutineSets } from '../../../lib/routineSessionLimits';
 import React, { useId } from 'react';
 import { ArrowUp, ArrowDown, Trash2, Activity, CircleHelp } from 'lucide-react';
 import type { ExerciseLibraryItem, PlannedSetTechnique, ProgressionContract, RoutineExercise, SetTechnique } from '../../../types';
