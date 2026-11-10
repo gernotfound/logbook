@@ -8,76 +8,14 @@ import { getNutritionConflictFingerprint } from '../../src/lib/utils/object';
 import { createAndMigrateVault } from '../../src/lib/sync/secureArchiveMigration';
 import { deviceVaultKeyId } from '../../src/lib/sync/secureArchiveKeys';
 import { lockAllVaults, lockVault, unlockVaultForOwner, vaultControlKey, LocalVaultLockedError } from '../../src/lib/sync/secureArchiveSession';
-import { LocalCiphertextError, SEALED_LOCAL_PREFIX } from '../../src/lib/sync/secureArchiveCipher';
-import { readSealedArchive, sealedArchiveKey, updateSealedArchive } from '../../src/lib/sync/secureArchiveIndexedDb';
+import { LocalCiphertextError } from '../../src/lib/sync/secureArchiveCipher';
 import { getArchiveRecord, updateArchiveRecord } from '../../src/lib/sync/secureArchiveRepository';
 
 const owner = 'user:secure-idb';
-const key = () => crypto.getRandomValues(new Uint8Array(32));
-type LocalState = { calories: number; weight: number; pending: number[]; version: 5 };
-
-describe('atomic encrypted IndexedDB primitive', () => {
-    beforeEach(async () => { await clear(); });
-
-    it('persists only ciphertext, verifies the full object and round-trips without plaintext', async () => {
-        const dek = key();
-        const value: LocalState = { calories: 1234, weight: 75, pending: [1, 2], version: 5 };
-        await updateSealedArchive<LocalState>(owner, dek, () => value);
-        const raw = await get(sealedArchiveKey(owner));
-        expect(typeof raw).toBe('string');
-        expect(raw).toMatch(/^tlb-sealed:v1:/);
-        expect(raw).not.toContain('calories');
-        expect(raw).not.toContain('1234');
-        expect(raw).not.toContain('"pending"');
-        expect(await readSealedArchive<LocalState>(owner, dek)).toEqual(value);
-    });
-
-    it('serializes two concurrent updates inside the same IDB transaction boundary', async () => {
-        const dek = key();
-        const base: LocalState = { calories: 0, weight: 0, pending: [], version: 5 };
-        await updateSealedArchive<LocalState>(owner, dek, () => base);
-        await Promise.all([
-            updateSealedArchive<LocalState>(owner, dek, current => ({
-                ...current!, weight: 75, pending: [...current!.pending, 1],
-            })),
-            updateSealedArchive<LocalState>(owner, dek, current => ({
-                ...current!, calories: 1800, pending: [...current!.pending, 2],
-            })),
-        ]);
-        const committed = await readSealedArchive<LocalState>(owner, dek);
-        expect(committed).toEqual({ calories: 1800, weight: 75, pending: [1, 2], version: 5 });
-    });
-
-    it('never erases persisted ciphertext after a rejected update', async () => {
-        const dek = key();
-        const initial: LocalState = { calories: 1400, weight: 75, pending: [1], version: 5 };
-        await updateSealedArchive<LocalState>(owner, dek, () => initial);
-        const previous = await get(sealedArchiveKey(owner));
-        await expect(updateSealedArchive<LocalState>(owner, dek, () => { throw new Error('journal conflict'); })).rejects.toThrow('journal conflict');
-        expect(await get(sealedArchiveKey(owner))).toEqual(previous);
-    });
-
-    it('fails closed for legacy unsealed records, wrong owner, tampered data and wrong key', async () => {
-        const dek = key();
-        await set(sealedArchiveKey(owner), { data: { weight: 75 } });
-        await expect(readSealedArchive(owner, dek)).rejects.toBeInstanceOf(LocalCiphertextError);
-        await expect(updateSealedArchive(owner, dek, () => ({ version: 5 }))).rejects.toBeInstanceOf(LocalCiphertextError);
-        expect(await get(sealedArchiveKey(owner))).toEqual({ data: { weight: 75 } });
-
-        await clear();
-        await updateSealedArchive(owner, dek, () => ({ secret: 'health' }));
-        const ciphertext = await get<string>(sealedArchiveKey(owner));
-        expect(ciphertext).toContain(SEALED_LOCAL_PREFIX);
-        await expect(readSealedArchive(owner, key())).rejects.toBeInstanceOf(LocalCiphertextError);
-        await set(sealedArchiveKey('user:other-idb'), ciphertext);
-        await expect(readSealedArchive('user:other-idb', dek)).rejects.toBeInstanceOf(LocalCiphertextError);
-        await set(sealedArchiveKey(owner), ciphertext!.replace(/.$/, c => c === 'A' ? 'B' : 'A'));
-        await expect(readSealedArchive(owner, dek)).rejects.toBeInstanceOf(LocalCiphertextError);
-    });
-});
+const archiveKey = (value: string) => `logbook:v2:${value}`;
 
 describe('IndexedDB gateway requires an active owner vault', () => {
-    const archive = sealedArchiveKey(owner);
+    const archive = archiveKey(owner);
     beforeEach(async () => {
         await clear();
         lockAllVaults();
@@ -114,7 +52,7 @@ describe('IndexedDB gateway requires an active owner vault', () => {
 });
 
 describe('encrypted archive gateway transaction invariants', () => {
-    const archive = sealedArchiveKey(owner);
+    const archive = archiveKey(owner);
     const original = { marker: 'durable-local-data', pending: [1] };
 
     beforeEach(async () => {
@@ -124,6 +62,20 @@ describe('encrypted archive gateway transaction invariants', () => {
         await createAndMigrateVault(owner);
     });
     afterEach(() => lockAllVaults());
+
+    it('rejects a ciphertext copied from another owner without rewriting either archive', async () => {
+        const otherOwner = 'user:secure-idb-foreign';
+        await updateArchiveRecord(owner, () => ({ marker: 'owner-secret' }));
+        const original = await get<string>(archive);
+        await createAndMigrateVault(otherOwner);
+        await set(archiveKey(otherOwner), original);
+
+        await expect(getArchiveRecord(otherOwner)).rejects.toBeInstanceOf(LocalCiphertextError);
+        await expect(updateArchiveRecord(otherOwner, () => ({ marker: 'wrong-owner' })))
+            .rejects.toBeInstanceOf(LocalCiphertextError);
+        expect(await get(archiveKey(otherOwner))).toBe(original);
+        expect(await get(archive)).toBe(original);
+    });
 
     it('rejects an undefined transformation without losing ciphertext or business data', async () => {
         await updateArchiveRecord(owner, () => original);
@@ -172,7 +124,7 @@ describe('encrypted archive gateway transaction invariants', () => {
 // Unlike the low-level primitive above, localRepository uses secureArchiveRepository.
 // These regressions exercise the production owner/epoch gate and the actual journal.
 describe('production encrypted localRepository gateway', () => {
-    const archive = sealedArchiveKey(owner);
+    const archive = archiveKey(owner);
     const profile = (height: string, gender?: string) => UserDataSchema.parse({
         profile: { height, ...(gender ? { gender } : {}) },
     }) as unknown as UserData;
