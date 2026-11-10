@@ -78,6 +78,7 @@ describe('Home nutrition summary efficiency', () => {
     it('selects the latest valid weight and the latest BF independently of insertion order', () => {
         function HomeSummary() {
             const home = useHomeView();
+            if (home.loading) return <output>Caricamento</output>;
             return <output data-testid="unordered-weight-bf">{[home.userWeight, home.bf, home.bfSource].join('|')}</output>;
         }
         const day = (date: string, weight: string, bf: string): NutritionDay => ({

@@ -172,7 +172,7 @@ interface SearchableFood {
     unit?: string;
 }
 
-export function createFoodSearcher<T extends SearchableFood>(foodsList: T[], categoryFilter?: string): (query: string) => T[] {
+export function createFoodSearcher<T extends SearchableFood>(foodsList: T[], categoryFilter?: string): (query: string, maxResults?: number) => T[] {
     if (!Array.isArray(foodsList) || foodsList.length === 0) return () => [];
     let results = foodsList;
     if (categoryFilter && categoryFilter !== 'all') {

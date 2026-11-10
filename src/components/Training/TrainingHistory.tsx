@@ -25,6 +25,11 @@ interface DatedWorkout {
 }
 
 const MONTH_NAMES = ['Gen', 'Feb', 'Mar', 'Apr', 'Mag', 'Giu', 'Lug', 'Ago', 'Set', 'Ott', 'Nov', 'Dic'];
+const MONTH_FORMATTER = new Intl.DateTimeFormat('it-IT', { month: 'long', year: 'numeric' });
+const DAY_FORMATTER = new Intl.DateTimeFormat('it-IT', {
+    weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
+});
+
 
 function pad(value: number): string {
     return String(value).padStart(2, '0');
@@ -47,20 +52,12 @@ function dateFromKey(key: string): Date {
 
 function monthLabel(key: string): string {
     const [year, month] = key.split('-').map(Number);
-    const label = new Intl.DateTimeFormat('it-IT', {
-        month: 'long',
-        year: 'numeric',
-    }).format(new Date(year, month - 1, 1, 12, 0, 0));
+    const label = MONTH_FORMATTER.format(new Date(year, month - 1, 1, 12, 0, 0));
     return label.charAt(0).toUpperCase() + label.slice(1);
 }
 
 function dayLabel(key: string): string {
-    const label = new Intl.DateTimeFormat('it-IT', {
-        weekday: 'long',
-        day: 'numeric',
-        month: 'long',
-        year: 'numeric',
-    }).format(dateFromKey(key));
+    const label = DAY_FORMATTER.format(dateFromKey(key));
     return label.charAt(0).toUpperCase() + label.slice(1);
 }
 
@@ -72,16 +69,15 @@ function formatCompactDuration(seconds: number): string {
     return `${totalMinutes} min`;
 }
 
+const TIME_FORMATTER = new Intl.DateTimeFormat('it-IT', { hour: '2-digit', minute: '2-digit' });
+
 function workoutStartTime(workout: WorkoutSession): string {
     if (typeof workout.globalStartTime !== 'number' || !Number.isFinite(workout.globalStartTime)) {
         return 'Orario n.d.';
     }
     const startedAt = new Date(workout.globalStartTime);
     if (!Number.isFinite(startedAt.getTime())) return 'Orario n.d.';
-    return new Intl.DateTimeFormat('it-IT', {
-        hour: '2-digit',
-        minute: '2-digit',
-    }).format(startedAt);
+    return TIME_FORMATTER.format(startedAt);
 }
 
 const TrainingHistory = ({ onEditWorkout }: TrainingHistoryProps) => {
