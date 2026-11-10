@@ -61,7 +61,7 @@ export default function VolumeCaloriesCorrelationChart({
   const [selectedWeeks, setSelectedWeeks] = useState<number>(defaultWeeks);
   const [isCalculating, setIsCalculating] = useState(true);
   const [calcError, setCalcError] = useState(false);
-  const { calculateCorrelationStats } = useAnalyticsWorker(isActive);
+  const { calculateCorrelationStats } = useAnalyticsWorker(isActive, true);
 
   const [calcResult, setCalcResult] = useState<{points: any[], stats: any}>({
     points: [],

@@ -3,6 +3,7 @@ import {
     computeWeeklyVolumeSeries,
     computeWeeklyNutritionSeries,
     computeVolumeCaloriesCorrelation,
+    computeVolumeCaloriesCorrelationFromVolume,
     calculatePearsonCorrelation,
     generateWeekIntervals,
     getWorkoutDateString
@@ -219,6 +220,22 @@ describe('Analytics Engine: src/lib/calc/analytics.ts', () => {
     });
 
     describe('computeVolumeCaloriesCorrelation', () => {
+        it('matches the original Pearson and nutrition results when volume is supplied by another chart', () => {
+            const history: WorkoutSession[] = [
+                { id: 'a', date: '2026-08-01', exercises: [{ exId: 'ex-bench', sessionNote: '', sets: [{ id: 's1', kg: '40', reps: '10', done: true }] }] },
+                { id: 'b', date: '2026-08-08', exercises: [{ exId: 'ex-pullup', sessionNote: '', sets: [{ id: 's2', kg: '10', reps: '6', done: true }] }] },
+                { id: 'c', date: '2026-08-15', exercises: [{ exId: 'ex-bench', sessionNote: '', sets: [{ id: 's3', kg: '70', reps: '10', done: true }] }] },
+            ];
+            const nutrition: Record<string, NutritionDay> = Object.fromEntries([
+                ['2026-08-01', 2200], ['2026-08-08', 2500], ['2026-08-15', 2800],
+            ].map(([date, kcal]) => [date, { date, kcal, carbs: 0, pro: 0, fat: 0 }]));
+            for (const period of [4, 8, 12, 24]) {
+                const volume = computeWeeklyVolumeSeries(history, mockLibrary, 80, period, '2026-08-22');
+                expect(computeVolumeCaloriesCorrelationFromVolume(volume.points, nutrition, period, '2026-08-22'))
+                    .toEqual(computeVolumeCaloriesCorrelation(history, nutrition, mockLibrary, 80, period, '2026-08-22'));
+            }
+        });
+
         it('aligns volume and nutrition series and produces meaningful insight in Italian sentence case', () => {
             const refDate = '2026-08-22';
             const history: WorkoutSession[] = [

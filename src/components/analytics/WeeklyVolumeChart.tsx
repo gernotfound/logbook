@@ -47,7 +47,7 @@ export default function WeeklyVolumeChart({
   const [selectedWeeks, setSelectedWeeks] = useState<number>(defaultWeeks);
   const [isCalculating, setIsCalculating] = useState(true);
   const [calcError, setCalcError] = useState(false);
-  const { calculateVolumeStats } = useAnalyticsWorker(isActive);
+  const { calculateVolumeStats } = useAnalyticsWorker(isActive, true);
 
   const [calcResult, setCalcResult] = useState<{points: any[], stats: any}>({
     points: [],
