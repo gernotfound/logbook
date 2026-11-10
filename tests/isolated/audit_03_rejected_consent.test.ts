@@ -33,6 +33,22 @@ const consent = (acceptedAt: string): LegalConsent => ({
     termsVersion: LEGAL_VERSIONS.terms,
 });
 
+async function confirmConsentJournal(): Promise<void> {
+    const { adoptReplicaCheckpoint, acknowledgeThrough, readLocal } =
+        await import('../../src/lib/sync/localRepository');
+    const now = Date.now();
+    await adoptReplicaCheckpoint('user:a', {
+        identity: { slot: 's00', replicaId: 'consent-ack-fixture', generation: 1,
+            checkpointAtMs: now, leaseUntilMs: now + 31_104_000_000 },
+        baseSeq: 0,
+    }, { clock: {}, syncMetaByDocument: {} });
+    const sent = await readLocal('user:a');
+    if (!sent?.replica || sent.pending.length === 0) throw new Error('Consenso fixture senza prova causale');
+    await acknowledgeThrough('user:a', sent.pending.at(-1)!.seq, sent.data, [], undefined, {
+        operations: structuredClone(sent.pending), replica: sent.replica,
+    });
+}
+
 describe('rejected legal-consent durable compensation', () => {
     beforeEach(async () => {
         lockAllVaults();
@@ -91,7 +107,7 @@ describe('rejected legal-consent durable compensation', () => {
     });
 
     it('keeps already-acknowledged consent after a late rejection', async () => {
-        const { initializeLocal, commitDomainOperations, acknowledgeThrough, revertRejectedConsent, readLocal } =
+        const { initializeLocal, commitDomainOperations, revertRejectedConsent, readLocal } =
             await import('../../src/lib/sync/localRepository');
         const initial = parse({});
         const accepted = consent('2026-10-03T12:00:00.000Z');
@@ -100,7 +116,7 @@ describe('rejected legal-consent durable compensation', () => {
 
         const sent = await readLocal('user:a');
         expect(sent?.pending.some(op => op.path[0] === 'legalConsent')).toBe(true);
-        await acknowledgeThrough('user:a', sent!.actorSeq, sent!.data);
+        await confirmConsentJournal();
         const confirmed = await readLocal('user:a');
         expect(confirmed?.data.legalConsent).toEqual(accepted);
         expect(confirmed?.pending.some(op => op.path[0] === 'legalConsent')).toBe(false);
@@ -110,14 +126,14 @@ describe('rejected legal-consent durable compensation', () => {
     });
 
     it('preserves unrelated pending edits when a late consent rejection finds no consent intent', async () => {
-        const { initializeLocal, commitDomainOperations, acknowledgeThrough, revertRejectedConsent, readLocal } =
+        const { initializeLocal, commitDomainOperations, revertRejectedConsent, readLocal } =
             await import('../../src/lib/sync/localRepository');
         const initial = parse({});
         const accepted = consent('2026-10-03T12:00:00.000Z');
         await initializeLocal('user:a', initial);
         await commitDomainOperations('user:a', { type: 'legal-consent.set', consent: accepted }, initial);
         const sent = await readLocal('user:a');
-        await acknowledgeThrough('user:a', sent!.actorSeq, sent!.data);
+        await confirmConsentJournal();
         const confirmed = await readLocal('user:a');
 
         await commitDomainOperations('user:a', { type: 'profile.patch', patch: { height: '180' } }, confirmed!.data);
@@ -160,14 +176,14 @@ describe('rejected legal-consent durable compensation', () => {
     });
 
     it('rejects a stale rollback even when an acknowledged journal would be a no-op', async () => {
-        const { initializeLocal, commitDomainOperations, acknowledgeThrough, revertRejectedConsent, readLocal } =
+        const { initializeLocal, commitDomainOperations, revertRejectedConsent, readLocal } =
             await import('../../src/lib/sync/localRepository');
         const initial = parse({});
         const accepted = consent('2026-10-03T12:00:00.000Z');
         await initializeLocal('user:a', initial);
         await commitDomainOperations('user:a', { type: 'legal-consent.set', consent: accepted }, initial);
         const sent = await readLocal('user:a');
-        await acknowledgeThrough('user:a', sent!.actorSeq, sent!.data);
+        await confirmConsentJournal();
         const confirmed = await readLocal('user:a');
         const key = 'logbook:v2:user:a';
         const encrypted = await get(key);

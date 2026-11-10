@@ -163,7 +163,7 @@ Le Rules rendono autorevoli membership, generation e scadenza lease tramite `req
 
 ## Acknowledge causale e race remote commit → local edit → acknowledge
 
-`acknowledgeThrough(owner, expectedSeq, remote, ..., syncMeta)` è un boundary CRITICAL.
+`acknowledgeThrough(owner, expectedSeq, remote, months, syncMeta, delivery, guard?)` è un boundary CRITICAL. Il `delivery` è obbligatorio: senza prefisso effettivamente consegnato e identità della replica, il journal non può essere acknowledged o riconciliato tramite snapshot.
 
 Dopo che Firestore ha accettato un batch, una nuova modifica locale può essere committata prima che arrivi l'ack locale. In quel caso lo snapshot remoto appena confermato è causalmente più nuovo per il batch inviato ma più vecchio rispetto alla nuova modifica locale.
 

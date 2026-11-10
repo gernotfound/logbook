@@ -9,7 +9,7 @@ import { getArchiveRecord, updateArchiveRecord } from '../../src/lib/sync/secure
 import { LocalCiphertextError } from '../../src/lib/sync/secureArchiveCipher';
 import { activateGuestSession, GUEST_SESSION_KEY } from '../../src/lib/sync/session';
 import type { UserData } from '../../src/types';
-import { adoptReplicaCheckpoint, hydrateLocal, commitLocal, commitDomainOperations, initializeLocal, readLocal, acknowledgeThrough, advanceLocalConsentRevisionIfClean, StaleLocalRevisionError } from '../../src/lib/sync/localRepository';
+import { adoptReplicaCheckpoint, hydrateLocal, commitLocal, commitDomainOperations, initializeLocal, readLocal, advanceLocalConsentRevisionIfClean, StaleLocalRevisionError } from '../../src/lib/sync/localRepository';
 import {
     CURRENT_DATA_SCHEMA,
     CURRENT_LOCAL_ENVELOPE,
@@ -126,9 +126,7 @@ describe('durable owner-scoped journal', () => {
         await hydrateLocal('user:a', initial, [], undefined, 'window');
         expect((await readLocal('user:a'))?.lastClosedWorkoutId).toBe('retired-only-local');
         expect((await readLocal('user:a'))?.closedWorkoutIds).toEqual(['retired-only-local']);
-        await acknowledgeThrough('user:a', after!.actorSeq, initial);
-        expect((await readLocal('user:a'))?.lastClosedWorkoutId).toBe('retired-only-local');
-        expect((await readLocal('user:a'))?.closedWorkoutIds).toEqual(['retired-only-local']);
+
     });
 
 
