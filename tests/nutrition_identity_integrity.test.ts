@@ -6,6 +6,7 @@ import {
     DomainParsers,
     CardioSessionSchema,
     LoggedMealItemSchema,
+    NutritionDaySchema,
     SupplementIntakeSchema,
     UserDataSchema,
 } from '../src/lib/schema';
