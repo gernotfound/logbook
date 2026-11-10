@@ -79,8 +79,26 @@ describe('F-003 nutrition identity integrity', () => {
         })).toThrow();
         expect(() => SupplementIntakeSchema.parse({ ...validIntake, id: '' })).toThrow();
         expect(() => SupplementIntakeSchema.parse({ ...validIntake, supplementId: '' })).toThrow();
-        expect(LoggedMealItemSchema.parse({ ...validMeal, id: 42 }).id).toBe('42');
-        expect(SupplementIntakeSchema.parse({ ...validIntake, id: 7, supplementId: 9 })).toMatchObject({ id: '7', supplementId: '9' });
+        expect(() => LoggedMealItemSchema.parse({ ...validMeal, id: 42 })).toThrow();
+        expect(() => SupplementIntakeSchema.parse({ ...validIntake, id: 7 })).toThrow();
+        expect(() => SupplementIntakeSchema.parse({ ...validIntake, supplementId: 9 })).toThrow();
+        // Public catalog foods may still have numeric IDs; this is not a meal identity.
+        expect(LoggedMealItemSchema.parse({ ...validMeal, foodId: 42 }).foodId).toBe(42);
+    });
+
+    it('quarantines numeric meal and intake identities without modifying the source', () => {
+        const raw = {
+            date: '2026-09-29', kcal: 350, carbs: 75, pro: 7, fat: 1,
+            meals: [{ ...validMeal, id: 42 }, validMeal],
+            supplementsIntake: [{ ...validIntake, id: 7 }, { ...validIntake, supplementId: 9 }, validIntake],
+        };
+        const original = structuredClone(raw);
+        const parsed = NutritionDaySchema.parse(raw);
+        expect(parsed.meals?.map(meal => meal.id)).toEqual(['meal-ok']);
+        expect(parsed.supplementsIntake?.map(intake => intake.id)).toEqual(['intake-ok']);
+        expect(raw).toEqual(original);
+        expect(() => requireCompleteNutritionMonthDocument('2026-09', { '2026-09-29': raw }))
+            .toThrow(IncompleteCloudMonthError);
     });
 
     it('rejects invalid calendar keys and mismatched day identity at the authoritative parser', () => {
