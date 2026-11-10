@@ -1,50 +1,57 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
+import type { User } from 'firebase/auth';
 import { useAuth } from '../../hooks/useAuth';
 import { auth } from '../../lib/firebase';
-import { captureSession, isCurrentSession } from '../../lib/sync/session';
+import { captureSession, isCurrentSession, type SessionSnapshot } from '../../lib/sync/session';
 
 type Action = 'verify' | 'resend' | 'local';
+type GateSession = { user: User | null; session: SessionSnapshot };
+type PendingAction = GateSession & { action: Action };
+type Feedback = GateSession & { message: string };
+
+function isCurrentGateSession({ user, session }: GateSession): boolean {
+    return auth.currentUser === user && isCurrentSession(session);
+}
 
 export function EmailVerificationGate() {
     const { currentUser, refreshEmailVerification, resendEmailVerification, continueUnverifiedLocally } = useAuth();
-    const [busy, setBusy] = useState<Action | null>(null);
-    const [message, setMessage] = useState<string | null>(null);
-
-    useEffect(() => {
-        setBusy(null);
-        setMessage(null);
-    }, [currentUser]);
+    const [pending, setPending] = useState<PendingAction | null>(null);
+    const [feedback, setFeedback] = useState<Feedback | null>(null);
+    // A superseded Auth epoch cannot keep the next account's buttons disabled
+    // or expose its feedback, even when the same UID logs in again.
+    const busy = pending && isCurrentGateSession(pending) ? pending.action : null;
+    const message = feedback && isCurrentGateSession(feedback) ? feedback.message : null;
 
     const run = async (action: Action) => {
         if (busy) return;
-        const user = auth.currentUser;
-        const session = captureSession();
-        const stillCurrent = () => auth.currentUser === user && isCurrentSession(session);
-        setBusy(action);
-        setMessage(null);
+        const request: GateSession = { user: auth.currentUser, session: captureSession() };
+        const stillCurrent = () => isCurrentGateSession(request);
+        const report = (text: string) => setFeedback({ ...request, message: text });
+        setPending({ ...request, action });
+        setFeedback(null);
         try {
             if (action === 'verify') {
                 const result = await refreshEmailVerification();
                 if (!stillCurrent()) return;
                 if (result === 'pending') {
-                    setMessage('La verifica non risulta ancora completata. Apri il link ricevuto e riprova.');
+                    report('La verifica non risulta ancora completata. Apri il link ricevuto e riprova.');
                 } else if (result === 'verified') {
-                    setMessage('Email verificata. Apertura dell’account in corso…');
+                    report('Email verificata. Apertura dell’account in corso…');
                 }
             } else if (action === 'resend') {
                 await resendEmailVerification();
-                if (stillCurrent()) setMessage('Email inviata. Controlla anche la cartella spam.');
+                if (stillCurrent()) report('Email inviata. Controlla anche la cartella spam.');
             } else {
                 await continueUnverifiedLocally();
             }
         } catch {
             if (stillCurrent()) {
-                setMessage(action === 'local'
+                report(action === 'local'
                     ? 'Non è possibile avviare la modalità locale. I dati già salvati restano conservati: riprova.'
                     : 'Operazione non completata. Controlla la connessione e riprova.');
             }
         } finally {
-            if (stillCurrent()) setBusy(null);
+            if (stillCurrent()) setPending(null);
         }
     };
 
