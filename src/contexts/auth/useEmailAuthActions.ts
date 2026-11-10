@@ -8,7 +8,7 @@ import { beginGuestMigrationIntent, clearGuestMigrationIntent, confirmGuestMigra
 import { captureAuthAttemptGuard } from '../../lib/auth/authAttemptGuard';
 import { safeHardReload } from '../../lib/sync/safeReload';
 import type { UserData } from '../../types';
-import type { GuestMigrationPolicy } from '../AuthContextDef';
+import type { EmailVerificationRefreshResult, GuestMigrationPolicy } from '../AuthContextDef';
 
 type EmailAuthDependencies = {
     isGuestActiveStrict: () => boolean;
@@ -25,6 +25,8 @@ async function abandonOwnGuestIntent(id: string | null): Promise<void> {
     try { await clearGuestMigrationIntent(id); }
     catch { /* A newer Auth attempt owns the currently stored intent. */ }
 }
+
+const VERIFICATION_RECHECK_DELAYS_MS = [600, 1200] as const;
 
 export function useEmailAuthActions({
     isGuestActiveStrict, setSaveError, setEmailVerificationRequired, migrationDataRef,
@@ -143,7 +145,7 @@ export function useEmailAuthActions({
         if (stillCurrent()) setSaveError('Email di verifica inviata. Controlla anche la cartella spam.');
     }, [setSaveError]);
 
-    const refreshEmailVerification = useCallback(async () => {
+    const refreshEmailVerification = useCallback(async (): Promise<EmailVerificationRefreshResult> => {
         const user = auth.currentUser;
         if (!user) throw new Error('Sessione non disponibile.');
         // A delayed SDK result belongs to this Auth epoch, including when the
@@ -152,20 +154,31 @@ export function useEmailAuthActions({
         const session = captureSession();
         const stillCurrent = () => auth.currentUser === user && isCurrentSession(session);
         try {
-            await reload(user);
-            if (!stillCurrent()) return;
-            if (!user.emailVerified) {
-                setEmailVerificationRequired(true);
-                setSaveError('Email non ancora verificata. Apri il link ricevuto e riprova.');
-                return;
+            // The confirmation link may complete just before Firebase exposes
+            // emailVerified to this tab. Bound the recheck rather than requiring
+            // a manual browser reload or polling indefinitely.
+            for (let attempt = 0; attempt <= VERIFICATION_RECHECK_DELAYS_MS.length; attempt++) {
+                await reload(user);
+                if (!stillCurrent()) return 'stale';
+                if (user.emailVerified) {
+                    // Firebase's ID token may still contain email_verified=false after reload().
+                    // Refresh its claims before resuming any owner-scoped cloud operation.
+                    await user.getIdToken(true);
+                    if (!stillCurrent()) return 'stale';
+                    await safeHardReload();
+                    return 'verified';
+                }
+                if (attempt < VERIFICATION_RECHECK_DELAYS_MS.length) {
+                    await new Promise<void>(resolve => setTimeout(resolve, VERIFICATION_RECHECK_DELAYS_MS[attempt]));
+                    if (!stillCurrent()) return 'stale';
+                }
             }
-            // Firebase's ID token may still contain email_verified=false after reload().
-            // Refresh its claims before resuming any owner-scoped cloud operation.
-            await user.getIdToken(true);
-            if (!stillCurrent()) return;
-            await safeHardReload();
+            setEmailVerificationRequired(true);
+            setSaveError('Email non ancora verificata. Apri il link ricevuto e riprova.');
+            return 'pending';
         } catch (error) {
             if (stillCurrent()) throw error;
+            return 'stale';
         }
     }, [setEmailVerificationRequired, setSaveError]);
 

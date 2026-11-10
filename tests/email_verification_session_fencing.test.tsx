@@ -73,6 +73,19 @@ describe('email verification actions across actual AuthProvider callbacks (SDK s
     },
   );
 
+  it('stops rechecking when the Auth session changes between attempts', async () => {
+    const { result, transition, preserved } = await start();
+    let pending!: Promise<string>;
+    act(() => { pending = result.current.refreshEmailVerification(); });
+    await waitFor(() => expect(reload).toHaveBeenCalledOnce());
+    await transition('other-account');
+    await act(async () => { expect(await pending).toBe('stale'); });
+    expect(reload).toHaveBeenCalledOnce();
+    expect(DB.loadCloudPayload).not.toHaveBeenCalled();
+    expect(DB.purgeAllLocalUserData).not.toHaveBeenCalled();
+    expect(idbStore['logbook:v2:user:verification-a']).toBe(preserved);
+  });
+
   it.each(['reload', 'token'] as const)(
     'does not enter the reload barrier after A-B-A during %s', async boundary => {
       const { result, first, transition, preserved } = await start();

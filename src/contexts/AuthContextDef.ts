@@ -4,6 +4,7 @@ import type { User } from 'firebase/auth';
 type LogoutOptions = { mode: 'normal' | 'force'; skipConfirm?: boolean };
 type GuestMigrationStatus = 'idle' | 'pending' | 'failed';
 export type GuestMigrationPolicy = 'merge' | 'skip';
+export type EmailVerificationRefreshResult = 'verified' | 'pending' | 'stale';
 
 export interface AuthContextType {
     currentUser: User | null;
@@ -19,7 +20,7 @@ export interface AuthContextType {
     loginWithEmail: (email: string, pass: string, guestPolicy?: GuestMigrationPolicy) => Promise<void>;
     registerWithEmail: (email: string, pass: string, guestPolicy?: GuestMigrationPolicy, isRequestCurrent?: () => boolean) => Promise<void>;
     resendEmailVerification: () => Promise<void>;
-    refreshEmailVerification: () => Promise<void>;
+    refreshEmailVerification: () => Promise<EmailVerificationRefreshResult>;
     continueUnverifiedLocally: () => Promise<void>;
 }
 
@@ -37,7 +38,7 @@ export const defaultAuthContext: AuthContextType = {
     loginWithEmail: async () => {},
     registerWithEmail: async () => {},
     resendEmailVerification: async () => {},
-    refreshEmailVerification: async () => {},
+    refreshEmailVerification: async () => 'stale',
     continueUnverifiedLocally: async () => {}
 };
 

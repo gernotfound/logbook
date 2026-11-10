@@ -72,9 +72,12 @@ describe('email verification lifecycle', () => {
         // replace safeHardReload. Observe its actual persistence barrier instead.
         const flush = vi.spyOn(draftRegistry, 'flushAll');
         try {
+            let pendingResult: string | undefined;
             await act(async () => {
-                await result.current.refreshEmailVerification();
+                pendingResult = await result.current.refreshEmailVerification();
             });
+            expect(pendingResult).toBe('pending');
+            expect(reload).toHaveBeenCalledTimes(3);
             expect(reload).toHaveBeenCalledWith(user);
             expect(user.getIdToken).not.toHaveBeenCalled();
             expect(flush).not.toHaveBeenCalled();
@@ -88,6 +91,29 @@ describe('email verification lifecycle', () => {
             expect(flush).toHaveBeenCalledWith({ strict: true });
             expect(user.getIdToken.mock.invocationCallOrder[0])
                 .toBeLessThan(flush.mock.invocationCallOrder[0]);
+        } finally {
+            flush.mockRestore();
+        }
+    });
+
+    it('accepts verification that becomes visible on a second Firebase refresh', async () => {
+        const user = account(false);
+        startWith(user);
+        const { result } = renderHook(() => useAuth(), { wrapper });
+        await waitFor(() => expect(result.current.emailVerificationRequired).toBe(true));
+
+        await prepareUnlockedTestArchive('user:' + user.uid);
+        vi.mocked(reload).mockImplementationOnce(async () => {})
+            .mockImplementationOnce(async () => { user.emailVerified = true; });
+        const flush = vi.spyOn(draftRegistry, 'flushAll');
+        try {
+            let outcome: string | undefined;
+            await act(async () => { outcome = await result.current.refreshEmailVerification(); });
+            expect(outcome).toBe('verified');
+            expect(reload).toHaveBeenCalledTimes(2);
+            expect(user.getIdToken).toHaveBeenCalledWith(true);
+            expect(flush).toHaveBeenCalledWith({ strict: true });
+            expect(DB.loadCloudPayload).not.toHaveBeenCalled();
         } finally {
             flush.mockRestore();
         }
