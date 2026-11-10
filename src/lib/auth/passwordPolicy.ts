@@ -3,6 +3,10 @@ import { auth, validatePassword } from '../firebase';
 export const PASSWORD_POLICY_SUMMARY =
     'La password non rispetta i requisiti di sicurezza configurati per l’account.';
 
+// NIST SP 800-63B-4: 15 Unicode code points for single-factor passwords.
+// Firebase is authoritative for additional requirements until the server cutover.
+export const MIN_NEW_PASSWORD_LENGTH = 15;
+
 export type PasswordRuleConfig = {
     minPasswordLength?: number;
     maxPasswordLength?: number;
@@ -12,33 +16,37 @@ export type PasswordRuleConfig = {
     containsNonAlphanumericCharacter?: boolean;
 };
 
-// Stable minimum aligned with the documented Production policy. A remote policy
-// may add stricter limits, but cannot silently weaken the application's baseline.
-const FALLBACK_RULES: PasswordRuleConfig = {
-    minPasswordLength: 8,
-    containsLowercaseLetter: true,
-    containsUppercaseLetter: true,
-    containsNumericCharacter: true,
-    containsNonAlphanumericCharacter: true,
-};
+function passwordLength(password: string): number {
+    return Array.from(password).length;
+}
+
+function policyUnavailable(cause?: unknown): Error & { code: string } {
+    return Object.assign(new Error('Verifica della policy password non disponibile.', { cause }), {
+        code: 'auth/password-policy-unavailable',
+    });
+}
 
 export async function loadPasswordRuleConfig(): Promise<PasswordRuleConfig> {
     const status = await validatePassword(auth, '');
-    return status.passwordPolicy?.customStrengthOptions ?? FALLBACK_RULES;
+    // These rules drive hints only. Submission always revalidates with Firebase.
+    return status.passwordPolicy?.customStrengthOptions ?? {};
 }
 
-export function getPasswordRequirements(password: string, rules: PasswordRuleConfig = FALLBACK_RULES): { label: string; met: boolean }[] {
-    const minLength = Math.max(FALLBACK_RULES.minPasswordLength ?? 8, rules.minPasswordLength ?? 0);
+export function getPasswordRequirements(password: string, rules: PasswordRuleConfig = {}): { label: string; met: boolean }[] {
+    const length = passwordLength(password);
+    const minLength = Math.max(MIN_NEW_PASSWORD_LENGTH, rules.minPasswordLength ?? 0);
     const requirements = [
-        { label: `Almeno ${minLength} caratteri`, met: password.length >= minLength },
+        { label: `Almeno ${minLength} caratteri`, met: length >= minLength },
     ];
-    requirements.push({ label: 'Una lettera minuscola', met: /[a-z]/.test(password) });
-    requirements.push({ label: 'Una lettera maiuscola', met: /[A-Z]/.test(password) });
-    requirements.push({ label: 'Un numero', met: /[0-9]/.test(password) });
-    requirements.push({ label: 'Un carattere speciale', met: /[^a-zA-Z0-9]/.test(password) });
-    if (rules.maxPasswordLength && password.length > rules.maxPasswordLength) {
-        requirements.push({ label: `Massimo ${rules.maxPasswordLength} caratteri`, met: false });
+    if (rules.maxPasswordLength !== undefined) {
+        requirements.push({ label: `Massimo ${rules.maxPasswordLength} caratteri`, met: length <= rules.maxPasswordLength });
     }
+    // Composition checks are only advisory when explicitly required by Firebase.
+    // They are not local blockers: the provider validates its own Unicode semantics.
+    if (rules.containsLowercaseLetter === true) requirements.push({ label: 'Una lettera minuscola', met: /[a-z]/.test(password) });
+    if (rules.containsUppercaseLetter === true) requirements.push({ label: 'Una lettera maiuscola', met: /[A-Z]/.test(password) });
+    if (rules.containsNumericCharacter === true) requirements.push({ label: 'Un numero', met: /[0-9]/.test(password) });
+    if (rules.containsNonAlphanumericCharacter === true) requirements.push({ label: 'Un carattere speciale', met: /[^a-zA-Z0-9]/.test(password) });
     return requirements;
 }
 
@@ -46,27 +54,33 @@ export async function validatePasswordAgainstPolicy(password: string): Promise<s
     const baselineFailure = getPasswordRequirements(password).find(rule => !rule.met);
     if (baselineFailure) return `La password richiede: ${baselineFailure.label.toLowerCase()}.`;
 
-    const status = await validatePassword(auth, password);
+    let status: Awaited<ReturnType<typeof validatePassword>>;
+    try {
+        status = await validatePassword(auth, password);
+    } catch (cause) {
+        throw policyUnavailable(cause);
+    }
+    if (!status || typeof status.isValid !== 'boolean') throw policyUnavailable();
     if (status.isValid) return null;
 
-    const policy = status.passwordPolicy.customStrengthOptions;
-    if (status.meetsMinPasswordLength === false) {
-        return `La password deve contenere almeno ${policy.minPasswordLength ?? 6} caratteri.`;
+    const rules = status.passwordPolicy?.customStrengthOptions;
+    if (status.meetsMinPasswordLength === false && rules?.minPasswordLength) {
+        return `La password deve contenere almeno ${Math.max(MIN_NEW_PASSWORD_LENGTH, rules.minPasswordLength)} caratteri.`;
     }
-    if (status.meetsMaxPasswordLength === false) {
-        return `La password non può superare ${policy.maxPasswordLength ?? 4096} caratteri.`;
+    if (status.meetsMaxPasswordLength === false && rules?.maxPasswordLength) {
+        return `La password non può superare ${rules.maxPasswordLength} caratteri.`;
     }
-    if (status.containsNumericCharacter === false) {
-        return 'La password deve contenere almeno 1 numero.';
+    if (rules?.containsNumericCharacter === true && status.containsNumericCharacter === false) {
+        return 'Firebase richiede ancora almeno 1 numero per questa password.';
     }
-    if (status.containsLowercaseLetter === false) {
-        return 'La password deve contenere almeno 1 lettera minuscola.';
+    if (rules?.containsLowercaseLetter === true && status.containsLowercaseLetter === false) {
+        return 'Firebase richiede ancora almeno 1 lettera minuscola per questa password.';
     }
-    if (status.containsUppercaseLetter === false) {
-        return 'La password deve contenere almeno 1 lettera maiuscola.';
+    if (rules?.containsUppercaseLetter === true && status.containsUppercaseLetter === false) {
+        return 'Firebase richiede ancora almeno 1 lettera maiuscola per questa password.';
     }
-    if (status.containsNonAlphanumericCharacter === false) {
-        return 'La password deve contenere almeno 1 carattere speciale.';
+    if (rules?.containsNonAlphanumericCharacter === true && status.containsNonAlphanumericCharacter === false) {
+        return 'Firebase richiede ancora almeno 1 carattere speciale per questa password.';
     }
     return PASSWORD_POLICY_SUMMARY;
 }
