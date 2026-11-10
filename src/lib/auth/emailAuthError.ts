@@ -10,6 +10,7 @@ export function describeEmailAuthError(error: unknown): string {
         case 'auth/invalid-email': return 'Formato email non valido.';
         case 'auth/weak-password': return typeof localPolicyFeedback === 'string' && localPolicyFeedback.length > 0
             ? localPolicyFeedback : PASSWORD_POLICY_SUMMARY;
+        case 'auth/password-policy-unavailable': return 'Non è possibile verificare i requisiti password con Firebase. Controlla la connessione e riprova.';
         case 'auth/user-not-found':
         case 'auth/wrong-password':
         case 'auth/invalid-credential': return 'Email o password errati.';
