@@ -25,9 +25,10 @@ const TRAINING_TABS: ReadonlyArray<{ id: TrainingSubTab; label: string }> = [
 interface TrainingViewProps {
     subTab?: TrainingSubTab;
     setSubTab?: (tab: TrainingSubTab) => void;
+    isActive?: boolean;
 }
 
-const TrainingView = ({ subTab = 'session', setSubTab }: TrainingViewProps) => {
+const TrainingView = ({ subTab = 'session', setSubTab, isActive = true }: TrainingViewProps) => {
     const { startEditHistoricalWorkout } = useWorkoutSession();
 
     const handleEditWorkout = async (wo: WorkoutSession) => {
@@ -50,6 +51,7 @@ const TrainingView = ({ subTab = 'session', setSubTab }: TrainingViewProps) => {
             {subTab === 'session' && (
                 <div id="training-panel-session" role="tabpanel" aria-labelledby="training-tab-session">
                     <TrainingSession
+                        isActive={isActive}
                         onNavigateToHistory={() => setSubTab?.('history')}
                         onNavigateToPlanning={() => setSubTab?.('planning')}
                     />

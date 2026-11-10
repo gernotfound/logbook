@@ -18,6 +18,7 @@ import { useAppStore } from '../../store/useAppStore';
 interface TrainingSessionProps {
     onNavigateToHistory?: () => void;
     onNavigateToPlanning?: () => void;
+    isActive?: boolean;
 }
 
 interface PostSessionDraft extends WorkoutCompletionDraft {
@@ -76,7 +77,7 @@ function blockPostSessionPersistence(error: unknown): void {
     });
 }
 
-const TrainingSession = ({ onNavigateToHistory, onNavigateToPlanning }: TrainingSessionProps) => {
+const TrainingSession = ({ onNavigateToHistory, onNavigateToPlanning, isActive = true }: TrainingSessionProps) => {
     const {
         activeWorkout, history, library, confirmWorkoutStart, deleteWorkout, endWorkout,
     } = useWorkoutSession();
@@ -385,6 +386,7 @@ const TrainingSession = ({ onNavigateToHistory, onNavigateToPlanning }: Training
 
     return (
         <ActiveWorkoutSession
+            isActive={isActive}
             key={String(activeWorkout.id ?? '')}
             onNavigateToHistory={onNavigateToHistory}
             onRequestEnd={handleRequestEnd}

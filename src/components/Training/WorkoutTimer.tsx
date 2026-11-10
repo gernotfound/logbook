@@ -19,13 +19,13 @@ const sameTimerSnapshot = (a: WorkoutTimerSnapshot, b: WorkoutTimerSnapshot): bo
     a.version === b.version && a.state === b.state
     && a.startTime === b.startTime && a.accumulated === b.accumulated;
 
-export default function WorkoutTimer() {
+export default function WorkoutTimer({ isActive = true }: { isActive?: boolean } = {}) {
     const { currentUser, isGuest } = useAuth();
     const owner = !isGuest && currentUser ? `user:${currentUser.uid}` : 'guest';
-    return <OwnerWorkoutTimer key={owner} owner={owner} />;
+    return <OwnerWorkoutTimer key={owner} owner={owner} isActive={isActive} />;
 }
 
-function OwnerWorkoutTimer({ owner }: { owner: string }) {
+function OwnerWorkoutTimer({ owner, isActive }: { owner: string; isActive: boolean }) {
     const [initialTimer] = useState(() => {
         try {
             return { snapshot: readWorkoutTimerSnapshot(owner), unreadable: false, error: null };
@@ -102,24 +102,33 @@ function OwnerWorkoutTimer({ owner }: { owner: string }) {
     // from absolute timestamps, so mobile background throttling cannot make the
     // timer drift and no interval cadence becomes a second source of truth.
     useEffect(() => {
-        if (restTimer.state !== 'running') return;
+        if (restTimer.state !== 'running' || !isActive) return;
 
         let timeoutId: ReturnType<typeof setTimeout> | null = null;
         let active = true;
 
         const scheduleNextTick = () => {
+            if (!active || document.visibilityState !== 'visible') return;
             timeoutId = setTimeout(() => {
-                if (!active) return;
+                if (!active || document.visibilityState !== 'visible') return;
                 setDisplayNow(Date.now());
                 scheduleNextTick();
             }, TIMER_REPAINT_MS);
         };
 
         const handleVisibilityChange = () => {
-            if (document.visibilityState === 'visible') setDisplayNow(Date.now());
+            if (timeoutId) clearTimeout(timeoutId);
+            timeoutId = null;
+            if (document.visibilityState === 'visible') {
+                setDisplayNow(Date.now());
+                scheduleNextTick();
+            }
         };
 
-        scheduleNextTick();
+        if (document.visibilityState === 'visible') {
+            setDisplayNow(Date.now());
+            scheduleNextTick();
+        }
         document.addEventListener('visibilitychange', handleVisibilityChange);
 
         return () => {
@@ -127,7 +136,7 @@ function OwnerWorkoutTimer({ owner }: { owner: string }) {
             if (timeoutId) clearTimeout(timeoutId);
             document.removeEventListener('visibilitychange', handleVisibilityChange);
         };
-    }, [restTimer.state]);
+    }, [restTimer.state, isActive]);
 
     const startRest = () => {
         if (restTimer.state === 'running') return;

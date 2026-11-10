@@ -575,7 +575,7 @@ function OwnerBoundApp({ startupTab }: { startupTab: string | null }) {
               )}
             </div>
             <div style={{ display: activeTab === 'training' ? 'block' : 'none' }}>
-              {(visitedTabs.training || activeTab === 'training') && <TrainingView subTab={trainingSubTab} setSubTab={setTrainingSubTab} />}
+              {(visitedTabs.training || activeTab === 'training') && <TrainingView subTab={trainingSubTab} setSubTab={setTrainingSubTab} isActive={activeTab === 'training'} />}
             </div>
             <div style={{ display: activeTab === 'nutrition' ? 'block' : 'none' }}>
               {(visitedTabs.nutrition || activeTab === 'nutrition') && <NutritionView subTab={nutritionSubTab} setSubTab={setNutritionSubTab} />}

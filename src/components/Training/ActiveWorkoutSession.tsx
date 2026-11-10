@@ -24,12 +24,12 @@ const remapIndexAfterMove = (index: number | null, fromIndex: number, toIndex: n
     return index;
 };
 
-export const GlobalTimer = ({ workoutId, startTime }: { workoutId: string; startTime?: number }) => {
+export const GlobalTimer = ({ workoutId, startTime, isActive = true }: { workoutId: string; startTime?: number; isActive?: boolean }) => {
     const [display, setDisplay] = useState('00:00:00');
     const [clockAnomaly, setClockAnomaly] = useState(false);
 
     useEffect(() => {
-        if (!startTime) return;
+        if (!startTime || !isActive) return;
 
         let anomalyReported = false;
         const surfaceClockAnomaly = () => {
@@ -48,22 +48,37 @@ export const GlobalTimer = ({ workoutId, startTime }: { workoutId: string; start
             setDisplay(Logic.formatDuration(diff));
         };
 
-        updateDisplay();
-        const interval = setInterval(updateDisplay, 1000);
-
+        let interval: ReturnType<typeof setInterval> | null = null;
+        const stopRepaint = () => {
+            if (interval !== null) clearInterval(interval);
+            interval = null;
+        };
+        const startRepaint = () => {
+            if (interval === null && document.visibilityState === 'visible') {
+                interval = setInterval(updateDisplay, 1000);
+            }
+        };
         const handleVisibilityChange = () => {
-            if (document.visibilityState !== 'visible') return;
+            if (document.visibilityState !== 'visible') {
+                stopRepaint();
+                return;
+            }
             const resumed = resumeWorkoutClock(workoutId, startTime);
             if (resumed.anomalous) surfaceClockAnomaly();
             updateDisplay();
+            startRepaint();
         };
+        if (document.visibilityState === 'visible') {
+            updateDisplay();
+            startRepaint();
+        }
         document.addEventListener('visibilitychange', handleVisibilityChange);
 
         return () => {
-            clearInterval(interval);
+            stopRepaint();
             document.removeEventListener('visibilitychange', handleVisibilityChange);
         };
-    }, [workoutId, startTime]);
+    }, [workoutId, startTime, isActive]);
 
     return (
         <div className="workout-total-duration">
@@ -79,11 +94,12 @@ export const GlobalTimer = ({ workoutId, startTime }: { workoutId: string; start
 };
 
 export interface ActiveWorkoutSessionProps {
+    isActive?: boolean;
     onNavigateToHistory?: () => void;
     onRequestEnd?: () => void;
 }
 
-export const ActiveWorkoutSession = ({ onNavigateToHistory, onRequestEnd }: ActiveWorkoutSessionProps) => {
+export const ActiveWorkoutSession = ({ onNavigateToHistory, onRequestEnd, isActive = true }: ActiveWorkoutSessionProps) => {
     const {
         activeWorkout, library, history, historySaving,
         mood, setMood, pump, setPump, fatigue, setFatigue, water, setWater,
@@ -97,7 +113,7 @@ export const ActiveWorkoutSession = ({ onNavigateToHistory, onRequestEnd }: Acti
         updateSetupNote, updateSessionNote, updateTechnicalStandard
     } = useWorkoutSession();
 
-    useWakeLock(true);
+    useWakeLock(isActive && !activeWorkout?.isEditingHistory);
 
     const [openHistoryExIndex, setOpenHistoryExIndex] = useState<number | null>(null);
     const [openSetupExIndex, setOpenSetupExIndex] = useState<number | null>(null);
@@ -240,6 +256,7 @@ export const ActiveWorkoutSession = ({ onNavigateToHistory, onRequestEnd }: Acti
         <BufferedWorkoutScope.Provider key={String(activeWorkout.id)} value={String(activeWorkout.id)}>
             <div className="training-sub-view active workout-session">
             <SessionHeader
+                isActive={isActive}
                 isEditingHistory={activeWorkout.isEditingHistory}
                 routineName={activeWorkout.routineName}
                 date={activeWorkout.date}
@@ -353,7 +370,7 @@ export const ActiveWorkoutSession = ({ onNavigateToHistory, onRequestEnd }: Acti
                     />
                 </div>
             ) : (
-                <GlobalTimer workoutId={String(activeWorkout.id ?? '')} startTime={activeWorkout.globalStartTime} />
+                <GlobalTimer workoutId={String(activeWorkout.id ?? '')} startTime={activeWorkout.globalStartTime} isActive={isActive} />
             )}
 
             {activeWorkout.isEditingHistory ? (

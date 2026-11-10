@@ -49,6 +49,26 @@ describe('Audit regression: React time boundaries', () => {
         expect(screen.getByText('00:01').textContent).toBe(pausedDisplay);
     });
 
+    test('WorkoutTimer pauses display repaint on an inactive section and refreshes on return', async () => {
+        vi.useRealTimers();
+        function Host() {
+            const [active, setActive] = React.useState(true);
+            return <><button onClick={() => setActive(value => !value)}>Cambia sezione</button><WorkoutTimer isActive={active} /></>;
+        }
+        renderWithProviders(<Host />);
+        await waitFor(() => expect(screen.getByRole('button', { name: 'Avvia recupero' })).toBeDefined());
+        vi.useFakeTimers();
+        vi.setSystemTime(new Date('2026-09-18T12:00:00'));
+        fireEvent.click(screen.getByRole('button', { name: 'Avvia recupero' }));
+        act(() => { vi.advanceTimersByTime(1500); });
+        expect(screen.getByText('00:01')).toBeDefined();
+        fireEvent.click(screen.getByRole('button', { name: 'Cambia sezione' }));
+        act(() => { vi.advanceTimersByTime(3000); });
+        expect(screen.getByText('00:01')).toBeDefined();
+        fireEvent.click(screen.getByRole('button', { name: 'Cambia sezione' }));
+        expect(screen.getByText('00:04')).toBeDefined();
+    });
+
     test('useHomeView updates the recovery window without rescanning historical workout sets', () => {
         const now = Date.now();
         const exercises = [{ exId: 'ex_test', sets: [{ id: 'set-1', kg: '60', reps: '10' }] }];
