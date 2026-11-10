@@ -8,8 +8,7 @@ import {
   getAppCheckToken,
   getLimitedUseAppCheckToken,
   AppCheckLimitedUseTokenError,
-  resetAppCheckStateForTesting,
-  setAppCheckFallbackOffline
+  resetAppCheckStateForTesting
 } from '../src/lib/appCheck';
 import * as appCheckSdk from 'firebase/app-check';
 
@@ -256,14 +255,6 @@ describe('AppCheck Initialization & Fallback Behavior', () => {
     expect(result.phase).toBe('error');
     expect(isAppCheckFallbackOffline()).toBe(true);
     expect(result.reason).toContain('Firebase AppCheck initialization failed');
-  });
-
-  it('allows manual toggle of fallback offline mode via setAppCheckFallbackOffline', () => {
-    expect(isAppCheckFallbackOffline()).toBe(false);
-    setAppCheckFallbackOffline(true);
-    expect(isAppCheckFallbackOffline()).toBe(true);
-    setAppCheckFallbackOffline(false);
-    expect(isAppCheckFallbackOffline()).toBe(false);
   });
 
   it('treats a missing limited-use provider as terminal, including while offline', async () => {

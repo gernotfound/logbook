@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { searchExerciseLibrary, createExerciseLibrarySearcher, filterItems, getLatestUserWeight } from './workout';
+import { createExerciseLibrarySearcher, getLatestUserWeight } from './workout';
 
 describe('typed workout search contracts', () => {
     const exercises = [
@@ -8,16 +8,16 @@ describe('typed workout search contracts', () => {
     ];
 
     it('preserves exercise metadata and field types through direct/fuzzy search', () => {
-        const results: typeof exercises = searchExerciseLibrary(exercises, 'panca');
+        const results: typeof exercises = createExerciseLibrarySearcher(exercises)('panca');
         expect(results).toHaveLength(1);
         expect(results[0]).toMatchObject({ id: 'a', setsCount: 4, customFlag: true });
-        const typoResults: typeof exercises = searchExerciseLibrary(exercises, 'pancca');
+        const typoResults: typeof exercises = createExerciseLibrarySearcher(exercises)('pancca');
         expect(typoResults.map(item => item.id)).toContain('a');
     });
 
     it('keeps blank-query alphabetical ordering without mutating the caller library', () => {
         const originalIds = exercises.map(item => item.id);
-        const all = searchExerciseLibrary(exercises, '   ');
+        const all = createExerciseLibrarySearcher(exercises)('   ');
         expect(all.map(item => item.id)).toEqual(['a', 'b']);
         expect(exercises.map(item => item.id)).toEqual(originalIds);
     });
@@ -32,23 +32,11 @@ describe('typed workout search contracts', () => {
         expect(searcher('').map(item => item.id)).toEqual(second.map(item => item.id));
     });
 
-    it('preserves arbitrary item fields in filterItems and direct-first deduplication', () => {
-        const items = [
-            { id: 'one', name: 'Panca piana', priority: 9 },
-            { id: 'two', name: 'Squat', priority: 3 },
-        ];
-        const filtered: typeof items = filterItems(items, 'panca');
-        expect(filtered).toHaveLength(1);
-        expect(filtered[0]).toBe(items[0]);
-        expect(filtered[0].priority).toBe(9);
-        expect(filterItems(items, '')).toBe(items);
-    });
-
     it('reuses an exercise search index, retaining ranking and separating different owners', () => {
         const search = createExerciseLibrarySearcher(exercises);
-        for (const query of ['', 'panca', 'pancca', 'panca piana', 'quadricipiti']) {
-            expect(search(query)).toEqual(searchExerciseLibrary(exercises, query));
-        }
+        expect(search('panca').map(item => item.id)).toEqual(['a']);
+        expect(search('quadricipiti').map(item => item.id)).toEqual(['b']);
+        expect(search('').map(item => item.id)).toEqual(['a', 'b']);
         const otherOwner = createExerciseLibrarySearcher([{ id: 'private', name: 'Rematore' }]);
         expect(otherOwner('panca')).toEqual([]);
         expect(search('panca').map(item => item.id)).toEqual(['a']);
@@ -87,12 +75,6 @@ describe('typed workout search contracts', () => {
         expect(getLatestUserWeight({ '2026-10-03': { weight: '82,1' }, '2026-10-2': { weight: 85 } })).toBe(82.1);
     });
 
-    it('supports caller-selected fields without changing empty-query semantics', () => {
-        const items = [{ id: 42, label: 'Spalle', weight: 15 }];
-        const matches: typeof items = filterItems(items, 'spalle', 'label');
-        expect(matches).toEqual(items);
-        expect(filterItems(items, '', 'label')).toBe(items);
-    });
 });
 
 describe('single-token exercise category search', () => {
@@ -104,7 +86,7 @@ describe('single-token exercise category search', () => {
         ];
         const searcher = createExerciseLibrarySearcher(library);
         expect(searcher('cardio').map(item => item.id)).toEqual(['erg']);
-        expect(searchExerciseLibrary(library, 'isometria').map(item => item.id)).toEqual(['plank']);
+        expect(createExerciseLibrarySearcher(library)('isometria').map(item => item.id)).toEqual(['plank']);
         expect(searcher('peso').map(item => item.id)).toEqual(['bench']);
         expect(searcher('Panca').map(item => item.id)).toContain('bench');
     });
