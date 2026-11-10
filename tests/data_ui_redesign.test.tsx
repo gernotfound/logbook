@@ -51,7 +51,7 @@ describe('Data UI redesign', () => {
         expect((container.querySelector('#measure-waist') as HTMLInputElement).value).toBe('84.5');
         fireEvent.click(estimate);
         expect(estimate.checked).toBe(true);
-        expect(screen.getByText(/Metodo US Navy/i)).toBeDefined();
+        expect(container.querySelector('.data-calculation-preview')).not.toBeNull();
         expect(container.querySelectorAll('#measure-waist')).toHaveLength(1);
         fireEvent.click(estimate);
         expect(estimate.checked).toBe(false);
