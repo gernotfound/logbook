@@ -1,4 +1,4 @@
-import { MAX_ROUTINE_SEGMENTS, MAX_ROUTINE_SETS, parseRoutineSetCount, previewRoutineSets } from '../lib/routineSessionLimits';
+import { MAX_ROUTINE_SEGMENTS, parseRoutineSetCount, previewRoutineSets } from '../lib/routineSessionLimits';
 import { dispatchDurableOperation } from '../lib/sync/dispatchDurableOperation';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useAppStore } from '../store/useAppStore';
