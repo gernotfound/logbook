@@ -19,7 +19,7 @@ describe('Home nutrition summary efficiency', () => {
             ].join('|')}</output>;
         }
         const nutrition: Record<string, NutritionDay> = {
-            '2026-08-02': { date: '2026-08-02', kcal: 0, carbs: 0, pro: 0, fat: 0, weight: '82.5', bf: '18.1', bfProvenance: { method: 'manual' } },
+            '2026-08-02': { date: '2026-08-02', kcal: 0, carbs: 0, pro: 0, fat: 0, weight: '82.5', bf: '18.1', bfProvenance: { method: 'us_navy' } },
             '2026-08-03': { date: '2026-08-03', kcal: 0, carbs: 0, pro: 0, fat: 0, weight: '83.1', bf: '' },
             '2026-08-04': { date: '2026-08-04', kcal: 2200, carbs: 200, pro: 150, fat: 80 },
         };
@@ -31,7 +31,7 @@ describe('Home nutrition summary efficiency', () => {
             },
         });
 
-        expect(screen.getByTestId('home-summary').textContent).toBe('83.1|18.1|Manuale|2500');
+        expect(screen.getByTestId('home-summary').textContent).toBe('83.1|18.1|US Navy|2500');
         expect(tdee).not.toHaveBeenCalled();
     });
     it('excludes pre-launch date keys from the latest weight and BF summary', () => {
@@ -40,22 +40,22 @@ describe('Home nutrition summary efficiency', () => {
             if (home.loading) return <output>Caricamento</output>;
             return <output data-testid="home-stored-day-summary">{[home.userWeight, home.bf, home.bfSource].join('|')}</output>;
         }
-        const day = (date: string, weight?: string, bf?: string, method?: 'manual' | 'us_navy'): NutritionDay => ({
+        const day = (date: string, weight?: string, bf?: string, method?: 'us_navy'): NutritionDay => ({
             date, kcal: 0, carbs: 0, pro: 0, fat: 0, weight, bf,
             ...(method ? { bfProvenance: { method } } : {}),
         });
         const nutrition: Record<string, NutritionDay> = {
-            '2026-9-30': day('2026-9-30', '90', '20', 'manual'),
-            '2026-10-02': day('2026-10-02', '82', '18', 'manual'),
+            '2026-9-30': day('2026-9-30', '90', '20', 'us_navy'),
+            '2026-10-02': day('2026-10-02', '82', '18', 'us_navy'),
             '03/10/2026': day('03/10/2026', '81,5', '17.2', 'us_navy'),
-            '2026-13-40': day('2026-13-40', '99', '9', 'manual'),
+            '2026-13-40': day('2026-13-40', '99', '9', 'us_navy'),
             '2026-10-04': day('2026-10-04', '-6', ''),
-            'not-a-date': day('not-a-date', '150', '5', 'manual'),
+            'not-a-date': day('not-a-date', '150', '5', 'us_navy'),
         };
         renderWithProviders(<HomeSummary />, {
             userData: { ...emptyUserData, history: [], nutrition },
         });
-        expect(screen.getByTestId('home-stored-day-summary').textContent).toBe('82|18.0|Manuale');
+        expect(screen.getByTestId('home-stored-day-summary').textContent).toBe('82|18.0|US Navy');
     });
 
     it('does not adopt an Italian date alias that collides with a canonical day', () => {
@@ -65,14 +65,14 @@ describe('Home nutrition summary efficiency', () => {
             return <output data-testid="home-equal-day">{[home.userWeight, home.bf, home.bfSource].join('|')}</output>;
         }
         const nutrition: Record<string, NutritionDay> = {
-            '2026-08-02': { date: '2026-08-02', kcal: 0, carbs: 0, pro: 0, fat: 0, weight: '80', bf: '20', bfProvenance: { method: 'manual' } },
+            '2026-08-02': { date: '2026-08-02', kcal: 0, carbs: 0, pro: 0, fat: 0, weight: '80', bf: '20', bfProvenance: { method: 'us_navy' } },
             '02/08/2026': { date: '02/08/2026', kcal: 0, carbs: 0, pro: 0, fat: 0, weight: '81', bf: '19', bfProvenance: { method: 'us_navy' } },
             '2026-08-03': { date: '2026-08-03', kcal: 0, carbs: 0, pro: 0, fat: 0, weight: 'not-a-weight', bf: '' },
         };
         renderWithProviders(<HomeSummary />, {
             userData: { ...emptyUserData, history: [], nutrition },
         });
-        expect(screen.getByTestId('home-equal-day').textContent).toBe('80|20.0|Manuale');
+        expect(screen.getByTestId('home-equal-day').textContent).toBe('80|20.0|US Navy');
     });
 
 });

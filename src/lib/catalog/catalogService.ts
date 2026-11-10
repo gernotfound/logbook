@@ -333,10 +333,4 @@ export function getInMemoryCatalog(fallbackToSeed: boolean = true): CachedGlobal
     return inMemoryCatalogCache;
 }
 
-/**
- * Checks whether the catalog is currently populated in memory.
- */
-export function isCatalogInMemory(): boolean {
-    return inMemoryCatalogCache !== null;
-}
 

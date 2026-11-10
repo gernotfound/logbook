@@ -2,7 +2,6 @@ import {
     format, 
     isValid, 
     parseISO, 
-    differenceInYears, 
     startOfMonth, 
     endOfMonth, 
     startOfWeek, 
@@ -120,26 +119,6 @@ export function shiftDateString(dateStr: string | undefined | null, deltaDays: n
     const date = new Date(y, m - 1, d, 12, 0, 0);
     date.setDate(date.getDate() + deltaDays);
     return getLocalDateString(date);
-}
-
-export function calculateAge(dob: string | Date | number): number {
-    if (!dob) return 30;
-    let date: Date;
-    if (dob instanceof Date) {
-        date = dob;
-    } else if (typeof dob === 'string') {
-        date = dob.includes('T') ? new Date(dob) : parseISO(dob);
-        if (!isValid(date)) {
-            date = new Date(dob);
-        }
-    } else if (typeof dob === 'number') {
-        date = new Date(dob);
-    } else {
-        return 30;
-    }
-    if (!isValid(date)) return 30;
-    const age = differenceInYears(new Date(), date);
-    return isNaN(age) || age < 0 ? 30 : age;
 }
 
 export function formatDuration(secondsOrMs: number, isMs = false): string {

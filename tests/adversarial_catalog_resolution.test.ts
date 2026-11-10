@@ -24,7 +24,7 @@ import {
     extractCustomExercisesAndOverrides,
     extractCustomFoodsAndOverrides
 } from '../src/lib/catalog/deltaResolver';
-import { calculateWorkoutVolume, searchExerciseLibrary } from '../src/lib/calc/workout';
+import { calculateWorkoutVolume, createExerciseLibrarySearcher } from '../src/lib/calc/workout';
 import type {
     CatalogExercise,
     CatalogFood,
@@ -171,7 +171,7 @@ describe('Adversarial & Stress Testing Suite for Catalog Resolution Pipeline (M1
             const resolved = resolveEffectiveExercises(globalExercises, userCustom);
             expect(resolved).toHaveLength(1);
             expect(resolved[0]).toMatchObject({ id: 'bench-press', name: 'Custom Overwriting Bench Press', isDefault: false });
-            expect(searchExerciseLibrary(resolved, 'bench').map(ex => ex.id)).toEqual(['bench-press']);
+            expect(createExerciseLibrarySearcher(resolved)('bench').map(ex => ex.id)).toEqual(['bench-press']);
             expect(calculateWorkoutVolume({ exercises: [{ exId: 'bench-press', sets: [{ kg: '10', reps: '2' }] }] }, resolved)).toBe(20);
             // Duplicate names remain distinct when their stable IDs differ.
             expect(resolveEffectiveExercises([...globalExercises, { ...globalExercises[0], id: 'second-bench' }], userCustom).map(ex => ex.id))

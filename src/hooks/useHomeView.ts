@@ -388,11 +388,9 @@ export function useHomeView(isActive = true): HomeViewState {
         const num = parseFloat(String(directBf));
         if (!isNaN(num)) {
             bf = num.toFixed(1);
-            bfSource = selectedBfDay?.bfProvenance?.method === 'manual'
-                ? 'Manuale'
-                : selectedBfDay?.bfProvenance?.method === 'us_navy'
-                    ? 'US Navy'
-                    : 'Origine non disponibile';
+            bfSource = selectedBfDay?.bfProvenance?.method === 'us_navy'
+                ? 'US Navy'
+                : 'Origine non disponibile';
         }
     }
 

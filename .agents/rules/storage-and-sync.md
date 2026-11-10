@@ -86,7 +86,7 @@ RAW STORAGE
 
 **MUST:** data business e `_sync` fanno parte dello stesso stato di migrazione logico. Una futura rinomina di campo deve poter rinominare anche la causal path corrispondente.
 
-**MUST:** le dimensioni `data schema` e `sync protocol` possono avanzare senza obbligare il bump di `local envelope` o `backup schema`. I registry data/sync ricevono quindi un migration carrier con scope `cloud`, `local-envelope` o `backup`, così lo stesso step N→N+1 può trasformare la rappresentazione persistita corretta per ciascun boundary mantenendo invariata la versione del container quando il container non cambia.
+**MUST:** le dimensioni `data schema` e `sync protocol` possono avanzare senza obbligare il bump di `local envelope` o `backup schema`. Il runtime attuale non contiene registry vuoti o trasformazioni speculative: accetta esclusivamente la baseline corrente, mantenendo distinta la validazione di ciascuna dimensione. Quando dati di una release realmente utilizzata richiederanno una migrazione, introdurre allora gli step necessari per ogni scope coinvolto (`cloud`, `local-envelope`, `backup`), senza modificare artificialmente la versione dei container non cambiati.
 
 **MUST:** versioni future sconosciute causano fail-closed / `update-required`; è vietato fare downgrade distruttivo o riscrivere il documento come se fosse corrente.
 
@@ -98,7 +98,7 @@ Applicare il fresh start di AGENTS. Tutti i nuovi writer usano namespace owner-s
 
 Un documento Firestore presente senza marker data/sync correnti è incompatibile; non inventare causalità. Ogni documento effettivamente toccato da semantic write porta i marker correnti, senza una scansione dedicata al solo aggiornamento dei marker.
 
-`DATA_MIGRATIONS` deve contenere in futuro solo step sequenziali N→N+1, puri, deterministici e senza side effect. Saltare uno step è errore. Uno step data/sync deve gestire esplicitamente gli scope persistiti che contengono quella dimensione; non deve ottenere la compatibilità forzando un bump artificiale del container.
+**MUST:** introdurre una migrazione soltanto quando esiste un formato già rilasciato e supportato da preservare. Gli eventuali step N→N+1 devono essere puri, deterministici e privi di side effect, eseguiti in sequenza senza salti, e devono coprire esplicitamente tutti gli scope persistiti pertinenti. Fino ad allora versioni diverse da quelle correnti sono rifiutate senza riscrittura.
 
 ## Pipeline di salvataggio transazionale (Journaling e Semantic Merge)
 

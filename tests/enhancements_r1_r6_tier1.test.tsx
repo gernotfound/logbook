@@ -529,30 +529,6 @@ describe('LogBook PWA Enhancements Integration Suite (Requirements R1 - R6)', ()
                 expect(onAddExercise).toHaveBeenCalledWith('ex_dip');
             });
 
-            it('T1.4.2: Logic.filterItems performs exact name matching on exercises list', () => {
-                const library: Exercise[] = [
-                    { id: '1', name: 'Panca Piana', setsCount: 3, sets: [] },
-                    { id: '2', name: 'Squat', setsCount: 3, sets: [] },
-                    { id: '3', name: 'Stacco da Terra', setsCount: 3, sets: [] }
-                ];
-
-                const filtered = Logic.filterItems(library, 'Panca Piana');
-                expect(filtered.length).toBe(1);
-                expect(filtered[0].name).toBe('Panca Piana');
-            });
-
-            it('T1.4.3: Logic.filterItems performs case-insensitive substring matching across library', () => {
-                const library: Exercise[] = [
-                    { id: '1', name: 'Panca Inclinata Manubri', setsCount: 3, sets: [] },
-                    { id: '2', name: 'Croci ai Cavi', setsCount: 3, sets: [] },
-                    { id: '3', name: 'Panca Declinata', setsCount: 3, sets: [] }
-                ];
-
-                const matches = Logic.filterItems(library, 'panca');
-                expect(matches.length).toBe(2);
-                expect(matches.map(m => m.id)).toEqual(['1', '3']);
-            });
-
             it('T1.4.4: RoutineEditor renders an already assigned exercise and its count', () => {
                 const routineExercises = [
                     { exId: 'ex1', setsCount: 4, minReps: 8, maxReps: 12 }

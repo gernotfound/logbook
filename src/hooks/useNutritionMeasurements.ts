@@ -175,10 +175,6 @@ export function useNutritionMeasurements(selectedDate?: string) {
                 bf = calculation.bf;
                 bfProvenance = calculation.provenance;
             }
-            // Previously recorded manual BF is read-only; editing weight must
-            // not silently erase a valid field from the supported archive.
-            const retainExistingManualBf = !calculateBf && targetDayData?.bfProvenance?.method === 'manual';
-
             const targetDate = targetDateStr;
             try {
                 if (!isCurrentSession(session)) throw new Error('Sessione cambiata');
@@ -196,8 +192,8 @@ export function useNutritionMeasurements(selectedDate?: string) {
                         biceps: biceps ? Number(biceps) : undefined,
                         thighs: thighs ? Number(thighs) : undefined,
                         calves: calves ? Number(calves) : undefined,
-                        bf: retainExistingManualBf ? targetDayData?.bf : bf !== null && !isNaN(bf) ? Math.round(bf * 10) / 10 : undefined,
-                        bfProvenance: retainExistingManualBf ? targetDayData?.bfProvenance : bfProvenance,
+                        bf: bf !== null && !isNaN(bf) ? Math.round(bf * 10) / 10 : undefined,
+                        bfProvenance,
                         measurementTime: measureTime,
                     },
                 });

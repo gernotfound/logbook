@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { createFoodSearcher, searchFoods } from './nutrition';
-import { createExerciseLibrarySearcher, searchExerciseLibrary } from './workout';
+import { createFoodSearcher } from './nutrition';
+import { createExerciseLibrarySearcher } from './workout';
 
 describe('catalog search index equivalence', () => {
     it('reuses indexes without changing search results on large deterministic catalogs', () => {
@@ -39,19 +39,15 @@ describe('catalog search index equivalence', () => {
         expect(preparedFoods('')).toHaveLength(600);
         expect(preparedExercises('')).toHaveLength(600);
 
-        // The public one-shot helpers share the same implementation as the
-        // cached searchers: comparing them alone cannot detect a shared regression.
         for (const [query, expectedId] of foodExamples) {
             const indexedIds = preparedFoods(query).map(item => item.id);
             expect(indexedIds).toContain(expectedId);
             expect(new Set(indexedIds).size).toBe(indexedIds.length);
-            expect(indexedIds).toEqual(searchFoods(foods, query).map(item => item.id));
         }
         for (const [query, expectedId] of exerciseExamples) {
             const indexedIds = preparedExercises(query).map(item => item.id);
             expect(indexedIds).toContain(expectedId);
             expect(new Set(indexedIds).size).toBe(indexedIds.length);
-            expect(indexedIds).toEqual(searchExerciseLibrary(exercises, query).map(item => item.id));
         }
 
     });

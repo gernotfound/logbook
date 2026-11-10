@@ -9,7 +9,7 @@ import {
     calculateWorkoutVolume,
     searchMuscles,
     mergeActivePains,
-    searchExerciseLibrary
+    createExerciseLibrarySearcher
 } from '../src/lib/calc/workout';
 import {
     getLocalDateString,
@@ -447,18 +447,18 @@ describe('EMPIRICAL CHALLENGER: Adversarial Stress Test Suite (Requirements R1 -
             expect(whitespaceSearch).toEqual([]);
         });
 
-        it('searchExerciseLibrary finds exercises across names, stemmed names, muscles and notes', () => {
+        it('createExerciseLibrarySearcher finds exercises across names, stemmed names, muscles and notes', () => {
             const library = [
                 { id: 'ex_1', name: 'Panca piana bilanciere', muscles: ['chest_upper_left', 'chest_upper_right'], notes: 'Presa media' },
                 { id: 'ex_2', name: 'Trazioni presa prona', muscles: ['latissimus_dorsi_left'], notes: 'Zavorra' },
                 { id: 'ex_3', name: 'Squat con bilanciere', muscles: ['quadriceps_left'], notes: 'Gambe' }
             ];
 
-            const pancaRes = searchExerciseLibrary(library, 'pettorali');
+            const pancaRes = createExerciseLibrarySearcher(library)('pettorali');
             expect(pancaRes.length).toBeGreaterThan(0);
             expect(pancaRes[0].id).toBe('ex_1');
 
-            const trazioniRes = searchExerciseLibrary(library, 'dorsali');
+            const trazioniRes = createExerciseLibrarySearcher(library)('dorsali');
             expect(trazioniRes.length).toBeGreaterThan(0);
             expect(trazioniRes[0].id).toBe('ex_2');
         });
