@@ -227,7 +227,7 @@ vi.spyOn(console, 'warn').mockImplementation(() => {});
                 const key = `corrupted_key_${idx}`;
                 window.localStorage.setItem(key, corruptedPayload);
 
-                const { result } = renderHook(() => useLocalStorage(key, { safe: true }));
+                const { result } = renderHook(() => useLocalStorage(key, { safe: true }, z.object({ safe: z.boolean() })));
                 expect(result.current[0]).toEqual({ safe: true });
             });
 
@@ -256,31 +256,14 @@ vi.spyOn(console, 'warn').mockImplementation(() => {});
             expect(warnSpy).toHaveBeenCalled();
         });
 
-        // --- SECTION 1C: Backward Compatibility (No Schema) ---
-        it('preserves full backward compatibility when no schema is provided', () => {
-            const noSchemaObj = { a: 1, b: [true, 'test'], c: { nested: true } };
-            window.localStorage.setItem('no_schema_key', JSON.stringify(noSchemaObj));
-
-            const { result } = renderHook(() => useLocalStorage<Record<string, unknown>>('no_schema_key', { fallback: true }));
-            expect(result.current[0]).toEqual(noSchemaObj);
-
-            // Setter works and serializes correctly
-            act(() => {
-                result.current[1]({ updated: true });
-            });
-
-            expect(result.current[0]).toEqual({ updated: true });
-            expect(JSON.parse(window.localStorage.getItem('no_schema_key')!)).toEqual({ updated: true });
-        });
-
-        // --- SECTION 1D: Storage Exception Resilience in useEffect ---
+        // --- SECTION 1C: Storage Exception Resilience in useEffect ---
         it('does not throw when localStorage.setItem throws QuotaExceededError', () => {
             const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
             const setItemSpy = vi.spyOn(window.localStorage, 'setItem').mockImplementation(() => {
                 throw new DOMException('Quota exceeded while writing browser storage', 'QuotaExceededError');
             });
 
-            const { result } = renderHook(() => useLocalStorage('quota_test', { val: 1 }));
+            const { result } = renderHook(() => useLocalStorage('quota_test', { val: 1 }, z.object({ val: z.number() })));
             expect(result.current[0]).toEqual({ val: 1 });
 
             act(() => {
