@@ -50,6 +50,37 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('routine editor durable failures', () => {
+    it('preserves invalid set counts for correction without changing plans or committing them', async () => {
+        const { result } = renderHook(() => useTrainingRoutines());
+        act(() => result.current.setRoutineName('Scheda'));
+        act(() => result.current.handleAddExerciseToRoutine('bench'));
+        act(() => result.current.handleUpdateSetsCount(0, '4'));
+        expect(result.current.routineExercises[0].setPlans).toHaveLength(4);
+
+        for (const rawCount of ['2.5', '1e2', '21', '0', '-1', 'invalid']) {
+            act(() => result.current.handleUpdateSetsCount(0, rawCount));
+            expect(result.current.routineExercises[0].setsCount).toBe(rawCount);
+            expect(result.current.routineExercises[0].setPlans).toHaveLength(4);
+            await act(async () => { expect(await result.current.handleSave()).toBe(false); });
+            expect(mocks.dispatch).not.toHaveBeenCalled();
+        }
+
+        act(() => result.current.handleUpdateSetsCount(0, '2'));
+        expect(result.current.routineExercises[0].setsCount).toBe(2);
+        expect(result.current.routineExercises[0].setPlans).toHaveLength(2);
+
+        mocks.dispatch.mockResolvedValue({ ok: true, status: 'synced' });
+        await act(async () => { expect(await result.current.handleSave()).toBe(true); });
+        expect(mocks.dispatch).toHaveBeenCalledWith(expect.arrayContaining([
+            expect.objectContaining({
+                type: 'routine.upsert',
+                routine: expect.objectContaining({
+                    exercises: [expect.objectContaining({ exId: 'bench', setsCount: 2 })],
+                }),
+            }),
+        ]));
+    });
+
     it('rejects an empty set count rather than saving an invented three-set routine', async () => {
         const { result } = renderHook(() => useTrainingRoutines());
         act(() => result.current.setRoutineName('Scheda'));

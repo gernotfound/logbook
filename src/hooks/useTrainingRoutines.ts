@@ -282,13 +282,15 @@ export function useTrainingRoutines() {
                 return newExs;
             }
 
-            const parsed = parseInt(count.toString(), 10);
-            if (isNaN(parsed)) {
-                newExs[index] = { ...currentExercise, setsCount: '' };
+            const parsed = Number(count);
+            if (!Number.isSafeInteger(parsed) || parsed < 1 || parsed > MAX_ROUTINE_SETS) {
+                // Keep the uncommitted input and set plans intact until the user
+                // corrects it; truncating it would silently change the workout.
+                newExs[index] = { ...currentExercise, setsCount: String(count) };
                 return newExs;
             }
 
-            const normalizedCount = Math.max(1, Math.min(MAX_ROUTINE_SETS, parsed));
+            const normalizedCount = parsed;
             const currentPlans = Array.isArray(currentExercise.setPlans) ? currentExercise.setPlans : [];
             const setPlans: PlannedSetTechnique[] = Array.from({ length: normalizedCount }, (_, setIndex) => ({
                 ...(currentPlans[setIndex] || { technique: 'straight' as const }),
