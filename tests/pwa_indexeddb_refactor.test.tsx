@@ -197,7 +197,6 @@ describe('PWA IndexedDB Cache & Sync Lock Refactor Suite', () => {
       expect(sanitized).not.toBeNull();
       expect(sanitized?.profile?.height).toBe('173');
       expect(Array.isArray(sanitized?.routines)).toBe(true);
-
     });
 
     test('saveUserData sets syncing to true during debounce and false upon completion', async () => {
@@ -310,7 +309,7 @@ describe('PWA IndexedDB Cache & Sync Lock Refactor Suite', () => {
         nutritionPlanning: {} as any
       };
 
-      // Trigger save. Catch the promise rejection since resetStore cancels it.
+      // Observe the cancellation rejection rather than swallowing it.
       const canceled = expect(useAppStore.getState().saveUserData(mockData))
         .rejects.toThrow('cambio sessione');
       expect(useAppStore.getState().syncing).toBe(true);
@@ -332,7 +331,7 @@ describe('PWA IndexedDB Cache & Sync Lock Refactor Suite', () => {
   });
 
   describe('R3: Sync Lock (beforeunload Event Listener)', () => {
-    test('beforeunload listener triggers preventDefault and returnValue when syncing is true', () => {
+    test('beforeunload listener prevents leaving the page while syncing is true', () => {
       // Set syncing to true
       useAppStore.getState().setSyncing(true);
 
