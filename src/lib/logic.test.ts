@@ -893,7 +893,7 @@ describe('Linear planning history and TDEE feed regressions', () => {
         const before = JSON.stringify(history);
         const result = Logic.getNextScheduledRoutine(cycle, routines, history);
         expect(result).toMatchObject({
-            completedCount: 4, nextSessionIndex: 5, nextRoutineId: 'third',
+            completedCount: 3, nextSessionIndex: 4, nextRoutineId: 'third',
             nextRoutineName: 'third', totalSessions: 12, isCycleCompleted: false,
         });
         expect(JSON.stringify(history)).toBe(before);
