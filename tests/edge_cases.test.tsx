@@ -4,6 +4,9 @@ import { screen, act, fireEvent, waitFor } from '@testing-library/react';
 import { renderWithAuthenticatedTestOwner, renderWithProviders, emptyUserData } from './setup';
 import { prepareUnlockedTestArchive } from './secureVaultFixture';
 import { Logic } from '../src/lib/logic';
+import { createLoggedMealItem } from '../src/lib/nutrition/createLoggedMealItem';
+import { calculateLoggedMealTotals } from '../src/lib/nutrition/calculateLoggedMealTotals';
+import type { Food } from '../src/types';
 
 import HomeView from '../src/components/Home/HomeView';
 import TrainingSession from '../src/components/Training/TrainingSession';
@@ -28,26 +31,6 @@ describe('Empirical Challenger Suite: Edge Cases & Stress Verification', () => {
   beforeEach(async () => { await prepareUnlockedTestArchive(); });
 
   describe('1. Zero-Quantity Inputs & Calculations', () => {
-    test('Logic.scaleFoodNutrients handles zero, negative, and invalid quantities', () => {
-      const food = { baseQty: 100, kcal: 250, carbs: 30, pro: 15, fat: 5, unit: 'g' };
-      
-      const zeroQty = Logic.scaleFoodNutrients(food, 0, 'g');
-      expect(zeroQty.kcal).toBe(0);
-      expect(zeroQty.carbs).toBe(0);
-      expect(zeroQty.pro).toBe(0);
-      expect(zeroQty.fat).toBe(0);
-
-      const negQty = Logic.scaleFoodNutrients(food, -100, 'g');
-      expect(negQty.kcal).toBe(0);
-
-      const nanQty = Logic.scaleFoodNutrients(food, NaN, 'g');
-      expect(nanQty.kcal).toBe(0);
-
-      const nullFood = Logic.scaleFoodNutrients(null as any, 100, 'g');
-      expect(nullFood.kcal).toBe(0);
-    });
-
-
     test('Logic.calculateMacrosFromKg handles zero weight or zero macro ratios', () => {
       const zeroWeight = Logic.calculateMacrosFromKg(0, 3.5, 2.0, 1.0);
       expect(zeroWeight.totalKcal).toBe(0);
@@ -75,25 +58,6 @@ describe('Empirical Challenger Suite: Edge Cases & Stress Verification', () => {
       expect(Logic.calculateBodyFat(-70, profile)).toBeNull();
     });
 
-
-    test('Logic.calculateMacroRatio handles zero fat or zero carbs without divide-by-zero crashes', () => {
-      const zeroFat = Logic.calculateMacroRatio(100, 0);
-      expect(zeroFat.ratioKcal).toBe(Infinity);
-      expect(zeroFat.ratioString).toBe('N/A');
-
-      const zeroBoth = Logic.calculateMacroRatio(0, 0);
-      expect(zeroBoth.ratioString).toBe('N/A');
-    });
-
-    test('Logic.calculateMealTotals handles empty array and meals with zero nutrients', () => {
-      expect(Logic.calculateMealTotals([])).toEqual({
-        kcal: 0, carbs: 0, pro: 0, fat: 0, satFat: 0, unSatFat: 0,
-        sugars: 0, fiber: 0, salt: 0, sodium: 0, vitA: 0, vitC: 0, calcium: 0, iron: 0
-      });
-
-      const zeroMeal = [{ foods: [{ kcal: 0, carbs: 0, pro: 0, fat: 0 }] }];
-      expect(Logic.calculateMealTotals(zeroMeal).kcal).toBe(0);
-    });
 
   });
 
@@ -202,7 +166,8 @@ describe('Empirical Challenger Suite: Edge Cases & Stress Verification', () => {
       const valid = Logic.validateCustomFood({ ...food, servingWeight: '60,5' });
       expect(valid.isValid).toBe(true);
       expect(valid.cleanData?.servingWeight).toBe(60.5);
-      expect(Logic.scaleFoodNutrients(valid.cleanData, 2, 'pezzo').kcal).toBe(145);
+      const logged = createLoggedMealItem(valid.cleanData as Food, 'Pranzo', 'meal-1', 0);
+      expect(calculateLoggedMealTotals([{ ...logged, quantity: 2 }]).kcal).toBe(145);
     });
 
     test('Components render gracefully when userData has minimal/empty structures', () => {

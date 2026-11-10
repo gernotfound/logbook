@@ -146,7 +146,7 @@ describe('Zod Schema Resilience & Defensive Catches', () => {
             expect(res.dob).toBe('19900101');
             expect(res.height).toBe('180');
             expect(res.neck).toBe('40');
-            expect(res.manualBf).toBe('15.5');
+            expect(res).not.toHaveProperty('manualBf');
             expect(res.extraField).toBe('kept_by_passthrough');
             expect(res.hip).toBe('95');
             expect(res).not.toHaveProperty('hips');

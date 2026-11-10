@@ -7,7 +7,6 @@ import {
     getInMemoryCatalog,
 
     clearCatalogCache,
-    isCatalogInMemory,
 
 } from '../src/lib/catalog/catalogService';
 import {
@@ -27,7 +26,7 @@ describe('Catalog Resolution Pipeline & Service Unit Tests (M1)', () => {
 
     describe('1. In-Memory & Seed Catalog Access (R2 / M1 Contract)', () => {
         it('getInMemoryCatalog() returns non-null seed catalog on cold start without prior initialization', () => {
-            expect(isCatalogInMemory()).toBe(false);
+            expect((getInMemoryCatalog(false) !== null)).toBe(false);
             const catalog = getInMemoryCatalog();
             // Must return a defined, non-null object with a valid manifest (seed is intentionally empty)
             expect(catalog).toBeDefined();
@@ -37,12 +36,12 @@ describe('Catalog Resolution Pipeline & Service Unit Tests (M1)', () => {
             expect(Array.isArray(catalog.exercises)).toBe(true);
             expect(Array.isArray(catalog.foods)).toBe(true);
             // Must mark the catalog as loaded into in-memory cache
-            expect(isCatalogInMemory()).toBe(true);
+            expect((getInMemoryCatalog(false) !== null)).toBe(true);
         });
 
         it('getInMemoryCatalog(false) returns null when cache is cleared and auto-fallback is disabled', async () => {
             await clearCatalogCache();
-            expect(isCatalogInMemory()).toBe(false);
+            expect((getInMemoryCatalog(false) !== null)).toBe(false);
             const catalog = getInMemoryCatalog(false);
             expect(catalog).toBeNull();
         });
@@ -75,7 +74,7 @@ describe('Catalog Resolution Pipeline & Service Unit Tests (M1)', () => {
             expect(Array.isArray(catalog.exercises)).toBe(true);
             expect(Array.isArray(catalog.foods)).toBe(true);
             // Must mark the catalog as loaded into in-memory cache
-            expect(isCatalogInMemory()).toBe(true);
+            expect((getInMemoryCatalog(false) !== null)).toBe(true);
             // Empty bundled seeds are reproducible; no asynchronous fallback write may race a remote refresh.
             expect(await idbGet(CATALOG_CACHE_KEY)).toBeUndefined();
             const catalog2 = await getCachedCatalog();

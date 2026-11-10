@@ -13,7 +13,7 @@ import {
 import { resolveEffectiveExercises, resolveEffectiveFoods } from '../src/lib/catalog/deltaResolver';
 import { mergeNutrition } from '../src/lib/merge';
 import { applyDomainOperations } from '../src/lib/sync/domainOperations';
-import { searchFoods } from '../src/lib/calc/nutrition';
+import { createFoodSearcher } from '../src/lib/calc/nutrition';
 import { useAppStore } from '../src/store/useAppStore';
 import { clearSyncTimers } from '../src/store/slices/createSyncSlice';
 import type { UserData, NutritionDay } from '../src/types';
@@ -89,7 +89,7 @@ describe('Tier 5: Adversarial Coverage Hardening Suite', () => {
             const catalog = await getCachedCatalog();
             const effectiveFoods = resolveEffectiveFoods(catalog.foods);
 
-            const searchFood = (query: string) => searchFoods(effectiveFoods, query);
+            const searchFood = createFoodSearcher(effectiveFoods);
 
             // 1. Exact query
             expect(() => searchFood('Petto di Pollo Crudo')).not.toThrow();

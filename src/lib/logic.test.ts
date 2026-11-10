@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { Logic } from './logic';
+import { createFoodSearcher } from './calc/nutrition';
 
 describe('Logic Library Tests', () => {
     
@@ -251,37 +252,6 @@ describe('Logic Library Tests', () => {
         expect(dateStr).toBe('2026-07-26');
     });
 
-    it('scaleFoodNutrients: returns zero nutrients when quantity is 0', () => {
-        const food = { baseQty: 100, kcal: 200, carbs: 30, pro: 10, fat: 5, unit: 'g' };
-        const scaled = Logic.scaleFoodNutrients(food, 0, 'g');
-        expect(scaled.kcal).toBe(0);
-        expect(scaled.carbs).toBe(0);
-        expect(scaled.pro).toBe(0);
-        expect(scaled.fat).toBe(0);
-    });
-
-
-    it('filterItems: fuzzy search handles typos for exercises', () => {
-        const library = [
-            { id: '1', name: 'Panca piana bilanciere' },
-            { id: '2', name: 'Squat con bilanciere' },
-            { id: '3', name: 'Trazioni alla sbarra' }
-        ];
-
-        // Exact search
-        expect(Logic.filterItems(library, 'Panca').length).toBe(1);
-
-        // Typo search: "pancca" instead of "panca"
-        const typoResults = Logic.filterItems(library, 'pancca');
-        expect(typoResults.length).toBeGreaterThan(0);
-        expect(typoResults[0].id).toBe('1');
-
-        // Typo search: "squatt" instead of "squat"
-        const squatResults = Logic.filterItems(library, 'squatt');
-        expect(squatResults.length).toBeGreaterThan(0);
-        expect(squatResults[0].id).toBe('2');
-    });
-
     it('searchFoods: fuzzy search handles typos for food items', () => {
         const foods = [
             { id: 'f1', name: 'Petto di pollo', brand: 'Aia', category: 'Carne' },
@@ -289,34 +259,19 @@ describe('Logic Library Tests', () => {
             { id: 'f3', name: 'Olio extravergine di oliva', brand: 'Monini', category: 'Grassi' }
         ];
 
+        const search = createFoodSearcher(foods);
         // Exact match
-        expect(Logic.searchFoods(foods, 'pollo').length).toBe(1);
+        expect(search('pollo').length).toBe(1);
 
         // Typo match: "peto di polo" -> "Petto di pollo"
-        const polloTypo = Logic.searchFoods(foods, 'peto polo');
+        const polloTypo = search('peto polo');
         expect(polloTypo.length).toBeGreaterThan(0);
         expect(polloTypo[0].id).toBe('f1');
 
         // Typo match: "avenna" -> "Fiocchi di avena"
-        const avenaTypo = Logic.searchFoods(foods, 'avenna');
+        const avenaTypo = search('avenna');
         expect(avenaTypo.length).toBeGreaterThan(0);
         expect(avenaTypo[0].id).toBe('f2');
-    });
-
-    it('calculateAge: computes age accurately from various inputs', () => {
-        // Person born in 1990
-        const age1990 = Logic.calculateAge('1990-01-01');
-        expect(age1990).toBeGreaterThanOrEqual(34);
-
-        // Person born exactly 20 years ago
-        const twentyYearsAgo = new Date();
-        twentyYearsAgo.setFullYear(twentyYearsAgo.getFullYear() - 20);
-        const age20 = Logic.calculateAge(Logic.getLocalDateString(twentyYearsAgo));
-        expect(age20).toBe(20);
-
-        // Fallback for invalid/empty inputs
-        expect(Logic.calculateAge('')).toBe(30);
-        expect(Logic.calculateAge('invalid-date')).toBe(30);
     });
 
     it('getLocalDateString: handles strings, numbers, dates and invalid input', () => {

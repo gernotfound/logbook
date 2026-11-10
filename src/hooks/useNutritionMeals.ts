@@ -85,7 +85,7 @@ export function useNutritionMeals(dateStr?: string) {
             name: food.name || '',
             brand: food.brand || '',
             unit: food.unit || 'g',
-            pieceWeight: food.servingWeight || food.pieceWeight || '',
+            pieceWeight: food.servingWeight ?? '',
             kcal: food.kcal !== undefined ? food.kcal.toString() : '',
             carbs: food.carbs !== undefined ? food.carbs.toString() : '',
             pro: food.pro !== undefined ? food.pro.toString() : '',

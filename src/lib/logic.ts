@@ -4,7 +4,7 @@ import {
     getLocalDateString, 
     formatItalianDate, 
     parseDateInput, 
-    calculateAge, 
+
     formatDuration, 
     normalizeDuration, 
     getCalendarMonthGrid, 
@@ -17,17 +17,15 @@ import { calculateBodyFatByMethod, calculateBodyFat } from './calc/bodyFat';
 import {
     calculateTDEE,
     calculateMacrosFromKg,
-    calculateMacroRatio,
+
     calculateTDEEAndMacros,
-    scaleFoodNutrients,
-    searchFoods,
+
     validateCustomFood,
-    calculateMealTotals
+
 } from './calc/nutrition';
 import {
     validateWorkoutRatings,
-    filterItems,
-    searchExerciseLibrary,
+
     normalizeStem,
     getLatestUserWeight,
     calculateEffectiveSetWeight,
@@ -49,7 +47,7 @@ export {
     formatSleepTime,
     parseSleepInput,
     isSleepTimeValid,
-    searchExerciseLibrary,
+
     normalizeStem,
     getDetailedMuscleCategory
 };
@@ -64,7 +62,7 @@ export const Logic = {
     getLocalDateString,
     formatItalianDate,
     parseDateInput,
-    calculateAge,
+
     formatDuration,
     normalizeDuration,
     getCalendarMonthGrid,
@@ -80,17 +78,14 @@ export const Logic = {
     // Nutrition & Foods
     calculateTDEE,
     calculateMacrosFromKg,
-    calculateMacroRatio,
+
     calculateTDEEAndMacros,
-    scaleFoodNutrients,
-    searchFoods,
+
     validateCustomFood,
-    calculateMealTotals,
 
     // Workouts & Planning
     validateWorkoutRatings,
-    filterItems,
-    searchExerciseLibrary,
+
     normalizeStem,
     getLatestUserWeight,
     calculateEffectiveSetWeight,
@@ -105,8 +100,4 @@ export const Logic = {
     searchMuscles,
     mergeActivePains
 };
-
-
-
-
 

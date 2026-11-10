@@ -163,7 +163,7 @@ export const CardioSessionSchema = z.object({
 }).passthrough();
 
 const BodyFatProvenanceSchema = z.object({
-    method: z.enum(['manual', 'us_navy']),
+    method: z.literal('us_navy'),
     inputs: z.object({
         heightCm: safeOptionalNumber(),
         waistCm: safeOptionalNumber(),

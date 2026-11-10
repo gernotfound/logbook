@@ -70,11 +70,6 @@ describe('Data UI redesign', () => {
             bfProvenance: { method: 'us_navy' },
         })} />);
         expect(estimate.checked).toBe(true);
-        rerender(<DataMeasurements {...measurementProps({
-            selectedDate: '2026-10-04', targetDateStr: '2026-10-04',
-            bfProvenance: { method: 'manual' },
-        })} />);
-        expect(estimate.checked).toBe(false);
     });
 
     it('passes the opt-in flag to the actual save control', () => {
@@ -127,7 +122,7 @@ describe('Data UI redesign', () => {
                         measurementTime: '07:28',
                         weight: 81.4,
                         bf: 16.7,
-                        bfProvenance: { method: 'manual' },
+                        bfProvenance: { method: 'us_navy' },
                         waist: 84.2,
                         neck: 38,
                         sleepHours: '07:44',
@@ -148,6 +143,7 @@ describe('Data UI redesign', () => {
         expect(detailDialog).toBeDefined();
         expect(detailDialog.querySelector('.data-detail-scroll')).not.toBeNull();
         expect(screen.getAllByText('16,7%').length).toBeGreaterThan(0);
+        expect(screen.getByText('BF · US Navy')).toBeDefined();
 
         fireEvent.click(screen.getByRole('button', { name: 'Chiudi' }));
         fireEvent.click(screen.getByRole('button', { name: 'Opzioni' }));

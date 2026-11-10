@@ -442,17 +442,6 @@ describe('LogBook PWA Enhancements Integration Suite (Requirements R1 - R6)', ()
                 expect(container.textContent).toContain('Nessun esercizio presente');
             });
 
-            it('T2.4.2: Special regex characters in search query do not crash Logic.filterItems', () => {
-                const library: Exercise[] = [
-                    { id: '1', name: 'Crunch (addominali) [base]', setsCount: 3, sets: [] }
-                ];
-
-                expect(() => {
-                    const result = Logic.filterItems(library, '.*+?^${}()|[]\\');
-                    expect(result).toEqual([]);
-                }).not.toThrow();
-            });
-
             it('T2.4.3: Adding the same library exercise multiple times to a routine is permitted', () => {
                 const routineExercises = [
                     { exId: 'ex_pullup', setsCount: 3 },
