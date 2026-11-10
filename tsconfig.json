@@ -20,11 +20,7 @@
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "noImplicitAny": true,
-    "noFallthroughCasesInSwitch": true,
-
-    /* Allow gradual migration */
-    "allowJs": true,
-    "checkJs": false
+    "noFallthroughCasesInSwitch": true
   },
   "include": ["src"],
   "references": [{ "path": "./tsconfig.node.json" }]
