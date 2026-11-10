@@ -120,6 +120,33 @@ describe('credential actions keep the initiating session (SDK and policy transpo
         },
     );
 
+    it('does not submit a linked password rejected by the current Firebase policy', async () => {
+        vi.mocked(validatePasswordAgainstPolicy).mockResolvedValueOnce('Firebase richiede ancora almeno 1 numero per questa password.');
+        const submit = beginLink();
+        await waitFor(() => expect(fixture.showAlert).toHaveBeenCalledWith(expect.stringContaining('Firebase richiede ancora')));
+        expect(submit.hasAttribute('disabled')).toBe(false);
+        expect(fetch).not.toHaveBeenCalled();
+        expect(reload).not.toHaveBeenCalled();
+    });
+
+    it('explains when remote password validation is unavailable and never submits credentials', async () => {
+        vi.mocked(validatePasswordAgainstPolicy).mockRejectedValueOnce(
+            Object.assign(new Error('private network detail'), { code: 'auth/password-policy-unavailable' }),
+        );
+        beginLink();
+        await waitFor(() => expect(fixture.showAlert).toHaveBeenCalledWith(expect.stringContaining('Non è possibile verificare')));
+        expect(JSON.stringify(fixture.showAlert.mock.calls)).not.toContain('private network detail');
+        expect(fetch).not.toHaveBeenCalled();
+    });
+
+    it('reports a Firebase REST password rejection without repeating the link', async () => {
+        vi.mocked(fetch).mockResolvedValueOnce(new Response(JSON.stringify({ error: { message: 'WEAK_PASSWORD : provider details' } }), { status: 400 }));
+        beginLink();
+        await waitFor(() => expect(fixture.showAlert).toHaveBeenCalledWith(expect.stringContaining('requisiti di sicurezza')));
+        expect(fetch).toHaveBeenCalledTimes(1);
+        expect(reload).not.toHaveBeenCalled();
+    });
+
     it('does not expose an old confirmed link or reload the new session', async () => {
         let finish!: (response: Response) => void;
         vi.mocked(fetch).mockImplementationOnce(() => new Promise<Response>(resolve => { finish = resolve; }));
