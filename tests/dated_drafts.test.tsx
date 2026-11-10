@@ -20,6 +20,7 @@ import { draftRegistry } from '../src/lib/utils/draftRegistry';
 import { UserDataSchema } from '../src/lib/schema';
 import type { DataSubTab, SyncResult } from '../src/types';
 import { useLocalStorage } from '../src/hooks/useLocalStorage';
+import { z } from 'zod';
 import { requireHealthConsentWritable } from '../src/lib/healthConsent';
 const data = (nutrition = {}) => UserDataSchema.parse({ profile: { height: '180', gender: 'M' }, nutrition }) as any;
 const day = (date: string, fields = {}) => ({ date, kcal: 0, pro: 0, carbs: 0, fat: 0, meals: [], ...fields });
@@ -1077,7 +1078,7 @@ it('allows the same mounted form to edit again after a confirmed save and retain
 
 it('reads a new localStorage key before any write can copy the previous value over it', () => {
     localStorage.setItem('view-a', JSON.stringify('history')); localStorage.setItem('view-b', JSON.stringify('home'));
-    const hook = renderHook(({ key }) => useLocalStorage(key, 'default'), { initialProps: { key: 'view-a' } });
+    const hook = renderHook(({ key }) => useLocalStorage(key, 'default', z.string()), { initialProps: { key: 'view-a' } });
     expect(hook.result.current[0]).toBe('history');
     hook.rerender({ key: 'view-b' }); expect(hook.result.current[0]).toBe('home');
     expect(localStorage.getItem('view-b')).toBe('"home"');

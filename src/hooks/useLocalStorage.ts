@@ -4,7 +4,7 @@ import type { ZodType } from 'zod';
 export function useLocalStorage<T>(
     key: string,
     initialValue: T,
-    schema?: ZodType<T, any, any>,
+    schema: ZodType<T, any, any>,
     initialOverride?: T,
 ): [T, (value: T) => void] {
     const readStoredValue = (): T => {
@@ -13,16 +13,12 @@ export function useLocalStorage<T>(
             if (item === null) return initialValue;
             const parsed = JSON.parse(item);
 
-            if (schema) {
-                const parseResult = schema.safeParse(parsed);
-                if (!parseResult.success) {
-                    console.warn(`Errore di validazione schema per localStorage key "${key}":`, parseResult.error);
-                    return initialValue;
-                }
-                return parseResult.data;
+            const parseResult = schema.safeParse(parsed);
+            if (!parseResult.success) {
+                console.warn(`Errore di validazione schema per localStorage key "${key}":`, parseResult.error);
+                return initialValue;
             }
-
-            return parsed as T;
+            return parseResult.data;
         } catch (error) {
             console.error(`Errore di parsing del localStorage key "${key}":`, error);
             return initialValue;

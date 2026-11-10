@@ -3,6 +3,7 @@ import { renderHook, act } from '@testing-library/react';
 import * as fs from 'fs';
 import * as path from 'path';
 import { useLocalStorage } from '../src/hooks/useLocalStorage';
+import { z } from 'zod';
 import type { UserData } from '../src/types';
 import { idbStore } from './setup';
 
@@ -418,7 +419,11 @@ describe('EMPIRICAL CHALLENGER: Adversarial Stress & Robustness Suite (R2, R3, R
                 const testKey = `corrupt_test_${index}`;
                 window.localStorage.setItem(testKey, payload);
 
-                const { result } = renderHook(() => useLocalStorage(testKey, fallback.value));
+                const schema = z.union([
+                    z.string(), z.number(), z.array(z.string()),
+                    z.object({ safe: z.boolean(), count: z.number(), tags: z.array(z.string()) }),
+                ]);
+                const { result } = renderHook(() => useLocalStorage(testKey, fallback.value, schema));
 
                 expect(result.current[0]).toEqual(fallback.value);
                 expect(consoleErrorSpy).toHaveBeenCalledWith(
@@ -435,7 +440,7 @@ describe('EMPIRICAL CHALLENGER: Adversarial Stress & Robustness Suite (R2, R3, R
             // Start with corrupt payload
             window.localStorage.setItem(testKey, 'bad_unquoted_value');
 
-            const { result } = renderHook(() => useLocalStorage<string>(testKey, 'initial_default'));
+            const { result } = renderHook(() => useLocalStorage<string>(testKey, 'initial_default', z.string()));
             expect(result.current[0]).toBe('initial_default');
 
             // Call setter with new valid value
@@ -449,7 +454,7 @@ describe('EMPIRICAL CHALLENGER: Adversarial Stress & Robustness Suite (R2, R3, R
 
             // Re-render hook from clean storage: should parse without error
             consoleErrorSpy.mockClear();
-            const { result: reloadedResult } = renderHook(() => useLocalStorage<string>(testKey, 'fallback_tab'));
+            const { result: reloadedResult } = renderHook(() => useLocalStorage<string>(testKey, 'fallback_tab', z.string()));
             expect(reloadedResult.current[0]).toBe('healed_valid_value');
             expect(consoleErrorSpy).not.toHaveBeenCalled();
         });

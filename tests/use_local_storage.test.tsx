@@ -18,7 +18,7 @@ describe('R4: useLocalStorage Safe Fallback & Strict Serialization Suite', () =>
         localStorage.setItem('user:account-navigation', JSON.stringify('training'));
         const { result, rerender } = renderHook(
             ({ key, override }: { key: string; override?: 'home' }) =>
-                useLocalStorage<'home' | 'training'>(key, 'home', undefined, override),
+                useLocalStorage<'home' | 'training'>(key, 'home', z.enum(['home', 'training']), override),
             { initialProps: { key: 'unbound:navigation', override: 'home' as const } },
         );
         rerender({ key: 'user:account-navigation', override: 'home' });
@@ -32,7 +32,7 @@ describe('R4: useLocalStorage Safe Fallback & Strict Serialization Suite', () =>
 
         const { result, rerender } = renderHook(
             ({ storageKey }: { storageKey: string }) =>
-                useLocalStorage<'home' | 'training' | 'nutrition' | 'data'>(storageKey, 'home'),
+                useLocalStorage<'home' | 'training' | 'nutrition' | 'data'>(storageKey, 'home', z.enum(['home', 'training', 'nutrition', 'data'])),
             { initialProps: { storageKey: 'user:first:navigation' } },
         );
         expect(result.current[0]).toBe('training');
@@ -50,7 +50,7 @@ describe('R4: useLocalStorage Safe Fallback & Strict Serialization Suite', () =>
     describe('Valid JSON Retrieval', () => {
         it('returns initialValue when localStorage item is null (key not present)', () => {
             const consoleErrorSpy = vi.spyOn(console, 'error');
-            const { result } = renderHook(() => useLocalStorage('test_key_null', 'default_tab'));
+            const { result } = renderHook(() => useLocalStorage('test_key_null', 'default_tab', z.string()));
 
             expect(result.current[0]).toBe('default_tab');
             expect(consoleErrorSpy).not.toHaveBeenCalled();
@@ -59,7 +59,7 @@ describe('R4: useLocalStorage Safe Fallback & Strict Serialization Suite', () =>
         it('returns parsed string when localStorage contains valid JSON string', () => {
             window.localStorage.setItem('test_key_str', JSON.stringify('history'));
 
-            const { result } = renderHook(() => useLocalStorage('test_key_str', 'home'));
+            const { result } = renderHook(() => useLocalStorage('test_key_str', 'home', z.string()));
             expect(result.current[0]).toBe('history');
         });
 
@@ -67,7 +67,7 @@ describe('R4: useLocalStorage Safe Fallback & Strict Serialization Suite', () =>
             const mockObj = { theme: 'dark', fontSize: 16, enabled: true };
             window.localStorage.setItem('test_key_obj', JSON.stringify(mockObj));
 
-            const { result } = renderHook(() => useLocalStorage('test_key_obj', { theme: 'light', fontSize: 14, enabled: false }));
+            const { result } = renderHook(() => useLocalStorage('test_key_obj', { theme: 'light', fontSize: 14, enabled: false }, z.object({ theme: z.string(), fontSize: z.number(), enabled: z.boolean() })));
             expect(result.current[0]).toEqual(mockObj);
         });
 
@@ -75,8 +75,8 @@ describe('R4: useLocalStorage Safe Fallback & Strict Serialization Suite', () =>
             window.localStorage.setItem('test_key_num', JSON.stringify(42));
             window.localStorage.setItem('test_key_bool', JSON.stringify(true));
 
-            const { result: numResult } = renderHook(() => useLocalStorage('test_key_num', 0));
-            const { result: boolResult } = renderHook(() => useLocalStorage('test_key_bool', false));
+            const { result: numResult } = renderHook(() => useLocalStorage('test_key_num', 0, z.number()));
+            const { result: boolResult } = renderHook(() => useLocalStorage('test_key_bool', false, z.boolean()));
 
             expect(numResult.current[0]).toBe(42);
             expect(boolResult.current[0]).toBe(true);
@@ -86,7 +86,7 @@ describe('R4: useLocalStorage Safe Fallback & Strict Serialization Suite', () =>
             const mockArr = ['routine_1', 'routine_2', 'routine_3'];
             window.localStorage.setItem('test_key_arr', JSON.stringify(mockArr));
 
-            const { result } = renderHook(() => useLocalStorage<string[]>('test_key_arr', []));
+            const { result } = renderHook(() => useLocalStorage<string[]>('test_key_arr', [], z.array(z.string())));
             expect(result.current[0]).toEqual(mockArr);
         });
     });
@@ -97,7 +97,7 @@ describe('R4: useLocalStorage Safe Fallback & Strict Serialization Suite', () =>
             // Writing unquoted plain string "dashboard" (causes SyntaxError on JSON.parse("dashboard"))
             window.localStorage.setItem('logbook_activeTab', 'dashboard');
 
-            const { result } = renderHook(() => useLocalStorage('logbook_activeTab', 'home'));
+            const { result } = renderHook(() => useLocalStorage('logbook_activeTab', 'home', z.string()));
 
             // Must strictly return initialValue 'home', NEVER the raw string 'dashboard'
             expect(result.current[0]).toBe('home');
@@ -111,7 +111,7 @@ describe('R4: useLocalStorage Safe Fallback & Strict Serialization Suite', () =>
             const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
             window.localStorage.setItem('malformed_json_key', '{ name: "invalid", broken: ');
 
-            const { result } = renderHook(() => useLocalStorage('malformed_json_key', { fallback: true }));
+            const { result } = renderHook(() => useLocalStorage('malformed_json_key', { fallback: true }, z.object({ fallback: z.boolean() })));
 
             expect(result.current[0]).toEqual({ fallback: true });
             expect(consoleErrorSpy).toHaveBeenCalledWith(
@@ -124,7 +124,7 @@ describe('R4: useLocalStorage Safe Fallback & Strict Serialization Suite', () =>
             const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
             window.localStorage.setItem('undefined_key', 'undefined');
 
-            const { result } = renderHook(() => useLocalStorage('undefined_key', 'default_val'));
+            const { result } = renderHook(() => useLocalStorage('undefined_key', 'default_val', z.string()));
 
             expect(result.current[0]).toBe('default_val');
             expect(consoleErrorSpy).toHaveBeenCalled();
@@ -133,7 +133,7 @@ describe('R4: useLocalStorage Safe Fallback & Strict Serialization Suite', () =>
 
     describe('Strict JSON Serialization on Save', () => {
         it('saves state as valid JSON.stringify string on mount and setter updates', () => {
-            const { result } = renderHook(() => useLocalStorage('saved_key', 'initial_value'));
+            const { result } = renderHook(() => useLocalStorage('saved_key', 'initial_value', z.string()));
 
             // On initial effect mount, saved value is JSON.stringify("initial_value") -> "\"initial_value\""
             expect(window.localStorage.getItem('saved_key')).toBe(JSON.stringify('initial_value'));
@@ -149,7 +149,7 @@ describe('R4: useLocalStorage Safe Fallback & Strict Serialization Suite', () =>
 
         it('saves complex objects and arrays as valid JSON strings', () => {
             const initialData = { id: 1, items: ['a', 'b'] };
-            const { result } = renderHook(() => useLocalStorage('complex_saved_key', initialData));
+            const { result } = renderHook(() => useLocalStorage('complex_saved_key', initialData, z.object({ id: z.number(), items: z.array(z.string()) })));
 
             expect(window.localStorage.getItem('complex_saved_key')).toBe(JSON.stringify(initialData));
 
@@ -170,7 +170,7 @@ describe('R4: useLocalStorage Safe Fallback & Strict Serialization Suite', () =>
                 throw new Error('QuotaExceededError: DOM Exception 22');
             });
 
-            const { result } = renderHook(() => useLocalStorage('quota_test_key', 'safe_default'));
+            const { result } = renderHook(() => useLocalStorage('quota_test_key', 'safe_default', z.string()));
 
             expect(result.current[0]).toBe('safe_default');
             expect(consoleErrorSpy).toHaveBeenCalledWith(
