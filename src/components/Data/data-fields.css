@@ -278,7 +278,7 @@
 
 #view-data .data-method-switch {
     display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: minmax(0, 1fr);
     gap: .5rem;
 }
 
@@ -324,14 +324,14 @@
     flex: 0 0 1.25rem;
     place-items: center;
     border: 1px solid var(--text-muted);
-    border-radius: 50%;
+    border-radius: .3rem;
     background: var(--surface-color);
 }
 
 #view-data .data-method-dot::after {
     width: .55rem;
     height: .55rem;
-    border-radius: 50%;
+    border-radius: .15rem;
     background: var(--primary-color);
     content: "";
     opacity: 0;

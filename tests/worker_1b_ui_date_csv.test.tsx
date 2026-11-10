@@ -67,8 +67,6 @@ describe('Worker 1B: UI/UX, Date Navigation, CSV Export & PWA Fixes', () => {
                     setNeck={vi.fn()}
                     hip=""
                     setHip={vi.fn()}
-                    manualBf=""
-                    setManualBf={vi.fn()}
                     chest=""
                     setChest={vi.fn()}
                     shoulders=""
@@ -105,8 +103,6 @@ describe('Worker 1B: UI/UX, Date Navigation, CSV Export & PWA Fixes', () => {
                     setNeck={vi.fn()}
                     hip=""
                     setHip={vi.fn()}
-                    manualBf=""
-                    setManualBf={vi.fn()}
                     chest=""
                     setChest={vi.fn()}
                     shoulders=""
@@ -138,7 +134,7 @@ describe('Worker 1B: UI/UX, Date Navigation, CSV Export & PWA Fixes', () => {
                     measureTime="" setMeasureTime={setValue}
                     weight="75" setWeight={setValue}
                     waist="" setWaist={setValue} neck="" setNeck={setValue}
-                    hip="" setHip={setValue} manualBf="" setManualBf={setValue}
+                    hip="" setHip={setValue}
                     chest="" setChest={setValue} shoulders="" setShoulders={setValue}
                     biceps="" setBiceps={setValue} thighs="" setThighs={setValue}
                     calves="" setCalves={setValue}
@@ -275,8 +271,6 @@ describe('Worker 1B: UI/UX, Date Navigation, CSV Export & PWA Fixes', () => {
                     setNeck={vi.fn()}
                     hip=""
                     setHip={vi.fn()}
-                    manualBf=""
-                    setManualBf={vi.fn()}
                     chest=""
                     setChest={vi.fn()}
                     shoulders=""

@@ -3,7 +3,6 @@ import { Activity, ChevronDown, Pencil, Plus, Ruler, Save, Trash2, UserRound, X 
 import { Logic } from '../../lib/logic';
 import { shiftDateString } from '../../lib/utils/date';
 import type { BodyFatProvenance, UserProfile } from '../../types';
-import type { BodyFatMode } from '../../hooks/useNutritionMeasurements';
 import DataDateNavigator from './DataDateNavigator';
 
 interface DataMeasurementsProps {
@@ -24,8 +23,6 @@ interface DataMeasurementsProps {
     setNeck: (val: string) => void;
     hip: string;
     setHip: (val: string) => void;
-    manualBf: string;
-    setManualBf: (val: string) => void;
     chest: string;
     setChest: (val: string) => void;
     shoulders: string;
@@ -38,7 +35,7 @@ interface DataMeasurementsProps {
     setCalves: (val: string) => void;
     handleCancelEdit: () => void;
     onDeleteMeasurement?: (date: string) => void | Promise<void>;
-    calculateAndSave: (e?: { preventDefault(): void }, bodyFatMode?: BodyFatMode) => Promise<unknown>;
+    calculateAndSave: (e?: { preventDefault(): void }, calculateBf?: boolean) => Promise<unknown>;
     onOpenBiometry?: () => void;
 }
 
@@ -93,7 +90,6 @@ const DataMeasurements: React.FC<DataMeasurementsProps> = ({
     waist, setWaist,
     neck, setNeck,
     hip, setHip,
-    manualBf, setManualBf,
     chest, setChest,
     shoulders, setShoulders,
     biceps, setBiceps,
@@ -107,15 +103,11 @@ const DataMeasurements: React.FC<DataMeasurementsProps> = ({
     const activeDateStr = targetDateStr || selectedDate || editingDate || Logic.getLocalDateString();
     const todayStr = Logic.getLocalDateString();
     const isEditing = Boolean(editingDate || hasExistingData);
-    // Keep the user's choice for the current day, but derive the default from
-    // persisted provenance whenever the viewed day or its saved method changes.
-    const modeKey = `${activeDateStr}:${bfProvenance?.method ?? 'none'}`;
-    const defaultMode: BodyFatMode = bfProvenance?.method === 'us_navy' ? 'calculate' : 'manual';
-    const [modeSelection, setModeSelection] = useState<{ key: string; mode: BodyFatMode }>(
-        () => ({ key: modeKey, mode: defaultMode })
-    );
-    const bfMode = modeSelection.key === modeKey ? modeSelection.mode : defaultMode;
-    const setBfMode = (mode: BodyFatMode) => setModeSelection({ key: modeKey, mode });
+    // The optional calculation follows the saved provenance for the selected day.
+    const selectionKey = `${activeDateStr}:${bfProvenance?.method ?? 'none'}`;
+    const savedCalculation = bfProvenance?.method === 'us_navy';
+    const [selection, setSelection] = useState(() => ({ key: selectionKey, enabled: savedCalculation }));
+    const calculateBf = selection.key === selectionKey ? selection.enabled : savedCalculation;
 
     const isFemale = profile?.gender === 'F';
     const profileComplete = Boolean((profile?.gender === 'M' || profile?.gender === 'F') && Number(profile?.height) > 0);
@@ -151,13 +143,6 @@ const DataMeasurements: React.FC<DataMeasurementsProps> = ({
     };
 
     const otherFields = [
-        ...(bfMode === 'manual'
-            ? [
-                { id: 'measure-waist', label: 'Vita', value: waist, setValue: setWaist },
-                { id: 'measure-neck', label: 'Collo', value: neck, setValue: setNeck },
-                ...(isFemale ? [{ id: 'measure-hip', label: 'Fianchi', value: hip, setValue: setHip }] : []),
-            ]
-            : []),
         { id: 'measure-chest', label: 'Torace', value: chest, setValue: setChest },
         { id: 'measure-shoulders', label: 'Spalle', value: shoulders, setValue: setShoulders },
         { id: 'measure-biceps', label: 'Braccia', value: biceps, setValue: setBiceps },
@@ -222,63 +207,24 @@ const DataMeasurements: React.FC<DataMeasurementsProps> = ({
                     />
                 </div>
 
+
                 <fieldset className="data-bf-method">
-                    <legend>Massa grassa</legend>
+                    <legend>Massa grassa (facoltativa)</legend>
                     <div className="data-method-switch">
-                        <label className={`data-method-option${bfMode === 'manual' ? ' selected' : ''}`}>
-                            <input
-                                type="radio"
-                                name="body-fat-method"
-                                value="manual"
-                                checked={bfMode === 'manual'}
-                                onChange={() => setBfMode('manual')}
-                            />
+                        <label className={'data-method-option' + (calculateBf ? ' selected' : '')}>
+                            <input type="checkbox" checked={calculateBf}
+                                onChange={event => setSelection({ key: selectionKey, enabled: event.target.checked })} />
                             <span className="data-method-dot" aria-hidden="true" />
                             <span>
-                                <strong>BF manuale</strong>
-                            </span>
-                        </label>
-                        <label className={`data-method-option${bfMode === 'calculate' ? ' selected' : ''}`}>
-                            <input
-                                type="radio"
-                                name="body-fat-method"
-                                value="calculate"
-                                checked={bfMode === 'calculate'}
-                                onChange={() => setBfMode('calculate')}
-                            />
-                            <span className="data-method-dot" aria-hidden="true" />
-                            <span>
-                                <strong>Calcolo da misure</strong>
-                                <small>Stima con il metodo US Navy</small>
+                                <strong>Calcola la massa grassa</strong>
+                                <small>Stima opzionale con metodo US Navy</small>
                             </span>
                         </label>
                     </div>
-                    <p className="data-method-help">Puoi cambiare metodo senza perdere i valori già inseriti.</p>
                 </fieldset>
 
-                {bfMode === 'manual' ? (
-                    <div className="data-form-grid">
-                        <label className="data-field data-field-full" style={{ minWidth: 0 }}>
-                            Massa grassa (BF)
-                            <span className="data-input-with-unit" style={{ minWidth: 0 }}>
-                                <input
-                                    id="measure-bf"
-                                    type="number"
-                                    inputMode="decimal"
-                                    min="0"
-                                    max="100"
-                                    step="0.1"
-                                    value={manualBf}
-                                    placeholder="—"
-                                    onChange={event => setManualBf(event.target.value)}
-                                    onFocus={event => event.target.select()}
-                                />
-                                <span className="data-input-unit">%</span>
-                            </span>
-                        </label>
-                    </div>
-                ) : (
-                    <div className="data-calculation-flow">
+                <div className="data-calculation-flow">
+                    {calculateBf && (
                         <div className="data-calculation-profile">
                             <span>
                                 <small>Profilo usato per il calcolo</small>
@@ -294,20 +240,20 @@ const DataMeasurements: React.FC<DataMeasurementsProps> = ({
                                 </button>
                             )}
                         </div>
-                        <div className="data-form-grid">
-                            <MeasurementField id="measure-waist" label="Vita" value={waist} onChange={setWaist} />
-                            <MeasurementField id="measure-neck" label="Collo" value={neck} onChange={setNeck} />
-                            {isFemale && (
-                                <MeasurementField id="measure-hip" label="Fianchi" value={hip} onChange={setHip} full />
-                            )}
-                        </div>
+                    )}
+                    <div className="data-form-grid">
+                        <MeasurementField id="measure-waist" label="Vita" value={waist} onChange={setWaist} />
+                        <MeasurementField id="measure-neck" label="Collo" value={neck} onChange={setNeck} />
+                        {isFemale && <MeasurementField id="measure-hip" label="Fianchi" value={hip} onChange={setHip} full />}
+                    </div>
+                    {calculateBf && (
                         <output className="data-calculation-preview" aria-live="polite">
                             <span>BF stimata</span>
                             <strong>{estimate.value}</strong>
                             <small>{estimate.detail}</small>
                         </output>
-                    </div>
-                )}
+                    )}
+                </div>
 
                 <details className="data-disclosure">
                     <summary className="disclosure-summary data-disclosure-summary">
@@ -319,11 +265,6 @@ const DataMeasurements: React.FC<DataMeasurementsProps> = ({
                         <ChevronDown className="data-disclosure-chevron" size={20} aria-hidden="true" />
                     </summary>
                     <div className="data-disclosure-body">
-                        {bfMode === 'manual' && (
-                            <p className="data-disclosure-note">
-                                Vita e collo restano misure indipendenti dalla percentuale di massa grassa inserita.
-                            </p>
-                        )}
                         <div className="data-form-grid">
                             {otherFields.map(field => (
                                 <MeasurementField
@@ -351,7 +292,7 @@ const DataMeasurements: React.FC<DataMeasurementsProps> = ({
                     <button
                         type="button"
                         className="btn btn-primary"
-                        onClick={event => void calculateAndSave(event, bfMode)}
+                        onClick={event => void calculateAndSave(event, calculateBf)}
                     >
                         <Save size={16} aria-hidden="true" />
                         {isEditing ? 'Salva modifiche' : 'Salva misurazione'}

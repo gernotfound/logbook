@@ -11,8 +11,6 @@ import type { BodyFatProvenance, NutritionDay, UserProfile } from '../types';
 const EMPTY_NUTRITION: Record<string, NutritionDay> = {};
 const EMPTY_PROFILE: UserProfile = {};
 
-export type BodyFatMode = 'manual' | 'calculate';
-
 export function useNutritionMeasurements(selectedDate?: string) {
     const profile = useAppStore(state => state.userData?.profile || EMPTY_PROFILE);
     const nutrition = useAppStore(state => state.userData?.nutrition || EMPTY_NUTRITION);
@@ -28,11 +26,10 @@ export function useNutritionMeasurements(selectedDate?: string) {
     const field = (name: keyof NutritionDay) => targetDayData?.[name]?.toString() ?? '';
     const draft = useDatedDraft('measurement', targetDateStr, {
         weight: field('weight'), waist: field('waist'), neck: field('neck'), hip: field('hip'),
-        manualBf: targetDayData?.bfProvenance?.method === 'manual' ? field('bf') : '',
         chest: field('chest'), shoulders: field('shoulders'), biceps: field('biceps'),
         thighs: field('thighs'), calves: field('calves'), measureTime: field('measurementTime') || defaultMeasureTime
     });
-    const { weight, waist, neck, hip, manualBf, chest, shoulders, biceps, thighs, calves, measureTime } = draft.values;
+    const { weight, waist, neck, hip, chest, shoulders, biceps, thighs, calves, measureTime } = draft.values;
     const hasExistingData = Boolean(
         targetDayData && (
             (targetDayData.weight !== undefined && targetDayData.weight !== null && targetDayData.weight !== '') ||
@@ -107,7 +104,7 @@ export function useNutritionMeasurements(selectedDate?: string) {
         }
     };
 
-    const calculateAndSave = async (e?: { preventDefault(): void }, bodyFatMode: BodyFatMode = 'manual') => {
+    const calculateAndSave = async (e?: { preventDefault(): void }, calculateBf = false) => {
         if (e) e.preventDefault();
         if (saving.current) return false;
         saving.current = true;
@@ -120,9 +117,8 @@ export function useNutritionMeasurements(selectedDate?: string) {
             }
 
             const optional = [waist, neck, hip, chest, shoulders, biceps, thighs, calves];
-            if (optional.some(value => value !== '' && (!Number.isFinite(Number(value)) || Number(value) <= 0)) ||
-                (bodyFatMode === 'manual' && manualBf !== '' && (!Number.isFinite(Number(manualBf)) || Number(manualBf) < 0 || Number(manualBf) > 100))) {
-                await showAlert('Inserisci misure numeriche valide e una percentuale di massa grassa tra 0 e 100.');
+            if (optional.some(value => value !== '' && (!Number.isFinite(Number(value)) || Number(value) <= 0))) {
+                await showAlert('Inserisci misure numeriche valide.');
                 return false;
             }
             const height = Number(profile.height);
@@ -173,17 +169,15 @@ export function useNutritionMeasurements(selectedDate?: string) {
                 return { bf: calculatedBf, provenance: calculatedProvenance };
             };
 
-            if (bodyFatMode === 'manual') {
-                if (manualBf && !isNaN(Number(manualBf))) {
-                    bf = Number(manualBf);
-                    bfProvenance = { method: 'manual' };
-                }
-            } else {
+            if (calculateBf) {
                 const calculation = await calculateUsNavy();
                 if (!calculation) return false;
                 bf = calculation.bf;
                 bfProvenance = calculation.provenance;
             }
+            // Previously recorded manual BF is read-only; editing weight must
+            // not silently erase a valid field from the supported archive.
+            const retainExistingManualBf = !calculateBf && targetDayData?.bfProvenance?.method === 'manual';
 
             const targetDate = targetDateStr;
             try {
@@ -202,8 +196,8 @@ export function useNutritionMeasurements(selectedDate?: string) {
                         biceps: biceps ? Number(biceps) : undefined,
                         thighs: thighs ? Number(thighs) : undefined,
                         calves: calves ? Number(calves) : undefined,
-                        bf: bf !== null && !isNaN(bf) ? Math.round(bf * 10) / 10 : undefined,
-                        bfProvenance,
+                        bf: retainExistingManualBf ? targetDayData?.bf : bf !== null && !isNaN(bf) ? Math.round(bf * 10) / 10 : undefined,
+                        bfProvenance: retainExistingManualBf ? targetDayData?.bfProvenance : bfProvenance,
                         measurementTime: measureTime,
                     },
                 });
@@ -231,7 +225,6 @@ export function useNutritionMeasurements(selectedDate?: string) {
         waist, setWaist: (value: string) => draft.setField('waist', value),
         neck, setNeck: (value: string) => draft.setField('neck', value),
         hip, setHip: (value: string) => draft.setField('hip', value),
-        manualBf, setManualBf: (value: string) => draft.setField('manualBf', value),
         chest, setChest: (value: string) => draft.setField('chest', value),
         shoulders, setShoulders: (value: string) => draft.setField('shoulders', value),
         biceps, setBiceps: (value: string) => draft.setField('biceps', value),

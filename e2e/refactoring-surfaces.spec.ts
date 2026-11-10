@@ -118,7 +118,10 @@ for (const viewport of viewports) {
       await page.getByRole('button', { name: 'Dati e statistiche', exact: true }).click();
       await page.getByRole('tab', { name: 'Misurazioni', exact: true }).click();
       await page.locator('#measure-weight').fill('81.4');
-      await page.locator('#measure-bf').fill('16.7');
+      await expect(page.locator('#measure-bf')).toHaveCount(0);
+      await expect(page.getByRole('checkbox', { name: /Calcola la massa grassa/i })).not.toBeChecked();
+      await page.locator('#measure-waist').fill('84.2');
+      await page.locator('#measure-neck').fill('38');
       await capture(page, testInfo, 'measurements');
       await page.getByRole('button', { name: 'Salva misurazione', exact: true }).click();
       for (const name of ['Sonno', 'Attività', 'Biometria']) {
