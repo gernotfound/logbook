@@ -7,6 +7,7 @@ import { clearSyncTimers } from '../src/store/slices/createSyncSlice';
 describe('ARCH-02: createSyncSlice', () => {
     afterEach(() => {
         clearSyncTimers();
+        vi.restoreAllMocks();
         vi.useRealTimers();
     });
 
@@ -41,11 +42,11 @@ describe('ARCH-02: createSyncSlice', () => {
     it('should reject with Error when DB returns rejected', async () => {
         vi.mocked(DB.saveUserData).mockResolvedValueOnce({ ok: false, status: 'rejected', error: { code: 'permission-denied' } });
         
-        const promise = useAppStore.getState().updateUserData((prev) => ({ ...prev, profile: { ...prev.profile, height: '180' } }));
+        const promise = useAppStore.getState().saveUserData((prev) => ({ ...prev!, profile: { ...prev!.profile, height: '180' } }));
         
         // Attach rejection handler BEFORE running timers to avoid PromiseRejectionHandledWarning
         const expectation = expect(promise).rejects.toThrow("Sincronizzazione rifiutata dal server");
-        await vi.runAllTimersAsync();
+        await vi.advanceTimersByTimeAsync(1_100);
         await expectation;
         
         const state = useAppStore.getState();
@@ -55,7 +56,7 @@ describe('ARCH-02: createSyncSlice', () => {
     it('should resolve with local-pending SyncResult when DB returns local-pending', async () => {
         vi.mocked(DB.saveUserData).mockResolvedValueOnce({ ok: false, status: 'local-pending', error: { code: 'unavailable' } });
         
-        const promise = useAppStore.getState().updateUserData((prev) => ({ ...prev, profile: { ...prev.profile, height: '180' } }));
+        const promise = useAppStore.getState().saveUserData((prev) => ({ ...prev!, profile: { ...prev!.profile, height: '180' } }));
         
         // Only the initial 1s debounce belongs to this assertion. Draining
         // all future timers would also run the new 20s foreground recovery.
@@ -72,9 +73,9 @@ describe('ARCH-02: createSyncSlice', () => {
     it('should resolve with synced SyncResult on success', async () => {
         vi.mocked(DB.saveUserData).mockResolvedValueOnce({ ok: true, status: 'synced' });
         
-        const promise = useAppStore.getState().updateUserData((prev) => ({ ...prev, profile: { ...prev.profile, height: '180' } }));
+        const promise = useAppStore.getState().saveUserData((prev) => ({ ...prev!, profile: { ...prev!.profile, height: '180' } }));
         
-        await vi.runAllTimersAsync();
+        await vi.advanceTimersByTimeAsync(1_100);
         const result = await promise;
         
         expect(result.ok).toBe(true);
