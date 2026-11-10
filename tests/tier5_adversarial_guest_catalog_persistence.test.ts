@@ -352,6 +352,16 @@ describe('Tier 5: Adversarial Coverage Hardening Suite', () => {
             expect(() => checkDocSize(capturedSealedUserDoc, 'User Profile')).not.toThrow();
         });
 
+        it('counts UTF-8 bytes exactly for current non-ASCII documents', () => {
+            const text = 'Aé€😀';
+            const document = { note: text };
+            expect(calculateDocSizeBytes(text)).toBe(10);
+            expect(calculateDocSizeBytes(document)).toBe(new TextEncoder().encode(JSON.stringify(document)).length);
+            expect(() => checkDocSize(text, 'Unicode', 10)).not.toThrow();
+            expect(() => checkDocSize(text, 'Unicode', 9)).toThrow(/supera il limite/);
+            expect(() => calculateDocSizeBytes(() => 1)).toThrow(/non è serializzabile/);
+        });
+
         it('T5.3.3: checkDocSize throws Error if serialized document size exceeds 950KB and passes for normal payloads', () => {
             const smallDoc = { name: 'Mario', count: 42 };
             expect(() => checkDocSize(smallDoc, "Test Small")).not.toThrow();
