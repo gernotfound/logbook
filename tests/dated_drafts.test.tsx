@@ -1432,3 +1432,19 @@ it('records optional US Navy provenance without manual BF entry', async () => {
     derived.unmount();
 });
 
+
+it('does not sort measurement history while its section is inactive, and restores it on demand', () => {
+    const records = {
+        '2026-09-12': day('2026-09-12', { weight: '82' }),
+        '2026-09-13': day('2026-09-13', { weight: '83' }),
+    };
+    useAppStore.setState({ userData: data(records), dataOwner: storageOwner() });
+    const hook = renderHook(({ visible }) => useNutritionMeasurements('2026-09-11', visible), {
+        initialProps: { visible: false },
+    });
+    expect(hook.result.current.measurementsHistory).toEqual([]);
+    hook.rerender({ visible: true });
+    expect(hook.result.current.measurementsHistory.map(item => item.date)).toEqual(['2026-09-13', '2026-09-12']);
+    hook.rerender({ visible: false });
+    expect(hook.result.current.measurementsHistory).toEqual([]);
+});

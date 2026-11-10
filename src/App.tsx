@@ -581,7 +581,7 @@ function OwnerBoundApp({ startupTab }: { startupTab: string | null }) {
               {(visitedTabs.nutrition || activeTab === 'nutrition') && <NutritionView subTab={nutritionSubTab} setSubTab={setNutritionSubTab} />}
             </div>
             <div style={{ display: activeTab === 'data' ? 'block' : 'none' }}>
-              {(visitedTabs.data || activeTab === 'data') && <DataView subTab={dataSubTab} setSubTab={setDataSubTab} />}
+              {(visitedTabs.data || activeTab === 'data') && <DataView subTab={dataSubTab} setSubTab={setDataSubTab} isActive={activeTab === 'data'} />}
             </div>
           </Suspense>
         </ErrorBoundary>

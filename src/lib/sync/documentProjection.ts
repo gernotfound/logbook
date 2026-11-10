@@ -83,12 +83,14 @@ export function projectDocuments(input: UserData, catalog: CachedGlobalCatalog, 
         if (collection === 'history_months') for (const id of ids) requestedHistoryIds.add(id);
     }
     const selectedHistory = new Map<string, WorkoutSession[]>();
-    for (const workout of data.history ?? []) {
-        const id = String(workout.id ?? '');
-        if (!requestedHistoryIds.has(id)) continue;
-        const selected = selectedHistory.get(id) ?? [];
-        selected.push(workout);
-        selectedHistory.set(id, selected);
+    if (requestedHistoryIds.size > 0) {
+        for (const workout of data.history ?? []) {
+            const id = String(workout.id ?? '');
+            if (!requestedHistoryIds.has(id)) continue;
+            const selected = selectedHistory.get(id) ?? [];
+            selected.push(workout);
+            selectedHistory.set(id, selected);
+        }
     }
     for (const [path, ids] of scope.monthly) {
         const [collection, month] = path.split('/');

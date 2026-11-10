@@ -494,6 +494,19 @@ describe('Domain Operations projection scope regressions', () => {
         }
     });
 
+    it('keeps a nutrition-only projection independent from unrelated history shards', () => {
+        const scope: DocumentProjectionScope = {
+            rootKeys: new Set(),
+            monthly: new Map([['nutrition_months/2026-10', new Set(['2026-10-01'])]]),
+        };
+        const projection = projectDocuments(before, withGlobalCatalog, scope);
+        const full = projectDocuments(before, withGlobalCatalog);
+        expect([...projection.keys()]).toEqual(['nutrition_months/2026-10']);
+        expect(projection.get('nutrition_months/2026-10')).toEqual({
+            '2026-10-01': full.get('nutrition_months/2026-10')!['2026-10-01'],
+        });
+    });
+
     it('preserves month transfer tombstones and does not emit unrelated paths', () => {
         const operation: DomainOperation = {
             type: 'history.upsert',

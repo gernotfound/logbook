@@ -111,22 +111,30 @@ export function useHomeView(isActive = true): HomeViewState {
         let active = true;
 
         const scheduleNextRefresh = () => {
+            if (!active || document.visibilityState !== 'visible') return;
             timeoutId = setTimeout(() => {
-                if (!active) return;
+                if (!active || document.visibilityState !== 'visible') return;
                 setHomeClockNow(Date.now());
                 scheduleNextRefresh();
             }, HOME_CLOCK_REFRESH_MS);
         };
 
         const handleVisibilityChange = () => {
-            if (document.visibilityState === 'visible') setHomeClockNow(Date.now());
+            if (timeoutId) clearTimeout(timeoutId);
+            timeoutId = null;
+            if (document.visibilityState === 'visible') {
+                setHomeClockNow(Date.now());
+                scheduleNextRefresh();
+            }
         };
 
-        // Mounted tabs remain alive while hidden; refresh on return, without a hidden timer.
-        immediateId = setTimeout(() => {
-            if (active) setHomeClockNow(Date.now());
-        }, 0);
-        scheduleNextRefresh();
+        // Timestamps remain authoritative while the document is hidden.
+        if (document.visibilityState === 'visible') {
+            immediateId = setTimeout(() => {
+                if (active) setHomeClockNow(Date.now());
+            }, 0);
+            scheduleNextRefresh();
+        }
         document.addEventListener('visibilitychange', handleVisibilityChange);
         return () => {
             active = false;
@@ -220,18 +228,23 @@ export function useHomeView(isActive = true): HomeViewState {
 
     // Persisted nutrition keys use the same canonical local dates as monthly shards.
     const { recentWeight, recentNutritionWithBf } = useMemo(() => {
-        const days = Object.entries(nutrition)
-            .filter(([date]) => parseDateInput(date) === date)
-            .sort(([a], [b]) => b.localeCompare(a));
         let weight: number | undefined;
         let bfDay: (typeof nutrition)[string] | undefined;
-        for (const [, day] of days) {
-            if (weight === undefined && day?.weight !== undefined && day?.weight !== null && day?.weight !== '') {
+        let weightDate = '';
+        let bfDate = '';
+        for (const [date, day] of Object.entries(nutrition)) {
+            if (parseDateInput(date) !== date) continue;
+            if (date > weightDate && day?.weight !== undefined && day?.weight !== null && day?.weight !== '') {
                 const candidate = parsePositiveWeight(day.weight);
-                if (candidate !== null) weight = candidate;
+                if (candidate !== null) {
+                    weight = candidate;
+                    weightDate = date;
+                }
             }
-            if (!bfDay && day?.bf !== undefined && day?.bf !== null && day?.bf !== '') bfDay = day;
-            if (weight !== undefined && bfDay) break;
+            if (date > bfDate && day?.bf !== undefined && day?.bf !== null && day?.bf !== '') {
+                bfDay = day;
+                bfDate = date;
+            }
         }
         return { recentWeight: weight, recentNutritionWithBf: bfDay };
     }, [nutrition]);
