@@ -400,15 +400,14 @@ export function getNextScheduledRoutine(
     if (!isBoundedCycleCount(effectiveWeeks, MAX_CALCULATED_CYCLE_WEEKS)) return null;
     const totalSessions = effectiveWeeks * sessionsPerWeek;
 
-    // Suggestions follow the last actually performed planned routine, not a
-    // mandatory quota or sequence. Older sessions lacking routineId retain
-    // the original count-based fallback.
+    // Suggestions follow the last performed planned routine, not a compulsory
+    // order. A cycle ID without a routine ID does not prove a planned session.
     let completedCount = 0;
     let lastRoutineIndex: number | undefined;
     let lastTime = Number.NEGATIVE_INFINITY;
     const routineIndexById = new Map(availableCycleRoutines.map((item, index) => [item.routineId, index]));
     for (const workout of Array.isArray(history) ? history : []) {
-        if (workout?.cycleId !== cycle.id) continue;
+        if (workout?.cycleId !== cycle.id || !workout.routineId) continue;
         completedCount++;
         const routineIndex = routineIndexById.get(workout.routineId ?? '');
         if (routineIndex === undefined) continue;

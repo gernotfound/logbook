@@ -50,6 +50,22 @@ describe('workout session preparation', () => {
         expect(workout.exercises[0].sets[0].segments).toHaveLength(19);
     });
 
+    it('rejects missing or zero sets instead of silently converting them to three', () => {
+        for (const setsCount of [undefined, null, '', '0', 0, -1, 2.5, 'invalid']) {
+            const routine = {
+                id: 'unproven-count', name: 'Scheda da correggere',
+                exercises: [{ exId: 'bench', setsCount }],
+            } as unknown as WorkoutRoutine;
+            expect(() => buildRoutineWorkout({}, routine, undefined, createRuntime()))
+                .toThrow('La scheda contiene troppe serie o segmenti');
+        }
+        const current: WorkoutRoutine = {
+            id: 'valid-count', name: 'Scheda corrente',
+            exercises: [{ exId: 'bench', setsCount: '3' }],
+        };
+        expect(buildRoutineWorkout({}, current, undefined, createRuntime()).exercises[0].sets).toHaveLength(3);
+    });
+
     it('rejects oversized imported setPlans before cloning them or preparing a session', () => {
         const oversized: WorkoutRoutine = {
             id: 'oversized-plans', name: 'Scheda importata',

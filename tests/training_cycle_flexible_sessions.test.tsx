@@ -190,10 +190,16 @@ describe('flexible training cycles', () => {
         expect(first?.nextRoutineId).toBe('first');
         expect(first?.totalSessions).toBe(8);
         expect(first?.totalRoutinesInCycle).toBe(2);
-        const afterFirst = getNextScheduledRoutine(withMissing, routines, [
-            { id: 'w1', cycleId: withMissing.id } as WorkoutSession,
+        const afterDeleted = getNextScheduledRoutine(withMissing, routines, [
+            { id: 'w1', cycleId: withMissing.id, routineId: 'deleted', exercises: [] },
         ]);
-        expect(afterFirst?.nextRoutineId).toBe('second');
+        expect(afterDeleted?.nextRoutineId).toBe('second');
+        expect(afterDeleted?.completedCount).toBe(1);
+        const withoutRoutine = getNextScheduledRoutine(withMissing, routines, [
+            { id: 'unknown', cycleId: withMissing.id, exercises: [] },
+        ]);
+        expect(withoutRoutine?.nextRoutineId).toBe('first');
+        expect(withoutRoutine?.completedCount).toBe(0);
         expect(withMissing.routines[0]?.routineId).toBe('deleted');
 
         setup(0, withMissing);
