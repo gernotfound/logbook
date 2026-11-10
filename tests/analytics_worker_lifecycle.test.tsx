@@ -210,7 +210,10 @@ it('cancels an obsolete period before the worker can finish, without an obsolete
         oldWorker.onmessage({ data: { id: oldRequest.id, type: 'SUCCESS', result: worker.volumeResult } });
         currentWorker.onmessage({ data: { id: newRequest.id, type: 'SUCCESS', result: worker.volumeResult } });
     });
-    expect((await old).message).toContain('superata');
+    const canceled = await old;
+    expect(canceled).toBeInstanceOf(Error);
+    if (!(canceled instanceof Error)) throw new Error('La richiesta superata non è stata annullata');
+    expect(canceled.message).toContain('superata');
     expect(await latest).toEqual(worker.volumeResult);
     expect(worker.fallback).not.toHaveBeenCalled();
     hook.unmount();
