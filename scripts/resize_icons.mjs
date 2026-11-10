@@ -1,4 +1,4 @@
-import { readFile, rm, writeFile } from 'node:fs/promises';
+import { readFile, writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import sharp from 'sharp';
 
@@ -16,7 +16,6 @@ const maskableOutput = 'public/icon-maskable-512.png';
 const maskableSize = 512;
 const maskableArtworkScale = 0.72;
 const socialOutput = 'public/social-share.png';
-const legacySocialOutput = 'public/social-share.jpg';
 
 async function validateRaster(output, width, height, format, { opaque = false } = {}) {
   const image = sharp(output);
@@ -165,7 +164,6 @@ export async function generateIcons() {
     .png({ compressionLevel: 9 })
     .toFile(socialOutput);
   await validateRaster(socialOutput, 1200, 630, 'png', { opaque: true });
-  await rm(legacySocialOutput, { force: true });
 
   console.log(`Generated and validated ${pngTargets.length + 4} branded assets from vector master ${source}.`);
 }

@@ -1420,7 +1420,7 @@ it('records body-fat provenance for manual and derived measurements', async () =
         derived.result.current.setWaist('85');
         derived.result.current.setNeck('40');
     });
-    await act(async () => { await derived.result.current.calculateAndSave(); });
+    await act(async () => { await derived.result.current.calculateAndSave(undefined, 'calculate'); });
 
     expect(dispatch).toHaveBeenLastCalledWith(expect.objectContaining({
         type: 'nutrition-day.patch',
