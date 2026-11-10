@@ -8,7 +8,7 @@ import {
   updateStorageMarker,
 } from '../src/lib/storageIntegrity';
 import { CURRENT_DATA_SCHEMA, CURRENT_LOCAL_ENVELOPE, CURRENT_SYNC_PROTOCOL } from '../src/lib/schemaEvolution';
-import { idbStore, localStorageMock } from './setup';
+import { idbStore, localStorageMock, readMockIdbValue } from './setup';
 import { prepareUnlockedTestArchive } from './secureVaultFixture';
 import { isVaultUnlocked, lockAllVaults, lockVault, vaultControlKey } from '../src/lib/sync/secureArchiveSession';
 import { initializeLocal } from '../src/lib/sync/localRepository';
@@ -39,9 +39,8 @@ describe('Storage bootstrap and owner integrity checks', () => {
       compatibilityError: null,
     });
     vi.clearAllMocks();
-    // A spy on this shared mocked function can retain an earlier test's
-    // implementation. The real test IDB map must back vault provisioning.
-    vi.mocked(idbKeyval.get).mockImplementation(async key => idbStore[String(key)]);
+    // Restore transaction ordering after another test replaces get().
+    vi.mocked(idbKeyval.get).mockImplementation(readMockIdbValue);
     vi.useRealTimers();
     document.body.innerHTML = '<div id="root"></div>';
   });
@@ -174,7 +173,8 @@ describe('Storage bootstrap and owner integrity checks', () => {
       + (payload === 'A' ? 'B' : 'A') + original!.slice(dot + 2);
     await idbKeyval.set(archiveKey, tampered);
     const control = localStorage.getItem(vaultControlKey('guest'));
-    const wrappingKey = await idbKeyval.get(deviceVaultKeyId('guest'));
+    const wrappingKeyId = deviceVaultKeyId('guest');
+    const wrappingKey = idbStore[wrappingKeyId];
 
     lockVault('guest');
     expect(isVaultUnlocked('guest')).toBe(false);
@@ -191,7 +191,10 @@ describe('Storage bootstrap and owner integrity checks', () => {
     expect(getStorageMarker(undefined, 'guest')?.timestamp).toBe(1000);
     expect(await idbKeyval.get(archiveKey)).toBe(tampered);
     expect(localStorage.getItem(vaultControlKey('guest'))).toBe(control);
-    expect(await idbKeyval.get(deviceVaultKeyId('guest'))).toBe(wrappingKey);
+    expect(idbStore[wrappingKeyId]).toBe(wrappingKey);
+    expect(await idbKeyval.get(wrappingKeyId)).toMatchObject({
+      type: 'secret', extractable: false, algorithm: { name: 'AES-GCM', length: 256 },
+    });
   });
 
   it('blocks guest cold boot when an existing integrity marker is unreadable and the cache is absent', async () => {

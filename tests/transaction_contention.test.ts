@@ -1,8 +1,8 @@
 import 'fake-indexeddb/auto';
 import { vi } from 'vitest';
 
-// The shared jsdom idb-keyval stub awaits each updater and permits concurrent
-// reads of the same old value; this suite needs genuine serialized IDB updates.
+// Check actorSeq and journal contention against real IndexedDB transactions,
+// independently of the shared jsdom test adapter.
 vi.unmock('idb-keyval');
 import { beforeEach, describe, expect, it } from 'vitest';
 import { UserDataSchema } from '../src/lib/schema';
@@ -10,8 +10,8 @@ import type { UserData } from '../src/types';
 
 describe('Transaction Contention & ActorSeq Invatiants', () => {
     beforeEach(async () => {
-        // The shared UI setup has already imported a module graph bound to its
-        // non-transactional IDB stub. Re-import after resetting that graph.
+        // Re-import after resetting the graph so production modules use the
+        // genuine IndexedDB implementation rather than the UI adapter.
         vi.resetModules();
         const { clear } = await import('idb-keyval');
         await clear();
