@@ -150,10 +150,13 @@ export const RoutineExerciseItem: React.FC<RoutineExerciseItemProps> = ({
                         </label>
                         <input
                             id={setsId}
-                            type="number" min="1" max={MAX_ROUTINE_SETS}
+                            type="text" inputMode="numeric" pattern="[0-9]*"
                             placeholder="3"
                             value={exercise.setsCount !== undefined && exercise.setsCount !== null ? exercise.setsCount : ''}
-                            onChange={e => onUpdateSetsCount(index, e.target.value)}
+                            onChange={e => {
+                                const value = e.target.value;
+                                if (/^[0-9]*$/.test(value)) onUpdateSetsCount(index, value);
+                            }}
                             onFocus={e => e.target.select()}
                             style={{
                                 width: '90px',
