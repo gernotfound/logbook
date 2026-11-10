@@ -126,9 +126,6 @@ describe('durable owner-scoped journal', () => {
         await hydrateLocal('user:a', initial, [], undefined, 'window');
         expect((await readLocal('user:a'))?.lastClosedWorkoutId).toBe('retired-only-local');
         expect((await readLocal('user:a'))?.closedWorkoutIds).toEqual(['retired-only-local']);
-        await acknowledgeThrough('user:a', after!.actorSeq, initial);
-        expect((await readLocal('user:a'))?.lastClosedWorkoutId).toBe('retired-only-local');
-        expect((await readLocal('user:a'))?.closedWorkoutIds).toEqual(['retired-only-local']);
     });
 
 
@@ -685,9 +682,9 @@ describe('durable owner-scoped journal', () => {
         await commitLocal('a', desired, base);
         const pendingBefore = (await readLocal('a'))!.pending;
         expect(pendingBefore.some(op => op.docPath === 'nutrition_months/2026-10')).toBe(true);
-        await acknowledgeThrough('a', 0, base, [], {
-            '': { protocolVersion: CURRENT_SYNC_PROTOCOL, clock: {}, fields: {} },
-        });
+        await hydrateLocal('a', base, [], new Map([['', {
+            _sync: { protocolVersion: CURRENT_SYNC_PROTOCOL, clock: {}, fields: {} },
+        }]]));
         const after = (await readLocal('a'))!;
         expect(after.pending).toEqual(pendingBefore);
         expect(after.data.nutrition?.['2026-10-01']?.weight).toBe(80);
@@ -754,7 +751,12 @@ describe('durable owner-scoped journal', () => {
         } }) as unknown as UserData;
         await initializeLocal('a', local, ['2025-01', '2026-09']);
         const knownMeta = { protocolVersion: CURRENT_SYNC_PROTOCOL, clock: { s01: 1 }, fields: {} };
-        await acknowledgeThrough('a', 0, local, [], { 'nutrition_months/2025-01': knownMeta });
+        await hydrateLocal('a', local, ['2025-01'], new Map<string, any>([
+            ['', { _sync: { protocolVersion: CURRENT_SYNC_PROTOCOL, clock: {}, fields: {} } }],
+            ['nutrition_months/2025-01', {
+                _sync: knownMeta, '2025-01-01': local.nutrition?.['2025-01-01'],
+            }],
+        ]));
         const before = await readLocal('a');
 
         // A paginated full scan started before another tab's acknowledgement:
@@ -783,7 +785,7 @@ describe('durable owner-scoped journal', () => {
         const local = data(171);
         await initializeLocal('a', local);
         const knownMeta = { protocolVersion: CURRENT_SYNC_PROTOCOL, clock: { s01: 1 }, fields: {} };
-        await acknowledgeThrough('a', 0, local, [], { '': knownMeta });
+        await hydrateLocal('a', local, [], new Map([['', { _sync: knownMeta }]]));
         const before = await readLocal('a');
         const cloud = data(160);
 
@@ -811,7 +813,12 @@ describe('durable owner-scoped journal', () => {
         } }) as unknown as UserData;
         await initializeLocal('a', local, ['2025-01', '2026-09']);
         const knownMeta = { protocolVersion: CURRENT_SYNC_PROTOCOL, clock: { s01: 1 }, fields: {} };
-        await acknowledgeThrough('a', 0, local, [], { 'nutrition_months/2025-01': knownMeta });
+        await hydrateLocal('a', local, ['2025-01'], new Map<string, any>([
+            ['', { _sync: { protocolVersion: CURRENT_SYNC_PROTOCOL, clock: {}, fields: {} } }],
+            ['nutrition_months/2025-01', {
+                _sync: knownMeta, '2025-01-01': local.nutrition?.['2025-01-01'],
+            }],
+        ]));
         const cloud = UserDataSchema.parse({ nutrition: {
             '2026-09-01': { date: '2026-09-01', weight: 81 },
         } }) as unknown as UserData;
@@ -991,15 +998,23 @@ describe('durable owner-scoped journal', () => {
         await prepareOwnerVault('user:a');
         const base = data(170);
         await initializeLocal('a', base);
+        const now = Date.now();
+        const identity = { slot: 's00', replicaId: 'ordered-ack-regression', generation: 1,
+            checkpointAtMs: now, leaseUntilMs: now + 31_104_000_000 };
+        await adoptReplicaCheckpoint('a', { identity, baseSeq: 0 },
+            { clock: {}, syncMetaByDocument: {} });
         const first = data(171);
         await commitLocal('a', first, base);
-        const actor = (await readLocal('a'))!.actorId;
+        const firstDelivery = (await readLocal('a'))!;
+        const actor = firstDelivery.actorId;
         const meta1 = {
             protocolVersion: CURRENT_SYNC_PROTOCOL,
             clock: { [actor]: 1 },
             fields: { 'profile/height': { actorId: actor, seq: 1, clock: { [actor]: 1 } } },
         };
-        await acknowledgeThrough('a', 1, first, [], { '': meta1 });
+        await acknowledgeThrough('a', 1, first, [], { '': meta1 }, {
+            operations: structuredClone(firstDelivery.pending), replica: identity,
+        });
 
         const second = data(172);
         await commitLocal('a', second, first);
@@ -1008,8 +1023,13 @@ describe('durable owner-scoped journal', () => {
             clock: { [actor]: 2 },
             fields: { 'profile/height': { actorId: actor, seq: 2, clock: { [actor]: 2 } } },
         };
-        await acknowledgeThrough('a', 2, second, [], { '': meta2 });
-        await acknowledgeThrough('a', 1, first, [], { '': meta1 });
+        const secondDelivery = (await readLocal('a'))!;
+        await acknowledgeThrough('a', 2, second, [], { '': meta2 }, {
+            operations: structuredClone(secondDelivery.pending), replica: identity,
+        });
+        await expect(acknowledgeThrough('a', 1, first, [], { '': meta1 }, {
+            operations: structuredClone(firstDelivery.pending), replica: identity,
+        })).rejects.toThrow('Acknowledgement invalidato');
 
         const stored = await readLocal('a');
         expect(stored?.data.profile?.height).toBe('172');
@@ -1021,15 +1041,23 @@ describe('durable owner-scoped journal', () => {
         await prepareOwnerVault('user:a');
         const base = data(170);
         await initializeLocal('a', base);
+        const now = Date.now();
+        const identity = { slot: 's00', replicaId: 'hydration-frontier-ack', generation: 1,
+            checkpointAtMs: now, leaseUntilMs: now + 31_104_000_000 };
+        await adoptReplicaCheckpoint('a', { identity, baseSeq: 0 },
+            { clock: {}, syncMetaByDocument: {} });
         const newer = data(172);
         await commitLocal('a', newer, base);
-        const actor = (await readLocal('a'))!.actorId;
+        const sent = (await readLocal('a'))!;
+        const actor = sent.actorId;
         const meta2 = {
             protocolVersion: CURRENT_SYNC_PROTOCOL,
             clock: { [actor]: 1 },
             fields: { 'profile/height': { actorId: actor, seq: 1, clock: { [actor]: 1 } } },
         };
-        await acknowledgeThrough('a', 1, newer, [], { '': meta2 });
+        await acknowledgeThrough('a', 1, newer, [], { '': meta2 }, {
+            operations: structuredClone(sent.pending), replica: identity,
+        });
 
         const stale = data(170);
         const staleDocuments = new Map<string, any>([
@@ -1057,7 +1085,12 @@ describe('durable owner-scoped journal', () => {
         } }) as unknown as UserData;
         await initializeLocal('a', local, ['2025-01']);
         const durableMeta = { protocolVersion: CURRENT_SYNC_PROTOCOL, clock: { s01: 3 }, fields: {} };
-        await acknowledgeThrough('a', 0, local, [], { 'nutrition_months/2025-01': durableMeta });
+        await hydrateLocal('a', local, ['2025-01'], new Map<string, any>([
+            ['', { _sync: { protocolVersion: CURRENT_SYNC_PROTOCOL, clock: {}, fields: {} } }],
+            ['nutrition_months/2025-01', {
+                _sync: durableMeta, '2025-01-01': local.nutrition?.['2025-01-01'],
+            }],
+        ]));
         const before = await readLocal('a');
         const cloud = UserDataSchema.parse({ nutrition: {
             '2025-01-01': { date: '2025-01-01', weight: 60 },
@@ -1084,9 +1117,9 @@ describe('durable owner-scoped journal', () => {
         await prepareOwnerVault('user:a');
         const local = data(170);
         await initializeLocal('a', local);
-        await acknowledgeThrough('a', 0, local, [], { '': {
-            protocolVersion: CURRENT_SYNC_PROTOCOL, clock: { s01: 3 }, fields: {},
-        } });
+        await hydrateLocal('a', local, [], new Map([['', {
+            _sync: { protocolVersion: CURRENT_SYNC_PROTOCOL, clock: { s01: 3 }, fields: {} },
+        }]]));
         const fresh = data(175);
         const documents = new Map<string, any>([['', {
             _sync: { protocolVersion: CURRENT_SYNC_PROTOCOL, clock: { s01: 3, s02: 4 }, fields: {} },
