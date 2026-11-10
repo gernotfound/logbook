@@ -152,10 +152,13 @@ export const AccountCard = () => {
             setShowCurrentPassword(false);
             setShowNewPassword(false);
             if (shouldReload) await reloadAfterAccountChange(stillCurrent);
-        } catch {
+        } catch (error) {
             if (!stillCurrent()) return;
             console.error('Operazione account non riuscita.');
-            await showAlert('Operazione account non riuscita. Riprova.');
+            const code = (error as { code?: unknown } | null)?.code;
+            await showAlert(code === 'auth/weak-password' || code === 'auth/password-policy-unavailable'
+                ? describeEmailAuthError(error)
+                : 'Operazione account non riuscita. Riprova.');
         } finally {
             setLoadingAction(null);
         }
