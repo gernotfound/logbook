@@ -134,6 +134,14 @@ Le delete fisiche client-side dei documenti mensili sono sempre negate; la cance
 
 `FirebaseError: Missing or insufficient permissions` / `permission-denied` può avere più cause (Rules, Auth, App Check, dominio/configurazione). Non classificare automaticamente l'errore come “Rules non deployate” o “App Check transitorio” senza discriminare la causa.
 
+## Firebase Authentication — password policy e cutover
+
+**Contratto applicativo (candidato PR G-, non ancora Production):** `src/lib/auth/passwordPolicy.ts` richiede almeno **15 code point Unicode** per la creazione, il cambio o il collegamento di una password. Non esistono regole statiche di composizione (maiuscole/minuscole/cifre/simboli). L'app non applica `trim()`, non normalizza né tronca la credenziale: il login e la reautenticazione devono continuare ad accettare la password esistente senza applicare a posteriori i nuovi requisiti di creazione.
+
+**Contratto provider:** ogni nuova password che supera il minimo applicativo deve superare anche `validatePassword(auth, password)` sul server Firebase, **prima** della mutazione; il submit resta rifiutato se la policy remota non è verificabile. La risposta Firebase (e non una regex hardcoded) è fonte dei requisiti transitori di composizione e dei limiti massimi. I suggerimenti asincroni non autorizzano mai la mutazione e possono essere indisponibili; i rifiuti all'atto della write, anche se la policy è mutata dopo il controllo, restano autorevoli.
+
+**Stato esterno:** le impostazioni Firebase Production riportate dal product owner il 10/11/2026 sono ancora min 8, max 4096, quattro categorie obbligatorie, enforcement *Richiedi applicazione*, upgrade all'accesso disabilitato. Non considerarle cambiate dall'esistenza del branch o della PR; riconfermarle in console prima di un futuro cutover. Il piano operativo sequenziale e i controlli per registrazione, login, recupero, cambio credenziale e collegamento sono nel [registro servizi esterni](../../docs/operations/external-services-register.md). Il cambio console è **escluso** dal mandato di questa PR.
+
 ## Sicurezza domini
 
 Se si cambia o si aggiunge un dominio di hosting:
