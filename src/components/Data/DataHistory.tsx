@@ -23,6 +23,11 @@ interface DataHistoryProps {
 }
 
 const MONTH_NAMES = ['Gen', 'Feb', 'Mar', 'Apr', 'Mag', 'Giu', 'Lug', 'Ago', 'Set', 'Ott', 'Nov', 'Dic'];
+const MONTH_FORMATTER = new Intl.DateTimeFormat('it-IT', { month: 'long', year: 'numeric' });
+const DAY_FORMATTER = new Intl.DateTimeFormat('it-IT', {
+    weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
+});
+
 
 function pad(value: number): string {
     return String(value).padStart(2, '0');
@@ -35,20 +40,12 @@ function dateFromKey(key: string): Date {
 
 function monthLabel(key: string): string {
     const [year, month] = key.split('-').map(Number);
-    const label = new Intl.DateTimeFormat('it-IT', {
-        month: 'long',
-        year: 'numeric',
-    }).format(new Date(year, month - 1, 1, 12, 0, 0));
+    const label = MONTH_FORMATTER.format(new Date(year, month - 1, 1, 12, 0, 0));
     return label.charAt(0).toUpperCase() + label.slice(1);
 }
 
 function dayLabel(key: string): string {
-    const label = new Intl.DateTimeFormat('it-IT', {
-        weekday: 'long',
-        day: 'numeric',
-        month: 'long',
-        year: 'numeric',
-    }).format(dateFromKey(key));
+    const label = DAY_FORMATTER.format(dateFromKey(key));
     return label.charAt(0).toUpperCase() + label.slice(1);
 }
 
@@ -70,8 +67,10 @@ function finiteAverage(days: MeasurementHistoryDay[], key: 'weight' | 'bf'): num
     return values.reduce((sum, value) => sum + value, 0) / values.length;
 }
 
+const DECIMAL_FORMATTER = new Intl.NumberFormat('it-IT', { maximumFractionDigits: 1 });
+
 function formatDecimal(value: number): string {
-    return value.toLocaleString('it-IT', { maximumFractionDigits: 1 });
+    return DECIMAL_FORMATTER.format(value);
 }
 
 function recordSummary(day: MeasurementHistoryDay): string {

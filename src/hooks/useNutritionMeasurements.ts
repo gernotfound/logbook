@@ -10,8 +10,9 @@ import type { BodyFatProvenance, NutritionDay, UserProfile } from '../types';
 
 const EMPTY_NUTRITION: Record<string, NutritionDay> = {};
 const EMPTY_PROFILE: UserProfile = {};
+const EMPTY_MEASUREMENTS_HISTORY: NutritionDay[] = [];
 
-export function useNutritionMeasurements(selectedDate?: string) {
+export function useNutritionMeasurements(selectedDate?: string, includeHistory = true) {
     const profile = useAppStore(state => state.userData?.profile || EMPTY_PROFILE);
     const nutrition = useAppStore(state => state.userData?.nutrition || EMPTY_NUTRITION);
     const dispatchDomainOperation = useAppStore(state => state.dispatchDomainOperation);
@@ -46,6 +47,7 @@ export function useNutritionMeasurements(selectedDate?: string) {
     );
 
     const measurementsHistory = useMemo(() => {
+        if (!includeHistory) return EMPTY_MEASUREMENTS_HISTORY;
         const historyFields = [
             'weight', 'bf', 'waist', 'neck', 'hip', 'chest', 'shoulders', 'biceps', 'thighs', 'calves',
             'sleepHours', 'sleepDeep', 'sleepLight', 'sleepRem', 'sleepAwake',
@@ -53,7 +55,7 @@ export function useNutritionMeasurements(selectedDate?: string) {
         return Object.values(nutrition)
             .filter(day => day && historyFields.some(key => day[key] !== undefined && day[key] !== null && day[key] !== ''))
             .sort((a, b) => (b.date || '').localeCompare(a.date || ''));
-    }, [nutrition]);
+    }, [nutrition, includeHistory]);
 
     const handleEditClick = (day: Pick<NutritionDay, 'date'>) => {
         setEditingDate(day.date);

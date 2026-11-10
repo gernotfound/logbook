@@ -102,6 +102,26 @@ describe('workout clock guard', () => {
         unmount();
     });
 
+    it('stops hidden-tab repaint but checks the elapsed clock again on reactivation', () => {
+        vi.useFakeTimers();
+        const wall = vi.spyOn(Date, 'now').mockReturnValue(100_000);
+        const monotonic = vi.spyOn(performance, 'now').mockReturnValue(1_000);
+        const timer = (isActive: boolean) => createElement(GlobalTimer, {
+            workoutId: 'tab-hidden-timer', startTime: 100_000, isActive,
+        });
+        const { rerender } = render(timer(true));
+        expect(screen.queryByRole('alert')).toBeNull();
+        rerender(timer(false));
+        act(() => {
+            wall.mockReturnValue(222_000);
+            monotonic.mockReturnValue(2_000);
+            vi.advanceTimersByTime(1_000);
+        });
+        expect(screen.queryByRole('alert')).toBeNull();
+        rerender(timer(true));
+        expect(screen.getByRole('alert').textContent).toContain('Orologio del dispositivo modificato');
+    });
+
     it('fails completion when the end wall clock is materially before the start time', () => {
         expect(() => assertWorkoutClockHealthy('w4', 100_000, 1_000)).toThrow(WorkoutClockAnomalyError);
     });

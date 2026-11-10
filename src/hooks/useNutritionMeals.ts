@@ -27,7 +27,7 @@ export function useNutritionMeals(dateStr?: string) {
     const [searchQuery, setSearchQuery] = useState('');
     const searchFoods = useMemo(() => createFoodSearcher(customFoods), [customFoods]);
     const searchResults = useMemo(
-        () => searchQuery.trim() ? searchFoods(searchQuery).slice(0, 15) : [],
+        () => searchQuery.trim() ? searchFoods(searchQuery, 15) : [],
         [searchFoods, searchQuery]
     );
 
