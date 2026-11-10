@@ -25,6 +25,9 @@ describe('workout session preparation', () => {
         const imported = { setsCount: 1_000_000_000 };
         expect(previewRoutineSets(imported.setsCount)).toBe(20);
         expect(previewRoutineSets(-5)).toBe(1);
+        expect(previewRoutineSets('2.5', [{}, {}, {}, {}])).toBe(4);
+        expect(previewRoutineSets('2e0', [{}, {}, {}, {}])).toBe(4);
+        expect(previewRoutineSets('2.5', [])).toBe(0);
         expect(imported.setsCount).toBe(1_000_000_000);
     });
 
