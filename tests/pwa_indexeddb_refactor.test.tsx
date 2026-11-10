@@ -1,6 +1,6 @@
 import { deviceKey, protectedDeviceKey, readDeviceValueStrict } from '../src/lib/sync/deviceStorage';
 import { prepareUnlockedTestArchive } from './secureVaultFixture';
-import { initializeLocal, readLocal } from '../src/lib/sync/localRepository';
+import { readLocal } from '../src/lib/sync/localRepository';
 import { createDataSlice } from '../src/store/slices/createDataSlice';
 import { createWorkoutSlice } from '../src/store/slices/createWorkoutSlice';
 import { createSyncSlice } from '../src/store/slices/createSyncSlice';
