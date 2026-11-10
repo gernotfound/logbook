@@ -175,57 +175,6 @@ export function createExerciseLibrarySearcher<T extends SearchableExercise>(libr
     };
 }
 
-export function searchExerciseLibrary<T extends SearchableExercise>(library: T[], query: string): T[] {
-    return createExerciseLibrarySearcher(library)(query);
-}
-
-export function filterItems<T extends object>(items: T[], query: string, searchFields: string | string[] = ['name']): T[] {
-    if (!Array.isArray(items)) return [];
-    if (!query || typeof query !== 'string' || !query.trim()) return items;
-    const q = query.trim().toLowerCase();
-    const fields = Array.isArray(searchFields) ? searchFields : [searchFields];
-
-    // Direct matches
-    const direct = items.filter(item => {
-        if (!item) return false;
-        return fields.some(field => {
-            const val = (item as Record<string, unknown>)[field];
-            return Boolean(val && String(val).toLowerCase().includes(q));
-        });
-    });
-
-    // Fuzzy matches with Fuse.js
-    // Fuse.js fuzzy search with multi-token support
-    const fuse = new Fuse(items, {
-        keys: fields,
-        threshold: 0.38,
-        ignoreLocation: true,
-        minMatchCharLength: 2,
-    });
-    const tokens = query.trim().split(/\s+/).filter(t => t.length >= 2);
-    let fuzzy: T[] = [];
-    if (tokens.length > 1) {
-        const tokenMatches = tokens.map(tok => new Set(fuse.search(tok).map(r => r.item)));
-        const allMatch = items.filter(item => tokenMatches.every(set => set.has(item)));
-        const singleMatches = fuse.search(query.trim()).map(res => res.item);
-        fuzzy = [...allMatch, ...singleMatches];
-    } else {
-        fuzzy = fuse.search(query.trim()).map(res => res.item);
-    }
-
-    // Merge direct + fuzzy without duplicates, keeping direct first
-    const seen = new Set<unknown>();
-    const result: T[] = [];
-    for (const it of [...direct, ...fuzzy]) {
-        const key = (it as { id?: unknown }).id ?? it;
-        if (!seen.has(key)) {
-            seen.add(key);
-            result.push(it);
-        }
-    }
-    return result;
-}
-
 export function validateWorkoutRatings(mood: unknown, pump?: unknown, fatigue?: unknown) {
     const checkRating = (val: unknown) => {
         if (val === null || val === undefined || val === '') return { val: null, invalid: false };
@@ -340,7 +289,6 @@ export function calculateSetVolume(
         kg?: string | number;
         reps?: string | number;
         segments?: Array<{ kg?: string | number; reps?: string | number }>;
-        dropsets?: Array<{ kg?: string | number; reps?: string | number }>;
     },
     exercise?: VolumeExerciseRef | null,
     userWeight: number = 80

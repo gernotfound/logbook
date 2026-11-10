@@ -295,10 +295,6 @@ export function isAppCheckFallbackOffline(): boolean {
     return isFallbackOfflineMode;
 }
 
-export function setAppCheckFallbackOffline(fallback: boolean): void {
-    isFallbackOfflineMode = fallback;
-}
-
 export async function getAppCheckToken(forceRefresh = false): Promise<string | null> {
     if (!appCheckInstance) return null;
     try {

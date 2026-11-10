@@ -5,7 +5,6 @@ export interface UserProfile {
     neck?: string;
     waist?: string;
     hip?: string;
-    manualBf?: string;
     chest?: string;
     shoulders?: string;
     biceps?: string;
@@ -219,7 +218,7 @@ export interface CardioSession {
 }
 
 export interface BodyFatProvenance {
-    method: 'manual' | 'us_navy';
+    method: 'us_navy';
     inputs?: {
         heightCm?: number;
         waistCm?: number;

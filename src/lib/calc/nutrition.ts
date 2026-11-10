@@ -110,17 +110,6 @@ export function calculateMacrosFromKg(
     };
 }
 
-export function calculateMacroRatio(carbsGrams: any, fatGrams: any) {
-    const cG = parseFloat(carbsGrams) || 0;
-    const fG = parseFloat(fatGrams) || 0;
-    const cKcal = cG * 4;
-    const fKcal = fG * 9;
-    if (fKcal <= 0) return { ratioKcal: cKcal > 0 ? Infinity : 0, ratioGrams: fG > 0 ? Math.round((cG / fG) * 100) / 100 : 0, ratioString: fKcal === 0 ? 'N/A' : '1.0:0' };
-    const ratioKcal = Math.round((cKcal / fKcal) * 100) / 100;
-    const ratioGrams = Math.round((cG / fG) * 100) / 100;
-    return { ratioKcal, ratioGrams, ratioString: `${ratioKcal}:1` };
-}
-
 export function calculateTDEEAndMacros(state: Partial<UserData> | null) {
     if (!state) return { tdee: 2500, bf: null, carbs: 300, pro: 160, fat: 70, totalKcal: 2500 };
     let tdeeVal = 2500;
@@ -159,88 +148,6 @@ export function calculateTDEEAndMacros(state: Partial<UserData> | null) {
     };
 }
 
-
-export function calculateMealTotals(meals: any[]) {
-    const totals = {
-        kcal: 0, carbs: 0, pro: 0, fat: 0, satFat: 0, unSatFat: 0,
-        sugars: 0, fiber: 0, salt: 0, sodium: 0, vitA: 0, vitC: 0, calcium: 0, iron: 0
-    };
-    if (!Array.isArray(meals)) return totals;
-    meals.forEach(m => {
-        if (!m || !Array.isArray(m.foods)) return;
-        m.foods.forEach((f: any) => {
-            if (!f) return;
-            totals.kcal += parseFloat(f.kcal) || 0;
-            totals.carbs += parseFloat(f.carbs) || 0;
-            totals.pro += parseFloat(f.pro) || 0;
-            totals.fat += parseFloat(f.fat) || 0;
-            totals.satFat += parseFloat(f.satFat) || 0;
-            totals.unSatFat += parseFloat(f.unSatFat) || 0;
-            totals.sugars += parseFloat(f.sugars) || 0;
-            totals.fiber += parseFloat(f.fiber) || 0;
-            totals.salt += parseFloat(f.salt) || 0;
-            totals.sodium += parseFloat(f.sodium) || 0;
-            totals.vitA += parseFloat(f.vitA) || 0;
-            totals.vitC += parseFloat(f.vitC) || 0;
-            totals.calcium += parseFloat(f.calcium) || 0;
-            totals.iron += parseFloat(f.iron) || 0;
-        });
-    });
-    totals.kcal = Math.round(totals.kcal);
-    totals.carbs = Math.round(totals.carbs * 10) / 10;
-    totals.pro = Math.round(totals.pro * 10) / 10;
-    totals.fat = Math.round(totals.fat * 10) / 10;
-    totals.satFat = Math.round(totals.satFat * 10) / 10;
-    totals.unSatFat = Math.round(totals.unSatFat * 10) / 10;
-    totals.sugars = Math.round(totals.sugars * 10) / 10;
-    totals.fiber = Math.round(totals.fiber * 10) / 10;
-    totals.salt = Math.round(totals.salt * 100) / 100;
-    totals.sodium = Math.round(totals.sodium * 100) / 100;
-    totals.vitA = Math.round(totals.vitA * 100) / 100;
-    totals.vitC = Math.round(totals.vitC * 100) / 100;
-    totals.calcium = Math.round(totals.calcium * 100) / 100;
-    totals.iron = Math.round(totals.iron * 100) / 100;
-    return totals;
-}
-
-export function scaleFoodNutrients(food: any, quantity: any, unit?: any) {
-    const zeroed = {
-        kcal: 0, carbs: 0, pro: 0, fat: 0,
-        satFat: 0, unSatFat: 0, sugars: 0, fiber: 0,
-        salt: 0, sodium: 0, vitA: 0, vitC: 0, calcium: 0, iron: 0
-    };
-    if (!food || isNaN(quantity) || quantity <= 0) {
-        return zeroed;
-    }
-    const qtyNum = parseFloat(quantity);
-    const baseQty = parseFloat(food.baseQty || food.defaultQty) || 100;
-    let effectiveQty = qtyNum;
-    const u = (unit || food.unit || 'g').toString().toLowerCase().trim();
-    const servingName = (food.servingUnit || '').toString().toLowerCase().trim();
-    if (u === 'pcs' || u === 'pezzo' || (servingName && u === servingName)) {
-        const weight = parseFloat(food.servingWeight) || baseQty;
-        effectiveQty = qtyNum * weight;
-    }
-    const factor = effectiveQty / baseQty;
-    const scale1 = (val: any) => Math.round((parseFloat(val) || 0) * factor * 10) / 10;
-    const scale2 = (val: any) => Math.round((parseFloat(val) || 0) * factor * 100) / 100;
-    return {
-        kcal: Math.round((parseFloat(food.kcal) || 0) * factor),
-        carbs: scale1(food.carbs),
-        pro: scale1(food.pro),
-        fat: scale1(food.fat),
-        satFat: scale1(food.satFat),
-        unSatFat: scale1(food.unSatFat),
-        sugars: scale1(food.sugars),
-        fiber: scale1(food.fiber),
-        salt: scale2(food.salt),
-        sodium: scale2(food.sodium),
-        vitA: scale2(food.vitA),
-        vitC: scale2(food.vitC),
-        calcium: scale2(food.calcium),
-        iron: scale2(food.iron)
-    };
-}
 
 const normalizeFoodStr = (str: unknown): string => String(str || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
 
@@ -352,10 +259,6 @@ export function createFoodSearcher<T extends SearchableFood>(foodsList: T[], cat
             return aName.localeCompare(bName, 'it');
         });
     };
-}
-
-export function searchFoods<T extends SearchableFood>(foodsList: T[], query: string, categoryFilter?: string): T[] {
-    return createFoodSearcher(foodsList, categoryFilter)(query);
 }
 
 export function validateCustomFood(foodData: any) {

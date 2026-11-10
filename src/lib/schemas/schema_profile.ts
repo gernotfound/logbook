@@ -14,13 +14,12 @@ export const UserProfileSchema = z.object({
     neck: safeOptionalString(PROFILE_STRING_MAX_LENGTH),
     waist: safeOptionalString(PROFILE_STRING_MAX_LENGTH),
     hip: safeOptionalString(PROFILE_STRING_MAX_LENGTH).transform(value => value === '' ? undefined : value).optional(),
-    manualBf: safeOptionalString(PROFILE_STRING_MAX_LENGTH),
     chest: safeOptionalString(PROFILE_STRING_MAX_LENGTH),
     shoulders: safeOptionalString(PROFILE_STRING_MAX_LENGTH),
     biceps: safeOptionalString(PROFILE_STRING_MAX_LENGTH),
     thighs: safeOptionalString(PROFILE_STRING_MAX_LENGTH),
     calves: safeOptionalString(PROFILE_STRING_MAX_LENGTH),
-}).passthrough().transform(({ hips: _unsupportedHips, ...profile }) => profile).catch(() => {
+}).passthrough().transform(({ hips: _unsupportedHips, manualBf: _unsupportedManualBf, ...profile }) => profile).catch(() => {
     return {};
 }).default({});
 
