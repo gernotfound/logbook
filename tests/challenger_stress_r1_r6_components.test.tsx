@@ -312,8 +312,6 @@ describe('EMPIRICAL CHALLENGER: Adversarial Stress Test Suite (Requirements R1 -
                     setNeck={vi.fn()}
                     hip=""
                     setHip={vi.fn()}
-                    manualBf=""
-                    setManualBf={vi.fn()}
                     chest=""
                     setChest={vi.fn()}
                     shoulders=""

@@ -1387,32 +1387,26 @@ it('retains a newer edit and rejects double submission while a save is pending',
     expect(localStorage.getItem(protectedDeviceKey(name, owner))).toMatch(/^tlb-sealed:v1:/);
     expect(localStorage.getItem(deviceKey(name, owner))).toBeNull();
 });
-it('records body-fat provenance for manual and derived measurements', async () => {
+it('records optional US Navy provenance without manual BF entry', async () => {
     const owner = storageOwner();
     await prepareUnlockedTestArchive(owner);
-    const manualName = 'draft:measurement:2026-09-11';
+    const weightOnlyName = 'draft:measurement:2026-09-11';
     const derivedName = 'draft:measurement:2026-09-12';
     const dispatch = vi.spyOn(useAppStore.getState(), 'dispatchDomainOperation')
         .mockResolvedValue({ ok: true, status: 'synced' } as SyncResult);
 
-    const manual = renderHook(() => useNutritionMeasurements('2026-09-11'));
-    act(() => {
-        manual.result.current.setWeight('80');
-        manual.result.current.setManualBf('14.2');
-    });
-    await act(async () => { await manual.result.current.calculateAndSave(); });
+    const weightOnly = renderHook(() => useNutritionMeasurements('2026-09-11'));
+    act(() => weightOnly.result.current.setWeight('80'));
+    await act(async () => { await weightOnly.result.current.calculateAndSave(); });
     expect(dispatch).toHaveBeenLastCalledWith(expect.objectContaining({
         type: 'nutrition-day.patch',
         date: '2026-09-11',
-        patch: expect.objectContaining({
-            bf: 14.2,
-            bfProvenance: { method: 'manual' },
-        }),
+        patch: expect.objectContaining({ bf: undefined, bfProvenance: undefined }),
     }));
-    expect(readFencedDatedDraftImage(manualName, owner).raw).toContain('"values":null');
-    expect(localStorage.getItem(protectedDeviceKey(manualName, owner))).toMatch(/^tlb-sealed:v1:/);
-    expect(localStorage.getItem(deviceKey(manualName, owner))).toBeNull();
-    manual.unmount();
+    expect(readFencedDatedDraftImage(weightOnlyName, owner).raw).toContain('"values":null');
+    expect(localStorage.getItem(protectedDeviceKey(weightOnlyName, owner))).toMatch(/^tlb-sealed:v1:/);
+    expect(localStorage.getItem(deviceKey(weightOnlyName, owner))).toBeNull();
+    weightOnly.unmount();
 
     dispatch.mockClear();
     const derived = renderHook(() => useNutritionMeasurements('2026-09-12'));
@@ -1421,8 +1415,7 @@ it('records body-fat provenance for manual and derived measurements', async () =
         derived.result.current.setWaist('85');
         derived.result.current.setNeck('40');
     });
-    await act(async () => { await derived.result.current.calculateAndSave(undefined, 'calculate'); });
-
+    await act(async () => { await derived.result.current.calculateAndSave(undefined, true); });
     expect(dispatch).toHaveBeenLastCalledWith(expect.objectContaining({
         type: 'nutrition-day.patch',
         date: '2026-09-12',

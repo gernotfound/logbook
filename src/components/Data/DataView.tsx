@@ -82,8 +82,6 @@ const DataView: React.FC<DataViewProps> = ({
                         setNeck={measurementsHook.setNeck}
                         hip={measurementsHook.hip}
                         setHip={measurementsHook.setHip}
-                        manualBf={measurementsHook.manualBf}
-                        setManualBf={measurementsHook.setManualBf}
                         chest={measurementsHook.chest}
                         setChest={measurementsHook.setChest}
                         shoulders={measurementsHook.shoulders}
@@ -103,9 +101,9 @@ const DataView: React.FC<DataViewProps> = ({
                                 changeSubTab('history');
                             }
                         }}
-                        calculateAndSave={async (e, bodyFatMode) => {
+                        calculateAndSave={async (e, calculateBf) => {
                             const wasEditing = !!measurementsHook.editingDate;
-                            const saved = await measurementsHook.calculateAndSave(e, bodyFatMode);
+                            const saved = await measurementsHook.calculateAndSave(e, calculateBf);
                             if (wasEditing && saved) {
                                 sleepHook.setEditingDate(null);
                                 changeSubTab('history');

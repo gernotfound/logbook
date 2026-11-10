@@ -71,8 +71,6 @@ describe('UI Alignments - R3 & R4', () => {
                     setNeck={vi.fn()}
                     hip=""
                     setHip={vi.fn()}
-                    manualBf=""
-                    setManualBf={vi.fn()}
                     chest=""
                     setChest={vi.fn()}
                     shoulders=""
@@ -124,8 +122,6 @@ describe('UI Alignments - R3 & R4', () => {
                     setNeck={vi.fn()}
                     hip=""
                     setHip={vi.fn()}
-                    manualBf=""
-                    setManualBf={vi.fn()}
                     chest=""
                     setChest={vi.fn()}
                     shoulders=""
@@ -202,27 +198,26 @@ describe('UI Alignments - R3 & R4', () => {
             expect(showAlertSpy).not.toHaveBeenCalled();
         });
 
-        it('explicit calculate mode uses US Navy even when a manual BF draft is preserved', async () => {
+        it('explicit calculation uses US Navy without manual input', async () => {
             const { result } = renderHook(() => useNutritionMeasurements('2026-08-06'));
 
             act(() => {
                 result.current.setWeight('75');
                 result.current.setWaist('82');
                 result.current.setNeck('38');
-                result.current.setManualBf('19');
             });
 
             await act(async () => {
-                await result.current.calculateAndSave(undefined, 'calculate');
+                await result.current.calculateAndSave(undefined, true);
             });
 
             const day = useAppStore.getState().userData?.nutrition?.['2026-08-06'];
             expect(day?.bf).toBeTypeOf('number');
-            expect(day?.bf).not.toBe(19);
+            expect(Number.isFinite(day?.bf)).toBe(true);
             expect(day?.bfProvenance?.method).toBe('us_navy');
         });
 
-        it('does not promote a body-fat value without current provenance into a manual draft', async () => {
+        it('does not promote BF without provenance during ordinary save', async () => {
             const existing = useAppStore.getState().userData!;
             const day = existing.nutrition?.['2026-08-10'];
             if (!day) throw new Error('Measurement fixture missing');
@@ -237,8 +232,7 @@ describe('UI Alignments - R3 & R4', () => {
             useAppStore.setState({ dispatchDomainOperation: dispatch });
             try {
                 const { result } = renderHook(() => useNutritionMeasurements('2026-08-10'));
-                expect(result.current.manualBf).toBe('');
-                await act(async () => { await result.current.calculateAndSave(undefined, 'manual'); });
+                await act(async () => { await result.current.calculateAndSave(); });
                 expect(dispatch).toHaveBeenCalledWith(expect.objectContaining({
                     type: 'nutrition-day.patch',
                     patch: expect.objectContaining({ bf: undefined, bfProvenance: undefined }),
@@ -248,7 +242,7 @@ describe('UI Alignments - R3 & R4', () => {
             }
         });
 
-        it('explicit manual mode does not silently derive BF from circumference fields', async () => {
+        it('weight and circumference save does not silently derive BF', async () => {
             const { result } = renderHook(() => useNutritionMeasurements('2026-08-07'));
 
             act(() => {
@@ -258,7 +252,7 @@ describe('UI Alignments - R3 & R4', () => {
             });
 
             await act(async () => {
-                await result.current.calculateAndSave(undefined, 'manual');
+                await result.current.calculateAndSave();
             });
 
             const day = useAppStore.getState().userData?.nutrition?.['2026-08-07'];
@@ -268,6 +262,33 @@ describe('UI Alignments - R3 & R4', () => {
             expect(day?.bf).toBeUndefined();
             expect(day?.bfProvenance).toBeUndefined();
         });
+        it('preserves an existing manual BF value when editing an unrelated field', async () => {
+            const existing = useAppStore.getState().userData!;
+            const day = existing.nutrition?.['2026-08-10'];
+            if (!day) throw new Error('Measurement fixture missing');
+            useAppStore.setState({
+                userData: {
+                    ...existing,
+                    nutrition: { ...existing.nutrition,
+                        '2026-08-10': { ...day, bf: 19.2, bfProvenance: { method: 'manual' } } },
+                },
+            });
+            const previousDispatch = useAppStore.getState().dispatchDomainOperation;
+            const dispatch = vi.fn().mockResolvedValue({ ok: true, status: 'synced' });
+            useAppStore.setState({ dispatchDomainOperation: dispatch });
+            try {
+                const { result } = renderHook(() => useNutritionMeasurements('2026-08-10'));
+                act(() => result.current.setWeight('81'));
+                await act(async () => { await result.current.calculateAndSave(); });
+                expect(dispatch).toHaveBeenCalledWith(expect.objectContaining({
+                    type: 'nutrition-day.patch',
+                    patch: expect.objectContaining({ bf: 19.2, bfProvenance: { method: 'manual' } }),
+                }));
+            } finally {
+                useAppStore.setState({ dispatchDomainOperation: previousDispatch });
+            }
+        });
+
     });
 
     describe('R4: SessionSetRow Vertical Centering', () => {
