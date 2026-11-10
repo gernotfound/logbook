@@ -175,7 +175,7 @@ Dopo che Firestore ha accettato un batch, una nuova modifica locale può essere 
 4. prende lo snapshot remoto confermato come nuova baseline;
 5. rigioca semanticamente sopra tale snapshot soltanto le operation ancora pending;
 6. preserva `pendingConflicts` local-only;
-7. **MUST:** aggiorna `syncMetaByDocument` esclusivamente con le prove `_sync` ricevute dal server o già verificate e conservate fuori scope: i metadati derivati dal replay delle operazioni ancora `pending` non sono una conferma remota e non possono diventare un falso storico di documenti cloud esistenti. Mantiene separati stato business in memoria/IDB e metadati di delivery effettiva.
+7. **MUST:** aggiorna `syncMetaByDocument` esclusivamente con le prove `_sync` ricevute dal server o già verificate e conservate fuori scope: i metadati derivati dal replay delle operazioni ancora `pending` non sono una conferma remota e non possono diventare un falso storico di documenti cloud esistenti. Per ogni documento con frontier durevole locale, i metadati dell'ACK devono coprirlo causalmente; un frontier precedente **o incomparabile** fa rifiutare l'intero ACK senza toccare il journal. Mantiene separati stato business in memoria/IDB e metadati di delivery effettiva.
 
 **MUST:** non usare `current.data` tal quale come sostituto del replay e non sostituire `data` con lo snapshot remoto quando `actorSeq`/pending sono avanzati: entrambi gli approcci possono perdere rispettivamente modifiche remote o modifiche locali.
 

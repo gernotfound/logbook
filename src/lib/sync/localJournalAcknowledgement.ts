@@ -58,17 +58,13 @@ export async function acknowledgeThrough(
         }
         const pending = current.pending.filter(op => op.seq > expectedSeq);
         const incomingMeta = syncMeta ?? {};
-        const incomingIsStale = Object.keys(incomingMeta).length > 0 && Object.entries(incomingMeta).some(([path, meta]) => {
+        const incomingDoesNotCoverDurable = Object.entries(incomingMeta).some(([path, meta]) => {
             const durable = current.syncMetaByDocument[path];
-            return durable !== undefined
-                && coversVectorClock(durable.clock, meta.clock)
-                && !coversVectorClock(meta.clock, durable.clock);
+            return durable !== undefined && !coversVectorClock(meta.clock, durable.clock);
         });
-        // Another tab may already have installed a causally newer acknowledgement.
-        // Never let an older remote snapshot replace that durable business state after
-        // the newer journal entries have already been acknowledged and removed.
-        // A stale confirmed delivery cannot retire its pending operations.
-        if (incomingIsStale) throw new Error('Acknowledgement obsoleto rispetto al frontier locale; journal preservato.');
+        // A different tab may have installed a newer or incomparable causal
+        // frontier. Neither is safe to replace with this delivered snapshot.
+        if (incomingDoesNotCoverDurable) throw new Error('Acknowledgement obsoleto rispetto al frontier locale; journal preservato.');
         const newClock = { ...current.clock };
         if (syncMeta) for (const meta of Object.values(syncMeta)) for (const [actor, seq] of Object.entries(meta.clock)) newClock[actor] = Math.max(newClock[actor] || 0, seq);
         const newSyncMeta = { ...current.syncMetaByDocument, ...(syncMeta || {}) };
