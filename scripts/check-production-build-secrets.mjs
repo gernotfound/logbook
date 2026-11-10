@@ -32,7 +32,7 @@ export function checkProductionBuildSecrets(hosting, firestore) {
       issues.push('Hosting: deploy job must not install or compile app dependencies');
     }
     const uploaded = build.includes('actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9');
-    const downloaded = deploy.includes('actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131');
+    const downloaded = deploy.includes('actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333');
     if (!uploaded || !downloaded ||
         !build.includes('hosting-frontend-${{ env.EXPECTED_SHA }}') ||
         !deploy.includes('hosting-frontend-${{ env.EXPECTED_SHA }}') ||

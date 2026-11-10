@@ -129,6 +129,15 @@ void test('hosting post-deploy asset probes avoid find|head SIGPIPE under pipefa
 });
 
 
+void test('rejects an unreviewed artifact downloader version in the privileged deploy job', () => {
+  const altered = hosting.replace(
+    'actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333',
+    'actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131',
+  );
+  assert.notEqual(altered, hosting);
+  assert.match(checkProductionBuildSecrets(altered, firestore).join('; '), /artifact handoff/);
+});
+
 void test('Hosting build remains unprivileged and hands an exact SHA artifact to its deploy job', () => {
   assert.deepEqual(checkProductionBuildSecrets(hosting, firestore), []);
   for (const [replacement, finding] of [
