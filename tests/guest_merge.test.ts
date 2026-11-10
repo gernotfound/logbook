@@ -548,7 +548,7 @@ describe('Deterministic Guest Merge (R5) Suite', () => {
             };
 
             const guestData: UserData = {
-                profile: { waist: '80', manualBf: '14' },
+                profile: { waist: '80' },
                 library: [{ id: 'ex2', name: 'Deadlift', setsCount: 4, sets: [] }],
                 routines: [{ id: 'r2', name: 'Back Day', exercises: [{ exId: 'ex2', setsCount: 4 }] }],
                 customFoods: [{ id: 'cf2', name: 'Whey', kcal: 380, pro: 80, carbs: 4, fat: 3 }],
@@ -569,7 +569,6 @@ describe('Deterministic Guest Merge (R5) Suite', () => {
             expect(Object.keys(result.nutrition || {})).toHaveLength(2);
             expect(result.profile?.height).toBe('175');
             expect(result.profile?.waist).toBe('80');
-            expect(result.profile?.manualBf).toBe('14');
         });
 
         it('filters out monolithic seed items from guest/cloud libraries and merges catalogOverrides without duplication', () => {
