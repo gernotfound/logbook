@@ -122,6 +122,8 @@ Flusso normativo:
 
 **MUST:** Firebase Auth è sempre l'ultima risorsa cloud eliminata. Un errore di query, batch, verifica, backend o stato non autorizza il purge locale né una dichiarazione di successo.
 
+**Controllo provider Firebase Auth (stato desiderato, NON applicato dal repository):** in Authentication → Impostazioni → Azioni utente, mantenere **Abilita creazione** attiva e disabilitare soltanto **Abilita eliminazione**. Firebase rifiuta così la cancellazione self-service tramite SDK client o REST con `auth/admin-restricted-operation`; il backend trusted conserva la capacità amministrativa `adminAuth().deleteUser(uid)` grazie all'Admin SDK. Il blocco provider è necessario anche quando la PWA non chiama `deleteUser`: un client modificato potrebbe farlo finché l'opzione è abilitata. Non ripristinare l'import/export del metodo client in `src/lib/firebase.ts` né introdurre endpoint `accounts:delete` nella PWA. **VERIFY-LIVE:** la policy non è impostata dalla CI e il suo stato effettivo va letto nella console; il percorso di cancellazione completo e il rifiuto self-service devono essere collaudati su identità di prova autorizzate prima di attestare la protezione end-to-end. Il cambio non deve disabilitare registrazione, sign-in, recovery o la cancellazione dei soli dati sanitari, che lascia intatta Firebase Auth.
+
 ### Recovery, marker e confini applicativi
 
 **MUST:** Un job `failed` deve comunicare che la cancellazione cloud può essere parziale. I batch già riusciti non sono reversibili. Errori transient/retryable possono essere ripresi idempotentemente; residui inattesi o violazioni fail-closed non devono entrare in un retry distruttivo automatico senza nuova valutazione.

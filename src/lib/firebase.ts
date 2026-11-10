@@ -24,8 +24,7 @@ import {
     signOut,
     onAuthStateChanged,
     browserLocalPersistence,
-    browserPopupRedirectResolver,
-    deleteUser
+    browserPopupRedirectResolver
 } from "firebase/auth";
 import {
     initializeFirestore,
@@ -158,6 +157,5 @@ export {
     getRedirectResult,
     signOut,
     onAuthStateChanged,
-    waitForPendingWrites,
-    deleteUser
+    waitForPendingWrites
 };
