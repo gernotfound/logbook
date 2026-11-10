@@ -22,8 +22,6 @@ function measurementProps(overrides: Record<string, unknown> = {}) {
         setNeck: vi.fn(),
         hip: '',
         setHip: vi.fn(),
-        manualBf: '16.8',
-        setManualBf: vi.fn(),
         chest: '101',
         setChest: vi.fn(),
         shoulders: '118',
@@ -42,71 +40,51 @@ function measurementProps(overrides: Record<string, unknown> = {}) {
 }
 
 describe('Data UI redesign', () => {
-    it('switches body-fat modes without losing draft values or duplicating Navy fields', () => {
-        const props = measurementProps();
-        const { container } = render(<DataMeasurements {...props} />);
-
-        const manual = screen.getByRole('radio', { name: /BF manuale/i }) as HTMLInputElement;
-        const calculate = screen.getByRole('radio', { name: /Calcolo da misure/i }) as HTMLInputElement;
-
-        expect(manual.checked).toBe(true);
-        expect((container.querySelector('#measure-bf') as HTMLInputElement).value).toBe('16.8');
-        expect(container.querySelectorAll('#measure-waist')).toHaveLength(1);
-        expect(container.querySelectorAll('#measure-neck')).toHaveLength(1);
-
-        fireEvent.click(calculate);
-
-        expect(calculate.checked).toBe(true);
+    it('removes manual BF input and keeps circumference fields visible exactly once', () => {
+        const { container } = render(<DataMeasurements {...measurementProps()} />);
+        const estimate = screen.getByRole('checkbox', { name: /Calcola la massa grassa/i }) as HTMLInputElement;
+        expect(estimate.checked).toBe(false);
         expect(container.querySelector('#measure-bf')).toBeNull();
+        expect(screen.queryByText('BF manuale')).toBeNull();
         expect(container.querySelectorAll('#measure-waist')).toHaveLength(1);
         expect(container.querySelectorAll('#measure-neck')).toHaveLength(1);
         expect((container.querySelector('#measure-waist') as HTMLInputElement).value).toBe('84.5');
-        expect((container.querySelector('#measure-neck') as HTMLInputElement).value).toBe('38');
-        expect(screen.getAllByText(/Metodo US Navy/i).length).toBeGreaterThan(0);
-
-        fireEvent.click(manual);
-
-        expect((container.querySelector('#measure-bf') as HTMLInputElement).value).toBe('16.8');
-        expect((container.querySelector('#measure-waist') as HTMLInputElement).value).toBe('84.5');
+        fireEvent.click(estimate);
+        expect(estimate.checked).toBe(true);
+        expect(screen.getByText(/Metodo US Navy/i)).toBeDefined();
+        expect(container.querySelectorAll('#measure-waist')).toHaveLength(1);
+        fireEvent.click(estimate);
+        expect(estimate.checked).toBe(false);
         expect((container.querySelector('#measure-neck') as HTMLInputElement).value).toBe('38');
     });
 
-    it('resets the selected BF method when a different day or saved provenance is loaded', () => {
-        const props = measurementProps();
-        const { rerender } = render(<DataMeasurements {...props} />);
-        const manual = screen.getByRole('radio', { name: /BF manuale/i }) as HTMLInputElement;
-        const calculate = screen.getByRole('radio', { name: /Calcolo da misure/i }) as HTMLInputElement;
-        fireEvent.click(calculate);
-        expect(calculate.checked).toBe(true);
-
+    it('resets optional BF calculation on date or saved provenance change', () => {
+        const { rerender } = render(<DataMeasurements {...measurementProps()} />);
+        const estimate = screen.getByRole('checkbox', { name: /Calcola la massa grassa/i }) as HTMLInputElement;
+        fireEvent.click(estimate);
+        expect(estimate.checked).toBe(true);
         rerender(<DataMeasurements {...measurementProps({ selectedDate: '2026-10-04', targetDateStr: '2026-10-04' })} />);
-        expect(manual.checked).toBe(true);
-
+        expect(estimate.checked).toBe(false);
         rerender(<DataMeasurements {...measurementProps({
-            selectedDate: '2026-10-04',
-            targetDateStr: '2026-10-04',
+            selectedDate: '2026-10-04', targetDateStr: '2026-10-04',
             bfProvenance: { method: 'us_navy' },
         })} />);
-        expect(calculate.checked).toBe(true);
-        fireEvent.click(manual);
-        expect(manual.checked).toBe(true);
-
+        expect(estimate.checked).toBe(true);
         rerender(<DataMeasurements {...measurementProps({
-            selectedDate: '2026-10-04',
-            targetDateStr: '2026-10-04',
+            selectedDate: '2026-10-04', targetDateStr: '2026-10-04',
             bfProvenance: { method: 'manual' },
         })} />);
-        expect(manual.checked).toBe(true);
+        expect(estimate.checked).toBe(false);
     });
 
-    it('submits the explicitly selected body-fat mode to the existing save callback', () => {
+    it('passes the opt-in flag to the actual save control', () => {
         const calculateAndSave = vi.fn().mockResolvedValue(true);
         render(<DataMeasurements {...measurementProps({ calculateAndSave })} />);
-
-        fireEvent.click(screen.getByRole('radio', { name: /Calcolo da misure/i }));
         fireEvent.click(screen.getByRole('button', { name: /Salva misurazione/i }));
-
-        expect(calculateAndSave).toHaveBeenCalledWith(expect.anything(), 'calculate');
+        expect(calculateAndSave).toHaveBeenLastCalledWith(expect.anything(), false);
+        fireEvent.click(screen.getByRole('checkbox', { name: /Calcola la massa grassa/i }));
+        fireEvent.click(screen.getByRole('button', { name: /Salva misurazione/i }));
+        expect(calculateAndSave).toHaveBeenLastCalledWith(expect.anything(), true);
     });
 
     it('renders canonical measurement days while ignoring pre-launch date formats', () => {
