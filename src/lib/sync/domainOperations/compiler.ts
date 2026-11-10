@@ -27,9 +27,26 @@ function workoutMonth(workout: WorkoutSession | undefined): string | null {
     return DATE_RE.test(date) ? date.slice(0, 7) : null;
 }
 
+function firstHistoryById(history: UserData['history']): Map<string, WorkoutSession> {
+    const indexed = new Map<string, WorkoutSession>();
+    for (const workout of history ?? []) {
+        // Match Array.find(): the first occurrence is authoritative even for malformed inputs.
+        if (typeof workout.id === 'string' && !indexed.has(workout.id)) indexed.set(workout.id, workout);
+    }
+    return indexed;
+}
+
 function collectScope(before: UserData, after: UserData, operations: readonly DomainOperation[]): Scope {
     const scope: Scope = { rootKeys: new Set(), monthly: new Map() };
     const root = (...keys: string[]) => keys.forEach(key => scope.rootKeys.add(key));
+    const multipleHistoryEdits = operations.filter(operation => operation.type === 'history.upsert'
+        || operation.type === 'history.delete' || operation.type === 'workout.complete').length > 1;
+    const beforeById = multipleHistoryEdits ? firstHistoryById(before.history) : null;
+    const afterById = multipleHistoryEdits ? firstHistoryById(after.history) : null;
+    const previousWorkout = (id: string) => beforeById
+        ? beforeById.get(id) : before.history?.find(workout => workout.id === id);
+    const nextWorkout = (id: string) => afterById
+        ? afterById.get(id) : after.history?.find(workout => workout.id === id);
 
     for (const operation of operations) {
         switch (operation.type) {
@@ -78,8 +95,8 @@ function collectScope(before: UserData, after: UserData, operations: readonly Do
             }
             case 'history.upsert': {
                 const id = requireId(operation.workout.id, 'Allenamento');
-                const old = before.history?.find(item => item.id === id);
-                const next = after.history?.find(item => item.id === id);
+                const old = previousWorkout(id);
+                const next = nextWorkout(id);
                 const oldMonth = workoutMonth(old);
                 const newMonth = workoutMonth(next);
                 if (oldMonth) addMonthly(scope, `history_months/${oldMonth}`, id);
@@ -88,15 +105,15 @@ function collectScope(before: UserData, after: UserData, operations: readonly Do
             }
             case 'history.delete': {
                 const id = requireId(operation.id, 'Allenamento');
-                const oldMonth = workoutMonth(before.history?.find(item => item.id === id));
+                const oldMonth = workoutMonth(previousWorkout(id));
                 if (oldMonth) addMonthly(scope, `history_months/${oldMonth}`, id);
                 break;
             }
             case 'workout.complete': {
                 root('activeWorkout', 'activePains');
                 const id = requireId(operation.workout.id, 'Allenamento');
-                const old = before.history?.find(item => item.id === id);
-                const next = after.history?.find(item => item.id === id);
+                const old = previousWorkout(id);
+                const next = nextWorkout(id);
                 const oldMonth = workoutMonth(old);
                 const newMonth = workoutMonth(next);
                 if (oldMonth) addMonthly(scope, `history_months/${oldMonth}`, id);

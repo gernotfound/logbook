@@ -87,7 +87,8 @@ export async function commitDomainOperations(owner: string, batch: DomainOperati
     owner = normalizeStorageOwner(owner);
     const domainOperations = normalizeDomainOperationBatch(batch);
     let fallbackData: UserData | undefined;
-    const fallback = (): UserData => fallbackData ??= structuredClone(parse(initialBase));
+    // Zod already creates an independent tree; a second deep copy adds no isolation.
+    const fallback = (): UserData => fallbackData ??= parse(initialBase);
     const catalog = await getCachedCatalog();
     let operations: SemanticOperation[] = [];
     let savedData = initialBase;
