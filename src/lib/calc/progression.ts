@@ -549,13 +549,23 @@ function selectBestHistorical(
         .filter(item => item.comparison.level === 'high')
         .map(item => item.exposure);
     if (!candidates.length) return undefined;
-    return candidates.find(candidate => candidates.every(other => {
+    // With distinct sessions, a lower known RIR always implies more effort than
+    // at least one candidate. Such a reference cannot dominate every exposure.
+    // Duplicate session IDs retain the original full comparison semantics.
+    const distinctSessions = new Set(candidates.map(candidate => candidate.sessionId)).size === candidates.length;
+    const maxKnownRir = distinctSessions
+        ? candidates.reduce((max, candidate) => Math.max(max, candidate.referenceSet?.rir ?? -Infinity), -Infinity)
+        : -Infinity;
+    return candidates.find(candidate => {
+        if (candidate.referenceSet?.rir !== undefined && candidate.referenceSet.rir < maxKnownRir) return false;
+        return candidates.every(other => {
         if (candidate.sessionId === other.sessionId) return true;
         const change = compareReferenceOutput(candidate.referenceSet, other.referenceSet);
         const effort = rirChange(candidate.referenceSet, other.referenceSet);
         return (change === 'better' && effort !== 'more')
             || (change === 'same' && (effort === 'same' || effort === 'less'));
-    }));
+        });
+    });
 }
 
 function qualityFor(
