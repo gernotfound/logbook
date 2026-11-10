@@ -152,10 +152,13 @@ export const AccountCard = () => {
             setShowCurrentPassword(false);
             setShowNewPassword(false);
             if (shouldReload) await reloadAfterAccountChange(stillCurrent);
-        } catch {
+        } catch (error) {
             if (!stillCurrent()) return;
             console.error('Operazione account non riuscita.');
-            await showAlert('Operazione account non riuscita. Riprova.');
+            const code = (error as { code?: unknown } | null)?.code;
+            await showAlert(code === 'auth/weak-password' || code === 'auth/password-policy-unavailable'
+                ? describeEmailAuthError(error)
+                : 'Operazione account non riuscita. Riprova.');
         } finally {
             setLoadingAction(null);
         }
@@ -224,7 +227,8 @@ export const AccountCard = () => {
             // AuthProvider owns verification and the later guest handoff.
         } catch (error) {
             if (!stillRequested()) return;
-            await showAlert((error as { code?: unknown } | null)?.code === 'auth/weak-password'
+            const code = (error as { code?: unknown } | null)?.code;
+            await showAlert(code === 'auth/weak-password' || code === 'auth/password-policy-unavailable'
                 ? describeEmailAuthError(error)
                 : 'Impossibile completare la registrazione. Completa eventuali tentativi già aperti e riprova. I dati locali sono conservati.');
         } finally {
@@ -266,6 +270,7 @@ export const AccountCard = () => {
                                     </button>
                                 </div>
 
+                                <p className="text-muted">La nuova password deve avere almeno 15 caratteri. Puoi usare una passphrase con spazi oppure un gestore di password; Firebase può richiedere ancora altri requisiti.</p>
                                 <div style={{ display: "flex", gap: "0.625rem", marginTop: "0.625rem" }}>
                                     <button className="btn ui-account-card-12" style={{ flex: 1 }} onClick={() => { guestRegistrationGeneration.current += 1; setShowReauthModal(null); setNewEmailInput(''); setNewPasswordInput(''); }}>Annulla</button>
                                     <button className="btn btn-primary" style={{ flex: 1 }} onClick={onGuestRegister} disabled={loadingAction === 'guestRegister'}>
@@ -423,6 +428,9 @@ export const AccountCard = () => {
                                 </div>
                             )}
 
+                            {(showReauthModal === 'password' || showReauthModal === 'linkEmail') && (
+                                <p className="text-muted">Almeno 15 caratteri per la nuova password. Sono ammesse passphrase con spazi; eventuali requisiti Firebase ancora attivi saranno verificati prima del salvataggio.</p>
+                            )}
                             {hasPassword && (
                                 <div style={{ position: "relative" }}>
                                     <input type={showCurrentPassword ? "text" : "password"} placeholder="Password Attuale" value={currentPasswordInput} onChange={e => setCurrentPasswordInput(e.target.value)} autoComplete="current-password" className="ui-account-card-32" style={{ padding: "0.625rem", paddingRight: "2.5rem", width: "100%", boxSizing: "border-box" }} />

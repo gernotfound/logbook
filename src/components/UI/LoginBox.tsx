@@ -267,6 +267,9 @@ export const LoginBox: React.FC<LoginBoxProps> = ({ onCancel }) => {
                         ))}
                     </ul>
                 )}
+                {mode === 'register' && (
+                    <p className="text-muted">Sono consentite passphrase con spazi e password generate da un gestore. Eventuali requisiti aggiuntivi provengono da Firebase.</p>
+                )}
 
                 {mode === 'register' && (
                     <div className="auth-form-field">

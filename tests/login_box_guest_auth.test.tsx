@@ -307,11 +307,55 @@ describe('LoginBox guest Google authentication', () => {
         fireEvent.change(screen.getByRole('textbox', { name: 'Email' }), { target: { value: 'new@example.com' } });
         fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'caccapuou' } });
         fireEvent.change(screen.getByLabelText('Conferma password'), { target: { value: 'caccapuou' } });
-        expect(screen.getByText(/Una lettera maiuscola/).closest('li')?.getAttribute('data-status')).toBe('missing');
+        expect(screen.getByRole('list', { name: 'Requisiti della password' }).querySelector('li')?.getAttribute('data-status')).toBe('missing');
+        // Hints for extra Firebase categories are asynchronous and optional; the
+        // registration action always enforces the actual remote policy.
         fireEvent.click(screen.getAllByRole('button', { name: 'Registrati' }).at(-1)!);
-        await waitFor(() => expect(screen.getByRole('alert').textContent).toContain('maiuscola'));
+        await waitFor(() => expect(screen.getByRole('alert').textContent).toContain('15 caratteri'));
         expect(authMocks.registerWithEmail).not.toHaveBeenCalled();
         expect(screen.getAllByRole('button', { name: 'Registrati' }).at(-1)!.hasAttribute('disabled')).toBe(false);
+    });
+
+    it('allows password manager paste and lowercase passphrases after the remote cutover', async () => {
+        vi.mocked(validatePassword).mockResolvedValueOnce({
+            isValid: false, passwordPolicy: { customStrengthOptions: { minPasswordLength: 15, maxPasswordLength: 4096 } },
+        } as any);
+        authState.isGuest = false;
+        render(<LoginBox />);
+        fireEvent.click(screen.getAllByRole('button', { name: 'Registrati' }).at(-1)!);
+        fireEvent.change(screen.getByRole('textbox', { name: 'Email' }), { target: { value: 'passphrase@example.com' } });
+        const password = screen.getByLabelText('Password') as HTMLInputElement;
+        const confirmation = screen.getByLabelText('Conferma password') as HTMLInputElement;
+        expect(password.getAttribute('autocomplete')).toBe('new-password');
+        expect(confirmation.getAttribute('autocomplete')).toBe('new-password');
+        const passphrase = 'una passphrase con molti spazi e unicode 🐱';
+        fireEvent.change(password, { target: { value: passphrase } });
+        fireEvent.change(confirmation, { target: { value: passphrase } });
+        expect(screen.getByRole('list', { name: 'Requisiti della password' }).querySelector('li')?.getAttribute('data-status')).toBe('met');
+        expect(screen.queryByText('Una lettera maiuscola')).toBeNull();
+        expect(screen.queryByText('Un numero')).toBeNull();
+        expect(screen.queryByText('Un carattere speciale')).toBeNull();
+        expect(password.maxLength).toBe(-1);
+        fireEvent.click(screen.getAllByRole('button', { name: 'Registrati' }).at(-1)!);
+        await waitFor(() => expect(authMocks.registerWithEmail).toHaveBeenCalledWith(
+            'passphrase@example.com', passphrase, undefined, expect.any(Function),
+        ));
+        expect(validatePassword).not.toHaveBeenCalledWith(expect.anything(), passphrase);
+    });
+
+    it('keeps password-policy outages visible without leaking provider internals', async () => {
+        authState.isGuest = false;
+        authMocks.registerWithEmail.mockRejectedValueOnce(
+            Object.assign(new Error('SECRET_FIREBASE_ERROR'), { code: 'auth/password-policy-unavailable' }),
+        );
+        render(<LoginBox />);
+        fireEvent.click(screen.getAllByRole('button', { name: 'Registrati' }).at(-1)!);
+        fireEvent.change(screen.getByRole('textbox', { name: 'Email' }), { target: { value: 'new@example.com' } });
+        fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'una passphrase molto lunga' } });
+        fireEvent.change(screen.getByLabelText('Conferma password'), { target: { value: 'una passphrase molto lunga' } });
+        fireEvent.click(screen.getAllByRole('button', { name: 'Registrati' }).at(-1)!);
+        await waitFor(() => expect(screen.getByRole('alert').textContent).toContain('Non è possibile verificare'));
+        expect(screen.getByRole('alert').textContent).not.toContain('SECRET_FIREBASE_ERROR');
     });
 
     it('reports mismatched confirmation before sending any registration request', async () => {

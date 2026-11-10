@@ -389,7 +389,7 @@ describe('serialized guest migration intent belongs to an exact Auth attempt', (
             const { result } = email(true);
             const pending = action === 'login'
                 ? result.current.loginWithEmail('first@example.test', 'Password1!', 'merge')
-                : result.current.registerWithEmail('first@example.test', 'Password1!', 'merge');
+                : result.current.registerWithEmail('first@example.test', 'SecurePassword123!Long', 'merge');
             await waitFor(() => expect(fail).toBeTypeOf('function'));
             const prior = localStorage.getItem(KEY);
             expect(prior).not.toBeNull();

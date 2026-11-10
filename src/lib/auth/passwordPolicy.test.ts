@@ -1,131 +1,154 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { validatePassword } from '../firebase';
-import { getPasswordRequirements, loadPasswordRuleConfig, PASSWORD_POLICY_SUMMARY, validatePasswordAgainstPolicy } from './passwordPolicy';
+import {
+    getPasswordRequirements, loadPasswordRuleConfig, MIN_NEW_PASSWORD_LENGTH,
+    PASSWORD_POLICY_SUMMARY, validatePasswordAgainstPolicy,
+} from './passwordPolicy';
 
 const mockedValidatePassword = vi.mocked(validatePassword);
-const policy = {
-    customStrengthOptions: {
-        minPasswordLength: 20,
-        maxPasswordLength: 128,
-        containsLowercaseLetter: true,
-        containsUppercaseLetter: true,
-        containsNumericCharacter: true,
-        containsNonAlphanumericCharacter: true,
-    },
+const currentFirebaseRules = {
+    minPasswordLength: 8,
+    maxPasswordLength: 4096,
+    containsLowercaseLetter: true,
+    containsUppercaseLetter: true,
+    containsNumericCharacter: true,
+    containsNonAlphanumericCharacter: true,
 };
+const futureFirebaseRules = { minPasswordLength: 15, maxPasswordLength: 4096 };
+const providerStatus = (isValid: boolean, rules: object, more: object = {}) => ({
+    isValid,
+    passwordPolicy: { customStrengthOptions: rules, enforcementState: 'ENFORCE', forceUpgradeOnSignin: false },
+    ...more,
+});
 
 describe('password policy', () => {
     beforeEach(() => { vi.clearAllMocks(); mockedValidatePassword.mockReset(); });
 
-    it('shows immediate advisory hints without treating them as the server policy', () => {
-        const requirements = getPasswordRequirements('caccapuou');
-        expect(requirements.find(item => item.label === 'Almeno 8 caratteri')?.met).toBe(true);
-        expect(requirements.filter(item => !item.met).map(item => item.label))
-            .toEqual(expect.arrayContaining(['Una lettera maiuscola', 'Un numero', 'Un carattere speciale']));
+    it('requires at least 15 Unicode characters but no composition categories locally', async () => {
+        expect(MIN_NEW_PASSWORD_LENGTH).toBe(15);
+        expect(getPasswordRequirements('tuttominuscoloenientealtro')).toEqual([
+            { label: 'Almeno 15 caratteri', met: true },
+        ]);
+        expect(getPasswordRequirements('abcdefghijklmno')).toEqual([
+            { label: 'Almeno 15 caratteri', met: true },
+        ]);
+        expect(getPasswordRequirements('abcdefghijklmn')[0].met).toBe(false);
+        await expect(validatePasswordAgainstPolicy('abcdefghijklmn')).resolves.toContain('15 caratteri');
         expect(mockedValidatePassword).not.toHaveBeenCalled();
     });
 
-    it('preserves the documented minimum and adds stricter criteria returned by Firebase', async () => {
-        mockedValidatePassword.mockResolvedValueOnce({ isValid: false, passwordPolicy: policy } as any);
-        const config = await loadPasswordRuleConfig();
-        expect(getPasswordRequirements('SecurePassword123!', config).find(item => item.label === 'Almeno 20 caratteri')?.met).toBe(false);
-        expect(mockedValidatePassword).toHaveBeenCalledWith(expect.anything(), '');
+    it('counts Unicode code points, does not trim spaces or normalize submitted passphrases', async () => {
+        expect(getPasswordRequirements('🐱'.repeat(14))[0].met).toBe(false);
+        expect(getPasswordRequirements('🐱'.repeat(15))[0].met).toBe(true);
+        const passphrase = '  uno due tre quattro cinque 🐱  ';
+        mockedValidatePassword.mockResolvedValueOnce(providerStatus(true, futureFirebaseRules) as any);
+        await expect(validatePasswordAgainstPolicy(passphrase)).resolves.toBeNull();
+        expect(mockedValidatePassword).toHaveBeenCalledExactlyOnceWith(expect.anything(), passphrase);
+        expect(getPasswordRequirements('é'.repeat(15))[0].met).toBe(true);
     });
 
-    it('refuses obviously weak passwords even if a backend fixture reports success', async () => {
-        mockedValidatePassword.mockResolvedValueOnce({ isValid: true, passwordPolicy: policy } as any);
-        await expect(validatePasswordAgainstPolicy('caccapuou')).resolves.toContain('maiuscola');
-        expect(mockedValidatePassword).not.toHaveBeenCalled();
+    it('fetches effective remote hints without inserting obsolete static character rules', async () => {
+        mockedValidatePassword.mockResolvedValueOnce(providerStatus(false, futureFirebaseRules) as any);
+        const rules = await loadPasswordRuleConfig();
+        expect(rules).toEqual(futureFirebaseRules);
+        expect(getPasswordRequirements('una lunga passphrase', rules)).toEqual([
+            { label: 'Almeno 15 caratteri', met: true },
+            { label: 'Massimo 4096 caratteri', met: true },
+        ]);
+        expect(mockedValidatePassword).toHaveBeenCalledExactlyOnceWith(expect.anything(), '');
     });
 
-    it('accepts a password only when Firebase accepts it', async () => {
-        const password = 'SecurePassword123!Long';
-        mockedValidatePassword.mockResolvedValueOnce({ isValid: true, passwordPolicy: policy } as any);
+    it('shows old composition hints only when the effective Firebase policy requires them', async () => {
+        mockedValidatePassword.mockResolvedValueOnce(providerStatus(false, currentFirebaseRules) as any);
+        const rules = await loadPasswordRuleConfig();
+        expect(getPasswordRequirements('tuttominuscoloenientealtro', rules).filter(x => !x.met).map(x => x.label))
+            .toEqual(['Una lettera maiuscola', 'Un numero', 'Un carattere speciale']);
+        expect(getPasswordRequirements('abcdefghijklmno', { minPasswordLength: 8 })[0])
+            .toEqual({ label: 'Almeno 15 caratteri', met: true });
+    });
+
+    it('matches Firebase special characters in transitional composition hints, not whitespace or arbitrary punctuation', () => {
+        const rules = { containsNonAlphanumericCharacter: true };
+        const special = (password: string) => getPasswordRequirements(password, rules).find(rule => rule.label === 'Un carattere speciale')?.met;
+        expect(special('passworddiquindici   ')).toBe(false);
+        expect(special('passworddiquindici—')).toBe(false);
+        expect(special('passworddiquindici!')).toBe(true);
+        expect(special('passworddiquindici\\\\')).toBe(true);
+    });
+
+    it('accepts 15+ character lowercase passphrases after the Firebase policy is changed', async () => {
+        const password = 'una frase senza numeri';
+        mockedValidatePassword.mockResolvedValueOnce(providerStatus(true, futureFirebaseRules) as any);
         await expect(validatePasswordAgainstPolicy(password)).resolves.toBeNull();
         expect(mockedValidatePassword).toHaveBeenCalledExactlyOnceWith(expect.anything(), password);
     });
 
-    it('reports the stricter minimum returned by Firebase', async () => {
-        mockedValidatePassword.mockResolvedValueOnce({
-            isValid: false, meetsMinPasswordLength: false, passwordPolicy: policy,
-        } as any);
-        await expect(validatePasswordAgainstPolicy('SecurePassword123!')).resolves.toContain('almeno 20 caratteri');
+    it('continues rejecting a password that Firebase currently rejects before cutover', async () => {
+        mockedValidatePassword.mockResolvedValueOnce(providerStatus(false, currentFirebaseRules, {
+            containsUppercaseLetter: false, containsNumericCharacter: false,
+        }) as any);
+        await expect(validatePasswordAgainstPolicy('una passphrase tutta minuscola')).resolves.toContain('Firebase richiede ancora');
+        expect(mockedValidatePassword).toHaveBeenCalledTimes(1);
     });
 
-    it.each([null, undefined, {}])('fails closed on an incomplete provider response (%s)', async response => {
-        mockedValidatePassword.mockResolvedValueOnce(response as any);
-        await expect(validatePasswordAgainstPolicy('SecurePassword123!')).rejects.toThrow();
+    it.each([
+        ['containsNumericCharacter', 'numero'],
+        ['containsLowercaseLetter', 'minuscola'],
+        ['containsUppercaseLetter', 'maiuscola'],
+        ['containsNonAlphanumericCharacter', 'speciale'],
+    ] as const)('describes effective remote requirement %s', async (field, message) => {
+        mockedValidatePassword.mockResolvedValueOnce(providerStatus(false, currentFirebaseRules, { [field]: false }) as any);
+        await expect(validatePasswordAgainstPolicy('passwordconalmenoquindici')).resolves.toContain(message);
     });
 
-    it('propagates a provider outage instead of authorizing a password locally', async () => {
-        const offline = new Error('password policy unavailable');
+    it('reports stricter Firebase minimum and maximum limits when returned by the provider', async () => {
+        mockedValidatePassword.mockResolvedValueOnce(providerStatus(false, { minPasswordLength: 25 }, { meetsMinPasswordLength: false }) as any);
+        await expect(validatePasswordAgainstPolicy('abcdefghijklmnop')).resolves.toContain('25 caratteri');
+        mockedValidatePassword.mockResolvedValueOnce(providerStatus(false, { maxPasswordLength: 16 }, { meetsMaxPasswordLength: false }) as any);
+        await expect(validatePasswordAgainstPolicy('abcdefghijklmnopq')).resolves.toContain('16 caratteri');
+        expect(getPasswordRequirements('abcdefghijklmno', { minPasswordLength: 25 })[0].met).toBe(false);
+        expect(getPasswordRequirements('abcdefghijklmnopq', { maxPasswordLength: 16 })[1].met).toBe(false);
+    });
+
+    it('supports Firebase maximum 4096 without silently truncating the value', async () => {
+        const password = 'a'.repeat(4096);
+        expect(getPasswordRequirements(password, futureFirebaseRules).every(x => x.met)).toBe(true);
+        expect(getPasswordRequirements(password + 'a', futureFirebaseRules)[1].met).toBe(false);
+        mockedValidatePassword.mockResolvedValueOnce(providerStatus(true, futureFirebaseRules) as any);
+        await expect(validatePasswordAgainstPolicy(password)).resolves.toBeNull();
+        expect(mockedValidatePassword).toHaveBeenCalledExactlyOnceWith(expect.anything(), password);
+    });
+
+    it('fails closed on Firebase policy outages and incomplete provider responses', async () => {
+        const offline = new Error('network error with private details');
         mockedValidatePassword.mockRejectedValueOnce(offline);
-        await expect(validatePasswordAgainstPolicy('SecurePassword123!')).rejects.toBe(offline);
+        await expect(validatePasswordAgainstPolicy('password sufficientemente lunga')).rejects.toMatchObject({
+            code: 'auth/password-policy-unavailable',
+        });
         mockedValidatePassword.mockRejectedValueOnce(offline);
         await expect(loadPasswordRuleConfig()).rejects.toBe(offline);
-    });
-
-    it('keeps the local baseline when Firebase returns no advisory policy', async () => {
-        mockedValidatePassword.mockResolvedValueOnce({ isValid: false } as any);
-        const config = await loadPasswordRuleConfig();
-        expect(getPasswordRequirements('weak', config).filter(rule => !rule.met).map(rule => rule.label))
-            .toEqual(['Almeno 8 caratteri', 'Una lettera maiuscola', 'Un numero', 'Un carattere speciale']);
-    });
-
-    it('maps Firebase-only requirement failures', async () => {
-        mockedValidatePassword.mockResolvedValueOnce({
-            isValid: false, meetsMaxPasswordLength: false, passwordPolicy: policy,
-        } as any);
-        await expect(validatePasswordAgainstPolicy('SecurePassword123!')).resolves.toContain('128 caratteri');
-        expect(PASSWORD_POLICY_SUMMARY).not.toContain('8 caratteri');
-    });
-
-    it('includes the exact minimum and maximum length limits in advisory requirements', () => {
-        const atLimit = getPasswordRequirements('Aa1!bbbb', { minPasswordLength: 8, maxPasswordLength: 8 });
-        expect(atLimit.find(item => item.label === 'Almeno 8 caratteri')).toEqual({
-            label: 'Almeno 8 caratteri', met: true,
-        });
-        expect(atLimit).not.toContainEqual(expect.objectContaining({ label: 'Massimo 8 caratteri' }));
-        const tooLong = getPasswordRequirements('Aa1!bbbbb', { maxPasswordLength: 8 });
-        expect(tooLong).toContainEqual({ label: 'Massimo 8 caratteri', met: false });
-        expect(atLimit).toContainEqual({ label: 'Una lettera minuscola', met: true });
-    });
-
-    it('preserves all local baseline advisory criteria when Firebase has no rule details', async () => {
-        mockedValidatePassword.mockResolvedValueOnce({ isValid: false } as any);
-        expect(await loadPasswordRuleConfig()).toEqual({
-            minPasswordLength: 8,
-            containsLowercaseLetter: true,
-            containsUppercaseLetter: true,
-            containsNumericCharacter: true,
-            containsNonAlphanumericCharacter: true,
-        });
-    });
-
-    it('reports each remote-only character requirement without accepting the password', async () => {
-        const remoteFailures = [
-            ['containsNumericCharacter', 'numero'],
-            ['containsLowercaseLetter', 'minuscola'],
-            ['containsUppercaseLetter', 'maiuscola'],
-            ['containsNonAlphanumericCharacter', 'speciale'],
-        ] as const;
-        for (const [field, message] of remoteFailures) {
-            mockedValidatePassword.mockResolvedValueOnce({
-                isValid: false, passwordPolicy: policy, [field]: false,
-            } as any);
-            await expect(validatePasswordAgainstPolicy('SecurePassword123!')).resolves.toContain(message);
+        for (const response of [null, undefined, {}]) {
+            mockedValidatePassword.mockResolvedValueOnce(response as any);
+            await expect(validatePasswordAgainstPolicy('password sufficientemente lunga'))
+                .rejects.toMatchObject({ code: 'auth/password-policy-unavailable' });
         }
-        expect(mockedValidatePassword).toHaveBeenCalledTimes(remoteFailures.length);
     });
 
-    it('uses the generic provider rejection when no specific remote criterion is available', async () => {
-        mockedValidatePassword.mockResolvedValueOnce({
-            isValid: false, passwordPolicy: policy,
-        } as any);
-        await expect(validatePasswordAgainstPolicy('SecurePassword123!'))
-            .resolves.toBe('La password non rispetta i requisiti di sicurezza configurati per l’account.');
-        expect(PASSWORD_POLICY_SUMMARY)
-            .toBe('La password non rispetta i requisiti di sicurezza configurati per l’account.');
+    it('retains local hints if policy detail is absent, but never authorizes a Firebase rejection', async () => {
+        mockedValidatePassword.mockResolvedValueOnce({ isValid: false } as any);
+        expect(await loadPasswordRuleConfig()).toEqual({});
+        expect(getPasswordRequirements('password sufficientemente lunga').map(x => x.label))
+            .toEqual(['Almeno 15 caratteri']);
+        mockedValidatePassword.mockResolvedValueOnce({ isValid: false } as any);
+        await expect(validatePasswordAgainstPolicy('password sufficientemente lunga'))
+            .resolves.toBe(PASSWORD_POLICY_SUMMARY);
     });
 
+    it('does not interpret unrequired character indicators as Firebase requirements', async () => {
+        mockedValidatePassword.mockResolvedValueOnce(providerStatus(false, futureFirebaseRules, {
+            containsNumericCharacter: false,
+        }) as any);
+        await expect(validatePasswordAgainstPolicy('password sufficientemente lunga'))
+            .resolves.toBe(PASSWORD_POLICY_SUMMARY);
+    });
 });
