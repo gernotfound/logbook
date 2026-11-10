@@ -13,11 +13,11 @@ async function collectBlockingAccessibilityViolations(page: Page, surface: strin
       id: violation.id,
       impact: violation.impact,
       targets: violation.nodes.flatMap(node => node.target),
+      details: violation.nodes.map(node => ({ html: node.html, failureSummary: node.failureSummary })),
     }));
 }
 
 async function continueAsGuest(page: Page) {
-  await page.goto('/');
   await page.getByRole('button', { name: 'Continua senza account' }).click();
   await page.getByText('Aggiornamento Termini e Privacy').waitFor();
   for (const checkbox of await page.locator('input[type="checkbox"]').all()) {
@@ -34,6 +34,7 @@ test(`representative guest surfaces have no serious automated accessibility viol
   await page.emulateMedia({ colorScheme: theme });
   await page.goto('/');
   await expect(page.getByRole('heading', { name: 'TheLogBook' })).toBeVisible();
+  await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
   const blocking = await collectBlockingAccessibilityViolations(page, 'login');
 
   await continueAsGuest(page);
@@ -64,6 +65,7 @@ test(`representative guest surfaces have no serious automated accessibility viol
 
 test('keyboard-opened routine menu retains focus and fits a narrow real viewport', async ({ page }) => {
   await page.setViewportSize({ width: 320, height: 850 });
+  await page.goto('/');
   await continueAsGuest(page);
   await page.getByRole('button', { name: 'Allenamento', exact: true }).click();
   await page.getByRole('tab', { name: 'Schede', exact: true }).click();
@@ -72,7 +74,7 @@ test('keyboard-opened routine menu retains focus and fits a narrow real viewport
   await page.locator('#routine-creation-form').getByRole('button', { name: 'Salva', exact: true }).click();
 
   const card = page.locator('.routine-library-card').filter({
-    has: page.getByRole('button', { name: 'Apri scheda Scheda accessibile', exact: true }),
+    has: page.getByRole('button', { name: 'Apri scheda Scheda accessibile 0 esercizi', exact: true }),
   });
   const trigger = card.getByRole('button', { name: 'Opzioni' });
   await trigger.focus();
@@ -92,7 +94,7 @@ test('keyboard-opened routine menu retains focus and fits a narrow real viewport
   await page.getByPlaceholder('Nome scheda').fill('Seconda scheda accessibile');
   await page.locator('#routine-creation-form').getByRole('button', { name: 'Salva', exact: true }).click();
   const secondCard = page.locator('.routine-library-card').filter({
-    has: page.getByRole('button', { name: 'Apri scheda Seconda scheda accessibile', exact: true }),
+    has: page.getByRole('button', { name: 'Apri scheda Seconda scheda accessibile 0 esercizi', exact: true }),
   });
   const secondTrigger = secondCard.getByRole('button', { name: 'Opzioni' });
 
@@ -107,4 +109,6 @@ test('keyboard-opened routine menu retains focus and fits a narrow real viewport
   await expect(secondMenu).toBeVisible();
   await expect(secondMenu.getByRole('menuitem').last()).toBeFocused();
   await expect(page.getByRole('menu')).toHaveCount(1);
+  expect(await collectBlockingAccessibilityViolations(page, 'keyboard-routine-menu'),
+    'axe found critical/serious WCAG violations in the open routine menu').toEqual([]);
 });

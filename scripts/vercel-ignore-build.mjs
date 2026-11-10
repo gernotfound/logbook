@@ -23,6 +23,24 @@ if (!previousSha) {
   process.exit(1);
 }
 
+// Vercel may check out only the new commit, even when the previous production
+// commit still exists on GitHub. Fetch exactly that missing revision rather than
+// redeploying the backend merely because the local clone is shallow.
+function ensurePreviousCommit(sha) {
+  if (!/^[a-f0-9]{40}$/.test(sha)) return false;
+  const exists = () => spawnSync('git', ['cat-file', '-e', `${sha}^{commit}`], { stdio: 'ignore' }).status === 0;
+  if (exists()) return true;
+  const fetched = spawnSync('git', ['fetch', '--quiet', '--no-tags', '--depth=1', 'origin', sha], {
+    stdio: 'pipe', timeout: 15000, maxBuffer: 1024 * 1024,
+  });
+  return fetched.status === 0 && exists();
+}
+
+if (!ensurePreviousCommit(previousSha)) {
+  console.log('Previous backend deployment commit cannot be verified; continue Vercel deployment.');
+  process.exit(1);
+}
+
 // Release policy bumps the PWA version on every PR; this alone does not change
 // the backend. All other package and lockfile changes still force a deployment.
 const versionFiles = ['package.json', 'package-lock.json'];

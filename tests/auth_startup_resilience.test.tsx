@@ -113,6 +113,26 @@ describe('authenticated startup and foreground recovery', () => {
     await waitFor(() => expect(vi.mocked(refreshHealthConsent).mock.calls.length).toBe(previousChecks + 1));
   });
 
+  test('clears a completed foreground write-wait deadline without skipping consent verification', async () => {
+    render(<AuthProvider><TestAuthConsumer /></AuthProvider>);
+    await waitFor(() => expect(screen.getByTestId('loading-state').textContent).toBe('READY'));
+    const previousChecks = vi.mocked(refreshHealthConsent).mock.calls.length;
+    const startTimer = vi.spyOn(globalThis, 'setTimeout');
+    const clearTimer = vi.spyOn(globalThis, 'clearTimeout');
+    try {
+      await act(async () => { window.dispatchEvent(new Event('focus')); });
+      await waitFor(() => expect(vi.mocked(refreshHealthConsent).mock.calls.length).toBe(previousChecks + 1));
+      await waitFor(() => {
+        const index = startTimer.mock.calls.findIndex(call => call[1] === 1500);
+        expect(index).toBeGreaterThanOrEqual(0);
+        expect(clearTimer).toHaveBeenCalledWith(startTimer.mock.results[index]?.value);
+      });
+    } finally {
+      startTimer.mockRestore();
+      clearTimer.mockRestore();
+    }
+  });
+
   test('rechecks the trusted consent before loading cloud data after reconnect', async () => {
     render(<AuthProvider><TestAuthConsumer /></AuthProvider>);
     await waitFor(() => expect(screen.getByTestId('loading-state').textContent).toBe('READY'));

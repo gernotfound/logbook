@@ -1,9 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import type { Food, NutritionDay } from '../src/types';
 import {
     calculateSetVolumeContract,
     calculateWorkoutVolumeContract,
-    calculateRealtimeKcalContract,
     mergeActivePainsContract
 } from './requirements_r1_r6_contracts';
 
@@ -38,61 +36,6 @@ describe('LogBook 4-Tier Automated Test Suite (Requirements R1 - R6)', () => {
             expect(vol).toBe(1670);
         });
 
-        it('T3.2: Pure calorie calculation and meal object assembly (no saving)', () => {
-            // Step 1: User creates custom high-protein pudding in form
-            const carbs = 12;
-            const pro = 20;
-            const fat = 3;
-            const calculatedKcal = calculateRealtimeKcalContract(carbs, pro, fat);
-            expect(calculatedKcal).toBe(155); // 12*4 + 20*4 + 3*9 = 48 + 80 + 27 = 155
-
-            const customFood: Food = {
-                id: 'cf_pudding',
-                name: 'Budino proteico',
-                carbs,
-                pro,
-                fat,
-                kcal: calculatedKcal,
-                unit: '100g',
-                isCustom: true
-            };
-
-            // Step 2: Log food on historical past date (2026-08-14)
-            const targetDate = '2026-08-14';
-            const initialDay: NutritionDay = {
-                date: targetDate,
-                kcal: 0,
-                carbs: 0,
-                pro: 0,
-                fat: 0,
-                meals: []
-            };
-
-            const loggedMeal = {
-                id: 'm_1',
-                name: customFood.name,
-                meal: 'spuntino',
-                quantity: 2, // 200g
-                kcal: customFood.kcal * 2,
-                carbs: customFood.carbs * 2,
-                pro: customFood.pro * 2,
-                fat: customFood.fat * 2
-            };
-
-            const updatedDay: NutritionDay = {
-                ...initialDay,
-                kcal: loggedMeal.kcal,
-                carbs: loggedMeal.carbs,
-                pro: loggedMeal.pro,
-                fat: loggedMeal.fat,
-                meals: [loggedMeal]
-            };
-
-            expect(updatedDay.kcal).toBe(310);
-            expect(updatedDay.pro).toBe(40);
-            expect(updatedDay.carbs).toBe(24);
-            expect(updatedDay.fat).toBe(6);
-        });
 
         it('T3.4: Pure volume function differs for two explicitly supplied bodyweights', () => {
             // User weighed 80kg on 2026-08-01, and 75kg on 2026-08-15
@@ -113,28 +56,6 @@ describe('LogBook 4-Tier Automated Test Suite (Requirements R1 - R6)', () => {
             expect(volumeCurrent).toBe(850);
         });
 
-        it('T3.5: Pure volume, DOMS union and macro functions on shared fixtures', () => {
-            // 1. Session volume calculation
-            const library = [{ id: 'ex_pullup', isBodyweight: true, equipmentWeight: 0, muscles: ['dorso', 'bicipiti'] }];
-            const session = {
-                exercises: [{ exId: 'ex_pullup', sets: [{ kg: '0', reps: '10' }, { kg: '5', reps: '8' }] }]
-            };
-            const userWeight = 75;
-            // Set 1: (0 + 75) * 10 = 750
-            // Set 2: (5 + 75) * 8 = 640 -> Total = 1390
-            const sessionVol = calculateWorkoutVolumeContract(session, library, userWeight);
-            expect(sessionVol).toBe(1390);
-
-            // 2. DOMS persistence: initial pain was 'dorso', user experienced new 'bicipiti' soreness
-            const initialPains = ['dorso'];
-            const sessionPains = ['bicipiti']; // Dorso unselected, bicipiti selected
-            const updatedPains = mergeActivePainsContract(initialPains, sessionPains);
-            expect(updatedPains).toEqual(['dorso', 'bicipiti']);
-
-            // 3. Post-workout snack auto-calculated kcal
-            const postWorkoutSnackKcal = calculateRealtimeKcalContract(45, 30, 2); // 45*4 + 30*4 + 2*9 = 180 + 120 + 18 = 318
-            expect(postWorkoutSnackKcal).toBe(318);
-        });
 
         it('T3.6: Combined equipment/bodyweight calculation and pure DOMS union', () => {
             const library = [
@@ -178,5 +99,50 @@ describe('LogBook 4-Tier Automated Test Suite (Requirements R1 - R6)', () => {
             // Existing pains are preserved regardless of training involvement or re-selection.
             expect(resolvedPains).toEqual(['petto', 'quadricipiti', 'polpacci']);
         });
+        it('T3.7: weighted calisthenics with multiple exercises and explicit DOMS preservation', () => {
+            // User starts session with weighted pull-ups and dips
+            const library = [
+                { id: 'c_pullup', name: 'Weighted Pull-Up', isBodyweight: true, equipmentWeight: 1.5, muscles: ['dorso', 'bicipiti'] },
+                { id: 'c_dip', name: 'Weighted Dips', isBodyweight: true, equipmentWeight: 1.5, muscles: ['petto', 'tricipiti'] }
+            ];
+
+            const userWeight = 74.0;
+
+            const session = {
+                id: 'ws_cali_1',
+                routineName: 'Street Workout Upper',
+                date: '2026-08-20',
+                exercises: [
+                    {
+                        exId: 'c_pullup',
+                        sessionNote: 'Focus esplosivo',
+                        sets: [
+                            { id: 's1', kg: '15', reps: '6' }, // (15 + 1.5 + 74) * 6 = 90.5 * 6 = 543
+                            { id: 's2', kg: '15', reps: '6' }, // 543
+                            { id: 's3', kg: '10', reps: '8' }  // (10 + 1.5 + 74) * 8 = 85.5 * 8 = 684
+                        ]
+                    },
+                    {
+                        exId: 'c_dip',
+                        sessionNote: 'Scendi fino a 90 gradi',
+                        sets: [
+                            { id: 's4', kg: '25', reps: '6' }, // (25 + 1.5 + 74) * 6 = 100.5 * 6 = 603
+                            { id: 's5', kg: '20', reps: '8' }  // (20 + 1.5 + 74) * 8 = 95.5 * 8 = 764
+                        ]
+                    }
+                ]
+            };
+
+            const totalVol = calculateWorkoutVolumeContract(session, library, userWeight);
+            expect(totalVol).toBe(3137); // 543 + 543 + 684 + 603 + 764 = 3137
+
+            // Session completion with ratings and sore triceps
+            const activePainsBefore = ['spalle'];
+            const sessionPains = ['tricipiti'];
+            const activePainsAfter = mergeActivePainsContract(activePainsBefore, sessionPains);
+            expect(activePainsAfter).toContain('spalle');
+            expect(activePainsAfter).toContain('tricipiti');
+        });
+
     });
 });

@@ -72,10 +72,17 @@ export function createAuthConsentLifecycleHandlers({
                 return;
             }
             if (useAppStore.getState().syncing) return;
-            await Promise.race([
-                waitForPendingWrites(getDb()),
-                new Promise(resolve => setTimeout(resolve, 1500))
-            ]);
+            // Release the losing deadline when Firestore settles promptly:
+            // otherwise each foreground check retains a redundant timer.
+            let deadline: ReturnType<typeof setTimeout> | undefined;
+            try {
+                await Promise.race([
+                    waitForPendingWrites(getDb()),
+                    new Promise<void>(resolve => { deadline = setTimeout(resolve, 1500); }),
+                ]);
+            } finally {
+                if (deadline !== undefined) clearTimeout(deadline);
+            }
             if (!stillCurrent() || !isHealthConsentWritable(userOwner(uid))) return;
             await loadData(user);
         } catch (error) {

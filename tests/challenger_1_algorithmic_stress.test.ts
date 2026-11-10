@@ -351,12 +351,10 @@ describe('Challenger 1: Algorithmic & Mathematical Stress Test Suite', () => {
             expect(calculatePearsonCorrelation(x2, y2)).toBe(-1.0);
         });
 
-        it('handles micro-variance (1e-9 differences) without divide-by-zero or NaN', () => {
+        it('retains a perfect positive correlation with micro-variance (1e-9 differences)', () => {
             const x = [1000.000000001, 1000.000000002, 1000.000000003];
             const y = [2000, 2500, 3000];
-            const r = calculatePearsonCorrelation(x, y);
-            expect(typeof r === 'number' || r === null).toBe(true);
-            expect(Number.isNaN(r as any)).toBe(false);
+            expect(calculatePearsonCorrelation(x, y)).toBe(1);
         });
 
         it('handles massive numbers (1e9) without precision loss or overflow', () => {

@@ -58,8 +58,8 @@ describe('Schede redesign', () => {
 
         fireEvent.change(search, { target: { value: '' } });
 
-        const upperToggle = screen.getByRole('button', { name: 'Apri scheda Upper body A' });
-        const lowerToggle = screen.getByRole('button', { name: 'Apri scheda Lower body A' });
+        const upperToggle = screen.getByRole('button', { name: /^Apri scheda Upper body A 1 esercizi/ });
+        const lowerToggle = screen.getByRole('button', { name: /^Apri scheda Lower body A 1 esercizi/ });
 
         fireEvent.click(upperToggle);
         expect(screen.getByText('Panca piana')).toBeTruthy();
@@ -71,7 +71,7 @@ describe('Schede redesign', () => {
         expect(screen.getByText('Squat')).toBeTruthy();
         expect(container.querySelectorAll('.routine-library-card.is-expanded')).toHaveLength(1);
 
-        fireEvent.click(screen.getByRole('button', { name: 'Chiudi scheda Lower body A' }));
+        fireEvent.click(screen.getByRole('button', { name: /^Chiudi scheda Lower body A 1 esercizi/ }));
         expect(container.querySelectorAll('.routine-library-card.is-expanded')).toHaveLength(0);
     });
 
@@ -88,7 +88,7 @@ describe('Schede redesign', () => {
         expect(screen.getByRole('menuitem', { name: 'Elimina' })).toBeTruthy();
         expect(card?.classList.contains('is-expanded')).toBe(false);
 
-        fireEvent.click(screen.getByRole('button', { name: 'Apri scheda Upper body A' }));
+        fireEvent.click(screen.getByRole('button', { name: /^Apri scheda Upper body A 1 esercizi/ }));
 
         const details = container.querySelector('.routine-muscle-details') as HTMLDetailsElement;
         expect(details).toBeTruthy();

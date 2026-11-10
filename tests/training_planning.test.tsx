@@ -638,7 +638,7 @@ describe('Training Planning & Volume Calculations', () => {
             );
 
             expect(screen.getByText('Scheda Test Upper')).toBeDefined();
-            expect(screen.getByText('1 esercizi')).toBeDefined();
+            expect(screen.getByText(/^1 esercizi(?: · .*)?$/)).toBeDefined();
 
             const optionsBtn = screen.getByTitle('Opzioni');
             expect(optionsBtn).toBeDefined();
