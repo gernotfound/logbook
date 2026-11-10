@@ -71,7 +71,7 @@ export function EmailVerificationGate() {
                         {busy === 'local' ? 'Preparazione…' : 'Continua in modalità locale'}
                     </button>
                 </div>
-                <p className="ui-login-box-3">In modalità locale gli allenamenti rimangono su questo dispositivo; il cloud si attiva dopo la verifica.</p>}
+                <p className="ui-login-box-3">In modalità locale gli allenamenti rimangono su questo dispositivo; il cloud si attiva dopo la verifica.</p>
             </section>
         </div>
     );
