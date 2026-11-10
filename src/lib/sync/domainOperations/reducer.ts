@@ -420,8 +420,8 @@ export function normalizeDomainOperationBatch(batch: DomainOperationBatch): Doma
 export function applyDomainOperations(input: UserData, batch: DomainOperationBatch): UserData {
     const operations = normalizeDomainOperationBatch(batch);
     // applyOne replaces root fields and copies nested collections before any write.
-    // Zod returns a detached tree after each operation, including on later batch failures.
-    // Never mutate an input branch here: a shallow root copy is the isolation boundary.
+    // The existing per-operation Zod parse still validates and normalizes the result.
+    // Keep this copy-on-write invariant: no nested input branch may be mutated.
     const draft = { ...input };
     return operations.reduce((state, operation) => applyOne(state, operation), draft);
 }
