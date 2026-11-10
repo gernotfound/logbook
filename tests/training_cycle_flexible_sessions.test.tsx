@@ -28,9 +28,16 @@ function setup(
     currentRoutines = routines,
     storedHistory?: WorkoutSession[],
 ) {
-    const history = storedHistory ?? Array.from({ length: historyCount }, (_, index) =>
-        ({ id: `completed-${index}`, cycleId: currentCycle.id }) as WorkoutSession
-    );
+    const plannedRoutineIds = currentCycle.routines
+        .map(item => item.routineId)
+        .filter(routineId => currentRoutines.some(routine => routine.id === routineId));
+    const history = storedHistory ?? Array.from({ length: historyCount }, (_, index): WorkoutSession => ({
+        id: `completed-${index}`,
+        cycleId: currentCycle.id,
+        routineId: plannedRoutineIds[index % plannedRoutineIds.length],
+        date: `2026-10-${String(index + 1).padStart(2, '0')}`,
+        exercises: [],
+    }));
     useAppStore.setState({
         userData: {
             library: [], routines: currentRoutines, history,
