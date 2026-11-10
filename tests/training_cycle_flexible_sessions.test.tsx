@@ -218,6 +218,14 @@ describe('flexible training cycles', () => {
         expect(screen.getByRole('option', { name: 'B. Scheda B' })).toBeDefined();
         expect(screen.queryByText('B di 2')).toBeNull();
         expect(withMissing.routines[0].routineId).toBe('deleted');
+
+        cleanup();
+        const { container } = render(<TrainingPlanning />);
+        fireEvent.click(screen.getByRole('button', { name: 'Dettagli ciclo' }));
+        const labels = container.querySelector('[aria-label="Sequenza schede del ciclo attivo"]');
+        expect(labels?.textContent).toContain('— Scheda non disponibile');
+        expect(labels?.textContent).toContain('A Scheda A');
+        expect(labels?.textContent).toContain('B Scheda B');
     });
 
     it('does not apply the previous cycle manual selection to a newly active cycle', () => {
@@ -253,6 +261,23 @@ describe('flexible training cycles', () => {
         render(<TrainingSessionSetup />);
         expect(screen.getByRole('option', { name: 'Z. Scheda 26' })).toBeDefined();
         expect(screen.getByRole('option', { name: 'AA. Scheda 27' })).toBeDefined();
+
+        cleanup();
+        const { container } = render(<TrainingPlanning />);
+        fireEvent.click(screen.getByRole('button', { name: 'Dettagli ciclo' }));
+        const activeLabels = container.querySelector('[aria-label="Sequenza schede del ciclo attivo"]');
+        expect(activeLabels?.textContent).toContain('Z Scheda 26');
+        expect(activeLabels?.textContent).toContain('AA Scheda 27');
+
+        cleanup();
+        useAppStore.setState(state => ({
+            userData: { ...state.userData!, activeCycleId: null },
+        }));
+        const { container: archived } = render(<TrainingPlanning />);
+        fireEvent.click(screen.getByRole('button', { name: /Ciclo flessibile/ }));
+        const archivedLabels = archived.querySelector('[aria-label="Sequenza schede del ciclo"]');
+        expect(archivedLabels?.textContent).toContain('Z Scheda 26');
+        expect(archivedLabels?.textContent).toContain('AA Scheda 27');
     });
 
     it('reports the absence of any usable cycle routine while preserving archive access', () => {

@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const authMocks = vi.hoisted(() => ({
     login: vi.fn(async () => {}),
     loginWithEmail: vi.fn(async () => {}),
-    registerWithEmail: vi.fn(async () => {}),
+    registerWithEmail: vi.fn(async (_email?: string, _pass?: string, _policy?: 'merge' | 'skip', _stillCurrent?: () => boolean) => {}),
     loginAsGuest: vi.fn(async () => {}),
     linkGoogleAccount: vi.fn(async () => {}),
     showAlert: vi.fn(async (_message: string) => {}),
@@ -44,18 +44,12 @@ vi.mock('../src/lib/firebase', () => ({
     })),
 }));
 
-vi.mock('../src/lib/auth/passwordPolicy', async importOriginal => {
-    const actual = await importOriginal<typeof import('../src/lib/auth/passwordPolicy')>();
-    return { ...actual, validatePasswordAgainstPolicy: vi.fn(actual.validatePasswordAgainstPolicy) };
-});
-
 vi.mock('../src/store/useDialogStore', () => ({
     useDialogStore: () => ({ showAlert: authMocks.showAlert }),
 }));
 
 import { LoginBox } from '../src/components/UI/LoginBox';
 import { sendPasswordResetEmail, validatePassword } from '../src/lib/firebase';
-import { validatePasswordAgainstPolicy } from '../src/lib/auth/passwordPolicy';
 import { useAppStore } from '../src/store/useAppStore';
 
 describe('LoginBox guest Google authentication', () => {
@@ -75,7 +69,6 @@ describe('LoginBox guest Google authentication', () => {
         authMocks.showAlert.mockClear();
         vi.mocked(sendPasswordResetEmail).mockReset();
         vi.mocked(sendPasswordResetEmail).mockResolvedValue(undefined);
-        vi.mocked(validatePasswordAgainstPolicy).mockClear();
     });
 
     it('keeps the local-data explanation inside the guest action and preserves its behavior', async () => {
@@ -307,9 +300,7 @@ describe('LoginBox guest Google authentication', () => {
     });
     it('shows unmet password requirements immediately and rejects weak registration', async () => {
         const policy = { customStrengthOptions: { minPasswordLength: 8, containsLowercaseLetter: true, containsUppercaseLetter: true, containsNumericCharacter: true, containsNonAlphanumericCharacter: true } };
-        vi.mocked(validatePassword)
-            .mockResolvedValueOnce({ isValid: false, passwordPolicy: policy } as any)
-            .mockResolvedValueOnce({ isValid: false, containsNumericCharacter: false, passwordPolicy: policy } as any);
+        vi.mocked(validatePassword).mockResolvedValueOnce({ isValid: false, passwordPolicy: policy } as any);
         authState.isGuest = false;
         render(<LoginBox />);
         fireEvent.click(screen.getAllByRole('button', { name: 'Registrati' }).at(-1)!);
@@ -372,15 +363,23 @@ describe('LoginBox guest Google authentication', () => {
         fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'SecurePassword123!' } });
         fireEvent.change(screen.getByLabelText('Conferma password'), { target: { value: 'SecurePassword123!' } });
         fireEvent.click(screen.getAllByRole('button', { name: 'Registrati' }).at(-1)!);
-        await waitFor(() => expect(authMocks.registerWithEmail).toHaveBeenCalledWith('valid@example.com', 'SecurePassword123!', undefined));
+        await waitFor(() => expect(authMocks.registerWithEmail).toHaveBeenCalledWith(
+            'valid@example.com', 'SecurePassword123!', undefined, expect.any(Function),
+        ));
+        // No policy request may validate the submitted credentials in the
+        // UI: the real Auth action owns that single authoritative check.
+        expect(validatePassword).not.toHaveBeenCalledWith(expect.anything(), 'SecurePassword123!');
         expect(screen.queryByRole('alert')).toBeNull();
     });
 
-    it('does not register an account when the overlay closes during asynchronous password validation', async () => {
+    it('cancels the registration request when the overlay unmounts during its policy check', async () => {
         authState.isGuest = false;
-        let release!: (result: string | null) => void;
-        const validatePolicy = vi.mocked(validatePasswordAgainstPolicy);
-        validatePolicy.mockImplementationOnce(() => new Promise(resolve => { release = resolve; }));
+        let release!: () => void;
+        let submittedAfterPolicy = false;
+        authMocks.registerWithEmail.mockImplementationOnce(async (_email, _pass, _policy, stillCurrent) => {
+            await new Promise<void>(resolve => { release = resolve; });
+            if (stillCurrent?.()) submittedAfterPolicy = true;
+        });
 
         const view = render(<LoginBox onCancel={() => {}} />);
         fireEvent.click(screen.getAllByRole('button', { name: 'Registrati' }).at(-1)!);
@@ -394,12 +393,12 @@ describe('LoginBox guest Google authentication', () => {
             target: { value: 'SecurePassword123!' },
         });
         fireEvent.click(screen.getAllByRole('button', { name: 'Registrati' }).at(-1)!);
-        await waitFor(() => expect(validatePolicy).toHaveBeenCalledExactlyOnceWith('SecurePassword123!'));
-        expect(authMocks.registerWithEmail).not.toHaveBeenCalled();
+        await waitFor(() => expect(authMocks.registerWithEmail).toHaveBeenCalledOnce());
+        expect(authMocks.registerWithEmail.mock.calls[0][3]?.()).toBe(true);
 
         view.unmount();
-        await act(async () => { release(null); });
-        expect(authMocks.registerWithEmail).not.toHaveBeenCalled();
+        await act(async () => { release(); });
+        expect(submittedAfterPolicy).toBe(false);
     });
 
     it('does not distinguish a non-existent email from a successful password reset request', async () => {

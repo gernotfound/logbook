@@ -171,16 +171,19 @@ function historicalBodyweight(
 ): number | undefined {
     if (Number.isFinite(context.explicitBodyweightKg) && (context.explicitBodyweightKg ?? 0) > 0) return context.explicitBodyweightKg;
     if (!date || !context.nutrition) return undefined;
-    const eligibleDates = Object.keys(context.nutrition)
-        .filter(key => /^\d{4}-\d{2}-\d{2}$/.test(key) && key <= date)
-        .sort()
-        .reverse();
-    for (const key of eligibleDates) {
-        const weight = numberValue(context.nutrition[key]?.weight);
-        if (weight !== undefined && weight > 0) return weight;
+    let latestDate = '';
+    let latestWeight: number | undefined;
+    for (const [day, entry] of Object.entries(context.nutrition)) {
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(day) || day > date || day <= latestDate) continue;
+        const weight = numberValue(entry?.weight);
+        if (weight !== undefined && weight > 0) {
+            latestDate = day;
+            latestWeight = weight;
+        }
     }
-    return undefined;
+    return latestWeight;
 }
+
 
 function createHistoricalBodyweightLookup(nutrition: ProgressionBodyweightContext['nutrition']): (date: string) => number | undefined {
     // Standalone normalisation keeps its existing lookup contract. A complete

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { act, fireEvent, screen } from '@testing-library/react';
+import { fireEvent, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import DataView from '../src/components/Data/DataView';
 import NutritionView from '../src/components/Nutrition/NutritionView';
@@ -7,7 +7,7 @@ import { emptyUserData, renderWithAuthenticatedTestOwner } from './setup';
 import type { DataSubTab, NutritionSubTab } from '../src/types';
 
 describe('secondary tab loading', () => {
-    it('loads activity and history on navigation without displacing the measurements tab', async () => {
+    it('loads activity and history through tab navigation without manually importing the view', async () => {
         function Harness() {
             const [tab, setTab] = useState<DataSubTab>('measurements');
             return <DataView subTab={tab} setSubTab={setTab} />;
@@ -16,7 +16,6 @@ describe('secondary tab loading', () => {
 
         expect(screen.getByRole('tabpanel', { name: 'Misurazioni' })).toBeDefined();
         fireEvent.click(screen.getByRole('tab', { name: 'Attività' }));
-        await act(async () => { await import('../src/components/Data/DataActivity'); });
         expect(await screen.findByRole('heading', { name: 'Attività — questa settimana' }, { timeout: 5000 })).toBeDefined();
         fireEvent.click(screen.getByRole('tab', { name: 'Storico' }));
         expect(await screen.findByRole('heading', { name: 'Storico Dati' })).toBeDefined();

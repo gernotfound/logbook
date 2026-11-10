@@ -881,48 +881,89 @@ describe('contextual progression engine', () => {
         expect(analysis.isRecord).toBe(false);
     });
 
-    it('indexes each historical exercise list once and matches independent single-exercise reports', () => {
-        const history = Array.from({ length: 72 }, (_, index) => {
-            const month = String(1 + (index % 8)).padStart(2, '0');
-            const date = `2026-${month}-${String(1 + (index % 26)).padStart(2, '0')}`;
-            return workout({
-                id: `history-${index}`, date,
-                exercises: [
-                    { exId: 'bench', sessionNote: '', sets: [set(90 + index % 8, 8, 2)] },
-                    { exId: 'pullup', sessionNote: '', sets: [set(10, 8, 2)] },
-                    { exId: 'leg-extension', sessionNote: '', sets: [set(60, 10, 2)] },
-                ],
-            });
+
+    it('reads each historical session once for multiple exercises and keeps first duplicates in chronological order', () => {
+        const exercise = (exId: string, reps: number) => ({
+            exId, sessionNote: '', sets: [set(100, reps, 2)],
         });
-        let inspectedLists = 0;
-        for (const item of history) {
-            const source = item.exercises;
-            Object.defineProperty(item, 'exercises', {
-                configurable: true,
-                get() { inspectedLists++; return source; },
-            });
-        }
+        const oldest = workout({
+            id: 'old', date: '2026-08-01',
+            exercises: [exercise('bench', 8), exercise('leg-extension', 6)],
+        });
+        const latest = workout({
+            id: 'latest', date: '2026-09-01',
+            exercises: [exercise('bench', 9), exercise('bench', 99), exercise('leg-extension', 7)],
+        });
         const current = workout({
-            id: 'current-index', date: '2026-10-01',
-            exercises: [
-                { exId: 'bench', sessionNote: '', sets: [set(100, 8, 2)] },
-                { exId: 'pullup', sessionNote: '', sets: [set(12, 8, 2)] },
-                { exId: 'leg-extension', sessionNote: '', sets: [set(70, 10, 2)] },
-            ],
+            id: 'current', date: '2026-09-08',
+            exercises: [exercise('bench', 10), exercise('leg-extension', 8)],
+        });
+        let historicalReads = 0;
+        const counted = (session: WorkoutSession): WorkoutSession => ({
+            ...session,
+            get exercises() {
+                historicalReads++;
+                return session.exercises;
+            },
+        });
+
+        const result = computeProgressionEngine(current, [counted(latest), counted(oldest)], library);
+        const benchResult = result.exercises.find(item => item.exId === 'bench');
+        const legResult = result.exercises.find(item => item.exId === 'leg-extension');
+
+        expect(historicalReads).toBe(2);
+        expect(benchResult?.latestExposure?.sessionId).toBe('latest');
+        expect(benchResult?.latestExposure?.referenceSet?.reps).toBe(9);
+        expect(benchResult?.previousComparable?.referenceSet?.reps).toBe(9);
+        expect(benchResult?.cycleBaseline).toBeUndefined();
+        expect(legResult?.latestExposure?.sessionId).toBe('latest');
+        expect(legResult?.previousComparable?.referenceSet?.reps).toBe(7);
+    });
+
+    it('uses the last valid measured bodyweight before each session without adopting future or malformed entries', () => {
+        const previous = workout({ id: 'old', date: '2026-05-20', exId: 'pullup', sets: [set(20, 10, 2)] });
+        const current = workout({ id: 'current', date: '2026-06-10', exId: 'pullup', sets: [set(20, 10, 2)] });
+        const day = (date: string, weight: number | string) => ({
+            date, kcal: 0, carbs: 0, pro: 0, fat: 0, weight,
         });
         const nutrition = {
-            '2026-01-01': { date: '2026-01-01', kcal: 0, carbs: 0, pro: 0, fat: 0, weight: 78 },
-            '2026-06-01': { date: '2026-06-01', kcal: 0, carbs: 0, pro: 0, fat: 0, weight: 82 },
-            '2026-09-15': { date: '2026-09-15', kcal: 0, carbs: 0, pro: 0, fat: 0, weight: 85 },
+            '2026-07-01': day('2026-07-01', 200),
+            '2026-06-09': day('2026-06-09', ''),
+            'bad-date': day('bad-date', 900),
+            '2026-05-21': day('2026-05-21', 0),
+            '2026-05-05': day('2026-05-05', 80),
+            '2026-06-01': day('2026-06-01', '87,5'),
         };
-        const independent = current.exercises.map(exercise =>
-            computeProgressionEngine({ ...current, exercises: [exercise] }, history, library, { nutrition }).exercises[0]
-        );
-        inspectedLists = 0;
-        const combined = computeProgressionEngine(current, history, library, { nutrition });
-        expect(combined.exercises).toEqual(independent);
-        expect(inspectedLists).toBe(history.length);
-        expect(combined.exercises.find(exercise => exercise.exId === 'pullup')?.current.bodyweightKg).toBe(85);
+
+        const analysis = computeProgressionEngine(current, [previous], library, { nutrition }).exercises[0];
+        expect(analysis.previousComparable?.bodyweightKg).toBe(80);
+        expect(analysis.current.bodyweightKg).toBe(87.5);
+        expect(analysis.previousComparable?.tonnageKg).toBe(1000);
+        expect(analysis.current.tonnageKg).toBe(1075);
+    });
+
+    it('preserves first-input tie resolution for the latest eligible density session', () => {
+        const earlier = workout({
+            id: 'early', date: '2026-08-01', routineId: 'density',
+            focus: 'density', duration: '01:30:00', sets: [set(100, 8, 2)],
+        });
+        const firstTie = workout({
+            id: 'tie-first', date: '2026-09-01', routineId: 'density',
+            focus: 'density', duration: '01:00:00', sets: [set(100, 8, 2)],
+        });
+        const secondTie = workout({
+            id: 'tie-second', date: '2026-09-01', routineId: 'density',
+            focus: 'density', duration: '00:55:00', sets: [set(100, 8, 2)],
+        });
+        const current = workout({
+            id: 'current', date: '2026-09-08', routineId: 'density',
+            focus: 'density', duration: '00:45:00', sets: [set(100, 8, 2)],
+        });
+
+        const result = computeProgressionEngine(current, [firstTie, earlier, secondTie], library);
+        expect(result.density?.previousDurationSeconds).toBe(3600);
+        expect(result.density?.currentDurationSeconds).toBe(2700);
+        expect(result.density?.quality).toBe('preliminary');
     });
 
     it('keeps the first duplicate historical exercise and never reuses a current-only bodyweight override for history', () => {
@@ -949,26 +990,6 @@ describe('contextual progression engine', () => {
         expect(analysis.previousComparable?.bodyweightKg).toBe(80);
         expect(analysis.previousComparable?.referenceSet?.kg).toBe(5);
         expect(analysis.previousComparable?.referenceSet?.effectiveKg).toBe(85);
-    });
-
-    it('keeps the first input session on a density chronology tie', () => {
-        const earlier = workout({
-            id: 'first-input', date: '2026-09-01', routineId: 'density',
-            focus: 'density', duration: '00:42:00', sets: [set(80, 8, 2)],
-        });
-        const sameChronology = workout({
-            id: 'second-input', date: '2026-09-01', routineId: 'density',
-            focus: 'density', duration: '00:36:00', sets: [set(80, 8, 2)],
-        });
-        earlier.globalStartTime = 1000;
-        sameChronology.globalStartTime = 1000;
-        const current = workout({
-            id: 'current', date: '2026-09-08', routineId: 'density',
-            focus: 'density', duration: '00:30:00', sets: [set(80, 8, 2)],
-        });
-        const result = computeProgressionEngine(current, [earlier, sameChronology], library);
-        expect(result.density?.previousDurationSeconds).toBe(42 * 60);
-        expect(result.density?.currentDurationSeconds).toBe(30 * 60);
     });
 
 });

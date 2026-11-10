@@ -38,8 +38,12 @@ export function deviceVaultKeyId(owner: string): string {
 const toHex = (b: Uint8Array): string =>
     Array.from(b, x => x.toString(16).padStart(2, '0')).join('');
 
+function isHexBytes(value: unknown, length: number): value is string {
+    return typeof value === 'string' && value.length === length * 2 && /^[0-9a-f]+$/i.test(value);
+}
+
 function fromHex(s: string, expected: number): Uint8Array {
-    if (typeof s !== 'string' || s.length !== expected * 2 || !/^[0-9a-f]+$/i.test(s)) throw new LocalUnlockError();
+    if (!isHexBytes(s, expected)) throw new LocalUnlockError();
     const bytes = new Uint8Array(expected);
     for (let i = 0; i < expected; i++) bytes[i] = Number.parseInt(s.slice(i * 2, i * 2 + 2), 16);
     return bytes;
@@ -87,12 +91,14 @@ async function establishDeviceKey(owner: string): Promise<CryptoKey> {
     } catch { throw new LocalUnlockError(); }
 }
 
-function validateVault(vault: LocalKeyVault, owner: string): void {
+/** Validate untrusted wrapped-DEK metadata without accessing the device key or allocating plaintext. */
+export function validateLocalKeyVault(value: unknown, owner: string): asserts value is LocalKeyVault {
     deviceVaultKeyId(owner);
-    if (!vault || vault.format !== 'thelogbook-local-device-vault'
-        || vault.version !== VERSION || vault.owner !== owner) throw new LocalUnlockError();
-    fromHex(vault.nonce, NONCE_BYTES);
-    fromHex(vault.wrappedDek, KEY_BYTES + TAG_BYTES);
+    if (!value || typeof value !== 'object' || Array.isArray(value)) throw new LocalUnlockError();
+    const vault = value as Partial<LocalKeyVault>;
+    if (vault.format !== 'thelogbook-local-device-vault' || vault.version !== VERSION
+        || vault.owner !== owner || !isHexBytes(vault.nonce, NONCE_BYTES)
+        || !isHexBytes(vault.wrappedDek, KEY_BYTES + TAG_BYTES)) throw new LocalUnlockError();
 }
 
 export async function createLocalKeyVault(owner: string): Promise<{ vault: LocalKeyVault; dataKey: Uint8Array }> {
@@ -120,7 +126,7 @@ export async function createLocalKeyVault(owner: string): Promise<{ vault: Local
 
 /** Rehydrates a DEK automatically on the SAME browser/profile, even offline. */
 export async function unlockLocalKeyVault(vault: LocalKeyVault, owner: string): Promise<Uint8Array> {
-    validateVault(vault, owner);
+    validateLocalKeyVault(vault, owner);
     const key = await requireDeviceKey(owner);
     try {
         const plaintext = await crypto.subtle.decrypt(

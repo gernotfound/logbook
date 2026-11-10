@@ -3,6 +3,7 @@ import { act, fireEvent, screen, within } from '@testing-library/react';
 import TrainingHistory from '../src/components/Training/TrainingHistory';
 import { useAppStore } from '../src/store/useAppStore';
 import { createMockUserData, renderWithProviders } from './setup';
+import { Logic } from '../src/lib/logic';
 import type { WorkoutSession } from '../src/types';
 
 const septemberEvening = new Date(2026, 8, 28, 18, 0, 0, 0).getTime();
@@ -49,9 +50,34 @@ function renderHistory() {
 
 afterEach(() => {
   vi.useRealTimers();
+  vi.restoreAllMocks();
 });
 
 describe('TrainingHistory calendar', () => {
+  it('validates each workout date once while indexing a large unsorted history', () => {
+    const workouts: WorkoutSession[] = Array.from({ length: 120 }, (_, index) => ({
+      id: `session-${index}`,
+      date: index === 119 ? '2026-09-28' : index % 2 === 0 ? '2026-08-15' : '2026-07-12',
+      routineName: index === 119 ? 'Sessione più recente' : `Sessione ${index}`,
+      exercises: [],
+    }));
+    const dateParser = vi.spyOn(Logic, 'parseDateInput');
+    renderWithProviders(<TrainingHistory />, {
+      userData: createMockUserData({ history: workouts }),
+    });
+
+    expect(screen.getByText('Settembre 2026')).toBeDefined();
+    expect(screen.getByText('Sessione più recente')).toBeDefined();
+    expect(screen.getByRole('button', { name: /Lunedì 28 settembre 2026, 1 allenamento/i })).toBeDefined();
+    // Initial date, presence and calendar indexing reuse the validated list.
+    expect(dateParser).toHaveBeenCalledTimes(workouts.length);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Mese precedente' }));
+    expect(screen.getByText('Agosto 2026')).toBeDefined();
+    expect(screen.getByRole('button', { name: /Sabato 15 agosto 2026, 60 allenamenti/i })).toBeDefined();
+    expect(dateParser).toHaveBeenCalledTimes(workouts.length);
+  });
+
   it('ignores pre-launch stored date aliases while retaining the current start timestamp fallback', () => {
     const mixed: WorkoutSession[] = [
       history[0],

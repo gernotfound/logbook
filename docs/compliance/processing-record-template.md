@@ -1,6 +1,6 @@
 # Registro delle attività di trattamento — template TheLogBook
 
-> Template di lavoro Art. 30 GDPR. Compilare in base al ruolo effettivo e far validare prima del pilot.
+> Template di lavoro Art. 30 GDPR. Compilare in base al ruolo effettivo e far validare prima dell'accesso di utenti esterni.
 
 **Allineamento tecnico:** [AGENTS](../../AGENTS.md), [Telemetria](../../.agents/rules/telemetry-and-privacy.md), [Cifratura](../../.agents/rules/secure-storage.md) e [Consenso](../../.agents/rules/health-consent.md). L'aggiornamento della descrizione tecnica non approva basi giuridiche, retention o ruoli.
 
@@ -19,7 +19,7 @@
 
 | Campo | Contenuto da validare |
 |---|---|
-| Ruolo GDPR | `[CONTROLLER / PROCESSOR / OTHER — SEE controller-role-decision.md]` |
+| Ruolo GDPR | `[DA VALIDARE — vedi controller-role-decision.md]` |
 | Interessati | Utenti maggiorenni di TheLogBook |
 | Finalità | Erogare funzioni richieste: allenamento, nutrizione, misurazioni, persistenza locale/cloud, sync, recovery |
 | Categorie dati | Account; routine/sessioni/esercizi; nutrizione; peso/composizione/circonferenze; sonno; dolori/fatica; preferenze e metadati tecnici |
@@ -27,7 +27,7 @@
 | Base Art. 6 | `[TO_VALIDATE]` |
 | Condizione Art. 9 | Consenso esplicito attuale; adeguatezza e revoca da validare |
 | Fonte | Direttamente dall'utente |
-| Destinatari | Fornitori tecnici strettamente necessari; nessun accesso palestra nell'architettura corrente |
+| Destinatari | Fornitori tecnici strettamente necessari; accesso ai dati di altri account negato dall'architettura owner-scoped |
 | Trasferimenti extra SEE | Vedi `vendor-transfer-register.md`; `[TO_VERIFY]` |
 | Retention | Vedi `retention-schedule.md` |
 | Misure | Vedi `technical-organizational-measures.md` |

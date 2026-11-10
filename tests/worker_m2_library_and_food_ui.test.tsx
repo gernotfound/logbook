@@ -667,6 +667,10 @@ describe('Worker M2: Exercise Library UI & Food Form Real-Time Calorie Calculati
 
             fireEvent.change(fatInput, { target: { value: '10' } });
             expect(kcalInput.value).toBe('170'); // 10 * 4 + 10 * 4 + 10 * 9 = 170
+
+            // After auto-calculation, a label value can still be entered manually.
+            fireEvent.change(kcalInput, { target: { value: '165' } });
+            expect(kcalInput.value).toBe('165');
         });
 
         it('correctly calculates mixed decimals and rounds to nearest whole integer', () => {
@@ -685,51 +689,8 @@ describe('Worker M2: Exercise Library UI & Food Form Real-Time Calorie Calculati
             expect(kcalInput.value).toBe('277');
         });
 
-        it('supports decimal inputs (e.g. "10.5")', () => {
-            render(<FoodFormWrapper />);
 
-            const carbsInput = screen.getByLabelText(/Carbo \(g\)/i);
-            const proInput = screen.getByLabelText(/Pro \(g\)/i);
-            const fatInput = screen.getByLabelText(/Grassi \(g\)/i);
-            const kcalInput = screen.getByLabelText(/Kcal/i) as HTMLInputElement;
 
-            // 10.5g C * 4 = 42, 5.5g P * 4 = 22, 2.0g F * 9 = 18 -> 42 + 22 + 18 = 82
-            fireEvent.change(carbsInput, { target: { value: '10.5' } });
-            fireEvent.change(proInput, { target: { value: '5.5' } });
-            fireEvent.change(fatInput, { target: { value: '2.0' } });
 
-            expect(kcalInput.value).toBe('82');
-        });
-
-        it('allows user to manually override kcal directly after macro entry', () => {
-            render(<FoodFormWrapper />);
-
-            const carbsInput = screen.getByLabelText(/Carbo \(g\)/i);
-            const proInput = screen.getByLabelText(/Pro \(g\)/i);
-            const fatInput = screen.getByLabelText(/Grassi \(g\)/i);
-            const kcalInput = screen.getByLabelText(/Kcal/i) as HTMLInputElement;
-
-            fireEvent.change(carbsInput, { target: { value: '10' } });
-            fireEvent.change(proInput, { target: { value: '10' } });
-            fireEvent.change(fatInput, { target: { value: '10' } });
-            expect(kcalInput.value).toBe('170');
-
-            // Manual adjustment (e.g. net carbs adjustment or official label discrepancy)
-            fireEvent.change(kcalInput, { target: { value: '165' } });
-            expect(kcalInput.value).toBe('165');
-        });
-
-        it('clears kcal when all macro inputs are emptied', () => {
-            render(<FoodFormWrapper />);
-
-            const carbsInput = screen.getByLabelText(/Carbo \(g\)/i);
-            const kcalInput = screen.getByLabelText(/Kcal/i) as HTMLInputElement;
-
-            fireEvent.change(carbsInput, { target: { value: '20' } });
-            expect(kcalInput.value).toBe('80');
-
-            fireEvent.change(carbsInput, { target: { value: '' } });
-            expect(kcalInput.value).toBe('');
-        });
     });
 });

@@ -1,7 +1,7 @@
 import React from 'react';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { act, renderHook } from '@testing-library/react';
-import { renderWithAuthenticatedTestOwner, renderWithProviders, emptyUserData } from './setup';
+import { act, fireEvent, render, renderHook } from '@testing-library/react';
+import { renderWithAuthenticatedTestOwner, emptyUserData } from './setup';
 import { useAppStore } from '../src/store/useAppStore';
 import { captureSession } from '../src/lib/sync/session';
 import { prepareUnlockedTestArchive } from './secureVaultFixture';
@@ -137,50 +137,44 @@ describe('LogBook PWA Enhancements Integration Suite (Requirements R1 - R6)', ()
             expect(next2?.nextSessionIndex).toBe(2);
         });
 
-        it('T3.3: Previously recorded sleep and nutrition are displayed in history and exported to CSV', async () => {
+        it('T3.3: Seven recorded days display their measurements and export intact to CSV', async () => {
             const downloadFileSpy = vi.spyOn(Exporter, 'downloadFile').mockResolvedValue(true);
-
-            const nutritionData = {
-                '2026-08-10': {
-                    date: '2026-08-10',
-                    weight: 78.5,
+            const nutritionData = Object.fromEntries(Array.from({ length: 7 }, (_, index) => {
+                const day = index + 1;
+                const date = `2026-08-0${day}`;
+                return [date, {
+                    date,
+                    weight: day === 2 ? 78.5 : Number((76 + day * 0.1).toFixed(1)),
                     bf: 14.5,
-                    sleepHours: '08:00',
-                    sleepDeep: '02:00',
-                    sleepLight: '04:30',
+                    sleepHours: day === 2 ? '08:00' : '07:30',
+                    sleepDeep: day === 2 ? '02:00' : '01:30',
+                    sleepLight: day === 2 ? '04:30' : '04:00',
                     sleepRem: '01:30',
                     sleepAwake: '00:30',
                     kcal: 2400,
                     carbs: 300,
                     pro: 160,
                     fat: 65
-                }
-            };
+                }];
+            }));
 
-            useAppStore.setState({
-                userData: {
-                    ...emptyUserData,
-                    nutrition: nutritionData
-                }
-            });
-
-            // Verify DataHistory renders formatted metrics
-            const { container } = renderWithProviders(
+            const { container, getByRole } = render(
                 <DataHistory
                     measurementsHistory={Object.values(nutritionData)}
                     editingDate={null}
                     onSelectEdit={vi.fn()}
                 />
             );
-
+            expect(container.querySelectorAll('.history-day.has-data')).toHaveLength(7);
+            fireEvent.click(getByRole('button', { name: /2 agosto 2026, 1 rilevazione/i }));
             expect(container.textContent).toContain('Sonno 08:00');
             expect(container.textContent).toContain('78,5 kg');
 
-            // Export to CSV
             await Exporter.exportToCSV([], nutritionData, []);
-
             await vi.waitFor(() => {
                 expect(downloadFileSpy).toHaveBeenCalledWith('misurazioni.csv', expect.stringContaining('"08:00","02:00","04:30","01:30","00:30"'), expect.anything());
+                expect(downloadFileSpy).toHaveBeenCalledWith('misurazioni.csv', expect.stringContaining('"2026-08-01",76.1'), expect.anything());
+                expect(downloadFileSpy).toHaveBeenCalledWith('misurazioni.csv', expect.stringContaining('"2026-08-07",76.7'), expect.anything());
             });
         });
 

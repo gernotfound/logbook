@@ -29,18 +29,18 @@ describe('catalog archive progressive rendering', () => {
         expect(screen.getAllByRole('button', { name: /^Apri dettaglio di/ })).toHaveLength(50);
         expect(screen.getByText('125 esercizi')).toBeDefined();
         fireEvent.click(screen.getByRole('button', { name: /Mostra altri esercizi/ }));
-        expect(screen.getAllByRole('button', { name: /^Apri dettaglio di/ })).toHaveLength(100);
+        expect(view.container.querySelectorAll('button[aria-label^="Apri dettaglio di "]')).toHaveLength(100);
         fireEvent.click(screen.getByRole('button', { name: /Mostra altri esercizi/ }));
-        expect(screen.getAllByRole('button', { name: /^Apri dettaglio di/ })).toHaveLength(125);
+        expect(view.container.querySelectorAll('button[aria-label^="Apri dettaglio di "]')).toHaveLength(125);
         expect(screen.queryByRole('button', { name: /Mostra altri esercizi/ })).toBeNull();
         view.rerender(<ExerciseArchive library={[...library]} {...props} />);
-        expect(screen.getAllByRole('button', { name: /^Apri dettaglio di/ })).toHaveLength(50);
+        expect(view.container.querySelectorAll('button[aria-label^="Apri dettaglio di "]')).toHaveLength(50);
         fireEvent.change(screen.getByRole('searchbox'), { target: { value: 'assolutamenteunico' } });
-        expect(screen.getAllByRole('button', { name: /^Apri dettaglio di/ })).toHaveLength(1);
+        expect(view.container.querySelectorAll('button[aria-label^="Apri dettaglio di "]')).toHaveLength(1);
         fireEvent.click(screen.getByRole('button', { name: 'Apri dettaglio di Esercizio assolutamenteunico' }));
         expect(onSelectedExIdChange).toHaveBeenCalledWith('exercise-124');
         fireEvent.change(screen.getByRole('searchbox'), { target: { value: '' } });
-        expect(screen.getAllByRole('button', { name: /^Apri dettaglio di/ })).toHaveLength(50);
+        expect(view.container.querySelectorAll('button[aria-label^="Apri dettaglio di "]')).toHaveLength(50);
     });
 
     it('limits initial food rows and keeps all meals available through load more and search', () => {
@@ -49,24 +49,24 @@ describe('catalog archive progressive rendering', () => {
             name: index === 124 ? 'Alimento parolaultraunica' : `Alimento ${index}`,
             unit: 'g', baseQty: 100, kcal: 100, carbs: 10, pro: 8, fat: 3,
         }));
-        renderWithAuthenticatedTestOwner(<NutritionFoodArchive />, {
+        const view = renderWithAuthenticatedTestOwner(<NutritionFoodArchive />, {
             userData: createMockUserData({ customFoods }),
         });
         expect(screen.getAllByRole('button', { name: 'Opzioni' })).toHaveLength(50);
         expect(screen.getByText('I tuoi alimenti (125)')).toBeDefined();
         fireEvent.click(screen.getByRole('button', { name: /Mostra altri alimenti/ }));
-        expect(screen.getAllByRole('button', { name: 'Opzioni' })).toHaveLength(100);
+        expect(view.container.querySelectorAll('button[aria-label="Opzioni"]')).toHaveLength(100);
         fireEvent.click(screen.getByRole('button', { name: /Mostra altri alimenti/ }));
-        expect(screen.getAllByRole('button', { name: 'Opzioni' })).toHaveLength(125);
+        expect(view.container.querySelectorAll('button[aria-label="Opzioni"]')).toHaveLength(125);
         expect(screen.queryByRole('button', { name: /Mostra altri alimenti/ })).toBeNull();
         fireEvent.change(screen.getByRole('textbox', { name: 'Cerca alimenti per nome o marca' }), {
             target: { value: 'parolaultraunica' },
         });
-        expect(screen.getAllByRole('button', { name: 'Opzioni' })).toHaveLength(1);
+        expect(view.container.querySelectorAll('button[aria-label="Opzioni"]')).toHaveLength(1);
         expect(screen.getByText('Alimento parolaultraunica')).toBeDefined();
         fireEvent.change(screen.getByRole('textbox', { name: 'Cerca alimenti per nome o marca' }), {
             target: { value: '' },
         });
-        expect(screen.getAllByRole('button', { name: 'Opzioni' })).toHaveLength(50);
+        expect(view.container.querySelectorAll('button[aria-label="Opzioni"]')).toHaveLength(50);
     });
 });

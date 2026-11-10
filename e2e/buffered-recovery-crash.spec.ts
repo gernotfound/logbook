@@ -59,6 +59,8 @@ test('abrupt browser crash preserves an unacknowledged encrypted note and recove
 
   const value = 'Testo non confermato: perdita improvvisa del processo e ripresa offline';
   await note.fill(value);
+  await expect(note).toHaveValue(value);
+  await expect(page.getByRole('button', { name: 'Aggiungi nota per la prossima volta' })).toBeVisible();
 
   // This is a real app write through the guest AEAD vault, not a synthetic
   // localStorage fixture. Both the independent witness and canonical draft
@@ -71,7 +73,12 @@ test('abrupt browser crash preserves an unacknowledged encrypted note and recove
   expect(Object.keys(before).filter(k => k.includes('draft:buffered-intent:'))).toHaveLength(1);
   expect(Object.keys(before).filter(k => k.includes('draft:buffered:textarea:'))).toHaveLength(1);
   expect(Object.values(before).every(raw =>
-    typeof raw === 'string' && !raw.includes(value))).toBe(true);
+    typeof raw === 'string' && raw.startsWith('tlb-sealed:v1:') && !raw.includes(value))).toBe(true);
+  const witnessKey = Object.keys(before).find(key => key.includes('draft:buffered-intent:'))!;
+  const canonicalKey = Object.keys(before).find(key => key.includes('draft:buffered:textarea:'))!;
+  expect(before[witnessKey]).not.toBe(before[canonicalKey]);
+  expect(await page.evaluate(() => Object.keys(localStorage).filter(key =>
+    key.startsWith('logbook:v2:guest:draft:buffered')))).toEqual([]);
 
   // Precache must already control this page; the next document has no network.
   await page.evaluate(async () => { await navigator.serviceWorker.ready; });
@@ -94,6 +101,8 @@ test('abrupt browser crash preserves an unacknowledged encrypted note and recove
   await recovered.setOffline(true);
   const resumed = recovered.pages()[0] ?? await recovered.newPage();
   await resumed.goto('/?tab=training');
+  expect(await resumed.evaluate(() => navigator.onLine)).toBe(false);
+  await expect.poll(() => resumed.evaluate(() => navigator.serviceWorker.controller !== null)).toBe(true);
   await expect(resumed.getByRole('button', { name: 'Termina allenamento' })).toBeVisible();
   await resumed.locator('.session-exercise-summary').click();
   await resumed.getByRole('button', { name: 'Aggiungi nota per la prossima volta' }).click();
@@ -104,6 +113,8 @@ test('abrupt browser crash preserves an unacknowledged encrypted note and recove
       key.startsWith(p + 'draft:buffered-intent:') || key.startsWith(p + 'draft:buffered:textarea:'))
   ), prefix);
   expect(after).toEqual(before);
+  expect(await resumed.evaluate(() => Object.keys(localStorage).filter(key =>
+    key.startsWith('logbook:v2:guest:draft:buffered')))).toEqual([]);
   } finally {
     await recovered?.close().catch(() => {});
     await original?.close().catch(() => {});

@@ -12,6 +12,7 @@ import { CycleMuscleMap } from './CycleMuscleMap';
 import { CycleStrategySummary } from './CycleStrategySummary';
 import { CycleVolumeAccordion } from './CycleVolumeAccordion';
 import { calculateCycleMacroVolume } from './cycleMacroVolume';
+import { getCycleRotationItems } from '../../../lib/calc/cycleRotationLabels';
 import { ContextMenu, type ContextMenuItem } from '../../UI/ContextMenu';
 import type { DomainOperation } from '../../../lib/sync/domainOperations';
 import type { Exercise, TrainingCycle, WorkoutRoutine, WorkoutSession } from '../../../types';
@@ -41,6 +42,8 @@ export default function TrainingPlanning({ onOpenSession }: TrainingPlanningProp
     const [isEditing, setIsEditing] = useState(false);
     const [editingCycle, setEditingCycle] = useState<TrainingCycle | null>(null);
     const editorGenerationRef = useRef(0);
+    const activeMutationRef = useRef(false);
+    const [activeMutationPending, setActiveMutationPending] = useState(false);
     const [detailsState, setDetailsState] = useState(() => ({ cycleId: activeCycleId, isOpen: false }));
     // Reset details before rendering a different active cycle. This avoids an
     // effect and prevents briefly showing another cycle's expanded content.
@@ -118,13 +121,17 @@ export default function TrainingPlanning({ onOpenSession }: TrainingPlanningProp
     };
 
     const handleEditCycle = async (cycle: TrainingCycle) => {
+        const generation = editorGenerationRef.current;
         if (isEditing) {
             if (editingCycle?.id === cycle.id) return;
             const confirmed = await showConfirm('L’editor attuale contiene modifiche che potrebbero non essere salvate. Vuoi abbandonarle e aprire un altro ciclo?');
-            if (!confirmed) return;
+            if (!confirmed || editorGenerationRef.current !== generation) return;
         }
+        // A queued confirmation must not reopen a removed cycle or an outdated snapshot.
+        const currentCycle = useAppStore.getState().userData?.trainingCycles?.find(item => item.id === cycle.id);
+        if (!currentCycle) return;
         editorGenerationRef.current += 1;
-        setEditingCycle(cycle);
+        setEditingCycle(currentCycle);
         setIsEditing(true);
         openEditorAtTop();
     };
@@ -158,9 +165,9 @@ export default function TrainingPlanning({ onOpenSession }: TrainingPlanningProp
         }
     };
 
-    const handleDeactivateCycle = async (_cycleId?: string) => {
+    const handleDeactivateCycle = async (cycleId: string) => {
         const confirmed = await showConfirm('Sei sicuro di voler disattivare il ciclo corrente?');
-        if (!confirmed) return;
+        if (!confirmed || useAppStore.getState().userData?.activeCycleId !== cycleId) return;
         try {
             await dispatchDurableOperation(dispatchDomainOperation, { type: 'active-cycle.set', id: null });
         } catch (error) {
@@ -189,9 +196,11 @@ export default function TrainingPlanning({ onOpenSession }: TrainingPlanningProp
         const confirmed = await showConfirm(`Eliminare il ciclo “${cycle.name}”?`);
         if (!confirmed) return;
         try {
-            const remaining = trainingCycles.filter(item => item.id !== cycle.id);
+            const currentData = useAppStore.getState().userData;
+            if (!currentData?.trainingCycles?.some(item => item.id === cycle.id)) return;
+            const remaining = currentData.trainingCycles.filter(item => item.id !== cycle.id);
             const operations: DomainOperation[] = [{ type: 'training-cycle.delete', id: cycle.id }];
-            if (activeCycleId === cycle.id) operations.push({ type: 'active-cycle.set', id: remaining[0]?.id ?? null });
+            if (currentData.activeCycleId === cycle.id) operations.push({ type: 'active-cycle.set', id: remaining[0]?.id ?? null });
             await dispatchDurableOperation(dispatchDomainOperation, operations);
         } catch (error) {
             console.error('Errore eliminazione ciclo:', error);
@@ -199,10 +208,25 @@ export default function TrainingPlanning({ onOpenSession }: TrainingPlanningProp
         }
     };
 
+    const runActiveMutation = async (action: () => void | Promise<void>) => {
+        // Close the repeat-click window before React disables the active-cycle controls.
+        if (activeMutationRef.current) return;
+        activeMutationRef.current = true;
+        setActiveMutationPending(true);
+        try {
+            await action();
+        } catch (error) {
+            console.error('Operazione sul ciclo attivo non completata:', error);
+        } finally {
+            activeMutationRef.current = false;
+            setActiveMutationPending(false);
+        }
+    };
+
     const activeMenuItems: ContextMenuItem[] = activeCycle ? [
-        { id: 'edit-active-cycle', label: 'Modifica', icon: <Pencil size={16} />, onClick: () => handleEditCycle(activeCycle) },
-        { id: 'duplicate-active-cycle', label: 'Duplica', icon: <Copy size={16} />, onClick: () => void handleDuplicateCycle(activeCycle) },
-        { id: 'delete-active-cycle', label: 'Elimina', icon: <Trash2 size={16} />, variant: 'danger', onClick: () => void handleDeleteCycle(activeCycle) }
+        { id: 'edit-active-cycle', label: 'Modifica', icon: <Pencil size={16} />, disabled: activeMutationPending, onClick: () => { void runActiveMutation(() => handleEditCycle(activeCycle)); } },
+        { id: 'duplicate-active-cycle', label: 'Duplica', icon: <Copy size={16} />, disabled: activeMutationPending, onClick: () => { void runActiveMutation(() => handleDuplicateCycle(activeCycle)); } },
+        { id: 'delete-active-cycle', label: 'Elimina', icon: <Trash2 size={16} />, variant: 'danger', disabled: activeMutationPending, onClick: () => { void runActiveMutation(() => handleDeleteCycle(activeCycle)); } }
     ] : [];
 
     // Read-only summary shares the bounded cycle calculation; historical invalid input stays unchanged.
@@ -243,7 +267,7 @@ export default function TrainingPlanning({ onOpenSession }: TrainingPlanningProp
             ) : null}
 
             {activeCycle ? (
-                <article className="planning-active-card">
+                <article className="planning-active-card" aria-busy={activeMutationPending}>
                     <header className="planning-active-head">
                         <div className="planning-active-title">
                             <span className="planning-active-badge">Ciclo attivo</span>
@@ -312,24 +336,21 @@ export default function TrainingPlanning({ onOpenSession }: TrainingPlanningProp
                         >
                             Dettagli ciclo
                         </button>
-                        <button type="button" className="btn btn-primary" onClick={onOpenSession} disabled={!onOpenSession}>
+                        <button type="button" className="btn btn-primary" onClick={onOpenSession} disabled={!onOpenSession || activeMutationPending}>
                             Apri sessione
                         </button>
-                        <button type="button" className="btn" onClick={() => void handleDeactivateCycle(activeCycle.id)}>
+                        <button type="button" className="btn" disabled={activeMutationPending} onClick={() => { void runActiveMutation(() => handleDeactivateCycle(activeCycle.id)); }}>
                             Disattiva ciclo
                         </button>
                     </div>
 
                     <div className="planning-active-details" hidden={!isDetailsOpen}>
                         <div className="planning-routine-chips" aria-label="Sequenza schede del ciclo attivo">
-                            {(activeCycle.routines ?? []).map((item, index) => {
-                                const routine = routines.find(candidate => candidate.id === item.routineId);
-                                return (
-                                    <span key={`${item.routineId}-${index}`}>
-                                        <b>{String.fromCharCode(65 + (index % 26))}</b> {routine?.name ?? 'Scheda non disponibile'}
-                                    </span>
-                                );
-                            })}
+                            {getCycleRotationItems(activeCycle, routines).map(({ routineId, routine, letter }, index) => (
+                                <span key={`${routineId}-${index}`}>
+                                    <b>{letter ?? '—'}</b> {routine?.name ?? 'Scheda non disponibile'}
+                                </span>
+                            ))}
                         </div>
                         <CycleMuscleMap
                             title="Mappa muscolare del ciclo"

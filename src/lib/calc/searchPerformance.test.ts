@@ -21,22 +21,37 @@ describe('catalog search index equivalence', () => {
             muscles: [],
             notes: 'Macchina',
         }));
-        const queries = ['pollo', 'polo', 'riso', 'greco', 'panca', 'pancca', 'squat', 'rematore'];
-        const foodQueries = queries.slice(0, 4);
-        const exerciseQueries = queries.slice(4);
+        const foodExamples = [
+            ['pollo', 'food-0'],
+            ['polo', 'food-0'],
+            ['riso', 'food-1'],
+            ['greco', 'food-2'],
+        ] as const;
+        const exerciseExamples = [
+            ['panca', 'exercise-0'],
+            ['pancca', 'exercise-0'],
+            ['squat', 'exercise-1'],
+            ['rematore', 'exercise-2'],
+        ] as const;
 
         const preparedFoods = createFoodSearcher(foods);
         const preparedExercises = createExerciseLibrarySearcher(exercises);
-        preparedFoods('pollo');
-        preparedExercises('panca');
+        expect(preparedFoods('')).toHaveLength(600);
+        expect(preparedExercises('')).toHaveLength(600);
 
-        for (const query of foodQueries) {
-            expect(preparedFoods(query).map(item => item.id))
-                .toEqual(searchFoods(foods, query).map(item => item.id));
+        // The public one-shot helpers share the same implementation as the
+        // cached searchers: comparing them alone cannot detect a shared regression.
+        for (const [query, expectedId] of foodExamples) {
+            const indexedIds = preparedFoods(query).map(item => item.id);
+            expect(indexedIds).toContain(expectedId);
+            expect(new Set(indexedIds).size).toBe(indexedIds.length);
+            expect(indexedIds).toEqual(searchFoods(foods, query).map(item => item.id));
         }
-        for (const query of exerciseQueries) {
-            expect(preparedExercises(query).map(item => item.id))
-                .toEqual(searchExerciseLibrary(exercises, query).map(item => item.id));
+        for (const [query, expectedId] of exerciseExamples) {
+            const indexedIds = preparedExercises(query).map(item => item.id);
+            expect(indexedIds).toContain(expectedId);
+            expect(new Set(indexedIds).size).toBe(indexedIds.length);
+            expect(indexedIds).toEqual(searchExerciseLibrary(exercises, query).map(item => item.id));
         }
 
     });

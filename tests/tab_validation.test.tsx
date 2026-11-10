@@ -19,10 +19,9 @@ import { refreshHealthConsent } from '../src/lib/healthConsent';
 const accountTabKey = ownerUiPreferenceKey('user:test-user-id', LOCAL_STORAGE_ACTIVE_TAB);
 
 describe('R4: Tab Zod Schema & LocalStorage Fallback Resilience (ARCH-05)', () => {
-    beforeEach(async () => {
+    beforeEach(() => {
         window.localStorage.clear();
         vi.clearAllMocks();
-        await prepareUnlockedTestArchive();
     });
 
     afterEach(() => window.history.replaceState({}, '', '/'));
@@ -112,6 +111,10 @@ describe('R4: Tab Zod Schema & LocalStorage Fallback Resilience (ARCH-05)', () =
     });
 
     describe('App Component Fallback on Corrupted LocalStorage', () => {
+        beforeEach(async () => {
+            await prepareUnlockedTestArchive();
+        });
+
         it('issues only one consent check when focus returns to a mounted App', async () => {
             renderWithProviders(<App />);
             await screen.findByRole('button', { name: /^home$/i });

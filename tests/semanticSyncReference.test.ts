@@ -5,9 +5,12 @@ import {
     parseSyncMeta,
     getMergePolicy,
     resolveIdentity,
+    type SemanticOperation,
 } from '../src/lib/sync/semanticProjection';
 import type { DocumentData } from '../src/lib/sync/documentProjection';
 import { removeUndefinedValuesForFirestore } from '../src/lib/utils/object';
+import { normalizeBusinessId, requireBusinessId } from '../src/lib/businessIdentity';
+import { identitySeed } from '../src/lib/sync/semanticProjection/policy';
 
 describe('Semantic sync reference invariants', () => {
     it('preserves prototype-named workout IDs and causal tombstones as own properties', () => {
@@ -112,7 +115,6 @@ describe('Semantic sync reference invariants', () => {
 
         const ops = diffDocuments(base, desired, 'A', 1, { A: 1 });
 
-        expect(getMergePolicy('', ['profile'])).toBe('property');
         expect(ops).toHaveLength(1);
         expect(ops[0]).toMatchObject({
             docPath: '',
@@ -361,4 +363,73 @@ describe('Semantic sync reference invariants', () => {
         ]);
     });
 
+});
+
+describe('Semantic Merge Policy', () => {
+    it('1. returns correct policy for root fields', () => {
+        expect(getMergePolicy('', ['profile'])).toBe('property');
+        expect(getMergePolicy('', ['library'])).toBe('keyed');
+        expect(getMergePolicy('', ['library', 'ex1'])).toBe('property');
+        expect(getMergePolicy('', ['routines'])).toBe('ordered-keyed');
+    });
+
+    it('rejects the reserved order marker as an entity ID before semantic compilation', () => {
+        expect(normalizeBusinessId('$order')).toBeNull();
+        expect(() => requireBusinessId('$order', 'Routine')).toThrow();
+        expect(() => resolveIdentity(['routines'], { id: '$order' })).toThrow();
+        expect(() => resolveIdentity(['routines', 'r1', 'exercises'], { exId: '$order' })).toThrow();
+        expect(() => identitySeed(['trainingCycles', 'c1', 'routines'], '$order')).toThrow();
+        expect(identitySeed(['trainingCycles', 'c1', 'routines'], 'r1')).toEqual({ routineId: 'r1' });
+        expect(resolveIdentity(['routines'], { id: '__proto__' })).toBe('__proto__');
+    });
+
+    it('2. returns correct policy for nested activeWorkout sets', () => {
+        expect(getMergePolicy('', ['activeWorkout', 'exercises', 'ex1', 'sets', 's1'])).toBe('property');
+        expect(getMergePolicy('', ['activeWorkout', 'exercises', 'ex1', 'sets', 's1', 'segments'])).toBe('ordered-keyed');
+        expect(getMergePolicy('history_months/2026-09', ['w1', 'exercises', 'ex1', 'sets', 's1', 'segments'])).toBe('ordered-keyed');
+    });
+});
+
+const base = () => new Map<string, DocumentData>([
+    ['', { profile: { height: '180' } }],
+]);
+
+const opA: SemanticOperation = {
+    docPath: '',
+    path: ['profile', 'height'],
+    value: '181',
+    isDelete: false,
+    actorId: 'A',
+    seq: 1,
+    clock: { A: 1 },
+};
+
+const opB: SemanticOperation = {
+    docPath: '',
+    path: ['profile', 'height'],
+    value: '182',
+    isDelete: false,
+    actorId: 'B',
+    seq: 1,
+    clock: { B: 1 },
+};
+
+describe('Semantic merge batching regression', () => {
+    it('produces the same business and causal state whether concurrent contenders arrive together or separately', () => {
+        const batched = applySemanticOperations(base(), [opA, opB]);
+
+        const firstA = applySemanticOperations(base(), [opA]);
+        const splitAB = applySemanticOperations(firstA.documents, [opB], firstA.syncMetas);
+
+        const firstB = applySemanticOperations(base(), [opB]);
+        const splitBA = applySemanticOperations(firstB.documents, [opA], firstB.syncMetas);
+
+        expect(batched.documents.get('')?.profile).toEqual({ height: '182' });
+        expect(splitAB.documents).toEqual(batched.documents);
+        expect(splitBA.documents).toEqual(batched.documents);
+        expect(splitAB.syncMetas).toEqual(batched.syncMetas);
+        expect(splitBA.syncMetas).toEqual(batched.syncMetas);
+        expect(batched.syncMetas[''].fields['profile/height']).toMatchObject({ actorId: 'B', seq: 1, clock: { B: 1 } });
+        expect(batched.syncMetas[''].clock).toEqual({ A: 1, B: 1 });
+    });
 });
