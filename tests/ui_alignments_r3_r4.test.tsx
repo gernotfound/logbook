@@ -224,7 +224,8 @@ describe('UI Alignments - R3 & R4', () => {
 
         it('does not promote a body-fat value without current provenance into a manual draft', async () => {
             const existing = useAppStore.getState().userData!;
-            const day = existing.nutrition['2026-08-10'];
+            const day = existing.nutrition?.['2026-08-10'];
+            if (!day) throw new Error('Measurement fixture missing');
             useAppStore.setState({
                 userData: {
                     ...existing,
