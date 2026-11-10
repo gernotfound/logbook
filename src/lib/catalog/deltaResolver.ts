@@ -267,10 +267,10 @@ export function mergeCatalogOverrides(
  * and catalog overrides by cross-referencing with the global catalog.
  */
 export function extractCustomExercisesAndOverrides(
-    legacyLibrary: Exercise[] = [],
+    effectiveLibrary: Exercise[] = [],
     globalExercises: CatalogExercise[] = []
 ): { customExercises: Exercise[]; overrides: CatalogOverrides } {
-    const list = Array.isArray(legacyLibrary) ? legacyLibrary : [];
+    const list = Array.isArray(effectiveLibrary) ? effectiveLibrary : [];
     const globals = Array.isArray(globalExercises) ? globalExercises : [];
 
     const globalMap = new Map<string, CatalogExercise>();
@@ -302,9 +302,7 @@ export function extractCustomExercisesAndOverrides(
         }
     }
 
-    // Determine if any global defaults were deleted by user in legacy data.
-    // If presentDefaultIds is empty, legacyLibrary contained no default items (e.g. pure custom list),
-    // so no default items should be marked as hidden.
+    // A list containing only custom items is not proof that all global defaults were hidden.
     const hiddenExerciseIds: string[] = [];
     if (presentDefaultIds.size > 0) {
         for (const globalEx of globals) {
@@ -328,10 +326,10 @@ export function extractCustomExercisesAndOverrides(
  * and catalog overrides by cross-referencing with the global foods catalog.
  */
 export function extractCustomFoodsAndOverrides(
-    legacyFoods: Food[] = [],
+    effectiveFoods: Food[] = [],
     globalFoods: CatalogFood[] = []
 ): { customFoods: Food[]; overrides: CatalogOverrides } {
-    const list = Array.isArray(legacyFoods) ? legacyFoods : [];
+    const list = Array.isArray(effectiveFoods) ? effectiveFoods : [];
     const globals = Array.isArray(globalFoods) ? globalFoods : [];
 
     const globalMap = new Map<string, CatalogFood>();
@@ -363,9 +361,7 @@ export function extractCustomFoodsAndOverrides(
         }
     }
 
-    // Determine if any global defaults were deleted by user in legacy data.
-    // If presentDefaultIds is empty, legacyFoods contained no default items,
-    // so no default items should be marked as hidden.
+    // A list containing only custom items is not proof that all global defaults were hidden.
     const hiddenFoodIds: string[] = [];
     if (presentDefaultIds.size > 0) {
         for (const globalFood of globals) {

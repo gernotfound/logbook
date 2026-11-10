@@ -28,7 +28,7 @@ export function useNutritionMeasurements(selectedDate?: string) {
     const field = (name: keyof NutritionDay) => targetDayData?.[name]?.toString() ?? '';
     const draft = useDatedDraft('measurement', targetDateStr, {
         weight: field('weight'), waist: field('waist'), neck: field('neck'), hip: field('hip'),
-        manualBf: targetDayData?.bfProvenance?.method === 'manual' || (targetDayData?.bf != null && !targetDayData?.bfProvenance) ? field('bf') : '',
+        manualBf: targetDayData?.bfProvenance?.method === 'manual' ? field('bf') : '',
         chest: field('chest'), shoulders: field('shoulders'), biceps: field('biceps'),
         thighs: field('thighs'), calves: field('calves'), measureTime: field('measurementTime') || defaultMeasureTime
     });
@@ -107,7 +107,7 @@ export function useNutritionMeasurements(selectedDate?: string) {
         }
     };
 
-    const calculateAndSave = async (e?: { preventDefault(): void }, bodyFatMode?: BodyFatMode) => {
+    const calculateAndSave = async (e?: { preventDefault(): void }, bodyFatMode: BodyFatMode = 'manual') => {
         if (e) e.preventDefault();
         if (saving.current) return false;
         saving.current = true;
@@ -121,7 +121,7 @@ export function useNutritionMeasurements(selectedDate?: string) {
 
             const optional = [waist, neck, hip, chest, shoulders, biceps, thighs, calves];
             if (optional.some(value => value !== '' && (!Number.isFinite(Number(value)) || Number(value) <= 0)) ||
-                (bodyFatMode !== 'calculate' && manualBf !== '' && (!Number.isFinite(Number(manualBf)) || Number(manualBf) < 0 || Number(manualBf) > 100))) {
+                (bodyFatMode === 'manual' && manualBf !== '' && (!Number.isFinite(Number(manualBf)) || Number(manualBf) < 0 || Number(manualBf) > 100))) {
                 await showAlert('Inserisci misure numeriche valide e una percentuale di massa grassa tra 0 e 100.');
                 return false;
             }
@@ -178,18 +178,7 @@ export function useNutritionMeasurements(selectedDate?: string) {
                     bf = Number(manualBf);
                     bfProvenance = { method: 'manual' };
                 }
-            } else if (bodyFatMode === 'calculate') {
-                const calculation = await calculateUsNavy();
-                if (!calculation) return false;
-                bf = calculation.bf;
-                bfProvenance = calculation.provenance;
-            } else if (manualBf && !isNaN(Number(manualBf))) {
-                bf = Number(manualBf);
-                bfProvenance = { method: 'manual' };
-            } else if (targetDayData?.bf !== undefined && targetDayData?.bf !== null && !targetDayData?.bfProvenance) {
-                const legacyBf = Number(targetDayData.bf);
-                if (Number.isFinite(legacyBf)) bf = legacyBf;
-            } else if (waist && neck && !isNaN(Number(waist)) && !isNaN(Number(neck))) {
+            } else {
                 const calculation = await calculateUsNavy();
                 if (!calculation) return false;
                 bf = calculation.bf;

@@ -198,6 +198,7 @@ describe('UI Alignments - R3 & R4', () => {
             expect(updatedNutrition?.['2026-08-05'].weight).toBe(75.2);
             expect(updatedNutrition?.['2026-08-05'].waist).toBe(80);
             expect(updatedNutrition?.['2026-08-05'].neck).toBe(37);
+            expect(updatedNutrition?.['2026-08-05'].bf).toBeUndefined();
             expect(showAlertSpy).not.toHaveBeenCalled();
         });
 
@@ -219,6 +220,32 @@ describe('UI Alignments - R3 & R4', () => {
             expect(day?.bf).toBeTypeOf('number');
             expect(day?.bf).not.toBe(19);
             expect(day?.bfProvenance?.method).toBe('us_navy');
+        });
+
+        it('does not promote a body-fat value without current provenance into a manual draft', async () => {
+            const existing = useAppStore.getState().userData!;
+            const day = existing.nutrition?.['2026-08-10'];
+            if (!day) throw new Error('Measurement fixture missing');
+            useAppStore.setState({
+                userData: {
+                    ...existing,
+                    nutrition: { ...existing.nutrition, '2026-08-10': { ...day, bf: 19.2 } },
+                },
+            });
+            const previousDispatch = useAppStore.getState().dispatchDomainOperation;
+            const dispatch = vi.fn().mockResolvedValue({ ok: true, status: 'synced' });
+            useAppStore.setState({ dispatchDomainOperation: dispatch });
+            try {
+                const { result } = renderHook(() => useNutritionMeasurements('2026-08-10'));
+                expect(result.current.manualBf).toBe('');
+                await act(async () => { await result.current.calculateAndSave(undefined, 'manual'); });
+                expect(dispatch).toHaveBeenCalledWith(expect.objectContaining({
+                    type: 'nutrition-day.patch',
+                    patch: expect.objectContaining({ bf: undefined, bfProvenance: undefined }),
+                }));
+            } finally {
+                useAppStore.setState({ dispatchDomainOperation: previousDispatch });
+            }
         });
 
         it('explicit manual mode does not silently derive BF from circumference fields', async () => {

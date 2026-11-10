@@ -1,18 +1,6 @@
 /**
- * Pre-Write Document Size Guard (LogBook PWA)
- * 
- * Cloud Firestore imposes a strict 1 MiB (1,048,576 bytes) limit per document.
- * This pre-flight checker enforces a defensive safety threshold of 950,000 bytes (950 KB)
- * on all root documents and monthly subcollection buckets before any network writeBatch is constructed.
- * 
- * Prevents:
- * 1. Firestore quota and size overflow errors (INVALID_ARGUMENT / Document too large).
- * 2. Unnecessary write operations that would fail at the Firestore engine level.
- * 3. Client state desynchronization.
- * 
- * Conforms to AGENTS.md:
- * - Italian Sentence case for all error messages.
- * - Universal environment compatibility (Browser Blob / Node Buffer).
+ * Firestore permits at most 1 MiB per document; use a conservative 950,000-byte
+ * pre-write guard for both root and monthly documents.
  */
 
 export const DOC_SIZE_LIMIT_BYTES = 950000;         // 950 KB safety margin
@@ -25,10 +13,7 @@ interface DocSizeAssessment {
     percentage: number;
 }
 
-/**
- * Calculates the exact UTF-8 byte length of a JavaScript object/document payload.
- * Supports both browser environments (via Blob / TextEncoder) and Node.js environments.
- */
+/** Calculates the UTF-8 byte length of a serialized document or JSON string. */
 export function calculateDocSizeBytes(data: unknown): number {
     if (data === undefined || data === null) {
         return 0;
@@ -36,21 +21,14 @@ export function calculateDocSizeBytes(data: unknown): number {
     
     let jsonStr: string;
     try {
-        jsonStr = typeof data === 'string' ? data : JSON.stringify(data);
+        const serialized = typeof data === 'string' ? data : JSON.stringify(data);
+        if (typeof serialized !== 'string') throw new Error('Il contenuto non è serializzabile in JSON.');
+        jsonStr = serialized;
     } catch (err: any) {
         throw new Error(`Impossibile serializzare i dati per la stima della dimensione: ${err?.message || 'errore sconosciuto'}`);
     }
 
-    if (typeof Blob !== 'undefined') {
-        return new Blob([jsonStr]).size;
-    }
-
-    if (typeof TextEncoder !== 'undefined') {
-        return new TextEncoder().encode(jsonStr).length;
-    }
-
-    // Fallback using standard URI encoding byte estimator
-    return encodeURI(jsonStr).split(/%..|./).length - 1;
+    return new TextEncoder().encode(jsonStr).length;
 }
 
 /**
