@@ -77,6 +77,25 @@ beforeEach(async () => {
 });
 afterEach(() => { vi.useRealTimers(); lockAllVaults(); vi.unstubAllGlobals(); });
 
+it.each([false, true])('releases the acquired ADK only after the journal writer settles (failure=%s)', async shouldFail => {
+    const initial = (await readLocal('user:a'))!;
+    vi.stubGlobal('fetch', vi.fn(async () => Response.json(keyPayload)));
+    let writerKey: Uint8Array | undefined;
+    remote.apply.mockImplementationOnce(async (_db, _uid, _batch, _isCurrent, _replica, cloudKey: Uint8Array) => {
+        writerKey = cloudKey;
+        expect(cloudKey).toEqual(new Uint8Array(32).fill(18));
+        if (shouldFail) throw new Error('Injected writer failure');
+        const { documents, syncMetas } = applySemanticOperations(
+            projectDocuments(data(170), getSeedCatalog()), initial.pending,
+        );
+        return { documents, syncMeta: syncMetas };
+    });
+    const result = await replicateJournal('user:a');
+    expect(result.ok).toBe(!shouldFail);
+    expect(writerKey).toEqual(new Uint8Array(32));
+    expect((await readLocal('user:a'))?.pending.length).toBe(shouldFail ? 1 : 0);
+});
+
 it.each(['network', 'timeout', 'limited-use', 'auth-network', 429, 503] as const)(
     'preserves ciphertext after key-service %s and automatically retries to a real local ACK',
     async failure => {

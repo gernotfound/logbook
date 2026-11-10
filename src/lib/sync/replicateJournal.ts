@@ -102,6 +102,7 @@ async function drain(session: ReturnType<typeof captureSession>, deliveryState: 
     const cloudKey = await requireCloudAccountDataKey(session.owner.slice(5), () => {
         if (!current()) throw new Error('Sessione cambiata prima della sincronizzazione cifrata.');
     });
+    try {
     if (!current()) throw new Error('Sessione cambiata');
     await waitForPendingWrites(getDb());
     const catalog = await getCachedCatalog();
@@ -169,6 +170,11 @@ async function drain(session: ReturnType<typeof captureSession>, deliveryState: 
         deliveryState.delivered = null;
     }
     throw new Error('Sessione cambiata');
+    } finally {
+        // The timed-out UI may have returned already; the real writer owns
+        // this key until its remote transaction and local ACK have settled.
+        cloudKey.fill(0);
+    }
 }
 
 async function classifyTimedOutWork(

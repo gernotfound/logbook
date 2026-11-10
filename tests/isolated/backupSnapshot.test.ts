@@ -12,9 +12,18 @@ vi.mock('../../src/lib/healthConsent', async () => ({
     requireHealthConsentWritable: () => undefined,
     getVerifiedHealthConsentRevision: () => 0,
 }));
+const issuedCloudKeys = vi.hoisted(() => [] as Uint8Array[]);
 vi.mock('../../src/lib/sync/cloudAccountKeyAccess', () => ({
-    requireCloudAccountDataKey: async () => new Uint8Array(32).fill(18),
-    requireRightsExportAccountDataKey: async () => new Uint8Array(32).fill(18),
+    requireCloudAccountDataKey: async () => {
+        const key = new Uint8Array(32).fill(18);
+        issuedCloudKeys.push(key);
+        return key;
+    },
+    requireRightsExportAccountDataKey: async () => {
+        const key = new Uint8Array(32).fill(18);
+        issuedCloudKeys.push(key);
+        return key;
+    },
 }));
 vi.mock('firebase/firestore', () => ({
     doc: (_db: unknown, ...path: string[]) => path.join('/'), collection: (_db: unknown, ...path: string[]) => path.join('/'),
@@ -75,6 +84,7 @@ function stubConcurrentStorage(values: Map<string, string>, overrides: Partial<P
 
 beforeEach(async () => {
     lockAllVaults();
+    issuedCloudKeys.length = 0;
     await clear(); vi.resetAllMocks(); invalidateSession(); sdk.auth.currentUser = { uid: 'a' };
     const storage = new Map<string, string>();
     vi.stubGlobal('localStorage', {
@@ -93,6 +103,27 @@ beforeEach(async () => {
     sdk.page.mockResolvedValue({ size: 0, docs: [] });
 });
 afterEach(() => { lockAllVaults(); vi.unstubAllGlobals(); });
+
+it('wipes only owned cloud backup ADKs on success, failure and retry', async () => {
+    const base = parse({ profile: { height: '170', gender: 'M' } });
+    await initializeSealedLocal(base);
+    const complete = await collectBackupSnapshot(base, true);
+    expect(complete.coverage.scope).toBe('cloud-and-device');
+    expect(issuedCloudKeys).toHaveLength(1);
+    expect(issuedCloudKeys[0]).toEqual(new Uint8Array(32));
+
+    sdk.page.mockRejectedValueOnce(new Error('offline'));
+    await expect(collectBackupSnapshot(base, true)).rejects.toThrow('offline');
+    expect(issuedCloudKeys).toHaveLength(2);
+    expect(issuedCloudKeys[1]).toEqual(new Uint8Array(32));
+
+    const borrowed = new Uint8Array(32).fill(18);
+    await collectBackupSnapshot(base, true, 0, borrowed);
+    expect(borrowed).toEqual(new Uint8Array(32).fill(18));
+    // Even with a caller-provided buffer the rights/sync gate acquires a fresh key.
+    expect(issuedCloudKeys).toHaveLength(3);
+    expect(issuedCloudKeys[2]).toEqual(new Uint8Array(32));
+});
 
 
 it('persists a backup fixture as AEAD ciphertext and rejects access after vault lock', async () => {
@@ -222,6 +253,8 @@ it('retries when an edit is acknowledged while the cloud scan is in flight', asy
     const backup = await collectBackupSnapshot(base, true);
     expect(backup.data.profile?.height).toBe('175');
     expect(sdk.root).toHaveBeenCalledTimes(2);
+    expect(issuedCloudKeys).toHaveLength(2);
+    expect(issuedCloudKeys.every(key => key.every(byte => byte === 0))).toBe(true);
 });
 
 it('retries when another device updates the replica control during the cloud scan', async () => {
