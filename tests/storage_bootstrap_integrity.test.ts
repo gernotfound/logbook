@@ -173,7 +173,8 @@ describe('Storage bootstrap and owner integrity checks', () => {
       + (payload === 'A' ? 'B' : 'A') + original!.slice(dot + 2);
     await idbKeyval.set(archiveKey, tampered);
     const control = localStorage.getItem(vaultControlKey('guest'));
-    const wrappingKey = await idbKeyval.get(deviceVaultKeyId('guest'));
+    const wrappingKeyId = deviceVaultKeyId('guest');
+    const wrappingKey = idbStore[wrappingKeyId];
 
     lockVault('guest');
     expect(isVaultUnlocked('guest')).toBe(false);
@@ -190,7 +191,10 @@ describe('Storage bootstrap and owner integrity checks', () => {
     expect(getStorageMarker(undefined, 'guest')?.timestamp).toBe(1000);
     expect(await idbKeyval.get(archiveKey)).toBe(tampered);
     expect(localStorage.getItem(vaultControlKey('guest'))).toBe(control);
-    expect(await idbKeyval.get(deviceVaultKeyId('guest'))).toBe(wrappingKey);
+    expect(idbStore[wrappingKeyId]).toBe(wrappingKey);
+    expect(await idbKeyval.get(wrappingKeyId)).toMatchObject({
+      type: 'secret', extractable: false, algorithm: { name: 'AES-GCM', length: 256 },
+    });
   });
 
   it('blocks guest cold boot when an existing integrity marker is unreadable and the cache is absent', async () => {
