@@ -64,6 +64,8 @@ function assertSupportedCurrentVersion(value: unknown, baseline: number, current
     return assertCurrentVersion(version, current, kind);
 }
 
+export type PersistedRecord = Record<string, unknown>;
+
 export interface NormalizedCloudDocument {
     business: Record<string, unknown>;
     sync: unknown;
@@ -186,7 +188,7 @@ export function withCurrentDataSchema(
         return {
             ...business,
             _schemaVersion: CURRENT_DATA_SCHEMA,
-            ...(normalizedSync === undefined ? {} : { _sync: normalizedSync }),
+            _sync: normalizedSync,
         };
     } catch (error) {
         reportRuntimeUpdateRequired(error);
