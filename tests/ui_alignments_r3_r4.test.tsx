@@ -262,7 +262,7 @@ describe('UI Alignments - R3 & R4', () => {
             expect(day?.bf).toBeUndefined();
             expect(day?.bfProvenance).toBeUndefined();
         });
-        it('preserves an existing manual BF value when editing an unrelated field', async () => {
+        it('clears a previously calculated BF when the calculation is switched off', async () => {
             const existing = useAppStore.getState().userData!;
             const day = existing.nutrition?.['2026-08-10'];
             if (!day) throw new Error('Measurement fixture missing');
@@ -270,7 +270,7 @@ describe('UI Alignments - R3 & R4', () => {
                 userData: {
                     ...existing,
                     nutrition: { ...existing.nutrition,
-                        '2026-08-10': { ...day, bf: 19.2, bfProvenance: { method: 'manual' } } },
+                        '2026-08-10': { ...day, bf: 19.2, bfProvenance: { method: 'us_navy' } } },
                 },
             });
             const previousDispatch = useAppStore.getState().dispatchDomainOperation;
@@ -282,7 +282,7 @@ describe('UI Alignments - R3 & R4', () => {
                 await act(async () => { await result.current.calculateAndSave(); });
                 expect(dispatch).toHaveBeenCalledWith(expect.objectContaining({
                     type: 'nutrition-day.patch',
-                    patch: expect.objectContaining({ bf: 19.2, bfProvenance: { method: 'manual' } }),
+                    patch: expect.objectContaining({ bf: undefined, bfProvenance: undefined }),
                 }));
             } finally {
                 useAppStore.setState({ dispatchDomainOperation: previousDispatch });
