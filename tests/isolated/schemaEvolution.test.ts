@@ -11,7 +11,7 @@ import {
     withCurrentDataSchema,
 } from '../../src/lib/schemaEvolution';
 
-describe('Schema Evolution registry', () => {
+describe('Schema evolution current-format boundaries', () => {
     it('keeps accepted current-format records detached from authenticated input', () => {
         const local = {
             version: 5, dataSchemaVersion: CURRENT_DATA_SCHEMA, syncProtocolVersion: CURRENT_SYNC_PROTOCOL,
