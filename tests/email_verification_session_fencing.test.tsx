@@ -61,7 +61,7 @@ describe('email verification actions across actual AuthProvider callbacks (SDK s
       const { result, transition, preserved } = await start();
       let finish!: () => void;
       vi.mocked(reload).mockImplementationOnce(() => new Promise<void>(resolve => { finish = resolve; }));
-      let pending!: Promise<void>;
+      let pending!: ReturnType<typeof result.current.refreshEmailVerification>;
       act(() => { pending = result.current.refreshEmailVerification(); });
       expect(reload).toHaveBeenCalledOnce();
       await transition(kind);
@@ -98,7 +98,7 @@ describe('email verification actions across actual AuthProvider callbacks (SDK s
       if (boundary === 'token') first.getIdToken.mockImplementationOnce(async () => { await gate; return 'old-token'; });
       const flush = vi.spyOn(draftRegistry, 'flushAll');
       try {
-        let pending!: Promise<void>;
+        let pending!: ReturnType<typeof result.current.refreshEmailVerification>;
         act(() => { pending = result.current.refreshEmailVerification(); });
         await waitFor(() => expect(boundary === 'reload' ? reload : first.getIdToken).toHaveBeenCalledOnce());
         await transition('A-B-A');
