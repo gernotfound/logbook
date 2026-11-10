@@ -307,7 +307,7 @@ describe('LoginBox guest Google authentication', () => {
         fireEvent.change(screen.getByRole('textbox', { name: 'Email' }), { target: { value: 'new@example.com' } });
         fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'caccapuou' } });
         fireEvent.change(screen.getByLabelText('Conferma password'), { target: { value: 'caccapuou' } });
-        expect(screen.getByText('Almeno 15 caratteri').closest('li')?.getAttribute('data-status')).toBe('missing');
+        expect(screen.getByRole('list', { name: 'Requisiti della password' }).querySelector('li')?.getAttribute('data-status')).toBe('missing');
         // Hints for extra Firebase categories are asynchronous and optional; the
         // registration action always enforces the actual remote policy.
         fireEvent.click(screen.getAllByRole('button', { name: 'Registrati' }).at(-1)!);
@@ -331,7 +331,7 @@ describe('LoginBox guest Google authentication', () => {
         const passphrase = 'una passphrase con molti spazi e unicode 🐱';
         fireEvent.change(password, { target: { value: passphrase } });
         fireEvent.change(confirmation, { target: { value: passphrase } });
-        expect(screen.getByText('Almeno 15 caratteri').closest('li')?.getAttribute('data-status')).toBe('met');
+        expect(screen.getByRole('list', { name: 'Requisiti della password' }).querySelector('li')?.getAttribute('data-status')).toBe('met');
         expect(screen.queryByText('Una lettera maiuscola')).toBeNull();
         expect(screen.queryByText('Un numero')).toBeNull();
         expect(screen.queryByText('Un carattere speciale')).toBeNull();
