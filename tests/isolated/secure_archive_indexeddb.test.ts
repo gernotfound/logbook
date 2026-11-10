@@ -121,8 +121,7 @@ describe('encrypted archive gateway transaction invariants', () => {
     });
 });
 
-// Unlike the low-level primitive above, localRepository uses secureArchiveRepository.
-// These regressions exercise the production owner/epoch gate and the actual journal.
+// End-to-end regressions cover the production owner/epoch gate and durable journal.
 describe('production encrypted localRepository gateway', () => {
     const archive = archiveKey(owner);
     const profile = (height: string, gender?: string) => UserDataSchema.parse({
