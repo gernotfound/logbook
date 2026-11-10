@@ -132,7 +132,6 @@ describe('rejected legal-consent durable compensation', () => {
         const accepted = consent('2026-10-03T12:00:00.000Z');
         await initializeLocal('user:a', initial);
         await commitDomainOperations('user:a', { type: 'legal-consent.set', consent: accepted }, initial);
-        const sent = await readLocal('user:a');
         await confirmConsentJournal();
         const confirmed = await readLocal('user:a');
 
@@ -182,7 +181,6 @@ describe('rejected legal-consent durable compensation', () => {
         const accepted = consent('2026-10-03T12:00:00.000Z');
         await initializeLocal('user:a', initial);
         await commitDomainOperations('user:a', { type: 'legal-consent.set', consent: accepted }, initial);
-        const sent = await readLocal('user:a');
         await confirmConsentJournal();
         const confirmed = await readLocal('user:a');
         const key = 'logbook:v2:user:a';
