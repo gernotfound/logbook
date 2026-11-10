@@ -26,14 +26,6 @@ export class LegacyVersionError extends Error {
     }
 }
 
-export class MissingMigrationError extends Error {
-    readonly code = 'missing-migration';
-    constructor(readonly kind: string, readonly fromVersion: number) {
-        super(`Migrazione ${kind} ${fromVersion}->${fromVersion + 1} mancante.`);
-        this.name = 'MissingMigrationError';
-    }
-}
-
 export function isUpdateRequiredError(error: unknown): boolean {
     const seen = new Set<unknown>();
     let current = error;
@@ -50,9 +42,6 @@ function reportRuntimeUpdateRequired(error: unknown) {
     window.dispatchEvent(new CustomEvent(UPDATE_REQUIRED_EVENT, { detail: error }));
 }
 
-type Migration<T> = (value: Readonly<T>) => T;
-export type MigrationRegistry<T> = Readonly<Record<number, Migration<T>>>;
-
 function assertVersionNumber(value: unknown, kind: string): number {
     if (typeof value !== 'number' || !Number.isInteger(value) || value < 1) {
         throw new Error(`${kind} non valido.`);
@@ -67,67 +56,13 @@ export function assertCurrentVersion(value: unknown, current: number, kind: stri
     return version;
 }
 
-export function migrateSequential<T>(
-    value: T,
-    fromVersion: number,
-    currentVersion: number,
-    registry: MigrationRegistry<T>,
-    kind: string,
-): T {
-    let version = assertVersionNumber(fromVersion, kind);
-    if (version > currentVersion) throw new FutureVersionError(kind, version, currentVersion);
-
-    let current = structuredClone(value);
-    while (version < currentVersion) {
-        const migration = registry[version];
-        if (!migration) throw new MissingMigrationError(kind, version);
-        current = migration(structuredClone(current));
-        version += 1;
-    }
-    return current;
+// Keep the first supported baseline distinct from the current version. Until
+// real released data requires a migration, all intermediate versions fail closed.
+function assertSupportedCurrentVersion(value: unknown, baseline: number, current: number, kind: string): number {
+    const version = assertVersionNumber(value, kind);
+    if (version < baseline) throw new LegacyVersionError(kind, version, baseline);
+    return assertCurrentVersion(version, current, kind);
 }
-
-function migrateFromBaseline<T>(
-    value: T,
-    fromVersion: number,
-    baselineVersion: number,
-    currentVersion: number,
-    registry: MigrationRegistry<T>,
-    kind: string,
-): T {
-    const version = assertVersionNumber(fromVersion, kind);
-    if (version < baselineVersion) throw new LegacyVersionError(kind, version, baselineVersion);
-    return migrateSequential(value, version, currentVersion, registry, kind);
-}
-
-export interface CloudMigrationState {
-    business: Record<string, unknown>;
-    sync: unknown;
-}
-
-export type PersistedRecord = Record<string, unknown>;
-
-export type DataMigrationCarrier =
-    | { scope: 'cloud'; state: CloudMigrationState }
-    | { scope: 'local-envelope'; record: PersistedRecord }
-    | { scope: 'backup'; record: PersistedRecord };
-
-export type SyncProtocolMigrationCarrier =
-    | { scope: 'cloud'; sync: PersistedRecord }
-    | { scope: 'local-envelope'; record: PersistedRecord }
-    | { scope: 'backup'; record: PersistedRecord };
-
-// Clean-cut pre-launch baseline: the first real account starts on the current persisted contracts.
-// Future N->N+1 migrations are added only after a real released version has persisted user data.
-// Data/sync migration steps receive a storage-scope carrier so one version dimension can advance
-// independently of the local-envelope or backup container version without coupling those bumps.
-const DATA_MIGRATIONS: MigrationRegistry<DataMigrationCarrier> = {};
-// Pre-launch clean cut: no real account data exists below Protocol 3.
-// Future entries are added only for post-launch N->N+1 migrations.
-const SYNC_PROTOCOL_MIGRATIONS: MigrationRegistry<SyncProtocolMigrationCarrier> = {};
-// The first supported local envelope is V5. Pre-launch V4 data is not migrated.
-const LOCAL_ENVELOPE_MIGRATIONS: MigrationRegistry<PersistedRecord> = {};
-const BACKUP_MIGRATIONS: MigrationRegistry<PersistedRecord> = {};
 
 export interface NormalizedCloudDocument {
     business: Record<string, unknown>;
@@ -137,15 +72,6 @@ export interface NormalizedCloudDocument {
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
     value !== null && typeof value === 'object' && !Array.isArray(value);
-
-function readSyncProtocol(sync: unknown, kind: string): number | undefined {
-    if (sync === undefined) return undefined;
-    if (!isRecord(sync)) throw new Error(`${kind} non valido.`);
-    const version = assertVersionNumber(sync.protocolVersion, kind);
-    if (version < BASELINE_SYNC_PROTOCOL) throw new LegacyVersionError(kind, version, BASELINE_SYNC_PROTOCOL);
-    if (version > CURRENT_SYNC_PROTOCOL) throw new FutureVersionError(kind, version, CURRENT_SYNC_PROTOCOL);
-    return version;
-}
 
 function assertCurrentCloudSyncEnvelope(sync: unknown, kind: string): Record<string, unknown> {
     if (!isRecord(sync)) throw new Error(`${kind} non valido.`);
@@ -180,60 +106,20 @@ function assertCurrentCloudSyncEnvelope(sync: unknown, kind: string): Record<str
     return sync;
 }
 
-function normalizeSyncProtocol(sync: unknown, sourceVersion: number | undefined, kind: string): unknown {
-    if (sync === undefined || sourceVersion === undefined) return undefined;
+function normalizeSyncProtocol(sync: unknown, kind: string): Record<string, unknown> {
     if (!isRecord(sync)) throw new Error(`${kind} non valido.`);
-    const migrated = migrateFromBaseline<SyncProtocolMigrationCarrier>(
-        { scope: 'cloud', sync },
-        sourceVersion,
-        BASELINE_SYNC_PROTOCOL,
-        CURRENT_SYNC_PROTOCOL,
-        SYNC_PROTOCOL_MIGRATIONS,
-        kind,
-    );
-    if (migrated.scope !== 'cloud') throw new Error(`${kind}: migration scope non valido.`);
-    return assertCurrentCloudSyncEnvelope(
-        { ...migrated.sync, protocolVersion: CURRENT_SYNC_PROTOCOL },
-        kind,
-    );
+    assertSupportedCurrentVersion(sync.protocolVersion, BASELINE_SYNC_PROTOCOL, CURRENT_SYNC_PROTOCOL, kind);
+    return assertCurrentCloudSyncEnvelope(structuredClone(sync), kind);
 }
 
 function normalizePersistedDimensions(
     record: PersistedRecord,
-    scope: 'local-envelope' | 'backup',
     kind: string,
 ): PersistedRecord {
-    const sourceDataVersion = assertVersionNumber(record.dataSchemaVersion, `${kind} data schema`);
-    const sourceSyncVersion = assertVersionNumber(record.syncProtocolVersion, `${kind} sync protocol`);
-
-    // The supported current format needs no migration: retain the single
-    // detached snapshot made at the outer persisted-record boundary.
-    if (sourceDataVersion === CURRENT_DATA_SCHEMA && sourceSyncVersion === CURRENT_SYNC_PROTOCOL) {
-        return { ...record, dataSchemaVersion: CURRENT_DATA_SCHEMA, syncProtocolVersion: CURRENT_SYNC_PROTOCOL };
-    }
-
-    const dataCarrier = migrateFromBaseline<DataMigrationCarrier>(
-        { scope, record },
-        sourceDataVersion,
-        BASELINE_DATA_SCHEMA,
-        CURRENT_DATA_SCHEMA,
-        DATA_MIGRATIONS,
-        `${kind} data schema`,
-    );
-    if (dataCarrier.scope !== scope) throw new Error(`${kind}: data migration scope non valido.`);
-
-    const syncCarrier = migrateFromBaseline<SyncProtocolMigrationCarrier>(
-        { scope, record: dataCarrier.record },
-        sourceSyncVersion,
-        BASELINE_SYNC_PROTOCOL,
-        CURRENT_SYNC_PROTOCOL,
-        SYNC_PROTOCOL_MIGRATIONS,
-        `${kind} sync protocol`,
-    );
-    if (syncCarrier.scope !== scope) throw new Error(`${kind}: sync migration scope non valido.`);
-
+    assertSupportedCurrentVersion(record.dataSchemaVersion, BASELINE_DATA_SCHEMA, CURRENT_DATA_SCHEMA, `${kind} data schema`);
+    assertSupportedCurrentVersion(record.syncProtocolVersion, BASELINE_SYNC_PROTOCOL, CURRENT_SYNC_PROTOCOL, `${kind} sync protocol`);
     return {
-        ...syncCarrier.record,
+        ...structuredClone(record),
         dataSchemaVersion: CURRENT_DATA_SCHEMA,
         syncProtocolVersion: CURRENT_SYNC_PROTOCOL,
     };
@@ -246,33 +132,16 @@ export function normalizeCloudDocument(raw: unknown, kind = 'Firestore data sche
         if (raw._schemaVersion === undefined) {
             throw new LegacyVersionError(kind, 0, BASELINE_DATA_SCHEMA);
         }
-        const sourceVersion = assertVersionNumber(raw._schemaVersion, kind);
-        if (sourceVersion < BASELINE_DATA_SCHEMA) throw new LegacyVersionError(kind, sourceVersion, BASELINE_DATA_SCHEMA);
-        if (sourceVersion > CURRENT_DATA_SCHEMA) throw new FutureVersionError(kind, sourceVersion, CURRENT_DATA_SCHEMA);
+        assertSupportedCurrentVersion(raw._schemaVersion, BASELINE_DATA_SCHEMA, CURRENT_DATA_SCHEMA, kind);
 
         const { _schemaVersion: _ignoredVersion, _sync, ...business } = raw;
         if (_sync === undefined) {
             throw new LegacyVersionError(`${kind} sync protocol`, 0, BASELINE_SYNC_PROTOCOL);
         }
-        const sourceSyncVersion = readSyncProtocol(_sync, `${kind} sync protocol`);
-
-        const migrated = migrateFromBaseline<DataMigrationCarrier>(
-            {
-                scope: 'cloud',
-                state: { business, sync: _sync },
-            },
-            sourceVersion,
-            BASELINE_DATA_SCHEMA,
-            CURRENT_DATA_SCHEMA,
-            DATA_MIGRATIONS,
-            kind,
-        );
-        if (migrated.scope !== 'cloud') throw new Error(`${kind}: migration scope non valido.`);
-
-        const normalizedSync = normalizeSyncProtocol(migrated.state.sync, sourceSyncVersion, `${kind} sync protocol`);
+        const normalizedSync = normalizeSyncProtocol(_sync, `${kind} sync protocol`);
 
         return {
-            business: migrated.state.business,
+            business: structuredClone(business),
             sync: normalizedSync,
             dataSchemaVersion: CURRENT_DATA_SCHEMA,
         };
@@ -285,17 +154,9 @@ export function normalizeCloudDocument(raw: unknown, kind = 'Firestore data sche
 export function normalizeLocalEnvelopeRecord(raw: unknown): PersistedRecord {
     try {
         if (!isRecord(raw)) throw new Error('Archivio locale non valido.');
-        const sourceVersion = assertVersionNumber(raw.version, 'Formato archivio locale');
-        const migrated = migrateFromBaseline(
-            raw,
-            sourceVersion,
-            BASELINE_LOCAL_ENVELOPE,
-            CURRENT_LOCAL_ENVELOPE,
-            LOCAL_ENVELOPE_MIGRATIONS,
-            'Formato archivio locale',
-        );
+        assertSupportedCurrentVersion(raw.version, BASELINE_LOCAL_ENVELOPE, CURRENT_LOCAL_ENVELOPE, 'Formato archivio locale');
         return {
-            ...normalizePersistedDimensions(migrated, 'local-envelope', 'Archivio locale'),
+            ...normalizePersistedDimensions(raw, 'Archivio locale'),
             version: CURRENT_LOCAL_ENVELOPE,
         };
     } catch (error) {
@@ -306,17 +167,9 @@ export function normalizeLocalEnvelopeRecord(raw: unknown): PersistedRecord {
 
 export function normalizeBackupRecord(raw: unknown): PersistedRecord {
     if (!isRecord(raw)) throw new Error('Formato backup non valido.');
-    const sourceVersion = assertVersionNumber(raw.version, 'Formato backup');
-    const migrated = migrateFromBaseline(
-        raw,
-        sourceVersion,
-        BASELINE_BACKUP_SCHEMA,
-        CURRENT_BACKUP_SCHEMA,
-        BACKUP_MIGRATIONS,
-        'Formato backup',
-    );
+    assertSupportedCurrentVersion(raw.version, BASELINE_BACKUP_SCHEMA, CURRENT_BACKUP_SCHEMA, 'Formato backup');
     return {
-        ...normalizePersistedDimensions(migrated, 'backup', 'Backup'),
+        ...normalizePersistedDimensions(raw, 'Backup'),
         version: CURRENT_BACKUP_SCHEMA,
     };
 }
@@ -329,8 +182,7 @@ export function withCurrentDataSchema(
         if (sync === undefined) {
             throw new LegacyVersionError('Protocollo sync in scrittura', 0, BASELINE_SYNC_PROTOCOL);
         }
-        const sourceSyncVersion = readSyncProtocol(sync, 'Protocollo sync in scrittura');
-        const normalizedSync = normalizeSyncProtocol(sync, sourceSyncVersion, 'Protocollo sync in scrittura');
+        const normalizedSync = normalizeSyncProtocol(sync, 'Protocollo sync in scrittura');
         return {
             ...business,
             _schemaVersion: CURRENT_DATA_SCHEMA,
