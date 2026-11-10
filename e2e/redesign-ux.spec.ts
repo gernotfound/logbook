@@ -122,7 +122,7 @@ test('registration password rules and visibility control stay aligned on mobile 
     const password = page.locator('input.ui-login-box-9');
     await password.fill('caccapuou');
     await expect(password).toHaveAttribute('aria-invalid', 'true');
-    await expect(page.getByText(/Una lettera maiuscola/)).toHaveAttribute('data-status', 'missing');
+    await expect(page.getByText('Almeno 15 caratteri').locator('..')).toHaveAttribute('data-status', 'missing');
 
     const inputBox = await password.boundingBox();
     const eye = await page.getByRole('button', { name: 'Mostra password' }).boundingBox();
