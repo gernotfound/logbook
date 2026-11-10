@@ -334,22 +334,6 @@ describe('EMPIRICAL CHALLENGER: Adversarial Stress & Robustness Suite (R2, R3, R
             expect(useAppStore.getState().syncing).toBe(false);
         });
 
-        it('ASYNC PROPAGATION: updateUserData properly propagates promise rejection to caller try/catch', async () => {
-            const dbError = new Error('Permission denied on update');
-            vi.spyOn(DB, 'saveUserData').mockRejectedValueOnce(dbError);
-            useAppStore.setState({ userData: createMockUserData(1), dataOwner: 'user:test-user-id' });
-
-            const updatePromise = useAppStore.getState().updateUserData((prev: UserData) => ({
-                ...prev,
-                profile: { ...prev.profile, name: 'Mutated under error' }
-            }));
-            const assertion = expect(updatePromise).rejects.toThrow('Permission denied on update');
-            await vi.advanceTimersByTimeAsync(1100);
-            await assertion;
-
-            expect(useAppStore.getState().saveError).toBe(dbError.message);
-            expect(useAppStore.getState().syncing).toBe(false);
-        });
     });
 
     /* =========================================================================

@@ -40,7 +40,7 @@ M8 non ha introdotto nuove versioni persistite. La fonte eseguibile attuale è `
 
 ### Boundary snapshot consentiti
 
-Il percorso snapshot `saveUserData` / `updateUserData` / `commitLocal` resta ammesso solo quando l'input è per natura un dataset bulk e non una singola intenzione utente:
+Il percorso snapshot `saveUserData` / `commitLocal` resta ammesso solo quando l'input è per natura un dataset bulk e non una singola intenzione utente:
 
 - bootstrap / inizializzazione envelope;
 - hydration cloud;

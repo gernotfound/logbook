@@ -33,7 +33,6 @@ export interface SyncSlice {
     setSaveError: (value: string | null) => void;
     setUpdateRequired: (error: unknown) => void;
     saveUserData: (data: UserData | null | ((previous: UserData | null) => UserData | null), options?: { expectedRevision?: number }) => Promise<SyncResult>;
-    updateUserData: (updater: (previous: UserData) => UserData) => Promise<SyncResult>;
     dispatchDomainOperation: (operation: DomainOperationBatch, options?: { workoutIntent?: { generation: string; sequence: number; consentRevision?: number; intentId: string; parentIntentId?: string; ancestorIds?: string[]; baseline: import('../../types').WorkoutSession | null } }) => Promise<SyncResult>;
     submitLegalConsent: (consent: NonNullable<UserData['legalConsent']>) => Promise<void>;
     flushPendingSyncs: () => Promise<void>;
@@ -311,17 +310,6 @@ export const createSyncSlice: StateCreator<AppState, [], [], SyncSlice> = (set, 
                 options?.expectedRevision,
             ).then<CacheResult>(() => ({ ok: true })).catch<CacheResult>(error => ({ ok: false, error }));
             return enqueue(session, generation, cache);
-        },
-        updateUserData: updater => {
-            if (get().compatibilityStatus === 'update-required') {
-                return Promise.resolve(updateRequiredResult(get().compatibilityError ?? 'Aggiornamento richiesto.'));
-            }
-            try { assertLocalPersistenceWritable(); }
-            catch (error) { return Promise.reject(error); }
-            requireHealthConsentWritable(captureSession().owner);
-            const data = get().userData;
-            if (!data) return Promise.reject(new Error('Dati utente non caricati'));
-            return get().saveUserData(updater(data));
         },
         dispatchDomainOperation: async (operation, options) => {
             if (get().compatibilityStatus === 'update-required') {
