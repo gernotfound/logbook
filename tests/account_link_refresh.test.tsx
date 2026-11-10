@@ -124,7 +124,7 @@ describe('credential actions keep the initiating session (SDK and policy transpo
         vi.mocked(validatePasswordAgainstPolicy).mockResolvedValueOnce('Firebase richiede ancora almeno 1 numero per questa password.');
         const submit = beginLink();
         await waitFor(() => expect(fixture.showAlert).toHaveBeenCalledWith(expect.stringContaining('Firebase richiede ancora')));
-        expect(submit.hasAttribute('disabled')).toBe(false);
+        await waitFor(() => expect(submit.hasAttribute('disabled')).toBe(false));
         expect(fetch).not.toHaveBeenCalled();
         expect(reload).not.toHaveBeenCalled();
     });
