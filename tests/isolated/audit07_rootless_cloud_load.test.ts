@@ -274,7 +274,11 @@ it('fails closed on incomplete full-month snapshots and recovers only after all 
         expect(payload?.cloudDocuments.get('nutrition_months/2024-01')).toMatchObject({
             '2024-01-11': { date: '2024-01-11' }, _sync: metadata,
         });
-        expect(harness.page).toHaveBeenCalledTimes(5);
+        expect(harness.page.mock.calls.map(([request]) => request.path.split('/').at(-1))).toEqual([
+            'history_months', 'nutrition_months',
+            'history_months', 'nutrition_months',
+            'history_months', 'nutrition_months',
+        ]);
     } finally {
         consoleError.mockRestore();
     }
