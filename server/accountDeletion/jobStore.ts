@@ -258,6 +258,9 @@ export async function deletePrivateCollectionPage(
   if (!PRIVATE_ACCOUNT_COLLECTIONS.includes(name)) throw new Error(`Unknown private collection: ${name}`);
   const db = adminDb();
   const page = await db.collection('users').doc(uid).collection(name).limit(PAGE_SIZE).select().get();
+  // An empty page has no destructive work. The next phase's transaction still
+  // fences lease ownership before deleting the root or any other documents.
+  if (page.empty) return 0;
   // Querying and deleting are deliberately separate; the job mutation AND
   // every page delete must be in the same lease-fenced Firestore transaction.
   await db.runTransaction(async (transaction: Transaction) => {
