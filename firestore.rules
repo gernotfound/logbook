@@ -370,9 +370,12 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
-    match /global_catalog/{document=**} {
-      allow read: if true;
-      allow write: if false;
+    // Public catalog clients request known manifest/version documents by ID.
+    // Queries would expose arbitrary historical documents and amplify quota abuse;
+    // nested catalog paths are not part of the publication contract.
+    match /global_catalog/{documentId} {
+      allow get: if true;
+      allow list, write: if false;
     }
 
     // Server-only administrative barrier. Clients cannot inspect or mutate deletion jobs;

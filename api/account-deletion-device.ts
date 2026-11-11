@@ -7,6 +7,9 @@ import {
   verifyDeletionRecoveryDevice,
 } from '../server/accountDeletion/deviceRecovery.js';
 import { accountDeletionCorsHeaders, requireAccountDeletionOrigin } from '../server/accountDeletion/cors.js';
+import {
+  assertBoundedJsonContentLength, BoundedJsonBodyError, readBoundedJsonObject,
+} from '../server/accountDeletion/readBoundedJson.js';
 
 export const maxDuration = 30;
 const ALLOWED_HEADERS = 'authorization, content-type, x-firebase-appcheck, x-account-deletion-uid, x-account-deletion-device';
@@ -23,6 +26,7 @@ function json(body: unknown, status: number, origin: string | null): Response {
 function errorResponse(error: unknown, origin: string | null): Response {
   if (error instanceof RequestAuthError) return json({ error: error.message }, error.status, origin);
   if (error instanceof DeletionRecoveryInputError) return json({ error: error.message }, 400, origin);
+  if (error instanceof BoundedJsonBodyError) return json({ error: error.message }, error.status, origin);
   if (error instanceof DeletionRecoveryConflictError) return json({ error: error.message }, 409, origin);
   const kind = error instanceof Error ? error.name : 'UnknownError';
   console.error('[account-deletion-device] backend failure', { kind });
@@ -43,20 +47,10 @@ export async function POST(request: Request): Promise<Response> {
   const origin = request.headers.get('origin');
   try {
     requireAccountDeletionOrigin(request);
+    assertBoundedJsonContentLength(request);
     const { uid } = await verifyRecoveryRegistrationRequester(request);
-    let body: unknown;
-    try {
-      body = await request.json();
-    } catch (error) {
-      if (error instanceof SyntaxError) {
-        throw new DeletionRecoveryInputError('Corpo JSON non valido.');
-      }
-      throw error;
-    }
-    if (!body || typeof body !== 'object' || Array.isArray(body)) {
-      throw new DeletionRecoveryInputError('Corpo JSON non valido.');
-    }
-    await registerDeletionRecoveryDevice(uid, (body as Record<string, unknown>).deviceToken);
+    const body = await readBoundedJsonObject(request);
+    await registerDeletionRecoveryDevice(uid, body.deviceToken);
     return json({ registered: true }, 200, origin);
   } catch (error) {
     return errorResponse(error, origin);

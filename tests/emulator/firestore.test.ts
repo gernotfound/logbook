@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { afterAll, beforeAll, beforeEach, expect, it } from 'vitest';
 import { initializeTestEnvironment, assertFails, assertSucceeds, type RulesTestEnvironment } from '@firebase/rules-unit-testing';
-import { doc, setDoc, getDoc, deleteDoc, updateDoc, writeBatch } from 'firebase/firestore';
+import { collection, doc, getDocs, setDoc, getDoc, deleteDoc, updateDoc, writeBatch } from 'firebase/firestore';
 import { CURRENT_SYNC_PROTOCOL } from '../../src/lib/schemaEvolution';
 import { sealCloudDocument, openCloudDocument, CloudCiphertextError } from '../../src/lib/sync/cloudDocumentCipher';
 import type { SyncMeta } from '../../src/lib/sync/semanticProjection/contracts';
@@ -41,6 +41,25 @@ it('gates every private owner path on the Firebase verified-email token claim', 
     await assertFails(registerReplica(missingClaim, 'a'));
     await assertSucceeds(registerReplica(verified, 'a'));
     await assertSucceeds(getDoc(doc(asModularFirestore(env.unauthenticatedContext().firestore()), 'global_catalog/public')));
+});
+
+it('permits direct public catalog reads but denies catalog enumeration and nested documents', async () => {
+    await env.withSecurityRulesDisabled(async context => {
+        const admin = asModularFirestore(context.firestore());
+        await setDoc(doc(admin, 'global_catalog/manifest'), { version: 'test' });
+        await setDoc(doc(admin, 'global_catalog/exercises_v1'), { items: [] });
+        await setDoc(doc(admin, 'global_catalog/manifest/internal/secret'), { marker: true });
+    });
+
+    const anonymous = asModularFirestore(env.unauthenticatedContext().firestore());
+    const owner = asModularFirestore(env.authenticatedContext('a', { email_verified: true }).firestore());
+    await assertSucceeds(getDoc(doc(anonymous, 'global_catalog/manifest')));
+    await assertSucceeds(getDoc(doc(anonymous, 'global_catalog/exercises_v1')));
+    await assertSucceeds(getDoc(doc(owner, 'global_catalog/manifest')));
+    await assertFails(getDocs(collection(anonymous, 'global_catalog')));
+    await assertFails(getDocs(collection(owner, 'global_catalog')));
+    await assertFails(getDoc(doc(anonymous, 'global_catalog/manifest/internal/secret')));
+    await assertFails(setDoc(doc(owner, 'global_catalog/manifest'), { version: 'tampered' }));
 });
 
 function protocol3Registration() {

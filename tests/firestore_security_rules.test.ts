@@ -36,9 +36,11 @@ describe('Firestore Security Rules Whitelist & Parity Verification', () => {
     expect(rulesContent).toContain('service cloud.firestore');
   });
 
-  it('contains global_catalog public read rule', () => {
-    expect(rulesContent).toMatch(/match\s+\/global_catalog\/\{document=\*\*\}/);
-    expect(rulesContent).toMatch(/allow\s+read:\s*if\s+true;/);
+  it('allows public catalog document reads without opening queries or nested paths', () => {
+    expect(rulesContent).toMatch(/match\s+\/global_catalog\/\{documentId\}/);
+    expect(rulesContent).toMatch(/allow\s+get:\s*if\s+true;/);
+    expect(rulesContent).toMatch(/allow\s+list,\s*write:\s*if\s+false;/);
+    expect(rulesContent).not.toMatch(/match\s+\/global_catalog\/\{document=\*\*\}/);
   });
 
   it('makes account_deletions server-only and uses it as a cross-device access barrier', () => {

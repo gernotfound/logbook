@@ -163,6 +163,10 @@ describe('R2: Firebase Config Security & Fail-Fast Suite', () => {
             // Firebase Hosting serves the frontend: Vercel config does not control its browser CSP.
             expect(csp).toBeDefined();
             expect(csp).toContain("connect-src 'self'");
+            // Vite emits analytics workers as same-origin assets; no blob worker
+            // execution is required by the shipped app or its service worker.
+            expect(csp).toContain("worker-src 'self';");
+            expect(csp).not.toContain("worker-src 'self' blob:");
             for (const disallowed of [
                 'google-analytics.com', 'googletagmanager.com', 'firebaseio.com',
                 'fonts.googleapis.com', 'fonts.gstatic.com', '*.googleapis.com',
