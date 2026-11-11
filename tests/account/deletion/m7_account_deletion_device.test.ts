@@ -126,6 +126,35 @@ describe('M7 account deletion recovery device registry', () => {
     },
   );
 
+  it('rejects excessive recovery-device POST bodies before registration and protects App Check budget', async () => {
+    for (const contentLength of [null, '9000']) {
+      const response = await POST(new Request('https://backend.example/api/account-deletion-device', {
+        method: 'POST',
+        headers: {
+          origin: 'https://thelogbook.web.app',
+          ...(contentLength === null ? {} : { 'content-length': contentLength }),
+        },
+        body: 'x'.repeat(9000),
+      }));
+      expect(response.status).toBe(413);
+      expect(registry()).toBeNull();
+    }
+    expect(auth.verifyRecoveryRegistrationRequester).toHaveBeenCalledTimes(1);
+  });
+
+  it('bounds a stream of empty chunks without registering a recovery device', async () => {
+    const response = await POST(new Request('https://backend.example/api/account-deletion-device', {
+      method: 'POST',
+      headers: { origin: 'https://thelogbook.web.app' },
+      body: new ReadableStream<Uint8Array>({
+        pull(controller) { controller.enqueue(new Uint8Array(0)); },
+      }),
+      duplex: 'half',
+    } as RequestInit & { duplex: 'half' }));
+    expect(response.status).toBe(408);
+    expect(registry()).toBeNull();
+  });
+
   it('preserves a real backend exception as a generic 500 after valid input', async () => {
     const registryError = vi.spyOn(fakeDb, 'runTransaction')
       .mockRejectedValueOnce(new Error('internal DB connection detail'));

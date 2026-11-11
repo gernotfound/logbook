@@ -98,6 +98,8 @@ La KEK è obbligatoria per il boundary cloud cifrato corrente, non per l'avvio l
 
 Le regole private di `/users/{uid}` e delle sottocollezioni richiedono sia la proprietà dell'UID sia il claim Firebase `email_verified == true` prima di verificare gli altri invarianti, inclusa l'assenza di una cancellazione account in corso. Un accesso privo del claim o con `false` viene negato; `global_catalog` continua a essere pubblico. I test dell'emulatore devono dichiarare esplicitamente `email_verified: true` per gli owner autorizzati e coprire il rifiuto delle sessioni non verificate.
 
+Per il client, il documento root `users/{uid}` e `sync_control/state` sono solo `get`: non occorre enumerarli. I documenti `history_months`/`nutrition_months` sono accessibili con `get` per i singoli mesi; le query `list` necessarie a checkpoint e backup devono specificare `limit` positivo non superiore a 400 e non devono usare `offset`. Il client già usa cursori e pagine rispettivamente da 400 e 50 documenti. Questi limiti riducono singole interrogazioni abusive e letture saltate, ma **non** costituiscono un limite di frequenza né proteggono da richieste ripetute di un account autorizzato.
+
 ### Test e deploy sono operazioni diverse
 
 Il gate repository corrente testa `firestore.rules` tramite Firebase Emulator (`npm run test:rules`, transitivamente incluso in `verify:m8`). Questo **non** deploya le Rules sul progetto Firebase.

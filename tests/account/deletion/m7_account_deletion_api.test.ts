@@ -105,8 +105,14 @@ describe('M7 native account deletion HTTP boundary', () => {
   );
 
   it('reports a failed request body stream as a backend failure, never as malformed input', async () => {
-    const input = request('POST', { receiptToken: 'receipt' });
-    const streamFailure = vi.spyOn(input, 'json').mockRejectedValueOnce(new TypeError('sensitive stream failure detail'));
+    const input = new Request('https://example.test/api/account-deletion', {
+      method: 'POST',
+      headers: { origin: 'https://thelogbook.web.app' },
+      body: new ReadableStream<Uint8Array>({
+        pull() { throw new TypeError('sensitive stream failure detail'); },
+      }),
+      duplex: 'half',
+    } as RequestInit & { duplex: 'half' });
     const log = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     try {
       const response = await POST(input);
@@ -120,8 +126,37 @@ describe('M7 native account deletion HTTP boundary', () => {
       expect(runner.processAccountDeletion).not.toHaveBeenCalled();
       expect(response.headers.get('cache-control')).toBe('no-store');
     } finally {
-      streamFailure.mockRestore();
       log.mockRestore();
+    }
+  });
+
+  it('rejects oversized and malformed Content-Length before costly authentication', async () => {
+    for (const length of ['8193', 'invalid']) {
+      const input = new Request('https://example.test/api/account-deletion', {
+        method: 'POST',
+        headers: { origin: 'https://thelogbook.web.app', 'content-length': length },
+        body: JSON.stringify({ receiptToken: 'receipt' }),
+      });
+      const response = await POST(input);
+      expect(response.status).toBe(length === '8193' ? 413 : 400);
+      expect(response.headers.get('cache-control')).toBe('no-store');
+    }
+    expect(auth.verifyDeletionRequester).not.toHaveBeenCalled();
+    expect(store.createOrRefreshDeletionJob).not.toHaveBeenCalled();
+  });
+
+  it('bounds the streamed body even when Content-Length is absent or dishonest', async () => {
+    for (const contentLength of [null, '2']) {
+      const response = await POST(new Request('https://example.test/api/account-deletion', {
+        method: 'POST',
+        headers: {
+          origin: 'https://thelogbook.web.app',
+          ...(contentLength === null ? {} : { 'content-length': contentLength }),
+        },
+        body: 'x'.repeat(8193),
+      }));
+      expect(response.status).toBe(413);
+      expect(store.createOrRefreshDeletionJob).not.toHaveBeenCalled();
     }
   });
 

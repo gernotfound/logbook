@@ -72,6 +72,23 @@ describe('M7 App Check replay protection for account deletion', () => {
     await expect(verifyDeletionRequester(requesterRequest())).resolves.toEqual({ uid: 'user-a' });
   });
 
+  it('denies missing App Check headers before revocation-checked Firebase Auth reads', async () => {
+    const missingAttestation = new Request('https://backend.example/api/cloud-key', {
+      headers: { authorization: 'Bearer valid-id-token' },
+    });
+    await expect(verifyHealthConsentRequester(missingAttestation)).rejects.toMatchObject({
+      name: 'RequestAuthError', status: 403,
+    });
+    await expect(verifyRecoveryRegistrationRequester(missingAttestation)).rejects.toMatchObject({
+      name: 'RequestAuthError', status: 403,
+    });
+    await expect(verifyDeletionRequester(missingAttestation)).rejects.toMatchObject({
+      name: 'RequestAuthError', status: 403,
+    });
+    expect(admin.verifyIdToken).not.toHaveBeenCalled();
+    expect(admin.verifyToken).not.toHaveBeenCalled();
+  });
+
   it('rejects an already consumed App Check token', async () => {
     admin.verifyToken.mockResolvedValueOnce({ alreadyConsumed: true });
     await expect(verifyDeletionRequester(requesterRequest())).rejects.toMatchObject({
