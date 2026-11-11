@@ -42,10 +42,12 @@ async function verifyAuthenticatedRequester(request: Request): Promise<DecodedId
   // A missing App Check header must not trigger a revocation-checked Auth
   // lookup. Validate both cheap request preconditions before either Admin call.
   appCheckToken(request);
+  // Reject forged, expired or replayed App Check attestations before the
+  // revocation-checked Firebase Auth lookup. A consumed token is intentionally
+  // never reused even when Auth subsequently denies the request.
+  await verifyConsumableAppCheck(request);
   try {
-    const decoded = await adminAuth().verifyIdToken(idToken, true);
-    await verifyConsumableAppCheck(request);
-    return decoded;
+    return await adminAuth().verifyIdToken(idToken, true);
   } catch (error) {
     if (error instanceof RequestAuthError) throw error;
     throw new RequestAuthError('Sessione non valida o revocata. Effettua nuovamente il login.');

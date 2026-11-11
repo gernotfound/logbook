@@ -36,6 +36,18 @@ function validateToken(value: unknown): string {
   return value;
 }
 
+// Pure syntactic preflight; authenticating the recovery proof still requires
+// the same one-time App Check and server-side constant-time hash verification.
+export function hasWellFormedRecoveryDeviceProof(uidValue: unknown, tokenValue: unknown): boolean {
+  try {
+    validateUid(uidValue);
+    validateToken(tokenValue);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 function hashToken(token: string): string {
   return createHash('sha256').update(token, 'utf8').digest('hex');
 }

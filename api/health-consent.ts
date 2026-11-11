@@ -97,6 +97,34 @@ function requireRevision(value: unknown, minimum: number, message: string): numb
   return value;
 }
 
+type ConsentCommand =
+  | { action: 'accept-initial'; acceptance: ExplicitConsentAcceptance }
+  | { action: 'withdraw'; expectedRevision: number }
+  | { action: 'reaccept'; acceptance: ExplicitConsentAcceptance; expectedRevision: number };
+
+function requireConsentCommand(body: Record<string, unknown>): ConsentCommand {
+  if (body.action === 'accept-initial') {
+    requireExplicitAcceptance(body.acceptance, 'È richiesta la prima accettazione esplicita dei documenti correnti.');
+    if (body.expectedRevision !== 0) throw new ConsentInputError('Revisione iniziale non valida.');
+    return { action: 'accept-initial', acceptance: body.acceptance };
+  }
+  if (body.action === 'withdraw') {
+    return {
+      action: 'withdraw',
+      expectedRevision: requireRevision(body.expectedRevision, 0, 'Revisione consenso mancante o non valida.'),
+    };
+  }
+  if (body.action === 'reaccept') {
+    requireExplicitAcceptance(body.acceptance, 'È richiesta una nuova accettazione esplicita dei documenti correnti.');
+    return {
+      action: 'reaccept',
+      acceptance: body.acceptance,
+      expectedRevision: requireRevision(body.expectedRevision, 1, 'Revisione della revoca mancante o non valida.'),
+    };
+  }
+  throw new ConsentInputError('Azione non valida.');
+}
+
 export async function OPTIONS(request: Request): Promise<Response> {
   const origin = request.headers.get('origin');
   try {
@@ -119,18 +147,18 @@ export async function POST(request: Request): Promise<Response> {
   try {
     requireAccountDeletionOrigin(request);
     const body = await readConsentBody(request);
+    // A malformed consent instruction is independent of identity or state:
+    // validate it before consuming App Check and verifying Firebase Auth.
+    const command = requireConsentCommand(body);
     const identity = await verifyHealthConsentRequester(request);
     const { uid } = identity;
 
-    if (body.action === 'accept-initial') {
+    if (command.action === 'accept-initial') {
       requireVerifiedHealthConsentWrite(identity);
-      requireExplicitAcceptance(body.acceptance, 'È richiesta la prima accettazione esplicita dei documenti correnti.');
-      if (body.expectedRevision !== 0) throw new ConsentInputError('Revisione iniziale non valida.');
-      return json(await recordInitialHealthConsentAcceptance(uid, body.acceptance), 200, origin);
+      return json(await recordInitialHealthConsentAcceptance(uid, command.acceptance), 200, origin);
     }
-    if (body.action === 'withdraw') {
-      const expectedRevision = requireRevision(body.expectedRevision, 0, 'Revisione consenso mancante o non valida.');
-      const state = await recordHealthConsentWithdrawal(uid, expectedRevision);
+    if (command.action === 'withdraw') {
+      const state = await recordHealthConsentWithdrawal(uid, command.expectedRevision);
       // The erasure job was durably enqueued in the same Firestore transaction.
       // Best-effort immediate progress must not turn a confirmed withdrawal into
       // an HTTP failure: the existing cron recovers unfinished work.
@@ -140,12 +168,7 @@ export async function POST(request: Request): Promise<Response> {
       }
       return json(state, 200, origin);
     }
-    if (body.action === 'reaccept') {
-      requireVerifiedHealthConsentWrite(identity);
-      requireExplicitAcceptance(body.acceptance, 'È richiesta una nuova accettazione esplicita dei documenti correnti.');
-      const expectedRevision = requireRevision(body.expectedRevision, 1, 'Revisione della revoca mancante o non valida.');
-      return json(await recordHealthConsentReacceptance(uid, body.acceptance, expectedRevision), 200, origin);
-    }
-    throw new ConsentInputError('Azione non valida.');
+    requireVerifiedHealthConsentWrite(identity);
+    return json(await recordHealthConsentReacceptance(uid, command.acceptance, command.expectedRevision), 200, origin);
   } catch (error) { return errorResponse(error, origin); }
 }
