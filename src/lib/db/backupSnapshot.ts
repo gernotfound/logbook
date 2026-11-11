@@ -182,15 +182,31 @@ export async function collectBackupSnapshot(fallback: UserData, includeCloud: bo
             const root = await withTimeout(getDocFromServer(doc(db, 'users', uid)), 10000, 'Cloud non disponibile per il backup completo.');
             assertCurrent();
             if (root.exists()) addRawDoc('', root.data());
-            for (const name of ['history_months', 'nutrition_months']) {
+            const scanCollection = async (name: 'history_months' | 'nutrition_months') => {
+                const records: Array<{ path: string; raw: unknown }> = [];
                 let cursor: QueryDocumentSnapshot | undefined;
                 do {
+                    assertCurrent();
                     const constraints = [orderBy(documentId()), limit(50)];
                     const page = await withTimeout(getDocsFromServer(query(collection(db, 'users', uid, name), ...constraints, ...(cursor ? [startAfter(cursor)] : []))), 10000, 'Lettura dello storico interrotta.');
                     assertCurrent();
-                    for (const item of page.docs) addRawDoc(name + '/' + item.id, item.data());
+                    for (const item of page.docs) records.push({ path: name + '/' + item.id, raw: item.data() });
                     cursor = page.size === 50 ? page.docs[page.docs.length - 1] : undefined;
                 } while (cursor);
+                return records;
+            };
+            // An unsuccessful reader must not outlive the acquired ADK's cleanup.
+            // Keep the original collection order and validate all pages before export.
+            const [historyScan, nutritionScan] = await Promise.allSettled([
+                scanCollection('history_months'),
+                scanCollection('nutrition_months'),
+            ]);
+            assertCurrent();
+            if (historyScan.status === 'rejected') throw historyScan.reason;
+            if (nutritionScan.status === 'rejected') throw nutritionScan.reason;
+            for (const item of [...historyScan.value, ...nutritionScan.value]) {
+                assertCurrent();
+                addRawDoc(item.path, item.raw);
             }
             const afterControl = await withTimeout(getDocFromServer(controlRef), 10000, 'Controllo versione cloud non disponibile.');
             assertCurrent();

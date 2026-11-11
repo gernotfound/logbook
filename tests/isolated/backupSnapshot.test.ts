@@ -271,6 +271,56 @@ it('retries when an edit is acknowledged while the cloud scan is in flight', asy
     expect(issuedCloudKeys.every(key => key.every(byte => byte === 0))).toBe(true);
 });
 
+it('starts both backup collections before either completes and preserves the final control read', async () => {
+    const data = parse({});
+    await initializeSealedLocal(data);
+    let releasePages!: () => void;
+    const pagesReleased = new Promise<void>(resolve => { releasePages = resolve; });
+    const started = new Set<string>();
+    sdk.page.mockImplementation(async ({ path }: { path: string }) => {
+        started.add(path.split('/').at(-1)!);
+        await pagesReleased;
+        return { size: 0, docs: [] };
+    });
+
+    const pending = collectBackupSnapshot(data, true);
+    try {
+        await vi.waitFor(() => expect([...started].sort()).toEqual(['history_months', 'nutrition_months']));
+    } finally {
+        releasePages();
+    }
+    const result = await pending;
+    expect(result.coverage.scope).toBe('cloud-and-device');
+    expect(sdk.control).toHaveBeenCalledTimes(2);
+    expect(issuedCloudKeys).toHaveLength(1);
+    expect(issuedCloudKeys[0]).toEqual(new Uint8Array(32));
+});
+
+it('keeps the account key alive until both backup reads settle after one fails', async () => {
+    const data = parse({});
+    await initializeSealedLocal(data);
+    let releaseNutrition!: () => void;
+    const nutritionReleased = new Promise<void>(resolve => { releaseNutrition = resolve; });
+    let nutritionStarted = false;
+    sdk.page.mockImplementation(async ({ path }: { path: string }) => {
+        if (path.endsWith('/history_months')) throw new Error('history offline');
+        nutritionStarted = true;
+        await nutritionReleased;
+        return { size: 0, docs: [] };
+    });
+
+    const pending = collectBackupSnapshot(data, true);
+    try {
+        await vi.waitFor(() => expect(nutritionStarted).toBe(true));
+        expect(issuedCloudKeys).toHaveLength(1);
+        expect(issuedCloudKeys[0]).toEqual(new Uint8Array(32).fill(18));
+    } finally {
+        releaseNutrition();
+    }
+    await expect(pending).rejects.toThrow('history offline');
+    expect(issuedCloudKeys[0]).toEqual(new Uint8Array(32));
+});
+
 it('retries when another device updates the replica control during the cloud scan', async () => {
     const data = parse({ profile: { height: '170' } });
     await initializeSealedLocal(data);
