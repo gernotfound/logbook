@@ -212,6 +212,7 @@ describe('bounded pending journal compaction', () => {
         }));
 
         expect(await ensureBoundedPendingSequences('a', 's00')).toEqual(concurrent.envelope);
+        expect(await get(storageKey('a'))).toBe(concurrent.ciphertext);
         expect(await readLocal('a')).toEqual(concurrent.envelope);
     });
 
@@ -222,6 +223,7 @@ describe('bounded pending journal compaction', () => {
         }));
 
         expect(await ensureBoundedPendingSequences('a', 's00')).toEqual(concurrent.envelope);
+        expect(await get(storageKey('a'))).toBe(concurrent.ciphertext);
         expect(await readLocal('a')).toEqual(concurrent.envelope);
     });
 

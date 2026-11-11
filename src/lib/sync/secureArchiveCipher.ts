@@ -69,7 +69,8 @@ export function openLocalText(key: Uint8Array, owner: string, storageKey: string
     if (!stored.startsWith(SEALED_LOCAL_PREFIX)) throw new LocalCiphertextError();
     const content = stored.slice(SEALED_LOCAL_PREFIX.length);
     const tokens = content.split('.');
-    if (tokens.length !== 2 || tokens[1].length > (MAX_PLAINTEXT_BYTES + 16) * 2) {
+    if (tokens.length !== 2 || tokens[0].length !== 32
+        || tokens[1].length > (MAX_PLAINTEXT_BYTES + 16) * 2) {
         throw new LocalCiphertextError();
     }
     const nonce = unbase64url(tokens[0]);
