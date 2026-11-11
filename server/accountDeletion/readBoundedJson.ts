@@ -8,7 +8,7 @@ export class BoundedJsonBodyError extends Error {
   }
 }
 
-export const MAX_TRUSTED_COMMAND_BYTES = 8 * 1024;
+const MAX_TRUSTED_COMMAND_BYTES = 8 * 1024;
 const MAX_BODY_READ_MS = 2_000;
 
 export function assertBoundedJsonContentLength(request: Request): void {
