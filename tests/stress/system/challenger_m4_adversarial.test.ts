@@ -1,0 +1,573 @@
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { prepareUnlockedTestArchive } from '../../secureVaultFixture';
+import { getDoc, getDocFromServer, writeBatch } from 'firebase/firestore';
+import fs from 'fs';
+import path from 'path';
+
+vi.unmock('../../../src/lib/db');
+import { ConsentedTestDB as DB, openTestCloudBusiness, sealTestCloudFixture, testCloudKey } from '../../testUtils';
+import { mergeUserData } from '../../../src/lib/merge';
+import { readLocal } from '../../../src/lib/sync/localRepository';
+import { DomainParsers } from '../../../src/lib/schema';
+import { useAppStore } from '../../../src/store/useAppStore';
+import type { UserData } from '../../../src/types';
+
+vi.mock('../../../src/lib/firebase', () => ({
+    auth: {
+        currentUser: {
+            uid: 'test-user-id',
+            getIdTokenResult: vi.fn().mockResolvedValue({ authTime: new Date().toISOString() }),
+        },
+        signOut: vi.fn().mockResolvedValue(undefined),
+    },
+    db: {},
+    getDb: vi.fn().mockReturnValue({}),
+    ensureAppCheck: vi.fn().mockResolvedValue(undefined),
+    waitForPendingWrites: vi.fn().mockResolvedValue(undefined),
+    deleteUser: vi.fn().mockResolvedValue(undefined),
+}));
+
+vi.mock('../../../src/lib/sync/session', async () => {
+    const actual = await vi.importActual<typeof import('../../../src/lib/sync/session')>('../../../src/lib/sync/session');
+    const { auth } = await import('../../../src/lib/firebase');
+    return {
+        ...actual,
+        storageOwner: () => auth.currentUser?.uid ? `user:${auth.currentUser.uid}` : 'guest',
+        captureSession: () => ({ owner: auth.currentUser?.uid ? `user:${auth.currentUser.uid}` : 'guest', epoch: 0 }),
+        isCurrentSession: (session: any) => session.owner === (auth.currentUser?.uid ? `user:${auth.currentUser.uid}` : 'guest'),
+    };
+});
+
+describe('Empirical Challenger: Architectural Hardening Stress Suite', () => {
+    let mockBatch: any;
+    let mockDocs: Record<string, any> = {};
+
+    beforeEach(async () => {
+        vi.clearAllMocks();
+        DB.resetCache();
+        useAppStore.getState().resetStore();
+        mockDocs = {};
+
+        vi.mocked(getDoc).mockImplementation(async (docRef: any) => {
+            const path = docRef?.path || String(docRef);
+            if (mockDocs[path] !== undefined) {
+                return { exists: () => true, data: () => structuredClone(mockDocs[path]) } as any;
+            }
+            return { exists: () => false, data: () => ({}) } as any;
+        });
+        vi.mocked(getDocFromServer).mockImplementation(async ref => vi.mocked(getDoc)(ref));
+
+        let pendingWrites: Array<() => void> = [];
+
+        mockBatch = {
+            set: vi.fn().mockImplementation((docRef: any, data: any) => {
+                const path = docRef?.path || String(docRef);
+                pendingWrites.push(() => {
+                    mockDocs[path] = structuredClone(data);
+                });
+            }),
+            delete: vi.fn().mockImplementation((docRef: any) => {
+                const path = docRef?.path || String(docRef);
+                pendingWrites.push(() => {
+                    delete mockDocs[path];
+                });
+            }),
+            commit: vi.fn().mockImplementation(async () => {
+                const writes = pendingWrites;
+                pendingWrites = [];
+                for (const write of writes) write();
+            }),
+        };
+        vi.mocked(writeBatch).mockImplementation(() => {
+            pendingWrites = [];
+            return mockBatch;
+        });
+        await prepareUnlockedTestArchive('user:test-user-id');
+    });
+
+    describe('Scope 1: Durable journal retry and offline diffing resilience', () => {
+        it('preserves the pending journal after a cloud timeout and retries the identical state', async () => {
+            const initialData = {
+                profile: { name: 'Initial Name' },
+                library: [],
+                routines: [],
+                history: [],
+                nutrition: {},
+                customFoods: [],
+                activeWorkout: null,
+                trainingCycles: [],
+                activeCycleId: null,
+                nutritionPlanning: null,
+                supplements: []
+            };
+
+            // 1. Initial save succeeds
+            await DB.saveUserData(initialData);
+            expect(mockBatch.commit).toHaveBeenCalledTimes(1);
+            mockBatch.set.mockClear();
+            mockBatch.commit.mockClear();
+
+            // 2. Next save fails due to timeout (offline simulation)
+            const mutatedData1 = {
+                ...initialData,
+                profile: { name: 'Mutated Name 1' }
+            };
+            mockBatch.commit.mockRejectedValueOnce(new Error('Timeout sincronizzazione Firestore'));
+
+            // The catch block logs warn and does not re-throw for timeout
+            await DB.saveUserData(mutatedData1);
+            expect(mockBatch.set.mock.calls.filter((call: any[]) => !String(call[0]?.path || '').includes('sync_control'))).toHaveLength(1);
+            expect(mockBatch.commit).toHaveBeenCalledTimes(1);
+            mockBatch.set.mockClear();
+            mockBatch.commit.mockClear();
+
+            // A failed cloud commit must not acknowledge the production journal.
+            // The test adapter's last-saved snapshot is not a production persistence contract.
+            expect((await readLocal('user:test-user-id'))?.pending.length).toBeGreaterThan(0);
+            mockBatch.commit.mockResolvedValueOnce(undefined);
+            await DB.saveUserData(mutatedData1);
+
+            expect(mockBatch.set.mock.calls.filter((call: any[]) => !String(call[0]?.path || '').includes('sync_control'))).toHaveLength(1);
+            expect(mockBatch.commit).toHaveBeenCalledTimes(1);
+            mockBatch.set.mockClear();
+            mockBatch.commit.mockClear();
+
+            expect((await readLocal('user:test-user-id'))?.pending).toEqual([]);
+
+            // An already acknowledged state must not create another cloud write.
+            await DB.saveUserData(mutatedData1);
+            expect(mockBatch.set).not.toHaveBeenCalled();
+            expect(mockBatch.commit).not.toHaveBeenCalled();
+        });
+
+        it('returns a rejection without acknowledging a pending journal and allows retry', async () => {
+            const state = {
+                profile: { name: 'Permission Denied State' },
+                library: [],
+                routines: [],
+                history: [],
+                nutrition: {},
+                customFoods: [],
+                activeWorkout: null,
+                trainingCycles: [],
+                activeCycleId: null,
+                nutritionPlanning: null,
+                supplements: []
+            };
+
+            const permError: any = new Error('Missing or insufficient permissions');
+            permError.code = 'permission-denied';
+            mockBatch.commit.mockRejectedValueOnce(permError);
+
+            const saveRes = await DB.saveUserData(state);
+            expect(saveRes).toEqual({ ok: false, status: 'rejected', error: permError });
+            expect((await readLocal('user:test-user-id'))?.pending.length).toBeGreaterThan(0);
+            mockBatch.set.mockClear();
+            mockBatch.commit.mockClear();
+
+            // Next attempt must still detect that state is uncommitted
+            mockBatch.commit.mockResolvedValueOnce(undefined);
+            await DB.saveUserData(state);
+            expect(mockBatch.set.mock.calls.filter((call: any[]) => !String(call[0]?.path || '').includes('sync_control'))).toHaveLength(1);
+            expect(mockBatch.commit).toHaveBeenCalledTimes(1);
+            expect((await readLocal('user:test-user-id'))?.pending).toEqual([]);
+        });
+
+        it('handles monthly history and nutrition diffing correctly after failure recovery', async () => {
+            const stateWithHistoryAndNut = {
+                profile: {},
+                library: [],
+                routines: [],
+                history: [
+                    { id: 'h1', date: '2026-08-16', exercises: [] },
+                    { id: 'h2', date: '2026-07-20', exercises: [] }
+                ],
+                nutrition: {
+                    '2026-08-16': { date: '2026-08-16', kcal: 2200, carbs: 250, pro: 160, fat: 60, meals: [] }
+                },
+                customFoods: [],
+                activeWorkout: null,
+                trainingCycles: [],
+                activeCycleId: null,
+                nutritionPlanning: null,
+                supplements: []
+            };
+
+            const offlineError: any = new Error('Firebase offline error');
+            offlineError.code = 'unavailable';
+            mockBatch.commit.mockRejectedValueOnce(offlineError);
+            await DB.saveUserData(stateWithHistoryAndNut);
+
+            // Verify both monthly docs were attempted
+            expect(mockBatch.set).toHaveBeenCalled();
+            mockBatch.set.mockClear();
+            mockBatch.commit.mockClear();
+
+            // Re-attempt must re-send history and nutrition batches
+            mockBatch.commit.mockResolvedValueOnce(undefined);
+            await DB.saveUserData(stateWithHistoryAndNut);
+            expect(mockBatch.set).toHaveBeenCalled();
+            expect(mockBatch.commit).toHaveBeenCalledTimes(1);
+        });
+    });
+
+    describe('Scope 2: Race Condition & Reconcile (In-flight Sync Protection)', () => {
+        it('preserves local uncommitted nutrition and customFoods when cloudData returns during sync', () => {
+            const staleCloudData: UserData = {
+                profile: { height: '175' },
+                library: [{ id: 'ex1', name: 'Panca piana', setsCount: 3, sets: [] }],
+                routines: [{ id: 'r1', name: 'Spinta', exercises: [] }],
+                history: [],
+                nutrition: {
+                    '2026-08-15': {
+                        date: '2026-08-15',
+                        kcal: 2000, carbs: 200, pro: 150, fat: 60,
+                        meals: [{ id: 'm1', name: 'Avena', meal: 'Colazione', quantity: 80, kcal: 300, carbs: 50, pro: 10, fat: 5 }],
+                        supplementsIntake: []
+                    }
+                },
+                customFoods: [{ id: 'cf1', name: 'Whey Protein', kcal: 120, pro: 24, carbs: 2, fat: 1 }],
+                activeWorkout: null,
+                trainingCycles: [],
+                activeCycleId: null,
+                nutritionPlanning: null as any,
+                supplements: []
+            };
+
+            const localPendingData: UserData = {
+                profile: { height: '175' },
+                library: [
+                    { id: 'ex1', name: 'Panca piana', setsCount: 3, sets: [] },
+                    { id: 'ex2', name: 'Croci manubri', setsCount: 3, sets: [] } // Added locally
+                ],
+                routines: [{ id: 'r1', name: 'Spinta', exercises: [] }],
+                history: [],
+                nutrition: {
+                    '2026-08-15': {
+                        date: '2026-08-15',
+                        kcal: 2000, carbs: 200, pro: 150, fat: 60,
+                        meals: [{ id: 'm1', name: 'Avena', meal: 'Colazione', quantity: 80, kcal: 300, carbs: 50, pro: 10, fat: 5 }],
+                        supplementsIntake: []
+                    },
+                    '2026-08-16': { // Added locally in-flight
+                        date: '2026-08-16',
+                        kcal: 2500, carbs: 300, pro: 180, fat: 70,
+                        meals: [{ id: 'm2', name: 'Riso e Pollo', meal: 'Pranzo', quantity: 200, kcal: 650, carbs: 80, pro: 50, fat: 10 }],
+                        supplementsIntake: [{ id: 'si1', supplementId: 'creatina', amount: 5, time: Date.now() }]
+                    }
+                },
+                customFoods: [
+                    { id: 'cf1', name: 'Whey Protein', kcal: 120, pro: 24, carbs: 2, fat: 1 },
+                    { id: 'cf2', name: 'Barretta Proteica', kcal: 210, pro: 20, carbs: 15, fat: 7 } // Added locally
+                ],
+                activeWorkout: null,
+                trainingCycles: [],
+                activeCycleId: null,
+                nutritionPlanning: null as any,
+                supplements: [{ id: 'creatina', name: 'Creatina Monoidrato', unit: 'g' }]
+            };
+
+            const merged = mergeUserData(staleCloudData, localPendingData);
+
+            // Verify local items were NOT deleted by cloudData
+            expect(merged.customFoods).toHaveLength(2);
+            expect(merged.customFoods?.some(f => f.name === 'Barretta Proteica')).toBe(true);
+
+            expect(merged.library).toHaveLength(2);
+            expect(merged.library?.some(e => e.id === 'ex2')).toBe(true);
+
+            expect(merged.nutrition?.['2026-08-16']).toBeDefined();
+            expect(merged.nutrition?.['2026-08-16']?.meals).toHaveLength(1);
+            expect(merged.nutrition?.['2026-08-16']?.meals?.[0]?.name).toBe('Riso e Pollo');
+            expect(merged.nutrition?.['2026-08-15']).toBeDefined();
+
+            expect(merged.supplements).toHaveLength(1);
+            expect(merged.supplements?.[0]?.id).toBe('creatina');
+        });
+
+        it('handles collision deterministically with local mutation priority', () => {
+            const cloudData: UserData = {
+                profile: { height: '175' },
+                library: [],
+                routines: [],
+                history: [],
+                nutrition: {
+                    '2026-08-16': {
+                        date: '2026-08-16',
+                        kcal: 500, carbs: 50, pro: 30, fat: 10,
+                        meals: [{ id: 'meal_1', name: 'Pasta Semplice', meal: 'Pranzo', quantity: 100, kcal: 350, carbs: 70, pro: 10, fat: 2 }],
+                        supplementsIntake: []
+                    }
+                },
+                customFoods: [{ id: 'cf_shared', name: 'Old Cloud Name', kcal: 100, pro: 10, carbs: 10, fat: 2 }],
+                activeWorkout: null,
+                trainingCycles: [],
+                activeCycleId: null,
+                nutritionPlanning: null as any,
+                supplements: []
+            };
+
+            const localData: UserData = {
+                profile: { height: '180' }, // Mutated height
+                library: [],
+                routines: [],
+                history: [],
+                nutrition: {
+                    '2026-08-16': {
+                        date: '2026-08-16',
+                        kcal: 600, carbs: 60, pro: 40, fat: 12,
+                        // Mutated meal quantity and new meal
+                        meals: [
+                            { id: 'meal_1', name: 'Pasta con Tonno', meal: 'Pranzo', quantity: 150, kcal: 500, carbs: 70, pro: 35, fat: 5 },
+                            { id: 'meal_2', name: 'Mela', meal: 'Spuntino', quantity: 150, kcal: 80, carbs: 20, pro: 0, fat: 0 }
+                        ],
+                        supplementsIntake: []
+                    }
+                },
+                customFoods: [{ id: 'cf_shared', name: 'Mutated Local Name', kcal: 110, pro: 12, carbs: 8, fat: 2 }],
+                activeWorkout: null,
+                trainingCycles: [],
+                activeCycleId: null,
+                nutritionPlanning: null as any,
+                supplements: []
+            };
+
+            const merged = mergeUserData(cloudData, localData);
+
+            expect(merged.profile?.height).toBe('180');
+            expect(merged.customFoods?.[0]?.name).toBe('Mutated Local Name');
+            expect(merged.nutrition?.['2026-08-16']?.meals).toHaveLength(2);
+            expect(merged.nutrition?.['2026-08-16']?.meals?.find(m => m.id === 'meal_1')?.name).toBe('Pasta con Tonno');
+        });
+    });
+
+    describe('Scope 3: Memoization Referential Identity Verification', () => {
+        it('verifies EMPTY_HISTORY_ARRAY in TrainingSession preserves strict reference equality (===) for multiple exercises without history', async () => {
+            const activeSessionFile = fs.readFileSync(
+                path.resolve(__dirname, '../../../src/components/Training/ActiveWorkoutSession.tsx'),
+                'utf-8'
+            );
+
+            // Verify module-level declaration exists
+            expect(activeSessionFile).toMatch(/const EMPTY_HISTORY_ARRAY:\s*Array<.*?>\s*=\s*\[\];/);
+
+            // Verify the fallback uses EMPTY_HISTORY_ARRAY instead of inline []
+            expect(activeSessionFile).toMatch(/exerciseHistoryMap\.get\(exItem\.exId\)\s*\|\|\s*EMPTY_HISTORY_ARRAY/);
+            expect(activeSessionFile).not.toMatch(/exerciseHistoryMap\.get\(exItem\.exId\)\s*\|\|\s*\[\]/);
+
+            // Emulate the exact lookup logic
+            const exerciseHistoryMap = new Map<string, any[]>();
+            exerciseHistoryMap.set('ex_with_history', [{ date: '2026-08-10', sets: [], note: '' }]);
+
+            const EMPTY_HISTORY_ARRAY: any[] = [];
+            const getPastWorkouts = (exId: string) => exerciseHistoryMap.get(exId) || EMPTY_HISTORY_ARRAY;
+
+            // Multiple exercises with no history across multiple render cycles
+            const render1_ex1 = getPastWorkouts('ex_new_1');
+            const render1_ex2 = getPastWorkouts('ex_new_2');
+            const render1_ex3 = getPastWorkouts('ex_new_3');
+
+            const render2_ex1 = getPastWorkouts('ex_new_1');
+            const render2_ex2 = getPastWorkouts('ex_new_2');
+
+            // Referential identity checks:
+            expect(render1_ex1).toBe(EMPTY_HISTORY_ARRAY);
+            expect(render1_ex2).toBe(EMPTY_HISTORY_ARRAY);
+            expect(render1_ex3).toBe(EMPTY_HISTORY_ARRAY);
+            expect(render1_ex1 === render1_ex2).toBe(true);
+            expect(render1_ex1 === render2_ex1).toBe(true);
+            expect(render1_ex2 === render2_ex2).toBe(true);
+
+            // In contrast, inline [] would fail strict equality:
+            const brokenLookup = () => exerciseHistoryMap.get('ex_new_1') || [];
+            expect(brokenLookup() === brokenLookup()).toBe(false);
+        });
+
+        it('Production SessionExerciseCard and SessionSetRow expose their real React.memo boundary', async () => {
+            const { SessionExerciseCard } = await import('../../../src/components/Training/session/SessionExerciseCard');
+            const { SessionSetRow } = await import('../../../src/components/Training/session/SessionSetRow');
+            expect((SessionExerciseCard as any).$$typeof).toBe(Symbol.for('react.memo'));
+            expect((SessionSetRow as any).$$typeof).toBe(Symbol.for('react.memo'));
+            // Production uses React.memo's default shallow comparison; no test-side comparator is authoritative.
+            expect((SessionExerciseCard as any).compare).toBeNull();
+            expect((SessionSetRow as any).compare).toBeNull();
+        });
+    });
+
+    describe('Scope 4: Security Rules Regex & Schema Whitelist Hardening', () => {
+        const rulesPath = path.resolve(__dirname, '../../../firestore.rules');
+        const rulesContent = fs.readFileSync(rulesPath, 'utf-8');
+
+        it('static smoke: firestore.rules declares the root whitelist and lacks legacy wildcard', () => {
+            // Check that recursive wildcard was removed from users doc
+            expect(rulesContent).not.toMatch(/match\s+\/users\/\{userId\}\/\{document=\*\*\}/);
+
+            const expectedKeys = ['_schemaVersion', '_sync', '_sealed'];
+
+            expectedKeys.forEach(key => expect(rulesContent).toContain(`'${key}'`));
+            expect(rulesContent).toContain('data._sync.fields.keys().size() == 0');
+
+            // Match the keys array in incomingData().keys().hasOnly([...])
+            const match = rulesContent.match(/function isSealedCloudDocument\(data\)[\s\S]*?data\.keys\(\)\.hasOnly\(\[\s*([\s\S]*?)\s*\]\)/);
+            expect(match).not.toBeNull();
+            const extractedKeys = match![1]
+                .split(',')
+                .map(k => k.trim().replace(/['"]/g, ''))
+                .filter(k => k.length > 0);
+
+            expect(extractedKeys.sort()).toEqual(expectedKeys.sort());
+        });
+
+        it('verifies DB.saveUserData writes strictly conforming userDocData with the complete whitelisted schema', async () => {
+            const sampleUserData = {
+                profile: { name: 'Test' },
+                library: [],
+                routines: [],
+                customFoods: [],
+                activeWorkout: null,
+                trainingCycles: [],
+                activeCycleId: null,
+                nutritionPlanning: null,
+                supplements: [],
+                activePains: [],
+                catalogOverrides: { exercises: {}, foods: {}, hiddenExerciseIds: [], hiddenFoodIds: [] },
+                history: [],
+                nutrition: {}
+            };
+
+            await DB.saveUserData(sampleUserData);
+            expect(mockBatch.set).toHaveBeenCalled();
+
+            const userDocCall = mockBatch.set.mock.calls.find((call: any) => call[0]?.path === 'users/test-user-id' && call[1]?._sealed);
+            expect(userDocCall).toBeDefined();
+            const writtenKeys = Object.keys(userDocCall[1]);
+            expect(openTestCloudBusiness(userDocCall[1]).profile.name).toBe('Test');
+
+            const expectedKeys = ['_schemaVersion', '_sync', '_sealed'];
+
+            expect(writtenKeys.sort()).toEqual(expectedKeys.sort());
+            // Ensure neither history nor nutrition leaked into the root document!
+            expect(writtenKeys).not.toContain('history');
+            expect(writtenKeys).not.toContain('nutrition');
+        });
+
+        it('parses the month-ID regex from firestore.rules and tests string boundaries', () => {
+            // Extract regex from rules
+            const regexMatch = rulesContent.match(/monthId\.matches\('([^']+)'\)/);
+            expect(regexMatch).not.toBeNull();
+            const regexStr = regexMatch![1];
+            const monthRegex = new RegExp(regexStr);
+
+            // Valid month IDs
+            const validMonths = [
+                '2026-01', '2026-02', '2026-03', '2026-04',
+                '2026-05', '2026-06', '2026-07', '2026-08',
+                '2026-09', '2026-10', '2026-11', '2026-12',
+                '1990-01', '2030-12', '2000-06'
+            ];
+            validMonths.forEach(m => {
+                expect(monthRegex.test(m), `Expected ${m} to be valid`).toBe(true);
+            });
+
+            // Hostile & Invalid month IDs
+            const invalidMonths = [
+                '2026-00',       // Month 00 invalid
+                '2026-13',       // Month 13 invalid
+                '2026-99',       // Month 99 invalid
+                '2026-1',        // Single digit month
+                '2026-012',      // 3-digit month
+                '26-05',         // 2-digit year
+                '202605',        // Missing dash
+                '2026/05',       // Wrong separator
+                '2026_05',       // Wrong separator
+                'bad-month',     // Non-numeric
+                '2026-aa',       // Non-numeric month
+                'aaaa-01',       // Non-numeric year
+                '2026-05-01',    // Day suffix attached
+                'prefix-2026-05',// Prefix attached
+                '2026-05\n',     // Trailing newline
+                ' 2026-05 ',     // Whitespace padding
+                '',              // Empty string
+                'null',          // Literal string null
+                'undefined'      // Literal string undefined
+            ];
+
+            invalidMonths.forEach(m => {
+                expect(monthRegex.test(m), `Expected ${m} to be rejected`).toBe(false);
+            });
+        });
+    });
+
+    describe('Scope 5: Domain Segmented Zod Parsers', () => {
+        it('exports DomainParsers for fine-grained validation and rejects corrupted sub-trees gracefully', () => {
+            expect(DomainParsers).toBeDefined();
+            expect(typeof DomainParsers.parseProfile).toBe('function');
+            expect(typeof DomainParsers.parseHistory).toBe('function');
+            expect(typeof DomainParsers.parseNutrition).toBe('function');
+            expect(typeof DomainParsers.parseLibrary).toBe('function');
+            expect(typeof DomainParsers.parseCustomFoods).toBe('function');
+            expect(typeof DomainParsers.parseRoutines).toBe('function');
+            expect(typeof DomainParsers.parseTrainingCycles).toBe('function');
+            expect(typeof DomainParsers.parseSupplements).toBe('function');
+            expect(typeof DomainParsers.parseNutritionPlanning).toBe('function');
+
+            // Defensive test: corrupted input to parseProfile recovers gracefully
+            const profile = DomainParsers.parseProfile({ height: 180, invalidProp: 'ok' });
+            expect(profile.height).toBe('180');
+
+            // Defensive test: corrupted nutrition day
+            const nutrition = DomainParsers.parseNutrition({
+                '2026-08-16': {
+                    date: '2026-08-16',
+                    kcal: '2200', // string parsed to number
+                    carbs: '250',
+                    pro: 'NaN',  // NaN recovers to default
+                    fat: 70
+                }
+            });
+            expect(nutrition['2026-08-16'].kcal).toBe(2200);
+            expect(nutrition['2026-08-16'].pro).toBe(0);
+        });
+    });
+
+    describe('Scope 6: Windowed Load & Batched Deletion Limits', () => {
+        it('DB.loadCloudPayload queries only 3 months window', async () => {
+            const mockUserDoc = {
+                _schemaVersion: 1,
+                _sync: {
+                    protocolVersion: 3,
+                    clock: {},
+                    fields: {},
+                    writer: { slot: 's00', replicaId: 'window-seed', generation: 1, seq: 0 },
+                },
+                profile: { height: '180' },
+                library: [],
+                routines: [],
+                customFoods: [],
+                trainingCycles: [],
+                activeCycleId: null
+            };
+
+            // Control and month reads are separate from the cloud root.
+            // Avoid a call-order fixture: the control witness is fetched first.
+            vi.mocked(getDocFromServer).mockImplementation(async (ref: any) => {
+                const path = String(ref?.path ?? '');
+                if (path.includes('/sync_control/') || path.includes('/history_months/')
+                    || path.includes('/nutrition_months/')) {
+                    return { exists: () => false, data: () => undefined } as any;
+                }
+                return { exists: () => true, data: () => sealTestCloudFixture(mockUserDoc) } as any;
+            });
+
+            const loaded = (await DB.loadCloudPayload({ cloudKey: testCloudKey() }))?.data;
+
+            expect(loaded).not.toBeNull();
+            expect(loaded?.profile?.height).toBe('180');
+            // Cached SDK reads are only for the catalog; authoritative user data uses server reads.
+            expect(getDoc).toHaveBeenCalledTimes(1);
+            // One root, six months and two server control-epoch reads.
+            expect(getDocFromServer).toHaveBeenCalledTimes(9);
+        });
+
+    });
+});
