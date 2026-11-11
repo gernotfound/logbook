@@ -291,11 +291,17 @@ function renamedTestPaths() {
 
 function remapDedicatedVitestLeaf(leaf, renames) {
   const parts = leaf.split(/\s+/);
-  if (parts[0] !== 'vitest' || parts[1] !== 'run' || parts.length < 3
-    || !parts.slice(2).every(file => /^tests\/\S+\.test\.(?:ts|tsx)$/.test(file))) {
+  if (parts[0] !== 'vitest' || parts[1] !== 'run') return leaf;
+  let firstFile = 2;
+  if (parts[firstFile] === '--config') {
+    if (!/^[\w./-]+\.config\.(?:ts|mts|mjs)$/.test(parts[firstFile + 1] ?? '')) return leaf;
+    firstFile += 2;
+  }
+  if (parts.length === firstFile
+    || !parts.slice(firstFile).every(file => /^tests\/\S+\.test\.(?:ts|tsx)$/.test(file))) {
     return leaf;
   }
-  return ['vitest', 'run', ...parts.slice(2).map(file => renames.get(file) ?? file)].join(' ');
+  return [...parts.slice(0, firstFile), ...parts.slice(firstFile).map(file => renames.get(file) ?? file)].join(' ');
 }
 
 const oldPackage = parseJson(readBase('package.json'), 'main package.json');
