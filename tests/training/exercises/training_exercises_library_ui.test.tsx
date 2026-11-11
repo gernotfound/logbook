@@ -1,6 +1,6 @@
 import React from 'react';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { render, screen, fireEvent, renderHook, act, waitFor } from '@testing-library/react';
+import { screen, fireEvent, renderHook, act, waitFor } from '@testing-library/react';
 import { renderWithProviders, emptyUserData, idbStore } from '../../setup';
 import { useAppStore } from '../../../src/store/useAppStore';
 import { useDialogStore } from '../../../src/store/useDialogStore';
