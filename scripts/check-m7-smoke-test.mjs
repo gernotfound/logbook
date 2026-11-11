@@ -14,11 +14,13 @@ const runnerScript = [
   "import { GET as getCron } from './dist/api/account-deletion-cron.js';",
   '',
   'async function run() {',
-  "  const req1 = new Request('https://example.test/api/account-deletion', { headers: { origin: 'https://thelogbook.web.app' } });",
+  // Exercise the authorization boundary with well-formed selectors; invalid
+  // selectors are now rejected earlier and deliberately return 400/404.
+  "  const req1 = new Request('https://example.test/api/account-deletion', { headers: { origin: 'https://thelogbook.web.app', 'x-account-deletion-uid': 'smoke-user', 'x-account-deletion-receipt': 'A'.repeat(43) } });",
   '  const res1 = await getDeletion(req1);',
   "  if (res1.status !== 403) throw new Error('Expected 403 on /api/account-deletion, got ' + res1.status);",
   '',
-  "  const deviceReq = new Request('https://example.test/api/account-deletion-device', { headers: { origin: 'https://thelogbook.web.app' } });",
+  "  const deviceReq = new Request('https://example.test/api/account-deletion-device', { headers: { origin: 'https://thelogbook.web.app', 'x-account-deletion-uid': 'smoke-user', 'x-account-deletion-device': 'A'.repeat(43) } });",
   '  const deviceRes = await getDeletionDevice(deviceReq);',
   "  if (deviceRes.status !== 403) throw new Error('Expected 403 on /api/account-deletion-device without App Check, got ' + deviceRes.status);",
   '',
