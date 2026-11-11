@@ -1,5 +1,5 @@
-import { expect, test, type Page } from './fixtures';
-import { pauseStorageWrite } from './storage-write-barrier';
+import { expect, test, type Page } from '../fixtures';
+import { pauseStorageWrite } from '../storage-write-barrier';
 
 const controlKey = 'logbook:v2:guest:secure-vault-control';
 type VaultControl = {

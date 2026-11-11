@@ -1,5 +1,5 @@
-import type { Page } from './fixtures';
-import { expect, test } from './pwa-upgrade-fixtures';
+import type { Page } from '../fixtures';
+import { expect, test } from '../pwa-upgrade-fixtures';
 
 async function openApplicationSettings(page: Page) {
   await page.goto('/?tab=settings');

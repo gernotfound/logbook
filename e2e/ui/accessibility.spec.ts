@@ -1,5 +1,5 @@
 import AxeBuilder from '@axe-core/playwright';
-import { expect, test, type Page } from './fixtures';
+import { expect, test, type Page } from '../fixtures';
 
 async function collectBlockingAccessibilityViolations(page: Page, surface: string) {
   const result = await new AxeBuilder({ page })

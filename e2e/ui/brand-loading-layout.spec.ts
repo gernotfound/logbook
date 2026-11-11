@@ -1,4 +1,4 @@
-import { expect, test, type Page } from './fixtures';
+import { expect, test, type Page } from '../fixtures';
 
 // Route the actual entry/lazy bundles; the worker lifecycle has separate E2E.
 // Blocking workers here prevents precache from bypassing those HTTP barriers.

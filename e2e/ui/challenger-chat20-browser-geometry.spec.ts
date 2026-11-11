@@ -1,4 +1,4 @@
-import { expect, test, type Page } from './fixtures';
+import { expect, test, type Page } from '../fixtures';
 
 // These assertions use Chromium layout geometry. Vitest/jsdom cannot measure
 // actual clipping, and a desktop browser does not emulate an OS virtual keyboard.

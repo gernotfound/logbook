@@ -1,4 +1,4 @@
-import { test, expect, type Page } from './fixtures';
+import { test, expect, type Page } from '../fixtures';
 
 const routineName = 'Scheda E2E revoca guest';
 

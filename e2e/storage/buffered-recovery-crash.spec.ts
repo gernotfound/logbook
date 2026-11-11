@@ -2,8 +2,8 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { chromium, type BrowserContext } from '@playwright/test';
-import { assertLoopbackE2eUrl } from '../scripts/e2e-environment.mjs';
-import { expect, test } from './fixtures';
+import { assertLoopbackE2eUrl } from '../../scripts/e2e-environment.mjs';
+import { expect, test } from '../fixtures';
 
 const origin = assertLoopbackE2eUrl(process.env.LOGBOOK_TEST_URL || 'http://127.0.0.1:4173');
 

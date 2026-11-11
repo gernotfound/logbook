@@ -1,4 +1,4 @@
-import { expect, test, type Page } from './fixtures';
+import { expect, test, type Page } from '../fixtures';
 
 async function inspectPersistedGuestArchive(page: Page): Promise<string> {
   return page.evaluate(async () => {

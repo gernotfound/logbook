@@ -1,4 +1,4 @@
-import { test, expect } from './fixtures';
+import { test, expect } from '../fixtures';
 
 test.describe('Offline scenarios & Background suspension', () => {
   test('unreadable ownership storage renders the recovery barrier instead of mounting account data', async ({ page }) => {

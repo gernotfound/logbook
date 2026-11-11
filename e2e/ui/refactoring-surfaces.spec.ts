@@ -1,4 +1,4 @@
-import { expect, test, type Page } from './fixtures';
+import { expect, test, type Page } from '../fixtures';
 import type { TestInfo } from '@playwright/test';
 
 test.describe.configure({ retries: 0 });

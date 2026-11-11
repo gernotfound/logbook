@@ -1,5 +1,5 @@
-import { expect, test, type Page } from './fixtures';
-import { pauseStorageWrite } from './storage-write-barrier';
+import { expect, test, type Page } from '../fixtures';
+import { pauseStorageWrite } from '../storage-write-barrier';
 
 async function enterGuest(page: Page) {
   await page.goto('/');
