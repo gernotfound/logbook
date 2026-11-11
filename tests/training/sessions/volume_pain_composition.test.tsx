@@ -3,7 +3,7 @@ import {
     calculateSetVolumeContract,
     calculateWorkoutVolumeContract,
     mergeActivePainsContract
-} from './requirements_r1_r6_contracts';
+} from '../../system/requirements/requirements_r1_r6_contracts';
 
 describe('LogBook 4-Tier Automated Test Suite (Requirements R1 - R6)', () => {
 
