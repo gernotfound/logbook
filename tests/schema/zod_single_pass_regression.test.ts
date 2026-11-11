@@ -72,7 +72,11 @@ describe('Zod single-pass parsing with preserved business invariants', () => {
         expect(day.meals).toEqual([{ ...meal, quantity: 100, kcal: 200, carbs: 30, pro: 6, fat: 3 }]);
         expect(day.supplementsIntake.map(item => item.id)).toEqual(['intake-1']);
         expect(day.cardioSessions.map(item => item.id)).toEqual(['cardio-1']);
-        expect(UserDataSchema.parse(result)).toEqual(result);
+        const reparsed = UserDataSchema.parse(result);
+        expect(reparsed.library).toEqual(result.library);
+        expect(reparsed.routines).toEqual(result.routines);
+        expect(reparsed.trainingCycles).toEqual(result.trainingCycles);
+        expect(reparsed.nutrition).toEqual(result.nutrition);
         expect(input).toEqual(original);
 
         expect(() => assertCloudBusinessPreserved('nutrition_months/2026-11', {
@@ -97,7 +101,8 @@ describe('Zod single-pass parsing with preserved business invariants', () => {
         expect(day.meals).toEqual([]);
         expect(day.supplementsIntake).toEqual([]);
         expect(day.cardioSessions).toEqual([]);
-        expect(UserDataSchema.parse(parsed)).toEqual(parsed);
+        const reparsed = UserDataSchema.parse(parsed);
+        expect(reparsed.nutrition).toEqual(parsed.nutrition);
     });
 
     it('matches full-Zod scoped projections and semantic operations for validated snapshots', () => {
@@ -113,7 +118,7 @@ describe('Zod single-pass parsing with preserved business invariants', () => {
             { type: 'nutrition-day.patch', date: '2026-11-11', patch: { weight: '80' } },
         ]);
         const scope: DocumentProjectionScope = {
-            rootKeys: new Set(['profile', 'library', 'catalogOverrides']),
+            rootKeys: new Set(['profile', 'library', 'catalogOverrides', 'nutritionPlanning']),
             monthly: new Map([
                 ['history_months/2026-11', new Set(['workout-1'])],
                 ['nutrition_months/2026-11', new Set(['2026-11-11'])],

@@ -22,12 +22,41 @@ export function projectDocuments(input: UserData, catalog: CachedGlobalCatalog, 
     return projectUserDocuments(UserDataSchema.parse(input) as unknown as UserData, catalog, scope);
 }
 
-// Only the Domain Operations compiler may skip redundant whole-archive parsing:
-// its before-state has passed the local envelope gateway, and its after-state
-// comes from the Zod-validating reducer. Untrusted cloud/backup/snapshot callers
-// must continue through projectDocuments() and the independent lossless guards.
+// Domain Operations inputs have already passed the local envelope gateway or
+// the validating reducer. Parse only touched fields and monthly identities:
+// a second Zod pass can still expand nested defaults (e.g. nutritionPlanning),
+// so skipping validation entirely would alter the compiled semantic diff.
 export function projectValidatedDomainDocuments(data: UserData, catalog: CachedGlobalCatalog, scope: DocumentProjectionScope): Map<string, DocumentData> {
-    return projectUserDocuments(data, catalog, scope);
+    const selected: Record<string, unknown> = {};
+    const keys = new Set(scope.rootKeys);
+    // Catalog visibility/delta projection depends on these three fields together.
+    if (['library', 'customFoods', 'catalogOverrides'].some(key => keys.has(key))) {
+        for (const key of ['library', 'customFoods', 'catalogOverrides']) keys.add(key);
+    }
+    for (const key of keys) {
+        if (Object.hasOwn(data, key)) {
+            Object.defineProperty(selected, key, { value: data[key as keyof UserData], enumerable: true, configurable: true, writable: true });
+        }
+    }
+
+    const historyIds = new Set<string>();
+    const nutritionDates = new Set<string>();
+    for (const [path, ids] of scope.monthly) {
+        if (path.startsWith('history_months/')) for (const id of ids) historyIds.add(id);
+        if (path.startsWith('nutrition_months/')) for (const id of ids) nutritionDates.add(id);
+    }
+    if (historyIds.size) {
+        selected.history = (data.history ?? []).filter(workout => historyIds.has(String(workout.id ?? '')));
+    }
+    if (nutritionDates.size) {
+        const nutrition: Record<string, unknown> = {};
+        for (const date of nutritionDates) {
+            if (!Object.hasOwn(data.nutrition ?? {}, date)) continue;
+            Object.defineProperty(nutrition, date, { value: data.nutrition![date], enumerable: true, configurable: true, writable: true });
+        }
+        selected.nutrition = nutrition;
+    }
+    return projectUserDocuments(UserDataSchema.parse(selected) as unknown as UserData, catalog, scope);
 }
 
 function projectUserDocuments(data: UserData, catalog: CachedGlobalCatalog, scope?: DocumentProjectionScope): Map<string, DocumentData> {
