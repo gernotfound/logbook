@@ -1,7 +1,7 @@
 import { act, fireEvent, render, renderHook, screen } from '@testing-library/react';
 import { useState } from 'react';
 import DataView from '../../../src/components/Data/DataView';
-import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useNutritionMeasurements } from '../../../src/hooks/useNutritionMeasurements';
 import { useSleepMeasurements } from '../../../src/hooks/useSleepMeasurements';
 import { useAppStore } from '../../../src/store/useAppStore';
@@ -44,6 +44,7 @@ afterEach(() => {
     vi.restoreAllMocks();
 });
 
+describe('Owner, consent revision and dated-draft fencing', () => {
 it('uses the fenced store owner without rereading lifecycle ownership on rerender', () => {
     const getItem = vi.spyOn(localStorage, 'getItem');
     const hook = renderHook(() => useNutritionMeasurements('2026-09-11'));
@@ -354,7 +355,9 @@ it('refuses malformed deletion-marker revisions without rewriting the original b
         .toThrow('Provenienza');
     expect(localStorage.getItem(key)).toBe(originalCiphertext);
 });
+});
 
+describe('Concurrent writers and witness integrity', () => {
 it('blocks a stale mounted measurement form before edit or business dispatch, preserving the newer device record', async () => {
     const owner = storageOwner();
     await prepareUnlockedTestArchive(owner);
@@ -685,7 +688,9 @@ it('rejects business save when a later witness update fails but a previous witne
     expect(() => draftRegistry.flushAll({ strict: true })).toThrow('bozze');
     hook.unmount();
 });
+});
 
+describe('Recovery lineage and safe retries', () => {
 it('recovers several sequential dated edits across React remounts without confusing lineage with concurrency', async () => {
     const owner = storageOwner();
     await prepareUnlockedTestArchive(owner);
@@ -1075,7 +1080,9 @@ it('allows the same mounted form to edit again after a confirmed save and retain
     expect(useAppStore.getState().localPersistenceBlocked).toBe(false);
     hook.unmount();
 });
+});
 
+describe('Measurement and sleep editor lifecycle', () => {
 it('reads a new localStorage key before any write can copy the previous value over it', () => {
     localStorage.setItem('view-a', JSON.stringify('history')); localStorage.setItem('view-b', JSON.stringify('home'));
     const hook = renderHook(({ key }) => useLocalStorage(key, 'default', z.string()), { initialProps: { key: 'view-a' } });
@@ -1448,3 +1455,5 @@ it('does not sort measurement history while its section is inactive, and restore
     hook.rerender({ visible: false });
     expect(hook.result.current.measurementsHistory).toEqual([]);
 });
+});
+
