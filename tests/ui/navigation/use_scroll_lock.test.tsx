@@ -1,7 +1,7 @@
 import { StrictMode } from 'react';
 import { cleanup, render } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
-import { useScrollLock } from '../../src/hooks/useScrollLock';
+import { useScrollLock } from '../../../src/hooks/useScrollLock';
 
 function Lock({ enabled = true }: { enabled?: boolean }) {
   useScrollLock(enabled);

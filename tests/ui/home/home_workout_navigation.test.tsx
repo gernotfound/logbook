@@ -1,7 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
-import HomeWorkoutWidget from '../../src/components/Home/widgets/HomeWorkoutWidget';
-import type { WorkoutSession } from '../../src/types';
+import HomeWorkoutWidget from '../../../src/components/Home/widgets/HomeWorkoutWidget';
+import type { WorkoutSession } from '../../../src/types';
 
 const completedWorkout = {
   id: 'completed-1',

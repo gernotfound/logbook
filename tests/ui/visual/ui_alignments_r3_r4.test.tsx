@@ -1,15 +1,15 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, renderHook, act } from '@testing-library/react';
 import React from 'react';
-import DataMeasurements from '../../src/components/Data/DataMeasurements';
-import DataView from '../../src/components/Data/DataView';
-import SessionSetRow from '../../src/components/Training/session/SessionSetRow';
-import { useNutritionMeasurements } from '../../src/hooks/useNutritionMeasurements';
-import { useAppStore } from '../../src/store/useAppStore';
-import { useDialogStore } from '../../src/store/useDialogStore';
-import { Logic } from '../../src/lib/logic';
-import { storageOwner } from '../../src/lib/sync/session';
-import { prepareUnlockedTestArchive } from '../secureVaultFixture';
+import DataMeasurements from '../../../src/components/Data/DataMeasurements';
+import DataView from '../../../src/components/Data/DataView';
+import SessionSetRow from '../../../src/components/Training/session/SessionSetRow';
+import { useNutritionMeasurements } from '../../../src/hooks/useNutritionMeasurements';
+import { useAppStore } from '../../../src/store/useAppStore';
+import { useDialogStore } from '../../../src/store/useDialogStore';
+import { Logic } from '../../../src/lib/logic';
+import { storageOwner } from '../../../src/lib/sync/session';
+import { prepareUnlockedTestArchive } from '../../secureVaultFixture';
 
 describe('UI Alignments - R3 & R4', () => {
     beforeEach(async () => {

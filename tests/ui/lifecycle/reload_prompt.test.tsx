@@ -1,21 +1,21 @@
 import React from 'react';
-import type { UserData, WorkoutSession } from '../../src/types';
+import type { UserData, WorkoutSession } from '../../../src/types';
 import { describe, test, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, act, within } from '@testing-library/react';
-import ReloadPrompt from '../../src/components/UI/ReloadPrompt';
-import { useRegisterSW } from '../../src/lib/pwaRegistration';
-import App from '../../src/App';
-import { idbStore, localStorageMock, mockFirebaseAuth, renderWithProviders } from '../setup';
-import { prepareUnlockedTestArchive } from '../secureVaultFixture';
-import { protectedDeviceKey, readDeviceValueStrict } from '../../src/lib/sync/deviceStorage';
-import { initializeLocal } from '../../src/lib/sync/localRepository';
-import { vaultControlKey } from '../../src/lib/sync/secureArchiveSession';
-import { UserDataSchema } from '../../src/lib/schema';
-import { useAppStore } from '../../src/store/useAppStore';
-import { BufferedInput } from '../../src/components/UI/BufferedInput';
-import { invalidateSession } from '../../src/lib/sync/session';
-import * as pwaUpdateModule from '../../src/lib/pwaUpdate';
-import * as reloadBarrierModule from '../../src/lib/sync/reloadBarrier';
+import ReloadPrompt from '../../../src/components/UI/ReloadPrompt';
+import { useRegisterSW } from '../../../src/lib/pwaRegistration';
+import App from '../../../src/App';
+import { idbStore, localStorageMock, mockFirebaseAuth, renderWithProviders } from '../../setup';
+import { prepareUnlockedTestArchive } from '../../secureVaultFixture';
+import { protectedDeviceKey, readDeviceValueStrict } from '../../../src/lib/sync/deviceStorage';
+import { initializeLocal } from '../../../src/lib/sync/localRepository';
+import { vaultControlKey } from '../../../src/lib/sync/secureArchiveSession';
+import { UserDataSchema } from '../../../src/lib/schema';
+import { useAppStore } from '../../../src/store/useAppStore';
+import { BufferedInput } from '../../../src/components/UI/BufferedInput';
+import { invalidateSession } from '../../../src/lib/sync/session';
+import * as pwaUpdateModule from '../../../src/lib/pwaUpdate';
+import * as reloadBarrierModule from '../../../src/lib/sync/reloadBarrier';
 
 describe('Service Worker Update Lifecycle (ReloadPrompt) Suite', () => {
   let mockSetNeedRefresh = vi.fn<(value: React.SetStateAction<boolean>) => void>();

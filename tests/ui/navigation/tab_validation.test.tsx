@@ -1,20 +1,20 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { screen, renderHook, fireEvent, act, waitFor } from '@testing-library/react';
-import App from '../../src/App';
-import HeaderDashboard from '../../src/components/Home/widgets/HeaderDashboard';
-import { defaultMockUserData, renderWithProviders } from '../setup';
-import { prepareUnlockedTestArchive } from '../secureVaultFixture';
-import { LEGAL_VERSIONS } from '../../src/lib/legalVersions';
+import App from '../../../src/App';
+import HeaderDashboard from '../../../src/components/Home/widgets/HeaderDashboard';
+import { defaultMockUserData, renderWithProviders } from '../../setup';
+import { prepareUnlockedTestArchive } from '../../secureVaultFixture';
+import { LEGAL_VERSIONS } from '../../../src/lib/legalVersions';
 import { 
     AppTabSchema, 
     TrainingSubTabSchema, 
     NutritionSubTabSchema, 
     DataSubTabSchema 
-} from '../../src/lib/schema';
-import { useLocalStorage } from '../../src/hooks/useLocalStorage';
-import { LOCAL_STORAGE_ACTIVE_TAB, LOCAL_STORAGE_TRAINING_TAB } from '../../src/constants';
-import { ownerUiPreferenceKey } from '../../src/lib/uiPreferenceKeys';
-import { refreshHealthConsent } from '../../src/lib/healthConsent';
+} from '../../../src/lib/schema';
+import { useLocalStorage } from '../../../src/hooks/useLocalStorage';
+import { LOCAL_STORAGE_ACTIVE_TAB, LOCAL_STORAGE_TRAINING_TAB } from '../../../src/constants';
+import { ownerUiPreferenceKey } from '../../../src/lib/uiPreferenceKeys';
+import { refreshHealthConsent } from '../../../src/lib/healthConsent';
 const accountTabKey = ownerUiPreferenceKey('user:test-user-id', LOCAL_STORAGE_ACTIVE_TAB);
 
 describe('R4: Tab Zod Schema & LocalStorage Fallback Resilience (ARCH-05)', () => {

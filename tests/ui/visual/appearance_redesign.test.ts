@@ -55,7 +55,7 @@ describe('local appearance preference', () => {
     expect(document.documentElement.dataset.theme).toBe('light');
     expect(document.documentElement.style.colorScheme).toBe('light');
     expect(document.querySelector('meta[name="theme-color"]')?.getAttribute('content')).toBe('#f3f4f6');
-    const { initializeAppearance, useAppearanceStore } = await import('../../src/store/useAppearanceStore');
+    const { initializeAppearance, useAppearanceStore } = await import('../../../src/store/useAppearanceStore');
     stop = initializeAppearance();
     expect(useAppearanceStore.getState()).toMatchObject({ preference: 'light', resolvedTheme: 'light' });
     systemChangesTo(false);
@@ -67,7 +67,7 @@ describe('local appearance preference', () => {
     localStorage.setItem(key, 'invalid');
     runBootstrap();
     expect(document.documentElement.dataset.themePreference).toBe('system');
-    const { initializeAppearance, useAppearanceStore } = await import('../../src/store/useAppearanceStore');
+    const { initializeAppearance, useAppearanceStore } = await import('../../../src/store/useAppearanceStore');
     stop = initializeAppearance();
     expect(initializeAppearance()).toBe(stop);
     expect(listeners.size).toBe(1);
@@ -90,7 +90,7 @@ describe('local appearance preference', () => {
     dark = true;
     expect(runBootstrap).not.toThrow();
     expect(document.documentElement.dataset.theme).toBe('dark');
-    const { initializeAppearance, useAppearanceStore } = await import('../../src/store/useAppearanceStore');
+    const { initializeAppearance, useAppearanceStore } = await import('../../../src/store/useAppearanceStore');
     stop = initializeAppearance();
     vi.spyOn(localStorage, 'setItem').mockImplementation(() => { throw new Error('quota'); });
     expect(useAppearanceStore.getState().setPreference('light')).toBe(false);
@@ -99,7 +99,7 @@ describe('local appearance preference', () => {
   });
 
   it('syncs the device preference across tabs without touching other storage keys', async () => {
-    const { initializeAppearance, useAppearanceStore } = await import('../../src/store/useAppearanceStore');
+    const { initializeAppearance, useAppearanceStore } = await import('../../../src/store/useAppearanceStore');
     stop = initializeAppearance();
     const write = vi.spyOn(localStorage, 'setItem');
     write.mockClear();
@@ -116,7 +116,7 @@ describe('local appearance preference', () => {
   it('starts safely when the system-theme API is absent', async () => {
     vi.stubGlobal('matchMedia', undefined);
     expect(runBootstrap).not.toThrow();
-    const { initializeAppearance, useAppearanceStore } = await import('../../src/store/useAppearanceStore');
+    const { initializeAppearance, useAppearanceStore } = await import('../../../src/store/useAppearanceStore');
     stop = initializeAppearance();
     expect(useAppearanceStore.getState()).toMatchObject({ preference: 'system', resolvedTheme: 'light' });
   });

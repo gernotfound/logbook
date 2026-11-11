@@ -2,11 +2,11 @@ import React from 'react';
 import type { User } from 'firebase/auth';
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { describe, beforeEach, expect, it } from 'vitest';
-import App from '../../src/App';
-import { AuthContext, defaultAuthContext } from '../../src/contexts/AuthContextDef';
-import { useAppStore } from '../../src/store/useAppStore';
-import { defaultMockUserData } from '../setup';
-import { LEGAL_VERSIONS } from '../../src/lib/legalVersions';
+import App from '../../../src/App';
+import { AuthContext, defaultAuthContext } from '../../../src/contexts/AuthContextDef';
+import { useAppStore } from '../../../src/store/useAppStore';
+import { defaultMockUserData } from '../../setup';
+import { LEGAL_VERSIONS } from '../../../src/lib/legalVersions';
 
 const consent = {
   hasAcceptedTerms: true, hasAcceptedHealthData: true,

@@ -1,8 +1,8 @@
 import React from 'react';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
-import DataHistory from '../../src/components/Data/DataHistory';
-import DataMeasurements from '../../src/components/Data/DataMeasurements';
+import DataHistory from '../../../src/components/Data/DataHistory';
+import DataMeasurements from '../../../src/components/Data/DataMeasurements';
 
 function measurementProps(overrides: Record<string, unknown> = {}) {
     return {

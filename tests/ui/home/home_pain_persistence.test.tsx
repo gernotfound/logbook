@@ -1,14 +1,14 @@
 import React from 'react';
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { update } from 'idb-keyval';
-import { captureSession } from '../../src/lib/sync/session';
-import { initializeLocal, readLocal } from '../../src/lib/sync/localRepository';
-import { prepareUnlockedTestArchive } from '../secureVaultFixture';
-import { UserDataSchema } from '../../src/lib/schema';
+import { captureSession } from '../../../src/lib/sync/session';
+import { initializeLocal, readLocal } from '../../../src/lib/sync/localRepository';
+import { prepareUnlockedTestArchive } from '../../secureVaultFixture';
+import { UserDataSchema } from '../../../src/lib/schema';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { useHomeView } from '../../src/hooks/useHomeView';
-import { useAppStore } from '../../src/store/useAppStore';
-import { emptyUserData, renderWithProviders } from '../setup';
+import { useHomeView } from '../../../src/hooks/useHomeView';
+import { useAppStore } from '../../../src/store/useAppStore';
+import { emptyUserData, renderWithProviders } from '../../setup';
 
 const originalDispatch = useAppStore.getState().dispatchDomainOperation;
 afterEach(() => { useAppStore.setState({ dispatchDomainOperation: originalDispatch }); });

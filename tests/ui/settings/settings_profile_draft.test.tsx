@@ -11,7 +11,7 @@ const state = vi.hoisted(() => ({
     dataOwner: 'user:test',
 }));
 
-vi.mock('../../src/store/useAppStore', () => {
+vi.mock('../../../src/store/useAppStore', () => {
     const getState = () => ({
         userData: { profile: state.profile },
         dataOwner: state.dataOwner,
@@ -24,16 +24,16 @@ vi.mock('../../src/store/useAppStore', () => {
         ),
     };
 });
-vi.mock('../../src/store/useDialogStore', () => ({
+vi.mock('../../../src/store/useDialogStore', () => ({
     useDialogStore: (select: (store: unknown) => unknown) => select({ showAlert: state.showAlert }),
 }));
-vi.mock('../../src/lib/sync/session', () => ({
+vi.mock('../../../src/lib/sync/session', () => ({
     captureSession: () => ({ owner: state.owner, epoch: state.epoch }),
     isCurrentSession: (snapshot: { owner: string; epoch: number }) =>
         state.currentSession && snapshot.owner === state.owner && snapshot.epoch === state.epoch,
 }));
 
-import { useSettingsProfile } from '../../src/hooks/useSettingsProfile';
+import { useSettingsProfile } from '../../../src/hooks/useSettingsProfile';
 
 beforeEach(() => {
     state.currentSession = true;

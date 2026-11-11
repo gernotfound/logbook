@@ -1,12 +1,12 @@
 import React from 'react';
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
-import RecoveryBentoCard from '../../src/components/Home/widgets/RecoveryBentoCard';
-import TrainingPlanning from '../../src/components/Training/planning/TrainingPlanning';
-import { UserDataSchema } from '../../src/lib/schema';
-import { Logic } from '../../src/lib/logic';
-import { storageOwner } from '../../src/lib/sync/session';
-import { useAppStore } from '../../src/store/useAppStore';
+import RecoveryBentoCard from '../../../src/components/Home/widgets/RecoveryBentoCard';
+import TrainingPlanning from '../../../src/components/Training/planning/TrainingPlanning';
+import { UserDataSchema } from '../../../src/lib/schema';
+import { Logic } from '../../../src/lib/logic';
+import { storageOwner } from '../../../src/lib/sync/session';
+import { useAppStore } from '../../../src/store/useAppStore';
 
 describe('React effect replacement with derived state', () => {
     it('collapses recovery disclosure after all pains disappear and does not reopen automatically', () => {

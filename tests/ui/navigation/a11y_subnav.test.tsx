@@ -1,15 +1,15 @@
 import React, { useState } from 'react';
 import { render, screen, within, fireEvent } from '@testing-library/react';
 import { describe, it, expect, vi } from 'vitest';
-import DataView from '../../src/components/Data/DataView';
-import NutritionView from '../../src/components/Nutrition/NutritionView';
-import SettingsView from '../../src/components/SettingsView';
-import TrainingView from '../../src/components/Training/TrainingView';
-import { BottomNav } from '../../src/components/UI/BottomNav';
-import type { NutritionSubTab, TrainingSubTab } from '../../src/types';
+import DataView from '../../../src/components/Data/DataView';
+import NutritionView from '../../../src/components/Nutrition/NutritionView';
+import SettingsView from '../../../src/components/SettingsView';
+import TrainingView from '../../../src/components/Training/TrainingView';
+import { BottomNav } from '../../../src/components/UI/BottomNav';
+import type { NutritionSubTab, TrainingSubTab } from '../../../src/types';
 
 // Mock dependencies
-vi.mock('../../src/store/useAppStore', () => ({
+vi.mock('../../../src/store/useAppStore', () => ({
     useAppStore: vi.fn((selector) => {
         const state = {
             userData: { pendingConflicts: {} },
@@ -21,7 +21,7 @@ vi.mock('../../src/store/useAppStore', () => ({
     }),
 }));
 
-vi.mock('../../src/hooks/useAuth', () => ({
+vi.mock('../../../src/hooks/useAuth', () => ({
     useAuth: () => ({
         currentUser: null,
         isGuest: false,

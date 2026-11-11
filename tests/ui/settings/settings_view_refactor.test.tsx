@@ -1,8 +1,8 @@
 import React from 'react';
 import { fireEvent, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
-import SettingsView from '../../src/components/SettingsView';
-import { renderWithProviders } from '../setup';
+import SettingsView from '../../../src/components/SettingsView';
+import { renderWithProviders } from '../../setup';
 
 describe('SettingsView hierarchical navigation', () => {
     it('opens the settings areas and preserves privacy/data content', () => {

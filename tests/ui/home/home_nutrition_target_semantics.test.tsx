@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
-import HomeNutritionWidget from '../../src/components/Home/widgets/HomeNutritionWidget';
-import { useHomeView } from '../../src/hooks/useHomeView';
-import { emptyUserData, renderWithProviders } from '../setup';
+import HomeNutritionWidget from '../../../src/components/Home/widgets/HomeNutritionWidget';
+import { useHomeView } from '../../../src/hooks/useHomeView';
+import { emptyUserData, renderWithProviders } from '../../setup';
 
 describe('Home nutrition target semantics', () => {
     it('reports the true percentage to assistive technology when calories exceed the goal', () => {

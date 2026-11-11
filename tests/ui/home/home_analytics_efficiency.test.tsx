@@ -1,10 +1,10 @@
 import React from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { screen } from '@testing-library/react';
-import { useHomeView } from '../../src/hooks/useHomeView';
-import { Logic } from '../../src/lib/logic';
-import { emptyUserData, renderWithProviders } from '../setup';
-import type { NutritionDay } from '../../src/types';
+import { useHomeView } from '../../../src/hooks/useHomeView';
+import { Logic } from '../../../src/lib/logic';
+import { emptyUserData, renderWithProviders } from '../../setup';
+import type { NutritionDay } from '../../../src/types';
 
 describe('Home nutrition summary efficiency', () => {
     afterEach(() => { vi.restoreAllMocks(); });

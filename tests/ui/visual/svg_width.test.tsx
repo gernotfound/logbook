@@ -1,9 +1,9 @@
 import React from 'react';
 import { describe, test, expect, beforeEach, afterEach, vi } from 'vitest';
-import { renderWithProviders } from '../setup';
+import { renderWithProviders } from '../../setup';
 import { screen, fireEvent } from '@testing-library/react';
-import MuscleModel from '../../src/components/Training/MuscleModel';
-import TrainingExercises from '../../src/components/Training/TrainingExercises';
+import MuscleModel from '../../../src/components/Training/MuscleModel';
+import TrainingExercises from '../../../src/components/Training/TrainingExercises';
 import fs from 'fs';
 import path from 'path';
 
@@ -11,7 +11,7 @@ describe('SVG Muscle Model Layout Width Verification', () => {
   let injectedStyle: HTMLStyleElement;
   beforeEach(() => {
     // Read and inject global.css into JSDOM document head
-    const globalCssPath = path.resolve(__dirname, '../../src/styles/global.css');
+    const globalCssPath = path.resolve(__dirname, '../../../src/styles/global.css');
     const cssContent = fs.readFileSync(globalCssPath, 'utf8');
     injectedStyle = document.createElement('style');
     injectedStyle.textContent = cssContent;
@@ -20,7 +20,7 @@ describe('SVG Muscle Model Layout Width Verification', () => {
   afterEach(() => injectedStyle.remove());
 
   test('verifies max-height constraint is removed from CSS', () => {
-    const globalCssPath = path.resolve(__dirname, '../../src/styles/global.css');
+    const globalCssPath = path.resolve(__dirname, '../../../src/styles/global.css');
     const cssContent = fs.readFileSync(globalCssPath, 'utf8');
     
     // Ensure .muscle-map-container svg does NOT have max-height: 180px
@@ -193,8 +193,8 @@ describe('SVG Muscle Model Layout Width Verification', () => {
     });
 
     test('verifies no CSS property collisions between index.css and global.css', () => {
-      const indexCssPath = path.resolve(__dirname, '../../src/index.css');
-      const globalCssPath = path.resolve(__dirname, '../../src/styles/global.css');
+      const indexCssPath = path.resolve(__dirname, '../../../src/index.css');
+      const globalCssPath = path.resolve(__dirname, '../../../src/styles/global.css');
       
       if (fs.existsSync(indexCssPath)) {
         const indexCss = fs.readFileSync(indexCssPath, 'utf8');

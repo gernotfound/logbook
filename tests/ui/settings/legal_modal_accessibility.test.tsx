@@ -1,15 +1,15 @@
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { PrivacyPolicy } from '../../src/pages/PrivacyPolicy';
-import { TermsAndConditions } from '../../src/pages/TermsAndConditions';
-import { ConsentOverlay } from '../../src/components/UI/ConsentOverlay';
-import { GlobalDialog } from '../../src/components/UI/GlobalDialog';
-import { useDialogStore } from '../../src/store/useDialogStore';
+import { PrivacyPolicy } from '../../../src/pages/PrivacyPolicy';
+import { TermsAndConditions } from '../../../src/pages/TermsAndConditions';
+import { ConsentOverlay } from '../../../src/components/UI/ConsentOverlay';
+import { GlobalDialog } from '../../../src/components/UI/GlobalDialog';
+import { useDialogStore } from '../../../src/store/useDialogStore';
 
-vi.unmock('../../src/store/useDialogStore');
-vi.mock('../../src/hooks/useScrollLock', () => ({ useScrollLock: vi.fn() }));
-vi.mock('../../src/hooks/useAuth', () => ({ useAuth: () => ({ isGuest: false }) }));
-vi.mock('../../src/hooks/useSettings', () => ({
+vi.unmock('../../../src/store/useDialogStore');
+vi.mock('../../../src/hooks/useScrollLock', () => ({ useScrollLock: vi.fn() }));
+vi.mock('../../../src/hooks/useAuth', () => ({ useAuth: () => ({ isGuest: false }) }));
+vi.mock('../../../src/hooks/useSettings', () => ({
   useSettings: () => ({
     handleExportBackup: vi.fn(),
     handleDeleteAccount: vi.fn(),

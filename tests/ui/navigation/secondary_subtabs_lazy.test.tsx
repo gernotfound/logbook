@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
 import { fireEvent, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
-import DataView from '../../src/components/Data/DataView';
-import NutritionView from '../../src/components/Nutrition/NutritionView';
-import { emptyUserData, renderWithAuthenticatedTestOwner } from '../setup';
-import type { DataSubTab, NutritionSubTab } from '../../src/types';
+import DataView from '../../../src/components/Data/DataView';
+import NutritionView from '../../../src/components/Nutrition/NutritionView';
+import { emptyUserData, renderWithAuthenticatedTestOwner } from '../../setup';
+import type { DataSubTab, NutritionSubTab } from '../../../src/types';
 
 describe('secondary tab loading', () => {
     it('loads activity and history through tab navigation without manually importing the view', async () => {

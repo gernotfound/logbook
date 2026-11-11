@@ -1,23 +1,23 @@
-import { deviceKey, protectedDeviceKey, readDeviceValueStrict } from '../../src/lib/sync/deviceStorage';
-import { persistPlainWorkoutSnapshot } from '../../src/lib/sync/workoutDeviceIntent';
-import { prepareUnlockedTestArchive } from '../secureVaultFixture';
-import { BrowserStorageError } from '../../src/lib/sync/browserStorage';
+import { deviceKey, protectedDeviceKey, readDeviceValueStrict } from '../../../src/lib/sync/deviceStorage';
+import { persistPlainWorkoutSnapshot } from '../../../src/lib/sync/workoutDeviceIntent';
+import { prepareUnlockedTestArchive } from '../../secureVaultFixture';
+import { BrowserStorageError } from '../../../src/lib/sync/browserStorage';
 import React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, render, renderHook, screen } from '@testing-library/react';
-import { emptyUserData } from '../setup';
-import { useAppStore } from '../../src/store/useAppStore';
-import { useWorkoutSession } from '../../src/hooks/useWorkoutSession';
-import { useNutritionPlanning } from '../../src/hooks/useNutritionPlanning';
-import { DB } from '../../src/lib/db';
-import { useDialogStore } from '../../src/store/useDialogStore';
-import { GlobalDialog } from '../../src/components/UI/GlobalDialog';
-import { clearSyncTimers } from '../../src/store/slices/createSyncSlice';
-import { draftRegistry } from '../../src/lib/utils/draftRegistry';
-import { captureSession } from '../../src/lib/sync/session';
+import { emptyUserData } from '../../setup';
+import { useAppStore } from '../../../src/store/useAppStore';
+import { useWorkoutSession } from '../../../src/hooks/useWorkoutSession';
+import { useNutritionPlanning } from '../../../src/hooks/useNutritionPlanning';
+import { DB } from '../../../src/lib/db';
+import { useDialogStore } from '../../../src/store/useDialogStore';
+import { GlobalDialog } from '../../../src/components/UI/GlobalDialog';
+import { clearSyncTimers } from '../../../src/store/slices/createSyncSlice';
+import { draftRegistry } from '../../../src/lib/utils/draftRegistry';
+import { captureSession } from '../../../src/lib/sync/session';
 
 // Exercise the actual dialog store; Firebase remains mocked at the network boundary.
-vi.unmock('../../src/store/useDialogStore');
+vi.unmock('../../../src/store/useDialogStore');
 const workout = { id: 'w-audit', date: '2026-09-10', routineName: 'Test', exercises: [], globalStartTime: 1000 };
 
 beforeEach(async () => {

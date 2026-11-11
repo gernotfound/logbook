@@ -1,13 +1,13 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, act } from '@testing-library/react';
-import ErrorBoundary from '../../src/components/UI/ErrorBoundary';
-import * as safeReloadModule from '../../src/lib/sync/safeReload';
-import { DB } from '../../src/lib/db';
-import { useDialogStore } from '../../src/store/useDialogStore';
-import { idbStore, localStorageMock } from '../setup';
-import { activateGuestSession, GUEST_REVOCATION_KEY, GUEST_SESSION_KEY, storageOwner, isActiveGuestSession, invalidateSession } from '../../src/lib/sync/session';
-import { markAccountDeletion } from '../../src/lib/sync/accountGate';
-import { prepareUnlockedTestArchive } from '../secureVaultFixture';
+import ErrorBoundary from '../../../src/components/UI/ErrorBoundary';
+import * as safeReloadModule from '../../../src/lib/sync/safeReload';
+import { DB } from '../../../src/lib/db';
+import { useDialogStore } from '../../../src/store/useDialogStore';
+import { idbStore, localStorageMock } from '../../setup';
+import { activateGuestSession, GUEST_REVOCATION_KEY, GUEST_SESSION_KEY, storageOwner, isActiveGuestSession, invalidateSession } from '../../../src/lib/sync/session';
+import { markAccountDeletion } from '../../../src/lib/sync/accountGate';
+import { prepareUnlockedTestArchive } from '../../secureVaultFixture';
 
 const ProblemChild = ({ shouldThrow, message = 'Test error boundary explosion' }: { shouldThrow: boolean; message?: string }) => {
     if (shouldThrow) {

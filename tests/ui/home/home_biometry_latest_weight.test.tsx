@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 import { fireEvent, screen, within } from '@testing-library/react';
-import HomeView from '../../src/components/Home/HomeView';
-import { getLocalDateString, shiftDateString } from '../../src/lib/utils/date';
-import { emptyUserData, renderWithProviders } from '../setup';
+import HomeView from '../../../src/components/Home/HomeView';
+import { getLocalDateString, shiftDateString } from '../../../src/lib/utils/date';
+import { emptyUserData, renderWithProviders } from '../../setup';
 
 describe('Home biometry: most recently recorded weight', () => {
     it('shows the latest recorded measurement even when it is outside the chart period', () => {

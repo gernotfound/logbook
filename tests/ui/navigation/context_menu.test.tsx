@@ -1,7 +1,7 @@
 import React from 'react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
-import { ContextMenu, ContextMenuItem } from '../../src/components/UI/ContextMenu';
+import { ContextMenu, ContextMenuItem } from '../../../src/components/UI/ContextMenu';
 import { Pencil, Trash2, Copy } from 'lucide-react';
 
 describe('ContextMenu Component (Milestone M1)', () => {

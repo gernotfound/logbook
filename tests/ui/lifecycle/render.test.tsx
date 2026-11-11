@@ -1,25 +1,25 @@
 import React from 'react';
-import { useAppStore } from '../../src/store/useAppStore';
+import { useAppStore } from '../../../src/store/useAppStore';
 import { describe, test, expect, vi, beforeEach } from 'vitest';
 import { screen } from '@testing-library/react';
-import { renderWithAuthenticatedTestOwner, renderWithProviders, emptyUserData } from '../setup';
-import { prepareUnlockedTestArchive } from '../secureVaultFixture';
+import { renderWithAuthenticatedTestOwner, renderWithProviders, emptyUserData } from '../../setup';
+import { prepareUnlockedTestArchive } from '../../secureVaultFixture';
 
-import App from '../../src/App';
-import HomeView from '../../src/components/Home/HomeView';
-import TrainingView from '../../src/components/Training/TrainingView';
-import TrainingSession from '../../src/components/Training/TrainingSession';
-import TrainingRoutines from '../../src/components/Training/TrainingRoutines';
-import TrainingHistory from '../../src/components/Training/TrainingHistory';
-import TrainingExercises from '../../src/components/Training/TrainingExercises';
-import NutritionView from '../../src/components/Nutrition/NutritionView';
-import NutritionMeals from '../../src/components/Nutrition/NutritionMeals';
-import NutritionPlanning from '../../src/components/Nutrition/NutritionPlanning';
-import CustomFoodForm from '../../src/components/Nutrition/CustomFoodForm';
-import DataView from '../../src/components/Data/DataView';
-import SettingsView from '../../src/components/SettingsView';
-import WorkoutTimer from '../../src/components/Training/WorkoutTimer';
-import MuscleModel from '../../src/components/Training/MuscleModel';
+import App from '../../../src/App';
+import HomeView from '../../../src/components/Home/HomeView';
+import TrainingView from '../../../src/components/Training/TrainingView';
+import TrainingSession from '../../../src/components/Training/TrainingSession';
+import TrainingRoutines from '../../../src/components/Training/TrainingRoutines';
+import TrainingHistory from '../../../src/components/Training/TrainingHistory';
+import TrainingExercises from '../../../src/components/Training/TrainingExercises';
+import NutritionView from '../../../src/components/Nutrition/NutritionView';
+import NutritionMeals from '../../../src/components/Nutrition/NutritionMeals';
+import NutritionPlanning from '../../../src/components/Nutrition/NutritionPlanning';
+import CustomFoodForm from '../../../src/components/Nutrition/CustomFoodForm';
+import DataView from '../../../src/components/Data/DataView';
+import SettingsView from '../../../src/components/SettingsView';
+import WorkoutTimer from '../../../src/components/Training/WorkoutTimer';
+import MuscleModel from '../../../src/components/Training/MuscleModel';
 
 describe('Render Test Suite - Zero Crash Verification', () => {
   beforeEach(async () => {

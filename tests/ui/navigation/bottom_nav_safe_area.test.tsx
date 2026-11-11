@@ -3,11 +3,11 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import * as fs from 'fs';
 import * as path from 'path';
-import { BottomNav } from '../../src/components/UI/BottomNav';
+import { BottomNav } from '../../../src/components/UI/BottomNav';
 
 describe('BottomNav & Safe Area Layout Conformance', () => {
-  const navCss = fs.readFileSync(path.resolve(__dirname, '../../src/styles/components.css'), 'utf-8');
-  const baseCss = fs.readFileSync(path.resolve(__dirname, '../../src/styles/base.css'), 'utf-8');
+  const navCss = fs.readFileSync(path.resolve(__dirname, '../../../src/styles/components.css'), 'utf-8');
+  const baseCss = fs.readFileSync(path.resolve(__dirname, '../../../src/styles/base.css'), 'utf-8');
 
   it('verifies .bottom-nav has bottom: 0 and does not subtract pixels from env(safe-area-inset-bottom)', () => {
     // Extract .bottom-nav rule block

@@ -2,8 +2,8 @@ import React from 'react';
 import { render } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ChartData, ChartOptions } from 'chart.js';
-import WeightChart from '../../src/components/Home/WeightChart';
-import { useChartAppearance } from '../../src/hooks/useChartAppearance';
+import WeightChart from '../../../src/components/Home/WeightChart';
+import { useChartAppearance } from '../../../src/hooks/useChartAppearance';
 
 type RenderedLine = {
     data: ChartData<'line', (number | null)[], string>;
@@ -20,7 +20,7 @@ vi.mock('react-chartjs-2', () => ({
         return null;
     },
 }));
-vi.mock('../../src/hooks/useChartAppearance', () => ({
+vi.mock('../../../src/hooks/useChartAppearance', () => ({
     useChartAppearance: vi.fn(),
 }));
 
