@@ -8,7 +8,7 @@ import { beginGuestMigrationIntent, clearGuestMigrationIntent, confirmGuestMigra
 import { captureAuthAttemptGuard } from '../../lib/auth/authAttemptGuard';
 import { safeHardReload } from '../../lib/sync/safeReload';
 import type { UserData } from '../../types';
-import type { EmailVerificationRefreshResult, GuestMigrationPolicy } from '../AuthContextDef';
+import type { EmailVerificationRefreshResult, EmailVerificationSendResult, GuestMigrationPolicy } from '../AuthContextDef';
 
 type EmailAuthDependencies = {
     isGuestActiveStrict: () => boolean;
@@ -131,18 +131,22 @@ export function useEmailAuthActions({
         }
     }, [handleAuthError, isGuestActiveStrict, migrationDataRef, setSaveError]);
 
-    const resendEmailVerification = useCallback(async () => {
+    const resendEmailVerification = useCallback(async (): Promise<EmailVerificationSendResult> => {
         const user = auth.currentUser;
-        if (!user || user.emailVerified) return;
+        if (!user) throw new Error('Sessione non disponibile.');
         const session = captureSession();
         const stillCurrent = () => auth.currentUser === user && isCurrentSession(session);
+        if (!stillCurrent()) return 'stale';
+        if (user.emailVerified) return 'already-verified';
         try {
             await sendEmailVerification(user);
         } catch (error) {
             if (stillCurrent()) throw error;
-            return;
+            return 'stale';
         }
-        if (stillCurrent()) setSaveError('Email di verifica inviata. Controlla anche la cartella spam.');
+        if (!stillCurrent()) return 'stale';
+        setSaveError('Email di verifica inviata. Controlla anche la cartella spam.');
+        return 'sent';
     }, [setSaveError]);
 
     const refreshEmailVerification = useCallback(async (): Promise<EmailVerificationRefreshResult> => {

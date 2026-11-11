@@ -41,6 +41,7 @@ beforeEach(() => {
     (auth as { currentUser: unknown }).currentUser = authState.user;
     invalidateSession();
     authState.showAlert.mockResolvedValue(undefined);
+    authState.resendEmailVerification.mockResolvedValue('sent');
   });
 
 describe('email verification feedback privacy', () => {
@@ -79,11 +80,42 @@ it('does not alert the next session after an old email send resolves', async () 
 
 
 describe('email verification gate feedback', () => {
+  it('does not claim to send an email when Firebase reports it is already verified', async () => {
+    authState.resendEmailVerification.mockResolvedValueOnce('already-verified');
+    render(<EmailVerificationGate />);
+    fireEvent.click(screen.getByRole('button', { name: 'Invia di nuovo la verifica' }));
+    await waitFor(() => expect(screen.getByRole('status').textContent).toContain('Email già verificata'));
+    expect(screen.getByRole('status').textContent).not.toContain('Email inviata');
+  });
+
+  it('shows an actionable error and avoids Firebase requests when owner storage is unreadable', async () => {
+    const getItem = vi.spyOn(localStorage, 'getItem').mockImplementationOnce(() => {
+      throw new Error('private browser storage details');
+    });
+    try {
+      render(<EmailVerificationGate />);
+      fireEvent.click(screen.getByRole('button', { name: 'Ho verificato la mia email' }));
+      await waitFor(() => expect(screen.getByRole('status').textContent).toContain('Archivio locale non disponibile'));
+      expect(authState.refreshEmailVerification).not.toHaveBeenCalled();
+      expect(screen.getByRole('status').textContent).not.toContain('private browser storage details');
+    } finally {
+      getItem.mockRestore();
+    }
+  });
+
   it('shows pending feedback only when Firebase still reports an unverified address', async () => {
     authState.refreshEmailVerification.mockResolvedValueOnce('pending');
     render(<EmailVerificationGate />);
     fireEvent.click(screen.getByRole('button', { name: 'Ho verificato la mia email' }));
     await waitFor(() => expect(screen.getByRole('status').textContent).toContain('non risulta ancora completata'));
+  });
+
+  it('does not misreport an already verified email in the account card', async () => {
+    authState.resendEmailVerification.mockResolvedValueOnce('already-verified');
+    render(<AccountCard />);
+    fireEvent.click(screen.getByRole('button', { name: 'Invia di nuovo' }));
+    await waitFor(() => expect(authState.showAlert).toHaveBeenCalledWith(expect.stringContaining('Email già verificata')));
+    expect(authState.showAlert).not.toHaveBeenCalledWith(expect.stringContaining('Email di verifica inviata'));
   });
 
   it('does not report a pending verification after Firebase confirms it', async () => {

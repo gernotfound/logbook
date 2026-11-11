@@ -119,6 +119,18 @@ describe('email verification lifecycle', () => {
         }
     });
 
+    it('never claims to resend mail once the current account is already verified', async () => {
+        const user = account(false);
+        startWith(user);
+        const { result } = renderHook(() => useAuth(), { wrapper });
+        await waitFor(() => expect(result.current.emailVerificationRequired).toBe(true));
+        user.emailVerified = true;
+        let outcome: string | undefined;
+        await act(async () => { outcome = await result.current.resendEmailVerification(); });
+        expect(outcome).toBe('already-verified');
+        expect(sendEmailVerification).not.toHaveBeenCalled();
+    });
+
     it.each([
         ['already verified', account(true)],
         ['signed out', null],
