@@ -179,16 +179,18 @@ describe('M7 native deletion job store', () => {
     state.docs.add('health_data_erasures/u');
     await createOrRefreshDeletionJob('u', 'A'.repeat(43));
 
-    for (const healthJob of [
+    const blocked = [
       { uid: 'u', status: 'requested' },
       { uid: 'u', status: 'deleting' },
       { uid: 'u', status: 'verifying' },
       { uid: 'u', status: 'failed', retryable: true },
-    ]) {
+    ];
+    for (const [index, healthJob] of blocked.entries()) {
       state.jobData.set('health_data_erasures/u', healthJob);
       expect(await acquireDeletionLease('u', 'account-worker', Date.now() + 60_000)).toBe(false);
-      expect(state.jobData.get('account_deletions/u')).toMatchObject({ status: 'requested' });
-      expect(state.jobUpdates).toHaveLength(0);
+      expect(state.jobData.get('account_deletions/u')).toMatchObject({ status: 'requested', attempts: 0 });
+      expect(state.jobUpdates).toHaveLength(index + 1);
+      expect(Object.keys(state.jobUpdates[index] as object)).toEqual(['updatedAt']);
     }
 
     state.jobData.set('health_data_erasures/u', { uid: 'u', status: 'complete' });
@@ -217,7 +219,8 @@ describe('M7 native deletion job store', () => {
     expect(await acquireDeletionLease('u', 'worker', Date.now() + 60_000)).toBe(false);
     state.jobData.set('health_data_erasures/u', { uid: 'u', status: 'unknown' });
     expect(await acquireDeletionLease('u', 'worker', Date.now() + 60_000)).toBe(false);
-    expect(state.jobUpdates).toHaveLength(0);
+    expect(state.jobUpdates).toHaveLength(2);
+    expect(state.jobUpdates.every(update => Object.keys(update as object).join() === 'updatedAt')).toBe(true);
   });
 
   it('refuses an account deletion lease when the persisted job belongs to a different UID', async () => {
