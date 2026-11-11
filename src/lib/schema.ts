@@ -134,9 +134,6 @@ export const DomainParsers = {
     parseProfile: (data: unknown) => {
         return UserProfileSchema.parse(data);
     },
-    parseWorkoutSession: (data: unknown) => {
-        return WorkoutSessionSchema.parse(data);
-    },
     parseActiveWorkout: (data: unknown) => {
         return PersistedActiveWorkoutSchema.parse(data);
     },
@@ -219,7 +216,6 @@ export const DomainParsers = {
 // ==========================================
 
 export const AppTabSchema = z.enum(['home', 'training', 'nutrition', 'data']);
-export const MainTabSchema = AppTabSchema;
 export const TrainingSubTabSchema = z.enum(['session', 'planning', 'routines', 'exercises', 'history']);
 export const NutritionSubTabSchema = z.enum(['meals', 'planning', 'archive', 'history', 'supplements']);
 export const DataSubTabSchema = z.enum(['measurements', 'sleep', 'activity', 'biometry', 'history']);

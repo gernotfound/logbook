@@ -1,35 +1,36 @@
 import { describe, it, expect, vi } from 'vitest';
 import { Exporter } from '../src/lib/export';
+import { formatCsvField, formatCsvRow } from '../src/lib/csvExport';
 import { useDialogStore } from '../src/store/useDialogStore';
 
 describe('SEC-01: CSV Formula Injection Mitigation in Export', () => {
     it('formatCsvField protegge le stringhe che iniziano con caratteri pericolosi', () => {
         // Stringhe malevole
-        expect(Exporter.formatCsvField('=1+1')).toBe(`"'=1+1"`);
-        expect(Exporter.formatCsvField('+SUM(A1:A10)')).toBe(`"'+SUM(A1:A10)"`);
-        expect(Exporter.formatCsvField('-cmd|\' /C calc\'!A0')).toBe(`"'-cmd|' /C calc'!A0"`);
-        expect(Exporter.formatCsvField('@foo')).toBe(`"'@foo"`);
-        expect(Exporter.formatCsvField('\t=1+1')).toBe(`"'\t=1+1"`);
-        expect(Exporter.formatCsvField('\r=1+1')).toBe(`"'\r=1+1"`);
-        expect(Exporter.formatCsvField('   =foo')).toBe(`"'   =foo"`); // leading spaces
-        expect(Exporter.formatCsvField('\u00A0=foo')).toBe(`"'\u00A0=foo"`);
-        expect(Exporter.formatCsvField('\uFEFF=foo')).toBe(`"'\uFEFF=foo"`);
-        expect(Exporter.formatCsvField('-1+2')).toBe(`"'-1+2"`); // stringa, non numero
+        expect(formatCsvField('=1+1')).toBe(`"'=1+1"`);
+        expect(formatCsvField('+SUM(A1:A10)')).toBe(`"'+SUM(A1:A10)"`);
+        expect(formatCsvField('-cmd|\' /C calc\'!A0')).toBe(`"'-cmd|' /C calc'!A0"`);
+        expect(formatCsvField('@foo')).toBe(`"'@foo"`);
+        expect(formatCsvField('\t=1+1')).toBe(`"'\t=1+1"`);
+        expect(formatCsvField('\r=1+1')).toBe(`"'\r=1+1"`);
+        expect(formatCsvField('   =foo')).toBe(`"'   =foo"`); // leading spaces
+        expect(formatCsvField('\u00A0=foo')).toBe(`"'\u00A0=foo"`);
+        expect(formatCsvField('\uFEFF=foo')).toBe(`"'\uFEFF=foo"`);
+        expect(formatCsvField('-1+2')).toBe(`"'-1+2"`); // stringa, non numero
 
         // Stringhe legittime
-        expect(Exporter.formatCsvField('Allenamento normale')).toBe(`"Allenamento normale"`);
-        expect(Exporter.formatCsvField('Nota: 1+1 fa 2')).toBe(`"Nota: 1+1 fa 2"`); // + non all'inizio
+        expect(formatCsvField('Allenamento normale')).toBe(`"Allenamento normale"`);
+        expect(formatCsvField('Nota: 1+1 fa 2')).toBe(`"Nota: 1+1 fa 2"`); // + non all'inizio
 
         // Quotazione doppie virgolette interne (e conservazione newline)
-        expect(Exporter.formatCsvField('Nota con "virgolette"')).toBe(`"Nota con ""virgolette"""`);
-        expect(Exporter.formatCsvField('Nota\nMulti riga')).toBe(`"Nota\nMulti riga"`);
+        expect(formatCsvField('Nota con "virgolette"')).toBe(`"Nota con ""virgolette"""`);
+        expect(formatCsvField('Nota\nMulti riga')).toBe(`"Nota\nMulti riga"`);
 
         // Comportamenti numerici e nullish (NON devono essere alterati o diventare stringhe vuote inattese)
-        expect(Exporter.formatCsvField(0)).toBe('0');
-        expect(Exporter.formatCsvField(-12.5)).toBe('-12.5'); // Numero negativo legittimo!
-        expect(Exporter.formatCsvField(false)).toBe('false');
-        expect(Exporter.formatCsvField(null)).toBe('');
-        expect(Exporter.formatCsvField(undefined)).toBe('');
+        expect(formatCsvField(0)).toBe('0');
+        expect(formatCsvField(-12.5)).toBe('-12.5'); // Numero negativo legittimo!
+        expect(formatCsvField(false)).toBe('false');
+        expect(formatCsvField(null)).toBe('');
+        expect(formatCsvField(undefined)).toBe('');
     });
 
     it('exportToCSV mantiene righe coerenti e neutralizza i campi testuali pericolosi', async () => {
@@ -102,7 +103,7 @@ describe('SEC-01: CSV Formula Injection Mitigation in Export', () => {
         expect(nutritionRecords[1].length).toBe(nutritionRecords[0].length);
         expect(nutritionRecords[1][0]).toBe('2023-10-10');
 
-        const testCsv = Exporter.formatCsvRow(['cella con, virgola', 'cella con\nLF', 'cella con\r\nCRLF', 'cella con "quote"', '']);
+        const testCsv = formatCsvRow(['cella con, virgola', 'cella con\nLF', 'cella con\r\nCRLF', 'cella con "quote"', '']);
         const parsedSpecials = parseCsvForTest(testCsv);
         expect(parsedSpecials[0]).toEqual(['cella con, virgola', 'cella con\nLF', 'cella con\r\nCRLF', 'cella con "quote"', '']);
 

@@ -360,15 +360,7 @@
 }
 
 #view-data .data-method-option small,
-#view-data .data-method-help {
-    color: var(--text-muted);
-    font-size: var(--font-size-micro);
-    line-height: 1.35;
-}
 
-#view-data .data-method-help {
-    margin: .5rem 0 0;
-}
 
 #view-data .data-calculation-flow {
     display: grid;
@@ -483,11 +475,6 @@
 }
 
 #view-data .data-disclosure-copy small,
-#view-data .data-disclosure-note {
-    color: var(--text-muted);
-    font-size: var(--font-size-micro);
-    line-height: 1.35;
-}
 
 #view-data .data-disclosure-chevron {
     flex: none;
@@ -504,9 +491,6 @@
     border-top: 1px solid var(--glass-border);
 }
 
-#view-data .data-disclosure-note {
-    margin: .75rem 0 0;
-}
 
 #view-data .data-action-row {
     display: grid;

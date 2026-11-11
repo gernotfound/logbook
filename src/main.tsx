@@ -9,7 +9,8 @@ import App from './App'
 import { AuthProvider } from './contexts/AuthContext'
 import ErrorBoundary from './components/UI/ErrorBoundary'
 import { AccountDeletionRecovery } from './components/AccountDeletionRecovery'
-import { useAppStore, getInitialUserData } from './store/useAppStore'
+import { useAppStore } from './store/useAppStore'
+import { parseInitialUserData } from './store/slices/createDataSlice'
 import './styles/global.css'
 import { initializeAppearance } from './store/useAppearanceStore'
 import { getInitialLocalWorkout } from './store/slices/createWorkoutSlice'
@@ -34,7 +35,6 @@ initializePWAInstallLifecycle();
 const STORAGE_UNAVAILABLE_MESSAGE = 'Archivio del dispositivo non disponibile. TheLogBook non può determinare in sicurezza a chi appartengono i dati locali. Riapri l’app o riprova dopo aver riabilitato lo storage del browser.';
 
 function renderStorageUnavailable(rootElement: HTMLElement | null): void {
-  window.__INITIAL_USER_DATA__ = null;
   useAppStore.setState({
     localPersistenceBlocked: true,
     syncHealth: 'failed',
@@ -141,7 +141,6 @@ export const initApp = async () => {
 
     if (status === 'read_error') {
       if (isUpdateRequiredError(readError)) {
-        window.__INITIAL_USER_DATA__ = null;
         useAppStore.getState().setUpdateRequired(readError);
       } else {
         renderStorageUnavailable(rootElement);
@@ -155,13 +154,12 @@ export const initApp = async () => {
         library: resolveEffectiveExercises(catalog.exercises, cached.library || [], cached.catalogOverrides),
         customFoods: resolveEffectiveFoods(catalog.foods, cached.customFoods || [], cached.catalogOverrides),
       };
-      window.__INITIAL_USER_DATA__ = cached;
       
       // Yield al main thread per garantire che il browser disegni la splash HTML
       // prima che Zod congeli il thread con la validazione sincrona massiva
       await new Promise(resolve => setTimeout(resolve, 0));
       
-      const initialData = getInitialUserData();
+      const initialData = parseInitialUserData(cached);
       if (initialData) {
         if (!useAppStore.getState().userData) {
           useAppStore.setState({ userData: initialData, dataOwner: bootstrapOwner });
@@ -171,14 +169,9 @@ export const initApp = async () => {
         // Update marker ONLY after complete successful read and schema validation
         if (bootstrapOwner) updateStorageMarker(Date.now(), undefined, bootstrapOwner);
       }
-    } else if (status !== 'read_error') {
-      window.__INITIAL_USER_DATA__ = null;
-
-
     }
   } catch (e) {
     console.warn("Errore generale durante bootstrap storage:", e);
-    window.__INITIAL_USER_DATA__ = null;
   }
 
   if (rootElement) {

@@ -27,7 +27,6 @@ describe('Storage bootstrap and owner integrity checks', () => {
   beforeEach(() => {
     localStorage.clear();
     localStorage.setItem('logbook_authenticated_owner', 'user:test-user-id');
-    window.__INITIAL_USER_DATA__ = null;
     useAppStore.setState({
       userData: null,
       localWorkout: null,
@@ -49,7 +48,6 @@ describe('Storage bootstrap and owner integrity checks', () => {
     lockAllVaults();
     localStorage.clear();
     invalidateSession();
-    window.__INITIAL_USER_DATA__ = null;
     vi.restoreAllMocks();
   });
 
@@ -62,7 +60,7 @@ describe('Storage bootstrap and owner integrity checks', () => {
     await initApp();
 
     expect(getSpy).not.toHaveBeenCalled();
-    expect(window.__INITIAL_USER_DATA__).toBeNull();
+    expect('__INITIAL_USER_DATA__' in window).toBe(false);
     expect(useAppStore.getState().localPersistenceBlocked).toBe(true);
     expect(useAppStore.getState().syncHealth).toBe('failed');
     expect(useAppStore.getState().saveError).toContain('Archivio del dispositivo non disponibile');
@@ -98,7 +96,7 @@ describe('Storage bootstrap and owner integrity checks', () => {
 
     expect(ownerRead.mock.calls.some(([key]) => key === 'logbook:v2:user:test-user-id')).toBe(false);
     // Firebase has not verified this hint. The owner data is inaccessible here.
-    expect(window.__INITIAL_USER_DATA__).toBeNull();
+    expect('__INITIAL_USER_DATA__' in window).toBe(false);
     expect(useAppStore.getState().userData).toBeNull();
     expect(getStorageMarker()).toBeNull();
   });
@@ -109,7 +107,7 @@ describe('Storage bootstrap and owner integrity checks', () => {
 
     await initApp();
 
-    expect(window.__INITIAL_USER_DATA__).toBeNull();
+    expect('__INITIAL_USER_DATA__' in window).toBe(false);
     expect(vi.mocked(idbKeyval.get).mock.calls.some(([key]) => key === 'logbook:v2:user:test-user-id')).toBe(false);
     expect(getStorageMarker()?.timestamp).toBe(1000);
     expect(useAppStore.getState().localPersistenceBlocked).toBe(false);
@@ -125,7 +123,7 @@ describe('Storage bootstrap and owner integrity checks', () => {
 
     await initApp();
 
-    expect(window.__INITIAL_USER_DATA__).toBeNull();
+    expect('__INITIAL_USER_DATA__' in window).toBe(false);
     expect(useAppStore.getState().compatibilityStatus).toBe('ok');
     expect(useAppStore.getState().compatibilityError).toBeNull();
     expect(useAppStore.getState().localPersistenceBlocked).toBe(false);
@@ -148,7 +146,7 @@ describe('Storage bootstrap and owner integrity checks', () => {
     await initApp();
 
     expect(getSpy.mock.calls.some(([key]) => key === 'logbook:v2:guest')).toBe(true);
-    expect(window.__INITIAL_USER_DATA__).toBeNull();
+    expect('__INITIAL_USER_DATA__' in window).toBe(false);
     expect(useAppStore.getState().localPersistenceBlocked).toBe(true);
     expect(getStorageMarker(undefined, 'guest')?.timestamp).toBe(1000);
     expect(await idbKeyval.get('logbook:v2:guest')).toBe(corruptBytes);
@@ -185,7 +183,7 @@ describe('Storage bootstrap and owner integrity checks', () => {
     expect(isVaultUnlocked('guest')).toBe(true);
     expect(getSpy.mock.calls.some(([key]) => key === deviceVaultKeyId('guest'))).toBe(true);
     expect(getSpy.mock.calls.some(([key]) => key === archiveKey)).toBe(true);
-    expect(window.__INITIAL_USER_DATA__).toBeNull();
+    expect('__INITIAL_USER_DATA__' in window).toBe(false);
     expect(useAppStore.getState().userData).toBeNull();
     expect(useAppStore.getState().localPersistenceBlocked).toBe(true);
     expect(getStorageMarker(undefined, 'guest')?.timestamp).toBe(1000);
@@ -211,7 +209,7 @@ describe('Storage bootstrap and owner integrity checks', () => {
 
     await initApp();
 
-    expect(window.__INITIAL_USER_DATA__).toBeNull();
+    expect('__INITIAL_USER_DATA__' in window).toBe(false);
     expect(useAppStore.getState().localPersistenceBlocked).toBe(true);
     expect(localStorage.getItem(getStorageMarkerKey('guest'))).toBe(original);
     expect(await idbKeyval.get('logbook:v2:guest')).toBe(originalArchive);
@@ -223,7 +221,7 @@ describe('Storage bootstrap and owner integrity checks', () => {
 
     await initApp();
 
-    expect(window.__INITIAL_USER_DATA__).toBeNull();
+    expect('__INITIAL_USER_DATA__' in window).toBe(false);
     expect(getStorageMarker()).toBeNull();
   });
 

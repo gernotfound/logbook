@@ -4,7 +4,7 @@ import { doc, getDoc, getDocFromServer, writeBatch } from 'firebase/firestore';
 
 vi.unmock('../src/lib/db');
 import { ConsentedTestDB as DB, openTestCloudBusiness, openTestCloudDocument, sealTestCloudFixture, testCloudKey } from './testUtils';
-import { DomainParsers } from '../src/lib/schema';
+import { DomainParsers, WorkoutSessionSchema } from '../src/lib/schema';
 import type { UserData } from '../src/types';
 
 vi.mock('../src/lib/firebase', () => ({
@@ -317,7 +317,7 @@ describe('Empirical Challenger: Persistence, Save Amnesia, 3-Month Windowing & D
     });
 
     describe('2. 3-Month Windowing & Multi-Month Firestore Isolation', () => {
-        it('2.1: DB.loadUserData reads 3 months with 9 authoritative server reads including control epochs', async () => {
+        it('2.1: DB.loadCloudPayload reads 3 months with 9 authoritative server reads including control epochs', async () => {
             const mockUserDoc = {
                 _schemaVersion: 1,
                 _sync: {
@@ -379,7 +379,7 @@ describe('Empirical Challenger: Persistence, Save Amnesia, 3-Month Windowing & D
                 return { exists: () => true, data: () => sealTestCloudFixture(mockUserDoc) } as any;
             });
 
-            const loaded = await DB.loadUserData({ cloudKey: testCloudKey() });
+            const loaded = (await DB.loadCloudPayload({ cloudKey: testCloudKey() }))?.data;
 
             expect(loaded).not.toBeNull();
             expect(loaded?.profile?.height).toBe('178');
@@ -628,7 +628,7 @@ describe('Empirical Challenger: Persistence, Save Amnesia, 3-Month Windowing & D
                 ]
             };
 
-            const parsed = DomainParsers.parseWorkoutSession(corruptedSession);
+            const parsed = WorkoutSessionSchema.parse(corruptedSession);
             expect(parsed.id).toBe('12345');
             expect(parsed.pumpRating).toBe(5);
             expect(parsed.fatigueRating).toBeNull();

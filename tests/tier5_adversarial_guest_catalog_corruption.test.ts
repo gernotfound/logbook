@@ -47,9 +47,6 @@ describe('Tier 5: Adversarial Coverage Hardening Suite', () => {
         clearSyncTimers();
         localStorage.clear();
         for (const k in idbStore) delete idbStore[k];
-        if (typeof window !== 'undefined') {
-            window.__INITIAL_USER_DATA__ = null;
-        }
         vi.mocked(doc).mockImplementation((_db: any, ...parts: string[]) => ({
             path: parts.join('/'),
             toString: () => parts.join('/')

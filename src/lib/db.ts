@@ -240,8 +240,4 @@ async function loadCloudPayload(options?: { allMonths?: boolean; cloudKey?: Uint
 export const DB = {
     ...baseDB,
     loadCloudPayload,
-    async loadUserData(options?: { allMonths?: boolean; cloudKey?: Uint8Array }): Promise<UserData | null> {
-        const payload = await loadCloudPayload(options);
-        return payload ? payload.data : null;
-    },
 };

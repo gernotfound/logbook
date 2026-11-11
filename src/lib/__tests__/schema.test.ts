@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { UserDataSchema, NutritionDaySchema, DomainParsers } from '../schema';
+import { UserDataSchema, NutritionDaySchema, DomainParsers, WorkoutSessionSchema } from '../schema';
 
 describe('UserDataSchema', () => {
     it('excludes the retired stored calorie total from active and pending plans without losing current targets', () => {
@@ -23,7 +23,7 @@ describe('UserDataSchema', () => {
         const before = structuredClone(workout);
         const parsed = UserDataSchema.parse({ history: [workout], activeWorkout: workout });
         for (const result of [parsed.history[0], parsed.activeWorkout,
-            DomainParsers.parseWorkoutSession(workout)]) {
+            WorkoutSessionSchema.parse(workout)]) {
             expect(result).not.toHaveProperty('endTime');
             expect(result).toMatchObject({ globalStartTime: 1000, globalEndTime: 2000, futureField: 'preserved' });
         }
