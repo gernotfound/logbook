@@ -86,13 +86,11 @@ export const Logic = {
     // Workouts & Planning
     validateWorkoutRatings,
 
-    normalizeStem,
     getLatestUserWeight,
     calculateEffectiveSetWeight,
     calculateSetVolume,
     calculateWorkoutVolume,
     calculateCycleVolume,
-    getDetailedMuscleCategory,
     calculateCycleTimeline,
     calculateCycleSchedule,
     getNextScheduledRoutine,

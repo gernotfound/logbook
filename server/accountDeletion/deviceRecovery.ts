@@ -134,12 +134,3 @@ export async function verifyDeletionRecoveryDevice(uidValue: unknown, tokenValue
   }
   return hashes.some(hash => matches(token, hash));
 }
-
-export async function purgeDeletionRecoveryDevices(uidValue: string): Promise<number> {
-  const uid = validateUid(uidValue);
-  const ref = registryRef(uid);
-  const snapshot = await ref.get();
-  if (!snapshot.exists) return 0;
-  await ref.delete();
-  return 1;
-}

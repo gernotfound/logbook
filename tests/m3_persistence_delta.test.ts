@@ -14,7 +14,7 @@ import {
     createExerciseOverride,
     createFoodOverride
 } from '../src/lib/catalog/deltaResolver';
-import { saveUserDataToCache, getInitialUserData } from '../src/store/slices/createDataSlice';
+import { saveUserDataToCache, parseInitialUserData } from '../src/store/slices/createDataSlice';
 import { idbStore } from './setup';
 import { readLocal } from '../src/lib/sync/localRepository';
 import { prepareUnlockedTestArchive } from './secureVaultFixture';
@@ -255,9 +255,9 @@ describe('M3: Storage & Persistence Delta Isolation Suite', () => {
         });
     });
 
-    describe('DB.loadUserData Catalog Resolution', () => {
+    describe('DB.loadCloudPayload Catalog Resolution', () => {
         it('hydrates user data from Firestore and resolves effective library and foods', async () => {
-            // Inject a fixture catalog so DB.loadUserData can resolve effective library and foods.
+            // Inject a fixture catalog so DB.loadCloudPayload can resolve effective library and foods.
             // seedExercises.json is intentionally empty (commit e61a133); the global catalog
             // is normally fetched from Firestore. This simulates that post-fetch state.
             const globalExFixture: import('../src/types').CatalogExercise[] = [
@@ -315,7 +315,7 @@ describe('M3: Storage & Persistence Delta Isolation Suite', () => {
             } as any;
             });
 
-            const loaded = await DB.loadUserData({ cloudKey: testCloudKey() });
+            const loaded = (await DB.loadCloudPayload({ cloudKey: testCloudKey() }))?.data;
 
             expect(loaded).not.toBeNull();
             expect(loaded?.profile?.height).toBe('180');
@@ -342,7 +342,7 @@ describe('M3: Storage & Persistence Delta Isolation Suite', () => {
             } as any;
             });
 
-            const loaded = await DB.loadUserData({ cloudKey: testCloudKey() });
+            const loaded = (await DB.loadCloudPayload({ cloudKey: testCloudKey() }))?.data;
 
             // When user doc is missing, standard catalog defaults are loaded from seeds (which are now empty).
             expect(loaded?.library?.length).toBe(0);
@@ -376,7 +376,7 @@ describe('M3: Storage & Persistence Delta Isolation Suite', () => {
             expect((await readLocal(owner))?.data.profile?.height).toBe('176');
         });
 
-        it('getInitialUserData safely returns validated UserData from window.__INITIAL_USER_DATA__', () => {
+        it('parseInitialUserData safely returns validated UserData from explicit input', () => {
             const rawData: UserData = {
                 profile: { height: '175' },
                 library: [],
@@ -387,8 +387,7 @@ describe('M3: Storage & Persistence Delta Isolation Suite', () => {
                 catalogOverrides: { exercises: {}, foods: {}, hiddenExerciseIds: [], hiddenFoodIds: [] }
             };
 
-            window.__INITIAL_USER_DATA__ = rawData;
-            const parsed = getInitialUserData();
+            const parsed = parseInitialUserData(rawData);
 
             expect(parsed).not.toBeNull();
             expect(parsed?.profile?.height).toBe('175');

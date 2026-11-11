@@ -235,7 +235,7 @@ La classificazione ispeziona solo proprietà proprie degli errori e una catena `
 
 `initApp` in `src/main.tsx` inizializza aspetto, catalogo e stato storage prima del render, ma non carica un archivio account a partire dal solo hint UID.
 
-- Guest: verificare marker/generazione, preparare il vault owner-scoped e leggere l'envelope prima di pubblicare `window.__INITIAL_USER_DATA__`, workout e store.
+- Guest: verificare marker/generazione, preparare il vault owner-scoped e leggere l'envelope prima di pubblicare dati e workout nello store Zustand.
 - Account: `bootstrapOwner` resta nullo nel pre-render; AuthProvider conferma l'identità Firebase e gestisce sblocco/lettura dell'archivio account. L'hint persistito è solo un'indicazione, non una prova Auth.
 - Cache, business e copie device attraversano gateway di versione, AEAD, Zod e integrità. Byte incompatibili o non leggibili restano preservati; una versione futura porta a `update-required` prima dell'editing.
 - Nessun default sintetico può diventare baseline cloud dopo un caricamento fallito.

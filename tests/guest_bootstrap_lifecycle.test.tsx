@@ -46,9 +46,6 @@ describe('Milestone M2: Guest Bootstrap & Cold Start Lifecycle', () => {
         (auth as any).currentUser = null;
         vi.mocked(onAuthStateChanged).mockImplementation((_auth, callback: any) => { callback(null); return () => {}; });
         localStorage.clear();
-        if (typeof window !== 'undefined') {
-            window.__INITIAL_USER_DATA__ = null;
-        }
         await clearCatalogCache();
         useAppStore.getState().resetStore();
         vi.clearAllMocks();

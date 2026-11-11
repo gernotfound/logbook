@@ -3,7 +3,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const state = vi.hoisted(() => ({
   registries: new Map<string, Record<string, unknown>>(),
   deletionJobUid: null as string | null,
-  deleted: 0,
 }));
 
 function registry(uid = 'user-a'): Record<string, unknown> | null {
@@ -19,9 +18,6 @@ function deviceRef(uid: string) {
   return {
     uid,
     async get() { return snapshot(uid); },
-    async delete() {
-      if (state.registries.delete(uid)) state.deleted += 1;
-    },
   };
 }
 
@@ -81,7 +77,6 @@ vi.mock('../server/accountDeletion/httpAuth', () => auth);
 import {
   MAX_DELETION_RECOVERY_DEVICES,
   DeletionRecoveryConflictError,
-  purgeDeletionRecoveryDevices,
   registerDeletionRecoveryDevice,
   verifyDeletionRecoveryDevice,
 } from '../server/accountDeletion/deviceRecovery';
@@ -110,7 +105,6 @@ describe('M7 account deletion recovery device registry', () => {
   beforeEach(() => {
     state.registries.clear();
     state.deletionJobUid = null;
-    state.deleted = 0;
     vi.clearAllMocks();
     auth.verifyRecoveryRegistrationRequester.mockResolvedValue({ uid: 'user-a' });
     auth.verifyStatusAppCheck.mockResolvedValue(undefined);
@@ -192,7 +186,7 @@ describe('M7 account deletion recovery device registry', () => {
     await expect(verifyDeletionRecoveryDevice('user-b', raw)).resolves.toBe(false);
   });
 
-  it('keeps two owners recovery registries independent across registration and purge', async () => {
+  it('keeps two owners recovery registries independent across registration and verification', async () => {
     const a = token('A');
     const b = token('B');
     await registerDeletionRecoveryDevice('user-a', a);
@@ -201,8 +195,6 @@ describe('M7 account deletion recovery device registry', () => {
     expect(registry('user-b')?.uid).toBe('user-b');
     expect(await verifyDeletionRecoveryDevice('user-a', b)).toBe(false);
     expect(await verifyDeletionRecoveryDevice('user-b', a)).toBe(false);
-    expect(await purgeDeletionRecoveryDevices('user-b')).toBe(1);
-    expect(registry('user-b')).toBeNull();
     expect(await verifyDeletionRecoveryDevice('user-a', a)).toBe(true);
     expect(registry('user-a')?.uid).toBe('user-a');
   });
@@ -225,13 +217,6 @@ describe('M7 account deletion recovery device registry', () => {
     await expect(verifyDeletionRecoveryDevice('user-a', token('A'))).resolves.toBe(true);
     await expect(verifyDeletionRecoveryDevice('user-a', token('B'))).resolves.toBe(false);
     await expect(verifyDeletionRecoveryDevice('user-a', token('Z'))).resolves.toBe(true);
-  });
-
-  it('purges the bounded registry in one operation', async () => {
-    await registerDeletionRecoveryDevice('user-a', token('A'));
-    await expect(purgeDeletionRecoveryDevices('user-a')).resolves.toBe(1);
-    await expect(purgeDeletionRecoveryDevices('user-a')).resolves.toBe(0);
-    expect(state.deleted).toBe(1);
   });
 
   it('rejects unauthorized origins before auth or recovery work', async () => {

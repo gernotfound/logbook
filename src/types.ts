@@ -443,12 +443,6 @@ export interface UserData {
     };
 }
 
-declare global {
-    interface Window {
-        __INITIAL_USER_DATA__?: UserData | null;
-    }
-}
-
 
 export type SyncResult =
     | { ok: true; status: 'synced' }

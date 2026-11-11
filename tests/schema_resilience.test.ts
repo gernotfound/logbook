@@ -431,7 +431,7 @@ describe('Zod Schema Resilience & Defensive Catches', () => {
         });
     });
 
-    describe('Runtime Gateway in DB.loadUserData', () => {
+    describe('Runtime Gateway in DB.loadCloudPayload', () => {
         it('UserDataSchema normalizes non-authoritative malformed objects', () => {
             const mockFirestoreData = {
                 profile: { height: 175 },
@@ -450,7 +450,7 @@ describe('Zod Schema Resilience & Defensive Catches', () => {
             expect(parsed.activeWorkout).toBeNull();
         });
 
-        it('rejects lossy Firestore root data during real DB.loadUserData', async () => {
+        it('rejects lossy Firestore root data during real DB.loadCloudPayload', async () => {
             const rootPath = 'users/test-user-id';
             const original = firestoreMockStore[rootPath];
             const cloudRoot = {
@@ -465,7 +465,7 @@ describe('Zod Schema Resilience & Defensive Catches', () => {
             const encryptedRoot = sealTestCloudFixture(cloudRoot);
             firestoreMockStore[rootPath] = encryptedRoot;
             try {
-                await expect(DB.loadUserData({ cloudKey: testCloudKey() })).rejects.toThrow(/dati cloud non validi/i);
+                await expect(DB.loadCloudPayload({ cloudKey: testCloudKey() })).rejects.toThrow(/dati cloud non validi/i);
                 expect(vi.mocked(getDocFromServer).mock.calls.some(([ref]) =>
                     (ref as { path?: string }).path === rootPath
                 )).toBe(true);

@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { createDataSlice, getInitialUserData, type DataSlice } from './slices/createDataSlice';
+import { createDataSlice, type DataSlice } from './slices/createDataSlice';
 import { createWorkoutSlice, type WorkoutSlice } from './slices/createWorkoutSlice';
 import { createSyncSlice, type SyncSlice } from './slices/createSyncSlice';
 import { captureSession, isActiveGuestSession } from '../lib/sync/session';
@@ -12,8 +12,6 @@ import { isAccountDeletionPending } from '../lib/sync/accountGate';
 import { createJournalRetry } from '../lib/sync/journalRetry';
 
 export interface AppState extends DataSlice, WorkoutSlice, SyncSlice {}
-
-export { getInitialUserData };
 
 export const useAppStore = create<AppState>()((...a) => ({
     ...createDataSlice(...a),

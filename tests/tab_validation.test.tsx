@@ -7,7 +7,6 @@ import { prepareUnlockedTestArchive } from './secureVaultFixture';
 import { LEGAL_VERSIONS } from '../src/lib/legalVersions';
 import { 
     AppTabSchema, 
-    MainTabSchema, 
     TrainingSubTabSchema, 
     NutritionSubTabSchema, 
     DataSubTabSchema 
@@ -27,13 +26,11 @@ describe('R4: Tab Zod Schema & LocalStorage Fallback Resilience (ARCH-05)', () =
     afterEach(() => window.history.replaceState({}, '', '/'));
 
     describe('Zod Schema Unit Validation', () => {
-        it('validates all valid AppTab / MainTab values', () => {
+        it('validates all valid AppTab values', () => {
             const validTabs = ['home', 'training', 'nutrition', 'data'] as const;
             for (const tab of validTabs) {
                 const parseApp = AppTabSchema.safeParse(tab);
-                const parseMain = MainTabSchema.safeParse(tab);
                 expect(parseApp.success).toBe(true);
-                expect(parseMain.success).toBe(true);
                 if (parseApp.success) expect(parseApp.data).toBe(tab);
             }
         });
