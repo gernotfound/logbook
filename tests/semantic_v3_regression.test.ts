@@ -222,8 +222,9 @@ describe('Semantic Merge V3 regressions', () => {
         const operations = diffDocuments(base, desired, 's00', 1, { s00: 1 });
         expect(operations.some(operation => operation.path.at(-1) === '$order')).toBe(true);
         const merged = applySemanticOperations(base, operations);
-        expect((merged.documents.get('')?.routines as typeof routines).map(item => item.id))
-            .toEqual(reordered.map(item => item.id));
+        const resultRoutines = merged.documents.get('')?.routines as typeof routines | undefined;
+        expect(resultRoutines).toBeDefined();
+        expect(resultRoutines?.map(item => item.id)).toEqual(reordered.map(item => item.id));
     });
 
     it('reconciles multiple descendant stamps after a newer parent replacement', () => {
