@@ -91,6 +91,7 @@ describe('Workout lifecycle durable recovery regressions', () => {
     });
     afterEach(() => vi.restoreAllMocks());
 
+    describe('Session readiness, consent and draft ownership', () => {
     it('does not treat an optimistic started snapshot as a confirmed local commit', async () => {
         await prepareUnlockedTestArchive(owner);
         const prepared = workout('optimistic-start');
@@ -458,8 +459,9 @@ describe('Workout lifecycle durable recovery regressions', () => {
         expect(deleted).toBe(false);
         expect(useAppStore.getState().localWorkout?.id).toBe('keep');
     });
+    });
 
-
+    describe('Start, pause and session fencing', () => {
     it('refuses an oversized historical plan without publishing any local workout', async () => {
         const initial = userData({
             routines: [{ id: 'oversized', name: 'Importata', exercises: [
@@ -740,7 +742,9 @@ describe('Workout lifecycle durable recovery regressions', () => {
             useAppStore.setState({ dispatchDomainOperation: previousDispatch });
         }
     });
+    });
 
+    describe('Durable completion, recovery and historical edits', () => {
     it('retains a live workout, timer and final draft when completion commit is rejected', async () => {
         await prepareUnlockedTestArchive(owner);
         const pending = workout('finish-rejected', true);
@@ -1161,7 +1165,9 @@ describe('Workout lifecycle durable recovery regressions', () => {
             expect.stringContaining('Allenamento eliminato dallo storico, ma'),
         );
     });
+    });
 
+    describe('Exercise identity, deletion cleanup and concurrent starts', () => {
     it('removes the confirmed exercise identity even if exercises are reordered in the dialog', async () => {
         const initial: WorkoutSession = { ...workout('exercise-race', true), exercises: [
             { id: 'first', exId: 'bench', sessionNote: '', sets: [{ id: 's1', kg: '40', reps: '8' }] },
@@ -1534,5 +1540,7 @@ describe('Workout lifecycle durable recovery regressions', () => {
         expect(useAppStore.getState().localPersistenceBlocked).toBe(false);
         expect(useDialogStore.getState().showAlert).not.toHaveBeenCalled();
     });
+    });
+
 
 });
