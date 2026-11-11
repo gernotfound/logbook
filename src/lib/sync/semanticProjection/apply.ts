@@ -523,8 +523,8 @@ export function applySemanticOperations(
         let protectedDescendants: ProtectedDescendant[] = [];
         if (selectedOperation) {
             const prefix = `${fk}/`;
-            const capturedDescendants = Object.entries(meta.fields)
-                .filter(([key]) => key.startsWith(prefix))
+            const descendants = Object.entries(meta.fields).filter(([key]) => key.startsWith(prefix));
+            const capturedDescendants = descendants
                 .map(([key, stamp]) => captureDescendant(doc, docPath, key, stamp));
 
             applyWinnerToDocument(doc, selectedOperation, ordersToApply);
@@ -533,9 +533,7 @@ export function applySemanticOperations(
                 .map(captured => reconcileCapturedDescendant(captured, nextStamp, doc))
                 .filter((item): item is ProtectedDescendant => item !== undefined);
 
-            for (const [key] of Object.entries(meta.fields)) {
-                if (key.startsWith(prefix)) delete meta.fields[key];
-            }
+            for (const [key] of descendants) delete meta.fields[key];
             for (const item of protectedDescendants) setOwnDataProperty(meta.fields, item.key, item.stamp);
         }
 
@@ -564,7 +562,8 @@ export function applySemanticOperations(
         for (const item of arr) entities.set(resolveIdentity(path, item), item);
 
         const winnerOrder = orderIds.filter(id => entities.has(id));
-        const missing = [...entities.keys()].filter(id => !winnerOrder.includes(id)).sort();
+        const orderedIds = new Set(winnerOrder);
+        const missing = [...entities.keys()].filter(id => !orderedIds.has(id)).sort();
         const finalOrder = [...winnerOrder, ...missing];
 
         arr.length = 0;

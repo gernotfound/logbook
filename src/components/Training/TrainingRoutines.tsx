@@ -26,19 +26,24 @@ const TrainingRoutines: React.FC = () => {
         handleRemoveExerciseFromRoutine, moveExercise
     } = useTrainingRoutines();
 
-    const editMuscles: string[] = [];
-    const editSecMuscles: string[] = [];
-    routineExercises.forEach(ex => {
-        const libDef = library.find(l => l.id === ex.exId);
-        if (libDef) {
-            if (libDef.muscles) {
-                libDef.muscles.forEach((mId: string) => editMuscles.push(mId));
-            }
-            if (libDef.secondaryMuscles) {
-                libDef.secondaryMuscles.forEach((mId: string) => editSecMuscles.push(mId));
+    const libraryById = React.useMemo(
+        () => new Map(library.map(exercise => [exercise.id, exercise] as const)),
+        [library],
+    );
+    const editorOpen = isCreating || Boolean(editingRoutineId);
+    const { editMuscles, editSecMuscles } = React.useMemo(() => {
+        const editMuscles: string[] = [];
+        const editSecMuscles: string[] = [];
+        if (editorOpen) {
+            for (const exercise of routineExercises) {
+                const definition = libraryById.get(exercise.exId);
+                if (!definition) continue;
+                editMuscles.push(...(definition.muscles ?? []));
+                editSecMuscles.push(...(definition.secondaryMuscles ?? []));
             }
         }
-    });
+        return { editMuscles, editSecMuscles };
+    }, [editorOpen, routineExercises, libraryById]);
 
     const normalizedQuery = searchQuery.trim().toLocaleLowerCase('it');
     const filteredRoutines = React.useMemo(
@@ -47,8 +52,6 @@ const TrainingRoutines: React.FC = () => {
         )),
         [normalizedQuery, routines],
     );
-
-    const editorOpen = isCreating || Boolean(editingRoutineId);
 
     const handleEditItem = (rtn: WorkoutRoutine) => {
         setIsCreating(false);
@@ -81,6 +84,7 @@ const TrainingRoutines: React.FC = () => {
                         editingRoutineId={editingRoutineId}
                         routineExercises={routineExercises}
                         library={library}
+                        libraryById={libraryById}
                         editMuscles={editMuscles}
                         editSecMuscles={editSecMuscles}
                         onAddExercise={handleAddExerciseToRoutine}
@@ -147,6 +151,7 @@ const TrainingRoutines: React.FC = () => {
                                     routine={rtn}
                                     isExpanded={expandedRoutineId === rtn.id}
                                     library={library}
+                                    libraryById={libraryById}
                                     isCreating={isCreating}
                                     onToggleExpand={handleRoutineClick}
                                     onEdit={handleEditItem}
