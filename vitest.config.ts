@@ -16,20 +16,20 @@ const appVersion = process.env.npm_package_version || '0.0.0-test';
 // Dedicated M5/M7/M8 suites run these files under their own verification commands.
 // Exclude them only from npm's canonical general runner, not from focused vitest invocations.
 const dedicatedSuiteExclusions = process.env.npm_lifecycle_event === 'test' ? [
-  'tests/logout_protection.test.ts',
-  'tests/guest_bootstrap_lifecycle.test.tsx',
-  'tests/guest_account_migration_v3.test.tsx',
-  'tests/catalog_resolution_pipeline.test.ts',
+  'tests/account/auth/logout_protection.test.ts',
+  'tests/account/guest/guest_bootstrap_lifecycle.test.tsx',
+  'tests/account/guest/guest_account_migration_v3.test.tsx',
+  'tests/catalog/catalog_resolution_pipeline.test.ts',
   'tests/hardening/**/*.test.{ts,tsx}',
-  'tests/m7_account_deletion_job_store.test.ts',
-  'tests/m7_account_deletion_fairness.test.ts',
-  'tests/m7_account_deletion_retention.test.ts',
-  'tests/m7_account_deletion_runner.test.ts',
-  'tests/m7_account_deletion_api.test.ts',
-  'tests/m7_account_deletion_http_auth.test.ts',
-  'tests/m7_account_deletion_device.test.ts',
-  'tests/m7_account_deletion_cron.test.ts',
-  'tests/m8_domain_operations.test.ts',
+  'tests/account/deletion/m7_account_deletion_job_store.test.ts',
+  'tests/account/deletion/m7_account_deletion_fairness.test.ts',
+  'tests/account/deletion/m7_account_deletion_retention.test.ts',
+  'tests/account/deletion/m7_account_deletion_runner.test.ts',
+  'tests/account/deletion/m7_account_deletion_api.test.ts',
+  'tests/account/deletion/m7_account_deletion_http_auth.test.ts',
+  'tests/account/deletion/m7_account_deletion_device.test.ts',
+  'tests/account/deletion/m7_account_deletion_cron.test.ts',
+  'tests/domain/m8_domain_operations.test.ts',
 ] : [];
 
 

@@ -1,0 +1,407 @@
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { getDocFromServer, writeBatch } from 'firebase/firestore';
+
+vi.unmock('../../src/lib/db');
+import { ConsentedTestDB as DB, openTestCloudBusiness, sealTestCloudFixture, testCloudKey } from '../testUtils';
+import {
+    getSeedCatalog,
+    clearCatalogCache,
+    saveCatalogToCache
+} from '../../src/lib/catalog/catalogService';
+import {
+    resolveEffectiveExercises,
+    resolveEffectiveFoods,
+    createExerciseOverride,
+    createFoodOverride
+} from '../../src/lib/catalog/deltaResolver';
+import { saveUserDataToCache, parseInitialUserData } from '../../src/store/slices/createDataSlice';
+import { idbStore } from '../setup';
+import { readLocal } from '../../src/lib/sync/localRepository';
+import { prepareUnlockedTestArchive } from '../secureVaultFixture';
+import { lockAllVaults } from '../../src/lib/sync/secureArchiveSession';
+import type { UserData, Exercise, Food, CatalogOverrides } from '../../src/types';
+
+
+
+describe('M3: Storage & Persistence Delta Isolation Suite', () => {
+    let mockBatch: any;
+    let capturedUserDocData: any;
+
+    beforeEach(async () => {
+        vi.clearAllMocks();
+        localStorage.clear();
+        for (const k in idbStore) delete idbStore[k];
+        await clearCatalogCache();
+        await prepareUnlockedTestArchive('user:test-user-id');
+        DB.resetCache();
+        capturedUserDocData = null;
+
+        mockBatch = {
+            set: vi.fn((ref: any, data: any) => {
+                if (ref?.path === 'users/test-user-id' && data?._sealed) {
+                    capturedUserDocData = openTestCloudBusiness(data);
+                }
+            }),
+            delete: vi.fn(),
+            commit: vi.fn().mockResolvedValue(undefined)
+        };
+        vi.mocked(writeBatch).mockReturnValue(mockBatch);
+    });
+
+    afterEach(() => lockAllVaults());
+
+    describe('DB.saveUserData Delta Isolation', () => {
+        it('persists only custom exercises and foods even with a populated global catalog', async () => {
+            const seed = getSeedCatalog();
+            // Bundled launch seeds are intentionally empty. Use realistic
+            // populated catalog data so the global-item exclusion is observable.
+            const catalog = {
+                ...seed,
+                manifest: { ...seed.manifest, version: 'delta-exclusion-fixture',
+                    itemCounts: { exercises: 2, foods: 2 } },
+                exercises: [
+                    { id: 'global_bench', name: 'Bench', muscles: ['chest'], setsCount: 3, trackingType: 'weight_reps', isDefault: true },
+                    { id: 'global_squat', name: 'Squat', muscles: ['quads'], setsCount: 3, trackingType: 'weight_reps', isDefault: true },
+                ],
+                foods: [
+                    { id: 'global_rice', name: 'Rice', kcal: 130, pro: 2.5, carbs: 28, fat: 0.3, isCustom: false },
+                    { id: 'global_chicken', name: 'Chicken', kcal: 120, pro: 25, carbs: 0, fat: 2, isCustom: false },
+                ],
+            } as import('../../src/types').CachedGlobalCatalog;
+            await saveCatalogToCache(catalog);
+            expect(catalog.exercises).toHaveLength(2);
+            expect(catalog.foods).toHaveLength(2);
+
+            const customExercise1: Exercise = {
+                id: 'custom_ex_hack_squat',
+                name: 'Hack Squat 45° Custom',
+                setsCount: 4,
+                sets: [],
+                muscles: ['quads'],
+                isDefault: false
+            };
+            const customExercise2: Exercise = {
+                id: 'custom_ex_reverse_fly',
+                name: 'Reverse Fly ai Cavi',
+                setsCount: 3,
+                sets: [],
+                muscles: ['shoulders'],
+                isDefault: false
+            };
+
+            const customFood1: Food = {
+                id: 'custom_food_clear_whey',
+                name: 'Clear Whey Isolate Anguria',
+                kcal: 85,
+                pro: 20,
+                carbs: 0.5,
+                fat: 0.1,
+                isCustom: true
+            };
+            const customFood2: Food = {
+                id: 'custom_food_rice_creme',
+                name: 'Crema di Riso Cioccolato',
+                kcal: 350,
+                pro: 7,
+                carbs: 78,
+                fat: 1.5,
+                isCustom: true
+            };
+
+            const fullResolvedLibrary = resolveEffectiveExercises(catalog.exercises, [customExercise1, customExercise2]);
+            const fullResolvedFoods = resolveEffectiveFoods(catalog.foods, [customFood1, customFood2]);
+
+            expect(fullResolvedLibrary).toHaveLength(4);
+            expect(fullResolvedFoods).toHaveLength(4);
+
+            const stateToSave: UserData = {
+                profile: { height: '178' },
+                library: fullResolvedLibrary,
+                customFoods: fullResolvedFoods,
+                catalogOverrides: {},
+                routines: [],
+                history: [],
+                nutrition: {},
+                trainingCycles: [],
+                activeCycleId: null,
+                supplements: [],
+                activeWorkout: null
+            };
+
+            expect(await DB.saveUserData(stateToSave)).toEqual({ ok: true, status: 'synced' });
+
+            expect(mockBatch.commit).toHaveBeenCalled();
+            expect(capturedUserDocData).toBeDefined();
+
+            // The Firestore user document must not include either global exercise.
+            expect(capturedUserDocData.library).toHaveLength(2);
+            expect(capturedUserDocData.library.map((e: Exercise) => e.id).sort()).toEqual(
+                ['custom_ex_hack_squat', 'custom_ex_reverse_fly']
+            );
+
+            // The Firestore user document must not include either global food.
+            expect(capturedUserDocData.customFoods).toHaveLength(2);
+            expect(capturedUserDocData.customFoods.map((f: Food) => f.id).sort()).toEqual(
+                ['custom_food_clear_whey', 'custom_food_rice_creme']
+            );
+
+            // Document size is tiny (< 15KB, well below 950KB limit)
+            expect(JSON.stringify(capturedUserDocData).length).toBeLessThan(15000);
+        });
+
+        it('persists modified catalog overrides and hidden IDs accurately to Firestore', async () => {
+            // Local fixture (seed is empty — commit e61a133)
+            const globalExFixture: import('../../src/types').CatalogExercise[] = [
+                { id: 'panca-piana-bilanciere', name: 'Panca Piana Bilanciere', muscles: ['chest'], trackingType: 'weight_reps', isDefault: true, setsCount: 4 },
+                { id: 'panca-declinata-bilanciere', name: 'Panca Declinata', muscles: ['chest'], trackingType: 'weight_reps', isDefault: true, setsCount: 3 }
+            ];
+            const globalFoodFixture: import('../../src/types').CatalogFood[] = [
+                { id: 'petto-di-pollo-crudo', name: 'Petto di pollo crudo', kcal: 106, pro: 22.5, carbs: 0, fat: 1.9, isCustom: false },
+                { id: 'petto-di-tacchino-crudo', name: 'Petto di tacchino crudo', kcal: 104, pro: 22.0, carbs: 0, fat: 1.5, isCustom: false }
+            ];
+            const fixtureCatalog = {
+                manifest: { version: '1.0.0', schemaVersion: 1, docRefs: { exercises: 'exercises_v1', foods: 'foods_v1' } },
+                exercises: globalExFixture,
+                foods: globalFoodFixture
+            } as any;
+            await saveCatalogToCache(fixtureCatalog);
+
+            const baseBench = globalExFixture.find(e => e.id === 'panca-piana-bilanciere')!;
+            const benchOverride = createExerciseOverride(baseBench, {
+                notes: 'Pausa 2 secondi al petto',
+                equipmentWeight: 20
+            });
+
+            const baseChicken = globalFoodFixture.find(f => f.id === 'petto-di-pollo-crudo')!;
+            const chickenOverride = createFoodOverride(baseChicken, {
+                pro: 25,
+                kcal: 110
+            });
+
+            const overrides: CatalogOverrides = {
+                exercises: {
+                    'panca-piana-bilanciere': benchOverride
+                },
+                foods: {
+                    'petto-di-pollo-crudo': chickenOverride
+                },
+                hiddenExerciseIds: ['panca-declinata-bilanciere'],
+                hiddenFoodIds: ['petto-di-tacchino-crudo']
+            };
+
+            const fullResolvedLibrary = resolveEffectiveExercises(globalExFixture, [], overrides);
+            const fullResolvedFoods = resolveEffectiveFoods(globalFoodFixture, [], overrides);
+
+            const stateToSave: UserData = {
+                profile: { height: '179' },
+                library: fullResolvedLibrary,
+                customFoods: fullResolvedFoods,
+                catalogOverrides: overrides,
+                routines: [],
+                history: [],
+                nutrition: {},
+                trainingCycles: [],
+                activeCycleId: null,
+                supplements: [],
+                activeWorkout: null
+            };
+
+            expect(await DB.saveUserData(stateToSave)).toEqual({ ok: true, status: 'synced' });
+
+            expect(mockBatch.commit).toHaveBeenCalled();
+            expect(capturedUserDocData).toBeDefined();
+
+            // Zero custom items
+            expect(capturedUserDocData.library).toHaveLength(0);
+            expect(capturedUserDocData.customFoods).toHaveLength(0);
+
+            // Overrides serialized correctly
+            expect(capturedUserDocData.catalogOverrides.exercises['panca-piana-bilanciere'].notes).toBe('Pausa 2 secondi al petto');
+            expect(capturedUserDocData.catalogOverrides.exercises['panca-piana-bilanciere'].equipmentWeight).toBe(20);
+            expect(capturedUserDocData.catalogOverrides.foods['petto-di-pollo-crudo'].pro).toBe(25);
+            expect(capturedUserDocData.catalogOverrides.hiddenExerciseIds).toContain('panca-declinata-bilanciere');
+            expect(capturedUserDocData.catalogOverrides.hiddenFoodIds).toContain('petto-di-tacchino-crudo');
+        });
+
+        it('guarantees seed catalog fallback when inMemoryCatalogCache is null without leaking seed items', async () => {
+            // Ensure in-memory cache is completely clear
+            await clearCatalogCache();
+
+            const seed = getSeedCatalog();
+            const fullResolvedLibrary = resolveEffectiveExercises(seed.exercises, []);
+            const fullResolvedFoods = resolveEffectiveFoods(seed.foods, []);
+
+            const stateToSave: UserData = {
+                profile: { height: '177' },
+                library: fullResolvedLibrary,
+                customFoods: fullResolvedFoods,
+                catalogOverrides: {},
+                routines: [],
+                history: [],
+                nutrition: {},
+                trainingCycles: [],
+                activeCycleId: null,
+                supplements: [],
+                activeWorkout: null
+            };
+
+            // Should not throw and should still isolate deltas via getSeedCatalog fallback
+            expect(await DB.saveUserData(stateToSave)).toEqual({ ok: true, status: 'synced' });
+
+            expect(mockBatch.commit).toHaveBeenCalled();
+            expect(capturedUserDocData).toBeDefined();
+            expect(capturedUserDocData.library).toHaveLength(0);
+            expect(capturedUserDocData.customFoods).toHaveLength(0);
+        });
+    });
+
+    describe('DB.loadCloudPayload Catalog Resolution', () => {
+        it('hydrates user data from Firestore and resolves effective library and foods', async () => {
+            // Inject a fixture catalog so DB.loadCloudPayload can resolve effective library and foods.
+            // seedExercises.json is intentionally empty (commit e61a133); the global catalog
+            // is normally fetched from Firestore. This simulates that post-fetch state.
+            const globalExFixture: import('../../src/types').CatalogExercise[] = [
+                { id: 'panca-piana-bilanciere', name: 'Panca Piana Bilanciere', muscles: ['chest'], trackingType: 'weight_reps', isDefault: true, setsCount: 4 },
+                { id: 'panca-declinata-bilanciere', name: 'Panca Declinata', muscles: ['chest'], trackingType: 'weight_reps', isDefault: true, setsCount: 3 },
+                { id: 'squat-bilanciere', name: 'Squat Bilanciere', muscles: ['quads'], trackingType: 'weight_reps', isDefault: true, setsCount: 4 }
+            ];
+            const globalFoodFixture: import('../../src/types').CatalogFood[] = [
+                { id: 'petto-di-pollo-crudo', name: 'Petto di pollo crudo', kcal: 106, pro: 22.5, carbs: 0, fat: 1.9, isCustom: false },
+                { id: 'riso-bianco-cotto', name: 'Riso bianco cotto', kcal: 130, pro: 2.7, carbs: 28.6, fat: 0.3, isCustom: false }
+            ];
+            const fixtureCatalog = {
+                manifest: { version: '1.0.0', schemaVersion: 1, docRefs: { exercises: 'exercises_v1', foods: 'foods_v1' } },
+                exercises: globalExFixture,
+                foods: globalFoodFixture
+            } as any;
+            await saveCatalogToCache(fixtureCatalog);
+
+            const mockFirestoreDoc = {
+                _schemaVersion: 1,
+                _sync: {
+                    protocolVersion: 3,
+                    clock: {},
+                    fields: {},
+                    writer: { slot: 's00', replicaId: 'delta-seed', generation: 1, seq: 0 },
+                },
+                profile: { height: '180' },
+                library: [
+                    { id: 'cloud_custom_dip', name: 'Dip alle Parallele Zavorrate', setsCount: 4, sets: [], isDefault: false }
+                ],
+                customFoods: [
+                    { id: 'cloud_custom_quark', name: 'Formaggio Quark Magro', kcal: 68, pro: 12, carbs: 4, fat: 0.2, isCustom: true }
+                ],
+                catalogOverrides: {
+                    exercises: {
+                        'panca-piana-bilanciere': { notes: 'Presa stretta' }
+                    },
+                    hiddenExerciseIds: ['panca-declinata-bilanciere']
+                },
+                routines: [],
+                // Cloud root contains only root keys; history/nutrition are monthly shards.
+                trainingCycles: [],
+                activeCycleId: null,
+                supplements: []
+            };
+
+            vi.mocked(getDocFromServer).mockImplementation(async (ref: any) => {
+                if (typeof ref?.path !== 'string' || ref.path.endsWith('/sync_control/state')
+                    || ref.path.includes('/history_months/') || ref.path.includes('/nutrition_months/')) {
+                    return { exists: () => false, data: () => undefined } as any;
+                }
+                return {
+                exists: () => true,
+                data: () => sealTestCloudFixture(mockFirestoreDoc)
+            } as any;
+            });
+
+            const loaded = (await DB.loadCloudPayload({ cloudKey: testCloudKey() }))?.data;
+
+            expect(loaded).not.toBeNull();
+            expect(loaded?.profile?.height).toBe('180');
+            // Library: 1 custom + 2 unhidden globals (panca-declinata hidden) = 3
+            expect(loaded?.library?.length).toBeGreaterThan(1);
+            expect(loaded?.library?.find(e => e.id === 'cloud_custom_dip')).toBeDefined();
+            expect(loaded?.library?.find(e => e.id === 'panca-piana-bilanciere')?.notes).toBe('Presa stretta');
+            expect(loaded?.library?.find(e => e.id === 'panca-declinata-bilanciere')).toBeUndefined();
+
+            // Foods: 1 custom + 2 standard globals = 3
+            expect(loaded?.customFoods?.length).toBeGreaterThan(1);
+            expect(loaded?.customFoods?.find(f => f.id === 'cloud_custom_quark')).toBeDefined();
+        });
+
+        it('returns standard catalog defaults when user document does not exist', async () => {
+            vi.mocked(getDocFromServer).mockImplementation(async (ref: any) => {
+                if (typeof ref?.path !== 'string' || ref.path.endsWith('/sync_control/state')
+                    || ref.path.includes('/history_months/') || ref.path.includes('/nutrition_months/')) {
+                    return { exists: () => false, data: () => undefined } as any;
+                }
+                return {
+                exists: () => false,
+                data: () => undefined
+            } as any;
+            });
+
+            const loaded = (await DB.loadCloudPayload({ cloudKey: testCloudKey() }))?.data;
+
+            // When user doc is missing, standard catalog defaults are loaded from seeds (which are now empty).
+            expect(loaded?.library?.length).toBe(0);
+            expect(loaded?.customFoods?.length).toBe(0);
+        });
+    });
+
+    describe('createDataSlice Cache Tiering', () => {
+        it('stores an encrypted owner envelope and refuses incidental cache deletion', async () => {
+            const testData: UserData = {
+                profile: { height: '176' },
+                library: [],
+                routines: [],
+                history: [],
+                nutrition: {},
+                customFoods: [],
+                activeWorkout: null,
+                            };
+
+            await saveUserDataToCache(testData);
+            const owner = 'user:test-user-id';
+            const storageKey = 'logbook:v2:' + owner;
+            const ciphertext = idbStore[storageKey];
+            // Short plaintext fragments may occur by chance in randomized base64url ciphertext.
+            expect(ciphertext).toMatch(/^tlb-sealed:v1:[A-Za-z0-9_-]{32}\.[A-Za-z0-9_-]+$/);
+            expect((await readLocal(owner))?.data.profile?.height).toBe('176');
+
+            // A null cache update is not verified account deletion: keep ciphertext.
+            await expect(saveUserDataToCache(null)).rejects.toThrow('percorso verificato di cancellazione');
+            expect(idbStore[storageKey]).toBe(ciphertext);
+            expect((await readLocal(owner))?.data.profile?.height).toBe('176');
+
+            // The IndexedDB control mirror can outlive a lost localStorage primary.
+            const controlKey = storageKey + ':secure-vault-control';
+            const control = localStorage.getItem(controlKey);
+            expect(control).not.toBeNull();
+            localStorage.removeItem(controlKey);
+            await expect(saveUserDataToCache(null)).rejects.toThrow('percorso verificato di cancellazione');
+            expect(idbStore[storageKey]).toBe(ciphertext);
+            localStorage.setItem(controlKey, control!);
+            expect((await readLocal(owner))?.data.profile?.height).toBe('176');
+        });
+
+        it('parseInitialUserData safely returns validated UserData from explicit input', () => {
+            const rawData: UserData = {
+                profile: { height: '175' },
+                library: [],
+                routines: [],
+                history: [],
+                nutrition: {},
+                customFoods: [],
+                catalogOverrides: { exercises: {}, foods: {}, hiddenExerciseIds: [], hiddenFoodIds: [] }
+            };
+
+            const parsed = parseInitialUserData(rawData);
+
+            expect(parsed).not.toBeNull();
+            expect(parsed?.profile?.height).toBe('175');
+            expect(parsed?.catalogOverrides).toBeDefined();
+        });
+    });
+});

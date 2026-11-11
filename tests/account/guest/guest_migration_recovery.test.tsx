@@ -1,0 +1,217 @@
+import { LEGAL_VERSIONS } from '../../../src/lib/legalVersions';
+import React from 'react';
+import { render, screen, waitFor } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { get } from 'idb-keyval';
+
+import { auth, onAuthStateChanged } from '../../../src/lib/firebase';
+import { DB } from '../../../src/lib/db';
+import { AuthProvider } from '../../../src/contexts/AuthContext';
+import { useAuth } from '../../../src/hooks/useAuth';
+import { UserDataSchema } from '../../../src/lib/schema';
+import * as localRepository from '../../../src/lib/sync/localRepository';
+import { activateGuestSession, GUEST_SESSION_KEY, storageOwner } from '../../../src/lib/sync/session';
+import { useAppStore } from '../../../src/store/useAppStore';
+import type { UserData } from '../../../src/types';
+import { beginGuestMigrationIntent } from '../../../src/lib/auth/guestMigrationIntent';
+import { createAndMigrateVault } from '../../../src/lib/sync/secureArchiveMigration';
+import { lockAllVaults } from '../../../src/lib/sync/secureArchiveSession';
+
+const parse = (value: unknown) => UserDataSchema.parse(value) as unknown as UserData;
+const user = { uid: 'guest-recovery-user', email: 'guest@example.com', displayName: 'Guest Recovery' } as any;
+let commitSpy: ReturnType<typeof vi.spyOn> | undefined;
+let onlineSpy: { mockRestore: () => void } | undefined;
+
+const MigrationProbe = () => {
+    const { guestMigrationStatus, isGuest } = useAuth();
+    return (
+        <div>
+            <div data-testid="migration-status">{guestMigrationStatus}</div>
+            <div data-testid="guest-state">{isGuest ? 'guest' : 'account'}</div>
+        </div>
+    );
+};
+
+function fixtures() {
+    const cloud = parse({
+        profile: { gender: 'M' },
+        routines: [{ id: 'cloud-routine', name: 'Cloud', exercises: [] }],
+        legalConsent: { hasAcceptedTerms: true, hasAcceptedHealthData: true, acceptedAt: '2026-10-11T10:00:00.000Z', privacyVersion: LEGAL_VERSIONS.privacy, termsVersion: LEGAL_VERSIONS.terms }
+    });
+    const guest = parse({
+        profile: { height: '175' },
+        routines: [{ id: 'guest-routine', name: 'Guest', exercises: [] }]
+    });
+    return { cloud, guest };
+}
+
+beforeEach(async () => {
+    lockAllVaults();
+    vi.clearAllMocks();
+    localStorage.clear();
+    sessionStorage.clear();
+    useAppStore.getState().resetStore({ force: true });
+    (auth as any).currentUser = user;
+    vi.mocked(onAuthStateChanged).mockImplementation((_auth, callback: any) => {
+        callback(user);
+        return () => {};
+    });
+
+    // Provision the guest archive under its real generation, then the account.
+    localStorage.setItem('logbook_is_guest', 'true');
+    localStorage.setItem(GUEST_SESSION_KEY, 'guest-crash-recovery-generation');
+    activateGuestSession('guest-crash-recovery-generation');
+    const { guest } = fixtures();
+    await createAndMigrateVault('guest');
+    await localRepository.initializeLocal('guest', guest, []);
+    expect(await get('logbook:v2:guest')).toMatch(/^tlb-sealed:v1:/);
+    await createAndMigrateVault('user:guest-recovery-user');
+});
+
+afterEach(() => {
+    commitSpy?.mockRestore();
+    commitSpy = undefined;
+    onlineSpy?.mockRestore();
+    onlineSpy = undefined;
+    lockAllVaults();
+});
+
+describe('guest migration crash recovery boundary', () => {
+    it('keeps the guest marker, policy and guest mode when the authenticated local commit fails', async () => {
+        const { cloud, guest } = fixtures();
+        localStorage.setItem('logbook_is_guest', 'true');
+        localStorage.setItem(GUEST_SESSION_KEY, 'guest-crash-recovery-generation');
+        activateGuestSession('guest-crash-recovery-generation');
+        await beginGuestMigrationIntent('merge', 'recovery', { uid: user.uid });
+        useAppStore.getState().setUserData(guest);
+
+        vi.mocked(DB.loadCloudPayload).mockResolvedValueOnce({
+            data: cloud,
+            completeMonths: [],
+            cloudDocuments: new Map()
+        });
+
+        commitSpy = vi.spyOn(localRepository, 'commitLocal').mockRejectedValueOnce(new Error('IndexedDB commit failed'));
+
+        render(
+            <AuthProvider>
+                <MigrationProbe />
+            </AuthProvider>
+        );
+
+        await waitFor(() => expect(screen.getByTestId('migration-status').textContent).toBe('failed'));
+
+        expect(localStorage.getItem('logbook_is_guest')).toBe('true');
+        expect(localStorage.getItem('guest_migration_intent_v1')).not.toBeNull();
+        expect(storageOwner()).toBe('guest');
+        expect(screen.getByTestId('guest-state').textContent).toBe('guest');
+
+        const guestEnvelope = await localRepository.readLocal('guest');
+        expect(guestEnvelope?.data.profile).toMatchObject({ height: '175' });
+        expect(guestEnvelope?.data.routines?.map(routine => routine.id)).toContain('guest-routine');
+        expect(useAppStore.getState().userData?.profile).toMatchObject({ height: '175' });
+    });
+
+    it('retires the guest marker only after the authenticated envelope is durable and before replication', async () => {
+        const { cloud, guest } = fixtures();
+        const guestCiphertextBefore = await get('logbook:v2:guest');
+        expect(guestCiphertextBefore).toMatch(/^tlb-sealed:v1:/);
+        localStorage.setItem('logbook_is_guest', 'true');
+        localStorage.setItem(GUEST_SESSION_KEY, 'guest-crash-recovery-generation');
+        activateGuestSession('guest-crash-recovery-generation');
+        await beginGuestMigrationIntent('merge', 'recovery', { uid: user.uid });
+        useAppStore.getState().setUserData(guest);
+        onlineSpy = vi.spyOn(window.navigator, 'onLine', 'get').mockReturnValue(false);
+
+        vi.mocked(DB.loadCloudPayload).mockResolvedValueOnce({
+            data: cloud,
+            completeMonths: [],
+            cloudDocuments: new Map()
+        });
+
+        render(
+            <AuthProvider>
+                <MigrationProbe />
+            </AuthProvider>
+        );
+
+        // Real replicateJournal() returns local-pending offline only for an authenticated owner.
+        // If the guest marker were still active at captureSession(), it would return synced early.
+        await waitFor(() => expect(useAppStore.getState().saveError).toContain('Offline: account preparato sul dispositivo'));
+        await waitFor(() => expect(screen.getByTestId('migration-status').textContent).toBe('idle'));
+
+        expect(localStorage.getItem('logbook_is_guest')).toBeNull();
+        expect(localStorage.getItem('guest_migration_intent_v1')).toBeNull();
+        expect(storageOwner()).toBe(`user:${user.uid}`);
+
+        // The retired guest generation must no longer decrypt its archive.
+        // Preserve its original ciphertext instead of testing a stale unlock.
+        const guestCiphertextAfter = await get('logbook:v2:guest');
+        const authenticatedEnvelope = await localRepository.readLocal(user.uid);
+        expect(guestCiphertextAfter).toBe(guestCiphertextBefore);
+        expect(authenticatedEnvelope?.data.profile).toMatchObject({ height: '175', gender: 'M' });
+        expect(authenticatedEnvelope?.data.routines?.map(routine => routine.id))
+            .toEqual(expect.arrayContaining(['cloud-routine', 'guest-routine']));
+        expect(authenticatedEnvelope?.pending.length).toBeGreaterThan(0);
+        expect(screen.getByTestId('guest-state').textContent).toBe('account');
+    });
+
+    it('retains the guest archive and migration intent when the initial cloud read fails', async () => {
+        const { guest } = fixtures();
+        const before = await localRepository.readLocal('guest');
+        localStorage.setItem('logbook_is_guest', 'true');
+        localStorage.setItem(GUEST_SESSION_KEY, 'guest-crash-recovery-generation');
+        activateGuestSession('guest-crash-recovery-generation');
+        await beginGuestMigrationIntent('merge', 'recovery', { uid: user.uid });
+        useAppStore.getState().setUserData(guest);
+        vi.mocked(DB.loadCloudPayload).mockRejectedValueOnce(new Error('Cloud unavailable before hydration'));
+
+        render(<AuthProvider><MigrationProbe /></AuthProvider>);
+
+        await waitFor(() => expect(screen.getByTestId('migration-status').textContent).toBe('failed'));
+        expect(DB.loadCloudPayload).toHaveBeenCalledTimes(1);
+        expect(await localRepository.readLocal(user.uid)).toBeUndefined();
+        expect(await localRepository.readLocal('guest')).toEqual(before);
+        expect(localStorage.getItem('logbook_is_guest')).toBe('true');
+        expect(localStorage.getItem('guest_migration_intent_v1')).not.toBeNull();
+        expect(storageOwner()).toBe('guest');
+        expect(screen.getByTestId('guest-state').textContent).toBe('guest');
+        expect(useAppStore.getState().userData?.routines?.map(routine => routine.id)).toContain('guest-routine');
+    });
+
+    it('creates a durable authenticated base when a new account has no cloud payload yet', async () => {
+        const { guest } = fixtures();
+        const guestCiphertextBefore = await get('logbook:v2:guest');
+        expect(guestCiphertextBefore).toMatch(/^tlb-sealed:v1:/);
+        localStorage.setItem('logbook_is_guest', 'true');
+        localStorage.setItem(GUEST_SESSION_KEY, 'guest-crash-recovery-generation');
+        activateGuestSession('guest-crash-recovery-generation');
+        await beginGuestMigrationIntent('merge', 'recovery', { uid: user.uid });
+        useAppStore.getState().setUserData(guest);
+        onlineSpy = vi.spyOn(window.navigator, 'onLine', 'get').mockReturnValue(false);
+
+        vi.mocked(DB.loadCloudPayload).mockResolvedValueOnce(null);
+
+        render(
+            <AuthProvider>
+                <MigrationProbe />
+            </AuthProvider>
+        );
+
+        await waitFor(() => expect(useAppStore.getState().saveError).toContain('Accetta Termini e consenso salute'));
+        await waitFor(() => expect(screen.getByTestId('migration-status').textContent).toBe('idle'));
+
+        const authenticatedEnvelope = await localRepository.readLocal(user.uid);
+        const guestCiphertextAfter = await get('logbook:v2:guest');
+
+        expect(authenticatedEnvelope).toBeDefined();
+        expect(authenticatedEnvelope?.data.profile).toMatchObject({ height: '175' });
+        expect(authenticatedEnvelope?.data.routines?.map(routine => routine.id)).toContain('guest-routine');
+        expect(authenticatedEnvelope?.pending.length).toBeGreaterThan(0);
+        expect(guestCiphertextAfter).toBe(guestCiphertextBefore);
+        expect(localStorage.getItem('logbook_is_guest')).toBeNull();
+        expect(localStorage.getItem('guest_migration_intent_v1')).toBeNull();
+        expect(storageOwner()).toBe(`user:${user.uid}`);
+        expect(screen.getByTestId('guest-state').textContent).toBe('account');
+    });
+});

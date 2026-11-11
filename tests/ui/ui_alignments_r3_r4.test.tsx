@@ -1,0 +1,342 @@
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { render, screen, fireEvent, renderHook, act } from '@testing-library/react';
+import React from 'react';
+import DataMeasurements from '../../src/components/Data/DataMeasurements';
+import DataView from '../../src/components/Data/DataView';
+import SessionSetRow from '../../src/components/Training/session/SessionSetRow';
+import { useNutritionMeasurements } from '../../src/hooks/useNutritionMeasurements';
+import { useAppStore } from '../../src/store/useAppStore';
+import { useDialogStore } from '../../src/store/useDialogStore';
+import { Logic } from '../../src/lib/logic';
+import { storageOwner } from '../../src/lib/sync/session';
+import { prepareUnlockedTestArchive } from '../secureVaultFixture';
+
+describe('UI Alignments - R3 & R4', () => {
+    beforeEach(async () => {
+        localStorage.clear();
+        localStorage.setItem(`logbook:v2:${storageOwner()}:health-consent-generation`, '1');
+        await prepareUnlockedTestArchive(storageOwner());
+        useAppStore.setState({
+            dataOwner: storageOwner(),
+            userData: {
+                profile: { height: '180', gender: 'M' },
+                nutrition: {
+                    '2026-08-10': {
+                        date: '2026-08-10',
+                        weight: 80.5,
+                        waist: 85,
+                        neck: 38,
+                        chest: 105,
+                        shoulders: 120,
+                        biceps: 38,
+                        thighs: 58,
+                        calves: 37,
+                        kcal: 2200,
+                        carbs: 250,
+                        pro: 160,
+                        fat: 60,
+                        meals: []
+                    }
+                },
+                history: [],
+                library: [],
+                routines: [],
+                customFoods: [],
+                trainingCycles: [],
+                activeCycleId: null,
+                activeWorkout: null,
+                supplements: []
+            }
+        });
+    });
+
+    describe('R3: DataMeasurements Date Navigator', () => {
+        it('renders Date Navigator with Prec, Succ, and Italian date when setSelectedDate is provided', () => {
+            const mockSetSelectedDate = vi.fn();
+            const todayStr = Logic.getLocalDateString();
+
+            render(
+                <DataMeasurements 
+                    profile={{ gender: 'M' }}
+                    selectedDate={todayStr}
+                    setSelectedDate={mockSetSelectedDate}
+                    targetDateStr={todayStr}
+                    measureTime="08:00"
+                    setMeasureTime={vi.fn()}
+                    weight=""
+                    setWeight={vi.fn()}
+                    waist=""
+                    setWaist={vi.fn()}
+                    neck=""
+                    setNeck={vi.fn()}
+                    hip=""
+                    setHip={vi.fn()}
+                    chest=""
+                    setChest={vi.fn()}
+                    shoulders=""
+                    setShoulders={vi.fn()}
+                    biceps=""
+                    setBiceps={vi.fn()}
+                    thighs=""
+                    setThighs={vi.fn()}
+                    calves=""
+                    setCalves={vi.fn()}
+                    handleCancelEdit={vi.fn()}
+                    calculateAndSave={vi.fn().mockResolvedValue(undefined)}
+                />
+            );
+
+            expect(screen.getByRole('button', { name: 'Giorno precedente' })).toBeDefined();
+            expect(screen.getByRole('button', { name: 'Giorno successivo' })).toBeDefined();
+            expect(screen.getByText('OGGI')).toBeDefined();
+
+            // Next button is disabled when date is today
+            const nextBtn = screen.getByRole('button', { name: 'Giorno successivo' }) as HTMLButtonElement;
+            expect(nextBtn.disabled).toBe(true);
+
+            // Click previous button
+            const prevBtn = screen.getByRole('button', { name: 'Giorno precedente' });
+            fireEvent.click(prevBtn);
+            expect(mockSetSelectedDate).toHaveBeenCalled();
+        });
+
+        it('allows navigating forward on a past date and offers deletion instead of a meaningless cancel action', () => {
+            const mockSetSelectedDate = vi.fn();
+            const onDeleteMeasurement = vi.fn();
+            const pastDate = '2026-08-10';
+
+            render(
+                <DataMeasurements 
+                    profile={{ gender: 'M' }}
+                    selectedDate={pastDate}
+                    setSelectedDate={mockSetSelectedDate}
+                    targetDateStr={pastDate}
+                    hasExistingData={true}
+                    measureTime="08:00"
+                    setMeasureTime={vi.fn()}
+                    weight="80.5"
+                    setWeight={vi.fn()}
+                    waist="85"
+                    setWaist={vi.fn()}
+                    neck="38"
+                    setNeck={vi.fn()}
+                    hip=""
+                    setHip={vi.fn()}
+                    chest=""
+                    setChest={vi.fn()}
+                    shoulders=""
+                    setShoulders={vi.fn()}
+                    biceps=""
+                    setBiceps={vi.fn()}
+                    thighs=""
+                    setThighs={vi.fn()}
+                    calves=""
+                    setCalves={vi.fn()}
+                    handleCancelEdit={vi.fn()}
+                    onDeleteMeasurement={onDeleteMeasurement}
+                    calculateAndSave={vi.fn().mockResolvedValue(undefined)}
+                />
+            );
+
+            expect(screen.getByText(/Modifica misurazione/i)).toBeDefined();
+            expect(screen.getByText(/Salva modifiche/i)).toBeDefined();
+            expect(screen.queryByRole('button', { name: 'Annulla' })).toBeNull();
+            fireEvent.click(screen.getByRole('button', { name: /Elimina/i }));
+            expect(onDeleteMeasurement).toHaveBeenCalledWith(pastDate);
+
+            const nextBtn = screen.getByRole('button', { name: 'Giorno successivo' }) as HTMLButtonElement;
+            expect(nextBtn.disabled).toBe(false);
+
+            fireEvent.click(nextBtn);
+            expect(mockSetSelectedDate).toHaveBeenCalled();
+
+            // Click today center text
+            const centerDateBlock = screen.getByRole('button', { name: /Torna a oggi/ });
+            expect(centerDateBlock.getAttribute('aria-label')).toContain(centerDateBlock.querySelector('strong')?.textContent);
+            fireEvent.click(centerDateBlock);
+            expect(mockSetSelectedDate).toHaveBeenCalledWith(Logic.getLocalDateString());
+        });
+
+        it('DataView integrates selectedDate and renders DataMeasurements properly', () => {
+            render(<DataView subTab="measurements" />);
+            expect(screen.getByText('Misurazioni')).toBeDefined();
+            expect(screen.getByRole('button', { name: 'Giorno precedente' })).toBeDefined();
+            expect(screen.getByRole('button', { name: 'Giorno successivo' })).toBeDefined();
+        });
+
+        it('useNutritionMeasurements hook loads past day values when selectedDate is provided', () => {
+            const { result } = renderHook(() => useNutritionMeasurements('2026-08-10'));
+            
+            expect(result.current.targetDateStr).toBe('2026-08-10');
+            expect(result.current.weight).toBe('80.5');
+            expect(result.current.waist).toBe('85');
+            expect(result.current.neck).toBe('38');
+            expect(result.current.chest).toBe('105');
+            expect(result.current.hasExistingData).toBe(true);
+        });
+
+        it('useNutritionMeasurements saves to selectedDate without a blocking success dialog', async () => {
+            const showAlertSpy = vi.spyOn(useDialogStore.getState(), 'showAlert');
+            const { result } = renderHook(() => useNutritionMeasurements('2026-08-05'));
+            
+            act(() => {
+                result.current.setWeight('75.2');
+                result.current.setWaist('80');
+                result.current.setNeck('37');
+            });
+
+            await act(async () => {
+                await result.current.calculateAndSave();
+            });
+
+            const updatedNutrition = useAppStore.getState().userData?.nutrition;
+            expect(updatedNutrition?.['2026-08-05']).toBeDefined();
+            expect(updatedNutrition?.['2026-08-05'].weight).toBe(75.2);
+            expect(updatedNutrition?.['2026-08-05'].waist).toBe(80);
+            expect(updatedNutrition?.['2026-08-05'].neck).toBe(37);
+            expect(updatedNutrition?.['2026-08-05'].bf).toBeUndefined();
+            expect(showAlertSpy).not.toHaveBeenCalled();
+        });
+
+        it('explicit calculation uses US Navy without manual input', async () => {
+            const { result } = renderHook(() => useNutritionMeasurements('2026-08-06'));
+
+            act(() => {
+                result.current.setWeight('75');
+                result.current.setWaist('82');
+                result.current.setNeck('38');
+            });
+
+            await act(async () => {
+                await result.current.calculateAndSave(undefined, true);
+            });
+
+            const day = useAppStore.getState().userData?.nutrition?.['2026-08-06'];
+            expect(day?.bf).toBeTypeOf('number');
+            expect(Number.isFinite(day?.bf)).toBe(true);
+            expect(day?.bfProvenance?.method).toBe('us_navy');
+        });
+
+        it('does not promote BF without provenance during ordinary save', async () => {
+            const existing = useAppStore.getState().userData!;
+            const day = existing.nutrition?.['2026-08-10'];
+            if (!day) throw new Error('Measurement fixture missing');
+            useAppStore.setState({
+                userData: {
+                    ...existing,
+                    nutrition: { ...existing.nutrition, '2026-08-10': { ...day, bf: 19.2 } },
+                },
+            });
+            const previousDispatch = useAppStore.getState().dispatchDomainOperation;
+            const dispatch = vi.fn().mockResolvedValue({ ok: true, status: 'synced' });
+            useAppStore.setState({ dispatchDomainOperation: dispatch });
+            try {
+                const { result } = renderHook(() => useNutritionMeasurements('2026-08-10'));
+                await act(async () => { await result.current.calculateAndSave(); });
+                expect(dispatch).toHaveBeenCalledWith(expect.objectContaining({
+                    type: 'nutrition-day.patch',
+                    patch: expect.objectContaining({ bf: undefined, bfProvenance: undefined }),
+                }));
+            } finally {
+                useAppStore.setState({ dispatchDomainOperation: previousDispatch });
+            }
+        });
+
+        it('weight and circumference save does not silently derive BF', async () => {
+            const { result } = renderHook(() => useNutritionMeasurements('2026-08-07'));
+
+            act(() => {
+                result.current.setWeight('75');
+                result.current.setWaist('82');
+                result.current.setNeck('38');
+            });
+
+            await act(async () => {
+                await result.current.calculateAndSave();
+            });
+
+            const day = useAppStore.getState().userData?.nutrition?.['2026-08-07'];
+            expect(day?.weight).toBe(75);
+            expect(day?.waist).toBe(82);
+            expect(day?.neck).toBe(38);
+            expect(day?.bf).toBeUndefined();
+            expect(day?.bfProvenance).toBeUndefined();
+        });
+        it('clears a previously calculated BF when the calculation is switched off', async () => {
+            const existing = useAppStore.getState().userData!;
+            const day = existing.nutrition?.['2026-08-10'];
+            if (!day) throw new Error('Measurement fixture missing');
+            useAppStore.setState({
+                userData: {
+                    ...existing,
+                    nutrition: { ...existing.nutrition,
+                        '2026-08-10': { ...day, bf: 19.2, bfProvenance: { method: 'us_navy' } } },
+                },
+            });
+            const previousDispatch = useAppStore.getState().dispatchDomainOperation;
+            const dispatch = vi.fn().mockResolvedValue({ ok: true, status: 'synced' });
+            useAppStore.setState({ dispatchDomainOperation: dispatch });
+            try {
+                const { result } = renderHook(() => useNutritionMeasurements('2026-08-10'));
+                act(() => result.current.setWeight('81'));
+                await act(async () => { await result.current.calculateAndSave(); });
+                expect(dispatch).toHaveBeenCalledWith(expect.objectContaining({
+                    type: 'nutrition-day.patch',
+                    patch: expect.objectContaining({ bf: undefined, bfProvenance: undefined }),
+                }));
+            } finally {
+                useAppStore.setState({ dispatchDomainOperation: previousDispatch });
+            }
+        });
+
+    });
+
+    describe('R4: SessionSetRow Vertical Centering', () => {
+        it('renders input flex container with alignItems: center and ellipsis options button with inline-flex alignment styles', () => {
+            const mockSet = {
+                id: 'set_1',
+                kg: '50',
+                reps: '10',
+                segments: [
+                    { technique: 'dropset' as const, id: 'ds_1', kg: '40', reps: '8' },
+                    { technique: 'isometry' as const, reps: '', id: 'iso_1', kg: '30', time: '20' }
+                ],
+            };
+
+            render(
+                <SessionSetRow 
+                    set={mockSet}
+                    sIndex={0}
+                    exIndex={0}
+                    isOpenMenu={false}
+                    onToggleMenu={vi.fn()}
+                    onRemoveSet={vi.fn()}
+                    onUpdateSet={vi.fn()}
+                    onAddSpecialSet={vi.fn()}
+                    onUpdateSpecialSet={vi.fn()}
+                    onRemoveSpecialSet={vi.fn()}
+                onUpdateSetTarget={vi.fn()}
+                />
+            );
+
+            const optionsButton = screen.getByLabelText('Opzioni serie 1');
+            expect(optionsButton).toBeDefined();
+            expect(optionsButton.style.display).toBe('inline-flex');
+            expect(optionsButton.style.alignItems).toBe('center');
+            expect(optionsButton.style.justifyContent).toBe('center');
+            expect(optionsButton.style.alignSelf).toBe('center');
+            expect(optionsButton.style.borderRadius).toBe('12px');
+
+            // Find input container
+            const inputContainer = optionsButton.parentElement;
+            expect(inputContainer).toBeDefined();
+            expect(inputContainer?.style.alignItems).toBe('center');
+            expect(inputContainer?.style.display).toBe('flex');
+
+            expect(screen.getByText('↳ Dropset 1')).toBeDefined();
+            expect(screen.getByText('↳ Isometria 1')).toBeDefined();
+            expect(document.querySelectorAll('.session-advanced-segment-grid.compact')).toHaveLength(2);
+        });
+    });
+});
+

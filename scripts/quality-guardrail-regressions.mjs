@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { execFileSync, spawnSync } from 'node:child_process';
-import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -267,6 +267,50 @@ await test('blocks removal of a leaf from the canonical verification chain', t =
   const ctx = fixture(t);
   const pkg = read(ctx.root, 'package.json');
   pkg.scripts['verify:m6'] = 'npm run lint && npm run test:typecheck:m5';
+  save(ctx.root, 'package.json', pkg);
+  commit(ctx.root);
+  mustFail(run(ctx), /Mandatory verification leaf removed/);
+});
+
+function dedicatedLeafFixture(t) {
+  const ctx = fixture(t);
+  save(ctx.root, 'tests/m7_account_deletion_api.test.ts', "import { it, expect } from 'vitest';\nit('checks the deletion API', () => expect(1).toBe(1));\n");
+  const pkg = read(ctx.root, 'package.json');
+  pkg.scripts['test:m7'] = 'vitest run tests/m7_account_deletion_api.test.ts';
+  pkg.scripts['verify:m8'] += ' && npm run test:m7';
+  save(ctx.root, 'package.json', pkg);
+  commit(ctx.root);
+  return { ...ctx, base: git(ctx.root, 'rev-parse', 'HEAD') };
+}
+
+await test('preserves mandatory Vitest coverage when a test is Git-renamed into a domain folder', t => {
+  const ctx = dedicatedLeafFixture(t);
+  mkdirSync(join(ctx.root, 'tests/account/deletion'), { recursive: true });
+  renameSync(join(ctx.root, 'tests/m7_account_deletion_api.test.ts'), join(ctx.root, 'tests/account/deletion/m7_account_deletion_api.test.ts'));
+  const pkg = read(ctx.root, 'package.json');
+  pkg.scripts['test:m7'] = 'vitest run tests/account/deletion/m7_account_deletion_api.test.ts';
+  save(ctx.root, 'package.json', pkg);
+  commit(ctx.root);
+  const result = run(ctx);
+  assert.equal(result.status, 0, result.stderr);
+});
+
+await test('rejects a moved verification command when the original test was only copied', t => {
+  const ctx = dedicatedLeafFixture(t);
+  save(ctx.root, 'tests/account/deletion/m7_account_deletion_api.test.ts', readFileSync(join(ctx.root, 'tests/m7_account_deletion_api.test.ts'), 'utf8'));
+  const pkg = read(ctx.root, 'package.json');
+  pkg.scripts['test:m7'] = 'vitest run tests/account/deletion/m7_account_deletion_api.test.ts';
+  save(ctx.root, 'package.json', pkg);
+  commit(ctx.root);
+  mustFail(run(ctx), /Mandatory verification leaf removed/);
+});
+
+await test('rejects renaming a mandatory test to a different basename', t => {
+  const ctx = dedicatedLeafFixture(t);
+  mkdirSync(join(ctx.root, 'tests/account/deletion'), { recursive: true });
+  renameSync(join(ctx.root, 'tests/m7_account_deletion_api.test.ts'), join(ctx.root, 'tests/account/deletion/replacement.test.ts'));
+  const pkg = read(ctx.root, 'package.json');
+  pkg.scripts['test:m7'] = 'vitest run tests/account/deletion/replacement.test.ts';
   save(ctx.root, 'package.json', pkg);
   commit(ctx.root);
   mustFail(run(ctx), /Mandatory verification leaf removed/);

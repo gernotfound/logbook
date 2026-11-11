@@ -1,0 +1,87 @@
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { useAppStore } from '../../src/store/useAppStore';
+import { DB } from '../../src/lib/db';
+import { prepareUnlockedTestArchive } from '../secureVaultFixture';
+import { clearSyncTimers } from '../../src/store/slices/createSyncSlice';
+
+describe('ARCH-02: createSyncSlice', () => {
+    afterEach(() => {
+        clearSyncTimers();
+        vi.restoreAllMocks();
+        vi.useRealTimers();
+    });
+
+    beforeEach(async () => {
+        vi.clearAllMocks();
+        // AEAD provisioning uses real asynchronous Web Crypto before timer virtualization.
+        await prepareUnlockedTestArchive('user:test-user-id');
+        vi.useFakeTimers();
+        
+        useAppStore.setState({
+            dataOwner: 'user:test-user-id',
+            userData: {
+                profile: {},
+                library: [],
+                routines: [],
+                customFoods: [],
+                history: [],
+                nutrition: {},
+                activeWorkout: null,
+                trainingCycles: [],
+                activeCycleId: null,
+                supplements: [],
+                activePains: [],
+                catalogOverrides: {}
+            },
+            syncing: false,
+            saveError: null,
+            localPersistenceBlocked: false
+        });
+    });
+
+    it('should reject with Error when DB returns rejected', async () => {
+        vi.mocked(DB.saveUserData).mockResolvedValueOnce({ ok: false, status: 'rejected', error: { code: 'permission-denied' } });
+        
+        const promise = useAppStore.getState().saveUserData((prev) => ({ ...prev!, profile: { ...prev!.profile, height: '180' } }));
+        
+        // Attach rejection handler BEFORE running timers to avoid PromiseRejectionHandledWarning
+        const expectation = expect(promise).rejects.toThrow("Sincronizzazione rifiutata dal server");
+        await vi.advanceTimersByTimeAsync(1_100);
+        await expectation;
+        
+        const state = useAppStore.getState();
+        expect(state.saveError).toBe("Sincronizzazione rifiutata dal server. Verifica l'accesso e riprova.");
+    });
+    
+    it('should resolve with local-pending SyncResult when DB returns local-pending', async () => {
+        vi.mocked(DB.saveUserData).mockResolvedValueOnce({ ok: false, status: 'local-pending', error: { code: 'unavailable' } });
+        
+        const promise = useAppStore.getState().saveUserData((prev) => ({ ...prev!, profile: { ...prev!.profile, height: '180' } }));
+        
+        // Only the initial 1s debounce belongs to this assertion. Draining
+        // all future timers would also run the new 20s foreground recovery.
+        await vi.advanceTimersByTimeAsync(1_100);
+        const result = await promise;
+
+        expect(result.ok).toBe(false);
+        expect(result.status).toBe('local-pending');
+        
+        const state = useAppStore.getState();
+        expect(state.saveError).toBe('Salvato localmente. Sincronizzazione in attesa.');
+    });
+    
+    it('should resolve with synced SyncResult on success', async () => {
+        vi.mocked(DB.saveUserData).mockResolvedValueOnce({ ok: true, status: 'synced' });
+        
+        const promise = useAppStore.getState().saveUserData((prev) => ({ ...prev!, profile: { ...prev!.profile, height: '180' } }));
+        
+        await vi.advanceTimersByTimeAsync(1_100);
+        const result = await promise;
+        
+        expect(result.ok).toBe(true);
+        expect(result.status).toBe('synced');
+        
+        const state = useAppStore.getState();
+        expect(state.saveError).toBeNull();
+    });
+});

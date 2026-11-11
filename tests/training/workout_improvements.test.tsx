@@ -1,0 +1,712 @@
+import { deviceKey, protectedDeviceKey } from '../../src/lib/sync/deviceStorage';
+import { captureSession } from '../../src/lib/sync/session';
+import { prepareUnlockedTestArchive } from '../secureVaultFixture';
+import React from 'react';
+import { describe, test, expect, beforeEach } from 'vitest';
+import { screen, act, fireEvent } from '@testing-library/react';
+import { renderWithProviders, renderWithAuthenticatedTestOwner, emptyUserData } from '../setup';
+import { Logic } from '../../src/lib/logic';
+import { parseManualDuration } from '../../src/lib/utils/date';
+import TrainingSession from '../../src/components/Training/TrainingSession';
+import TrainingRoutines from '../../src/components/Training/TrainingRoutines';
+import TrainingHistory from '../../src/components/Training/TrainingHistory';
+import TrainingExercises from '../../src/components/Training/TrainingExercises';
+import { FoodItemRow } from '../../src/components/Nutrition/archive/FoodItemRow';
+import TrainingView from '../../src/components/Training/TrainingView';
+import WorkoutTimer from '../../src/components/Training/WorkoutTimer';
+import { readWorkoutTimerSnapshot, resetGlobalWorkoutTimer, writeWorkoutTimerSnapshot } from '../../src/lib/utils/timer';
+import SettingsView from '../../src/components/SettingsView';
+import MuscleModel from '../../src/components/Training/MuscleModel';
+import { useHomeView } from '../../src/hooks/useHomeView';
+import type { WorkoutSession, TrainingSubTab } from '../../src/types';
+
+describe('Workout Improvements & History Edit Suite', () => {
+
+  beforeEach(() => {
+    localStorage.clear();
+  });
+
+  describe('1. Optional Session Rating Validation', () => {
+    test('validateWorkoutRatings rejects the retired object-shaped rating aliases', () => {
+      const result = Logic.validateWorkoutRatings({ moodRating: 4, pumpRating: 5, fatigueRating: 3 });
+      expect(result.isValid).toBe(false);
+      expect(result.mood).toBeNull();
+      expect(result.pump).toBeNull();
+      expect(result.fatigue).toBeNull();
+      expect(result.errors.mood).not.toBeNull();
+    });
+
+    test('validateWorkoutRatings allows completely empty ratings', () => {
+      const res = Logic.validateWorkoutRatings('', '', '');
+      expect(res.isValid).toBe(true);
+      expect(res.mood).toBeNull();
+      expect(res.pump).toBeNull();
+      expect(res.fatigue).toBeNull();
+      expect(res.errors.mood).toBeNull();
+      expect(res.errors.pump).toBeNull();
+      expect(res.errors.fatigue).toBeNull();
+    });
+
+    test('validateWorkoutRatings allows null or undefined ratings', () => {
+      const res = Logic.validateWorkoutRatings(null, undefined, null);
+      expect(res.isValid).toBe(true);
+      expect(res.mood).toBeNull();
+      expect(res.pump).toBeNull();
+      expect(res.fatigue).toBeNull();
+    });
+
+    test('validateWorkoutRatings allows partial ratings', () => {
+      const res = Logic.validateWorkoutRatings(4, '', null);
+      expect(res.isValid).toBe(true);
+      expect(res.mood).toBe(4);
+      expect(res.pump).toBeNull();
+      expect(res.fatigue).toBeNull();
+    });
+
+    test('validateWorkoutRatings rejects out of range numbers', () => {
+      const res = Logic.validateWorkoutRatings(15, 0, -2);
+      expect(res.isValid).toBe(false);
+      expect(res.errors.mood).not.toBeNull();
+      expect(res.errors.pump).not.toBeNull();
+      expect(res.errors.fatigue).not.toBeNull();
+    });
+
+    test('validateWorkoutRatings accepts only integer values from 1 to 5', () => {
+      const outOfScale = Logic.validateWorkoutRatings('8', '5.5', 6);
+      expect(outOfScale.isValid).toBe(false);
+      expect(outOfScale.mood).toBeNull();
+      expect(outOfScale.pump).toBeNull();
+      expect(outOfScale.fatigue).toBeNull();
+      expect(outOfScale.errors.mood).toContain('1 a 5');
+
+
+      const res = Logic.validateWorkoutRatings('1', '5', '3');
+      expect(res.isValid).toBe(true);
+      expect(res.mood).toBe(1);
+      expect(res.pump).toBe(5);
+      expect(res.fatigue).toBe(3);
+    });
+  });
+
+  describe('2. Top Timer Reset on Session Actions', () => {
+    test('ignores a reset event for another owner without falsifying the displayed timer', async () => {
+      const owner = captureSession().owner;
+      await prepareUnlockedTestArchive(owner);
+      const running = {
+        version: 1 as const, state: 'running' as const,
+        startTime: Date.now() - 70000, accumulated: 0,
+      };
+      writeWorkoutTimerSnapshot(running, owner);
+      const { container } = renderWithAuthenticatedTestOwner(<WorkoutTimer />, { dataOwner: owner });
+      expect(container.textContent).toContain('01:10');
+
+      act(() => {
+        window.dispatchEvent(new CustomEvent('logbook_reset_timer', {
+          detail: { owner: 'user:another-account' },
+        }));
+      });
+      expect(container.textContent).toContain('01:10');
+      expect(readWorkoutTimerSnapshot(owner)).toEqual(running);
+    });
+
+    test('refuses a stale timer action instead of overwriting a newer device snapshot', async () => {
+      const owner = captureSession().owner;
+      await prepareUnlockedTestArchive(owner);
+      writeWorkoutTimerSnapshot({ version: 1, state: 'stopped', startTime: 0, accumulated: 0 }, owner);
+      renderWithAuthenticatedTestOwner(<WorkoutTimer />, { dataOwner: owner });
+      expect(screen.getByRole('button', { name: 'Avvia recupero' })).toBeDefined();
+
+      // Another tab wrote this state without notifying the mounted React component.
+      const newer = {
+        version: 1 as const, state: 'running' as const,
+        startTime: Date.now() - 6000, accumulated: 0,
+      };
+      writeWorkoutTimerSnapshot(newer, owner);
+      fireEvent.click(screen.getByRole('button', { name: 'Avvia recupero' }));
+
+      expect(readWorkoutTimerSnapshot(owner)).toEqual(newer);
+      expect(screen.getByText("Timer aggiornato da un'altra scheda. Ripeti l'azione per modificarlo.")).toBeDefined();
+      expect(screen.getByRole('button', { name: 'Pausa recupero' })).toBeDefined();
+
+      fireEvent.click(screen.getByRole('button', { name: 'Pausa recupero' }));
+      expect(readWorkoutTimerSnapshot(owner)).toMatchObject({
+        version: 1, state: 'paused', startTime: 0,
+      });
+      expect(screen.queryByText("Timer aggiornato da un'altra scheda. Ripeti l'azione per modificarlo.")).toBeNull();
+    });
+
+    test('resetGlobalWorkoutTimer persists stopped snapshot and updates displayed timer', async () => {
+      const owner = captureSession().owner;
+      await prepareUnlockedTestArchive(owner);
+      const running = { version: 1 as const, state: 'running' as const, startTime: Date.now() - 5000, accumulated: 0 };
+      writeWorkoutTimerSnapshot(running, owner);
+      const sealedKey = protectedDeviceKey('timer', owner);
+      const before = localStorage.getItem(sealedKey);
+      expect(before).toMatch(/^tlb-sealed:v1:/);
+      expect(localStorage.getItem(deviceKey('timer', owner))).toBeNull();
+
+      const { container } = renderWithProviders(<WorkoutTimer />);
+      expect(readWorkoutTimerSnapshot(owner)).toEqual(running);
+
+      act(() => {
+        expect(resetGlobalWorkoutTimer(owner)).toBe(true);
+      });
+
+      expect(readWorkoutTimerSnapshot(owner)).toEqual({
+        version: 1, state: 'stopped', startTime: 0, accumulated: 0,
+      });
+      expect(localStorage.getItem(sealedKey)).toMatch(/^tlb-sealed:v1:/);
+      expect(localStorage.getItem(sealedKey)).not.toBe(before);
+      expect(localStorage.getItem(deviceKey('timer', owner))).toBeNull();
+      expect(container.textContent).toContain('00:00');
+    });
+  });
+
+  describe('3. MuscleModel & Compact Reps in TrainingRoutines', () => {
+    test('MuscleModel is always visible in routine creation even with zero exercises', () => {
+      const { container } = renderWithProviders(<TrainingRoutines />, {
+        userData: { ...emptyUserData, routines: [] }
+      });
+
+      // Click "Crea scheda"
+      const createBtn = screen.getByRole('button', { name: 'Crea scheda' });
+      act(() => {
+        fireEvent.click(createBtn);
+      });
+
+      // SVG MuscleModel must be rendered in DOM
+      const svg = container.querySelector('svg');
+      expect(svg).not.toBeNull();
+    });
+  });
+
+  describe('4. Historical Workout Editing Flow', () => {
+    test('TrainingHistory renders edit button and triggers onEditWorkout callback', () => {
+      let editedWorkout: WorkoutSession | null = null;
+
+      const mockHistory: WorkoutSession[] = [
+        {
+          id: 'w_hist_1',
+          routineId: 'r1',
+          routineName: 'Push Day A',
+          date: '2026-08-01',
+          globalStartTime: 1722500000000,
+          globalEndTime: 1722503600000,
+          globalDurationStr: '01:00:00',
+          moodRating: 4,
+          pumpRating: 5,
+          fatigueRating: 4,
+          waterLiters: 1.5,
+          exercises: [
+            {
+              exId: 'ex1',
+              sets: [{ id: 's1', kg: '80', reps: '10' }],
+              sessionNote: 'Good focus'
+            }
+          ]
+        }
+      ];
+
+      const { container } = renderWithProviders(
+        <TrainingHistory onEditWorkout={(w) => { editedWorkout = w; }} />,
+        {
+          userData: { ...emptyUserData, history: mockHistory }
+        }
+      );
+
+      expect(container.textContent).toContain('Push Day A');
+      const triggerBtn = screen.getByRole('button', { name: /opzioni/i });
+      expect(triggerBtn).not.toBeNull();
+
+      act(() => {
+        fireEvent.click(triggerBtn);
+      });
+
+      const editBtn = screen.getByRole('menuitem', { name: /modifica allenamento/i });
+      expect(editBtn).not.toBeNull();
+
+      act(() => {
+        fireEvent.click(editBtn);
+      });
+
+      expect(editedWorkout).not.toBeNull();
+      expect(editedWorkout).toMatchObject({ id: 'w_hist_1' });
+    });
+
+    test('strict manual-duration parsing rejects malformed timestamps without silently changing them', () => {
+      expect(parseManualDuration('01:23:45')).toBe('01:23:45');
+      expect(parseManualDuration('75 min')).toBe('01:15:00');
+      expect(parseManualDuration('75:15')).toBe('01:15:15');
+      expect(parseManualDuration('0')).toBe('00:00:00');
+      expect(parseManualDuration('')).toBe('00:00:00');
+      for (const value of ['00:90:00', '10:99', '1:2:3:4', '45 min junk', '1abc', '-1', 'Infinity', '999999999999999999999 min']) {
+        expect(parseManualDuration(value)).toBeNull();
+      }
+    });
+
+    test('history duration input preserves the draft while editing and on invalid blur', async () => {
+      const owner = captureSession().owner;
+      if (owner.startsWith('user:')) {
+        localStorage.setItem(`logbook:v2:${owner}:health-consent-generation`, '1');
+      }
+      await prepareUnlockedTestArchive(owner);
+      const editingSession = {
+        id: 'duration-draft', originalHistoryId: 'duration-draft', isEditingHistory: true,
+        date: '2026-08-01', routineName: 'Durata',
+        globalDurationStr: '00:45:00', manualDurationStr: '00:45:00', exercises: [],
+      } as WorkoutSession;
+      const { container } = renderWithAuthenticatedTestOwner(<TrainingSession />, {
+        localWorkout: editingSession, userData: { ...emptyUserData } as any, dataOwner: owner,
+      });
+      const input = container.querySelector('#workout-manual-duration') as HTMLInputElement;
+      act(() => { fireEvent.change(input, { target: { value: '00:90:00' } }); });
+      expect(input.value).toBe('00:90:00');
+      act(() => { fireEvent.blur(input); });
+      expect(input.value).toBe('00:90:00');
+      act(() => { fireEvent.change(input, { target: { value: '75 min' } }); });
+      act(() => { fireEvent.blur(input); });
+      expect(input.value).toBe('01:15:00');
+    });
+
+    test('TrainingSession in isEditingHistory mode renders banner, manual duration and "Salva Modifica"', () => {
+      const editingSession: WorkoutSession = {
+        id: 'w_editing',
+        originalHistoryId: 'w_hist_1',
+        isEditingHistory: true,
+        routineId: 'r1',
+        routineName: 'Push Day Modificata',
+        date: '2026-08-01',
+        globalDurationStr: '00:45:00',
+        manualDurationStr: '00:45:00',
+        moodRating: 4,
+        pumpRating: 5,
+        fatigueRating: 5,
+        waterLiters: 2.0,
+        exercises: [
+          {
+            exId: 'ex1',
+            sets: [{ id: 's1', kg: '85', reps: '8' }],
+            sessionNote: 'Modificato'
+          }
+        ]
+      };
+
+      const { container } = renderWithProviders(<TrainingSession />, {
+        localWorkout: editingSession,
+        userData: { ...emptyUserData, library: [{ id: 'ex1', name: 'Panca Piana', setsCount: 3, sets: [] }] }
+      });
+
+      // Verify banner
+      expect(container.textContent).toContain('Modifica allenamento dello storico');
+
+      // Verify manual duration input exists
+      const durationInput = container.querySelector('#workout-manual-duration') as HTMLInputElement;
+      expect(durationInput).not.toBeNull();
+      expect(durationInput.value).toBe('00:45:00');
+
+      // Verify "Salva modifiche" button is present instead of "Termina sessione"
+      expect(screen.getByText(/Salva modifiche/i)).not.toBeNull();
+      expect(screen.queryByText(/Termina sessione/i)).toBeNull();
+    });
+
+    test('TrainingView full integration: edit from history switches sub-tab to session in edit mode', async () => {
+      const owner = captureSession().owner;
+      if (owner.startsWith('user:')) localStorage.setItem(`logbook:v2:${owner}:health-consent-generation`, '1');
+      await prepareUnlockedTestArchive(owner);
+      const mockHistory: WorkoutSession[] = [
+        {
+          id: 'w_hist_test',
+          routineId: 'r1',
+          routineName: 'Gambe Hardcore',
+          date: '2026-08-02',
+          globalStartTime: 1722500000000,
+          globalEndTime: 1722504000000,
+          globalDurationStr: '01:06:40',
+          exercises: []
+        }
+      ];
+
+      const ControlledTrainingView = () => {
+        const [subTab, setSubTab] = React.useState<TrainingSubTab>('history');
+        return <TrainingView subTab={subTab} setSubTab={setSubTab} />;
+      };
+
+      renderWithProviders(
+        <ControlledTrainingView />,
+        {
+          localWorkout: null,
+          userData: { ...emptyUserData, activeWorkout: null, history: mockHistory } as any
+        }
+      );
+
+      const triggerBtn = await screen.findByRole('button', { name: /opzioni/i });
+      await act(async () => {
+        fireEvent.click(triggerBtn);
+      });
+
+      const editBtn = screen.getByRole('menuitem', { name: /modifica allenamento/i });
+      await act(async () => {
+        fireEvent.click(editBtn);
+      });
+
+      expect(screen.getByRole('tab', { name: 'Sessione' }).getAttribute('aria-selected')).toBe('true');
+      expect(screen.getByRole('tabpanel', { name: 'Sessione' })).toBeDefined();
+      expect(screen.getByText('Modifica allenamento dello storico')).toBeDefined();
+      expect(screen.getByText(/Salva modifiche/i)).toBeDefined();
+    });
+  });
+
+  describe('5. SettingsView CSV Export Button Location', () => {
+    test('Esporta Dati CSV button is directly present in SettingsView', () => {
+      renderWithProviders(<SettingsView />);
+
+      const dataButton = screen.getByRole('button', { name: /Dati e backup/i });
+      fireEvent.click(dataButton);
+
+      const csvBtn = screen.getByText(/Esporta dati \(CSV\)/i);
+      expect(csvBtn).not.toBeNull();
+    });
+  });
+
+  describe('6. MuscleModel Custom Colors & useHomeView Volume/Dropset/Fatigue', () => {
+    test('MuscleModel applies custom colors from both atomic SVG path IDs and logical muscle IDs', () => {
+      const customColors: Record<string, string> = {
+        'chest-upper-left': '#ef4444',
+        'back': '#f97316'
+      };
+
+      const { container } = renderWithProviders(
+        <MuscleModel muscleColors={customColors} interactive={false} />
+      );
+
+      const chestPath = container.querySelector('[data-muscle-path="chest-upper-left"]');
+      expect(chestPath).not.toBeNull();
+      expect(chestPath?.getAttribute('style')).toContain('fill: rgb(239, 68, 68)');
+
+      // 'back' is a logical group mapping to lats, traps, etc.
+      const latsPath = container.querySelector('[data-muscle-path="lats-mid-left"]');
+      expect(latsPath).not.toBeNull();
+      expect(latsPath?.getAttribute('style')).toContain('fill: rgb(249, 115, 22)');
+    });
+
+    test('useHomeView retains recent muscle exposure for composed sets', () => {
+      const now = Date.now();
+      const mockLibrary = [
+        {
+          id: 'ex_bench',
+          name: 'Panca Piana',
+          setsCount: 3,
+          sets: [],
+          muscles: ['chest_lower', 'chest_upper'],
+          secondaryMuscles: ['triceps', 'delts_front']
+        },
+        {
+          id: 'ex_curl',
+          name: 'Curl Bicipiti',
+          setsCount: 3,
+          sets: [],
+          muscles: ['biceps'],
+          secondaryMuscles: ['forearms']
+        }
+      ];
+
+      // Workout done 24 hours ago (yesterday)
+      const yesterdayWorkout = {
+        id: 'w_yesterday',
+        date: Logic.getLocalDateString(new Date(now - 24 * 3600 * 1000)),
+        globalStartTime: now - (24 * 3600 * 1000),
+        exercises: [
+          {
+            exId: 'ex_bench',
+            sets: [
+              { id: 's1', kg: '80', reps: '10' },
+              { id: 's2', kg: '80', reps: '10' },
+              { 
+                id: 's3', 
+                kg: '80', 
+                reps: '8', 
+                segments: [
+                    { technique: 'dropset' as const, id: 'ds1', kg: '60', reps: '6' },
+                  { technique: 'dropset' as const, id: 'ds2', kg: '40', reps: '6' }
+                ] 
+              }
+            ]
+          }
+        ]
+      };
+
+      // Test component consuming useHomeView
+      let hookResult: any = null;
+      function TestHomeComponent() {
+        const res = useHomeView();
+        React.useEffect(() => { hookResult = res; });
+        return <div data-testid="home-loaded">{res.loading ? 'loading' : 'ready'}</div>;
+      }
+
+      renderWithProviders(<TestHomeComponent />, {
+        userData: {
+          ...emptyUserData,
+          library: mockLibrary,
+          history: [yesterdayWorkout]
+        } as any
+      });
+
+      expect(hookResult.loading).toBe(false);
+      
+      // Composed sets still count as factual exposure for the 72-hour recovery map.
+      expect(hookResult.muscleColors['chest-lower-left']).toBe('var(--muscle-recent)');
+      expect(hookResult.muscleColors['chest_lower']).toBe('var(--muscle-recent)');
+    });
+
+    test('useHomeView correctly exposes estimated BF from recent nutrition measurements', () => {
+      let hookResult: any = null;
+      function TestHomeComponent() {
+        const res = useHomeView();
+        React.useEffect(() => { hookResult = res; });
+        return <div data-testid="home-loaded">{res.loading ? 'loading' : 'ready'}</div>;
+      }
+
+      renderWithProviders(<TestHomeComponent />, {
+        userData: {
+          ...emptyUserData,
+          profile: { height: '180', gender: 'M', dob: '1995-05-10' },
+          nutrition: {
+            '2026-08-05': {
+              date: '2026-08-05',
+              weight: 80.5,
+              waist: 84,
+              neck: 39,
+              bf: 15.2,
+              kcal: 2200, carbs: 250, pro: 160, fat: 60
+            }
+          }
+        } as any
+      });
+
+      expect(hookResult.loading).toBe(false);
+      expect(hookResult.bf).toBe('15.2');
+    });
+
+    test('useHomeView generates proper chartData and periods (7d, 30d, 180d, 365d) without coupling hook data to chart colors', () => {
+      let hookResult: any = null;
+      function TestHomeComponent() {
+        const res = useHomeView();
+        React.useEffect(() => { hookResult = res; });
+        return <div data-testid="home-loaded">{res.loading ? 'loading' : 'ready'}</div>;
+      }
+
+      renderWithProviders(<TestHomeComponent />, {
+        userData: {
+          ...emptyUserData,
+          nutrition: {
+            '2026-08-01': { date: '2026-08-01', weight: 81.0 },
+            '2026-08-07': { date: '2026-08-07', weight: 79.8 }
+          }
+        } as any
+      });
+
+      expect(hookResult.loading).toBe(false);
+      expect(hookResult.weightPeriod).toBe('7d');
+      expect(hookResult.chartData.datasets[0].pointBackgroundColor).toBeUndefined();
+      expect(hookResult.chartData.datasets[0].fill).toBeUndefined();
+      expect(hookResult.chartData.labels.length).toBe(7);
+
+      // Change period to 30d
+      act(() => {
+        hookResult.setWeightPeriod('30d');
+      });
+      expect(hookResult.weightPeriod).toBe('30d');
+      expect(hookResult.chartData.labels.length).toBe(30);
+
+      // Change period to 180d
+      act(() => {
+        hookResult.setWeightPeriod('180d');
+      });
+      expect(hookResult.weightPeriod).toBe('180d');
+      expect(hookResult.chartData.labels.length).toBe(180);
+
+      // Change period to 365d
+      act(() => {
+        hookResult.setWeightPeriod('365d');
+      });
+      expect(hookResult.weightPeriod).toBe('365d');
+      expect(hookResult.chartData.labels.length).toBe(365);
+    });
+  });
+
+  describe('7. ContextMenu Integration (TrainingHistory, TrainingExercises, FoodItemRow)', () => {
+    test('TrainingHistory ContextMenu provides "Vedi report", "Modifica allenamento" and "Elimina allenamento"', async () => {
+      const mockHistory: WorkoutSession[] = [
+        {
+          id: 'w_test_ctx',
+          routineId: 'r1',
+          routineName: 'Legs Blast',
+          date: '2026-08-10',
+          globalStartTime: 1723300000000,
+          globalEndTime: 1723303600000,
+          globalDurationStr: '01:00:00',
+          exercises: []
+        }
+      ];
+
+      let edited: WorkoutSession | null = null;
+      renderWithProviders(
+        <TrainingHistory onEditWorkout={(w) => { edited = w; }} />,
+        {
+          userData: { ...emptyUserData, history: mockHistory } as any
+        }
+      );
+
+      // Verify ContextMenu trigger button exists
+      const triggerBtn = screen.getByRole('button', { name: /opzioni/i });
+      expect(triggerBtn).not.toBeNull();
+
+      // Open menu
+      act(() => {
+        fireEvent.click(triggerBtn);
+      });
+
+      // Check menu items
+      const reportItem = screen.getByRole('menuitem', { name: /vedi report/i });
+      const editItem = screen.getByRole('menuitem', { name: /modifica allenamento/i });
+      const deleteItem = screen.getByRole('menuitem', { name: /elimina allenamento/i });
+
+      expect(reportItem).not.toBeNull();
+      expect(editItem).not.toBeNull();
+      expect(deleteItem).not.toBeNull();
+
+      // Click "Vedi report" opens report modal
+      act(() => {
+        fireEvent.click(reportItem);
+      });
+      expect(screen.getByText(/Chiudi Report/i)).not.toBeNull();
+
+      // Close modal
+      act(() => {
+        fireEvent.click(screen.getByText(/Chiudi Report/i));
+      });
+
+      // Re-open menu and click edit
+      act(() => {
+        fireEvent.click(triggerBtn);
+      });
+      act(() => {
+        fireEvent.click(screen.getByRole('menuitem', { name: /modifica allenamento/i }));
+      });
+      expect(edited).toEqual(mockHistory[0]);
+    });
+
+    test('TrainingExercises detail actions preserve default vs custom exercise rules', () => {
+      const mockLibrary = [
+        {
+          id: 'ex_default',
+          name: 'Panca Piana Catalogo',
+          setsCount: 3,
+          sets: [],
+          isDefault: true,
+          muscles: ['chest_lower']
+        },
+        {
+          id: 'ex_custom',
+          name: 'Panca Inclinata Custom',
+          setsCount: 3,
+          sets: [],
+          isDefault: false,
+          muscles: ['chest_upper']
+        }
+      ];
+
+      renderWithProviders(<TrainingExercises />, {
+        userData: { ...emptyUserData, library: mockLibrary, routines: [] } as any
+      });
+
+      act(() => {
+        fireEvent.click(screen.getByRole('button', { name: 'Apri dettaglio di Panca Piana Catalogo' }));
+      });
+
+      expect(screen.getByRole('button', { name: 'Modifica' })).not.toBeNull();
+      expect(screen.getByRole('button', { name: 'Duplica' })).not.toBeNull();
+      expect(screen.queryByRole('button', { name: 'Elimina' })).toBeNull();
+
+      act(() => {
+        fireEvent.click(screen.getByRole('button', { name: 'Torna all’elenco' }));
+      });
+      act(() => {
+        fireEvent.click(screen.getByRole('button', { name: 'Apri dettaglio di Panca Inclinata Custom' }));
+      });
+
+      expect(screen.getByRole('button', { name: 'Modifica' })).not.toBeNull();
+      expect(screen.getByRole('button', { name: 'Duplica' })).not.toBeNull();
+      expect(screen.getByRole('button', { name: 'Elimina' })).not.toBeNull();
+
+      act(() => {
+        fireEvent.click(screen.getByRole('button', { name: 'Modifica' }));
+      });
+
+      expect(screen.getByRole('heading', { name: /Modifica esercizio/i })).not.toBeNull();
+    });
+
+    test('FoodItemRow ContextMenu renders "Modifica alimento" and "Elimina alimento", preserving quick add', () => {
+      const mockFood = {
+        id: 'cf_apple',
+        name: 'Mela Fuji',
+        brand: 'Bio',
+        kcal: 52,
+        pro: 0.3,
+        carbs: 14,
+        fat: 0.2,
+        baseQty: 100,
+        unit: 'g'
+      };
+
+      let editedFood: any = null;
+      let deletedFood: any = null;
+      let quickAdded: { food: any; mealType: string } | null = null;
+
+      renderWithProviders(
+        <FoodItemRow
+          food={mockFood}
+          isLast={true}
+          mealTypes={['Colazione', 'Pranzo']}
+          onEdit={(f) => { editedFood = f; }}
+          onDelete={(f) => { deletedFood = f; }}
+          onDuplicate={() => {}}
+          onQuickAddToMeal={(f, mt) => { quickAdded = { food: f, mealType: mt }; }}
+        />
+      );
+
+      // Verify quick add buttons work
+      const colazioneBtn = screen.getByText('Colazione');
+      act(() => {
+        fireEvent.click(colazioneBtn);
+      });
+      expect(quickAdded).toEqual({ food: mockFood, mealType: 'Colazione' });
+
+      // Open ContextMenu
+      const triggerBtn = screen.getByRole('button', { name: /opzioni/i });
+      act(() => {
+        fireEvent.click(triggerBtn);
+      });
+
+      const editItem = screen.getByRole('menuitem', { name: /modifica/i });
+      const deleteItem = screen.getByRole('menuitem', { name: /elimina/i });
+      expect(editItem).not.toBeNull();
+      expect(deleteItem).not.toBeNull();
+
+      // Click Modifica alimento
+      act(() => {
+        fireEvent.click(editItem);
+      });
+      expect(editedFood).toEqual(mockFood);
+
+      // Re-open ContextMenu and click Elimina alimento
+      act(() => {
+        fireEvent.click(triggerBtn);
+      });
+      act(() => {
+        fireEvent.click(screen.getByRole('menuitem', { name: /elimina/i }));
+      });
+      expect(deletedFood).toEqual(mockFood);
+    });
+  });
+});

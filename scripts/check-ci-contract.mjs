@@ -49,20 +49,20 @@ if (!existsSync('config/lint-warning-baseline.json')) {
 // The umbrella gate retains its leaf commands but partitions their discovery.
 // Focused test:m7, test:m8 and test:hardening must still execute the dedicated files.
 const dedicatedUnitFiles = [
-  "tests/logout_protection.test.ts",
-  "tests/guest_bootstrap_lifecycle.test.tsx",
-  "tests/guest_account_migration_v3.test.tsx",
-  "tests/catalog_resolution_pipeline.test.ts",
+  "tests/account/auth/logout_protection.test.ts",
+  "tests/account/guest/guest_bootstrap_lifecycle.test.tsx",
+  "tests/account/guest/guest_account_migration_v3.test.tsx",
+  "tests/catalog/catalog_resolution_pipeline.test.ts",
   "tests/hardening/**/*.test.{ts,tsx}",
-  "tests/m7_account_deletion_job_store.test.ts",
-  "tests/m7_account_deletion_fairness.test.ts",
-  "tests/m7_account_deletion_retention.test.ts",
-  "tests/m7_account_deletion_runner.test.ts",
-  "tests/m7_account_deletion_api.test.ts",
-  "tests/m7_account_deletion_http_auth.test.ts",
-  "tests/m7_account_deletion_device.test.ts",
-  "tests/m7_account_deletion_cron.test.ts",
-  "tests/m8_domain_operations.test.ts"
+  "tests/account/deletion/m7_account_deletion_job_store.test.ts",
+  "tests/account/deletion/m7_account_deletion_fairness.test.ts",
+  "tests/account/deletion/m7_account_deletion_retention.test.ts",
+  "tests/account/deletion/m7_account_deletion_runner.test.ts",
+  "tests/account/deletion/m7_account_deletion_api.test.ts",
+  "tests/account/deletion/m7_account_deletion_http_auth.test.ts",
+  "tests/account/deletion/m7_account_deletion_device.test.ts",
+  "tests/account/deletion/m7_account_deletion_cron.test.ts",
+  "tests/domain/m8_domain_operations.test.ts"
 ];
 const standardVitest = readFileSync('vitest.config.ts', 'utf8');
 const isolatedVitest = readFileSync('vitest.isolated.config.ts', 'utf8');
@@ -90,7 +90,7 @@ if (packageJson.scripts?.['test:isolated'] !== 'vitest run --config vitest.isola
 if (!isolatedVitest.includes("exclude: process.env.npm_lifecycle_event === 'test:isolated' ? ['tests/isolated/m8_domain_commit.test.ts'] : []")) {
   failures.push('vitest isolated: m8_domain_commit must run only in dedicated M8 gate');
 }
-for (const file of dedicatedUnitFiles.filter(path => path.startsWith('tests/m7_account_deletion_'))) {
+for (const file of dedicatedUnitFiles.filter(path => path.startsWith('tests/account/deletion/m7_account_deletion_'))) {
   if (!packageJson.scripts?.['test:m7']?.includes(file)) {
     failures.push(`test:m7: missing dedicated file ${file}`);
   }
@@ -101,7 +101,7 @@ for (const name of ['m8_domain_operations', 'm8_domain_commit']) {
   }
 }
 const hardeningConfig = readFileSync('vitest.hardening.config.ts', 'utf8');
-for (const file of dedicatedUnitFiles.filter(path => !path.startsWith('tests/m7_') && !path.startsWith('tests/m8_') && !path.startsWith('tests/hardening/'))) {
+for (const file of dedicatedUnitFiles.filter(path => !path.startsWith('tests/account/deletion/m7_account_deletion_') && !path.startsWith('tests/domain/m8_') && !path.startsWith('tests/hardening/'))) {
   if (!hardeningConfig.includes(`'${file}'`)) failures.push(`test:hardening: missing dedicated file ${file}`);
 }
 if (!hardeningConfig.includes("'tests/hardening/**/*.test.{ts,tsx}'")) {
