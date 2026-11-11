@@ -110,6 +110,28 @@ it('hydrates encrypted root and full history+nutrition scans, refusing a missing
     } finally { silentConsole.mockRestore(); }
 });
 
+it('reads both complete cloud collections concurrently and preserves the control bracket', async () => {
+    let releasePages!: () => void;
+    const pagesReleased = new Promise<void>(resolve => { releasePages = resolve; });
+    const started = new Set<string>();
+    harness.page.mockImplementation(async ({ path }: { path: string }) => {
+        started.add(path.split('/').at(-1)!);
+        await pagesReleased;
+        return { size: 0, docs: [] };
+    });
+
+    const pending = DB.loadCloudPayload({ allMonths: true, cloudKey: TEST_ADK });
+    try {
+        await vi.waitFor(() => expect([...started].sort()).toEqual(['history_months', 'nutrition_months']));
+    } finally {
+        releasePages();
+    }
+    const result = await pending;
+    expect(result?.completeMonths).toEqual([]);
+    expect(harness.root.mock.calls.filter(([path]) =>
+        String(path).endsWith('/sync_control/state'))).toHaveLength(2);
+});
+
 it('does not fetch even an absent root without an authenticated ADK', async () => {
     await expect(DB.loadCloudPayload()).rejects.toBeInstanceOf(CloudCiphertextError);
     expect(harness.root).not.toHaveBeenCalled();
