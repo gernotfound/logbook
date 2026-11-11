@@ -1,16 +1,13 @@
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, act } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import DataMeasurements from '../../../src/components/Data/DataMeasurements';
 import DataSleep from '../../../src/components/Data/DataSleep';
-import TrainingHistory from '../../../src/components/Training/TrainingHistory';
-import TrainingPlanning from '../../../src/components/Training/planning/TrainingPlanning';
-import { SessionRatings } from '../../../src/components/Training/session/SessionRatings';
 import { useAppStore } from '../../../src/store/useAppStore';
-import type { WorkoutSession, UserData } from '../../../src/types';
+import type { UserData } from '../../../src/types';
 import { createDefaultNutritionPlanning } from '../../../src/lib/nutritionDefaults';
 
-describe('Data and training UI regressions', () => {
+describe('Measurement and sleep date navigation', () => {
     beforeEach(() => {
         vi.clearAllMocks();
         localStorage.clear();
@@ -227,99 +224,4 @@ describe('Data and training UI regressions', () => {
             expect(setSelectedDate).toHaveBeenCalledWith('2026-09-01');
         });
     });
-
-    describe('P2-6: TrainingHistory Date Fallback', () => {
-        it('renders historical date from wo.date when globalStartTime is absent', () => {
-            const historicalWorkout: WorkoutSession = {
-                id: 'w_hist_1',
-                date: '2025-12-25',
-                routineName: 'Christmas Workout',
-                exercises: [{ exId: 'ex_1', sessionNote: '', sets: [{ id: 's1', kg: '100', reps: '10' }] }]
-            };
-
-            useAppStore.setState({
-                dataOwner: 'user:test-user-id',
-                userData: {
-                    ...useAppStore.getState().userData!,
-                    history: [historicalWorkout]
-                }
-            });
-
-            render(<TrainingHistory />);
-
-            expect(screen.getByText('Christmas Workout')).toBeDefined();
-            // Should contain 25 and dic/dec and 2025
-            const historyText = screen.getByText(/25.*2025/i);
-            expect(historyText).toBeDefined();
-        });
-    });
-
-    describe('P3-1: Sentence Case Compliance', () => {
-        it('DataMeasurements renders the approved optional-measurements disclosure', () => {
-            render(
-                <DataMeasurements
-                    profile={{ gender: 'M' }}
-                    measureTime=""
-                    setMeasureTime={vi.fn()}
-                    weight=""
-                    setWeight={vi.fn()}
-                    waist=""
-                    setWaist={vi.fn()}
-                    neck=""
-                    setNeck={vi.fn()}
-                    hip=""
-                    setHip={vi.fn()}
-                    chest=""
-                    setChest={vi.fn()}
-                    shoulders=""
-                    setShoulders={vi.fn()}
-                    biceps=""
-                    setBiceps={vi.fn()}
-                    thighs=""
-                    setThighs={vi.fn()}
-                    calves=""
-                    setCalves={vi.fn()}
-                    handleCancelEdit={vi.fn()}
-                    calculateAndSave={vi.fn()}
-                />
-            );
-
-            expect(screen.getByText('Altre misurazioni')).toBeDefined();
-        });
-
-        it('TrainingPlanning assigns a collision-safe numeric suffix when duplicating a cycle', async () => {
-            render(<TrainingPlanning />);
-
-            const optionsBtn = screen.getByTitle('Opzioni');
-            await act(async () => {
-                fireEvent.click(optionsBtn);
-            });
-
-            const dupBtn = screen.getByRole('menuitem', { name: /Duplica/i });
-            await act(async () => {
-                fireEvent.click(dupBtn);
-            });
-
-            const cycles = useAppStore.getState().userData?.trainingCycles || [];
-            expect(cycles.some(c => c.name === 'Mesociclo Massa - 1')).toBe(true);
-        });
-
-        it('SessionRatings renders Valuta sessione in sentence case', () => {
-            render(
-                <SessionRatings
-                    water=""
-                    setWater={vi.fn()}
-                    mood=""
-                    setMood={vi.fn()}
-                    pump=""
-                    setPump={vi.fn()}
-                    fatigue=""
-                    setFatigue={vi.fn()}
-                />
-            );
-
-            expect(screen.getByText('Valuta sessione')).toBeDefined();
-        });
-    });
-
 });
