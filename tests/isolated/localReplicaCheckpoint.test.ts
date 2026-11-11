@@ -140,6 +140,45 @@ describe('durable local replica checkpoint adoption', () => {
         expect(after.revision).toBe(before.revision + 1);
     });
 
+    it.each([
+        { reason: 'remote vector clock', baseSeq: 1, clock: { s00: 2 } as CloudCheckpoint['clock'] },
+        { reason: 'remote control sequence', baseSeq: 2, clock: {} as CloudCheckpoint['clock'] },
+    ])('rejects an incompatible same-replica $reason without sealing a bad journal', async ({ baseSeq, clock }) => {
+        const before = await pendingReplica();
+        const ciphertext = await get(key('a'));
+        await expect(adoptReplicaCheckpoint(
+            'a', { identity: before.replica!, baseSeq }, cloudCheckpoint(clock),
+        )).rejects.toThrow('Checkpoint replica incoerente');
+        expect(await get(key('a'))).toBe(ciphertext);
+        expect(await readLocal('a')).toEqual(before);
+    });
+
+    it('preserves the local actor frontier when an empty replacement checkpoint reserves a higher sequence', async () => {
+        await initializeLocal('a', data(170));
+        await adoptReplicaCheckpoint('a', { identity: identity('s00'), baseSeq: 0 }, {
+            clock: {}, syncMetaByDocument: {},
+        });
+        const after = await adoptReplicaCheckpoint('a', {
+            identity: identity('s01', 'reused-slot', 2), baseSeq: 7,
+        }, cloudCheckpoint({ s00: 4 }));
+        expect(after.actorId).toBe('s01');
+        expect(after.actorSeq).toBe(7);
+        expect(after.clock).toEqual({ s00: 4, s01: 7 });
+        expect(after.pending).toEqual([]);
+        expect(await readLocal('a')).toEqual(after);
+    });
+
+    it('rejects a replacement whose cloud clock exceeds the claimed sequence', async () => {
+        await initializeLocal('a', data(170));
+        const before = await readLocal('a');
+        const ciphertext = await get(key('a'));
+        await expect(adoptReplicaCheckpoint('a', {
+            identity: identity('s01', 'replacement', 2), baseSeq: 7,
+        }, cloudCheckpoint({ s01: 8 }))).rejects.toThrow('Checkpoint replica incoerente');
+        expect(await get(key('a'))).toBe(ciphertext);
+        expect(await readLocal('a')).toEqual(before);
+    });
+
     it('rejects a stale session guard without altering either owner', async () => {
         await initializeLocal('a', data(170));
         await createAndMigrateVault('user:b');

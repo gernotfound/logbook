@@ -148,6 +148,14 @@ export const initApp = async () => {
       }
     }
 
+    if (isGuest && status === 'missing') {
+      // A previous saved guest archive cannot be treated as a fresh start.
+      // Preserve the surviving vault and marker for explicit recovery.
+      console.warn('Archivio guest precedentemente salvato non più disponibile.');
+      renderStorageUnavailable(rootElement);
+      return;
+    }
+
     if (status === 'valid' && cached) {
       cached = {
         ...cached,

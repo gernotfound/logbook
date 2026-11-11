@@ -216,6 +216,29 @@ describe('Storage bootstrap and owner integrity checks', () => {
     expect(createRoot).toHaveBeenCalledTimes(1);
   });
 
+  it('blocks a guest with a saved marker but missing IndexedDB envelope without replacing credentials', async () => {
+    localStorage.removeItem('logbook_authenticated_owner');
+    localStorage.setItem('logbook_is_guest', 'true');
+    localStorage.setItem(GUEST_SESSION_KEY, 'lost-guest-envelope');
+    activateGuestSession('lost-guest-envelope');
+    await prepareUnlockedTestArchive('guest');
+    const marker = updateStorageMarker(1000, undefined, 'guest');
+    const control = localStorage.getItem(vaultControlKey('guest'));
+
+    expect(await idbKeyval.get('logbook:v2:guest')).toBeUndefined();
+    await initApp();
+
+    expect(useAppStore.getState().localPersistenceBlocked).toBe(true);
+    expect(useAppStore.getState().syncHealth).toBe('failed');
+    expect(await idbKeyval.get('logbook:v2:guest')).toBeUndefined();
+    expect(getStorageMarker(undefined, 'guest')).toEqual(marker);
+    expect(localStorage.getItem(vaultControlKey('guest'))).toBe(control);
+    const rendered = vi.mocked(vi.mocked(createRoot).mock.results[0].value.render).mock.calls[0][0] as {
+      props: { children: { props: { id: string } } };
+    };
+    expect(rendered.props.children.props.id).toBe('storage-unavailable');
+  });
+
   it('Flow 4: First launch without a marker or cache remains empty', async () => {
     vi.spyOn(idbKeyval, 'get').mockResolvedValue(null);
 

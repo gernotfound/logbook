@@ -1,15 +1,13 @@
 import type { StateCreator } from 'zustand';
-import { del as idbDel } from 'idb-keyval';
 import equal from 'fast-deep-equal';
 import { DomainParsers, UserDataSchema } from '../../lib/schema';
 import type { ResolveNutritionConflictInput, SyncResult, UserData } from '../../types';
 import type { AppState } from '../useAppStore';
 import { getNutritionConflictFingerprint } from '../../lib/utils/object';
 
-import { updateStorageMarker, clearStorageMarker } from '../../lib/storageIntegrity';
+import { updateStorageMarker } from '../../lib/storageIntegrity';
 import { commitLocal, initializeLocal, clearNutritionConflict, readLocal, StaleLocalRevisionError } from '../../lib/sync/localRepository';
 import { persistPlainWorkoutSnapshot } from '../../lib/sync/workoutDeviceIntent';
-import { readVaultControl } from '../../lib/sync/secureArchiveSession';
 import { captureSession, isCurrentSession } from '../../lib/sync/session';
 import { markTabSnapshotClean, markTabSnapshotDirty } from '../../lib/sync/tabSnapshotCausality';
 import { isUpdateRequiredError } from '../../lib/schemaEvolution';
@@ -71,12 +69,9 @@ export const saveUserDataToCache = async (data: UserData | null, base?: UserData
             return envelope.data;
         }
         if (!guard()) throw new Error('Sessione cambiata prima della rimozione locale.');
-        // A protected archive may be removed only through a verified lifecycle
-        // purge (logout/account deletion), never an incidental null cache save.
-        if (readVaultControl(session.owner)) throw new Error('Archivio cifrato: utilizza il percorso verificato di cancellazione locale.');
-        await idbDel(`logbook:v2:${session.owner}`);
-        if (guard()) clearStorageMarker(undefined, session.owner);
-        return null;
+        // Cache callers cannot prove a lifecycle purge, even if vault metadata
+        // was lost while its mirrored control or ciphertext is still recoverable.
+        throw new Error('Archivio cifrato: utilizza il percorso verificato di cancellazione locale.');
         };
         // Start the first writer immediately; later writes await its full
         // read/commit/readback, not merely the IndexedDB update callback.

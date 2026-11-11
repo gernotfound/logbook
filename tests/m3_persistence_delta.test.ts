@@ -374,6 +374,16 @@ describe('M3: Storage & Persistence Delta Isolation Suite', () => {
             await expect(saveUserDataToCache(null)).rejects.toThrow('percorso verificato di cancellazione');
             expect(idbStore[storageKey]).toBe(ciphertext);
             expect((await readLocal(owner))?.data.profile?.height).toBe('176');
+
+            // The IndexedDB control mirror can outlive a lost localStorage primary.
+            const controlKey = storageKey + ':secure-vault-control';
+            const control = localStorage.getItem(controlKey);
+            expect(control).not.toBeNull();
+            localStorage.removeItem(controlKey);
+            await expect(saveUserDataToCache(null)).rejects.toThrow('percorso verificato di cancellazione');
+            expect(idbStore[storageKey]).toBe(ciphertext);
+            localStorage.setItem(controlKey, control!);
+            expect((await readLocal(owner))?.data.profile?.height).toBe('176');
         });
 
         it('parseInitialUserData safely returns validated UserData from explicit input', () => {

@@ -62,6 +62,17 @@ describe('secure archive ciphertext primitive', () => {
         expect(() => openLocalText(original, owner, archive, sealed.slice(0, -9))).toThrow(LocalCiphertextError);
     });
 
+    it('rejects nonces of unexpected length before decoding their bytes', () => {
+        const original = key();
+        const sealed = sealLocalText(original, owner, archive, 'private');
+        const payload = sealed.split('.')[1];
+        expect(() => openLocalText(original, owner, archive, SEALED_LOCAL_PREFIX + 'A'.repeat(64) + '.' + payload))
+            .toThrow(LocalCiphertextError);
+        expect(() => openLocalText(original, owner, archive, SEALED_LOCAL_PREFIX + 'A'.repeat(31) + '.' + payload))
+            .toThrow(LocalCiphertextError);
+        expect(openLocalText(original, owner, archive, sealed)).toBe('private');
+    });
+
     it('refuses unsupported key material and invalid record identity', () => {
         expect(() => sealLocalText(new Uint8Array(31), owner, archive, 'private')).toThrow();
         expect(() => sealLocalText(key(), '', archive, 'private')).toThrow();

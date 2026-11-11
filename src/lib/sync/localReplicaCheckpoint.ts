@@ -40,6 +40,10 @@ export async function adoptReplicaCheckpoint(
             && current.replica.generation === claim.identity.generation;
 
         if (sameReplica) {
+            if ((checkpoint.clock[current.actorId] ?? 0) > current.actorSeq
+                || claim.baseSeq > current.actorSeq) {
+                throw new Error('Checkpoint replica incoerente con la sequenza locale: journal preservato.');
+            }
             saved = {
                 ...current,
                 ...currentEnvelopeVersions(),
@@ -47,6 +51,7 @@ export async function adoptReplicaCheckpoint(
                 replica: claim.identity,
                 revision: current.revision + 1,
             };
+            validateLocalEnvelope(saved, owner);
             return saved;
         }
 
@@ -55,6 +60,9 @@ export async function adoptReplicaCheckpoint(
         const baseDocs = projectDocuments(baseline, catalog);
         const desiredDocs = projectDocuments(desired, catalog);
         const actorId = claim.identity.slot;
+        if ((checkpoint.clock[actorId] ?? 0) > claim.baseSeq) {
+            throw new Error('Checkpoint replica incoerente con la sequenza assegnata: journal preservato.');
+        }
         const provisionalSeq = claim.baseSeq + 1;
         const provisionalClock: VectorClock = { ...checkpoint.clock, [actorId]: provisionalSeq };
 
@@ -71,7 +79,7 @@ export async function adoptReplicaCheckpoint(
         const actorSeq = operations.length ? sequenced.actorSeq : claim.baseSeq;
         const clock: VectorClock = operations.length
             ? sequenced.clock
-            : { ...checkpoint.clock };
+            : { ...checkpoint.clock, ...(claim.baseSeq > 0 ? { [actorId]: claim.baseSeq } : {}) };
 
         saved = {
             ...current,
@@ -86,6 +94,7 @@ export async function adoptReplicaCheckpoint(
             replica: claim.identity,
             revision: current.revision + 1,
         };
+        validateLocalEnvelope(saved, owner);
         return saved;
     });
 

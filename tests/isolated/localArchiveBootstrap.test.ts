@@ -12,7 +12,8 @@ import { initializeLocal, readLocal } from '../../src/lib/sync/localArchiveBoots
 import { commitDomainOperations } from '../../src/lib/sync/localRepository';
 import type { LocalEnvelope } from '../../src/lib/sync/localEnvelopeValidation';
 import { createAndMigrateVault } from '../../src/lib/sync/secureArchiveMigration';
-import { LocalVaultLockedError, lockAllVaults } from '../../src/lib/sync/secureArchiveSession';
+import { LocalVaultLockedError, lockAllVaults, vaultControlKey } from '../../src/lib/sync/secureArchiveSession';
+import { updateStorageMarker, getStorageMarker } from '../../src/lib/storageIntegrity';
 import { updateArchiveRecord } from '../../src/lib/sync/secureArchiveRepository';
 import { beginLocalPurge, cancelUnstartedLocalPurge, LocalPurgePendingError } from '../../src/lib/sync/localPurgeFence';
 import { rememberAuthenticatedOwner } from '../../src/lib/sync/authOwnerHint';
@@ -111,6 +112,36 @@ describe('diagnostic encrypted archive bootstrap', () => {
         expect(guest?.baseline).toEqual(input);
         expect(await get('logbook:v2:guest')).toMatch(/^tlb-sealed:v1:/);
         expect(await get(key)).toBeUndefined();
+    });
+
+    it('rejects a missing previously saved guest archive without replacing its vault or marker', async () => {
+        localStorage.setItem('logbook_is_guest', 'true');
+        localStorage.setItem(GUEST_SESSION_KEY, 'guest-lost-envelope');
+        activateGuestSession('guest-lost-envelope');
+        await createAndMigrateVault('guest');
+        const marker = updateStorageMarker(1000, undefined, 'guest');
+        const control = localStorage.getItem(vaultControlKey('guest'));
+
+        expect(await get('logbook:v2:guest')).toBeUndefined();
+        await expect(initializeLocal('guest', state('199')))
+            .rejects.toThrow('Archivio guest precedentemente salvato');
+        expect(await get('logbook:v2:guest')).toBeUndefined();
+        expect(getStorageMarker(undefined, 'guest')).toEqual(marker);
+        expect(localStorage.getItem(vaultControlKey('guest'))).toBe(control);
+    });
+
+    it('permits redundant guest initialization when the authenticated envelope exists', async () => {
+        localStorage.setItem('logbook_is_guest', 'true');
+        localStorage.setItem(GUEST_SESSION_KEY, 'guest-existing-envelope');
+        activateGuestSession('guest-existing-envelope');
+        await createAndMigrateVault('guest');
+        await initializeLocal('guest', state('170'));
+        updateStorageMarker(1000, undefined, 'guest');
+        const ciphertext = await get('logbook:v2:guest');
+
+        await initializeLocal('guest', state('199'));
+        expect(await get('logbook:v2:guest')).toBe(ciphertext);
+        expect((await readLocal('guest'))?.data.profile?.height).toBe('170');
     });
 
     it('keeps account reads and first seeds isolated across two real owner vaults', async () => {

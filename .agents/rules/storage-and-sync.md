@@ -51,6 +51,8 @@ L'app utilizza quattro livelli di storage con ruoli distinti:
 
 **MUST (CRITICAL, device senza vault):** in assenza di un controllo vault `active`, `readDeviceValueStrict` e `writeDeviceValue` non forniscono fallback plaintext e non possono creare, cancellare o sostituire alcuna copia: le letture rigorose del namespace vecchio e `sealed:` identificano errori di storage e byte orfani senza modificarli. Anche la mancanza di entrambi i record è un errore di vault, non un permesso a salvare in chiaro. Un errore di lettura del browser non autorizza una conclusione «assenza di dati». Le letture best-effort restano riservate a preferenze e suggerimenti non distruttivi.
 
+**MUST (CRITICAL, guest con archivio mancante):** un marker di integrità owner-scoped valido indica che esisteva una copia guest salvata. Se la chiave envelope IndexedDB è assente, `main.tsx` deve bloccare il cold boot e `initializeLocal('guest')` deve rifiutare il nuovo seed dentro il commit transazionale, preservando vault, marker e copie superstiti. Un marker non leggibile fallisce chiuso; non è autorizzazione a considerare il guest al primo avvio. Una copia presente e valida mantiene invece il bootstrap idempotente. L'account autenticato usa il distinto percorso di recupero cloud verificato.
+
 **MAY:** soltanto preferenze e hint non critici possono restare best-effort quando il loro contratto non influenza l'integrità dei dati business. Non sono più presenti code diagnostiche di errore; timer/workout e code specializzate conservano i rispettivi gateway strict.
 
 ## Versioni indipendenti e Schema Evolution
