@@ -1,5 +1,5 @@
 import React from 'react';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, screen } from '@testing-library/react';
 import { renderWithProviders, emptyUserData } from './setup';
 import TrainingRoutines from '../src/components/Training/TrainingRoutines';
@@ -73,6 +73,24 @@ describe('Schede redesign', () => {
 
         fireEvent.click(screen.getByRole('button', { name: /^Chiudi scheda Lower body A 1 esercizi/ }));
         expect(container.querySelectorAll('.routine-library-card.is-expanded')).toHaveLength(0);
+    });
+
+    it('resolves routine details through the shared index without scanning the library', () => {
+        const indexedLibrary = [...library];
+        const linearLookup = vi.spyOn(indexedLibrary, 'find').mockImplementation(() => {
+            throw new Error('Routine cards must use the shared exercise index');
+        });
+        try {
+            renderWithProviders(<TrainingRoutines />, {
+                userData: { ...emptyUserData, routines, library: indexedLibrary },
+            });
+            fireEvent.click(screen.getByRole('button', { name: /^Apri scheda Upper body A 1 esercizi/ }));
+            expect(screen.getByText('Panca piana')).toBeTruthy();
+            expect(screen.getByText('3 × 8–10')).toBeTruthy();
+            expect(linearLookup).not.toHaveBeenCalled();
+        } finally {
+            linearLookup.mockRestore();
+        }
     });
 
     it('keeps the contextual menu separate from expansion and exposes muscles in a collapsed disclosure', () => {

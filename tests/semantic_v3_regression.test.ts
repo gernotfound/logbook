@@ -212,6 +212,40 @@ describe('Semantic Merge V3 regressions', () => {
         expect(recreated.documents.get(nutritionPath)?.[date]).toMatchObject({ date, weight: 82 });
     });
 
+    it('reorders a large ordered-keyed collection without losing entities', () => {
+        const routines = Array.from({ length: 80 }, (_, index) => ({
+            id: `r-${index}`, name: `Routine ${index}`, exercises: [],
+        }));
+        const base = new Map<string, DocumentData>([['', { routines }]]);
+        const reordered = [...routines].reverse();
+        const desired = new Map<string, DocumentData>([['', { routines: reordered }]]);
+        const operations = diffDocuments(base, desired, 's00', 1, { s00: 1 });
+        expect(operations.some(operation => operation.path.at(-1) === '$order')).toBe(true);
+        const merged = applySemanticOperations(base, operations);
+        expect((merged.documents.get('')?.routines as typeof routines).map(item => item.id))
+            .toEqual(reordered.map(item => item.id));
+    });
+
+    it('reconciles multiple descendant stamps after a newer parent replacement', () => {
+        const base = nutritionDocs({ date, weight: 80, waist: 90, meals: [] });
+        const descendants: SemanticOperation[] = [
+            { docPath: nutritionPath, path: [date, 'weight'], value: 82,
+                actorId: 'A', seq: 1, clock: { A: 1 }, isDelete: false },
+            { docPath: nutritionPath, path: [date, 'waist'], value: 92,
+                actorId: 'A', seq: 1, clock: { A: 1 }, isDelete: false },
+        ];
+        const parent: SemanticOperation = {
+            docPath: nutritionPath, path: [date],
+            value: { date, weight: 85, waist: 93, meals: [] },
+            actorId: 'B', seq: 1, clock: { A: 1, B: 1 }, isDelete: false,
+        };
+        const earlier = applySemanticOperations(base, descendants);
+        const incremental = applySemanticOperations(earlier.documents, [parent], earlier.syncMetas);
+        const combined = applySemanticOperations(base, [parent, ...descendants]);
+        expect(incremental.documents).toEqual(combined.documents);
+        expect(incremental.syncMetas).toEqual(combined.syncMetas);
+    });
+
     it('requires a complete current SyncMeta shape', () => {
         expect(() => parseSyncMeta({ protocolVersion: CURRENT_SYNC_PROTOCOL, clock: {} })).toThrow('fields');
         expect(() => parseSyncMeta({ protocolVersion: CURRENT_SYNC_PROTOCOL, fields: {} })).toThrow('clock');

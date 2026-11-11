@@ -11,6 +11,7 @@ interface RoutineEditorProps {
     editingRoutineId: string | null;
     routineExercises: RoutineExercise[];
     library: ExerciseLibraryItem[];
+    libraryById?: ReadonlyMap<string, ExerciseLibraryItem>;
     editMuscles: string[];
     editSecMuscles: string[];
     onAddExercise: (exId: string) => void;
@@ -32,6 +33,7 @@ export const RoutineEditor: React.FC<RoutineEditorProps> = ({
     editingRoutineId,
     routineExercises,
     library,
+    libraryById,
     editMuscles,
     editSecMuscles,
     onAddExercise,
@@ -47,6 +49,10 @@ export const RoutineEditor: React.FC<RoutineEditorProps> = ({
     isSaving
 }) => {
     const exerciseSearchId = React.useId();
+    const indexedLibrary = React.useMemo(
+        () => libraryById ?? new Map(library.map(item => [item.id, item] as const)),
+        [libraryById, library],
+    );
     return (
         <div>
             <div className="routine-editor-head">
@@ -106,7 +112,7 @@ export const RoutineEditor: React.FC<RoutineEditorProps> = ({
                     <div className="routine-empty-state">Nessun esercizio presente.</div>
                 ) : (
                     routineExercises.map((exercise, index) => {
-                        const libraryItem = library.find(item => item.id === exercise.exId);
+                        const libraryItem = indexedLibrary.get(exercise.exId);
                         return (
                             <RoutineExerciseItem
                                 key={index}
