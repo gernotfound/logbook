@@ -1,14 +1,14 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { get } from 'idb-keyval';
-import { idbStore } from '../setup';
-import { prepareUnlockedTestArchive } from '../secureVaultFixture';
-import { createAndMigrateVault } from '../../src/lib/sync/secureArchiveMigration';
-import { deviceVaultKeyId, LocalUnlockError } from '../../src/lib/sync/secureArchiveKeys';
-import { readVaultControl, vaultControlKey } from '../../src/lib/sync/secureArchiveSession';
-import { protectedDeviceKey, writeDeviceValue } from '../../src/lib/sync/deviceStorage';
-import { vaultControlMirrorId } from '../../src/lib/sync/secureArchiveControlRecovery';
-import { initializeLocal } from '../../src/lib/sync/localRepository';
-import { UserDataSchema } from '../../src/lib/schema';
+import { idbStore } from '../../setup';
+import { prepareUnlockedTestArchive } from '../../secureVaultFixture';
+import { createAndMigrateVault } from '../../../src/lib/sync/secureArchiveMigration';
+import { deviceVaultKeyId, LocalUnlockError } from '../../../src/lib/sync/secureArchiveKeys';
+import { readVaultControl, vaultControlKey } from '../../../src/lib/sync/secureArchiveSession';
+import { protectedDeviceKey, writeDeviceValue } from '../../../src/lib/sync/deviceStorage';
+import { vaultControlMirrorId } from '../../../src/lib/sync/secureArchiveControlRecovery';
+import { initializeLocal } from '../../../src/lib/sync/localRepository';
+import { UserDataSchema } from '../../../src/lib/schema';
 
 const owner = 'user:fixture-isolation';
 

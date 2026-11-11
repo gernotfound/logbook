@@ -1,10 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { clear } from 'idb-keyval';
-import { createAndMigrateVault } from '../../src/lib/sync/secureArchiveMigration';
-import { lockAllVaults } from '../../src/lib/sync/secureArchiveSession';
-import { emptyUserData } from '../setup';
-import { hydrateLocal, initializeLocal, readLocal } from '../../src/lib/sync/localRepository';
-import type { UserData } from '../../src/types';
+import { createAndMigrateVault } from '../../../src/lib/sync/secureArchiveMigration';
+import { lockAllVaults } from '../../../src/lib/sync/secureArchiveSession';
+import { emptyUserData } from '../../setup';
+import { hydrateLocal, initializeLocal, readLocal } from '../../../src/lib/sync/localRepository';
+import type { UserData } from '../../../src/types';
 
 function data(height: string): UserData {
     return {

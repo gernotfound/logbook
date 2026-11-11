@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 import { z } from 'zod';
-import { useLocalStorage } from '../../src/hooks/useLocalStorage';
+import { useLocalStorage } from '../../../src/hooks/useLocalStorage';
 
 describe('R4: useLocalStorage Safe Fallback & Strict Serialization Suite', () => {
     beforeEach(() => {

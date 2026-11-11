@@ -1,12 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Exercise the production DB implementation, not the shared UI test mock.
-vi.unmock('../../src/lib/db');
+vi.unmock('../../../src/lib/db');
 import { runTransaction } from 'firebase/firestore';
-import { ConsentedTestDB as DB } from '../testUtils';
-import { prepareUnlockedTestArchive } from '../secureVaultFixture';
-import { readLocal } from '../../src/lib/sync/localRepository';
-import { lockAllVaults } from '../../src/lib/sync/secureArchiveSession';
+import { ConsentedTestDB as DB } from '../../testUtils';
+import { prepareUnlockedTestArchive } from '../../secureVaultFixture';
+import { readLocal } from '../../../src/lib/sync/localRepository';
+import { lockAllVaults } from '../../../src/lib/sync/secureArchiveSession';
 
 const OWNER = 'user:test-user-id';
 const state = {

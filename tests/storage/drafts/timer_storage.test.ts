@@ -1,13 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { localStorageMock } from '../setup';
-import { deviceKey, protectedDeviceKey, readDeviceValueStrict, writeDeviceValue } from '../../src/lib/sync/deviceStorage';
-import { prepareUnlockedTestArchive } from '../secureVaultFixture';
+import { localStorageMock } from '../../setup';
+import { deviceKey, protectedDeviceKey, readDeviceValueStrict, writeDeviceValue } from '../../../src/lib/sync/deviceStorage';
+import { prepareUnlockedTestArchive } from '../../secureVaultFixture';
 import {
     readWorkoutTimerSnapshot,
     resetGlobalWorkoutTimer,
     stoppedWorkoutTimer,
     writeWorkoutTimerSnapshot,
-} from '../../src/lib/utils/timer';
+} from '../../../src/lib/utils/timer';
 
 const OWNER = 'user:timer-test';
 

@@ -4,7 +4,7 @@ import {
     readBrowserValueStrict,
     writeBrowserJson,
     writeBrowserValue,
-} from '../../src/lib/sync/browserStorage';
+} from '../../../src/lib/sync/browserStorage';
 import {
     AccountDeletionMarkerCorruptError,
     findPendingAccountDeletion,
@@ -13,15 +13,15 @@ import {
     isAccountDeletionPending,
     markAccountDeletion,
     readAccountDeletionMarker,
-} from '../../src/lib/sync/accountGate';
-import { readDeviceValueStrict, writeDeviceValue } from '../../src/lib/sync/deviceStorage';
+} from '../../../src/lib/sync/accountGate';
+import { readDeviceValueStrict, writeDeviceValue } from '../../../src/lib/sync/deviceStorage';
 import {
     DeletionRecoveryCredentialCorruptError,
     removeDeletionRecoveryCredential,
-} from '../../src/lib/deletionDeviceRecovery';
-import { storageOwner } from '../../src/lib/sync/session';
-import { localStorageMock } from '../setup';
-import { prepareUnlockedTestArchive } from '../secureVaultFixture';
+} from '../../../src/lib/deletionDeviceRecovery';
+import { storageOwner } from '../../../src/lib/sync/session';
+import { localStorageMock } from '../../setup';
+import { prepareUnlockedTestArchive } from '../../secureVaultFixture';
 
 const OWNER = 'user:test-user';
 const storageFailure = () => { throw new DOMException('blocked', 'SecurityError'); };

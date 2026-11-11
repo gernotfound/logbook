@@ -1,11 +1,11 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { useAppStore } from '../../src/store/useAppStore';
-import { DB } from '../../src/lib/db';
-import type { UserData } from '../../src/types';
-import { prepareUnlockedTestArchive } from '../secureVaultFixture';
-import { lockAllVaults } from '../../src/lib/sync/secureArchiveSession';
-import { createDefaultNutritionPlanning } from '../../src/lib/nutritionDefaults';
-import { readLocal } from '../../src/lib/sync/localRepository';
+import { useAppStore } from '../../../src/store/useAppStore';
+import { DB } from '../../../src/lib/db';
+import type { UserData } from '../../../src/types';
+import { prepareUnlockedTestArchive } from '../../secureVaultFixture';
+import { lockAllVaults } from '../../../src/lib/sync/secureArchiveSession';
+import { createDefaultNutritionPlanning } from '../../../src/lib/nutritionDefaults';
+import { readLocal } from '../../../src/lib/sync/localRepository';
 
 describe('R3: Zustand saveUserData Error Rejection & Debouncing Suite', () => {
     const mockUserData1: UserData = {

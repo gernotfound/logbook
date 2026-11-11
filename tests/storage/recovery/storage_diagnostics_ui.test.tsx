@@ -1,8 +1,8 @@
 import React from 'react';
 import { act, cleanup, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
-import { StorageDiagnostics } from '../../src/components/Settings/StorageDiagnostics';
-import { setStorageDiagnosticData } from '../../src/lib/storageStatus';
+import { StorageDiagnostics } from '../../../src/components/Settings/StorageDiagnostics';
+import { setStorageDiagnosticData } from '../../../src/lib/storageStatus';
 
 afterEach(() => {
   cleanup();

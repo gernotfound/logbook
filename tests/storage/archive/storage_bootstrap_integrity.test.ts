@@ -1,20 +1,20 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as idbKeyval from 'idb-keyval';
 import { createRoot } from 'react-dom/client';
-import { initApp } from '../../src/main';
-import { useAppStore } from '../../src/store/useAppStore';
+import { initApp } from '../../../src/main';
+import { useAppStore } from '../../../src/store/useAppStore';
 import {
   getStorageMarker,
   updateStorageMarker,
-} from '../../src/lib/storageIntegrity';
-import { CURRENT_DATA_SCHEMA, CURRENT_LOCAL_ENVELOPE, CURRENT_SYNC_PROTOCOL } from '../../src/lib/schemaEvolution';
-import { idbStore, localStorageMock, readMockIdbValue } from '../setup';
-import { prepareUnlockedTestArchive } from '../secureVaultFixture';
-import { isVaultUnlocked, lockAllVaults, lockVault, vaultControlKey } from '../../src/lib/sync/secureArchiveSession';
-import { initializeLocal } from '../../src/lib/sync/localRepository';
-import { UserDataSchema } from '../../src/lib/schema';
-import { deviceVaultKeyId } from '../../src/lib/sync/secureArchiveKeys';
-import { activateGuestSession, GUEST_SESSION_KEY, invalidateSession } from '../../src/lib/sync/session';
+} from '../../../src/lib/storageIntegrity';
+import { CURRENT_DATA_SCHEMA, CURRENT_LOCAL_ENVELOPE, CURRENT_SYNC_PROTOCOL } from '../../../src/lib/schemaEvolution';
+import { idbStore, localStorageMock, readMockIdbValue } from '../../setup';
+import { prepareUnlockedTestArchive } from '../../secureVaultFixture';
+import { isVaultUnlocked, lockAllVaults, lockVault, vaultControlKey } from '../../../src/lib/sync/secureArchiveSession';
+import { initializeLocal } from '../../../src/lib/sync/localRepository';
+import { UserDataSchema } from '../../../src/lib/schema';
+import { deviceVaultKeyId } from '../../../src/lib/sync/secureArchiveKeys';
+import { activateGuestSession, GUEST_SESSION_KEY, invalidateSession } from '../../../src/lib/sync/session';
 
 vi.mock('react-dom/client', () => ({
   createRoot: vi.fn(() => ({
@@ -202,7 +202,7 @@ describe('Storage bootstrap and owner integrity checks', () => {
     activateGuestSession('guest-marker-recovery');
     await prepareUnlockedTestArchive('guest');
     // Use the owner-scoped key computed by production, not the old global marker.
-    const { getStorageMarkerKey } = await import('../../src/lib/storageIntegrity');
+    const { getStorageMarkerKey } = await import('../../../src/lib/storageIntegrity');
     localStorage.setItem(getStorageMarkerKey('guest'), '{not-json');
     const original = localStorage.getItem(getStorageMarkerKey('guest'));
     const originalArchive = await idbKeyval.get('logbook:v2:guest');

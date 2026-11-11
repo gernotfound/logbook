@@ -2,8 +2,8 @@ import 'fake-indexeddb/auto';
 import { webcrypto } from 'node:crypto';
 import { clear, del, get } from 'idb-keyval';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { createLocalKeyVault, deviceVaultKeyId, LocalUnlockError, unlockLocalKeyVault } from '../../src/lib/sync/secureArchiveKeys';
-import { openLocalText, sealLocalText } from '../../src/lib/sync/secureArchiveCipher';
+import { createLocalKeyVault, deviceVaultKeyId, LocalUnlockError, unlockLocalKeyVault } from '../../../src/lib/sync/secureArchiveKeys';
+import { openLocalText, sealLocalText } from '../../../src/lib/sync/secureArchiveCipher';
 
 const owner = 'user:test-archive-keys';
 

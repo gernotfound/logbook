@@ -1,23 +1,23 @@
 import React, { useLayoutEffect } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, fireEvent, render, renderHook, screen } from '@testing-library/react';
-import { BufferedInput, BufferedTextarea } from '../../src/components/UI/BufferedInput';
-import { BufferedWorkoutScope } from '../../src/components/UI/bufferedWorkoutScope';
-import SessionSetRow from '../../src/components/Training/session/SessionSetRow';
-import SessionExerciseCard from '../../src/components/Training/session/SessionExerciseCard';
-import { useWorkoutSetMutations } from '../../src/hooks/workout/useWorkoutSetMutations';
-import type { WorkoutSession } from '../../src/types';
-import { deviceKey, protectedDeviceKey, readDeviceValueStrict, writeDeviceValue } from '../../src/lib/sync/deviceStorage';
-import { prepareUnlockedTestArchive } from '../secureVaultFixture';
-import { readBufferedDraftSnapshot, writeBufferedDraft } from '../../src/lib/sync/bufferedDraftEpoch';
+import { BufferedInput, BufferedTextarea } from '../../../src/components/UI/BufferedInput';
+import { BufferedWorkoutScope } from '../../../src/components/UI/bufferedWorkoutScope';
+import SessionSetRow from '../../../src/components/Training/session/SessionSetRow';
+import SessionExerciseCard from '../../../src/components/Training/session/SessionExerciseCard';
+import { useWorkoutSetMutations } from '../../../src/hooks/workout/useWorkoutSetMutations';
+import type { WorkoutSession } from '../../../src/types';
+import { deviceKey, protectedDeviceKey, readDeviceValueStrict, writeDeviceValue } from '../../../src/lib/sync/deviceStorage';
+import { prepareUnlockedTestArchive } from '../../secureVaultFixture';
+import { readBufferedDraftSnapshot, writeBufferedDraft } from '../../../src/lib/sync/bufferedDraftEpoch';
 import {
     clearBufferedWriterIntent, createBufferedWriterIntentName,
     inspectBufferedRecoveryEvidence, readBufferedWriterEvidence, writeBufferedWriterIntent,
-} from '../../src/lib/sync/bufferedDraftWriterIntent';
-import { activateGuestSession, captureSession, GUEST_SESSION_KEY, invalidateSession } from '../../src/lib/sync/session';
-import { requiredUpdateRecoveryRegistry } from '../../src/lib/sync/requiredUpdateRecovery';
-import { useAppStore } from '../../src/store/useAppStore';
-import { localStorageMock } from '../setup';
+} from '../../../src/lib/sync/bufferedDraftWriterIntent';
+import { activateGuestSession, captureSession, GUEST_SESSION_KEY, invalidateSession } from '../../../src/lib/sync/session';
+import { requiredUpdateRecoveryRegistry } from '../../../src/lib/sync/requiredUpdateRecovery';
+import { useAppStore } from '../../../src/store/useAppStore';
+import { localStorageMock } from '../../setup';
 
 type FieldKind = 'input' | 'textarea';
 const initialGetItem = localStorageMock.getItem.getMockImplementation()!;

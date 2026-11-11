@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import {
   STORAGE_MARKER_VERSION, StorageMarkerReadError, getStorageMarker, getStorageMarkerKey,
   updateStorageMarker, clearStorageMarker, diagnoseStorageState,
-} from '../../src/lib/storageIntegrity';
+} from '../../../src/lib/storageIntegrity';
 
 describe('Owner-scoped storage integrity markers', () => {
   beforeEach(() => { localStorage.clear(); vi.clearAllMocks(); });

@@ -1,4 +1,4 @@
-import { idbStore } from '../setup';
+import { idbStore } from '../../setup';
 import { describe, expect, it } from 'vitest';
 import { clear, del, get, set, update } from 'idb-keyval';
 

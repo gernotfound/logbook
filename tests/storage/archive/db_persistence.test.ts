@@ -1,11 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { getDocFromServer, writeBatch } from 'firebase/firestore';
 
-vi.unmock('../../src/lib/db');
+vi.unmock('../../../src/lib/db');
 
-import { ConsentedTestDB as DB, openTestCloudBusiness } from '../testUtils';
-import { prepareUnlockedTestArchive } from '../secureVaultFixture';
-import { sealCloudDocument } from '../../src/lib/sync/cloudDocumentCipher';
+import { ConsentedTestDB as DB, openTestCloudBusiness } from '../../testUtils';
+import { prepareUnlockedTestArchive } from '../../secureVaultFixture';
+import { sealCloudDocument } from '../../../src/lib/sync/cloudDocumentCipher';
 
 
 describe('DB Persistence for Training Cycles and Planning', () => {

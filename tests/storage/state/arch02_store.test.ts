@@ -1,8 +1,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { useAppStore } from '../../src/store/useAppStore';
-import { DB } from '../../src/lib/db';
-import { prepareUnlockedTestArchive } from '../secureVaultFixture';
-import { clearSyncTimers } from '../../src/store/slices/createSyncSlice';
+import { useAppStore } from '../../../src/store/useAppStore';
+import { DB } from '../../../src/lib/db';
+import { prepareUnlockedTestArchive } from '../../secureVaultFixture';
+import { clearSyncTimers } from '../../../src/store/slices/createSyncSlice';
 
 describe('ARCH-02: createSyncSlice', () => {
     afterEach(() => {

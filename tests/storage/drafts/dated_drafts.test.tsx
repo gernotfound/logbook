@@ -1,27 +1,27 @@
 import { act, fireEvent, render, renderHook, screen } from '@testing-library/react';
 import { useState } from 'react';
-import DataView from '../../src/components/Data/DataView';
+import DataView from '../../../src/components/Data/DataView';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { useNutritionMeasurements } from '../../src/hooks/useNutritionMeasurements';
-import { useSleepMeasurements } from '../../src/hooks/useSleepMeasurements';
-import { useAppStore } from '../../src/store/useAppStore';
-import { useDialogStore } from '../../src/store/useDialogStore';
-import { activateGuestSession, GUEST_SESSION_KEY, GUEST_REVOCATION_KEY, invalidateSession, storageOwner } from '../../src/lib/sync/session';
-import { deviceKey, protectedDeviceKey, writeDeviceValue } from '../../src/lib/sync/deviceStorage';
-import { prepareUnlockedTestArchive } from '../secureVaultFixture';
-import { DatedDraftConflictError, readFencedDatedDraft, readFencedDatedDraftImage, writeFencedDatedDraft, UnverifiedDatedDraftEpochError } from '../../src/lib/sync/datedDraftEpoch';
+import { useNutritionMeasurements } from '../../../src/hooks/useNutritionMeasurements';
+import { useSleepMeasurements } from '../../../src/hooks/useSleepMeasurements';
+import { useAppStore } from '../../../src/store/useAppStore';
+import { useDialogStore } from '../../../src/store/useDialogStore';
+import { activateGuestSession, GUEST_SESSION_KEY, GUEST_REVOCATION_KEY, invalidateSession, storageOwner } from '../../../src/lib/sync/session';
+import { deviceKey, protectedDeviceKey, writeDeviceValue } from '../../../src/lib/sync/deviceStorage';
+import { prepareUnlockedTestArchive } from '../../secureVaultFixture';
+import { DatedDraftConflictError, readFencedDatedDraft, readFencedDatedDraftImage, writeFencedDatedDraft, UnverifiedDatedDraftEpochError } from '../../../src/lib/sync/datedDraftEpoch';
 import {
     clearDatedWriterIntent, createDatedWriterIntentName, inspectDatedRecoveryEvidence,
     readDatedWriterEvidence, writeDatedWriterIntent,
-} from '../../src/lib/sync/datedDraftWriterIntent';
-import { writerParentReference } from '../../src/lib/sync/writerLineage';
-import { mockFirebaseAuth } from '../setup';
-import { draftRegistry } from '../../src/lib/utils/draftRegistry';
-import { UserDataSchema } from '../../src/lib/schema';
-import type { DataSubTab, SyncResult } from '../../src/types';
-import { useLocalStorage } from '../../src/hooks/useLocalStorage';
+} from '../../../src/lib/sync/datedDraftWriterIntent';
+import { writerParentReference } from '../../../src/lib/sync/writerLineage';
+import { mockFirebaseAuth } from '../../setup';
+import { draftRegistry } from '../../../src/lib/utils/draftRegistry';
+import { UserDataSchema } from '../../../src/lib/schema';
+import type { DataSubTab, SyncResult } from '../../../src/types';
+import { useLocalStorage } from '../../../src/hooks/useLocalStorage';
 import { z } from 'zod';
-import { requireHealthConsentWritable } from '../../src/lib/healthConsent';
+import { requireHealthConsentWritable } from '../../../src/lib/healthConsent';
 const data = (nutrition = {}) => UserDataSchema.parse({ profile: { height: '180', gender: 'M' }, nutrition }) as any;
 const day = (date: string, fields = {}) => ({ date, kcal: 0, pro: 0, carbs: 0, fat: 0, meals: [], ...fields });
 const storeItem = vi.mocked(localStorage.setItem).getMockImplementation()!;
@@ -1219,7 +1219,7 @@ it('leaves the sleep historical editor accessible but closes it after measuremen
         return <DataView subTab={tab} setSubTab={setTab} />;
     };
     const view = render(<Harness />);
-    await act(async () => { await import('../../src/components/Data/DataHistory'); });
+    await act(async () => { await import('../../../src/components/Data/DataHistory'); });
     fireEvent.click(screen.getByRole('button', { name: 'Opzioni' }));
     fireEvent.click(screen.getByRole('menuitem', { name: 'Modifica misurazione' }));
     fireEvent.click(screen.getByRole('tab', { name: 'Sonno' }));
@@ -1252,7 +1252,7 @@ it('stays in the measurement editor when draft cancellation fails and navigates 
         return <DataView subTab={tab} setSubTab={setTab} />;
     };
     const view = render(<Harness />);
-    await act(async () => { await import('../../src/components/Data/DataHistory'); });
+    await act(async () => { await import('../../../src/components/Data/DataHistory'); });
     fireEvent.click(screen.getByRole('button', { name: 'Opzioni' }));
     fireEvent.click(screen.getByRole('menuitem', { name: 'Modifica misurazione' }));
     expect(view.container.querySelector('#data-panel-measurements')).not.toBeNull();

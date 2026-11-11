@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
-import { dispatchDurableOperation } from '../../src/lib/sync/dispatchDurableOperation';
-import type { SyncResult } from '../../src/types';
+import { dispatchDurableOperation } from '../../../src/lib/sync/dispatchDurableOperation';
+import type { SyncResult } from '../../../src/types';
 
 const operation = { type: 'active-pains.set' as const, pains: [] };
 

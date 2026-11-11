@@ -1,13 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { update as idbUpdate } from 'idb-keyval';
-import { DB } from '../../src/lib/db';
-import { initializeLocal, readLocal } from '../../src/lib/sync/localRepository';
-import { captureSession } from '../../src/lib/sync/session';
-import { useAppStore } from '../../src/store/useAppStore';
-import type { UserData } from '../../src/types';
-import { emptyUserData, idbStore } from '../setup';
-import { prepareUnlockedTestArchive } from '../secureVaultFixture';
-import { lockAllVaults } from '../../src/lib/sync/secureArchiveSession';
+import { DB } from '../../../src/lib/db';
+import { initializeLocal, readLocal } from '../../../src/lib/sync/localRepository';
+import { captureSession } from '../../../src/lib/sync/session';
+import { useAppStore } from '../../../src/store/useAppStore';
+import type { UserData } from '../../../src/types';
+import { emptyUserData, idbStore } from '../../setup';
+import { prepareUnlockedTestArchive } from '../../secureVaultFixture';
+import { lockAllVaults } from '../../../src/lib/sync/secureArchiveSession';
 
 const baseData = (): UserData => structuredClone({
     ...emptyUserData,

@@ -1,12 +1,12 @@
 import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
-vi.unmock('../../src/lib/db');
+vi.unmock('../../../src/lib/db');
 
 import { runTransaction } from 'firebase/firestore';
-import { ConsentedTestDB as DB } from '../testUtils';
-import { DB as RealDB } from '../../src/lib/db';
-import { readLocal } from '../../src/lib/sync/localRepository';
-import { prepareUnlockedTestArchive } from '../secureVaultFixture';
-import { lockAllVaults } from '../../src/lib/sync/secureArchiveSession';
+import { ConsentedTestDB as DB } from '../../testUtils';
+import { DB as RealDB } from '../../../src/lib/db';
+import { readLocal } from '../../../src/lib/sync/localRepository';
+import { prepareUnlockedTestArchive } from '../../secureVaultFixture';
+import { lockAllVaults } from '../../../src/lib/sync/secureArchiveSession';
 
 const OWNER = 'user:test-user-id';
 const state = {

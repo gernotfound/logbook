@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
     LocalCiphertextError, openLocalJson, openLocalText, sealLocalJson, sealLocalText,
     SEALED_LOCAL_PREFIX,
-} from '../../src/lib/sync/secureArchiveCipher';
+} from '../../../src/lib/sync/secureArchiveCipher';
 
 const key = (): Uint8Array => crypto.getRandomValues(new Uint8Array(32));
 const owner = 'user:local-crypt-test';

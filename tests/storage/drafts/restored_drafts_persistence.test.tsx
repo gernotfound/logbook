@@ -1,17 +1,17 @@
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
-import { useTrainingExercises } from '../../src/hooks/useTrainingExercises';
-import { useTrainingRoutines } from '../../src/hooks/useTrainingRoutines';
-import { deviceKey, protectedDeviceKey, readDeviceValueStrict, writeDeviceValue } from '../../src/lib/sync/deviceStorage';
-import { writeWorkoutRecoveryDraft } from '../../src/lib/sync/workoutRecoveryDraft';
-import { prepareUnlockedTestArchive } from '../secureVaultFixture';
-import { localStorageMock } from '../setup';
-import { useAppStore } from '../../src/store/useAppStore';
-import { useDialogStore } from '../../src/store/useDialogStore';
-import { UserDataSchema } from '../../src/lib/schema';
-import { initializeLocal, readLocal } from '../../src/lib/sync/localRepository';
-import type { UserData } from '../../src/types';
-import { storageOwner } from '../../src/lib/sync/session';
+import { useTrainingExercises } from '../../../src/hooks/useTrainingExercises';
+import { useTrainingRoutines } from '../../../src/hooks/useTrainingRoutines';
+import { deviceKey, protectedDeviceKey, readDeviceValueStrict, writeDeviceValue } from '../../../src/lib/sync/deviceStorage';
+import { writeWorkoutRecoveryDraft } from '../../../src/lib/sync/workoutRecoveryDraft';
+import { prepareUnlockedTestArchive } from '../../secureVaultFixture';
+import { localStorageMock } from '../../setup';
+import { useAppStore } from '../../../src/store/useAppStore';
+import { useDialogStore } from '../../../src/store/useDialogStore';
+import { UserDataSchema } from '../../../src/lib/schema';
+import { initializeLocal, readLocal } from '../../../src/lib/sync/localRepository';
+import type { UserData } from '../../../src/types';
+import { storageOwner } from '../../../src/lib/sync/session';
 
 const initialStorageWrite = localStorageMock.setItem.getMockImplementation()!;
 

@@ -1,25 +1,25 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { getDocFromServer, writeBatch } from 'firebase/firestore';
 
-vi.unmock('../../src/lib/db');
-import { ConsentedTestDB as DB, openTestCloudBusiness, sealTestCloudFixture, testCloudKey } from '../testUtils';
+vi.unmock('../../../src/lib/db');
+import { ConsentedTestDB as DB, openTestCloudBusiness, sealTestCloudFixture, testCloudKey } from '../../testUtils';
 import {
     getSeedCatalog,
     clearCatalogCache,
     saveCatalogToCache
-} from '../../src/lib/catalog/catalogService';
+} from '../../../src/lib/catalog/catalogService';
 import {
     resolveEffectiveExercises,
     resolveEffectiveFoods,
     createExerciseOverride,
     createFoodOverride
-} from '../../src/lib/catalog/deltaResolver';
-import { saveUserDataToCache, parseInitialUserData } from '../../src/store/slices/createDataSlice';
-import { idbStore } from '../setup';
-import { readLocal } from '../../src/lib/sync/localRepository';
-import { prepareUnlockedTestArchive } from '../secureVaultFixture';
-import { lockAllVaults } from '../../src/lib/sync/secureArchiveSession';
-import type { UserData, Exercise, Food, CatalogOverrides } from '../../src/types';
+} from '../../../src/lib/catalog/deltaResolver';
+import { saveUserDataToCache, parseInitialUserData } from '../../../src/store/slices/createDataSlice';
+import { idbStore } from '../../setup';
+import { readLocal } from '../../../src/lib/sync/localRepository';
+import { prepareUnlockedTestArchive } from '../../secureVaultFixture';
+import { lockAllVaults } from '../../../src/lib/sync/secureArchiveSession';
+import type { UserData, Exercise, Food, CatalogOverrides } from '../../../src/types';
 
 
 
@@ -67,7 +67,7 @@ describe('M3: Storage & Persistence Delta Isolation Suite', () => {
                     { id: 'global_rice', name: 'Rice', kcal: 130, pro: 2.5, carbs: 28, fat: 0.3, isCustom: false },
                     { id: 'global_chicken', name: 'Chicken', kcal: 120, pro: 25, carbs: 0, fat: 2, isCustom: false },
                 ],
-            } as import('../../src/types').CachedGlobalCatalog;
+            } as import('../../../src/types').CachedGlobalCatalog;
             await saveCatalogToCache(catalog);
             expect(catalog.exercises).toHaveLength(2);
             expect(catalog.foods).toHaveLength(2);
@@ -151,11 +151,11 @@ describe('M3: Storage & Persistence Delta Isolation Suite', () => {
 
         it('persists modified catalog overrides and hidden IDs accurately to Firestore', async () => {
             // Local fixture (seed is empty — commit e61a133)
-            const globalExFixture: import('../../src/types').CatalogExercise[] = [
+            const globalExFixture: import('../../../src/types').CatalogExercise[] = [
                 { id: 'panca-piana-bilanciere', name: 'Panca Piana Bilanciere', muscles: ['chest'], trackingType: 'weight_reps', isDefault: true, setsCount: 4 },
                 { id: 'panca-declinata-bilanciere', name: 'Panca Declinata', muscles: ['chest'], trackingType: 'weight_reps', isDefault: true, setsCount: 3 }
             ];
-            const globalFoodFixture: import('../../src/types').CatalogFood[] = [
+            const globalFoodFixture: import('../../../src/types').CatalogFood[] = [
                 { id: 'petto-di-pollo-crudo', name: 'Petto di pollo crudo', kcal: 106, pro: 22.5, carbs: 0, fat: 1.9, isCustom: false },
                 { id: 'petto-di-tacchino-crudo', name: 'Petto di tacchino crudo', kcal: 104, pro: 22.0, carbs: 0, fat: 1.5, isCustom: false }
             ];
@@ -260,12 +260,12 @@ describe('M3: Storage & Persistence Delta Isolation Suite', () => {
             // Inject a fixture catalog so DB.loadCloudPayload can resolve effective library and foods.
             // seedExercises.json is intentionally empty (commit e61a133); the global catalog
             // is normally fetched from Firestore. This simulates that post-fetch state.
-            const globalExFixture: import('../../src/types').CatalogExercise[] = [
+            const globalExFixture: import('../../../src/types').CatalogExercise[] = [
                 { id: 'panca-piana-bilanciere', name: 'Panca Piana Bilanciere', muscles: ['chest'], trackingType: 'weight_reps', isDefault: true, setsCount: 4 },
                 { id: 'panca-declinata-bilanciere', name: 'Panca Declinata', muscles: ['chest'], trackingType: 'weight_reps', isDefault: true, setsCount: 3 },
                 { id: 'squat-bilanciere', name: 'Squat Bilanciere', muscles: ['quads'], trackingType: 'weight_reps', isDefault: true, setsCount: 4 }
             ];
-            const globalFoodFixture: import('../../src/types').CatalogFood[] = [
+            const globalFoodFixture: import('../../../src/types').CatalogFood[] = [
                 { id: 'petto-di-pollo-crudo', name: 'Petto di pollo crudo', kcal: 106, pro: 22.5, carbs: 0, fat: 1.9, isCustom: false },
                 { id: 'riso-bianco-cotto', name: 'Riso bianco cotto', kcal: 130, pro: 2.7, carbs: 28.6, fat: 0.3, isCustom: false }
             ];

@@ -5,8 +5,8 @@ import { vi } from 'vitest';
 // independently of the shared jsdom test adapter.
 vi.unmock('idb-keyval');
 import { beforeEach, describe, expect, it } from 'vitest';
-import { UserDataSchema } from '../../src/lib/schema';
-import type { UserData } from '../../src/types';
+import { UserDataSchema } from '../../../src/lib/schema';
+import type { UserData } from '../../../src/types';
 
 describe('Transaction Contention & ActorSeq Invatiants', () => {
     beforeEach(async () => {
@@ -16,13 +16,13 @@ describe('Transaction Contention & ActorSeq Invatiants', () => {
         const { clear } = await import('idb-keyval');
         await clear();
         localStorage.clear();
-        const { lockAllVaults } = await import('../../src/lib/sync/secureArchiveSession');
+        const { lockAllVaults } = await import('../../../src/lib/sync/secureArchiveSession');
         lockAllVaults();
     });
 
     it('correctly increments actorSeq and maintains clock invariants under concurrent commits', async () => {
-        const { commitLocal, initializeLocal, readLocal } = await import('../../src/lib/sync/localRepository');
-        const { createAndMigrateVault } = await import('../../src/lib/sync/secureArchiveMigration');
+        const { commitLocal, initializeLocal, readLocal } = await import('../../../src/lib/sync/localRepository');
+        const { createAndMigrateVault } = await import('../../../src/lib/sync/secureArchiveMigration');
         await createAndMigrateVault('user:a');
         const base = UserDataSchema.parse({}) as unknown as UserData;
         await initializeLocal('user:a', base);
