@@ -28,7 +28,7 @@ for (const path of ['/', '/index.html', '/sw.js', '/manifest.webmanifest', '/app
 }
 if (!headers.includes('/assets/*\n  Cache-Control: public, max-age=31536000, immutable')) failures.push('Immutable hashed assets required');
 if (!headers.includes('X-Robots-Tag: noindex, nofollow')) failures.push('Candidate must not be indexed before authorized cutover');
-if (!readFileSync('cloudflare/.assetsignore', 'utf8').split('\\n').includes('_headers')) failures.push('Worker must not publicly expose _headers');
+if (!readFileSync('cloudflare/.assetsignore', 'utf8').split('\n').includes('_headers')) failures.push('Worker must not publicly expose _headers');
 if (/Access-Control-Allow-Origin:\s*\*/i.test(headers)) failures.push('Wildcard CORS forbidden');
 if (!sw.includes('denylist:') || !sw.includes('__')) failures.push('SW must exclude Firebase helper namespace');
 if (!vite.includes('CLOUDFLARE_APP_ORIGIN') || !vite.includes('transformIndexHtml')) {

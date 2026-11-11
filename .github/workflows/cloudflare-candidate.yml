@@ -147,4 +147,32 @@ jobs:
           grep -qi '^x-content-type-options: nosniff' /tmp/cloudflare-headers
           grep -qi '^content-security-policy:' /tmp/cloudflare-headers
           grep -qi '^cache-control: .*no-store' /tmp/cloudflare-headers
+          grep -qi '^x-robots-tag: noindex, nofollow' /tmp/cloudflare-headers
+
+          shopt -s nullglob globstar
+          chunks=(dist/assets/**/*.{js,css})
+          test "${#chunks[@]}" -gt 0
+          for file in "${chunks[@]}"; do
+            path="/${file#dist/}"
+            mime="$(curl --fail --silent --show-error -H 'Accept-Encoding: identity' \
+              --output /tmp/cloudflare-chunk --write-out '%{content_type}' "${CLOUDFLARE_APP_ORIGIN}${path}")"
+            case "${file}:${mime}" in
+              *.js:text/javascript*|*.js:application/javascript*|*.css:text/css*) ;;
+              *) echo "Unexpected MIME: ${path} ${mime}"; exit 1 ;;
+            esac
+            cmp -s "${file}" /tmp/cloudflare-chunk || { echo "Chunk byte mismatch: ${path}"; exit 1; }
+          done
+
+          curl --fail --silent --show-error \
+            -H 'Sec-Fetch-Mode: navigate' -H 'Accept: text/html' \
+            "${CLOUDFLARE_APP_ORIGIN}/training" -o /tmp/cloudflare-spa
+          cmp -s dist/index.html /tmp/cloudflare-spa || { echo 'SPA fallback mismatch'; exit 1; }
+          miss_status="$(curl --silent --show-error --output /tmp/cloudflare-missing \
+            --write-out '%{http_code}' -H 'Accept: application/javascript' \
+            "${CLOUDFLARE_APP_ORIGIN}/assets/missing-synthetic.js")"
+          test "${miss_status}" = 404 || { echo 'Missing JS must be a real 404'; exit 1; }
+
+          helper_status="$(curl --silent --show-error --output /tmp/cloudflare-auth-helper \
+            --write-out '%{http_code}' "${CLOUDFLARE_APP_ORIGIN}/__/auth")"
+          test "${helper_status}" = 404 || { echo 'Unrecognized Auth helper route must fail closed'; exit 1; }
           echo 'Static assets verified; authenticated flows still require the provider and browser gates'
