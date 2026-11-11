@@ -1,0 +1,328 @@
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { TrainingSessionSetup } from '../../../src/components/Training/TrainingSessionSetup';
+import TrainingPlanning from '../../../src/components/Training/planning/TrainingPlanning';
+import { useWorkoutSession } from '../../../src/hooks/useWorkoutSession';
+import { useAppStore } from '../../../src/store/useAppStore';
+import { getNextScheduledRoutine } from '../../../src/lib/calc/planning';
+import type { TrainingCycle, UserData, WorkoutRoutine, WorkoutSession } from '../../../src/types';
+
+vi.mock('../../../src/hooks/useWorkoutSession', () => ({ useWorkoutSession: vi.fn() }));
+
+const routines: WorkoutRoutine[] = [
+    { id: 'first', name: 'Scheda A', exercises: [] },
+    { id: 'second', name: 'Scheda B', exercises: [] },
+];
+
+const cycle: TrainingCycle = {
+    id: 'flexible-cycle', name: 'Ciclo flessibile', durationWeeks: 2, sessionsPerWeek: 4,
+    routines: [{ routineId: 'first', frequencyPerWeek: 2 }, { routineId: 'second', frequencyPerWeek: 2 }],
+};
+
+const startWorkout = vi.fn();
+const startFreeWorkout = vi.fn();
+
+function setup(
+    historyCount: number,
+    currentCycle = cycle,
+    currentRoutines = routines,
+    storedHistory?: WorkoutSession[],
+) {
+    const plannedRoutineIds = currentCycle.routines
+        .map(item => item.routineId)
+        .filter(routineId => currentRoutines.some(routine => routine.id === routineId));
+    const history = storedHistory ?? Array.from({ length: historyCount }, (_, index): WorkoutSession => ({
+        id: `completed-${index}`,
+        cycleId: currentCycle.id,
+        routineId: plannedRoutineIds[index % plannedRoutineIds.length],
+        date: `2026-10-${String(index + 1).padStart(2, '0')}`,
+        exercises: [],
+    }));
+    useAppStore.setState({
+        userData: {
+            library: [], routines: currentRoutines, history,
+            trainingCycles: [currentCycle], activeCycleId: currentCycle.id,
+        } as UserData,
+    });
+    vi.mocked(useWorkoutSession).mockReturnValue({
+        routines: currentRoutines, history, startWorkout, startFreeWorkout,
+    } as unknown as ReturnType<typeof useWorkoutSession>);
+}
+
+beforeEach(() => {
+    vi.clearAllMocks();
+});
+
+afterEach(() => {
+    cleanup();
+});
+
+describe('flexible training cycles', () => {
+    it('suggests the successor of the last performed routine, with no weekly reset or forced sequence', () => {
+        const fourRoutines: WorkoutRoutine[] = [
+            ...routines,
+            { id: 'third', name: 'Scheda C', exercises: [] },
+            { id: 'fourth', name: 'Scheda D', exercises: [] },
+        ];
+        const fourCycle: TrainingCycle = {
+            ...cycle, routines: fourRoutines.map(routine => ({ routineId: routine.id, frequencyPerWeek: 1 })),
+        };
+        const completed = (routineId: string, date: string, id = routineId): WorkoutSession => ({
+            id, cycleId: fourCycle.id, routineId, date, exercises: [],
+        });
+        const weekOneAC = [
+            completed('first', '2026-10-01'),
+            completed('third', '2026-10-02'),
+        ];
+        expect(getNextScheduledRoutine(fourCycle, fourRoutines, weekOneAC)?.nextRoutineId).toBe('fourth');
+
+        // A B on one week -> C D A B on the next, with no compulsory recovery.
+        const firstWeekAB = [
+            completed('first', '2026-10-01'),
+            completed('second', '2026-10-02'),
+        ];
+        const weekTwo: WorkoutSession[] = [...firstWeekAB];
+        for (const [index, routineId] of ['third', 'fourth', 'first', 'second'].entries()) {
+            expect(getNextScheduledRoutine(fourCycle, fourRoutines, weekTwo)?.nextRoutineId).toBe(routineId);
+            weekTwo.push(completed(routineId, `2026-10-${String(index + 8).padStart(2, '0')}`, `week2-${index}`));
+        }
+        // A C B D also finishes the four available choices with no prescribed order.
+        const reorderedWeek = [
+            completed('first', '2026-10-01'),
+            completed('third', '2026-10-02'),
+            completed('second', '2026-10-03'),
+            completed('fourth', '2026-10-04'),
+        ];
+        expect(getNextScheduledRoutine(fourCycle, fourRoutines, reorderedWeek)?.nextRoutineId).toBe('first');
+        expect(getNextScheduledRoutine(fourCycle, fourRoutines, reorderedWeek)?.completedCount).toBe(4);
+
+        // Even with D suggested after A C, manually choosing A must remain possible.
+        setup(0, fourCycle, fourRoutines, weekOneAC);
+        render(<TrainingSessionSetup />);
+        expect(screen.getByRole('heading', { name: 'Scheda D' })).toBeDefined();
+        fireEvent.change(screen.getByRole('combobox', { name: 'Seleziona scheda della rotazione' }), {
+            target: { value: 'first' },
+        });
+        fireEvent.click(screen.getByRole('button', { name: 'Avvia Scheda A' }));
+        expect(startWorkout).toHaveBeenCalledWith('first', {
+            cycleId: fourCycle.id, cycleName: fourCycle.name,
+        });
+        const afterRestartA = [...weekOneAC, completed('first', '2026-10-08', 'restart-a')];
+        expect(getNextScheduledRoutine(fourCycle, fourRoutines, afterRestartA)?.nextRoutineId).toBe('second');
+
+        // The history array itself need not be in chronological order.
+        const unsorted = [completed('third', '2026-10-12'), completed('first', '2026-10-10')];
+        expect(getNextScheduledRoutine(fourCycle, fourRoutines, unsorted)?.nextRoutineId).toBe('fourth');
+        expect(getNextScheduledRoutine(fourCycle, fourRoutines, [
+            completed('first', '2026-10-10', 'legacy-first'),
+            { id: 'unrelated-cycle', routineId: 'fourth', cycleId: 'other', date: '2026-10-15', exercises: [] },
+        ])?.nextRoutineId).toBe('second');
+    });
+
+    it('permits choosing any planned routine after only one of four suggested weekly sessions', () => {
+        setup(1);
+        render(<TrainingSessionSetup />);
+        expect(screen.getByText('Scheda suggerita · Rotazione flessibile')).toBeDefined();
+        expect(screen.getByText(/Seduta 2 di 8/)).toBeDefined();
+        fireEvent.change(screen.getByRole('combobox', { name: 'Seleziona scheda della rotazione' }), {
+            target: { value: 'first' },
+        });
+        fireEvent.click(screen.getByRole('button', { name: 'Avvia Scheda A' }));
+        expect(startWorkout).toHaveBeenCalledWith('first', {
+            cycleId: cycle.id, cycleName: cycle.name,
+        });
+    });
+
+    it('shows an invalid-date warning but still allows a manual in-cycle workout', () => {
+        setup(0, { ...cycle, startDate: 'not-a-date' });
+        render(<TrainingSessionSetup />);
+        expect(screen.getByText('Parametri del ciclo da correggere')).toBeDefined();
+        expect(screen.queryByText('Scheda suggerita · Rotazione flessibile')).toBeNull();
+        fireEvent.click(screen.getByRole('button', { name: 'Avvia Scheda A' }));
+        expect(startWorkout).toHaveBeenCalledWith('first', {
+            cycleId: cycle.id, cycleName: cycle.name,
+        });
+    });
+
+    it('stops suggesting session 9 of 8 but still starts an optional routine within the cycle', () => {
+        setup(8);
+        render(<TrainingSessionSetup />);
+        expect(screen.getByText('Obiettivo indicativo raggiunto')).toBeDefined();
+        expect(screen.queryByText(/Seduta 9 di 8/)).toBeNull();
+        expect(screen.getByText(/Puoi continuare ad allenarti/)).toBeDefined();
+        fireEvent.change(screen.getByRole('combobox', { name: 'Seleziona scheda del ciclo' }), {
+            target: { value: 'second' },
+        });
+        fireEvent.click(screen.getByRole('button', { name: 'Avvia Scheda B' }));
+        expect(startWorkout).toHaveBeenCalledWith('second', {
+            cycleId: cycle.id, cycleName: cycle.name,
+        });
+        expect(screen.getByRole('button', { name: 'Allenamento libero' })).toBeDefined();
+    });
+
+    it('ends automatic suggestions when the calendar period ends, even after only one optional session', () => {
+        setup(1, { ...cycle, startDate: '2020-01-01' });
+        render(<TrainingSessionSetup />);
+        expect(screen.getByText('Periodo del ciclo concluso')).toBeDefined();
+        expect(screen.queryByText('Scheda suggerita · Rotazione flessibile')).toBeNull();
+        expect(screen.queryByText(/Seduta 2 di 8/)).toBeNull();
+        fireEvent.change(screen.getByRole('combobox', { name: 'Seleziona scheda del ciclo' }), {
+            target: { value: 'second' },
+        });
+        fireEvent.click(screen.getByRole('button', { name: 'Avvia Scheda B' }));
+        expect(startWorkout).toHaveBeenCalledWith('second', {
+            cycleId: cycle.id, cycleName: cycle.name,
+        });
+    });
+
+    it('labels timeline progress as elapsed time rather than completed training sessions', () => {
+        setup(1, { ...cycle, startDate: '2020-01-01' });
+        render(<TrainingPlanning />);
+        expect(screen.getByText('Periodo concluso')).toBeDefined();
+        expect(screen.getByText('100% del periodo trascorso')).toBeDefined();
+        expect(screen.getByRole('progressbar', { name: 'Avanzamento del periodo del ciclo' })).toBeDefined();
+        expect(screen.queryByText('100% completato')).toBeNull();
+        expect(screen.queryByText('Scheda suggerita nella rotazione')).toBeNull();
+    });
+
+    it('skips deleted routines in suggestions without removing their stored cycle references', () => {
+        const withMissing = {
+            ...cycle, routines: [
+                { routineId: 'deleted', frequencyPerWeek: 1 },
+                { routineId: 'first', frequencyPerWeek: 1 },
+                { routineId: 'second', frequencyPerWeek: 1 },
+            ],
+        };
+        const first = getNextScheduledRoutine(withMissing, routines, []);
+        expect(first?.nextRoutineId).toBe('first');
+        expect(first?.totalSessions).toBe(8);
+        expect(first?.totalRoutinesInCycle).toBe(2);
+        const afterDeleted = getNextScheduledRoutine(withMissing, routines, [
+            { id: 'w1', cycleId: withMissing.id, routineId: 'deleted', exercises: [] },
+        ]);
+        expect(afterDeleted?.nextRoutineId).toBe('second');
+        expect(afterDeleted?.completedCount).toBe(1);
+        const withoutRoutine = getNextScheduledRoutine(withMissing, routines, [
+            { id: 'unknown', cycleId: withMissing.id, exercises: [] },
+        ]);
+        expect(withoutRoutine?.nextRoutineId).toBe('first');
+        expect(withoutRoutine?.completedCount).toBe(0);
+        expect(withMissing.routines[0]?.routineId).toBe('deleted');
+
+        setup(0, withMissing);
+        render(<TrainingSessionSetup />);
+        expect(screen.getByRole('heading', { name: 'Scheda A' })).toBeDefined();
+        expect(screen.getByRole('button', { name: /Avvia Scheda A/ })).toBeDefined();
+    });
+
+    it('numbers only available routines consistently with the suggested rotation', () => {
+        const withMissing = {
+            ...cycle, routines: [
+                { routineId: 'deleted', frequencyPerWeek: 1 },
+                { routineId: 'first', frequencyPerWeek: 1 },
+                { routineId: 'second', frequencyPerWeek: 1 },
+            ],
+        };
+        setup(0, withMissing);
+        render(<TrainingSessionSetup />);
+        expect(getNextScheduledRoutine(withMissing, routines, [])?.positionInRotation).toBe(1);
+        expect(screen.getByText('A di 2')).toBeDefined();
+        expect(screen.getByRole('option', { name: 'A. Scheda A' })).toBeDefined();
+        expect(screen.getByRole('option', { name: 'B. Scheda B' })).toBeDefined();
+        expect(screen.queryByText('B di 2')).toBeNull();
+        expect(withMissing.routines[0].routineId).toBe('deleted');
+
+        cleanup();
+        const { container } = render(<TrainingPlanning />);
+        fireEvent.click(screen.getByRole('button', { name: 'Dettagli ciclo' }));
+        const labels = container.querySelector('[aria-label="Sequenza schede del ciclo attivo"]');
+        expect(labels?.textContent).toContain('— Scheda non disponibile');
+        expect(labels?.textContent).toContain('A Scheda A');
+        expect(labels?.textContent).toContain('B Scheda B');
+    });
+
+    it('does not apply the previous cycle manual selection to a newly active cycle', () => {
+        setup(0);
+        render(<TrainingSessionSetup />);
+        fireEvent.change(screen.getByRole('combobox', { name: 'Seleziona scheda della rotazione' }), {
+            target: { value: 'second' },
+        });
+        expect(screen.getByRole('button', { name: 'Avvia Scheda B' })).toBeDefined();
+        const nextCycle: TrainingCycle = { ...cycle, id: 'another-cycle', name: 'Altro ciclo' };
+        act(() => {
+            useAppStore.setState(state => ({
+                userData: { ...state.userData!, activeCycleId: nextCycle.id, trainingCycles: [nextCycle] },
+            }));
+        });
+        expect(screen.getByRole('heading', { name: 'Scheda A' })).toBeDefined();
+        expect(screen.queryByRole('button', { name: 'Avvia Scheda B' })).toBeNull();
+        fireEvent.click(screen.getByRole('button', { name: /Avvia Scheda A/ }));
+        expect(startWorkout).toHaveBeenLastCalledWith('first', {
+            cycleId: nextCycle.id, cycleName: nextCycle.name,
+        });
+    });
+
+    it('uses unique alphabetic rotation labels beyond Z', () => {
+        const manyRoutines: WorkoutRoutine[] = Array.from({ length: 27 }, (_, index) => ({
+            id: `r-${index}`, name: `Scheda ${index + 1}`, exercises: [],
+        }));
+        const largeCycle: TrainingCycle = {
+            ...cycle, sessionsPerWeek: 14,
+            routines: manyRoutines.map(routine => ({ routineId: routine.id, frequencyPerWeek: 1 })),
+        };
+        setup(0, largeCycle, manyRoutines);
+        render(<TrainingSessionSetup />);
+        expect(screen.getByRole('option', { name: 'Z. Scheda 26' })).toBeDefined();
+        expect(screen.getByRole('option', { name: 'AA. Scheda 27' })).toBeDefined();
+
+        cleanup();
+        const { container } = render(<TrainingPlanning />);
+        fireEvent.click(screen.getByRole('button', { name: 'Dettagli ciclo' }));
+        const activeLabels = container.querySelector('[aria-label="Sequenza schede del ciclo attivo"]');
+        expect(activeLabels?.textContent).toContain('Z Scheda 26');
+        expect(activeLabels?.textContent).toContain('AA Scheda 27');
+
+        cleanup();
+        useAppStore.setState(state => ({
+            userData: { ...state.userData!, activeCycleId: null },
+        }));
+        const { container: archived } = render(<TrainingPlanning />);
+        fireEvent.click(screen.getByRole('button', { name: /Ciclo flessibile/ }));
+        const archivedLabels = archived.querySelector('[aria-label="Sequenza schede del ciclo"]');
+        expect(archivedLabels?.textContent).toContain('Z Scheda 26');
+        expect(archivedLabels?.textContent).toContain('AA Scheda 27');
+    });
+
+    it('reports the absence of any usable cycle routine while preserving archive access', () => {
+        setup(0, { ...cycle, routines: [{ routineId: 'deleted', frequencyPerWeek: 1 }] });
+        render(<TrainingSessionSetup />);
+        expect(screen.getByText(/non contiene schede disponibili/)).toBeDefined();
+        expect(screen.getByText('Scheda A').closest('button')).not.toBeNull();
+    });
+
+    it('marks deleted cycle routines as unavailable in planning without erasing the saved cycle', () => {
+        setup(0, { ...cycle, routines: [
+            { routineId: 'deleted', frequencyPerWeek: 1 }, { routineId: 'first', frequencyPerWeek: 1 },
+        ] });
+        render(<TrainingPlanning />);
+        expect(screen.getByText(/scheda del ciclo non è più disponibile/)).toBeDefined();
+        expect(screen.getByText('Scheda non disponibile')).toBeDefined();
+        expect(useAppStore.getState().userData?.trainingCycles?.[0]?.routines[0]?.routineId).toBe('deleted');
+    });
+
+    it('does not display Infinity or misleading zero as the planned total for invalid historical cycles', () => {
+        setup(0, { ...cycle, sessionsPerWeek: Number.POSITIVE_INFINITY });
+        render(<TrainingPlanning />);
+        expect(screen.getByText('—')).toBeDefined();
+        expect(screen.getByText(/Parametri del ciclo da correggere: le sedute previste/)).toBeDefined();
+        expect(screen.queryByText('Infinity')).toBeNull();
+    });
+
+    it('keeps an optional finite target without requiring all sessions to be performed', () => {
+        setup(1);
+        render(<TrainingPlanning />);
+        expect(screen.getByText('8')).toBeDefined();
+        expect(screen.getByText('Sedute previste')).toBeDefined();
+        expect(screen.getByText('Sedute / sett. (stima)')).toBeDefined();
+    });
+});

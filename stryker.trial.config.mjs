@@ -75,7 +75,7 @@ export const trialCases = {
       "src/lib/calc/cycleLimits.ts"
     ],
     "testFiles": [
-      "tests/training/training_cycle_limits_regression.test.ts"
+      "tests/training/cycles/training_cycle_limits_regression.test.ts"
     ]
   },
   "password-policy": {

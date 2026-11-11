@@ -1,0 +1,271 @@
+import 'fake-indexeddb/auto';
+import { clear, get } from 'idb-keyval';
+import { beforeEach, describe, expect, it } from 'vitest';
+
+import type { CachedGlobalCatalog, UserData, WorkoutSession } from '../../../src/types';
+import { DomainParsers, UserDataSchema, WorkoutSessionSchema } from '../../../src/lib/schema';
+import { createBackup, decodeImport, prepareImport } from '../../../src/lib/backup';
+import { applyDomainOperations } from '../../../src/lib/sync/domainOperations';
+import { applyRemoteDocuments, projectDocuments } from '../../../src/lib/sync/documentProjection';
+import { initializeLocal, readLocal } from '../../../src/lib/sync/localRepository';
+import { deviceKey, protectedDeviceKey, readDeviceValueStrict, writeDeviceValue } from '../../../src/lib/sync/deviceStorage';
+import { updateArchiveRecord } from '../../../src/lib/sync/secureArchiveRepository';
+import { persistPlainWorkoutSnapshot, unwrapWorkoutDeviceSnapshot } from '../../../src/lib/sync/workoutDeviceIntent';
+import { captureSession } from '../../../src/lib/sync/session';
+import { prepareUnlockedTestArchive } from '../../secureVaultFixture';
+import { DeviceWorkoutCorruptError, getInitialLocalWorkout } from '../../../src/store/slices/createWorkoutSlice';
+import { useAppStore } from '../../../src/store/useAppStore';
+
+const catalog: CachedGlobalCatalog = {
+    manifest: {
+        version: 'f006-test',
+        updatedAt: '2026-09-29T00:00:00.000Z',
+        schemaVersion: 1,
+        docRefs: { exercises: 'catalog/exercises', foods: 'catalog/foods' },
+        itemCounts: { exercises: 0, foods: 0 },
+    },
+    exercises: [],
+    foods: [],
+    cachedAt: 0,
+};
+
+const validWorkout: WorkoutSession = {
+    id: 'active-ok',
+    date: '2026-09-29',
+    routineName: 'Upper',
+    globalStartTime: 100,
+    exercises: [],
+    pains: [],
+};
+
+const invalidActiveWorkouts: unknown[] = [
+    { ...validWorkout, id: '' },
+    { ...validWorkout, id: '   ' },
+    { ...validWorkout, id: 'undefined' },
+    { ...validWorkout, id: 'null' },
+    { ...validWorkout, id: 'bad/id' },
+    { ...validWorkout, id: true },
+    { date: '2026-09-29', exercises: [] },
+    {},
+];
+
+describe('F-006 active workout persisted business identity', () => {
+    beforeEach(async () => {
+        await clear();
+        localStorage.clear();
+        useAppStore.setState({ userData: null, localWorkout: null });
+    });
+
+    it('keeps generic transient workout parsing id-optional while quarantining persisted activeWorkout identities', () => {
+        const transient = WorkoutSessionSchema.parse({ date: '2026-09-29', exercises: [] });
+        expect(transient.id).toBeUndefined();
+
+        for (const invalid of invalidActiveWorkouts) {
+            expect(DomainParsers.parseActiveWorkout(invalid)).toBeNull();
+            const parsed = UserDataSchema.parse({ activeWorkout: invalid }) as unknown as UserData;
+            expect(parsed.activeWorkout).toBeNull();
+        }
+
+        expect(DomainParsers.parseActiveWorkout({ ...validWorkout, id: '  active-trimmed  ' })?.id).toBe('active-trimmed');
+        expect(DomainParsers.parseActiveWorkout({ ...validWorkout, id: 42 })?.id).toBe('42');
+        expect(DomainParsers.parseActiveWorkout(validWorkout)).toMatchObject(validWorkout);
+    });
+
+    it('preserves malformed encrypted active workouts and separately enforces device-local identity', async () => {
+        const base = UserDataSchema.parse({}) as unknown as UserData;
+        const owner = captureSession().owner;
+        if (owner.startsWith('user:')) {
+            localStorage.setItem(`logbook:v2:${owner}:health-consent-generation`, '1');
+        }
+        await prepareUnlockedTestArchive(owner);
+        await initializeLocal(owner, base);
+
+        const key = 'logbook:v2:' + owner;
+        await updateArchiveRecord<any>(owner, raw => ({
+            ...raw,
+            data: { ...raw.data, activeWorkout: { date: '2026-09-29', exercises: [] } },
+            baseline: { ...raw.baseline, activeWorkout: { ...validWorkout, id: 'bad/id' } },
+        }));
+        expect(await get<string>(key)).toMatch(/^tlb-sealed:v1:/);
+
+        const encryptedOriginal = await get<string>(key);
+        await expect(readLocal(owner)).rejects.toThrow('non conservabili');
+        expect(await get<string>(key)).toBe(encryptedOriginal);
+
+        // A new bootstrap cannot replace an existing durable envelope.
+        // Reset the test fixture explicitly before seeding its next lifecycle.
+        await clear();
+        await prepareUnlockedTestArchive(owner);
+        await initializeLocal(owner, UserDataSchema.parse({ activeWorkout: validWorkout }) as unknown as UserData);
+        expect(await get<string>(key)).toMatch(/^tlb-sealed:v1:/);
+        expect((await readLocal(owner))?.data.activeWorkout).toMatchObject(validWorkout);
+
+        const sealedKey = protectedDeviceKey('workout', owner);
+        // Malformed current-format workout: the epoch is valid, but the
+        // business identity must still be quarantined independently.
+        writeDeviceValue('workout', JSON.stringify({
+            __logbookWorkoutSnapshot: 1, owner, consentRevision: 1,
+            workout: { date: '2026-09-29', exercises: [] },
+        }), owner);
+        const invalidCiphertext = localStorage.getItem(sealedKey);
+        expect(invalidCiphertext).toMatch(/^tlb-sealed:v1:/);
+        expect(() => getInitialLocalWorkout(owner)).toThrow(DeviceWorkoutCorruptError);
+        expect(localStorage.getItem(sealedKey)).toBe(invalidCiphertext);
+
+        // A routine writer must not silently replace the malformed ciphertext.
+        expect(() => persistPlainWorkoutSnapshot(validWorkout, owner)).toThrow('identificativi non validi');
+        expect(localStorage.getItem(sealedKey)).toBe(invalidCiphertext);
+
+        // Explicitly retire only this test's quarantined fixture before seeding
+        // a separate valid workout lifecycle; normal boot never does this.
+        writeDeviceValue('workout', null, owner);
+        persistPlainWorkoutSnapshot(validWorkout, owner);
+        expect(getInitialLocalWorkout(owner)).toMatchObject(validWorkout);
+        expect(localStorage.getItem(sealedKey)).toMatch(/^tlb-sealed:v1:/);
+        expect(localStorage.getItem(deviceKey('workout', owner))).toBeNull();
+    });
+
+    it.each([
+        ['duplicated set ID', [
+            { id: 's-1', kg: '80', reps: '8' },
+            { id: 's-1', kg: '75', reps: '10' },
+        ]],
+        ['missing set ID', [
+            { kg: '80', reps: '8' },
+        ]],
+    ])('preserves authenticated device ciphertext with a %s instead of silently repairing the ID', async (_case, sets) => {
+        const owner = 'user:nested-identity-recovery';
+        localStorage.setItem(`logbook:v2:${owner}:health-consent-generation`, '1');
+        await prepareUnlockedTestArchive(owner);
+        const corrupted = {
+            ...validWorkout,
+            exercises: [{ id: 'se-1', exId: 'bench', sessionNote: '', sets }],
+        };
+        const protectedKey = protectedDeviceKey('workout', owner);
+        expect(() => persistPlainWorkoutSnapshot(corrupted as WorkoutSession, owner))
+            .toThrow('identificativo');
+        expect(localStorage.getItem(protectedKey)).toBeNull();
+        // A malformed ciphertext must be injected at the storage boundary,
+        // never through the production writer that is under test.
+        writeDeviceValue('workout', JSON.stringify({
+            __logbookWorkoutSnapshot: 1, owner, consentRevision: 1, workout: corrupted,
+        }), owner);
+        const ciphertext = localStorage.getItem(protectedKey);
+        const original = readDeviceValueStrict('workout', owner);
+        expect(ciphertext).toMatch(/^tlb-sealed:v1:/);
+
+        expect(() => getInitialLocalWorkout(owner)).toThrow(DeviceWorkoutCorruptError);
+        expect(() => persistPlainWorkoutSnapshot(validWorkout, owner)).toThrow('identificativi non validi');
+        expect(localStorage.getItem(protectedKey)).toBe(ciphertext);
+        expect(readDeviceValueStrict('workout', owner)).toBe(original);
+    });
+
+    it('does not synthesize missing business IDs from an authenticated durable fallback', async () => {
+        const owner = 'user:malformed-account-fallback';
+        localStorage.setItem(`logbook:v2:${owner}:health-consent-generation`, '1');
+        await prepareUnlockedTestArchive(owner);
+        const malformed = {
+            ...validWorkout,
+            exercises: [{ exId: 'bench', sessionNote: '', sets: [{ kg: '60', reps: '8' }] }],
+        } as WorkoutSession;
+
+        expect(() => getInitialLocalWorkout(owner, malformed)).toThrow(DeviceWorkoutCorruptError);
+        expect(readDeviceValueStrict('workout', owner)).toBeNull();
+        expect(localStorage.getItem(protectedDeviceKey('workout', owner))).toBeNull();
+    });
+
+    it('does not adopt or persist a malformed remote active workout into runtime state', async () => {
+        const owner = captureSession().owner;
+        if (owner.startsWith('user:')) {
+            localStorage.setItem(`logbook:v2:${owner}:health-consent-generation`, '1');
+        }
+        await prepareUnlockedTestArchive(owner);
+        const base = UserDataSchema.parse({}) as unknown as UserData;
+        useAppStore.getState().setUserData({
+            ...base,
+            activeWorkout: { date: '2026-09-29', exercises: [] } as WorkoutSession,
+        });
+
+        expect(useAppStore.getState().userData?.activeWorkout).toBeNull();
+        expect(useAppStore.getState().localWorkout).toBeNull();
+        expect(localStorage.getItem(protectedDeviceKey('workout', owner))).toBeNull();
+        expect(localStorage.getItem(deviceKey('workout', owner))).toBeNull();
+
+        useAppStore.getState().setUserData({ ...base, activeWorkout: validWorkout });
+        expect(useAppStore.getState().userData?.activeWorkout).toMatchObject(validWorkout);
+        expect(useAppStore.getState().localWorkout).toMatchObject(validWorkout);
+        expect(localStorage.getItem(protectedDeviceKey('workout', owner))).toMatch(/^tlb-sealed:v1:/);
+        const recovered = unwrapWorkoutDeviceSnapshot(JSON.parse(readDeviceValueStrict('workout', owner)!), owner).workout;
+        expect(recovered).toMatchObject(validWorkout);
+        expect(localStorage.getItem(deviceKey('workout', owner))).toBeNull();
+    });
+
+    it('quarantines malformed cloud activeWorkout before resume and does not re-project it', () => {
+        const base = UserDataSchema.parse({}) as unknown as UserData;
+        const malformedRemote = new Map<string, Record<string, unknown>>([
+            ['', { activeWorkout: { date: '2026-09-29', exercises: [] } }],
+        ]);
+
+        const hydrated = applyRemoteDocuments(base, malformedRemote, catalog);
+        expect(hydrated.activeWorkout).toBeNull();
+        expect(projectDocuments(hydrated, catalog).get('')?.activeWorkout).toBeNull();
+
+        const validRemote = new Map<string, Record<string, unknown>>([
+            ['', { activeWorkout: validWorkout }],
+        ]);
+        const validHydrated = applyRemoteDocuments(base, validRemote, catalog);
+        expect(validHydrated.activeWorkout).toMatchObject(validWorkout);
+        expect(projectDocuments(validHydrated, catalog).get('')?.activeWorkout).toMatchObject(validWorkout);
+    });
+
+    it('rejects malformed activeWorkout during backup restore without changing or sanitizing the source backup', () => {
+        const current = UserDataSchema.parse({ profile: { height: '180' } }) as unknown as UserData;
+        const backup = createBackup(current, 'guest') as any;
+        backup.userData = {
+            ...current,
+            profile: { height: '181' },
+            activeWorkout: { date: '2026-09-29', exercises: [] },
+        };
+
+        const original = structuredClone(backup);
+        expect(() => decodeImport(backup, 'guest')).toThrow('allenamento attivo non valido');
+        expect(backup).toEqual(original);
+        expect(current.profile?.height).toBe('180');
+
+        backup.userData = { ...current, activeWorkout: null };
+        expect(prepareImport(current, decodeImport(backup, 'guest').data, 'restore').data.activeWorkout).toBeNull();
+
+        backup.userData = { ...current, activeWorkout: validWorkout };
+        const validRestored = prepareImport(current, decodeImport(backup, 'guest').data, 'restore').data;
+        expect(validRestored.activeWorkout).toMatchObject(validWorkout);
+    });
+
+    it('preserves the normal resume -> modify -> complete cycle for a valid recovered workout', () => {
+        const recovered = UserDataSchema.parse({ activeWorkout: validWorkout }) as unknown as UserData;
+        const modifiedWorkout: WorkoutSession = {
+            ...validWorkout,
+            moodRating: 4,
+        };
+
+        const modified = applyDomainOperations(recovered, {
+            type: 'active-workout.set',
+            workout: modifiedWorkout,
+        });
+        expect(modified.activeWorkout).toMatchObject({ id: 'active-ok', moodRating: 4 });
+
+        const finishedWorkout: WorkoutSession = {
+            ...modifiedWorkout,
+            globalEndTime: 200,
+            globalDurationStr: '00:01:40',
+        };
+        const completed = applyDomainOperations(modified, {
+            type: 'workout.complete',
+            workout: finishedWorkout,
+            expectedActiveWorkoutId: String(finishedWorkout.id),
+            activePains: [],
+        });
+
+        expect(completed.activeWorkout).toBeNull();
+        expect(completed.history?.[0]).toMatchObject({ id: 'active-ok', moodRating: 4 });
+    });
+});
