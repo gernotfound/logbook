@@ -77,7 +77,7 @@ describe('email verification feedback privacy', () => {
 
 it('does not alert the next session after an old email send resolves', async () => {
   let finish!: () => void;
-  authState.resendEmailVerification.mockImplementationOnce(() => new Promise<void>(resolve => { finish = resolve; }));
+  authState.resendEmailVerification.mockImplementationOnce(() => new Promise<'sent'>(resolve => { finish = () => resolve('sent'); }));
   render(<AccountCard />);
   const button = screen.getByRole('button', { name: 'Invia di nuovo' });
   fireEvent.click(button);
