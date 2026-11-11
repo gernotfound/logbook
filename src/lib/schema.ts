@@ -81,40 +81,40 @@ export const defaultUserDataFallback: UserData = {
     catalogOverrides: { exercises: {}, foods: {}, hiddenExerciseIds: [], hiddenFoodIds: [] }
 };
 
-function sanitizeTopLevelIdentityCollection(
+function sanitizeTopLevelIdentityCollection<T extends { id?: unknown }>(
     value: unknown,
-    schema: { safeParse: (input: unknown) => { success: boolean; data?: any; error?: unknown } },
-): unknown[] {
-    if (value === undefined) return [];
-    if (!Array.isArray(value)) {
-        return [];
-    }
-    const result: unknown[] = [];
+    schema: z.ZodType<T>,
+): Array<T & { id: string }> {
+    if (!Array.isArray(value)) return [];
+    const result: Array<T & { id: string }> = [];
     const seen = new Set<string>();
     for (const raw of value) {
         const parsed = schema.safeParse(raw);
-        const id = parsed.success ? normalizeBusinessId(parsed.data?.id) : null;
-        if (!parsed.success || !id || seen.has(id)) {
-            continue;
-        }
+        const id = parsed.success ? normalizeBusinessId(parsed.data.id) : null;
+        if (!parsed.success || !id || seen.has(id)) continue;
         seen.add(id);
         result.push({ ...parsed.data, id });
     }
     return result;
 }
 
+// The identity sanitizer already runs each item through its Zod schema.
+// Transform its verified output directly instead of parsing the array twice.
+const parsedIdentityCollection = <T extends { id?: unknown }>(schema: z.ZodType<T>) =>
+    z.unknown().transform(value => sanitizeTopLevelIdentityCollection(value, schema)).default([]);
+
 export const UserDataSchema = z.object({
     profile: UserProfileSchema.optional().catch({}).default({}),
-    library: z.preprocess(value => sanitizeTopLevelIdentityCollection(value, ExerciseSchema), z.array(ExerciseSchema)).default([]),
-    routines: z.preprocess(value => sanitizeTopLevelIdentityCollection(value, WorkoutRoutineSchema), z.array(WorkoutRoutineSchema)).default([]),
+    library: parsedIdentityCollection(ExerciseSchema),
+    routines: parsedIdentityCollection(WorkoutRoutineSchema),
     history: WorkoutHistorySchema, // Actually stored in history_months in Firebase
     nutrition: z.record(z.string(), NutritionDaySchema).optional().catch({}).default({}), // nutrition_months
-    customFoods: z.preprocess(value => sanitizeTopLevelIdentityCollection(value, FoodSchema), z.array(FoodSchema)).default([]),
+    customFoods: parsedIdentityCollection(FoodSchema),
     activeWorkout: PersistedActiveWorkoutSchema,
     nutritionPlanning: NutritionPlanningSchema.optional().catch(undefined),
-    trainingCycles: z.preprocess(value => sanitizeTopLevelIdentityCollection(value, TrainingCycleSchema), z.array(TrainingCycleSchema)).default([]),
+    trainingCycles: parsedIdentityCollection(TrainingCycleSchema),
     activeCycleId: z.union([z.string(), z.null()]).optional().catch(null).default(null),
-    supplements: z.preprocess(value => sanitizeTopLevelIdentityCollection(value, SupplementSchema), z.array(SupplementSchema)).default([]),
+    supplements: parsedIdentityCollection(SupplementSchema),
     activePains: z.array(safeString('')).optional().catch([]).default([]),
     catalogOverrides: CatalogOverridesSchema.optional().catch({ exercises: {}, foods: {}, hiddenExerciseIds: [], hiddenFoodIds: [] }).default({ exercises: {}, foods: {}, hiddenExerciseIds: [], hiddenFoodIds: [] }),
     legalConsent: LegalConsentSchema,

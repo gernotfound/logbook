@@ -73,12 +73,12 @@ export const RoutineExerciseSchema = z.object({
     progressionContract: ProgressionContractSchema.optional().catch(undefined),
 }).passthrough();
 
-function sanitizeRoutineExercises(value: unknown): unknown[] {
+function sanitizeRoutineExercises(value: unknown): z.output<typeof RoutineExerciseSchema>[] {
     if (value === undefined) return [];
     if (!Array.isArray(value)) {
         return [];
     }
-    const result: unknown[] = [];
+    const result: z.output<typeof RoutineExerciseSchema>[] = [];
     const seen = new Set<string>();
     for (const raw of value) {
         const parsed = RoutineExerciseSchema.safeParse(raw);
@@ -94,7 +94,7 @@ function sanitizeRoutineExercises(value: unknown): unknown[] {
 export const WorkoutRoutineSchema = z.object({
     id: safeString(''),
     name: safeString(''),
-    exercises: z.preprocess(sanitizeRoutineExercises, z.array(RoutineExerciseSchema)).default([]),
+    exercises: z.unknown().transform(sanitizeRoutineExercises).default([]),
 }).passthrough().catch(() => {
     return { id: '', name: '', exercises: [] };
 }).default({ id: '', name: '', exercises: [] });
@@ -111,9 +111,9 @@ const SessionSetSegmentSchema = z.object({
     target: SetTargetSchema.optional().catch(undefined),
 });
 
-function sanitizeSetSegments(value: unknown): unknown[] {
+function sanitizeSetSegments(value: unknown): z.output<typeof SessionSetSegmentSchema>[] {
     if (!Array.isArray(value)) return [];
-    const result: unknown[] = [];
+    const result: z.output<typeof SessionSetSegmentSchema>[] = [];
     const seen = new Set<string>();
     for (const raw of value) {
         const parsed = SessionSetSegmentSchema.safeParse(raw);
@@ -139,7 +139,7 @@ export const SessionExerciseSetSchema = z.object({
     done: safeOptionalBoolean(),
     technique: SetTechniqueSchema.optional().catch(undefined),
     executionMode: z.enum(['standard', 'stop_reps']).optional().catch(undefined),
-    segments: z.preprocess(sanitizeSetSegments, z.array(SessionSetSegmentSchema)).optional().catch(undefined),
+    segments: z.unknown().transform(sanitizeSetSegments).optional().catch(undefined),
     target: SetTargetSchema.optional().catch(undefined),
 }).passthrough().transform(({ dropsets: _dropsets, isometrics: _isometrics, ...set }) => {
     if (set.rir !== undefined) return set;
@@ -206,12 +206,12 @@ export const TrainingCycleRoutineItemSchema = z.object({
     frequencyPerWeek: safeNumber(1),
 }).passthrough();
 
-function sanitizeTrainingCycleRoutines(value: unknown): unknown[] {
+function sanitizeTrainingCycleRoutines(value: unknown): z.output<typeof TrainingCycleRoutineItemSchema>[] {
     if (value === undefined) return [];
     if (!Array.isArray(value)) {
         return [];
     }
-    const result: unknown[] = [];
+    const result: z.output<typeof TrainingCycleRoutineItemSchema>[] = [];
     const seen = new Set<string>();
     for (const raw of value) {
         const parsed = TrainingCycleRoutineItemSchema.safeParse(raw);
@@ -234,7 +234,7 @@ export const TrainingCycleSchema = z.object({
     endDate: safeOptionalString(),
     notes: safeOptionalString(),
     strategy: TrainingCycleStrategySchema.optional().catch(undefined),
-    routines: z.preprocess(sanitizeTrainingCycleRoutines, z.array(TrainingCycleRoutineItemSchema)).default([]),
+    routines: z.unknown().transform(sanitizeTrainingCycleRoutines).default([]),
     createdAt: safeOptionalNumber(),
     isActive: safeOptionalBoolean(),
 }).passthrough().catch(() => {

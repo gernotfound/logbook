@@ -109,12 +109,12 @@ export const SupplementIntakeSchema = z.object({
     time: safeNumber(0),
 }).passthrough();
 
-function sanitizeLoggedMeals(value: unknown): unknown[] {
+function sanitizeLoggedMeals(value: unknown): z.output<typeof LoggedMealItemSchema>[] {
     if (value === undefined) return [];
     if (!Array.isArray(value)) {
         return [];
     }
-    const result: unknown[] = [];
+    const result: z.output<typeof LoggedMealItemSchema>[] = [];
     const seen = new Set<string>();
     for (const raw of value) {
         const parsed = LoggedMealItemSchema.safeParse(raw);
@@ -127,12 +127,12 @@ function sanitizeLoggedMeals(value: unknown): unknown[] {
     return result;
 }
 
-function sanitizeSupplementIntakes(value: unknown): unknown[] {
+function sanitizeSupplementIntakes(value: unknown): z.output<typeof SupplementIntakeSchema>[] {
     if (value === undefined) return [];
     if (!Array.isArray(value)) {
         return [];
     }
-    const result: unknown[] = [];
+    const result: z.output<typeof SupplementIntakeSchema>[] = [];
     const seen = new Set<string>();
     for (const raw of value) {
         const parsed = SupplementIntakeSchema.safeParse(raw);
@@ -170,12 +170,12 @@ const BodyFatProvenanceSchema = z.object({
     }).passthrough().optional().catch(undefined),
 }).passthrough();
 
-function sanitizeCardioSessions(value: unknown): unknown[] {
+function sanitizeCardioSessions(value: unknown): z.output<typeof CardioSessionSchema>[] {
     if (value === undefined) return [];
     if (!Array.isArray(value)) {
         return [];
     }
-    const result: unknown[] = [];
+    const result: z.output<typeof CardioSessionSchema>[] = [];
     const seen = new Set<string>();
     for (const raw of value) {
         const parsed = CardioSessionSchema.safeParse(raw);
@@ -188,17 +188,9 @@ function sanitizeCardioSessions(value: unknown): unknown[] {
     return result;
 }
 
-export const NutritionDaySchema = z.preprocess((val: any) => {
-    if (val && typeof val === 'object') {
-        return {
-            ...val,
-            meals: sanitizeLoggedMeals(val.meals),
-            supplementsIntake: sanitizeSupplementIntakes(val.supplementsIntake),
-            cardioSessions: sanitizeCardioSessions(val.cardioSessions),
-        };
-    }
-    return val;
-}, z.object({
+// Nested identity filters already return individually validated entries.
+// Keep invalid siblings quarantined without an extra array/element parse.
+export const NutritionDaySchema = z.object({
     date: safeString(''),
     kcal: safeNumber(0),
     carbs: safeNumber(0),
@@ -217,8 +209,8 @@ export const NutritionDaySchema = z.preprocess((val: any) => {
     calves: safeOptionalNumber(),
     measurementTime: safeOptionalString(),
     isDayOn: safeOptionalBoolean(),
-    meals: z.array(LoggedMealItemSchema).optional().default([]),
-    supplementsIntake: z.array(SupplementIntakeSchema).optional().default([]),
+    meals: z.unknown().transform(sanitizeLoggedMeals).default([]),
+    supplementsIntake: z.unknown().transform(sanitizeSupplementIntakes).default([]),
     sleepHours: safeOptionalSleepTime(),
     sleepDeep: safeOptionalSleepTime(),
     sleepLight: safeOptionalSleepTime(),
@@ -227,13 +219,13 @@ export const NutritionDaySchema = z.preprocess((val: any) => {
     steps: z.number().finite().int().nonnegative().optional().catch(undefined),
     stepsSource: z.enum(['manual', 'imported']).optional().catch(undefined),
     stepsCapturedAt: z.number().finite().nonnegative().optional().catch(undefined),
-    cardioSessions: z.array(CardioSessionSchema).optional().default([]),
+    cardioSessions: z.unknown().transform(sanitizeCardioSessions).default([]),
 }).passthrough().transform((day) => {
     const { hips: _unsupportedHips, ...canonicalDay } = day;
     if (canonicalDay.steps !== undefined) return canonicalDay;
     const { stepsSource: _source, stepsCapturedAt: _capturedAt, ...withoutStepMetadata } = canonicalDay;
     return withoutStepMetadata;
-})).catch(() => {
+}).catch(() => {
     return { date: '', kcal: 0, carbs: 0, pro: 0, fat: 0, meals: [], supplementsIntake: [], cardioSessions: [] };
 }).default({ date: '', kcal: 0, carbs: 0, pro: 0, fat: 0, meals: [], supplementsIntake: [], cardioSessions: [] });
 

@@ -89,6 +89,8 @@ Per ogni DomainOperation costruisce una projection scope che contiene solo:
 
 Il diff semantico viene poi delegato a `diffDocuments()` sulle sole projection scope.
 
+**MUST (proiezione scoped):** il compiler utilizza `projectValidatedDomainDocuments()` soltanto su input `before` già verificato dal gateway dell'envelope locale (o seed iniziale normalizzato) e `after` prodotto dal reducer Zod. La funzione esegue comunque Zod sui campi root e sulle entità mensili coinvolte, perché un parsing ripetuto può espandere default annidati: non saltarlo interamente. Non usare questo percorso su dati da rete, import, cache non autenticata o snapshot non validati. `projectDocuments()` mantiene la validazione completa per gli altri chiamanti. I test devono confrontare le proiezioni scoped con la versione completamente validata e verificare che le operazioni causali prodotte siano identiche.
+
 **MUST:** proprietà non appartenenti allo scope dell'operazione non generano SemanticOperation.
 
 **MUST:** il compiler riusa merge policy, keyed identity, `$order`, tombstone e active-workout guard del protocollo corrente; non deve duplicarne una variante incompatibile.

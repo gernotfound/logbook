@@ -1,6 +1,6 @@
 import type { CachedGlobalCatalog, UserData, WorkoutSession } from '../../../types';
 import { getLocalDateString } from '../../utils/date';
-import { projectDocuments } from '../documentProjection';
+import { projectValidatedDomainDocuments } from '../documentProjection';
 import {
     diffDocuments,
     type SemanticOperation,
@@ -138,7 +138,7 @@ export function compileDomainOperations(
 ): SemanticOperation[] {
     const operations = normalizeDomainOperationBatch(batch);
     const scope = collectScope(before, after, operations);
-    const baseDocuments = projectDocuments(before, catalog, scope);
-    const desiredDocuments = projectDocuments(after, catalog, scope);
+    const baseDocuments = projectValidatedDomainDocuments(before, catalog, scope);
+    const desiredDocuments = projectValidatedDomainDocuments(after, catalog, scope);
     return diffDocuments(baseDocuments, desiredDocuments, actorId, seq, clock);
 }
