@@ -499,7 +499,7 @@ it('rejects unsafe Protocol 3 clock coordinates in otherwise fenced business wri
 
 it('permits public catalog reads but denies client writes', async () => {
     for (const db of [asModularFirestore(env.unauthenticatedContext().firestore()), asModularFirestore(env.authenticatedContext('a', { email_verified: true }).firestore())]) {
-        for (const path of ['global_catalog/manifest', 'global_catalog/versioned/items/private']) {
+        for (const path of ['global_catalog/manifest', 'global_catalog/exercises_v1']) {
             const ref = doc(db, path);
             await assertSucceeds(getDoc(ref));
             await assertFails(setDoc(ref, { version: 'tampered' }));
