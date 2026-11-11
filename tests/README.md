@@ -35,7 +35,7 @@ La radice di `tests/` contiene soltanto fixture e setup condivisi: **nessun file
 - `training/`: `cycles/`, `sessions/`, `routines/`, `exercises/`, `history/` e `shared/`.
 - `ui/`: `navigation/`, `home/`, `data/`, `settings/`, `visual/` e `lifecycle/`.
 - `storage/`: `archive/`, `drafts/`, `recovery/`, `sync/` e `state/`.
-- `system/`: `requirements/`, `enhancements/`, `integration/` e `regressions/`.
+- `system/`: `requirements/`, `enhancements/`, `integration/` e `regressions/`. Riservare questa area agli scenari che attraversano davvero più domini; i casi autonomi devono stare vicino alla funzionalità verificata.
 - `isolated/` e `stress/` conservano i runner specializzati, ma distinguono anche i domini funzionali nelle sottocartelle. I test `.tsx` isolati continuano a usare jsdom; le suite `.ts` Node mantengono il proprio setup.
 - `e2e/`: `account/`, `health/`, `storage/`, `pwa/` e `ui/`. `fixtures.ts`, `pwa-upgrade-fixtures.ts` e `storage-write-barrier.ts` restano condivisi nella radice di `e2e/`.
 
@@ -46,5 +46,7 @@ La radice di `tests/` contiene soltanto fixture e setup condivisi: **nessun file
 - Spostare gruppi funzionali, aggiornando **tutti** gli import relativi, i mock e i percorsi citati in script, configurazioni e documentazione.
 - Preservare i nomi `challenger_*`, `*adversarial*` e `*stress*` quando determinano il runner stress. Non spostare suite Node nel runner jsdom o viceversa.
 - Conservare le fixture condivise (`setup.tsx`, `secureVaultFixture.ts` e altre) in un punto comune, senza duplicarle.
+- Per suite lunghe con fixture e stato critici condivisi, usare gruppi `describe` per ciclo di vita anziché duplicare setup e mock in più file senza una necessità dimostrata.
+- Il runner generale è `npm run test`. I vecchi alias `test:unit`/`test:integration` sono stati rimossi perché dividevano per percorso (`src/` e `tests/`), non per tipo reale di test.
 - `test:discovery` deve dimostrare che ogni test è assegnato una sola volta; `test:coverage:critical` deve conservare la selezione critica indipendentemente dalla profondità della cartella.
 - Dopo ogni gruppo, verificare lint, TypeScript, test normativi, suite dedicate e CI canonica. Non ridurre asserzioni, coverage o controlli per agevolare il riordino.
