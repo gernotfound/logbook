@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import type { CachedGlobalCatalog, UserData } from '../../src/types';
-import { UserDataSchema } from '../../src/lib/schema';
+import { DomainParsers, UserDataSchema } from '../../src/lib/schema';
+import { hasUserData } from '../../src/lib/merge';
 import { assertCloudBusinessPreserved, CloudDataIntegrityError } from '../../src/lib/sync/cloudBusinessIntegrity';
 import { projectDocuments, projectValidatedDomainDocuments, type DocumentProjectionScope } from '../../src/lib/sync/documentProjection';
-import { applyDomainOperations, compileDomainOperations } from '../../src/lib/sync/domainOperations';
+import { applyDomainOperations, compileDomainOperations, type DomainOperation } from '../../src/lib/sync/domainOperations';
+import { diffDocuments } from '../../src/lib/sync/semanticProjection';
 
 const catalog: CachedGlobalCatalog = {
     manifest: {
@@ -137,4 +139,156 @@ describe('Zod single-pass parsing with preserved business invariants', () => {
         expect(compiled.some(operation => operation.docPath === '' && operation.path[0] === 'profile')).toBe(true);
         expect(compiled.some(operation => operation.docPath === 'nutrition_months/2026-11')).toBe(true);
     });
+    it('validates each history session once while preserving normalized nested sets, identity and source', () => {
+        const raw = [{
+            id: '  workout-1  ',
+            date: '2026-11-11',
+            routineName: 42,
+            globalStartTime: '1794000000000',
+            endTime: 1794000600000,
+            exercises: [{
+                id: 'session-ex-1',
+                exId: 'catalog-ex-1',
+                sessionNote: null,
+                sets: [{
+                    id: 'set-1',
+                    kg: 80,
+                    reps: 8,
+                    rir: 2,
+                    segments: [
+                        { id: 'segment-1', kg: 60, reps: 6, technique: 'dropset' },
+                        { id: 'segment-1', kg: 40, reps: 6, technique: 'dropset' },
+                        { id: 'bad/id', kg: 30, reps: 8 },
+                    ],
+                    dropsets: [{ kg: 20, reps: 5 }],
+                }],
+            }],
+        }, {
+            id: 'workout-1', date: '2026-11-11', exercises: [],
+        }, { id: '', date: '2026-11-11' }, null, 'corrupted'];
+        const original = structuredClone(raw);
+        const history = DomainParsers.parseHistory(raw);
+        const state = UserDataSchema.parse({ history });
+
+        expect(history).toHaveLength(1);
+        expect(history[0].id).toBe('workout-1');
+        expect(history[0].routineName).toBe('42');
+        expect(history[0].globalStartTime).toBe(1794000000000);
+        expect(history[0]).not.toHaveProperty('endTime');
+        expect(history[0].exercises[0].sessionNote).toBe('');
+        expect(history[0].exercises[0].sets[0].kg).toBe('80');
+        expect(history[0].exercises[0].sets[0].rir).toBe(2);
+        expect(history[0].exercises[0].sets[0]).not.toHaveProperty('dropsets');
+        expect(history[0].exercises[0].sets[0].segments).toEqual([
+            { id: 'segment-1', kg: '60', reps: '6', technique: 'dropset' },
+        ]);
+        expect(state.history).toEqual(history);
+        expect(UserDataSchema.parse(state).history).toEqual(history);
+        expect(raw).toEqual(original);
+
+        const projected = projectDocuments(state as unknown as UserData, catalog);
+        expect(Object.keys(projected.get('history_months/2026-11') ?? {})).toEqual(['workout-1']);
+        expect(() => assertCloudBusinessPreserved('history_months/2026-11', {
+            'workout-1': raw[0],
+        }, {
+            'workout-1': history[0],
+        })).toThrow(CloudDataIntegrityError);
+    });
+
+    it('matches full-Zod scoped projections and causal operations across domain mutation families', () => {
+        const before = UserDataSchema.parse({
+            profile: { height: '170' },
+            library: [{ id: 'ex-1', name: 'Squat', setsCount: 3, sets: [] }],
+            routines: [
+                { id: 'r-1', name: 'Upper', exercises: [{ exId: 'ex-1', setsCount: 3 }] },
+                { id: 'r-2', name: 'Lower', exercises: [] },
+            ],
+            customFoods: [{ id: 'food-1', name: 'Riso', kcal: 100, carbs: 20, pro: 2, fat: 1 }],
+            history: [{ id: 'historical-1', date: '2026-11-11', exercises: [] }],
+            nutrition: { '2026-11-11': { date: '2026-11-11', kcal: 0, carbs: 0, pro: 0, fat: 0 } },
+            activeWorkout: { id: 'active-1', date: '2026-11-11', exercises: [] },
+            catalogOverrides: { exercises: {}, foods: {}, hiddenExerciseIds: [], hiddenFoodIds: [] },
+        }) as unknown as UserData;
+        const root = (...keys: string[]): DocumentProjectionScope => ({
+            rootKeys: new Set(keys), monthly: new Map(),
+        });
+        const scopedMonth = (path: string, id: string): DocumentProjectionScope => ({
+            rootKeys: new Set(), monthly: new Map([[path, new Set([id])]]),
+        });
+        const cases: Array<{
+            label: string;
+            operation: DomainOperation | DomainOperation[];
+            scope: DocumentProjectionScope;
+        }> = [
+            { label: 'profile', operation: { type: 'profile.patch', patch: { height: '175' } }, scope: root('profile') },
+            { label: 'routine order', operation: { type: 'routine.reorder', ids: ['r-2', 'r-1'] }, scope: root('routines') },
+            { label: 'catalog visibility', operation: { type: 'catalog.exercise.visibility', id: 'ex-1', hidden: true }, scope: root('catalogOverrides') },
+            { label: 'catalog custom food', operation: {
+                type: 'food.upsert', food: { id: 'food-2', name: 'Fagioli', kcal: 70, carbs: 12, pro: 4, fat: 1 },
+            }, scope: root('customFoods', 'catalogOverrides') },
+            { label: 'nutrition planning defaults', operation: {
+                type: 'nutrition-planning.replace', value: { weight: 80 }, origin: 'user-edited',
+            }, scope: root('nutritionPlanning', 'nutritionPlanningOrigin') },
+            { label: 'active workout', operation: { type: 'active-workout.set', workout: null }, scope: root('activeWorkout') },
+            { label: 'nutrition day', operation: {
+                type: 'nutrition-day.patch', date: '2026-11-11', patch: { weight: 80 },
+            }, scope: scopedMonth('nutrition_months/2026-11', '2026-11-11') },
+            { label: 'history move', operation: {
+                type: 'history.upsert', workout: { id: 'historical-1', date: '2026-12-01', exercises: [] },
+            }, scope: {
+                rootKeys: new Set(),
+                monthly: new Map([
+                    ['history_months/2026-11', new Set(['historical-1'])],
+                    ['history_months/2026-12', new Set(['historical-1'])],
+                ]),
+            } },
+            { label: 'history delete', operation: { type: 'history.delete', id: 'historical-1' },
+                scope: scopedMonth('history_months/2026-11', 'historical-1') },
+            { label: 'workout completion', operation: {
+                type: 'workout.complete',
+                workout: { id: 'active-1', date: '2026-11-11', exercises: [] },
+                expectedActiveWorkoutId: 'active-1',
+                activePains: ['quads'],
+            }, scope: {
+                rootKeys: new Set(['activeWorkout', 'activePains']),
+                monthly: new Map([['history_months/2026-11', new Set(['active-1'])]]),
+            } },
+        ];
+
+        for (const { label, operation, scope } of cases) {
+            const after = applyDomainOperations(before, operation);
+            for (const state of [before, after]) {
+                expect([...projectValidatedDomainDocuments(state, catalog, scope)], label)
+                    .toEqual([...projectDocuments(state, catalog, scope)]);
+            }
+            const actor = 'actor-zod-parity';
+            const clock = { [actor]: 1 };
+            const expected = diffDocuments(
+                projectDocuments(before, catalog, scope),
+                projectDocuments(after, catalog, scope),
+                actor, 1, clock,
+            );
+            const actual = compileDomainOperations(before, after, operation, catalog, actor, 1, clock);
+            expect(actual, label).toEqual(expected);
+        }
+    });
+
+    it('keeps a missing or empty nutrition plan stable through repeated parsing and guest-data detection', () => {
+        const empty = UserDataSchema.parse({}) as unknown as UserData;
+        const reparsed = UserDataSchema.parse(empty) as unknown as UserData;
+        expect(reparsed.nutritionPlanning).toEqual(empty.nutritionPlanning);
+        expect(hasUserData(empty)).toBe(false);
+        expect(hasUserData(reparsed)).toBe(false);
+
+        const partial = UserDataSchema.parse({
+            nutritionPlanning: { weight: '78.5', notes: 'retain' },
+            pendingConflicts: { nutritionPlanning: { onDaysCount: 3 } },
+        }) as unknown as UserData;
+        expect(partial.nutritionPlanning).toEqual({ weight: 78.5, notes: 'retain' });
+        expect(partial.pendingConflicts?.nutritionPlanning).toEqual({ onDaysCount: 3 });
+        expect(UserDataSchema.parse(partial).nutritionPlanning).toEqual(partial.nutritionPlanning);
+        expect(UserDataSchema.parse(partial).pendingConflicts).toEqual(partial.pendingConflicts);
+        expect(hasUserData(partial)).toBe(true);
+    });
+
 });
