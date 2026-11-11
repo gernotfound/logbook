@@ -36,6 +36,83 @@ const compile = (before: UserData, operation: DomainOperation | DomainOperation[
     return { after, operations, replay };
 };
 
+
+function deepFreeze<T>(value: T): T {
+    if (value !== null && typeof value === 'object' && !Object.isFrozen(value)) {
+        for (const child of Object.values(value)) deepFreeze(child);
+        Object.freeze(value);
+    }
+    return value;
+}
+
+describe('Domain reducer input isolation across operations', () => {
+    it('does not mutate frozen nested source data for unrelated or compound writes', () => {
+        const session: WorkoutSession = {
+            id: 'w-1', date: '2026-09-15', exercises: [{
+                id: 'session-ex-1', exId: 'e-1', sessionNote: '', sets: [],
+            }],
+        };
+        const before = deepFreeze(base({
+            profile: { height: '170' },
+            nutrition: {
+                '2026-09-15': {
+                    date: '2026-09-15', kcal: 0, carbs: 0, pro: 0, fat: 0, meals: [], supplementsIntake: [],
+                    steps: 100,
+                },
+            },
+            history: [session],
+            library: [{ id: 'e-1', name: 'Esercizio', setsCount: 3, sets: [] }],
+            routines: [{ id: 'r-1', name: 'Routine', exercises: [{ exId: 'e-1', setsCount: 3 }] }],
+            catalogOverrides: { exercises: {}, foods: {} },
+        }));
+        const snapshot = structuredClone(before);
+        const cases: DomainOperation[] = [
+            { type: 'profile.patch', patch: { height: '171' } },
+            { type: 'nutrition-day.patch', date: '2026-09-15', patch: { weight: '80' } },
+            { type: 'nutrition-day.delete', date: '2026-09-15' },
+            { type: 'activity-steps.set', date: '2026-09-15', steps: 4567 },
+            { type: 'activity-steps.clear', date: '2026-09-15' },
+            { type: 'nutrition-meal.upsert', date: '2026-09-15', meal: {
+                id: 'meal-1', name: 'Pasto', meal: 'Pranzo', baseQty: 100, quantity: 100,
+                kcal: 120, carbs: 12, pro: 8, fat: 4,
+            } },
+            { type: 'routine-exercise.upsert', routineId: 'r-1', exercise: { exId: 'e-1', setsCount: 4 } },
+            { type: 'routine-exercise.reorder', routineId: 'r-1', exIds: ['e-1'] },
+            { type: 'exercise.delete', id: 'e-1' },
+            { type: 'history.upsert', workout: { ...session, date: '2026-10-15' } },
+            { type: 'history.delete', id: 'w-1' },
+            { type: 'catalog.exercise.patch', id: 'e-1', patch: { name: 'Mio nome' } },
+            { type: 'catalog.exercise.visibility', id: 'e-1', hidden: true },
+            { type: 'active-workout.set', workout: session },
+            { type: 'workout.complete', workout: session, expectedActiveWorkoutId: 'w-1', activePains: [] },
+        ];
+        for (const operation of cases) {
+            const result = applyDomainOperations(before, operation);
+            expect(result).not.toBe(before);
+            expect(result).toEqual(UserDataSchema.parse(result));
+            expect(result.history).not.toBe(before.history);
+            expect(result.nutrition).not.toBe(before.nutrition);
+            expect(before).toEqual(snapshot);
+        }
+    });
+
+    it('does not leak partial edits from a failed frozen multi-operation batch', () => {
+        const before = deepFreeze(base({
+            nutrition: { '2026-09-15': {
+                date: '2026-09-15', kcal: 0, carbs: 0, pro: 0, fat: 0, meals: [], supplementsIntake: [],
+            } },
+            history: [{ id: 'w-original', date: '2026-09-15', exercises: [] }],
+        }));
+        const snapshot = structuredClone(before);
+        expect(() => applyDomainOperations(before, [
+            { type: 'activity-steps.set', date: '2026-09-15', steps: 3000 },
+            { type: 'history.upsert', workout: { id: 'w-new', date: '2026-10-15', exercises: [] } },
+            { type: 'activity-steps.set', date: '2026-09-15', steps: -1 },
+        ])).toThrow('Passi: valore non valido');
+        expect(before).toEqual(snapshot);
+    });
+});
+
 describe('M8 Domain Operations V4', () => {
     it('rejects prototype-sensitive patch keys instead of changing object inheritance', () => {
         const before = base({ profile: { height: '170' } });
@@ -435,6 +512,45 @@ describe('M8 Domain Operations V4', () => {
     });
 
 
+});
+
+
+describe('Batched history lookup and semantic projection', () => {
+    it('preserves moved, deleted and untouched workouts across monthly documents', () => {
+        const history: WorkoutSession[] = Array.from({ length: 72 }, (_, index) => ({
+            id: `history-${index}`,
+            date: index % 2 === 0 ? '2026-08-15' : '2026-07-15',
+            exercises: [],
+        }));
+        const moved = history.slice(0, 24).map(workout => ({ ...workout, date: '2026-09-15' }));
+        const deleted = new Set(history.slice(24, 42).map(workout => String(workout.id)));
+        const before = base({ history });
+        const after = base({ history: [
+            ...moved,
+            ...history.slice(24).filter(workout => !deleted.has(String(workout.id))),
+        ] });
+        const batch: DomainOperation[] = [
+            ...moved.map(workout => ({ type: 'history.upsert' as const, workout })),
+            ...[...deleted].map(id => ({ type: 'history.delete' as const, id })),
+        ];
+        const operations = compileDomainOperations(before, after, batch, catalog, 'actor-a', 1, { 'actor-a': 1 });
+        const replay = applySemanticOperations(projectDocuments(before, catalog), operations).documents;
+        const affected = new Set([...moved.map(workout => String(workout.id)), ...deleted]);
+        expect(operations.length).toBeGreaterThan(0);
+        expect(operations.every(operation => operation.docPath.startsWith('history_months/')
+            && affected.has(String(operation.path[0])))).toBe(true);
+        for (const workout of moved) {
+            const previousMonth = Number(String(workout.id).split('-')[1]) % 2 === 0 ? '2026-08' : '2026-07';
+            expect(replay.get(`history_months/${previousMonth}`)?.[String(workout.id)]).toBeUndefined();
+            expect(replay.get('history_months/2026-09')?.[String(workout.id)]).toMatchObject({ date: '2026-09-15' });
+        }
+        for (const id of deleted) {
+            const previousMonth = Number(id.split('-')[1]) % 2 === 0 ? '2026-08' : '2026-07';
+            expect(replay.get(`history_months/${previousMonth}`)?.[id]).toBeUndefined();
+        }
+        expect(replay.get('history_months/2026-08')?.['history-42']).toMatchObject({ date: '2026-08-15' });
+        expect(replay.get('history_months/2026-07')?.['history-43']).toMatchObject({ date: '2026-07-15' });
+    });
 });
 
 describe('Domain Operations projection scope regressions', () => {
