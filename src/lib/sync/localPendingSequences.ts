@@ -25,7 +25,7 @@ export async function ensureBoundedPendingSequences(owner: string, expectedActor
         const current = validateLocalEnvelope(raw, owner);
         if (!current || current.actorId !== expectedActorId) {
             saved = current;
-            return current;
+            return raw;
         }
 
         const bounded = resequencePendingOperationsForBoundedTransactions(
@@ -36,7 +36,7 @@ export async function ensureBoundedPendingSequences(owner: string, expectedActor
         );
         if (!bounded.changed) {
             saved = current;
-            return current;
+            return raw;
         }
 
         saved = {
