@@ -48,13 +48,20 @@ export const PartialMacroTargetSchema = z.object({
     fat: optionalNonNegativeNumber(),
 }).passthrough().optional().catch(undefined);
 
+// Optional macro blocks must stay absent when missing. MacroRatioSchema and
+// MacroBoostSchema have defaults for *direct* parsing, but their defaults inside
+// optional fields caused an empty plan to grow zero-valued blocks on reparse.
+// That changed hasUserData() for a guest with no entered nutrition plan.
+const optionalMacroRatio = z.union([z.undefined(), MacroRatioSchema]).optional().catch(undefined);
+const optionalMacroBoost = z.union([z.undefined(), MacroBoostSchema]).optional().catch(undefined);
+
 export const NutritionPlanningSchema = z.object({
     weight: optionalPositiveNumber(),
     onDaysCount: safeOptionalNumber(),
-    avgMacros: MacroRatioSchema.optional().catch(undefined),
-    onBoost: MacroBoostSchema.optional().catch(undefined),
-    onMacros: MacroRatioSchema.optional().catch(undefined),
-    offMacros: MacroRatioSchema.optional().catch(undefined),
+    avgMacros: optionalMacroRatio,
+    onBoost: optionalMacroBoost,
+    onMacros: optionalMacroRatio,
+    offMacros: optionalMacroRatio,
     notes: safeOptionalString(),
     normocalorica: PartialMacroTargetSchema.optional().catch(undefined),
 }).passthrough().transform(({

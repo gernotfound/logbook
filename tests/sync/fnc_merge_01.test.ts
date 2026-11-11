@@ -152,8 +152,10 @@ describe('PR 3: FNC-MERGE-01 Nutrition Planning Merge Policy', () => {
         expect(merged.pendingConflicts?.nutritionPlanning?.avgMacros).toEqual(guestPlan.avgMacros);
         expect(merged.pendingConflicts?.nutritionPlanning?.onBoost).toEqual(guestPlan.onBoost);
         expect(merged.pendingConflicts?.nutritionPlanning?.normocalorica).toEqual(guestPlan.normocalorica);
-        // The parser may add the current schema's normalized nested macro defaults.
-        expect(merged.pendingConflicts?.nutritionPlanning?.offMacros).toBeDefined();
+        // An absent block must stay absent: Zod must not manufacture
+        // a zero-valued conflict merely by parsing the plan again.
+        expect(merged.pendingConflicts?.nutritionPlanning?.offMacros).toBeUndefined();
+        expect(merged.pendingConflicts?.nutritionPlanning?.onMacros).toBeUndefined();
     });
 
     // 7. Guest user-edited + cloud differente

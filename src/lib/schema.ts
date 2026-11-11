@@ -22,13 +22,13 @@ const normalizePersistedWorkoutId = (record: unknown): string | null => {
     return normalizeBusinessId((record as { id?: unknown }).id);
 };
 
-const sanitizeWorkoutHistory = (data: unknown): unknown[] => {
+const sanitizeWorkoutHistory = (data: unknown): Array<z.output<typeof WorkoutSessionSchema> & { id: string }> => {
     if (data === undefined) return [];
     if (!Array.isArray(data)) {
         return [];
     }
 
-    const result: unknown[] = [];
+    const result: Array<z.output<typeof WorkoutSessionSchema> & { id: string }> = [];
     const seen = new Set<string>();
     for (const raw of data) {
         const id = normalizePersistedWorkoutId(raw);
@@ -43,10 +43,9 @@ const sanitizeWorkoutHistory = (data: unknown): unknown[] => {
     return result;
 };
 
-const WorkoutHistorySchema = z.preprocess(
-    sanitizeWorkoutHistory,
-    z.array(WorkoutSessionSchema),
-).default([]);
+// Each valid session was already parsed by sanitizeWorkoutHistory. Parsing
+// the resulting array again also repeats all nested sets and segments.
+const WorkoutHistorySchema = z.unknown().transform(sanitizeWorkoutHistory).default([]);
 
 const sanitizePersistedActiveWorkout = (data: unknown): unknown => {
     if (data === undefined || data === null) return null;
