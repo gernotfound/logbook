@@ -28,6 +28,12 @@ export function compareAssignments(expectedItems, assignments, label) {
   return failures;
 }
 
+// Keep shared setup at tests/ root, but require executable tests to have a domain owner.
+export function ungroupedTestFiles(files) {
+  return files.filter(file => file.startsWith('tests/')
+    && !file.slice('tests/'.length).includes('/') && testFile.test(file));
+}
+
 function execute(label, command, args, lifecycle) {
   const child = spawnSync(command, args, {
     cwd: root,
@@ -105,6 +111,8 @@ function verify() {
     runners['m8-' + (index + 1)] = vitestList('m8-' + (index + 1), 'test:m8', m8.config, m8.files);
   }
   const failures = compareAssignments(nodeTests, runners, 'Vitest/Node');
+  const ungrouped = ungroupedTestFiles(nodeTests);
+  if (ungrouped.length) failures.push('Tests must be grouped under tests/<area>/: ' + ungrouped.join(', '));
   const projectListings = {};
   for (const project of ['chromium', 'mobile-safari']) {
     const full = playwrightList(project);

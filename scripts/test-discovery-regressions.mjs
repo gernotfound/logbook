@@ -3,8 +3,16 @@ import { test } from 'node:test';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { loadConfigFromFile } from 'vite';
-import { compareAssignments, normalizePlaywrightLocation } from './check-test-discovery.mjs';
+import { compareAssignments, normalizePlaywrightLocation, ungroupedTestFiles } from './check-test-discovery.mjs';
 import { isCriticalTest } from './critical-test-selection.mjs';
+
+await test('rejects test files at tests/ root without rejecting shared fixtures or nested suites', () => {
+  assert.deepEqual(ungroupedTestFiles([
+    'tests/root.test.ts', 'tests/another.spec.mjs', 'tests/feature/valid.test.tsx',
+    'tests/isolated/worker.test.ts', 'tests/setup.tsx', 'tests/secureVaultFixture.ts',
+    'src/lib/root.test.ts',
+  ]), ['tests/root.test.ts', 'tests/another.spec.mjs']);
+});
 
 await test('accepts complete one-to-one discovery', () => {
   assert.deepEqual(compareAssignments(['a.test.ts', 'b.test.ts'], { general: ['a.test.ts'], isolated: ['b.test.ts'] }, 'Vitest'), []);
