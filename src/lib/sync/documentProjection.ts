@@ -19,7 +19,18 @@ export function rootDocument(data: UserData): DocumentData {
 }
 
 export function projectDocuments(input: UserData, catalog: CachedGlobalCatalog, scope?: DocumentProjectionScope): Map<string, DocumentData> {
-    const data = UserDataSchema.parse(input) as unknown as UserData;
+    return projectUserDocuments(UserDataSchema.parse(input) as unknown as UserData, catalog, scope);
+}
+
+// Only the Domain Operations compiler may skip redundant whole-archive parsing:
+// its before-state has passed the local envelope gateway, and its after-state
+// comes from the Zod-validating reducer. Untrusted cloud/backup/snapshot callers
+// must continue through projectDocuments() and the independent lossless guards.
+export function projectValidatedDomainDocuments(data: UserData, catalog: CachedGlobalCatalog, scope: DocumentProjectionScope): Map<string, DocumentData> {
+    return projectUserDocuments(data, catalog, scope);
+}
+
+function projectUserDocuments(data: UserData, catalog: CachedGlobalCatalog, scope?: DocumentProjectionScope): Map<string, DocumentData> {
     const documents = new Map<string, DocumentData>();
     if (!scope || scope.rootKeys.size) {
         let projected = data;
