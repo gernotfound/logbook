@@ -126,7 +126,18 @@ describe('R4: Tab Zod Schema & LocalStorage Fallback Resilience (ARCH-05)', () =
             window.localStorage.setItem(ownerUiPreferenceKey('user:other-account', LOCAL_STORAGE_ACTIVE_TAB), JSON.stringify('training'));
             window.localStorage.setItem(ownerUiPreferenceKey('user:other-account', LOCAL_STORAGE_TRAINING_TAB), JSON.stringify('exercises'));
 
-            renderWithProviders(<App />);
+            renderWithProviders(<App />, {
+                userData: {
+                    ...defaultMockUserData,
+                    legalConsent: {
+                        hasAcceptedTerms: true,
+                        hasAcceptedHealthData: true,
+                        acceptedAt: '2026-09-30T00:00:00.000Z',
+                        privacyVersion: LEGAL_VERSIONS.privacy,
+                        termsVersion: LEGAL_VERSIONS.terms,
+                    },
+                },
+            });
             const home = await screen.findByRole('button', { name: /^home$/i });
             expect(home.classList.contains('active')).toBe(true);
             fireEvent.click(screen.getByRole('button', { name: /^allenamento$/i }));
