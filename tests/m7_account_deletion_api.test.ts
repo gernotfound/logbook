@@ -178,6 +178,26 @@ describe('M7 native account deletion HTTP boundary', () => {
     }
   });
 
+  it('rejects malformed deletion status selectors before consuming App Check or reading jobs', async () => {
+    store.validateUid.mockImplementationOnce(() => { throw new Error('Identificativo account non valido.'); });
+    const invalidUid = await GET(request('GET'));
+    expect(invalidUid.status).toBe(400);
+    expect(auth.verifyStatusAppCheck).not.toHaveBeenCalled();
+
+    const invalidReceipt = await GET(new Request('https://example.test/api/account-deletion', {
+      method: 'GET',
+      headers: {
+        origin: 'https://thelogbook.web.app',
+        'x-account-deletion-uid': 'u',
+        'x-account-deletion-receipt': 'invalid',
+      },
+    }));
+    expect(invalidReceipt.status).toBe(400);
+    expect(auth.verifyStatusAppCheck).not.toHaveBeenCalled();
+    expect(store.readAuthorizedDeletionJob).not.toHaveBeenCalled();
+    expect(runner.progressAndReadStatus).not.toHaveBeenCalled();
+  });
+
   it('returns 400 only for malformed client input', async () => {
     const response = await POST(request('POST', { receiptToken: 'bad' }));
     expect(response.status).toBe(400);

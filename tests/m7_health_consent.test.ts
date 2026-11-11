@@ -256,6 +256,20 @@ describe('trusted health consent boundary', () => {
 
 
   it.each([
+    ['unknown action', { action: 'missing' }],
+    ['invalid initial acceptance', { action: 'accept-initial', expectedRevision: 0, acceptance: null }],
+    ['invalid initial revision', { action: 'accept-initial', expectedRevision: 1, acceptance }],
+    ['invalid withdrawal revision', { action: 'withdraw', expectedRevision: -1 }],
+    ['invalid reacceptance', { action: 'reaccept', expectedRevision: 1, acceptance: { ...acceptance, termsVersion: 'obsolete' } }],
+  ])('rejects %s before App Check/Auth or Firestore work', async (_case, body) => {
+    const response = await POST(req('POST', body));
+    expect(response.status).toBe(400);
+    expect(auth.verifyHealthConsentRequester).not.toHaveBeenCalled();
+    expect(storage.documents.size).toBe(0);
+    expect(erasureWorker.process).not.toHaveBeenCalled();
+  });
+
+  it.each([
     ['declared', new Request('https://backend.test/api/health-consent', {
       method: 'POST',
       headers: { origin: 'https://thelogbook.web.app', 'content-length': '9000' },

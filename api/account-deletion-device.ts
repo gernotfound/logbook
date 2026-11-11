@@ -5,6 +5,7 @@ import {
   DeletionRecoveryConflictError,
   registerDeletionRecoveryDevice,
   verifyDeletionRecoveryDevice,
+  hasWellFormedRecoveryDeviceProof,
 } from '../server/accountDeletion/deviceRecovery.js';
 import { accountDeletionCorsHeaders, requireAccountDeletionOrigin } from '../server/accountDeletion/cors.js';
 import {
@@ -61,10 +62,13 @@ export async function GET(request: Request): Promise<Response> {
   const origin = request.headers.get('origin');
   try {
     requireAccountDeletionOrigin(request);
-    await verifyStatusAppCheck(request);
     const uid = request.headers.get('x-account-deletion-uid');
     const token = request.headers.get('x-account-deletion-device');
-    if (!uid || !await verifyDeletionRecoveryDevice(uid, token)) {
+    if (!hasWellFormedRecoveryDeviceProof(uid, token)) {
+      return json({ error: 'Recovery non autorizzato.' }, 404, origin);
+    }
+    await verifyStatusAppCheck(request);
+    if (!await verifyDeletionRecoveryDevice(uid, token)) {
       return json({ error: 'Recovery non autorizzato.' }, 404, origin);
     }
     const status = await readDeletionStatusForUid(uid);

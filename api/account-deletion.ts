@@ -100,9 +100,11 @@ export async function GET(request: Request): Promise<Response> {
   const origin = request.headers.get('origin');
   try {
     requireAccountDeletionOrigin(request);
-    await verifyStatusAppCheck(request);
+    // Malformed recovery selectors reveal no account state; reject them before
+    // consuming a one-time App Check token or reading trusted data.
     const uid = validatedInput(() => validateUid(request.headers.get('x-account-deletion-uid')));
     const receiptToken = validatedInput(() => validateReceipt(request.headers.get('x-account-deletion-receipt')));
+    await verifyStatusAppCheck(request);
 
     const authorized = await readAuthorizedDeletionJob(uid, receiptToken);
     if (!authorized) return json({ error: 'Cancellazione non trovata.' }, { status: 404 }, origin);

@@ -355,6 +355,24 @@ describe('M7 account deletion recovery device registry', () => {
     expect(store.readDeletionStatusForUid).toHaveBeenCalledTimes(2);
   });
 
+  it('rejects malformed recovery headers before App Check and Firestore reads', async () => {
+    for (const overrides of [
+      { 'x-account-deletion-device': 'invalid' },
+      { 'x-account-deletion-device': token('A'), 'x-account-deletion-uid': 'invalid/uid' },
+      { 'x-account-deletion-device': token('A'), 'x-account-deletion-uid': '' },
+    ]) {
+      const headers = new Headers(request('GET').headers);
+      for (const [name, value] of Object.entries(overrides)) headers.set(name, value);
+      const response = await GET(new Request('https://backend.example/api/account-deletion-device', {
+        headers,
+      }));
+      expect(response.status).toBe(404);
+      expect(response.headers.get('cache-control')).toBe('no-store');
+    }
+    expect(auth.verifyStatusAppCheck).not.toHaveBeenCalled();
+    expect(store.readDeletionStatusForUid).not.toHaveBeenCalled();
+  });
+
   it('returns 404 for an invalid recovery credential without exposing account state', async () => {
     const response = await GET(request('GET', { deviceToken: token('B') }));
     expect(response.status).toBe(404);
