@@ -319,7 +319,7 @@ await test('rejects renaming a mandatory test to a different basename', t => {
 
 function configuredLeafFixture(t) {
   const ctx = fixture(t);
-  save(ctx.root, 'tests/isolated/m8_domain_commit.test.ts', "import { it, expect } from 'vitest';\\nit('domain commit', () => expect(1).toBe(1));\\n");
+  save(ctx.root, 'tests/isolated/m8_domain_commit.test.ts', "import { it, expect } from 'vitest';\nit('domain commit', () => expect(1).toBe(1));\n");
   const pkg = read(ctx.root, 'package.json');
   pkg.scripts['test:m8'] = 'vitest run --config vitest.isolated.config.ts tests/isolated/m8_domain_commit.test.ts';
   pkg.scripts['verify:m8'] += ' && npm run test:m8';
