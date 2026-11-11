@@ -87,7 +87,7 @@ if (packageJson.scripts?.test !== 'vitest run') {
 if (packageJson.scripts?.['test:isolated'] !== 'vitest run --config vitest.isolated.config.ts') {
   failures.push('test:isolated canonical leaf must remain unmodified');
 }
-if (!isolatedVitest.includes("exclude: process.env.npm_lifecycle_event === 'test:isolated' ? ['tests/isolated/m8_domain_commit.test.ts'] : []")) {
+if (!isolatedVitest.includes("exclude: process.env.npm_lifecycle_event === 'test:isolated' ? ['tests/isolated/domain/m8_domain_commit.test.ts'] : []")) {
   failures.push('vitest isolated: m8_domain_commit must run only in dedicated M8 gate');
 }
 for (const file of dedicatedUnitFiles.filter(path => path.startsWith('tests/account/deletion/m7_account_deletion_'))) {

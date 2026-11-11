@@ -17,7 +17,7 @@ export default defineConfig({
     environment: 'node',
     setupFiles: ['./tests/isolated/browserStorageSetup.ts'],
     include: ['tests/isolated/**/*.test.ts'],
-    exclude: process.env.npm_lifecycle_event === 'test:isolated' ? ['tests/isolated/m8_domain_commit.test.ts'] : [],
+    exclude: process.env.npm_lifecycle_event === 'test:isolated' ? ['tests/isolated/domain/m8_domain_commit.test.ts'] : [],
     maxWorkers: 2,
   },
 });

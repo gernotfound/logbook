@@ -52,7 +52,7 @@
     "test:m7": "vitest run tests/account/deletion/m7_account_deletion_job_store.test.ts tests/account/deletion/m7_account_deletion_fairness.test.ts tests/account/deletion/m7_account_deletion_retention.test.ts tests/account/deletion/m7_account_deletion_runner.test.ts tests/account/deletion/m7_account_deletion_api.test.ts tests/account/deletion/m7_account_deletion_http_auth.test.ts tests/account/deletion/m7_account_deletion_device.test.ts tests/account/deletion/m7_account_deletion_cron.test.ts",
     "test:pwa:m7": "node scripts/check-m7-native-vercel.mjs && node --test scripts/vercel-ignore-build-regressions.mjs",
     "test:smoke:m7": "node --test scripts/check-m7-smoke-test-regressions.mjs && node scripts/check-m7-smoke-test.mjs",
-    "test:m8": "vitest run tests/domain/m8_domain_operations.test.ts && vitest run --config vitest.isolated.config.ts tests/isolated/m8_domain_commit.test.ts",
+    "test:m8": "vitest run tests/domain/m8_domain_operations.test.ts && vitest run --config vitest.isolated.config.ts tests/isolated/domain/m8_domain_commit.test.ts",
     "test:domain-boundary:m8": "node scripts/check-m8-domain-boundary.mjs",
     "verify:m0": "npm run lint && npm run test && npm run test:isolated && npm run test:stress && npm run test:rules && npm run test:no-skips && npm run build",
     "verify:m2": "npm run lint && npm run test && npm run test:isolated && npm run test:fuzz && npm run test:stress && npm run test:rules && npm run test:no-skips && npm run build",
