@@ -141,7 +141,8 @@ describe('R4: Tab Zod Schema & LocalStorage Fallback Resilience (ARCH-05)', () =
             const home = await screen.findByRole('button', { name: /^home$/i });
             expect(home.classList.contains('active')).toBe(true);
             fireEvent.click(screen.getByRole('button', { name: /^allenamento$/i }));
-            const session = await screen.findByRole('tab', { name: 'Sessione' });
+            // TrainingView is lazy-loaded; wait for the actual view, not the initial loading fallback.
+            const session = await screen.findByRole('tab', { name: 'Sessione' }, { timeout: 5000 });
             expect(session.getAttribute('aria-selected')).toBe('true');
             expect(window.localStorage.getItem(ownerUiPreferenceKey('user:test-user-id', LOCAL_STORAGE_TRAINING_TAB))).toBe(JSON.stringify('session'));
         });
