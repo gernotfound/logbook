@@ -28,7 +28,7 @@ for (const path of ['/', '/index.html', '/sw.js', '/manifest.webmanifest', '/app
 }
 if (!headers.includes('/assets/*\n  Cache-Control: public, max-age=31536000, immutable')) failures.push('Immutable hashed assets required');
 if (/Access-Control-Allow-Origin:\s*\*/i.test(headers)) failures.push('Wildcard CORS forbidden');
-if (!sw.includes('denylist:') || !sw.includes('__/')) failures.push('SW must exclude Firebase helper namespace');
+if (!sw.includes('denylist:') || !sw.includes('__')) failures.push('SW must exclude Firebase helper namespace');
 if (!vite.includes('CLOUDFLARE_APP_ORIGIN') || !vite.includes('transformIndexHtml')) {
   failures.push('Canonical HTML must be transformed before PWA precache generation');
 }

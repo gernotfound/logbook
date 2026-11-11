@@ -4,7 +4,7 @@ import react from '@vitejs/plugin-react'
 import { VitePWA } from '@unplugin-pwa/vite'
 import { visualizer } from 'rollup-plugin-visualizer'
 
-// Frontend production is Firebase Hosting at the root path.
+// Firebase Hosting remains the active production origin until the authorized cutover.
 
 const appVersion = process.env.npm_package_version || '0.0.0-dev'
 const buildSha = process.env.LOGBOOK_BUILD_SHA || process.env.EXPECTED_SHA || process.env.GITHUB_SHA || process.env.VERCEL_GIT_COMMIT_SHA || 'dev'
@@ -26,6 +26,14 @@ export function assertNoBundledClientDiagnostics(moduleIds: Iterable<string>): v
 }
 
 const basePath = '/'
+const cloudflareOrigin = process.env.CLOUDFLARE_APP_ORIGIN;
+if (cloudflareOrigin) {
+  const url = new URL(cloudflareOrigin);
+  if (url.protocol !== 'https:' || url.origin !== cloudflareOrigin ||
+      url.pathname !== '/' || url.search || url.hash || url.username || url.password) {
+    throw new Error('CLOUDFLARE_APP_ORIGIN must be an exact HTTPS origin without a path');
+  }
+}
 
 export default defineConfig({
   define: {
@@ -38,6 +46,13 @@ export default defineConfig({
   base: basePath,
   plugins: [
     react(),
+    // Update canonical metadata before the Service Worker hashes index.html.
+    cloudflareOrigin && {
+      name: 'thelogbook-cloudflare-canonical-origin',
+      transformIndexHtml(html) {
+        return html.replaceAll('https://thelogbook.web.app/', cloudflareOrigin + '/');
+      },
+    },
     {
       name: 'thelogbook-no-client-error-monitoring',
       generateBundle(_output, bundle) {
