@@ -39,6 +39,15 @@ export function validateStressAssignment(files, selected) {
   return issues;
 }
 
+export function ungroupedMajorSuiteTests(files) {
+  const large = new Set(['isolated', 'stress', 'training', 'ui', 'storage', 'system']);
+  return files.filter(file => {
+    const segments = file.split('/');
+    if (segments[0] === 'e2e') return segments.length === 2 && /\.spec\.ts$/.test(file);
+    return segments[0] === 'tests' && segments.length === 3 && large.has(segments[1]) && testFile.test(file);
+  });
+}
+
 export function ungroupedTestFiles(files) {
   return files.filter(file => file.startsWith('tests/')
     && !file.slice('tests/'.length).includes('/') && testFile.test(file));
@@ -124,6 +133,8 @@ function verify() {
   failures.push(...validateStressAssignment(nodeTests, runners.stress));
   failures.push(...validateMutationSelection(trialCases, tracked));
   const ungrouped = ungroupedTestFiles(nodeTests);
+  const misplaced = ungroupedMajorSuiteTests(tracked);
+  if (misplaced.length) failures.push('Large and specialized test suites need functional subfolders: ' + misplaced.join(', '));
   if (ungrouped.length) failures.push('Tests must be grouped under tests/<area>/: ' + ungrouped.join(', '));
   const projectListings = {};
   for (const project of ['chromium', 'mobile-safari']) {

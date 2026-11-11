@@ -31,7 +31,7 @@ export function validateMutationSelection(trials, trackedPaths) {
         errors.push(area + ': generic runner mismatch ' + file);
       }
     }
-    for (const target of mutate ?? []) {
+    for (const target of Array.isArray(mutate) ? mutate : []) {
       const path = typeof target === 'string' ? target.replace(/:\d+-\d+$/, '') : '';
       if (!tracked.has(path)) errors.push(area + ': missing mutation target ' + String(target));
     }

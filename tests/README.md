@@ -27,7 +27,19 @@ La **responsabilità funzionale** determina la cartella, mentre il **runner** de
 | Runner stress | `stress/` | Test adversarial e di carico selezionati per nome |
 | Runner specializzati | `isolated/`, `emulator/`, `fuzz/`, `recovery/`, `gc/`, `hardening/` | Mantengono i propri setup e criteri di discovery |
 
-La radice di `tests/` contiene soltanto fixture e setup condivisi: **nessun file `.test.*` o `.spec.*` deve essere collocato direttamente qui**. `test:discovery` verifica anche questo vincolo. I test co-locati in `src/` restano vicini al modulo quando utile. I test browser e le fixture Playwright restano in `e2e/` finché i loro contratti di discovery e di progetto non vengono aggiornati insieme.
+La radice di `tests/` contiene soltanto fixture e setup condivisi: **nessun file `.test.*` o `.spec.*` deve essere collocato direttamente qui**. `test:discovery` verifica anche questo vincolo. I test co-locati in `src/` restano vicini al modulo quando utile. I test browser sono organizzati per funzionalità in `e2e/`; le fixture condivise restano alla radice della stessa directory.
+
+
+## Sottocartelle per i gruppi numerosi
+
+- `training/`: `cycles/`, `sessions/`, `routines/`, `exercises/`, `history/` e `shared/`.
+- `ui/`: `navigation/`, `home/`, `data/`, `settings/`, `visual/` e `lifecycle/`.
+- `storage/`: `archive/`, `drafts/`, `recovery/`, `sync/` e `state/`.
+- `system/`: `requirements/`, `enhancements/`, `integration/` e `regressions/`.
+- `isolated/` e `stress/` conservano i runner specializzati, ma distinguono anche i domini funzionali nelle sottocartelle. I test `.tsx` isolati continuano a usare jsdom; le suite `.ts` Node mantengono il proprio setup.
+- `e2e/`: `account/`, `health/`, `storage/`, `pwa/` e `ui/`. `fixtures.ts`, `pwa-upgrade-fixtures.ts` e `storage-write-barrier.ts` restano condivisi nella radice di `e2e/`.
+
+`test:discovery` verifica le assegnazioni ai runner, il posizionamento delle suite numerose e i percorsi reali delle 25 diagnostiche Stryker. `test:ci` esegue la suite Vitest generale una sola volta; non sostituisce né il gate `verify:m8` né le suite dedicate.
 
 ## Invarianti degli spostamenti
 

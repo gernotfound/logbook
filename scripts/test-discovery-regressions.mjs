@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { loadConfigFromFile } from 'vite';
-import { compareAssignments, normalizePlaywrightLocation, ungroupedTestFiles, validateStressAssignment } from './check-test-discovery.mjs';
+import { compareAssignments, normalizePlaywrightLocation, ungroupedTestFiles, ungroupedMajorSuiteTests, validateStressAssignment } from './check-test-discovery.mjs';
 import { isCriticalTest } from './critical-test-selection.mjs';
 import { validateMutationSelection } from './check-mutation-selection.mjs';
 
@@ -13,6 +13,15 @@ await test('rejects test files at tests/ root without rejecting shared fixtures 
     'tests/isolated/worker.test.ts', 'tests/setup.tsx', 'tests/secureVaultFixture.ts',
     'src/lib/root.test.ts',
   ]), ['tests/root.test.ts', 'tests/another.spec.mjs']);
+});
+
+await test('requires functional subfolders for large suites without restricting shared fixtures', () => {
+  assert.deepEqual(ungroupedMajorSuiteTests([
+    'tests/stress/challenger_ui_stress.test.ts', 'tests/stress/ui/challenger_ui_stress.test.ts',
+    'tests/training/cycle_example.test.ts', 'tests/training/cycles/cycle_example.test.ts',
+    'e2e/offline.spec.ts', 'e2e/pwa/offline.spec.ts', 'e2e/fixtures.ts',
+    'tests/isolated/browserStorageSetup.ts', 'tests/emulator/firestore.test.ts',
+  ]), ['tests/stress/challenger_ui_stress.test.ts', 'tests/training/cycle_example.test.ts', 'e2e/offline.spec.ts']);
 });
 
 await test('accepts complete one-to-one discovery', () => {
