@@ -43,6 +43,8 @@ describe('M7 App Check replay protection for account deletion', () => {
     await expect(verifyDeletionRequester(requesterRequest())).resolves.toEqual({ uid: 'user-a' });
     expect(admin.verifyIdToken).toHaveBeenCalledWith('id-token', true);
     expect(admin.verifyToken).toHaveBeenCalledWith('limited-use-app-check', { consume: true });
+    expect(admin.verifyToken.mock.invocationCallOrder[0])
+      .toBeLessThan(admin.verifyIdToken.mock.invocationCallOrder[0]);
   });
 
   it('verifies identity and exposes the email claim for action-specific consent authorization', async () => {
@@ -89,12 +91,35 @@ describe('M7 App Check replay protection for account deletion', () => {
     expect(admin.verifyToken).not.toHaveBeenCalled();
   });
 
-  it('rejects an already consumed App Check token', async () => {
+  it('rejects an already consumed App Check token before consulting Auth', async () => {
     admin.verifyToken.mockResolvedValueOnce({ alreadyConsumed: true });
     await expect(verifyDeletionRequester(requesterRequest())).rejects.toMatchObject({
       name: 'RequestAuthError',
       status: 403,
     });
+    expect(admin.verifyIdToken).not.toHaveBeenCalled();
+  });
+
+  it('rejects a failed App Check verification without consuming Firebase Auth reads', async () => {
+    admin.verifyToken.mockRejectedValueOnce(new Error('invalid limited-use attestation'));
+    await expect(verifyHealthConsentRequester(requesterRequest())).rejects.toMatchObject({
+      name: 'RequestAuthError',
+      status: 403,
+    });
+    expect(admin.verifyIdToken).not.toHaveBeenCalled();
+  });
+
+  it('still verifies revocation after a valid App Check token and never leaks Auth errors', async () => {
+    admin.verifyIdToken.mockRejectedValueOnce(new Error('sensitive firebase auth detail'));
+    await expect(verifyRecoveryRegistrationRequester(requesterRequest())).rejects.toMatchObject({
+      name: 'RequestAuthError',
+      status: 401,
+      message: 'Sessione non valida o revocata. Effettua nuovamente il login.',
+    });
+    expect(admin.verifyToken).toHaveBeenCalledExactlyOnceWith('limited-use-app-check', { consume: true });
+    expect(admin.verifyIdToken).toHaveBeenCalledExactlyOnceWith('id-token', true);
+    expect(admin.verifyToken.mock.invocationCallOrder[0])
+      .toBeLessThan(admin.verifyIdToken.mock.invocationCallOrder[0]);
   });
 
   it('uses the same one-time verification for status/recovery calls without Firebase Auth', async () => {
