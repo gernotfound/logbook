@@ -15,7 +15,7 @@ import { captureSession, invalidateSession, isCurrentSession } from '../../../sr
 import { initializeLocal, readLocal } from '../../../src/lib/sync/localRepository';
 import { prepareUnlockedTestArchive } from '../../secureVaultFixture';
 
-describe('Worker M2: Exercise Library UI & Food Form Real-Time Calorie Calculation', () => {
+describe('Exercise library hooks and UI', () => {
 
     beforeEach(() => {
         window.localStorage.clear();

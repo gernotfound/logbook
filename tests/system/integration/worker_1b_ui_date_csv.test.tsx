@@ -10,7 +10,7 @@ import { useAppStore } from '../../../src/store/useAppStore';
 import type { WorkoutSession, UserData } from '../../../src/types';
 import { createDefaultNutritionPlanning } from '../../../src/lib/nutritionDefaults';
 
-describe('Worker 1B: UI/UX, Date Navigation, CSV Export & PWA Fixes', () => {
+describe('Data and training UI regressions', () => {
     beforeEach(() => {
         vi.clearAllMocks();
         localStorage.clear();
