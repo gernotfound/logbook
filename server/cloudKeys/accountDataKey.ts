@@ -38,76 +38,72 @@ export async function releaseAccountDataKey(uid: string, purpose: 'sync' | 'righ
   const erasureRef = db.collection('health_data_erasures').doc(uid);
   const root = db.collection('users').doc(uid);
 
-  // Normal unlock reads the existing wrapped ADK, without deriving another
-  // account key. The versioned server-only KEK must stay available for as
-  // long as any account envelope was encrypted under it.
-  const [existingKey, preflightConsent, preflightDeletion, preflightErasure] = await Promise.all([
-    keyRef.get(), consentRef.get(), deletionRef.get(), erasureRef.get(),
-  ]);
-  // Avoid unnecessary key generation for withdrawn, unregistered or
-  // deleting accounts. The transaction below MUST still recheck these same
-  // documents to fence any concurrent revocation/erasure after preflight.
-  if (!trustedConsent(preflightConsent.data(), uid, purpose)
-      || preflightDeletion.exists
-      || (preflightErasure.exists && preflightErasure.data()?.status !== 'complete')) {
-    throw new AccountKeyUnavailableError();
-  }
-  let wrappedCandidate: Awaited<ReturnType<typeof wrapAccountDataKey>> | null = null;
-  if (!existingKey.exists && purpose === 'sync') {
-    // Query.get() hides missing parent documents whose nested subcollections
-    // survive deletion. A new key must not strand any such ciphertext or
-    // unknown private collection under an apparently empty user root.
-    // This scan precedes expensive wrapping; transactional root/consent reads
-    // below still fence concurrent supported business writes and withdrawals.
-    if ((await root.listCollections()).length > 0) throw new CloudKeyProvisioningConflictError();
-    // Secret-dependent operations MUST stay outside the Firestore retry callback.
-    // A race loser discards its candidate and uses the persisted winner.
+  // One fenced read-only transaction serves the common existing-key path.
+  // A missing key takes the provisioning path below; secret wrapping remains
+  // outside Firestore's retriable transaction callback.
+  const readFencedKey = async (transaction: FirebaseFirestore.Transaction) => {
+    const [stored, consent, deletion, erasure] = await Promise.all([
+      transaction.get(keyRef), transaction.get(consentRef),
+      transaction.get(deletionRef), transaction.get(erasureRef),
+    ]);
+    const consentData = consent.data();
+    if (!trustedConsent(consentData, uid, purpose) || deletion.exists
+        || (erasure.exists && erasure.data()?.status !== 'complete')) {
+      throw new AccountKeyUnavailableError();
+    }
+    const consentRevision = consentData!.revision as number;
+    if (!stored.exists) return { wrapped: null, consentRevision };
+
+    const data = stored.data();
+    if (!data || data.uid !== uid || data.format !== 'thelogbook-wrapped-account-key'
+        || data.version !== 1 || data.keyVersion !== 1
+        || typeof data.ciphertext !== 'string' || typeof data.iv !== 'string'
+        || typeof data.tag !== 'string') {
+      throw new AccountKeyUnavailableError();
+    }
+    return { wrapped: data, consentRevision };
+  };
+
+  let selected = await db.runTransaction(readFencedKey);
+  if (!selected.wrapped) {
+    // Rights-only access never creates keys, even if withdrawal is complete.
+    if (purpose === 'rights-export') throw new AccountKeyUnavailableError();
+
+    // Missing root documents can retain private descendants. Check before
+    // wrapping; the second transaction still fences supported business writes.
+    if ((await root.listCollections()).length > 0) {
+      throw new CloudKeyProvisioningConflictError();
+    }
+
     const candidate = randomBytes(32);
+    let wrappedCandidate: Awaited<ReturnType<typeof wrapAccountDataKey>>;
     try {
       wrappedCandidate = await wrapAccountDataKey(uid, candidate);
     } finally {
       candidate.fill(0);
     }
+
+    // A competing provisioner may have installed the winner while we wrapped
+    // our candidate. All consent/deletion fences are checked again atomically.
+    selected = await db.runTransaction(async transaction => {
+      const checked = await readFencedKey(transaction);
+      if (checked.wrapped) return checked;
+
+      const [rootSnap, controlSnap, history, nutrition] = await Promise.all([
+        transaction.get(root),
+        transaction.get(root.collection('sync_control').doc('state')),
+        transaction.get(root.collection('history_months').limit(1)),
+        transaction.get(root.collection('nutrition_months').limit(1)),
+      ]);
+      if (rootSnap.exists || controlSnap.exists || !history.empty || !nutrition.empty) {
+        throw new CloudKeyProvisioningConflictError();
+      }
+      transaction.create(keyRef, wrappedCandidate);
+      return { wrapped: wrappedCandidate, consentRevision: checked.consentRevision };
+    });
   }
 
-  const selected = await db.runTransaction(async transaction => {
-    const [stored, consent, deletion, erasure] = await Promise.all([
-      transaction.get(keyRef), transaction.get(consentRef), transaction.get(deletionRef),
-      transaction.get(erasureRef),
-    ]);
-    const consentData = consent.data();
-    if (!trustedConsent(consentData, uid, purpose) || deletion.exists
-        || (erasure.exists && erasure.data()?.status !== 'complete')) throw new AccountKeyUnavailableError();
-    const consentRevision = consentData!.revision as number;
-    if (stored.exists) {
-      const data = stored.data();
-      if (!data || data.uid !== uid || data.format !== 'thelogbook-wrapped-account-key'
-          || data.version !== 1 || data.keyVersion !== 1
-          || typeof data.ciphertext !== 'string' || typeof data.iv !== 'string'
-          || typeof data.tag !== 'string') {
-        throw new AccountKeyUnavailableError();
-      }
-      return { wrapped: data, consentRevision };
-    }
-    // Rights-only access NEVER provisions keys: withdrawal may export existing
-    // ciphertext, but cannot create fresh cloud storage or re-enable sync.
-    if (purpose === 'rights-export') throw new AccountKeyUnavailableError();
-    // This is NOT a migration: if any existing cloud business state is
-    // present, creating a new key would make it appear that an existing
-    // plaintext/ciphertext archive belonged to the newly generated ADK.
-    const [rootSnap, controlSnap, history, nutrition] = await Promise.all([
-      transaction.get(root),
-      transaction.get(root.collection('sync_control').doc('state')),
-      transaction.get(root.collection('history_months').limit(1)),
-      transaction.get(root.collection('nutrition_months').limit(1)),
-    ]);
-    if (rootSnap.exists || controlSnap.exists || !history.empty || !nutrition.empty) {
-      throw new CloudKeyProvisioningConflictError();
-    }
-    if (!wrappedCandidate) throw new AccountKeyUnavailableError();
-    transaction.create(keyRef, wrappedCandidate);
-    return { wrapped: wrappedCandidate, consentRevision };
-  });
+  if (!selected.wrapped) throw new AccountKeyUnavailableError();
 
   const key = await unwrapAccountDataKey(uid, selected.wrapped);
   try {

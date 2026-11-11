@@ -10,6 +10,7 @@ interface RoutineCardProps {
     routine: Routine;
     isExpanded: boolean;
     library: ExerciseLibraryItem[];
+    libraryById?: ReadonlyMap<string, ExerciseLibraryItem>;
     onToggleExpand: (id: string) => void;
     onEdit: (routine: Routine) => void;
     onDelete: (id: string, e: React.MouseEvent) => void;
@@ -35,17 +36,22 @@ export const RoutineCard: React.FC<RoutineCardProps> = ({
     routine,
     isExpanded,
     library,
+    libraryById,
     onToggleExpand,
     onEdit,
     onDuplicate,
     onDelete,
     isCreating
 }) => {
+    const indexedLibrary = React.useMemo(
+        () => libraryById ?? new Map(library.map(item => [item.id, item] as const)),
+        [libraryById, library],
+    );
     const primaryMuscles = new Set<string>();
     const secondaryMuscles = new Set<string>();
 
     (routine.exercises || []).forEach(exercise => {
-        const libraryItem = library.find(item => item.id === exercise.exId);
+        const libraryItem = indexedLibrary.get(exercise.exId);
         libraryItem?.muscles?.forEach(muscleId => primaryMuscles.add(muscleId));
         libraryItem?.secondaryMuscles?.forEach(muscleId => secondaryMuscles.add(muscleId));
     });
@@ -129,7 +135,7 @@ export const RoutineCard: React.FC<RoutineCardProps> = ({
                         ) : (
                             <div className="routine-sequence">
                                 {(routine.exercises || []).map((exercise: RoutineExercise, index: number) => {
-                                    const libraryItem = library.find(item => item.id === exercise.exId);
+                                    const libraryItem = indexedLibrary.get(exercise.exId);
                                     return (
                                         <div key={`${exercise.exId}-${index}`} className="routine-sequence-item">
                                             <span className="routine-sequence-index" aria-hidden="true">{index + 1}</span>

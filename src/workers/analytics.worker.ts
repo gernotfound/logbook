@@ -1,4 +1,4 @@
-import { computeWeeklyVolumeSeries, computeVolumeCaloriesCorrelation } from '../lib/calc/analytics';
+import { computeWeeklyVolumeSeries, computeVolumeCaloriesCorrelation, computeVolumeCaloriesCorrelationFromVolume } from '../lib/calc/analytics';
 
 self.onmessage = (e: MessageEvent) => {
     const { id, type, payload } = e.data;
@@ -9,6 +9,11 @@ self.onmessage = (e: MessageEvent) => {
             const result = computeWeeklyVolumeSeries(history, library, userWeight, numWeeks, referenceDate);
             self.postMessage({ id, type: 'SUCCESS', result });
         } 
+        else if (type === 'CALCULATE_CORRELATION_FROM_VOLUME') {
+            const { volumePoints, nutrition, numWeeks, referenceDate } = payload;
+            const result = computeVolumeCaloriesCorrelationFromVolume(volumePoints, nutrition, numWeeks, referenceDate);
+            self.postMessage({ id, type: 'SUCCESS', result });
+        }
         else if (type === 'CALCULATE_CORRELATION_STATS') {
             const { history, nutrition, library, userWeight, numWeeks, referenceDate } = payload;
             const result = computeVolumeCaloriesCorrelation(history, nutrition, library, userWeight, numWeeks, referenceDate);

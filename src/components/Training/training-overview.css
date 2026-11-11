@@ -157,12 +157,6 @@
   color: var(--primary-color);
 }
 
-.training-planning-create { margin-bottom: 1.25rem; }
-.training-cycle-active-card {
-  margin-bottom: 1rem;
-  padding: 1rem;
-  border: 1px solid var(--border-strong, var(--glass-border));
-}
 .cycle-muscle-map {
   min-width: 0;
   margin: 1.25rem 0;
@@ -193,7 +187,6 @@
 
 @media (max-width: 22.5rem) {
   .workout-session .section-divider,
-  .training-cycle-active-card,
   .cycle-muscle-map,
   .workout-report-page { padding: .75rem; }
   .workout-timer .timer-controls { gap: .25rem; }

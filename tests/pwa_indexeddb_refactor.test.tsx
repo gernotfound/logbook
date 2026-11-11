@@ -9,7 +9,8 @@ import type { AppState } from '../src/store/useAppStore';
 import React from 'react';
 import { describe, test, expect, beforeEach, vi, afterEach } from 'vitest';
 import { render } from '@testing-library/react';
-import { useAppStore, getInitialUserData } from '../src/store/useAppStore';
+import { useAppStore } from '../src/store/useAppStore';
+import { parseInitialUserData } from '../src/store/slices/createDataSlice';
 import { idbStore } from './setup';
 import { DB } from '../src/lib/db';
 
@@ -21,9 +22,6 @@ describe('PWA IndexedDB Cache & Sync Lock Refactor Suite', () => {
     vi.useRealTimers();
     localStorage.clear();
     for (const k in idbStore) delete idbStore[k];
-    if (typeof window !== 'undefined') {
-      window.__INITIAL_USER_DATA__ = null;
-    }
     useAppStore.getState().resetStore();
     vi.clearAllMocks();
   });
@@ -31,40 +29,22 @@ describe('PWA IndexedDB Cache & Sync Lock Refactor Suite', () => {
   afterEach(() => {
     vi.restoreAllMocks();
     vi.useRealTimers();
-    if (typeof window !== 'undefined') {
-      window.__INITIAL_USER_DATA__ = null;
-    }
   });
 
   describe('R1 & R2: IndexedDB UserData Cache & Zustand Integration', () => {
-    test('a fresh production store initializer parses window.__INITIAL_USER_DATA__ without a manual setState', () => {
-      const mockInitialData: UserData = {
-        profile: { height: '178' },
-        library: [],
-        routines: [],
-        history: [],
-        nutrition: {},
-        customFoods: [],
-        activeWorkout: null,
-        nutritionPlanning: {} as any
+    test('fresh stores never implicitly hydrate an unverified owner', () => {
+      const raw: UserData = {
+        profile: { height: '178' }, library: [], routines: [], history: [],
+        nutrition: {}, customFoods: [], activeWorkout: null, nutritionPlanning: {} as any,
       };
-
-      window.__INITIAL_USER_DATA__ = mockInitialData;
-
       const freshStore = createStore<AppState>()((...args) => ({
-        ...createDataSlice(...args),
-        ...createWorkoutSlice(...args),
-        ...createSyncSlice(...args),
+        ...createDataSlice(...args), ...createWorkoutSlice(...args), ...createSyncSlice(...args),
       }));
-      expect(freshStore.getState().userData?.profile?.height).toBe('178');
-      expect(freshStore.getState().userData).not.toBe(mockInitialData);
-      window.__INITIAL_USER_DATA__ = '{bad json' as unknown as UserData;
-      const invalidStore = createStore<AppState>()((...args) => ({
-        ...createDataSlice(...args),
-        ...createWorkoutSlice(...args),
-        ...createSyncSlice(...args),
-      }));
-      expect(invalidStore.getState().userData).toBeNull();
+      expect(freshStore.getState().userData).toBeNull();
+      const parsed = parseInitialUserData(raw);
+      expect(parsed?.profile?.height).toBe('178');
+      expect(parsed).not.toBe(raw);
+      expect(freshStore.getState().userData).toBeNull();
     });
 
     test('setUserData persists authenticated ciphertext through the production vault gateway', async () => {
@@ -182,19 +162,11 @@ describe('PWA IndexedDB Cache & Sync Lock Refactor Suite', () => {
       expect(localStorage.getItem(protectedDeviceKey('workout'))).toBeNull();
     });
 
-    test('getInitialUserData safely handles corrupt JSON string or non-object structures without crashing', () => {
-      // 1. Corrupt JSON string
-      (window as any).__INITIAL_USER_DATA__ = '{ invalid_json: ';
-      expect(getInitialUserData()).toBeNull();
-
-      // 2. Non-object primitive
-      (window as any).__INITIAL_USER_DATA__ = 12345;
-      expect(getInitialUserData()).toBeNull();
-
-      // Partial object gets sanitized via UserDataSchema defaults
-      (window as any).__INITIAL_USER_DATA__ = { profile: { height: '173' } };
-      const sanitized = getInitialUserData();
-      expect(sanitized).not.toBeNull();
+    test('parseInitialUserData rejects invalid inputs and sanitizes partial objects', () => {
+      expect(parseInitialUserData('{ invalid_json: ')).toBeNull();
+      expect(parseInitialUserData(12345)).toBeNull();
+      expect(parseInitialUserData(null)).toBeNull();
+      const sanitized = parseInitialUserData({ profile: { height: '173' } });
       expect(sanitized?.profile?.height).toBe('173');
       expect(Array.isArray(sanitized?.routines)).toBe(true);
     });

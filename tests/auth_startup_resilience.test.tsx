@@ -35,9 +35,6 @@ describe('authenticated startup and foreground recovery', () => {
     lockAllVaults();
     localStorage.clear();
     for (const k in idbStore) delete idbStore[k];
-    if (typeof window !== 'undefined') {
-      window.__INITIAL_USER_DATA__ = null;
-    }
     useAppStore.getState().resetStore();
     (auth as any).currentUser = {
       uid: 'test-user-id',
@@ -87,7 +84,6 @@ describe('authenticated startup and foreground recovery', () => {
     expect(screen.getByTestId('loading-state').textContent).toBe('LOADING');
     expect(screen.getByTestId('data-state').textContent).toBe('NO_DATA');
     expect(DB.loadCloudPayload).not.toHaveBeenCalled();
-    expect(DB.loadUserData).not.toHaveBeenCalled();
 
     await act(async () => { resolveConsent('active'); });
     await waitFor(() => expect(screen.getByTestId('loading-state').textContent).toBe('READY'));
@@ -101,7 +97,6 @@ describe('authenticated startup and foreground recovery', () => {
     expect(screen.getByTestId('user-state').textContent).toBe('test@example.com');
     expect(screen.getByTestId('data-state').textContent).toBe('NO_DATA');
     expect(DB.loadCloudPayload).not.toHaveBeenCalled();
-    expect(DB.loadUserData).not.toHaveBeenCalled();
   });
 
   test('rechecks consent when the browser window regains focus', async () => {
@@ -245,7 +240,6 @@ describe('authenticated startup and foreground recovery', () => {
     expect(useAppStore.getState().dataOwner).toBeNull();
     expect(vi.mocked(refreshHealthConsent)).not.toHaveBeenCalled();
     expect(DB.loadCloudPayload).not.toHaveBeenCalled();
-    expect(DB.loadUserData).not.toHaveBeenCalled();
     expect(localStorage.getItem('logbook_authenticated_owner')).toBeNull();
     expect(idbStore['logbook:v2:user:test-user-id']).toEqual(archiveBefore);
   });
@@ -264,8 +258,7 @@ describe('authenticated startup and foreground recovery', () => {
       expect(screen.getByTestId('data-state').textContent).toBe('NO_DATA');
       expect(vi.mocked(refreshHealthConsent)).not.toHaveBeenCalled();
       expect(DB.loadCloudPayload).not.toHaveBeenCalled();
-      expect(DB.loadUserData).not.toHaveBeenCalled();
-    } finally {
+      } finally {
       if (originalSet) localStorageMock.setItem.mockImplementation(originalSet);
     }
   });

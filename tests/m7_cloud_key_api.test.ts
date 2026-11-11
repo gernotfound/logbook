@@ -6,6 +6,7 @@ const harness = vi.hoisted(() => {
   }
   return {
     documents: new Map<string, Record<string, unknown>>(),
+    documentReads: new Map<string, number>(),
     beforeTransaction: null as null | (() => void),
     afterTransaction: null as null | (() => void),
     verify: vi.fn(async () => ({ uid: 'owner-a', emailVerified: true })),
@@ -23,6 +24,7 @@ function ref(key: string) {
   return {
     key,
     async get() {
+      harness.documentReads.set(key, (harness.documentReads.get(key) ?? 0) + 1);
       const found = harness.documents.get(key);
       return { exists: Boolean(found), data: () => found };
     },
@@ -64,9 +66,12 @@ const db = {
     });
     // A rejected transaction must not publish staged credentials.
     for (const entry of pendingCreates) harness.documents.set(entry.key, entry.data);
-    const after = harness.afterTransaction;
-    harness.afterTransaction = null;
-    after?.();
+    // Only a write transaction can attest successful key creation.
+    if (pendingCreates.length > 0) {
+      const after = harness.afterTransaction;
+      harness.afterTransaction = null;
+      after?.();
+    }
     return result;
   },
 };
@@ -110,6 +115,7 @@ const request = (origin = 'https://thelogbook.web.app', withBody = false) => new
 
 beforeEach(() => {
   harness.documents.clear();
+  harness.documentReads.clear();
   harness.beforeTransaction = null;
   harness.afterTransaction = null;
   vi.clearAllMocks();
@@ -140,6 +146,40 @@ describe('authenticated cloud account key API', () => {
     expect(harness.wrap).toHaveBeenCalledTimes(1);
     expect(harness.unwrap).toHaveBeenCalledTimes(2);
   });
+
+  it('avoids duplicate preflight reads when the wrapped key already exists', async () => {
+    expect((await POST(request())).status).toBe(200);
+    harness.documentReads.clear();
+
+    expect((await POST(request())).status).toBe(200);
+    // The existing key is read only inside the consent/deletion-fenced
+    // transaction; the non-transactional preflight has been removed.
+    expect(harness.documentReads.get('user_data_keys/owner-a')).toBe(1);
+    expect(harness.documentReads.get('health_consent_withdrawals/owner-a')).toBe(1);
+    expect(harness.documentReads.get('account_deletions/owner-a')).toBe(2);
+    expect(harness.documentReads.get('health_data_erasures/owner-a')).toBe(2);
+    expect(harness.wrap).toHaveBeenCalledTimes(1);
+  });
+
+  it.each(['withdrawal', 'account deletion', 'health erasure'] as const)(
+    'still refuses a stored key if %s begins before the fenced transaction', async scenario => {
+      expect((await POST(request())).status).toBe(200);
+      const existing = harness.documents.get('user_data_keys/owner-a');
+      harness.beforeTransaction = () => {
+        if (scenario === 'withdrawal') {
+          harness.documents.set('health_consent_withdrawals/owner-a', { ...consent(), status: 'withdrawn' });
+        } else if (scenario === 'account deletion') {
+          harness.documents.set('account_deletions/owner-a', { uid: 'owner-a', status: 'requested' });
+        } else {
+          harness.documents.set('health_data_erasures/owner-a', { uid: 'owner-a', status: 'deleting' });
+        }
+      };
+
+      expect((await POST(request())).status).toBe(503);
+      expect(harness.documents.get('user_data_keys/owner-a')).toEqual(existing);
+      expect(harness.wrap).toHaveBeenCalledTimes(1);
+    },
+  );
 
   it('accepts an empty POST body stream, but never accepts payload bytes', async () => {
     // Vercel's Request adapter can expose a non-null body stream even when
@@ -460,14 +500,40 @@ describe('authenticated cloud account key API', () => {
     expect(harness.wrap).toHaveBeenCalledTimes(1);
   });
 
-  it('rechecks consent in its transaction after a preflight-to-transaction revocation', async () => {
-    harness.beforeTransaction = () => harness.documents.set(
-      'health_consent_withdrawals/owner-a', { ...consent(), status: 'withdrawn' },
-    );
+  it('rechecks consent in the provisioning transaction after the first key check', async () => {
+    const wrap = harness.wrap.getMockImplementation();
+    harness.wrap.mockImplementationOnce(async (uid, secret) => {
+      const result = await wrap!(uid, secret);
+      harness.beforeTransaction = () => harness.documents.set(
+        'health_consent_withdrawals/owner-a', { ...consent(), status: 'withdrawn' },
+      );
+      return result;
+    });
     const response = await POST(request());
     expect(response.status).toBe(503);
     expect(harness.wrap).toHaveBeenCalledTimes(1);
     expect(harness.documents.has('user_data_keys/owner-a')).toBe(false);
+  });
+
+  it('adopts a concurrent provisioning winner without replacing its wrapped key', async () => {
+    const concurrentKey = Buffer.alloc(32, 77);
+    const wrapper = harness.wrap.getMockImplementation();
+    harness.wrap.mockImplementationOnce(async (uid, secret) => {
+      const candidate = await wrapper!(uid, secret);
+      harness.beforeTransaction = () => {
+        harness.documents.set('user_data_keys/owner-a', {
+          ...candidate, ciphertext: concurrentKey.toString('base64'),
+        });
+      };
+      return candidate;
+    });
+
+    const response = await POST(request());
+    expect(response.status).toBe(200);
+    expect(Buffer.from((await response.json() as { key: string }).key, 'base64')).toEqual(concurrentKey);
+    expect(harness.documents.get('user_data_keys/owner-a')?.ciphertext).toBe(concurrentKey.toString('base64'));
+    expect(harness.wrap).toHaveBeenCalledTimes(1);
+    expect(harness.documentReads.get('user_data_keys/owner-a')).toBe(2);
   });
 
   it('never releases key bytes if consent is withdrawn immediately after transaction commit', async () => {

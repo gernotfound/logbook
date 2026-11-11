@@ -6,6 +6,7 @@ const fixture = vi.hoisted(() => ({
   records: new Map<string, Entry>(),
   failQueryOnce: '' as string,
   pauseQuery: null as null | { path: string; entered: () => void; resume: Promise<void> },
+  transactionCount: 0,
 }));
 
 vi.mock('../server/accountDeletion/firebaseAdmin', () => {
@@ -96,6 +97,7 @@ vi.mock('../server/accountDeletion/firebaseAdmin', () => {
   const db = {
     collection,
     runTransaction: async (callback: (tx: any) => Promise<unknown>) => {
+      fixture.transactionCount++;
       const staged: Array<() => void> = [];
       const tx = {
         get: async (ref: { path: string }) => getSnapshot(ref.path),
@@ -132,6 +134,7 @@ const markerPath = (uid: string) => 'health_data_erasures/' + uid;
 
 beforeEach(() => {
   fixture.records.clear();
+  fixture.transactionCount = 0;
   fixture.failQueryOnce = '';
   fixture.pauseQuery = null;
   fixture.records.set(consentPath('a'), { uid: 'a', revision: 3, status: 'withdrawn' });
@@ -165,6 +168,20 @@ describe('trusted data-only erasure worker', () => {
     await createHealthDataErasureJob('a');
     expect(await readHealthDataErasureStatus('a')).toMatchObject({ complete: true });
     expect(fixture.records.get(consentPath('a'))?.revision).toBe(4);
+  });
+
+  it('avoids three no-op page transactions while preserving the final lease-fenced erasure', async () => {
+    fixture.records.delete('users/a/history_months/2026-09');
+    fixture.records.delete('users/a/nutrition_months/2026-09');
+    fixture.records.delete('users/a/sync_control/state');
+    await createHealthDataErasureJob('a');
+    const transactionsBefore = fixture.transactionCount;
+
+    expect(await processHealthDataErasure('a', Date.now() + 30_000)).toBe('complete');
+    // Acquire lease, delete root, complete erasure: no transaction for empty pages.
+    expect(fixture.transactionCount - transactionsBefore).toBe(3);
+    expect(fixture.records.has('users/a')).toBe(false);
+    expect(fixture.records.has('user_data_keys/a')).toBe(false);
   });
 
   it.each([

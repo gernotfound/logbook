@@ -21,22 +21,16 @@ export interface DataSlice {
     resolveNutritionConflict: (input: ResolveNutritionConflictInput) => Promise<SyncResult>;
 }
 
-export const getInitialUserData = (): UserData | null => {
+export const parseInitialUserData = (data: unknown): UserData | null => {
     try {
-        if (typeof window === 'undefined') return null;
-        const cached = window.__INITIAL_USER_DATA__;
-        if (!cached) return null;
-        const parsed = typeof cached === 'string' ? JSON.parse(cached) : cached;
-        if (!parsed || typeof parsed !== 'object') return null;
-
+        if (!data || typeof data !== 'object' || Array.isArray(data)) return null;
         const start = performance.now();
-        const validated = UserDataSchema.parse(parsed) as unknown as UserData;
+        const validated = UserDataSchema.parse(data) as UserData;
         const end = performance.now();
         console.log(`[BOOT] Parsing Zod completato in ${(end - start).toFixed(2)}ms`);
-
         return validated;
     } catch (err) {
-        console.warn("[BOOT] Errore parsing Zod:", err);
+        console.warn('[BOOT] Errore parsing Zod:', err);
         return null;
     }
 };
@@ -108,7 +102,7 @@ function alignActiveWorkout(
 }
 
 export const createDataSlice: StateCreator<AppState, [], [], DataSlice> = (set, get) => ({
-    userData: getInitialUserData(),
+    userData: null,
     dataOwner: null,
 
     setUserData: (dataOrUpdater) => {

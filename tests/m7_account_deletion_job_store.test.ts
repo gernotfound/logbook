@@ -493,6 +493,19 @@ describe('M7 native deletion job store', () => {
   });
 
 
+  it('skips a lease-only update on empty pages without bypassing the next destructive fence', async () => {
+    stageDeletionJob('u');
+    expect(await acquireDeletionLease('u', 'worker-A', Date.now() + 60_000)).toBe(true);
+    const updatesBeforeEmptyPage = state.jobUpdates.length;
+
+    expect(await deletePrivateCollectionPage('u', 'history_months', 1, 'worker-A')).toBe(0);
+    expect(state.jobUpdates).toHaveLength(updatesBeforeEmptyPage);
+
+    state.jobData.get('account_deletions/u').leaseOwner = 'worker-B';
+    await expect(deleteUserRoot('u', 'worker-A')).rejects.toBeInstanceOf(DeletionLeaseLostError);
+    expect(state.docs.has('account_deletions/u')).toBe(true);
+  });
+
   it('fences a stale worker out of document deletion, park, failure and completion', async () => {
     stageDeletionJob('u');
     state.docs.add('users/u/history_months/survivor');

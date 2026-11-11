@@ -8,7 +8,7 @@ import { captureSession, isCurrentSession } from './sync/session';
 import { readLocal } from './sync/localRepository';
 import equal from 'fast-deep-equal';
 import type { Exercise, ExportShareOptions, NutritionDay, TrainingCycle, UserData, WorkoutRoutine, WorkoutSession, SyncResult } from '../types';
-import { buildCsvFiles, formatCsvField, formatCsvRow } from './csvExport';
+import { buildCsvFiles } from './csvExport';
 import { parseLargeBackupJson } from './streamJsonImport';
 
 export const MAX_JSON_IMPORT_BYTES = 64 * 1024 * 1024;
@@ -124,14 +124,6 @@ export const Exporter = {
 
         const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
         triggerAnchorDownload(blob, `logbook_emergency_backup_${Logic.getLocalDateString()}.json`);
-    },
-
-    formatCsvField(value: unknown): string {
-        return formatCsvField(value);
-    },
-
-    formatCsvRow(fields: Array<string | number | boolean | null | undefined>): string {
-        return formatCsvRow(fields);
     },
 
     async exportToCSV(

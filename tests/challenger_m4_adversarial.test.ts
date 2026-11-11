@@ -502,7 +502,6 @@ describe('Empirical Challenger: Architectural Hardening Stress Suite', () => {
         it('exports DomainParsers for fine-grained validation and rejects corrupted sub-trees gracefully', () => {
             expect(DomainParsers).toBeDefined();
             expect(typeof DomainParsers.parseProfile).toBe('function');
-            expect(typeof DomainParsers.parseWorkoutSession).toBe('function');
             expect(typeof DomainParsers.parseHistory).toBe('function');
             expect(typeof DomainParsers.parseNutrition).toBe('function');
             expect(typeof DomainParsers.parseLibrary).toBe('function');
@@ -532,7 +531,7 @@ describe('Empirical Challenger: Architectural Hardening Stress Suite', () => {
     });
 
     describe('Scope 6: Windowed Load & Batched Deletion Limits', () => {
-        it('DB.loadUserData queries only 3 months window', async () => {
+        it('DB.loadCloudPayload queries only 3 months window', async () => {
             const mockUserDoc = {
                 _schemaVersion: 1,
                 _sync: {
@@ -560,7 +559,7 @@ describe('Empirical Challenger: Architectural Hardening Stress Suite', () => {
                 return { exists: () => true, data: () => sealTestCloudFixture(mockUserDoc) } as any;
             });
 
-            const loaded = await DB.loadUserData({ cloudKey: testCloudKey() });
+            const loaded = (await DB.loadCloudPayload({ cloudKey: testCloudKey() }))?.data;
 
             expect(loaded).not.toBeNull();
             expect(loaded?.profile?.height).toBe('180');

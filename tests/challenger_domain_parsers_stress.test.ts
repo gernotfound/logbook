@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { DomainParsers, UserDataSchema } from '../src/lib/schema';
+import { DomainParsers, UserDataSchema, WorkoutSessionSchema } from '../src/lib/schema';
 
 describe('Challenger 2: DomainParsers Adversarial Stress Testing', () => {
     describe('1. parseProfile', () => {
@@ -75,7 +75,7 @@ describe('Challenger 2: DomainParsers Adversarial Stress Testing', () => {
                     }
                 ]
             };
-            const result = DomainParsers.parseWorkoutSession(validSession);
+            const result = WorkoutSessionSchema.parse(validSession);
             expect(result.id).toBe('sess_123');
             expect(result.exercises).toHaveLength(1);
             expect(result.exercises[0].sets[0].segments?.filter(segment => segment.technique === 'dropset')).toHaveLength(1);
@@ -95,7 +95,7 @@ describe('Challenger 2: DomainParsers Adversarial Stress Testing', () => {
 
             corruptedSessions.forEach(payload => {
                 expect(() => {
-                    const parsed = DomainParsers.parseWorkoutSession(payload);
+                    const parsed = WorkoutSessionSchema.parse(payload);
                     expect(Array.isArray(parsed.exercises)).toBe(true);
                 }).not.toThrow();
             });
@@ -123,7 +123,7 @@ describe('Challenger 2: DomainParsers Adversarial Stress Testing', () => {
                 exercises: hugeExercises
             };
 
-            const parsed = DomainParsers.parseWorkoutSession(largeSession);
+            const parsed = WorkoutSessionSchema.parse(largeSession);
             expect(parsed.exercises).toHaveLength(50);
             expect(parsed.exercises[0].sets).toHaveLength(10);
             expect(parsed.exercises.flatMap(exercise => exercise.sets)).toHaveLength(500);

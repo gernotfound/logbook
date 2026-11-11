@@ -419,8 +419,9 @@ export function normalizeDomainOperationBatch(batch: DomainOperationBatch): Doma
 
 export function applyDomainOperations(input: UserData, batch: DomainOperationBatch): UserData {
     const operations = normalizeDomainOperationBatch(batch);
-    // Each operation parses a fresh snapshot; intermediate states never escape this batch.
-    // Clone once up front so even a later validation failure cannot mutate the caller's state.
-    const draft = structuredClone(input);
+    // applyOne replaces root fields and copies nested collections before any write.
+    // The existing per-operation Zod parse still validates and normalizes the result.
+    // Keep this copy-on-write invariant: no nested input branch may be mutated.
+    const draft = { ...input };
     return operations.reduce((state, operation) => applyOne(state, operation), draft);
 }

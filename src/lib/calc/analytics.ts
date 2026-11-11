@@ -726,6 +726,16 @@ function correlateVolumeAndNutrition(
     return { points, stats };
 }
 
+/** Reuse a computed volume series without scanning the workout history twice. */
+export function computeVolumeCaloriesCorrelationFromVolume(
+    volumePoints: WeeklyVolumePoint[],
+    nutrition: Record<string, NutritionDay> | null | undefined = {},
+    numWeeks = 8,
+    referenceDate: Date | string = new Date(),
+): { points: VolumeCaloriesPoint[]; stats: VolumeCaloriesCorrelationStats } {
+    return correlateVolumeAndNutrition(volumePoints, nutrition, numWeeks, referenceDate);
+}
+
 export function computeVolumeCaloriesCorrelation(
     history: WorkoutSession[] | null | undefined = [],
     nutrition: Record<string, NutritionDay> | null | undefined = {},

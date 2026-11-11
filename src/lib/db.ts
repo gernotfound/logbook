@@ -147,7 +147,11 @@ async function loadCloudPayload(options?: { allMonths?: boolean; cloudKey?: Uint
         }
 
         if (options?.allMonths) {
-            for (const colName of ['history_months', 'nutrition_months']) {
+            const scanCollection = async (colName: 'history_months' | 'nutrition_months') => {
+                const documents = new Map<string, Record<string, unknown>>();
+                const months: string[] = [];
+                const history: unknown[] = [];
+                const nutrition: Record<string, unknown> = {};
                 let cursor: QueryDocumentSnapshot | undefined;
                 do {
                     const constraints: QueryConstraint[] = [orderBy(documentId()), limit(400)];
@@ -157,27 +161,38 @@ async function loadCloudPayload(options?: { allMonths?: boolean; cloudKey?: Uint
                         10000,
                         `Timeout recupero ${colName} completo`,
                     );
+                    if (auth.currentUser?.uid !== user.uid) throw new Error('Sessione cambiata durante la lettura cloud');
                     for (const item of page.docs) {
-                        const normalized = readAccountCloudDocument(item.data(), `${colName}/${item.id} data schema`, user.uid, `${colName}/${item.id}`, options?.cloudKey);
+                        const path = `${colName}/${item.id}`;
+                        const normalized = readAccountCloudDocument(item.data(), `${path} data schema`, user.uid, path, options?.cloudKey);
                         const rawMonthData = normalized.business;
                         const monthData = colName === 'history_months'
                             ? requireCompleteHistoryMonthDocument(item.id, rawMonthData)
                             : requireCompleteNutritionMonthDocument(item.id, rawMonthData);
                         // A full checkpoint must never treat discarded or rewritten entries as complete.
-                        assertCloudBusinessPreserved(`${colName}/${item.id}`, rawMonthData, monthData);
-                        cloudDocuments.set(`${colName}/${item.id}`, { ...monthData, _sync: normalized.sync });
-                        if (!completeMonths.includes(item.id)) completeMonths.push(item.id);
-                        if (colName === 'history_months') {
-                            Object.values(monthData).forEach(historyItem => state.history.push(historyItem));
-                        } else {
-                            Object.entries(monthData).forEach(([date, day]) => {
-                                state.nutrition[date] = day;
-                            });
-                        }
+                        assertCloudBusinessPreserved(path, rawMonthData, monthData);
+                        documents.set(path, { ...monthData, _sync: normalized.sync });
+                        months.push(item.id);
+                        if (colName === 'history_months') history.push(...Object.values(monthData));
+                        else Object.assign(nutrition, monthData);
                     }
                     cursor = page.size === 400 ? page.docs[page.docs.length - 1] : undefined;
                 } while (cursor);
-            }
+                return { documents, months, history, nutrition };
+            };
+            // Wait for both readers even on failure; publish only complete,
+            // validated sections in the same deterministic order as before.
+            const [historyScan, nutritionScan] = await Promise.allSettled([
+                scanCollection('history_months'),
+                scanCollection('nutrition_months'),
+            ]);
+            if (historyScan.status === 'rejected') throw historyScan.reason;
+            if (nutritionScan.status === 'rejected') throw nutritionScan.reason;
+            for (const [path, document] of historyScan.value.documents) cloudDocuments.set(path, document);
+            for (const [path, document] of nutritionScan.value.documents) cloudDocuments.set(path, document);
+            state.history = historyScan.value.history;
+            state.nutrition = nutritionScan.value.nutrition;
+            completeMonths = [...new Set([...historyScan.value.months, ...nutritionScan.value.months])];
         } else {
             const now = new Date();
             const targetMonths = [0, 1, 2].map(offset => {
@@ -225,8 +240,4 @@ async function loadCloudPayload(options?: { allMonths?: boolean; cloudKey?: Uint
 export const DB = {
     ...baseDB,
     loadCloudPayload,
-    async loadUserData(options?: { allMonths?: boolean; cloudKey?: Uint8Array }): Promise<UserData | null> {
-        const payload = await loadCloudPayload(options);
-        return payload ? payload.data : null;
-    },
 };

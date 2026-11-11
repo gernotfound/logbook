@@ -529,10 +529,6 @@ vi.mock('../src/lib/db', () => ({
       const state = useAppStore.getState();
       return state.userData ? { data: state.userData, completeMonths: [], cloudDocuments: new Map() } : null;
     }),
-    loadUserData: vi.fn().mockImplementation(() => {
-      const state = useAppStore.getState();
-      return state.userData;
-    }),
     saveUserData: vi.fn().mockResolvedValue({ ok: true, status: 'synced' }),
     secureLogOut: vi.fn().mockResolvedValue(undefined),
     deleteAccount: vi.fn().mockResolvedValue(undefined),
