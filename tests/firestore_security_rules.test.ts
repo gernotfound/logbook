@@ -36,9 +36,11 @@ describe('Firestore Security Rules Whitelist & Parity Verification', () => {
     expect(rulesContent).toContain('service cloud.firestore');
   });
 
-  it('contains global_catalog public read rule', () => {
-    expect(rulesContent).toMatch(/match\s+\/global_catalog\/\{document=\*\*\}/);
-    expect(rulesContent).toMatch(/allow\s+read:\s*if\s+true;/);
+  it('allows public catalog document reads without opening queries or nested paths', () => {
+    expect(rulesContent).toMatch(/match\s+\/global_catalog\/\{documentId\}/);
+    expect(rulesContent).toMatch(/allow\s+get:\s*if\s+true;/);
+    expect(rulesContent).toMatch(/allow\s+list,\s*write:\s*if\s+false;/);
+    expect(rulesContent).not.toMatch(/match\s+\/global_catalog\/\{document=\*\*\}/);
   });
 
   it('makes account_deletions server-only and uses it as a cross-device access barrier', () => {
@@ -60,7 +62,8 @@ describe('Firestore Security Rules Whitelist & Parity Verification', () => {
   it('keeps root deletion server-only while allowing active-owner reads and writes', () => {
     const usersBlock = rulesContent.match(/match\s+\/users\/\{userId\}\s*\{([\s\S]*?)\n\s*match\s+\/history_months/);
     expect(usersBlock).not.toBeNull();
-    expect(usersBlock![1]).toMatch(/allow\s+read:\s*if\s+isWritableOwner\(userId\);/);
+    expect(usersBlock![1]).toMatch(/allow\s+get:\s*if\s+isWritableOwner\(userId\);/);
+    expect(usersBlock![1]).toMatch(/allow\s+list:\s*if\s+false;/);
     expect(usersBlock![1]).toMatch(/allow\s+create,\s*update:\s*if\s+isWritableOwner\(userId\)/);
     expect(usersBlock![1]).not.toMatch(/allow\s+read,\s*delete:/);
     expect(usersBlock![1]).not.toMatch(/allow\s+delete:/);
@@ -68,7 +71,10 @@ describe('Firestore Security Rules Whitelist & Parity Verification', () => {
 
   it('allows only an active owner to access private month collections', () => {
     expect(rulesContent).toMatch(/match\s+\/history_months\/\{monthId\}/);
-    expect(rulesContent).toMatch(/allow\s+read:\s*if\s+isWritableOwner\(userId\);/);
+    expect(rulesContent).toMatch(/allow\s+get:\s*if\s+isWritableOwner\(userId\);/);
+    expect(rulesContent).toMatch(/allow\s+list:\s*if\s+boundedArchiveQuery\(\)\s*&&\s*isWritableOwner\(userId\);/);
+    expect(rulesContent).toContain("request.query.get('offset', 0) == 0");
+    expect(rulesContent).toContain('request.query.limit <= 400');
     expect(rulesContent.match(/allow\s+delete:\s*if\s+false;/g)?.length).toBeGreaterThanOrEqual(3);
     expect(rulesContent).toMatch(/match\s+\/nutrition_months\/\{monthId\}/);
   });

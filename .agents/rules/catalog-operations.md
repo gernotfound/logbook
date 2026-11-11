@@ -17,7 +17,7 @@ Il manifest indica i documenti dati della versione pubblicata; `exercises_v1` e 
 
 ### Regole Firestore
 
-`global_catalog` ha `allow read: if true` (pubblico in sola lettura) e `allow write: if false` (nessuna scrittura da client).
+`global_catalog` consente al client soltanto `get` pubbliche di singoli documenti della collezione (`manifest` e riferimenti versionati). Query/`list`, accessi a sottocollezioni e scritture sono negati: il catalogo non richiede enumerazione e i documenti storici non devono essere scoperti tramite query. Questa restrizione riduce la superficie di abuso, **non** impedisce richieste ripetute a un documento noto né sostituisce App Check o i limiti di quota.
 
 ## Seed locali vuoti — policy "enforce manual input"
 

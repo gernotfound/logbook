@@ -12,6 +12,9 @@ import {
 } from '../server/accountDeletion/budget.js';
 import { processAccountDeletion, progressAndReadStatus } from '../server/accountDeletion/runner.js';
 import { accountDeletionCorsHeaders, requireAccountDeletionOrigin } from '../server/accountDeletion/cors.js';
+import {
+  assertBoundedJsonContentLength, BoundedJsonBodyError, readBoundedJsonObject,
+} from '../server/accountDeletion/readBoundedJson.js';
 
 export const maxDuration = 300;
 
@@ -60,32 +63,23 @@ function errorResponse(error: unknown, origin: string | null = null): Response {
   if (error instanceof RequestInputError) {
     return json({ error: error.message }, { status: 400 }, origin);
   }
+  if (error instanceof BoundedJsonBodyError) {
+    return json({ error: error.message }, { status: error.status }, origin);
+  }
   const kind = error instanceof Error ? error.name : 'UnknownError';
   console.error('[account-deletion] backend failure', { kind });
   return json({ error: 'Servizio di cancellazione temporaneamente non disponibile. La copia locale è stata conservata.' }, { status: 500 }, origin);
-}
-
-async function requestBody(request: Request): Promise<Record<string, unknown>> {
-  let body: unknown;
-  try {
-    body = await request.json();
-  } catch (error) {
-    if (error instanceof SyntaxError) throw new RequestInputError('Corpo JSON non valido.');
-    // An interrupted body stream is a transport failure, not invalid user input.
-    throw error;
-  }
-  if (!body || typeof body !== 'object' || Array.isArray(body)) {
-    throw new RequestInputError('Corpo JSON non valido.');
-  }
-  return body as Record<string, unknown>;
 }
 
 export async function POST(request: Request): Promise<Response> {
   const origin = request.headers.get('origin');
   try {
     requireAccountDeletionOrigin(request);
+    // Reject an explicitly oversized request before consuming a one-shot App Check
+    // token or contacting Firebase Auth; the stream itself is bounded after auth.
+    assertBoundedJsonContentLength(request);
     const { uid } = await verifyDeletionRequester(request);
-    const body = await requestBody(request);
+    const body = await readBoundedJsonObject(request);
     const receiptToken = validatedInput(() => validateReceipt(body.receiptToken));
 
     await createOrRefreshDeletionJob(uid, receiptToken);
