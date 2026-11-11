@@ -45,8 +45,8 @@ describe('Firebase environment hardening', () => {
             expect(fileContent).not.toMatch(/logbook-test/);
             expect(fileContent).not.toMatch(/logbook-demo/);
             expect(fileContent).not.toMatch(/logbook-prod/);
-            expect(fileContent).not.toMatch(/\.firebaseapp\.com/);
-            expect(fileContent).not.toMatch(/\.firebasestorage\.app/);
+            expect(fileContent).not.toContain('.firebaseapp.com');
+            expect(fileContent).not.toContain('.firebasestorage.app');
 
             // Must verify all 4 required variables are listed in requiredEnvVars
             for (const key of requiredEnvKeys) {
