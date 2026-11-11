@@ -4,7 +4,7 @@
 
 ## Dove collocare un test
 
-La **responsabilità funzionale** determina la cartella, mentre il **runner** determina l'ambiente e il gate. Evitare una cartella per singolo test o per milestone temporanea.
+La **responsabilità funzionale** determina la cartella, mentre il **runner** determina l'ambiente e il gate. Evitare una cartella per singolo test o per milestone temporanea. La sola presenza di fixture condivise non rende una suite trasversale: conta il contratto verificato dalle asserzioni.
 
 | Area | Cartella | Responsabilità |
 | --- | --- | --- |
