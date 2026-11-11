@@ -8,7 +8,7 @@ const root = resolve(fileURLToPath(new URL('..', import.meta.url)));
 const testPaths = execFileSync('git', ['ls-files', '-z'], { cwd: root, encoding: 'utf8' }).split('\0').filter(Boolean);
 
 const selected = testPaths.filter(isCriticalTest);
-if (selected.length < 15) throw new Error('Critical coverage test selection unexpectedly small: ' + selected.length);
+if (selected.length < 48) throw new Error('Critical coverage test selection unexpectedly small: ' + selected.length);
 
 const sources = [
   'src/lib/auth/**/*.{ts,tsx}',

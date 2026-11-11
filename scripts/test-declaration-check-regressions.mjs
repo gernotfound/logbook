@@ -72,7 +72,7 @@ await test('preserves generic arrow functions in .ts without interpreting them a
     'const deferred = <T>() => new Promise<T>(() => {});',
     "it.skip('disabled', () => {});",
   ].join('\n');
-  assert.deepEqual(findDisabledTests(source, 'tests/isolated/lateCommit.test.ts').map(f => f.label), ['skip']);
+  assert.deepEqual(findDisabledTests(source, 'tests/isolated/sync/lateCommit.test.ts').map(f => f.label), ['skip']);
 });
 
 await test('rejects JSX in .ts rather than silently misparsing test declarations', () => {

@@ -4,27 +4,27 @@
 export const trialCases = {
   "secure-control-recovery": {
     "mutate": ["src/lib/sync/secureArchiveControlRecovery.ts"],
-    "testFiles": ["tests/isolated/secureArchiveControlRecovery.test.ts", "tests/isolated/secure_archive_migration.test.ts"],
+    "testFiles": ["tests/isolated/storage/secureArchiveControlRecovery.test.ts", "tests/isolated/storage/secure_archive_migration.test.ts"],
     "runner": "isolated"
   },
   "secure-archive-session": {
     "mutate": ["src/lib/sync/secureArchiveSession.ts"],
-    "testFiles": ["tests/isolated/secure_archive_session.test.ts", "tests/isolated/secureArchiveSession.test.ts", "tests/isolated/secure_archive_indexeddb.test.ts", "tests/isolated/secureArchiveRepository.test.ts"],
+    "testFiles": ["tests/isolated/storage/secureArchiveSession.test.ts", "tests/isolated/storage/secure_archive_indexeddb.test.ts", "tests/isolated/storage/secureArchiveRepository.test.ts"],
     "runner": "isolated"
   },
   "secure-archive-repository": {
     "mutate": ["src/lib/sync/secureArchiveRepository.ts"],
-    "testFiles": ["tests/isolated/secure_archive_indexeddb.test.ts", "tests/isolated/secureArchiveRepository.test.ts"],
+    "testFiles": ["tests/isolated/storage/secure_archive_indexeddb.test.ts", "tests/isolated/storage/secureArchiveRepository.test.ts"],
     "runner": "isolated"
   },
   "archive-bootstrap": {
     "mutate": ["src/lib/sync/localArchiveBootstrap.ts"],
-    "testFiles": ["tests/isolated/localRepository.test.ts", "tests/isolated/localArchiveBootstrap.test.ts"],
+    "testFiles": ["tests/isolated/storage/localRepository.test.ts", "tests/isolated/storage/localArchiveBootstrap.test.ts"],
     "runner": "isolated"
   },
   "consent-reconciliation": {
     "mutate": ["src/lib/sync/localConsentReconciliation.ts"],
-    "testFiles": ["tests/isolated/localRepository.test.ts", "tests/isolated/audit_03_rejected_consent.test.ts", "tests/isolated/localConsentReconciliation.test.ts"],
+    "testFiles": ["tests/isolated/storage/localRepository.test.ts", "tests/isolated/health/audit_03_rejected_consent.test.ts", "tests/isolated/health/localConsentReconciliation.test.ts"],
     "runner": "isolated"
   },
   "csv": {
@@ -32,8 +32,8 @@ export const trialCases = {
       "src/lib/csvExport.ts:7-25"
     ],
     "testFiles": [
-      "tests/csv_export_builder.test.ts",
-      "tests/sec01_csv_injection.test.tsx"
+      "tests/portability/csv_export_builder.test.ts",
+      "tests/portability/sec01_csv_injection.test.tsx"
     ]
   },
   "meal-totals": {
@@ -67,7 +67,7 @@ export const trialCases = {
       "src/lib/utils/date.ts:12-33"
     ],
     "testFiles": [
-      "tests/secure_id_generation.test.ts"
+      "tests/schema/secure_id_generation.test.ts"
     ]
   },
   "cycle-limits": {
@@ -75,7 +75,7 @@ export const trialCases = {
       "src/lib/calc/cycleLimits.ts"
     ],
     "testFiles": [
-      "tests/training_cycle_limits_regression.test.ts"
+      "tests/training/cycles/training_cycle_limits_regression.test.ts"
     ]
   },
   "password-policy": {
@@ -88,61 +88,61 @@ export const trialCases = {
   },
   "sync-batching": {
     "mutate": ["src/lib/sync/syncBatching.ts"],
-    "testFiles": ["tests/isolated/syncBatching.test.ts"],
+    "testFiles": ["tests/isolated/sync/syncBatching.test.ts"],
     "runner": "isolated"
   },
   "journal-retry": {
     "mutate": ["src/lib/sync/journalRetry.ts"],
-    "testFiles": ["tests/isolated/journalRetry.test.ts", "tests/isolated/cloudKeyJournalRecovery.test.ts"],
+    "testFiles": ["tests/isolated/sync/journalRetry.test.ts", "tests/isolated/sync/cloudKeyJournalRecovery.test.ts"],
     "runner": "isolated"
   },
   "replica-checkpoint": {
     "mutate": ["src/lib/sync/localReplicaCheckpoint.ts"],
-    "testFiles": ["tests/isolated/localReplicaCheckpoint.test.ts"],
+    "testFiles": ["tests/isolated/sync/localReplicaCheckpoint.test.ts"],
     "runner": "isolated"
   },
   "cloud-integrity": {
     "mutate": ["src/lib/sync/localCloudIntegrity.ts"],
-    "testFiles": ["tests/isolated/localCloudIntegrity.test.ts"],
+    "testFiles": ["tests/isolated/sync/localCloudIntegrity.test.ts"],
     "runner": "isolated"
   },
   "cloud-hydration": {
     "mutate": ["src/lib/sync/localCloudHydration.ts"],
-    "testFiles": ["tests/isolated/localRepository.test.ts", "tests/isolated/consentEpochRecovery.test.ts", "tests/isolated/localCloudHydration.test.ts"],
+    "testFiles": ["tests/isolated/storage/localRepository.test.ts", "tests/isolated/health/consentEpochRecovery.test.ts", "tests/isolated/sync/localCloudHydration.test.ts"],
     "runner": "isolated"
   },
   "journal-acknowledgement": {
     "mutate": ["src/lib/sync/localJournalAcknowledgement.ts"],
-    "testFiles": ["tests/isolated/localRepository.test.ts", "tests/isolated/lateCommit.test.ts", "tests/isolated/storeJournal.test.ts", "tests/isolated/localJournalAcknowledgement.test.ts"],
+    "testFiles": ["tests/isolated/storage/localRepository.test.ts", "tests/isolated/sync/lateCommit.test.ts", "tests/isolated/sync/storeJournal.test.ts", "tests/isolated/sync/localJournalAcknowledgement.test.ts"],
     "runner": "isolated"
   },
   "consent-journal-recovery": {
     "mutate": ["src/lib/sync/localConsentJournalRecovery.ts"],
-    "testFiles": ["tests/isolated/consentEpochRecovery.test.ts", "tests/isolated/localConsentJournalRecovery.test.ts"],
+    "testFiles": ["tests/isolated/health/consentEpochRecovery.test.ts", "tests/isolated/health/localConsentJournalRecovery.test.ts"],
     "runner": "isolated"
   },
   "nutrition-conflict": {
     "mutate": ["src/lib/sync/localNutritionConflict.ts"],
-    "testFiles": ["tests/isolated/secure_archive_indexeddb.test.ts", "tests/isolated/localSnapshotMergeMetadata.test.ts", "tests/isolated/m8_domain_commit.test.ts", "tests/isolated/storeJournal.test.ts", "tests/isolated/localNutritionConflict.test.ts"],
+    "testFiles": ["tests/isolated/storage/secure_archive_indexeddb.test.ts", "tests/isolated/sync/localSnapshotMergeMetadata.test.ts", "tests/isolated/domain/m8_domain_commit.test.ts", "tests/isolated/sync/storeJournal.test.ts", "tests/isolated/sync/localNutritionConflict.test.ts"],
     "runner": "isolated"
   },
   "pending-sequences": {
     "mutate": ["src/lib/sync/localPendingSequences.ts"],
-    "testFiles": ["tests/isolated/localPendingSequences.test.ts"],
+    "testFiles": ["tests/isolated/sync/localPendingSequences.test.ts"],
     "runner": "isolated"
   },
   "sync-failure": {
     "mutate": ["src/lib/sync/syncFailure.ts"],
-    "testFiles": ["tests/app_check_sync_semantics.test.ts"]
+    "testFiles": ["tests/firebase/app_check_sync_semantics.test.ts"]
   },
   "monthly-tombstones": {
     "mutate": ["src/lib/sync/monthlyEntityTombstones.ts"],
-    "testFiles": ["tests/isolated/monthlyEntityTombstones.test.ts", "tests/isolated/monthlyEntityTombstoneReplay.test.ts"],
+    "testFiles": ["tests/isolated/sync/monthlyEntityTombstones.test.ts", "tests/isolated/sync/monthlyEntityTombstoneReplay.test.ts"],
     "runner": "isolated"
   },
   "business-normalization": {
     "mutate": ["src/lib/sync/businessNormalizationIntegrity.ts"],
-    "testFiles": ["tests/isolated/businessNormalizationIntegrity.test.ts"],
+    "testFiles": ["tests/isolated/domain/businessNormalizationIntegrity.test.ts"],
     "runner": "isolated"
   },
   "causal-compaction": {

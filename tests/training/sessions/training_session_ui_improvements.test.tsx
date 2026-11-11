@@ -1,0 +1,1154 @@
+import React from 'react';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { render, screen, fireEvent, act, waitFor } from '@testing-library/react';
+import { captureSession, invalidateSession } from '../../../src/lib/sync/session';
+import { prepareUnlockedTestArchive } from '../../secureVaultFixture';
+import { initializeLocal } from '../../../src/lib/sync/localRepository';
+import SessionExerciseCard from '../../../src/components/Training/session/SessionExerciseCard';
+import SessionExerciseAccordion from '../../../src/components/Training/session/SessionExerciseAccordion';
+import SessionSetRow from '../../../src/components/Training/session/SessionSetRow';
+import TrainingSession from '../../../src/components/Training/TrainingSession';
+import { useDialogStore } from '../../../src/store/useDialogStore';
+import { useAppStore } from '../../../src/store/useAppStore';
+import { renderWithAuthenticatedTestOwner, emptyUserData } from '../../setup';
+import type { WorkoutSession, Exercise } from '../../../src/types';
+
+describe('Training Session UI Improvements Suite (R1, R2, R3)', () => {
+    const mockLibrary: Exercise[] = [
+        { id: 'ex_bench', name: 'Panca Piana', setsCount: 3, sets: [], trackingType: 'weight_reps' },
+        { id: 'ex_plank', name: 'Plank', setsCount: 3, sets: [], trackingType: 'time' },
+        { id: 'ex_treadmill', name: 'Tapis Roulant', setsCount: 1, sets: [], trackingType: 'cardio' }
+    ];
+
+    beforeEach(async () => {
+        vi.clearAllMocks();
+        localStorage.clear();
+        const owner = captureSession().owner;
+        if (owner.startsWith('user:')) localStorage.setItem(`logbook:v2:${owner}:health-consent-generation`, '1');
+        await prepareUnlockedTestArchive(owner);
+        useAppStore.setState({
+            userData: {
+                ...emptyUserData,
+                library: mockLibrary,
+                routines: [
+                    {
+                        id: 'routine_1',
+                        name: 'Scheda Petto',
+                        exercises: [{ exId: 'ex_bench', setsCount: 3 }]
+                    }
+                ]
+            },
+            localWorkout: null,
+            syncing: false,
+            saveError: null
+        });
+    });
+
+    describe('R1: Graphic Restyling of Exercises and Sets', () => {
+        it('R1.1: Exercises container in TrainingSession does NOT have .card gray background class', () => {
+            const activeWorkout: WorkoutSession = {
+                id: 'sess_1',
+                routineId: 'routine_1',
+                routineName: 'Scheda Petto',
+                date: '2026-08-20',
+                globalStartTime: Date.now(),
+                exercises: [
+                    {
+                        exId: 'ex_bench',
+                        sets: [{ id: 's1', kg: '80', reps: '10' }],
+                        sessionNote: ''
+                    }
+                ]
+            };
+
+            renderWithAuthenticatedTestOwner(<TrainingSession />, {
+                localWorkout: activeWorkout,
+                userData: {
+                    ...emptyUserData,
+                    library: mockLibrary,
+                    routines: [{ id: 'routine_1', name: 'Scheda Petto', exercises: [{ exId: 'ex_bench', setsCount: 3 }] }]
+                }
+            });
+
+            expect(screen.getByText('Scheda Petto')).toBeDefined();
+            const exerciseList = document.querySelector('.session-exercise-list');
+            expect(exerciseList).not.toBeNull();
+            expect(exerciseList?.classList.contains('card')).toBe(false);
+            expect(exerciseList?.querySelector('.session-exercise-shell')).not.toBeNull();
+        });
+
+        it('R1.2: SessionSetRow exposes the semantic primary border token (jsdom structural check)', () => {
+            const setObj = { id: 's1', kg: '80', reps: '10' };
+
+            const { container } = render(
+                <SessionSetRow
+                    set={setObj}
+                    sIndex={0}
+                    exIndex={0}
+                    trackingType="weight_reps"
+                    isOpenMenu={false}
+                    onToggleMenu={() => {}}
+                    onRemoveSet={() => {}}
+                    onUpdateSet={() => {}}
+                    onAddSpecialSet={() => {}}
+                    onUpdateSpecialSet={() => {}}
+                    onRemoveSpecialSet={() => {}}
+                    onUpdateSetTarget={() => {}}
+                />
+            );
+
+            const row = container.querySelector('.set-row');
+            expect(row).not.toBeNull();
+            expect((row as HTMLElement).style.border).toContain('var(--primary-color)');
+        });
+
+    });
+
+    it('R1.3: advanced techniques are an ordered queue without a generic segment control', () => {
+        const { container } = render(
+            <SessionSetRow
+                set={{ id: 's-tech', kg: '100', reps: '8', technique: 'dropset', segments: [
+                    { id: 'seg1', kg: '', reps: '', technique: 'dropset' },
+                    { id: 'seg2', kg: '', reps: '', technique: 'dropset' },
+                    { id: 'seg3', kg: '', reps: '', technique: 'rest_pause' },
+                ] }}
+                sIndex={0}
+                exIndex={0}
+                trackingType="weight_reps"
+                isOpenMenu={false}
+                onToggleMenu={() => {}}
+                onRemoveSet={() => {}}
+                onUpdateSet={() => {}}
+                onAddSpecialSet={() => {}}
+                onUpdateSpecialSet={() => {}}
+                onRemoveSpecialSet={() => {}}
+                onUpdateSetTarget={() => {}}
+            />
+        );
+        expect(screen.getByText('↳ Dropset 1')).toBeDefined();
+        expect(screen.getByText('↳ Dropset 2')).toBeDefined();
+        expect(screen.getByText('↳ Rest-pause 1')).toBeDefined();
+        expect(screen.queryByText('+ Segmento')).toBeNull();
+        expect(container.textContent?.toLocaleLowerCase('it')).not.toContain('segmento');
+    });
+
+    it('associa le cinque etichette cardio ai rispettivi campi', () => {
+        render(
+            <SessionExerciseCard
+                exItem={{ id: 'cardio-instance', exId: 'ex_treadmill', sessionNote: '', sets: [
+                    { id: 'cardio-set-1', kg: '', reps: '', time: '', distance: '', speed: '', incline: '', kcal: '' }
+                ] }}
+                exIndex={0}
+                libDef={{ id: 'ex_treadmill', name: 'Tapis Roulant', trackingType: 'cardio' }}
+                pastWorkouts={[]}
+                isHistoryOpen={false}
+                isSetupOpen={false}
+                openSpecialMenuId={null}
+                onToggleHistory={vi.fn()}
+                onToggleSetup={vi.fn()}
+                onRemoveExercise={vi.fn()}
+                onUpdateSetupNote={vi.fn()}
+                onUpdateSessionNote={vi.fn()}
+                onUpdateTechnicalStandard={vi.fn()}
+                onAddSet={vi.fn()}
+                onRemoveSet={vi.fn()}
+                onUpdateSet={vi.fn()}
+                onAddSpecialSet={vi.fn()}
+                onUpdateSpecialSet={vi.fn()}
+                onRemoveSpecialSet={vi.fn()}
+                onUpdateSetTarget={vi.fn()}
+                onToggleSpecialMenu={vi.fn()}
+            />
+        );
+
+        for (const label of ['Durata (min)', 'Distanza (km)', 'Velocità media', 'Inclinazione (%)', 'Kcal stimate']) {
+            expect(screen.getByRole('textbox', { name: label })).toBeDefined();
+        }
+    });
+
+    it('isola ID e associazioni dei campi di due istanze senza ID persistente', () => {
+        const props = {
+            exItem: { exId: 'ex_treadmill', sessionNote: '', sets: [{ id: 'set-one', kg: '', reps: '' }] },
+            exIndex: 0,
+            libDef: { id: 'ex_treadmill', name: 'Tapis Roulant', trackingType: 'cardio' },
+            pastWorkouts: [],
+            isHistoryOpen: false,
+            isSetupOpen: false,
+            openSpecialMenuId: null,
+            onToggleHistory: vi.fn(),
+            onToggleSetup: vi.fn(),
+            onRemoveExercise: vi.fn(),
+            onUpdateSetupNote: vi.fn(),
+            onUpdateSessionNote: vi.fn(),
+            onUpdateTechnicalStandard: vi.fn(),
+            onAddSet: vi.fn(),
+            onRemoveSet: vi.fn(),
+            onUpdateSet: vi.fn(),
+            onAddSpecialSet: vi.fn(),
+            onUpdateSpecialSet: vi.fn(),
+            onRemoveSpecialSet: vi.fn(),
+            onUpdateSetTarget: vi.fn(),
+            onToggleSpecialMenu: vi.fn(),
+        };
+        const { container } = render(
+            <>
+                <SessionExerciseAccordion {...props} isCurrent initiallyExpanded />
+                <SessionExerciseAccordion
+                    {...props}
+                    exItem={{ ...props.exItem, sets: [{ id: 'set-two', kg: '', reps: '' }] }}
+                    exIndex={1}
+                    isCurrent={false}
+                    initiallyExpanded
+                />
+            </>
+        );
+
+        const shells = [...container.querySelectorAll('.session-exercise-shell')];
+        expect(shells).toHaveLength(2);
+        for (const [index, shell] of shells.entries()) {
+            const identity = `ex_treadmill_${index}`;
+            const summary = shell.querySelector('.session-exercise-summary');
+            const body = shell.querySelector('.session-exercise-shell-body');
+            expect(summary?.getAttribute('aria-controls')).toBe(`session-exercise-body-${identity}`);
+            expect(body?.id).toBe(`session-exercise-body-${identity}`);
+            for (const field of ['time', 'distance', 'speed', 'incline', 'kcal']) {
+                const id = `cardio-${field}-${identity}-${index === 0 ? 'set-one' : 'set-two'}`;
+                const input = shell.querySelector(`input[id="${id}"]`);
+                const label = shell.querySelector(`label[for="${id}"]`) as HTMLLabelElement | null;
+                expect(input).not.toBeNull();
+                expect(label?.control).toBe(input);
+                expect(container.querySelectorAll(`[id="${id}"]`)).toHaveLength(1);
+            }
+            const noteId = `session-note-${identity}`;
+            expect(shell.querySelector(`textarea[id="${noteId}"]`)).not.toBeNull();
+            expect(container.querySelectorAll(`[id="${noteId}"]`)).toHaveLength(1);
+        }
+    });
+
+    describe('R2: Set Button Layout & Functionality', () => {
+        it('R2.1: Renders two side-by-side buttons for "Rimuovi serie" and "Aggiungi serie"', () => {
+            const exItem = {
+                id: 'item_1',
+                exId: 'ex_bench',
+                sets: [
+                    { id: 's1', kg: '', reps: '' },
+                    { id: 's2', kg: '', reps: '' }
+                ],
+                sessionNote: ''
+            };
+            const libDef = { id: 'ex_bench', name: 'Panca Piana', trackingType: 'weight_reps' };
+
+            render(
+                <SessionExerciseCard
+                    exItem={exItem}
+                    exIndex={0}
+                    libDef={libDef}
+                    pastWorkouts={[]}
+                    isHistoryOpen={false}
+                    isSetupOpen={false}
+                    openSpecialMenuId={null}
+                    onToggleHistory={() => {}}
+                    onToggleSetup={() => {}}
+                    onRemoveExercise={() => {}}
+                    onUpdateSetupNote={() => {}}
+                    onUpdateSessionNote={() => {}}
+                    onAddSet={() => {}}
+                    onRemoveSet={() => {}}
+                    onUpdateSet={() => {}}
+                    onAddSpecialSet={() => {}}
+                    onUpdateSpecialSet={() => {}}
+                    onRemoveSpecialSet={() => {}}
+                    onToggleSpecialMenu={() => {}}
+                onUpdateSetTarget={vi.fn()}
+                onUpdateTechnicalStandard={vi.fn()}
+                />
+            );
+
+            const removeBtn = screen.getByText('- Rimuovi serie');
+            const addBtn = screen.getByText('+ Aggiungi serie');
+
+            expect(removeBtn).toBeDefined();
+            expect(addBtn).toBeDefined();
+
+            const historyBtn = screen.getByRole('button', { name: /storico/i });
+            const setupBtn = screen.getByRole('button', { name: /setup/i });
+            expect(historyBtn.getAttribute('aria-expanded')).toBe('false');
+            expect(historyBtn.getAttribute('aria-controls')).toBe('session-history-0');
+            expect(setupBtn.getAttribute('aria-expanded')).toBe('false');
+            expect(setupBtn.getAttribute('aria-controls')).toBe('session-setup-0');
+
+            // Check that they share the same parent flex container
+            expect(removeBtn.parentElement).toBe(addBtn.parentElement);
+            const parentStyle = removeBtn.parentElement?.getAttribute('style') || '';
+            expect(parentStyle).toContain('display: flex');
+        });
+
+        it('R2.2: "Rimuovi serie" removes only the last set index', async () => {
+            const onRemoveSetSpy = vi.fn();
+            const exItem = {
+                id: 'item_1',
+                exId: 'ex_bench',
+                sets: [
+                    { id: 's1', kg: '', reps: '' },
+                    { id: 's2', kg: '', reps: '' },
+                    { id: 's3', kg: '', reps: '' }
+                ],
+                sessionNote: ''
+            };
+            const libDef = { id: 'ex_bench', name: 'Panca Piana', trackingType: 'weight_reps' };
+
+            render(
+                <SessionExerciseCard
+                    exItem={exItem}
+                    exIndex={0}
+                    libDef={libDef}
+                    pastWorkouts={[]}
+                    isHistoryOpen={false}
+                    isSetupOpen={false}
+                    openSpecialMenuId={null}
+                    onToggleHistory={() => {}}
+                    onToggleSetup={() => {}}
+                    onRemoveExercise={() => {}}
+                    onUpdateSetupNote={() => {}}
+                    onUpdateSessionNote={() => {}}
+                    onAddSet={() => {}}
+                    onRemoveSet={onRemoveSetSpy}
+                    onUpdateSet={() => {}}
+                    onAddSpecialSet={() => {}}
+                    onUpdateSpecialSet={() => {}}
+                    onRemoveSpecialSet={() => {}}
+                    onToggleSpecialMenu={() => {}}
+                onUpdateSetTarget={vi.fn()}
+                onUpdateTechnicalStandard={vi.fn()}
+                />
+            );
+
+            const removeBtn = screen.getByText('- Rimuovi serie');
+            await act(async () => {
+                fireEvent.click(removeBtn);
+            });
+
+            // Must call onRemoveSet with index 2 (last element of 3 sets)
+            expect(onRemoveSetSpy).toHaveBeenCalledTimes(1);
+            expect(onRemoveSetSpy.mock.calls[0].slice(0, 2)).toEqual([0, 2]);
+        });
+
+        it('R2.3: "Rimuovi serie" is disabled when sets array is empty', async () => {
+            const onRemoveSetSpy = vi.fn();
+            const exItem = {
+                id: 'item_1',
+                exId: 'ex_bench',
+                sets: [],
+                sessionNote: ''
+            };
+            const libDef = { id: 'ex_bench', name: 'Panca Piana', trackingType: 'weight_reps' };
+
+            render(
+                <SessionExerciseCard
+                    exItem={exItem}
+                    exIndex={0}
+                    libDef={libDef}
+                    pastWorkouts={[]}
+                    isHistoryOpen={false}
+                    isSetupOpen={false}
+                    openSpecialMenuId={null}
+                    onToggleHistory={() => {}}
+                    onToggleSetup={() => {}}
+                    onRemoveExercise={() => {}}
+                    onUpdateSetupNote={() => {}}
+                    onUpdateSessionNote={() => {}}
+                    onAddSet={() => {}}
+                    onRemoveSet={onRemoveSetSpy}
+                    onUpdateSet={() => {}}
+                    onAddSpecialSet={() => {}}
+                    onUpdateSpecialSet={() => {}}
+                    onRemoveSpecialSet={() => {}}
+                    onToggleSpecialMenu={() => {}}
+                onUpdateSetTarget={vi.fn()}
+                onUpdateTechnicalStandard={vi.fn()}
+                />
+            );
+
+            const removeBtn = screen.getByText('- Rimuovi serie') as HTMLButtonElement;
+            expect(removeBtn.disabled).toBe(true);
+
+            await act(async () => {
+                fireEvent.click(removeBtn);
+            });
+
+            expect(onRemoveSetSpy).not.toHaveBeenCalled();
+        });
+    });
+
+    describe('R3: Protection Against Accidental Deletion', () => {
+        it('R3.1: Does NOT prompt confirmation if last set is unedited (empty/zero fields)', async () => {
+            const showConfirmSpy = vi.spyOn(useDialogStore.getState(), 'showConfirm');
+            const onRemoveSetSpy = vi.fn();
+
+            const exItem = {
+                id: 'item_1',
+                exId: 'ex_bench',
+                sets: [
+                    { id: 's1', kg: '80', reps: '10' },
+                    { id: 's2', kg: '', reps: '' } // Unedited set
+                ],
+                sessionNote: ''
+            };
+            const libDef = { id: 'ex_bench', name: 'Panca Piana', trackingType: 'weight_reps' };
+
+            render(
+                <SessionExerciseCard
+                    exItem={exItem}
+                    exIndex={0}
+                    libDef={libDef}
+                    pastWorkouts={[]}
+                    isHistoryOpen={false}
+                    isSetupOpen={false}
+                    openSpecialMenuId={null}
+                    onToggleHistory={() => {}}
+                    onToggleSetup={() => {}}
+                    onRemoveExercise={() => {}}
+                    onUpdateSetupNote={() => {}}
+                    onUpdateSessionNote={() => {}}
+                    onAddSet={() => {}}
+                    onRemoveSet={onRemoveSetSpy}
+                    onUpdateSet={() => {}}
+                    onAddSpecialSet={() => {}}
+                    onUpdateSpecialSet={() => {}}
+                    onRemoveSpecialSet={() => {}}
+                    onToggleSpecialMenu={() => {}}
+                onUpdateSetTarget={vi.fn()}
+                onUpdateTechnicalStandard={vi.fn()}
+                />
+            );
+
+            const removeBtn = screen.getByText('- Rimuovi serie');
+            await act(async () => {
+                fireEvent.click(removeBtn);
+            });
+
+            expect(showConfirmSpy).not.toHaveBeenCalled();
+            expect(onRemoveSetSpy.mock.calls[0].slice(0, 2)).toEqual([0, 1]);
+        });
+
+        it('R3.2: Shows confirmation dialog when last set contains weight/reps, and deletes when confirmed', async () => {
+            const showConfirmSpy = vi.spyOn(useDialogStore.getState(), 'showConfirm').mockResolvedValue(true);
+            const onRemoveSetSpy = vi.fn();
+
+            const exItem = {
+                id: 'item_1',
+                exId: 'ex_bench',
+                sets: [
+                    { id: 's1', kg: '80', reps: '10' },
+                    { id: 's2', kg: '85', reps: '8' } // Filled set
+                ],
+                sessionNote: ''
+            };
+            const libDef = { id: 'ex_bench', name: 'Panca Piana', trackingType: 'weight_reps' };
+
+            render(
+                <SessionExerciseCard
+                    exItem={exItem}
+                    exIndex={0}
+                    libDef={libDef}
+                    pastWorkouts={[]}
+                    isHistoryOpen={false}
+                    isSetupOpen={false}
+                    openSpecialMenuId={null}
+                    onToggleHistory={() => {}}
+                    onToggleSetup={() => {}}
+                    onRemoveExercise={() => {}}
+                    onUpdateSetupNote={() => {}}
+                    onUpdateSessionNote={() => {}}
+                    onAddSet={() => {}}
+                    onRemoveSet={onRemoveSetSpy}
+                    onUpdateSet={() => {}}
+                    onAddSpecialSet={() => {}}
+                    onUpdateSpecialSet={() => {}}
+                    onRemoveSpecialSet={() => {}}
+                    onToggleSpecialMenu={() => {}}
+                onUpdateSetTarget={vi.fn()}
+                onUpdateTechnicalStandard={vi.fn()}
+                />
+            );
+
+            const removeBtn = screen.getByText('- Rimuovi serie');
+            await act(async () => {
+                fireEvent.click(removeBtn);
+            });
+
+            expect(showConfirmSpy).toHaveBeenCalledTimes(1);
+            expect(onRemoveSetSpy.mock.calls[0].slice(0, 2)).toEqual([0, 1]);
+        });
+
+        it('R3.3: Cancels deletion when user declines confirmation dialog', async () => {
+            const showConfirmSpy = vi.spyOn(useDialogStore.getState(), 'showConfirm').mockResolvedValue(false);
+            const onRemoveSetSpy = vi.fn();
+
+            const exItem = {
+                id: 'item_1',
+                exId: 'ex_bench',
+                sets: [
+                    { id: 's1', kg: '80', reps: '10' }
+                ],
+                sessionNote: ''
+            };
+            const libDef = { id: 'ex_bench', name: 'Panca Piana', trackingType: 'weight_reps' };
+
+            render(
+                <SessionExerciseCard
+                    exItem={exItem}
+                    exIndex={0}
+                    libDef={libDef}
+                    pastWorkouts={[]}
+                    isHistoryOpen={false}
+                    isSetupOpen={false}
+                    openSpecialMenuId={null}
+                    onToggleHistory={() => {}}
+                    onToggleSetup={() => {}}
+                    onRemoveExercise={() => {}}
+                    onUpdateSetupNote={() => {}}
+                    onUpdateSessionNote={() => {}}
+                    onAddSet={() => {}}
+                    onRemoveSet={onRemoveSetSpy}
+                    onUpdateSet={() => {}}
+                    onAddSpecialSet={() => {}}
+                    onUpdateSpecialSet={() => {}}
+                    onRemoveSpecialSet={() => {}}
+                    onToggleSpecialMenu={() => {}}
+                onUpdateSetTarget={vi.fn()}
+                onUpdateTechnicalStandard={vi.fn()}
+                />
+            );
+
+            const removeBtn = screen.getByText('- Rimuovi serie');
+            await act(async () => {
+                fireEvent.click(removeBtn);
+            });
+
+            expect(showConfirmSpy).toHaveBeenCalledTimes(1);
+            expect(onRemoveSetSpy).not.toHaveBeenCalled();
+        });
+
+        it('R3.4: Detects filled data in time tracking exercises and special sets (dropsets/isometrics)', async () => {
+            const showConfirmSpy = vi.spyOn(useDialogStore.getState(), 'showConfirm').mockResolvedValue(true);
+            const onRemoveSetSpy = vi.fn();
+
+            // Case A: time tracking exercise
+            const exItemTime = {
+                id: 'item_plank',
+                exId: 'ex_plank',
+                sets: [{ id: 's_plank', kg: '', reps: '', time: '60s' }],
+                sessionNote: ''
+            };
+            const libDefTime = { id: 'ex_plank', name: 'Plank', trackingType: 'time' };
+
+            const { unmount } = render(
+                <SessionExerciseCard
+                    exItem={exItemTime}
+                    exIndex={0}
+                    libDef={libDefTime}
+                    pastWorkouts={[]}
+                    isHistoryOpen={false}
+                    isSetupOpen={false}
+                    openSpecialMenuId={null}
+                    onToggleHistory={() => {}}
+                    onToggleSetup={() => {}}
+                    onRemoveExercise={() => {}}
+                    onUpdateSetupNote={() => {}}
+                    onUpdateSessionNote={() => {}}
+                    onAddSet={() => {}}
+                    onRemoveSet={onRemoveSetSpy}
+                    onUpdateSet={() => {}}
+                    onAddSpecialSet={() => {}}
+                    onUpdateSpecialSet={() => {}}
+                    onRemoveSpecialSet={() => {}}
+                    onToggleSpecialMenu={() => {}}
+                onUpdateSetTarget={vi.fn()}
+                onUpdateTechnicalStandard={vi.fn()}
+                />
+            );
+
+            await act(async () => {
+                fireEvent.click(screen.getByText('- Rimuovi serie'));
+            });
+
+            expect(showConfirmSpy).toHaveBeenCalledTimes(1);
+            expect(onRemoveSetSpy.mock.calls[0].slice(0, 2)).toEqual([0, 0]);
+            unmount();
+            showConfirmSpy.mockClear();
+            onRemoveSetSpy.mockClear();
+
+            // Case B: Dropset filled
+            const exItemDropset = {
+                id: 'item_ds',
+                exId: 'ex_bench',
+                sets: [
+                    {
+                        id: 's_ds',
+                        kg: '',
+                        reps: '',
+                        segments: [{ technique: 'dropset' as const, id: 'ds_1', kg: '50', reps: '6' }]
+                    }
+                ],
+                sessionNote: ''
+            };
+            const libDefWeight = { id: 'ex_bench', name: 'Panca Piana', trackingType: 'weight_reps' };
+
+            render(
+                <SessionExerciseCard
+                    exItem={exItemDropset}
+                    exIndex={0}
+                    libDef={libDefWeight}
+                    pastWorkouts={[]}
+                    isHistoryOpen={false}
+                    isSetupOpen={false}
+                    openSpecialMenuId={null}
+                    onToggleHistory={() => {}}
+                    onToggleSetup={() => {}}
+                    onRemoveExercise={() => {}}
+                    onUpdateSetupNote={() => {}}
+                    onUpdateSessionNote={() => {}}
+                    onAddSet={() => {}}
+                    onRemoveSet={onRemoveSetSpy}
+                    onUpdateSet={() => {}}
+                    onAddSpecialSet={() => {}}
+                    onUpdateSpecialSet={() => {}}
+                    onRemoveSpecialSet={() => {}}
+                    onToggleSpecialMenu={() => {}}
+                onUpdateSetTarget={vi.fn()}
+                onUpdateTechnicalStandard={vi.fn()}
+                />
+            );
+
+            await act(async () => {
+                fireEvent.click(screen.getByText('- Rimuovi serie'));
+            });
+
+            expect(showConfirmSpy).toHaveBeenCalledTimes(1);
+            expect(onRemoveSetSpy.mock.calls[0].slice(0, 2)).toEqual([0, 0]);
+        });
+
+        it('R3.5: protects isometry-only and RIR-zero sets before deleting the last series', async () => {
+            const showConfirm = vi.spyOn(useDialogStore.getState(), 'showConfirm').mockResolvedValue(false);
+            const onRemoveSet = vi.fn();
+            const isoExercise = {
+                id: 'item_isometry',
+                exId: 'ex_bench',
+                sessionNote: '',
+                sets: [{
+                    id: 's_iso', kg: '', reps: '',
+                    segments: [{ technique: 'isometry' as const, reps: '', id: 'iso_1', kg: '', time: '20' }]
+                }]
+            };
+            const props = {
+                exIndex: 0,
+                libDef: { id: 'ex_bench', name: 'Panca Piana', trackingType: 'weight_reps' as const },
+                pastWorkouts: [],
+                isHistoryOpen: false,
+                isSetupOpen: false,
+                openSpecialMenuId: null,
+                onToggleHistory: vi.fn(),
+                onToggleSetup: vi.fn(),
+                onRemoveExercise: vi.fn(),
+                onUpdateSetupNote: vi.fn(),
+                onUpdateSessionNote: vi.fn(),
+                onAddSet: vi.fn(),
+                onRemoveSet,
+                onUpdateSet: vi.fn(),
+                onAddSpecialSet: vi.fn(),
+                onUpdateSpecialSet: vi.fn(),
+                onRemoveSpecialSet: vi.fn(),
+                onToggleSpecialMenu: vi.fn(),
+                onUpdateSetTarget: vi.fn(),
+                onUpdateTechnicalStandard: vi.fn()
+            };
+            const view = render(<SessionExerciseCard {...props} exItem={isoExercise} />);
+            await act(async () => {
+                fireEvent.click(screen.getByText('- Rimuovi serie'));
+            });
+            expect(showConfirm).toHaveBeenCalledTimes(1);
+            expect(onRemoveSet).not.toHaveBeenCalled();
+
+            showConfirm.mockResolvedValue(true);
+            await act(async () => {
+                fireEvent.click(screen.getByText('- Rimuovi serie'));
+            });
+            expect(onRemoveSet.mock.calls[0].slice(0, 3)).toEqual([0, 0, 's_iso']);
+
+            showConfirm.mockClear();
+            onRemoveSet.mockClear();
+            view.rerender(<SessionExerciseCard {...props} exItem={{
+                ...isoExercise,
+                sets: [{ id: 's_rir', kg: '', reps: '', rir: 0 }]
+            }} />);
+            await act(async () => {
+                fireEvent.click(screen.getByText('- Rimuovi serie'));
+            });
+            expect(showConfirm).toHaveBeenCalledTimes(1);
+            expect(onRemoveSet.mock.calls[0].slice(0, 3)).toEqual([0, 0, 's_rir']);
+        });
+    });
+
+    describe('Full Session Integration Lifecycle', () => {
+        it('Interactively adds and removes sets during an active workout session', async () => {
+            const activeWorkout: WorkoutSession = {
+                id: 'sess_live',
+                routineId: 'routine_1',
+                routineName: 'Scheda Petto',
+                date: '2026-08-20',
+                globalStartTime: Date.now(),
+                exercises: [
+                    {
+                        id: 'session-instance-bench',
+                        exId: 'ex_bench',
+                        sets: [
+                            { id: 's1', kg: '80', reps: '10' },
+                            { id: 's2', kg: '80', reps: '10' }
+                        ],
+                        sessionNote: ''
+                    }
+                ]
+            };
+
+            const owner = captureSession().owner;
+            const initialData = {
+                ...emptyUserData,
+                library: mockLibrary,
+                routines: [{ id: 'routine_1', name: 'Scheda Petto', exercises: [{ exId: 'ex_bench', setsCount: 3 }] }],
+                activeWorkout,
+            };
+            await initializeLocal(owner, initialData);
+            renderWithAuthenticatedTestOwner(<TrainingSession />, {
+                localWorkout: activeWorkout,
+                userData: initialData,
+            });
+
+            // 1. Add a 3rd set
+            const addBtn = screen.getByText('+ Aggiungi serie');
+            await act(async () => {
+                fireEvent.click(addBtn);
+            });
+
+            let currentWorkout = useAppStore.getState().localWorkout;
+            expect(currentWorkout?.exercises[0].sets).toHaveLength(3);
+
+            // 2. Remove the empty 3rd set (no confirmation needed)
+            const showConfirmSpy = vi.spyOn(useDialogStore.getState(), 'showConfirm');
+            const removeBtn = screen.getByText('- Rimuovi serie');
+
+            await act(async () => {
+                fireEvent.click(removeBtn);
+            });
+
+            expect(showConfirmSpy).not.toHaveBeenCalled();
+            currentWorkout = useAppStore.getState().localWorkout;
+            expect(currentWorkout?.exercises[0].sets).toHaveLength(2);
+
+            // 3. Remove the filled 2nd set (confirmation confirmed)
+            showConfirmSpy.mockResolvedValueOnce(true);
+            await act(async () => {
+                fireEvent.click(removeBtn);
+            });
+
+            expect(showConfirmSpy).toHaveBeenCalledTimes(1);
+            await waitFor(() => {
+                expect(useAppStore.getState().localWorkout?.exercises[0].sets).toHaveLength(1);
+            });
+            currentWorkout = useAppStore.getState().localWorkout;
+
+            // 4. Remove the 1st filled set down to 0 sets
+            showConfirmSpy.mockResolvedValueOnce(true);
+            await act(async () => {
+                fireEvent.click(removeBtn);
+            });
+
+            expect(showConfirmSpy).toHaveBeenCalledTimes(2);
+            currentWorkout = useAppStore.getState().localWorkout;
+            expect(currentWorkout?.exercises[0].sets).toHaveLength(0);
+
+            // 5. Attempting to remove on 0 sets should be disabled and do nothing
+            expect((removeBtn as HTMLButtonElement).disabled).toBe(true);
+            await act(async () => {
+                fireEvent.click(removeBtn);
+            });
+            expect(useAppStore.getState().localWorkout?.exercises[0].sets).toHaveLength(0);
+            expect(showConfirmSpy).toHaveBeenCalledTimes(2);
+        });
+
+        it('preserves newly edited set data while a row deletion confirmation is pending', async () => {
+            const activeWorkout: WorkoutSession = {
+                id: 'pending-row-delete',
+                routineId: 'routine_1',
+                routineName: 'Scheda Petto',
+                date: '2026-08-20',
+                globalStartTime: Date.now(),
+                exercises: [{
+                    id: 'session-bench',
+                    exId: 'ex_bench',
+                    sets: [{ id: 'set-one', kg: '80', reps: '10' }],
+                    sessionNote: ''
+                }]
+            };
+            const owner = captureSession().owner;
+            const initialData = {
+                ...emptyUserData,
+                library: mockLibrary,
+                routines: [{ id: 'routine_1', name: 'Scheda Petto', exercises: [{ exId: 'ex_bench', setsCount: 3 }] }],
+                activeWorkout
+            };
+            await initializeLocal(owner, initialData);
+            let confirmDeletion!: (accepted: boolean) => void;
+            const pendingConfirmation = new Promise<boolean>(resolve => { confirmDeletion = resolve; });
+            const showConfirm = vi.spyOn(useDialogStore.getState(), 'showConfirm')
+                .mockReturnValue(pendingConfirmation);
+            renderWithAuthenticatedTestOwner(<TrainingSession />, {
+                localWorkout: activeWorkout,
+                userData: initialData
+            });
+
+            await act(async () => {
+                fireEvent.click(screen.getByLabelText('Rimuovi serie 1'));
+            });
+            expect(showConfirm).toHaveBeenCalledTimes(1);
+
+            await act(async () => {
+                const input = screen.getByPlaceholderText('Kg');
+                fireEvent.change(input, { target: { value: '85' } });
+                fireEvent.blur(input);
+            });
+            await waitFor(() => {
+                expect(useAppStore.getState().localWorkout?.exercises[0].sets[0].kg).toBe('85');
+            });
+
+            await act(async () => { confirmDeletion(true); });
+            expect(useAppStore.getState().localWorkout?.exercises[0].sets).toHaveLength(1);
+            expect(useAppStore.getState().localWorkout?.exercises[0].sets[0]).toMatchObject({
+                id: 'set-one',
+                kg: '85',
+                reps: '10'
+            });
+        });
+
+
+        it('deletes a confirmed set if only another set changes while the dialog is open', async () => {
+            const activeWorkout: WorkoutSession = {
+                id: 'unrelated-edit-confirmation', routineId: 'routine_1',
+                routineName: 'Scheda Petto', date: '2026-08-20', globalStartTime: Date.now(),
+                exercises: [{ id: 'session-bench', exId: 'ex_bench', sessionNote: '',
+                    sets: [
+                        { id: 'set-one', kg: '80', reps: '10' },
+                        { id: 'set-two', kg: '70', reps: '12' }
+                    ]
+                }]
+            };
+            const owner = captureSession().owner;
+            const initialData = {
+                ...emptyUserData, library: mockLibrary,
+                routines: [{ id: 'routine_1', name: 'Scheda Petto',
+                    exercises: [{ exId: 'ex_bench', setsCount: 3 }] }],
+                activeWorkout
+            };
+            await initializeLocal(owner, initialData);
+            let accept!: (ok: boolean) => void;
+            const confirm = vi.spyOn(useDialogStore.getState(), 'showConfirm')
+                .mockReturnValue(new Promise<boolean>(resolve => { accept = resolve; }));
+            renderWithAuthenticatedTestOwner(<TrainingSession />, {
+                localWorkout: activeWorkout, userData: initialData
+            });
+            await act(async () => { fireEvent.click(screen.getByLabelText('Rimuovi serie 1')); });
+            expect(confirm).toHaveBeenCalledOnce();
+            await act(async () => {
+                const weight = screen.getAllByPlaceholderText('Kg')[1];
+                fireEvent.change(weight, { target: { value: '75' } });
+                fireEvent.blur(weight);
+            });
+            await waitFor(() =>
+                expect(useAppStore.getState().localWorkout?.exercises[0].sets[1].kg).toBe('75')
+            );
+            await act(async () => { accept(true); });
+            expect(useAppStore.getState().localWorkout?.exercises[0].sets).toEqual([
+                expect.objectContaining({ id: 'set-two', kg: '75', reps: '12' })
+            ]);
+        });
+
+        it('rejects an obsolete Auth epoch before deleting a confirmed set', async () => {
+            const activeWorkout: WorkoutSession = {
+                id: 'stale-confirmation', routineId: 'routine_1',
+                routineName: 'Scheda Petto', date: '2026-08-20', globalStartTime: Date.now(),
+                exercises: [{ id: 'session-bench', exId: 'ex_bench', sessionNote: '',
+                    sets: [{ id: 'set-one', kg: '80', reps: '10' }]
+                }]
+            };
+            const owner = captureSession().owner;
+            const initialData = {
+                ...emptyUserData, library: mockLibrary,
+                routines: [{ id: 'routine_1', name: 'Scheda Petto',
+                    exercises: [{ exId: 'ex_bench', setsCount: 3 }] }],
+                activeWorkout
+            };
+            await initializeLocal(owner, initialData);
+            let accept!: (ok: boolean) => void;
+            const confirm = vi.spyOn(useDialogStore.getState(), 'showConfirm')
+                .mockReturnValue(new Promise<boolean>(resolve => { accept = resolve; }));
+            renderWithAuthenticatedTestOwner(<TrainingSession />, {
+                localWorkout: activeWorkout, userData: initialData
+            });
+            await act(async () => { fireEvent.click(screen.getByLabelText('Rimuovi serie 1')); });
+            expect(confirm).toHaveBeenCalledOnce();
+            act(() => { invalidateSession(); invalidateSession(); });
+            await act(async () => { accept(true); });
+            expect(useAppStore.getState().localWorkout?.exercises[0].sets).toEqual([
+                expect.objectContaining({ id: 'set-one', kg: '80', reps: '10' })
+            ]);
+        });
+
+        it('Adversarial: verifies isometry detection and empty dropset handling', async () => {
+            const showConfirmSpy = vi.spyOn(useDialogStore.getState(), 'showConfirm').mockResolvedValue(true);
+            const onRemoveSetSpy = vi.fn();
+
+            // Case A: Isometry with filled time
+            const exItemIso = {
+                id: 'item_iso',
+                exId: 'ex_bench',
+                sets: [
+                    {
+                        id: 's_iso',
+                        kg: '',
+                        reps: '',
+                        segments: [{ technique: 'isometry' as const, reps: '', id: 'iso_1', kg: '', time: '45s' }]
+                    }
+                ],
+                sessionNote: ''
+            };
+            const libDef = { id: 'ex_bench', name: 'Panca Piana', trackingType: 'weight_reps' };
+
+            const { unmount } = render(
+                <SessionExerciseCard
+                    exItem={exItemIso}
+                    exIndex={0}
+                    libDef={libDef}
+                    pastWorkouts={[]}
+                    isHistoryOpen={false}
+                    isSetupOpen={false}
+                    openSpecialMenuId={null}
+                    onToggleHistory={() => {}}
+                    onToggleSetup={() => {}}
+                    onRemoveExercise={() => {}}
+                    onUpdateSetupNote={() => {}}
+                    onUpdateSessionNote={() => {}}
+                    onAddSet={() => {}}
+                    onRemoveSet={onRemoveSetSpy}
+                    onUpdateSet={() => {}}
+                    onAddSpecialSet={() => {}}
+                    onUpdateSpecialSet={() => {}}
+                    onRemoveSpecialSet={() => {}}
+                    onToggleSpecialMenu={() => {}}
+                onUpdateSetTarget={vi.fn()}
+                onUpdateTechnicalStandard={vi.fn()}
+                />
+            );
+
+            await act(async () => {
+                fireEvent.click(screen.getByText('- Rimuovi serie'));
+            });
+
+            expect(showConfirmSpy).toHaveBeenCalledTimes(1);
+            expect(onRemoveSetSpy.mock.calls[0].slice(0, 2)).toEqual([0, 0]);
+
+            unmount();
+            showConfirmSpy.mockClear();
+            onRemoveSetSpy.mockClear();
+
+            // Case B: Unfilled dropset and isometry (all fields empty/zero)
+            const exItemEmptySpecials = {
+                id: 'item_empty_specials',
+                exId: 'ex_bench',
+                sets: [
+                    {
+                        id: 's_empty',
+                        kg: '0',
+                        reps: '',
+                        segments: [
+                            { technique: 'dropset' as const, id: 'ds_empty', kg: '', reps: '0' },
+                            { technique: 'isometry' as const, reps: '', id: 'iso_empty', kg: '', time: '' }
+                        ],
+                    }
+                ],
+                sessionNote: ''
+            };
+
+            render(
+                <SessionExerciseCard
+                    exItem={exItemEmptySpecials}
+                    exIndex={0}
+                    libDef={libDef}
+                    pastWorkouts={[]}
+                    isHistoryOpen={false}
+                    isSetupOpen={false}
+                    openSpecialMenuId={null}
+                    onToggleHistory={() => {}}
+                    onToggleSetup={() => {}}
+                    onRemoveExercise={() => {}}
+                    onUpdateSetupNote={() => {}}
+                    onUpdateSessionNote={() => {}}
+                    onAddSet={() => {}}
+                    onRemoveSet={onRemoveSetSpy}
+                    onUpdateSet={() => {}}
+                    onAddSpecialSet={() => {}}
+                    onUpdateSpecialSet={() => {}}
+                    onRemoveSpecialSet={() => {}}
+                    onToggleSpecialMenu={() => {}}
+                onUpdateSetTarget={vi.fn()}
+                onUpdateTechnicalStandard={vi.fn()}
+                />
+            );
+
+            await act(async () => {
+                fireEvent.click(screen.getByText('- Rimuovi serie'));
+            });
+
+            // No confirmation prompt since all values are 0 or empty
+            expect(showConfirmSpy).not.toHaveBeenCalled();
+            expect(onRemoveSetSpy.mock.calls[0].slice(0, 2)).toEqual([0, 0]);
+        });
+
+        it('Adversarial: verifies numeric zeroes and Italian comma decimal formatting', async () => {
+            const showConfirmSpy = vi.spyOn(useDialogStore.getState(), 'showConfirm').mockResolvedValue(true);
+            const onRemoveSetSpy = vi.fn();
+            const libDef = { id: 'ex_bench', name: 'Panca Piana', trackingType: 'weight_reps' };
+
+            // Scenario 1: Zero with decimal comma '0,0' and '0.00' -> Unfilled (no confirm)
+            const exZeroes = {
+                id: 'item_zeroes',
+                exId: 'ex_bench',
+                sets: [{ id: 's_z', kg: '0,0', reps: '0.00' }],
+                sessionNote: ''
+            };
+
+            const { unmount } = render(
+                <SessionExerciseCard
+                    exItem={exZeroes}
+                    exIndex={0}
+                    libDef={libDef}
+                    pastWorkouts={[]}
+                    isHistoryOpen={false}
+                    isSetupOpen={false}
+                    openSpecialMenuId={null}
+                    onToggleHistory={() => {}}
+                    onToggleSetup={() => {}}
+                    onRemoveExercise={() => {}}
+                    onUpdateSetupNote={() => {}}
+                    onUpdateSessionNote={() => {}}
+                    onAddSet={() => {}}
+                    onRemoveSet={onRemoveSetSpy}
+                    onUpdateSet={() => {}}
+                    onAddSpecialSet={() => {}}
+                    onUpdateSpecialSet={() => {}}
+                    onRemoveSpecialSet={() => {}}
+                    onToggleSpecialMenu={() => {}}
+                onUpdateSetTarget={vi.fn()}
+                onUpdateTechnicalStandard={vi.fn()}
+                />
+            );
+
+            await act(async () => {
+                fireEvent.click(screen.getByText('- Rimuovi serie'));
+            });
+
+            expect(showConfirmSpy).not.toHaveBeenCalled();
+            expect(onRemoveSetSpy.mock.calls[0].slice(0, 2)).toEqual([0, 0]);
+            unmount();
+            showConfirmSpy.mockClear();
+            onRemoveSetSpy.mockClear();
+
+            // Scenario 2: Microplates with decimal comma '2,5' -> Filled (requires confirm)
+            const exMicroplates = {
+                id: 'item_micro',
+                exId: 'ex_bench',
+                sets: [{ id: 's_micro', kg: '2,5', reps: '10' }],
+                sessionNote: ''
+            };
+
+            render(
+                <SessionExerciseCard
+                    exItem={exMicroplates}
+                    exIndex={0}
+                    libDef={libDef}
+                    pastWorkouts={[]}
+                    isHistoryOpen={false}
+                    isSetupOpen={false}
+                    openSpecialMenuId={null}
+                    onToggleHistory={() => {}}
+                    onToggleSetup={() => {}}
+                    onRemoveExercise={() => {}}
+                    onUpdateSetupNote={() => {}}
+                    onUpdateSessionNote={() => {}}
+                    onAddSet={() => {}}
+                    onRemoveSet={onRemoveSetSpy}
+                    onUpdateSet={() => {}}
+                    onAddSpecialSet={() => {}}
+                    onUpdateSpecialSet={() => {}}
+                    onRemoveSpecialSet={() => {}}
+                    onToggleSpecialMenu={() => {}}
+                onUpdateSetTarget={vi.fn()}
+                onUpdateTechnicalStandard={vi.fn()}
+                />
+            );
+
+            await act(async () => {
+                fireEvent.click(screen.getByText('- Rimuovi serie'));
+            });
+
+            expect(showConfirmSpy).toHaveBeenCalledTimes(1);
+            expect(onRemoveSetSpy.mock.calls[0].slice(0, 2)).toEqual([0, 0]);
+        });
+
+        it('Adversarial: verifies onRemoveLastSet prop delegation when provided', async () => {
+            const onRemoveLastSetSpy = vi.fn();
+            const onRemoveSetSpy = vi.fn();
+            const libDef = { id: 'ex_bench', name: 'Panca Piana', trackingType: 'weight_reps' };
+
+            const exItem = {
+                id: 'item_delegated',
+                exId: 'ex_bench',
+                sets: [{ id: 's1', kg: '100', reps: '5' }],
+                sessionNote: ''
+            };
+
+            render(
+                <SessionExerciseCard
+                    exItem={exItem}
+                    exIndex={0}
+                    libDef={libDef}
+                    pastWorkouts={[]}
+                    isHistoryOpen={false}
+                    isSetupOpen={false}
+                    openSpecialMenuId={null}
+                    onToggleHistory={() => {}}
+                    onToggleSetup={() => {}}
+                    onRemoveExercise={() => {}}
+                    onUpdateSetupNote={() => {}}
+                    onUpdateSessionNote={() => {}}
+                    onAddSet={() => {}}
+                    onRemoveSet={onRemoveSetSpy}
+                    onRemoveLastSet={onRemoveLastSetSpy}
+                    onUpdateSet={() => {}}
+                    onAddSpecialSet={() => {}}
+                    onUpdateSpecialSet={() => {}}
+                    onRemoveSpecialSet={() => {}}
+                    onToggleSpecialMenu={() => {}}
+                onUpdateSetTarget={vi.fn()}
+                onUpdateTechnicalStandard={vi.fn()}
+                />
+            );
+
+            await act(async () => {
+                fireEvent.click(screen.getByText('- Rimuovi serie'));
+            });
+
+            expect(onRemoveLastSetSpy).toHaveBeenCalledTimes(1);
+            expect(onRemoveSetSpy).not.toHaveBeenCalled();
+        });
+    });
+});

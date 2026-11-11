@@ -316,6 +316,40 @@ await test('rejects renaming a mandatory test to a different basename', t => {
   mustFail(run(ctx), /Mandatory verification leaf removed/);
 });
 
+
+function configuredLeafFixture(t) {
+  const ctx = fixture(t);
+  save(ctx.root, 'tests/isolated/m8_domain_commit.test.ts', "import { it, expect } from 'vitest';\nit('domain commit', () => expect(1).toBe(1));\n");
+  const pkg = read(ctx.root, 'package.json');
+  pkg.scripts['test:m8'] = 'vitest run --config vitest.isolated.config.ts tests/isolated/m8_domain_commit.test.ts';
+  pkg.scripts['verify:m8'] += ' && npm run test:m8';
+  save(ctx.root, 'package.json', pkg);
+  commit(ctx.root);
+  return { ...ctx, base: git(ctx.root, 'rev-parse', 'HEAD') };
+}
+
+await test('preserves mandatory configured Vitest leaf when an isolated test moves into a domain folder', t => {
+  const ctx = configuredLeafFixture(t);
+  mkdirSync(join(ctx.root, 'tests/isolated/domain'), { recursive: true });
+  renameSync(join(ctx.root, 'tests/isolated/m8_domain_commit.test.ts'), join(ctx.root, 'tests/isolated/domain/m8_domain_commit.test.ts'));
+  const pkg = read(ctx.root, 'package.json');
+  pkg.scripts['test:m8'] = 'vitest run --config vitest.isolated.config.ts tests/isolated/domain/m8_domain_commit.test.ts';
+  save(ctx.root, 'package.json', pkg);
+  commit(ctx.root);
+  const result = run(ctx);
+  assert.equal(result.status, 0, result.stderr);
+});
+
+await test('rejects a configured Vitest leaf copied instead of Git-renamed', t => {
+  const ctx = configuredLeafFixture(t);
+  save(ctx.root, 'tests/isolated/domain/m8_domain_commit.test.ts', readFileSync(join(ctx.root, 'tests/isolated/m8_domain_commit.test.ts'), 'utf8'));
+  const pkg = read(ctx.root, 'package.json');
+  pkg.scripts['test:m8'] = 'vitest run --config vitest.isolated.config.ts tests/isolated/domain/m8_domain_commit.test.ts';
+  save(ctx.root, 'package.json', pkg);
+  commit(ctx.root);
+  mustFail(run(ctx), /Mandatory verification leaf removed/);
+});
+
 await test('blocks newly added source suppression comments', t => {
   const ctx = fixture(t);
   save(ctx.root, 'src/App.tsx', '// oxlint-disable react/rules-of-hooks\nexport const safe = true;\n');

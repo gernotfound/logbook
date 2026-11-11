@@ -1,0 +1,532 @@
+import React from 'react';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { act, fireEvent, render, renderHook, screen, waitFor } from '@testing-library/react';
+import { renderWithProviders, emptyUserData } from '../../setup';
+import { useAppStore } from '../../../src/store/useAppStore';
+import { useDialogStore } from '../../../src/store/useDialogStore';
+import { Logic } from '../../../src/lib/logic';
+import { shiftDateString } from '../../../src/lib/utils/date';
+import { UserDataSchema } from '../../../src/lib/schema';
+import { useSleepMeasurements } from '../../../src/hooks/useSleepMeasurements';
+import { storageOwner } from '../../../src/lib/sync/session';
+import { prepareUnlockedTestArchive } from '../../secureVaultFixture';
+import { readLocal, initializeLocal } from '../../../src/lib/sync/localRepository';
+import { readDatedWriterEvidence } from '../../../src/lib/sync/datedDraftWriterIntent';
+import DataSleep from '../../../src/components/Data/DataSleep';
+import DataHistory from '../../../src/components/Data/DataHistory';
+import type { NutritionDay, UserData } from '../../../src/types';
+
+const EMPTY_NUTRITION_OBJ: Record<string, NutritionDay> = {};
+
+// Integrated wrapper component simulating real parent page for sleep UI & history
+const SleepIntegratedView: React.FC = () => {
+    const sleepHook = useSleepMeasurements();
+    const nutrition = useAppStore(state => state.userData?.nutrition || EMPTY_NUTRITION_OBJ);
+    
+    // Sort history by date descending
+    const measurementsHistory = React.useMemo(() => {
+        return Object.values(nutrition).sort((a, b) => 
+            (b.date || '').localeCompare(a.date || '')
+        );
+    }, [nutrition]);
+
+    return (
+        <div>
+            <DataSleep sleepHook={sleepHook} selectedDate={sleepHook.selectedDate} setSelectedDate={sleepHook.setSelectedDate} />
+            <DataHistory 
+                measurementsHistory={measurementsHistory} 
+                editingDate={sleepHook.editingDate} 
+                onSelectEdit={(day) => sleepHook.setEditingDate(day.date)} 
+            />
+        </div>
+    );
+};
+
+// The sleep-save integration tests need a stable owner and real local commit.
+// AuthProvider starts an unrelated asynchronous hydration that can replace the fixture.
+async function renderOwnedSleepView(userData: UserData) {
+    const owner = storageOwner();
+    await prepareUnlockedTestArchive(owner);
+    await initializeLocal(owner, userData);
+    useAppStore.setState({ userData, dataOwner: owner, syncing: false, saveError: null });
+    return render(<SleepIntegratedView />);
+}
+
+describe('Empirical Challenger: Sleep Format in HH:MM & State Integration Stress Suite', () => {
+
+    beforeEach(() => {
+        window.localStorage.clear();
+        localStorage.setItem(`logbook:v2:${storageOwner()}:health-consent-generation`, '1');
+        useAppStore.getState().resetStore();
+        useAppStore.setState({ dataOwner: storageOwner() });
+        vi.clearAllMocks();
+    });
+
+    afterEach(() => {
+        window.localStorage.clear();
+        useAppStore.getState().resetStore();
+        vi.restoreAllMocks();
+    });
+
+    describe('1. UI Component Re-renders & Form State Synchronization', () => {
+        it('renders DataSleep and synchronizes inputs via fireEvent across all 5 fields', async () => {
+            const { container } = await renderOwnedSleepView(emptyUserData);
+
+            const hoursInput = container.querySelector('#sleep-hours') as HTMLInputElement;
+            const deepInput = container.querySelector('#sleep-deep') as HTMLInputElement;
+            const lightInput = container.querySelector('#sleep-light') as HTMLInputElement;
+            const remInput = container.querySelector('#sleep-rem') as HTMLInputElement;
+            const awakeInput = container.querySelector('#sleep-awake') as HTMLInputElement;
+
+            expect(hoursInput).not.toBeNull();
+            expect(deepInput).not.toBeNull();
+            expect(lightInput).not.toBeNull();
+            expect(remInput).not.toBeNull();
+            expect(awakeInput).not.toBeNull();
+
+            // Simulate typing in all inputs
+            act(() => {
+                fireEvent.change(hoursInput, { target: { value: '07:45' } });
+                fireEvent.change(deepInput, { target: { value: '01:30' } });
+                fireEvent.change(lightInput, { target: { value: '04:15' } });
+                fireEvent.change(remInput, { target: { value: '01:15' } });
+                fireEvent.change(awakeInput, { target: { value: '00:45' } });
+            });
+
+            expect(hoursInput.value).toBe('07:45');
+            expect(deepInput.value).toBe('01:30');
+            expect(lightInput.value).toBe('04:15');
+            expect(remInput.value).toBe('01:15');
+            expect(awakeInput.value).toBe('00:45');
+        });
+
+        it('switches between dates dynamically and synchronizes form values without stale data', async () => {
+            const today = Logic.getLocalDateString();
+            const yesterday = shiftDateString(today, -1);
+
+            const customUserData = {
+                ...emptyUserData,
+                nutrition: {
+                    [today]: {
+                        date: today,
+                        kcal: 2000, carbs: 200, pro: 150, fat: 50,
+                        sleepHours: '08:00',
+                        sleepDeep: '02:00',
+                        sleepLight: '04:30',
+                        sleepRem: '01:00',
+                        sleepAwake: '00:30'
+                    },
+                    [yesterday]: {
+                        date: yesterday,
+                        kcal: 1800, carbs: 180, pro: 140, fat: 45,
+                        sleepHours: '06:30',
+                        sleepDeep: '01:15',
+                        sleepLight: '03:45',
+                        sleepRem: '01:00',
+                        sleepAwake: '00:30'
+                    }
+                }
+            };
+
+            const { container } = renderWithProviders(<SleepIntegratedView />, { userData: customUserData });
+
+            const hoursInput = container.querySelector('#sleep-hours') as HTMLInputElement;
+            const deepInput = container.querySelector('#sleep-deep') as HTMLInputElement;
+
+            // Initially loaded with today's data
+            expect(hoursInput.value).toBe('08:00');
+            expect(deepInput.value).toBe('02:00');
+            expect(container.textContent).toContain('Dati sonno');
+
+            // Use the redesigned date navigator to switch to the previous day.
+            act(() => {
+                fireEvent.click(screen.getByRole('button', { name: 'Giorno precedente' }));
+            });
+
+            // Form must update to yesterday's values without stale data.
+            expect(hoursInput.value).toBe('06:30');
+            expect(deepInput.value).toBe('01:15');
+
+            // Return to today through the center date control.
+            act(() => {
+                fireEvent.click(screen.getByRole('button', { name: /Torna a oggi/ }));
+            });
+
+            expect(hoursInput.value).toBe('08:00');
+            expect(deepInput.value).toBe('02:00');
+            expect(container.textContent).toContain('Dati sonno');
+        });
+    });
+
+    describe('2. Hydration from Stored State (Current Format & Unsupported Inputs)', () => {
+        it('does not promote pre-launch numeric values to current editor fields', () => {
+            const today = Logic.getLocalDateString();
+            const customUserData = {
+                ...emptyUserData,
+                nutrition: {
+                    [today]: {
+                        date: today,
+                        kcal: 2200, carbs: 250, pro: 160, fat: 60,
+                        sleepHours: 7.5,
+                        sleepDeep: 1.5,
+                        sleepLight: 4.25,
+                        sleepRem: 1.25,
+                        sleepAwake: 0.5
+                    }
+                }
+            };
+
+            const { container } = renderWithProviders(<SleepIntegratedView />, { userData: customUserData });
+
+            expect((container.querySelector('#sleep-hours') as HTMLInputElement).value).toBe('');
+            expect((container.querySelector('#sleep-deep') as HTMLInputElement).value).toBe('');
+            expect((container.querySelector('#sleep-light') as HTMLInputElement).value).toBe('');
+            expect((container.querySelector('#sleep-rem') as HTMLInputElement).value).toBe('');
+            expect((container.querySelector('#sleep-awake') as HTMLInputElement).value).toBe('');
+        });
+
+        it('does not promote pre-launch decimal strings or shorthand values', () => {
+            const today = Logic.getLocalDateString();
+            const customUserData = {
+                ...emptyUserData,
+                nutrition: {
+                    [today]: {
+                        date: today,
+                        kcal: 2200, carbs: 250, pro: 160, fat: 60,
+                        sleepHours: '7.5',
+                        sleepDeep: '7,5',
+                        sleepLight: '8h',
+                        sleepRem: '1.25',
+                        sleepAwake: '0.5h'
+                    }
+                }
+            };
+
+            const { container } = renderWithProviders(<SleepIntegratedView />, { userData: customUserData });
+
+            expect((container.querySelector('#sleep-hours') as HTMLInputElement).value).toBe('');
+            expect((container.querySelector('#sleep-deep') as HTMLInputElement).value).toBe('');
+            expect((container.querySelector('#sleep-light') as HTMLInputElement).value).toBe('');
+            expect((container.querySelector('#sleep-rem') as HTMLInputElement).value).toBe('');
+            expect((container.querySelector('#sleep-awake') as HTMLInputElement).value).toBe('');
+        });
+
+        it('hydrates corrupt / out-of-range values gracefully into empty strings without crash', () => {
+            const today = Logic.getLocalDateString();
+            const customUserData = {
+                ...emptyUserData,
+                nutrition: {
+                    [today]: {
+                        date: today,
+                        kcal: 2200, carbs: 250, pro: 160, fat: 60,
+                        sleepHours: 'invalid_data',
+                        sleepDeep: 999,
+                        sleepLight: -5,
+                        sleepRem: '25:00',
+                        sleepAwake: '12:65'
+                    }
+                }
+            };
+
+            const { container } = renderWithProviders(<SleepIntegratedView />, { userData: customUserData });
+
+            expect((container.querySelector('#sleep-hours') as HTMLInputElement).value).toBe('');
+            expect((container.querySelector('#sleep-deep') as HTMLInputElement).value).toBe('');
+            expect((container.querySelector('#sleep-light') as HTMLInputElement).value).toBe('');
+            expect((container.querySelector('#sleep-rem') as HTMLInputElement).value).toBe('');
+            expect((container.querySelector('#sleep-awake') as HTMLInputElement).value).toBe('');
+        });
+    });
+
+    describe('3. Clearing Optional Sleep Phases', () => {
+        it('clears all optional sleep phases when user deletes them, leaving them undefined in store', async () => {
+            const today = Logic.getLocalDateString();
+            const customUserData = {
+                ...emptyUserData,
+                nutrition: {
+                    [today]: {
+                        date: today,
+                        kcal: 2400, carbs: 300, pro: 170, fat: 65,
+                        sleepHours: '08:00',
+                        sleepDeep: '02:00',
+                        sleepLight: '04:00',
+                        sleepRem: '01:30',
+                        sleepAwake: '00:30'
+                    }
+                }
+            };
+
+            const { container } = await renderOwnedSleepView(customUserData);
+
+            const deepInput = container.querySelector('#sleep-deep') as HTMLInputElement;
+            const lightInput = container.querySelector('#sleep-light') as HTMLInputElement;
+            const remInput = container.querySelector('#sleep-rem') as HTMLInputElement;
+            const awakeInput = container.querySelector('#sleep-awake') as HTMLInputElement;
+            await waitFor(() => {
+                expect(deepInput.value).toBe('02:00');
+                expect(lightInput.value).toBe('04:00');
+                expect(remInput.value).toBe('01:30');
+                expect(awakeInput.value).toBe('00:30');
+            });
+
+            // Clear all optional phase inputs
+            act(() => {
+                fireEvent.change(deepInput, { target: { value: '' } });
+                fireEvent.change(lightInput, { target: { value: '' } });
+                fireEvent.change(remInput, { target: { value: '' } });
+                fireEvent.change(awakeInput, { target: { value: '' } });
+            });
+
+            const saveBtn = Array.from((container.querySelectorAll('button') as NodeListOf<HTMLButtonElement>)).find(b => b.textContent?.includes('Salva sonno'));
+            expect(saveBtn).toBeDefined();
+
+            expect([deepInput.value, lightInput.value, remInput.value, awakeInput.value])
+                .toEqual(['', '', '', '']);
+            const witness = readDatedWriterEvidence(storageOwner(), `draft:sleep:${today}`);
+            expect(witness).toHaveLength(1);
+            expect(witness[0].values).toMatchObject({
+                sleepDeep: '', sleepLight: '', sleepRem: '', sleepAwake: '',
+            });
+            await act(async () => { fireEvent.click(saveBtn!); });
+            // Durable Domain Operations are asynchronous. Fixed 50 ms sleeps
+            // can observe a pre-commit store even when the save will succeed.
+            await waitFor(async () => {
+                expect(useAppStore.getState().syncing).toBe(false);
+                const persisted = useAppStore.getState().userData?.nutrition?.[today];
+                const durable = (await readLocal(storageOwner()))?.data.nutrition?.[today];
+                expect(persisted?.sleepHours).toBe('08:00');
+                expect(persisted?.sleepDeep).toBeUndefined();
+                expect(persisted?.sleepLight).toBeUndefined();
+                expect(persisted?.sleepRem).toBeUndefined();
+                expect(persisted?.sleepAwake).toBeUndefined();
+                expect(durable?.sleepHours).toBe('08:00');
+                expect(durable?.sleepDeep).toBeUndefined();
+                expect(durable?.sleepLight).toBeUndefined();
+                expect(durable?.sleepRem).toBeUndefined();
+                expect(durable?.sleepAwake).toBeUndefined();
+            }, { timeout: 5000 });
+            const day = useAppStore.getState().userData?.nutrition?.[today];
+            // Verify existing nutrition fields were not destroyed
+            expect(day?.kcal).toBe(2400);
+            expect(day?.carbs).toBe(300);
+        });
+
+        it('allows partial clearing of optional phases (e.g. keeping deep and light, clearing rem and awake)', async () => {
+            const today = Logic.getLocalDateString();
+            const customUserData = {
+                ...emptyUserData,
+                nutrition: {
+                    [today]: {
+                        date: today,
+                        kcal: 2000, carbs: 200, pro: 150, fat: 50,
+                        sleepHours: '07:30',
+                        sleepDeep: '01:30',
+                        sleepLight: '04:30',
+                        sleepRem: '01:00',
+                        sleepAwake: '00:30'
+                    }
+                }
+            };
+
+            const { container } = await renderOwnedSleepView(customUserData);
+
+            const remInput = container.querySelector('#sleep-rem') as HTMLInputElement;
+            const awakeInput = container.querySelector('#sleep-awake') as HTMLInputElement;
+            await waitFor(() => {
+                expect(remInput.value).toBe('01:00');
+                expect(awakeInput.value).toBe('00:30');
+            });
+
+            act(() => {
+                fireEvent.change(remInput, { target: { value: '' } });
+                fireEvent.change(awakeInput, { target: { value: '' } });
+            });
+
+            const saveBtn = Array.from((container.querySelectorAll('button') as NodeListOf<HTMLButtonElement>)).find(b => b.textContent?.includes('Salva sonno'));
+
+            expect([remInput.value, awakeInput.value]).toEqual(['', '']);
+            const witness = readDatedWriterEvidence(storageOwner(), `draft:sleep:${today}`);
+            expect(witness).toHaveLength(1);
+            expect(witness[0].values.sleepRem).toBe('');
+            expect(witness[0].values.sleepAwake).toBe('');
+            await act(async () => { fireEvent.click(saveBtn!); });
+            await waitFor(async () => {
+                expect(useAppStore.getState().syncing).toBe(false);
+                const persisted = useAppStore.getState().userData?.nutrition?.[today];
+                const durable = (await readLocal(storageOwner()))?.data.nutrition?.[today];
+                expect(persisted?.sleepHours).toBe('07:30');
+                expect(persisted?.sleepDeep).toBe('01:30');
+                expect(persisted?.sleepLight).toBe('04:30');
+                expect(persisted?.sleepRem).toBeUndefined();
+                expect(persisted?.sleepAwake).toBeUndefined();
+                expect(durable?.sleepHours).toBe('07:30');
+                expect(durable?.sleepDeep).toBe('01:30');
+                expect(durable?.sleepLight).toBe('04:30');
+                expect(durable?.sleepRem).toBeUndefined();
+                expect(durable?.sleepAwake).toBeUndefined();
+            }, { timeout: 5000 });
+        });
+    });
+
+    describe('4. Saving Total Sleep Validation & Alerts', () => {
+        it('blocks save and shows alert when sleepHours is empty', async () => {
+            const { container } = renderWithProviders(<SleepIntegratedView />, { userData: emptyUserData });
+            const showAlertSpy = vi.spyOn(useDialogStore.getState(), 'showAlert');
+
+            const saveBtn = Array.from((container.querySelectorAll('button') as NodeListOf<HTMLButtonElement>)).find(b => b.textContent?.includes('Salva sonno'));
+
+            await act(async () => {
+                fireEvent.click(saveBtn!);
+            });
+
+            expect(showAlertSpy).toHaveBeenCalledWith(
+                expect.stringContaining('Le ore di sonno sono obbligatorie')
+            );
+            // Verify no data was saved
+            expect(useAppStore.getState().userData?.nutrition?.[Logic.getLocalDateString()]?.sleepHours).toBeUndefined();
+        });
+
+        it('blocks save and shows alert when sleepHours is invalid (e.g. 25:00 or random text)', async () => {
+            const { container } = renderWithProviders(<SleepIntegratedView />, { userData: emptyUserData });
+            const showAlertSpy = vi.spyOn(useDialogStore.getState(), 'showAlert');
+
+            const hoursInput = container.querySelector('#sleep-hours') as HTMLInputElement;
+            act(() => {
+                fireEvent.change(hoursInput, { target: { value: '25:00' } });
+            });
+
+            const saveBtn = Array.from((container.querySelectorAll('button') as NodeListOf<HTMLButtonElement>)).find(b => b.textContent?.includes('Salva sonno'));
+
+            await act(async () => {
+                fireEvent.click(saveBtn!);
+            });
+
+            expect(showAlertSpy).toHaveBeenCalledWith(
+                expect.stringContaining('Le ore di sonno sono obbligatorie')
+            );
+        });
+
+        it('blocks save and shows specific alert when an optional phase format is invalid', async () => {
+            await prepareUnlockedTestArchive(storageOwner());
+            useAppStore.setState({ userData: emptyUserData });
+            const showAlertSpy = vi.spyOn(useDialogStore.getState(), 'showAlert');
+            const { result } = renderHook(() => useSleepMeasurements());
+
+            act(() => {
+                result.current.setSleepHours('08:00');
+                result.current.setSleepDeep('99:99');
+            });
+
+            await act(async () => {
+                await result.current.saveSleep();
+            });
+
+            expect(showAlertSpy).toHaveBeenCalledWith(
+                expect.stringContaining('Il formato del sonno profondo non è valido')
+            );
+        });
+
+        it('successfully saves only total sleep when optional phases are left blank', async () => {
+            const today = Logic.getLocalDateString();
+            const owner = storageOwner();
+            await prepareUnlockedTestArchive(owner);
+            await initializeLocal(owner, emptyUserData);
+            useAppStore.setState({ userData: emptyUserData, dataOwner: owner });
+            const showAlertSpy = vi.spyOn(useDialogStore.getState(), 'showAlert');
+            const { result } = renderHook(() => useSleepMeasurements());
+
+            act(() => {
+                result.current.setSleepHours('07:30');
+            });
+
+            await act(async () => {
+                await result.current.saveSleep();
+            });
+
+            expect(showAlertSpy).not.toHaveBeenCalled();
+
+            const day = useAppStore.getState().userData?.nutrition?.[today];
+            expect(day?.sleepHours).toBe('07:30');
+            expect(day?.sleepDeep).toBeUndefined();
+            expect(day?.sleepLight).toBeUndefined();
+            expect((await readLocal(owner))?.data.nutrition?.[today]?.sleepHours).toBe('07:30');
+        });
+    });
+
+    describe('5. DataHistory Display and Click-to-Edit', () => {
+        it('renders sleep hours in history items and activates edit mode upon clicking', async () => {
+            const date1 = '2026-08-20';
+            const date2 = '2026-08-19';
+
+            const customUserData = {
+                ...emptyUserData,
+                nutrition: {
+                    [date1]: {
+                        date: date1,
+                        kcal: 2200, carbs: 250, pro: 160, fat: 60,
+                        weight: 75.5,
+                        sleepHours: '08:15'
+                    },
+                    [date2]: {
+                        date: date2,
+                        kcal: 2100, carbs: 240, pro: 155, fat: 58,
+                        weight: 75.8,
+                        sleepHours: '07:15'
+                    }
+                }
+            };
+
+            const { container } = renderWithProviders(<SleepIntegratedView />, { userData: customUserData });
+
+            // The selected day is shown as a focused record, like Training history.
+            expect(container.textContent).toContain('08:15');
+
+            const date2Button = screen.getByRole('button', { name: /19 agosto 2026, 1 rilevazione/i });
+            act(() => {
+                fireEvent.click(date2Button);
+            });
+
+            expect(container.textContent).toContain('07:15');
+
+            const optionsTrigger = screen.getByRole('button', { name: 'Opzioni' });
+            fireEvent.click(optionsTrigger);
+            fireEvent.click(screen.getByRole('menuitem', { name: 'Modifica misurazione' }));
+
+            // The existing edit callback still drives the real sleep draft in this integration harness.
+            expect(container.textContent).toContain('Modifica sonno');
+            expect((container.querySelector('#sleep-hours') as HTMLInputElement).value).toBe('07:15');
+        });
+    });
+
+    describe('6. Zod Gateway Resilience Under Corrupted Injection', () => {
+        it('handles non-primitive or malformed sleep values in UserDataSchema without throwing', () => {
+            const corruptUser = {
+                profile: {},
+                library: [],
+                routines: [],
+                history: [],
+                nutrition: {
+                    '2026-08-20': {
+                        date: '2026-08-20',
+                        kcal: 2000, carbs: 200, pro: 150, fat: 50,
+                        sleepHours: { invalid: 'object' } as any,
+                        sleepDeep: [1, 2, 3] as any,
+                        sleepLight: true as any,
+                        sleepRem: -100,
+                        sleepAwake: null
+                    }
+                }
+            };
+
+            expect(() => {
+                const parsed = UserDataSchema.parse(corruptUser);
+                const day = parsed.nutrition['2026-08-20'];
+                expect(day.sleepHours).toBeUndefined();
+                expect(day.sleepDeep).toBeUndefined();
+                expect(day.sleepLight).toBeUndefined();
+                expect(day.sleepRem).toBeUndefined();
+                expect(day.sleepAwake).toBeUndefined();
+            }).not.toThrow();
+        });
+    });
+});

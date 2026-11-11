@@ -1,0 +1,196 @@
+import React from 'react';
+import { useAppStore } from '../../../src/store/useAppStore';
+import { describe, test, expect, vi, beforeEach } from 'vitest';
+import { screen } from '@testing-library/react';
+import { renderWithAuthenticatedTestOwner, renderWithProviders, emptyUserData } from '../../setup';
+import { prepareUnlockedTestArchive } from '../../secureVaultFixture';
+
+import App from '../../../src/App';
+import HomeView from '../../../src/components/Home/HomeView';
+import TrainingView from '../../../src/components/Training/TrainingView';
+import TrainingSession from '../../../src/components/Training/TrainingSession';
+import TrainingRoutines from '../../../src/components/Training/TrainingRoutines';
+import TrainingHistory from '../../../src/components/Training/TrainingHistory';
+import TrainingExercises from '../../../src/components/Training/TrainingExercises';
+import NutritionView from '../../../src/components/Nutrition/NutritionView';
+import NutritionMeals from '../../../src/components/Nutrition/NutritionMeals';
+import NutritionPlanning from '../../../src/components/Nutrition/NutritionPlanning';
+import CustomFoodForm from '../../../src/components/Nutrition/CustomFoodForm';
+import DataView from '../../../src/components/Data/DataView';
+import SettingsView from '../../../src/components/SettingsView';
+import WorkoutTimer from '../../../src/components/Training/WorkoutTimer';
+import MuscleModel from '../../../src/components/Training/MuscleModel';
+
+describe('Render Test Suite - Zero Crash Verification', () => {
+  beforeEach(async () => {
+    await prepareUnlockedTestArchive();
+    useAppStore.setState({ localPersistenceBlocked: false, compatibilityStatus: 'ok', syncHealth: 'synced' });
+  });
+
+  test('renders full App without crashing when authenticated', async () => {
+    const { container } = renderWithProviders(<App />);
+    expect(container).toBeDefined();
+    const navElement = await screen.findByRole('navigation');
+    expect(navElement).toBeDefined();
+  });
+
+  test('renders HomeView without crashing', () => {
+    const onNavigateMock = vi.fn();
+    const { container } = renderWithProviders(<HomeView onNavigate={onNavigateMock} />);
+    expect(container.querySelector('#view-home')).not.toBeNull();
+    expect(screen.getByText(/TheLogBook/i)).toBeDefined();
+  });
+
+  test('renders TrainingView with session subtab', () => {
+    const setSubTabMock = vi.fn();
+    const { container } = renderWithProviders(
+      <TrainingView subTab="session" setSubTab={setSubTabMock} />
+    );
+    expect(container).toBeDefined();
+    expect(screen.getAllByText(/Sessione/i).length).toBeGreaterThan(0);
+  });
+
+  test('renders TrainingView with routines subtab', async () => {
+    const setSubTabMock = vi.fn();
+    const { container } = renderWithProviders(
+      <TrainingView subTab="routines" setSubTab={setSubTabMock} />
+    );
+    expect(container).toBeDefined();
+    expect(screen.getByRole('tab', { name: 'Schede' }).getAttribute('aria-selected')).toBe('true');
+    expect(await screen.findByRole('button', { name: /Crea scheda/i })).toBeDefined();
+  });
+
+  test('renders TrainingView with history subtab', async () => {
+    const setSubTabMock = vi.fn();
+    const { container } = renderWithProviders(
+      <TrainingView subTab="history" setSubTab={setSubTabMock} />
+    );
+    expect(container).toBeDefined();
+    expect(screen.getByRole('tab', { name: 'Storico' }).getAttribute('aria-selected')).toBe('true');
+    expect(await screen.findByText(/Storico Allenamenti/i)).toBeDefined();
+  });
+
+  test('renders TrainingView with exercises subtab', async () => {
+    const setSubTabMock = vi.fn();
+    const { container } = renderWithProviders(
+      <TrainingView subTab="exercises" setSubTab={setSubTabMock} />
+    );
+    expect(container).toBeDefined();
+    expect(screen.getByRole('tab', { name: 'Esercizi' }).getAttribute('aria-selected')).toBe('true');
+    expect(await screen.findByRole('button', { name: /Crea esercizio/i })).toBeDefined();
+  });
+
+  test('renders TrainingSession with no active workout', () => {
+    const { container } = renderWithAuthenticatedTestOwner(<TrainingSession />);
+    expect(container.textContent).toContain('Scegli dall’archivio');
+  });
+
+  test('renders TrainingSession with active workout', () => {
+    const activeWorkout = {
+      id: 'w_test_1',
+      routineId: 'r1',
+      routineName: 'Scheda A - Upper',
+      date: '2026-07-26',
+      globalStartTime: Date.now(),
+      exercises: [
+        {
+          exId: 'ex1',
+          sets: [{ id: 's1', kg: '80', reps: '10' }],
+          sessionNote: 'Note per test'
+        }
+      ]
+    };
+    const { container } = renderWithAuthenticatedTestOwner(<TrainingSession />, {
+      localWorkout: activeWorkout,
+      userData: { 
+        ...emptyUserData, 
+        activeWorkout,
+        library: [{ id: 'ex1', name: 'Panca Piana' }] 
+      } as any
+    });
+    expect(container.textContent).toContain('Scheda A - Upper');
+    expect(container.textContent).toContain('Panca Piana');
+  });
+
+  test('renders TrainingRoutines without crashing', () => {
+    const { container } = renderWithProviders(<TrainingRoutines />);
+    expect(container).toBeDefined();
+    expect(screen.getByRole('button', { name: 'Crea scheda' })).toBeDefined();
+  });
+
+  test('renders TrainingHistory / HistoryView without crashing', () => {
+    const { container } = renderWithProviders(<TrainingHistory />);
+    expect(container).toBeDefined();
+    expect(screen.getByText(/Storico Allenamenti/i)).toBeDefined();
+  });
+
+  test('renders TrainingExercises without crashing', () => {
+    const { container } = renderWithProviders(<TrainingExercises />);
+    expect(container).toBeDefined();
+    expect(screen.getByRole('button', { name: /Crea esercizio/i })).toBeDefined();
+  });
+
+  test('renders NutritionView with meals subtab', () => {
+    const setSubTabMock = vi.fn();
+    const { container } = renderWithProviders(
+      <NutritionView subTab="meals" setSubTab={setSubTabMock} />
+    );
+    expect(container).toBeDefined();
+    expect(screen.getByRole('tab', { name: 'Pasti' }).getAttribute('aria-selected')).toBe('true');
+    expect(screen.getByRole('tabpanel', { name: 'Pasti' })).not.toBeNull();
+  });
+
+  test('renders NutritionMeals without crashing', () => {
+    const { container } = renderWithProviders(<NutritionMeals />);
+    expect(container).toBeDefined();
+    expect(screen.getByText(/Cerca Alimento/i)).toBeDefined();
+  });
+
+  test('renders NutritionPlanning without crashing', () => {
+    const { container } = renderWithProviders(<NutritionPlanning />);
+    expect(container).toBeDefined();
+    expect(screen.getByText(/Pianificazione Macro/i)).toBeDefined();
+  });
+  test('renders CustomFoodForm without crashing', () => {
+    const cfData = { name: '', brand: '', unit: 'g', pieceWeight: '', kcal: '', carbs: '', pro: '', fat: '' };
+    const setCfDataMock = vi.fn();
+    const saveCustomFoodMock = vi.fn();
+    const setShowCustomModalMock = vi.fn();
+    const { container } = renderWithProviders(
+      <CustomFoodForm
+        cfData={cfData}
+        setCfData={setCfDataMock}
+        saveCustomFood={saveCustomFoodMock}
+        showCustomModal={true}
+        setShowCustomModal={setShowCustomModalMock}
+      />
+    );
+    expect(container).toBeDefined();
+    expect(container.querySelector('#cf-name')).not.toBeNull();
+  });
+
+  test('renders SettingsView without crashing', () => {
+    const { container } = renderWithProviders(<SettingsView />);
+    expect(container).toBeDefined();
+    expect(screen.getByRole('button', { name: /Account e accesso/i })).toBeDefined();
+  });
+
+  test('renders DataView without crashing', () => {
+    const { container } = renderWithProviders(<DataView />);
+    expect(container).toBeDefined();
+    expect(screen.getByText(/Nuova misurazione/i)).toBeDefined();
+  });
+
+  test('renders WorkoutTimer without crashing', () => {
+    const { container } = renderWithProviders(
+      <WorkoutTimer />
+    );
+    expect(container.textContent).toMatch(/\d{2}:\d{2}/);
+  });
+
+  test('renders MuscleModel without crashing', () => {
+    const { container } = renderWithProviders(<MuscleModel selectedMuscles={['chest']} />);
+    expect(container.querySelector('svg')).not.toBeNull();
+  });
+
+});

@@ -21,7 +21,7 @@ I test M5 devono attraversare il boundary production che dichiarano di verificar
 - nutrizione: `useNutritionMeals` e il suo indice `createFoodSearcher` reali, con risultati attesi espliciti; `DB` resta il boundary esterno mocked nella suite jsdom. `Logic.searchFoods` usa lo stesso algoritmo e non è un oracle indipendente;
 - totali meal: confronto con `calculateLoggedMealTotals` e valori attesi espliciti.
 
-Le suite stress `tests/tier5_adversarial_guest_catalog_*.test.ts`, ora suddivise per scenario, forniscono copertura supplementare ma non sostituiscono questi acceptance oracle.
+Le suite stress `tests/stress/catalog/tier5_adversarial_guest_catalog_*.test.ts`, ora suddivise per scenario, forniscono copertura supplementare ma non sostituiscono questi acceptance oracle.
 
 ## Confini della suite
 

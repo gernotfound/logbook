@@ -52,7 +52,7 @@ The recovery suite runs with one worker because it intentionally injects failure
 
 ## Browser memory boundary
 
-`e2e/offline.spec.ts` closes the original Playwright page, opens a new page while offline, and verifies both:
+`e2e/pwa/offline.spec.ts` closes the original Playwright page, opens a new page while offline, and verifies both:
 
 - a routine persisted as `UserData` survives from the IndexedDB envelope; and
 - the active workout survives from device-local storage.
