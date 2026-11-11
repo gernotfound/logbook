@@ -1,0 +1,317 @@
+import { captureSession } from '../../src/lib/sync/session';
+import React from 'react';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { update as updateIndexedDb } from 'idb-keyval';
+import { WorkoutSessionSchema } from '../../src/lib/schema';
+import { Exporter } from '../../src/lib/export';
+import { createBackup, decodeImport, prepareImport } from '../../src/lib/backup';
+import { UserDataSchema } from '../../src/lib/schema';
+import { useAppStore } from '../../src/store/useAppStore';
+import PreSessionCheckIn from '../../src/components/Training/PreSessionCheckIn';
+import TrainingSession from '../../src/components/Training/TrainingSession';
+import type { UserData, WorkoutSession } from '../../src/types';
+import { initializeLocal, readLocal } from '../../src/lib/sync/localRepository';
+import { deviceKey, protectedDeviceKey, readDeviceValueStrict } from '../../src/lib/sync/deviceStorage';
+import { prepareUnlockedTestArchive } from '../secureVaultFixture';
+import { AuthContext, defaultAuthContext } from '../../src/contexts/AuthContextDef';
+import { auth } from '../../src/lib/firebase';
+
+const renderOwnedWorkoutSession = () => render(
+    <AuthContext.Provider value={{ ...defaultAuthContext, currentUser: auth.currentUser, isGuest: false }}>
+        <TrainingSession />
+    </AuthContext.Provider>,
+);
+
+const parseUserData = (value: unknown) => UserDataSchema.parse(value) as unknown as UserData;
+
+function session(readiness?: WorkoutSession['readiness']): WorkoutSession {
+    return {
+        id: 'w-readiness',
+        date: '2026-09-24',
+        routineName: 'Push',
+        globalStartTime: 1_700_000_000_000,
+        exercises: [{ id: 'se-readiness-bench', exId: 'bench', sessionNote: '', sets: [{ id: 's1', kg: '100', reps: '8' }] }],
+        ...(readiness ? { readiness } : {}),
+    };
+}
+
+describe('pre-session readiness contract', () => {
+    beforeEach(() => {
+        localStorage.clear();
+        localStorage.setItem(`logbook:v2:${captureSession().owner}:health-consent-generation`, '3');
+        useAppStore.setState({
+            dataOwner: captureSession().owner,
+            userData: parseUserData({
+                nutrition: { '2026-09-24': { date: '2026-09-24', sleepHours: '06:18' } },
+                activePains: ['shoulders', 'elbow'],
+            }),
+            localWorkout: null,
+        });
+    });
+
+    it('accepts complete and partial readiness while keeping missing values absent, not zero', () => {
+        const complete = WorkoutSessionSchema.parse(session({ capturedAt: 123, energy: 1, stress: 2, motivation: 3, muscleRecovery: 5 }));
+        expect(complete.readiness).toEqual({ capturedAt: 123, energy: 1, stress: 2, motivation: 3, muscleRecovery: 5 });
+
+        const partial = WorkoutSessionSchema.parse(session({ capturedAt: 456, energy: 4 }));
+        expect(partial.readiness).toEqual({ capturedAt: 456, energy: 4 });
+        expect(partial.readiness).not.toHaveProperty('stress');
+        expect(partial.readiness?.stress).not.toBe(0);
+
+        const skipped = WorkoutSessionSchema.parse(session());
+        expect(skipped.readiness).toBeUndefined();
+    });
+
+    it.each([0, 6, -1, 2.5])('drops readiness values outside the integer 1-5 contract instead of persisting them: %s', value => {
+        const parsed = WorkoutSessionSchema.parse(session({ capturedAt: 123, energy: value }));
+        expect(parsed.readiness).toBeUndefined();
+    });
+
+    it('renders large 1-5 controls, canonical sleep and active pains without starting automatically', async () => {
+        await prepareUnlockedTestArchive(captureSession().owner);
+        const onStart = vi.fn(async () => true);
+        render(<PreSessionCheckIn workoutId="w-readiness" routineName="Push" date="2026-09-24" onStart={onStart} onCancel={vi.fn(async () => true)} />);
+
+        expect(screen.getByText('Registrato: 6 h 18 min')).toBeTruthy();
+        expect(screen.getByText(/Spalle/)).toBeTruthy();
+        expect(screen.getAllByRole('button', { name: /su 5/ })).toHaveLength(20);
+        expect(onStart).not.toHaveBeenCalled();
+
+        fireEvent.click(screen.getByRole('button', { name: 'Energia: 4 su 5' }));
+        fireEvent.click(screen.getByRole('button', { name: 'Stress: 2 su 5' }));
+        const owner = captureSession().owner;
+        const name = 'draft:pre-session:w-readiness';
+        const sealed = localStorage.getItem(protectedDeviceKey(name, owner));
+        expect(sealed).toMatch(/^tlb-sealed:v1:/);
+        expect(localStorage.getItem(deviceKey(name, owner))).toBeNull();
+        expect(JSON.parse(readDeviceValueStrict(name, owner)!)).toMatchObject({
+            __logbookWorkoutRecoveryDraft: 1, owner, name,
+            consentRevision: 3, data: { energy: 4, stress: 2 },
+        });
+        fireEvent.click(screen.getByRole('button', { name: 'Inizia allenamento' }));
+        await waitFor(() => expect(onStart).toHaveBeenCalledWith({ energy: 4, stress: 2 }));
+    });
+
+    it('keeps a prepared workout in check-in state until the explicit start command', async () => {
+        await prepareUnlockedTestArchive(captureSession().owner);
+        useAppStore.setState({
+            localWorkout: { id: 'pending', date: '2026-09-24', routineName: 'Push', exercises: [] },
+        });
+        renderOwnedWorkoutSession();
+        expect(screen.getByRole('heading', { name: 'Come arrivi oggi?' })).toBeTruthy();
+        expect(screen.queryByText('Durata Totale')).toBeNull();
+    });
+
+    it('keeps pre-session answers scoped to the currently displayed workout after a replacement', async () => {
+        const owner = captureSession().owner;
+        await prepareUnlockedTestArchive(owner);
+        const first: WorkoutSession = { id: 'checkin-first', date: '2026-09-24', routineName: 'First', exercises: [] };
+        const second: WorkoutSession = { id: 'checkin-second', date: '2026-09-24', routineName: 'Second', exercises: [] };
+        useAppStore.setState({
+            userData: parseUserData({ activeWorkout: first }), dataOwner: owner,
+            localWorkout: first, localPersistenceBlocked: false,
+        });
+        renderOwnedWorkoutSession();
+        fireEvent.click(screen.getByRole('button', { name: 'Energia: 4 su 5' }));
+        const firstName = 'draft:pre-session:checkin-first';
+        const secondName = 'draft:pre-session:checkin-second';
+        expect(JSON.parse(readDeviceValueStrict(firstName, owner)!).data.energy).toBe(4);
+
+        // The session can be replaced without unmounting the enclosing TrainingSession.
+        act(() => useAppStore.setState({
+            userData: parseUserData({ activeWorkout: second }), localWorkout: second,
+        }));
+        expect(screen.getByText(/Second · Tutti i valori sono facoltativi/)).toBeTruthy();
+        expect(screen.getByRole('button', { name: 'Energia: 4 su 5' }).getAttribute('aria-pressed')).toBe('false');
+        expect(readDeviceValueStrict(secondName, owner)).toBeNull();
+
+        fireEvent.click(screen.getByRole('button', { name: 'Energia: 2 su 5' }));
+        expect(JSON.parse(readDeviceValueStrict(secondName, owner)!).data).toMatchObject({ energy: 2 });
+        expect(JSON.parse(readDeviceValueStrict(firstName, owner)!).data).toMatchObject({ energy: 4 });
+    });
+
+    it('scrolls to the top after confirming the pre-session check-in', async () => {
+        await prepareUnlockedTestArchive(captureSession().owner);
+        const scrollToSpy = vi.spyOn(window, 'scrollTo').mockImplementation(() => {});
+        const prepared: WorkoutSession = { id: 'pending-scroll', date: '2026-09-24', routineName: 'Push', exercises: [] };
+        const data = parseUserData({ activeWorkout: prepared });
+        await initializeLocal(captureSession().owner, data);
+        useAppStore.setState({ userData: data, dataOwner: captureSession().owner,
+            localWorkout: prepared, localPersistenceBlocked: false });
+
+        renderOwnedWorkoutSession();
+        fireEvent.click(screen.getByRole('button', { name: 'Energia: 4 su 5' }));
+        fireEvent.click(screen.getByRole('button', { name: 'Inizia allenamento' }));
+
+        await waitFor(() => expect(useAppStore.getState().localWorkout?.globalStartTime).toBeTruthy());
+        await waitFor(() => expect(scrollToSpy).toHaveBeenCalledWith({ top: 0, left: 0, behavior: 'auto' }));
+        // The production debounce lasts 1,000 ms, matching waitFor's default
+        // timeout. Drain the real queue rather than racing the assertion deadline.
+        await act(async () => { await useAppStore.getState().flushPendingSyncs(); });
+        await waitFor(() => expect(screen.getByRole('button', { name: 'Termina allenamento' })).toBeTruthy());
+        const saved = await readLocal(captureSession().owner);
+        expect(saved?.data.activeWorkout?.id).toBe('pending-scroll');
+        expect(saved?.data.activeWorkout?.globalStartTime).toBe(useAppStore.getState().localWorkout?.globalStartTime);
+        scrollToSpy.mockRestore();
+    });
+
+    it('anchors the workout date to the actual local start time when check-in crosses midnight', async () => {
+        await prepareUnlockedTestArchive(captureSession().owner);
+        const startedAt = new Date(2026, 8, 25, 0, 0, 5).getTime();
+        const prepared: WorkoutSession = { id: 'pending-midnight', date: '2026-09-24', routineName: 'Push', ratingScale: 5, exercises: [] };
+        const data = parseUserData({ activeWorkout: prepared });
+        await initializeLocal(captureSession().owner, data);
+        useAppStore.setState({ userData: data, dataOwner: captureSession().owner,
+            localWorkout: prepared, localPersistenceBlocked: false });
+        renderOwnedWorkoutSession();
+        // Isolate the clock-boundary check from archive initialization and
+        // its asynchronous security bookkeeping.
+        const nowSpy = vi.spyOn(Date, 'now').mockReturnValue(startedAt);
+        try {
+            fireEvent.click(screen.getByRole('button', { name: 'Salta check-in e inizia' }));
+            // First observe the real optimistic transition, then force its queued
+            // production commit to settle before checking UI and IndexedDB.
+            await waitFor(() => expect(useAppStore.getState().localWorkout?.globalStartTime).toBe(startedAt));
+            await act(async () => { await useAppStore.getState().flushPendingSyncs(); });
+            await waitFor(() => expect(screen.getByRole('button', { name: 'Termina allenamento' })).toBeTruthy());
+            const started = useAppStore.getState().localWorkout;
+            expect(started?.globalStartTime).toBe(startedAt);
+            expect(started?.date).toBe('2026-09-25');
+            const saved = await readLocal(captureSession().owner);
+            expect(saved?.data.activeWorkout?.globalStartTime).toBe(startedAt);
+            expect(saved?.data.activeWorkout?.date).toBe('2026-09-25');
+        } finally {
+            nowSpy.mockRestore();
+        }
+    });
+
+    it('skips the check-in without inventing values', async () => {
+        await prepareUnlockedTestArchive(captureSession().owner);
+        const onStart = vi.fn(async () => true);
+        render(<PreSessionCheckIn workoutId="w-readiness" date="2026-09-24" onStart={onStart} onCancel={vi.fn(async () => true)} />);
+        fireEvent.click(screen.getByRole('button', { name: 'Salta check-in e inizia' }));
+        await waitFor(() => expect(onStart).toHaveBeenCalledWith(undefined));
+    });
+
+    it('keeps post-session answers as a local draft until Salva e termina', async () => {
+        await prepareUnlockedTestArchive(captureSession().owner);
+        localStorage.setItem(`logbook:v2:${captureSession().owner}:health-consent-generation`, '3');
+        const originalDispatch = useAppStore.getState().dispatchDomainOperation;
+        const dispatchDomainOperation = vi.fn(async (operation: unknown) => {
+            void operation;
+            return { ok: true, status: 'synced' as const };
+        });
+        const active: WorkoutSession = {
+            id: 'post-session-draft',
+            date: '2026-09-24',
+            routineName: 'Push',
+            ratingScale: 5,
+            globalStartTime: Date.now() - 60_000,
+            exercises: [],
+        };
+
+        useAppStore.setState({
+            dataOwner: captureSession().owner,
+            userData: parseUserData({ activeWorkout: active, activePains: [] }),
+            localWorkout: active,
+            syncing: false,
+            dispatchDomainOperation: dispatchDomainOperation as typeof originalDispatch,
+        });
+
+        try {
+            renderOwnedWorkoutSession();
+
+            fireEvent.click(screen.getByRole('button', { name: 'Termina allenamento' }));
+            expect(screen.getByRole('heading', { name: 'Com’è andato l’allenamento?' })).toBeTruthy();
+
+            fireEvent.click(screen.getByRole('button', { name: 'Umore: 5 su 5' }));
+            expect(useAppStore.getState().localWorkout?.moodRating).toBeUndefined();
+            expect(useAppStore.getState().syncing).toBe(false);
+            expect(dispatchDomainOperation).not.toHaveBeenCalled();
+
+            fireEvent.click(screen.getByRole('button', { name: 'Torna all’allenamento' }));
+            expect(dispatchDomainOperation).not.toHaveBeenCalled();
+
+            fireEvent.click(screen.getByRole('button', { name: 'Termina allenamento' }));
+            expect(screen.getByRole('button', { name: 'Umore: 5 su 5' }).getAttribute('aria-pressed')).toBe('true');
+
+            const waterInput = screen.getByLabelText('Acqua bevuta (litri)');
+            fireEvent.change(waterInput, { target: { value: '1.5' } });
+            fireEvent.blur(waterInput);
+
+            expect(useAppStore.getState().localWorkout?.waterLiters).toBeUndefined();
+            expect(dispatchDomainOperation).not.toHaveBeenCalled();
+
+            fireEvent.click(screen.getByRole('button', { name: 'Salva e termina' }));
+
+            await waitFor(() => expect(dispatchDomainOperation).toHaveBeenCalledTimes(1));
+            const operation = dispatchDomainOperation.mock.calls[0][0];
+            expect(operation).toMatchObject({
+                type: 'workout.complete',
+                workout: {
+                    id: 'post-session-draft',
+                    moodRating: 5,
+                    waterLiters: 1.5,
+                },
+            });
+            await waitFor(() => expect(useAppStore.getState().localWorkout).toBeNull());
+            await waitFor(() => expect(readDeviceValueStrict(
+                'draft:post-session:post-session-draft', captureSession().owner,
+            )).toBeNull());
+        } finally {
+            useAppStore.setState({ dispatchDomainOperation: originalDispatch });
+        }
+    });
+
+    it('round-trips readiness through backup/restore without a schema migration', () => {
+        const data = parseUserData({ history: [session({ capturedAt: 123, energy: 5, muscleRecovery: 3 })] });
+        const backup = JSON.parse(JSON.stringify(createBackup(data, 'guest')));
+        const restored = prepareImport(parseUserData({}), decodeImport(backup, 'guest').data, 'restore').data;
+        expect(restored.history?.[0].readiness).toEqual({ capturedAt: 123, energy: 5, muscleRecovery: 3 });
+    });
+
+    it('does not expose a started workout if the optimistic device update outlives a failed IndexedDB commit', async () => {
+        await prepareUnlockedTestArchive(captureSession().owner);
+        const prepared: WorkoutSession = { id: 'failed-start', date: '2026-09-24', routineName: 'Push', exercises: [] };
+        const data = parseUserData({ activeWorkout: prepared });
+        const owner = captureSession().owner;
+        await initializeLocal(owner, data);
+        useAppStore.setState({
+            userData: data, dataOwner: owner, localWorkout: prepared,
+            localPersistenceBlocked: false, syncHealth: 'synced', saveError: null,
+        });
+        renderOwnedWorkoutSession();
+
+        // Inject a real local commit failure, not a mock SyncResult pretending
+        // persistence succeeded. The original prepared record must survive.
+        vi.mocked(updateIndexedDb).mockRejectedValueOnce(new Error('Injected IndexedDB write failure'));
+        fireEvent.click(screen.getByRole('button', { name: 'Salta check-in e inizia' }));
+        await waitFor(() => expect(useAppStore.getState().localWorkout?.globalStartTime).toBeTypeOf('number'));
+        await act(async () => { await useAppStore.getState().flushPendingSyncs(); });
+
+        await waitFor(() => expect(screen.getByRole('heading', { name: 'Persistenza dell’allenamento non confermata' })).toBeTruthy());
+        expect(screen.queryByRole('button', { name: 'Termina allenamento' })).toBeNull();
+        expect(useAppStore.getState().localPersistenceBlocked).toBe(true);
+        const durable = await readLocal(owner);
+        expect(durable?.data.activeWorkout?.id).toBe('failed-start');
+        expect(durable?.data.activeWorkout?.globalStartTime).toBeUndefined();
+    });
+
+    it('exports the four readiness dimensions and leaves absent dimensions empty', async () => {
+        let content = '';
+        vi.spyOn(Exporter, 'downloadFile').mockImplementation(async (filename, value) => {
+            if (filename === 'allenamenti.csv') content = value;
+            return true;
+        });
+        await Exporter.exportToCSV([session({ capturedAt: 123, energy: 5, stress: 1, muscleRecovery: 3 })], {}, []);
+        expect(content.split('\n')[0]).toContain('Energia pre-sessione,Stress pre-sessione,Motivazione pre-sessione,Recupero muscolare pre-sessione');
+        const headers = content.split('\n')[0].split(',');
+        const columns = content.split('\n')[1].split(',');
+        expect(columns[headers.indexOf('Energia pre-sessione')]).toBe('5');
+        expect(columns[headers.indexOf('Stress pre-sessione')]).toBe('1');
+        expect(columns[headers.indexOf('Motivazione pre-sessione')]).toBe('""');
+        expect(columns[headers.indexOf('Recupero muscolare pre-sessione')]).toBe('3');
+        vi.restoreAllMocks();
+    });
+});

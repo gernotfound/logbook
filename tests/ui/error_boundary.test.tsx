@@ -1,0 +1,363 @@
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { render, screen, fireEvent, act } from '@testing-library/react';
+import ErrorBoundary from '../../src/components/UI/ErrorBoundary';
+import * as safeReloadModule from '../../src/lib/sync/safeReload';
+import { DB } from '../../src/lib/db';
+import { useDialogStore } from '../../src/store/useDialogStore';
+import { idbStore, localStorageMock } from '../setup';
+import { activateGuestSession, GUEST_REVOCATION_KEY, GUEST_SESSION_KEY, storageOwner, isActiveGuestSession, invalidateSession } from '../../src/lib/sync/session';
+import { markAccountDeletion } from '../../src/lib/sync/accountGate';
+import { prepareUnlockedTestArchive } from '../secureVaultFixture';
+
+const ProblemChild = ({ shouldThrow, message = 'Test error boundary explosion' }: { shouldThrow: boolean; message?: string }) => {
+    if (shouldThrow) {
+        throw new Error(message);
+    }
+    return <div>Normal Content</div>;
+};
+
+describe('R2: ErrorBoundary & Dialog Hardening Suite', () => {
+    const originalLocation = window.location;
+
+    beforeEach(() => {
+        vi.clearAllMocks();
+        window.localStorage.clear();
+
+        Object.defineProperty(window, 'location', {
+            configurable: true,
+            value: {
+                ...originalLocation,
+                reload: vi.fn()
+            }
+        });
+    });
+
+    afterEach(() => {
+        Object.defineProperty(window, 'location', {
+            configurable: true,
+            value: originalLocation
+        });
+        vi.restoreAllMocks();
+    });
+
+    it('renders children when no uncaught error occurs', () => {
+        render(
+            <ErrorBoundary>
+                <div>Hello Safe World</div>
+            </ErrorBoundary>
+        );
+
+        expect(screen.getByText('Hello Safe World')).toBeDefined();
+    });
+
+    it('renders fallback error UI when a child throws', () => {
+        const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+        render(
+            <ErrorBoundary>
+                <ProblemChild shouldThrow={true} />
+            </ErrorBoundary>
+        );
+
+        expect(screen.getByText('Ops, qualcosa è andato storto!')).toBeDefined();
+        expect(screen.getByText(/Ricarica pagina/i)).toBeDefined();
+        expect(screen.getByText(/Azzera dati locali/i)).toBeDefined();
+
+        consoleErrorSpy.mockRestore();
+    });
+
+    it('reloads page safely when "Ricarica pagina" button is clicked', async () => {
+        await prepareUnlockedTestArchive(storageOwner());
+        const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+        render(
+            <ErrorBoundary>
+                <ProblemChild shouldThrow={true} />
+            </ErrorBoundary>
+        );
+
+        await act(async () => {
+            fireEvent.click(screen.getByText(/Ricarica pagina/i));
+        });
+        expect(window.location.reload).toHaveBeenCalledTimes(1);
+
+        consoleErrorSpy.mockRestore();
+    });
+
+    it('keeps the error screen and reports a blocked protected reload', async () => {
+        const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+        vi.spyOn(safeReloadModule, 'safeHardReload').mockRejectedValueOnce(new Error('Durable copy missing'));
+
+        render(<ErrorBoundary><ProblemChild shouldThrow={true} /></ErrorBoundary>);
+        await act(async () => { fireEvent.click(screen.getByText(/Ricarica pagina/i)); });
+
+        expect(window.location.reload).not.toHaveBeenCalled();
+        expect(screen.getByText('Ops, qualcosa è andato storto!')).toBeDefined();
+        expect(useDialogStore.getState().showAlert).toHaveBeenCalledWith(
+            'Impossibile ricaricare in sicurezza: alcune modifiche locali potrebbero non essere ancora state salvate. Riprova tra qualche secondo.'
+        );
+        log.mockRestore();
+    });
+
+    it('shows the offline recovery fallback for an uncaught dynamic import failure', () => {
+        const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+        render(<ErrorBoundary><ProblemChild shouldThrow={true} message="Failed to fetch dynamically imported module" /></ErrorBoundary>);
+        expect(screen.getByRole('heading', { name: 'Sei offline' })).toBeDefined();
+        expect(screen.getByText(/Connettiti a internet/i)).toBeDefined();
+        expect(screen.getByRole('button', { name: /Ricarica pagina/i })).toBeDefined();
+        log.mockRestore();
+    });
+
+    it('asks for explicit confirmation before deleting local data', async () => {
+        const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+        vi.mocked(useDialogStore.getState().showConfirm).mockResolvedValue(false);
+
+        render(
+            <ErrorBoundary>
+                <ProblemChild shouldThrow={true} />
+            </ErrorBoundary>
+        );
+
+        await act(async () => {
+            fireEvent.click(screen.getByText(/Azzera dati locali/i));
+        });
+
+        expect(useDialogStore.getState().showConfirm).toHaveBeenCalledWith(
+            'Questa operazione elimina i dati locali della sessione corrente, inclusi quelli non ancora sincronizzati. I dati già presenti nel cloud non vengono cancellati. Procedere?',
+            'Azzera dati locali'
+        );
+        expect(DB.purgeAllLocalUserData).not.toHaveBeenCalled();
+        expect(window.location.reload).not.toHaveBeenCalled();
+
+        consoleErrorSpy.mockRestore();
+    });
+
+    it('purges the current owner envelope without clearing unrelated localStorage, then reloads', async () => {
+        const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+        vi.mocked(useDialogStore.getState().showConfirm).mockResolvedValue(true);
+        idbStore['logbook:v2:user:test-user-id'] = { data: { profile: { name: 'Luigi' } } };
+        localStorage.setItem('logbook:v2:user:test-user-id:workout', '{"id":"w1"}');
+        localStorage.setItem('unrelated-app-key', 'keep-me');
+        vi.mocked(localStorageMock.clear).mockClear();
+        vi.mocked(window.location.reload).mockClear();
+
+        render(
+            <ErrorBoundary>
+                <ProblemChild shouldThrow={true} />
+            </ErrorBoundary>
+        );
+
+        await act(async () => {
+            fireEvent.click(screen.getByText(/Azzera dati locali/i));
+        });
+
+        expect(DB.purgeAllLocalUserData).toHaveBeenCalledExactlyOnceWith('user:test-user-id');
+        expect(idbStore['logbook:v2:user:test-user-id']).toBeUndefined();
+        expect(localStorage.getItem('logbook:v2:user:test-user-id:workout')).toBeNull();
+        expect(localStorage.getItem('unrelated-app-key')).toBe('keep-me');
+        expect(localStorageMock.clear).not.toHaveBeenCalled();
+        expect(window.location.reload).toHaveBeenCalledTimes(1);
+
+        consoleErrorSpy.mockRestore();
+    });
+
+    it('does not reload and reports the failure when local purge is incomplete', async () => {
+        const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+        vi.mocked(useDialogStore.getState().showConfirm).mockResolvedValue(true);
+        vi.mocked(DB.purgeAllLocalUserData).mockRejectedValueOnce(new Error('IndexedDB delete failed'));
+        vi.mocked(window.location.reload).mockClear();
+
+        render(
+            <ErrorBoundary>
+                <ProblemChild shouldThrow={true} />
+            </ErrorBoundary>
+        );
+
+        await act(async () => {
+            fireEvent.click(screen.getByText(/Azzera dati locali/i));
+        });
+
+        expect(DB.purgeAllLocalUserData).toHaveBeenCalledTimes(1);
+        expect(window.location.reload).not.toHaveBeenCalled();
+        expect(useDialogStore.getState().showAlert).toHaveBeenCalledWith(
+            'Pulizia locale non completata. I dati rimasti sul dispositivo non sono stati dichiarati eliminati. Riprova o ricarica la pagina.'
+        );
+
+        consoleErrorSpy.mockRestore();
+    });
+    it('runs only one local reset while confirmation or purge is still pending', async () => {
+        const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+        let approve!: (approved: boolean) => void;
+        const confirm = vi.mocked(useDialogStore.getState().showConfirm).mockImplementationOnce(
+            () => new Promise(resolve => { approve = resolve; }),
+        );
+        let finishPurge!: () => void;
+        const purge = vi.mocked(DB.purgeAllLocalUserData).mockImplementationOnce(
+            () => new Promise<void>(resolve => { finishPurge = resolve; }),
+        );
+        const reload = vi.spyOn(safeReloadModule, 'safeHardReload').mockResolvedValue(undefined);
+
+        render(<ErrorBoundary><ProblemChild shouldThrow={true} /></ErrorBoundary>);
+        const reset = screen.getByRole('button', { name: /Azzera dati locali/i });
+        fireEvent.click(reset);
+        fireEvent.click(reset);
+        expect(confirm).toHaveBeenCalledTimes(1);
+        expect(purge).not.toHaveBeenCalled();
+
+        await act(async () => { approve(true); });
+        expect(purge).toHaveBeenCalledExactlyOnceWith('user:test-user-id');
+        fireEvent.click(reset);
+        fireEvent.click(screen.getByRole('button', { name: /Ricarica pagina/i }));
+        expect(confirm).toHaveBeenCalledTimes(1);
+        expect(purge).toHaveBeenCalledTimes(1);
+        expect(reload).not.toHaveBeenCalled();
+        expect(window.location.reload).not.toHaveBeenCalled();
+
+        await act(async () => { finishPurge(); });
+        expect(window.location.reload).toHaveBeenCalledTimes(1);
+        log.mockRestore();
+    });
+
+    it('does not begin a destructive reset during the reload durability check', async () => {
+        const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+        let finishReload!: () => void;
+        const reload = vi.spyOn(safeReloadModule, 'safeHardReload').mockImplementationOnce(
+            () => new Promise<void>(resolve => { finishReload = resolve; }),
+        );
+        const confirm = vi.mocked(useDialogStore.getState().showConfirm).mockResolvedValue(true);
+
+        render(<ErrorBoundary><ProblemChild shouldThrow={true} /></ErrorBoundary>);
+        fireEvent.click(screen.getByRole('button', { name: /Ricarica pagina/i }));
+        fireEvent.click(screen.getByRole('button', { name: /Azzera dati locali/i }));
+        expect(reload).toHaveBeenCalledTimes(1);
+        expect(confirm).not.toHaveBeenCalled();
+        expect(DB.purgeAllLocalUserData).not.toHaveBeenCalled();
+
+        await act(async () => { finishReload(); });
+        await act(async () => { fireEvent.click(screen.getByRole('button', { name: /Azzera dati locali/i })); });
+        expect(confirm).toHaveBeenCalledTimes(1);
+        expect(DB.purgeAllLocalUserData).toHaveBeenCalledExactlyOnceWith('user:test-user-id');
+        log.mockRestore();
+    });
+
+    it('allows retrying local reset after a rejected purge', async () => {
+        const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+        const confirm = vi.mocked(useDialogStore.getState().showConfirm).mockResolvedValue(true);
+        const purge = vi.mocked(DB.purgeAllLocalUserData)
+            .mockRejectedValueOnce(new Error('IndexedDB cleanup unavailable'))
+            .mockResolvedValueOnce(undefined);
+
+        render(<ErrorBoundary><ProblemChild shouldThrow={true} /></ErrorBoundary>);
+        const reset = screen.getByRole('button', { name: /Azzera dati locali/i });
+        await act(async () => { fireEvent.click(reset); });
+        expect(purge).toHaveBeenCalledTimes(1);
+        expect(window.location.reload).not.toHaveBeenCalled();
+
+        await act(async () => { fireEvent.click(reset); });
+        expect(confirm).toHaveBeenCalledTimes(2);
+        expect(purge).toHaveBeenCalledTimes(2);
+        expect(window.location.reload).toHaveBeenCalledTimes(1);
+        log.mockRestore();
+    });
+
+    it('revokes the guest generation before a failed error-recovery purge', async () => {
+        const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+        vi.mocked(useDialogStore.getState().showConfirm).mockResolvedValue(true);
+        localStorage.setItem('logbook_is_guest', 'true');
+        localStorage.setItem(GUEST_SESSION_KEY, 'error-recovery-guest');
+        activateGuestSession('error-recovery-guest');
+        vi.spyOn(DB, 'purgeAllLocalUserData').mockRejectedValueOnce(new Error('simulated partial IndexedDB failure'));
+
+        render(<ErrorBoundary><ProblemChild shouldThrow={true} /></ErrorBoundary>);
+        await act(async () => { fireEvent.click(screen.getByText(/Azzera dati locali/i)); });
+
+        expect(localStorage.getItem(GUEST_REVOCATION_KEY)).not.toBeNull();
+        expect(isActiveGuestSession()).toBe(false);
+        expect(window.location.reload).not.toHaveBeenCalled();
+        expect(useDialogStore.getState().showAlert).toHaveBeenCalled();
+        spy.mockRestore();
+    });
+
+    it('refuses a destructive reset when the confirmed session has changed', async () => {
+        const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+        let approve!: (allowed: boolean) => void;
+        vi.mocked(useDialogStore.getState().showConfirm).mockImplementationOnce(() =>
+            new Promise(resolve => { approve = resolve; })
+        );
+
+        render(<ErrorBoundary><ProblemChild shouldThrow={true} /></ErrorBoundary>);
+        fireEvent.click(screen.getByText(/Azzera dati locali/i));
+        invalidateSession(); // Simulate a login/logout while the confirm dialog is open.
+        await act(async () => { approve(true); });
+
+        expect(DB.purgeAllLocalUserData).not.toHaveBeenCalled();
+        expect(window.location.reload).not.toHaveBeenCalled();
+        expect(useDialogStore.getState().showAlert).not.toHaveBeenCalled();
+        spy.mockRestore();
+    });
+
+    it('does not reload after the account session changes while local purge is pending', async () => {
+        const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+        vi.mocked(useDialogStore.getState().showConfirm).mockResolvedValueOnce(true);
+        let finishPurge!: () => void;
+        vi.mocked(DB.purgeAllLocalUserData).mockImplementationOnce(() =>
+            new Promise<void>(resolve => { finishPurge = resolve; })
+        );
+
+        render(<ErrorBoundary><ProblemChild shouldThrow={true} /></ErrorBoundary>);
+        await act(async () => { fireEvent.click(screen.getByText(/Azzera dati locali/i)); });
+        expect(DB.purgeAllLocalUserData).toHaveBeenCalledExactlyOnceWith('user:test-user-id');
+
+        // The owner label can be identical after A→B→A; the epoch still changed.
+        invalidateSession();
+        invalidateSession();
+        await act(async () => { finishPurge(); });
+
+        expect(window.location.reload).not.toHaveBeenCalled();
+        log.mockRestore();
+    });
+
+    it('suppresses obsolete local purge failure alerts after Auth A→B→A', async () => {
+        const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+        vi.mocked(useDialogStore.getState().showConfirm).mockResolvedValueOnce(true);
+        const alert = vi.mocked(useDialogStore.getState().showAlert);
+        let failPurge!: (error: Error) => void;
+        const purge = vi.mocked(DB.purgeAllLocalUserData).mockImplementationOnce(
+            () => new Promise<void>((_resolve, reject) => { failPurge = reject; }),
+        );
+
+        render(<ErrorBoundary><ProblemChild shouldThrow={true} /></ErrorBoundary>);
+        await act(async () => { fireEvent.click(screen.getByRole('button', { name: /Azzera dati locali/i })); });
+        expect(purge).toHaveBeenCalledExactlyOnceWith('user:test-user-id');
+
+        // The same account label after two Auth transitions is not the old epoch.
+        invalidateSession();
+        invalidateSession();
+        await act(async () => { failPurge(new Error('obsolete IndexedDB cleanup error')); });
+        expect(window.location.reload).not.toHaveBeenCalled();
+        expect(alert).not.toHaveBeenCalled();
+        log.mockRestore();
+    });
+
+    it('never calls local reset when the account has a pending server deletion', async () => {
+        const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+        const owner = storageOwner();
+        markAccountDeletion(owner, { receiptToken: 'A'.repeat(43) });
+        vi.mocked(useDialogStore.getState().showConfirm).mockResolvedValue(true);
+        idbStore['logbook:v2:' + owner] = { data: { profile: { name: 'Keep me' } } };
+
+        render(<ErrorBoundary><ProblemChild shouldThrow={true} /></ErrorBoundary>);
+        await act(async () => {
+            fireEvent.click(screen.getByText(/Azzera dati locali/i));
+        });
+
+        expect(DB.purgeAllLocalUserData).not.toHaveBeenCalled();
+        expect(window.location.reload).not.toHaveBeenCalled();
+        expect(idbStore['logbook:v2:' + owner]).toBeDefined();
+        expect(useDialogStore.getState().showAlert).toHaveBeenCalledWith(
+            'Cancellazione account ancora in corso: i dati locali sono necessari per il recupero e non possono essere azzerati.'
+        );
+        consoleErrorSpy.mockRestore();
+    });
+
+});

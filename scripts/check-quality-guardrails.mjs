@@ -264,6 +264,40 @@ function expandScript(pkg, name, stack = []) {
   return leaves;
 }
 
+// A dedicated Vitest file may move without removing its verification leaf.
+// Accept only Git-confirmed renames within tests/ that retain the test basename.
+function renamedTestPaths() {
+  const changes = git(['diff', '--name-status', '-z', '--find-renames=50%', baseSha, 'HEAD', '--', 'tests/']).split('\0');
+  const renames = new Map();
+  for (let index = 0; index < changes.length && changes[index];) {
+    const status = changes[index++];
+    const before = changes[index++];
+    if (/^R\d+$/.test(status)) {
+      const after = changes[index++];
+      if (!before || !after) throw new Error('Malformed Git rename record');
+      if (before.startsWith('tests/') && after.startsWith('tests/')
+        && before.split('/').at(-1) === after.split('/').at(-1)
+        && /\.test\.(?:ts|tsx)$/.test(before)) {
+        renames.set(before, after);
+      }
+    } else if (/^C\d+$/.test(status)) {
+      index++;
+    } else if (!before) {
+      throw new Error('Malformed Git file-change record');
+    }
+  }
+  return renames;
+}
+
+function remapDedicatedVitestLeaf(leaf, renames) {
+  const parts = leaf.split(/\s+/);
+  if (parts[0] !== 'vitest' || parts[1] !== 'run' || parts.length < 3
+    || !parts.slice(2).every(file => /^tests\/\S+\.test\.(?:ts|tsx)$/.test(file))) {
+    return leaf;
+  }
+  return ['vitest', 'run', ...parts.slice(2).map(file => renames.get(file) ?? file)].join(' ');
+}
+
 const oldPackage = parseJson(readBase('package.json'), 'main package.json');
 const newPackage = parseJson(readCurrent('package.json'), 'candidate package.json');
 if (oldPackage && newPackage) {
@@ -288,8 +322,10 @@ if (oldPackage && newPackage) {
     for (const leaf of expandScript(newPackage, 'verify:m8')) {
       present.set(leaf, (present.get(leaf) || 0) + 1);
     }
+    const renames = renamedTestPaths();
     for (const [leaf, minimum] of required) {
-      if ((present.get(leaf) || 0) < minimum) {
+      const candidateLeaf = remapDedicatedVitestLeaf(leaf, renames);
+      if ((present.get(candidateLeaf) || 0) < minimum) {
         failures.push('Mandatory verification leaf removed or weakened: ' + leaf);
       }
     }
