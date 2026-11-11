@@ -572,7 +572,7 @@ render(
             ];
 
             for (const relPath of filesToCheck) {
-                const absPath = path.resolve(__dirname, '..', relPath);
+                const absPath = path.resolve(__dirname, '../..', relPath);
                 expect(fs.existsSync(absPath), `File ${relPath} must exist`).toBe(true);
                 const fileContent = fs.readFileSync(absPath, 'utf-8');
                 expect(
