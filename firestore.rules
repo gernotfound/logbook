@@ -5,6 +5,16 @@ service cloud.firestore {
       return request.auth != null;
     }
 
+    // Cursor-based archive pagination must not use offsets: skipped rows
+    // consume billable reads even when the query returns only one document.
+    // Check cheap query constraints before ownership/consent document lookups.
+    function boundedArchiveQuery() {
+      return request.query.limit is int
+        && request.query.limit > 0
+        && request.query.limit <= 400
+        && request.query.get('offset', 0) == 0;
+    }
+
     function isOwner(userId) {
       return isAuthenticated() && request.auth.uid == userId;
     }
@@ -408,7 +418,8 @@ service cloud.firestore {
       // Root deletion is server-only. Client-side account deletion must always use
       // the trusted account-deletion job so subcollections and Firebase Auth cannot
       // be orphaned.
-      allow read: if isWritableOwner(userId);
+      allow get: if isWritableOwner(userId);
+      allow list: if false;
 
       allow create, update: if isWritableOwner(userId)
         && isSealedCloudDocument(incomingData())
@@ -419,7 +430,8 @@ service cloud.firestore {
         && preservesSyncProtocol();
 
       match /history_months/{monthId} {
-        allow read: if isWritableOwner(userId);
+        allow get: if isWritableOwner(userId);
+        allow list: if boundedArchiveQuery() && isWritableOwner(userId);
         allow delete: if false;
         allow create, update: if isWritableOwner(userId)
           && isValidMonthId(monthId)
@@ -433,7 +445,8 @@ service cloud.firestore {
       }
 
       match /nutrition_months/{monthId} {
-        allow read: if isWritableOwner(userId);
+        allow get: if isWritableOwner(userId);
+        allow list: if boundedArchiveQuery() && isWritableOwner(userId);
         allow delete: if false;
         allow create, update: if isWritableOwner(userId)
           && isValidMonthId(monthId)
@@ -447,7 +460,8 @@ service cloud.firestore {
       }
 
       match /sync_control/{controlId} {
-        allow read: if controlId == 'state' && isWritableOwner(userId);
+        allow get: if controlId == 'state' && isWritableOwner(userId);
+        allow list: if false;
         allow create: if controlId == 'state'
           && isWritableOwner(userId)
           && validReplicaControlCreate(userId, incomingData());

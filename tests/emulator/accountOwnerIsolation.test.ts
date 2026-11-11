@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { beforeAll, beforeEach, afterAll, it } from 'vitest';
 import { initializeTestEnvironment, assertFails, assertSucceeds, type RulesTestEnvironment } from '@firebase/rules-unit-testing';
-import { collection, deleteDoc, doc, getDoc, getDocs, setDoc } from 'firebase/firestore';
+import { collection, deleteDoc, doc, getDoc, getDocs, limit, query, setDoc } from 'firebase/firestore';
 import { seedTrustedConsent, asModularFirestore, registerReplica } from './replicaHarness';
 
 let env: RulesTestEnvironment;
@@ -46,6 +46,33 @@ it('denies foreign owner access on every private root/shard/control document and
     await assertFails(getDocs(collection(bob, 'users', 'a', path)));
   }
   await assertFails(getDocs(collection(bob, 'users')));
+});
+
+it('bounds owner archive queries without blocking document reads or cursor-compatible pages', async () => {
+  await env.withSecurityRulesDisabled(async admin => {
+    const db = asModularFirestore(admin.firestore());
+    for (const path of privatePaths) await setDoc(doc(db, path), { seeded: true });
+  });
+
+  const alice = asModularFirestore(env.authenticatedContext('a', { email_verified: true }).firestore());
+  const bob = asModularFirestore(env.authenticatedContext('b', { email_verified: true }).firestore());
+  for (const name of ['history_months', 'nutrition_months']) {
+    const collectionRef = collection(alice, 'users', 'a', name);
+    // Standard sync uses 400 documents/page, backup uses 50.
+    const backup = await assertSucceeds(getDocs(query(collectionRef, limit(50))));
+    expect(backup.size).toBe(1);
+    const fullCheckpoint = await assertSucceeds(getDocs(query(collectionRef, limit(400))));
+    expect(fullCheckpoint.size).toBe(1);
+    await assertFails(getDocs(collectionRef));
+    await assertFails(getDocs(query(collectionRef, limit(401))));
+    await assertFails(getDocs(query(collection(bob, 'users', 'a', name), limit(50))));
+    await assertSucceeds(getDoc(doc(alice, 'users', 'a', name, '2026-09')));
+  }
+  // Neither the users root nor replica-control records need enumeration.
+  await assertSucceeds(getDoc(doc(alice, 'users/a')));
+  await assertSucceeds(getDoc(doc(alice, 'users/a/sync_control/state')));
+  await assertFails(getDocs(collection(alice, 'users')));
+  await assertFails(getDocs(collection(alice, 'users', 'a', 'sync_control')));
 });
 
 it('denies cross-owner replica registration while allowing the verified owner', async () => {

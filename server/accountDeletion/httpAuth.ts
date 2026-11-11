@@ -39,6 +39,9 @@ async function verifyConsumableAppCheck(request: Request): Promise<void> {
 
 async function verifyAuthenticatedRequester(request: Request): Promise<DecodedIdToken> {
   const idToken = bearerToken(request);
+  // A missing App Check header must not trigger a revocation-checked Auth
+  // lookup. Validate both cheap request preconditions before either Admin call.
+  appCheckToken(request);
   try {
     const decoded = await adminAuth().verifyIdToken(idToken, true);
     await verifyConsumableAppCheck(request);
