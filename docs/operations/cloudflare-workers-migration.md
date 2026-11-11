@@ -7,6 +7,8 @@
 - Il build Vite continua a generare il frontend; Cloudflare pubblica `dist/` come asset statici senza invocazioni Worker per i file esistenti.
 - L'unico namespace dinamico deliberato è `/__/auth/*`: un proxy HTTPS verso il dominio standard `logbook-db-98cc4.firebaseapp.com`. Non usa `thelogbook.web.app`, evita redirect 302 verso l'helper e serve il fallback Google su Safari. Il Worker rifiuta metodi non previsti, payload grandi e richieste a path estranei; non accetta host upstream controllati dal client e non registra informazioni personali.
 - `/__/auth/iframe` è incorporato dalla pagina: **non** usare `X-Frame-Options: DENY` o `frame-ancestors 'none'` sulle risposte proxy. Le risposte **statiche** continuano invece a usare la CSP e gli header dell'attuale `firebase.json`.
+- L'upstream Auth `firebaseapp.com` resta collegato ai servizi Firebase Hosting dello stesso progetto: la sua disponibilità in presenza di quota Hosting esaurita **non è confermata**. Prima del cutover serve verifica reale; il proxy non rende autonomi gli helper OAuth.
+- Il candidato invia `X-Robots-Tag: noindex`; rimuoverlo solo nel cutover autorizzato e validato.
 - Gli asset statici Cloudflare non consumano richieste Worker; le invocazioni del proxy Auth e le richieste non-asset possono consumare la quota gratuita e restituire 429 dopo l'esaurimento. Nessuna garanzia SLA Enterprise o invulnerabilità DDoS.
 - Una URL `workers.dev` non fornisce automaticamente le stesse regole WAF personalizzabili di una zona con dominio proprio. Nessun dominio a pagamento è richiesto.
 

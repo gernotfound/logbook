@@ -27,6 +27,7 @@ for (const file of ['robots.txt', 'sitemap.xml']) {
   writeFileSync(path, content.replaceAll('https://thelogbook.web.app/', value + '/'));
 }
 copyFileSync('cloudflare/_headers', 'dist/_headers');
+copyFileSync('cloudflare/.assetsignore', 'dist/.assetsignore');
 for (const file of ['index.html', 'sw.js', 'manifest.webmanifest', 'robots.txt', 'sitemap.xml', '_headers']) {
   if (!existsSync('dist/' + file)) throw new Error('Cloudflare artifact missing ' + file);
 }

@@ -1,5 +1,6 @@
 // Only the Firebase Auth helpers need a first-party reverse proxy.
-// This fixed upstream is independent of the old thelogbook.web.app Hosting quota.
+// The helper upstream remains a Firebase Hosting dependency; verify its availability
+// separately because Firebase Hosting transfer quotas apply at project scope.
 const AUTH_UPSTREAM = 'https://logbook-db-98cc4.firebaseapp.com';
 const AUTH_PREFIX = '/__/auth/';
 const MAX_AUTH_BODY = 65536;
