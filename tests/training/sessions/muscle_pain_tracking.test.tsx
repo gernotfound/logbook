@@ -9,7 +9,7 @@ import { Logic } from '../../../src/lib/logic';
 import { UserDataSchema, WorkoutSessionSchema } from '../../../src/lib/schema';
 import SessionRatings from '../../../src/components/Training/session/SessionRatings';
 import MuscleModel from '../../../src/components/Training/MuscleModel';
-import { mergeActivePainsContract } from '../../system/requirements/requirements_r1_r6_contracts';
+import { mergeActivePainsContract } from '../../domainCalculationContracts';
 
 describe('Muscle pain tracking, UI and persistence', () => {
     describe('Feature coverage', () => {

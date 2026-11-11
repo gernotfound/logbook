@@ -5,7 +5,7 @@ import { useAppStore } from '../../src/store/useAppStore';
 import { captureSession } from '../../src/lib/sync/session';
 import { FoodSchema } from '../../src/lib/schema';
 import CustomFoodForm from '../../src/components/Nutrition/CustomFoodForm';
-import { calculateRealtimeKcalContract } from '../system/requirements/requirements_r1_r6_contracts';
+import { calculateRealtimeKcalContract } from '../domainCalculationContracts';
 
 describe('Food real-time calories', () => {
     describe('Feature coverage', () => {

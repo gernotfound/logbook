@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { useAppStore } from '../../../src/store/useAppStore';
 import { captureSession } from '../../../src/lib/sync/session';
 import { ExerciseSchema } from '../../../src/lib/schema';
-import { getLatestUserWeightContract, calculateEffectiveSetWeightContract, calculateSetVolumeContract, calculateWorkoutVolumeContract } from '../../system/requirements/requirements_r1_r6_contracts';
+import { getLatestUserWeightContract, calculateEffectiveSetWeightContract, calculateSetVolumeContract, calculateWorkoutVolumeContract } from '../../domainCalculationContracts';
 
 describe('Bodyweight and equipment volume', () => {
     describe('Feature coverage', () => {
