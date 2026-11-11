@@ -1,4 +1,5 @@
 import { getArchiveRecord, updateArchiveRecord } from './secureArchiveRepository';
+import { getStorageMarker } from '../storageIntegrity';
 import { ownerConsentRevision } from './localConsentReconciliation';
 import { UserDataSchema } from '../schema';
 import type { UserData } from '../../types';
@@ -30,6 +31,9 @@ export async function initializeLocal(owner: string, data: UserData, completeMon
         // can be empty (especially for guest or an acknowledged account) while
         // a concurrent tab has already committed durable business edits.
         if (current) return raw;
+        if (owner === 'guest' && getStorageMarker(undefined, owner)) {
+            throw new Error('Archivio guest precedentemente salvato ma non più disponibile: dati superstiti preservati per il recupero.');
+        }
         return { ...currentEnvelopeVersions(), ...ownerConsentRevision(owner), owner, actorId: generateId('actor'), actorSeq: 0, clock: {}, data: parsed, baseline: parsed, completeMonths: completeMonths ?? [], pending: [], syncMetaByDocument: {}, replica: null, revision: 0 };
     });
 }
