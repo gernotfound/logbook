@@ -1,33 +1,76 @@
 import { useState } from 'react';
+import type { User } from 'firebase/auth';
 import { useAuth } from '../../hooks/useAuth';
+import { auth } from '../../lib/firebase';
+import { captureSession, isCurrentSession, type SessionSnapshot } from '../../lib/sync/session';
 
 type Action = 'verify' | 'resend' | 'local';
+type GateSession = { user: User | null; session: SessionSnapshot };
+type PendingAction = GateSession & { action: Action };
+type Feedback = GateSession & { message: string };
+type StorageFailure = { user: User | null; message: string };
+
+function isCurrentGateSession({ user, session }: GateSession): boolean {
+    return auth.currentUser === user && isCurrentSession(session);
+}
 
 export function EmailVerificationGate() {
     const { currentUser, refreshEmailVerification, resendEmailVerification, continueUnverifiedLocally } = useAuth();
-    const [busy, setBusy] = useState<Action | null>(null);
-    const [message, setMessage] = useState<string | null>(null);
+    const [pending, setPending] = useState<PendingAction | null>(null);
+    const [feedback, setFeedback] = useState<Feedback | null>(null);
+    const [storageFailure, setStorageFailure] = useState<StorageFailure | null>(null);
+    // A superseded Auth epoch cannot keep the next account's buttons disabled
+    // or expose its feedback, even when the same UID logs in again.
+    const busy = pending && isCurrentGateSession(pending) ? pending.action : null;
+    const message = feedback && isCurrentGateSession(feedback)
+        ? feedback.message
+        : storageFailure?.user === auth.currentUser ? storageFailure?.message : null;
 
     const run = async (action: Action) => {
         if (busy) return;
-        setBusy(action);
-        setMessage(null);
+        let request: GateSession;
+        try {
+            request = { user: auth.currentUser, session: captureSession() };
+        } catch {
+            // An unreadable owner/session is not permission to touch Firebase.
+            setStorageFailure({
+                user: auth.currentUser,
+                message: 'Archivio locale non disponibile. Controlla le impostazioni del browser e riprova.',
+            });
+            return;
+        }
+        setStorageFailure(null);
+        const stillCurrent = () => isCurrentGateSession(request);
+        const report = (text: string) => setFeedback({ ...request, message: text });
+        setPending({ ...request, action });
+        setFeedback(null);
         try {
             if (action === 'verify') {
-                await refreshEmailVerification();
-                setMessage('La verifica non risulta ancora completata. Apri il link ricevuto e riprova.');
+                const result = await refreshEmailVerification();
+                if (!stillCurrent()) return;
+                if (result === 'pending') {
+                    report('La verifica non risulta ancora completata. Apri il link ricevuto e riprova.');
+                } else if (result === 'verified') {
+                    report('Email verificata. Apertura dell’account in corso…');
+                }
             } else if (action === 'resend') {
-                await resendEmailVerification();
-                setMessage('Email inviata. Controlla anche la cartella spam.');
+                const result = await resendEmailVerification();
+                if (!stillCurrent()) return;
+                if (result === 'sent') report('Email inviata. Controlla anche la cartella spam.');
+                if (result === 'already-verified') report('Email già verificata. Premi “Ho verificato la mia email” per accedere.');
             } else {
                 await continueUnverifiedLocally();
             }
         } catch {
-            setMessage(action === 'local'
-                ? 'Non è possibile avviare la modalità locale. I dati già salvati restano conservati: riprova.'
-                : 'Operazione non completata. Controlla la connessione e riprova.');
+            if (stillCurrent()) {
+                report(action === 'local'
+                    ? 'Non è possibile avviare la modalità locale. I dati già salvati restano conservati: riprova.'
+                    : action === 'verify' && request.user?.emailVerified === true
+                        ? 'Email verificata, ma l’accesso non è ancora pronto. Le modifiche locali restano conservate: riprova.'
+                        : 'Operazione non completata. Controlla la connessione e riprova.');
+            }
         } finally {
-            setBusy(null);
+            if (stillCurrent()) setPending(null);
         }
     };
 
@@ -42,6 +85,7 @@ export function EmailVerificationGate() {
                 <p className="ui-login-box-3">
                     Controlla la casella di {currentUser?.email ?? 'posta elettronica'} e apri il link di verifica. Se non l'hai ricevuto, puoi richiederne uno nuovo.
                 </p>
+                {message && <p role="status" aria-live="polite">{message}</p>}
                 <div style={{ display: 'grid', gap: '0.75rem' }}>
                     <button type="button" className="btn btn-primary" disabled={busy !== null} onClick={() => void run('verify')}>
                         {busy === 'verify' ? 'Verifica in corso…' : 'Ho verificato la mia email'}
@@ -54,7 +98,6 @@ export function EmailVerificationGate() {
                     </button>
                 </div>
                 <p className="ui-login-box-3">In modalità locale gli allenamenti rimangono su questo dispositivo; il cloud si attiva dopo la verifica.</p>
-                {message && <p role="status" aria-live="polite">{message}</p>}
             </section>
         </div>
     );

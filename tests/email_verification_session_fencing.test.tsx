@@ -61,7 +61,7 @@ describe('email verification actions across actual AuthProvider callbacks (SDK s
       const { result, transition, preserved } = await start();
       let finish!: () => void;
       vi.mocked(reload).mockImplementationOnce(() => new Promise<void>(resolve => { finish = resolve; }));
-      let pending!: Promise<void>;
+      let pending!: ReturnType<typeof result.current.refreshEmailVerification>;
       act(() => { pending = result.current.refreshEmailVerification(); });
       expect(reload).toHaveBeenCalledOnce();
       await transition(kind);
@@ -72,6 +72,19 @@ describe('email verification actions across actual AuthProvider callbacks (SDK s
       expect(DB.purgeAllLocalUserData).not.toHaveBeenCalled();
     },
   );
+
+  it('stops rechecking when the Auth session changes between attempts', async () => {
+    const { result, transition, preserved } = await start();
+    let pending!: Promise<string>;
+    act(() => { pending = result.current.refreshEmailVerification(); });
+    await waitFor(() => expect(reload).toHaveBeenCalledOnce());
+    await transition('other-account');
+    await act(async () => { expect(await pending).toBe('stale'); });
+    expect(reload).toHaveBeenCalledOnce();
+    expect(DB.loadCloudPayload).not.toHaveBeenCalled();
+    expect(DB.purgeAllLocalUserData).not.toHaveBeenCalled();
+    expect(idbStore['logbook:v2:user:verification-a']).toBe(preserved);
+  });
 
   it.each(['reload', 'token'] as const)(
     'does not enter the reload barrier after A-B-A during %s', async boundary => {
@@ -85,7 +98,7 @@ describe('email verification actions across actual AuthProvider callbacks (SDK s
       if (boundary === 'token') first.getIdToken.mockImplementationOnce(async () => { await gate; return 'old-token'; });
       const flush = vi.spyOn(draftRegistry, 'flushAll');
       try {
-        let pending!: Promise<void>;
+        let pending!: ReturnType<typeof result.current.refreshEmailVerification>;
         act(() => { pending = result.current.refreshEmailVerification(); });
         await waitFor(() => expect(boundary === 'reload' ? reload : first.getIdToken).toHaveBeenCalledOnce());
         await transition('A-B-A');
@@ -105,7 +118,7 @@ describe('email verification actions across actual AuthProvider callbacks (SDK s
       vi.mocked(sendEmailVerification).mockImplementationOnce(() => new Promise<void>((resolve, reject) => {
         finish = () => outcome === 'success' ? resolve() : reject(new Error('old provider error'));
       }));
-      let pending!: Promise<void>;
+      let pending!: ReturnType<typeof result.current.resendEmailVerification>;
       act(() => { pending = result.current.resendEmailVerification(); });
       expect(sendEmailVerification).toHaveBeenCalledOnce();
       await transition('A-B-A');

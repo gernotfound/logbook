@@ -337,7 +337,9 @@ export const AccountCard = () => {
                                         setLoadingAction('verifyEmail');
                                         await refreshEmailVerification();
                                     } catch {
-                                        if (stillCurrent()) await showAlert('Verifica email non riuscita. Riprova.');
+                                        if (stillCurrent()) await showAlert(currentUser?.emailVerified
+                                            ? 'Email verificata, ma non è stato possibile completare l’accesso in sicurezza. Riprova.'
+                                            : 'Verifica email non riuscita. Riprova.');
                                     } finally {
                                         setLoadingAction(null);
                                     }
@@ -355,9 +357,10 @@ export const AccountCard = () => {
                                         stillCurrent = captureAccountAction();
                                         if (!stillCurrent()) return;
                                         setLoadingAction('verifyEmail');
-                                        await resendEmailVerification();
+                                        const outcome = await resendEmailVerification();
                                         if (!stillCurrent()) return;
-                                        await showAlert('Email di verifica inviata. Controlla anche la cartella spam.');
+                                        if (outcome === 'sent') await showAlert('Email di verifica inviata. Controlla anche la cartella spam.');
+                                        if (outcome === 'already-verified') await showAlert('Email già verificata. Premi “Ho verificato” per accedere.');
                                     } catch {
                                         if (stillCurrent()) await showAlert('Invio email non riuscito. Riprova.');
                                     } finally {
