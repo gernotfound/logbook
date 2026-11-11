@@ -65,7 +65,9 @@ export function EmailVerificationGate() {
             if (stillCurrent()) {
                 report(action === 'local'
                     ? 'Non è possibile avviare la modalità locale. I dati già salvati restano conservati: riprova.'
-                    : 'Operazione non completata. Controlla la connessione e riprova.');
+                    : action === 'verify' && request.user?.emailVerified === true
+                        ? 'Email verificata, ma l’accesso non è ancora pronto. Le modifiche locali restano conservate: riprova.'
+                        : 'Operazione non completata. Controlla la connessione e riprova.');
             }
         } finally {
             if (stillCurrent()) setPending(null);

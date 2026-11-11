@@ -337,7 +337,9 @@ export const AccountCard = () => {
                                         setLoadingAction('verifyEmail');
                                         await refreshEmailVerification();
                                     } catch {
-                                        if (stillCurrent()) await showAlert('Verifica email non riuscita. Riprova.');
+                                        if (stillCurrent()) await showAlert(currentUser?.emailVerified
+                                            ? 'Email verificata, ma non è stato possibile completare l’accesso in sicurezza. Riprova.'
+                                            : 'Verifica email non riuscita. Riprova.');
                                     } finally {
                                         setLoadingAction(null);
                                     }

@@ -38,6 +38,7 @@ import { EmailVerificationGate } from '../src/components/UI/EmailVerificationGat
 
 beforeEach(() => {
     vi.clearAllMocks();
+    authState.user.emailVerified = false;
     (auth as { currentUser: unknown }).currentUser = authState.user;
     invalidateSession();
     authState.showAlert.mockResolvedValue(undefined);
@@ -53,6 +54,15 @@ describe('email verification feedback privacy', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Ho verificato' }));
     await waitFor(() => expect(authState.showAlert).toHaveBeenCalledWith('Verifica email non riuscita. Riprova.'));
     expect(JSON.stringify(authState.showAlert.mock.calls)).not.toContain('PRIVATE_AUTH_PROVIDER_DETAILS');
+  });
+
+  it('distinguishes verified email from a later refresh barrier failure in the account card', async () => {
+    authState.user.emailVerified = true;
+    authState.refreshEmailVerification.mockRejectedValueOnce(new Error('PRIVATE_REFRESH_FAILURE'));
+    render(<AccountCard />);
+    fireEvent.click(screen.getByRole('button', { name: 'Ho verificato' }));
+    await waitFor(() => expect(authState.showAlert).toHaveBeenCalledWith(expect.stringContaining('Email verificata')));
+    expect(JSON.stringify(authState.showAlert.mock.calls)).not.toContain('PRIVATE_REFRESH_FAILURE');
   });
 
   it('does not reveal raw Firebase exceptions when verification email cannot be sent', async () => {
@@ -108,6 +118,16 @@ describe('email verification gate feedback', () => {
     render(<EmailVerificationGate />);
     fireEvent.click(screen.getByRole('button', { name: 'Ho verificato la mia email' }));
     await waitFor(() => expect(screen.getByRole('status').textContent).toContain('non risulta ancora completata'));
+  });
+
+  it('reports that verification succeeded but safe account opening is still blocked', async () => {
+    authState.user.emailVerified = true;
+    authState.refreshEmailVerification.mockRejectedValueOnce(new Error('PRIVATE_REFRESH_FAILURE'));
+    render(<EmailVerificationGate />);
+    fireEvent.click(screen.getByRole('button', { name: 'Ho verificato la mia email' }));
+    await waitFor(() => expect(screen.getByRole('status').textContent).toContain('Email verificata'));
+    expect(screen.getByRole('status').textContent).toContain('non è ancora pronto');
+    expect(screen.getByRole('status').textContent).not.toContain('PRIVATE_REFRESH_FAILURE');
   });
 
   it('does not misreport an already verified email in the account card', async () => {
