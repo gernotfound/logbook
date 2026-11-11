@@ -1,24 +1,24 @@
 import React from 'react';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { screen, act, fireEvent, renderHook } from '@testing-library/react';
-import { renderWithAuthenticatedTestOwner, renderWithProviders, emptyUserData } from '../setup';
-import { useAppStore } from '../../src/store/useAppStore';
-import { captureSession } from '../../src/lib/sync/session';
+import { renderWithAuthenticatedTestOwner, renderWithProviders, emptyUserData } from '../../setup';
+import { useAppStore } from '../../../src/store/useAppStore';
+import { captureSession } from '../../../src/lib/sync/session';
 
-import { initializeLocal, readLocal } from '../../src/lib/sync/localRepository';
-import { prepareUnlockedTestArchive } from '../secureVaultFixture';
-import { Logic } from '../../src/lib/logic';
-import { NutritionDaySchema, TrainingCycleSchema } from '../../src/lib/schema';
-import { useSleepMeasurements } from '../../src/hooks/useSleepMeasurements';
-import { useWorkoutSetMutations } from '../../src/hooks/workout/useWorkoutSetMutations';
-import { useWorkoutSession } from '../../src/hooks/useWorkoutSession';
-import DataSleep from '../../src/components/Data/DataSleep';
-import DataHistory from '../../src/components/Data/DataHistory';
-import { RoutineEditor } from '../../src/components/Training/routines/RoutineEditor';
-import { CycleEditor } from '../../src/components/Training/planning/CycleEditor';
-import TrainingSession from '../../src/components/Training/TrainingSession';
-import SessionExerciseCard from '../../src/components/Training/session/SessionExerciseCard';
-import type { WorkoutSession, WorkoutRoutine, Exercise } from '../../src/types';
+import { initializeLocal, readLocal } from '../../../src/lib/sync/localRepository';
+import { prepareUnlockedTestArchive } from '../../secureVaultFixture';
+import { Logic } from '../../../src/lib/logic';
+import { NutritionDaySchema, TrainingCycleSchema } from '../../../src/lib/schema';
+import { useSleepMeasurements } from '../../../src/hooks/useSleepMeasurements';
+import { useWorkoutSetMutations } from '../../../src/hooks/workout/useWorkoutSetMutations';
+import { useWorkoutSession } from '../../../src/hooks/useWorkoutSession';
+import DataSleep from '../../../src/components/Data/DataSleep';
+import DataHistory from '../../../src/components/Data/DataHistory';
+import { RoutineEditor } from '../../../src/components/Training/routines/RoutineEditor';
+import { CycleEditor } from '../../../src/components/Training/planning/CycleEditor';
+import TrainingSession from '../../../src/components/Training/TrainingSession';
+import SessionExerciseCard from '../../../src/components/Training/session/SessionExerciseCard';
+import type { WorkoutSession, WorkoutRoutine, Exercise } from '../../../src/types';
 
 describe('LogBook PWA Enhancements Integration Suite (Requirements R1 - R6)', () => {
     beforeEach(async () => {

@@ -1,25 +1,25 @@
 import React from 'react';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, screen, fireEvent, renderHook, act } from '@testing-library/react';
-import { emptyUserData, idbStore } from '../setup';
-import { prepareUnlockedTestArchive } from '../secureVaultFixture';
-import { useAppStore } from '../../src/store/useAppStore';
-import { captureSession } from '../../src/lib/sync/session';
-import { initializeLocal, readLocal } from '../../src/lib/sync/localRepository';
-import { Logic } from '../../src/lib/logic';
+import { emptyUserData, idbStore } from '../../setup';
+import { prepareUnlockedTestArchive } from '../../secureVaultFixture';
+import { useAppStore } from '../../../src/store/useAppStore';
+import { captureSession } from '../../../src/lib/sync/session';
+import { initializeLocal, readLocal } from '../../../src/lib/sync/localRepository';
+import { Logic } from '../../../src/lib/logic';
 import {
     UserDataSchema,
     ExerciseSchema,
     NutritionDaySchema,
     FoodSchema,
     WorkoutSessionSchema
-} from '../../src/lib/schema';
-import CustomFoodForm from '../../src/components/Nutrition/CustomFoodForm';
-import DataMeasurements from '../../src/components/Data/DataMeasurements';
-import SessionSetRow from '../../src/components/Training/session/SessionSetRow';
-import SessionRatings from '../../src/components/Training/session/SessionRatings';
-import MuscleModel from '../../src/components/Training/MuscleModel';
-import { useNutritionMeasurements } from '../../src/hooks/useNutritionMeasurements';
+} from '../../../src/lib/schema';
+import CustomFoodForm from '../../../src/components/Nutrition/CustomFoodForm';
+import DataMeasurements from '../../../src/components/Data/DataMeasurements';
+import SessionSetRow from '../../../src/components/Training/session/SessionSetRow';
+import SessionRatings from '../../../src/components/Training/session/SessionRatings';
+import MuscleModel from '../../../src/components/Training/MuscleModel';
+import { useNutritionMeasurements } from '../../../src/hooks/useNutritionMeasurements';
 import {
     getLatestUserWeightContract,
     calculateEffectiveSetWeightContract,
@@ -27,7 +27,7 @@ import {
     calculateWorkoutVolumeContract,
     calculateRealtimeKcalContract,
     mergeActivePainsContract
-} from '../requirements_r1_r6_contracts';
+} from '../../requirements_r1_r6_contracts';
 
 describe('TheLogBook 4-Tier Automated Test Suite (Requirements R1 - R6)', () => {
     beforeEach(async () => {

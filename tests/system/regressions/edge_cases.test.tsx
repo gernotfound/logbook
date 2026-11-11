@@ -1,26 +1,26 @@
 import React from 'react';
 import { describe, test, expect, beforeEach } from 'vitest';
 import { screen, act, fireEvent, waitFor } from '@testing-library/react';
-import { renderWithAuthenticatedTestOwner, renderWithProviders, emptyUserData } from '../setup';
-import { prepareUnlockedTestArchive } from '../secureVaultFixture';
-import { Logic } from '../../src/lib/logic';
-import { createLoggedMealItem } from '../../src/lib/nutrition/createLoggedMealItem';
-import { calculateLoggedMealTotals } from '../../src/lib/nutrition/calculateLoggedMealTotals';
-import type { Food } from '../../src/types';
+import { renderWithAuthenticatedTestOwner, renderWithProviders, emptyUserData } from '../../setup';
+import { prepareUnlockedTestArchive } from '../../secureVaultFixture';
+import { Logic } from '../../../src/lib/logic';
+import { createLoggedMealItem } from '../../../src/lib/nutrition/createLoggedMealItem';
+import { calculateLoggedMealTotals } from '../../../src/lib/nutrition/calculateLoggedMealTotals';
+import type { Food } from '../../../src/types';
 
-import HomeView from '../../src/components/Home/HomeView';
-import TrainingSession from '../../src/components/Training/TrainingSession';
-import TrainingRoutines from '../../src/components/Training/TrainingRoutines';
-import TrainingHistory from '../../src/components/Training/TrainingHistory';
-import TrainingExercises from '../../src/components/Training/TrainingExercises';
-import NutritionMeals from '../../src/components/Nutrition/NutritionMeals';
-import NutritionPlanning from '../../src/components/Nutrition/NutritionPlanning';
-import SettingsView from '../../src/components/SettingsView';
-import WorkoutTimer from '../../src/components/Training/WorkoutTimer';
-import { stoppedWorkoutTimer, writeWorkoutTimerSnapshot } from '../../src/lib/utils/timer';
-import { storageOwner } from '../../src/lib/sync/session';
-import { useAuth } from '../../src/hooks/useAuth';
-import MuscleModel from '../../src/components/Training/MuscleModel';
+import HomeView from '../../../src/components/Home/HomeView';
+import TrainingSession from '../../../src/components/Training/TrainingSession';
+import TrainingRoutines from '../../../src/components/Training/TrainingRoutines';
+import TrainingHistory from '../../../src/components/Training/TrainingHistory';
+import TrainingExercises from '../../../src/components/Training/TrainingExercises';
+import NutritionMeals from '../../../src/components/Nutrition/NutritionMeals';
+import NutritionPlanning from '../../../src/components/Nutrition/NutritionPlanning';
+import SettingsView from '../../../src/components/SettingsView';
+import WorkoutTimer from '../../../src/components/Training/WorkoutTimer';
+import { stoppedWorkoutTimer, writeWorkoutTimerSnapshot } from '../../../src/lib/utils/timer';
+import { storageOwner } from '../../../src/lib/sync/session';
+import { useAuth } from '../../../src/hooks/useAuth';
+import MuscleModel from '../../../src/components/Training/MuscleModel';
 
 const ReadyOwner = () => {
   const { currentUser, loading } = useAuth();

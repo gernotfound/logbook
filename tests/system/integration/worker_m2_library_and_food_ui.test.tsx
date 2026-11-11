@@ -1,20 +1,20 @@
 import React, { useState } from 'react';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, screen, fireEvent, renderHook, act, waitFor } from '@testing-library/react';
-import { renderWithProviders, emptyUserData, idbStore } from '../setup';
-import { useAppStore } from '../../src/store/useAppStore';
-import { useDialogStore } from '../../src/store/useDialogStore';
-import { useTrainingExercises } from '../../src/hooks/useTrainingExercises';
-import { clearCatalogCache, getInMemoryCatalog, saveCatalogToCache } from '../../src/lib/catalog/catalogService';
+import { renderWithProviders, emptyUserData, idbStore } from '../../setup';
+import { useAppStore } from '../../../src/store/useAppStore';
+import { useDialogStore } from '../../../src/store/useDialogStore';
+import { useTrainingExercises } from '../../../src/hooks/useTrainingExercises';
+import { clearCatalogCache, getInMemoryCatalog, saveCatalogToCache } from '../../../src/lib/catalog/catalogService';
 import { set as idbSet } from 'idb-keyval';
-import TrainingExercises from '../../src/components/Training/TrainingExercises';
-import CustomFoodForm from '../../src/components/Nutrition/CustomFoodForm';
-import type { Exercise } from '../../src/types';
-import { deviceKey, protectedDeviceKey, readDeviceValueStrict } from '../../src/lib/sync/deviceStorage';
-import { readWorkoutRecoveryDraft, writeWorkoutRecoveryDraft } from '../../src/lib/sync/workoutRecoveryDraft';
-import { captureSession, invalidateSession, isCurrentSession } from '../../src/lib/sync/session';
-import { initializeLocal, readLocal } from '../../src/lib/sync/localRepository';
-import { prepareUnlockedTestArchive } from '../secureVaultFixture';
+import TrainingExercises from '../../../src/components/Training/TrainingExercises';
+import CustomFoodForm from '../../../src/components/Nutrition/CustomFoodForm';
+import type { Exercise } from '../../../src/types';
+import { deviceKey, protectedDeviceKey, readDeviceValueStrict } from '../../../src/lib/sync/deviceStorage';
+import { readWorkoutRecoveryDraft, writeWorkoutRecoveryDraft } from '../../../src/lib/sync/workoutRecoveryDraft';
+import { captureSession, invalidateSession, isCurrentSession } from '../../../src/lib/sync/session';
+import { initializeLocal, readLocal } from '../../../src/lib/sync/localRepository';
+import { prepareUnlockedTestArchive } from '../../secureVaultFixture';
 
 describe('Worker M2: Exercise Library UI & Food Form Real-Time Calorie Calculation', () => {
 

@@ -1,15 +1,15 @@
 import React from 'react';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { screen, act, fireEvent, renderHook } from '@testing-library/react';
-import { renderWithProviders, emptyUserData } from '../setup';
-import { prepareUnlockedTestArchive } from '../secureVaultFixture';
-import { captureSession } from '../../src/lib/sync/session';
-import { initializeLocal, readLocal } from '../../src/lib/sync/localRepository';
-import { useAppStore } from '../../src/store/useAppStore';
-import { Logic } from '../../src/lib/logic';
-import { useWorkoutSession } from '../../src/hooks/useWorkoutSession';
-import { CycleEditor } from '../../src/components/Training/planning/CycleEditor';
-import type { WorkoutRoutine, TrainingCycle, Exercise } from '../../src/types';
+import { renderWithProviders, emptyUserData } from '../../setup';
+import { prepareUnlockedTestArchive } from '../../secureVaultFixture';
+import { captureSession } from '../../../src/lib/sync/session';
+import { initializeLocal, readLocal } from '../../../src/lib/sync/localRepository';
+import { useAppStore } from '../../../src/store/useAppStore';
+import { Logic } from '../../../src/lib/logic';
+import { useWorkoutSession } from '../../../src/hooks/useWorkoutSession';
+import { CycleEditor } from '../../../src/components/Training/planning/CycleEditor';
+import type { WorkoutRoutine, TrainingCycle, Exercise } from '../../../src/types';
 
 describe('LogBook PWA Enhancements Integration Suite (Requirements R1 - R6)', () => {
     beforeEach(() => {

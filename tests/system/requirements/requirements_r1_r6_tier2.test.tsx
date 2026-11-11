@@ -1,26 +1,26 @@
 import React from 'react';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, screen, fireEvent, renderHook, act } from '@testing-library/react';
-import { emptyUserData, idbStore } from '../setup';
-import { prepareUnlockedTestArchive } from '../secureVaultFixture';
-import { captureSession } from '../../src/lib/sync/session';
-import { deviceKey } from '../../src/lib/sync/deviceStorage';
-import { initializeLocal, readLocal } from '../../src/lib/sync/localRepository';
-import { useNutritionMeasurements } from '../../src/hooks/useNutritionMeasurements';
-import { useAppStore } from '../../src/store/useAppStore';
-import { Logic } from '../../src/lib/logic';
+import { emptyUserData, idbStore } from '../../setup';
+import { prepareUnlockedTestArchive } from '../../secureVaultFixture';
+import { captureSession } from '../../../src/lib/sync/session';
+import { deviceKey } from '../../../src/lib/sync/deviceStorage';
+import { initializeLocal, readLocal } from '../../../src/lib/sync/localRepository';
+import { useNutritionMeasurements } from '../../../src/hooks/useNutritionMeasurements';
+import { useAppStore } from '../../../src/store/useAppStore';
+import { Logic } from '../../../src/lib/logic';
 import {
     UserDataSchema,
-} from '../../src/lib/schema';
-import SessionSetRow from '../../src/components/Training/session/SessionSetRow';
-import MuscleModel from '../../src/components/Training/MuscleModel';
+} from '../../../src/lib/schema';
+import SessionSetRow from '../../../src/components/Training/session/SessionSetRow';
+import MuscleModel from '../../../src/components/Training/MuscleModel';
 import {
     calculateEffectiveSetWeightContract,
     calculateSetVolumeContract,
     calculateWorkoutVolumeContract,
     calculateRealtimeKcalContract,
     mergeActivePainsContract
-} from '../requirements_r1_r6_contracts';
+} from '../../requirements_r1_r6_contracts';
 
 describe('LogBook 4-Tier Automated Test Suite (Requirements R1 - R6)', () => {
     beforeEach(() => {

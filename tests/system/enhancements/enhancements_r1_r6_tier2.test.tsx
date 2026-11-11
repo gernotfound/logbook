@@ -1,24 +1,24 @@
 import React from 'react';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { act, fireEvent, renderHook } from '@testing-library/react';
-import { renderWithAuthenticatedTestOwner, renderWithProviders, emptyUserData, idbStore } from '../setup';
-import { useAppStore } from '../../src/store/useAppStore';
-import { captureSession } from '../../src/lib/sync/session';
-import { prepareUnlockedTestArchive } from '../secureVaultFixture';
-import { initializeLocal, readLocal } from '../../src/lib/sync/localRepository';
-import { protectedDeviceKey, readDeviceValueStrict } from '../../src/lib/sync/deviceStorage';
-import { useDialogStore } from '../../src/store/useDialogStore';
-import { Logic } from '../../src/lib/logic';
-import { Exporter } from '../../src/lib/export';
-import { SessionExerciseSchema } from '../../src/lib/schema';
-import { useSleepMeasurements } from '../../src/hooks/useSleepMeasurements';
-import { useWorkoutSetMutations } from '../../src/hooks/workout/useWorkoutSetMutations';
-import { useWorkoutSession } from '../../src/hooks/useWorkoutSession';
-import { useTrainingRoutines } from '../../src/hooks/useTrainingRoutines';
-import { RoutineEditor } from '../../src/components/Training/routines/RoutineEditor';
-import TrainingSession from '../../src/components/Training/TrainingSession';
-import SessionExerciseCard from '../../src/components/Training/session/SessionExerciseCard';
-import type { WorkoutSession, Exercise } from '../../src/types';
+import { renderWithAuthenticatedTestOwner, renderWithProviders, emptyUserData, idbStore } from '../../setup';
+import { useAppStore } from '../../../src/store/useAppStore';
+import { captureSession } from '../../../src/lib/sync/session';
+import { prepareUnlockedTestArchive } from '../../secureVaultFixture';
+import { initializeLocal, readLocal } from '../../../src/lib/sync/localRepository';
+import { protectedDeviceKey, readDeviceValueStrict } from '../../../src/lib/sync/deviceStorage';
+import { useDialogStore } from '../../../src/store/useDialogStore';
+import { Logic } from '../../../src/lib/logic';
+import { Exporter } from '../../../src/lib/export';
+import { SessionExerciseSchema } from '../../../src/lib/schema';
+import { useSleepMeasurements } from '../../../src/hooks/useSleepMeasurements';
+import { useWorkoutSetMutations } from '../../../src/hooks/workout/useWorkoutSetMutations';
+import { useWorkoutSession } from '../../../src/hooks/useWorkoutSession';
+import { useTrainingRoutines } from '../../../src/hooks/useTrainingRoutines';
+import { RoutineEditor } from '../../../src/components/Training/routines/RoutineEditor';
+import TrainingSession from '../../../src/components/Training/TrainingSession';
+import SessionExerciseCard from '../../../src/components/Training/session/SessionExerciseCard';
+import type { WorkoutSession, Exercise } from '../../../src/types';
 
 describe('LogBook PWA Enhancements Integration Suite (Requirements R1 - R6)', () => {
     beforeEach(async () => {

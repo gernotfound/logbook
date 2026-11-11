@@ -1,21 +1,21 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { UserDataSchema } from '../../src/lib/schema';
-import { mergeUserData } from '../../src/lib/merge';
-import type { UserData, WorkoutSession } from '../../src/types';
-import { diffDocuments } from '../../src/lib/sync/semanticProjection';
-import { applyDomainOperations } from '../../src/lib/sync/domainOperations';
-import { assertHistoryMonthDocument, assertNutritionMonthDocument, requireCanonicalWorkoutDate } from '../../src/lib/sync/monthlyIntegrity';
-import { classifySyncFailure } from '../../src/lib/sync/syncFailure';
-import { useAppStore } from '../../src/store/useAppStore';
-import { getInitialLocalWorkout } from '../../src/store/slices/createWorkoutSlice';
-import { deviceKey, protectedDeviceKey, readDeviceValueStrict } from '../../src/lib/sync/deviceStorage';
-import { unwrapWorkoutDeviceSnapshot } from '../../src/lib/sync/workoutDeviceIntent';
-import { prepareUnlockedTestArchive } from '../secureVaultFixture';
-import { clearAuthenticatedOwnerHint, readAuthenticatedOwnerHint, rememberAuthenticatedOwner } from '../../src/lib/sync/authOwnerHint';
-import { storageOwner } from '../../src/lib/sync/session';
-import { normalizeStorageOwner, userOwner } from '../../src/lib/sync/owner';
-import { assertNoLocalPurge } from '../../src/lib/sync/localPurgeFence';
-import { auth } from '../../src/lib/firebase';
+import { UserDataSchema } from '../../../src/lib/schema';
+import { mergeUserData } from '../../../src/lib/merge';
+import type { UserData, WorkoutSession } from '../../../src/types';
+import { diffDocuments } from '../../../src/lib/sync/semanticProjection';
+import { applyDomainOperations } from '../../../src/lib/sync/domainOperations';
+import { assertHistoryMonthDocument, assertNutritionMonthDocument, requireCanonicalWorkoutDate } from '../../../src/lib/sync/monthlyIntegrity';
+import { classifySyncFailure } from '../../../src/lib/sync/syncFailure';
+import { useAppStore } from '../../../src/store/useAppStore';
+import { getInitialLocalWorkout } from '../../../src/store/slices/createWorkoutSlice';
+import { deviceKey, protectedDeviceKey, readDeviceValueStrict } from '../../../src/lib/sync/deviceStorage';
+import { unwrapWorkoutDeviceSnapshot } from '../../../src/lib/sync/workoutDeviceIntent';
+import { prepareUnlockedTestArchive } from '../../secureVaultFixture';
+import { clearAuthenticatedOwnerHint, readAuthenticatedOwnerHint, rememberAuthenticatedOwner } from '../../../src/lib/sync/authOwnerHint';
+import { storageOwner } from '../../../src/lib/sync/session';
+import { normalizeStorageOwner, userOwner } from '../../../src/lib/sync/owner';
+import { assertNoLocalPurge } from '../../../src/lib/sync/localPurgeFence';
+import { auth } from '../../../src/lib/firebase';
 
 const parse = (value: unknown): UserData => UserDataSchema.parse(value) as unknown as UserData;
 

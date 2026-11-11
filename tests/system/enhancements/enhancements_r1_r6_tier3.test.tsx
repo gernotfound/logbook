@@ -1,20 +1,20 @@
 import React from 'react';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { act, fireEvent, render, renderHook } from '@testing-library/react';
-import { renderWithAuthenticatedTestOwner, emptyUserData } from '../setup';
-import { useAppStore } from '../../src/store/useAppStore';
-import { captureSession } from '../../src/lib/sync/session';
-import { prepareUnlockedTestArchive } from '../secureVaultFixture';
-import { initializeLocal, readLocal } from '../../src/lib/sync/localRepository';
-import { idbStore } from '../setup';
-import { Logic } from '../../src/lib/logic';
-import { Exporter } from '../../src/lib/export';
-import { useSleepMeasurements } from '../../src/hooks/useSleepMeasurements';
-import { useWorkoutSetMutations } from '../../src/hooks/workout/useWorkoutSetMutations';
-import { useWorkoutSession } from '../../src/hooks/useWorkoutSession';
-import DataHistory from '../../src/components/Data/DataHistory';
-import TrainingSession from '../../src/components/Training/TrainingSession';
-import type { WorkoutSession, WorkoutRoutine, TrainingCycle, Exercise } from '../../src/types';
+import { renderWithAuthenticatedTestOwner, emptyUserData } from '../../setup';
+import { useAppStore } from '../../../src/store/useAppStore';
+import { captureSession } from '../../../src/lib/sync/session';
+import { prepareUnlockedTestArchive } from '../../secureVaultFixture';
+import { initializeLocal, readLocal } from '../../../src/lib/sync/localRepository';
+import { idbStore } from '../../setup';
+import { Logic } from '../../../src/lib/logic';
+import { Exporter } from '../../../src/lib/export';
+import { useSleepMeasurements } from '../../../src/hooks/useSleepMeasurements';
+import { useWorkoutSetMutations } from '../../../src/hooks/workout/useWorkoutSetMutations';
+import { useWorkoutSession } from '../../../src/hooks/useWorkoutSession';
+import DataHistory from '../../../src/components/Data/DataHistory';
+import TrainingSession from '../../../src/components/Training/TrainingSession';
+import type { WorkoutSession, WorkoutRoutine, TrainingCycle, Exercise } from '../../../src/types';
 
 describe('LogBook PWA Enhancements Integration Suite (Requirements R1 - R6)', () => {
     beforeEach(() => {

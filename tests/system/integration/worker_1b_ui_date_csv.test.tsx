@@ -1,14 +1,14 @@
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, act } from '@testing-library/react';
-import DataMeasurements from '../../src/components/Data/DataMeasurements';
-import DataSleep from '../../src/components/Data/DataSleep';
-import TrainingHistory from '../../src/components/Training/TrainingHistory';
-import TrainingPlanning from '../../src/components/Training/planning/TrainingPlanning';
-import { SessionRatings } from '../../src/components/Training/session/SessionRatings';
-import { useAppStore } from '../../src/store/useAppStore';
-import type { WorkoutSession, UserData } from '../../src/types';
-import { createDefaultNutritionPlanning } from '../../src/lib/nutritionDefaults';
+import DataMeasurements from '../../../src/components/Data/DataMeasurements';
+import DataSleep from '../../../src/components/Data/DataSleep';
+import TrainingHistory from '../../../src/components/Training/TrainingHistory';
+import TrainingPlanning from '../../../src/components/Training/planning/TrainingPlanning';
+import { SessionRatings } from '../../../src/components/Training/session/SessionRatings';
+import { useAppStore } from '../../../src/store/useAppStore';
+import type { WorkoutSession, UserData } from '../../../src/types';
+import { createDefaultNutritionPlanning } from '../../../src/lib/nutritionDefaults';
 import fs from 'fs';
 import path from 'path';
 
@@ -326,7 +326,7 @@ describe('Worker 1B: UI/UX, Date Navigation, CSV Export & PWA Fixes', () => {
 
     describe('P2-4: PWA Manifest Configuration', () => {
         it('Vite source config declares a stable basePath PWA manifest id', () => {
-            const viteConfigPath = path.resolve(__dirname, '../../vite.config.ts');
+            const viteConfigPath = path.resolve(__dirname, '../../../vite.config.ts');
             const content = fs.readFileSync(viteConfigPath, 'utf-8');
             expect(content).toMatch(/manifest:\s*\{[^}]*id:\s*basePath/s);
         });
