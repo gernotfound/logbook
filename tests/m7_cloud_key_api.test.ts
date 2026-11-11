@@ -6,6 +6,7 @@ const harness = vi.hoisted(() => {
   }
   return {
     documents: new Map<string, Record<string, unknown>>(),
+    documentReads: new Map<string, number>(),
     beforeTransaction: null as null | (() => void),
     afterTransaction: null as null | (() => void),
     verify: vi.fn(async () => ({ uid: 'owner-a', emailVerified: true })),
@@ -23,6 +24,7 @@ function ref(key: string) {
   return {
     key,
     async get() {
+      harness.documentReads.set(key, (harness.documentReads.get(key) ?? 0) + 1);
       const found = harness.documents.get(key);
       return { exists: Boolean(found), data: () => found };
     },
@@ -110,6 +112,7 @@ const request = (origin = 'https://thelogbook.web.app', withBody = false) => new
 
 beforeEach(() => {
   harness.documents.clear();
+  harness.documentReads.clear();
   harness.beforeTransaction = null;
   harness.afterTransaction = null;
   vi.clearAllMocks();
@@ -140,6 +143,40 @@ describe('authenticated cloud account key API', () => {
     expect(harness.wrap).toHaveBeenCalledTimes(1);
     expect(harness.unwrap).toHaveBeenCalledTimes(2);
   });
+
+  it('avoids duplicate preflight reads when the wrapped key already exists', async () => {
+    expect((await POST(request())).status).toBe(200);
+    harness.documentReads.clear();
+
+    expect((await POST(request())).status).toBe(200);
+    // The initial key existence check and fenced transaction remain, but
+    // consent/deletion/erasure no longer need an additional preflight.
+    expect(harness.documentReads.get('user_data_keys/owner-a')).toBe(2);
+    expect(harness.documentReads.get('health_consent_withdrawals/owner-a')).toBe(1);
+    expect(harness.documentReads.get('account_deletions/owner-a')).toBe(2);
+    expect(harness.documentReads.get('health_data_erasures/owner-a')).toBe(2);
+    expect(harness.wrap).toHaveBeenCalledTimes(1);
+  });
+
+  it.each(['withdrawal', 'account deletion', 'health erasure'] as const)(
+    'still refuses a stored key if %s begins before the fenced transaction', async scenario => {
+      expect((await POST(request())).status).toBe(200);
+      const existing = harness.documents.get('user_data_keys/owner-a');
+      harness.beforeTransaction = () => {
+        if (scenario === 'withdrawal') {
+          harness.documents.set('health_consent_withdrawals/owner-a', { ...consent(), status: 'withdrawn' });
+        } else if (scenario === 'account deletion') {
+          harness.documents.set('account_deletions/owner-a', { uid: 'owner-a', status: 'requested' });
+        } else {
+          harness.documents.set('health_data_erasures/owner-a', { uid: 'owner-a', status: 'deleting' });
+        }
+      };
+
+      expect((await POST(request())).status).toBe(503);
+      expect(harness.documents.get('user_data_keys/owner-a')).toEqual(existing);
+      expect(harness.wrap).toHaveBeenCalledTimes(1);
+    },
+  );
 
   it('accepts an empty POST body stream, but never accepts payload bytes', async () => {
     // Vercel's Request adapter can expose a non-null body stream even when

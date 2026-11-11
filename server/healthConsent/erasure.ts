@@ -219,6 +219,9 @@ async function updateUnderLease(uid: string, leaseOwner: string, update: Record<
 async function deleteCollectionPage(uid: string, name: typeof PRIVATE_ACCOUNT_COLLECTIONS[number], leaseOwner: string): Promise<number> {
   const db = adminDb();
   const page = await db.collection('users').doc(uid).collection(name).limit(PAGE_SIZE).select().get();
+  // Skipping an empty page is safe: root deletion and final completion each
+  // recheck the current lease and consent epoch in a Firestore transaction.
+  if (page.empty) return 0;
   await updateUnderLease(uid, leaseOwner, { status: 'deleting' }, tx => {
     for (const item of page.docs) tx.delete(item.ref);
   });

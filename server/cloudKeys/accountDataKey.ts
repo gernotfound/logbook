@@ -38,22 +38,21 @@ export async function releaseAccountDataKey(uid: string, purpose: 'sync' | 'righ
   const erasureRef = db.collection('health_data_erasures').doc(uid);
   const root = db.collection('users').doc(uid);
 
-  // Normal unlock reads the existing wrapped ADK, without deriving another
-  // account key. The versioned server-only KEK must stay available for as
-  // long as any account envelope was encrypted under it.
-  const [existingKey, preflightConsent, preflightDeletion, preflightErasure] = await Promise.all([
-    keyRef.get(), consentRef.get(), deletionRef.get(), erasureRef.get(),
-  ]);
-  // Avoid unnecessary key generation for withdrawn, unregistered or
-  // deleting accounts. The transaction below MUST still recheck these same
-  // documents to fence any concurrent revocation/erasure after preflight.
-  if (!trustedConsent(preflightConsent.data(), uid, purpose)
-      || preflightDeletion.exists
-      || (preflightErasure.exists && preflightErasure.data()?.status !== 'complete')) {
-    throw new AccountKeyUnavailableError();
-  }
+  // Existing ADKs are checked under the transaction below; preliminary
+  // consent/deletion reads would only duplicate its mandatory fences.
+  const existingKey = await keyRef.get();
   let wrappedCandidate: Awaited<ReturnType<typeof wrapAccountDataKey>> | null = null;
   if (!existingKey.exists && purpose === 'sync') {
+    // For first-time provisioning, reject revoked/deleting accounts before
+    // generating a secret. The transaction rechecks these same documents.
+    const [preflightConsent, preflightDeletion, preflightErasure] = await Promise.all([
+      consentRef.get(), deletionRef.get(), erasureRef.get(),
+    ]);
+    if (!trustedConsent(preflightConsent.data(), uid, purpose)
+        || preflightDeletion.exists
+        || (preflightErasure.exists && preflightErasure.data()?.status !== 'complete')) {
+      throw new AccountKeyUnavailableError();
+    }
     // Query.get() hides missing parent documents whose nested subcollections
     // survive deletion. A new key must not strand any such ciphertext or
     // unknown private collection under an apparently empty user root.
