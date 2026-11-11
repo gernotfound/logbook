@@ -118,7 +118,7 @@ describe('email verification actions across actual AuthProvider callbacks (SDK s
       vi.mocked(sendEmailVerification).mockImplementationOnce(() => new Promise<void>((resolve, reject) => {
         finish = () => outcome === 'success' ? resolve() : reject(new Error('old provider error'));
       }));
-      let pending!: Promise<void>;
+      let pending!: ReturnType<typeof result.current.resendEmailVerification>;
       act(() => { pending = result.current.resendEmailVerification(); });
       expect(sendEmailVerification).toHaveBeenCalledOnce();
       await transition('A-B-A');
