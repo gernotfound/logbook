@@ -2,6 +2,8 @@ import { execFileSync, spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { relative, resolve, isAbsolute } from 'node:path';
 import { createRequire } from 'node:module';
+import { trialCases } from '../stryker.trial.config.mjs';
+import { validateMutationSelection } from './check-mutation-selection.mjs';
 import { fileURLToPath } from 'node:url';
 
 const root = resolve(fileURLToPath(new URL('..', import.meta.url)));
@@ -29,6 +31,14 @@ export function compareAssignments(expectedItems, assignments, label) {
 }
 
 // Keep shared setup at tests/ root, but require executable tests to have a domain owner.
+export function validateStressAssignment(files, selected) {
+  const shouldBeStress = files.filter(file => file.startsWith('tests/stress/'));
+  const selectedSet = new Set(selected);
+  const issues = shouldBeStress.filter(file => !selectedSet.has(file)).map(file => 'stress runner missed ' + file);
+  issues.push(...selected.filter(file => !file.startsWith('tests/stress/')).map(file => 'stress runner owns non-stress ' + file));
+  return issues;
+}
+
 export function ungroupedTestFiles(files) {
   return files.filter(file => file.startsWith('tests/')
     && !file.slice('tests/'.length).includes('/') && testFile.test(file));
@@ -111,6 +121,8 @@ function verify() {
     runners['m8-' + (index + 1)] = vitestList('m8-' + (index + 1), 'test:m8', m8.config, m8.files);
   }
   const failures = compareAssignments(nodeTests, runners, 'Vitest/Node');
+  failures.push(...validateStressAssignment(nodeTests, runners.stress));
+  failures.push(...validateMutationSelection(trialCases, tracked));
   const ungrouped = ungroupedTestFiles(nodeTests);
   if (ungrouped.length) failures.push('Tests must be grouped under tests/<area>/: ' + ungrouped.join(', '));
   const projectListings = {};

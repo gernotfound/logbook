@@ -1,7 +1,7 @@
 {
   "name": "logbook",
   "private": true,
-  "version": "2.357.0",
+  "version": "2.358.0",
   "type": "module",
   "packageManager": "npm@11.21.0",
   "engines": {
@@ -24,7 +24,7 @@
     "lint:baseline:update": "node scripts/check-lint-baseline.mjs --update",
     "preview": "vite preview",
     "test": "vitest run",
-    "test:ci": "npm run test:unit && npm run test:integration",
+    "test:ci": "npm run test",
     "test:stress": "vitest run --config vitest.stress.config.ts",
     "test:fuzz": "vitest run --config vitest.fuzz.config.ts",
     "test:recovery": "vitest run --config vitest.recovery.config.ts",

@@ -3,8 +3,9 @@ import { test } from 'node:test';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { loadConfigFromFile } from 'vite';
-import { compareAssignments, normalizePlaywrightLocation, ungroupedTestFiles } from './check-test-discovery.mjs';
+import { compareAssignments, normalizePlaywrightLocation, ungroupedTestFiles, validateStressAssignment } from './check-test-discovery.mjs';
 import { isCriticalTest } from './critical-test-selection.mjs';
+import { validateMutationSelection } from './check-mutation-selection.mjs';
 
 await test('rejects test files at tests/ root without rejecting shared fixtures or nested suites', () => {
   assert.deepEqual(ungroupedTestFiles([
@@ -67,6 +68,26 @@ await test('critical coverage selection is invariant under functional test folde
   assert.equal(isCriticalTest('tests/training/auth_checkpoint_drain.spec.ts'), false);
   assert.equal(isCriticalTest('tests/account/auth/guest_login_overlay.test.tsx'), false);
   assert.equal(isCriticalTest('tests\\\\account\\\\auth\\\\auth_checkpoint_drain.test.ts'), true);
+});
+
+
+await test('mutation diagnostic selection rejects missing, duplicate and misrouted files', () => {
+  const tracked = ['tests/schema/a.test.ts', 'tests/isolated/b.test.ts', 'src/x.ts'];
+  const valid = { one: { mutate: ['src/x.ts'], testFiles: ['tests/schema/a.test.ts'] } };
+  assert.deepEqual(validateMutationSelection(valid, tracked), []);
+  assert.match(validateMutationSelection({ one: { mutate: ['src/x.ts'], testFiles: ['tests/schema/missing.test.ts'] } }, tracked).join('\n'), /missing\/invalid mutation test/);
+  assert.match(validateMutationSelection({ one: { mutate: ['src/x.ts'], testFiles: ['tests/schema/a.test.ts', 'tests/schema/a.test.ts'] } }, tracked).join('\n'), /duplicate mutation test/);
+  assert.match(validateMutationSelection({ one: { mutate: ['src/x.ts'], testFiles: ['tests/isolated/b.test.ts'] } }, tracked).join('\n'), /generic runner mismatch/);
+  assert.match(validateMutationSelection({ one: { runner: 'gc', mutate: ['src/x.ts'], testFiles: ['tests/isolated/b.test.ts'] } }, tracked).join('\n'), /gc runner mismatch/);
+  assert.match(validateMutationSelection({ one: { mutate: ['src/missing.ts'], testFiles: ['tests/schema/a.test.ts'] } }, tracked).join('\n'), /missing mutation target/);
+  assert.match(validateMutationSelection({ one: { mutate: ['src/x.ts'], testFiles: [] } }, tracked).join('\n'), /no mutation test files/);
+});
+
+await test('stress suite discovery requires ownership of every stress file and no outsiders', () => {
+  const listed = ['tests/stress/challenger_focus.test.ts', 'tests/training/routine.test.ts'];
+  assert.deepEqual(validateStressAssignment(listed, ['tests/stress/challenger_focus.test.ts']), []);
+  assert.match(validateStressAssignment(listed, ['tests/training/routine.test.ts']).join('\n'), /stress runner missed/);
+  assert.match(validateStressAssignment(listed, ['tests/stress/challenger_focus.test.ts', 'tests/training/routine.test.ts']).join('\n'), /stress runner owns non-stress/);
 });
 
 await test('stress runner preserves non-stress exclusions and the base environment', async () => {

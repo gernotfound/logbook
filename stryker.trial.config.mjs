@@ -9,7 +9,7 @@ export const trialCases = {
   },
   "secure-archive-session": {
     "mutate": ["src/lib/sync/secureArchiveSession.ts"],
-    "testFiles": ["tests/isolated/secure_archive_session.test.ts", "tests/isolated/secureArchiveSession.test.ts", "tests/isolated/secure_archive_indexeddb.test.ts", "tests/isolated/secureArchiveRepository.test.ts"],
+    "testFiles": ["tests/isolated/secureArchiveSession.test.ts", "tests/isolated/secure_archive_indexeddb.test.ts", "tests/isolated/secureArchiveRepository.test.ts"],
     "runner": "isolated"
   },
   "secure-archive-repository": {
@@ -32,8 +32,8 @@ export const trialCases = {
       "src/lib/csvExport.ts:7-25"
     ],
     "testFiles": [
-      "tests/csv_export_builder.test.ts",
-      "tests/sec01_csv_injection.test.tsx"
+      "tests/portability/csv_export_builder.test.ts",
+      "tests/portability/sec01_csv_injection.test.tsx"
     ]
   },
   "meal-totals": {
@@ -67,7 +67,7 @@ export const trialCases = {
       "src/lib/utils/date.ts:12-33"
     ],
     "testFiles": [
-      "tests/secure_id_generation.test.ts"
+      "tests/schema/secure_id_generation.test.ts"
     ]
   },
   "cycle-limits": {
@@ -75,7 +75,7 @@ export const trialCases = {
       "src/lib/calc/cycleLimits.ts"
     ],
     "testFiles": [
-      "tests/training_cycle_limits_regression.test.ts"
+      "tests/training/training_cycle_limits_regression.test.ts"
     ]
   },
   "password-policy": {
@@ -133,7 +133,7 @@ export const trialCases = {
   },
   "sync-failure": {
     "mutate": ["src/lib/sync/syncFailure.ts"],
-    "testFiles": ["tests/app_check_sync_semantics.test.ts"]
+    "testFiles": ["tests/firebase/app_check_sync_semantics.test.ts"]
   },
   "monthly-tombstones": {
     "mutate": ["src/lib/sync/monthlyEntityTombstones.ts"],
