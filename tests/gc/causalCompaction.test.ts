@@ -84,6 +84,43 @@ describe('M4 causal metadata compaction', () => {
         },
     );
 
+    it('compacts many sibling fields using only the ancestor delete coverage', () => {
+        const fields: SyncMeta['fields'] = {
+            profile: { actorId: 'A', seq: 2, clock: { A: 2 }, deleted: true },
+        };
+        for (let index = 0; index < 480; index++) {
+            fields[`profile/measurements/${index}`] = index % 3 === 0
+                ? { actorId: 'B', seq: 1, clock: { B: 1 } }
+                : { actorId: 'A', seq: 1, clock: { A: 1 } };
+        }
+        const source = parseSyncMeta({ protocolVersion: 3, clock: { A: 2, B: 1 }, fields });
+        const compacted = compactSyncMeta(source);
+        expect(Object.keys(compacted.fields)).toHaveLength(161);
+        for (let index = 0; index < 480; index++) {
+            expect(Object.hasOwn(compacted.fields, `profile/measurements/${index}`))
+                .toBe(index % 3 === 0);
+        }
+        expect(compactSyncMeta(compacted)).toEqual(compacted);
+        expect(Object.keys(source.fields)).toHaveLength(481);
+    });
+
+    it('retires terminal ancestor tombstones only after every descendant has retired', () => {
+        const fields: SyncMeta['fields'] = {
+            profile: { actorId: 'A', seq: 2, clock: { A: 2 }, deleted: true },
+        };
+        for (let index = 0; index < 160; index++) {
+            fields[`profile/measurements/${index}`] = {
+                actorId: 'B', seq: 1, clock: { B: 1 }, deleted: true,
+            };
+        }
+        const source = parseSyncMeta({ protocolVersion: 3, clock: { A: 2, B: 1 }, fields });
+        const concurrent = compactSyncMeta(source);
+        expect(Object.keys(concurrent.fields)).toHaveLength(161);
+        const retired = compactSyncMeta(source, { A: 2, B: 1 });
+        expect(retired.fields).toEqual({});
+        expect(retired.clock).toEqual(source.clock);
+    });
+
     it('uses componentwise causal coverage rather than age or tie-break order', () => {
         expect(coversVector({ A: 4, B: 2 }, { A: 3, B: 2 })).toBe(true);
         expect(coversVector({ A: 4 }, { A: 3, B: 1 })).toBe(false);

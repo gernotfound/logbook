@@ -35,6 +35,12 @@ function pathDepth(fieldKey: string): number {
     return fieldKey.split('/').length;
 }
 
+function forEachAncestorKey(key: string, visit: (ancestor: string) => void): void {
+    for (let slash = key.indexOf('/'); slash !== -1; slash = key.indexOf('/', slash + 1)) {
+        visit(key.slice(0, slash));
+    }
+}
+
 /**
  * Lossless metadata compaction for the current hierarchical merge protocol.
  *
@@ -67,17 +73,28 @@ export function compactSyncMeta(meta: SyncMeta, stableFrontier?: VectorClock): S
         .filter(([, stamp]) => stamp.deleted === true || stamp.deleteClock !== undefined)
         .sort(([left], [right]) => pathDepth(left) - pathDepth(right) || left.localeCompare(right));
 
+    // Index only actual hierarchical descendants, preserving the field insertion
+    // order of the previous scan. Coverage checks below remain unchanged.
+    const descendantKeys = new Map<string, string[]>();
+    if (deleteBarriers.length) {
+        for (const key of Object.keys(fields)) {
+            forEachAncestorKey(key, ancestor => {
+                const descendants = descendantKeys.get(ancestor);
+                if (descendants) descendants.push(key);
+                else descendantKeys.set(ancestor, [key]);
+            });
+        }
+    }
+
     for (const [ancestorKey, ancestorStamp] of deleteBarriers) {
-        if (!fields[ancestorKey]) continue;
+        if (!Object.hasOwn(fields, ancestorKey)) continue;
         const coverage = ancestorStamp.deleteClock ?? ancestorStamp.clock;
-        const descendantPrefix = `${ancestorKey}/`;
-        for (const [candidateKey, candidateStamp] of Object.entries(fields)) {
-            if (!candidateKey.startsWith(descendantPrefix)) continue;
+        for (const candidateKey of descendantKeys.get(ancestorKey) ?? []) {
+            const candidateStamp = Object.hasOwn(fields, candidateKey) ? fields[candidateKey] : undefined;
+            if (!candidateStamp) continue;
             // Concurrent deletes can extend the barrier beyond the winner clock.
             // Removing the stamp must not discard those unobserved delete events.
-            if (coversStamp(coverage, candidateStamp)) {
-                delete fields[candidateKey];
-            }
+            if (coversStamp(coverage, candidateStamp)) delete fields[candidateKey];
         }
     }
 
@@ -93,12 +110,20 @@ export function compactSyncMeta(meta: SyncMeta, stableFrontier?: VectorClock): S
 
         const byDepthDesc = Object.keys(fields)
             .sort((left, right) => pathDepth(right) - pathDepth(left) || right.localeCompare(left));
+        const descendantCounts = new Map<string, number>();
         for (const key of byDepthDesc) {
-            const stamp = fields[key];
+            forEachAncestorKey(key, ancestor => {
+                descendantCounts.set(ancestor, (descendantCounts.get(ancestor) ?? 0) + 1);
+            });
+        }
+        for (const key of byDepthDesc) {
+            const stamp = Object.hasOwn(fields, key) ? fields[key] : undefined;
             if (!stamp?.deleted || !coversStamp(stableFrontier, stamp)) continue;
-            const descendantPrefix = `${key}/`;
-            if (Object.keys(fields).some(other => other !== key && other.startsWith(descendantPrefix))) continue;
+            if ((descendantCounts.get(key) ?? 0) > 0) continue;
             delete fields[key];
+            forEachAncestorKey(key, ancestor => {
+                descendantCounts.set(ancestor, (descendantCounts.get(ancestor) ?? 0) - 1);
+            });
         }
     }
 
