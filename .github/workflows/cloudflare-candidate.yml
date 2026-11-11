@@ -1,0 +1,150 @@
+name: Cloudflare Workers Static Assets Candidate
+
+on:
+  workflow_dispatch:
+    inputs:
+      expected_sha:
+        description: Exact validated main commit to deploy to the isolated workers.dev candidate
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: cloudflare-workers-static-assets-candidate
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build exact main candidate (no Cloudflare credentials)
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      actions: read
+    env:
+      EXPECTED_SHA: ${{ inputs.expected_sha }}
+      LOGBOOK_BUILD_SHA: ${{ inputs.expected_sha }}
+      CLOUDFLARE_APP_ORIGIN: ${{ vars.CLOUDFLARE_APP_ORIGIN }}
+      VITE_FIREBASE_API_KEY: ${{ vars.VITE_FIREBASE_API_KEY }}
+      VITE_FIREBASE_PROJECT_ID: ${{ vars.VITE_FIREBASE_PROJECT_ID }}
+      VITE_FIREBASE_APP_ID: ${{ vars.VITE_FIREBASE_APP_ID }}
+      VITE_ACCOUNT_DELETION_API_ORIGIN: ${{ vars.VITE_ACCOUNT_DELETION_API_ORIGIN }}
+      VITE_ACCOUNT_INACTIVITY_TRACKING: ${{ vars.VITE_ACCOUNT_INACTIVITY_TRACKING }}
+      VITE_RECAPTCHA_ENTERPRISE_SITE_KEY: ${{ vars.VITE_RECAPTCHA_ENTERPRISE_SITE_KEY }}
+      GH_TOKEN: ${{ github.token }}
+
+    steps:
+      - name: Checkout exact main
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ inputs.expected_sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Validate main identity and verified Firestore reconciliation
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "${EXPECTED_SHA}" =~ ^[a-f0-9]{40}$ ]] || { echo 'Invalid SHA'; exit 1; }
+          actual="$(git rev-parse HEAD)"
+          remote="$(git ls-remote --exit-code origin refs/heads/main | awk '{print $1}')"
+          if [ "${actual}" != "${EXPECTED_SHA}" ] || [ "${remote}" != "${EXPECTED_SHA}" ]; then
+            echo 'Refusing non-main or stale commit'; exit 1
+          fi
+          gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/firebase-firestore-production.yml/runs?head_sha=${EXPECTED_SHA}&per_page=50" \
+            --jq '[.workflow_runs[] | select(.head_sha == "'"${EXPECTED_SHA}"'" and .conclusion == "success" and .event == "workflow_run")] | length > 0' \
+            | grep -Fx true || { echo 'Exact-main Firestore release gate missing'; exit 1; }
+          for key in CLOUDFLARE_APP_ORIGIN VITE_FIREBASE_API_KEY VITE_FIREBASE_PROJECT_ID VITE_FIREBASE_APP_ID VITE_ACCOUNT_DELETION_API_ORIGIN VITE_RECAPTCHA_ENTERPRISE_SITE_KEY; do
+            if [ -z "${!key:-}" ]; then echo "Missing public build variable: ${key}"; exit 1; fi
+          done
+          test "${VITE_FIREBASE_PROJECT_ID}" = "logbook-db-98cc4"
+          test "${VITE_ACCOUNT_DELETION_API_ORIGIN}" = "https://logbook-gnf.vercel.app"
+      - name: Setup Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: '24'
+          cache: npm
+      - name: Verify npm runtime
+        run: |
+          set -euo pipefail
+          [[ "$(npm --version)" == 11.* ]]
+      - name: Audit install scripts
+        run: node scripts/check-install-scripts.mjs
+      - name: Install locked dependencies
+        run: npm ci
+      - name: Build origin-specific Static Assets
+        run: node scripts/build-cloudflare-assets.mjs
+      - name: Check host and security contract
+        run: node scripts/check-cloudflare-config.mjs
+      - name: Upload same-run verified asset artifact
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: cloudflare-candidate-${{ inputs.expected_sha }}
+          path: dist/
+          if-no-files-found: error
+          retention-days: 1
+
+  deploy:
+    name: Deploy isolated candidate from same-run artifact
+    needs: build
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    env:
+      EXPECTED_SHA: ${{ inputs.expected_sha }}
+      CLOUDFLARE_APP_ORIGIN: ${{ vars.CLOUDFLARE_APP_ORIGIN }}
+    steps:
+      - name: Checkout exact main
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ inputs.expected_sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Download same-run assets
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: cloudflare-candidate-${{ inputs.expected_sha }}
+          path: dist/
+      - name: Validate deployment input and exact-main lease
+        shell: bash
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          set -euo pipefail
+          test -n "${CLOUDFLARE_ACCOUNT_ID}"
+          test -n "${CLOUDFLARE_API_TOKEN}"
+          test -n "${CLOUDFLARE_APP_ORIGIN}"
+          test "$(git rev-parse HEAD)" = "${EXPECTED_SHA}"
+          test "$(git ls-remote --exit-code origin refs/heads/main | awk '{print $1}')" = "${EXPECTED_SHA}"
+          for resource in dist/index.html dist/sw.js dist/manifest.webmanifest dist/_headers; do
+            test -s "${resource}" || { echo "Missing ${resource}"; exit 1; }
+          done
+      - name: Deploy Workers Static Assets candidate
+        uses: cloudflare/wrangler-action@953926a2e2182532811c01a25e53647d93bf07c0 # v4
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          wranglerVersion: '4.159.0'
+          command: deploy --config cloudflare/wrangler.jsonc
+      - name: Non-destructive smoke of the Cloudflare candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          for path in / /sw.js /manifest.webmanifest /robots.txt /sitemap.xml; do
+            local_file="dist/${path#/}"
+            if [ "${path}" = "/" ]; then local_file="dist/index.html"; fi
+            curl --fail --silent --show-error --retry 3 --retry-delay 2 --retry-all-errors \
+              -H 'Accept-Encoding: identity' "${CLOUDFLARE_APP_ORIGIN}${path}" -o /tmp/cloudflare-served-asset
+            cmp -s "${local_file}" /tmp/cloudflare-served-asset || { echo "Cloudflare byte mismatch ${path}"; exit 1; }
+          done
+          curl --fail --silent --show-error -D /tmp/cloudflare-headers -o /dev/null "${CLOUDFLARE_APP_ORIGIN}/"
+          grep -qi '^x-content-type-options: nosniff' /tmp/cloudflare-headers
+          grep -qi '^content-security-policy:' /tmp/cloudflare-headers
+          grep -qi '^cache-control: .*no-store' /tmp/cloudflare-headers
+          echo 'Static assets verified; authenticated flows still require the provider and browser gates'
