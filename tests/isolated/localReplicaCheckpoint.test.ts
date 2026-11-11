@@ -141,8 +141,8 @@ describe('durable local replica checkpoint adoption', () => {
     });
 
     it.each([
-        { reason: 'remote vector clock', baseSeq: 1, clock: { s00: 2 } },
-        { reason: 'remote control sequence', baseSeq: 2, clock: {} },
+        { reason: 'remote vector clock', baseSeq: 1, clock: { s00: 2 } as CloudCheckpoint['clock'] },
+        { reason: 'remote control sequence', baseSeq: 2, clock: {} as CloudCheckpoint['clock'] },
     ])('rejects an incompatible same-replica $reason without sealing a bad journal', async ({ baseSeq, clock }) => {
         const before = await pendingReplica();
         const ciphertext = await get(key('a'));
