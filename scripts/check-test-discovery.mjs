@@ -108,8 +108,9 @@ function playwrightList(project, shard) {
 }
 
 function verify() {
-  const tracked = execFileSync('git', ['ls-files', '-z'], { cwd: root, encoding: 'utf8' })
-    .split('\0').filter(Boolean).map(normalizeFile).filter(file => testFile.test(file));
+  const trackedFiles = execFileSync('git', ['ls-files', '-z'], { cwd: root, encoding: 'utf8' })
+    .split('\0').filter(Boolean).map(normalizeFile);
+  const tracked = trackedFiles.filter(file => testFile.test(file));
   const nodeTests = tracked.filter(file => !file.startsWith('e2e/'));
   const browserFiles = tracked.filter(file => file.startsWith('e2e/'));
   const pkg = JSON.parse(readFileSync(resolve(root, 'package.json'), 'utf8'));
@@ -131,7 +132,7 @@ function verify() {
   }
   const failures = compareAssignments(nodeTests, runners, 'Vitest/Node');
   failures.push(...validateStressAssignment(nodeTests, runners.stress));
-  failures.push(...validateMutationSelection(trialCases, tracked));
+  failures.push(...validateMutationSelection(trialCases, trackedFiles));
   const ungrouped = ungroupedTestFiles(nodeTests);
   const misplaced = ungroupedMajorSuiteTests(tracked);
   if (misplaced.length) failures.push('Large and specialized test suites need functional subfolders: ' + misplaced.join(', '));
