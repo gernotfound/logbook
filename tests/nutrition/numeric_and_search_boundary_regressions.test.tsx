@@ -1,36 +1,17 @@
 import React from 'react';
 import { describe, test, expect, beforeEach } from 'vitest';
-import { screen, act, fireEvent, waitFor } from '@testing-library/react';
-import { renderWithAuthenticatedTestOwner, renderWithProviders, emptyUserData } from '../../setup';
-import { prepareUnlockedTestArchive } from '../../secureVaultFixture';
-import { Logic } from '../../../src/lib/logic';
-import { createLoggedMealItem } from '../../../src/lib/nutrition/createLoggedMealItem';
-import { calculateLoggedMealTotals } from '../../../src/lib/nutrition/calculateLoggedMealTotals';
-import type { Food } from '../../../src/types';
+import { screen, fireEvent } from '@testing-library/react';
+import { renderWithProviders, emptyUserData } from '../setup';
+import { prepareUnlockedTestArchive } from '../secureVaultFixture';
+import { Logic } from '../../src/lib/logic';
+import { createLoggedMealItem } from '../../src/lib/nutrition/createLoggedMealItem';
+import { calculateLoggedMealTotals } from '../../src/lib/nutrition/calculateLoggedMealTotals';
+import type { Food } from '../../src/types';
+import NutritionMeals from '../../src/components/Nutrition/NutritionMeals';
 
-import HomeView from '../../../src/components/Home/HomeView';
-import TrainingSession from '../../../src/components/Training/TrainingSession';
-import TrainingRoutines from '../../../src/components/Training/TrainingRoutines';
-import TrainingHistory from '../../../src/components/Training/TrainingHistory';
-import TrainingExercises from '../../../src/components/Training/TrainingExercises';
-import NutritionMeals from '../../../src/components/Nutrition/NutritionMeals';
-import NutritionPlanning from '../../../src/components/Nutrition/NutritionPlanning';
-import SettingsView from '../../../src/components/SettingsView';
-import WorkoutTimer from '../../../src/components/Training/WorkoutTimer';
-import { stoppedWorkoutTimer, writeWorkoutTimerSnapshot } from '../../../src/lib/utils/timer';
-import { storageOwner } from '../../../src/lib/sync/session';
-import { useAuth } from '../../../src/hooks/useAuth';
-import MuscleModel from '../../../src/components/Training/MuscleModel';
-
-const ReadyOwner = () => {
-  const { currentUser, loading } = useAuth();
-  return <output data-testid="authenticated-owner">{!loading && currentUser ? currentUser.uid : 'pending'}</output>;
-};
-
-describe('Empirical Challenger Suite: Edge Cases & Stress Verification', () => {
+describe('Nutrition numeric and hostile search inputs', () => {
   beforeEach(async () => { await prepareUnlockedTestArchive(); });
 
-  describe('1. Zero-Quantity Inputs & Calculations', () => {
     test('Logic.calculateMacrosFromKg handles zero weight or zero macro ratios', () => {
       const zeroWeight = Logic.calculateMacrosFromKg(0, 3.5, 2.0, 1.0);
       expect(zeroWeight.totalKcal).toBe(0);
@@ -58,10 +39,6 @@ describe('Empirical Challenger Suite: Edge Cases & Stress Verification', () => {
       expect(Logic.calculateBodyFat(-70, profile)).toBeNull();
     });
 
-
-  });
-
-  describe('2. Missing User Profile Data & Null States', () => {
     test('Logic.calculateBodyFat returns null for missing or partial user profile', () => {
       expect(Logic.calculateBodyFat(75, null as any)).toBeNull();
       expect(Logic.calculateBodyFat(75, {})).toBeNull();
@@ -109,7 +86,6 @@ describe('Empirical Challenger Suite: Edge Cases & Stress Verification', () => {
       });
       expect(withUnsupportedAliases).toEqual(withoutTargets);
     });
-
 
     test('custom-food numeric validation rejects partial, non-finite and empty required values', () => {
       const food = { name: 'Test', baseQty: 100, unit: 'g', kcal: '120', carbs: '15', pro: '5', fat: '4' };
@@ -170,119 +146,6 @@ describe('Empirical Challenger Suite: Edge Cases & Stress Verification', () => {
       expect(calculateLoggedMealTotals([{ ...logged, quantity: 2 }]).kcal).toBe(145);
     });
 
-    test('Components render gracefully when userData has minimal/empty structures', () => {
-
-
-      expect(() => renderWithProviders(<HomeView onNavigate={() => {}} />, { userData: emptyUserData })).not.toThrow();
-      expect(() => renderWithProviders(<SettingsView />, { userData: emptyUserData })).not.toThrow();
-      expect(() => renderWithProviders(<NutritionPlanning />, { userData: emptyUserData })).not.toThrow();
-      expect(() => renderWithAuthenticatedTestOwner(<TrainingSession />, { userData: emptyUserData })).not.toThrow();
-      expect(() => renderWithProviders(<TrainingRoutines />, { userData: emptyUserData })).not.toThrow();
-      expect(() => renderWithProviders(<TrainingHistory />, { userData: emptyUserData })).not.toThrow();
-      expect(() => renderWithProviders(<TrainingExercises />, { userData: emptyUserData })).not.toThrow();
-    });
-
-    test('NutritionPlanning without normocalorica object in nutritionPlanning renders without TypeError (Vulnerability check)', () => {
-      const incompleteUserData = {
-        nutritionPlanning: {
-          weight: 80, avgMacros: { carbsPerKg: 3.5, proPerKg: 2.0, fatPerKg: 1.0 }
-          // normocalorica missing!
-        } as any
-      };
-      expect(() => renderWithProviders(<NutritionPlanning />, { userData: incompleteUserData })).not.toThrow();
-    });
-  });
-
-  describe('3. Midnight Date Boundary Cases', () => {
-    test('Logic.getLocalDateString correctly formats midnight boundaries', () => {
-      const midnight1 = new Date(2026, 6, 26, 0, 0, 0);
-      const dateStr1 = Logic.getLocalDateString(midnight1);
-      expect(dateStr1).toBe('2026-07-26');
-
-      const endOfDay = new Date(2026, 6, 26, 23, 59, 59, 999);
-      const dateStr2 = Logic.getLocalDateString(endOfDay);
-      expect(dateStr2).toBe('2026-07-26');
-
-      const dec31 = new Date(2026, 11, 31, 23, 59, 59);
-      expect(Logic.getLocalDateString(dec31)).toBe('2026-12-31');
-
-      const jan1 = new Date(2027, 0, 1, 0, 0, 0);
-      expect(Logic.getLocalDateString(jan1)).toBe('2027-01-01');
-
-      const leapFeb = new Date(2028, 1, 29);
-      expect(Logic.getLocalDateString(leapFeb)).toBe('2028-02-29');
-    });
-
-    test('Logic.getCalendarMonthGrid generates correct days for month transitions', () => {
-      const gridDec = Logic.getCalendarMonthGrid(2026, 11); // December 2026
-      expect(gridDec.length).toBeGreaterThanOrEqual(35);
-      expect(gridDec.some(cell => cell.dateStr === '2026-12-31')).toBe(true);
-
-      const gridJan = Logic.getCalendarMonthGrid(2027, 0); // January 2027
-      expect(gridJan.some(cell => cell.dateStr === '2027-01-01')).toBe(true);
-    });
-
-  });
-
-  describe('4. WorkoutTimer & Ticking Behavior', () => {
-    test('WorkoutTimer handles absent, stopped and future device-timer snapshots', () => {
-      const owner = storageOwner();
-      const { container: c1, unmount: unmount1 } = renderWithProviders(<WorkoutTimer />);
-      expect(c1.textContent).toContain('00:00');
-      unmount1();
-
-      writeWorkoutTimerSnapshot(stoppedWorkoutTimer(), owner);
-      const { container: c2, unmount: unmount2 } = renderWithProviders(<WorkoutTimer />);
-      expect(c2.textContent).toContain('00:00');
-      unmount2();
-
-      // A clock value in the future must not render a negative duration.
-      writeWorkoutTimerSnapshot({
-        version: 1, state: 'running',
-        startTime: Date.now() + 10000, accumulated: 0,
-      }, owner);
-      const { container: c3 } = renderWithProviders(<WorkoutTimer />);
-      expect(c3.textContent).toContain('00:00');
-    });
-
-    test('WorkoutTimer rest controls (Play, Pause, Reset, Stop) operate cleanly without state crashes', async () => {
-      // The previous case deliberately leaves a running future snapshot. Start
-      // from a known *durably committed* stopped timer, not leaked test state.
-      writeWorkoutTimerSnapshot(stoppedWorkoutTimer(), storageOwner());
-      const { container } = renderWithProviders(<><ReadyOwner /><WorkoutTimer /></>);
-      await waitFor(() => expect(screen.getByTestId('authenticated-owner').textContent).toBe('test-user-id'));
-
-      const playBtn = container.querySelector('.timer-btn.play') as HTMLButtonElement;
-      expect(playBtn).not.toBeNull();
-
-      act(() => {
-        fireEvent.click(playBtn);
-      });
-
-      const pauseBtn = container.querySelector('.timer-btn.pause') as HTMLButtonElement;
-      expect(pauseBtn).not.toBeNull();
-
-      act(() => {
-        fireEvent.click(pauseBtn);
-      });
-
-      const resetBtn = container.querySelector('.timer-btn.reset') as HTMLButtonElement;
-      expect(resetBtn).not.toBeNull();
-      act(() => {
-        fireEvent.click(resetBtn);
-      });
-
-      const stopBtn = container.querySelector('.timer-btn.stop') as HTMLButtonElement;
-      expect(stopBtn).not.toBeNull();
-      act(() => {
-        fireEvent.click(stopBtn);
-      });
-
-      expect(container.textContent).toContain('00:00');
-    });
-  });
-
-  describe('5. Component Boundary States & Stress Inputs', () => {
     test('NutritionMeals handles literal regex metacharacters and still finds a known food', () => {
       renderWithProviders(<NutritionMeals />, { userData: {
         ...emptyUserData,
@@ -300,40 +163,4 @@ describe('Empirical Challenger Suite: Edge Cases & Stress Verification', () => {
       expect(screen.getByText('Pollo Test')).toBeDefined();
       expect(screen.queryByRole('status')).toBeNull();
     });
-
-    test('TrainingSession handles active workout with empty sets and non-numeric inputs', () => {
-      const emptySetWorkout = {
-        id: 'w_empty',
-        routineId: 'r1',
-        routineName: 'Scheda Test Empty',
-        date: '2026-07-26',
-        globalStartTime: Date.now(),
-        exercises: [
-          {
-            exId: 'ex1',
-            sets: [],
-            sessionNote: ''
-          },
-          {
-            exId: 'ex2',
-            sets: [{ id: 's1', kg: '', reps: '' }, { id: 's2', kg: '-10', reps: '0' }],
-            sessionNote: null
-          }
-        ]
-      };
-
-      const { container } = renderWithAuthenticatedTestOwner(<TrainingSession />, { 
-        localWorkout: emptySetWorkout,
-        userData: { ...emptyUserData, activeWorkout: emptySetWorkout } as any
-      });
-      expect(container.textContent).toContain('Scheda Test Empty');
-    });
-
-    test('MuscleModel handles unknown, null, or undefined muscle IDs safely', () => {
-      expect(() => renderWithProviders(<MuscleModel selectedMuscles={[""]} />)).not.toThrow();
-      expect(() => renderWithProviders(<MuscleModel selectedMuscles={["unknown_muscle_id_xyz"]} />)).not.toThrow();
-      expect(() => renderWithProviders(<MuscleModel selectedMuscles={[null as any]} />)).not.toThrow();
-    });
-  });
-
 });

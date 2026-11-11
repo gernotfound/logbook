@@ -31,6 +31,18 @@ describe('shared independent-writer evidence consistency', () => {
         expect(readDeviceValueStrict).not.toHaveBeenCalled();
     });
 
+    it('rejects a new independent witness inserted during authenticated final reads', () => {
+        const current = new Set(names);
+        const readNames = vi.fn(() => new Set(current));
+        vi.mocked(readDeviceValueStrict).mockImplementation(name => {
+            if (name === 'w1') current.add('w3');
+            return scanned.find(item => item.name === name)?.raw ?? null;
+        });
+        expect(() => check(readNames)).toThrow('inventory changed');
+        expect(readNames).toHaveBeenCalledTimes(2);
+        expect(readDeviceValueStrict).toHaveBeenCalledTimes(2);
+    });
+
     it('rejects replacement of an unrelated witness even when the names are unchanged', () => {
         vi.mocked(readDeviceValueStrict).mockImplementation(name => name === 'w1' ? 'first' : 'altered');
         expect(() => check()).toThrow('value changed');

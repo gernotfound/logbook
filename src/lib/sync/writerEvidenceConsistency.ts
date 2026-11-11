@@ -26,7 +26,11 @@ export function assertStableWriterEvidence(
             throw new Error(messages.value);
         }
     }
-    if (readDeviceConsentRevision(owner) !== consentRevision) {
+    // Another tab can add a witness during the authenticated reads above.
+    // Recheck membership after them; this is not an atomic cross-tab snapshot.
+    const finalNames = readNames();
+    if (finalNames.size !== names.size || [...names].some(name => !finalNames.has(name))
+        || readDeviceConsentRevision(owner) !== consentRevision) {
         throw new Error(messages.inventory);
     }
 }
