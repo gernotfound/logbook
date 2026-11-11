@@ -1,7 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
-import { z } from 'zod';
 
 describe('Firebase environment hardening', () => {
     describe('R2 Adversarial: Firebase Configuration Fail-Fast & Secret Audit', () => {
