@@ -4,6 +4,7 @@ import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { loadConfigFromFile } from 'vite';
 import { compareAssignments, normalizePlaywrightLocation } from './check-test-discovery.mjs';
+import { isCriticalTest } from './critical-test-selection.mjs';
 
 await test('accepts complete one-to-one discovery', () => {
   assert.deepEqual(compareAssignments(['a.test.ts', 'b.test.ts'], { general: ['a.test.ts'], isolated: ['b.test.ts'] }, 'Vitest'), []);
@@ -33,6 +34,31 @@ await test('rejects Playwright sharding loss and duplicate test identities', () 
 await test('normalizes both Playwright CLI filename formats to the tracked E2E path', () => {
   assert.equal(normalizePlaywrightLocation('accessibility.spec.ts:33:1'), 'e2e/accessibility.spec.ts:33:1');
   assert.equal(normalizePlaywrightLocation('e2e/accessibility.spec.ts:33:1'), 'e2e/accessibility.spec.ts:33:1');
+});
+
+await test('critical coverage selection is invariant under functional test folder moves', () => {
+  for (const name of [
+    'auth_checkpoint_drain.test.ts',
+    'account_deletion_reauth_ui.test.tsx',
+    'm7_account_deletion_api.test.ts',
+    'guest_bootstrap_lifecycle.test.tsx',
+    'guest_account_migration_v3.test.tsx',
+    'health_consent_client.test.ts',
+    'db_sync_error_semantics.test.ts',
+    'storage_bootstrap_integrity.test.ts',
+  ]) {
+    assert.equal(isCriticalTest('tests/' + name), true, name + ' at root');
+    assert.equal(isCriticalTest('tests/account/auth/' + name), true, name + ' in auth folder');
+    assert.equal(isCriticalTest('tests/account/deletion/' + name), true, name + ' in deletion folder');
+  }
+  assert.equal(isCriticalTest('src/lib/auth/recentAuth.test.ts'), true);
+  assert.equal(isCriticalTest('src/contexts/auth/session.test.tsx'), true);
+  assert.equal(isCriticalTest('tests/isolated/auth_checkpoint_drain.test.ts'), false);
+  assert.equal(isCriticalTest('tests/emulator/m7_account_deletion_api.test.ts'), false);
+  assert.equal(isCriticalTest('tests/fuzz/storage_bootstrap_integrity.test.ts'), false);
+  assert.equal(isCriticalTest('tests/training/auth_checkpoint_drain.spec.ts'), false);
+  assert.equal(isCriticalTest('tests/account/auth/guest_login_overlay.test.tsx'), false);
+  assert.equal(isCriticalTest('tests\\\\account\\\\auth\\\\auth_checkpoint_drain.test.ts'), true);
 });
 
 await test('stress runner preserves non-stress exclusions and the base environment', async () => {

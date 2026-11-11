@@ -2,10 +2,11 @@ import { execFileSync, spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { isCriticalTest } from './critical-test-selection.mjs';
 
 const root = resolve(fileURLToPath(new URL('..', import.meta.url)));
 const testPaths = execFileSync('git', ['ls-files', '-z'], { cwd: root, encoding: 'utf8' }).split('\0').filter(Boolean);
-const isCriticalTest = file => /^(?:src\/(?:lib\/auth|contexts\/auth)\/.*\.test\.(?:ts|tsx)|tests\/(?:auth_|authenticated_|account_deletion_|m7_account_deletion_|m7_logout_deletion_|health_consent_|health_data_erasure_|m7_health_|db_sync_|sync_|storage_|browser_storage_|guest_bootstrap_|guest_account_).+\.test\.(?:ts|tsx))$/.test(file);
+
 const selected = testPaths.filter(isCriticalTest);
 if (selected.length < 15) throw new Error('Critical coverage test selection unexpectedly small: ' + selected.length);
 

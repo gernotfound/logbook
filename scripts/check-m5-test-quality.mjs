@@ -3,10 +3,10 @@ import path from 'node:path';
 import { findDisabledTests } from './test-declaration-check.mjs';
 
 const fixedFiles = [
-  'tests/logout_protection.test.ts',
-  'tests/guest_bootstrap_lifecycle.test.tsx',
-  'tests/guest_account_migration_v3.test.tsx',
-  'tests/catalog_resolution_pipeline.test.ts',
+  'tests/account/auth/logout_protection.test.ts',
+  'tests/account/guest/guest_bootstrap_lifecycle.test.tsx',
+  'tests/account/guest/guest_account_migration_v3.test.tsx',
+  'tests/catalog/catalog_resolution_pipeline.test.ts',
   'tests/hardening/nutrition_guest_flow.test.tsx',
 ];
 const testFilePattern = /\.(?:test|spec)\.[cm]?[jt]sx?$/;

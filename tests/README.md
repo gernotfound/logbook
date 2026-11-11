@@ -1,8 +1,28 @@
 # Organizzazione delle suite di test
 
-**Contesto:** [AGENTS.md](../AGENTS.md) governa processo e autorizzazioni; [Verifica CI](../.agents/rules/ci-verification.md) definisce il gate canonico corrente `npm run verify:m8` o CI equivalente exact-SHA. I comandi delle milestone sotto sono subset diagnostici, non il gate finale.
+**Contratti:** [AGENTS.md](../AGENTS.md) e [Verifica CI](../.agents/rules/ci-verification.md). Il gate completo resta `npm run verify:m8` oppure la CI equivalente sullo SHA esatto; le suite isolate non sono sostituibili dai test jsdom.
 
-- **Regola:** spostare test esistenti solo per area funzionale e in piccoli gruppi, quando import, fixture, script nominativi, include/exclude Vitest, typecheck e CI possono essere aggiornati e verificati sullo stesso SHA.
-- **Distribuzione corrente:** molti test restano direttamente in `tests/`; non sono obsoleti per questo motivo. Le suite specializzate `isolated/`, `emulator/`, `fuzz/`, `recovery/`, `gc/` e `hardening/` seguono i rispettivi gate dedicati.
-- **MUST:** non modificare soltanto i percorsi per ragioni estetiche: preservare semanticamente test e mocking, aggiornare import relativi, rintracciare riferimenti con `git grep`, poi verificare sia la suite selezionata sia il gate canonico `verify:m8` o CI equivalente exact-SHA.
-- **MUST:** gli spostamenti non autorizzano `skip`, riduzione di asserzioni, modifica dei boundary normativi o esclusione dei test dalla copertura TypeScript.
+## Dove collocare un test
+
+La **responsabilità funzionale** determina la cartella, mentre il **runner** determina l'ambiente e il gate. Evitare una cartella per singolo test o per milestone temporanea.
+
+| Area | Cartella | Responsabilità |
+| --- | --- | --- |
+| Account | `account/auth/`, `account/guest/`, `account/deletion/` | Accesso, guest, ciclo di vita e cancellazione |
+| Analytics | `analytics/` | Calcoli, grafici e worker |
+| Catalogo | `catalog/` | Catalogo, risoluzione e paginazione |
+| Dominio | `domain/` | Operazioni business e invarianti |
+| Nutrizione | `nutrition/` | Alimenti, pasti, pianificazione e UI |
+| PWA | `pwa/` | Registrazione, aggiornamenti e lifecycle |
+| Allenamento | `training/` | Cicli, esercizi, sessioni e pianificazione |
+| Runner specializzati | `isolated/`, `emulator/`, `fuzz/`, `recovery/`, `gc/`, `hardening/` | Mantengono i propri setup e criteri di discovery |
+
+Altri test restano temporaneamente nella radice di `tests/` in attesa di migrazioni coerenti per area. I test co-locati in `src/` restano vicini al modulo quando utile. I test browser e le fixture Playwright restano in `e2e/` finché i loro contratti di discovery e di progetto non vengono aggiornati insieme.
+
+## Invarianti degli spostamenti
+
+- Spostare gruppi funzionali, aggiornando **tutti** gli import relativi, i mock e i percorsi citati in script, configurazioni e documentazione.
+- Preservare i nomi `challenger_*`, `*adversarial*` e `*stress*` quando determinano il runner stress. Non spostare suite Node nel runner jsdom o viceversa.
+- Conservare le fixture condivise (`setup.tsx`, `secureVaultFixture.ts` e altre) in un punto comune, senza duplicarle.
+- `test:discovery` deve dimostrare che ogni test è assegnato una sola volta; `test:coverage:critical` deve conservare la selezione critica indipendentemente dalla profondità della cartella.
+- Dopo ogni gruppo, verificare lint, TypeScript, test normativi, suite dedicate e CI canonica. Non ridurre asserzioni, coverage o controlli per agevolare il riordino.
