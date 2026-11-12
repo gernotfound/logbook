@@ -237,6 +237,14 @@ try {
   assert.deepEqual(healthStatus, { ready: true, durableObjectBinding: true, d1Binding: false });
   console.log('CF00 temporary remote Worker entrypoint: PASS; DO binding present, D1 absent');
 
+  // Unknown algorithms exercise the DO bootstrap without performing a KDF.
+  const doCanary = await fetch(new URL('/__cf00/password?algorithm=unknown', origin), {
+    method: 'POST', headers, signal: AbortSignal.timeout(10000),
+  });
+  assert.equal(doCanary.status, 400, 'Remote DO boot canary failed with HTTP ' + doCanary.status);
+  assert.deepEqual(await doCanary.json(), { error: 'algorithm' });
+  console.log('CF00 temporary remote Durable Object bootstrap: PASS (no crypto executed)');
+
   const results = {};
   const failures = [];
   for (const algorithm of ['pbkdf2', 'scrypt']) {
