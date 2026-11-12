@@ -109,6 +109,10 @@ Frontend React/Vite/TypeScript, stato Zustand, Zod, CSS nativo con token semanti
 - **MUST:** UI leggibile in system/light/dark, mobile e safe area; dialoghi tramite `GlobalDialog`/`useDialogStore`. Selettori Zustand stabili e nessuna mutazione dello store globale durante render/recovery React; `useRef(initialValue)` non è lazy initialization.
 - **MUST:** catalogo pubblico in sola lettura client; pubblicazioni reali richiedono input validi e conferma esplicita, senza automatismi legati alla release PWA. Fallback e rollback sono nel [Catalogo](.agents/rules/catalog-operations.md).
 
+## Incidente quota App Check — checkpoint 12/11/2026
+
+L'email Google Cloud originale conferma esaurimento delle 10.000 valutazioni gratuite reCAPTCHA Enterprise a novembre per `logbook-db-98cc4` (circa 12.813 azioni senza score stimate, **non** richieste Firebase accettate). L'attestazione App Check del client è richiesta prima del cloud; non disabilitare l'enforcement o passare a billing per aggirare il limite. Verificare un'alternativa gratuita robusta (CustomProvider + Turnstile con issuer server-side) prima del cutover. Il proprietario ha rimosso anche i due riferimenti OAuth Google a `thelogbook.web.app`; screenshot mostra `thelogbook.me` e callback nel modulo, ma manca read-back e test live. **Non reintrodurre/riabilitare il vecchio site ID Hosting `thelogbook`**. Il dominio Firebase predefinito per helper Auth/email è distinto. Tutti i limiti delle prove e le fonti sono nel registro servizi e issue #1041.
+
 ## Branch, versione e PR
 
 1. **MUST:** branch dedicato dal main GitHub verificato; mai push diretto a `main` o bypass di protezioni. Controllare che i branch non-main non generino deploy Vercel.
