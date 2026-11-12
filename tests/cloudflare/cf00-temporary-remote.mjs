@@ -34,7 +34,13 @@ async function requestWithBoundedRetries(url, headers) {
       const response = await fetch(url, { method: 'POST', headers, signal: AbortSignal.timeout(20000) });
       if (response.status === 200) return response;
       // The temporary workers.dev route may need a short propagation delay.
-      if (![404, 502, 503, 504].includes(response.status)) throw new Error('Remote Worker HTTP status ' + response.status);
+      if (![404, 502, 503, 504].includes(response.status)) {
+        const data = await response.clone().json().catch(() => null);
+        const category = ['TypeError', 'RangeError', 'Error', 'DOMException', 'Unknown'].includes(data?.category)
+          ? data.category : 'unspecified';
+        throw new Error('Remote Worker HTTP ' + response.status + ', error='
+          + (data?.error === 'kdf-runtime-failure' ? 'kdf-runtime-failure/' : 'non-kdf/') + category);
+      }
       lastError = new Error('Remote Worker unavailable (HTTP ' + response.status + ')');
     } catch (error) {
       lastError = error;
@@ -71,16 +77,21 @@ try {
   assert.ok(origin.hostname.endsWith('.workers.dev'));
 
   const headers = { 'x-cf00-secret': secret };
+  const unauthorized = await fetch(new URL('/__cf00/health', origin),
+    { method: 'POST', signal: AbortSignal.timeout(10000) });
+  assert.equal(unauthorized.status, 404, 'Worker must deny requests before authentication');
+
+  const health = await requestWithBoundedRetries(new URL('/__cf00/health', origin), headers);
+  const healthStatus = await health.json();
+  assert.deepEqual(healthStatus, { ready: true, durableObjectBinding: true, d1Binding: false });
+  console.log('CF00 temporary remote Worker entrypoint: PASS; DO binding present, D1 absent');
+
   const pbkdf2 = await requestWithBoundedRetries(new URL('/__cf00/password?algorithm=pbkdf2', origin), headers);
   const pbkdf2Body = await pbkdf2.json();
   checkResult(pbkdf2Body, 'pbkdf2');
   const scrypt = await requestWithBoundedRetries(new URL('/__cf00/password?algorithm=scrypt', origin), headers);
   const scryptBody = await scrypt.json();
   checkResult(scryptBody, 'scrypt');
-
-  const unauthorized = await fetch(new URL('/__cf00/password?algorithm=scrypt', origin),
-    { method: 'POST', signal: AbortSignal.timeout(10000) });
-  assert.equal(unauthorized.status, 404);
 
   console.log('CF00 temporary Cloudflare REMOTE: PASS, D1 not exercised.');
   console.log('PBKDF2 600000 remote wall-ms: ' + pbkdf2Body.wallMs.toFixed(1));

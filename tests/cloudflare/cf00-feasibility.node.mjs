@@ -105,6 +105,11 @@ void test('SQLite adapter does not claim D1 provider metering', () => withDb(asy
   assert.equal(response.status, 200);
   const payload = await response.json();
   assert.equal(payload.queryMetrics, null);
+  const health = await worker.fetch(new Request('https://cf00.invalid/__cf00/health', {
+    method: 'POST', headers,
+  }), env);
+  assert.equal(health.status, 200);
+  assert.deepEqual(await health.json(), { ready: true, durableObjectBinding: false, d1Binding: true });
   const plan = await worker.fetch(new Request('https://cf00.invalid/__cf00/plan', {
     method: 'POST', headers,
   }), env);

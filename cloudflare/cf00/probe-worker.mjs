@@ -55,8 +55,15 @@ export class PasswordProbe {
     // Public requests can reach this class only through the guarded entry Worker.
     if (request.method !== 'POST') return json({ error: 'method' }, 405);
     const kind = new URL(request.url).searchParams.get('algorithm');
-    if (kind === 'scrypt') return json(await measureScrypt());
-    if (kind === 'pbkdf2') return json(await measurePbKdf2());
+    try {
+      if (kind === 'scrypt') return json(await measureScrypt());
+      if (kind === 'pbkdf2') return json(await measurePbKdf2());
+    } catch (error) {
+      // Only expose a bounded error class: a synthetic probe must not leak runtime details.
+      const category = ['TypeError', 'RangeError', 'Error', 'DOMException'].includes(error?.name)
+        ? error.name : 'Unknown';
+      return json({ error: 'kdf-runtime-failure', category }, 500);
+    }
     return json({ error: 'algorithm' }, 400);
   }
 }
@@ -84,6 +91,10 @@ export default {
         return json({ receipt });
       }
       if (path === '/__cf00/state') return json(await readSyntheticState(env.DB));
+      if (path === '/__cf00/health') return json({
+        ready: true, durableObjectBinding: typeof env.PASSWORD_PROBE?.idFromName === 'function',
+        d1Binding: typeof env.DB?.prepare === 'function',
+      });
       if (path === '/__cf00/plan') {
         const queries = [
           'EXPLAIN QUERY PLAN SELECT revision FROM cf00_control WHERE owner = ?',
