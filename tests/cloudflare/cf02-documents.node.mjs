@@ -72,7 +72,7 @@ function envelope(seq = 1) {
 
 function attempt(batchId = 'batch000000000001', seq = 1, rev = 0, paths = ['']) {
   return {
-    batchId, expectedRevision: rev, consentRevision: 1,
+    batchId, expectedRevision: rev, expectedFenceEpoch: 5, consentRevision: 1,
     replica, lastSeq: seq, documents: paths.map(path => ({ path, document: envelope(seq) })),
   };
 }
@@ -262,6 +262,7 @@ void test('trusted identity, epoch, consent, origin, CSRF and strict schemas fai
   assert.equal((await call(db, 'commit', item, { env: makeEnv(db, { csrfVerified: false }) })).status, 403);
   assert.equal((await call(db, 'commit', item, { env: makeEnv(db, { rateGatePassed: false }) })).status, 503);
   assert.equal((await call(db, 'commit', item, { env: makeEnv(db, { fenceEpoch: 4 }) })).status, 409);
+  assert.equal((await call(db, 'commit', { ...item, expectedFenceEpoch: 4 })).status, 409);
   assert.equal((await call(db, 'commit', item, { env: makeEnv(db, { healthConsentRevision: 2 }) })).status, 403);
   assert.equal((await call(db, 'commit', { ...item, uid: 'other-user' })).status, 400);
   assert.equal((await call(db, 'commit', { ...item, documents: [{ path: '', document: { ...envelope(), health: 'plaintext' } }] })).status, 400);
