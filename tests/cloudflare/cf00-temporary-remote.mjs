@@ -112,6 +112,19 @@ async function callD1(origin, headers, path, payload = {}) {
   throw new Error('Read-only D1 retry budget exhausted');
 }
 
+async function syntheticWriteWhenBindingReady(origin, headers, attempt) {
+  for (let n = 0; n < 5; n += 1) {
+    const response = await callD1(origin, headers, '/__cf00/write', attempt);
+    if (response.status !== 503) return response;
+    const body = await response.clone().json().catch(() => null);
+    // Only an explicit pre-transaction guard can prove no write was attempted.
+    // Lost ACK and transport errors must never be retried without durable receipt evidence.
+    if (body?.error !== 'd1-binding-unavailable' || n === 4) return response;
+    await sleep(400 * (n + 1));
+  }
+  throw new Error('Unreachable synthetic binding retry state');
+}
+
 async function exerciseD1(origin, headers, environment) {
   const dbName = 'cf00-temporary-' + randomBytes(5).toString('hex');
   const createOutput = runWrangler(['d1', 'create', dbName, '--jurisdiction=eu', '--temporary'], environment, 'D1 EU create in temporary account');
@@ -189,9 +202,10 @@ async function exerciseD1(origin, headers, environment) {
     { writer: 'writer-a', batchId: 'batch000000000021-a', expectedRev: 0, consentEpoch: 7 },
     { writer: 'writer-b', batchId: 'batch000000000021-b', expectedRev: 0, consentEpoch: 7 },
   ];
-  const outcomes = await Promise.all(requests.map(x => callD1(d1Origin, headers, '/__cf00/write', x)));
-  assert.deepEqual(outcomes.map(x => x.status).sort((a, b) => a - b), [200, 409],
-    'Same snapshot must have one winner, one conflict');
+  const outcomes = await Promise.all(requests.map(x => syntheticWriteWhenBindingReady(d1Origin, headers, x)));
+  const statuses = outcomes.map(x => x.status).sort((a, b) => a - b);
+  assert.deepEqual(statuses, [200, 409],
+    'Same snapshot must have one winner and one conflict (observed HTTP ' + statuses.join(',') + ')');
   const winner = outcomes[0].status === 200 ? 0 : 1;
   const commit = await outcomes[winner].json();
   assert.equal(commit.batchId, requests[winner].batchId);
