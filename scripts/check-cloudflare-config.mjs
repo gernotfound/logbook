@@ -43,5 +43,15 @@ if (!candidateWorkflow.includes('"${CLOUDFLARE_APP_ORIGIN}/?tab=training"') ||
     !candidateWorkflow.includes('test "${miss_status}" = 404')) {
   failures.push('Cloudflare smoke must cover the real PWA shortcut and strict 404 for absent JS, CSS and pathnames');
 }
+const mismatchDiagnostics = readFileSync('scripts/cloudflare-asset-mismatch-diagnostics.sh', 'utf8');
+if (!candidateWorkflow.includes('cmp -s "${local_file}" /tmp/cloudflare-served-asset ||') ||
+    !candidateWorkflow.includes('bash scripts/cloudflare-asset-mismatch-diagnostics.sh') ||
+    !candidateWorkflow.includes('"${CLOUDFLARE_APP_ORIGIN}${path}" "${EXPECTED_SHA}" "${initial_http}"') ||
+    !mismatchDiagnostics.includes('sha256sum') ||
+    !mismatchDiagnostics.includes('--dump-header') ||
+    !mismatchDiagnostics.includes('for probe in exact cache-busted; do') ||
+    !mismatchDiagnostics.includes('exit 1')) {
+  failures.push('Cloudflare byte mismatch must remain a failing gate with bounded SHA-256, HTTP and cache diagnostics');
+}
 if (failures.length) { for (const problem of failures) console.error(problem); process.exit(1); }
 console.log('Cloudflare static assets and Auth proxy configuration contract OK');
