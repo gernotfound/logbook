@@ -6,6 +6,7 @@ const firebase = JSON.parse(readFileSync('firebase.json', 'utf8'));
 const headers = readFileSync('cloudflare/_headers', 'utf8');
 const vite = readFileSync('vite.config.ts', 'utf8');
 const sw = readFileSync('src/sw.ts', 'utf8');
+const candidateWorkflow = readFileSync('.github/workflows/cloudflare-candidate.yml', 'utf8');
 
 if (wrangler.main !== './auth-proxy.mjs' || wrangler.assets?.directory !== '../dist' ||
     wrangler.assets?.binding !== 'ASSETS' || wrangler.assets?.not_found_handling !== 'single-page-application' ||
@@ -33,6 +34,12 @@ if (/Access-Control-Allow-Origin:\s*\*/i.test(headers)) failures.push('Wildcard 
 if (!sw.includes('denylist:') || !sw.includes('__')) failures.push('SW must exclude Firebase helper namespace');
 if (!vite.includes('CLOUDFLARE_APP_ORIGIN') || !vite.includes('transformIndexHtml')) {
   failures.push('Canonical HTML must be transformed before PWA precache generation');
+}
+// Cloudflare's SPA fallback is navigation-sensitive. The missing-chunk
+// smoke must model a browser module fetch, not a headerless curl navigation.
+if (!candidateWorkflow.includes("-H 'Sec-Fetch-Mode: cors' -H 'Sec-Fetch-Dest: script'") ||
+    !candidateWorkflow.includes('test "${miss_status}" = 404')) {
+  failures.push('Cloudflare missing-JS smoke must enforce 404 with browser module Fetch Metadata');
 }
 if (failures.length) { for (const problem of failures) console.error(problem); process.exit(1); }
 console.log('Cloudflare static assets and Auth proxy configuration contract OK');

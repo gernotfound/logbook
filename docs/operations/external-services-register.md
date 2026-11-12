@@ -38,6 +38,14 @@ I contratti correnti sono governati da [AGENTS](../../AGENTS.md): [Cifratura](..
 | Snyk | OPTIONAL | controllo security supplementare | integrazione Snyk esterna |
 | Google Search Console | EXTERNAL-ONLY | verifica proprietà, sitemap e indicizzazione | Search Console + asset SEO repo |
 
+## Primo Worker Cloudflare — risultato provider CI 12/11/2026 (checkpoint più recente)
+
+Il [run manuale GitHub #43211365177](https://github.com/gernotfound/logbook/actions/runs/43211365177) ha compilato il candidato sulla HEAD `main 1a0148f435b8d53e15219c224ead34f9b982414f`. Il job build è **SUCCESS**, il passo Wrangler è **SUCCESS**: **72 asset nuovi/modificati caricati**, trigger `workers.dev` creato per Worker `thelogbook-frontend`, versione Cloudflare `e2bbc26f-480c-4f81-87b0-be087fdd6b95`. Il job deploy complessivo è **FAILURE** nello smoke `Missing JS must be a real 404`. Le precedenti verifiche di asset noti, header noindex/no-store e SPA fallback sono state eseguite dal job prima del failure; non equivale a validazione completa di Auth o sicurezza.
+
+**Root cause candidata, non ancora provata HTTP:** Cloudflare Static Assets con `not_found_handling: single-page-application` può usare il fallback `index.html` in richieste non corrispondenti; lo smoke non inviava i Fetch Metadata tipici di un browser che carica un modulo JS. Un branch dedicato aggiunge `Sec-Fetch-Mode: cors` e `Sec-Fetch-Dest: script`, mantenendo obbligatorio il 404 e registrando status/MIME al fallimento. Validare in CI e nel **nuovo run live** prima di dichiarare risolto; se torna non-404 correggere il routing, non eliminare il guardrail.
+
+**Sicurezza operativa:** il token bootstrap Workers Admin ora risulta utilizzabile per il primo deploy (non rivelarne il valore); dopo il primo run effettivamente validato, sostituire con token Worker Editor e revocare Admin. Nessun Custom Domain collegato, nessun cutover G01 né nuovo Firebase Hosting deploy. Checklist [#1041](https://github.com/gernotfound/logbook/issues/1041) rimane aperta.
+
 ## Checkpoint di arresto Firebase Hosting e GitHub — 12/11/2026 (aggiorna i precedenti checkpoint)
 
 Questa sezione **prevale** sulle descrizioni precedenti del sito Hosting come ACTIVE. Non costituisce attestazione di un nuovo frontend live.
