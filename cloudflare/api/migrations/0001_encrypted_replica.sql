@@ -73,4 +73,3 @@ BEGIN
   ) THEN RAISE(ABORT, 'sync-fenced') END;
 END;
 
-CREATE INDEX sync_receipts_revision_idx ON sync_receipts(uid, committed_revision);
