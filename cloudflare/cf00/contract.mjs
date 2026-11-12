@@ -1,8 +1,8 @@
 // Isolated synthetic D1 probe, never imported by the production PWA.
-export const PROBE_OWNER = 'cf00-synthetic-owner';
-export const PROBE_EPOCH = 7;
+const PROBE_OWNER = 'cf00-synthetic-owner';
+const PROBE_EPOCH = 7;
 
-export const SCHEMA = [
+const SCHEMA = [
   `CREATE TABLE IF NOT EXISTS cf00_control (
       owner TEXT PRIMARY KEY, revision INTEGER NOT NULL CHECK (revision >= 0),
       consent_epoch INTEGER NOT NULL CHECK (consent_epoch >= 1)
@@ -36,7 +36,7 @@ export async function prepareFixture(db) {
   ]);
 }
 
-export function isSafeAttempt(attempt) {
+function isSafeAttempt(attempt) {
   return attempt && typeof attempt === 'object' && !Array.isArray(attempt)
     && /^[a-z][a-z0-9-]{0,31}$/.test(attempt.writer)
     && /^[a-zA-Z0-9_-]{16,64}$/.test(attempt.batchId)
