@@ -274,12 +274,29 @@ try {
   assert.deepEqual(healthStatus, { ready: true, durableObjectBinding: true, d1Binding: false });
   console.log('CF00 temporary remote Worker entrypoint: PASS; DO binding present, D1 absent');
 
-  // Unknown algorithms exercise the DO bootstrap without performing a KDF.
-  const doCanary = await fetch(new URL('/__cf00/password?algorithm=unknown', origin), {
-    method: 'POST', headers, signal: AbortSignal.timeout(10000),
-  });
-  assert.equal(doCanary.status, 400, 'Remote DO boot canary failed with HTTP ' + doCanary.status);
-  assert.deepEqual(await doCanary.json(), { error: 'algorithm' });
+  // Unknown algorithms exercise the DO bootstrap without computing a KDF.
+  // A newly created workers.dev route can return a transient 404 while propagating.
+  let doReady = false;
+  for (let n = 0; n < 10; n += 1) {
+    let response;
+    try {
+      response = await fetch(new URL('/__cf00/password?algorithm=unknown', origin), {
+        method: 'POST', headers, signal: AbortSignal.timeout(10000),
+      });
+    } catch {
+      // Only this non-mutating canary is safe to retry on transport failure.
+    }
+    if (response?.status === 400) {
+      assert.deepEqual(await response.json(), { error: 'algorithm' });
+      doReady = true;
+      break;
+    }
+    if (response && ![404, 502, 503, 504].includes(response.status)) {
+      throw new Error('Unexpected DO canary status ' + response.status);
+    }
+    if (n < 9) await sleep(600);
+  }
+  assert.ok(doReady, 'Remote DO boot canary did not become available');
   console.log('CF00 temporary remote Durable Object bootstrap: PASS (no crypto executed)');
 
   const results = {};
