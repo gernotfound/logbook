@@ -8,7 +8,7 @@ const SCHEMA = [
       consent_epoch INTEGER NOT NULL CHECK (consent_epoch >= 1)
     )`,
   `CREATE TABLE IF NOT EXISTS cf00_receipt (
-      owner TEXT NOT NULL, batch_id TEXT NOT NULL, expected_rev INTEGER NOT NULL,
+      owner TEXT NOT NULL, batch_id TEXT NOT NULL, writer TEXT NOT NULL, expected_rev INTEGER NOT NULL,
       consent_epoch INTEGER NOT NULL, committed_rev INTEGER NOT NULL,
       PRIMARY KEY (owner, batch_id)
     )`,
@@ -50,8 +50,8 @@ export async function commitSyntheticBatch(db, attempt) {
   // A no-op UPDATE cannot fail a D1 batch; the guard trigger must abort it.
   return db.batch([
     db.prepare(`INSERT INTO cf00_receipt
-      (owner, batch_id, expected_rev, consent_epoch, committed_rev)
-      VALUES (?, ?, ?, ?, ?)`).bind(PROBE_OWNER, batchId, expectedRev, consentEpoch, expectedRev + 1),
+      (owner, batch_id, writer, expected_rev, consent_epoch, committed_rev)
+      VALUES (?, ?, ?, ?, ?, ?)`).bind(PROBE_OWNER, batchId, writer, expectedRev, consentEpoch, expectedRev + 1),
     db.prepare(`INSERT INTO cf00_document (owner, path, ciphertext, revision)
       VALUES (?, ?, ?, ?)
       ON CONFLICT(owner, path) DO UPDATE SET ciphertext = excluded.ciphertext,
@@ -63,7 +63,7 @@ export async function commitSyntheticBatch(db, attempt) {
 
 export async function readReceipt(db, batchId) {
   if (typeof batchId !== 'string' || !/^[a-zA-Z0-9_-]{16,64}$/.test(batchId)) throw new TypeError('Invalid batch ID');
-  return db.prepare('SELECT expected_rev, consent_epoch, committed_rev FROM cf00_receipt WHERE owner=? AND batch_id=?')
+  return db.prepare('SELECT writer, expected_rev, consent_epoch, committed_rev FROM cf00_receipt WHERE owner=? AND batch_id=?')
     .bind(PROBE_OWNER, batchId).first();
 }
 

@@ -46,7 +46,7 @@ const attempt = (writer, batchId, expectedRev = 0, consentEpoch = 7) => ({
   writer, batchId, expectedRev, consentEpoch,
 });
 
-void test('one of two writers with identical revision succeeds and the other rolls back', () => withDb(async (a, b) => {
+void test('two writers using the same snapshot have one commit and one rollback (serial adapter)', () => withDb(async (a, b) => {
   await prepareFixture(a);
   const outcomes = await Promise.allSettled([
     commitSyntheticBatch(a, attempt('writer-a', 'batch000000000001-a')),
@@ -68,9 +68,9 @@ void test('stale consent and failed late statement never persist receipt or docu
   await assert.rejects(commitSyntheticBatch(a, attempt('writer-a', 'batch000000000002-a', 0, 6)), /stale/i);
   assert.equal((await readSyntheticState(a)).control.revision, 0);
   await assert.rejects(a.batch([
-    a.prepare('INSERT INTO cf00_receipt VALUES (?, ?, ?, ?, ?)').bind('cf00-synthetic-owner', 'batch000000000002-b', 0, 7, 1),
+    a.prepare('INSERT INTO cf00_receipt VALUES (?, ?, ?, ?, ?, ?)').bind('cf00-synthetic-owner', 'batch000000000002-b', 'writer-a', 0, 7, 1),
     a.prepare('INSERT INTO cf00_document VALUES (?, ?, ?, ?)').bind('cf00-synthetic-owner', 'writer-a', 'synthetic', 1),
-    a.prepare('INSERT INTO cf00_receipt VALUES (?, ?, ?, ?, ?)').bind('cf00-synthetic-owner', 'batch000000000002-b', 0, 7, 1),
+    a.prepare('INSERT INTO cf00_receipt VALUES (?, ?, ?, ?, ?, ?)').bind('cf00-synthetic-owner', 'batch000000000002-b', 'writer-a', 0, 7, 1),
   ]), /UNIQUE/i);
   assert.equal((await readSyntheticState(a)).docs.length, 0);
   assert.equal(await readReceipt(a, 'batch000000000002-b'), null);
@@ -81,9 +81,13 @@ void test('duplicate batch cannot produce a second commit; receipt permits lost-
   const write = attempt('writer-a', 'batch000000000003-a');
   await commitSyntheticBatch(a, write);
   await assert.rejects(commitSyntheticBatch(a, write));
-  assert.equal((await readSyntheticState(a)).control.revision, 1);
+  // Reusing the same batch ID with a different write must not masquerade as its ACK.
+  await assert.rejects(commitSyntheticBatch(a, attempt('writer-b', write.batchId)));
+  const state = await readSyntheticState(a);
+  assert.equal(state.control.revision, 1);
+  assert.deepEqual(state.docs.map(doc => doc.path), ['writer-a']);
   assert.deepEqual({ ...(await readReceipt(a, write.batchId)) }, {
-    expected_rev: 0, consent_epoch: 7, committed_rev: 1,
+    writer: 'writer-a', expected_rev: 0, consent_epoch: 7, committed_rev: 1,
   });
 }));
 

@@ -4,9 +4,9 @@ Questo codice è un **prototipo di fattibilità**, non il backend di TheLogBook.
 
 ## Contratti provati
 
-- `contract.mjs`: `D1Database.batch()` deve eseguire atomicamente una guardia che rifiuta revisione/consenso stantii. Un `UPDATE` su 0 righe non basta: il trigger SQLite solleva un errore che fa rollback dell'intero batch. La ricevuta permette di distinguere un commit da un ACK perso.
+- `contract.mjs`: `D1Database.batch()` deve eseguire atomicamente una guardia che rifiuta revisione/consenso stantii. Un `UPDATE` su 0 righe non basta: il trigger SQLite solleva un errore che fa rollback dell'intero batch. La ricevuta conserva anche il `writer` sintetico oltre a revisione e consenso, così una collisione di `batchId` non può essere scambiata per la ricevuta di un'altra scrittura. **Limite:** in produzione l'identità della richiesta deve includere l'intero payload autenticato (o la sua impronta), non solo il percorso sintetico.
 - `probe-worker.mjs`: default deny (404), accesso soltanto con `CF00_PROBE_ENABLED=true` e secret lungo almeno 32 caratteri. La classe Durable Object esegue esclusivamente hashing di un input sintetico, usando parametri **documentati OWASP**: scrypt `N=2^14,r=8,p=5`, PBKDF2-HMAC-SHA256 `600000`. Il risultato espone soltanto durata **wall-clock**, parametri e lunghezza dell'output, **non il tempo CPU del provider** né l'hash.
-- `tests/cloudflare/cf00-feasibility.node.mjs`: adapter minimale Node SQLite, test di conflitto, rollback, consenso, ricevuta, default-deny e hashing senza output segreto. L'adapter **non simula** la rete D1, il comportamento del servizio Cloudflare, CAS multi-PoP o il budget CPU di Workers Free.
+- `tests/cloudflare/cf00-feasibility.node.mjs`: adapter minimale Node SQLite, test di conflitto serializzato, rollback, consenso, identità della ricevuta, default-deny e hashing senza output segreto. L'adapter Node usa operazioni SQLite sincrone: `Promise.allSettled` non rende le due scritture realmente contemporanee. L'adapter **non simula** la rete D1, il comportamento del servizio Cloudflare, CAS multi-PoP o il budget CPU di Workers Free.
 
 ## Esecuzione locale, senza Cloudflare
 
