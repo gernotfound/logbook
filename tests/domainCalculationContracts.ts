@@ -1,7 +1,7 @@
-import { Logic } from '../../../src/lib/logic';
+import { Logic } from '../src/lib/logic';
 
 /* =========================================================================
- * PURE CALCULATION & PAIN PERSISTENCE CONTRACT HELPERS (R1, R2, R6)
+ * SHARED PRODUCTION CALCULATION & PAIN PERSISTENCE CONTRACT HELPERS
  * ========================================================================= */
 
 export const getLatestUserWeightContract = Logic.getLatestUserWeight;
@@ -10,6 +10,6 @@ export const calculateSetVolumeContract = Logic.calculateSetVolume;
 export const calculateWorkoutVolumeContract = Logic.calculateWorkoutVolume;
 
 // Share the real calculator invoked by CustomFoodForm; never reimplement it in a test.
-export { calculateCustomFoodKcal as calculateRealtimeKcalContract } from '../../../src/lib/nutrition/calculateCustomFoodKcal';
+export { calculateCustomFoodKcal as calculateRealtimeKcalContract } from '../src/lib/nutrition/calculateCustomFoodKcal';
 
 export const mergeActivePainsContract = Logic.mergeActivePains;

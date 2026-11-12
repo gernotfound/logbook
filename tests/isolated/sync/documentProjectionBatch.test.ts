@@ -35,6 +35,15 @@ describe('batch monthly cloud projection', () => {
         ]);
         const original = state(localHistory, localNutrition);
         const snapshot = structuredClone(original);
+        // Count traversal of an untouched workout instead of wall-clock time.
+        // The previous per-month algorithm reread it for each incoming shard.
+        const untouched = original.history?.find(item => item.id === 'future-untouched');
+        if (!untouched) throw new Error('Missing untouched workout fixture');
+        let dateReads = 0;
+        Object.defineProperty(untouched, 'date', {
+            enumerable: true, configurable: true,
+            get() { dateReads += 1; return '2027-01-02'; },
+        });
         const docs = new Map<string, DocumentData>();
         const reversed = [...months].reverse();
         for (const month of reversed) {
@@ -44,6 +53,7 @@ describe('batch monthly cloud projection', () => {
         }
 
         const result = applyRemoteDocuments(original, docs, catalog);
+        expect(dateReads).toBeLessThan(months.length);
         expect((result.history ?? []).map(item => item.id)).toEqual([
             'future-untouched', 'past-untouched', ...reversed.map(month => `cloud-${month}`),
         ]);

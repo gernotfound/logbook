@@ -177,17 +177,22 @@ export async function acquireDeletionLease(uidValue: string, leaseOwner: string,
     }
     if (current.status === 'complete' || (current.status === 'failed' && current.retryable === false)) return false;
 
-    // Both deletion workers purge the same shards but have independent leases.
-    // Never start account deletion while the data-only erasure can still resume.
-    if (erasure.exists) {
-      const healthJob = erasure.data();
-      if (healthJob?.uid !== uid || (healthJob.status !== 'complete'
-          && !(healthJob.status === 'failed' && healthJob.retryable === false))) return false;
-    }
-
     const nowMs = Date.now();
     const currentLeaseUntil = timestampMillis(current.leaseUntil) ?? 0;
     if (currentLeaseUntil > nowMs && current.leaseOwner && current.leaseOwner !== leaseOwner) return false;
+
+    // Health-data erasure and account deletion touch the same shards and have
+    // independent leases. Defer a blocked candidate in the updatedAt-ordered
+    // recovery queue: otherwise 25 permanently busy jobs starve all newer jobs.
+    // Only scheduling metadata is updated; the lease, cursor and data remain unchanged.
+    if (erasure.exists) {
+      const healthJob = erasure.data();
+      if (healthJob?.uid !== uid || (healthJob.status !== 'complete'
+          && !(healthJob.status === 'failed' && healthJob.retryable === false))) {
+        transaction.update(ref, { updatedAt: Timestamp.now() });
+        return false;
+      }
+    }
 
     transaction.update(ref, {
       status: current.status === 'verifying' ? 'verifying' : 'deleting',

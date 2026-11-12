@@ -1,6 +1,6 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type { CachedGlobalCatalog, UserData } from '../../src/types';
-import { DomainParsers, UserDataSchema } from '../../src/lib/schema';
+import { DomainParsers, UserDataSchema, WorkoutSessionSchema } from '../../src/lib/schema';
 import { hasUserData } from '../../src/lib/merge';
 import { assertCloudBusinessPreserved, CloudDataIntegrityError } from '../../src/lib/sync/cloudBusinessIntegrity';
 import { projectDocuments, projectValidatedDomainDocuments, type DocumentProjectionScope } from '../../src/lib/sync/documentProjection';
@@ -167,7 +167,18 @@ describe('Zod single-pass parsing with preserved business invariants', () => {
             id: 'workout-1', date: '2026-11-11', exercises: [],
         }, { id: '', date: '2026-11-11' }, null, 'corrupted'];
         const original = structuredClone(raw);
-        const history = DomainParsers.parseHistory(raw);
+        const parseSpy = vi.spyOn(WorkoutSessionSchema, 'parse');
+        const history = (() => {
+            try {
+                const parsed = DomainParsers.parseHistory(raw);
+                // Only the first unique valid ID is parsed; duplicates and
+                // invalid IDs cannot introduce an additional Zod pass.
+                expect(parseSpy).toHaveBeenCalledTimes(1);
+                return parsed;
+            } finally {
+                parseSpy.mockRestore();
+            }
+        })();
         const state = UserDataSchema.parse({ history });
 
         expect(history).toHaveLength(1);
