@@ -12,7 +12,7 @@
 
 ## Scelta tecnica e limiti
 
-- Il build Vite continua a generare il frontend; Cloudflare pubblica `dist/` come asset statici senza invocazioni Worker per i file esistenti.
+- Il build Vite continua a generare il frontend; Cloudflare pubblica `dist/` come asset statici senza invocazioni Worker per i file esistenti. L'app naviga tramite root e parametro `/?tab=...`, non necessita di path `/training`. La modalità `404-page` è richiesta per impedire che chunk JS/CSS mancanti o path non supportati ricevano `index.html` con HTTP 200. Non riabilitare `single-page-application` senza introdurre un router che ne giustifichi l'uso e senza verificare 404 MIME-safe; le risposte 404 devono restare nella rete degli asset senza utilizzare la quota Worker.
 - L'unico namespace dinamico deliberato è `/__/auth/*`: un proxy HTTPS verso il dominio standard `logbook-db-98cc4.firebaseapp.com`. Non usa `thelogbook.web.app`, evita redirect 302 verso l'helper e serve il fallback Google su Safari. Il Worker rifiuta metodi non previsti, payload grandi e richieste a path estranei; non accetta host upstream controllati dal client e non registra informazioni personali.
 - `/__/auth/iframe` è incorporato dalla pagina: **non** usare `X-Frame-Options: DENY` o `frame-ancestors 'none'` sulle risposte proxy. Le risposte **statiche** continuano invece a usare la CSP e gli header dell'attuale `firebase.json`.
 - L'upstream Auth `firebaseapp.com` resta collegato ai servizi Firebase Hosting dello stesso progetto: la sua disponibilità in presenza di quota Hosting esaurita **non è confermata**. Prima del cutover serve verifica reale; il proxy non rende autonomi gli helper OAuth.
