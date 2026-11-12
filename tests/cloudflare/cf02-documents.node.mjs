@@ -160,6 +160,9 @@ void test('trusted identity, epoch, consent, origin, CSRF and strict schemas fai
   assert.equal((await call(db, 'commit', { ...item, uid: 'other-user' })).status, 400);
   assert.equal((await call(db, 'commit', { ...item, documents: [{ path: '', document: { ...envelope(), health: 'plaintext' } }] })).status, 400);
   assert.equal((await call(db, 'commit', { ...item, documents: [{ path: '../escape', document: envelope() }] })).status, 400);
+  const missingCausalDot = envelope();
+  delete missingCausalDot._sync.clock.s00;
+  assert.equal((await call(db, 'commit', { ...item, documents: [{ path: '', document: missingCausalDot }] })).status, 400);
   assert.equal((await call(db, 'commit', { ...item, documents: [{ path: '', document: envelope() }, { path: '', document: envelope() }] })).status, 400);
   db.sqlite.prepare("UPDATE sync_subjects SET status = 'withdrawn' WHERE uid = ?").run(owner);
   assert.equal((await call(db, 'read', { paths: [''] })).status, 403);
