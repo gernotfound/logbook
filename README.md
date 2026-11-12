@@ -8,7 +8,7 @@ Funziona anche **offline**: i dati vengono salvati sul dispositivo e possono ess
 
 Supporta backup, importazione ed esportazione dei dati.
 
-**Apri la PWA:** https://thelogbook.web.app/
+**Distribuzione PWA:** frontend temporaneamente non pubblicato durante la migrazione a Cloudflare. Il dominio previsto è `thelogbook.me`, ma il cutover non è ancora avvenuto: non utilizzare il precedente `thelogbook.web.app`. [Stato e blocchi della migrazione](https://github.com/gernotfound/logbook/issues/1041).
 
 **Documentazione:** [Indice completo](docs/README.md) · [AGENTS.md, punto di ingresso per agenti](AGENTS.md). La mappa in AGENTS indica quali contratti specialistici aprire per ogni task.
 
