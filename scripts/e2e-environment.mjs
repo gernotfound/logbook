@@ -6,7 +6,7 @@ export function createIsolatedE2eEnvironment(source) {
   for (const [key, value] of Object.entries(source)) {
     if (/^(VITE_|FIREBASE_ADMIN_|LOGBOOK_E2E_)/.test(key)) continue;
     if ([
-      'FIREBASE_HOSTING_DEPLOY', 'CRON_SECRET', 'PUBLIC_APP_ORIGIN',
+      'FIREBASE_HOSTING_DEPLOY', 'CRON_SECRET', 'PUBLIC_APP_ORIGIN', 'PUBLIC_CANDIDATE_APP_ORIGIN',
       'GOOGLE_APPLICATION_CREDENTIALS', 'FIREBASE_CONFIG', 'GCLOUD_PROJECT',
       'GOOGLE_CLOUD_PROJECT', 'LOGBOOK_TEST_URL',
     ].includes(key)) continue;
