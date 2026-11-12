@@ -58,3 +58,17 @@ void test('POST size is bounded and only reviewed headers reach upstream', async
     assert.equal((await handler.fetch(req('/__/auth/handler', { method: 'POST', body: 'x'.repeat(70000) }))).status, 413);
   });
 });
+
+void test('upstream Firebase quota or Hosting failures remain failures and are never cached as successful helpers', async () => {
+  for (const status of [429, 509]) {
+    await mockedFetch(async () => new Response('upstream unavailable', {
+      status,
+      headers: { 'Content-Type': 'text/plain', 'Cache-Control': 'public, max-age=600' },
+    }), async () => {
+      const response = await handler.fetch(req('/__/auth/iframe'));
+      assert.equal(response.status, status);
+      assert.equal(response.headers.get('Cache-Control'), 'no-store');
+      assert.equal(await response.text(), 'upstream unavailable');
+    });
+  }
+});
