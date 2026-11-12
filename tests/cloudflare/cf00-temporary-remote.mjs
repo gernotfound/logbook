@@ -92,7 +92,7 @@ function safeRemoteD1Response(response, label) {
   assert.equal(response.status, 200, label + ' HTTP ' + response.status);
 }
 
-async function callD1(d1Origin, headers, path, payload = {}) {
+async function callD1(origin, headers, path, payload = {}) {
   return fetch(new URL(path, origin), {
     method: 'POST', headers: { ...headers, 'content-type': 'application/json' },
     body: JSON.stringify(payload), signal: AbortSignal.timeout(12000),
