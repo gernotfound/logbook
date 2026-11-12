@@ -1,8 +1,8 @@
 // D1 transport adapter: SQL has no access to the account data key or business plaintext.
 // All queries bind values; writes require a trigger-guarded atomic D1 batch.
-export async function readSnapshot(db, uid, consentRevision, paths) {
+export async function readSnapshot(db, uid, consentRevision, fenceEpoch, paths) {
   const statements = [
-    db.prepare("SELECT s.revision, a.fence_epoch FROM sync_subjects a JOIN sync_state s ON s.uid = a.uid WHERE a.uid = ? AND a.status = 'active' AND a.consent_revision = ?").bind(uid, consentRevision),
+    db.prepare("SELECT s.revision, a.fence_epoch FROM sync_subjects a JOIN sync_state s ON s.uid = a.uid WHERE a.uid = ? AND a.status = 'active' AND a.consent_revision = ? AND a.fence_epoch = ?").bind(uid, consentRevision, fenceEpoch),
     ...paths.map(path => db.prepare("SELECT envelope_json, revision FROM sync_documents WHERE uid = ? AND path = ?").bind(uid, path)),
   ];
   const rows = await db.batch(statements);
@@ -15,9 +15,9 @@ export async function readSnapshot(db, uid, consentRevision, paths) {
   return { revision: control.revision, fenceEpoch: control.fence_epoch, documents };
 }
 
-export async function readReceipt(db, uid, consentRevision, batchId) {
-  return db.prepare("SELECT r.request_hash, r.committed_revision, r.last_seq FROM sync_receipts r JOIN sync_subjects a ON a.uid = r.uid WHERE r.uid = ? AND r.batch_id = ? AND a.status = 'active' AND a.consent_revision = ?")
-    .bind(uid, batchId, consentRevision).first();
+export async function readReceipt(db, uid, consentRevision, fenceEpoch, batchId) {
+  return db.prepare("SELECT r.request_hash, r.committed_revision, r.last_seq FROM sync_receipts r JOIN sync_subjects a ON a.uid = r.uid WHERE r.uid = ? AND r.batch_id = ? AND a.status = 'active' AND a.consent_revision = ? AND a.fence_epoch = ?")
+    .bind(uid, batchId, consentRevision, fenceEpoch).first();
 }
 
 export async function readAccessState(db, uid) {
@@ -25,15 +25,15 @@ export async function readAccessState(db, uid) {
     .bind(uid).first();
 }
 
-export async function commitEncryptedBatch(db, uid, attempt, hash) {
+export async function commitEncryptedBatch(db, uid, fenceEpoch, attempt, hash) {
   const { batchId, expectedRevision, consentRevision, replica, lastSeq, documents } = attempt;
   const nextRevision = expectedRevision + 1;
   // A silent no-op UPDATE is NOT a CAS primitive. The trigger on this first
   // INSERT aborts the D1 transaction when ownership, consent, lease or revision
   // changed; D1 batch rolls back all later statements on any failure.
   const statements = [
-    db.prepare("INSERT INTO sync_receipts (uid, batch_id, request_hash, expected_revision, committed_revision, consent_revision, slot, replica_id, generation, last_seq, document_count) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
-      .bind(uid, batchId, hash, expectedRevision, nextRevision, consentRevision,
+    db.prepare("INSERT INTO sync_receipts (uid, batch_id, request_hash, expected_revision, committed_revision, consent_revision, fence_epoch, slot, replica_id, generation, last_seq, document_count) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+      .bind(uid, batchId, hash, expectedRevision, nextRevision, consentRevision, fenceEpoch,
         replica.slot, replica.replicaId, replica.generation, lastSeq, documents.length),
     ...documents.map(({ path, document }) =>
       db.prepare("INSERT INTO sync_documents (uid, path, envelope_json, revision) VALUES (?, ?, ?, ?) ON CONFLICT(uid, path) DO UPDATE SET envelope_json = excluded.envelope_json, revision = excluded.revision")
