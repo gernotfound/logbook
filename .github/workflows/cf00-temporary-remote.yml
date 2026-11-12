@@ -1,4 +1,4 @@
-name: CF-00 Temporary Remote KDF Feasibility
+name: CF-00 Temporary Remote KDF and D1 Feasibility
 
 on:
   pull_request:
@@ -17,7 +17,7 @@ concurrency:
 
 jobs:
   remote-kdf:
-    name: Temporary Cloudflare account (KDF only, no Production credentials)
+    name: Temporary Cloudflare account (KDF and D1, no Production credentials)
     if: github.event.pull_request.head.repo.full_name == github.repository && startsWith(github.head_ref, 'CF-00-cloudflare-temporary-')
     runs-on: ubuntu-24.04
     timeout-minutes: 10
@@ -41,7 +41,7 @@ jobs:
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
           node-version: '24'
-      - name: Exercise ephemeral Cloudflare Worker and Durable Object
+      - name: Exercise ephemeral Cloudflare Worker, Durable Object, and EU D1
         env:
           CI: 'true'
           WRANGLER_SEND_METRICS: 'false'
