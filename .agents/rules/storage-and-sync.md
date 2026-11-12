@@ -40,6 +40,15 @@ L'app utilizza quattro livelli di storage con ruoli distinti:
 
 **MUST:** la cache locale del client Firestore resta **memory-only**. La durabilità offline dei dati utente appartiene all'envelope IndexedDB owner-scoped di TheLogBook; non introdurre `persistentLocalCache()` come seconda copia persistente non gestita dal lifecycle di logout/cancellazione account.
 
+## Cloudflare D1 — candidato di trasporto, non runtime corrente (CF-01/02/04)
+
+Lo sviluppo isolato [PR #1070](https://github.com/gernotfound/logbook/pull/1070) contiene una migration D1 versionata e un Worker in `cloudflare/api/`, il trasporto `src/lib/sync/cloudReplicaTransport.ts` e il verificatore `cloudReplicaCheckpoint.ts`. **Il percorso attivo rimane Firestore e non va commutato per il solo fatto che questi file siano presenti.**
+
+- **MUST per l'integrazione futura:** mantenere esattamente la separazione memoria → journal IndexedDB durevole → commit D1/receipt → ACK IndexedDB; timeout o 409 non cancellano pending. La receipt di un batch deve includere il digest degli stessi byte ciphertext, replica, consenso, sequenza e revisione che il client verifica.
+- **MUST:** una scansione account completa include root e tutti i mesi con paginazione bounded e revisione/fence uguale a ogni pagina. Un cambio concorrente causa restart/fail-closed, mai hydration parziale. Ogni envelope deve essere aperto con ADK/UID/path e autenticato **prima** che uno snapshot sia considerato idoneo al merge; la sola `_sync` pubblica non basta.
+- **MUST:** snapshot iniziale, checkpoint e server CAS rispettano owner/session epoch, consenso, slot/generation/lease, causal metadata, size limit e max 8 documenti per write. D1 `batch()`/trigger deve abortire le scritture concorrenti senza no-op; non spostare il semantic merge (che richiede ADK) dentro il Worker.
+- **Stato tecnico non dimostrato:** Auth Cloudflare privata, provisioning repliche, sync-control completo, stable frontier/GC, merge client→D1 e ADK trusted non sono ancora integrati. I test SQLite simulati e la CI non provano D1 remoto, CPU Free, quote, backup o Production; i requisiti di CF-00/03/04/05/06/08/09 restano aperti.
+
 ## Browser storage boundary
 
 `src/lib/sync/browserStorage.ts` centralizza gli errori di accesso allo storage dei boundary applicativi:
