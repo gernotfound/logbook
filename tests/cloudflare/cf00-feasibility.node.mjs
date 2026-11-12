@@ -91,6 +91,32 @@ void test('duplicate batch cannot produce a second commit; receipt permits lost-
   });
 }));
 
+void test('SQLite adapter does not claim D1 provider metering', () => withDb(async (db) => {
+  const secret = 'q'.repeat(48);
+  const env = { DB: db, CF00_PROBE_ENABLED: 'true', CF00_PROBE_SECRET: secret };
+  const headers = { 'x-cf00-secret': secret };
+  const init = await worker.fetch(new Request('https://cf00.invalid/__cf00/init', { method: 'POST', headers }), env);
+  assert.equal(init.status, 200);
+  const response = await worker.fetch(new Request('https://cf00.invalid/__cf00/write', {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(attempt('writer-a', 'batch000000000004-a')),
+  }), env);
+  assert.equal(response.status, 200);
+  const payload = await response.json();
+  assert.equal(payload.queryMetrics, null);
+  const plan = await worker.fetch(new Request('https://cf00.invalid/__cf00/plan', {
+    method: 'POST', headers,
+  }), env);
+  assert.equal(plan.status, 200);
+  const evidence = await plan.json();
+  assert.deepEqual(evidence.plans.map(item => item.name), ['control', 'receipt', 'document']);
+  for (const item of evidence.plans) {
+    assert.ok(item.detail.some(text => /USING (?:COVERING )?INDEX/.test(text)));
+    assert.equal(item.queryMetrics, null);
+  }
+}));
+
 void test('probe defaults to unavailable and requires a secret even when enabled', async () => {
   const url = 'https://cf00.invalid/__cf00/init';
   const missing = await worker.fetch(new Request(url, { method: 'POST' }), {});

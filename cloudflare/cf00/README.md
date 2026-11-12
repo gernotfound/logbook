@@ -6,6 +6,7 @@ Questo codice è un **prototipo di fattibilità**, non il backend di TheLogBook.
 
 - `contract.mjs`: `D1Database.batch()` deve eseguire atomicamente una guardia che rifiuta revisione/consenso stantii. Un `UPDATE` su 0 righe non basta: il trigger SQLite solleva un errore che fa rollback dell'intero batch. La ricevuta conserva anche il `writer` sintetico oltre a revisione e consenso, così il chiamante può identificare una collisione di `batchId` confrontando i campi della ricevuta con la propria richiesta. **Limite:** in produzione l'identità della richiesta deve includere l'intero payload autenticato (o la sua impronta), non solo il percorso sintetico.
 - `probe-worker.mjs`: default deny (404), accesso soltanto con `CF00_PROBE_ENABLED=true` e secret lungo almeno 32 caratteri. La classe Durable Object esegue esclusivamente hashing di un input sintetico, usando parametri **documentati OWASP**: scrypt `N=2^14,r=8,p=5`, PBKDF2-HMAC-SHA256 `600000`. Il risultato espone soltanto durata **wall-clock**, parametri e lunghezza dell'output, **non il tempo CPU del provider** né l'hash.
+- La route protetta `/__cf00/write` riporta `queryMetrics` soltanto se `D1Database.batch()` fornisce metadati di righe lette/scritte e dimensione DB; se il runtime non li fornisce, restituisce `null` (mai contatori inventati). `/__cf00/plan` verifica il piano di tre query prefissate con `EXPLAIN QUERY PLAN`, senza SQL passato dall'esterno. Le misure di workerd locale NON sono quelle del provider remoto, e non misurano CPU di Workers.
 - `tests/cloudflare/cf00-feasibility.node.mjs`: adapter minimale Node SQLite, test di conflitto serializzato, rollback, consenso, identità della ricevuta, default-deny e hashing senza output segreto. L'adapter Node usa operazioni SQLite sincrone: `Promise.allSettled` non rende le due scritture realmente contemporanee. L'adapter **non simula** la rete D1, il comportamento del servizio Cloudflare, CAS multi-PoP o il budget CPU di Workers Free.
 
 ## Esecuzione locale, senza Cloudflare
@@ -19,7 +20,7 @@ npx wrangler@4.159.0 dev -c cloudflare/cf00/wrangler.local.jsonc --local
 
 Per abilitare le route del Worker durante un test HTTP locale, creare un file non versionato `cloudflare/cf00/.dev.vars` contenente `CF00_PROBE_ENABLED=true` e `CF00_PROBE_SECRET=<segreto casuale di almeno 32 caratteri>`. Generarlo localmente, non inserirlo in Git, chat, issue o log. Lo script è inutilizzabile senza entrambe le condizioni.
 
-Dopo l'avvio si possono inviare richieste POST, con header `x-cf00-secret`, agli endpoint `/__cf00/init`, `/__cf00/write`, `/__cf00/state`, `/__cf00/receipt` e `/__cf00/password?algorithm=scrypt|pbkdf2`. `/__cf00/init` azzera **solo** le righe del proprietario sintetico nelle tabelle `cf00_*`.
+Dopo l'avvio si possono inviare richieste POST, con header `x-cf00-secret`, agli endpoint `/__cf00/init`, `/__cf00/write`, `/__cf00/state`, `/__cf00/receipt`, `/__cf00/plan` e `/__cf00/password?algorithm=scrypt|pbkdf2`. `/__cf00/init` azzera **solo** le righe del proprietario sintetico nelle tabelle `cf00_*`.
 
 ## Cosa manca prima di dichiarare CF-00 validata
 

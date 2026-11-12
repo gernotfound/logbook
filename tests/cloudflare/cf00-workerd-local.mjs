@@ -52,6 +52,23 @@ try {
     batch('writer-b', 'batch000000000001-b', 0),
   ]);
   assert.deepEqual([first.status, second.status].sort(), [200, 409]);
+  const committed = await (first.status === 200 ? first : second).json();
+  assert.equal(committed.queryMetrics?.statements, 3);
+  assert.ok(Number.isSafeInteger(committed.queryMetrics.rowsRead));
+  assert.ok(Number.isSafeInteger(committed.queryMetrics.rowsWritten));
+  assert.ok(committed.queryMetrics.rowsRead >= 0);
+  assert.ok(committed.queryMetrics.rowsWritten > 0);
+  assert.ok(committed.queryMetrics.sizeAfterBytes > 0);
+  console.log('CF00 simulated D1 write rows: read=' + committed.queryMetrics.rowsRead
+    + ' written=' + committed.queryMetrics.rowsWritten + ' (NOT remote D1)');
+  const planResponse = await request('/__cf00/plan');
+  assert.equal(planResponse.status, 200);
+  const plan = await planResponse.json();
+  assert.deepEqual(plan.plans.map(item => item.name), ['control', 'receipt', 'document']);
+  for (const item of plan.plans) {
+    assert.ok(item.detail.some(text => /USING (?:COVERING )?INDEX/.test(text)),
+      item.name + ' must search the PK index');
+  }
   const stateResponse = await request('/__cf00/state');
   assert.equal(stateResponse.status, 200);
   const state = await stateResponse.json();
