@@ -69,7 +69,7 @@ export async function commitEncryptedBatch(db, uid, fenceEpoch, attempt, hash) {
     ...documents.map(({ path, document }) =>
       db.prepare("INSERT INTO sync_documents (uid, path, envelope_json, revision) VALUES (?, ?, ?, ?) ON CONFLICT(uid, path) DO UPDATE SET envelope_json = excluded.envelope_json, revision = excluded.revision")
         .bind(uid, path, JSON.stringify(document), nextRevision)),
-    db.prepare("UPDATE sync_replicas SET last_seq = ? WHERE uid = ? AND slot = ? AND replica_id = ? AND generation = ? AND last_seq < ?")
+    db.prepare("UPDATE sync_replicas SET last_seq = ? WHERE uid = ? AND slot = ? AND replica_id = ? AND generation = ? AND last_seq <= ?")
       .bind(lastSeq, uid, replica.slot, replica.replicaId, replica.generation, lastSeq),
     db.prepare("UPDATE sync_state SET revision = ? WHERE uid = ? AND revision = ?")
       .bind(nextRevision, uid, expectedRevision),
