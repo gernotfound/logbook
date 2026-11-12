@@ -93,10 +93,23 @@ function safeRemoteD1Response(response, label) {
 }
 
 async function callD1(origin, headers, path, payload = {}) {
-  return fetch(new URL(path, origin), {
-    method: 'POST', headers: { ...headers, 'content-type': 'application/json' },
-    body: JSON.stringify(payload), signal: AbortSignal.timeout(12000),
-  });
+  const safeRead = ['/__cf00/health', '/__cf00/state', '/__cf00/receipt', '/__cf00/plan'].includes(path);
+  for (let attempt = 0; attempt < (safeRead ? 4 : 1); attempt += 1) {
+    let response;
+    try {
+      response = await fetch(new URL(path, origin), {
+        method: 'POST', headers: { ...headers, 'content-type': 'application/json' },
+        body: JSON.stringify(payload), signal: AbortSignal.timeout(12000),
+      });
+    } catch (error) {
+      if (!safeRead || attempt === 3) throw error;
+      await sleep(200 * (attempt + 1));
+      continue;
+    }
+    if (!safeRead || ![502, 503, 504].includes(response.status) || attempt === 3) return response;
+    await sleep(200 * (attempt + 1));
+  }
+  throw new Error('Read-only D1 retry budget exhausted');
 }
 
 async function exerciseD1(origin, headers, environment) {
