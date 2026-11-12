@@ -6,6 +6,6 @@ rmSync(outputDirectory, { recursive: true, force: true });
 mkdirSync(outputDirectory, { recursive: true });
 writeFileSync(
   `${outputDirectory}/backend-only.txt`,
-  'TheLogBook frontend is served by Firebase Hosting. This Vercel deployment contains only trusted backend functions, cron and legacy-origin routing.\n',
+  'TheLogBook frontend is migrating to Cloudflare. This Vercel deployment contains trusted backend functions and cron only; it does not serve the PWA.\n',
   'utf8',
 );
