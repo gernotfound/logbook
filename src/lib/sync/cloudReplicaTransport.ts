@@ -9,6 +9,7 @@ import type { ReplicaIdentity } from './replicaProtocol';
 export interface CloudReplicaBatch {
     batchId: string;
     expectedRevision: number;
+    expectedFenceEpoch: number;
     consentRevision: number;
     replica: Pick<ReplicaIdentity, 'slot' | 'replicaId' | 'generation'>;
     lastSeq: number;
