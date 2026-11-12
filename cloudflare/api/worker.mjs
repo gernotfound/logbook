@@ -152,8 +152,7 @@ async function handler(request, env) {
   const route = url.pathname;
   const validRoutes = new Set(['/v1/sync/read', '/v1/sync/commit', '/v1/sync/receipt']);
   if (!validRoutes.has(route)) return reply({ error: 'not-found' }, 404);
-  if ((route === '/v1/sync/receipt' && request.method !== 'GET')
-    || (route !== '/v1/sync/receipt' && request.method !== 'POST')) {
+  if (request.method !== 'POST') {
     return reply({ error: 'method-not-allowed' }, 405);
   }
   // Same-origin requests only; do not enable wildcard CORS or permissive previews.
@@ -170,12 +169,13 @@ async function handler(request, env) {
   const consentRevision = claims.healthConsentRevision;
   const fenceEpoch = claims.fenceEpoch;
   if (route === '/v1/sync/receipt') {
-    const batchId = id.safeParse(url.searchParams.get('batchId'));
+    const body = await jsonBounded(request);
+    const batchId = z.strictObject({ batchId: id }).safeParse(body);
     if (!batchId.success) throw new BadInput('invalid-input', 400);
     const state = await readAccessState(env.DB, uid);
     if (state?.status !== 'active' || state?.consent_revision !== consentRevision
       || state?.revision === undefined) throw new BadInput('access-revoked', 403);
-    const receipt = await readReceipt(env.DB, uid, consentRevision, fenceEpoch, batchId.data);
+    const receipt = await readReceipt(env.DB, uid, consentRevision, fenceEpoch, batchId.data.batchId);
     return reply({ receipt: receipt ? { revision: receipt.committed_revision, lastSeq: receipt.last_seq } : null });
   }
   const raw = await jsonBounded(request);
