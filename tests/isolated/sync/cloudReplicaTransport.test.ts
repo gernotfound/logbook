@@ -2,6 +2,8 @@ import { describe, expect, it, vi } from 'vitest';
 import { CloudReplicaTransportError, createCloudflareReplicaTransport } from '../../../src/lib/sync/cloudReplicaTransport';
 
 describe('isolated Cloudflare document transport', () => {
+    const batch = { batchId: 'batch000000000001', expectedRevision: 0, consentRevision: 1,
+        replica: { slot: 's00', replicaId: 'replica-test', generation: 1 }, lastSeq: 1, documents: [] };
     it('uses same-origin credentialed requests and never acknowledges unverified ciphertext', async () => {
         const fetcher = vi.fn(async (_url: RequestInfo | URL, _init?: RequestInit) => new Response(JSON.stringify({
             revision: 7,
@@ -20,15 +22,15 @@ describe('isolated Cloudflare document transport', () => {
         const conflict = createCloudflareReplicaTransport(vi.fn(async () => new Response(
             JSON.stringify({ error: 'replica-fenced-or-conflict' }), { status: 409 },
         )) as typeof fetch);
-        await expect(conflict.receipt('batch000000000001')).rejects.toMatchObject({ status: 409 });
+        await expect(conflict.receipt(batch)).rejects.toMatchObject({ status: 409 });
         const timedOut = createCloudflareReplicaTransport(vi.fn(async () => {
             throw new TypeError('network unavailable');
         }) as typeof fetch);
-        await expect(timedOut.receipt('batch000000000001')).rejects.toBeInstanceOf(CloudReplicaTransportError);
+        await expect(timedOut.receipt(batch)).rejects.toBeInstanceOf(CloudReplicaTransportError);
         const malformed = createCloudflareReplicaTransport(vi.fn(async () => new Response(
             JSON.stringify({ receipt: { revision: '1', lastSeq: 1 } }),
         )) as typeof fetch);
-        await expect(malformed.receipt('batch000000000001')).rejects.toBeInstanceOf(CloudReplicaTransportError);
+        await expect(malformed.receipt(batch)).rejects.toBeInstanceOf(CloudReplicaTransportError);
     });
 
     it('requires a session-bound CSRF value before any encrypted commit', async () => {
