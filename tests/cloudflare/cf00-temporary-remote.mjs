@@ -265,6 +265,18 @@ try {
   }
   console.log('External round-trip includes network overhead; neither measurement is provider CPU time.');
   assert.deepEqual(failures, [], 'All unanticipated KDF failures must be resolved');
+  const credentialResponse = await requestWithBoundedRetries(
+    new URL('/__cf00/password?algorithm=scrypt-lifecycle', origin), headers);
+  const credential = await credentialResponse.json();
+  assert.deepEqual(credential, {
+    algorithm: 'scrypt', N: 16384, r: 8, p: 5, saltBytes: 16, outputBits: 256,
+    matchingPasswordAccepted: true,
+    wrongPasswordRejected: true,
+    tamperedDigestRejected: true,
+    malformedCredentialRejected: true,
+    freshSaltPerCredential: true,
+  });
+  console.log('CF00 temporary REMOTE Durable Object: serialized salted credential + right/wrong/tampered/malformed checks PASS');
   await exerciseD1(origin, headers, environment);
   console.log('Temporary account was not claimed; its resources expire automatically.');
 } finally {

@@ -50,6 +50,43 @@ async function measureScrypt() {
   return { algorithm: 'scrypt', N: 16384, r: 8, p: 5, wallMs: elapsed, outputBits: bytes.byteLength * 8 };
 }
 
+
+// This fixture deliberately accepts no password from an HTTP request. It is a
+// compatibility test for the full credential format, not an auth service.
+function createSyntheticCredential() {
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  const digest = scryptSync(syntheticPassword, salt, 32, {
+    N: 16384, r: 8, p: 5, maxmem: 64 * 1024 * 1024,
+  });
+  return `scrypt-v1:${Buffer.from(salt).toString('hex')}:${digest.toString('hex')}`;
+}
+
+function verifySyntheticCredential(candidate, record) {
+  if (typeof record !== 'string' || !/^scrypt-v1:[a-f0-9]{32}:[a-f0-9]{64}$/.test(record)) return false;
+  const [, saltHex, digestHex] = record.split(':');
+  const expected = Buffer.from(digestHex, 'hex');
+  const actual = scryptSync(candidate, Buffer.from(saltHex, 'hex'), expected.length, {
+    N: 16384, r: 8, p: 5, maxmem: 64 * 1024 * 1024,
+  });
+  return timingSafeEqual(actual, expected);
+}
+
+async function probeSyntheticCredential() {
+  const stored = createSyntheticCredential();
+  const tampered = stored.slice(0, -1) + (stored.endsWith('0') ? '1' : '0');
+  const outcomes = {
+    algorithm: 'scrypt',
+    N: 16384, r: 8, p: 5, saltBytes: 16, outputBits: 256,
+    matchingPasswordAccepted: verifySyntheticCredential(syntheticPassword, stored),
+    wrongPasswordRejected: !verifySyntheticCredential(syntheticPassword + '-wrong', stored),
+    tamperedDigestRejected: !verifySyntheticCredential(syntheticPassword, tampered),
+    malformedCredentialRejected: !verifySyntheticCredential(syntheticPassword, stored + ':extra'),
+    freshSaltPerCredential: stored !== createSyntheticCredential(),
+  };
+  // No salts, password material, derived keys, or credential records leave the Durable Object.
+  return outcomes;
+}
+
 export class PasswordProbe {
   async fetch(request) {
     // Public requests can reach this class only through the guarded entry Worker.
@@ -57,6 +94,7 @@ export class PasswordProbe {
     const kind = new URL(request.url).searchParams.get('algorithm');
     try {
       if (kind === 'scrypt') return json(await measureScrypt());
+      if (kind === 'scrypt-lifecycle') return json(await probeSyntheticCredential());
       if (kind === 'pbkdf2') return json(await measurePbKdf2());
     } catch (error) {
       // Only expose a bounded error class: a synthetic probe must not leak runtime details.

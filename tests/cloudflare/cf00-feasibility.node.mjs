@@ -122,6 +122,24 @@ void test('SQLite adapter does not claim D1 provider metering', () => withDb(asy
   }
 }));
 
+void test('synthetic password credential round-trip rejects wrong, altered and malformed records', async () => {
+  const probe = new PasswordProbe();
+  const response = await probe.fetch(new Request('https://cf00.invalid/?algorithm=scrypt-lifecycle', {
+    method: 'POST',
+  }));
+  assert.equal(response.status, 200);
+  const result = await response.json();
+  assert.deepEqual(result, {
+    algorithm: 'scrypt', N: 16384, r: 8, p: 5, saltBytes: 16, outputBits: 256,
+    matchingPasswordAccepted: true,
+    wrongPasswordRejected: true,
+    tamperedDigestRejected: true,
+    malformedCredentialRejected: true,
+    freshSaltPerCredential: true,
+  });
+  for (const key of ['hash', 'salt', 'stored', 'password', 'credential']) assert.ok(!(key in result));
+});
+
 void test('probe defaults to unavailable and requires a secret even when enabled', async () => {
   const url = 'https://cf00.invalid/__cf00/init';
   const missing = await worker.fetch(new Request(url, { method: 'POST' }), {});

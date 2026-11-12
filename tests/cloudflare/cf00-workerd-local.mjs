@@ -95,6 +95,16 @@ try {
     assert.ok(!('hash' in result));
     console.log(`CF00 ${algorithm}: wall_ms=${result.wallMs.toFixed(1)} (NOT provider CPU)`);
   }
+  const lifecycle = await request('/__cf00/password?algorithm=scrypt-lifecycle');
+  assert.equal(lifecycle.status, 200);
+  const credential = await lifecycle.json();
+  for (const key of ['matchingPasswordAccepted', 'wrongPasswordRejected',
+    'tamperedDigestRejected', 'malformedCredentialRejected', 'freshSaltPerCredential']) {
+    assert.equal(credential[key], true, key + ' must hold');
+  }
+  assert.equal(credential.outputBits, 256);
+  assert.ok(!('hash' in credential) && !('salt' in credential) && !('credential' in credential));
+  console.log('CF00 workerd local credential hash + verify + tamper rejection: PASS (synthetic)');
   console.log('CF00 workerd local D1/DO smoke: PASS (simulated bindings, no remote quota claims)');
 } catch (error) {
   console.error(logs.replaceAll(secret, '[REDACTED]').slice(-3000));
