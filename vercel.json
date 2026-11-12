@@ -41,13 +41,6 @@
       "schedule": "0 3 * * *"
     }
   ],
-  "redirects": [
-    {
-      "source": "/",
-      "destination": "https://thelogbook.web.app/",
-      "statusCode": 301
-    }
-  ],
   "fluid": true,
   "framework": null,
   "ignoreCommand": "node scripts/vercel-ignore-build.mjs",
