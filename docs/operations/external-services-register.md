@@ -26,6 +26,8 @@ I contratti correnti sono governati da [AGENTS](../../AGENTS.md): [Cifratura](..
 | Firebase Storage | NON USATO DAL RUNTIME | modulo Storage e relativa env client ritirati dal contratto | codice |
 | Firebase Cloud Messaging | NON USATO DAL RUNTIME | modulo Messaging e relativa env client ritirati dal contratto | codice |
 | Firebase Hosting | ACTIVE | frontend/PWA Production su `thelogbook.web.app`, deploy exact-SHA da GitHub Actions | Firebase Hosting + workflow Production |
+| Cloudflare Workers Static Assets | EXTERNAL-ONLY / VERIFY-LIVE | candidato frontend/PWA preparato in `main`, non ancora distribuito | issue #1041 + runbook Cloudflare + dashboard |
+| IONOS — `thelogbook.me` | EXTERNAL-ONLY / VERIFY-LIVE | registrar del dominio acquistato secondo conferma del proprietario, DNS/NS e rinnovo da verificare | pannello IONOS + verifica DNS |
 | Firebase/Vercel Test separati | DISMESSI (2026-10-18) | Progetti `thelogbook-test` e `thelogbook-test-backend` eliminati; nessun cloud di test separato attivo | Firebase CLI, inventario Vercel, PR #431 |
 | Firebase Admin | ACTIVE | lifecycle account, consenso/diritti, custodia ADK e manutenzione trusted | Vercel env + Vercel Functions |
 | Firebase App Check + reCAPTCHA Enterprise / Google Cloud Fraud Defense | ACTIVE | attestazione anti-abuse prima dell'accesso cloud | Firebase App Check + Google Cloud |
@@ -41,6 +43,26 @@ I contratti correnti sono governati da [AGENTS](../../AGENTS.md): [Cifratura](..
 Su richiesta del product owner il progetto Firebase/GCP `thelogbook-test` e il progetto Vercel `thelogbook-test-backend` sono stati eliminati. Le verifiche successive hanno rilevato **assenza** del primo nell'inventario Firebase CLI e **zero corrispondenze** del secondo nell'elenco progetti Vercel; Firebase Hosting Test era stato disabilitato (HTTP 404). La [PR #431](https://github.com/gernotfound/logbook/pull/431) è chiusa senza merge e il branch remoto/locale dedicato è stato rimosso. Il codice/configurazione Test di quella PR non è stato portato su `main`.
 
 Sono preservati Firebase Production `logbook-db-98cc4`, Vercel Production `logbook`, i relativi origin e i workflow GitHub Actions. Non si deve ricreare automaticamente un cloud Test né usare Production per stress test, simulazioni distruttive o modifiche a dati reali. Restano disponibili fixture sintetiche, Firebase Emulator, Vitest, Playwright locale e gate canonico; per prove live non distruttive seguire [Collaudi E2E](e2e-reliability.md). La rimozione dei progetti non prova da sola la pulizia di eventuali allowlist/configurazioni esterne di terze parti: verificarle prima di affermarla.
+
+## Migrazione Cloudflare e dominio IONOS — onboarding pre-cutover (12/11/2026)
+
+Questo checkpoint aggiorna le decisioni del proprietario senza trasformarle in prove di configurazione live. La migrazione frontend resta governata dalla [checklist #1041](https://github.com/gernotfound/logbook/issues/1041) e dal [runbook Cloudflare](cloudflare-workers-migration.md).
+
+| Aspetto | Stato e fonte | Prossima verifica |
+|---|---|---|
+| Dominio pubblico desiderato | `thelogbook.me`, **acquisto presso IONOS confermato dal proprietario** il 12/11/2026; nessun trasferimento del registrar richiesto | Disponibilità in IONOS, rinnovo, registrar lock, NS e DNSSEC |
+| Cloudflare account | Schermata Workers & Pages: account presente, senza progetti; sottodominio `califano-ger.workers.dev` assegnato | Verifica ownership zona, piano, 2FA recovery, membri/permessi |
+| Sicurezza account | **2FA Cloudflare attivata secondo dichiarazione del proprietario**; non è un riscontro di console | Fattori di recupero, token di deploy con privilegio minimo |
+| Candidato applicazione | Worker `thelogbook-frontend` predisposto nel codice PR #1039 già integrato in main; nessun HTTP/deploy Cloudflare certificato | Workflow GitHub manuale su SHA main corrente, autenticazione, App Check, statici |
+| Dominio Custom Worker | Canonico desiderato `thelogbook.me`; `www` da redirigere solo dopo collaudo | DNS records, HTTPS e SSL Cloudflare, OAuth, WAF e anti-bypass |
+| Firebase Hosting | Ancora configurato come frontend di distribuzione e workflow CI automatico in `main`; ultimo smoke Hosting fallito con HTTP 509 nel run #43184505621 | Provider live; piano di arresto che non interrompa gli helper Auth senza consapevolezza |
+| Autorizzazione disattivazione | **Concessa espressamente dal proprietario il 12/11/2026**, anche senza necessità di mantenere disponibile il frontend in sviluppo; **non eseguita né verificata** | Decidere tecnicamente quando bloccare la pipeline Hosting e assicurare helper Auth indipendenti o downtime esplicito. Non elimina Firebase Auth/Firestore/App Check |
+| Autorizzazione cutover dominio | **Non ancora concessa come gate G01**: preparazione zona DNS e candidatura isolata non costituiscono passaggio pubblico | Test e report GO/NO-GO |
+| Utenti della PWA | Proprietario dichiara che il prodotto non è pubblicato e non ha utenti che richiedano una migrazione legacy | Nessuna conversione speculativa di storage/account pre-lancio; preservare dati realmente creati nella baseline supportata |
+
+**Regole di sicurezza:** non scrivere ID account Cloudflare, password, API token, credenziali OAuth, segreti Firebase/Vercel o record DNS privati nel repository pubblico. `CLOUDFLARE_ACCOUNT_ID` va solo nelle GitHub Variables, `CLOUDFLARE_API_TOKEN` nei GitHub Secrets. Il nome host `workers.dev` è un riferimento tecnico, non una credenziale. I nomi dei due nameserver vanno copiati dalla zona Cloudflare **al momento della configurazione**, non inventati.
+
+**Stato integrativo:** il documento [agent setup Cloudflare](https://developers.cloudflare.com/agent-setup/prompt.md) è stato consultato il 12/11/2026: fornisce procedure per IDE/agenti con CLI locali (Claude, Codex, Cursor, ecc.). La PWA ha già una configurazione Wrangler e il percorso GitHub Actions; l'onboarding di un ulteriore MCP/CLI sul computer del proprietario non è prerequisito del candidato.
 
 ## Firebase Hosting
 
