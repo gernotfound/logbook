@@ -139,7 +139,15 @@ async function exerciseD1(origin, headers, environment) {
   }
   assert.ok(ready, 'Temporary remote Worker did not expose D1 binding');
 
-  safeRemoteD1Response(await callD1(origin, headers, '/__cf00/init'), 'D1 fixture initialization');
+  const initResponse = await callD1(origin, headers, '/__cf00/init');
+  if (initResponse.status !== 200) {
+    const data = await initResponse.json().catch(() => null);
+    const category = /^[A-Za-z][A-Za-z0-9_]{0,39}$/.test(String(data?.category))
+      ? data.category : 'Unknown';
+    const hint = typeof data?.hint === 'string' ? data.hint.slice(0, 150) : '';
+    throw new Error('D1 fixture init failure: HTTP ' + initResponse.status
+      + ', category=' + category + ', hint=' + hint);
+  }
   const requests = [
     { writer: 'writer-a', batchId: 'batch000000000021-a', expectedRev: 0, consentEpoch: 7 },
     { writer: 'writer-b', batchId: 'batch000000000021-b', expectedRev: 0, consentEpoch: 7 },

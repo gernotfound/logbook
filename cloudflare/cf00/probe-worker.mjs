@@ -77,8 +77,19 @@ export default {
     const path = new URL(request.url).pathname;
     try {
       if (path === '/__cf00/init') {
-        await prepareFixture(env.DB);
-        return json({ initialized: true });
+        try {
+          await prepareFixture(env.DB);
+          return json({ initialized: true });
+        } catch (error) {
+          // This isolated, secret-protected fixture contains no user data.
+          const category = /^[A-Za-z][A-Za-z0-9_]{0,39}$/.test(String(error?.name))
+            ? String(error.name) : 'Unknown';
+          const hint = String(error?.message ?? 'unknown')
+            .replaceAll(env.CF00_PROBE_SECRET, '[redacted]')
+            .replace(/https?:\/\/[^\s]+/g, '[url]')
+            .replace(/[A-Za-z0-9_=-]{36,}/g, '[redacted]').slice(0, 150);
+          return json({ error: 'schema-init-failure', category, hint }, 400);
+        }
       }
       if (path === '/__cf00/write') {
         const raw = await request.text();
