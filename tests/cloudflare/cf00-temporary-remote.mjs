@@ -101,11 +101,11 @@ async function callD1(origin, headers, path, payload = {}) {
 
 async function exerciseD1(origin, headers, environment) {
   const dbName = 'cf00-temporary-' + randomBytes(5).toString('hex');
-  const createOutput = runWrangler(['d1', 'create', dbName, '--jurisdiction=eu'], environment, 'D1 EU create in temporary account');
+  const createOutput = runWrangler(['d1', 'create', dbName, '--jurisdiction=eu', '--temporary'], environment, 'D1 EU create in temporary account');
   const dbId = parseDatabaseId(createOutput);
   assert.ok(dbId && /^[a-f0-9-]{36}$/.test(dbId), 'Temporary D1 UUID missing; provider raw output withheld');
 
-  const infoOutput = runWrangler(['d1', 'info', dbName, '--json'], environment, 'D1 remote info');
+  const infoOutput = runWrangler(['d1', 'info', dbName, '--json', '--temporary'], environment, 'D1 remote info');
   let info;
   try {
     const start = infoOutput.indexOf('{');
