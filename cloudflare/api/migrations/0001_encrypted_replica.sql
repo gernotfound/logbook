@@ -41,6 +41,7 @@ CREATE TABLE sync_receipts (
   expected_revision INTEGER NOT NULL CHECK (expected_revision >= 0),
   committed_revision INTEGER NOT NULL CHECK (committed_revision = expected_revision + 1),
   consent_revision INTEGER NOT NULL CHECK (consent_revision >= 1),
+  fence_epoch INTEGER NOT NULL CHECK (fence_epoch >= 1),
   slot TEXT NOT NULL,
   replica_id TEXT NOT NULL,
   generation INTEGER NOT NULL CHECK (generation >= 1),
@@ -61,6 +62,7 @@ BEGIN
     WHERE a.uid = NEW.uid
       AND a.status = 'active'
       AND a.consent_revision = NEW.consent_revision
+      AND a.fence_epoch = NEW.fence_epoch
       AND s.revision = NEW.expected_revision
       AND r.slot = NEW.slot
       AND r.replica_id = NEW.replica_id
