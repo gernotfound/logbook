@@ -7,6 +7,22 @@ const encoder = new TextEncoder();
 
 function json(value, status = 200) { return new Response(JSON.stringify(value), { status, headers }); }
 
+function summarizeD1Batch(results) {
+  if (!Array.isArray(results) || results.length === 0) return null;
+  const metas = results.map(result => result?.meta);
+  if (!metas.every(meta => meta && Number.isSafeInteger(meta.rows_read) && meta.rows_read >= 0
+    && Number.isSafeInteger(meta.rows_written) && meta.rows_written >= 0)) return null;
+  const rowsRead = metas.reduce((total, meta) => total + meta.rows_read, 0);
+  const rowsWritten = metas.reduce((total, meta) => total + meta.rows_written, 0);
+  const sizeAfter = metas.at(-1).size_after;
+  return {
+    statements: metas.length,
+    rowsRead,
+    rowsWritten,
+    sizeAfterBytes: Number.isSafeInteger(sizeAfter) && sizeAfter >= 0 ? sizeAfter : null,
+  };
+}
+
 function authorized(request, env) {
   if (env.CF00_PROBE_ENABLED !== 'true' || typeof env.CF00_PROBE_SECRET !== 'string'
     || env.CF00_PROBE_SECRET.length < 32) return false;
@@ -59,8 +75,8 @@ export default {
         const raw = await request.text();
         if (raw.length > 4096) return json({ error: 'payload-too-large' }, 413);
         const attempt = JSON.parse(raw);
-        await commitSyntheticBatch(env.DB, attempt);
-        return json({ committed: true, batchId: attempt.batchId });
+        const result = await commitSyntheticBatch(env.DB, attempt);
+        return json({ committed: true, batchId: attempt.batchId, queryMetrics: summarizeD1Batch(result) });
       }
       if (path === '/__cf00/receipt') {
         const { batchId } = await request.json();
@@ -68,6 +84,24 @@ export default {
         return json({ receipt });
       }
       if (path === '/__cf00/state') return json(await readSyntheticState(env.DB));
+      if (path === '/__cf00/plan') {
+        const queries = [
+          'EXPLAIN QUERY PLAN SELECT revision FROM cf00_control WHERE owner = ?',
+          'EXPLAIN QUERY PLAN SELECT committed_rev FROM cf00_receipt WHERE owner = ? AND batch_id = ?',
+          'EXPLAIN QUERY PLAN SELECT revision FROM cf00_document WHERE owner = ? AND path = ?',
+        ];
+        const bindings = [
+          ['cf00-synthetic-owner'],
+          ['cf00-synthetic-owner', 'batch000000000001-a'],
+          ['cf00-synthetic-owner', 'writer-a'],
+        ];
+        const plans = await Promise.all(queries.map((sql, i) => env.DB.prepare(sql).bind(...bindings[i]).all()));
+        return json({ plans: plans.map((result, i) => ({
+          name: ['control', 'receipt', 'document'][i],
+          detail: result.results.map(row => row.detail),
+          queryMetrics: summarizeD1Batch([result]),
+        })) });
+      }
       if (path === '/__cf00/password') {
         const algorithm = new URL(request.url).searchParams.get('algorithm');
         const id = env.PASSWORD_PROBE.idFromName('cf00-only-password-benchmark');
