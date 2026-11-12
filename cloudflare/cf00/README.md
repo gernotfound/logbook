@@ -1,0 +1,31 @@
+# CF-00 — banco di prova isolato Workers / D1 / hashing
+
+Questo codice è un **prototipo di fattibilità**, non il backend di TheLogBook. Usa un proprietario sintetico fisso, ciphertext fittizio e tabelle `cf00_*`. Non legge né modifica account, dati o segreti reali. **Non è autorizzato a sostituire Firebase e non è un gate di rilascio Production.**
+
+## Contratti provati
+
+- `contract.mjs`: `D1Database.batch()` deve eseguire atomicamente una guardia che rifiuta revisione/consenso stantii. Un `UPDATE` su 0 righe non basta: il trigger SQLite solleva un errore che fa rollback dell'intero batch. La ricevuta permette di distinguere un commit da un ACK perso.
+- `probe-worker.mjs`: default deny (404), accesso soltanto con `CF00_PROBE_ENABLED=true` e secret lungo almeno 32 caratteri. La classe Durable Object esegue esclusivamente hashing di un input sintetico, usando parametri **documentati OWASP**: scrypt `N=2^14,r=8,p=5`, PBKDF2-HMAC-SHA256 `600000`. Il risultato espone soltanto durata **wall-clock**, parametri e lunghezza dell'output, **non il tempo CPU del provider** né l'hash.
+- `tests/cloudflare/cf00-feasibility.node.mjs`: adapter minimale Node SQLite, test di conflitto, rollback, consenso, ricevuta, default-deny e hashing senza output segreto. L'adapter **non simula** la rete D1, il comportamento del servizio Cloudflare, CAS multi-PoP o il budget CPU di Workers Free.
+
+## Esecuzione locale, senza Cloudflare
+
+Usare **Node 24.x** (versione canonica del repository) e:
+
+```sh
+npm run test:cf00
+npx wrangler@4.159.0 dev -c cloudflare/cf00/wrangler.local.jsonc --local
+```
+
+Per abilitare le route del Worker durante un test HTTP locale, creare un file non versionato `cloudflare/cf00/.dev.vars` contenente `CF00_PROBE_ENABLED=true` e `CF00_PROBE_SECRET=<segreto casuale di almeno 32 caratteri>`. Generarlo localmente, non inserirlo in Git, chat, issue o log. Lo script è inutilizzabile senza entrambe le condizioni.
+
+Dopo l'avvio si possono inviare richieste POST, con header `x-cf00-secret`, agli endpoint `/__cf00/init`, `/__cf00/write`, `/__cf00/state`, `/__cf00/receipt` e `/__cf00/password?algorithm=scrypt|pbkdf2`. `/__cf00/init` azzera **solo** le righe del proprietario sintetico nelle tabelle `cf00_*`.
+
+## Cosa manca prima di dichiarare CF-00 validata
+
+1. Eseguire il prototipo sotto `wrangler dev --local` (workerd/Miniflare) e controllare che trigger e Durable Object corrispondano al contratto.
+2. Misurare hashing su **Workers Free remoto realmente isolato**, verificando CPU e quota con metriche provider, carico basso e limite predeterminato; la sola durata `wallMs` non prova consumo CPU.
+3. Creare, se strettamente necessario e con token Cloudflare a scopo minimo, un D1 di prova **separato** con `--jurisdiction=eu`; non usare database Production. Testare concorrenza remota, abort/rollback, lost ACK, quote e cleanup. La configurazione `wrangler.local.jsonc` contiene un UUID fittizio e **non** si può deployare come D1 remoto.
+4. Verificare Better Auth attuale (bundle `workerd`, KDF, sessioni, OAuth) e invio di email transazionali gratuito con ricezione effettiva. Se falliscono, CF-00 rimane NO-GO; non indebolire la KDF o attivare billing automaticamente.
+
+Fonti: [D1 batch](https://developers.cloudflare.com/d1/worker-api/d1-database/), [D1 sviluppo locale](https://developers.cloudflare.com/d1/best-practices/local-development/), [limiti Workers](https://developers.cloudflare.com/workers/platform/limits/), [limiti Durable Objects](https://developers.cloudflare.com/durable-objects/platform/limits/), [OWASP password](https://cheatsheetseries.owasp.org/cheatsheets/Password_Storage_Cheat_Sheet.html). Tracking: [epic #1053](https://github.com/gernotfound/logbook/issues/1053) e [CF-00 #1054](https://github.com/gernotfound/logbook/issues/1054).
