@@ -80,7 +80,7 @@ function runWrangler(args, environment, label) {
     throw new Error(label + ' failed (' + category + ', exit=' + output.status
       + ', hints=' + (hints.join(',') || 'unclassified') + '). Sensitive provider output withheld.');
   }
-  return captured;
+  return String(output.stdout ?? '');
 }
 
 function parseDatabaseId(output) {
@@ -109,7 +109,9 @@ async function exerciseD1(origin, headers, environment) {
   let info;
   try {
     const start = infoOutput.indexOf('{');
-    info = JSON.parse(infoOutput.slice(start));
+    const end = infoOutput.lastIndexOf('}');
+    if (start < 0 || end <= start) throw new Error('No JSON object found');
+    info = JSON.parse(infoOutput.slice(start, end + 1));
   } catch {
     throw new Error('Temporary D1 info did not return parseable JSON (raw output withheld)');
   }
