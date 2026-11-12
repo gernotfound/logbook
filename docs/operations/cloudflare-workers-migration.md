@@ -62,7 +62,7 @@ Il build sostituisce i metadati HTML con l'origin Cloudflare **prima** di genera
 ## Gate obbligatori prima della transizione definitiva
 
 - Review, Canonical Verification, CodeQL, gate M8 sullo stesso SHA; Firestore Production e deploy Cloudflare devono essere attestati separatamente.
-- Smoke asset con confronto byte, MIME, CSP, cache, fallback SPA, /__/auth senza fallback HTML, 404 reali di JS/CSS inesistenti, analisi traffico Worker/free quota.
+- Smoke asset con confronto byte, MIME, CSP, cache e root `/?tab=training`; 404 reali di JS/CSS inesistenti e path `/training` non supportato, `/__/auth` senza fallback HTML, analisi traffico Worker/free quota. Non confondere un file JS mancante con una pagina HTML valida.
 - Browser reali: Google popup + redirect (incluso Safari iOS), email/password, reset/verifica mail, App Check e Firestore, Vercel CORS/preflight, account consent/erasure/deletion, recovery delle chiavi, guest→account, multi-tab.
 - PWA install, offline, aggiornamento con barriera durevole, responsive light/dark, recupero di archivi locali. **IndexedDB e Service Worker sono origin-scoped**: i dati guest presenti sotto il vecchio dominio non appaiono automaticamente nel nuovo; occorre verificare la portabilità corrente con export/import, senza purgare alcunché.
 - Prima di rimuovere il vecchio frontend, considerare eventuale Service Worker installato che potrebbe ancora fornire la shell cached: un semplice redirect HTTP non lo disattiva.
