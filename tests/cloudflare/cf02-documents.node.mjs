@@ -190,6 +190,10 @@ void test('late SQL failure rolls back receipt, ciphertext and control revision 
 void test('trusted identity, epoch, consent, origin, CSRF and strict schemas fail closed', () => withFixture(async db => {
   const item = attempt('batch000000000005');
   assert.equal((await call(db, 'commit', item, { env: { DB: db, API_ORIGIN: origin } })).status, 503);
+  const throttled = { DB: db, API_ORIGIN: origin,
+    AUTH_GATE: { fetch: async () => new Response(null, { status: 429 }) } };
+  assert.deepEqual(await call(db, 'commit', item, { env: throttled }),
+    { status: 429, body: { error: 'rate-limited' } });
   assert.equal((await call(db, 'commit', item, { headers: { Origin: 'https://evil.invalid' } })).status, 403);
   const alternateHost = await worker.fetch(new Request('https://shadow.workers.dev/v1/sync/commit', {
     method: 'POST', headers: { Origin: origin, 'Content-Type': 'application/json' }, body: JSON.stringify(item),
