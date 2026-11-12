@@ -38,6 +38,18 @@ I contratti correnti sono governati da [AGENTS](../../AGENTS.md): [Cifratura](..
 | Snyk | OPTIONAL | controllo security supplementare | integrazione Snyk esterna |
 | Google Search Console | EXTERNAL-ONLY | verifica proprietà, sitemap e indicizzazione | Search Console + asset SEO repo |
 
+## Checkpoint OAuth Google — 12 novembre 2026 (screenshot console, pre-modifica)
+
+**Fonte/evidenza:** schermata del proprietario Google Cloud → Google Auth Platform → Client → client OAuth per applicazione Web di TheLogBook, confrontata con l'implementazione sul `main 4d7701be914530de1e3d485fe5eacaa706b758a7`. Il client risulta **Attivo**. Non riportare client ID o secret, anche parzialmente, nel repository. La data di ultimo utilizzo mostrata dal provider è il 10/11/2026 con avviso di possibile ritardo.
+
+- **Origini JavaScript autorizzate (4, stato osservato):** `http://localhost`, `http://localhost:5000`, `https://logbook-db-98cc4.firebaseapp.com`, `https://thelogbook.web.app`. **`https://thelogbook.me` non presente** al momento della schermata.
+- **URI di reindirizzamento autorizzati (2, stato osservato):** `https://logbook-db-98cc4.firebaseapp.com/__/auth/handler` e `https://thelogbook.web.app/__/auth/handler`. **`https://thelogbook.me/__/auth/handler` non presente** al momento della schermata.
+- **Firebase Auth Authorized domains è un elenco diverso**, verificato in schermata precedente: `thelogbook.me` già Custom e `thelogbook.web.app` rimosso. Non dedurre la modifica OAuth dalla modifica Firebase.
+- **Azione indicata al proprietario, NON confermata come eseguita:** aggiungere solo `https://thelogbook.me` alle origini JavaScript e `https://thelogbook.me/__/auth/handler` ai redirect di **questo** client, poi salvare. Mantenere per ora i valori già presenti, inclusi il default `firebaseapp.com` e i riferimenti a `thelogbook.web.app` da ritirare soltanto con pulizia coordinata dopo test. Non aggiungere `workers.dev` come origine permanente, non modificare il client secret.
+- **Contratto runtime:** il candidato Cloudflare continua a usare `/__/auth/*` proxato su `logbook-db-98cc4.firebaseapp.com`; il build imposta `authDomain` al proprio origin. Per il dominio definitivo dovrà essere `thelogbook.me` e il callback OAuth deve coincidere esattamente. Queste voci in console non confermano disponibilità degli helper se Firebase Hosting ha problemi di quota. Restano P0 login Google popup/redirect Safari e valutazione proxy vs self-host ufficiale, gestione email action, CSP, App Check/reCAPTCHA Enterprise, Browser API key, backend CORS e recovery account. **Nessun cutover G01 autorizzato.**
+
+**Fonti ufficiali:** [Firebase — redirect best practices](https://firebase.google.com/docs/auth/web/redirect-best-practices), [Google — OAuth URI mismatch](https://developers.google.com/identity/protocols/oauth2/web-server). Lo screenshot non prova comportamento in produzione.
+
 ## Checkpoint configurazione autenticazione — 12/11/2026, successivo al ritiro Hosting
 
 **Evidenza:** schermata del proprietario della console Firebase Authentication → Impostazioni → Domini autorizzati, relativa al progetto TheLogBook. Elenco **visibile dopo la modifica**: `localhost` (Default), `logbook-db-98cc4.firebaseapp.com` (Default), `logbook-db-98cc4.web.app` (Default), `thelogbook.me` (Custom). **`thelogbook.web.app` non compare più**. Il proprietario conferma l'esecuzione; prova da screenshot, **non** lettura indipendente API Firebase né collaudo OAuth. Il dominio definitivo `thelogbook.me` è già autorizzato in Firebase Auth; non aggiungerlo di nuovo. `thelogbook-frontend.califano-ger.workers.dev` non compare e non deve diventare un dominio autorizzato permanente per inerzia.

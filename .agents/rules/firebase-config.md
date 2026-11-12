@@ -11,6 +11,8 @@ Il proprietario ha fornito l'output CLI della **disattivazione del solo sito `th
 
 **Checkpoint console Auth 12/11/2026 (successivo):** schermata del proprietario in Authentication → Settings → Authorized domains con `localhost`, `logbook-db-98cc4.firebaseapp.com`, `logbook-db-98cc4.web.app` (Default) e `thelogbook.me` (Custom). `thelogbook.web.app` non appare più, rimosso su richiesta del proprietario. Questo non equivale a disattivare Firebase Hosting (site ID `thelogbook` disabilitato separatamente) né prova che Google OAuth, App Check, email action, API key e browser login funzionino sul dominio definitivo. Preservare i domini Firebase predefiniti finché necessari ai helper Auth; non autorizzare `workers.dev` permanentemente senza necessità misurata. Vedi registro servizi e issue #1041. TLS minimo Cloudflare portato a 1.2 da dashboard owner; modalità Full e cutover G01 invariati.
 
+**Checkpoint Google OAuth 12/11/2026 (successivo alla schermata Firebase Auth):** screenshot del client Web Google **Attivo**, con 4 origini JavaScript e 2 redirect: `thelogbook.web.app` è ancora presente in entrambi, mentre `thelogbook.me` e `https://thelogbook.me/__/auth/handler` mancano. Il proprietario ha ricevuto istruzioni per aggiungere i due valori in modo additivo, **salvataggio non confermato**. Non rimuovere ancora i callback precedenti né Firebase default; non confondere allowlist Auth con OAuth, App Check e API key. Nessun dato di client ID/secret nel repository. Vedi registro e issue #1041.
+
 ## Tre contratti di configurazione distinti
 
 Non trattare tutte le variabili Firebase/App Check/Admin come un unico blocco obbligatorio. Esistono tre boundary differenti: client Firebase, App Check client e server trusted.
@@ -22,7 +24,7 @@ Non trattare tutte le variabili Firebase/App Check/Admin come un unico blocco ob
 | Variabile | Stato corrente | Note |
 |---|---|---|
 | `VITE_FIREBASE_API_KEY` | MUST | Chiave API pubblica Firebase |
-| `VITE_FIREBASE_AUTH_DOMAIN` | MUST | Dominio Auth; in Production Firebase Hosting deve essere `thelogbook.web.app` così popup/redirect usano lo stesso origin del frontend |
+| `VITE_FIREBASE_AUTH_DOMAIN` | MUST | Il frontend storico Firebase Hosting usava `thelogbook.web.app`; il candidato Cloudflare lo imposta al proprio hostname con `scripts/build-cloudflare-assets.mjs`. Per il futuro dominio pubblico il valore deve essere `thelogbook.me`, con helper OAuth disponibili sul medesimo origin; OAuth/provider e test browser restano prerequisiti |
 | `VITE_FIREBASE_PROJECT_ID` | MUST | Project ID |
 | `VITE_FIREBASE_APP_ID` | MUST | Config Firebase Web |
 
