@@ -9,7 +9,7 @@ const sw = readFileSync('src/sw.ts', 'utf8');
 const candidateWorkflow = readFileSync('.github/workflows/cloudflare-candidate.yml', 'utf8');
 
 if (wrangler.main !== './auth-proxy.mjs' || wrangler.assets?.directory !== '../dist' ||
-    wrangler.assets?.binding !== 'ASSETS' || wrangler.assets?.not_found_handling !== 'single-page-application' ||
+    wrangler.assets?.binding !== 'ASSETS' || wrangler.assets?.not_found_handling !== '404-page' ||
     JSON.stringify(wrangler.assets?.run_worker_first) !== JSON.stringify(['/__/auth', '/__/auth/*'])) {
   failures.push('Wrangler must serve static assets first and invoke only the Firebase Auth proxy explicitly');
 }
@@ -35,11 +35,13 @@ if (!sw.includes('denylist:') || !sw.includes('__')) failures.push('SW must excl
 if (!vite.includes('CLOUDFLARE_APP_ORIGIN') || !vite.includes('transformIndexHtml')) {
   failures.push('Canonical HTML must be transformed before PWA precache generation');
 }
-// Cloudflare's SPA fallback is navigation-sensitive. The missing-chunk
-// smoke must model a browser module fetch, not a headerless curl navigation.
-if (!candidateWorkflow.includes("-H 'Sec-Fetch-Mode: cors' -H 'Sec-Fetch-Dest: script'") ||
+// The current app routes by root query parameters, not pathname. Absent
+// assets and unsupported deep links must fail on the static edge without
+// consuming Worker invocations or returning the app shell to module loads.
+if (!candidateWorkflow.includes('"${CLOUDFLARE_APP_ORIGIN}/?tab=training"') ||
+    !candidateWorkflow.includes('for missing_path in /assets/missing-synthetic.js /assets/missing-synthetic.css /training; do') ||
     !candidateWorkflow.includes('test "${miss_status}" = 404')) {
-  failures.push('Cloudflare missing-JS smoke must enforce 404 with browser module Fetch Metadata');
+  failures.push('Cloudflare smoke must cover the real PWA shortcut and strict 404 for absent JS, CSS and pathnames');
 }
 if (failures.length) { for (const problem of failures) console.error(problem); process.exit(1); }
 console.log('Cloudflare static assets and Auth proxy configuration contract OK');
