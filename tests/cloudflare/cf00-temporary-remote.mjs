@@ -66,7 +66,19 @@ function runWrangler(args, environment, label) {
     const category = /429|rate.limit|too many requests/i.test(captured) ? 'provider-rate-limit'
       : /not authorized|unauthorized|authentication|permission|credentials|access denied|403/i.test(captured)
         ? 'provider-authorization' : 'provider-or-tool-failure';
-    throw new Error(label + ' failed (' + category + ', exit=' + output.status + '). Sensitive provider output withheld.');
+    const hints = [
+      ['missing-account-id', /account[_\s-]*id.{0,45}(missing|required|not found|not set)/i],
+      ['login-required', /(?:login|log in|authenticate|authentication)\s+(?:is\s+)?(?:required|first|needed)/i],
+      ['noninteractive-selection', /(?:select|choose).{0,50}(?:account|prompt)|not an interactive terminal|non-interactive/i],
+      ['temporary-scope', /temporar(?:y|ily).{0,60}(?:not supported|unauthorized|account|token)/i],
+      ['jurisdiction', /jurisdiction|data residency|region restriction/i],
+      ['d1-plan', /D1.{0,60}(?:not available|not enabled|limit exceeded|not allowed)/i],
+      ['unknown-option', /unknown (?:argument|option)|invalid (?:argument|option)/i],
+      ['config', /wrangler.(?:toml|json)|configuration file/i],
+      ['network', /timed?\s*out|ENOTFOUND|ECONNRESET|fetch failed/i],
+    ].filter(([, pattern]) => pattern.test(captured)).map(([hint]) => hint);
+    throw new Error(label + ' failed (' + category + ', exit=' + output.status
+      + ', hints=' + (hints.join(',') || 'unclassified') + '). Sensitive provider output withheld.');
   }
   return captured;
 }
