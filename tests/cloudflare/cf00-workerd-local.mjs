@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
-import { existsSync, rmSync, writeFileSync } from 'node:fs';
+import { rmSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { setTimeout as sleep } from 'node:timers/promises';
@@ -28,7 +28,6 @@ async function waitForWorker(child) {
   throw new Error('Timed out waiting for local workerd');
 }
 
-if (existsSync(varsPath)) throw new Error('CF00 probe refuses to replace an existing local .dev.vars');
 writeFileSync(varsPath, `CF00_PROBE_ENABLED=true\nCF00_PROBE_SECRET=${secret}\n`, { mode: 0o600, flag: 'wx' });
 let logs = '';
 let child;
