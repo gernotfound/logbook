@@ -93,10 +93,36 @@ function safeRemoteD1Response(response, label) {
 }
 
 async function callD1(origin, headers, path, payload = {}) {
-  return fetch(new URL(path, origin), {
-    method: 'POST', headers: { ...headers, 'content-type': 'application/json' },
-    body: JSON.stringify(payload), signal: AbortSignal.timeout(12000),
-  });
+  const safeRead = ['/__cf00/health', '/__cf00/state', '/__cf00/receipt', '/__cf00/plan'].includes(path);
+  for (let attempt = 0; attempt < (safeRead ? 4 : 1); attempt += 1) {
+    let response;
+    try {
+      response = await fetch(new URL(path, origin), {
+        method: 'POST', headers: { ...headers, 'content-type': 'application/json' },
+        body: JSON.stringify(payload), signal: AbortSignal.timeout(12000),
+      });
+    } catch (error) {
+      if (!safeRead || attempt === 3) throw error;
+      await sleep(200 * (attempt + 1));
+      continue;
+    }
+    if (!safeRead || ![502, 503, 504].includes(response.status) || attempt === 3) return response;
+    await sleep(200 * (attempt + 1));
+  }
+  throw new Error('Read-only D1 retry budget exhausted');
+}
+
+async function syntheticWriteWhenBindingReady(origin, headers, attempt) {
+  for (let n = 0; n < 5; n += 1) {
+    const response = await callD1(origin, headers, '/__cf00/write', attempt);
+    if (response.status !== 503) return response;
+    const body = await response.clone().json().catch(() => null);
+    // Only an explicit pre-transaction guard can prove no write was attempted.
+    // Lost ACK and transport errors must never be retried without durable receipt evidence.
+    if (body?.error !== 'd1-binding-unavailable' || n === 4) return response;
+    await sleep(400 * (n + 1));
+  }
+  throw new Error('Unreachable synthetic binding retry state');
 }
 
 async function exerciseD1(origin, headers, environment) {
@@ -120,41 +146,66 @@ async function exerciseD1(origin, headers, environment) {
   console.log('CF00 temporary D1: remote create and EU jurisdiction readback confirmed');
 
   const config = JSON.parse(readFileSync(join(root, 'cloudflare/cf00/wrangler.temporary.jsonc'), 'utf8'));
+  // A distinct Worker avoids testing across mixed versions of a hot-redeployed route.
+  // Both scripts share the same disposable account; neither touches an app origin.
+  config.name = 'thelogbook-cf00-temporary-d1-only';
   config.d1_databases = [{ binding: 'DB', database_name: dbName, database_id: dbId }];
   writeFileSync(generatedConfig, JSON.stringify(config, null, 2) + '\n', { flag: 'wx', mode: 0o600 });
-  // The second deployment explicitly reuses the same cached temporary account.
-  runWrangler(['deploy', '--temporary', '--strict', '--config',
-    'cloudflare/cf00/wrangler.temporary.generated.jsonc', '--secrets-file', secretFile], environment, 'Redeploy temporary Worker with D1');
-  let ready = false;
-  for (let n = 0; n < 6; n += 1) {
-    const response = await callD1(origin, headers, '/__cf00/health');
-    if (response.ok) {
-      const body = await response.json();
-      if (body.ready === true && body.durableObjectBinding === true && body.d1Binding === true) {
-        ready = true;
-        break;
-      }
-    }
-    if (n < 5) await sleep(1000);
-  }
-  assert.ok(ready, 'Temporary remote Worker did not expose D1 binding');
+  const d1Deploy = runWrangler(['deploy', '--temporary', '--strict', '--config',
+    'cloudflare/cf00/wrangler.temporary.generated.jsonc', '--secrets-file', secretFile], environment, 'Deploy distinct temporary D1 Worker');
+  const d1Endpoint = d1Deploy.match(/https:\/\/[a-z0-9-]+(?:\.[a-z0-9-]+)*\.workers\.dev\b/i);
+  assert.ok(d1Endpoint, 'Distinct D1 Worker URL missing; provider output withheld');
+  const d1Origin = new URL(d1Endpoint[0]);
+  assert.equal(d1Origin.protocol, 'https:');
+  assert.notEqual(d1Origin.hostname, origin.hostname, 'D1 probe must use its own isolated Worker');
 
-  const initResponse = await callD1(origin, headers, '/__cf00/init');
-  if (initResponse.status !== 200) {
+  let ready = false;
+  for (let n = 0; n < 12; n += 1) {
+    try {
+      const response = await callD1(d1Origin, headers, '/__cf00/health');
+      if (response.ok) {
+        const body = await response.json();
+        if (body.ready === true && body.durableObjectBinding === true && body.d1Binding === true) {
+          ready = true;
+          break;
+        }
+      }
+    } catch {
+      // Fresh workers.dev routes can take a short time to become reachable.
+    }
+    if (n < 11) await sleep(1000);
+  }
+  assert.ok(ready, 'New temporary D1 Worker did not become reachable with its binding');
+
+  // Only this synthetic, pre-write, idempotent fixture init may be retried.
+  // Real user writes require receipt-based lost-ACK recovery, not blind retries.
+  let initialized = false;
+  for (let n = 0; n < 12; n += 1) {
+    const initResponse = await callD1(d1Origin, headers, '/__cf00/init');
+    if (initResponse.status === 200) {
+      initialized = true;
+      break;
+    }
     const data = await initResponse.json().catch(() => null);
+    if (initResponse.status === 503 && data?.error === 'd1-binding-unavailable') {
+      if (n < 11) await sleep(1000);
+      continue;
+    }
     const category = /^[A-Za-z][A-Za-z0-9_]{0,39}$/.test(String(data?.category))
       ? data.category : 'Unknown';
     const hint = typeof data?.hint === 'string' ? data.hint.slice(0, 150) : '';
     throw new Error('D1 fixture init failure: HTTP ' + initResponse.status
       + ', category=' + category + ', hint=' + hint);
   }
+  assert.ok(initialized, 'D1 binding did not become available at this temporary deployment');
   const requests = [
     { writer: 'writer-a', batchId: 'batch000000000021-a', expectedRev: 0, consentEpoch: 7 },
     { writer: 'writer-b', batchId: 'batch000000000021-b', expectedRev: 0, consentEpoch: 7 },
   ];
-  const outcomes = await Promise.all(requests.map(x => callD1(origin, headers, '/__cf00/write', x)));
-  assert.deepEqual(outcomes.map(x => x.status).sort((a, b) => a - b), [200, 409],
-    'Same snapshot must have one winner, one conflict');
+  const outcomes = await Promise.all(requests.map(x => syntheticWriteWhenBindingReady(d1Origin, headers, x)));
+  const statuses = outcomes.map(x => x.status).sort((a, b) => a - b);
+  assert.deepEqual(statuses, [200, 409],
+    'Same snapshot must have one winner and one conflict (observed HTTP ' + statuses.join(',') + ')');
   const winner = outcomes[0].status === 200 ? 0 : 1;
   const commit = await outcomes[winner].json();
   assert.equal(commit.batchId, requests[winner].batchId);
@@ -164,34 +215,34 @@ async function exerciseD1(origin, headers, environment) {
   console.log('CF00 temporary REMOTE D1 batch metering: reads=' + commit.queryMetrics.rowsRead
     + ', writes=' + commit.queryMetrics.rowsWritten + ', SQL statements=3');
 
-  const stateResponse = await callD1(origin, headers, '/__cf00/state');
+  const stateResponse = await callD1(d1Origin, headers, '/__cf00/state');
   safeRemoteD1Response(stateResponse, 'D1 state read');
   const state = await stateResponse.json();
   assert.equal(state.control.revision, 1);
   assert.equal(state.control.consent_epoch, 7);
   assert.equal(state.docs.length, 1);
   assert.equal(state.docs[0].path, requests[winner].writer);
-  const receiptResponse = await callD1(origin, headers, '/__cf00/receipt', { batchId: requests[winner].batchId });
+  const receiptResponse = await callD1(d1Origin, headers, '/__cf00/receipt', { batchId: requests[winner].batchId });
   safeRemoteD1Response(receiptResponse, 'D1 winner receipt');
   const receipt = (await receiptResponse.json()).receipt;
   assert.deepEqual({ writer: receipt.writer, expected_rev: receipt.expected_rev,
     consent_epoch: receipt.consent_epoch, committed_rev: receipt.committed_rev },
     { writer: requests[winner].writer, expected_rev: 0, consent_epoch: 7, committed_rev: 1 });
-  const loserReceiptResponse = await callD1(origin, headers, '/__cf00/receipt', { batchId: requests[1 - winner].batchId });
+  const loserReceiptResponse = await callD1(d1Origin, headers, '/__cf00/receipt', { batchId: requests[1 - winner].batchId });
   safeRemoteD1Response(loserReceiptResponse, 'D1 losing receipt');
   assert.equal((await loserReceiptResponse.json()).receipt, null);
 
-  const duplicate = await callD1(origin, headers, '/__cf00/write', requests[winner]);
+  const duplicate = await callD1(d1Origin, headers, '/__cf00/write', requests[winner]);
   assert.equal(duplicate.status, 409, 'Already-applied batch must not execute again');
-  const staleConsent = await callD1(origin, headers, '/__cf00/write', {
+  const staleConsent = await callD1(d1Origin, headers, '/__cf00/write', {
     writer: 'writer-c', batchId: 'batch000000000022-c', expectedRev: 1, consentEpoch: 6,
   });
   assert.equal(staleConsent.status, 409, 'Consent epoch stale must fail closed');
-  const afterResponse = await callD1(origin, headers, '/__cf00/state');
+  const afterResponse = await callD1(d1Origin, headers, '/__cf00/state');
   safeRemoteD1Response(afterResponse, 'D1 state after rejected writes');
   assert.deepEqual(await afterResponse.json(), state);
 
-  const planResponse = await callD1(origin, headers, '/__cf00/plan');
+  const planResponse = await callD1(d1Origin, headers, '/__cf00/plan');
   safeRemoteD1Response(planResponse, 'D1 index plans');
   const plans = (await planResponse.json()).plans;
   assert.deepEqual(plans.map(x => x.name), ['control', 'receipt', 'document']);
@@ -237,6 +288,31 @@ try {
   assert.deepEqual(healthStatus, { ready: true, durableObjectBinding: true, d1Binding: false });
   console.log('CF00 temporary remote Worker entrypoint: PASS; DO binding present, D1 absent');
 
+  // Unknown algorithms exercise the DO bootstrap without computing a KDF.
+  // A newly created workers.dev route can return a transient 404 while propagating.
+  let doReady = false;
+  for (let n = 0; n < 10; n += 1) {
+    let response;
+    try {
+      response = await fetch(new URL('/__cf00/password?algorithm=unknown', origin), {
+        method: 'POST', headers, signal: AbortSignal.timeout(10000),
+      });
+    } catch {
+      // Only this non-mutating canary is safe to retry on transport failure.
+    }
+    if (response?.status === 400) {
+      assert.deepEqual(await response.json(), { error: 'algorithm' });
+      doReady = true;
+      break;
+    }
+    if (response && ![404, 502, 503, 504].includes(response.status)) {
+      throw new Error('Unexpected DO canary status ' + response.status);
+    }
+    if (n < 9) await sleep(600);
+  }
+  assert.ok(doReady, 'Remote DO boot canary did not become available');
+  console.log('CF00 temporary remote Durable Object bootstrap: PASS (no crypto executed)');
+
   const results = {};
   const failures = [];
   for (const algorithm of ['pbkdf2', 'scrypt']) {
@@ -265,6 +341,18 @@ try {
   }
   console.log('External round-trip includes network overhead; neither measurement is provider CPU time.');
   assert.deepEqual(failures, [], 'All unanticipated KDF failures must be resolved');
+  const credentialResponse = await requestWithBoundedRetries(
+    new URL('/__cf00/password?algorithm=scrypt-lifecycle', origin), headers);
+  const credential = await credentialResponse.json();
+  assert.deepEqual(credential, {
+    algorithm: 'scrypt', N: 16384, r: 8, p: 5, saltBytes: 16, outputBits: 256,
+    matchingPasswordAccepted: true,
+    wrongPasswordRejected: true,
+    tamperedDigestRejected: true,
+    malformedCredentialRejected: true,
+    freshSaltPerCredential: true,
+  });
+  console.log('CF00 temporary REMOTE Durable Object: serialized salted credential + right/wrong/tampered/malformed checks PASS');
   await exerciseD1(origin, headers, environment);
   console.log('Temporary account was not claimed; its resources expire automatically.');
 } finally {
