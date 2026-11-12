@@ -139,9 +139,14 @@ jobs:
           for path in / /sw.js /manifest.webmanifest /robots.txt /sitemap.xml; do
             local_file="dist/${path#/}"
             if [ "${path}" = "/" ]; then local_file="dist/index.html"; fi
-            curl --fail --silent --show-error --retry 3 --retry-delay 2 --retry-all-errors \
-              -H 'Accept-Encoding: identity' "${CLOUDFLARE_APP_ORIGIN}${path}" -o /tmp/cloudflare-served-asset
-            cmp -s "${local_file}" /tmp/cloudflare-served-asset || { echo "Cloudflare byte mismatch ${path}"; exit 1; }
+            initial_http="$(curl --fail --silent --show-error --retry 3 --retry-delay 2 --retry-all-errors \
+              -H 'Accept-Encoding: identity' --dump-header /tmp/cloudflare-served-headers \
+              --write-out '%{http_code} %{content_type}' \
+              "${CLOUDFLARE_APP_ORIGIN}${path}" -o /tmp/cloudflare-served-asset)"
+            cmp -s "${local_file}" /tmp/cloudflare-served-asset || \
+              bash scripts/cloudflare-asset-mismatch-diagnostics.sh \
+                "${local_file}" /tmp/cloudflare-served-asset /tmp/cloudflare-served-headers \
+                "${CLOUDFLARE_APP_ORIGIN}${path}" "${EXPECTED_SHA}" "${initial_http}"
           done
           curl --fail --silent --show-error -D /tmp/cloudflare-headers -o /dev/null "${CLOUDFLARE_APP_ORIGIN}/"
           grep -qi '^x-content-type-options: nosniff' /tmp/cloudflare-headers
