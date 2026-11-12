@@ -49,8 +49,9 @@ async function withFixture(run) {
     db.sqlite.exec(migration);
     db.sqlite.prepare('INSERT INTO sync_subjects VALUES (?, ?, ?, ?)').run(owner, 'active', 1, 5);
     db.sqlite.prepare('INSERT INTO sync_state (uid, revision) VALUES (?, 0)').run(owner);
-    db.sqlite.prepare('INSERT INTO sync_replicas VALUES (?, ?, ?, ?, ?, ?, ?)').run(
-      owner, replica.slot, replica.replicaId, 1, Date.now() + 86400000, 0, 'active');
+    const now = Date.now();
+    db.sqlite.prepare('INSERT INTO sync_replicas (uid, slot, replica_id, generation, lease_until_ms, checkpoint_at_ms, checkpoint_clock_json, last_seq, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)').run(
+      owner, replica.slot, replica.replicaId, 1, now + 86400000, now, '{}', 0, 'active');
     await run(db, second);
   } finally { second.close(); db.close(); rmSync(dir, { recursive: true, force: true }); }
 }
@@ -216,6 +217,23 @@ void test('CAS conflict and invalid replica cannot persist documents or receipts
   assert.equal(fenced.status, 409);
   assert.equal(db.sqlite.prepare('SELECT revision FROM sync_state').get().revision, 0);
   assert.equal(db.sqlite.prepare('SELECT count(*) as n FROM sync_documents').get().n, 0);
+}));
+
+void test('idempotent new Protocol 3 batch may advance a revision without increasing lastSeq', () => withFixture(async db => {
+  const first = attempt('batch000000000031', 1, 0);
+  const second = attempt('batch000000000032', 1, 1);
+  assert.equal((await call(db, 'commit', first)).status, 200);
+  assert.equal((await call(db, 'commit', second)).status, 200);
+  assert.equal(db.sqlite.prepare('SELECT revision FROM sync_state').get().revision, 2);
+  assert.equal(db.sqlite.prepare('SELECT last_seq FROM sync_replicas').get().last_seq, 1);
+  assert.equal(db.sqlite.prepare('SELECT count(*) AS n FROM sync_receipts').get().n, 2);
+}));
+
+void test('SQL schema refuses invalid months and malformed checkpoint clocks', () => withFixture(async db => {
+  assert.throws(() => db.sqlite.prepare('UPDATE sync_replicas SET checkpoint_clock_json=?').run('not-json'));
+  assert.throws(() => db.sqlite.prepare('INSERT INTO sync_documents (uid,path,envelope_json,revision) VALUES (?,?,?,?)')
+    .run(owner, 'history_months/2026-19', '{}', 1));
+  assert.equal(db.sqlite.prepare('SELECT count(*) AS n FROM sync_documents').get().n, 0);
 }));
 
 void test('late SQL failure rolls back receipt, ciphertext and control revision atomically', () => withFixture(async db => {
