@@ -163,6 +163,47 @@ void test('real XChaCha20-Poly1305 ciphertext survives D1 HTTP save/read without
   assert.ok(!raw.envelope_json.includes('synthetic-only-75'));
 }));
 
+void test('paginated checkpoint covers every root/month document at one revision', () => withFixture(async db => {
+  const paths = ['', ...Array.from({ length: 10 }, (_, index) =>
+    `history_months/2026-${String(index + 1).padStart(2, '0')}`)];
+  const first = attempt('batch000000000021', 1, 0, paths.slice(0, 8));
+  const second = attempt('batch000000000022', 2, 1, paths.slice(8));
+  assert.equal((await call(db, 'commit', first)).status, 200);
+  assert.equal((await call(db, 'commit', second)).status, 200);
+  const p1 = await call(db, 'scan', { after: null, expectedRevision: null });
+  assert.equal(p1.status, 200);
+  assert.equal(p1.body.revision, 2);
+  assert.equal(p1.body.documents.length, 8);
+  assert.equal(p1.body.complete, false);
+  assert.equal(p1.body.nextAfter, p1.body.documents.at(-1).path);
+  const p2 = await call(db, 'scan', { after: p1.body.nextAfter, expectedRevision: p1.body.revision });
+  assert.equal(p2.status, 200);
+  assert.equal(p2.body.documents.length, 3);
+  assert.equal(p2.body.complete, true);
+  assert.equal(p2.body.nextAfter, null);
+  assert.deepEqual([...p1.body.documents, ...p2.body.documents].map(doc => doc.path),
+    [...paths].sort());
+  assert.equal(db.sqlite.prepare('SELECT count(*) AS n FROM sync_documents').get().n, 11);
+}));
+
+void test('a concurrent write or changed consent fences an incomplete paginated checkpoint', () => withFixture(async db => {
+  const paths = ['', ...Array.from({ length: 8 }, (_, index) =>
+    `nutrition_months/2026-${String(index + 1).padStart(2, '0')}`)];
+  assert.equal((await call(db, 'commit', attempt('batch000000000023', 1, 0, paths.slice(0, 8)))).status, 200);
+  assert.equal((await call(db, 'commit', attempt('batch000000000024', 2, 1, paths.slice(8)))).status, 200);
+  const p1 = await call(db, 'scan', { after: null, expectedRevision: null });
+  assert.equal(p1.body.complete, false);
+  assert.equal((await call(db, 'commit',
+    attempt('batch000000000025', 3, 2, ['history_months/2025-12']))).status, 200);
+  const stale = await call(db, 'scan',
+    { after: p1.body.nextAfter, expectedRevision: p1.body.revision });
+  assert.deepEqual(stale, { status: 409, body: { error: 'snapshot-changed' } });
+  assert.equal((await call(db, 'scan', { after: '', expectedRevision: null })).status, 400);
+  db.sqlite.prepare('UPDATE sync_subjects SET consent_revision = 2 WHERE uid = ?').run(owner);
+  assert.equal((await call(db, 'scan', { after: null, expectedRevision: null })).status, 403);
+  assert.equal((await call(db, 'scan', { after: p1.body.nextAfter, expectedRevision: 2 })).status, 403);
+}));
+
 void test('CAS conflict and invalid replica cannot persist documents or receipts', () => withFixture(async db => {
   const a = attempt('batch000000000002', 1, 1);
   const stale = await call(db, 'commit', a);
