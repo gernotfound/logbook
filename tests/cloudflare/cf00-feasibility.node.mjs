@@ -46,7 +46,7 @@ const attempt = (writer, batchId, expectedRev = 0, consentEpoch = 7) => ({
   writer, batchId, expectedRev, consentEpoch,
 });
 
-test('one of two writers with identical revision succeeds and the other rolls back', () => withDb(async (a, b) => {
+void test('one of two writers with identical revision succeeds and the other rolls back', () => withDb(async (a, b) => {
   await prepareFixture(a);
   const outcomes = await Promise.allSettled([
     commitSyntheticBatch(a, attempt('writer-a', 'batch000000000001-a')),
@@ -63,7 +63,7 @@ test('one of two writers with identical revision succeeds and the other rolls ba
   assert.equal(await readReceipt(a, `batch000000000001-${winner === 'a' ? 'b' : 'a'}`), null);
 }));
 
-test('stale consent and failed late statement never persist receipt or document', () => withDb(async (a) => {
+void test('stale consent and failed late statement never persist receipt or document', () => withDb(async (a) => {
   await prepareFixture(a);
   await assert.rejects(commitSyntheticBatch(a, attempt('writer-a', 'batch000000000002-a', 0, 6)), /stale/i);
   assert.equal((await readSyntheticState(a)).control.revision, 0);
@@ -76,7 +76,7 @@ test('stale consent and failed late statement never persist receipt or document'
   assert.equal(await readReceipt(a, 'batch000000000002-b'), null);
 }));
 
-test('duplicate batch cannot produce a second commit; receipt permits lost-ACK recovery', () => withDb(async (a) => {
+void test('duplicate batch cannot produce a second commit; receipt permits lost-ACK recovery', () => withDb(async (a) => {
   await prepareFixture(a);
   const write = attempt('writer-a', 'batch000000000003-a');
   await commitSyntheticBatch(a, write);
@@ -87,7 +87,7 @@ test('duplicate batch cannot produce a second commit; receipt permits lost-ACK r
   });
 }));
 
-test('probe defaults to unavailable and requires a secret even when enabled', async () => {
+void test('probe defaults to unavailable and requires a secret even when enabled', async () => {
   const url = 'https://cf00.invalid/__cf00/init';
   const missing = await worker.fetch(new Request(url, { method: 'POST' }), {});
   assert.equal(missing.status, 404);
@@ -97,7 +97,7 @@ test('probe defaults to unavailable and requires a secret even when enabled', as
   assert.equal(invalid.status, 404);
 });
 
-test('work factor probes use synthetic data and do not expose hash output', async () => {
+void test('work factor probes use synthetic data and do not expose hash output', async () => {
   const probe = new PasswordProbe();
   const r = await probe.fetch(new Request('https://cf00.invalid/?algorithm=pbkdf2', { method: 'POST' }));
   const p = await r.json();
