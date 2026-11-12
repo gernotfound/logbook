@@ -5,6 +5,10 @@
 
 **Autorità:** [`AGENTS.md`](../../AGENTS.md). Questo contratto ne specializza gli invarianti; non amplia autorizzazioni o perimetro.
 
+## Stato transitorio Hosting — 12/11/2026
+
+Il proprietario ha fornito l'output CLI della **disattivazione del solo sito `thelogbook`** nel progetto `logbook-db-98cc4` e confermato di aver disabilitato il workflow GitHub `Firebase Hosting Production`. Le sezioni sottostanti che descrivono `thelogbook.web.app` come **Production Hosting** rappresentano ora il **contratto precedente mantenuto per diagnosi e test**, non una prova di servizio raggiungibile o un ordine di riattivazione. Il progetto Firebase e il site ID predefinito `logbook-db-98cc4` restano distinti. Il candidato Cloudflare imposta `VITE_FIREBASE_AUTH_DOMAIN` al proprio hostname `workers.dev`; Auth, Google redirect, App Check e helper serviti dall'upstream `firebaseapp.com` richiedono verifiche browser/provider separate. Non cancellare Firebase Auth/Firestore/App Check né ridurre l'allowlist delle 25 API.
+
 ## Tre contratti di configurazione distinti
 
 Non trattare tutte le variabili Firebase/App Check/Admin come un unico blocco obbligatorio. Esistono tre boundary differenti: client Firebase, App Check client e server trusted.

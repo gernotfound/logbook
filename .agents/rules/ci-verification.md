@@ -5,6 +5,10 @@
 
 **Autorità:** [`AGENTS.md`](../../AGENTS.md). Questo contratto ne specializza gli invarianti; non amplia autorizzazioni o perimetro.
 
+## Eccezione provider transitoria confermata dall'owner — 12/11/2026
+
+La CI canonica, CodeQL, il `Main Release Gate` e la riconciliazione Firestore **rimangono obbligatori**. Il proprietario ha dichiarato disabilitato tramite GitHub UI il workflow di deploy `Firebase Hosting Production` e ha fornito l'output CLI che conferma `firebase hosting:disable --site thelogbook`. Le regole tecniche sul workflow Hosting riportate sotto descrivono i contratti da preservare **qualora sia deliberatamente riabilitato**, non un'autorizzazione al suo rilancio. Il workflow Cloudflare candidato è manuale, only-main, richiede SHA/gate esatti e non autorizza un cutover automatico. Lo stato `disabled_manually` di GitHub e lo stato live Cloudflare sono verifiche provider distinte da CI e documentazione.
+
 ## Scope
 
 Questa regola disciplina il gate canonico di verifica automatica corrente dopo M8. Le milestone M0–M8 restano composte transitivamente nel comando repository; GitHub Actions può distribuire i leaf command equivalenti su runner indipendenti senza ridurre la copertura.
