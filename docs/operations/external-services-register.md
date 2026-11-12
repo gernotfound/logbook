@@ -26,7 +26,7 @@ I contratti correnti sono governati da [AGENTS](../../AGENTS.md): [Cifratura](..
 | Firebase Storage | NON USATO DAL RUNTIME | modulo Storage e relativa env client ritirati dal contratto | codice |
 | Firebase Cloud Messaging | NON USATO DAL RUNTIME | modulo Messaging e relativa env client ritirati dal contratto | codice |
 | Firebase Hosting — site `thelogbook` | DISABILITATO (output Firebase CLI del proprietario 12/11/2026) | precedente frontend `thelogbook.web.app`; il workflow automatico è dichiarato disabilitato in GitHub | output CLI proprietario + workflow GitHub da ricontrollare |
-| Cloudflare Workers Static Assets | EXTERNAL-ONLY / VERIFY-LIVE | nuovo frontend previsto; candidato `workers.dev` predisposto in `main`, deployment non ancora attestato | issue #1041 + runbook Cloudflare + dashboard |
+| Cloudflare Workers Static Assets | EXTERNAL-ONLY / VERIFY-LIVE | Worker `workers.dev` distribuito da GitHub, ma smoke #43214892963 fallito (JS mancante: HTTP 200 HTML), fix routing 404 in verifica; nessun cutover pubblico | issue #1041 + runbook Cloudflare + dashboard |
 | IONOS — `thelogbook.me` | EXTERNAL-ONLY / VERIFY-LIVE | registrar del dominio acquistato; rinnovo e transfer lock verificati da screenshot, cambio NS salvato su IONOS, propagazione Cloudflare non ancora attestata | pannello IONOS + verifica DNS |
 | Firebase/Vercel Test separati | DISMESSI (2026-10-18) | Progetti `thelogbook-test` e `thelogbook-test-backend` eliminati; nessun cloud di test separato attivo | Firebase CLI, inventario Vercel, PR #431 |
 | Firebase Admin | ACTIVE | lifecycle account, consenso/diritti, custodia ADK e manutenzione trusted | Vercel env + Vercel Functions |
