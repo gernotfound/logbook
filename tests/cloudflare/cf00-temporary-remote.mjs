@@ -92,7 +92,7 @@ function safeRemoteD1Response(response, label) {
   assert.equal(response.status, 200, label + ' HTTP ' + response.status);
 }
 
-async function callD1(origin, headers, path, payload = {}) {
+async function callD1(d1Origin, headers, path, payload = {}) {
   return fetch(new URL(path, origin), {
     method: 'POST', headers: { ...headers, 'content-type': 'application/json' },
     body: JSON.stringify(payload), signal: AbortSignal.timeout(12000),
@@ -120,30 +120,42 @@ async function exerciseD1(origin, headers, environment) {
   console.log('CF00 temporary D1: remote create and EU jurisdiction readback confirmed');
 
   const config = JSON.parse(readFileSync(join(root, 'cloudflare/cf00/wrangler.temporary.jsonc'), 'utf8'));
+  // A distinct Worker avoids testing across mixed versions of a hot-redeployed route.
+  // Both scripts share the same disposable account; neither touches an app origin.
+  config.name = 'thelogbook-cf00-temporary-d1-only';
   config.d1_databases = [{ binding: 'DB', database_name: dbName, database_id: dbId }];
   writeFileSync(generatedConfig, JSON.stringify(config, null, 2) + '\n', { flag: 'wx', mode: 0o600 });
-  // The second deployment explicitly reuses the same cached temporary account.
-  runWrangler(['deploy', '--temporary', '--strict', '--config',
-    'cloudflare/cf00/wrangler.temporary.generated.jsonc', '--secrets-file', secretFile], environment, 'Redeploy temporary Worker with D1');
+  const d1Deploy = runWrangler(['deploy', '--temporary', '--strict', '--config',
+    'cloudflare/cf00/wrangler.temporary.generated.jsonc', '--secrets-file', secretFile], environment, 'Deploy distinct temporary D1 Worker');
+  const d1Endpoint = d1Deploy.match(/https:\/\/[a-z0-9-]+(?:\.[a-z0-9-]+)*\.workers\.dev\b/i);
+  assert.ok(d1Endpoint, 'Distinct D1 Worker URL missing; provider output withheld');
+  const d1Origin = new URL(d1Endpoint[0]);
+  assert.equal(d1Origin.protocol, 'https:');
+  assert.notEqual(d1Origin.hostname, origin.hostname, 'D1 probe must use its own isolated Worker');
+
   let ready = false;
-  for (let n = 0; n < 6; n += 1) {
-    const response = await callD1(origin, headers, '/__cf00/health');
-    if (response.ok) {
-      const body = await response.json();
-      if (body.ready === true && body.durableObjectBinding === true && body.d1Binding === true) {
-        ready = true;
-        break;
+  for (let n = 0; n < 12; n += 1) {
+    try {
+      const response = await callD1(d1Origin, headers, '/__cf00/health');
+      if (response.ok) {
+        const body = await response.json();
+        if (body.ready === true && body.durableObjectBinding === true && body.d1Binding === true) {
+          ready = true;
+          break;
+        }
       }
+    } catch {
+      // Fresh workers.dev routes can take a short time to become reachable.
     }
-    if (n < 5) await sleep(1000);
+    if (n < 11) await sleep(1000);
   }
-  assert.ok(ready, 'Temporary remote Worker did not expose D1 binding');
+  assert.ok(ready, 'New temporary D1 Worker did not become reachable with its binding');
 
   // Only this synthetic, pre-write, idempotent fixture init may be retried.
   // Real user writes require receipt-based lost-ACK recovery, not blind retries.
   let initialized = false;
   for (let n = 0; n < 12; n += 1) {
-    const initResponse = await callD1(origin, headers, '/__cf00/init');
+    const initResponse = await callD1(d1Origin, headers, '/__cf00/init');
     if (initResponse.status === 200) {
       initialized = true;
       break;
@@ -164,7 +176,7 @@ async function exerciseD1(origin, headers, environment) {
     { writer: 'writer-a', batchId: 'batch000000000021-a', expectedRev: 0, consentEpoch: 7 },
     { writer: 'writer-b', batchId: 'batch000000000021-b', expectedRev: 0, consentEpoch: 7 },
   ];
-  const outcomes = await Promise.all(requests.map(x => callD1(origin, headers, '/__cf00/write', x)));
+  const outcomes = await Promise.all(requests.map(x => callD1(d1Origin, headers, '/__cf00/write', x)));
   assert.deepEqual(outcomes.map(x => x.status).sort((a, b) => a - b), [200, 409],
     'Same snapshot must have one winner, one conflict');
   const winner = outcomes[0].status === 200 ? 0 : 1;
@@ -176,34 +188,34 @@ async function exerciseD1(origin, headers, environment) {
   console.log('CF00 temporary REMOTE D1 batch metering: reads=' + commit.queryMetrics.rowsRead
     + ', writes=' + commit.queryMetrics.rowsWritten + ', SQL statements=3');
 
-  const stateResponse = await callD1(origin, headers, '/__cf00/state');
+  const stateResponse = await callD1(d1Origin, headers, '/__cf00/state');
   safeRemoteD1Response(stateResponse, 'D1 state read');
   const state = await stateResponse.json();
   assert.equal(state.control.revision, 1);
   assert.equal(state.control.consent_epoch, 7);
   assert.equal(state.docs.length, 1);
   assert.equal(state.docs[0].path, requests[winner].writer);
-  const receiptResponse = await callD1(origin, headers, '/__cf00/receipt', { batchId: requests[winner].batchId });
+  const receiptResponse = await callD1(d1Origin, headers, '/__cf00/receipt', { batchId: requests[winner].batchId });
   safeRemoteD1Response(receiptResponse, 'D1 winner receipt');
   const receipt = (await receiptResponse.json()).receipt;
   assert.deepEqual({ writer: receipt.writer, expected_rev: receipt.expected_rev,
     consent_epoch: receipt.consent_epoch, committed_rev: receipt.committed_rev },
     { writer: requests[winner].writer, expected_rev: 0, consent_epoch: 7, committed_rev: 1 });
-  const loserReceiptResponse = await callD1(origin, headers, '/__cf00/receipt', { batchId: requests[1 - winner].batchId });
+  const loserReceiptResponse = await callD1(d1Origin, headers, '/__cf00/receipt', { batchId: requests[1 - winner].batchId });
   safeRemoteD1Response(loserReceiptResponse, 'D1 losing receipt');
   assert.equal((await loserReceiptResponse.json()).receipt, null);
 
-  const duplicate = await callD1(origin, headers, '/__cf00/write', requests[winner]);
+  const duplicate = await callD1(d1Origin, headers, '/__cf00/write', requests[winner]);
   assert.equal(duplicate.status, 409, 'Already-applied batch must not execute again');
-  const staleConsent = await callD1(origin, headers, '/__cf00/write', {
+  const staleConsent = await callD1(d1Origin, headers, '/__cf00/write', {
     writer: 'writer-c', batchId: 'batch000000000022-c', expectedRev: 1, consentEpoch: 6,
   });
   assert.equal(staleConsent.status, 409, 'Consent epoch stale must fail closed');
-  const afterResponse = await callD1(origin, headers, '/__cf00/state');
+  const afterResponse = await callD1(d1Origin, headers, '/__cf00/state');
   safeRemoteD1Response(afterResponse, 'D1 state after rejected writes');
   assert.deepEqual(await afterResponse.json(), state);
 
-  const planResponse = await callD1(origin, headers, '/__cf00/plan');
+  const planResponse = await callD1(d1Origin, headers, '/__cf00/plan');
   safeRemoteD1Response(planResponse, 'D1 index plans');
   const plans = (await planResponse.json()).plans;
   assert.deepEqual(plans.map(x => x.name), ['control', 'receipt', 'document']);
