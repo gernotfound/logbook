@@ -18,7 +18,7 @@ concurrency:
 jobs:
   remote-kdf:
     name: Temporary Cloudflare account (KDF and D1, no Production credentials)
-    if: github.event.pull_request.head.repo.full_name == github.repository && startsWith(github.head_ref, 'CF-00-cloudflare-temporary-')
+    if: github.event.pull_request.head.repo.full_name == github.repository && (startsWith(github.head_ref, 'CF-00-cloudflare-temporary-') || startsWith(github.head_ref, 'CF-00-credential-hash-verify-'))
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
