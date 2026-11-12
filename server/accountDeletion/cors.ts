@@ -2,15 +2,17 @@ import { RequestAuthError } from './httpAuth.js';
 
 const DEFAULT_PUBLIC_APP_ORIGIN = 'https://thelogbook.web.app';
 
-function parseConfiguredOrigin(fallback?: string): string | null {
-  const raw = process.env.PUBLIC_APP_ORIGIN;
+type AppOriginEnv = 'PUBLIC_APP_ORIGIN' | 'PUBLIC_CANDIDATE_APP_ORIGIN';
+
+function parseConfiguredOrigin(name: AppOriginEnv, fallback?: string): string | null {
+  const raw = process.env[name];
   if (raw === undefined || raw.trim() === '') return fallback ?? null;
 
   let url: URL;
   try {
     url = new URL(raw.trim());
   } catch {
-    throw new Error('PUBLIC_APP_ORIGIN non valida.');
+    throw new Error(name + ' non valida.');
   }
 
   if (url.protocol !== 'https:'
@@ -19,13 +21,17 @@ function parseConfiguredOrigin(fallback?: string): string | null {
     || url.search
     || url.hash
     || (url.pathname !== '' && url.pathname !== '/')) {
-    throw new Error('PUBLIC_APP_ORIGIN deve essere un origin HTTPS esatto senza path, query o credenziali.');
+    throw new Error(name + ' deve essere un origin HTTPS esatto senza path, query o credenziali.');
   }
   return url.origin;
 }
 
 function allowedAccountDeletionOrigins(): ReadonlySet<string> {
-  return new Set([parseConfiguredOrigin(DEFAULT_PUBLIC_APP_ORIGIN)!]);
+  const primary = parseConfiguredOrigin('PUBLIC_APP_ORIGIN', DEFAULT_PUBLIC_APP_ORIGIN)!;
+  // Only a deliberately provisioned, exact second origin is allowed during
+  // candidate testing; removing the environment variable restores single-origin CORS.
+  const candidate = parseConfiguredOrigin('PUBLIC_CANDIDATE_APP_ORIGIN');
+  return new Set(candidate ? [primary, candidate] : [primary]);
 }
 
 export function requireAccountDeletionOrigin(request: Request): string {
