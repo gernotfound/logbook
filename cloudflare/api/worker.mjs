@@ -159,6 +159,7 @@ async function handler(request, env) {
   }
   // Same-origin requests only; do not enable wildcard CORS or permissive previews.
   if (!env.API_ORIGIN || !/^https:\/\//.test(env.API_ORIGIN)
+    || url.origin !== env.API_ORIGIN
     || request.headers.get('origin') !== env.API_ORIGIN
     || (request.headers.has('sec-fetch-site') && request.headers.get('sec-fetch-site') !== 'same-origin')) {
     return reply({ error: 'origin-rejected' }, 403);
