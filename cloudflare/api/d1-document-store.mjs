@@ -15,6 +15,37 @@ export async function readSnapshot(db, uid, consentRevision, fenceEpoch, paths) 
   return { revision: control.revision, fenceEpoch: control.fence_epoch, documents };
 }
 
+// A full checkpoint is collected in bounded, revision-fenced pages. Each D1
+// batch is one SQL transaction: the control and its page share a consistent view.
+// No page is authoritative on its own, and callers must reject stale revisions.
+export async function readDocumentPage(db, uid, consentRevision, fenceEpoch, afterPath, expectedRevision) {
+  const pageSql = afterPath === null
+    ? "SELECT path, envelope_json, revision FROM sync_documents WHERE uid = ? ORDER BY path LIMIT 9"
+    : "SELECT path, envelope_json, revision FROM sync_documents WHERE uid = ? AND path > ? ORDER BY path LIMIT 9";
+  const pageArgs = afterPath === null ? [uid] : [uid, afterPath];
+  const [controlResult, pageResult] = await db.batch([
+    db.prepare("SELECT s.revision, a.fence_epoch FROM sync_subjects a JOIN sync_state s ON s.uid = a.uid WHERE a.uid = ? AND a.status = 'active' AND a.consent_revision = ? AND a.fence_epoch = ?")
+      .bind(uid, consentRevision, fenceEpoch),
+    db.prepare(pageSql).bind(...pageArgs),
+  ]);
+  const control = controlResult?.results?.[0];
+  if (!control) return { kind: 'access-revoked' };
+  if (expectedRevision !== null && control.revision !== expectedRevision) {
+    return { kind: 'snapshot-changed' };
+  }
+  const all = pageResult.results;
+  const hasMore = all.length > 8;
+  const items = all.slice(0, 8).map(row => ({
+    path: row.path,
+    revision: row.revision,
+    document: JSON.parse(row.envelope_json),
+  }));
+  return {
+    kind: 'page', revision: control.revision, fenceEpoch: control.fence_epoch,
+    documents: items, nextAfter: hasMore ? items.at(-1).path : null, complete: !hasMore,
+  };
+}
+
 export async function readReceipt(db, uid, consentRevision, fenceEpoch, batchId) {
   return db.prepare("SELECT r.request_hash, r.committed_revision, r.last_seq, r.consent_revision, r.slot, r.replica_id, r.generation FROM sync_receipts r JOIN sync_subjects a ON a.uid = r.uid WHERE r.uid = ? AND r.batch_id = ? AND a.status = 'active' AND a.consent_revision = ? AND a.fence_epoch = ?")
     .bind(uid, batchId, consentRevision, fenceEpoch).first();
