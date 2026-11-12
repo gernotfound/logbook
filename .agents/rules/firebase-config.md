@@ -13,6 +13,12 @@ Il proprietario ha fornito l'output CLI della **disattivazione del solo sito `th
 
 **Checkpoint Google OAuth 12/11/2026 (successivo alla schermata Firebase Auth):** screenshot del client Web Google **Attivo**, con 4 origini JavaScript e 2 redirect: `thelogbook.web.app` è ancora presente in entrambi, mentre `thelogbook.me` e `https://thelogbook.me/__/auth/handler` mancano. Il proprietario ha ricevuto istruzioni per aggiungere i due valori in modo additivo, **salvataggio non confermato**. Non rimuovere ancora i callback precedenti né Firebase default; non confondere allowlist Auth con OAuth, App Check e API key. Nessun dato di client ID/secret nel repository. Vedi registro e issue #1041.
 
+## Aggiornamento sicurezza 12/11/2026 — quota App Check e OAuth
+
+L'email ufficiale Google Cloud sul progetto `logbook-db-98cc4` conferma **10.000 assessments gratuiti reCAPTCHA esauriti a novembre** e circa **12.813 azioni senza score** stimate, non equivalenti a richieste Firebase accettate. Senza fatturazione `CreateAssessment` fallisce 429 `RESOURCE_EXHAUSTED`; non inferire dal messaggio che l'enforcement Firebase consenta traffico non attestato. Il client usa `ReCaptchaEnterpriseProvider` e fallisce chiuso quando il token App Check è indisponibile. Non spegnere enforcement o attivare billing per workaround. Valutazione P0 del provider custom App Check/Turnstile con issuer server-side e protezioni antiabuso, senza assumere che sia già deployato.
+
+Screenshot OAuth Web aggiornato: `https://thelogbook.me` e `https://thelogbook.me/__/auth/handler` presenti nel modulo; `thelogbook.web.app` rimosso dalle due allowlist su scelta del product owner. **Non ripristinare il vecchio Hosting o le sue autorizzazioni**. `logbook-db-98cc4.firebaseapp.com` è distinto e rimane necessario finché gli helper/action email non hanno un sostituto. Salvataggio provider dopo refresh, allowlist reCAPTCHA e login/App Check reali ancora da verificare; vedere registro e issue #1041.
+
 ## Tre contratti di configurazione distinti
 
 Non trattare tutte le variabili Firebase/App Check/Admin come un unico blocco obbligatorio. Esistono tre boundary differenti: client Firebase, App Check client e server trusted.

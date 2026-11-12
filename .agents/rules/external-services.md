@@ -46,6 +46,8 @@ Il repository è pubblico.
 - **MUST:** prima di eliminare una funzione generica di portabilità, dimostrare che sia specifica del provider ritirato. Il supporto generico a base path/subpath non è automaticamente codice legacy di deployment.
 - **VERIFY:** restrizioni referrer API key, origin/redirect OAuth, domini autorizzati Firebase Auth, domini reCAPTCHA/Fraud Defense e proprietà Search Console sono stato esterno.
 
+**Incidente quota 12/11/2026, Google Cloud:** notifica del provider per `logbook-db-98cc4` attesta **10.000 valutazioni gratuite reCAPTCHA consumate** e circa **12.813 azioni senza valutazione**. Non significa 12.813 richieste Firebase accettate. Sul piano senza billing, nuove `CreateAssessment` oltre quota falliscono `429 RESOURCE_EXHAUSTED`; App Check può non ottenere nuovi token. Mantieni enforcement, nessun upgrade a pagamento né bypass; il solo Cloudflare Hosting non mitiga questa quota. Considerare un provider custom App Check verificato via Turnstile Free e backend trusted, dopo analisi di IAM, rate-limit e failure path. Screenshot OAuth owner aggiornato mostra `thelogbook.me` e callback presenti e `thelogbook.web.app` rimossi: **non riattivare il vecchio sito per rollback non richiesto**. Verifica di salvataggio e login live ancora aperta. Dettagli nel registro e issue #1041.
+
 ## Boundary dei provider
 
 ### Firebase / Google Cloud

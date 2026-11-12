@@ -1,7 +1,7 @@
 {
   "name": "logbook",
   "private": true,
-  "version": "2.372.0",
+  "version": "2.373.0",
   "type": "module",
   "packageManager": "npm@11.21.0",
   "engines": {
