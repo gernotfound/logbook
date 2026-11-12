@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { describe, expect, it, vi } from 'vitest';
 import { CloudReplicaTransportError, createCloudflareReplicaTransport } from '../../../src/lib/sync/cloudReplicaTransport';
 
@@ -31,6 +32,31 @@ describe('isolated Cloudflare document transport', () => {
             JSON.stringify({ receipt: { revision: '1', lastSeq: 1 } }),
         )) as typeof fetch);
         await expect(malformed.receipt(batch)).rejects.toBeInstanceOf(CloudReplicaTransportError);
+    });
+
+    it('checks the exact batch fingerprint before recognizing a lost ACK receipt', async () => {
+        const canonical = JSON.stringify({
+            batchId: batch.batchId, consentRevision: 1, documents: [],
+            expectedRevision: 0, lastSeq: 1,
+            replica: { generation: 1, replicaId: 'replica-test', slot: 's00' },
+        });
+        const requestHash = createHash('sha256').update(canonical).digest('hex');
+        const receipt = { requestHash, revision: 1, lastSeq: 1, consentRevision: 1,
+            replica: { slot: 's00', replicaId: 'replica-test', generation: 1 } };
+        const fetcher = vi.fn(async () => new Response(JSON.stringify({ receipt })));
+        const remote = createCloudflareReplicaTransport(fetcher as typeof fetch);
+        await expect(remote.receipt(batch)).resolves.toEqual({ revision: 1, lastSeq: 1 });
+        expect(fetcher).toHaveBeenCalledWith('/v1/sync/receipt', expect.objectContaining({
+            method: 'POST', credentials: 'include', mode: 'same-origin',
+        }));
+        const tampered = createCloudflareReplicaTransport(vi.fn(async () => new Response(
+            JSON.stringify({ receipt: { ...receipt, requestHash: '0'.repeat(64) } }),
+        )) as typeof fetch);
+        await expect(tampered.receipt(batch)).rejects.toBeInstanceOf(CloudReplicaTransportError);
+        const absent = createCloudflareReplicaTransport(vi.fn(async () => new Response(
+            JSON.stringify({ receipt: null }),
+        )) as typeof fetch);
+        await expect(absent.receipt(batch)).resolves.toBeNull();
     });
 
     it('requires a session-bound CSRF value before any encrypted commit', async () => {
