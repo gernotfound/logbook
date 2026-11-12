@@ -223,6 +223,18 @@ void test('simultaneous stale revisions have one winner and no phantom receipt',
   assert.equal(db.sqlite.prepare('SELECT count(*) as n FROM sync_receipts').get().n, 1);
 }));
 
+void test('oversized streamed bodies fail with 413 before any D1 mutation', () => withFixture(async db => {
+  const largeBody = JSON.stringify({ data: 'X'.repeat(1800001) });
+  const response = await worker.fetch(new Request(origin + '/v1/sync/commit', {
+    method: 'POST', headers: { Origin: origin, 'Content-Type': 'application/json' },
+    body: largeBody,
+  }), makeEnv(db));
+  assert.equal(response.status, 413);
+  assert.equal((await response.json()).error, 'payload-too-large');
+  assert.equal(db.sqlite.prepare('SELECT count(*) as n FROM sync_receipts').get().n, 0);
+  assert.equal(db.sqlite.prepare('SELECT revision FROM sync_state').get().revision, 0);
+}));
+
 void test('isolated migration has an explicit rollback, without touching external resources', () => withFixture(async db => {
   db.sqlite.exec(rollback);
   const existing = db.sqlite.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='sync_subjects'").get();
