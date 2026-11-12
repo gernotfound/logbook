@@ -163,23 +163,35 @@ jobs:
             cmp -s "${file}" /tmp/cloudflare-chunk || { echo "Chunk byte mismatch: ${path}"; exit 1; }
           done
 
+          # The PWA uses query-string shortcuts, not server-side pathname routes.
           curl --fail --silent --show-error \
             -H 'Sec-Fetch-Mode: navigate' -H 'Accept: text/html' \
-            "${CLOUDFLARE_APP_ORIGIN}/training" -o /tmp/cloudflare-spa
-          cmp -s dist/index.html /tmp/cloudflare-spa || { echo 'SPA fallback mismatch'; exit 1; }
-          # Simulate a real Vite module request: without Fetch Metadata, the
-          # Cloudflare SPA fallback can return index.html for a synthetic curl miss.
-          miss_result="$(curl --silent --show-error --output /tmp/cloudflare-missing \
-            --write-out '%{http_code} %{content_type}' \
-            -H 'Accept: application/javascript' \
-            -H 'Sec-Fetch-Mode: cors' -H 'Sec-Fetch-Dest: script' \
-            -H 'Sec-Fetch-Site: same-origin' \
-            "${CLOUDFLARE_APP_ORIGIN}/assets/missing-synthetic.js")"
-          miss_status="${miss_result%% *}"
-          test "${miss_status}" = 404 || {
-            echo "Missing browser JS request must be a real 404; got HTTP ${miss_result}"
+            "${CLOUDFLARE_APP_ORIGIN}/?tab=training" -o /tmp/cloudflare-tab-shortcut
+          cmp -s dist/index.html /tmp/cloudflare-tab-shortcut || {
+            echo 'PWA query shortcut must serve the root app shell'
             exit 1
           }
+
+          # Missing static resources must never fall back to index.html. Verify
+          # browser script/style loads as well as a navigation to an unknown path.
+          for missing_path in /assets/missing-synthetic.js /assets/missing-synthetic.css /training; do
+            case "${missing_path}" in
+              *.js) accept='application/javascript'; mode='cors'; destination='script' ;;
+              *.css) accept='text/css'; mode='no-cors'; destination='style' ;;
+              *) accept='text/html'; mode='navigate'; destination='document' ;;
+            esac
+            miss_result="$(curl --silent --show-error --output /tmp/cloudflare-missing \
+              --write-out '%{http_code} %{content_type}' \
+              -H "Accept: ${accept}" \
+              -H "Sec-Fetch-Mode: ${mode}" -H "Sec-Fetch-Dest: ${destination}" \
+              -H 'Sec-Fetch-Site: same-origin' \
+              "${CLOUDFLARE_APP_ORIGIN}${missing_path}")"
+            miss_status="${miss_result%% *}"
+            test "${miss_status}" = 404 || {
+              echo "Missing Cloudflare path ${missing_path} must be a real 404; got HTTP ${miss_result}"
+              exit 1
+            }
+          done
 
           helper_status="$(curl --silent --show-error --output /tmp/cloudflare-auth-helper \
             --write-out '%{http_code}' "${CLOUDFLARE_APP_ORIGIN}/__/auth")"
