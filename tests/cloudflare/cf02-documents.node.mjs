@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
 import { DatabaseSync } from 'node:sqlite';
+import { xchacha20poly1305 } from '@noble/ciphers/chacha.js';
 import worker from '../../cloudflare/api/worker.mjs';
 
 const migration = readFileSync(new URL('../../cloudflare/api/migrations/0001_encrypted_replica.sql', import.meta.url), 'utf8');
@@ -122,6 +123,44 @@ void test('first encrypted root/month write, coherent read and durable receipt r
   const collision = await call(db, 'commit', { ...item, documents: [{ path: '', document: envelope(1) }] });
   assert.deepEqual(collision, { status: 409, body: { error: 'batch-id-conflict' } });
   assert.equal(db.sqlite.prepare('SELECT count(*) as n FROM sync_receipts').get().n, 1);
+}));
+
+void test('real XChaCha20-Poly1305 ciphertext survives D1 HTTP save/read without business plaintext', () => withFixture(async db => {
+  const key = new Uint8Array(32).fill(47);
+  const nonce = new Uint8Array(24).fill(23);
+  const path = 'nutrition_months/2026-11';
+  const business = { '2026-11-12': { weight: 'synthetic-only-75' } };
+  const sealed = envelope(1);
+  const canonical = value => {
+    if (Array.isArray(value)) return '[' + value.map(canonical).join(',') + ']';
+    if (value !== null && typeof value === 'object') {
+      return '{' + Object.keys(value).sort().map(k => JSON.stringify(k) + ':' + canonical(value[k])).join(',') + '}';
+    }
+    return JSON.stringify(value);
+  };
+  const aad = new TextEncoder().encode(canonical([
+    'thelogbook-cloud-document', 1, owner, path, 1, sealed._sync,
+  ]));
+  const payload = new TextEncoder().encode(canonical({ business, fields: {} }));
+  const encoded = bytes => Buffer.from(bytes).toString('base64url');
+  sealed._sealed.nonce = encoded(nonce);
+  sealed._sealed.ciphertext = encoded(xchacha20poly1305(key, nonce, aad).encrypt(payload));
+  const write = attempt('batch000000000008', 1, 0, [path]);
+  write.documents[0].document = sealed;
+  assert.equal((await call(db, 'commit', write)).status, 200);
+  const read = await call(db, 'read', { paths: [path] });
+  assert.equal(read.status, 200);
+  assert.deepEqual(read.body.documents[0].document, sealed);
+  const ciphertext = Buffer.from(read.body.documents[0].document._sealed.ciphertext, 'base64url');
+  const actual = xchacha20poly1305(key, nonce, aad).decrypt(ciphertext);
+  assert.deepEqual(JSON.parse(new TextDecoder().decode(actual)), { business, fields: {} });
+  const wrongPathAad = new TextEncoder().encode(canonical([
+    'thelogbook-cloud-document', 1, owner, '', 1, sealed._sync,
+  ]));
+  assert.throws(() => xchacha20poly1305(key, nonce, wrongPathAad).decrypt(ciphertext));
+  const raw = db.sqlite.prepare('SELECT envelope_json FROM sync_documents WHERE uid=? AND path=?').get(owner, path);
+  assert.ok(raw.envelope_json.includes('_sealed'));
+  assert.ok(!raw.envelope_json.includes('synthetic-only-75'));
 }));
 
 void test('CAS conflict and invalid replica cannot persist documents or receipts', () => withFixture(async db => {
