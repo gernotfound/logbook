@@ -49,6 +49,7 @@ const authClaims = z.strictObject({
   healthConsentRevision: safeInt.min(1),
   fenceEpoch: safeInt.min(1),
   csrfVerified: z.boolean(),
+  rateGatePassed: z.literal(true),
 });
 
 function reply(body, status = 200) {
@@ -176,7 +177,9 @@ async function handler(request, env) {
     if (state?.status !== 'active' || state?.consent_revision !== consentRevision
       || state?.revision === undefined) throw new BadInput('access-revoked', 403);
     const receipt = await readReceipt(env.DB, uid, consentRevision, fenceEpoch, batchId.data.batchId);
-    return reply({ receipt: receipt ? { revision: receipt.committed_revision, lastSeq: receipt.last_seq } : null });
+    return reply({ receipt: receipt ? { requestHash: receipt.request_hash, revision: receipt.committed_revision,
+      lastSeq: receipt.last_seq, consentRevision: receipt.consent_revision,
+      replica: { slot: receipt.slot, replicaId: receipt.replica_id, generation: receipt.generation } } : null });
   }
   const raw = await jsonBounded(request);
   if (route === '/v1/sync/read') {
