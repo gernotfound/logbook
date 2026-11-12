@@ -139,15 +139,27 @@ async function exerciseD1(origin, headers, environment) {
   }
   assert.ok(ready, 'Temporary remote Worker did not expose D1 binding');
 
-  const initResponse = await callD1(origin, headers, '/__cf00/init');
-  if (initResponse.status !== 200) {
+  // Only this synthetic, pre-write, idempotent fixture init may be retried.
+  // Real user writes require receipt-based lost-ACK recovery, not blind retries.
+  let initialized = false;
+  for (let n = 0; n < 12; n += 1) {
+    const initResponse = await callD1(origin, headers, '/__cf00/init');
+    if (initResponse.status === 200) {
+      initialized = true;
+      break;
+    }
     const data = await initResponse.json().catch(() => null);
+    if (initResponse.status === 503 && data?.error === 'd1-binding-unavailable') {
+      if (n < 11) await sleep(1000);
+      continue;
+    }
     const category = /^[A-Za-z][A-Za-z0-9_]{0,39}$/.test(String(data?.category))
       ? data.category : 'Unknown';
     const hint = typeof data?.hint === 'string' ? data.hint.slice(0, 150) : '';
     throw new Error('D1 fixture init failure: HTTP ' + initResponse.status
       + ', category=' + category + ', hint=' + hint);
   }
+  assert.ok(initialized, 'D1 binding did not become available at this temporary deployment');
   const requests = [
     { writer: 'writer-a', batchId: 'batch000000000021-a', expectedRev: 0, consentEpoch: 7 },
     { writer: 'writer-b', batchId: 'batch000000000021-b', expectedRev: 0, consentEpoch: 7 },

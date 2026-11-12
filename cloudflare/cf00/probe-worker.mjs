@@ -113,6 +113,12 @@ export default {
     if (!authorized(request, env)) return json({ error: 'not-available' }, 404);
     if (request.method !== 'POST') return json({ error: 'method' }, 405);
     const path = new URL(request.url).pathname;
+    // A newly deployed temporary Worker can still be routed through a version
+    // without the D1 binding. Fail explicitly before any schema or write work.
+    if (['/__cf00/init', '/__cf00/write', '/__cf00/state', '/__cf00/receipt', '/__cf00/plan'].includes(path)
+      && typeof env.DB?.prepare !== 'function') {
+      return json({ error: 'd1-binding-unavailable' }, 503);
+    }
     try {
       if (path === '/__cf00/init') {
         try {

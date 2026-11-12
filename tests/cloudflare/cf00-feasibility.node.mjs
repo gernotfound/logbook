@@ -140,6 +140,19 @@ void test('synthetic password credential round-trip rejects wrong, altered and m
   for (const key of ['hash', 'salt', 'stored', 'password', 'credential']) assert.ok(!(key in result));
 });
 
+void test('authorized D1 routes reject a missing binding without touching data', async () => {
+  const secret = 't'.repeat(48);
+  const env = { CF00_PROBE_ENABLED: 'true', CF00_PROBE_SECRET: secret };
+  for (const path of ['/__cf00/init', '/__cf00/write', '/__cf00/state',
+    '/__cf00/receipt', '/__cf00/plan']) {
+    const response = await worker.fetch(new Request('https://cf00.invalid' + path, {
+      method: 'POST', headers: { 'x-cf00-secret': secret },
+    }), env);
+    assert.equal(response.status, 503);
+    assert.deepEqual(await response.json(), { error: 'd1-binding-unavailable' });
+  }
+});
+
 void test('probe defaults to unavailable and requires a secret even when enabled', async () => {
   const url = 'https://cf00.invalid/__cf00/init';
   const missing = await worker.fetch(new Request(url, { method: 'POST' }), {});
