@@ -6,7 +6,7 @@ import { CloudCiphertextError, sealCloudDocument } from '../../../src/lib/sync/c
 import type { SyncMeta } from '../../../src/lib/sync/semanticProjection/contracts';
 
 describe('isolated Cloudflare document transport', () => {
-    const batch = { batchId: 'batch000000000001', expectedRevision: 0, consentRevision: 1,
+    const batch = { batchId: 'batch000000000001', expectedRevision: 0, expectedFenceEpoch: 5, consentRevision: 1,
         replica: { slot: 's00', replicaId: 'replica-test', generation: 1 }, lastSeq: 1, documents: [] };
     it('uses same-origin credentialed requests and never acknowledges unverified ciphertext', async () => {
         const fetcher = vi.fn(async (_url: RequestInfo | URL, _init?: RequestInit) => new Response(JSON.stringify({
@@ -40,6 +40,7 @@ describe('isolated Cloudflare document transport', () => {
     it('checks the exact batch fingerprint before recognizing a lost ACK receipt', async () => {
         const canonical = JSON.stringify({
             batchId: batch.batchId, consentRevision: 1, documents: [],
+            expectedFenceEpoch: 5,
             expectedRevision: 0, lastSeq: 1,
             replica: { generation: 1, replicaId: 'replica-test', slot: 's00' },
         });
@@ -66,7 +67,7 @@ describe('isolated Cloudflare document transport', () => {
         const fetcher = vi.fn(async () => new Response('{}'));
         const remote = createCloudflareReplicaTransport(fetcher as typeof fetch);
         await expect(remote.commit({
-            batchId: 'batch000000000002', expectedRevision: 0, consentRevision: 1,
+            batchId: 'batch000000000002', expectedRevision: 0, expectedFenceEpoch: 5, consentRevision: 1,
             replica: { slot: 's00', replicaId: 'replica-test', generation: 1 },
             lastSeq: 1, documents: [],
         }, '')).rejects.toBeInstanceOf(CloudReplicaTransportError);
