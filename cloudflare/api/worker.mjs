@@ -139,7 +139,8 @@ function validateSealedBatch(input) {
     const w = sealed._sync.writer;
     if (w.slot !== input.replica.slot || w.replicaId !== input.replica.replicaId
       || w.generation !== input.replica.generation || w.seq !== input.lastSeq
-      || w.consentRevision !== input.consentRevision || sealed._sync.clock[w.slot] < w.seq) {
+      || w.consentRevision !== input.consentRevision
+      || !Number.isSafeInteger(sealed._sync.clock[w.slot]) || sealed._sync.clock[w.slot] < w.seq) {
       throw new BadInput('invalid-input', 400);
     }
     if (new TextEncoder().encode(JSON.stringify(sealed)).byteLength > MAX_DOCUMENT_BYTES) {
