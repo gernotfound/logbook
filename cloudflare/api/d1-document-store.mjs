@@ -16,7 +16,7 @@ export async function readSnapshot(db, uid, consentRevision, fenceEpoch, paths) 
 }
 
 export async function readReceipt(db, uid, consentRevision, fenceEpoch, batchId) {
-  return db.prepare("SELECT r.request_hash, r.committed_revision, r.last_seq FROM sync_receipts r JOIN sync_subjects a ON a.uid = r.uid WHERE r.uid = ? AND r.batch_id = ? AND a.status = 'active' AND a.consent_revision = ? AND a.fence_epoch = ?")
+  return db.prepare("SELECT r.request_hash, r.committed_revision, r.last_seq, r.consent_revision, r.slot, r.replica_id, r.generation FROM sync_receipts r JOIN sync_subjects a ON a.uid = r.uid WHERE r.uid = ? AND r.batch_id = ? AND a.status = 'active' AND a.consent_revision = ? AND a.fence_epoch = ?")
     .bind(uid, batchId, consentRevision, fenceEpoch).first();
 }
 
