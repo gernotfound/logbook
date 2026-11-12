@@ -9,6 +9,13 @@ Il registro decisionale stabile e leggibile anche fuori dal codice è `docs/oper
 
 **Autorità:** [`AGENTS.md`](../../AGENTS.md). Questo contratto ne specializza gli invarianti; non amplia autorizzazioni o perimetro.
 
+## Checkpoint servizi 12/11/2026 — fase Cloudflare, nessun cutover
+
+- **Conferma operativa del proprietario:** su Cloud Shell del progetto `logbook-db-98cc4`, il comando `firebase hosting:disable --project logbook-db-98cc4 --site thelogbook` ha restituito `Hosting has been disabled for thelogbook`. Il workflow GitHub `Firebase Hosting Production` è stato **dichiarato disabilitato** dal proprietario tramite UI GitHub; verificare separatamente lo stato `disabled_manually` prima di considerare sicuro qualsiasi futuro merge. Il workflow rimane nel repository e non va riattivato implicitamente.
+- **Non disattivare** il site ID predefinito `logbook-db-98cc4` né gli altri siti del progetto elencati da Firebase CLI: solo il site ID `thelogbook` è stato disabilitato. Mantieni Authentication, Firestore, App Check, gli Admin SDK trusted su Vercel e le identità WIF Firestore.
+- **Cloudflare:** zona DNS `thelogbook.me` su piano Free con delega IONOS modificata ma attivazione `Active` non ancora osservata. Worker `thelogbook-frontend` candidato `workers.dev` non ancora attestato; il proxy `/__/auth/*` dipende ancora da `logbook-db-98cc4.firebaseapp.com`. L'autorizzazione a spegnere Hosting non equivale a GO pubblico: verificare gli helper Google/Safari e il percorso di autenticazione prima del cutover.
+- **GitHub credenziali:** il proprietario dichiara creata la Variable `CLOUDFLARE_APP_ORIGIN`; `CLOUDFLARE_ACCOUNT_ID` ancora da inserire alla data del checkpoint, `CLOUDFLARE_API_TOKEN` non attestato. Non scrivere in file pubblici valori privati di credenziali/account; il valore del token va esclusivamente nel Secret. La fonte autorevole dello stato operativo resta [issue #1041](https://github.com/gernotfound/logbook/issues/1041).
+
 ## Fonte di verità
 
 - **MUST:** codice/config repository e stato del provider esterno sono fonti di verità separate. Non dedurre la configurazione live dal solo repository.
@@ -25,7 +32,7 @@ Il repository è pubblico.
 - **MUST:** non tracciare snapshot `.env.production` o equivalenti con valori reali del deployment. Il contratto pubblico vive in `.env.example`; i valori Production vivono nel provider di deployment.
 - **SHOULD:** evitare di duplicare nella documentazione identificativi/site key client pubblici quando nome e ruolo sono sufficienti.
 - **MUST:** esempi e fixture di test usano identità e path sintetici.
-- **MUST:** il deploy Firebase Hosting da GitHub usa Workload Identity Federation con impersonation limitata al repository; il service account Hosting ha soltanto `roles/firebasehosting.admin` + `roles/serviceusage.apiKeysViewer`.
+- **MUST:** un eventuale deploy Firebase Hosting **solo se nuovamente autorizzato** usa Workload Identity Federation con impersonation limitata al repository; il service account Hosting ha soltanto `roles/firebasehosting.admin` + `roles/serviceusage.apiKeysViewer`. La WIF Hosting esistente non autorizza a riabilitare il workflow disattivato.
 - **MUST:** il deploy Firestore Production usa un service account WIF separato, senza chiavi private, con il minimo contratto corrente `roles/firebaserules.admin` + `roles/datastore.indexAdmin` + `roles/serviceusage.apiKeysViewer` + `roles/serviceusage.serviceUsageViewer`; non assegnare questi privilegi al deployer Hosting per comodità.
 - L'identità Firebase Admin di Vercel è separata e, quando consuma token App Check limited-use, deve possedere il permesso `firebaseappcheck.appCheckTokens.verify`; `roles/firebaseappcheck.tokenVerifier` è il ruolo minimo da preferire quando si assegna ex novo tale capacità, mentre un ruolo già presente che includa lo stesso permesso non va duplicato inutilmente.
 - **MUST:** se un valore privato viene esposto, ruotarlo/revocarlo presso il provider e ripulire lo stato repository corrente dove praticabile; cancellare un messaggio o aggiungere un commit successivo non sostituisce la rotazione.
@@ -35,7 +42,7 @@ Il repository è pubblico.
 - **MUST:** origin e domini di deployment ritirati vengono rimossi dalla configurazione applicativa e dalle allowlist esterne quando non sono più necessari.
 - **MUST:** non mantenere autorizzato un vecchio origin per sola compatibilità storica se nessun runtime reale lo usa.
 - **MUST:** il ritiro di un origin che ha ospitato una PWA deve considerare anche i Service Worker già installati: un redirect HTTP del root non basta se un worker legacy può ancora servire l'app shell dalla propria cache.
-- **MUST (baseline fresh start pre-lancio):** il Service Worker di ritiro su `/sw.js` dell'origin Vercel è dismesso: non esistono installazioni pre-lancio da supportare. Vercel continua a ospitare solo backend trusted e il redirect del vecchio root verso Firebase, mentre il Service Worker corrente della PWA è distribuito esclusivamente da Firebase Hosting. Non re-autorizzare il vecchio origin in Firebase Auth/App Check.
+- **MUST (baseline fresh start pre-lancio):** il Service Worker di ritiro su `/sw.js` dell'origin Vercel è dismesso: non esistono installazioni pre-lancio da supportare. Vercel continua a ospitare solo backend trusted e il redirect del vecchio root verso il precedente frontend Firebase; questo redirect **non certifica un sito raggiungibile** dopo il disable. Il Service Worker della PWA era distribuito da Firebase Hosting; il nuovo runtime candidato Cloudflare va validato separatamente. Non re-autorizzare il vecchio origin in Firebase Auth/App Check.
 - **MUST:** prima di eliminare una funzione generica di portabilità, dimostrare che sia specifica del provider ritirato. Il supporto generico a base path/subpath non è automaticamente codice legacy di deployment.
 - **VERIFY:** restrizioni referrer API key, origin/redirect OAuth, domini autorizzati Firebase Auth, domini reCAPTCHA/Fraud Defense e proprietà Search Console sono stato esterno.
 
@@ -43,7 +50,7 @@ Il repository è pubblico.
 
 ### Firebase / Google Cloud
 
-Firebase Hosting, Firebase Authentication, Firestore, Firebase Admin e App Check sono boundary distinti anche quando condividono lo stesso progetto Google Cloud. Il frontend/PWA target è servito da Firebase Hosting statico sul piano Spark; Functions/Scheduler Firebase non fanno parte dell'architettura.
+Firebase Hosting, Firebase Authentication, Firestore, Firebase Admin e App Check sono boundary distinti anche quando condividono lo stesso progetto Google Cloud. Il precedente frontend/PWA era servito da Firebase Hosting statico sul piano Spark, site ID `thelogbook`, **disabilitato il 12/11/2026 secondo output CLI fornito**. Il nuovo frontend target è Cloudflare Workers Static Assets, non ancora distribuito; Functions/Scheduler Firebase non fanno parte dell'architettura.
 
 - Seguire `.agents/rules/firebase-config.md` per contratti env client/server, App Check e Rules.
 - Google Cloud può presentare reCAPTCHA Enterprise dentro il prodotto più ampio Fraud Defense. TheLogBook usa attualmente il provider reCAPTCHA Enterprise tramite Firebase App Check; non dichiarare attive Account defense, SMS defense, transaction defense o API Fraud Defense dirette senza evidenza live.
@@ -54,7 +61,7 @@ Firebase Hosting, Firebase Authentication, Firestore, Firebase Admin e App Check
 
 ### Vercel
 
-- Vercel è il boundary backend trusted Production: contiene env server-only, Functions e cron; il frontend/PWA Production target è Firebase Hosting.
+- Vercel è il boundary backend trusted Production: contiene env server-only, Functions e cron; il frontend/PWA precedentemente su Firebase Hosting è disabilitato e il target Cloudflare attende i gate di rilascio.
 - **MUST:** il deployment Vercel non deve eseguire né pubblicare il build Vite/Firebase del frontend. Il suo output statico è un artefatto backend-only dedicato; in particolare non deve esporre il Service Worker PWA generato per Firebase.
 - `main` resta l'unico branch abilitato al deployment salvo cambio deliberato del contratto repository.
 - Le credenziali server-only non devono mai avere prefisso `VITE_`.
