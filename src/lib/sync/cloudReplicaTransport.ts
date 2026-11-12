@@ -21,6 +21,16 @@ export interface CloudReplicaSnapshot {
     documents: Array<{ path: string; revision: number | null; document: unknown }>;
 }
 
+export interface CloudReplicaCompleteScan {
+    revision: number;
+    fenceEpoch: number;
+    documents: Array<{ path: string; revision: number; document: unknown }>;
+}
+
+const SCAN_PAGE_SIZE = 8;
+const MAX_SCAN_PAGES = 1024;
+const DOCUMENT_PATH = /^(?:(?:history_months|nutrition_months)\/\d{4}-(?:0[1-9]|1[0-2]))?$/;
+
 export interface CloudReplicaReceipt {
     revision: number;
     lastSeq: number;
@@ -61,7 +71,7 @@ function safeRevision(value: unknown): value is number {
  * validates identity, health consent and session-bound CSRF independently.
  */
 export function createCloudflareReplicaTransport(send: typeof fetch = fetch) {
-    async function post(route: 'read' | 'commit' | 'receipt', body: unknown, csrfToken?: string): Promise<unknown> {
+    async function post(route: 'read' | 'scan' | 'commit' | 'receipt', body: unknown, csrfToken?: string): Promise<unknown> {
         let response: Response;
         try {
             response = await send('/v1/sync/' + route, {
@@ -88,6 +98,54 @@ export function createCloudflareReplicaTransport(send: typeof fetch = fetch) {
     }
 
     return {
+        // A partial page must never be published as a complete cloud checkpoint.
+        // A concurrent write forces a 409 (and a fresh scan), never a silent
+        // merge against an inconsistent collection of monthly documents.
+        async scanAll(): Promise<CloudReplicaCompleteScan> {
+            let after: string | null = null;
+            let expectedRevision: number | null = null;
+            let fenceEpoch: number | null = null;
+            const documents: CloudReplicaCompleteScan['documents'] = [];
+            for (let index = 0; index < MAX_SCAN_PAGES; index += 1) {
+                const value = await post('scan', { after, expectedRevision });
+                if (!isRecord(value) || !safeRevision(value.revision)
+                    || !safeRevision(value.fenceEpoch)
+                    || !Array.isArray(value.documents)
+                    || value.documents.length > SCAN_PAGE_SIZE
+                    || typeof value.complete !== 'boolean'
+                    || (value.nextAfter !== null && typeof value.nextAfter !== 'string')
+                    || (expectedRevision !== null && value.revision !== expectedRevision)
+                    || (fenceEpoch !== null && value.fenceEpoch !== fenceEpoch)) {
+                    throw new CloudReplicaTransportError(0);
+                }
+                const page: CloudReplicaCompleteScan['documents'] = [];
+                let previous = after;
+                for (const item of value.documents) {
+                    if (!isRecord(item) || typeof item.path !== 'string'
+                        || !DOCUMENT_PATH.test(item.path)
+                        || (previous !== null && item.path <= previous)
+                        || !safeRevision(item.revision) || item.revision < 1
+                        || item.revision > value.revision || !isRecord(item.document)) {
+                        throw new CloudReplicaTransportError(0);
+                    }
+                    page.push({ path: item.path, revision: item.revision, document: item.document });
+                    previous = item.path;
+                }
+                if (value.complete !== (value.nextAfter === null)
+                    || (!value.complete && (page.length !== SCAN_PAGE_SIZE || value.nextAfter !== previous))) {
+                    throw new CloudReplicaTransportError(0);
+                }
+                documents.push(...page);
+                expectedRevision = value.revision as number;
+                fenceEpoch = value.fenceEpoch as number;
+                if (value.complete) {
+                    return { revision: expectedRevision, fenceEpoch, documents };
+                }
+                after = value.nextAfter as string;
+            }
+            throw new CloudReplicaTransportError(0);
+        },
+
         async read(paths: string[]): Promise<CloudReplicaSnapshot> {
             const value = await post('read', { paths });
             if (!isRecord(value) || !safeRevision(value.revision) || !safeRevision(value.fenceEpoch)
