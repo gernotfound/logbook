@@ -36,10 +36,13 @@ async function requestWithBoundedRetries(url, headers) {
       // The temporary workers.dev route may need a short propagation delay.
       if (![404, 502, 503, 504].includes(response.status)) {
         const data = await response.clone().json().catch(() => null);
-        const category = ['TypeError', 'RangeError', 'Error', 'DOMException', 'Unknown'].includes(data?.category)
+        const category = typeof data?.category === 'string' && /^[A-Za-z][A-Za-z0-9_]{0,39}$/.test(data.category)
           ? data.category : 'unspecified';
-        throw new Error('Remote Worker HTTP ' + response.status + ', error='
-          + (data?.error === 'kdf-runtime-failure' ? 'kdf-runtime-failure/' : 'non-kdf/') + category);
+        const hint = typeof data?.hint === 'string'
+          ? data.hint.replace(/https?:\/\/[^\s]+/g, '[url]').slice(0, 160) : '';
+        return Promise.reject(new Error('Remote Worker HTTP ' + response.status + ', error='
+          + (data?.error === 'kdf-runtime-failure' ? 'kdf-runtime-failure/' : 'non-kdf/')
+          + category + ', hint=' + hint));
       }
       lastError = new Error('Remote Worker unavailable (HTTP ' + response.status + ')');
     } catch (error) {
@@ -86,18 +89,26 @@ try {
   assert.deepEqual(healthStatus, { ready: true, durableObjectBinding: true, d1Binding: false });
   console.log('CF00 temporary remote Worker entrypoint: PASS; DO binding present, D1 absent');
 
-  const pbkdf2 = await requestWithBoundedRetries(new URL('/__cf00/password?algorithm=pbkdf2', origin), headers);
-  const pbkdf2Body = await pbkdf2.json();
-  checkResult(pbkdf2Body, 'pbkdf2');
-  const scrypt = await requestWithBoundedRetries(new URL('/__cf00/password?algorithm=scrypt', origin), headers);
-  const scryptBody = await scrypt.json();
-  checkResult(scryptBody, 'scrypt');
-
-  console.log('CF00 temporary Cloudflare REMOTE: PASS, D1 not exercised.');
-  console.log('PBKDF2 600000 remote wall-ms: ' + pbkdf2Body.wallMs.toFixed(1));
-  console.log('scrypt N=16384,r=8,p=5 remote wall-ms: ' + scryptBody.wallMs.toFixed(1));
+  const results = {};
+  const failures = [];
+  for (const algorithm of ['pbkdf2', 'scrypt']) {
+    try {
+      const response = await requestWithBoundedRetries(
+        new URL('/__cf00/password?algorithm=' + algorithm, origin), headers);
+      const body = await response.json();
+      checkResult(body, algorithm);
+      results[algorithm] = body.wallMs;
+    } catch (error) {
+      failures.push(algorithm);
+      console.error('CF00 temporary remote ' + algorithm + ' FAIL: ' + error.message);
+    }
+  }
+  for (const [algorithm, wallMs] of Object.entries(results)) {
+    console.log('CF00 temporary remote ' + algorithm + ' wall-ms: ' + wallMs.toFixed(1));
+  }
   console.log('These are remote wall times, NOT provider CPU metrics or proof of the Workers Free budget.');
   console.log('Temporary account was not claimed; its resources expire automatically.');
+  assert.deepEqual(failures, [], 'Remote KDF execution must work for both algorithms');
 } finally {
   rmSync(sandbox, { recursive: true, force: true });
 }

@@ -60,9 +60,11 @@ export class PasswordProbe {
       if (kind === 'pbkdf2') return json(await measurePbKdf2());
     } catch (error) {
       // Only expose a bounded error class: a synthetic probe must not leak runtime details.
-      const category = ['TypeError', 'RangeError', 'Error', 'DOMException'].includes(error?.name)
+      const category = typeof error?.name === 'string' && /^[A-Za-z][A-Za-z0-9_]{0,39}$/.test(error.name)
         ? error.name : 'Unknown';
-      return json({ error: 'kdf-runtime-failure', category }, 500);
+      const hint = String(error?.message ?? 'unknown').replaceAll(syntheticPassword, '[synthetic-value]')
+        .replace(/https?:\/\/[^\s]+/g, '[url]').replace(/[A-Za-z0-9_=-]{36,}/g, '[redacted]').slice(0, 160);
+      return json({ error: 'kdf-runtime-failure', category, hint }, 500);
     }
     return json({ error: 'algorithm' }, 400);
   }
