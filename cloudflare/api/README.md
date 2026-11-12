@@ -12,7 +12,7 @@ Firebase/Firestore writer, IndexedDB journal and encrypted vault remain active.
 - Account, consent, replica enrollment and lease records must be provisioned
   by a separate trusted service. This API exposes no provisioning route.
 - AUTH_GATE must be a **private service binding** that verifies an actual
-  session, verified email, health consent and session-bound CSRF for writes.
+  session, verified email, health consent, rate gate before D1, and session-bound CSRF for writes.
   It returns uid, fenceEpoch, healthConsentRevision and csrfVerified. No
   caller-supplied UID or static header is accepted as an identity.
 - API_ORIGIN must be an exact HTTPS origin. When missing, requests fail closed.
@@ -23,8 +23,8 @@ Firebase/Firestore writer, IndexedDB journal and encrypted vault remain active.
   eight documents and a receipt; POST /v1/sync/receipt retrieves the receipt.
 - The client must verify AEAD and perform Protocol 3 merge **before** commit.
   A rejected/stale CAS requires a fresh read and merge. Receipt replay requires
-  the same immutable sealed bytes and batch ID; it never infers success from a
-  timeout. Full checkpoint, account-key transport and consent/erasure flows
+  the same immutable sealed bytes, batch ID and SHA-256 receipt digest; it never
+  infers success from a timeout. Full checkpoint, account-key transport and consent/erasure flows
   remain CF-03/04/05/06 responsibilities.
 - This SQL adapter models document writes and fencing, **not** the entire
   Firestore Rules contract yet. It must not become the application's default
