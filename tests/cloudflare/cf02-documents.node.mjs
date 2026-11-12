@@ -81,7 +81,7 @@ function makeEnv(db, claims = {}) {
       async fetch() {
         return new Response(JSON.stringify({
           uid: owner, authenticated: true, emailVerified: true,
-          healthConsentRevision: 1, fenceEpoch: 5, csrfVerified: true, ...claims,
+          healthConsentRevision: 1, fenceEpoch: 5, csrfVerified: true, rateGatePassed: true, ...claims,
         }), { status: 200 });
       },
     },
@@ -112,7 +112,10 @@ void test('first encrypted root/month write, coherent read and durable receipt r
   assert.equal(fetched.body.revision, 1);
   assert.deepEqual(fetched.body.documents.map(item => item.document), [envelope(), envelope()]);
   const receipt = await call(db, 'receipt', { batchId: item.batchId });
-  assert.deepEqual(receipt.body, { receipt: { revision: 1, lastSeq: 1 } });
+  assert.equal(receipt.body.receipt.revision, 1);
+  assert.equal(receipt.body.receipt.lastSeq, 1);
+  assert.match(receipt.body.receipt.requestHash, /^[a-f0-9]{64}$/);
+  assert.deepEqual(receipt.body.receipt.replica, replica);
   const replay = await call(db, 'commit', item);
   assert.equal(replay.status, 200);
   assert.equal(replay.body.replayed, true);
@@ -151,6 +154,7 @@ void test('trusted identity, epoch, consent, origin, CSRF and strict schemas fai
   assert.equal((await call(db, 'commit', item, { headers: { Origin: 'https://evil.invalid' } })).status, 403);
   assert.equal((await call(db, 'commit', item, { headers: { 'Sec-Fetch-Site': 'cross-site' } })).status, 403);
   assert.equal((await call(db, 'commit', item, { env: makeEnv(db, { csrfVerified: false }) })).status, 403);
+  assert.equal((await call(db, 'commit', item, { env: makeEnv(db, { rateGatePassed: false }) })).status, 503);
   assert.equal((await call(db, 'commit', item, { env: makeEnv(db, { fenceEpoch: 4 }) })).status, 409);
   assert.equal((await call(db, 'commit', item, { env: makeEnv(db, { healthConsentRevision: 2 }) })).status, 403);
   assert.equal((await call(db, 'commit', { ...item, uid: 'other-user' })).status, 400);
