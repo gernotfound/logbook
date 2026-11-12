@@ -19,6 +19,8 @@ CREATE TABLE sync_replicas (
   replica_id TEXT NOT NULL CHECK (length(replica_id) BETWEEN 1 AND 128),
   generation INTEGER NOT NULL CHECK (generation >= 1),
   lease_until_ms INTEGER NOT NULL CHECK (lease_until_ms > 0),
+  checkpoint_at_ms INTEGER NOT NULL CHECK (checkpoint_at_ms > 0),
+  checkpoint_clock_json TEXT NOT NULL CHECK (json_valid(checkpoint_clock_json) AND json_type(checkpoint_clock_json) = 'object'),
   last_seq INTEGER NOT NULL DEFAULT 0 CHECK (last_seq >= 0),
   status TEXT NOT NULL CHECK (status IN ('active', 'retired')),
   PRIMARY KEY (uid, slot)
@@ -30,8 +32,11 @@ CREATE TABLE sync_documents (
   envelope_json TEXT NOT NULL CHECK (length(envelope_json) BETWEEN 1 AND 950000),
   revision INTEGER NOT NULL CHECK (revision >= 1),
   PRIMARY KEY (uid, path),
-  CHECK (path = '' OR path GLOB 'history_months/[0-9][0-9][0-9][0-9]-[0-1][0-9]'
-           OR path GLOB 'nutrition_months/[0-9][0-9][0-9][0-9]-[0-1][0-9]')
+  CHECK (path = '' OR (
+    (path GLOB 'history_months/[0-9][0-9][0-9][0-9]-[0-1][0-9]'
+       OR path GLOB 'nutrition_months/[0-9][0-9][0-9][0-9]-[0-1][0-9]')
+    AND substr(path, -2, 2) BETWEEN '01' AND '12'
+  ))
 );
 
 CREATE TABLE sync_receipts (
@@ -68,7 +73,7 @@ BEGIN
       AND r.replica_id = NEW.replica_id
       AND r.generation = NEW.generation
       AND r.status = 'active'
-      AND r.last_seq < NEW.last_seq
+      AND r.last_seq <= NEW.last_seq
       AND r.lease_until_ms > CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER)
   ) THEN RAISE(ABORT, 'sync-fenced') END;
 END;
