@@ -124,6 +124,7 @@ async function authorize(request, env, route, isMutation) {
   try {
     response = await env.AUTH_GATE.fetch(new Request('https://auth-gate.internal/__internal/authorize', { method: 'POST', headers }));
   } catch { throw new BadInput('auth-unavailable', 503); }
+  if (response.status === 429) throw new BadInput('rate-limited', 429);
   if (response.status === 401 || response.status === 403) throw new BadInput('unauthorized', response.status);
   if (!response.ok) throw new BadInput('auth-unavailable', 503);
   let claims;
