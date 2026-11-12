@@ -26,6 +26,20 @@ export interface CloudReplicaReceipt {
     lastSeq: number;
 }
 
+function canonical(value: unknown): string {
+    if (Array.isArray(value)) return '[' + value.map(canonical).join(',') + ']';
+    if (value !== null && typeof value === 'object') {
+        const record = value as Record<string, unknown>;
+        return '{' + Object.keys(record).sort().map(key => JSON.stringify(key) + ':' + canonical(record[key])).join(',') + '}';
+    }
+    return JSON.stringify(value);
+}
+
+async function batchHash(batch: CloudReplicaBatch): Promise<string> {
+    const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(canonical(batch)));
+    return Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('');
+}
+
 export class CloudReplicaTransportError extends Error {
     constructor(readonly status: number) {
         super('Trasporto replica cloud non confermato: journal locale da preservare.');
@@ -90,6 +104,7 @@ export function createCloudflareReplicaTransport(send: typeof fetch = fetch) {
             if (!csrfToken) throw new CloudReplicaTransportError(0);
             const value = await post('commit', batch, csrfToken);
             if (!isRecord(value) || !safeRevision(value.revision) || !safeRevision(value.lastSeq)
+                || value.revision !== batch.expectedRevision + 1
                 || value.batchId !== batch.batchId || value.lastSeq !== batch.lastSeq
                 || typeof value.replayed !== 'boolean') {
                 throw new CloudReplicaTransportError(0);
@@ -97,14 +112,25 @@ export function createCloudflareReplicaTransport(send: typeof fetch = fetch) {
             return { revision: value.revision, lastSeq: value.lastSeq, replayed: value.replayed };
         },
 
-        async receipt(batchId: string): Promise<CloudReplicaReceipt | null> {
-            const value = await post('receipt', { batchId });
+        async receipt(batch: CloudReplicaBatch): Promise<CloudReplicaReceipt | null> {
+            const hash = await batchHash(batch);
+            const value = await post('receipt', { batchId: batch.batchId });
             if (!isRecord(value) || !Object.hasOwn(value, 'receipt')) throw new CloudReplicaTransportError(0);
             if (value.receipt === null) return null;
-            if (!isRecord(value.receipt) || !safeRevision(value.receipt.revision) || !safeRevision(value.receipt.lastSeq)) {
+            if (!isRecord(value.receipt) || !safeRevision(value.receipt.revision)
+                || !safeRevision(value.receipt.lastSeq)
+                || value.receipt.revision !== batch.expectedRevision + 1
+                || value.receipt.lastSeq !== batch.lastSeq
+                || value.receipt.consentRevision !== batch.consentRevision
+                || !isRecord(value.receipt.replica)
+                || value.receipt.replica.slot !== batch.replica.slot
+                || value.receipt.replica.replicaId !== batch.replica.replicaId
+                || value.receipt.replica.generation !== batch.replica.generation
+                || value.receipt.requestHash !== hash) {
                 throw new CloudReplicaTransportError(0);
             }
             return { revision: value.receipt.revision, lastSeq: value.receipt.lastSeq };
+
         },
     };
 }
