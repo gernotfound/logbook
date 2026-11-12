@@ -152,6 +152,10 @@ void test('trusted identity, epoch, consent, origin, CSRF and strict schemas fai
   const item = attempt('batch000000000005');
   assert.equal((await call(db, 'commit', item, { env: { DB: db, API_ORIGIN: origin } })).status, 503);
   assert.equal((await call(db, 'commit', item, { headers: { Origin: 'https://evil.invalid' } })).status, 403);
+  const alternateHost = await worker.fetch(new Request('https://shadow.workers.dev/v1/sync/commit', {
+    method: 'POST', headers: { Origin: origin, 'Content-Type': 'application/json' }, body: JSON.stringify(item),
+  }), makeEnv(db));
+  assert.equal(alternateHost.status, 403);
   assert.equal((await call(db, 'commit', item, { headers: { 'Sec-Fetch-Site': 'cross-site' } })).status, 403);
   assert.equal((await call(db, 'commit', item, { env: makeEnv(db, { csrfVerified: false }) })).status, 403);
   assert.equal((await call(db, 'commit', item, { env: makeEnv(db, { rateGatePassed: false }) })).status, 503);
