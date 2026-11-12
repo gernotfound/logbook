@@ -4,7 +4,7 @@
 
 ## Checkpoint provider e architettura — 12 novembre 2026 (corrente)
 
-Il **registro operativo** [external-services-register.md](external-services-register.md#checkpoint-verificato--12-novembre-2026-successivo-ai-run-falliti) conserva il dettaglio dei check effettuati, le fonti (screenshot Cloudflare e connettori GitHub/Vercel), i limiti delle prove e le attività residue: DNS Cloudflare Free con 11 record, DNSSEC OFF, Universal SSL Active/backup, encryption mode Full (non strict), minimo TLS 1.0, Always Use HTTPS e HSTS OFF, 339 richieste TLS 1.3 e 96 None nell'intervallo 24h mostrato. Nessun custom domain Worker e nessun G01 autorizzato.
+Il **registro operativo** [external-services-register.md](external-services-register.md) conserva il dettaglio dei check effettuati, le fonti (screenshot Cloudflare e connettori GitHub/Vercel), i limiti delle prove e le attività residue: DNS Cloudflare Free con 11 record, DNSSEC OFF, Universal SSL Active/backup, encryption mode Full (non strict), minimo TLS 1.0, Always Use HTTPS e HSTS OFF, 339 richieste TLS 1.3 e 96 None nell'intervallo 24h mostrato. Nessun custom domain Worker e nessun G01 autorizzato.
 
 La scelta architetturale **non è definitiva**: verificare se gli helper Firebase ufficiali e il gestore delle email action possono essere ospitati staticamente su Cloudflare eliminando la dipendenza dinamica da Firebase Hosting, senza perdere Google popup/redirect, fallback Safari, App Check o sicurezza del lifecycle account. Il semplice smoke HTTP non sostituisce browser e configurazioni provider. Per la priorità e il gate decisionale vedi [issue #1041](https://github.com/gernotfound/logbook/issues/1041).
 
