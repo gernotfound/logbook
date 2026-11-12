@@ -1,6 +1,6 @@
 # Cloudflare Workers Static Assets — candidato pre-cutover
 
-**Stato:** preparazione su branch; questo documento non attesta un deploy. Il vecchio Firebase Hosting resta attivo fino ad autorizzazione esplicita del proprietario. Issue: [#1036](https://github.com/gernotfound/logbook/issues/1036).
+**Stato verificato GitHub (12/11/2026):** codice preparatorio integrato in `main` tramite [PR #1039](https://github.com/gernotfound/logbook/pull/1039), SHA `e37616d92a9b4d6a1e8408358b136f74a2d169f7`; **nessun deployment Cloudflare attestato**. Checklist autorevole [#1041](https://github.com/gernotfound/logbook/issues/1041); incidente quota Hosting [#1036](https://github.com/gernotfound/logbook/issues/1036). L'autorizzazione a disattivare Firebase Hosting è stata comunicata dal proprietario il 12/11/2026, ma **non attesta l'esecuzione** e non autorizza implicitamente il cutover G01.
 
 ## Scelta tecnica e limiti
 
@@ -11,6 +11,26 @@
 - Il candidato invia `X-Robots-Tag: noindex`; rimuoverlo solo nel cutover autorizzato e validato.
 - Gli asset statici Cloudflare non consumano richieste Worker; le invocazioni del proxy Auth e le richieste non-asset possono consumare la quota gratuita e restituire 429 dopo l'esaurimento. Nessuna garanzia SLA Enterprise o invulnerabilità DDoS.
 - Una URL `workers.dev` non fornisce automaticamente le stesse regole WAF personalizzabili di una zona con dominio proprio. Nessun dominio a pagamento è richiesto.
+
+## Checkpoint onboarding — 12/11/2026 (fonte distinta: proprietario / schermata / provider)
+
+- **IONOS:** il proprietario conferma l'acquisto di `thelogbook.me`; rinnovo, blocco trasferimento, DNSSEC e record DNS non sono ancora stati verificati nel registrar. Il nome target scelto per il futuro frontend pubblico è `thelogbook.me` (apex), con `www` da reindirizzare al canonico solo dopo test.
+- **Cloudflare:** la schermata fornita dal proprietario mostra account Workers & Pages presente, nessun progetto e sottodominio allocato `califano-ger.workers.dev`. Il proprietario afferma di aver attivato la **2FA**: recupero 2FA, membri/ruoli, piano effettivo, certificati, DNS e impostazioni di sicurezza restano da controllare nel provider. Non pubblicare l'Account ID, un token o dati di fatturazione nel repository.
+- **Origine candidato proposta (non ancora live):** `https://thelogbook-frontend.califano-ger.workers.dev` combina il nome Worker in `wrangler.jsonc` con il sottodominio assegnato; non è un URL verificato HTTP. Il valore GitHub `CLOUDFLARE_APP_ORIGIN` deve coincidere esattamente con l'origin **effettivamente assegnato** dopo il deploy. `CLOUDFLARE_ACCOUNT_ID` è una GitHub Variable; `CLOUDFLARE_API_TOKEN` un Secret con privilegi minimi. Non incollare i valori in chat o issue.
+- **Utenti / migrazione dati:** il proprietario conferma che il prodotto non è pubblicato e non esistono utenti della PWA da migrare. Non costruire portabilità specifica di installazioni pre-lancio inesistenti. Proteggere comunque dati/archivi creati nella baseline supportata durante i collaudi.
+- **Autorizzazioni:** disattivazione Firebase Hosting richiesta/autorizzata dal proprietario; disattivazione non ancora eseguita e stato runtime da verificare. Il cutover pubblico **G01** rimane una decisione separata e non è stato autorizzato soltanto dal setup del dominio. Non eliminare il progetto Firebase, Authentication, Firestore, App Check o Vercel.
+- **Blocco tecnico prima di spegnere Hosting:** `cloudflare/auth-proxy.mjs` usa ancora l'upstream `logbook-db-98cc4.firebaseapp.com`, origin collegato agli helper di Firebase Hosting. `firebase hosting:disable` interrompe il servizio Hosting del sito indicato; non garantisce che `/__/auth/*` resti raggiungibile. Prima di disabilitare operativamente, adottare un helper indipendente verificato o registrare il fermo del login in sviluppo e il ripristino previsto; impedire al workflow automatico Firebase Hosting di riattivare il sito. **Non interpretare l'autorizzazione come prova di disattivazione effettiva.**
+
+### Sequenza IONOS → Cloudflare (zona DNS, senza cutover anticipato)
+
+1. Da **Cloudflare Domains**, aggiungere `thelogbook.me` come zona completa, selezionando il piano **Free** (senza nuovo acquisto/trasferimento di registrar). Lasciare `Workers & Pages > Create application` inutilizzato finché il deployment tramite GitHub non è pronto.
+2. Inventariare e conservare una copia privata dei record DNS IONOS esistenti (in particolare MX, TXT/SPF, DKIM e DMARC qualora presenti); verificare che l'importazione/scansione Cloudflare li riproduca. Non inviare credenziali o record con token sensibili in issue pubbliche.
+3. Verificare DNSSEC/DS nel registrar e disattivare la vecchia firma se attiva **prima** di delegare a nuovi nameserver; attendere la propagazione indicata dai provider.
+4. Dal pannello IONOS, **Domini & SSL → thelogbook.me → Name server → Utilizza name server personali**, inserire **solo i due NS assegnati alla zona da Cloudflare**, non valori di esempio. Confermare/valutare effetti su eventuali servizi email prima del salvataggio.
+5. Verificare stato **Active** della zona Cloudflare, NS autoritativi, TLS e record risolti; creare un Worker con il workflow GitHub candidato esatto SHA su `workers.dev`, non tramite template/dashboard manuale che divergano dal codice versionato.
+6. Solo dopo il candidato, i test Auth/App Check, provider e autorizzazione G01: collegare `thelogbook.me` come **Worker Custom Domain**, valutare `www`, SEO, WAF e accesso `workers.dev` per evitare bypass. Un custom domain Workers crea DNS/certificato Cloudflare; non richiede SSL a pagamento IONOS.
+
+**Fonti tecniche:** [Cloudflare zone DNS Free](https://developers.cloudflare.com/dns/zone-setups/full-setup/setup/), [Worker Custom Domains](https://developers.cloudflare.com/workers/configuration/routing/custom-domains/), [IONOS nameserver](https://www.ionos.it/aiuto/domini/utilizzare-un-proprio-name-server/utilizzare-un-proprio-name-server-per-un-dominio/), [Cloudflare DNSSEC](https://developers.cloudflare.com/dns/dnssec/), [Firebase Hosting disable](https://firebase.google.com/docs/cli), [Firebase Auth helper reserved URLs](https://firebase.google.com/docs/hosting/reserved-urls).
 
 ## Configurazione esterna necessaria (senza segreti in Git)
 
