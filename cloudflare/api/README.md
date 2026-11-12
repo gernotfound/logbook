@@ -19,9 +19,14 @@ Firebase/Firestore writer, IndexedDB journal and encrypted vault remain active.
   Origin, session, consent, account fence, replica lease and D1 CAS are distinct
   checks. No CORS wildcard or public debug endpoint is provided.
 - POST /v1/sync/read reads up to eight ciphertext envelopes under one D1
-  snapshot; POST /v1/sync/commit atomically advances a guarded replica, up to
-  eight documents and a receipt; POST /v1/sync/receipt retrieves the receipt.
+  snapshot; POST /v1/sync/scan reads a bounded page with a revision-fenced
+  cursor for a complete account checkpoint. POST /v1/sync/commit atomically
+  advances a guarded replica, up to eight documents and a receipt;
+  POST /v1/sync/receipt retrieves the content-bound receipt.
 - The client must verify AEAD and perform Protocol 3 merge **before** commit.
+  The shared `cloudMergeEngine.ts` powers both Firestore writes and the D1
+  candidate (`cloudReplicaCommit.ts`); each D1 write binds
+  `expectedFenceEpoch` from the authenticated account snapshot.
   A rejected/stale CAS requires a fresh read and merge. Receipt replay requires
   the same immutable sealed bytes, batch ID and SHA-256 receipt digest; it never
   infers success from a timeout. Full checkpoint, account-key transport and consent/erasure flows

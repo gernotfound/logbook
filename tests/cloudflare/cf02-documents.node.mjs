@@ -236,6 +236,16 @@ void test('SQL schema refuses invalid months and malformed checkpoint clocks', (
   assert.equal(db.sqlite.prepare('SELECT count(*) AS n FROM sync_documents').get().n, 0);
 }));
 
+void test('a batch from an erased account epoch cannot resurrect data at reset revision', () => withFixture(async db => {
+  const stale = attempt('batch000000000035', 1, 0);
+  db.sqlite.prepare('UPDATE sync_subjects SET fence_epoch = 6 WHERE uid = ?').run(owner);
+  const result = await call(db, 'commit', stale, { env: makeEnv(db, { fenceEpoch: 6 }) });
+  assert.deepEqual(result, { status: 409, body: { error: 'replica-fenced-or-conflict' } });
+  assert.equal(db.sqlite.prepare('SELECT revision FROM sync_state').get().revision, 0);
+  assert.equal(db.sqlite.prepare('SELECT count(*) AS n FROM sync_receipts').get().n, 0);
+  assert.equal(db.sqlite.prepare('SELECT count(*) AS n FROM sync_documents').get().n, 0);
+}));
+
 void test('late SQL failure rolls back receipt, ciphertext and control revision atomically', () => withFixture(async db => {
   db.sqlite.exec("CREATE TRIGGER synthetic_rollback BEFORE INSERT ON sync_documents BEGIN SELECT RAISE(ABORT, 'fixture failure'); END");
   const failed = await call(db, 'commit', attempt('batch000000000004'));
