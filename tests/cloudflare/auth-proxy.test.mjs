@@ -9,7 +9,7 @@ async function mockedFetch(fn, run) {
   globalThis.fetch = fn;
   try { await run(); } finally { globalThis.fetch = saved; }
 }
-test('non-Auth paths and unsupported methods never reach Firebase', async () => {
+void test('non-Auth paths and unsupported methods never reach Firebase', async () => {
   await mockedFetch(() => { throw Error('no upstream permitted'); }, async () => {
     assert.equal((await handler.fetch(req('/assets/missing.js'))).status, 404);
     assert.equal((await handler.fetch(req('/__/unrelated/'))).status, 404);
@@ -17,7 +17,7 @@ test('non-Auth paths and unsupported methods never reach Firebase', async () => 
     assert.equal((await handler.fetch(req('/__/auth/iframe', { method: 'PUT' }))).status, 405);
   });
 });
-test('the same-origin helper proxies only the fixed firebaseapp.com host', async () => {
+void test('the same-origin helper proxies only the fixed firebaseapp.com host', async () => {
   await mockedFetch(async (url, options) => {
     assert.equal(url, 'https://logbook-db-98cc4.firebaseapp.com/__/auth/iframe?apiKey=synthetic');
     assert.equal(options.method, 'GET');
@@ -34,7 +34,7 @@ test('the same-origin helper proxies only the fixed firebaseapp.com host', async
     assert.equal(await response.text(), 'helper');
   });
 });
-test('first-party redirects are rebased but external insecure redirects fail closed', async () => {
+void test('first-party redirects are rebased but external insecure redirects fail closed', async () => {
   await mockedFetch(async () => new Response(null, { status: 302, headers: { Location: '/__/auth/handler?code=test' } }), async () => {
     assert.equal((await handler.fetch(req('/__/auth/handler'))).headers.get('location'), app + '/__/auth/handler?code=test');
   });
@@ -42,7 +42,7 @@ test('first-party redirects are rebased but external insecure redirects fail clo
     assert.equal((await handler.fetch(req('/__/auth/handler'))).status, 502);
   });
 });
-test('POST size is bounded and only reviewed headers reach upstream', async () => {
+void test('POST size is bounded and only reviewed headers reach upstream', async () => {
   await mockedFetch(async (_url, options) => {
     assert.equal(options.headers.get('x-admin-key'), null);
     assert.equal(options.headers.get('origin'), app);
