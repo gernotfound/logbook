@@ -25,9 +25,9 @@ I contratti correnti sono governati da [AGENTS](../../AGENTS.md): [Cifratura](..
 | Firebase Realtime Database | NON USATO DAL RUNTIME | modulo RTDB e relativa env client ritirati dal contratto | codice |
 | Firebase Storage | NON USATO DAL RUNTIME | modulo Storage e relativa env client ritirati dal contratto | codice |
 | Firebase Cloud Messaging | NON USATO DAL RUNTIME | modulo Messaging e relativa env client ritirati dal contratto | codice |
-| Firebase Hosting | ACTIVE | frontend/PWA Production su `thelogbook.web.app`, deploy exact-SHA da GitHub Actions | Firebase Hosting + workflow Production |
-| Cloudflare Workers Static Assets | EXTERNAL-ONLY / VERIFY-LIVE | candidato frontend/PWA preparato in `main`, non ancora distribuito | issue #1041 + runbook Cloudflare + dashboard |
-| IONOS — `thelogbook.me` | EXTERNAL-ONLY / VERIFY-LIVE | registrar del dominio acquistato secondo conferma del proprietario, DNS/NS e rinnovo da verificare | pannello IONOS + verifica DNS |
+| Firebase Hosting — site `thelogbook` | DISABILITATO (output Firebase CLI del proprietario 12/11/2026) | precedente frontend `thelogbook.web.app`; il workflow automatico è dichiarato disabilitato in GitHub | output CLI proprietario + workflow GitHub da ricontrollare |
+| Cloudflare Workers Static Assets | EXTERNAL-ONLY / VERIFY-LIVE | nuovo frontend previsto; candidato `workers.dev` predisposto in `main`, deployment non ancora attestato | issue #1041 + runbook Cloudflare + dashboard |
+| IONOS — `thelogbook.me` | EXTERNAL-ONLY / VERIFY-LIVE | registrar del dominio acquistato; rinnovo e transfer lock verificati da screenshot, cambio NS salvato su IONOS, propagazione Cloudflare non ancora attestata | pannello IONOS + verifica DNS |
 | Firebase/Vercel Test separati | DISMESSI (2026-10-18) | Progetti `thelogbook-test` e `thelogbook-test-backend` eliminati; nessun cloud di test separato attivo | Firebase CLI, inventario Vercel, PR #431 |
 | Firebase Admin | ACTIVE | lifecycle account, consenso/diritti, custodia ADK e manutenzione trusted | Vercel env + Vercel Functions |
 | Firebase App Check + reCAPTCHA Enterprise / Google Cloud Fraud Defense | ACTIVE | attestazione anti-abuse prima dell'accesso cloud | Firebase App Check + Google Cloud |
@@ -37,6 +37,17 @@ I contratti correnti sono governati da [AGENTS](../../AGENTS.md): [Cifratura](..
 | GitHub Actions / CodeQL / ruleset | ACTIVE | repository pubblico, PR, CI e SAST canonico | GitHub |
 | Snyk | OPTIONAL | controllo security supplementare | integrazione Snyk esterna |
 | Google Search Console | EXTERNAL-ONLY | verifica proprietà, sitemap e indicizzazione | Search Console + asset SEO repo |
+
+## Checkpoint di arresto Firebase Hosting e GitHub — 12/11/2026 (aggiorna i precedenti checkpoint)
+
+Questa sezione **prevale** sulle descrizioni precedenti del sito Hosting come ACTIVE. Non costituisce attestazione di un nuovo frontend live.
+
+- **Firebase CLI — evidenza fornita dal proprietario:** in Cloud Shell con progetto attivo `logbook-db-98cc4`, `firebase hosting:sites:list --project logbook-db-98cc4` ha mostrato **numerosi site ID distinti**. Il comando `firebase hosting:disable --project logbook-db-98cc4 --site thelogbook` è stato confermato con risposta `Hosting has been disabled for thelogbook. Deploy a new version to re-enable.` **È stato disabilitato solo il site ID `thelogbook`**, cioè `thelogbook.web.app`. Non eliminare né disabilitare il sito predefinito `logbook-db-98cc4` (possibili helper Firebase Authentication) o gli altri site ID; non eliminare il progetto Firebase, Auth, Firestore, App Check o le credenziali Admin.
+- **Workflow GitHub:** il proprietario scrive `A fatto` dopo aver ricevuto la procedura per eseguire `Disable workflow` su `Firebase Hosting Production`. È una **conferma del proprietario**, non una lettura autonoma dello stato `disabled_manually`. Il YAML del workflow è ancora nel repository e potrebbe effettuare nuovamente un deploy se riabilitato; controllare prima di altri merge, e non riabilitarlo per ottenere uno smoke verde.
+- **Contesto del problema:** sullo SHA `a818066187c45f727ac3194d64b946dfc0381590`, il run Hosting `43199923228` ha completato il deploy ma fallito lo smoke HTTP con **509**. La disattivazione non cancella il consumo quota già accumulato e non prova che gli helper Auth su `logbook-db-98cc4.firebaseapp.com` siano accessibili. Prima di cutover Google/Safari richiedono test o self-host degli helper ufficiali verificati.
+- **IONOS/Cloudflare:** `thelogbook.me` su piano Cloudflare Free; nameserver assegnati `melany.ns.cloudflare.com`, `santino.ns.cloudflare.com`, salvataggio NS in IONOS confermato da screenshot. Risultato DS **assente** riferito dal proprietario; `Check nameservers now` ha risposto che Cloudflare sta verificando: **stato Active non ancora osservato**. Conservare record MX/SPF/DKIM/DMARC e verificare posta/SSL dopo delega.
+- **GitHub Variables / Secrets:** il proprietario ha confermato di aver inserito la **prima variable** `CLOUDFLARE_APP_ORIGIN`; l'inserimento di `CLOUDFLARE_ACCOUNT_ID` è ancora da confermare. `CLOUDFLARE_API_TOKEN` non è attestato nei Secrets. Nessun valore di Account ID o token è conservato nel repository; token bootstrap Workers con privilegi temporanei e rotazione post-creazione come descritto nella [issue #1041](https://github.com/gernotfound/logbook/issues/1041).
+- **Fase di rilascio:** Cloudflare Workers `thelogbook-frontend` non è ancora stato pubblicato/verificato; la variabile backend Vercel `PUBLIC_CANDIDATE_APP_ORIGIN` risultava assente nell'ultima ispezione provider. Nessun cutover G01 autorizzato, nessun utente storico da migrare. La checklist operativa rimane [#1041](https://github.com/gernotfound/logbook/issues/1041), con stato dei gate e ulteriori verifiche distinto da questo registro.
 
 ## Dismissione ambiente Test separato — 2026-10-18
 
@@ -55,8 +66,8 @@ Questo checkpoint aggiorna le decisioni del proprietario senza trasformarle in p
 | Sicurezza account | **2FA Cloudflare attivata secondo dichiarazione del proprietario**; non è un riscontro di console | Fattori di recupero, token di deploy con privilegio minimo |
 | Candidato applicazione | Worker `thelogbook-frontend` predisposto nel codice PR #1039 già integrato in main; nessun HTTP/deploy Cloudflare certificato | Workflow GitHub manuale su SHA main corrente, autenticazione, App Check, statici |
 | Dominio Custom Worker | Canonico desiderato `thelogbook.me`; `www` da redirigere solo dopo collaudo | DNS records, HTTPS e SSL Cloudflare, OAuth, WAF e anti-bypass |
-| Firebase Hosting | Ancora configurato come frontend di distribuzione e workflow CI automatico in `main`; ultimo smoke Hosting fallito con HTTP 509 nel run #43184505621 | Provider live; piano di arresto che non interrompa gli helper Auth senza consapevolezza |
-| Autorizzazione disattivazione | **Concessa espressamente dal proprietario il 12/11/2026**, anche senza necessità di mantenere disponibile il frontend in sviluppo; **non eseguita né verificata** | Decidere tecnicamente quando bloccare la pipeline Hosting e assicurare helper Auth indipendenti o downtime esplicito. Non elimina Firebase Auth/Firestore/App Check |
+| Firebase Hosting | **Aggiornamento successivo 12/11/2026:** site `thelogbook` disabilitato secondo output CLI del proprietario; workflow GitHub Hosting dichiarato disabilitato via UI (non verificato indipendentemente). L'ultimo smoke pre-disabilitazione noto restituiva HTTP 509 | Verificare stato workflow `disabled_manually` e indisponibilità del solo sito; non toccare site ID predefinito `logbook-db-98cc4` |
+| Autorizzazione disattivazione | **Concessa ed eseguita sul sito `thelogbook` il 12/11/2026**, come confermato dal comando CLI; disabilitazione workflow GitHub dichiarata dall'owner, verifica GitHub indipendente ancora necessaria | Verificare che Hosting non venga ridistribuito, mantenere Auth/Firestore/App Check e testare gli helper OAuth distintamente |
 | Autorizzazione cutover dominio | **Non ancora concessa come gate G01**: preparazione zona DNS e candidatura isolata non costituiscono passaggio pubblico | Test e report GO/NO-GO |
 | Utenti della PWA | Proprietario dichiara che il prodotto non è pubblicato e non ha utenti che richiedano una migrazione legacy | Nessuna conversione speculativa di storage/account pre-lancio; preservare dati realmente creati nella baseline supportata |
 
@@ -66,7 +77,7 @@ Questo checkpoint aggiorna le decisioni del proprietario senza trasformarle in p
 
 ## Firebase Hosting
 
-Firebase Hosting è il provider del frontend/PWA Production di TheLogBook dal cutover verificato del 2026-10-02. Vercel resta esclusivamente backend trusted/cron e redirect del vecchio root.
+Firebase Hosting **è stato** il provider del frontend/PWA Production di TheLogBook dal cutover verificato del 2026-10-02 **fino al disable del sito `thelogbook` del 12/11/2026** (output CLI del proprietario). La sezione sottostante conserva la cronologia storica. Vercel resta esclusivamente backend trusted/cron e redirect del vecchio root, che potrebbe puntare a un sito non raggiungibile finché Cloudflare non sarà attivo.
 
 ### Ritiro del Service Worker Vercel legacy — 2026-10-03
 
