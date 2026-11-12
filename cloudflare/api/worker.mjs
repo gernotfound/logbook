@@ -39,6 +39,7 @@ const pageInput = z.strictObject({ after: documentPath.nullable(), expectedRevis
 const commitInput = z.strictObject({
   batchId: id,
   expectedRevision: safeInt,
+  expectedFenceEpoch: safeInt.min(1),
   consentRevision: safeInt.min(1),
   replica,
   lastSeq: safeInt.min(1),
@@ -208,6 +209,7 @@ async function handler(request, env) {
   if (!parsed.success) throw new BadInput('invalid-input', 400);
   const input = parsed.data;
   if (input.consentRevision !== consentRevision) throw new BadInput('access-revoked', 403);
+  if (input.expectedFenceEpoch !== fenceEpoch) throw new BadInput('replica-fenced-or-conflict', 409);
   validateSealedBatch(input);
   const hash = await payloadHash(input);
   const existing = await readReceipt(env.DB, uid, consentRevision, fenceEpoch, input.batchId);
