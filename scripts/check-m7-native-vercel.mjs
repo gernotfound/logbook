@@ -92,12 +92,10 @@ if (vercelBackendBuild.includes('npm run build') || vercelBackendBuild.includes(
 }
 if (vercel.fluid !== true) failures.push('Vercel Fluid compute must be explicitly enabled to preserve the 300s Hobby function ceiling');
 
-const legacyFrontendRedirect = vercel.redirects?.find(item => item.source === '/');
-if (!legacyFrontendRedirect) failures.push('missing retired Vercel frontend root redirect');
-else {
-  if (legacyFrontendRedirect.destination !== 'https://thelogbook.web.app/') failures.push('retired Vercel frontend root must redirect to the Firebase Hosting canonical origin');
-  if (legacyFrontendRedirect.statusCode !== 301) failures.push('retired Vercel frontend root redirect must use HTTP 301 for the Search Console Change of Address pre-check');
-  if ('permanent' in legacyFrontendRedirect) failures.push('retired Vercel frontend root redirect must use explicit statusCode 301 instead of permanent 307/308 mode');
+// This deployment hosts only trusted APIs. Never forward its root to the
+// retired Firebase Hosting site; the new frontend domain has not cut over yet.
+if (vercel.redirects?.some(item => item.source === '/' || item.destination?.includes('thelogbook.web.app'))) {
+  failures.push('Backend-only Vercel must not redirect to the retired Firebase frontend');
 }
 
 if (vercel.rewrites?.some(item => item.source === '/sw.js')
