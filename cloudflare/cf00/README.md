@@ -22,6 +22,12 @@ Per abilitare le route del Worker durante un test HTTP locale, creare un file no
 
 Dopo l'avvio si possono inviare richieste POST, con header `x-cf00-secret`, agli endpoint `/__cf00/init`, `/__cf00/write`, `/__cf00/state`, `/__cf00/receipt`, `/__cf00/plan` e `/__cf00/password?algorithm=scrypt|pbkdf2`. `/__cf00/init` azzera **solo** le righe del proprietario sintetico nelle tabelle `cf00_*`.
 
+## Prova remota temporanea (Durable Object, senza credenziali)
+
+Il workflow PR-only `.github/workflows/cf00-temporary-remote.yml` esegue `tests/cloudflare/cf00-temporary-remote.mjs` **solo** su branch CF-00 dello stesso repository. Usa `wrangler deploy --temporary` su un account Cloudflare effimero separato, senza il token, il dominio o i dati del proprietario. Un secret casuale è iniettato da file temporaneo con permessi stretti; il claim URL (credenziale bearer) resta catturato in memoria, mai stampato. Sono consentite solo poche richieste al Worker; la route D1 non è disponibile in questa configurazione. Non riscattare l'account temporaneo: Cloudflare ne rimuove automaticamente le risorse alla scadenza.
+
+**Limiti probatori:** questa verifica utilizza infrastruttura Cloudflare reale, ma non l'account Workers Free definitivo. Cloudflare congela `performance.now()` durante la CPU: il delta interno può essere `0` anche quando scrypt ha calcolato correttamente. Il test misura quindi la latenza round-trip dall'esterno, **non** CPU billing. La prova remota del 12/11/2026 [run #43308065129](https://github.com/gernotfound/logbook/actions/runs/43308065129) ha inoltre restituito `NotSupportedError` per PBKDF2 600.000 iterazioni, perché il runtime rifiuta valori superiori a 100.000; tale incompatibilità è esplicita e **non** autorizza ad abbassare il work factor. scrypt deve completarsi con i parametri OWASP invariati. Non prova Better Auth, i flussi email, D1 EU, quote e residenza. Un fallimento per rifiuto anti-abuso del provider, indisponibilità dei temporary accounts o mancanza di supporto è un **blocco del test remoto**, non un bug dimostrato della PWA. Fonte: https://developers.cloudflare.com/workers/platform/claim-deployments/
+
 ## Cosa manca prima di dichiarare CF-00 validata
 
 1. Eseguire il prototipo sotto `wrangler dev --local` (workerd/Miniflare) e controllare che trigger e Durable Object corrispondano al contratto.

@@ -1,0 +1,12 @@
+{
+  "name": "thelogbook-cf00-temporary-kdf-only",
+  "main": "./probe-worker.mjs",
+  "compatibility_date": "2026-11-12",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": true,
+  "vars": { "CF00_PROBE_ENABLED": "true" },
+  "durable_objects": {
+    "bindings": [{ "name": "PASSWORD_PROBE", "class_name": "PasswordProbe" }]
+  },
+  "migrations": [{ "tag": "cf00-temporary-v1", "new_sqlite_classes": ["PasswordProbe"] }]
+}

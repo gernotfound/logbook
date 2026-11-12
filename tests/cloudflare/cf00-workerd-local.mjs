@@ -41,6 +41,9 @@ try {
   }
   await waitForWorker(child);
 
+  const health = await request('/__cf00/health');
+  assert.equal(health.status, 200);
+  assert.deepEqual(await health.json(), { ready: true, durableObjectBinding: true, d1Binding: true });
   const init = await request('/__cf00/init');
   assert.equal(init.status, 200, 'D1 schema and synthetic fixture must initialize');
 
