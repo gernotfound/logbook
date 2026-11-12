@@ -86,7 +86,9 @@ La private key supporta newline escaped (`\\n`) e viene normalizzata server-side
 `.env.example` documenta i boundary usando **solo placeholder non sensibili**:
 
 - configurazione client Firebase/App Check (`VITE_*`);
-- nomi delle env server trusted (`FIREBASE_ADMIN_*`, `CRON_SECRET`, `PUBLIC_APP_ORIGIN`, `CLOUD_ACCOUNT_KEK_V1`);
+- nomi delle env server trusted (`FIREBASE_ADMIN_*`, `CRON_SECRET`, `PUBLIC_APP_ORIGIN`, `PUBLIC_CANDIDATE_APP_ORIGIN`, `CLOUD_ACCOUNT_KEK_V1`);
+
+**MUST:** `PUBLIC_CANDIDATE_APP_ORIGIN` è opzionale e temporanea in Vercel: quando presente abilita un solo ulteriore origin HTTPS esatto per le API trusted, esclusivamente per il collaudo isolato Cloudflare. Il valore assente non amplia la allowlist. Entrambe le origin devono superare la stessa validazione; un valore non valido fallisce chiuso prima della verifica token e senza CORS permissivo. Rimuoverla in Vercel al termine della transizione e verificare il ritorno a un unico origin. CORS non sostituisce Auth, App Check, consenso o owner fencing.
 
 La KEK è obbligatoria per il boundary cloud cifrato corrente, non per l'avvio locale del client. Un commento template non certifica provisioning o recuperabilità del secret.
 

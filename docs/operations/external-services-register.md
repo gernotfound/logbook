@@ -331,7 +331,10 @@ Le configurazioni server-only che appartengono al runtime Vercel sono:
 - `FIREBASE_ADMIN_PRIVATE_KEY`;
 - `CRON_SECRET`;
 - `CLOUD_ACCOUNT_KEK_V1` per la custodia delle ADK;
-- `PUBLIC_APP_ORIGIN` per la allowlist dell'origin canonico.
+- `PUBLIC_APP_ORIGIN` per la allowlist dell'origin canonico;
+- `PUBLIC_CANDIDATE_APP_ORIGIN` (opzionale, inizialmente non attestata in Vercel) per ammettere temporaneamente una seconda origin HTTPS esatta ai collaudi Cloudflare `workers.dev`, senza wildcard. Il backend mantiene gli stessi token Auth/App Check e i vincoli di proprietario; la variabile deve essere rimossa dopo il collaudo/cutover e la rimozione verificata nel provider.
+
+**Preparazione Cloudflare (2026-11-12, codice candidato):** la allowlist condivisa dalle API trusted calcola due origin solo quando la seconda è stata configurata in modo valido; origin estranei o imitazioni vengono rifiutati e configurazioni malformate falliscono chiuso. I test di regressione verificano preflight, POST e mancata chiamata ai boundary trusted prima del rifiuto. **Non attesta** che la variabile sia già presente su Vercel né un E2E su Cloudflare.
 
 `PUBLIC_APP_LEGACY_ORIGIN` è ritirata dal contratto applicativo post-cutover e non deve essere reintrodotta.
 
