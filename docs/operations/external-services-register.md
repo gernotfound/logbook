@@ -38,7 +38,15 @@ I contratti correnti sono governati da [AGENTS](../../AGENTS.md): [Cifratura](..
 | Snyk | OPTIONAL | controllo security supplementare | integrazione Snyk esterna |
 | Google Search Console | EXTERNAL-ONLY | verifica proprietà, sitemap e indicizzazione | Search Console + asset SEO repo |
 
-## Primo Worker Cloudflare — risultato provider CI 12/11/2026 (checkpoint più recente)
+## Secondo smoke Cloudflare: HTML al posto del 404 — 12/11/2026 (checkpoint più recente)
+
+Il [run #43214892963](https://github.com/gernotfound/logbook/actions/runs/43214892963) sullo SHA `a34f5937980b1dd3f748cba2cd80c45a8fc58f7a` ha nuovamente eseguito il deploy Wrangler con successo ma fallito lo smoke: `Missing browser JS request must be a real 404; got HTTP 200 text/html` per `/assets/missing-synthetic.js` pur inviando `Sec-Fetch-Mode: cors` e `Sec-Fetch-Dest: script`. La causa è la configurazione `not_found_handling: single-page-application`, che su asset inesistenti può servire `index.html` con 200 secondo la [documentazione ufficiale Cloudflare](https://developers.cloudflare.com/workers/static-assets/routing/single-page-application/). Questo confuta l'ipotesi del precedente checkpoint che bastasse emulare i Fetch Metadata del browser.
+
+**Soluzione candidata (non live):** `not_found_handling: 404-page`, con `run_worker_first` ristretto a `/__/auth` e `/__/auth/*`. Le sezioni dell'app usano `/?tab=training` e query simili, non un router pathname; quindi `/training` non è una route server supportata e deve rispondere 404. I file statici validi rimangono senza invocazione Worker, mentre un JS/CSS inesistente non ottiene HTML e il 404 è servito dalla rete statica: mitigazione utile per la quota Free. Test statico di configurazione e smoke JS/CSS/URL mancanti mantengono il guardrail. **Nessun nuovo deploy Cloudflare attestato**; serve PR/canonica/merge e nuovo run manuale sul nuovo SHA di `main`.
+
+**Rischi separati:** Firebase Hosting site `thelogbook` disabilitato dal proprietario; nessuna garanzia sugli helper Auth del sito predefinito, su App Check, OAuth, backend CORS, DNS Cloudflare Active o sul cutover `thelogbook.me`. Non alterare secret o re-enable Hosting. Il token bootstrap Admin va ruotato verso Editor limitato al Worker dopo candidato verde.
+
+## Primo Worker Cloudflare — risultato provider CI 12/11/2026 (checkpoint storico)
 
 Il [run manuale GitHub #43211365177](https://github.com/gernotfound/logbook/actions/runs/43211365177) ha compilato il candidato sulla HEAD `main 1a0148f435b8d53e15219c224ead34f9b982414f`. Il job build è **SUCCESS**, il passo Wrangler è **SUCCESS**: **72 asset nuovi/modificati caricati**, trigger `workers.dev` creato per Worker `thelogbook-frontend`, versione Cloudflare `e2bbc26f-480c-4f81-87b0-be087fdd6b95`. Il job deploy complessivo è **FAILURE** nello smoke `Missing JS must be a real 404`. Le precedenti verifiche di asset noti, header noindex/no-store e SPA fallback sono state eseguite dal job prima del failure; non equivale a validazione completa di Auth o sicurezza.
 
