@@ -47,12 +47,12 @@ export default defineConfig({
   plugins: [
     react(),
     // Update canonical metadata before the Service Worker hashes index.html.
-    cloudflareOrigin && {
+    cloudflareOrigin ? {
       name: 'thelogbook-cloudflare-canonical-origin',
       transformIndexHtml(html) {
         return html.replaceAll('https://thelogbook.web.app/', cloudflareOrigin + '/');
       },
-    },
+    } : false,
     {
       name: 'thelogbook-no-client-error-monitoring',
       generateBundle(_output, bundle) {
