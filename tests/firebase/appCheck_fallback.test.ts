@@ -224,6 +224,29 @@ describe('AppCheck Initialization & Fallback Behavior', () => {
     expect(result.error).toBe(firebaseError);
   });
 
+  it('fails closed after a reCAPTCHA assessment quota 429 and recovers only after a fresh valid SDK token', async () => {
+    const mockAppCheckInstance = { app: dummyApp };
+    vi.spyOn(appCheckSdk, 'initializeAppCheck').mockReturnValue(mockAppCheckInstance as any);
+    const expiredQuota = Object.assign(new Error('RESOURCE_EXHAUSTED: assessment quota exceeded'), { status: 429 });
+    const getToken = vi.spyOn(appCheckSdk, 'getToken')
+      .mockRejectedValueOnce(expiredQuota)
+      .mockResolvedValueOnce({ token: 'recovered-after-quota-reset' });
+
+    const blocked = await initAppCheck(dummyApp, { siteKey: 'enterprise-site-key' });
+    expect(blocked.phase).toBe('token-error');
+    expect(blocked.tokenAvailable).toBe(false);
+    expect(blocked.success).toBe(false);
+    expect(blocked.retryable).toBe(true);
+    expect(isAppCheckFallbackOffline()).toBe(true);
+
+    const recovered = await initAppCheck(dummyApp, { siteKey: 'enterprise-site-key' });
+    expect(recovered.success).toBe(true);
+    expect(recovered.phase).toBe('token-ready');
+    expect(recovered.tokenAvailable).toBe(true);
+    expect(isAppCheckFallbackOffline()).toBe(false);
+    expect(getToken).toHaveBeenCalledTimes(2);
+  });
+
   it('activates fallback offline mode when site key is provided but environment is unsupported', async () => {
     const originalCrypto = window.crypto;
     Object.defineProperty(window, 'crypto', { value: undefined, configurable: true });
