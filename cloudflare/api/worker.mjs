@@ -246,9 +246,10 @@ async function handler(request, env) {
   }
   if (route === '/v1/sync/replica/claim' || route === '/v1/sync/replica/retire') {
     const isClaim = route === '/v1/sync/replica/claim';
-    const parsed = (isClaim ? claimInput : retireInput).safeParse(raw);
-    if (!parsed.success) throw new BadInput('invalid-input', 400);
-    const input = parsed.data;
+    const claim = isClaim ? claimInput.safeParse(raw) : null;
+    const retirement = isClaim ? null : retireInput.safeParse(raw);
+    const input = claim?.success ? claim.data : retirement?.success ? retirement.data : null;
+    if (!input) throw new BadInput('invalid-input', 400);
     if (input.consentRevision !== consentRevision) throw new BadInput('access-revoked', 403);
     if (input.expectedFenceEpoch !== fenceEpoch) throw new BadInput('replica-fenced-or-conflict', 409);
     const hash = await payloadHash(input);
@@ -261,18 +262,20 @@ async function handler(request, env) {
     if (!control) throw new BadInput('access-revoked', 403);
     if (control.revision !== input.expectedRevision) throw new BadInput('replica-fenced-or-conflict', 409);
     let selected;
-    if (isClaim) {
+    if (claim?.success) {
       // Public Protocol 3 clocks in AEAD-associated metadata provide a bounded
       // server-side cross-check; the client must separately AEAD-open a full
       // account scan before checkpoint adoption.
       const cloudClock = await readPublicCheckpointClock(env.DB, uid);
-      if (canonical(cloudClock) !== canonical(input.checkpointClock)) {
+      if (canonical(cloudClock) !== canonical(claim.data.checkpointClock)) {
         throw new BadInput('checkpoint-changed', 409);
       }
       selected = prepareReplicaClaim(control, cloudClock,
-        input.candidateReplicaId, input.currentReplica);
+        claim.data.candidateReplicaId, claim.data.currentReplica);
+    } else if (retirement?.success) {
+      selected = prepareReplicaRetirement(control, retirement.data.replica);
     } else {
-      selected = prepareReplicaRetirement(control, input.replica);
+      throw new BadInput('invalid-input', 400);
     }
     if (!selected) throw new BadInput('replica-fenced-or-conflict', 409);
     const mutation = {
