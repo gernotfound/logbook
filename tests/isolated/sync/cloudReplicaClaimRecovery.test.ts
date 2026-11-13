@@ -230,6 +230,29 @@ describe('candidate encrypted D1 claim intent', () => {
         expect((await readLocal(owner))?.replica).toBeNull();
     });
 
+    it('does not adopt a historical receipt when the server checkpoint clock differs', async () => {
+        const { staged, snapshot } = await prepare();
+        const remote = transport(snapshot);
+        const sealed = await get(storage);
+        remote.replayStoredClaim.mockRejectedValueOnce(
+            new CloudReplicaMutationReconciliationRequiredError({
+                mutationId: staged.mutationId, action: 'register', revision: 1,
+                currentRevision: 2, reconciliationRequired: true, replayed: true,
+                baseSeq: 0, replica: remote.replica,
+            }),
+        );
+        remote.control.mockResolvedValueOnce({
+            revision: 2, fenceEpoch: 5, consentRevision: 1,
+            replicas: { s01: { ...remote.replica, lastSeq: 0,
+                status: 'active' as const, checkpointClock: { s00: 2 } } },
+        });
+        await expect(resumeCloudflareReplicaClaim(owner, key, remote, 'session-csrf', () => true))
+            .resolves.toBe('reconciliation-required');
+        expect(remote.scanAll).not.toHaveBeenCalled();
+        expect(await get(storage)).toBe(sealed);
+        expect((await readLocal(owner))?.cloudflareReplicaClaim).toEqual(staged);
+    });
+
     it('preserves historical claim if the replica was retired or reused', async () => {
         const { staged, snapshot } = await prepare();
         const remote = transport(snapshot);

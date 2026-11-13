@@ -138,6 +138,7 @@ export async function resumeCloudflareReplicaClaim(
         || entry.generation !== receipt.replica.generation || entry.lastSeq !== receipt.baseSeq
         || entry.leaseUntilMs !== receipt.replica.leaseUntilMs
         || entry.checkpointAtMs !== receipt.replica.checkpointAtMs
+        || !equal(entry.checkpointClock, intent.checkpointClock)
         || entry.leaseUntilMs <= Date.now()) {
         return 'reconciliation-required';
     }

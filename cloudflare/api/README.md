@@ -47,7 +47,7 @@ Firebase/Firestore writer, IndexedDB journal and encrypted vault remain active.
   it; the next session replays the exact same request. Only an authenticated
   matching request-bound receipt followed by a fresh complete ADK-open scan,
   the original unchanged checkpoint clock, the exact still-active replica
-  membership (including sequence/lease), and two stable control reads can
+  membership (including sequence/lease and checkpoint clock), and two stable control reads can
   authorize an atomic `adoptReplicaCheckpoint()` that removes the stored
   intent. A historical receipt after an unrelated control revision can pass
   ONLY these same tests; changed cloud documents, retired/reused slots, lease
