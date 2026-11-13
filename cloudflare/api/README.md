@@ -62,7 +62,7 @@ Firebase/Firestore writer, IndexedDB journal and encrypted vault remain active.
   remain CF-03/04/05/06 responsibilities.
 - The global Protocol 3 `_sync.writer.seq` is the batch's last sequence;
   a particular document's `_sync.clock[writer.slot]` can legitimately be
-  lower. Require a positive actor dot, never inflate clocks to pass validation.
+  lower. Require a positive actor dot **at most equal to writer.seq**, never inflate clocks to pass validation.
   The API allows up to eight 950 KB ciphertext envelopes per request plus
   bounded JSON overhead; this does NOT establish that an 8-envelope canonical
   hash/parse fits the Workers Free **10 ms CPU** limit. Benchmark on real
