@@ -2,7 +2,7 @@
 // All queries bind values; writes require a trigger-guarded atomic D1 batch.
 export async function readSnapshot(db, uid, consentRevision, fenceEpoch, paths) {
   const statements = [
-    db.prepare("SELECT s.revision, a.fence_epoch FROM sync_subjects a JOIN sync_state s ON s.uid = a.uid WHERE a.uid = ? AND a.status = 'active' AND a.consent_revision = ? AND a.fence_epoch = ?").bind(uid, consentRevision, fenceEpoch),
+    db.prepare("SELECT s.revision, a.fence_epoch, a.consent_revision FROM sync_subjects a JOIN sync_state s ON s.uid = a.uid WHERE a.uid = ? AND a.status = 'active' AND a.consent_revision = ? AND a.fence_epoch = ?").bind(uid, consentRevision, fenceEpoch),
     ...paths.map(path => db.prepare("SELECT envelope_json, revision FROM sync_documents WHERE uid = ? AND path = ?").bind(uid, path)),
   ];
   const rows = await db.batch(statements);
@@ -12,7 +12,7 @@ export async function readSnapshot(db, uid, consentRevision, fenceEpoch, paths) 
     const row = rows[index + 1]?.results?.[0];
     return { path, revision: row?.revision ?? null, document: row ? JSON.parse(row.envelope_json) : null };
   });
-  return { revision: control.revision, fenceEpoch: control.fence_epoch, documents };
+  return { revision: control.revision, fenceEpoch: control.fence_epoch, consentRevision: control.consent_revision, documents };
 }
 
 // The replica register and sync revision are read inside one SQL snapshot.
@@ -57,7 +57,7 @@ export async function readDocumentPage(db, uid, consentRevision, fenceEpoch, aft
     : "SELECT path, envelope_json, revision FROM sync_documents WHERE uid = ? AND path > ? ORDER BY path LIMIT 9";
   const pageArgs = afterPath === null ? [uid] : [uid, afterPath];
   const [controlResult, pageResult] = await db.batch([
-    db.prepare("SELECT s.revision, a.fence_epoch FROM sync_subjects a JOIN sync_state s ON s.uid = a.uid WHERE a.uid = ? AND a.status = 'active' AND a.consent_revision = ? AND a.fence_epoch = ?")
+    db.prepare("SELECT s.revision, a.fence_epoch, a.consent_revision FROM sync_subjects a JOIN sync_state s ON s.uid = a.uid WHERE a.uid = ? AND a.status = 'active' AND a.consent_revision = ? AND a.fence_epoch = ?")
       .bind(uid, consentRevision, fenceEpoch),
     db.prepare(pageSql).bind(...pageArgs),
   ]);
@@ -75,7 +75,7 @@ export async function readDocumentPage(db, uid, consentRevision, fenceEpoch, aft
   }));
   return {
     kind: 'page', revision: control.revision, fenceEpoch: control.fence_epoch,
-    documents: items, nextAfter: hasMore ? items.at(-1).path : null, complete: !hasMore,
+    consentRevision: control.consent_revision, documents: items, nextAfter: hasMore ? items.at(-1).path : null, complete: !hasMore,
   };
 }
 
