@@ -9,8 +9,10 @@ Firebase/Firestore writer, IndexedDB journal and encrypted vault remain active.
   ID, workers.dev and preview URLs disabled, no domain route or public fixture.
 - The database contains ciphertext envelopes and public causal metadata only.
   Root and monthly paths retain the existing cloud cipher v1 / Sync Protocol 3.
-- Account, consent, replica enrollment and lease records must be provisioned
-  by a separate trusted service. This API exposes no provisioning route.
+- Account identity, consent and epoch remain provisioned only by a separate
+  trusted service. An isolated Auth/CSRF-gated replica membership API now
+  handles slot registration, checkpoint and expired-lease retirement; it must
+  not be used until real Auth and full-scan adoption are integrated.
 - AUTH_GATE must be a **private service binding** that verifies an actual
   session, verified email, health consent, rate gate before D1, and session-bound CSRF for writes.
   It returns uid, fenceEpoch, healthConsentRevision and csrfVerified. No
@@ -21,8 +23,12 @@ Firebase/Firestore writer, IndexedDB journal and encrypted vault remain active.
 - POST /v1/sync/control reads the authenticated Protocol 3 replica registry,
   consent, account epoch and revision in one D1 batch. The client rejects
   invalid actors/checkpoint clocks and derives the stable frontier only from
-  active replicas. No public endpoint changes replica membership or checkpoints.
-  Every future maintenance write must advance the same revision atomically.
+  active replicas. POST /v1/sync/replica/claim and /v1/sync/replica/retire now change membership
+  only after private Auth/CSRF, expected account revision/consent/epoch and
+  lease/generation checks. The first SQL statement stores a digest-bound
+  mutation event whose trigger fences the entire atomic D1 batch. A lost
+  response can only be reconciled to the exact same mutation while its
+  committed revision remains current.
 - POST /v1/sync/read reads up to eight ciphertext envelopes under one D1
   snapshot; POST /v1/sync/scan reads a bounded page with a revision-fenced
   cursor for a complete account checkpoint. Reads/scans carry an explicit
@@ -35,7 +41,12 @@ Firebase/Firestore writer, IndexedDB journal and encrypted vault remain active.
   candidate (`cloudReplicaCommit.ts`); each D1 write binds
   `expectedFenceEpoch` and health consent generation from the same authenticated
   document/control snapshot. Stable frontier and lastSeq are derived from the
-  validated server replica register, not arbitrary caller parameters.
+  validated server replica register, not arbitrary caller parameters. A replica
+  checkpoint is computed from a complete AEAD-verified scan; the server also
+  compares the submitted clock with JSON1 aggregation of public `_sync.clock`
+  metadata, **not** with encrypted private health/candidate fields. This does
+  not prove the client actually decrypted every document, and no local replica
+  adoption/journal ACK is wired to this candidate yet.
   A rejected/stale CAS requires a fresh read and merge. Receipt replay requires
   the same immutable sealed bytes, batch ID and SHA-256 receipt digest; it never
   infers success from a timeout. Full checkpoint, account-key transport and consent/erasure flows
