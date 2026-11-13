@@ -112,7 +112,7 @@ void test('unverified, disabled, deleted, future-verified and invalid principal 
 });
 
 void test('a provider error or missing affected-row proof never produces a cookie', async () => {
-  const { db, sqlite } = fixture();
+  const { sqlite } = fixture();
   try {
     const broken = {
       prepare: () => ({ bind: () => ({ run: async () => ({ success: true, meta: { changes: 0 } }) }) }),
