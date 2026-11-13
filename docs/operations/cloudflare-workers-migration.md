@@ -1,4 +1,4 @@
-# Cloudflare Workers Static Assets — candidato pre-cutover
+# Cloudflare full-stack — candidato API/D1 e Static Assets pre-cutover
 
 **Stato 12/11/2026, dopo il primo smoke verde:** il [run manuale #43223911523](https://github.com/gernotfound/logbook/actions/runs/43223911523) sul `main 0d38e9b05602f7b1b95e6238b1188e46c31dceb0` (2.369.0) ha completato build/deploy di `thelogbook-frontend` su `workers.dev` e smoke statico **SUCCESS**. I run #43211365177, #43214892963 e #43218485391 sono *storici falliti*; il byte mismatch su `sw.js` non ha causa dimostrata. Le funzioni autenticate rimangono da verificare. La dashboard Cloudflare per `thelogbook.me` indica protezione della zona Free e certificati Universal SSL, ma il dominio **non è collegato al Worker** e **G01 non è autorizzato**. Firebase Hosting site `thelogbook` è stato disabilitato dal proprietario, senza modificare i siti predefiniti né Auth/Firestore/App Check. Checklist [#1041](https://github.com/gernotfound/logbook/issues/1041); incidente quota [#1036](https://github.com/gernotfound/logbook/issues/1036). I checkpoint di onboarding sottostanti sono storici e non sostituiscono il riepilogo verificato.
 
@@ -31,7 +31,7 @@ L'email Google Cloud del 12/11/2026 per `logbook-db-98cc4` conferma 10.000/10.00
 
 Lo screenshot OAuth più recente del proprietario mostra **`thelogbook.me` e il suo `/__/auth/handler` presenti, `thelogbook.web.app` assente**; l'owner non vuole mantenere o riattivare il vecchio Hosting. Conservare `logbook-db-98cc4.firebaseapp.com` per i flussi Firebase predefiniti ancora dipendenti da quel dominio. Read-back OAuth dopo salvataggio e test browser non attestati. Fonte e dettagli nel [registro](external-services-register.md) e issue #1041. **G01 resta NO-GO**.
 
-## Checkpoint provider e architettura — 12 novembre 2026 (corrente)
+## Checkpoint provider e architettura — 12 novembre 2026 (storico, non LIVE attuale)
 
 Il **registro operativo** [external-services-register.md](external-services-register.md) conserva il dettaglio dei check effettuati, le fonti (screenshot Cloudflare e connettori GitHub/Vercel), i limiti delle prove e le attività residue: DNS Cloudflare Free con 11 record, DNSSEC OFF, Universal SSL Active/backup, encryption mode Full (non strict), minimo TLS **1.2** dopo aggiornamento screenshot successivo (prima 1.0), Always Use HTTPS e HSTS OFF, 339 richieste TLS 1.3 e 96 None nell'intervallo 24h mostrato. Nessun custom domain Worker e nessun G01 autorizzato.
 

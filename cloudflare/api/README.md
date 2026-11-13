@@ -45,8 +45,9 @@ Firebase/Firestore writer, IndexedDB journal and encrypted vault remain active.
   checkpoint is computed from a complete AEAD-verified scan; the server also
   compares the submitted clock with JSON1 aggregation of public `_sync.clock`
   metadata, **not** with encrypted private health/candidate fields. This does
-  not prove the client actually decrypted every document, and no local replica
-  adoption/journal ACK is wired to this candidate yet.
+  not prove the client actually decrypted every document. Local replica
+  adoption and the D1 journal ACK are not wired into the **application runtime**;
+  the isolated candidate stages and acknowledges only in tests.
   The isolated client candidate stores the **exact ciphertext, nonce, batch ID
   and delivered causal prefix** into the owner-encrypted IndexedDB envelope
   before any D1 commit. On a lost response, it replays these same bytes and
