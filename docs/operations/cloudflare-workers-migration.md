@@ -100,3 +100,29 @@ Le componenti indipendenti possono procedere in parallelo a CF-00. Una dipendenz
 ## Tracciamento
 
 [AGENTS](../../AGENTS.md), [Storage e sync](../../.agents/rules/storage-and-sync.md), [Crash consistency](../../.agents/rules/crash-consistency.md), [Cifratura](../../.agents/rules/secure-storage.md), [Consenso](../../.agents/rules/health-consent.md), [CI](../../.agents/rules/ci-verification.md); [EPIC #1053](https://github.com/gernotfound/logbook/issues/1053), [CF-00 #1054](https://github.com/gernotfound/logbook/issues/1054), [CF-01 #1055](https://github.com/gernotfound/logbook/issues/1055), [CF-02 #1056](https://github.com/gernotfound/logbook/issues/1056), [CF-03 #1057](https://github.com/gernotfound/logbook/issues/1057), [CF-04 #1058](https://github.com/gernotfound/logbook/issues/1058), [CF-05 #1059](https://github.com/gernotfound/logbook/issues/1059), [CF-06 #1060](https://github.com/gernotfound/logbook/issues/1060), [CF-07 #1061](https://github.com/gernotfound/logbook/issues/1061), [CF-08 #1062](https://github.com/gernotfound/logbook/issues/1062), [CF-09 #1063](https://github.com/gernotfound/logbook/issues/1063) e [hosting/DNS #1041](https://github.com/gernotfound/logbook/issues/1041). Dettagli dei vecchi cutover nella cronologia Git, **non istruzioni attive**.
+
+
+### CF-03/CF-05 — unified candidate HTTP API and session logout (13/11/2026)
+
+The local-only API candidate now has one `cloudflare/api/worker.mjs` HTTP
+entrypoint for `/v1/sync/*`, `/v1/consent/status`,
+`/v1/consent/initial` and `POST /v1/auth/logout`. The separate
+consent Wrangler file was retired; one placeholder D1 config supplies
+private AUTH_GATE, exact origin and current legal versions. All route
+handlers retain their own authorization/validation. This changes **source
+code only**, not a deployed Cloudflare Worker, D1 migration or domain.
+
+Logout checks session-bound CSRF and owner/epoch in a single D1 update. On
+an ambiguous write outcome, only a primary read proving the exact revoked
+session permits clearing its session and CSRF cookies. Logout cannot erase
+any health data, pending IndexedDB journal, keys or independent sessions.
+Logout without first consent (including a pending-verification account)
+must remain possible and never grants fitness access. CI exercises the
+combined HTTP entry and failure/recovery using synthetic SQLite sessions;
+provider CPU/latency/Free quotas remain untested.
+
+**Release NO-GO:** real password/Google Auth and email, PWA session wiring,
+ADK/key lifecycle, revocation/health erasure/reacceptance, rights/delete,
+offline multi-device/Safari and runtime D1/Workers smoke. Migration 0003/0004
+not applied to the existing D1 sandbox at this checkpoint. Mailjet work
+continues independently. No DNS, Production or old-provider retirement.

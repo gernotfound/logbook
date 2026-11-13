@@ -1,6 +1,8 @@
 // Candidate-only encrypted replica API. There is intentionally no public fixture,
 // secret-header login, test backdoor or fallback identity when AUTH_GATE is absent.
 import { z } from 'zod';
+import consentWorker from './consent-worker.mjs';
+import logoutWorker from './logout-worker.mjs';
 import { commitEncryptedBatch, readAccessState, readDocumentPage, readReceipt, readReplicaControl, readSnapshot } from './d1-document-store.mjs';
 import {
   mutationResponse, prepareReplicaClaim, prepareReplicaRetirement, readPublicCheckpointClock,
@@ -350,6 +352,11 @@ async function handler(request, env) {
 
 export default {
   async fetch(request, env) {
+    const route = new URL(request.url).pathname;
+    if (route === '/v1/consent/status' || route === '/v1/consent/initial') {
+      return consentWorker.fetch(request, env);
+    }
+    if (route === '/v1/auth/logout') return logoutWorker.fetch(request, env);
     try { return await handler(request, env); }
     catch (error) {
       if (error instanceof BadInput) return reply({ error: error.message }, error.status);
