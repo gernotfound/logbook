@@ -2,6 +2,10 @@
 // secret-header login, test backdoor or fallback identity when AUTH_GATE is absent.
 import { z } from 'zod';
 import { commitEncryptedBatch, readAccessState, readDocumentPage, readReceipt, readReplicaControl, readSnapshot } from './d1-document-store.mjs';
+import {
+  mutationResponse, prepareReplicaClaim, prepareReplicaRetirement, readPublicCheckpointClock,
+  readReplicaMutationReceipt, writeReplicaMutation,
+} from './replica-maintenance.mjs';
 
 const MAX_BODY_BYTES = 1800000;
 const MAX_DOCUMENT_BYTES = 950000;
@@ -33,6 +37,15 @@ const document = z.strictObject({
 });
 const documentPath = z.string().max(32).regex(PATH);
 const id = z.string().regex(/^[A-Za-z0-9_-]{16,128}$/);
+const mutationBase = {
+  mutationId: id, expectedRevision: safeInt,
+  expectedFenceEpoch: safeInt.min(1), consentRevision: safeInt.min(1),
+};
+const claimInput = z.strictObject({
+  ...mutationBase, candidateReplicaId: z.string().min(1).max(128).refine(s => s.trim() === s),
+  currentReplica: replica.nullable(), checkpointClock: z.record(slot, safeInt),
+});
+const retireInput = z.strictObject({ ...mutationBase, replica });
 const readInput = z.strictObject({ paths: z.array(documentPath).min(1).max(8) });
 const pageInput = z.strictObject({ after: documentPath.nullable(), expectedRevision: safeInt.nullable() })
   .refine(value => (value.after === null) === (value.expectedRevision === null));
@@ -156,7 +169,7 @@ function validateSealedBatch(input) {
 async function handler(request, env) {
   const url = new URL(request.url);
   const route = url.pathname;
-  const validRoutes = new Set(['/v1/sync/read', '/v1/sync/scan', '/v1/sync/control', '/v1/sync/commit', '/v1/sync/receipt']);
+  const validRoutes = new Set(['/v1/sync/read', '/v1/sync/scan', '/v1/sync/control', '/v1/sync/replica/claim', '/v1/sync/replica/retire', '/v1/sync/commit', '/v1/sync/receipt']);
   if (!validRoutes.has(route)) return reply({ error: 'not-found' }, 404);
   if (request.method !== 'POST') {
     return reply({ error: 'method-not-allowed' }, 405);
@@ -171,7 +184,8 @@ async function handler(request, env) {
   if (!env.DB || typeof env.DB.prepare !== 'function' || typeof env.DB.batch !== 'function') {
     return reply({ error: 'storage-unavailable' }, 503);
   }
-  const claims = await authorize(request, env, route, route === '/v1/sync/commit');
+  const claims = await authorize(request, env, route,
+    route === '/v1/sync/commit' || route === '/v1/sync/replica/claim' || route === '/v1/sync/replica/retire');
   const uid = claims.uid;
   const consentRevision = claims.healthConsentRevision;
   const fenceEpoch = claims.fenceEpoch;
@@ -194,6 +208,61 @@ async function handler(request, env) {
     const control = await readReplicaControl(env.DB, uid, consentRevision, fenceEpoch);
     if (!control) throw new BadInput('access-revoked', 403);
     return reply(control);
+  }
+  if (route === '/v1/sync/replica/claim' || route === '/v1/sync/replica/retire') {
+    const isClaim = route === '/v1/sync/replica/claim';
+    const parsed = (isClaim ? claimInput : retireInput).safeParse(raw);
+    if (!parsed.success) throw new BadInput('invalid-input', 400);
+    const input = parsed.data;
+    if (input.consentRevision !== consentRevision) throw new BadInput('access-revoked', 403);
+    if (input.expectedFenceEpoch !== fenceEpoch) throw new BadInput('replica-fenced-or-conflict', 409);
+    const hash = await payloadHash(input);
+    const existing = await readReplicaMutationReceipt(env.DB, uid, consentRevision, fenceEpoch, input.mutationId);
+    if (existing) {
+      if (existing.request_hash !== hash) throw new BadInput('mutation-id-conflict', 409);
+      return reply(mutationResponse(input.mutationId, existing, true));
+    }
+    const control = await readReplicaControl(env.DB, uid, consentRevision, fenceEpoch);
+    if (!control) throw new BadInput('access-revoked', 403);
+    if (control.revision !== input.expectedRevision) throw new BadInput('replica-fenced-or-conflict', 409);
+    let selected;
+    if (isClaim) {
+      // Public Protocol 3 clocks in AEAD-associated metadata provide a bounded
+      // server-side cross-check; the client must separately AEAD-open a full
+      // account scan before checkpoint adoption.
+      const cloudClock = await readPublicCheckpointClock(env.DB, uid);
+      if (canonical(cloudClock) !== canonical(input.checkpointClock)) {
+        throw new BadInput('checkpoint-changed', 409);
+      }
+      selected = prepareReplicaClaim(control, cloudClock,
+        input.candidateReplicaId, input.currentReplica);
+    } else {
+      selected = prepareReplicaRetirement(control, input.replica);
+    }
+    if (!selected) throw new BadInput('replica-fenced-or-conflict', 409);
+    const mutation = {
+      ...selected, mutationId: input.mutationId, hash,
+      expectedRevision: input.expectedRevision, fenceEpoch, consentRevision,
+    };
+    try {
+      const stored = await writeReplicaMutation(env.DB, uid, mutation);
+      return reply(mutationResponse(input.mutationId, stored, false));
+    } catch (error) {
+      const saved = await readReplicaMutationReceipt(env.DB, uid,
+        consentRevision, fenceEpoch, input.mutationId);
+      if (saved) {
+        if (saved.request_hash !== hash) throw new BadInput('mutation-id-conflict', 409);
+        return reply(mutationResponse(input.mutationId, saved, true));
+      }
+      const state = await readAccessState(env.DB, uid);
+      if (state?.status !== 'active' || state.consent_revision !== consentRevision
+        || state.fence_epoch !== fenceEpoch) throw new BadInput('access-revoked', 403);
+      if (state.revision !== input.expectedRevision
+        || /replica-control-fenced|UNIQUE constraint|replica-regression/i.test(String(error?.message))) {
+        throw new BadInput('replica-fenced-or-conflict', 409);
+      }
+      throw error;
+    }
   }
   if (route === '/v1/sync/scan') {
     const parsed = pageInput.safeParse(raw);
