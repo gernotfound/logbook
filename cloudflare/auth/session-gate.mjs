@@ -30,7 +30,7 @@ function canonicalToken(value) {
   try {
     const binary = atob(value.replace(/-/g, '+').replace(/_/g, '/') + '=');
     return binary.length === 32
-      && btoa(binary).replace(/\\+/g, '-').replace(/\\//g, '_').replace(/=+$/, '') === value;
+      && btoa(binary).replaceAll('+', '-').replaceAll('/', '_').replace(/=+$/, '') === value;
   } catch {
     return false;
   }
