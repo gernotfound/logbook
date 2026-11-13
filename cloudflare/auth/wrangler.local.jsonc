@@ -1,0 +1,18 @@
+{
+  "name": "thelogbook-cf03-auth-gate-local-only",
+  "main": "./session-gate.mjs",
+  "compatibility_date": "2026-11-12",
+  "workers_dev": false,
+  "preview_urls": false,
+  "d1_databases": [{
+    "binding": "DB",
+    "database_name": "cf02-disposable-local-only",
+    "database_id": "00000000-0000-4000-8000-000000000002",
+    "migrations_dir": "../api/migrations"
+  }],
+  "ratelimits": [{
+    "name": "API_RATE_LIMITER",
+    "namespace_id": "31003",
+    "simple": { "limit": 60, "period": 60 }
+  }]
+}
