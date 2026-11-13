@@ -236,11 +236,15 @@ export async function resumeCloudflareReplicaClaim(
     const currentControl = await transport.control();
     current(guard);
     if (!equal(control, currentControl)) return 'reconciliation-required';
+    // The AEAD scan and both control reads can outlast the original lease.
+    // Fence the final IndexedDB commit as well, not just the first read.
+    if (entry.leaseUntilMs <= Date.now()) return 'reconciliation-required';
+    const liveMembership = () => guard() && entry.leaseUntilMs > Date.now();
     if (!equal(verifiedClock, intent.checkpointClock)) {
         // The original claim committed, but independently committed documents
         // advanced. Restage a new request only while the original membership
         // and its receipt metadata still match; no current grant is inferred.
-        return replaceClaimIntent(owner, intent, control, verifiedClock, guard);
+        return replaceClaimIntent(owner, intent, control, verifiedClock, liveMembership);
     }
     const docMap = new Map<string, Record<string, unknown>>();
     for (const [path, doc] of verified.documents) {
@@ -249,7 +253,7 @@ export async function resumeCloudflareReplicaClaim(
     const checkpoint = checkpointFromCloudDocuments(docMap);
     await adoptReplicaCheckpoint(owner, {
         identity: receipt.replica, baseSeq: receipt.baseSeq,
-    }, checkpoint, guard, intent.mutationId);
-    current(guard);
+    }, checkpoint, liveMembership, intent.mutationId);
+    current(liveMembership);
     return 'adopted';
 }
