@@ -60,6 +60,9 @@ export async function revertRejectedConsent(owner: string, expected: UserData['l
         if (!guard()) throw new Error('Ripristino consenso invalidato dal cambio sessione');
         const current = validateLocalEnvelope(raw, owner);
         if (!current || !equal(current.data.legalConsent, expected)) return raw!;
+        if (current.cloudflareDelivery) {
+            throw new Error('Intento D1 pendente: rollback del consenso sospeso senza alterare il journal.');
+        }
 
         const legalConsentOps = current.pending.filter(op =>
             op.docPath === ''
