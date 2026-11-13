@@ -12,6 +12,8 @@
 
 I righi dei checkpoint precedenti riportati più sotto conservano la sequenza storica e **non sostituiscono questo stato corrente**.
 
+**Registro servizi esterni:** `docs/operations/external-services-register.md` è attualmente toccato dalla PR concorrente [#1070](https://github.com/gernotfound/logbook/pull/1070), perciò non lo modifichiamo in questo branch per evitare conflitti e interferenze con la migrazione. Il presente documento, indicizzato da `docs/README.md` e collegato in #1054, mantiene il checkpoint verificabile. Riconciliare il registro dopo il coordinamento/merge della PR concorrente, riportando soltanto lo stato provider realmente validato.
+
 ## Scelta in corso
 
 - **Provider candidato:** Brevo Free, non ancora verificato per l'invio transazionale sull'account TheLogBook. La selezione è condizionata a disponibilità Free, limiti, deliverability e controlli privacy.
