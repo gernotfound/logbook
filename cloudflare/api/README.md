@@ -157,3 +157,37 @@ Firebase/Firestore writer, IndexedDB journal and encrypted vault remain active.
 For disposable local D1 only, Wrangler can apply the versioned migration with
 its local database command. The node:test suite uses a transactional SQLite
 adapter and is not evidence of remote D1 performance, IAM or quota.
+
+## CF-03 private session gate candidate (not activated)
+
+Migration `0003_auth_session_gate.sql` adds owner-scoped Auth principals and only
+SHA-256 hashes of 32-byte random session/CSRF tokens. This schema is **new baseline,
+not a migration of Firebase accounts**; the isolated D1 sandbox had only
+`0001`/`0002` at the prior verified checkpoint. The new migration has not
+been applied to a Cloudflare provider by this change.
+
+`cloudflare/auth/session-gate.mjs` answers only
+`POST https://auth-gate.internal/__internal/authorize` over an internal
+service binding. The local-only Wrangler configs bind the D1 replica candidate
+to this private Worker; neither config exposes the gate on workers.dev or a
+custom route. The gate rejects any missing configuration, external route,
+invalid/duplicated cookie, expired/revoked session, unverified or disabled
+account, stale account epoch, missing/withdrawn consent and unmatched D1
+fence. It performs one primary SQL read joining session, principal and
+consent, and validates a session-bound CSRF header on mutations. An
+approximate Cloudflare rate-limit binding must approve before the D1 query,
+otherwise no trusted claim is returned. Rate limiting is per-session and
+per-location; global anonymous flood defense, password/email/Google antiabuse
+and Free quota measurements remain CF-00/07 requirements.
+
+**No account-creation, password verification, Google OAuth, email verification,
+session issuance, token refresh, consent provisioning or key delivery exists
+in this increment.** Only the future trusted Auth service may mint/revoke
+sessions and synchronize `auth_epoch` with `sync_subjects.fence_epoch`.
+Never seed a synthetic session in a deployed service or treat this gate's
+unit tests as real authentication. `AUTH_GATE` remains unavailable to the
+live frontend. No public Worker API has been deployed, no DNS/cutover has
+been performed, and the Firebase runtime remains the active client path.
+Production integration needs authenticated issuer, verified consent, logout
+and session revocation/recovery, edge abuse controls and runtime tests.
+
