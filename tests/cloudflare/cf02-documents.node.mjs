@@ -183,32 +183,43 @@ void test('new replica enrollment commits one guarded registration and is replay
   assert.equal(db.sqlite.prepare("SELECT last_seq FROM sync_replicas WHERE uid=? AND slot='s01'").get(owner).last_seq, 1);
 }));
 
-void test('historical replica ID cannot be reused for registration or expired-slot replacement', () => withFixture(async db => {
-  const reusedId = 'prior-replica-id-0001';
-  assert.equal((await call(db, 'replica/claim', claim('mutation0000000600', 0, reusedId))).status, 200);
+void test('a retired replica ID cannot rejoin after its slot is reused by a new generation', () => withFixture(async db => {
+  const oldId = 'prior-replica-id-0001';
+  const first = await call(db, 'replica/claim', claim('mutation0000000600', 0, oldId));
+  assert.equal(first.status, 200);
+  assert.equal(first.body.replica.slot, 's01');
 
-  // Synthetically advance the register to a successor generation. The old
-  // mutation ledger stays intact while the old ID leaves the live register.
+  // Age the lease rather than bypassing the actual retirement and reuse
+  // APIs; the immutable receipt remains authoritative throughout the test.
   const now = Date.now();
-  db.sqlite.prepare("UPDATE sync_replicas SET replica_id = ?, generation = 2 WHERE uid = ? AND slot = 's01'")
-    .run('successor-device-0001', owner);
-  db.sqlite.prepare('UPDATE sync_state SET revision = revision + 1 WHERE uid = ?').run(owner);
-  const registeredAgain = await call(db, 'replica/claim', claim('mutation0000000601', 2, reusedId));
-  assert.deepEqual(registeredAgain, { status: 409, body: { error: 'replica-fenced-or-conflict' } });
+  db.sqlite.prepare("UPDATE sync_replicas SET lease_until_ms = ? WHERE uid = ? AND slot = 's01'")
+    .run(now - 600000, owner);
+  const oldReplica = { slot: 's01', replicaId: oldId, generation: 1 };
+  const retired = await call(db, 'replica/retire', retire('mutation0000000601', 1, oldReplica));
+  assert.equal(retired.status, 200);
+  assert.equal(retired.body.revision, 2);
 
-  // Exhaust free slots, leaving one lease expired: the SQL guard must also
-  // block reuse-expired, while a fresh identity may claim that same slot.
+  // Other synthetic device memberships have filled the register, so the
+  // real claim endpoint must choose the retired s01 slot (generation 2).
   for (let i = 2; i < 16; i += 1) {
     db.sqlite.prepare('INSERT INTO sync_replicas (uid,slot,replica_id,generation,lease_until_ms,checkpoint_at_ms,checkpoint_clock_json,last_seq,status) VALUES (?,?,?,?,?,?,?,?,?)')
       .run(owner, `s${String(i).padStart(2, '0')}`, `occupied-device-${i}`, 1,
         i === 2 ? now - 600000 : now + 86400000, now - 86400000, '{}', 0, 'active');
   }
-  const expiredAgain = await call(db, 'replica/claim', claim('mutation0000000602', 2, reusedId));
-  assert.deepEqual(expiredAgain, { status: 409, body: { error: 'replica-fenced-or-conflict' } });
-  assert.equal(db.sqlite.prepare('SELECT revision FROM sync_state WHERE uid = ?').get(owner).revision, 2);
-  assert.equal(db.sqlite.prepare('SELECT COUNT(*) AS n FROM sync_replica_mutations WHERE uid = ?').get(owner).n, 1);
+  const replacement = await call(db, 'replica/claim', claim('mutation0000000602', 2, 'successor-device-0001'));
+  assert.equal(replacement.status, 200);
+  assert.equal(replacement.body.action, 'reuse-expired');
+  assert.equal(replacement.body.replica.slot, 's01');
+  assert.equal(replacement.body.replica.generation, 2);
 
-  const fresh = await call(db, 'replica/claim', claim('mutation0000000603', 2, 'fresh-device-0001'));
+  // Old ID is absent from the live register, but its historical ledger row
+  // must still prevent reuse at the other expired slot.
+  const rejected = await call(db, 'replica/claim', claim('mutation0000000603', 3, oldId));
+  assert.deepEqual(rejected, { status: 409, body: { error: 'replica-fenced-or-conflict' } });
+  assert.equal(db.sqlite.prepare('SELECT revision FROM sync_state WHERE uid = ?').get(owner).revision, 3);
+  assert.equal(db.sqlite.prepare('SELECT COUNT(*) AS n FROM sync_replica_mutations WHERE uid = ?').get(owner).n, 3);
+
+  const fresh = await call(db, 'replica/claim', claim('mutation0000000604', 3, 'fresh-device-0001'));
   assert.equal(fresh.status, 200);
   assert.equal(fresh.body.action, 'reuse-expired');
   assert.equal(fresh.body.replica.slot, 's02');
