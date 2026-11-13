@@ -191,8 +191,18 @@ export function createCloudflareReplicaTransport(send: typeof fetch = fetch) {
                 candidateReplicaId, currentReplica, checkpointClock,
             };
             const value = await post('replica/claim', body, csrfToken);
-            return parseMutationResponse(value, mutationId, control.revision,
+            const confirmed = parseMutationResponse(value, mutationId, control.revision,
                 ['register', 'checkpoint', 'reuse-expired']);
+            const matchesCurrent = currentReplica !== null
+                && confirmed.replica.slot === currentReplica.slot
+                && confirmed.replica.replicaId === currentReplica.replicaId
+                && confirmed.replica.generation === currentReplica.generation;
+            if (confirmed.action === 'checkpoint'
+                ? confirmed.replica.replicaId !== candidateReplicaId && !matchesCurrent
+                : confirmed.replica.replicaId !== candidateReplicaId) {
+                throw new CloudReplicaTransportError(0);
+            }
+            return confirmed;
         },
 
         async retireExpiredReplica(
@@ -207,7 +217,13 @@ export function createCloudflareReplicaTransport(send: typeof fetch = fetch) {
                 expectedFenceEpoch: control.fenceEpoch,
                 consentRevision: control.consentRevision, replica,
             }, csrfToken);
-            return parseMutationResponse(value, mutationId, control.revision, ['retire']);
+            const confirmed = parseMutationResponse(value, mutationId, control.revision, ['retire']);
+            if (confirmed.replica.slot !== replica.slot
+                || confirmed.replica.replicaId !== replica.replicaId
+                || confirmed.replica.generation !== replica.generation) {
+                throw new CloudReplicaTransportError(0);
+            }
+            return confirmed;
         },
 
         // A partial page must never be published as a complete cloud checkpoint.

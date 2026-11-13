@@ -120,6 +120,12 @@ describe('isolated Cloudflare document transport', () => {
         await expect(client.claimCheckpoint(checkpoint, control,
             'device-new', null, mutationId, ''))
             .rejects.toBeInstanceOf(CloudReplicaTransportError);
+        const wrongIdentity = createCloudflareReplicaTransport(vi.fn(async () =>
+            new Response(JSON.stringify({ ...result, replica: { ...result.replica,
+                replicaId: 'unexpected-device' } }))) as typeof fetch);
+        await expect(wrongIdentity.claimCheckpoint(checkpoint, control,
+            'device-new', null, mutationId, 'csrf'))
+            .rejects.toBeInstanceOf(CloudReplicaTransportError);
         expect(fetcher).toHaveBeenCalledTimes(1);
     });
 
@@ -135,6 +141,12 @@ describe('isolated Cloudflare document transport', () => {
         const client = createCloudflareReplicaTransport(fetcher as typeof fetch);
         await expect(client.retireExpiredReplica(control, target, id, 'csrf'))
             .resolves.toEqual(retirement);
+        const changedReplica = createCloudflareReplicaTransport(vi.fn(async () =>
+            new Response(JSON.stringify({ ...retirement, replica: {
+                ...retirement.replica, generation: 3,
+            } }))) as typeof fetch);
+        await expect(changedReplica.retireExpiredReplica(control, target, id, 'csrf'))
+            .rejects.toBeInstanceOf(CloudReplicaTransportError);
         const invalid = createCloudflareReplicaTransport(vi.fn(async () =>
             new Response(JSON.stringify({ ...retirement, revision: 8 }))) as typeof fetch);
         await expect(invalid.retireExpiredReplica(control, target, id, 'csrf'))
