@@ -1,6 +1,16 @@
 # Brevo — onboarding email transazionali Cloudflare (CF-00 B2)
 
-**Stato: BOZZA OPERATIVA, NON ATTIVATO / NON VALIDATO.** Checkpoint 13/11/2026. Collegato alle issue [CF-00 #1054](https://github.com/gernotfound/logbook/issues/1054), [CF-03 #1057](https://github.com/gernotfound/logbook/issues/1057) e all'[epic #1053](https://github.com/gernotfound/logbook/issues/1053). Questo documento registra soltanto l'onboarding del servizio email, senza autorizzare l'integrazione Auth, il cambio DNS o il rilascio. Riferimento normativo: `AGENTS.md` e `.agents/rules/external-services.md`.
+**Stato: DNS VERIFICATI DA BREVO / AUTENTICAZIONE FINALE E INVIO NON ANCORA PROVATI.** Checkpoint 13/11/2026. Collegato alle issue [CF-00 #1054](https://github.com/gernotfound/logbook/issues/1054), [CF-03 #1057](https://github.com/gernotfound/logbook/issues/1057) e all'[epic #1053](https://github.com/gernotfound/logbook/issues/1053). Questo documento registra soltanto l'onboarding del servizio email, senza autorizzare l'integrazione Auth, il cambio DNS o il rilascio. Riferimento normativo: `AGENTS.md` e `.agents/rules/external-services.md`.
+
+## Stato corrente verificato — 13/11/2026
+
+- Il product owner ha aggiunto manualmente i quattro record DNS richiesti per `notify.thelogbook.me`. **Read-back Cloudflare API GET**: zona `thelogbook.me` attiva, **15 record**, TXT Brevo presente; i CNAME `brevo1._domainkey.notify` e `brevo2._domainkey.notify` corrispondono agli obiettivi Brevo e sono **DNS only**, TTL Auto; il TXT `_dmarc.notify` è presente. I record email IONOS dell'apex (MX, SPF, DMARC CNAME) restano presenti. Non trascrivere in Git i valori del codice di verifica.
+- **Verifica separata tramite UI Brevo:** il product owner conferma che, dopo «Verifica record», tutti e quattro gli esiti (codice Brevo, DKIM 1, DKIM 2, DMARC) sono **verdi e corrispondono**. Non abbiamo un accesso API di Brevo per un read-back indipendente.
+- **Passo ancora da attestare:** selezione finale «Autentica dominio» su Brevo e stato dominio autenticato. Verifica record ≠ esito conclusivo del wizard.
+- **CF-00 B2 NON VALIDATO:** l'account Free deve ancora risultare abilitato all'invio transazionale; nessun invio accettato/delivered/inbox è stato provato, nessun segreto API gestito dal progetto; Auth e Worker non modificati.
+- Classificazione **CRITICAL** per dipendenza futura da verifica/reset account; attività corrente circoscritta all'onboarding email. **Nessuna modifica DNS effettuata dall'assistente**: i record sono stati creati dall'owner via dashboard.
+
+I righi dei checkpoint precedenti riportati più sotto conservano la sequenza storica e **non sostituiscono questo stato corrente**.
 
 ## Scelta in corso
 
@@ -16,30 +26,28 @@
 | Voce | Evidenza | Stato |
 |---|---|---|
 | Registrazione Brevo | Screenshot del product owner: dashboard e sezione email transazionali/SMTP accessibili | **Account creato**, invio reale non provato |
-| Inserimento dominio | Screenshot del product owner: procedura Brevo alla fase 2 «Sottodominio personalizzato (opzionale)» per `notify.thelogbook.me` | **Inserito nella procedura**, non autenticato |
+| Inserimento dominio | Screenshot product owner: wizard Brevo per `notify.thelogbook.me` e conferma successiva di tutti i record verdi | **DNS allineati; autenticazione finale ancora da attestare** |
 | Sottodominio link personalizzati | La UI mostra un campo con suffisso `.notify.thelogbook.me`, dichiarato opzionale | **Non necessario**; indicato di proseguire con campo vuoto |
 | Scelta metodo DNS | Screenshot 13/11: wizard alla fase «Configura metodo» con **Record DNS individuali** o **Configurazione gestita da Brevo** (NS) | **Scelta individuale raccomandata**, non ancora confermata effettuata dal proprietario |
 | Wizard Brevo, fase «Record» | Screenshot 13/11: Brevo richiede inizialmente **TXT** con nome relativo `notify` e valore di verifica `brevo-code:…` per `notify.thelogbook.me`; la schermata avverte che il record non corrisponde ancora | **Istruzioni fornite per l'inserimento manuale**; valore completo non copiato nella documentazione pubblica e salvataggio non verificato |
 | Conflitti DNS Cloudflare, lettura prima della scrittura | Cloudflare API GET della zona `thelogbook.me` attiva: 11 record; **nessun** record con nome `notify.thelogbook.me` né sotto `*.notify.thelogbook.me` al controllo del 13/11 | **Assenza di conflitto sul nome del primo TXT al momento della lettura**, non prova di un inserimento successivo |
-| Configurazione DNS | Screenshot owner e Cloudflare GET 13/11: 12 record zona; TXT `notify.thelogbook.me` presente, valore riconosciuto come `brevo-code:…` (con virgolette di rappresentazione DNS); MX IONOS e DMARC dell'apex conservati | **TXT creato dal proprietario e verificato su Cloudflare; autenticazione Brevo non ancora validata** |
-| DKIM 1 | Brevo chiede CNAME `brevo1._domainkey.notify` → `b1.notify-thelogbook-me.dkim.brevo.com`; Cloudflare GET non mostra il nome | **Da aggiungere manualmente; DNS only, TTL Auto** |
-| DKIM 2 | Brevo chiede CNAME `brevo2._domainkey.notify` → `b2.notify-thelogbook-me.dkim.brevo.com`; Cloudflare GET non mostra il nome | **Da aggiungere manualmente; DNS only, TTL Auto** |
-| DMARC sottodominio | Brevo chiede TXT `_dmarc.notify`; il valore appare troncato nello screenshot, quindi va copiato integralmente dalla UI. Cloudflare GET non mostra il nome; `_dmarc.thelogbook.me` è un CNAME IONOS separato | **Da aggiungere manualmente; senza alterare DMARC apex** |
+| Configurazione DNS | Read-back Cloudflare 13/11: 15 record DNS totali; TXT, CNAME DKIM 1 e 2 e DMARC del sottodominio presenti; MX/DMARC IONOS sull'apex conservati | **Quattro record DNS confermati da Cloudflare e verificati verdi in Brevo** |
+| DKIM 1 | Cloudflare GET: CNAME `brevo1._domainkey.notify` → `b1.notify-thelogbook-me.dkim.brevo.com`, DNS only, TTL Auto; Brevo lo segna verde | **Verificato** |
+| DKIM 2 | Cloudflare GET: CNAME `brevo2._domainkey.notify` → `b2.notify-thelogbook-me.dkim.brevo.com`, DNS only, TTL Auto; Brevo lo segna verde | **Verificato** |
+| DMARC sottodominio | Cloudflare GET: TXT `_dmarc.notify` presente; Brevo lo segna verde. Il DMARC apex resta distinto | **Verificato** |
 | Stato email transazionali/API | Nessuna API key, nessuna chiamata autenticata a Brevo, nessun test inbox mostrato | **NON VALIDATO** |
 | Impatto runtime | Nessuna modifica a Worker, Firebase/Vercel, Auth, D1, dominio Production | **Nessuna integrazione** |
 
 L'immagine della dashboard è una prova fornita dal proprietario, **non** un read-back via API del provider. Il solo accesso al menu SMTP non prova che l'account possa inviare email.
 
-## Procedura residua e gate
+## Passi successivi e gate
 
-1. Proseguire senza sottodominio personalizzato per i link (schermata precedente completata secondo screenshot fase 3).
-2. Alla fase «Configura metodo», preferire **Record DNS individuali** e poi «Aggiunta manuale» nella sezione successiva; non scegliere NS gestiti da Brevo né connessione automatica con privilegi di scrittura DNS Cloudflare. La scelta individuale conserva il controllo degli esatti record in Cloudflare e non delega il sottodominio. **Questa è una raccomandazione, non una configurazione già effettuata.**
-3. Prima voce visibile nella fase «Record»: TXT host `notify` (`notify.thelogbook.me`), valore completo da copiare con il pulsante della UI Brevo e TTL automatico su Cloudflare. **Non trascrivere il valore da uno screenshot troncato**, non duplicare il suffisso del nome e non memorizzare il token nel repository pubblico. È stata fornita soltanto la guida all'inserimento manuale: **nessuna scrittura effettuata dal connettore**; attendere conferma del proprietario e read-back.
-4. Stato verificato su Cloudflare 13/11: TXT Brevo già inserito dall'owner, 12 record in zona e nessun record DKIM1/DKIM2/DMARC sul sottodominio. Dalla UI Brevo del proprietario sono richiesti: CNAME `brevo1._domainkey.notify` → `b1.notify-thelogbook-me.dkim.brevo.com`; CNAME `brevo2._domainkey.notify` → `b2.notify-thelogbook-me.dkim.brevo.com`; TXT `_dmarc.notify` con contenuto completo da copiare dal portale (non recuperabile dallo screenshot). Sui due CNAME impostare `DNS only` e TTL `Auto`; per DMARC TTL `Auto`. Non usare proxy. Controllare CNAME flattening se DKIM non viene rilevato da Brevo. Salvare singolarmente e confermare con read-back; poi premere `Verifica record`/`Autentica dominio` in Brevo.
-5. L'inserimento DNS è svolto dal proprietario via UI; l'assistente resta in sola lettura sul provider. Verificare SPF/DKIM/DMARC e stato autenticazione Brevo con read-back. Non considerare completamento una sola visualizzazione di record in Cloudflare. Non intervenire su MX/SPF/DKIM/DMARC dell'apex IONOS.
-6. Verificare se l'account Free è realmente abilitato per email transazionali e quali limiti di quota e approvazione si applicano.
-7. Collaudare invio tramite HTTPS con email di test autorizzata, mittente verificato, secret escluso da repository/chat, messaggi privi di dati salute. Distinguere 201/receipt, delivery, bounce, delay, blocchi provider, quota e reset.
-8. Prima di procedere con Auth: documentare DPA/subprocessor, durata log transazionali e anteprime corpo, disattivazione del tracking non necessario, protezioni antiabuso, rate limit, token verifica/reset monouso/scadenti.
+1. **Autenticare definitivamente il dominio** dalla schermata Brevo premendo `Autentica dominio` dopo le quattro verifiche verdi, poi acquisire screenshot dello stato autentico/attivo; non dichiarare il passaggio concluso prima.
+2. Verificare che il piano **Brevo Free** consenta concretamente l'invio transazionale a indirizzi arbitrari e che l'account non sia in approvazione/sospensione.
+3. Preparare il mittente `no-reply@notify.thelogbook.me`, verificando eventuali condizioni di creazione e conferma senza acquistare una casella non necessaria. Valutare indirizzo reply-to separato realmente monitorato.
+4. Eseguire un invio **solo con destinatario di test autorizzato**, tramite API HTTPS server-side con secret conservato esclusivamente nel provider/sandbox; distinguere receipt API, delivery, inbox e bounce. Non esporre chiavi nel repository o nella chat.
+5. Prima di integrare Auth, verificare quota Free, rate limit/cooldown, contenuti email privi di salute, DPA/subprocessor, retention log/anteprime e tracking disattivato quando non necessario; verificare reset e token monouso nel sottosistema Auth autonomo.
+6. Senza un GO completo CF-00 B2, non dichiarare la dipendenza email pronta per la nuova Auth. Nessun intervento su vecchia Auth/Worker e nessun cutover di dominio.
 
 ## Fonti da rileggere al punto di integrazione
 
