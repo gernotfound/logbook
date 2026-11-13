@@ -13,7 +13,7 @@ const initial: SyncMeta = {
 };
 const base = sealCloudDocument(key, uid, '', { profile: { height: '170' } }, initial);
 const snapshot: CloudReplicaSnapshot = {
-    revision: 4, fenceEpoch: 7,
+    revision: 4, fenceEpoch: 7, consentRevision: 1,
     documents: [{ path: '', revision: 4, document: base }],
 };
 const control: CloudReplicaControlSnapshot = {
@@ -75,7 +75,10 @@ describe('D1 encrypted commit candidate from the shared Protocol 3 engine', () =
         expect(() => stage({ current: () => false })).toThrow(CloudReplicaStaleSnapshotError);
         expect(() => stage({ control: { ...control, revision: 5 } })).toThrow(CloudReplicaStaleSnapshotError);
         expect(() => stage({ control: { ...control, fenceEpoch: 8 } })).toThrow(CloudReplicaStaleSnapshotError);
-        expect(stage({ control: { ...control, consentRevision: 2 } }).batch.consentRevision).toBe(2);
+        expect(() => stage({ control: { ...control, consentRevision: 2 } }))
+            .toThrow(CloudReplicaStaleSnapshotError);
+        expect(() => stage({ checkpoint: { ...snapshot, consentRevision: 2 } }))
+            .toThrow(CloudReplicaStaleSnapshotError);
         expect(() => stage({ control: { ...control, replicas: {} } })).toThrow(CloudReplicaStaleSnapshotError);
         expect(() => stage({ control: { ...control, replicas: { s00: {
             ...control.replicas.s00, status: 'retired',
