@@ -10,6 +10,7 @@ import { UserDataSchema } from '../../../src/lib/schema';
 import { adoptReplicaCheckpoint, acknowledgeThrough, commitLocal, initializeLocal, readLocal } from '../../../src/lib/sync/localRepository';
 import { stageCloudflareDelivery, resumeCloudflareDelivery } from '../../../src/lib/sync/cloudReplicaDurableDelivery';
 import { applySemanticOperations, parseSyncMeta } from '../../../src/lib/sync/semanticProjection';
+import { compactSyncMetas } from '../../../src/lib/sync/causalCompaction';
 import type { CloudReplicaBatch, CloudReplicaControlSnapshot, CloudReplicaSnapshot } from '../../../src/lib/sync/cloudReplicaTransport';
 import { createAndMigrateVault } from '../../../src/lib/sync/secureArchiveMigration';
 import { lockAllVaults } from '../../../src/lib/sync/secureArchiveSession';
@@ -87,6 +88,18 @@ async function stage() {
             + JSON.stringify(initial.envelope.pending)
             + ' syncMeta=' + JSON.stringify(meta)
             + ' parse=' + String(error));
+    }
+    const compacted = compactSyncMetas(applied.syncMetas, {})[''];
+    try {
+        parseSyncMeta({ ...compacted, writer: {
+            slot: initial.replica.slot, replicaId: initial.replica.replicaId,
+            generation: initial.replica.generation, seq: initial.envelope.pending.at(-1)!.seq,
+            consentRevision: 1,
+        } });
+    } catch (error) {
+        throw new Error('DIAGNOSTIC compact metadata failure: '
+            + String(error) + ' before=' + JSON.stringify(meta)
+            + ' after=' + JSON.stringify(compacted));
     }
     await stageCloudflareDelivery(owner, initial.envelope.pending, initial.snapshot,
         initial.control, initial.replica, 'batch000000000191', adk, () => true);
