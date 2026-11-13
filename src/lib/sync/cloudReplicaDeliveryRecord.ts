@@ -85,7 +85,8 @@ export function parseCloudflareDeliveryIntent(
             || sync.writer.seq !== batch.lastSeq || sync.writer.consentRevision !== batch.consentRevision
             // A document may be causally behind the final batch sequence:
             // do not reject valid multi-sequence, multi-document deliveries.
-            || (sync.clock[replica.slot] ?? 0) < 1) invalidIntent();
+            || (sync.clock[replica.slot] ?? 0) < 1
+            || sync.clock[replica.slot] > batch.lastSeq) invalidIntent();
         seenPaths.add(entry.path);
     }
     if (seenPaths.size !== expectedPaths.size) invalidIntent();

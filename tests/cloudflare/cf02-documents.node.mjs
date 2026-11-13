@@ -544,6 +544,9 @@ void test('trusted identity, epoch, consent, origin, CSRF and strict schemas fai
   assert.equal((await call(db, 'commit', { ...item, uid: 'other-user' })).status, 400);
   assert.equal((await call(db, 'commit', { ...item, documents: [{ path: '', document: { ...envelope(), health: 'plaintext' } }] })).status, 400);
   assert.equal((await call(db, 'commit', { ...item, documents: [{ path: '../escape', document: envelope() }] })).status, 400);
+  const futureCausalDot = envelope();
+  futureCausalDot._sync.clock.s00 = 2;
+  assert.equal((await call(db, 'commit', { ...item, documents: [{ path: '', document: futureCausalDot }] })).status, 400);
   const missingCausalDot = envelope();
   delete missingCausalDot._sync.clock.s00;
   assert.equal((await call(db, 'commit', { ...item, documents: [{ path: '', document: missingCausalDot }] })).status, 400);

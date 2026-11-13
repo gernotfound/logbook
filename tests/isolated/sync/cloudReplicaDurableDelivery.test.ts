@@ -240,6 +240,21 @@ describe('candidate D1 delivery: encrypted IndexedDB intent and exact ACK', () =
         expect((await readLocal(owner))?.cloudflareDelivery).toBeDefined();
     });
 
+    it('refuses an intent that falsely claims a causal dot beyond its attested batch sequence', async () => {
+        await stage();
+        const intent = (await readLocal(owner))!.cloudflareDelivery!;
+        const previous = await get(storeKey);
+        expect(intent.batch.lastSeq).toBe(1);
+        const invalid = structuredClone(intent);
+        invalid.batch.documents[0].document._sync.clock.s00 = 2;
+        await updateArchiveRecord<unknown>(owner, raw => ({
+            ...(raw as Record<string, unknown>), cloudflareDelivery: invalid,
+        }));
+        await expect(readLocal(owner)).rejects.toThrow('Intento D1 non verificabile');
+        // The pre-existing delivery is never acknowledged from forged metadata.
+        expect(await get(storeKey)).not.toBe(previous);
+    });
+
     it('does not allow a second staging attempt or a replica checkpoint while an intent is outstanding', async () => {
         const initial = await stage();
         const previous = await get(storeKey);

@@ -162,7 +162,8 @@ function validateSealedBatch(input) {
       // Writer.seq identifies the whole committed batch, while a particular
       // document may have been last touched by an earlier operation in it.
       // Require the actor's real causal dot, not a fabricated global frontier.
-      || !Number.isSafeInteger(sealed._sync.clock[w.slot]) || sealed._sync.clock[w.slot] < 1) {
+      || !Number.isSafeInteger(sealed._sync.clock[w.slot])
+      || sealed._sync.clock[w.slot] < 1 || sealed._sync.clock[w.slot] > w.seq) {
       throw new BadInput('invalid-input', 400);
     }
     if (new TextEncoder().encode(JSON.stringify(sealed)).byteLength > MAX_DOCUMENT_BYTES) {
