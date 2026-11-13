@@ -102,6 +102,42 @@ async function call(db, route, body, config = {}) {
   return { status: response.status, body: await response.json() };
 }
 
+void test('replica control snapshot is owner-scoped and revision-bound', () => withFixture(async db => {
+  const initial = await call(db, 'control', {});
+  assert.equal(initial.status, 200);
+  assert.deepEqual(initial.body, {
+    revision: 0, fenceEpoch: 5, consentRevision: 1,
+    replicas: { s00: {
+      replicaId: replica.replicaId, generation: 1, leaseUntilMs: initial.body.replicas.s00.leaseUntilMs,
+      checkpointAtMs: initial.body.replicas.s00.checkpointAtMs,
+      checkpointClock: {}, lastSeq: 0, status: 'active',
+    } },
+  });
+  assert.equal((await call(db, 'control', { uid: 'another-owner' })).status, 400);
+  assert.equal((await call(db, 'control', {}, { env: makeEnv(db, { fenceEpoch: 4 }) })).status, 403);
+  assert.equal((await call(db, 'control', {}, { env: makeEnv(db, { healthConsentRevision: 2 }) })).status, 403);
+  assert.equal((await call(db, 'commit', attempt('batch000000000061'))).status, 200);
+  const after = await call(db, 'control', {});
+  assert.equal(after.body.revision, 1);
+  assert.equal(after.body.replicas.s00.lastSeq, 1);
+}));
+
+void test('replica control includes all active/retired actors and their checkpoint clocks', () => withFixture(async db => {
+  const now = Date.now();
+  db.sqlite.prepare('UPDATE sync_replicas SET checkpoint_clock_json = ? WHERE uid = ? AND slot = ?')
+    .run(JSON.stringify({ s00: 7, s01: 2 }), owner, 's00');
+  db.sqlite.prepare('INSERT INTO sync_replicas (uid, slot, replica_id, generation, lease_until_ms, checkpoint_at_ms, checkpoint_clock_json, last_seq, status) VALUES (?,?,?,?,?,?,?,?,?)')
+    .run(owner, 's01', 'second-synthetic-device', 2, now + 86400000, now, '{"s00":4,"s01":2}', 2, 'active');
+  db.sqlite.prepare('INSERT INTO sync_replicas (uid, slot, replica_id, generation, lease_until_ms, checkpoint_at_ms, checkpoint_clock_json, last_seq, status) VALUES (?,?,?,?,?,?,?,?,?)')
+    .run(owner, 's02', 'retired-synthetic-device', 3, now - 3000, now - 10000, '{"s00":99}', 9, 'retired');
+  const control = await call(db, 'control', {});
+  assert.equal(control.status, 200);
+  assert.equal(Object.keys(control.body.replicas).length, 3);
+  assert.deepEqual(control.body.replicas.s00.checkpointClock, { s00: 7, s01: 2 });
+  assert.deepEqual(control.body.replicas.s01.checkpointClock, { s00: 4, s01: 2 });
+  assert.equal(control.body.replicas.s02.status, 'retired');
+}));
+
 void test('first encrypted root/month write, coherent read and durable receipt replay', () => withFixture(async db => {
   const before = await call(db, 'read', { paths: ['', 'history_months/2026-11'] });
   assert.equal(before.status, 200);
