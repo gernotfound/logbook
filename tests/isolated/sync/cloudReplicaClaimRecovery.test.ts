@@ -361,6 +361,25 @@ describe('candidate encrypted D1 claim intent', () => {
         expect((await readLocal(owner))?.cloudflareReplicaClaim).toBeDefined();
     });
 
+    it('refuses historical adoption if the lease expires during the complete AEAD scan', async () => {
+        const { staged, snapshot } = await prepare();
+        const remote = transport(snapshot);
+        const original = await get(storage);
+        remote.scanAll.mockImplementationOnce(async () => {
+            vi.spyOn(Date, 'now').mockReturnValue(remote.replica.leaseUntilMs + 1);
+            return snapshot(1);
+        });
+
+        await expect(resumeCloudflareReplicaClaim(owner, key, remote, 'session-csrf', () => true))
+            .resolves.toBe('reconciliation-required');
+        expect(remote.control).toHaveBeenCalledTimes(2);
+        expect(remote.scanAll).toHaveBeenCalledOnce();
+        expect(await get(storage)).toBe(original);
+        const local = (await readLocal(owner))!;
+        expect(local.cloudflareReplicaClaim).toEqual(staged);
+        expect(local.replica).toBeNull();
+    });
+
     it('adopts a historical claim only after an unchanged active replica and a fresh AEAD scan', async () => {
         const { staged, snapshot } = await prepare();
         await commitLocal(owner, data(171), data(170));
