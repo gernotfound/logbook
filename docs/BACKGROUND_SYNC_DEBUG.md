@@ -1,8 +1,8 @@
-# Debug ripresa sincronizzazione
+# Debug ripresa sincronizzazione — runtime Firebase transitorio
 
 ## Ambito e precondizioni
 
-Questa guida riguarda la **replica cloud di un account autenticato** con sessione corrente, consenso salute verificato per il cloud e archivio locale accessibile. La modalità guest conserva i dati sul dispositivo, ma non effettua replica Firestore. Per una ripresa dopo un periodo offline devono già esistere le autorizzazioni e il checkpoint replica necessari: tornare online non li crea automaticamente.
+Questa guida riguarda il **runtime ancora collegato a Firebase/Firestore**, non il candidato Cloudflare D1 isolato (PR #1070 su main, API AuthGate non distribuita). I medesimi invarianti di journal e recovery devono sopravvivere nella nuova architettura, ma timer/eventi/retry qui descritti non sono prove del suo comportamento. La guida riguarda la replica cloud di un account autenticato con sessione corrente, consenso salute verificato per il cloud e archivio locale accessibile. La modalità guest conserva i dati sul dispositivo, ma non effettua replica Firestore. Per una ripresa dopo un periodo offline devono già esistere le autorizzazioni e il checkpoint replica necessari: tornare online non li crea automaticamente.
 
 `local-pending` è uno **stato del client** (`syncHealth`), non il formato del journal e, da solo, **non prova** che un batch sia presente e durevole in IndexedDB. Una barriera preliminare può segnalare `local-pending` prima della lettura dell'envelope; dopo un errore di trasporto, la classificazione richiede invece la prova del batch riproducibile. Non usare un indicatore UI come attestazione di persistenza o consegna.
 

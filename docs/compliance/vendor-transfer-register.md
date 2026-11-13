@@ -1,6 +1,6 @@
 # Registro fornitori, subprocessori e trasferimenti — TheLogBook
 
-> Compilare da documentazione contrattuale e console correnti. Non dedurre localizzazione, ruolo o meccanismo di trasferimento dal solo repository.
+> Compilare da documentazione contrattuale e console correnti. Non dedurre localizzazione, ruolo o meccanismo di trasferimento dal solo repository. **13/11/2026:** tabella Firebase/Vercel = architettura legacy ancora nel codice, non architettura approvata finale. La nuova D1 `jurisdiction=eu` sintetica non prova collocazione Workers, email, OAuth, log o conformità. Nessun account o dato precedente da migrare secondo il product owner.
 
 **Perimetro tecnico:** [AGENTS](../../AGENTS.md), [Cifratura](../../.agents/rules/secure-storage.md) e [Telemetria](../../.agents/rules/telemetry-and-privacy.md). Le descrizioni sotto derivano dal contratto repository; ruoli, termini, localizzazioni e retention provider rimangono da verificare e approvare.
 
@@ -11,9 +11,12 @@
 | Google / Firebase Authentication | Login/account | UID, email, dati provider auth | `[VERIFY_DPA]` | `[VERIFY]` | `[VERIFY]` | `[VERIFY]` | Aperto |
 | Google / Cloud Firestore | Replica cloud cifrata utenti e registri tecnici server-only | Ciphertext business/salute, metadati causali pubblici e dati amministrativi minimi | `[VERIFY_DPA]` | Database: `[VERIFY_LIVE]` | `[VERIFY]` | App + servizio | Aperto |
 | Google / reCAPTCHA Enterprise / App Check | Anti-abuse/attestazione | Dati tecnici dispositivo/rete secondo servizio | `[VERIFY]` | `[VERIFY]` | `[VERIFY]` | `[VERIFY]` | Aperto |
-| Google / Firebase Hosting | Hosting statico frontend/PWA | Request metadata e asset pubblici; nessun dato business utente intenzionale | `[VERIFY_DPA]` | `[VERIFY]` | `[VERIFY]` | `[VERIFY]` | Aperto |
+| Google / Firebase Hosting | Hosting statico **storico disabilitato** del sito `thelogbook`, secondo attestazione del proprietario | Request metadata del servizio precedente | `[VERIFY_DPA]` | `[VERIFY]` | `[VERIFY]` | `[VERIFY]` | Storico; inventario prima della dismissione |
 | Vercel Functions / Cron | API trusted per lifecycle, consenso/diritti, custodia chiave cloud e manutenzione | Request metadata; payload API minimi; ADK accessibile al server trusted tramite KEK protetta; log tecnici minimizzati, mai chiavi/token/dati salute liberi | `[VERIFY_DPA]` | `[VERIFY]` | `[VERIFY]` | **Hobby**: runtime log consultabili per 1 ora; altre copie da verificare | Piano verificato; copertura contrattuale aperta |
 | GitHub | Repository e CI | Codice, metadati dev, log CI; nessun dato utente intenzionale | `[VERIFY]` | `[VERIFY]` | `[VERIFY]` | `[VERIFY]` | Dev-only |
+| Cloudflare Workers Static Assets / futuro Worker API | Hosting/frontend candidato e futura API/sessioni | Metadati rete/request, possibili identificativi e log operativi; nessuna salute plaintext prevista | `[VERIFY_DPA]` | `[VERIFY]` | `[VERIFY]` | `[VERIFY]` | Static Assets candidato, Worker API NON attivo | 
+| Cloudflare D1 sandbox EU | SQL per replica cifrata / future sessioni e control-plane | Solo fixture sintetiche; futura D1 può contenere ciphertext e dati amministrativi minimi, non salute in chiaro | `[VERIFY_DPA]` | `jurisdiction=eu` osservata solo per D1 | `[VERIFY]` | `[VERIFY]` | **Solo test**, non database utenti | 
+| Fornitore email da selezionare (Brevo/Mailjet/Resend candidati) | Verifica/reset account e notifiche transazionali | Email, token di verifica, metadati di invio e possibili eventi di apertura | `[VERIFY_DPA]` | `[VERIFY]` | `[VERIFY]` | `[VERIFY]` | **Non selezionato**: PR #1071 registra tracking Brevo ancora problematico |
 
 Google Analytics 4/Firebase Analytics, Vercel Analytics e Speed Insights sono dismessi dal runtime. Le configurazioni storiche ritirate rimangono rintracciabili nella cronologia Git, non nel contratto dei fornitori operativi.
 
