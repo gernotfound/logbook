@@ -62,6 +62,17 @@ describe('D1 encrypted commit candidate from the shared Protocol 3 engine', () =
         expect(outcome.syncMeta['']).toEqual(opened.sync);
     });
 
+    it('strips lease and checkpoint fields from a full local replica before AEAD and HTTP serialization', () => {
+        const full = { ...replica, leaseUntilMs: Date.now() + 86400000, checkpointAtMs: Date.now() };
+        const result = prepareCloudflareCommit(uid, ops, snapshot, control, full,
+            'batch000000000097', key, () => true);
+        expect(result.batch.replica).toEqual(replica);
+        const opened = openCloudDocument(key, uid, '', result.batch.documents[0].document);
+        expect(opened.sync.writer).toEqual({
+            ...replica, seq: 1, consentRevision: 1,
+        });
+    });
+
     it('rejects incomplete or contradictory remote bases, without submitting a write', () => {
         for (const checkpoint of [
             { ...snapshot, documents: [] },
