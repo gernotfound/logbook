@@ -15,6 +15,7 @@ class Statement {
   constructor(sqlite, sql, args = []) { this.sqlite = sqlite; this.sql = sql; this.args = args; }
   bind(...args) { return new Statement(this.sqlite, this.sql, args); }
   async first() { return this.sqlite.prepare(this.sql).get(...this.args) ?? null; }
+  async all() { return { results: this.sqlite.prepare(this.sql).all(...this.args) }; }
   async run() {
     const outcome = this.sqlite.prepare(this.sql).run(...this.args);
     return { success: true, meta: { changes: outcome.changes } };
@@ -28,7 +29,9 @@ class D1Adapter {
     this.sqlite.exec('BEGIN IMMEDIATE');
     try {
       const out = [];
-      for (const statement of statements) out.push(await statement.run());
+      for (const statement of statements) {
+        out.push(/^\\s*SELECT\\b/i.test(statement.sql) ? await statement.all() : await statement.run());
+      }
       this.sqlite.exec('COMMIT');
       return out;
     } catch (error) {
