@@ -47,6 +47,15 @@ Firebase/Firestore writer, IndexedDB journal and encrypted vault remain active.
   metadata, **not** with encrypted private health/candidate fields. This does
   not prove the client actually decrypted every document, and no local replica
   adoption/journal ACK is wired to this candidate yet.
+  The isolated client candidate stores the **exact ciphertext, nonce, batch ID
+  and delivered causal prefix** into the owner-encrypted IndexedDB envelope
+  before any D1 commit. On a lost response, it replays these same bytes and
+  acknowledges only a content-bound receipt. The receipt and journal prefix
+  are reconciled in the very same IndexedDB transaction; unrelated concurrent
+  local edits remain pending. The active Firestore journal is unchanged.
+  Public writer/HTTP replica objects contain only slot, replicaId and
+  generation; never spread local lease/checkpoint timestamps into strict Zod
+  or AEAD metadata. No real Auth/ADK or D1 cloud activation is wired yet.
   A rejected/stale CAS requires a fresh read and merge. Receipt replay requires
   the same immutable sealed bytes, batch ID and SHA-256 receipt digest; it never
   infers success from a timeout. Full checkpoint, account-key transport and consent/erasure flows
