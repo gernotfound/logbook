@@ -221,3 +221,49 @@ record is active. No code yet verifies actual password/Google credentials,
 reissues login tokens, rotates sessions, provides first consent, or maps a
 real signup result to `auth_principals`. The Node/SQLite tests are
 synthetic and cannot validate provider CPU, OAuth or email delivery.
+
+## CF-05 — candidate first-consent boundary (not deployed)
+
+`cloudflare/api/consent-worker.mjs` accepts identity-only requests
+`POST /v1/consent/status` and `POST /v1/consent/initial`.
+These are candidate HTTP routes not bound to the public frontend or domain.
+The private `AUTH_GATE` accepts the two routes only with a valid, non-revoked
+host-only session. The first-accept mutation additionally requires session
+CSRF, verified email, exact legal versions and three explicit booleans
+(`acceptedHealthData`, `acceptedTerms`, `confirmsOver18`). The first two
+reuse the active UI acceptance contract; age confirmation is an additional
+explicit requirement. The server uses its own clock. With no existing
+consent the status is `unregistered` with `revision: 0`, not implicit
+acceptance. Responses preserve the client fields `revision`, ISO
+`acceptedAt`, `privacyVersion` and `termsVersion`, with `fenceEpoch` for
+the new session boundary.
+
+Migration `0004_initial_consent.sql` stores the immutable first acceptance
+receipt and joins it to `sync_subjects` and `sync_state` in a single D1
+batch. The initial insert revalidates the still-live auth session and account
+epoch **within the SQL transaction** so a revocation between the AuthGate
+and writer cannot silently authorize processing. A late failure rolls back
+the entire grant; the caller must reread status after a lost response, not
+invent an ACK or create a new owner. The sync gate now requires the actual immutable acceptance, exactly the
+first revision, **and the current server-configured legal versions** before
+accepting cloud writes. An older accepted document remains available as a
+status read, but does not authorize sync until an explicit current consent
+flow is implemented. Both status reads and writes recheck that the original hashed session
+is still active in D1, including expiry and revocation after the private
+gate has returned. The status read also denies an active revision other than
+1; the immutable first receipt cannot be relabelled as a later consent.
+Future reacceptance (revisions 2+) needs separate proofs and an
+explicit gate extension; it cannot reuse revision-1 consent as authorization.
+
+`cloudflare/api/consent.wrangler.local.jsonc` uses placeholder D1 and
+private binding only; its example legal versions must be kept in sync with
+`src/lib/legalVersions.ts` at future deploy. Missing or inconsistent
+provider configuration denies acceptance.
+
+**Incomplete and release NO-GO**: full Auth credential verifier, email/Google,
+revocation with atomic erasure job, rights-only, reacceptance, legal-change
+handling, keys/ADK, account deletion, real HTTP Cloudflare measurement,
+frontend consent UI wiring and provider deployment. Existing Firebase
+accounts and health data are NOT transferred. No live schema, route or DNS
+is modified by the candidate. The fixture tests run Node SQLite and fake
+service binding; they do not prove D1 runtime behavior.

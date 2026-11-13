@@ -14,6 +14,8 @@ async function fixture() {
   for (const file of [
     '0001_encrypted_replica.sql', '0002_reject_reused_replica_ids.sql',
     '0003_auth_session_gate.sql',
+        // Initial consent depends on the Auth principal schema.
+        '0004_initial_consent.sql',
   ]) {
     sqlite.exec(readFileSync(new URL('../../cloudflare/api/migrations/' + file, import.meta.url), 'utf8'));
   }
@@ -22,6 +24,8 @@ async function fixture() {
   sqlite.prepare('INSERT INTO sync_subjects(uid,status,consent_revision,fence_epoch) VALUES (?,?,?,?)')
     .run('account-a', 'active', 1, epoch);
   sqlite.prepare('INSERT INTO sync_state(uid,revision) VALUES (?,?)').run('account-a', 0);
+  sqlite.prepare('INSERT INTO health_consent_acceptances(uid,consent_revision,privacy_version,terms_version,accepted_at_ms,over_18_confirmed) VALUES (?,1,?,?,?,1)')
+    .run('account-a', '1.3.9', '1.2.5', Date.now() - 1000);
   sqlite.prepare('INSERT INTO auth_principals(uid,status,verified_at_ms,auth_epoch) VALUES (?,?,?,?)')
     .run('account-a', 'active', now - 10000, epoch);
   sqlite.prepare('INSERT INTO auth_sessions(token_hash,uid,auth_epoch,csrf_hash,issued_at_ms,idle_expires_at_ms,absolute_expires_at_ms) VALUES (?,?,?,?,?,?,?)')
@@ -50,7 +54,7 @@ async function fixture() {
   };
   const env = {
     DB: db,
-    API_ORIGIN: ORIGIN,
+    API_ORIGIN: ORIGIN, CONSENT_PRIVACY_VERSION: '1.3.9', CONSENT_TERMS_VERSION: '1.2.5',
     API_RATE_LIMITER: {
       async limit({ key }) {
         rateChecks += 1;
