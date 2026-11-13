@@ -18,15 +18,24 @@ Firebase/Firestore writer, IndexedDB journal and encrypted vault remain active.
 - API_ORIGIN must be an exact HTTPS origin. When missing, requests fail closed.
   Origin, session, consent, account fence, replica lease and D1 CAS are distinct
   checks. No CORS wildcard or public debug endpoint is provided.
+- POST /v1/sync/control reads the authenticated Protocol 3 replica registry,
+  consent, account epoch and revision in one D1 batch. The client rejects
+  invalid actors/checkpoint clocks and derives the stable frontier only from
+  active replicas. No public endpoint changes replica membership or checkpoints.
+  Every future maintenance write must advance the same revision atomically.
 - POST /v1/sync/read reads up to eight ciphertext envelopes under one D1
   snapshot; POST /v1/sync/scan reads a bounded page with a revision-fenced
-  cursor for a complete account checkpoint. POST /v1/sync/commit atomically
+  cursor for a complete account checkpoint. Reads/scans carry an explicit
+  consent revision to prevent cross-consent hydration or merge. SQL triggers
+  reject revision and replica sequence regressions. POST /v1/sync/commit atomically
   advances a guarded replica, up to eight documents and a receipt;
   POST /v1/sync/receipt retrieves the content-bound receipt.
 - The client must verify AEAD and perform Protocol 3 merge **before** commit.
   The shared `cloudMergeEngine.ts` powers both Firestore writes and the D1
   candidate (`cloudReplicaCommit.ts`); each D1 write binds
-  `expectedFenceEpoch` from the authenticated account snapshot.
+  `expectedFenceEpoch` and health consent generation from the same authenticated
+  document/control snapshot. Stable frontier and lastSeq are derived from the
+  validated server replica register, not arbitrary caller parameters.
   A rejected/stale CAS requires a fresh read and merge. Receipt replay requires
   the same immutable sealed bytes, batch ID and SHA-256 receipt digest; it never
   infers success from a timeout. Full checkpoint, account-key transport and consent/erasure flows
