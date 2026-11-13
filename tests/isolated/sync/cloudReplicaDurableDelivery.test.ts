@@ -13,6 +13,7 @@ import type { CloudReplicaBatch, CloudReplicaControlSnapshot, CloudReplicaSnapsh
 import { createAndMigrateVault } from '../../../src/lib/sync/secureArchiveMigration';
 import { lockAllVaults } from '../../../src/lib/sync/secureArchiveSession';
 import { updateArchiveRecord } from '../../../src/lib/sync/secureArchiveRepository';
+import { markCloudIntegrityBlocked } from '../../../src/lib/sync/localRepository';
 
 const uid = 'a';
 const owner = 'user:' + uid;
@@ -162,6 +163,27 @@ describe('candidate D1 delivery: encrypted IndexedDB intent and exact ACK', () =
         expect(after.pending[0].seq).toBeGreaterThan(envelope.pending.at(-1)!.seq);
         expect(after.cloudflareDelivery).toBeUndefined();
         expect(after.syncMetaByDocument[''].clock).toEqual({ s00: 1 });
+    });
+
+    it('refuses to stage against a newly fenced cloud snapshot, without touching ciphertext', async () => {
+        const initial = await seed();
+        await markCloudIntegrityBlocked(owner);
+        const previous = await get(storeKey);
+        await expect(stageCloudflareDelivery(owner, initial.envelope.pending, initial.snapshot,
+            initial.control, initial.replica, 'batch000000000194', adk, () => true))
+            .rejects.toThrow('Intento D1 non installabile');
+        expect(await get(storeKey)).toBe(previous);
+    });
+
+    it('does not stage a stale prefix after another tab adds a new pending operation', async () => {
+        const initial = await seed();
+        await commitLocal(owner, profile(172), profile(171));
+        const previous = await get(storeKey);
+        await expect(stageCloudflareDelivery(owner, initial.envelope.pending, initial.snapshot,
+            initial.control, initial.replica, 'batch000000000195', adk, () => true))
+            .rejects.toThrow('Intento D1 non installabile');
+        expect(await get(storeKey)).toBe(previous);
+        expect((await readLocal(owner))?.pending).toHaveLength(2);
     });
 
     it('does not allow a second staging attempt or a replica checkpoint while an intent is outstanding', async () => {
