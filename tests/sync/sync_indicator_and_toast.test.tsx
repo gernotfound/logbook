@@ -617,7 +617,7 @@ describe('LogBook Background Sync & Error Toast 4-Tier Test Suite', () => {
         act(() => {
           useAppStore.setState({ saveError: multilineMsg });
         });
-        expect(container.querySelector('.sync-error-toast') || screen.queryByText(/Errore riga 1/i)).toBeDefined();
+        expect(container.querySelector('.sync-error-toast') || screen.queryByText(/Errore riga 1/i)).not.toBeNull();
 
         act(() => {
           useAppStore.setState({ saveError: '' });

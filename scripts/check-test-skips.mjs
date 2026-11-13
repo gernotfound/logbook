@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { findDisabledTests } from './test-declaration-check.mjs';
+import { findDisabledTests, isExecutableTestFile } from './test-declaration-check.mjs';
 
 const regression = spawnSync(process.execPath, ['--test', 'scripts/test-declaration-check-regressions.mjs'], { stdio: 'inherit' });
 if (regression.error) throw regression.error;
@@ -30,7 +30,6 @@ function checkMockTargets(filePath, source) {
     }
 }
 const violations = [];
-const testFilePattern = /\.(?:test|spec)\.[cm]?[jt]sx?$/;
 const forbiddenPatterns = [
     { label: 'tautology', pattern: /expect\s*\(\s*true\s*\)\s*\.\s*toBe\s*\(\s*true\s*\)|expect\s*\(\s*false\s*\)\s*\.\s*toBe\s*\(\s*false\s*\)/g },
 ];
@@ -43,7 +42,7 @@ function walk(directory) {
             walk(fullPath);
             continue;
         }
-        if (!testFilePattern.test(entry.name)) continue;
+        if (!isExecutableTestFile(entry.name)) continue;
 
         const content = fs.readFileSync(fullPath, 'utf8');
         checkMockTargets(fullPath, content);

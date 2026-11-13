@@ -99,6 +99,39 @@ describe('Session set actions and accessibility', () => {
 
                 fireEvent.click(dropsetBtn);
                 expect(mockAdd).toHaveBeenCalledWith(0, 'dropset', 's1');
+                fireEvent.click(isometryBtn);
+                expect(mockAdd).toHaveBeenCalledWith(0, 'isometry', 's1');
+            });
+
+            it('edits a nested dropset without losing its parent-set identity', () => {
+                const onUpdateSpecialSet = vi.fn();
+                render(
+                    <SessionSetRow
+                        set={{
+                            id: 's1', kg: '90', reps: '8',
+                            segments: [
+                                { technique: 'dropset', id: 'ds1', kg: '70', reps: '8' },
+                                { technique: 'isometry', id: 'iso1', kg: '50', reps: '', time: '20' },
+                            ],
+                        }}
+                        sIndex={0}
+                        exIndex={0}
+                        isOpenMenu={false}
+                        onToggleMenu={vi.fn()}
+                        onRemoveSet={vi.fn()}
+                        onUpdateSet={vi.fn()}
+                        onUpdateSetTarget={vi.fn()}
+                        onAddSpecialSet={vi.fn()}
+                        onUpdateSpecialSet={onUpdateSpecialSet}
+                        onRemoveSpecialSet={vi.fn()}
+                    />
+                );
+                expect(screen.getByText('↳ Dropset 1')).toBeDefined();
+                expect(screen.getByText('↳ Isometria 1')).toBeDefined();
+                const input = screen.getByDisplayValue('70');
+                fireEvent.change(input, { target: { value: '75' } });
+                fireEvent.blur(input);
+                expect(onUpdateSpecialSet).toHaveBeenCalledWith(0, 's1', 'segments', 'ds1', 'kg', '75');
             });
 
             it('T1.4.4: renders Dropset rows beneath the parent set with kg and reps inputs', () => {
