@@ -689,8 +689,18 @@ void test('account epoch change revokes receipt lookup instead of implying an ab
   db.sqlite.prepare('UPDATE sync_subjects SET fence_epoch = 6 WHERE uid = ?').run(owner);
   assert.deepEqual(await call(db, 'receipt', { batchId: batch.batchId }),
     { status: 403, body: { error: 'access-revoked' } });
-  const newSession = await call(db, 'receipt', { batchId: batch.batchId },
+  // A claimed epoch alone cannot reauthorize the original session.
+  const forgedEpoch = await call(db, 'receipt', { batchId: batch.batchId },
     { env: makeEnv(db, { fenceEpoch: 6 }) });
+  assert.deepEqual(forgedEpoch, { status: 403, body: { error: 'access-revoked' } });
+
+  db.sqlite.prepare('UPDATE auth_principals SET auth_epoch = 6 WHERE uid = ?').run(owner);
+  const now = Date.now();
+  const freshSessionHash = 'd'.repeat(64);
+  db.sqlite.prepare('INSERT INTO auth_sessions (token_hash,uid,auth_epoch,csrf_hash,issued_at_ms,idle_expires_at_ms,absolute_expires_at_ms) VALUES (?,?,?,?,?,?,?)')
+    .run(freshSessionHash, owner, 6, 'e'.repeat(64), now - 1000, now + 86400000, now + 2592000000);
+  const newSession = await call(db, 'receipt', { batchId: batch.batchId },
+    { env: makeEnv(db, { fenceEpoch: 6, sessionHash: freshSessionHash }) });
   assert.deepEqual(newSession, { status: 200, body: { receipt: null } });
 }));
 
@@ -837,7 +847,7 @@ void test('a logout racing after AuthGate cannot commit ciphertext or its receip
   const result = await call(db, 'commit', attempt('batch000000000991'), {
     env: { ...makeEnv(db), DB: intercepted },
   });
-  assert.deepEqual(result, { status: 503, body: { error: 'cloud-unavailable' } });
+  assert.deepEqual(result, { status: 403, body: { error: 'access-revoked' } });
   assert.equal(db.sqlite.prepare('SELECT COUNT(*) AS n FROM sync_receipts').get().n, 0);
   assert.equal(db.sqlite.prepare('SELECT COUNT(*) AS n FROM sync_documents').get().n, 0);
   assert.equal(db.sqlite.prepare('SELECT revision FROM sync_state').get().revision, 0);
@@ -855,7 +865,7 @@ void test('a logout racing after AuthGate cannot mutate replica membership', () 
   const result = await call(db, 'replica/claim', claim('mutation0000000991'), {
     env: { ...makeEnv(db), DB: intercepted },
   });
-  assert.deepEqual(result, { status: 503, body: { error: 'cloud-unavailable' } });
+  assert.deepEqual(result, { status: 403, body: { error: 'access-revoked' } });
   assert.equal(db.sqlite.prepare('SELECT COUNT(*) AS n FROM sync_replica_mutations').get().n, 0);
   assert.equal(db.sqlite.prepare('SELECT COUNT(*) AS n FROM sync_replicas').get().n, 1);
   assert.equal(db.sqlite.prepare('SELECT revision FROM sync_state').get().revision, 0);
@@ -865,7 +875,7 @@ void test('an expired or foreign session digest cannot authorize a D1 write', ()
   const forged = await call(db, 'commit', attempt('batch000000000992'), {
     env: makeEnv(db, { sessionHash: 'f'.repeat(64) }),
   });
-  assert.equal(forged.status, 503);
+  assert.equal(forged.status, 403);
   const intercepted = Object.create(db);
   intercepted.batch = async statements => {
     if (statements[0]?.sql.includes('INSERT INTO sync_receipts')) {
@@ -877,7 +887,7 @@ void test('an expired or foreign session digest cannot authorize a D1 write', ()
   const expired = await call(db, 'commit', attempt('batch000000000993'), {
     env: { ...makeEnv(db), DB: intercepted },
   });
-  assert.equal(expired.status, 503);
+  assert.equal(expired.status, 403);
   assert.equal(db.sqlite.prepare('SELECT COUNT(*) AS n FROM sync_receipts').get().n, 0);
   assert.equal(db.sqlite.prepare('SELECT revision FROM sync_state').get().revision, 0);
 }));
