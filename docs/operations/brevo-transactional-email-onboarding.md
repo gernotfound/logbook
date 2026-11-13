@@ -1,6 +1,6 @@
 # Brevo — onboarding email transazionali Cloudflare (CF-00 B2)
 
-**Stato: DOMINIO BREVO AUTENTICATO / MITTENTE E INVIO NON ANCORA VERIFICATI.** Checkpoint 13/11/2026. Collegato alle issue [CF-00 #1054](https://github.com/gernotfound/logbook/issues/1054), [CF-03 #1057](https://github.com/gernotfound/logbook/issues/1057) e all'[epic #1053](https://github.com/gernotfound/logbook/issues/1053). Questo documento registra soltanto l'onboarding del servizio email, senza autorizzare l'integrazione Auth, il cambio DNS o il rilascio. Riferimento normativo: `AGENTS.md` e `.agents/rules/external-services.md`.
+**Stato: DOMINIO E MITTENTE VERIFICATI IN BREVO / INVIO TRANSAZIONALE NON ANCORA PROVATO.** Checkpoint 13/11/2026. Collegato alle issue [CF-00 #1054](https://github.com/gernotfound/logbook/issues/1054), [CF-03 #1057](https://github.com/gernotfound/logbook/issues/1057) e all'[epic #1053](https://github.com/gernotfound/logbook/issues/1053). Questo documento registra soltanto l'onboarding del servizio email, senza autorizzare l'integrazione Auth, il cambio DNS o il rilascio. Riferimento normativo: `AGENTS.md` e `.agents/rules/external-services.md`.
 
 ## Stato corrente verificato — 13/11/2026
 
@@ -9,7 +9,9 @@
 - **Autenticazione finale confermata da screenshot del product owner:** dopo aver premuto «Autentica dominio», Brevo mostra `notify.thelogbook.me` con punto verde e stato **«Autenticato»** nella sezione `Impostazioni > Mittenti, domini, IP > Domini`, unitamente al testo «Il tuo dominio è stato autenticato». Questa è evidenza del provider via schermata dell'owner, non read-back API indipendente; gli eventuali 48 h indicati da Brevo riguardano la propagazione DNS, **non annullano l'esito verde già visibile**.
 - **Brandizzazione:** la stessa schermata mostra «Non brandizzato» e nessun `Branded subdomain`; è una funzione opzionale per i link di tracking/brand e **non un problema dell'autenticazione di invio**. Non configurare tracking o un sottodominio ulteriore per il solo invio di email di account.
 - **CF-00 B2 NON VALIDATO:** l'account Free deve ancora risultare abilitato all'invio transazionale; nessun invio accettato/delivered/inbox è stato provato, nessun segreto API gestito dal progetto; Auth e Worker non modificati.
-- **Mittente proposto, non ancora osservato come creato:** `TheLogBook <no-reply@notify.thelogbook.me>`. Dopo autenticazione del dominio Brevo non richiede una verifica a 6 cifre per ciascun mittente (fonte: https://help.brevo.com/hc/it/articles/208836149-Creazione-di-un-nuovo-mittente-nome-ed-email-del-mittente). L'assenza di verifica individuale **non equivale** a inbox funzionante per ricevere risposte. Prima del test invio, verificare abilitazione transazionale Free ed eventuali restrizioni approvazione account; fonte: https://help.brevo.com/hc/it/articles/115000188150-Risoluzione-dei-problemi-con-Brevo-SMTP.
+- **Mittente creato e verificato (screenshot Brevo 13/11):** `TheLogBook <no-reply@notify.thelogbook.me>` con indicatore verde «Verificato», firma DKIM riferita a `notify.thelogbook.me` verde e stato DMARC «configurato» verde; IP condiviso. Questo attesta la configurazione del mittente in Brevo **non** l'abilitazione dell'invio transazionale, la consegna, né l'esistenza di una casella per le risposte. Non sono state fornite chiavi API/SMTP.
+- **Avviso mittenti non conformi:** la stessa schermata Brevo mostra un secondo mittente basato su Gmail con avvisi DKIM/DMARC; il banner generale è coerente con quel mittente. Il mittente del sottodominio TheLogBook ha invece i due stati verdi. Non assumere che l'altro mittente sia usato, né eliminarlo senza verificare dipendenze; non registrarne l'indirizzo personale nel repository.
+- **Prossimo gate — email transazionali Free:** secondo la guida ufficiale Brevo l'invio transazionale di un nuovo account può richiedere attivazione separata da assistenza, anche se il dominio/mittente è verificato: https://help.brevo.com/hc/it/articles/115000188150-Risoluzione-dei-problemi-con-Brevo-SMTP . Prima di qualsiasi test, consultare la pagina Transazionale > Tempo reale e il piano/queue senza esporre segreti; non equiparare una email di prova da editor a un test dell'API HTTPS integrata.
 - Classificazione **CRITICAL** per dipendenza futura da verifica/reset account; attività corrente circoscritta all'onboarding email. **Nessuna modifica DNS effettuata dall'assistente**: i record sono stati creati dall'owner via dashboard.
 
 I righi dei checkpoint precedenti riportati più sotto conservano la sequenza storica e **non sostituiscono questo stato corrente**.
@@ -20,7 +22,7 @@ I righi dei checkpoint precedenti riportati più sotto conservano la sequenza st
 
 - **Provider candidato:** Brevo Free, non ancora verificato per l'invio transazionale sull'account TheLogBook. La selezione è condizionata a disponibilità Free, limiti, deliverability e controlli privacy.
 - **Integrazione futura:** API HTTPS server-side di Brevo da Cloudflare Worker; API key soltanto nel Secret del Worker, mai nel client, nei commit o nei log. Non attivare la nuova Auth sulla sola base di questa scelta.
-- **Dominio mittente previsto:** `notify.thelogbook.me`. Email indicativa `no-reply@notify.thelogbook.me`, **non ancora configurata né verificata**.
+- **Dominio mittente configurato e verificato (UI Brevo):** `notify.thelogbook.me`. Mittente verificato in Brevo: `TheLogBook <no-reply@notify.thelogbook.me>`. La casella di risposta e la consegna di messaggi veri non sono ancora provate.
 - **Sottodominio facoltativo proposto dalla procedura Brevo:** ad esempio `mail.notify.thelogbook.me`. Si riferisce all'hostname dei collegamenti nelle email, **non** al dominio mittente. Il product owner è stato guidato a lasciarlo vuoto: non sono necessari URL personalizzati o tracciamento dei clic per verifica/reset account.
 - **Posta esistente:** DNS `thelogbook.me` conserva MX e record correlati a IONOS. Non modificare i record esistenti per impostare il nuovo mittente. L'eventuale aggiunta di record nel sottodominio richiede read-back e autorizzazione specifica prima della scrittura.
 - **Nessun dato personale nei test sintetici:** distinguere sempre accettazione API (es. `messageId`) dalla consegna reale e dalla verifica dell'utente; niente successo fittizio e niente retry incontrollati.
@@ -39,7 +41,9 @@ I righi dei checkpoint precedenti riportati più sotto conservano la sequenza st
 | DKIM 1 | Cloudflare GET: CNAME `brevo1._domainkey.notify` → `b1.notify-thelogbook-me.dkim.brevo.com`, DNS only, TTL Auto; Brevo lo segna verde | **Verificato** |
 | DKIM 2 | Cloudflare GET: CNAME `brevo2._domainkey.notify` → `b2.notify-thelogbook-me.dkim.brevo.com`, DNS only, TTL Auto; Brevo lo segna verde | **Verificato** |
 | DMARC sottodominio | Cloudflare GET: TXT `_dmarc.notify` presente; Brevo lo segna verde. Il DMARC apex resta distinto | **Verificato** |
-| Stato email transazionali/API | Nessuna API key, nessuna chiamata autenticata a Brevo, nessun test inbox mostrato | **NON VALIDATO** |
+| Mittente TheLogBook | Screenshot Brevo: `TheLogBook <no-reply@notify.thelogbook.me>` con badge «Verificato», firma DKIM e DMARC verdi; IP condiviso | **VERIFICATO NELLA UI** |
+| Avviso altro mittente | La UI segnala un altro mittente Gmail con DKIM predefinito e avviso su dominio gratuito; il nuovo mittente TheLogBook ha esiti verdi | **Non blocca il mittente nuovo; evitare di inviare dal vecchio** |
+| Stato email transazionali/API | Nessuna API key, nessuna chiamata autenticata a Brevo, nessun test inbox mostrato; attivazione piattaforma Free da verificare | **NON VALIDATO** |
 | Impatto runtime | Nessuna modifica a Worker, Firebase/Vercel, Auth, D1, dominio Production | **Nessuna integrazione** |
 
 L'immagine della dashboard è una prova fornita dal proprietario, **non** un read-back via API del provider. Il solo accesso al menu SMTP non prova che l'account possa inviare email.
@@ -47,8 +51,8 @@ L'immagine della dashboard è una prova fornita dal proprietario, **non** un rea
 ## Passi successivi e gate
 
 1. **Autenticazione del dominio COMPLETATA** secondo schermata Brevo del product owner, 13/11/2026. Non configurare `Branded subdomain` salvo un vero requisito futuro dei link.
-2. Da `Impostazioni > Mittenti, domini, IP > Mittenti` creare `TheLogBook <no-reply@notify.thelogbook.me>`; **stato: istruzioni fornite, salvataggio non ancora osservato**. Verificare eventuali campi aggiuntivi e un reply-to monitorato, senza esporre email private.
-3. Verificare che il piano **Brevo Free** consenta concretamente l'invio transazionale a indirizzi arbitrari e che l'account non sia in approvazione/sospensione.
+2. **Mittente creato e verificato:** screenshot Brevo 13/11 mostra `TheLogBook <no-reply@notify.thelogbook.me>` con DKIM e DMARC verdi. Non acquistare una casella per l'invio; un reply-to monitorato separato resta da valutare.
+3. **Verificare la reale abilitazione della piattaforma transazionale sul piano Free:** aprire `Transazionale > Tempo reale` e controllare stato, quota e possibili richieste di attivazione da parte di Brevo. Se non attiva, richiedere abilitazione all'assistenza senza upgrade o billing. Non confondere la verifica mittente con l'attivazione SMTP/API.
 4. Eseguire un invio **solo con destinatario di test autorizzato**, tramite API HTTPS server-side con secret conservato esclusivamente nel provider/sandbox; distinguere receipt API, delivery, inbox e bounce. Non esporre chiavi nel repository o nella chat.
 5. Prima di integrare Auth, verificare quota Free, rate limit/cooldown, contenuti email privi di salute, DPA/subprocessor, retention log/anteprime e tracking disattivato quando non necessario; verificare reset e token monouso nel sottosistema Auth autonomo.
 6. Senza un GO completo CF-00 B2, non dichiarare la dipendenza email pronta per la nuova Auth. Nessun intervento su vecchia Auth/Worker e nessun cutover di dominio.
