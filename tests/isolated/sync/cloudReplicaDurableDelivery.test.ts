@@ -9,6 +9,8 @@ import type { UserData, CachedGlobalCatalog } from '../../../src/types';
 import { UserDataSchema } from '../../../src/lib/schema';
 import { adoptReplicaCheckpoint, acknowledgeThrough, commitLocal, initializeLocal, readLocal } from '../../../src/lib/sync/localRepository';
 import { stageCloudflareDelivery, resumeCloudflareDelivery } from '../../../src/lib/sync/cloudReplicaDurableDelivery';
+import { stageCloudflareReplicaClaim } from '../../../src/lib/sync/cloudReplicaClaimRecovery';
+import { readAuthenticatedCloudflareCheckpoint } from '../../../src/lib/sync/cloudReplicaCheckpoint';
 import type { CloudReplicaBatch, CloudReplicaControlSnapshot, CloudReplicaSnapshot } from '../../../src/lib/sync/cloudReplicaTransport';
 import { createAndMigrateVault } from '../../../src/lib/sync/secureArchiveMigration';
 import { lockAllVaults } from '../../../src/lib/sync/secureArchiveSession';
@@ -253,6 +255,29 @@ describe('candidate D1 delivery: encrypted IndexedDB intent and exact ACK', () =
         await expect(readLocal(owner)).rejects.toThrow('Intento D1 non verificabile');
         // The pre-existing delivery is never acknowledged from forged metadata.
         expect(await get(storeKey)).not.toBe(previous);
+    });
+
+    it('rejects a D1 delivery while a durable replica claim is pending without altering the vault', async () => {
+        const initial = await seed();
+        const verified = await readAuthenticatedCloudflareCheckpoint(
+            async () => ({
+                revision: initial.control.revision, fenceEpoch: initial.control.fenceEpoch,
+                consentRevision: initial.control.consentRevision, documents: [],
+            }), uid, adk, initial.control.consentRevision, () => true,
+        );
+        await stageCloudflareReplicaClaim(owner, verified, initial.control,
+            'another-claim-device', () => true);
+        const before = await get(storeKey);
+        expect((await readLocal(owner))?.cloudflareReplicaClaim).toBeDefined();
+
+        await expect(stageCloudflareDelivery(owner, initial.envelope.pending, initial.snapshot,
+            initial.control, initial.replica, 'batch000000000197', adk, () => true))
+            .rejects.toThrow('Intento D1 non installabile');
+        expect(await get(storeKey)).toBe(before);
+        const after = (await readLocal(owner))!;
+        expect(after.cloudflareDelivery).toBeUndefined();
+        expect(after.cloudflareReplicaClaim).toBeDefined();
+        expect(after.pending).toEqual(initial.envelope.pending);
     });
 
     it('does not allow a second staging attempt or a replica checkpoint while an intent is outstanding', async () => {
