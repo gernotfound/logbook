@@ -54,8 +54,10 @@ function tokens(issued) {
 void test('issuer creates 32-byte random session and host-only CSRF cookies after verified principal', async () => {
   const { db, sqlite, now } = fixture();
   try {
-    const first = await issueVerifiedSession(db, 'verified-a', now);
-    const second = await issueVerifiedSession(db, 'verified-a', now + 1);
+    const before = Date.now();
+    const first = await issueVerifiedSession(db, 'verified-a');
+    const second = await issueVerifiedSession(db, 'verified-a');
+    const after = Date.now();
     const a = tokens(first);
     const b = tokens(second);
     assert.notEqual(a.session, b.session);
@@ -63,8 +65,10 @@ void test('issuer creates 32-byte random session and host-only CSRF cookies afte
     assert.match(first.setCookies[0], /; Path=\/; Secure; HttpOnly; SameSite=Lax; Max-Age=604800$/);
     assert.match(first.setCookies[1], /; Path=\/; Secure; SameSite=Lax; Max-Age=604800$/);
     assert.doesNotMatch(first.setCookies[1], /HttpOnly/);
-    assert.equal(first.idleExpiresAtMs, now + 604800000);
-    assert.equal(first.absoluteExpiresAtMs, now + 2592000000);
+    assert.ok(first.idleExpiresAtMs >= before + 604800000);
+    assert.ok(first.idleExpiresAtMs <= after + 604800000);
+    assert.ok(first.absoluteExpiresAtMs >= before + 2592000000);
+    assert.ok(first.absoluteExpiresAtMs <= after + 2592000000);
     const rows = sqlite.prepare('SELECT * FROM auth_sessions WHERE uid = ?').all('verified-a');
     assert.equal(rows.length, 2);
     assert.ok(rows.every(row => row.token_hash !== a.session && row.csrf_hash !== a.csrf));
@@ -76,7 +80,7 @@ void test('issuer creates 32-byte random session and host-only CSRF cookies afte
 void test('a verified account can create a session before initial health consent, not sync', async () => {
   const { db, sqlite, now } = fixture();
   try {
-    const issued = await issueVerifiedSession(db, 'verified-a', now);
+    const issued = await issueVerifiedSession(db, 'verified-a');
     assert.equal(tokens(issued).session.length, 43);
     assert.equal(sqlite.prepare('SELECT COUNT(*) AS count FROM sync_subjects').get().count, 0);
   } finally { sqlite.close(); }
@@ -93,14 +97,14 @@ void test('unverified, disabled, deleted, future-verified and invalid principal 
     const { db, sqlite, now } = fixture();
     try {
       sqlite.exec(mutation);
-      await assert.rejects(issueVerifiedSession(db, 'verified-a', now), SessionIssuanceError);
+      await assert.rejects(issueVerifiedSession(db, 'verified-a'), SessionIssuanceError);
       assert.equal(sqlite.prepare('SELECT COUNT(*) AS count FROM auth_sessions').get().count, 0);
     } finally { sqlite.close(); }
   }
   const { db, sqlite, now } = fixture();
   try {
     for (const uid of ['', '/not-owner', ' verified-a', 'other-owner']) {
-      await assert.rejects(issueVerifiedSession(db, uid, now), SessionIssuanceError);
+      await assert.rejects(issueVerifiedSession(db, uid), SessionIssuanceError);
     }
     assert.equal(sqlite.prepare('SELECT COUNT(*) AS count FROM auth_sessions').get().count, 0);
   } finally { sqlite.close(); }
@@ -124,7 +128,7 @@ void test('a provider error or missing affected-row proof never produces a cooki
 void test('newly issued cookie is valid only under current consent and epoch; CSRF is session-bound', async () => {
   const { db, sqlite, now } = fixture();
   try {
-    const issued = await issueVerifiedSession(db, 'verified-a', now);
+    const issued = await issueVerifiedSession(db, 'verified-a');
     const { session, csrf } = tokens(issued);
     const header = () => ({
       origin: ORIGIN,
