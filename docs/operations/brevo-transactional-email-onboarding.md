@@ -38,6 +38,8 @@ Fonti: [Google: linee guida per mittenti](https://support.google.com/mail/answer
 
 **Richiesta product owner (13/11/2026):** rimuovere il tracciamento delle aperture delle email dell'app. **Screenshot del pannello Brevo** `Consenso al pixel tracking per contatto` mostra selezionato **«No»** in «Consenso al tracciamento per contatto»; la pagina spiega esplicitamente che **quando la gestione del consenso è disattivata, tutti i contatti vengono monitorati**. Per ridurre il tracciamento occorre **attivare «Sì»**, quindi impostare **«Monitora contatti il cui consenso è sconosciuto» su «No»** e salvare. Questa impostazione **non è ancora stata eseguita/verificata**: nessun connettore Brevo disponibile per cambiarla direttamente. L'assistente guida il proprietario tramite UI senza modificare Auth, DNS o infrastruttura.
 
+**Nuovo screenshot owner (13/11/2026, non ancora salvato):** dopo aver selezionato «Sì» sul primo controllo, Brevo mostra il secondo controllo «Monitora i contatti per cui il consenso non è noto», **preselezionato su «Sì»**. L'assistente ha evidenziato che così il tracciamento dei contatti con consenso sconosciuto rimarrebbe attivo e ha indicato di impostare **«No» nel secondo controllo prima di premere «Salva»**. Il primo controllo risulta «Sì» nello screenshot; **non è attestato né il cambio del secondo controllo né il salvataggio**.
+
 **Passi nella UI Brevo:**
 
 1. `Impostazioni > Contatti > Consenso al tracciamento tramite pixel per contatto` (testo UI localizzato da verificare).
