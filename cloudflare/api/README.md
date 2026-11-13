@@ -60,6 +60,16 @@ Firebase/Firestore writer, IndexedDB journal and encrypted vault remain active.
   the same immutable sealed bytes, batch ID and SHA-256 receipt digest; it never
   infers success from a timeout. Full checkpoint, account-key transport and consent/erasure flows
   remain CF-03/04/05/06 responsibilities.
+- The global Protocol 3 `_sync.writer.seq` is the batch's last sequence;
+  a particular document's `_sync.clock[writer.slot]` can legitimately be
+  lower. Require a positive actor dot, never inflate clocks to pass validation.
+  The API allows up to eight 950 KB ciphertext envelopes per request plus
+  bounded JSON overhead; this does NOT establish that an 8-envelope canonical
+  hash/parse fits the Workers Free **10 ms CPU** limit. Benchmark on real
+  provider Free and design bounded recovery before release.
+- The SQL subject fence prevents consent/epoch rollback, same-generation
+  reactivation and revival of a deleted UID. It does not itself erase data,
+  prove backup anti-resurrection, or implement CF-05/06.
 - This SQL adapter models document writes and fencing, **not** the entire
   Firestore Rules contract yet. It must not become the application's default
   until complete differential tests and real Auth integration are validated.

@@ -26,12 +26,13 @@ I contratti correnti sono governati da [AGENTS](../../AGENTS.md): [Cifratura](..
 | Firebase Storage | NON USATO DAL RUNTIME | modulo Storage e relativa env client ritirati dal contratto | codice |
 | Firebase Cloud Messaging | NON USATO DAL RUNTIME | modulo Messaging e relativa env client ritirati dal contratto | codice |
 | Firebase Hosting — site `thelogbook` | DISABILITATO (output Firebase CLI del proprietario 12/11/2026) | precedente frontend `thelogbook.web.app`; il workflow automatico è dichiarato disabilitato in GitHub | output CLI proprietario + workflow GitHub da ricontrollare |
-| Cloudflare Workers Static Assets | EXTERNAL-ONLY / VERIFY-LIVE | Worker `workers.dev` distribuito, smoke statico SUCCESS run #43223911523 su main 2.369.0; Auth/browser/provider non verificati; nessun cutover pubblico | issue #1041 + runbook Cloudflare + dashboard |
+| Cloudflare Workers Static Assets | EXTERNAL-ONLY / VERIFY-LIVE | Worker `workers.dev` distribuito secondo checkpoint 12/11; smoke statico storico #43223911523, non prova Auth/Production o cutover | issue #1041 + runbook Cloudflare + dashboard |
+| Cloudflare Workers API + D1 encrypted replica | CANDIDATO GITHUB / NON ATTIVO | Worker e schema D1 v1 su PR draft #1070; test SQLite/fake IndexedDB in CI, AuthGate reale, ADK e D1 provider non attestati; NON cambiare provider/DNS | PR #1070 + issue #1053/1055/1056/1058 + runbook |
 | IONOS — `thelogbook.me` | EXTERNAL-ONLY / VERIFY-LIVE | registrar del dominio acquistato; rinnovo e transfer lock da screenshot, NS cambiati; dashboard Cloudflare zona Free protetta con 11 record DNS, certificato Universal SSL Active; NS/DS pubblici e posta da verificare | pannelli IONOS/Cloudflare + verifica DNS |
 | Firebase/Vercel Test separati | DISMESSI (2026-10-18) | Progetti `thelogbook-test` e `thelogbook-test-backend` eliminati; nessun cloud di test separato attivo | Firebase CLI, inventario Vercel, PR #431 |
 | Firebase Admin | ACTIVE | lifecycle account, consenso/diritti, custodia ADK e manutenzione trusted | Vercel env + Vercel Functions |
 | Firebase App Check + reCAPTCHA Enterprise / Google Cloud Fraud Defense | ACTIVE | attestazione anti-abuse prima dell'accesso cloud | Firebase App Check + Google Cloud |
-| Vercel Functions / Cron | ACTIVE | backend trusted lifecycle, consenso/diritti, chiave cloud, cron e redirect del vecchio root verso Firebase | Vercel + `vercel.json` |
+| Vercel Functions / Cron | ACTIVE | backend trusted lifecycle, consenso/diritti, chiave cloud e cron; il precedente redirect root verso Firebase è stato rimosso in PR #1052 (stato live da verificare nel provider) | Vercel + `vercel.json` + PR #1052 |
 | Vercel Analytics / Speed Insights | RITIRATO | non fanno più parte del frontend Production | codice + cronologia cutover |
 | Google Analytics / GA4 | DISMESSO | Nessuna dipendenza runtime; integrazione e preferenza client rimosse, collegamento Firebase sciolto e proprietà dismessa | PR #320 + operazioni Google/Firebase/GitHub confermate dal product owner |
 | GitHub Actions / CodeQL / ruleset | ACTIVE | repository pubblico, PR, CI e SAST canonico | GitHub |
