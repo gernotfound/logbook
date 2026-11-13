@@ -9,6 +9,7 @@ import type { UserData, CachedGlobalCatalog } from '../../../src/types';
 import { UserDataSchema } from '../../../src/lib/schema';
 import { adoptReplicaCheckpoint, acknowledgeThrough, commitLocal, initializeLocal, readLocal } from '../../../src/lib/sync/localRepository';
 import { stageCloudflareDelivery, resumeCloudflareDelivery } from '../../../src/lib/sync/cloudReplicaDurableDelivery';
+import { applySemanticOperations, parseSyncMeta } from '../../../src/lib/sync/semanticProjection';
 import type { CloudReplicaBatch, CloudReplicaControlSnapshot, CloudReplicaSnapshot } from '../../../src/lib/sync/cloudReplicaTransport';
 import { createAndMigrateVault } from '../../../src/lib/sync/secureArchiveMigration';
 import { lockAllVaults } from '../../../src/lib/sync/secureArchiveSession';
@@ -71,6 +72,22 @@ async function seed() {
 }
 async function stage() {
     const initial = await seed();
+    // Temporary diagnostic: identify the precise production Protocol 3
+    // invariant violated by a real local journal on the first cloud write.
+    const applied = applySemanticOperations(new Map([['', {}]]), initial.envelope.pending);
+    const meta = applied.syncMetas[''];
+    try {
+        parseSyncMeta({ ...meta, writer: {
+            slot: initial.replica.slot, replicaId: initial.replica.replicaId,
+            generation: initial.replica.generation, seq: initial.envelope.pending.at(-1)!.seq,
+            consentRevision: 1,
+        } });
+    } catch (error) {
+        throw new Error('DIAGNOSTIC real pending='
+            + JSON.stringify(initial.envelope.pending)
+            + ' syncMeta=' + JSON.stringify(meta)
+            + ' parse=' + String(error));
+    }
     await stageCloudflareDelivery(owner, initial.envelope.pending, initial.snapshot,
         initial.control, initial.replica, 'batch000000000191', adk, () => true);
     return initial;
