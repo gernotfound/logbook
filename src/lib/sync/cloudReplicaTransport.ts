@@ -283,8 +283,18 @@ export function createCloudflareReplicaTransport(send: typeof fetch = fetch) {
 
         // Reuse the same primary-ledger proof for claim and retirement.
         // The original request body, not just its mutationId, is hash-bound.
-        claimMutationOutcome: mutationOutcome,
-        retirementMutationOutcome: mutationOutcome,
+        async claimMutationOutcome(
+            body: CloudReplicaClaimRequest,
+            csrfToken: string,
+        ): Promise<CloudReplicaClaimMutationOutcome> {
+            return mutationOutcome(body, csrfToken);
+        },
+        async retirementMutationOutcome(
+            body: CloudReplicaRetirementRequest,
+            csrfToken: string,
+        ): Promise<CloudReplicaClaimMutationOutcome> {
+            return mutationOutcome(body, csrfToken);
+        },
 
         // The exact retirement request must first be staged in the encrypted
         // owner vault; replaying a lost response never generates a new ID.
