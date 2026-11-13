@@ -191,3 +191,33 @@ been performed, and the Firebase runtime remains the active client path.
 Production integration needs authenticated issuer, verified consent, logout
 and session revocation/recovery, edge abuse controls and runtime tests.
 
+
+## CF-03 trusted session issuance candidate (not a login endpoint)
+
+`cloudflare/auth/session-issuer.mjs` is a private helper for the future
+password/Google handler **after** it verifies credentials and verified-email
+ownership. It does not authenticate the supplied UID and therefore **MUST
+NEVER** be exposed as a public route or invoked from a user-provided UID.
+A single conditional D1 `INSERT ... SELECT` requires an active,
+email-verified principal and copies its current `auth_epoch` atomically;
+zero affected rows, malformed D1 results and unknown write outcomes fail
+closed without returning cookie headers. Auth epoch increments invalidate
+already issued sessions in the separate private session gate.
+
+An authenticated session uses a cryptographically random 32-byte opaque
+token in a `__Host-logbook_session` cookie (`Secure; HttpOnly; SameSite=Lax;
+Path=/`); its CSRF companion is also a random session-bound 32-byte token,
+stored in a `__Host-logbook_csrf` host-only Secure/Lax cookie readable by
+the same-origin PWA for `X-CSRF-Token`. D1 contains only SHA-256 token hashes.
+The companion cookie survives reload and works across same-origin tabs,
+without persisting the HttpOnly session token in JavaScript or IndexedDB.
+Future logout and recovery must clear **both** cookies, preserve local
+pending journal, and verify server revocation/epoch. The returned `setCookies`
+are for the trusted Auth response only; never log, echo or cache them.
+
+Issuance is possible before the first health consent, but the separate
+`AUTH_GATE` still blocks every sync operation until the trusted consent
+record is active. No code yet verifies actual password/Google credentials,
+reissues login tokens, rotates sessions, provides first consent, or maps a
+real signup result to `auth_principals`. The Node/SQLite tests are
+synthetic and cannot validate provider CPU, OAuth or email delivery.

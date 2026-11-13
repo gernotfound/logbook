@@ -25,6 +25,19 @@ Firebase, nessun deploy o DNS. Riferimento a [CF-03 #1057](https://github.com/ge
 La configurazione Mailjet e la sua verifica vengono svolte in un filone
 separato; questo incremento non modifica provider email.
 
+## Incremento CF-03 — issuer di sessioni in verifica
+
+`cloudflare/auth/session-issuer.mjs` prepara l'emissione di cookie
+sessione/CSRF solo **dopo** una futura autenticazione trusted valida.
+La creazione D1 è condizionata atomicamente a principal attivo ed email
+già verificata, con `auth_epoch` corrente. Il token HttpOnly resta
+indipendente dal CSRF leggibile dal frontend, che sopravvive a reload e
+nuove schede senza salvare il token di sessione nel JavaScript. Con consenso
+assente la sessione può esistere, ma il gate interno non autorizza
+sincronizzazione. Non c'è ancora un endpoint pubblico di login/Google,
+consenso o invio email, né deploy/provider; il nuovo issuer rimane un
+componente interno isolato. I test di prova sono Node/SQLite sintetici.
+
 ## Stato verificato — prove separate
 
 | Area | Evidenza | Non dimostra |
