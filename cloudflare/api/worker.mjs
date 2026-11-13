@@ -248,8 +248,8 @@ async function handler(request, env) {
     const isClaim = route === '/v1/sync/replica/claim';
     const claim = isClaim ? claimInput.safeParse(raw) : null;
     const retirement = isClaim ? null : retireInput.safeParse(raw);
-    if (!claim?.success && !retirement?.success) throw new BadInput('invalid-input', 400);
-    const input = claim?.success ? claim.data : retirement.data;
+    const input = claim?.success ? claim.data : retirement?.success ? retirement.data : null;
+    if (!input) throw new BadInput('invalid-input', 400);
     if (input.consentRevision !== consentRevision) throw new BadInput('access-revoked', 403);
     if (input.expectedFenceEpoch !== fenceEpoch) throw new BadInput('replica-fenced-or-conflict', 409);
     const hash = await payloadHash(input);
@@ -272,8 +272,10 @@ async function handler(request, env) {
       }
       selected = prepareReplicaClaim(control, cloudClock,
         claim.data.candidateReplicaId, claim.data.currentReplica);
-    } else {
+    } else if (retirement?.success) {
       selected = prepareReplicaRetirement(control, retirement.data.replica);
+    } else {
+      throw new BadInput('invalid-input', 400);
     }
     if (!selected) throw new BadInput('replica-fenced-or-conflict', 409);
     const mutation = {
