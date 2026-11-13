@@ -1,6 +1,6 @@
 # Misure tecniche e organizzative — TheLogBook
 
-> Scheda TOM Art. 32 da allineare allo stato reale. "Presente nel codice" non equivale a "configurato live": le verifiche esterne sono esplicitamente separate.
+> Scheda TOM Art. 32 da allineare allo stato reale. "Presente nel codice" non equivale a "configurato live": le verifiche esterne sono esplicitamente separate. **13/11/2026:** il frontend Firebase Hosting è disabilitato secondo il proprietario, il runtime applicativo contiene ancora Firebase Auth/Firestore/App Check e Vercel; il nuovo Worker API D1 è solo candidato. Queste righe descrivono la baseline transitoria, non il sistema Cloudflare futuro o una certificazione GDPR.
 
 **Fonte tecnica:** [AGENTS](../../AGENTS.md) e i contratti specialistici collegati. Le righe su provider e smoke descrivono evidenze da acquisire o checkpoint datati, non nuove verifiche live.
 
@@ -18,9 +18,9 @@
 | Analytics di utilizzo | GA4/Firebase Analytics, Vercel Analytics e Speed Insights dismessi; nessun monitoraggio esterno degli errori client | Codice aggiornato; configurazioni provider da verificare |
 | Account deletion | Workflow server-mediated, idempotente, Auth cancellata per ultima | Implementato/testato |
 | Segreti | Firebase Admin, cron e `CLOUD_ACCOUNT_KEK_V1` server-only, esclusi dal bundle; KEK preservata e ruotata solo con processo versionato di rewrap | Contratto repository |
-| HTTP | CSP, frame denial, referrer/permissions policies e cache policy app-shell/SW | `firebase.json` + smoke Firebase Hosting |
+| HTTP | CSP, frame denial, referrer/permissions policies e cache policy app-shell/SW | `firebase.json` documenta l'hosting storico disabilitato; `cloudflare/_headers`, `cloudflare/wrangler.jsonc` e smoke statico Workers candidato richiedono nuovo collaudo browser/runtime |
 | CI | Exact-SHA Canonical Verification + M8 | GitHub Actions |
-| Deploy | Riconciliazione Firestore dopo CI verde exact-SHA su `main`, poi Firebase Hosting sullo stesso SHA; Vercel backend main-only con deploy o skip verificato secondo il delta | Workflow GitHub + `vercel.json` |
+| Deploy | Riconciliazione Firestore ancora attiva; Firebase Hosting dichiarato disabilitato e **non** da riattivare; Vercel backend main-only; futuro rilascio Workers/D1 richiede gate e smoke separati | Workflow GitHub + `vercel.json` + [runbook](../operations/cloudflare-workers-migration.md) |
 | PWA update | Reload barrier prima dell'update | Implementato/testato |
 
 ## Misure esterne da verificare
@@ -57,7 +57,7 @@
 Allegare/archiviare:
 
 1. SHA Production e CI verde;
-2. release Firebase Hosting e deployment Vercel backend associati allo stesso stato di `main`;
+2. release verificata del frontend/API **Cloudflare** e configurazione D1/Workers/Auth/email, con prove separate del runtime; nessun ritorno a Firebase Hosting come rollback;
 3. Rules/App Check live verificati;
 4. elenco env richieste senza valori segreti;
 5. risultati smoke account/deletion pertinenti;
