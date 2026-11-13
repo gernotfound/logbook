@@ -36,7 +36,8 @@ export function parseCloudflareReplicaClaimIntent(
         || typeof raw.candidateReplicaId !== 'string' || !raw.candidateReplicaId.trim()
         || raw.candidateReplicaId.trim() !== raw.candidateReplicaId || raw.candidateReplicaId.length > 128
         || !safe(raw.expectedRevision, 0) || !safe(raw.expectedFenceEpoch, 1)
-        || !safe(raw.consentRevision, 1) || raw.consentRevision !== consentRevision) {
+        || !safe(raw.consentRevision, 1)
+        || (consentRevision !== undefined && raw.consentRevision !== consentRevision)) {
         throw new Error('Intento claim D1 non valido: archivio cifrato preservato.');
     }
     const clock: VectorClock = parseVectorClock(raw.checkpointClock, 'D1 claim checkpoint');
