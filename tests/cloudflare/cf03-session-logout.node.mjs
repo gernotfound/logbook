@@ -30,7 +30,7 @@ class D1Adapter {
     try {
       const out = [];
       for (const statement of statements) {
-        out.push(/^\\s*SELECT\\b/i.test(statement.sql) ? await statement.all() : await statement.run());
+        out.push(/^\s*SELECT\b/i.test(statement.sql) ? await statement.all() : await statement.run());
       }
       this.sqlite.exec('COMMIT');
       return out;
