@@ -63,9 +63,15 @@ export async function issueVerifiedSession(db, authenticatedUid, nowMs = Date.no
       throw new SessionIssuanceError();
     }
     return {
-      setCookie: SESSION_COOKIE + '=' + sessionToken +
-        '; Path=/; Secure; HttpOnly; SameSite=Lax; Max-Age=' + IDLE_TTL_MS / 1000,
-      csrfToken,
+      // The non-HttpOnly, host-only CSRF cookie survives reload/new tabs;
+      // browser code sends its value in X-CSRF-Token. Only the session cookie
+      // grants authentication, and its corresponding CSRF hash is in D1.
+      setCookies: [
+        SESSION_COOKIE + '=' + sessionToken +
+          '; Path=/; Secure; HttpOnly; SameSite=Lax; Max-Age=' + IDLE_TTL_MS / 1000,
+        '__Host-logbook_csrf=' + csrfToken +
+          '; Path=/; Secure; SameSite=Lax; Max-Age=' + IDLE_TTL_MS / 1000,
+      ],
       idleExpiresAtMs,
       absoluteExpiresAtMs,
     };
