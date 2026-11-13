@@ -1,7 +1,7 @@
 // Candidate-only encrypted replica API. There is intentionally no public fixture,
 // secret-header login, test backdoor or fallback identity when AUTH_GATE is absent.
 import { z } from 'zod';
-import { commitEncryptedBatch, readAccessState, readDocumentPage, readReceipt, readSnapshot } from './d1-document-store.mjs';
+import { commitEncryptedBatch, readAccessState, readDocumentPage, readReceipt, readReplicaControl, readSnapshot } from './d1-document-store.mjs';
 
 const MAX_BODY_BYTES = 1800000;
 const MAX_DOCUMENT_BYTES = 950000;
@@ -156,7 +156,7 @@ function validateSealedBatch(input) {
 async function handler(request, env) {
   const url = new URL(request.url);
   const route = url.pathname;
-  const validRoutes = new Set(['/v1/sync/read', '/v1/sync/scan', '/v1/sync/commit', '/v1/sync/receipt']);
+  const validRoutes = new Set(['/v1/sync/read', '/v1/sync/scan', '/v1/sync/control', '/v1/sync/commit', '/v1/sync/receipt']);
   if (!validRoutes.has(route)) return reply({ error: 'not-found' }, 404);
   if (request.method !== 'POST') {
     return reply({ error: 'method-not-allowed' }, 405);
@@ -188,6 +188,12 @@ async function handler(request, env) {
       replica: { slot: receipt.slot, replicaId: receipt.replica_id, generation: receipt.generation } } : null });
   }
   const raw = await jsonBounded(request);
+  if (route === '/v1/sync/control') {
+    if (!z.strictObject({}).safeParse(raw).success) throw new BadInput('invalid-input', 400);
+    const control = await readReplicaControl(env.DB, uid, consentRevision, fenceEpoch);
+    if (!control) throw new BadInput('access-revoked', 403);
+    return reply(control);
+  }
   if (route === '/v1/sync/scan') {
     const parsed = pageInput.safeParse(raw);
     if (!parsed.success) throw new BadInput('invalid-input', 400);
