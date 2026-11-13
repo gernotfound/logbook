@@ -18,7 +18,7 @@ La dichiarazione di database vuoto non è un inventario provider e non autorizza
 | Frontend Cloudflare | Worker `thelogbook-frontend` su `workers.dev` e [smoke Static Assets #43223911523](https://github.com/gernotfound/logbook/actions/runs/43223911523) riuscito | Auth, Safari/iOS, update PWA, API e dominio finale |
 | D1 sandbox | `thelogbook-cf02-eu-isolated-20261113`, `jurisdiction=eu`, read replication OFF: schema `0001` + `0002` applicate e indice/trigger anti-riuso riletti via Cloudflare; un UID e un documento **sintetici**, zero mutation di replica | Database reale, HTTP Worker, performance Free, conformità GDPR |
 | Nuova API | `cloudflare/api/worker.mjs` e adapter SQL presenti nel repository, `AUTH_GATE` trusted assente, nessun binding D1 al Worker frontend | Runtime Auth o replica cloud utilizzabili |
-| Lavoro successivo | [PR draft #1072](https://github.com/gernotfound/logbook/pull/1072) HEAD `7860999a844148f13271e444d561c53c8d3befff`, [CI PR #43426814494](https://github.com/gernotfound/logbook/actions/runs/43426814494) SUCCESS | Codice già su main: la PR resta da integrare |
+| Recupero claim D1 | [PR #1072](https://github.com/gernotfound/logbook/pull/1072): ristaging nel vault di claim committato con clock remoto avanzato; verificare stato merge/CI da GitHub | Non è integrazione AuthGate o API Production; nessun ACK o grant sul ristaging |
 | Email | [PR draft #1071](https://github.com/gernotfound/logbook/pull/1071) documenta consegna test Brevo Gmail/Proton, ma eventi apertura «Anonimizzato» ancora presenti | Email Auth senza tracking e provider definitivo |
 | Vercel | Deployment backend Production `READY` dello SHA `8f6625a` avviato automaticamente dopo merge | Cloudflare Production o cutover DNS |
 
@@ -34,7 +34,7 @@ Il vecchio Hosting Firebase `thelogbook` è disabilitato secondo il comando CLI 
 
 **Claim e retirement.** Una richiesta di mutazione replica è resa durevole nel vault con mutationId immutabile. Il retry usa gli stessi byte e un 409 non prova l'assenza di commit. `replica/status` legge **insieme** dalla D1 primaria il ledger e la revisione: soltanto `not-committed` + revisione ormai avanzata autorizzano una nuova richiesta **persistita prima della rete**, senza ACK di business. Una ricevuta storica non è un grant di membership; adozione di claim richiede la stessa incarnazione attiva/lease/seq/checkpoint, due controlli remoti identici e full scan AEAD con clock coerente. Il retirement committato può concludere come `retired` oppure `superseded` quando nuova generazione/differente replicaId sono dimostrati; chiude **solo l'intento amministrativo**, mai journal o GC.
 
-La PR #1072, **non su main**, propone per claim già committati e con **solo clock cloud avanzato** una nuova scansione AEAD, doppio controllo stabile e ristaging dell'intento con nuovo mutationId/clock. Altri casi non riconciliabili (replica ritirata/riusata, lease, seq, consenso/epoch o controllo instabile) devono fallire chiuso.
+La PR #1072 implementa per claim già committati e con **solo clock cloud avanzato** una nuova scansione AEAD, doppio controllo stabile e ristaging dell'intento con nuovo mutationId/clock. Altri casi non riconciliabili (replica ritirata/riusata, lease, seq, consenso/epoch o controllo instabile) devono fallire chiuso.
 
 **Causalità Protocol 3:** `writer.seq` è globale al batch, non il dot di ciascun documento. Il documento deve mantenere un dot positivo del writer nel range `1..writer.seq`. Nessuna falsificazione di frontier per uniformare i clock.
 

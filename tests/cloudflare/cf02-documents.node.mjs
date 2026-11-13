@@ -228,6 +228,35 @@ void test('a retired replica ID cannot rejoin after its slot is reused by a new 
   assert.equal(fresh.body.replica.generation, 2);
 }));
 
+void test('a committed registration can be checkpointed under a new mutation after independent cloud writes', () => withFixture(async db => {
+  const first = claim('mutation0000000700', 0, 'resume-same-device-0001');
+  const registered = await call(db, 'replica/claim', first);
+  assert.equal(registered.status, 200);
+  assert.equal(registered.body.action, 'register');
+  assert.equal(registered.body.replica.slot, 's01');
+
+  // A different writer advances the document clock and global revision.
+  // The original new device has not adopted its slot and still sends null
+  // currentReplica, but must checkpoint the same live registered identity.
+  assert.equal((await call(db, 'commit', attempt('batch000000000700', 1, 1))).status, 200);
+  const restaged = claim('mutation0000000701', 2, first.candidateReplicaId, { s00: 1 }, null);
+  const recovered = await call(db, 'replica/claim', restaged);
+  assert.equal(recovered.status, 200);
+  assert.equal(recovered.body.action, 'checkpoint');
+  assert.equal(recovered.body.revision, 3);
+  assert.equal(recovered.body.baseSeq, 0);
+  assert.equal(recovered.body.replica.slot, registered.body.replica.slot);
+  assert.equal(recovered.body.replica.replicaId, registered.body.replica.replicaId);
+  assert.equal(recovered.body.replica.generation, registered.body.replica.generation);
+  assert.equal(db.sqlite.prepare('SELECT COUNT(*) AS n FROM sync_replicas WHERE uid = ?').get(owner).n, 2);
+  assert.equal(db.sqlite.prepare('SELECT revision FROM sync_state WHERE uid = ?').get(owner).revision, 3);
+  const replayedOriginal = await call(db, 'replica/claim', first);
+  assert.equal(replayedOriginal.status, 200);
+  assert.equal(replayedOriginal.body.replayed, true);
+  assert.equal(replayedOriginal.body.reconciliationRequired, true);
+  assert.equal(replayedOriginal.body.currentRevision, 3);
+}));
+
 void test('lost claim reply after a concurrent write returns historical proof, not a fresh replica grant', () => withFixture(async db => {
   const input = claim('mutation0000000101', 0, 'device-replay-safe');
   const registered = await call(db, 'replica/claim', input);
