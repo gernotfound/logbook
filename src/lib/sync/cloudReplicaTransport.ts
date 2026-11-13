@@ -1,7 +1,7 @@
 import type { SealedCloudDocument } from './cloudDocumentCipher';
 import { parseReplicaControl, type ReplicaControl, type ReplicaIdentity } from './replicaProtocol';
 import type { AuthenticatedCloudflareCheckpoint } from './cloudReplicaCheckpoint';
-import { mergeVectors } from './semanticProjection';
+import { mergeVectors, parseSyncMeta } from './semanticProjection';
 
 /**
  * Network-only boundary: no IndexedDB writes or ACK decisions live here.
@@ -182,7 +182,7 @@ export function createCloudflareReplicaTransport(send: typeof fetch = fetch) {
             }
             let checkpointClock: Record<string, number> = {};
             for (const verified of checkpoint.documents.values()) {
-                checkpointClock = mergeVectors(checkpointClock, verified.sync.clock);
+                checkpointClock = mergeVectors(checkpointClock, parseSyncMeta(verified.sync).clock);
             }
             const body = {
                 mutationId, expectedRevision: control.revision,
