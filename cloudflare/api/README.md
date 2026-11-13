@@ -255,10 +255,11 @@ gate has returned. The status read also denies an active revision other than
 Future reacceptance (revisions 2+) needs separate proofs and an
 explicit gate extension; it cannot reuse revision-1 consent as authorization.
 
-`cloudflare/api/consent.wrangler.local.jsonc` uses placeholder D1 and
-private binding only; its example legal versions must be kept in sync with
-`src/lib/legalVersions.ts` at future deploy. Missing or inconsistent
-provider configuration denies acceptance.
+`cloudflare/api/wrangler.local.jsonc` is the unified local-only API
+configuration. Its placeholder legal versions must match
+`src/lib/legalVersions.ts` before any future deployment. The separate
+consent config was removed in PR #1081. Missing or inconsistent provider
+configuration denies acceptance.
 
 **Incomplete and release NO-GO**: full Auth credential verifier, email/Google,
 revocation with atomic erasure job, rights-only, reacceptance, legal-change
@@ -290,3 +291,35 @@ devices, erase health data or close the account. A retry using an already
 revoked cookie receives 401: the UI must never infer the previous call
 succeeded without an authoritative response. The real frontend, credentials
 verifier, account rights and provider runtime are still disconnected.
+
+
+## Review: recheck the actual session at D1 transaction time
+
+The internal `AUTH_GATE` now includes the SHA-256 digest of the current
+opaque session in its **private** claims for sync routes as well as
+identity-only routes. Neither the client nor its JSON body can supply this
+value. Both ciphertext commits and replica membership mutations use
+`cloudflare/auth/session-write-fence.mjs` inside the **first SQL INSERT**
+of their atomic D1 batch: a revoked/expired session, changed account epoch,
+disabled/unverified principal or mismatched owner forces the existing
+`request_hash` CHECK to abort the complete batch. It cannot create
+a document, receipt or new replica grant after a logout that committed
+before this SQL statement. The original 0001..0004 schemas are unchanged.
+
+**Read-side follow-up on this branch:** snapshot, paginated scan, replica
+control, historical receipts/status, checkpoint-clock validation and error
+reconciliation now require the same live session hash in their authorizing
+SQL query. Protected reads use `withSession('first-primary')`; multiple
+SELECTs are batched in a single D1 transaction so no unauthenticated page
+can escape after an earlier authorization query. A revoked/expired/foreign
+token or a changed account epoch yields no business result or ACK. The
+session hash never appears in the HTTP request body, response or log.
+
+A revocation that commits **before the relevant D1 transaction** blocks
+the next protected read or write. This is not an absolute guarantee that
+an already-running response can be recalled if logout occurs *after* that
+transaction's snapshot, or that committed receipts should be discarded.
+Consent withdrawal/erasure, global logout and account deletion still need
+their own transactional protocol. Tests here run against synthetic
+SQLite, not the deployed Workers/D1 runtime; CPU, quotas, mobile recovery
+and the actual frontend flow remain release blockers.

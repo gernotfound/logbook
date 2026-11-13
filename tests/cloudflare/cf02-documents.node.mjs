@@ -9,6 +9,9 @@ import worker from '../../cloudflare/api/worker.mjs';
 
 const migration = readFileSync(new URL('../../cloudflare/api/migrations/0001_encrypted_replica.sql', import.meta.url), 'utf8');
 const identityMigration = readFileSync(new URL('../../cloudflare/api/migrations/0002_reject_reused_replica_ids.sql', import.meta.url), 'utf8');
+const sessionMigration = readFileSync(new URL('../../cloudflare/api/migrations/0003_auth_session_gate.sql', import.meta.url), 'utf8');
+const consentMigration = readFileSync(new URL('../../cloudflare/api/migrations/0004_initial_consent.sql', import.meta.url), 'utf8');
+const syntheticSessionHash = 'b'.repeat(64);
 const rollback = readFileSync(new URL('../../cloudflare/api/rollback/0001_encrypted_replica_down.sql', import.meta.url), 'utf8');
 const origin = 'https://candidate.invalid';
 const owner = 'cf02-synthetic-owner';
@@ -50,7 +53,16 @@ async function withFixture(run) {
   try {
     db.sqlite.exec(migration);
     db.sqlite.exec(identityMigration);
+    db.sqlite.exec(sessionMigration);
+    db.sqlite.exec(consentMigration);
+    const issuedAt = Date.now() - 5000;
+    db.sqlite.prepare('INSERT INTO auth_principals (uid,status,verified_at_ms,auth_epoch) VALUES (?,?,?,?)')
+      .run(owner, 'active', issuedAt, 5);
+    db.sqlite.prepare('INSERT INTO auth_sessions (token_hash,uid,auth_epoch,csrf_hash,issued_at_ms,idle_expires_at_ms,absolute_expires_at_ms) VALUES (?,?,?,?,?,?,?)')
+      .run(syntheticSessionHash, owner, 5, 'c'.repeat(64), issuedAt, issuedAt + 86400000, issuedAt + 2592000000);
     db.sqlite.prepare('INSERT INTO sync_subjects VALUES (?, ?, ?, ?)').run(owner, 'active', 1, 5);
+    db.sqlite.prepare('INSERT INTO health_consent_acceptances (uid,consent_revision,privacy_version,terms_version,accepted_at_ms,over_18_confirmed) VALUES (?,1,?,?,?,1)')
+      .run(owner, '1.3.9', '1.2.5', issuedAt);
     db.sqlite.prepare('INSERT INTO sync_state (uid, revision) VALUES (?, 0)').run(owner);
     const now = Date.now();
     db.sqlite.prepare('INSERT INTO sync_replicas (uid, slot, replica_id, generation, lease_until_ms, checkpoint_at_ms, checkpoint_clock_json, last_seq, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)').run(
@@ -86,7 +98,8 @@ function makeEnv(db, claims = {}) {
       async fetch() {
         return new Response(JSON.stringify({
           uid: owner, authenticated: true, emailVerified: true,
-          healthConsentRevision: 1, fenceEpoch: 5, csrfVerified: true, rateGatePassed: true, ...claims,
+          healthConsentRevision: 1, fenceEpoch: 5, csrfVerified: true, rateGatePassed: true,
+          sessionHash: syntheticSessionHash, ...claims,
         }), { status: 200 });
       },
     },
@@ -796,8 +809,158 @@ void test('oversized streamed bodies fail with 413 before any D1 mutation', () =
   assert.equal(db.sqlite.prepare('SELECT revision FROM sync_state').get().revision, 0);
 }));
 
-void test('isolated migration has an explicit rollback, without touching external resources', () => withFixture(async db => {
-  db.sqlite.exec(rollback);
-  const existing = db.sqlite.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='sync_subjects'").get();
-  assert.equal(existing, undefined);
+void test('isolated migration rollback only targets its original disposable schema', () => {
+  // The historical 0001/0002 rollback does not remove newer Auth/consent
+  // tables. Verify its own contract against a dedicated disposable database.
+  const sqlite = new DatabaseSync(':memory:');
+  try {
+    sqlite.exec('PRAGMA foreign_keys=ON');
+    sqlite.exec(migration);
+    sqlite.exec(identityMigration);
+    sqlite.exec(rollback);
+    const existing = sqlite.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='sync_subjects'").get();
+    assert.equal(existing, undefined);
+  } finally {
+    sqlite.close();
+  }
+});
+
+void test('a logout racing after AuthGate cannot commit ciphertext or its receipt', () => withFixture(async db => {
+  const intercepted = Object.create(db);
+  intercepted.batch = async statements => {
+    if (statements[0]?.sql.includes('INSERT INTO sync_receipts')) {
+      db.sqlite.prepare('UPDATE auth_sessions SET revoked_at_ms = ? WHERE token_hash = ?')
+        .run(Date.now(), syntheticSessionHash);
+    }
+    return db.batch(statements);
+  };
+  const result = await call(db, 'commit', attempt('batch000000000991'), {
+    env: { ...makeEnv(db), DB: intercepted },
+  });
+  assert.deepEqual(result, { status: 503, body: { error: 'cloud-unavailable' } });
+  assert.equal(db.sqlite.prepare('SELECT COUNT(*) AS n FROM sync_receipts').get().n, 0);
+  assert.equal(db.sqlite.prepare('SELECT COUNT(*) AS n FROM sync_documents').get().n, 0);
+  assert.equal(db.sqlite.prepare('SELECT revision FROM sync_state').get().revision, 0);
+}));
+
+void test('a logout racing after AuthGate cannot mutate replica membership', () => withFixture(async db => {
+  const intercepted = Object.create(db);
+  intercepted.batch = async statements => {
+    if (statements[0]?.sql.includes('INSERT INTO sync_replica_mutations')) {
+      db.sqlite.prepare('UPDATE auth_sessions SET revoked_at_ms = ? WHERE token_hash = ?')
+        .run(Date.now(), syntheticSessionHash);
+    }
+    return db.batch(statements);
+  };
+  const result = await call(db, 'replica/claim', claim('mutation0000000991'), {
+    env: { ...makeEnv(db), DB: intercepted },
+  });
+  assert.deepEqual(result, { status: 503, body: { error: 'cloud-unavailable' } });
+  assert.equal(db.sqlite.prepare('SELECT COUNT(*) AS n FROM sync_replica_mutations').get().n, 0);
+  assert.equal(db.sqlite.prepare('SELECT COUNT(*) AS n FROM sync_replicas').get().n, 1);
+  assert.equal(db.sqlite.prepare('SELECT revision FROM sync_state').get().revision, 0);
+}));
+
+void test('an expired or foreign session digest cannot authorize a D1 write', () => withFixture(async db => {
+  const forged = await call(db, 'commit', attempt('batch000000000992'), {
+    env: makeEnv(db, { sessionHash: 'f'.repeat(64) }),
+  });
+  assert.equal(forged.status, 503);
+  const intercepted = Object.create(db);
+  intercepted.batch = async statements => {
+    if (statements[0]?.sql.includes('INSERT INTO sync_receipts')) {
+      db.sqlite.prepare('UPDATE auth_sessions SET idle_expires_at_ms = issued_at_ms + 1, absolute_expires_at_ms = issued_at_ms + 2 WHERE token_hash = ?')
+        .run(syntheticSessionHash);
+    }
+    return db.batch(statements);
+  };
+  const expired = await call(db, 'commit', attempt('batch000000000993'), {
+    env: { ...makeEnv(db), DB: intercepted },
+  });
+  assert.equal(expired.status, 503);
+  assert.equal(db.sqlite.prepare('SELECT COUNT(*) AS n FROM sync_receipts').get().n, 0);
+  assert.equal(db.sqlite.prepare('SELECT revision FROM sync_state').get().revision, 0);
+}));
+
+void test('missing trusted session digest rejects mutations before D1', () => withFixture(async db => {
+  const noDigest = await call(db, 'commit', attempt('batch000000000994'), {
+    env: makeEnv(db, { sessionHash: undefined }),
+  });
+  assert.equal(noDigest.status, 503);
+  const malformed = await call(db, 'replica/claim', claim('mutation0000000995'), {
+    env: makeEnv(db, { sessionHash: 'broken' }),
+  });
+  assert.equal(malformed.status, 503);
+  assert.equal(db.sqlite.prepare('SELECT COUNT(*) AS n FROM sync_receipts').get().n, 0);
+  assert.equal(db.sqlite.prepare('SELECT COUNT(*) AS n FROM sync_replica_mutations').get().n, 0);
+}));
+
+void test('revoked Auth session after private gate cannot read snapshots, replica control or receipts', () => withFixture(async db => {
+  const original = attempt('batch000000000997');
+  assert.equal((await call(db, 'commit', original)).status, 200);
+  assert.equal((await call(db, 'read', { paths: [''] })).status, 200);
+  db.sqlite.prepare('UPDATE auth_sessions SET revoked_at_ms = ? WHERE token_hash = ?')
+    .run(Date.now(), syntheticSessionHash);
+
+  // makeEnv deliberately returns the earlier trusted gate claims. Every D1
+  // read must independently refuse them after the subsequent logout.
+  const cases = [
+    ['control', {}],
+    ['read', { paths: [''] }],
+    ['scan', { after: null, expectedRevision: null }],
+    ['receipt', { batchId: original.batchId }],
+    ['replica/status', claim('mutation0000000996')],
+    ['replica/claim', claim('mutation0000000997')],
+    ['commit', original],
+  ];
+  for (const [route, request] of cases) {
+    const result = await call(db, route, request);
+    assert.equal(result.status, 403, route);
+    assert.deepEqual(result.body, { error: 'access-revoked' }, route);
+  }
+  assert.equal(db.sqlite.prepare('SELECT COUNT(*) AS n FROM sync_receipts').get().n, 1);
+  assert.equal(db.sqlite.prepare('SELECT COUNT(*) AS n FROM sync_replica_mutations').get().n, 0);
+  assert.equal(db.sqlite.prepare('SELECT revision FROM sync_state').get().revision, 1);
+}));
+
+void test('expired, foreign and fenced-epoch sessions cannot read D1 account state', () => withFixture(async db => {
+  const routes = [
+    ['control', {}],
+    ['read', { paths: [''] }],
+    ['scan', { after: null, expectedRevision: null }],
+    ['receipt', { batchId: 'batch000000000998' }],
+  ];
+  for (const [route, request] of routes) {
+    const foreign = await call(db, route, request, {
+      env: makeEnv(db, { sessionHash: 'f'.repeat(64) }),
+    });
+    assert.equal(foreign.status, 403, route);
+  }
+
+  db.sqlite.prepare('UPDATE auth_sessions SET idle_expires_at_ms = issued_at_ms + 1, absolute_expires_at_ms = issued_at_ms + 2 WHERE token_hash = ?')
+    .run(syntheticSessionHash);
+  assert.equal((await call(db, 'control', {})).status, 403);
+  db.sqlite.prepare('UPDATE auth_principals SET auth_epoch = 6 WHERE uid = ?')
+    .run(owner);
+  assert.equal((await call(db, 'read', { paths: [''] })).status, 403);
+}));
+
+void test('revocation between replica-control read and clock scan prevents a new membership receipt', () => withFixture(async db => {
+  const raced = Object.create(db);
+  let interrupted = false;
+  raced.batch = async statements => {
+    if (!interrupted && statements[0]?.sql.includes('HAVING')) {
+      interrupted = true;
+      db.sqlite.prepare('UPDATE auth_sessions SET revoked_at_ms = ? WHERE token_hash = ?')
+        .run(Date.now(), syntheticSessionHash);
+    }
+    return db.batch(statements);
+  };
+  const result = await call(db, 'replica/claim', claim('mutation0000000999'), {
+    env: { ...makeEnv(db), DB: raced },
+  });
+  assert.equal(interrupted, true);
+  assert.equal(result.status, 503);
+  assert.equal(db.sqlite.prepare('SELECT COUNT(*) AS n FROM sync_replica_mutations').get().n, 0);
+  assert.equal(db.sqlite.prepare('SELECT revision FROM sync_state').get().revision, 0);
 }));
