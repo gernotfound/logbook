@@ -7,6 +7,14 @@ Firebase/Firestore writer, IndexedDB journal and encrypted vault remain active.
   disposable-only** rollback in rollback/ (never apply it to user data).
 - Local-only Wrangler configuration: wrangler.local.jsonc; placeholder database
   ID, workers.dev and preview URLs disabled, no domain route or public fixture.
+  Do NOT replace the local placeholder with a remote database ID.
+- Provider verification 2026-11-13: isolated **EU-jurisdiction** D1 resource
+  `thelogbook-cf02-eu-isolated-20261113` (UUID
+  `9aa51833-8adc-495f-bdfc-93b5542e8023`) was provisioned without
+  connecting a Worker/domain. Migration 0001 was accepted (6 tables,
+  5 triggers). Synthetic CAS and consent-regression requests were rejected,
+  and a late failed statement rolled back an earlier receipt insert. This
+  proves SQL behavior on remote D1, NOT HTTP Worker/Auth, quota or runtime.
 - The database contains ciphertext envelopes and public causal metadata only.
   Root and monthly paths retain the existing cloud cipher v1 / Sync Protocol 3.
 - Account identity, consent and epoch remain provisioned only by a separate
@@ -33,6 +41,14 @@ Firebase/Firestore writer, IndexedDB journal and encrypted vault remain active.
   receipt proves historical commit but NEVER authorizes local adoption:
   client claim/retire throws a typed reconciliation-required error and must
   repeat a full AEAD-verified scan with a fresh guarded mutation.
+- Candidate encrypted claim workflow: `cloudReplicaClaimRecovery.ts` writes an
+  immutable claim mutationId/body to the owner-vault IndexedDB before sending
+  it; the next session replays the exact same request. Only an authenticated
+  matching current receipt followed by a second full ADK-open scan and two
+  stable control reads can authorize an atomic `adoptReplicaCheckpoint()`
+  that removes the stored intent with the checkpoint. A historical reply
+  returns reconciliation-required without deleting local data. Automatic
+  re-claim under a new mutationId and production wiring remain TODO.
 - POST /v1/sync/read reads up to eight ciphertext envelopes under one D1
   snapshot; POST /v1/sync/scan reads a bounded page with a revision-fenced
   cursor for a complete account checkpoint. Reads/scans carry an explicit
