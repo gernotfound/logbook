@@ -85,7 +85,7 @@ export async function readReceipt(db, uid, consentRevision, fenceEpoch, batchId)
 }
 
 export async function readAccessState(db, uid) {
-  return db.prepare("SELECT a.status, a.consent_revision, s.revision FROM sync_subjects a JOIN sync_state s ON a.uid = s.uid WHERE a.uid = ?")
+  return db.prepare("SELECT a.status, a.consent_revision, a.fence_epoch, s.revision FROM sync_subjects a JOIN sync_state s ON a.uid = s.uid WHERE a.uid = ?")
     .bind(uid).first();
 }
 
