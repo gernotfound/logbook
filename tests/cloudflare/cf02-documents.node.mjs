@@ -302,6 +302,17 @@ void test('account epoch change revokes receipt lookup instead of implying an ab
   assert.deepEqual(newSession, { status: 200, body: { receipt: null } });
 }));
 
+void test('old consent receipts are never visible after trusted reacceptance', () => withFixture(async db => {
+  const batch = attempt('batch000000000066');
+  assert.equal((await call(db, 'commit', batch)).status, 200);
+  db.sqlite.prepare('UPDATE sync_subjects SET consent_revision = 2 WHERE uid = ?').run(owner);
+  assert.deepEqual(await call(db, 'receipt', { batchId: batch.batchId }),
+    { status: 403, body: { error: 'access-revoked' } });
+  assert.deepEqual(await call(db, 'receipt', { batchId: batch.batchId },
+    { env: makeEnv(db, { healthConsentRevision: 2 }) }),
+    { status: 200, body: { receipt: null } });
+}));
+
 void test('a batch from an erased account epoch cannot resurrect data at reset revision', () => withFixture(async db => {
   const stale = attempt('batch000000000035', 1, 0);
   db.sqlite.prepare('UPDATE sync_subjects SET fence_epoch = 6 WHERE uid = ?').run(owner);
