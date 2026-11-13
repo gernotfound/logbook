@@ -63,8 +63,8 @@ Firebase/Firestore writer, IndexedDB journal and encrypted vault remain active.
   It returns `retry-staged`: this is NOT a remotely committed claim;
   another guarded resume sends the new immutable request. `committed`,
   `inconclusive`, stale/corrupt scans or races preserve the old intent.
-  Historical successful claims with changed membership, automatic
-  retirement rebase, production Auth wiring and provider HTTP proof remain TODO.
+  Historical successful claims with changed membership, production Auth
+  wiring and provider HTTP proof remain TODO.
 - Candidate durable retirement workflow: `cloudReplicaRetirementRecovery.ts`
   writes an immutable expired-lease target/mutationId into the same
   owner-encrypted vault before sending anything. `replayStoredRetirement()`
@@ -77,8 +77,19 @@ Firebase/Firestore writer, IndexedDB journal and encrypted vault remain active.
   membership metadata. Reused slots, changed consent, unstable controls or
   torn intents preserve ciphertext and report reconciliation-required or fail closed.
   Claim, retirement and document delivery intents are mutually exclusive.
-  Automatic re-retirement under a new revision and runtime integration remain
-  TODO; this is not a working end-to-end logout/erasure path.
+  After HTTP 409 with no receipt, the same strict primary-SQL status endpoint
+  also accepts the original retirement body. Only `not-committed` after a
+  strictly advanced revision allows a new retirement request. It requires the
+  SAME still-active slot/replicaId/generation with elapsed lease and 5-minute
+  skew, plus two stable control reads under unchanged consent/epoch. The new
+  mutationId/revision replaces the encrypted intent in one IndexedDB update,
+  preserving the business journal: `retry-staged` is NOT an ACK or successful
+  retirement. Renewed leases, already-retired or reused slots, altered
+  session/consent, and any unproven outcome preserve the original. Retirement
+  of the device's own local writer is forbidden to avoid silently stranding
+  unsent journal operations. Runtime integration and remediation of a
+  historically committed but no longer adoptable mutation remain TODO; this
+  is not a working end-to-end logout/erasure path.
 - POST /v1/sync/read reads up to eight ciphertext envelopes under one D1
   snapshot; POST /v1/sync/scan reads a bounded page with a revision-fenced
   cursor for a complete account checkpoint. Reads/scans carry an explicit

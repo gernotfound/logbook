@@ -180,6 +180,25 @@ export function createCloudflareReplicaTransport(send: typeof fetch = fetch) {
         }
     }
 
+    // A 409 is not absence-of-commit evidence. Only an authenticated
+    // primary SQL read that also sees a later revision can rule out the
+    // original immutable mutation, even if its HTTP response was lost.
+    async function mutationOutcome(
+        body: CloudReplicaClaimRequest | CloudReplicaRetirementRequest,
+        csrfToken: string,
+    ): Promise<CloudReplicaClaimMutationOutcome> {
+        if (!csrfToken) throw new CloudReplicaTransportError(0);
+        const value = await post('replica/status', body, csrfToken);
+        if (!isRecord(value) || !safeRevision(value.currentRevision)
+            || (value.outcome !== 'committed' && value.outcome !== 'not-committed'
+                && value.outcome !== 'inconclusive')
+            || (value.outcome === 'not-committed' && value.currentRevision <= body.expectedRevision)
+            || (value.outcome === 'committed' && value.currentRevision <= body.expectedRevision)) {
+            throw new CloudReplicaTransportError(0);
+        }
+        return value as unknown as CloudReplicaClaimMutationOutcome;
+    }
+
     return {
         async control(): Promise<CloudReplicaControlSnapshot> {
             const raw = await post('control', {});
@@ -262,23 +281,10 @@ export function createCloudflareReplicaTransport(send: typeof fetch = fetch) {
             return confirmed;
         },
 
-        // This read-only primary SQL proof is distinct from a 409: status=409
-        // alone does not exclude an in-flight successful original mutation.
-        async claimMutationOutcome(
-            body: CloudReplicaClaimRequest,
-            csrfToken: string,
-        ): Promise<CloudReplicaClaimMutationOutcome> {
-            if (!csrfToken) throw new CloudReplicaTransportError(0);
-            const value = await post('replica/status', body, csrfToken);
-            if (!isRecord(value) || !safeRevision(value.currentRevision)
-                || (value.outcome !== 'committed' && value.outcome !== 'not-committed'
-                    && value.outcome !== 'inconclusive')
-                || (value.outcome === 'not-committed' && value.currentRevision <= body.expectedRevision)
-                || (value.outcome === 'committed' && value.currentRevision <= body.expectedRevision)) {
-                throw new CloudReplicaTransportError(0);
-            }
-            return value as unknown as CloudReplicaClaimMutationOutcome;
-        },
+        // Reuse the same primary-ledger proof for claim and retirement.
+        // The original request body, not just its mutationId, is hash-bound.
+        claimMutationOutcome: mutationOutcome,
+        retirementMutationOutcome: mutationOutcome,
 
         // The exact retirement request must first be staged in the encrypted
         // owner vault; replaying a lost response never generates a new ID.

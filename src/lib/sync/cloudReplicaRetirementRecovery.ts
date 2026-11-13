@@ -1,6 +1,6 @@
 import equal from 'fast-deep-equal';
 import {
-    CloudReplicaMutationReconciliationRequiredError,
+    CloudReplicaMutationReconciliationRequiredError, CloudReplicaTransportError,
     type CloudReplicaControlSnapshot, type CloudReplicaMutationResult, type createCloudflareReplicaTransport,
 } from './cloudReplicaTransport';
 import {
@@ -13,7 +13,7 @@ import { updateArchiveRecord } from './secureArchiveRepository';
 import { validateLocalEnvelope } from './localEnvelopeValidation';
 
 type Guard = () => boolean;
-type Transport = Pick<ReturnType<typeof createCloudflareReplicaTransport>, 'replayStoredRetirement' | 'control'>;
+type Transport = Pick<ReturnType<typeof createCloudflareReplicaTransport>, 'replayStoredRetirement' | 'retirementMutationOutcome' | 'control'>;
 const SKEW_MS = 5 * 60 * 1000;
 
 function current(guard: Guard): void {
@@ -63,7 +63,8 @@ export async function stageCloudflareReplicaRetirement(
         const local = validateLocalEnvelope(raw, owner);
         if (!local || local.cloudIntegrityFence || local.cloudflareDelivery
             || local.cloudflareReplicaClaim || local.cloudflareReplicaRetirement
-            || local.consentRevision !== control.consentRevision) {
+            || local.consentRevision !== control.consentRevision
+            || (local.replica !== null && sameReplica(local.replica, replica))) {
             throw new Error('Retirement D1 non installabile: archivio, consenso o sync non coerenti.');
         }
         const intent = parseCloudflareReplicaRetirementIntent({
@@ -82,6 +83,61 @@ export async function stageCloudflareReplicaRetirement(
 }
 
 /**
+ * A 409 is not evidence that the original retirement failed. Only a single
+ * primary D1 read proving the original mutation absent AFTER its expected
+ * CAS revision has been surpassed may authorize a new retirement request.
+ * Membership is checked twice; a renewed/retired/reused target is never
+ * acted on. The new mutation replaces the sealed intent BEFORE any retry.
+ */
+async function rebaseUncommittedRetirement(
+    owner: string,
+    intent: CloudflareReplicaRetirementIntent,
+    transport: Transport,
+    csrfToken: string,
+    guard: Guard,
+): Promise<'retry-staged' | 'reconciliation-required'> {
+    const outcome = await transport.retirementMutationOutcome(intent, csrfToken);
+    current(guard);
+    if (outcome.outcome !== 'not-committed') return 'reconciliation-required';
+
+    const control = await transport.control();
+    current(guard);
+    const target = control.replicas[intent.replica.slot];
+    if (control.revision !== outcome.currentRevision
+        || control.revision <= intent.expectedRevision
+        || control.fenceEpoch !== intent.expectedFenceEpoch
+        || control.consentRevision !== intent.consentRevision
+        || !target || target.status !== 'active'
+        || !sameReplica({ ...target, slot: intent.replica.slot }, intent.replica)
+        || !Number.isSafeInteger(target.leaseUntilMs)
+        || target.leaseUntilMs + SKEW_MS >= Date.now()) {
+        return 'reconciliation-required';
+    }
+
+    const again = await transport.control();
+    current(guard);
+    if (!equal(control, again)) return 'reconciliation-required';
+
+    const replacement = parseCloudflareReplicaRetirementIntent({
+        ...intent, mutationId: crypto.randomUUID(), expectedRevision: control.revision,
+    }, intent.consentRevision);
+    await updateArchiveRecord<unknown>(owner, raw => {
+        current(guard);
+        const saved = validateLocalEnvelope(raw, owner);
+        if (!saved || saved.cloudIntegrityFence || saved.cloudflareDelivery
+            || saved.cloudflareReplicaClaim || saved.consentRevision !== intent.consentRevision
+            || !equal(saved.cloudflareReplicaRetirement, intent)
+            || (saved.replica !== null && sameReplica(saved.replica, intent.replica))
+            || target.leaseUntilMs + SKEW_MS >= Date.now()) {
+            throw new Error('Rebase retirement D1 concorrente o non autorizzato: intent e journal preservati.');
+        }
+        return { ...saved, cloudflareReplicaRetirement: replacement, revision: saved.revision + 1 };
+    });
+    current(guard);
+    return 'retry-staged';
+}
+
+/**
  * A historical receipt is proof that the original retirement committed, but
  * not proof that the target is still retired. An unrelated control revision may
  * advance without invalidating this completed retirement. Require two stable
@@ -93,7 +149,7 @@ export async function resumeCloudflareReplicaRetirement(
     transport: Transport,
     csrfToken: string,
     guard: Guard,
-): Promise<'idle' | 'retired' | 'reconciliation-required'> {
+): Promise<'idle' | 'retired' | 'retry-staged' | 'reconciliation-required'> {
     const owner = account(ownerInput);
     current(guard);
     if (!csrfToken) throw new Error('Sessione D1 assente: retirement sospeso.');
@@ -103,7 +159,8 @@ export async function resumeCloudflareReplicaRetirement(
     const intent = local.cloudflareReplicaRetirement;
     if (!intent) return 'idle';
     if (local.cloudIntegrityFence || local.cloudflareDelivery || local.cloudflareReplicaClaim
-        || local.consentRevision !== intent.consentRevision) {
+        || local.consentRevision !== intent.consentRevision
+        || (local.replica !== null && sameReplica(local.replica, intent.replica))) {
         throw new Error('Barriera integrità D1: retirement sospeso.');
     }
 
@@ -112,7 +169,12 @@ export async function resumeCloudflareReplicaRetirement(
         receipt = await transport.replayStoredRetirement(intent, csrfToken);
     } catch (error) {
         current(guard);
-        if (!(error instanceof CloudReplicaMutationReconciliationRequiredError)) throw error;
+        if (!(error instanceof CloudReplicaMutationReconciliationRequiredError)) {
+            if (error instanceof CloudReplicaTransportError && error.status === 409) {
+                return rebaseUncommittedRetirement(owner, intent, transport, csrfToken, guard);
+            }
+            throw error;
+        }
         // The transport already validated the original request/receipt binding.
         // The fresh control below must still prove this exact incarnation retired.
         receipt = error.historicalReceipt;

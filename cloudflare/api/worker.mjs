@@ -216,9 +216,12 @@ async function handler(request, env) {
     return reply(control);
   }
   if (route === '/v1/sync/replica/status') {
-    const parsed = claimInput.safeParse(raw);
-    if (!parsed.success) throw new BadInput('invalid-input', 400);
-    const input = parsed.data;
+    // The two strict schemas are disjoint: a status lookup proves absence
+    // for the exact original mutation body, never just a shared mutationId.
+    const claim = claimInput.safeParse(raw);
+    const retirement = claim.success ? null : retireInput.safeParse(raw);
+    if (!claim.success && !retirement?.success) throw new BadInput('invalid-input', 400);
+    const input = claim.success ? claim.data : retirement.data;
     if (input.consentRevision !== consentRevision
       || input.expectedFenceEpoch !== fenceEpoch) throw new BadInput('access-revoked', 403);
     // Only the primary can establish non-commit under a concurrent lost ACK.

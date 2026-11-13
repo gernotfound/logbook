@@ -97,6 +97,36 @@ describe('isolated Cloudflare document transport', () => {
         await expect(conflict.claimMutationOutcome(claim, 'csrf')).rejects.toMatchObject({ status: 409 });
     });
 
+    it('uses the original retirement body for primary non-commit proof without a grant', async () => {
+        const original = {
+            mutationId: 'mutation0000000811', expectedRevision: 4,
+            expectedFenceEpoch: 5, consentRevision: 1,
+            replica: { slot: 's03', replicaId: 'retiring-device', generation: 2 },
+        };
+        const fetcher = vi.fn(async () =>
+            new Response(JSON.stringify({ outcome: 'not-committed', currentRevision: 6 })));
+        const transport = createCloudflareReplicaTransport(fetcher as typeof fetch);
+        await expect(transport.retirementMutationOutcome(original, 'csrf'))
+            .resolves.toEqual({ outcome: 'not-committed', currentRevision: 6 });
+        expect(fetcher).toHaveBeenCalledWith('/v1/sync/replica/status',
+            expect.objectContaining({ method: 'POST', credentials: 'include',
+                headers: expect.objectContaining({ 'X-CSRF-Token': 'csrf' }) }));
+        expect(JSON.parse((fetcher.mock.calls[0] as unknown as [string, RequestInit])[1].body as string))
+            .toEqual(original);
+        for (const invalid of [
+            { outcome: 'not-committed', currentRevision: 4 },
+            { outcome: 'committed', currentRevision: 3 },
+            { outcome: 'inconclusive', currentRevision: '6' },
+        ]) {
+            const bad = createCloudflareReplicaTransport(vi.fn(async () =>
+                new Response(JSON.stringify(invalid))) as typeof fetch);
+            await expect(bad.retirementMutationOutcome(original, 'csrf'))
+                .rejects.toBeInstanceOf(CloudReplicaTransportError);
+        }
+        await expect(transport.retirementMutationOutcome(original, ''))
+            .rejects.toBeInstanceOf(CloudReplicaTransportError);
+    });
+
     it('loads an authenticated replica register and rejects malformed clocks', async () => {
         const content = { revision: 4, fenceEpoch: 7, consentRevision: 1,
             replicas: { s00: {
