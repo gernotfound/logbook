@@ -10,6 +10,21 @@
 
 La dichiarazione di database vuoto non è un inventario provider e non autorizza cancellazioni/reset fisici. Il cutover del dominio `thelogbook.me`, OAuth, posta Production e la dismissione irreversibile richiedono un GO specifico, anche senza utenti da migrare.
 
+## Incremento CF-03 in verifica — gate di sessione interno
+
+Il branch CF-03 aggiunge migration D1 `0003_auth_session_gate.sql`,
+`cloudflare/auth/session-gate.mjs` e regressioni SQL/HTTP sintetiche.
+Il nuovo endpoint è **esclusivamente un service binding privato**, con cookie
+`__Host-logbook_session` hashato, CSRF hashato, status/email verificata,
+revoca/scadenza, generazione Auth allineata al fence del consenso e rate limiter
+di sessione obbligatorio. Si usa una SELECT sulla D1 primaria per ottenere
+le prove coerenti; gli errori non restituiscono dati o SQL. Mancano ancora
+issuance Auth reale (password/Google), verifica/reset email, consent provision,
+API live, CPU/quote e test su provider. Nessuna migrazione di account
+Firebase, nessun deploy o DNS. Riferimento a [CF-03 #1057](https://github.com/gernotfound/logbook/issues/1057).
+La configurazione Mailjet e la sua verifica vengono svolte in un filone
+separato; questo incremento non modifica provider email.
+
 ## Stato verificato — prove separate
 
 | Area | Evidenza | Non dimostra |
