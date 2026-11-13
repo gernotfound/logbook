@@ -5,7 +5,6 @@ const SLOT = /^s(?:0[0-9]|1[0-5])$/;
 const SLOT_IDS = Array.from({ length: 16 }, (_, i) => `s${String(i).padStart(2, '0')}`);
 const LEASE_MS = 360 * 24 * 60 * 60 * 1000;
 const SKEW_MS = 5 * 60 * 1000;
-const SQL_NOW_MS = "CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER)";
 
 export async function readPublicCheckpointClock(db, uid) {
   const [integrity, clocks] = await db.batch([
