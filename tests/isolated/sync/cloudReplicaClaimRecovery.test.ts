@@ -10,7 +10,7 @@ import { UserDataSchema } from '../../../src/lib/schema';
 import { sealCloudDocument } from '../../../src/lib/sync/cloudDocumentCipher';
 import { readAuthenticatedCloudflareCheckpoint } from '../../../src/lib/sync/cloudReplicaCheckpoint';
 import { stageCloudflareReplicaClaim, resumeCloudflareReplicaClaim } from '../../../src/lib/sync/cloudReplicaClaimRecovery';
-import { CloudReplicaMutationReconciliationRequiredError, CloudReplicaTransportError, type CloudReplicaClaimMutationOutcome, type CloudReplicaControlSnapshot } from '../../../src/lib/sync/cloudReplicaTransport';
+import { CloudReplicaMutationReconciliationRequiredError, CloudReplicaTransportError, type CloudReplicaClaimMutationOutcome, type CloudReplicaControlSnapshot, type CloudReplicaMutationResult } from '../../../src/lib/sync/cloudReplicaTransport';
 import { initializeLocal, readLocal, commitLocal, adoptReplicaCheckpoint } from '../../../src/lib/sync/localRepository';
 import { createAndMigrateVault } from '../../../src/lib/sync/secureArchiveMigration';
 import { lockAllVaults, unlockVaultForOwner } from '../../../src/lib/sync/secureArchiveSession';
@@ -77,13 +77,13 @@ function transport(snapshot: (revision: number) => Promise<{
         slot: 's01', replicaId: 'durable-new-device', generation: 1,
         checkpointAtMs: now, leaseUntilMs: now + 86400000,
     };
-    const mutationResult = {
+    const mutationResult: CloudReplicaMutationResult = {
         mutationId: '', action: 'register' as const, revision: 1, currentRevision: 1,
         reconciliationRequired: false, replayed: true, baseSeq: 0, replica,
     };
     return {
         replica,
-        replayStoredClaim: vi.fn(async (claim: { mutationId: string }, csrf: string) => {
+        replayStoredClaim: vi.fn(async (claim: { mutationId: string }, csrf: string): Promise<CloudReplicaMutationResult> => {
             expect(csrf).toBe('session-csrf');
             return { ...mutationResult, mutationId: claim.mutationId };
         }),
