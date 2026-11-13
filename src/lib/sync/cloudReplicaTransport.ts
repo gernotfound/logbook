@@ -1,5 +1,5 @@
 import type { SealedCloudDocument } from './cloudDocumentCipher';
-import type { ReplicaIdentity } from './replicaProtocol';
+import { parseReplicaControl, type ReplicaControl, type ReplicaIdentity } from './replicaProtocol';
 
 /**
  * Network-only boundary: no IndexedDB writes or ACK decisions live here.
@@ -31,6 +31,13 @@ export interface CloudReplicaCompleteScan {
 const SCAN_PAGE_SIZE = 8;
 const MAX_SCAN_PAGES = 1024;
 const DOCUMENT_PATH = /^(?:(?:history_months|nutrition_months)\/\d{4}-(?:0[1-9]|1[0-2]))?$/;
+
+export interface CloudReplicaControlSnapshot {
+    revision: number;
+    fenceEpoch: number;
+    consentRevision: number;
+    replicas: ReplicaControl['replicas'];
+}
 
 export interface CloudReplicaReceipt {
     revision: number;
@@ -72,7 +79,7 @@ function safeRevision(value: unknown): value is number {
  * validates identity, health consent and session-bound CSRF independently.
  */
 export function createCloudflareReplicaTransport(send: typeof fetch = fetch) {
-    async function post(route: 'read' | 'scan' | 'commit' | 'receipt', body: unknown, csrfToken?: string): Promise<unknown> {
+    async function post(route: 'read' | 'scan' | 'control' | 'commit' | 'receipt', body: unknown, csrfToken?: string): Promise<unknown> {
         let response: Response;
         try {
             response = await send('/v1/sync/' + route, {
@@ -99,6 +106,27 @@ export function createCloudflareReplicaTransport(send: typeof fetch = fetch) {
     }
 
     return {
+        async control(): Promise<CloudReplicaControlSnapshot> {
+            const raw = await post('control', {});
+            if (!isRecord(raw) || !safeRevision(raw.revision)
+                || !safeRevision(raw.fenceEpoch) || raw.fenceEpoch < 1
+                || !safeRevision(raw.consentRevision) || raw.consentRevision < 1
+                || !isRecord(raw.replicas)) throw new CloudReplicaTransportError(0);
+            try {
+                const parsed = parseReplicaControl({
+                    protocolVersion: 3, consentRevision: raw.consentRevision,
+                    replicas: raw.replicas, mutation: { slot: 's00', action: 'checkpoint' },
+                });
+                return {
+                    revision: raw.revision, fenceEpoch: raw.fenceEpoch,
+                    consentRevision: raw.consentRevision,
+                    replicas: parsed.replicas,
+                };
+            } catch {
+                throw new CloudReplicaTransportError(0);
+            }
+        },
+
         // A partial page must never be published as a complete cloud checkpoint.
         // A concurrent write forces a 409 (and a fresh scan), never a silent
         // merge against an inconsistent collection of monthly documents.
