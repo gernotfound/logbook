@@ -55,6 +55,26 @@ CREATE TABLE sync_receipts (
   PRIMARY KEY (uid, batch_id)
 );
 
+-- A new session may reuse a slot only with a higher generation and a
+-- nondecreasing sequence. The writer never resets a replica's causal actor.
+CREATE TRIGGER sync_replica_no_regression BEFORE UPDATE ON sync_replicas
+WHEN NEW.uid != OLD.uid OR NEW.slot != OLD.slot
+  OR NEW.generation < OLD.generation OR NEW.last_seq < OLD.last_seq
+  OR (OLD.status = 'retired' AND NEW.status = 'active'
+      AND NEW.generation <= OLD.generation)
+BEGIN
+  SELECT RAISE(ABORT, 'replica-regression');
+END;
+
+-- Every encrypted write AND future checkpoint/retirement must advance this
+-- revision. A non-increasing revision would let a stale multi-page snapshot
+-- or a stale stable-frontier computation pass the client-side compare.
+CREATE TRIGGER sync_state_monotone BEFORE UPDATE ON sync_state
+WHEN NEW.revision <= OLD.revision
+BEGIN
+  SELECT RAISE(ABORT, 'sync-revision-regression');
+END;
+
 -- The first statement of each D1 batch MUST be the receipt insert.
 -- A failed compare must abort the whole batch, not silently update zero rows.
 -- SQLite serialization makes the following document/control writes atomic.
