@@ -11,6 +11,13 @@
 - **Non eseguito:** convalida Mailjet del dominio, read-back esito SPF/DKIM nella console Mailjet, chiavi API, invio HTTPS, lettura del MIME, test Gmail/Proton, integrazione Workers/Auth, revoca chiavi Brevo o dismissione account. CF-00 B2 resta **NON-GO**.
 - **Ritiro e pulizia contesto:** dopo il collaudo Mailjet e l'inventario live, rimuovere progressivamente Brevo dalle configurazioni e dai riferimenti **operativi correnti**, aggiornando registro, runbook, regole/issue pertinenti e test/codice eventuali; mantenere la traccia delle prove storiche in GitHub/issue senza presentarle come configurazione attiva. L'account Brevo e i record DNS non sono da eliminare anticipatamente.
 
+## Intervento Cloudflare autorizzato e verificato — 13/11/2026
+
+- **Autorizzazione specifica owner:** modificare esclusivamente il nome del singolo TXT di verifica Mailjet nella zona DNS Cloudflare `thelogbook.me`, mantenendo contenuto, TTL e tutti gli altri record invariati.
+- **Operazione eseguita tramite API Cloudflare (PATCH):** nome da `mailjet._b360c0fc.thelogbook.me` a `mailjet._b360c0fc.notify.thelogbook.me`; nessun record creato/eliminato. Il valore del TXT, TTL 3600 e proxy status risultano invariati.
+- **Read-back provider dopo PATCH:** record corretto presente una sola volta, nome errato assente; inventario DNS prima/dopo di 18 record, tutti gli altri 17 invariati (compresi DKIM Brevo, MX/SPF/DKIM IONOS e DMARC).
+- **Ancora da verificare:** la convalida da Mailjet con `Option 2 > Validate my domain`, autenticazione SPF/DKIM visualizzata nel pannello, tracciamento post-salvataggio, invio e MIME reale. La risposta Cloudflare non prova che Mailjet abbia validato il dominio o che la DNS propagation sia universalmente completata. Nessun nuovo GO per invio Auth o ritiro Brevo.
+
 ## Requisiti di prodotto e gate
 
 - Invii transazionali a indirizzi arbitrari **senza pixel di apertura**, monitoraggio delle aperture, riscrittura degli URL e tracking dei clic. Gli eventuali link di verifica/reset con token devono raggiungere solo l'origine applicativa prevista; i sistemi antivirus dei destinatari non devono consumare i token prima dell'utente.
