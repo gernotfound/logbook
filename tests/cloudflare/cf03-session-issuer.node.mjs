@@ -39,7 +39,7 @@ function fixture() {
   const now = Date.now();
   sqlite.prepare('INSERT INTO auth_principals(uid,status,verified_at_ms,auth_epoch) VALUES (?,?,?,?)')
     .run('verified-a', 'active', now - 10000, 1);
-  return { db, sqlite, now };
+  return { db, sqlite };
 }
 
 function tokens(issued) {
@@ -52,7 +52,7 @@ function tokens(issued) {
 }
 
 void test('issuer creates 32-byte random session and host-only CSRF cookies after verified principal', async () => {
-  const { db, sqlite, now } = fixture();
+  const { db, sqlite } = fixture();
   try {
     const before = Date.now();
     const first = await issueVerifiedSession(db, 'verified-a');
@@ -78,7 +78,7 @@ void test('issuer creates 32-byte random session and host-only CSRF cookies afte
 });
 
 void test('a verified account can create a session before initial health consent, not sync', async () => {
-  const { db, sqlite, now } = fixture();
+  const { db, sqlite } = fixture();
   try {
     const issued = await issueVerifiedSession(db, 'verified-a');
     assert.equal(tokens(issued).session.length, 43);
@@ -94,14 +94,14 @@ void test('unverified, disabled, deleted, future-verified and invalid principal 
     "UPDATE auth_principals SET verified_at_ms=9999999999999 WHERE uid='verified-a'",
   ];
   for (const mutation of mutations) {
-    const { db, sqlite, now } = fixture();
+    const { db, sqlite } = fixture();
     try {
       sqlite.exec(mutation);
       await assert.rejects(issueVerifiedSession(db, 'verified-a'), SessionIssuanceError);
       assert.equal(sqlite.prepare('SELECT COUNT(*) AS count FROM auth_sessions').get().count, 0);
     } finally { sqlite.close(); }
   }
-  const { db, sqlite, now } = fixture();
+  const { db, sqlite } = fixture();
   try {
     for (const uid of ['', '/not-owner', ' verified-a', 'other-owner']) {
       await assert.rejects(issueVerifiedSession(db, uid), SessionIssuanceError);
@@ -126,7 +126,7 @@ void test('a provider error or missing affected-row proof never produces a cooki
 });
 
 void test('newly issued cookie is valid only under current consent and epoch; CSRF is session-bound', async () => {
-  const { db, sqlite, now } = fixture();
+  const { db, sqlite } = fixture();
   try {
     const issued = await issueVerifiedSession(db, 'verified-a');
     const { session, csrf } = tokens(issued);
