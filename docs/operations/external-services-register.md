@@ -35,9 +35,22 @@ I contratti correnti sono governati da [AGENTS](../../AGENTS.md): [Cifratura](..
 | Vercel Functions / Cron | ACTIVE | backend trusted lifecycle, consenso/diritti, chiave cloud e cron; il precedente redirect root verso Firebase è stato rimosso in PR #1052 (stato live da verificare nel provider) | Vercel + `vercel.json` + PR #1052 |
 | Vercel Analytics / Speed Insights | RITIRATO | non fanno più parte del frontend Production | codice + cronologia cutover |
 | Google Analytics / GA4 | DISMESSO | Nessuna dipendenza runtime; integrazione e preferenza client rimosse, collegamento Firebase sciolto e proprietà dismessa | PR #320 + operazioni Google/Firebase/GitHub confermate dal product owner |
+| Brevo — email `notify.thelogbook.me` | EXTERNAL-ONLY / VERIFY-LIVE | dominio e mittente autenticati nel provider, consegna email di prova Gmail/Proton verificata; **NON** collegato al nuovo Auth/Worker e tracking pixel anonimo ancora registrato | [Registro prove email CF-00](brevo-transactional-email-onboarding.md) + issue #1054/#1057 |
 | GitHub Actions / CodeQL / ruleset | ACTIVE | repository pubblico, PR, CI e SAST canonico | GitHub |
 | Snyk | OPTIONAL | controllo security supplementare | integrazione Snyk esterna |
 | Google Search Console | EXTERNAL-ONLY | verifica proprietà, sitemap e indicizzazione | Search Console + asset SEO repo |
+
+## Email transazionali Cloudflare — checkpoint 13/11/2026 (CF-00 B2, ancora NO-GO)
+
+**Provider provato:** Brevo Free, dominio mittente `notify.thelogbook.me` e indirizzo `no-reply@notify.thelogbook.me`. Lo screenshot del proprietario mostra dominio **Autenticato** (codice TXT, due DKIM e DMARC) e mittente **Verificato**. Cloudflare DNS **read-only** confermava 15 record zona, tra cui TXT di verifica, due CNAME DKIM in DNS only e TXT `_dmarc.notify` con `p=none`; sono rimasti i record MX/SPF/DMARC IONOS dell'apex. `p=none` è monitoraggio, non protezione dal falsificare il mittente.
+
+**Collaudo email via UI Brevo:** invii di test del 13/11 arrivati e registrati **Consegnata** sia su Gmail sia su Proton. Il ritardo dei primi test Gmail si è poi risolto; non attribuirgli una causa non provata. Le intestazioni fornite dal proprietario per Proton confermano `spf=pass` (envelope Brevo), `dkim=pass` (firma `notify.thelogbook.me` **allineata**), `dmarc=pass` e trasporto TLS 1.3. **Non sono state testate le API HTTPS dal Worker, né il flusso Auth email/reset.** Non usare il successo della UI per dichiarare valida l'Auth.
+
+**Decisione privacy:** su richiesta dell'owner è stata abilitata, **secondo conferma del proprietario ma senza screenshot read-back**, la gestione consenso tracking per destinatario con impostazioni *controllo = Sì* e *contatti a consenso sconosciuto = No*. Il successivo test Brevo ha registrato comunque **Prima apertura — Anonimizzato**: i log mostrano che l'anonimizzazione riduce la collegabilità, **non elimina la misurazione delle aperture**. Il pixel è eliminabile con `removeTrackingPixel:true` soltanto su Enterprise secondo changelog Brevo del 29/10/2026; **nessun upgrade autorizzato**. Restano da verificare retention log/anteprime (default Brevo indefinito), mancata riscrittura dei link di account/reset, privacy/DPA e API con errori/quote/antiabuso.
+
+**Scelta provider ancora APERTA:** in ricerca documentale sono emerse alternative Free, **Mailjet** (API, 6.000 email/mese, 200/giorno, controllo `TrackOpens/TrackClicks:disabled` e data center UE dichiarati; quota contatti/queue da verificare) e **Resend** (3.000/mese, 100/giorno, tracking OFF per default, dati conservati negli USA). Nessun account, DNS o test Mailjet/Resend attivato. Brevo documenta anche email API `textContent` senza HTML, ma è **ipotesi da verificare** che una mail realmente consegnata sia priva di pixel; non considerarla una soluzione provata.
+
+**Perimetro:** nessuna modifica Auth, Worker, DNS Production, credenziali o billing da questa attività documentale. Il futuro canale deve inviare tramite API HTTPS server-side con secret isolato, nessun dato salute, accettazione distinta da consegna, rate limit/quota e fallimento sicuro. Riferimenti esatti: [documentazione email CF-00](brevo-transactional-email-onboarding.md), [issue #1054](https://github.com/gernotfound/logbook/issues/1054), [issue #1057](https://github.com/gernotfound/logbook/issues/1057).
 
 ## Revisione critica dei checkpoint di migrazione — 12/11/2026
 
