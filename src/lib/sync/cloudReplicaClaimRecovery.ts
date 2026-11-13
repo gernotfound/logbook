@@ -2,7 +2,7 @@ import equal from 'fast-deep-equal';
 import type { AuthenticatedCloudflareCheckpoint } from './cloudReplicaCheckpoint';
 import { readAuthenticatedCloudflareCheckpoint } from './cloudReplicaCheckpoint';
 import {
-    CloudReplicaMutationReconciliationRequiredError,
+    CloudReplicaMutationReconciliationRequiredError, CloudReplicaTransportError,
     type CloudReplicaControlSnapshot, type CloudReplicaMutationResult, type createCloudflareReplicaTransport,
 } from './cloudReplicaTransport';
 import { parseCloudflareReplicaClaimIntent, type CloudflareReplicaClaimIntent } from './cloudReplicaClaimRecord';
@@ -15,7 +15,7 @@ import { mergeVectors, parseSyncMeta } from './semanticProjection';
 import { validateLocalEnvelope } from './localEnvelopeValidation';
 
 type Guard = () => boolean;
-type Transport = Pick<ReturnType<typeof createCloudflareReplicaTransport>, 'replayStoredClaim' | 'control' | 'scanAll'>;
+type Transport = Pick<ReturnType<typeof createCloudflareReplicaTransport>, 'replayStoredClaim' | 'claimMutationOutcome' | 'control' | 'scanAll'>;
 
 function current(guard: Guard): void {
     if (!guard()) throw new Error('Claim D1 invalidato dalla sessione: archivio e journal preservati.');
@@ -80,6 +80,64 @@ export async function stageCloudflareReplicaClaim(
 }
 
 /**
+ * Rebase a stale claim only after the primary DB has atomically observed the
+ * original mutation absent AND its expected revision permanently surpassed.
+ * The new request is sealed locally before any subsequent network attempt;
+ * an ambiguous 409 or a failed authenticated scan preserves the original.
+ */
+async function rebaseUncommittedClaim(
+    owner: string,
+    uid: string,
+    intent: CloudflareReplicaClaimIntent,
+    accountKey: Uint8Array,
+    transport: Transport,
+    csrfToken: string,
+    guard: Guard,
+): Promise<'retry-staged' | 'reconciliation-required'> {
+    const outcome = await transport.claimMutationOutcome(intent, csrfToken);
+    current(guard);
+    if (outcome.outcome !== 'not-committed') return 'reconciliation-required';
+
+    const control = await transport.control();
+    current(guard);
+    if (control.revision !== outcome.currentRevision
+        || control.revision <= intent.expectedRevision
+        || control.fenceEpoch !== intent.expectedFenceEpoch
+        || control.consentRevision !== intent.consentRevision) return 'reconciliation-required';
+
+    const verified = await readAuthenticatedCloudflareCheckpoint(
+        () => transport.scanAll(), uid, accountKey, intent.consentRevision, guard,
+    );
+    current(guard);
+    if (verified.revision !== control.revision
+        || verified.fenceEpoch !== control.fenceEpoch
+        || verified.consentRevision !== control.consentRevision) {
+        return 'reconciliation-required';
+    }
+    const again = await transport.control();
+    current(guard);
+    if (!equal(control, again)) return 'reconciliation-required';
+
+    const next = parseCloudflareReplicaClaimIntent({
+        ...intent, mutationId: crypto.randomUUID(),
+        expectedRevision: control.revision, checkpointClock: snapshotClock(verified),
+    }, intent.consentRevision);
+    await updateArchiveRecord<unknown>(owner, raw => {
+        current(guard);
+        const saved = validateLocalEnvelope(raw, owner);
+        if (!saved || saved.cloudIntegrityFence || saved.cloudflareDelivery
+            || saved.cloudflareReplicaRetirement || saved.consentRevision !== intent.consentRevision
+            || !equal(saved.cloudflareReplicaClaim, intent)
+            || !equal(tuple(saved.replica), intent.currentReplica)) {
+            throw new Error('Rebase claim D1 concorrente o non autorizzato: intent e journal preservati.');
+        }
+        return { ...saved, cloudflareReplicaClaim: next, revision: saved.revision + 1 };
+    });
+    current(guard);
+    return 'retry-staged';
+}
+
+/**
  * A historical receipt is proof of the original claim only, not a live grant.
  * Adoption remains safe after an unrelated control revision solely when the
  * original incarnation is still active and unchanged, a fresh complete AEAD
@@ -93,7 +151,7 @@ export async function resumeCloudflareReplicaClaim(
     transport: Transport,
     csrfToken: string,
     guard: Guard,
-): Promise<'idle' | 'adopted' | 'reconciliation-required'> {
+): Promise<'idle' | 'adopted' | 'retry-staged' | 'reconciliation-required'> {
     const { owner, uid } = account(ownerInput);
     current(guard);
     if (!(accountKey instanceof Uint8Array) || accountKey.length !== 32 || !csrfToken) {
@@ -114,7 +172,12 @@ export async function resumeCloudflareReplicaClaim(
         receipt = await transport.replayStoredClaim(intent, csrfToken);
     } catch (error) {
         current(guard);
-        if (!(error instanceof CloudReplicaMutationReconciliationRequiredError)) throw error;
+        if (!(error instanceof CloudReplicaMutationReconciliationRequiredError)) {
+            if (error instanceof CloudReplicaTransportError && error.status === 409) {
+                return rebaseUncommittedClaim(owner, uid, intent, accountKey, transport, csrfToken, guard);
+            }
+            throw error;
+        }
         // The transport has already validated the request-bound historical
         // receipt; only the guarded full AEAD scan can authorize adoption.
         receipt = error.historicalReceipt;

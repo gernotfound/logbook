@@ -26,6 +26,7 @@ class D1SqliteAdapter {
     this.sqlite.exec('PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 3000;');
   }
   prepare(sql) { return new Statement(this.sqlite, sql); }
+  withSession(mode) { assert.equal(mode, 'first-primary'); return this; }
   async batch(statements) {
     this.sqlite.exec('BEGIN IMMEDIATE');
     try {
@@ -320,6 +321,51 @@ void test('lost acknowledgement of replica registration is recovered from durabl
   assert.equal(outcome.body.replayed, true);
   assert.equal(db.sqlite.prepare('SELECT revision FROM sync_state').get().revision, 1);
   assert.equal(db.sqlite.prepare('SELECT COUNT(*) AS n FROM sync_replica_mutations').get().n, 1);
+}));
+
+void test('primary D1 claim outcome proves non-commit only after irreversible revision advance', () => withFixture(async db => {
+  const old = claim('mutation0000000400', 0, 'device-not-registered');
+  assert.deepEqual(await call(db, 'replica/status', old),
+    { status: 200, body: { outcome: 'inconclusive', currentRevision: 0 } });
+  assert.equal((await call(db, 'replica/claim', claim('mutation0000000401', 0, 'other-device'))).status, 200);
+  assert.deepEqual(await call(db, 'replica/claim', old),
+    { status: 409, body: { error: 'replica-fenced-or-conflict' } });
+  assert.deepEqual(await call(db, 'replica/status', old),
+    { status: 200, body: { outcome: 'not-committed', currentRevision: 1 } });
+  assert.equal(db.sqlite.prepare('SELECT COUNT(*) AS n FROM sync_replica_mutations WHERE mutation_id = ?')
+    .get(old.mutationId).n, 0);
+  // The original stale CAS cannot subsequently register a second replica.
+  assert.equal((await call(db, 'replica/claim', old)).status, 409);
+  assert.equal(db.sqlite.prepare('SELECT COUNT(*) AS n FROM sync_replicas').get().n, 2);
+}));
+
+void test('a committed original mutation never reports not-committed after another revision', () => withFixture(async db => {
+  const original = claim('mutation0000000410', 0, 'first-device');
+  assert.equal((await call(db, 'replica/claim', original)).status, 200);
+  assert.deepEqual(await call(db, 'replica/status', original),
+    { status: 200, body: { outcome: 'committed', currentRevision: 1 } });
+  assert.equal((await call(db, 'replica/claim', claim('mutation0000000411', 1, 'second-device'))).status, 200);
+  assert.deepEqual(await call(db, 'replica/status', original),
+    { status: 200, body: { outcome: 'committed', currentRevision: 2 } });
+  assert.deepEqual(await call(db, 'replica/status', { ...original, candidateReplicaId: 'forged-device' }),
+    { status: 409, body: { error: 'mutation-id-conflict' } });
+  assert.equal((await call(db, 'replica/claim', original)).body.replayed, true);
+  assert.equal(db.sqlite.prepare('SELECT COUNT(*) AS n FROM sync_replica_mutations').get().n, 2);
+}));
+
+void test('claim non-commit proof is strictly session/consent/CSRF-gated and requires a primary', () => withFixture(async db => {
+  const original = claim('mutation0000000420', 0, 'new-device');
+  assert.equal((await call(db, 'replica/status', original, { env: { DB: db, API_ORIGIN: origin } })).status, 503);
+  assert.equal((await call(db, 'replica/status', original, { env: makeEnv(db, { csrfVerified: false }) })).status, 403);
+  assert.equal((await call(db, 'replica/status', { ...original, consentRevision: 2 })).status, 403);
+  assert.equal((await call(db, 'replica/status', { ...original, expectedFenceEpoch: 7 })).status, 403);
+  assert.equal((await call(db, 'replica/status', { ...original, mutationId: 'tiny' })).status, 400);
+  const withSession = db.withSession;
+  db.withSession = undefined;
+  assert.deepEqual(await call(db, 'replica/status', original),
+    { status: 503, body: { error: 'cloud-unavailable' } });
+  db.withSession = withSession;
+  assert.equal(db.sqlite.prepare('SELECT COUNT(*) AS n FROM sync_replica_mutations').get().n, 0);
 }));
 
 void test('first encrypted root/month write, coherent read and durable receipt replay', () => withFixture(async db => {

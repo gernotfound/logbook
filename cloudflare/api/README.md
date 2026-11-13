@@ -52,8 +52,19 @@ Firebase/Firestore writer, IndexedDB journal and encrypted vault remain active.
   intent. A historical receipt after an unrelated control revision can pass
   ONLY these same tests; changed cloud documents, retired/reused slots, lease
   or consent mismatch preserve the intent and journal. No business ACK is
-  inferred from a claim receipt. An automatic fresh claim under a new
-  mutationId after an uncommitted 409 and production wiring remain TODO.
+  inferred from a claim receipt. On HTTP 409 with NO original receipt, the
+  read-only POST /v1/sync/replica/status executes a SINGLE primary D1 SELECT
+  joining the account revision and the mutation ledger under trusted
+  Auth/consent/epoch/CSRF. Only `not-committed` after revision advance
+  proves the original CAS can never commit. The client then performs a new
+  complete ADK-open scan and two identical control reads, replacing the
+  original intent with a NEW mutationId and checkpoint clock in the SAME
+  encrypted IndexedDB record while preserving the business journal.
+  It returns `retry-staged`: this is NOT a remotely committed claim;
+  another guarded resume sends the new immutable request. `committed`,
+  `inconclusive`, stale/corrupt scans or races preserve the old intent.
+  Historical successful claims with changed membership, automatic
+  retirement rebase, production Auth wiring and provider HTTP proof remain TODO.
 - Candidate durable retirement workflow: `cloudReplicaRetirementRecovery.ts`
   writes an immutable expired-lease target/mutationId into the same
   owner-encrypted vault before sending anything. `replayStoredRetirement()`

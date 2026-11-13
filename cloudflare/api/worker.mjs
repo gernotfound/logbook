@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { commitEncryptedBatch, readAccessState, readDocumentPage, readReceipt, readReplicaControl, readSnapshot } from './d1-document-store.mjs';
 import {
   mutationResponse, prepareReplicaClaim, prepareReplicaRetirement, readPublicCheckpointClock,
-  readReplicaMutationReceipt, writeReplicaMutation,
+  readReplicaMutationReceipt, readReplicaMutationOutcome, writeReplicaMutation,
 } from './replica-maintenance.mjs';
 
 const MAX_DOCUMENT_BYTES = 950000;
@@ -175,7 +175,7 @@ function validateSealedBatch(input) {
 async function handler(request, env) {
   const url = new URL(request.url);
   const route = url.pathname;
-  const validRoutes = new Set(['/v1/sync/read', '/v1/sync/scan', '/v1/sync/control', '/v1/sync/replica/claim', '/v1/sync/replica/retire', '/v1/sync/commit', '/v1/sync/receipt']);
+  const validRoutes = new Set(['/v1/sync/read', '/v1/sync/scan', '/v1/sync/control', '/v1/sync/replica/claim', '/v1/sync/replica/retire', '/v1/sync/replica/status', '/v1/sync/commit', '/v1/sync/receipt']);
   if (!validRoutes.has(route)) return reply({ error: 'not-found' }, 404);
   if (request.method !== 'POST') {
     return reply({ error: 'method-not-allowed' }, 405);
@@ -191,7 +191,7 @@ async function handler(request, env) {
     return reply({ error: 'storage-unavailable' }, 503);
   }
   const claims = await authorize(request, env, route,
-    route === '/v1/sync/commit' || route === '/v1/sync/replica/claim' || route === '/v1/sync/replica/retire');
+    route === '/v1/sync/commit' || route === '/v1/sync/replica/claim' || route === '/v1/sync/replica/retire' || route === '/v1/sync/replica/status');
   const uid = claims.uid;
   const consentRevision = claims.healthConsentRevision;
   const fenceEpoch = claims.fenceEpoch;
@@ -214,6 +214,30 @@ async function handler(request, env) {
     const control = await readReplicaControl(env.DB, uid, consentRevision, fenceEpoch);
     if (!control) throw new BadInput('access-revoked', 403);
     return reply(control);
+  }
+  if (route === '/v1/sync/replica/status') {
+    const parsed = claimInput.safeParse(raw);
+    if (!parsed.success) throw new BadInput('invalid-input', 400);
+    const input = parsed.data;
+    if (input.consentRevision !== consentRevision
+      || input.expectedFenceEpoch !== fenceEpoch) throw new BadInput('access-revoked', 403);
+    // Only the primary can establish non-commit under a concurrent lost ACK.
+    // This single SELECT prevents a receipt/revision time-of-check race.
+    const row = await readReplicaMutationOutcome(env.DB, uid, consentRevision, fenceEpoch, input.mutationId);
+    if (!row) throw new BadInput('access-revoked', 403);
+    if (row.existing_hash !== null) {
+      if (row.existing_hash !== await payloadHash(input)
+        || row.existing_consent_revision !== consentRevision
+        || row.existing_fence_epoch !== fenceEpoch
+        || row.existing_expected_revision !== input.expectedRevision) {
+        throw new BadInput('mutation-id-conflict', 409);
+      }
+      return reply({ outcome: 'committed', currentRevision: row.current_revision });
+    }
+    return reply({
+      outcome: row.current_revision > input.expectedRevision ? 'not-committed' : 'inconclusive',
+      currentRevision: row.current_revision,
+    });
   }
   if (route === '/v1/sync/replica/claim' || route === '/v1/sync/replica/retire') {
     const isClaim = route === '/v1/sync/replica/claim';

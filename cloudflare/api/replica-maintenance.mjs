@@ -89,6 +89,29 @@ export async function readReplicaMutationReceipt(db, uid, consentRevision, fence
     .bind(uid, mutationId, consentRevision, fenceEpoch).first();
 }
 
+/**
+ * A single primary SQL snapshot reads BOTH the authoritative revision and the
+ * mutation ledger. A 409 alone cannot prove absence: a concurrent original
+ * request may have committed between a receipt lookup and a revision read.
+ * Once revision advanced without that ledger row, the original CAS can never
+ * commit in the same consent/epoch, even if its HTTP request is still running.
+ */
+export async function readReplicaMutationOutcome(db, uid, consentRevision, fenceEpoch, mutationId) {
+  if (typeof db.withSession !== 'function') throw new Error('primary-d1-session-unavailable');
+  const primary = db.withSession('first-primary');
+  return primary.prepare(`SELECT s.revision AS current_revision,
+    e.request_hash AS existing_hash,
+    e.expected_revision AS existing_expected_revision,
+    e.consent_revision AS existing_consent_revision,
+    e.fence_epoch AS existing_fence_epoch
+    FROM sync_subjects a
+    JOIN sync_state s ON s.uid = a.uid
+    LEFT JOIN sync_replica_mutations e ON e.uid = a.uid AND e.mutation_id = ?
+    WHERE a.uid = ? AND a.status = 'active'
+      AND a.consent_revision = ? AND a.fence_epoch = ?`)
+    .bind(mutationId, uid, consentRevision, fenceEpoch).first();
+}
+
 export function mutationResponse(mutationId, receipt, replayed) {
   return {
     mutationId, action: receipt.action, revision: receipt.committed_revision,

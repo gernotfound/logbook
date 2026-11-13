@@ -72,6 +72,11 @@ export interface CloudReplicaMutationResult {
     reconciliationRequired: boolean;
 }
 
+export interface CloudReplicaClaimMutationOutcome {
+    outcome: 'committed' | 'not-committed' | 'inconclusive';
+    currentRevision: number;
+}
+
 export interface CloudReplicaReceipt {
     revision: number;
     lastSeq: number;
@@ -149,7 +154,7 @@ function parseMutationResponse(
  * validates identity, health consent and session-bound CSRF independently.
  */
 export function createCloudflareReplicaTransport(send: typeof fetch = fetch) {
-    async function post(route: 'read' | 'scan' | 'control' | 'replica/claim' | 'replica/retire' | 'commit' | 'receipt', body: unknown, csrfToken?: string): Promise<unknown> {
+    async function post(route: 'read' | 'scan' | 'control' | 'replica/claim' | 'replica/retire' | 'replica/status' | 'commit' | 'receipt', body: unknown, csrfToken?: string): Promise<unknown> {
         let response: Response;
         try {
             response = await send('/v1/sync/' + route, {
@@ -255,6 +260,24 @@ export function createCloudflareReplicaTransport(send: typeof fetch = fetch) {
                 throw new CloudReplicaMutationReconciliationRequiredError(confirmed);
             }
             return confirmed;
+        },
+
+        // This read-only primary SQL proof is distinct from a 409: status=409
+        // alone does not exclude an in-flight successful original mutation.
+        async claimMutationOutcome(
+            body: CloudReplicaClaimRequest,
+            csrfToken: string,
+        ): Promise<CloudReplicaClaimMutationOutcome> {
+            if (!csrfToken) throw new CloudReplicaTransportError(0);
+            const value = await post('replica/status', body, csrfToken);
+            if (!isRecord(value) || !safeRevision(value.currentRevision)
+                || (value.outcome !== 'committed' && value.outcome !== 'not-committed'
+                    && value.outcome !== 'inconclusive')
+                || (value.outcome === 'not-committed' && value.currentRevision <= body.expectedRevision)
+                || (value.outcome === 'committed' && value.currentRevision <= body.expectedRevision)) {
+                throw new CloudReplicaTransportError(0);
+            }
+            return value as unknown as CloudReplicaClaimMutationOutcome;
         },
 
         // The exact retirement request must first be staged in the encrypted

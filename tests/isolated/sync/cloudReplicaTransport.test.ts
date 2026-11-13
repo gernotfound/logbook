@@ -63,6 +63,40 @@ describe('isolated Cloudflare document transport', () => {
         await expect(absent.receipt(batch)).resolves.toBeNull();
     });
 
+    it('requires a primary SQL non-commit outcome before rotating a durable claim', async () => {
+        const claim = {
+            mutationId: 'mutation0000000800', expectedRevision: 1,
+            expectedFenceEpoch: 5, consentRevision: 1,
+            candidateReplicaId: 'candidate-device', currentReplica: null,
+            checkpointClock: { s00: 2 },
+        };
+        const fetcher = vi.fn(async () =>
+            new Response(JSON.stringify({ outcome: 'not-committed', currentRevision: 3 })));
+        const remote = createCloudflareReplicaTransport(fetcher as typeof fetch);
+        await expect(remote.claimMutationOutcome(claim, 'csrf')).resolves.toEqual({
+            outcome: 'not-committed', currentRevision: 3,
+        });
+        expect(fetcher).toHaveBeenCalledWith('/v1/sync/replica/status',
+            expect.objectContaining({ method: 'POST', credentials: 'include',
+                headers: expect.objectContaining({ 'X-CSRF-Token': 'csrf' }) }));
+        expect(JSON.parse((fetcher.mock.calls[0] as unknown as [string, RequestInit])[1].body as string))
+            .toEqual(claim);
+        for (const invalid of [
+            { outcome: 'not-committed', currentRevision: 1 },
+            { outcome: 'committed', currentRevision: 0 },
+            { outcome: 'not-committed', currentRevision: '4' },
+            { outcome: 'unknown', currentRevision: 3 },
+        ]) {
+            const wrong = createCloudflareReplicaTransport(vi.fn(async () =>
+                new Response(JSON.stringify(invalid))) as typeof fetch);
+            await expect(wrong.claimMutationOutcome(claim, 'csrf'))
+                .rejects.toBeInstanceOf(CloudReplicaTransportError);
+        }
+        const conflict = createCloudflareReplicaTransport(vi.fn(async () =>
+            new Response(JSON.stringify({ error: 'mutation-id-conflict' }), { status: 409 })) as typeof fetch);
+        await expect(conflict.claimMutationOutcome(claim, 'csrf')).rejects.toMatchObject({ status: 409 });
+    });
+
     it('loads an authenticated replica register and rejects malformed clocks', async () => {
         const content = { revision: 4, fenceEpoch: 7, consentRevision: 1,
             replicas: { s00: {
