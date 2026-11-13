@@ -8,6 +8,7 @@ import { xchacha20poly1305 } from '@noble/ciphers/chacha.js';
 import worker from '../../cloudflare/api/worker.mjs';
 
 const migration = readFileSync(new URL('../../cloudflare/api/migrations/0001_encrypted_replica.sql', import.meta.url), 'utf8');
+const identityMigration = readFileSync(new URL('../../cloudflare/api/migrations/0002_reject_reused_replica_ids.sql', import.meta.url), 'utf8');
 const rollback = readFileSync(new URL('../../cloudflare/api/rollback/0001_encrypted_replica_down.sql', import.meta.url), 'utf8');
 const origin = 'https://candidate.invalid';
 const owner = 'cf02-synthetic-owner';
@@ -48,6 +49,7 @@ async function withFixture(run) {
   const second = new D1SqliteAdapter(filename);
   try {
     db.sqlite.exec(migration);
+    db.sqlite.exec(identityMigration);
     db.sqlite.prepare('INSERT INTO sync_subjects VALUES (?, ?, ?, ?)').run(owner, 'active', 1, 5);
     db.sqlite.prepare('INSERT INTO sync_state (uid, revision) VALUES (?, 0)').run(owner);
     const now = Date.now();
@@ -179,6 +181,38 @@ void test('new replica enrollment commits one guarded registration and is replay
   write.documents[0].document._sync.clock = { s01: 1 };
   assert.equal((await call(db, 'commit', write)).status, 200);
   assert.equal(db.sqlite.prepare("SELECT last_seq FROM sync_replicas WHERE uid=? AND slot='s01'").get(owner).last_seq, 1);
+}));
+
+void test('historical replica ID cannot be reused for registration or expired-slot replacement', () => withFixture(async db => {
+  const reusedId = 'prior-replica-id-0001';
+  assert.equal((await call(db, 'replica/claim', claim('mutation0000000600', 0, reusedId))).status, 200);
+
+  // Synthetically advance the register to a successor generation. The old
+  // mutation ledger stays intact while the old ID leaves the live register.
+  const now = Date.now();
+  db.sqlite.prepare("UPDATE sync_replicas SET replica_id = ?, generation = 2 WHERE uid = ? AND slot = 's01'")
+    .run('successor-device-0001', owner);
+  db.sqlite.prepare('UPDATE sync_state SET revision = revision + 1 WHERE uid = ?').run(owner);
+  const registeredAgain = await call(db, 'replica/claim', claim('mutation0000000601', 2, reusedId));
+  assert.deepEqual(registeredAgain, { status: 409, body: { error: 'replica-fenced-or-conflict' } });
+
+  // Exhaust free slots, leaving one lease expired: the SQL guard must also
+  // block reuse-expired, while a fresh identity may claim that same slot.
+  for (let i = 2; i < 16; i += 1) {
+    db.sqlite.prepare('INSERT INTO sync_replicas (uid,slot,replica_id,generation,lease_until_ms,checkpoint_at_ms,checkpoint_clock_json,last_seq,status) VALUES (?,?,?,?,?,?,?,?,?)')
+      .run(owner, `s${String(i).padStart(2, '0')}`, `occupied-device-${i}`, 1,
+        i === 2 ? now - 600000 : now + 86400000, now - 86400000, '{}', 0, 'active');
+  }
+  const expiredAgain = await call(db, 'replica/claim', claim('mutation0000000602', 2, reusedId));
+  assert.deepEqual(expiredAgain, { status: 409, body: { error: 'replica-fenced-or-conflict' } });
+  assert.equal(db.sqlite.prepare('SELECT revision FROM sync_state WHERE uid = ?').get(owner).revision, 2);
+  assert.equal(db.sqlite.prepare('SELECT COUNT(*) AS n FROM sync_replica_mutations WHERE uid = ?').get(owner).n, 1);
+
+  const fresh = await call(db, 'replica/claim', claim('mutation0000000603', 2, 'fresh-device-0001'));
+  assert.equal(fresh.status, 200);
+  assert.equal(fresh.body.action, 'reuse-expired');
+  assert.equal(fresh.body.replica.slot, 's02');
+  assert.equal(fresh.body.replica.generation, 2);
 }));
 
 void test('lost claim reply after a concurrent write returns historical proof, not a fresh replica grant', () => withFixture(async db => {

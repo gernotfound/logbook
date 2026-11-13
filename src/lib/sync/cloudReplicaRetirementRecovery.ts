@@ -142,6 +142,8 @@ async function rebaseUncommittedRetirement(
  * not proof that the target is still retired. An unrelated control revision may
  * advance without invalidating this completed retirement. Require two stable
  * remote reads of the exact retired incarnation before clearing the intent.
+ * A strictly newer, different incarnation at the same slot also proves that
+ * the original retirement was superseded; it is not a grant or causal GC proof.
  * Never ACK any business journal entry from a membership receipt.
  */
 export async function resumeCloudflareReplicaRetirement(
@@ -149,7 +151,7 @@ export async function resumeCloudflareReplicaRetirement(
     transport: Transport,
     csrfToken: string,
     guard: Guard,
-): Promise<'idle' | 'retired' | 'retry-staged' | 'reconciliation-required'> {
+): Promise<'idle' | 'retired' | 'superseded' | 'retry-staged' | 'reconciliation-required'> {
     const owner = account(ownerInput);
     current(guard);
     if (!csrfToken) throw new Error('Sessione D1 assente: retirement sospeso.');
@@ -189,14 +191,17 @@ export async function resumeCloudflareReplicaRetirement(
     const control = await transport.control();
     current(guard);
     const entry = control.replicas[intent.replica.slot];
+    const superseded = entry && entry.generation > receipt.replica.generation
+        && entry.replicaId !== receipt.replica.replicaId;
+    const exactRetirement = entry && entry.status === 'retired'
+        && sameReplica({ ...entry, slot: intent.replica.slot }, intent.replica)
+        && entry.lastSeq === receipt.baseSeq
+        && entry.leaseUntilMs === receipt.replica.leaseUntilMs
+        && entry.checkpointAtMs === receipt.replica.checkpointAtMs;
     if (control.revision < receipt.currentRevision
         || control.fenceEpoch !== intent.expectedFenceEpoch
         || control.consentRevision !== intent.consentRevision
-        || !entry || entry.status !== 'retired'
-        || !sameReplica({ ...entry, slot: intent.replica.slot }, intent.replica)
-        || entry.lastSeq !== receipt.baseSeq
-        || entry.leaseUntilMs !== receipt.replica.leaseUntilMs
-        || entry.checkpointAtMs !== receipt.replica.checkpointAtMs) {
+        || (!exactRetirement && !superseded)) {
         return 'reconciliation-required';
     }
     const again = await transport.control();
@@ -214,5 +219,5 @@ export async function resumeCloudflareReplicaRetirement(
         return { ...saved, cloudflareReplicaRetirement: undefined, revision: saved.revision + 1 };
     });
     current(guard);
-    return 'retired';
+    return superseded ? 'superseded' : 'retired';
 }

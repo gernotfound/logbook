@@ -3,7 +3,8 @@
 This is a candidate API, **not an enabled production route**. The existing
 Firebase/Firestore writer, IndexedDB journal and encrypted vault remain active.
 
-- Schema: migrations/0001_encrypted_replica.sql; optional **destructive,
+- Schema: migrations/0001_encrypted_replica.sql and
+  migrations/0002_reject_reused_replica_ids.sql; optional **destructive,
   disposable-only** rollback in rollback/ (never apply it to user data).
 - Local-only Wrangler configuration: wrangler.local.jsonc; placeholder database
   ID, workers.dev and preview URLs disabled, no domain route or public fixture.
@@ -74,8 +75,11 @@ Firebase/Firestore writer, IndexedDB journal and encrypted vault remain active.
   request-bound receipt may be reconciled after unrelated account revisions
   only if two fresh identical control reads still show the exact target
   incarnation retired under the same consent/epoch, with its receipt's
-  membership metadata. Reused slots, changed consent, unstable controls or
-  torn intents preserve ciphertext and report reconciliation-required or fail closed.
+  membership metadata. A historically committed retirement may also close
+  as `superseded` when two identical controls prove a strictly newer generation
+  with a different ID in the same slot. This only clears the retired intent:
+  no business ACK, grant or causal GC. Same-generation replacements, changed
+  consent, unstable controls and torn intents still fail closed.
   Claim, retirement and document delivery intents are mutually exclusive.
   After HTTP 409 with no receipt, the same strict primary-SQL status endpoint
   also accepts the original retirement body. Only `not-committed` after a
@@ -88,7 +92,7 @@ Firebase/Firestore writer, IndexedDB journal and encrypted vault remain active.
   session/consent, and any unproven outcome preserve the original. Retirement
   of the device's own local writer is forbidden to avoid silently stranding
   unsent journal operations. Runtime integration and remediation of a
-  historically committed but no longer adoptable mutation remain TODO; this
+  historically committed claim that cannot be safely adopted remains TODO; this
   is not a working end-to-end logout/erasure path.
 - POST /v1/sync/read reads up to eight ciphertext envelopes under one D1
   snapshot; POST /v1/sync/scan reads a bounded page with a revision-fenced
@@ -129,6 +133,10 @@ Firebase/Firestore writer, IndexedDB journal and encrypted vault remain active.
   bounded JSON overhead; this does NOT establish that an 8-envelope canonical
   hash/parse fits the Workers Free **10 ms CPU** limit. Benchmark on real
   provider Free and design bounded recovery before release.
+- Migration 0002 fences reused replica identities against the immutable
+  mutation ledger even after their original slot is replaced. The existing
+  isolated D1 sandbox still requires 0002: this branch change does not write
+  provider data or activate the API.
 - The SQL subject fence prevents consent/epoch rollback, same-generation
   reactivation and revival of a deleted UID. It does not itself erase data,
   prove backup anti-resurrection, or implement CF-05/06.

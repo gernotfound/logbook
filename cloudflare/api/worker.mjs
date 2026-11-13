@@ -291,7 +291,7 @@ async function handler(request, env) {
       if (state?.status !== 'active' || state.consent_revision !== consentRevision
         || state.fence_epoch !== fenceEpoch) throw new BadInput('access-revoked', 403);
       if (state.revision !== input.expectedRevision
-        || /replica-control-fenced|UNIQUE constraint|replica-regression/i.test(String(error?.message))) {
+        || /replica-control-fenced|replica-id-reuse|UNIQUE constraint|replica-regression/i.test(String(error?.message))) {
         throw new BadInput('replica-fenced-or-conflict', 409);
       }
       throw error;
