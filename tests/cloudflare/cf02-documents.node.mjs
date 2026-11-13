@@ -475,6 +475,31 @@ void test('old consent receipts are never visible after trusted reacceptance', (
     { status: 200, body: { receipt: null } });
 }));
 
+void test('D1 account generation cannot regress or reactivate without fresh consent and epoch', () => withFixture(async db => {
+  db.sqlite.prepare("UPDATE sync_subjects SET status = 'withdrawn' WHERE uid = ?").run(owner);
+  assert.throws(() => db.sqlite.prepare("UPDATE sync_subjects SET status = 'active' WHERE uid = ?").run(owner),
+    /subject-fence-regression/);
+  assert.throws(() => db.sqlite.prepare('UPDATE sync_subjects SET consent_revision = 0 WHERE uid = ?').run(owner),
+    /subject-fence-regression/);
+  assert.throws(() => db.sqlite.prepare('UPDATE sync_subjects SET fence_epoch = 4 WHERE uid = ?').run(owner),
+    /subject-fence-regression/);
+  assert.throws(() => db.sqlite.prepare("UPDATE sync_subjects SET status = 'active', consent_revision = 2 WHERE uid = ?").run(owner),
+    /subject-fence-regression/);
+  assert.throws(() => db.sqlite.prepare("UPDATE sync_subjects SET status = 'active', fence_epoch = 6 WHERE uid = ?").run(owner),
+    /subject-fence-regression/);
+  db.sqlite.prepare("UPDATE sync_subjects SET status = 'active', consent_revision = 2, fence_epoch = 6 WHERE uid = ?").run(owner);
+  assert.deepEqual(db.sqlite.prepare('SELECT status, consent_revision, fence_epoch FROM sync_subjects WHERE uid = ?').get(owner), {
+    status: 'active', consent_revision: 2, fence_epoch: 6,
+  });
+  // An old consent/epoch request cannot write even if the control revision
+  // is reused after a trusted reset in a future lifecycle implementation.
+  const old = await call(db, 'commit', attempt('batch000000000079'));
+  assert.equal(old.status, 403);
+  db.sqlite.prepare("UPDATE sync_subjects SET status = 'deleted' WHERE uid = ?").run(owner);
+  assert.throws(() => db.sqlite.prepare("UPDATE sync_subjects SET status = 'active', consent_revision = 3, fence_epoch = 7 WHERE uid = ?").run(owner),
+    /subject-fence-regression/);
+}));
+
 void test('a batch from an erased account epoch cannot resurrect data at reset revision', () => withFixture(async db => {
   const stale = attempt('batch000000000035', 1, 0);
   db.sqlite.prepare('UPDATE sync_subjects SET fence_epoch = 6 WHERE uid = ?').run(owner);

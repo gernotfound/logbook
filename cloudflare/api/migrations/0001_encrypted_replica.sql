@@ -8,6 +8,22 @@ CREATE TABLE sync_subjects (
   fence_epoch INTEGER NOT NULL CHECK (fence_epoch >= 1)
 );
 
+-- A trusted future consent/erasure service may change account status, but
+-- may not roll back an accepted generation or revive a revoked identity under
+-- a previously authorized epoch. A deleted identity is terminal for this UID.
+-- This is a defense in depth, not a substitute for the trusted erasure flow.
+CREATE TRIGGER sync_subjects_no_regression BEFORE UPDATE ON sync_subjects
+WHEN NEW.uid != OLD.uid
+  OR NEW.consent_revision < OLD.consent_revision
+  OR NEW.fence_epoch < OLD.fence_epoch
+  OR (OLD.status = 'deleted' AND NEW.status != 'deleted')
+  OR (OLD.status != 'active' AND NEW.status = 'active'
+      AND (NEW.consent_revision <= OLD.consent_revision
+        OR NEW.fence_epoch <= OLD.fence_epoch))
+BEGIN
+  SELECT RAISE(ABORT, 'subject-fence-regression');
+END;
+
 CREATE TABLE sync_state (
   uid TEXT PRIMARY KEY REFERENCES sync_subjects(uid) ON DELETE RESTRICT,
   revision INTEGER NOT NULL DEFAULT 0 CHECK (revision >= 0)
