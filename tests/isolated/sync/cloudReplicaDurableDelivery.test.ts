@@ -2,6 +2,19 @@ import 'fake-indexeddb/auto';
 import { clear, get } from 'idb-keyval';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+// Diagnostic for the synthetic fixture only. Never log actual user health data.
+vi.mock('../../../src/lib/sync/cloudDocumentCipher', async importOriginal => {
+    const cipher = await importOriginal<typeof import('../../../src/lib/sync/cloudDocumentCipher')>();
+    const { parseSyncMeta } = await import('../../../src/lib/sync/semanticProjection/metadata');
+    return { ...cipher, sealCloudDocument: (...args: Parameters<typeof cipher.sealCloudDocument>) => {
+        try { return cipher.sealCloudDocument(...args); } catch (error) {
+            let reason = 'not metadata';
+            try { parseSyncMeta(args[4]); } catch (cause) { reason = String(cause); }
+            throw new Error('DIAGNOSTIC CIPHER path=' + args[2] + ' reason=' + reason
+                + ' metadata=' + JSON.stringify(args[4]), { cause: error });
+        }
+    } };
+});
 const catalogSource = vi.hoisted(() => ({ read: vi.fn() }));
 vi.mock('../../../src/lib/catalog/catalogService', () => ({ getCachedCatalog: catalogSource.read }));
 
