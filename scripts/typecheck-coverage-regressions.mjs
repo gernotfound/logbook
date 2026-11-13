@@ -29,6 +29,10 @@ function fixture(t) {
     compilerOptions: { noEmit: true },
     include: ['api/**/*.ts', 'server/**/*.ts'],
   }));
+  writeFixture(root, 'tsconfig.cloudflare.json', JSON.stringify({
+    compilerOptions: { noEmit: true, allowJs: true, checkJs: true },
+    include: ['cloudflare/**/*.mjs'],
+  }));
   for (const path of [
     'src/app.tsx',
     'src/types.d.ts',
@@ -37,6 +41,7 @@ function fixture(t) {
     'vite.config.ts',
     'api/handler.ts',
     'server/job.ts',
+    'cloudflare/api/worker.mjs',
   ]) writeFixture(root, path);
 
   execFileSync('git', ['init', '--quiet'], { cwd: root });
@@ -54,6 +59,38 @@ await test('accepts tracked files covered by either TypeScript project', t => {
   const result = run(root);
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, /all 7 tracked/);
+});
+
+await test('rejects a Cloudflare module not included in the JavaScript typecheck', t => {
+  const root = fixture(t);
+  writeFixture(root, 'cloudflare/auth/session-gate.mjs');
+  execFileSync('git', ['add', 'cloudflare/auth/session-gate.mjs'], { cwd: root });
+  writeFixture(root, 'tsconfig.cloudflare.json', JSON.stringify({
+    compilerOptions: { noEmit: true, allowJs: true, checkJs: true },
+    include: ['cloudflare/api/**/*.mjs'],
+  }));
+  const result = run(root);
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /cloudflare\/auth\/session-gate\.mjs/);
+});
+
+await test('refuses to disable semantic checking of Cloudflare JavaScript', t => {
+  const root = fixture(t);
+  writeFixture(root, 'tsconfig.cloudflare.json', JSON.stringify({
+    compilerOptions: { noEmit: true, allowJs: true, checkJs: false },
+    include: ['cloudflare/**/*.mjs'],
+  }));
+  const result = run(root);
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /Cloudflare TypeScript project must check JS modules/);
+});
+
+await test('the TypeScript compiler rejects a wrong operation inside a Cloudflare JS module', t => {
+  const root = fixture(t);
+  writeFixture(root, 'cloudflare/api/worker.mjs', "const value = 'wrong'; value.toFixed(2);\n");
+  const result = spawnSync(process.execPath, [compiler, '--noEmit', '-p', join(root, 'tsconfig.cloudflare.json')], { cwd: root, encoding: 'utf8' });
+  assert.notEqual(result.status, 0);
+  assert.match(result.stdout + result.stderr, /toFixed/);
 });
 
 await test('rejects a tracked TypeScript file in an unconfigured directory', t => {
