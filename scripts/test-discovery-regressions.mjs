@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { loadConfigFromFile } from 'vite';
-import { compareAssignments, normalizePlaywrightLocation, ungroupedTestFiles, ungroupedMajorSuiteTests, validateStressAssignment } from './check-test-discovery.mjs';
+import { compareAssignments, normalizePlaywrightLocation, ungroupedTestFiles, ungroupedMajorSuiteTests, validateStressAssignment, discoverNativeNodeTests } from './check-test-discovery.mjs';
 import { isCriticalTest } from './critical-test-selection.mjs';
 import { validateMutationSelection } from './check-mutation-selection.mjs';
 
@@ -42,6 +42,20 @@ await test('rejects tests selected from outside the tracked inventory', () => {
 
 await test('rejects an empty dedicated runner', () => {
   assert.match(compareAssignments(['a.test.ts'], { general: ['a.test.ts'], m7: [] }, 'Vitest').join('\n'), /empty runner m7/);
+});
+
+await test('native Node discovery follows nested canonical scripts and rejects lost or duplicate suites', () => {
+  const scripts = {
+    'test:pwa:m7': 'node --test tests/cloudflare/first.node.mjs && node scripts/check-cloudflare-config.mjs && npm run test:cf00',
+    'test:cf00': 'node --test tests/cloudflare/second.node.mjs',
+  };
+  const selected = discoverNativeNodeTests(scripts);
+  assert.deepEqual(selected, ['tests/cloudflare/first.node.mjs', 'tests/cloudflare/second.node.mjs']);
+  assert.deepEqual(compareAssignments(selected, { node: selected }, 'Native Node'), []);
+  assert.match(compareAssignments([...selected, 'tests/cloudflare/orphan.node.mjs'], { node: selected }, 'Native Node').join('\n'), /undiscovered.*orphan\.node\.mjs/);
+  assert.match(compareAssignments(selected, { node: [...selected, selected[0]] }, 'Native Node').join('\n'), /duplicate.*first\.node\.mjs/);
+  assert.throws(() => discoverNativeNodeTests({ 'test:pwa:m7': 'npm run test:pwa:m7' }), /recursive Node test script/);
+  assert.throws(() => discoverNativeNodeTests({ 'test:pwa:m7': 'npm run absent' }), /missing Node test script: absent/);
 });
 
 await test('rejects Playwright sharding loss and duplicate test identities', () => {

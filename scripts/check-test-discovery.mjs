@@ -9,6 +9,33 @@ import { fileURLToPath } from 'node:url';
 const root = resolve(fileURLToPath(new URL('..', import.meta.url)));
 const require = createRequire(import.meta.url);
 const testFile = /\.(?:test|spec)\.[cm]?[jt]sx?$/;
+const nativeNodeTestFile = /\.node\.mjs$/;
+
+// Node's test runner is invoked by dedicated npm scripts rather than Vitest.
+// Trace the canonical PWA gate, including nested npm run leaves, so a newly
+// tracked Cloudflare suite cannot silently fall outside CI.
+export function discoverNativeNodeTests(scripts, entry = 'test:pwa:m7') {
+  const selected = [];
+  const visit = (script, ancestors) => {
+    if (ancestors.includes(script)) throw new Error('recursive Node test script: ' + [...ancestors, script].join(' -> '));
+    const command = scripts[script];
+    if (typeof command !== 'string') throw new Error('missing Node test script: ' + script);
+    for (const step of command.split(/\s*&&\s*/)) {
+      const npm = step.trim().match(/^npm run ([\w:-]+)$/);
+      if (npm) {
+        visit(npm[1], [...ancestors, script]);
+        continue;
+      }
+      const node = step.trim().match(/^node --test (.+)$/);
+      if (!node) continue;
+      for (const argument of node[1].trim().split(/\s+/)) {
+        if (nativeNodeTestFile.test(argument)) selected.push(argument.replace(/^\.\//, ''));
+      }
+    }
+  };
+  visit(entry, []);
+  return selected;
+}
 const vitestExecutable = resolve(root, 'node_modules/vitest/vitest.mjs');
 
 export function compareAssignments(expectedItems, assignments, label) {
@@ -131,6 +158,10 @@ function verify() {
     runners['m8-' + (index + 1)] = vitestList('m8-' + (index + 1), 'test:m8', m8.config, m8.files);
   }
   const failures = compareAssignments(nodeTests, runners, 'Vitest/Node');
+  const nativeNodeTests = trackedFiles.filter(file => nativeNodeTestFile.test(file));
+  failures.push(...compareAssignments(nativeNodeTests, {
+    'node --test': discoverNativeNodeTests(pkg.scripts),
+  }, 'Native Node'));
   failures.push(...validateStressAssignment(nodeTests, runners.stress));
   failures.push(...validateMutationSelection(trialCases, trackedFiles));
   const ungrouped = ungroupedTestFiles(nodeTests);
@@ -150,7 +181,7 @@ function verify() {
   for (const file of browserMissing) failures.push('Playwright: spec without runnable tests ' + file);
   for (const file of browserUnexpected) failures.push('Playwright: untracked spec ' + file);
   if (failures.length) throw new Error(failures.join('\n'));
-  console.log('Test discovery verified: ' + nodeTests.length + ' Vitest/Node files each assigned once to ' + Object.keys(runners).length + ' runners; ' + browserFiles.length + ' Playwright spec files, ' + projectListings.chromium.length + ' Chromium tests, ' + projectListings['mobile-safari'].length + ' WebKit tests across 4 shards per browser.');
+  console.log('Test discovery verified: ' + nodeTests.length + ' Vitest files and ' + nativeNodeTests.length + ' native Node test files assigned once; ' + browserFiles.length + ' Playwright spec files, ' + projectListings.chromium.length + ' Chromium tests, ' + projectListings['mobile-safari'].length + ' WebKit tests across 4 shards per browser.');
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

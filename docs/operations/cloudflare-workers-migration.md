@@ -10,9 +10,9 @@
 
 La dichiarazione di database vuoto non è un inventario provider e non autorizza cancellazioni/reset fisici. Il cutover del dominio `thelogbook.me`, OAuth, posta Production e la dismissione irreversibile richiedono un GO specifico, anche senza utenti da migrare.
 
-## Incremento CF-03 in verifica — gate di sessione interno
+## Incremento CF-03 integrato — gate di sessione interno (non distribuito)
 
-Il branch CF-03 aggiunge migration D1 `0003_auth_session_gate.sql`,
+La [PR #1076](https://github.com/gernotfound/logbook/pull/1076), integrata su `main c2352c5e23e4daf1e71f3224fdf315ab8bfefe7b`, aggiunge migration D1 `0003_auth_session_gate.sql`,
 `cloudflare/auth/session-gate.mjs` e regressioni SQL/HTTP sintetiche.
 Il nuovo endpoint è **esclusivamente un service binding privato**, con cookie
 `__Host-logbook_session` hashato, CSRF hashato, status/email verificata,
@@ -25,9 +25,9 @@ Firebase, nessun deploy o DNS. Riferimento a [CF-03 #1057](https://github.com/ge
 La configurazione Mailjet e la sua verifica vengono svolte in un filone
 separato; questo incremento non modifica provider email.
 
-## Incremento CF-03 — issuer di sessioni in verifica
+## Incremento CF-03 integrato — issuer di sessioni (non esposto)
 
-`cloudflare/auth/session-issuer.mjs` prepara l'emissione di cookie
+La [PR #1078](https://github.com/gernotfound/logbook/pull/1078), integrata su `main d744f0ff1d5828329e78188396dcc4aacc6cd987` (CI PR e main riuscite), aggiunge `cloudflare/auth/session-issuer.mjs` per l'emissione di cookie
 sessione/CSRF solo **dopo** una futura autenticazione trusted valida.
 La creazione D1 è condizionata atomicamente a principal attivo ed email
 già verificata, con `auth_epoch` corrente. Il token HttpOnly resta
@@ -38,23 +38,34 @@ sincronizzazione. Non c'è ancora un endpoint pubblico di login/Google,
 consenso o invio email, né deploy/provider; il nuovo issuer rimane un
 componente interno isolato. I test di prova sono Node/SQLite sintetici.
 
+## Incremento CF-05 integrato — primo consenso trusted (non distribuito)
+
+La [PR #1079](https://github.com/gernotfound/logbook/pull/1079), integrata su `main fc1423cc03bc488787d218a7f13b184f4c410ae7` (2.388.0), ha aggiunto un Worker HTTP candidato per stato e accettazione iniziale, con contratto frontend `unregistered`/`revision`/`acceptedAt` ISO, input `acceptedTerms`, `acceptedHealthData`, `confirmsOver18`, versioni legali correnti e CSRF. D1 schema `0004`: prova
+immutabile in una transazione insieme a subject e sync_state; il gate
+interno ne richiede l'esistenza prima di qualsiasi replica. Consenso mancante, prova incompleta, versione legale superata o generazione
+sfasata non autorizzano replica, anche con cookie Auth valido. La revoca e
+la riaccettazione sono **NON IMPLEMENTATE**, così come issuer Auth reale
+e i diritti; nessuna route pubblica o migration provider applicata.
+Questo codice non abilita la PWA: serve completare l'intero ciclo di consenso
+prima del rilascio. Vedi [CF-05 #1059](https://github.com/gernotfound/logbook/issues/1059).
+
 ## Stato verificato — prove separate
 
 | Area | Evidenza | Non dimostra |
 |---|---|---|
-| Repository | [PR #1070](https://github.com/gernotfound/logbook/pull/1070) e [PR #1072](https://github.com/gernotfound/logbook/pull/1072) integrate su `main d327444dcb87fc4deadf8fe52ae471f4609e2ea7`; [CI main #43448020658](https://github.com/gernotfound/logbook/actions/runs/43448020658) **SUCCESS** (Main Release Gate + CodeQL); [Firestore legacy #43448527780](https://github.com/gernotfound/logbook/actions/runs/43448527780) **SUCCESS** | Nuovo Worker API pubblicato o runtime Cloudflare verificato |
+| Repository | [PR #1070](https://github.com/gernotfound/logbook/pull/1070), [#1072](https://github.com/gernotfound/logbook/pull/1072), [#1076](https://github.com/gernotfound/logbook/pull/1076), [#1078](https://github.com/gernotfound/logbook/pull/1078) e [#1079](https://github.com/gernotfound/logbook/pull/1079) integrate su `main fc1423cc03bc488787d218a7f13b184f4c410ae7` (2.388.0). [CI #1079 #43478867640](https://github.com/gernotfound/logbook/actions/runs/43478867640) **SUCCESS**, [main post-merge #43479409657](https://github.com/gernotfound/logbook/actions/runs/43479409657) **SUCCESS** (Main Release Gate e CodeQL sull'esatto SHA main) | Nuovo Worker Auth/consenso, API e replica pubblicati o runtime Cloudflare verificato |
 | Frontend Cloudflare | Worker `thelogbook-frontend` su `workers.dev` e [smoke Static Assets #43223911523](https://github.com/gernotfound/logbook/actions/runs/43223911523) riuscito | Auth, Safari/iOS, update PWA, API e dominio finale |
 | D1 sandbox | `thelogbook-cf02-eu-isolated-20261113`, `jurisdiction=eu`, read replication OFF: schema `0001` + `0002` applicate e indice/trigger anti-riuso riletti via Cloudflare; un UID e un documento **sintetici**, zero mutation di replica | Database reale, HTTP Worker, performance Free, conformità GDPR |
-| Nuova API | `cloudflare/api/worker.mjs` e adapter SQL presenti nel repository, `AUTH_GATE` trusted assente, nessun binding D1 al Worker frontend | Runtime Auth o replica cloud utilizzabili |
+| Nuova API | `cloudflare/api/worker.mjs`, `cloudflare/auth/session-gate.mjs`, issuer e `cloudflare/api/consent-worker.mjs` integrati nel repository, ma senza Auth password/Google reale, binding remoto o collegamento al client. SQL 0003/0004 solo versionate, non applicate su D1 Cloudflare | Runtime Auth, consenso, cancellazione o replica cloud utilizzabili |
 | Recupero claim D1 | [PR #1072](https://github.com/gernotfound/logbook/pull/1072) **MERGED**: ristaging durevole nel vault di claim già committato quando è avanzato soltanto il clock; receipt/lease/seq/checkpoint e AEAD verificati; lease scaduto durante scan rifiutato nella transazione | Non è integrazione AuthGate o API Production; nessun ACK o grant sul ristaging |
-| Email | [PR draft #1071](https://github.com/gernotfound/logbook/pull/1071) documenta consegna test Brevo Gmail/Proton, ma eventi apertura «Anonimizzato» ancora presenti | Email Auth senza tracking e provider definitivo |
+| Email | [PR #1071](https://github.com/gernotfound/logbook/pull/1071) integrata: scelta Mailjet Free dopo test Brevo con tracking; [PR #1077](https://github.com/gernotfound/logbook/pull/1077) in lavoro parallelo documentale Mailjet | Invio Auth Mailjet verificato, assenza tracking nel MIME ricevuto o dismissione del vecchio provider |
 | Vercel | Deployment backend Production `READY` dello SHA `8f6625a` avviato automaticamente dopo merge | Cloudflare Production o cutover DNS |
 
 Il vecchio Hosting Firebase `thelogbook` è disabilitato secondo il comando CLI attestato dal proprietario; il workflow GitHub Hosting risulta dichiarato disabilitato, ma non è stato letto autonomamente come `disabled_manually`. Non riattivarlo come rollback.
 
 ## Architettura già implementata nel candidato isolato
 
-**Storage D1.** Le migration `cloudflare/api/migrations/0001_encrypted_replica.sql` e `0002_reject_reused_replica_ids.sql` creano schema per soggetto/consenso/epoch, revisione CAS, registro repliche, documenti root/mensili cifrati, mutation e receipt immutabili. Trigger e vincoli bloccano rollback di revisione/epoch, sequenza regressiva, identità storica riutilizzata dopo il cambio slot. La seconda migration contiene un indice `(uid, replica_id)` per non eseguire scansioni lineari del ledger. **La presenza dello schema non implementa erasure/restore né Auth.** Gli script `rollback/` sono solo per database disposable: mai su dati reali senza autorizzazione.
+**Storage D1.** Le migration `cloudflare/api/migrations/0001_encrypted_replica.sql` e `0002_reject_reused_replica_ids.sql` creano schema per soggetto/consenso/epoch, revisione CAS, registro repliche, documenti root/mensili cifrati, mutation e receipt immutabili. Trigger e vincoli bloccano rollback di revisione/epoch, sequenza regressiva, identità storica riutilizzata dopo il cambio slot. La seconda migration contiene un indice `(uid, replica_id)` per non eseguire scansioni lineari del ledger. Le migration `0003_auth_session_gate.sql` e `0004_initial_consent.sql` sono integrate nel repository, **non applicate alla D1 sandbox Cloudflare**: modellano principal/sessioni hashate, primo consenso e proof immutabile. **La presenza dello schema non implementa erasure/restore né Auth reale.** Gli script `rollback/` sono solo per database disposable: mai su dati reali senza autorizzazione.
 
 **Worker e protocollo.** `cloudflare/api/worker.mjs`, `replica-maintenance.mjs`, `d1-document-store.mjs`: POST con body/documenti limitati, schema Zod strict, same-origin, CSRF e claim `AUTH_GATE` verificati prima di ogni accesso, CAS D1 e mutazioni immutabili hash-bound, batch atomicamente trigger-fenced. Fino a otto documenti cifrati, massimo 950 KB per documento: body cap complessivo coerente, ma **non ancora misurato sul Worker Free**. Niente AuthGate mock in runtime reale, no trusted identity via header controllabile dal client.
 
@@ -89,3 +100,29 @@ Le componenti indipendenti possono procedere in parallelo a CF-00. Una dipendenz
 ## Tracciamento
 
 [AGENTS](../../AGENTS.md), [Storage e sync](../../.agents/rules/storage-and-sync.md), [Crash consistency](../../.agents/rules/crash-consistency.md), [Cifratura](../../.agents/rules/secure-storage.md), [Consenso](../../.agents/rules/health-consent.md), [CI](../../.agents/rules/ci-verification.md); [EPIC #1053](https://github.com/gernotfound/logbook/issues/1053), [CF-00 #1054](https://github.com/gernotfound/logbook/issues/1054), [CF-01 #1055](https://github.com/gernotfound/logbook/issues/1055), [CF-02 #1056](https://github.com/gernotfound/logbook/issues/1056), [CF-03 #1057](https://github.com/gernotfound/logbook/issues/1057), [CF-04 #1058](https://github.com/gernotfound/logbook/issues/1058), [CF-05 #1059](https://github.com/gernotfound/logbook/issues/1059), [CF-06 #1060](https://github.com/gernotfound/logbook/issues/1060), [CF-07 #1061](https://github.com/gernotfound/logbook/issues/1061), [CF-08 #1062](https://github.com/gernotfound/logbook/issues/1062), [CF-09 #1063](https://github.com/gernotfound/logbook/issues/1063) e [hosting/DNS #1041](https://github.com/gernotfound/logbook/issues/1041). Dettagli dei vecchi cutover nella cronologia Git, **non istruzioni attive**.
+
+
+### CF-03/CF-05 — unified candidate HTTP API and session logout (13/11/2026)
+
+The local-only API candidate now has one `cloudflare/api/worker.mjs` HTTP
+entrypoint for `/v1/sync/*`, `/v1/consent/status`,
+`/v1/consent/initial` and `POST /v1/auth/logout`. The separate
+consent Wrangler file was retired; one placeholder D1 config supplies
+private AUTH_GATE, exact origin and current legal versions. All route
+handlers retain their own authorization/validation. This changes **source
+code only**, not a deployed Cloudflare Worker, D1 migration or domain.
+
+Logout checks session-bound CSRF and owner/epoch in a single D1 update. On
+an ambiguous write outcome, only a primary read proving the exact revoked
+session permits clearing its session and CSRF cookies. Logout cannot erase
+any health data, pending IndexedDB journal, keys or independent sessions.
+Logout without first consent (including a pending-verification account)
+must remain possible and never grants fitness access. CI exercises the
+combined HTTP entry and failure/recovery using synthetic SQLite sessions;
+provider CPU/latency/Free quotas remain untested.
+
+**Release NO-GO:** real password/Google Auth and email, PWA session wiring,
+ADK/key lifecycle, revocation/health erasure/reacceptance, rights/delete,
+offline multi-device/Safari and runtime D1/Workers smoke. Migration 0003/0004
+not applied to the existing D1 sandbox at this checkpoint. Mailjet work
+continues independently. No DNS, Production or old-provider retirement.

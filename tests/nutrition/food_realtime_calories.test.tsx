@@ -1,6 +1,6 @@
 import React from 'react';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { useAppStore } from '../../src/store/useAppStore';
 import { captureSession } from '../../src/lib/sync/session';
 import { FoodSchema } from '../../src/lib/schema';
@@ -67,6 +67,24 @@ describe('Food real-time calories', () => {
                 expect(screen.getByDisplayValue('0.9')).toBeDefined();
             });
 
+            it('recalculates edited macros and saves only after the user submits', () => {
+                const saveCustomFood = vi.fn().mockResolvedValue(undefined);
+                const setCfData = vi.fn();
+                render(
+                    <CustomFoodForm
+                        cfData={{ name: 'Pasta Integrale', carbs: 65, pro: 12, fat: 2, kcal: 326, unit: 'g' }}
+                        setCfData={setCfData}
+                        saveCustomFood={saveCustomFood}
+                        showCustomModal={true}
+                        setShowCustomModal={vi.fn()}
+                    />
+                );
+                fireEvent.change(screen.getByDisplayValue('65'), { target: { value: '70' } });
+                expect(setCfData).toHaveBeenCalledWith(expect.objectContaining({ carbs: '70', kcal: 346 }));
+                expect(saveCustomFood).not.toHaveBeenCalled();
+                fireEvent.click(screen.getByRole('button', { name: 'Salva alimento' }));
+                expect(saveCustomFood).toHaveBeenCalledTimes(1);
+            });
             it('T1.2.7: FoodSchema sanitizes and validates food macros and calorie numbers', () => {
                 const food = {
                     name: 'Avena integrale',
@@ -81,6 +99,12 @@ describe('Food real-time calories', () => {
                 expect(parsed.carbs).toBe(66);
                 expect(parsed.pro).toBe(14);
                 expect(parsed.fat).toBe(7);
+                const denseFood = FoodSchema.parse({
+                    name: 'Burro di arachidi', carbs: 20, pro: 25,
+                    fat: 50, kcal: 630, isCustom: true,
+                });
+                expect(denseFood.kcal).toBe(630);
+                expect(denseFood.fat).toBe(50);
             });
         });
     });
@@ -132,6 +156,16 @@ describe('Food real-time calories', () => {
                 expect(kcal).toBe(85); // -10*4 + 20*4 + 5*9
             });
 
+            it('preserves whitespace, comma-decimal input and small fractional rounding', () => {
+                expect(calculateRealtimeKcalContract('   ', null, undefined)).toBe(0);
+                expect(calculateRealtimeKcalContract('12,5', '20,5', '5,5')).toBe(182);
+                expect(calculateRealtimeKcalContract('0.1', '0.2', '0.3')).toBe(4);
+            });
+
+            it('preserves signed and high-but-finite macronutrient calculations', () => {
+                expect(calculateRealtimeKcalContract(-10, -5, -2)).toBe(-78);
+                expect(calculateRealtimeKcalContract(5000, 2000, 1000)).toBe(37000);
+            });
             it('T2.2.7: fractional rounding boundary (e.g. 0.125g macros)', () => {
                 const kcal = calculateRealtimeKcalContract(0.125, 0.125, 0.125);
                 // 0.5 + 0.5 + 1.125 = 2.125 -> 2

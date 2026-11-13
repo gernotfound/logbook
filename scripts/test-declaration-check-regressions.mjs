@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { findDisabledTests } from './test-declaration-check.mjs';
+import { findDisabledTests, isExecutableTestFile } from './test-declaration-check.mjs';
 
 for (const [source, reason] of [
   ["it.skip('x', () => {})", 'skip'],
@@ -80,4 +80,11 @@ await test('rejects JSX in .ts rather than silently misparsing test declarations
     () => findDisabledTests('const view = <div />;', 'invalid.test.ts'),
     /Cannot parse test source invalid\.test\.ts:/,
   );
+});
+
+await test('native Node suites are scanned while non-test modules remain excluded', () => {
+  assert.equal(isExecutableTestFile('tests/cloudflare/cf03-session-logout.node.mjs'), true);
+  assert.equal(isExecutableTestFile('tests/cloudflare/cf03-session-logout.mjs'), false);
+  assert.equal(isExecutableTestFile('tests/tooling/runner.test.mjs'), true);
+  assert.deepEqual(findDisabledTests("import { test } from 'node:test'; void test.skip('disabled', () => {});", 'tests/cloudflare/disabled.node.mjs').map(f => f.label), ['skip']);
 });

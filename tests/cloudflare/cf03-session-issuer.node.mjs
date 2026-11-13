@@ -12,6 +12,8 @@ function fixture() {
   sqlite.exec('PRAGMA foreign_keys=ON');
   for (const name of [
     '0001_encrypted_replica.sql', '0002_reject_reused_replica_ids.sql', '0003_auth_session_gate.sql',
+        // Initial consent depends on the Auth principal schema.
+        '0004_initial_consent.sql',
   ]) {
     sqlite.exec(readFileSync(new URL('../../cloudflare/api/migrations/' + name, import.meta.url), 'utf8'));
   }
@@ -139,7 +141,7 @@ void test('newly issued cookie is valid only under current consent and epoch; CS
       'x-csrf-token': csrf,
     });
     const env = {
-      DB: db, API_ORIGIN: ORIGIN,
+      DB: db, API_ORIGIN: ORIGIN, CONSENT_PRIVACY_VERSION: '1.3.9', CONSENT_TERMS_VERSION: '1.2.5',
       API_RATE_LIMITER: { limit: async () => ({ success: true }) },
     };
     const call = () => gate.fetch(new Request('https://auth-gate.internal/__internal/authorize', {
@@ -150,6 +152,8 @@ void test('newly issued cookie is valid only under current consent and epoch; CS
     sqlite.prepare('INSERT INTO sync_subjects(uid,status,consent_revision,fence_epoch) VALUES (?,?,?,?)')
       .run('verified-a', 'active', 1, 1);
     sqlite.prepare('INSERT INTO sync_state(uid,revision) VALUES (?,?)').run('verified-a', 0);
+    sqlite.prepare('INSERT INTO health_consent_acceptances(uid,consent_revision,privacy_version,terms_version,accepted_at_ms,over_18_confirmed) VALUES (?,1,?,?,?,1)')
+      .run('verified-a', '1.3.9', '1.2.5', Date.now() - 1000);
     const active = await call();
     assert.equal(active.status, 200);
     assert.deepEqual((await active.json()).uid, 'verified-a');
