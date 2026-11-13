@@ -57,7 +57,7 @@ export async function stageCloudflareDelivery(
     await updateArchiveRecord<unknown>(owner, raw => {
         current(guard);
         const envelope = validateLocalEnvelope(raw, owner);
-        if (!envelope || envelope.cloudflareDelivery
+        if (!envelope || envelope.cloudflareDelivery || envelope.cloudIntegrityFence
             || !envelope.replica || envelope.replica.slot !== replica.slot
             || envelope.replica.replicaId !== replica.replicaId
             || envelope.replica.generation !== replica.generation
