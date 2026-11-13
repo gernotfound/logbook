@@ -10,7 +10,7 @@ import { UserDataSchema } from '../../../src/lib/schema';
 import { sealCloudDocument } from '../../../src/lib/sync/cloudDocumentCipher';
 import { readAuthenticatedCloudflareCheckpoint } from '../../../src/lib/sync/cloudReplicaCheckpoint';
 import { stageCloudflareReplicaClaim, resumeCloudflareReplicaClaim } from '../../../src/lib/sync/cloudReplicaClaimRecovery';
-import { CloudReplicaMutationReconciliationRequiredError, CloudReplicaTransportError, type CloudReplicaClaimMutationOutcome } from '../../../src/lib/sync/cloudReplicaTransport';
+import { CloudReplicaMutationReconciliationRequiredError, CloudReplicaTransportError, type CloudReplicaClaimMutationOutcome, type CloudReplicaControlSnapshot } from '../../../src/lib/sync/cloudReplicaTransport';
 import { initializeLocal, readLocal, commitLocal, adoptReplicaCheckpoint } from '../../../src/lib/sync/localRepository';
 import { createAndMigrateVault } from '../../../src/lib/sync/secureArchiveMigration';
 import { lockAllVaults } from '../../../src/lib/sync/secureArchiveSession';
@@ -92,7 +92,7 @@ function transport(snapshot: (revision: number) => Promise<{
             expect(csrf).toBe('session-csrf');
             return { outcome: 'inconclusive', currentRevision: 0 };
         }),
-        control: vi.fn(async () => ({
+        control: vi.fn(async (): Promise<CloudReplicaControlSnapshot> => ({
             revision: 1, fenceEpoch: 5, consentRevision: 1,
             replicas: {
                 s01: { ...replica, lastSeq: 0, status: 'active' as const,
@@ -556,7 +556,7 @@ describe('candidate encrypted D1 claim intent', () => {
         const local = await readLocal(owner);
         expect(local?.cloudflareReplicaClaim?.consentRevision).toBe(1);
         const brokenTransport = {
-            replayStoredClaim: vi.fn(), control: vi.fn(), scanAll: vi.fn(),
+            replayStoredClaim: vi.fn(), claimMutationOutcome: vi.fn(), control: vi.fn(), scanAll: vi.fn(),
         };
         await expect(resumeCloudflareReplicaClaim(owner, key, brokenTransport,
             'session-csrf', () => true)).rejects.toThrow('Barriera integrità D1');
