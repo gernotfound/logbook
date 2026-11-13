@@ -67,6 +67,10 @@ function chooseReplicaClaim(control, candidateId, current, checkpointClock, now)
   };
 }
 
+// The receipt is immutable proof of an earlier mutation, NOT a current
+// membership grant. A later business write, another claim or slot reuse must
+// not erase evidence of the original commit. Only the same live consent/epoch
+// can look it up; currentRevision/currentReplicaMatches fence local adoption.
 export async function readReplicaMutationReceipt(db, uid, consentRevision, fenceEpoch, mutationId) {
   return db.prepare(`SELECT e.request_hash, e.action, e.committed_revision, e.slot,
     e.replica_id, e.generation, e.last_seq, e.checkpoint_at_ms, e.lease_until_ms
