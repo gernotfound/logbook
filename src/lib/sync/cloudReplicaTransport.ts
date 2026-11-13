@@ -1,5 +1,7 @@
 import type { SealedCloudDocument } from './cloudDocumentCipher';
 import { parseReplicaControl, type ReplicaControl, type ReplicaIdentity } from './replicaProtocol';
+import type { AuthenticatedCloudflareCheckpoint } from './cloudReplicaCheckpoint';
+import { mergeVectors } from './semanticProjection';
 
 /**
  * Network-only boundary: no IndexedDB writes or ACK decisions live here.
@@ -41,6 +43,15 @@ export interface CloudReplicaControlSnapshot {
     replicas: ReplicaControl['replicas'];
 }
 
+export interface CloudReplicaMutationResult {
+    mutationId: string;
+    action: 'register' | 'checkpoint' | 'reuse-expired' | 'retire';
+    revision: number;
+    replica: ReplicaIdentity;
+    baseSeq: number;
+    replayed: boolean;
+}
+
 export interface CloudReplicaReceipt {
     revision: number;
     lastSeq: number;
@@ -75,13 +86,36 @@ function safeRevision(value: unknown): value is number {
     return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0;
 }
 
+function parseMutationResponse(
+    value: unknown,
+    mutationId: string,
+    expectedRevision: number,
+    actions: CloudReplicaMutationResult['action'][],
+): CloudReplicaMutationResult {
+    if (!isRecord(value) || value.mutationId !== mutationId
+        || !actions.includes(value.action as CloudReplicaMutationResult['action'])
+        || value.revision !== expectedRevision + 1
+        || !safeRevision(value.baseSeq)
+        || typeof value.replayed !== 'boolean'
+        || !isRecord(value.replica)
+        || !/^s(?:0[0-9]|1[0-5])$/.test(String(value.replica.slot))
+        || typeof value.replica.replicaId !== 'string'
+        || !value.replica.replicaId.trim()
+        || !safeRevision(value.replica.generation) || value.replica.generation < 1
+        || !safeRevision(value.replica.leaseUntilMs) || value.replica.leaseUntilMs < 1
+        || !safeRevision(value.replica.checkpointAtMs) || value.replica.checkpointAtMs < 1) {
+        throw new CloudReplicaTransportError(0);
+    }
+    return value as unknown as CloudReplicaMutationResult;
+}
+
 /**
  * Candidate only. Same-origin /v1 routes are not wired into production sync.
  * The browser sends the HttpOnly session cookie; the server's trusted AUTH_GATE
  * validates identity, health consent and session-bound CSRF independently.
  */
 export function createCloudflareReplicaTransport(send: typeof fetch = fetch) {
-    async function post(route: 'read' | 'scan' | 'control' | 'commit' | 'receipt', body: unknown, csrfToken?: string): Promise<unknown> {
+    async function post(route: 'read' | 'scan' | 'control' | 'replica/claim' | 'replica/retire' | 'commit' | 'receipt', body: unknown, csrfToken?: string): Promise<unknown> {
         let response: Response;
         try {
             response = await send('/v1/sync/' + route, {
@@ -127,6 +161,53 @@ export function createCloudflareReplicaTransport(send: typeof fetch = fetch) {
             } catch {
                 throw new CloudReplicaTransportError(0);
             }
+        },
+
+        // Checkpoint clocks are derived exclusively from the authenticated,
+        // complete AEAD scan; callers cannot supply a faster arbitrary frontier.
+        async claimCheckpoint(
+            checkpoint: AuthenticatedCloudflareCheckpoint,
+            control: CloudReplicaControlSnapshot,
+            candidateReplicaId: string,
+            currentReplica: Pick<ReplicaIdentity, 'slot' | 'replicaId' | 'generation'> | null,
+            mutationId: string,
+            csrfToken: string,
+        ): Promise<CloudReplicaMutationResult> {
+            if (!csrfToken || !safeRevision(checkpoint.revision)
+                || checkpoint.revision !== control.revision
+                || checkpoint.fenceEpoch !== control.fenceEpoch
+                || checkpoint.consentRevision !== control.consentRevision
+                || checkpoint.documents.size > MAX_SCAN_PAGES * SCAN_PAGE_SIZE) {
+                throw new CloudReplicaTransportError(0);
+            }
+            let checkpointClock: Record<string, number> = {};
+            for (const verified of checkpoint.documents.values()) {
+                checkpointClock = mergeVectors(checkpointClock, verified.sync.clock);
+            }
+            const body = {
+                mutationId, expectedRevision: control.revision,
+                expectedFenceEpoch: control.fenceEpoch,
+                consentRevision: control.consentRevision,
+                candidateReplicaId, currentReplica, checkpointClock,
+            };
+            const value = await post('replica/claim', body, csrfToken);
+            return parseMutationResponse(value, mutationId, control.revision,
+                ['register', 'checkpoint', 'reuse-expired']);
+        },
+
+        async retireExpiredReplica(
+            control: CloudReplicaControlSnapshot,
+            replica: Pick<ReplicaIdentity, 'slot' | 'replicaId' | 'generation'>,
+            mutationId: string,
+            csrfToken: string,
+        ): Promise<CloudReplicaMutationResult> {
+            if (!csrfToken) throw new CloudReplicaTransportError(0);
+            const value = await post('replica/retire', {
+                mutationId, expectedRevision: control.revision,
+                expectedFenceEpoch: control.fenceEpoch,
+                consentRevision: control.consentRevision, replica,
+            }, csrfToken);
+            return parseMutationResponse(value, mutationId, control.revision, ['retire']);
         },
 
         // A partial page must never be published as a complete cloud checkpoint.
