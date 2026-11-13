@@ -198,7 +198,7 @@ describe('candidate encrypted D1 claim intent', () => {
             identity: { slot: 's00', replicaId: 'other', generation: 1,
                 checkpointAtMs: Date.now(), leaseUntilMs: Date.now() + 86400000 },
             baseSeq: 0,
-        }, { clock: {}, syncMetaByDocument: {} })).rejects.toThrow('Claim');
+        }, { clock: {}, syncMetaByDocument: {} })).rejects.toThrow('Checkpoint replica incompatibile');
         expect(await get(storage)).toBe(sealed);
     });
 
