@@ -488,9 +488,12 @@ void test('D1 account generation cannot regress or reactivate without fresh cons
   assert.throws(() => db.sqlite.prepare("UPDATE sync_subjects SET status = 'active', fence_epoch = 6 WHERE uid = ?").run(owner),
     /subject-fence-regression/);
   db.sqlite.prepare("UPDATE sync_subjects SET status = 'active', consent_revision = 2, fence_epoch = 6 WHERE uid = ?").run(owner);
-  assert.deepEqual(db.sqlite.prepare('SELECT status, consent_revision, fence_epoch FROM sync_subjects WHERE uid = ?').get(owner), {
-    status: 'active', consent_revision: 2, fence_epoch: 6,
-  });
+  const reactivated = db.sqlite.prepare(
+    'SELECT status, consent_revision, fence_epoch FROM sync_subjects WHERE uid = ?',
+  ).get(owner);
+  assert.equal(reactivated.status, 'active');
+  assert.equal(reactivated.consent_revision, 2);
+  assert.equal(reactivated.fence_epoch, 6);
   // An old consent/epoch request cannot write even if the control revision
   // is reused after a trusted reset in a future lifecycle implementation.
   const old = await call(db, 'commit', attempt('batch000000000079'));
