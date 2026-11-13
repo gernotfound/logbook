@@ -1,6 +1,11 @@
 -- Retain historical membership IDs as tombstones, even after their slot is
 -- reused. A registered device cannot resurrect an old replica identity.
 -- Additive migration for isolated databases where 0001 is already applied.
+-- Lookup must remain indexed as successful checkpoints accumulate in the
+-- immutable ledger; otherwise every registration scans the owner's history.
+CREATE INDEX sync_replica_history_identity
+  ON sync_replica_mutations (uid, replica_id);
+
 CREATE TRIGGER sync_replica_id_no_reuse BEFORE INSERT ON sync_replica_mutations
 WHEN NEW.action IN ('register', 'reuse-expired') AND EXISTS (
   SELECT 1 FROM sync_replica_mutations history
