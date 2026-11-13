@@ -86,6 +86,66 @@ describe('isolated Cloudflare document transport', () => {
         }
     });
 
+    it('claims a replica only from a complete AEAD-open checkpoint with the same control revision', async () => {
+        const key = new Uint8Array(32).fill(19);
+        const sync: SyncMeta = { protocolVersion: 3, clock: { s00: 2 }, fields: {},
+            writer: { slot: 's00', replicaId: 'device-a', generation: 1, seq: 2, consentRevision: 1 } };
+        const encrypted = sealCloudDocument(key, 'owner-fixture', '', { profile: { height: '175' } }, sync);
+        const scan = async () => ({ revision: 5, fenceEpoch: 3, consentRevision: 1,
+            documents: [{ path: '', revision: 5, document: encrypted }] });
+        const checkpoint = await readAuthenticatedCloudflareCheckpoint(
+            scan, 'owner-fixture', key, 1, () => true,
+        );
+        const control = { revision: 5, fenceEpoch: 3, consentRevision: 1, replicas: {} };
+        const mutationId = 'mutation0000000099';
+        const result = { mutationId, action: 'register', revision: 6,
+            replica: { slot: 's01', replicaId: 'device-new', generation: 1,
+                checkpointAtMs: Date.now(), leaseUntilMs: Date.now() + 86400000 },
+            baseSeq: 0, replayed: false };
+        const fetcher = vi.fn(async () => new Response(JSON.stringify(result)));
+        const client = createCloudflareReplicaTransport(fetcher as typeof fetch);
+        await expect(client.claimCheckpoint(checkpoint, control,
+            'device-new', null, mutationId, 'session-csrf')).resolves.toEqual(result);
+        const request = fetcher.mock.calls[0] as unknown as [string, RequestInit];
+        expect(request[0]).toBe('/v1/sync/replica/claim');
+        expect(request[1].headers).toMatchObject({ 'X-CSRF-Token': 'session-csrf' });
+        expect(JSON.parse(request[1].body as string)).toEqual({
+            mutationId, candidateReplicaId: 'device-new', currentReplica: null,
+            expectedRevision: 5, expectedFenceEpoch: 3, consentRevision: 1,
+            checkpointClock: { s00: 2 },
+        });
+        await expect(client.claimCheckpoint(checkpoint, { ...control, revision: 6 },
+            'device-new', null, mutationId, 'session-csrf'))
+            .rejects.toBeInstanceOf(CloudReplicaTransportError);
+        await expect(client.claimCheckpoint(checkpoint, control,
+            'device-new', null, mutationId, ''))
+            .rejects.toBeInstanceOf(CloudReplicaTransportError);
+        expect(fetcher).toHaveBeenCalledTimes(1);
+    });
+
+    it('validates a retirement receipt before allowing a future local checkpoint', async () => {
+        const control = { revision: 8, fenceEpoch: 3, consentRevision: 1, replicas: {} };
+        const id = 'mutation0000000100';
+        const target = { slot: 's00', replicaId: 'retiring-device', generation: 2 };
+        const retirement = { mutationId: id, action: 'retire', revision: 9,
+            baseSeq: 8, replayed: false,
+            replica: { ...target, checkpointAtMs: Date.now() - 300000,
+                leaseUntilMs: Date.now() - 200000 } };
+        const fetcher = vi.fn(async () => new Response(JSON.stringify(retirement)));
+        const client = createCloudflareReplicaTransport(fetcher as typeof fetch);
+        await expect(client.retireExpiredReplica(control, target, id, 'csrf'))
+            .resolves.toEqual(retirement);
+        const invalid = createCloudflareReplicaTransport(vi.fn(async () =>
+            new Response(JSON.stringify({ ...retirement, revision: 8 }))) as typeof fetch);
+        await expect(invalid.retireExpiredReplica(control, target, id, 'csrf'))
+            .rejects.toBeInstanceOf(CloudReplicaTransportError);
+        expect(JSON.parse((fetcher.mock.calls[0] as unknown as [string, RequestInit])[1].body as string))
+            .toEqual({
+                mutationId: id, expectedRevision: 8, expectedFenceEpoch: 3,
+                consentRevision: 1, replica: target,
+            });
+    });
+
     it('requires a session-bound CSRF value before any encrypted commit', async () => {
         const fetcher = vi.fn(async () => new Response('{}'));
         const remote = createCloudflareReplicaTransport(fetcher as typeof fetch);
