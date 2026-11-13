@@ -29,7 +29,7 @@ export async function readPublicCheckpointClock(db, uid) {
   return clock;
 }
 
-export function chooseReplicaClaim(control, candidateId, current, checkpointClock, now) {
+function chooseReplicaClaim(control, candidateId, current, checkpointClock, now) {
   const entries = control.replicas;
   const isEligible = entry => entry?.status === 'active' && entry.leaseUntilMs + SKEW_MS >= now;
   let match = null;
