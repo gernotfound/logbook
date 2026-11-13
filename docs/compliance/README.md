@@ -10,7 +10,7 @@
 
 Questa cartella raccoglie i documenti operativi che servono per trasformare le scelte tecniche di TheLogBook in un processo dimostrabile: registro dei trattamenti, screening DPIA, retention, incident response, fornitori/trasferimenti, misure tecniche e organizzative, gestione dei diritti.
 
-La fonte di verità tecnica resta il repository corrente. Le configurazioni esterne — Firebase/Google Cloud, Vercel, GitHub e relativi account amministrativi — devono essere verificate direttamente prima dell'apertura a utenti esterni e non vanno dedotte da questi template.
+La fonte di verità tecnica resta il repository corrente. Le configurazioni esterne — **Cloudflare (Workers/D1/DNS), email/OAuth**, Firebase/Google Cloud e Vercel transitori, GitHub e relativi account amministrativi — devono essere verificate direttamente prima dell'apertura a utenti esterni e non vanno dedotte da questi template. Il product owner conferma fresh start senza account o dati Firebase da trasferire; restano da verificare flussi e privacy **del nuovo servizio**, inclusi log, email e giurisdizioni.
 
 ## Modello di utilizzo deciso dal product owner — 5 novembre 2026
 

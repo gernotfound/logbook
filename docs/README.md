@@ -29,13 +29,14 @@ La selezione completa dei contratti resta in [AGENTS](../AGENTS.md). Qui si indi
 | Documento | Stato | Per quale attività |
 |---|---|---|
 | [Archivio locale cifrato](architecture/secure-local-archive-design.md) | Specifica approvata e rilasciata; smoke reali separati | Cifratura, migrazione, recovery, modello di minaccia |
-| [Gateway cloud trusted](architecture/trusted-sync-gateway-design.md) | PROPOSTA NON IMPLEMENTATA su baseline storica precedente al cloud cifrato | Rivalutare prima di ogni eventuale incarico; non attivare le fasi dal solo documento |
+| [Gateway cloud trusted](architecture/trusted-sync-gateway-design.md) | STORICO: proposta superata dal programma Cloudflare | Solo decisioni passate; non riaprire il vecchio gateway per inerzia |
 
 ## Operazioni e configurazioni esterne
 
 | Documento | Stato | Per quale attività |
 |---|---|---|
 | [Registro servizi esterni](operations/external-services-register.md) | Registro operativo; riscontri live necessari | Firebase, Vercel, GitHub e servizi ritirati |
+| [Runbook Cloudflare](operations/cloudflare-workers-migration.md) | Guida corrente per sviluppo, gate e abbandono del vecchio stack | Workers/D1, Auth, privacy e release |
 | [Collaudi E2E e affidabilità](operations/e2e-reliability.md) | Guida corrente sui limiti delle prove; collaudi live separati | CI sintetica, dispositivi reali e perimetro Production |
 | [Cutover Firebase Hosting](operations/firebase-hosting-cutover.md) | STORICO completato il 2 ottobre 2026 | Decisioni e rollback storici, non procedura di deploy corrente |
 

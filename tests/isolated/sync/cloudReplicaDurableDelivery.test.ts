@@ -99,9 +99,12 @@ describe('candidate D1 delivery: encrypted IndexedDB intent and exact ACK', () =
     it('stores immutable AEAD bytes before network and clears them in the same journal ACK', async () => {
         await stage();
         const sealed = await get<unknown>(storeKey);
-        expect(sealed).toMatch(/^tlb-sealed:v1:/);
-        expect(JSON.stringify(sealed)).not.toContain('171');
+        // AEAD ciphertext is random base64url: a short numeric plaintext
+        // fragment can appear by chance, so never search for bare "171".
+        expect(sealed).toMatch(/^tlb-sealed:v1:[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/);
+        expect(sealed).not.toContain('"height":"171"');
         const persisted = (await readLocal(owner))!;
+        expect(persisted.data.profile?.height).toBe('171');
         const beforeBytes = JSON.stringify(persisted.cloudflareDelivery?.batch);
         expect(persisted.cloudflareDelivery?.operations).toEqual(persisted.pending);
 
