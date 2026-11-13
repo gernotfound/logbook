@@ -2,19 +2,6 @@ import 'fake-indexeddb/auto';
 import { clear, get } from 'idb-keyval';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-// Diagnostic for the synthetic fixture only. Never log actual user health data.
-vi.mock('../../../src/lib/sync/cloudDocumentCipher', async importOriginal => {
-    const cipher = await importOriginal<typeof import('../../../src/lib/sync/cloudDocumentCipher')>();
-    const { parseSyncMeta } = await import('../../../src/lib/sync/semanticProjection/metadata');
-    return { ...cipher, sealCloudDocument: (...args: Parameters<typeof cipher.sealCloudDocument>) => {
-        try { return cipher.sealCloudDocument(...args); } catch (error) {
-            let reason = 'not metadata';
-            try { parseSyncMeta(args[4]); } catch (cause) { reason = String(cause); }
-            throw new Error('DIAGNOSTIC CIPHER path=' + args[2] + ' reason=' + reason
-                + ' metadata=' + JSON.stringify(args[4]), { cause: error });
-        }
-    } };
-});
 const catalogSource = vi.hoisted(() => ({ read: vi.fn() }));
 vi.mock('../../../src/lib/catalog/catalogService', () => ({ getCachedCatalog: catalogSource.read }));
 
@@ -22,8 +9,6 @@ import type { UserData, CachedGlobalCatalog } from '../../../src/types';
 import { UserDataSchema } from '../../../src/lib/schema';
 import { adoptReplicaCheckpoint, acknowledgeThrough, commitLocal, initializeLocal, readLocal } from '../../../src/lib/sync/localRepository';
 import { stageCloudflareDelivery, resumeCloudflareDelivery } from '../../../src/lib/sync/cloudReplicaDurableDelivery';
-import { applySemanticOperations, parseSyncMeta } from '../../../src/lib/sync/semanticProjection';
-import { compactSyncMetas } from '../../../src/lib/sync/causalCompaction';
 import type { CloudReplicaBatch, CloudReplicaControlSnapshot, CloudReplicaSnapshot } from '../../../src/lib/sync/cloudReplicaTransport';
 import { createAndMigrateVault } from '../../../src/lib/sync/secureArchiveMigration';
 import { lockAllVaults } from '../../../src/lib/sync/secureArchiveSession';
@@ -86,51 +71,6 @@ async function seed() {
 }
 async function stage() {
     const initial = await seed();
-    // Temporary diagnostic: identify the precise production Protocol 3
-    // invariant violated by a real local journal on the first cloud write.
-    const applied = applySemanticOperations(new Map([['', {}]]), initial.envelope.pending);
-    const meta = applied.syncMetas[''];
-    try {
-        parseSyncMeta({ ...meta, writer: {
-            slot: initial.replica.slot, replicaId: initial.replica.replicaId,
-            generation: initial.replica.generation, seq: initial.envelope.pending.at(-1)!.seq,
-            consentRevision: 1,
-        } });
-    } catch (error) {
-        throw new Error('DIAGNOSTIC real pending='
-            + JSON.stringify(initial.envelope.pending)
-            + ' syncMeta=' + JSON.stringify(meta)
-            + ' parse=' + String(error));
-    }
-    const allPaths = [...new Set(initial.envelope.pending.map(op => op.docPath))];
-    const perDocument = applySemanticOperations(new Map(allPaths.map(path => [path, {}])), initial.envelope.pending);
-    const compactedByPath = compactSyncMetas(perDocument.syncMetas, {});
-    const compacted = compactedByPath[''];
-    try {
-        parseSyncMeta({ ...compacted, writer: {
-            slot: initial.replica.slot, replicaId: initial.replica.replicaId,
-            generation: initial.replica.generation, seq: initial.envelope.pending.at(-1)!.seq,
-            consentRevision: 1,
-        } });
-    } catch (error) {
-        throw new Error('DIAGNOSTIC compact metadata failure: '
-            + String(error) + ' before=' + JSON.stringify(meta)
-            + ' after=' + JSON.stringify(compacted));
-    }
-    for (const path of allPaths) {
-        const metaAtPath = compactedByPath[path];
-        try {
-            parseSyncMeta({ ...metaAtPath, writer: {
-                slot: initial.replica.slot, replicaId: initial.replica.replicaId,
-                generation: initial.replica.generation, seq: initial.envelope.pending.at(-1)!.seq,
-                consentRevision: 1,
-            } });
-        } catch (error) {
-            throw new Error('DIAGNOSTIC path=' + path + ' parse=' + String(error)
-                + ' pending=' + JSON.stringify(initial.envelope.pending)
-                + ' compacted=' + JSON.stringify(metaAtPath));
-        }
-    }
     await stageCloudflareDelivery(owner, initial.envelope.pending, initial.snapshot,
         initial.control, initial.replica, 'batch000000000191', adk, () => true);
     return initial;
@@ -262,7 +202,7 @@ describe('candidate D1 delivery: encrypted IndexedDB intent and exact ACK', () =
         const before = await get(storeKey);
         await expect(stageCloudflareDelivery(owner, initial.envelope.pending, initial.snapshot,
             initial.control, initial.replica, 'batch000000000193', adk, () => false))
-            .rejects.toThrow('Sessione');
+            .rejects.toThrow('sessione');
         expect(await get(storeKey)).toBe(before);
     });
 });
