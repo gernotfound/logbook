@@ -98,6 +98,9 @@ export async function resumeCloudflareDelivery(
     const local = await readLocal(owner);
     current(guard);
     if (!local) throw new Error('Archivio locale assente: non è consentito un ACK.');
+    if (local.cloudIntegrityFence) {
+        throw new Error('Barriera cloud presente: consegna D1 sospesa e journal preservato.');
+    }
     const intent = local.cloudflareDelivery;
     if (!intent) return 'idle';
 
@@ -137,8 +140,7 @@ export async function resumeCloudflareDelivery(
     const delivered = intent.operations;
     const lastSeq = delivered.at(-1)!.seq;
     const months = [...new Set(intent.batch.documents.flatMap(({ path }) =>
-        path === '' ? [] : [path.split('/')[1],
-        ]))];
+        path === '' ? [] : [path.split('/')[1]]))];
     current(guard);
     await acknowledgeThrough(owner, lastSeq, remote, months, syncMeta, {
         operations: delivered, replica: intent.replica,
