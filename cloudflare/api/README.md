@@ -267,3 +267,26 @@ frontend consent UI wiring and provider deployment. Existing Firebase
 accounts and health data are NOT transferred. No live schema, route or DNS
 is modified by the candidate. The fixture tests run Node SQLite and fake
 service binding; they do not prove D1 runtime behavior.
+
+
+## One candidate API and trusted per-session logout (CF-03)
+
+`wrangler.local.jsonc` is the single local-only API configuration. Its
+`worker.mjs` entrypoint now dispatches encrypted sync, initial consent and
+`POST /v1/auth/logout`. The redundant local CF-05 configuration was removed.
+The config uses only placeholder D1, private AUTH_GATE, exact HTTPS origin and
+legal-version values; no public Worker, route or provider migration is implied.
+
+Logout requires the existing private session proof, session-bound CSRF,
+same-origin POST and an empty body. A conditional D1 write revokes only
+that session's hashed token at the current account epoch. Ambiguous write
+outcomes require a primary read of that exact revoked token before returning
+`signed-out` and expiring both host-only cookies. A failure never returns
+false success or deletes another session. Logout also works before verified
+email/initial consent; it does not grant fitness access.
+
+This endpoint **does not** discard local ciphertext/journal, revoke other
+devices, erase health data or close the account. A retry using an already
+revoked cookie receives 401: the UI must never infer the previous call
+succeeded without an authoritative response. The real frontend, credentials
+verifier, account rights and provider runtime are still disconnected.
