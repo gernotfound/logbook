@@ -1,0 +1,13 @@
+{
+  "name": "thelogbook-cf02-local-only",
+  "main": "./worker.mjs",
+  "compatibility_date": "2026-11-12",
+  "workers_dev": false,
+  "preview_urls": false,
+  "d1_databases": [{
+    "binding": "DB",
+    "database_name": "cf02-disposable-local-only",
+    "database_id": "00000000-0000-4000-8000-000000000002",
+    "migrations_dir": "./migrations"
+  }]
+}
