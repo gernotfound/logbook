@@ -13,12 +13,12 @@ export class MailjetSendError extends Error {
 
 function validEmail(value) {
   return typeof value === 'string' && value.length <= 254
-    && /^[^\\s@<>]+@[^\\s@<>]+\\.[^\\s@<>]+$/.test(value);
+    && /^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/.test(value);
 }
 
 function validCredential(value, allowColon = false) {
   return typeof value === 'string' && value.length > 0 && value.length <= 256
-    && /^[\\x21-\\x7e]+$/.test(value) && (allowColon || !value.includes(':'));
+    && /^[\x21-\x7e]+$/.test(value) && (allowColon || !value.includes(':'));
 }
 
 export function createMailjetAuthSender({ apiKey, secretKey, fromEmail, fetchImpl = fetch }) {
@@ -30,7 +30,7 @@ export function createMailjetAuthSender({ apiKey, secretKey, fromEmail, fetchImp
   const authorization = 'Basic ' + btoa(apiKey + ':' + secretKey);
   return async function sendAuthEmail({ to, subject, text }) {
     if (!validEmail(to) || typeof subject !== 'string' || subject.length < 1
-        || subject.length > 150 || /[\\r\\n]/.test(subject)
+        || subject.length > 150 || /[\r\n]/.test(subject)
         || typeof text !== 'string' || text.length < 1 || text.length > 10000) {
       throw new MailjetSendError('invalid-message');
     }
