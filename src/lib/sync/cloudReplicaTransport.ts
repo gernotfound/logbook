@@ -19,12 +19,14 @@ export interface CloudReplicaBatch {
 export interface CloudReplicaSnapshot {
     revision: number;
     fenceEpoch: number;
+    consentRevision: number;
     documents: Array<{ path: string; revision: number | null; document: unknown }>;
 }
 
 export interface CloudReplicaCompleteScan {
     revision: number;
     fenceEpoch: number;
+    consentRevision: number;
     documents: Array<{ path: string; revision: number; document: unknown }>;
 }
 
@@ -134,17 +136,20 @@ export function createCloudflareReplicaTransport(send: typeof fetch = fetch) {
             let after: string | null = null;
             let expectedRevision: number | null = null;
             let fenceEpoch: number | null = null;
+            let consentRevision: number | null = null;
             const documents: CloudReplicaCompleteScan['documents'] = [];
             for (let index = 0; index < MAX_SCAN_PAGES; index += 1) {
                 const value = await post('scan', { after, expectedRevision });
                 if (!isRecord(value) || !safeRevision(value.revision)
                     || !safeRevision(value.fenceEpoch)
+                    || !safeRevision(value.consentRevision) || value.consentRevision < 1
                     || !Array.isArray(value.documents)
                     || value.documents.length > SCAN_PAGE_SIZE
                     || typeof value.complete !== 'boolean'
                     || (value.nextAfter !== null && typeof value.nextAfter !== 'string')
                     || (expectedRevision !== null && value.revision !== expectedRevision)
-                    || (fenceEpoch !== null && value.fenceEpoch !== fenceEpoch)) {
+                    || (fenceEpoch !== null && value.fenceEpoch !== fenceEpoch)
+                    || (consentRevision !== null && value.consentRevision !== consentRevision)) {
                     throw new CloudReplicaTransportError(0);
                 }
                 const page: CloudReplicaCompleteScan['documents'] = [];
@@ -167,8 +172,9 @@ export function createCloudflareReplicaTransport(send: typeof fetch = fetch) {
                 documents.push(...page);
                 expectedRevision = value.revision as number;
                 fenceEpoch = value.fenceEpoch as number;
+                consentRevision = value.consentRevision as number;
                 if (value.complete) {
-                    return { revision: expectedRevision, fenceEpoch, documents };
+                    return { revision: expectedRevision, fenceEpoch, consentRevision, documents };
                 }
                 after = value.nextAfter as string;
             }
@@ -178,6 +184,7 @@ export function createCloudflareReplicaTransport(send: typeof fetch = fetch) {
         async read(paths: string[]): Promise<CloudReplicaSnapshot> {
             const value = await post('read', { paths });
             if (!isRecord(value) || !safeRevision(value.revision) || !safeRevision(value.fenceEpoch)
+                || !safeRevision(value.consentRevision) || value.consentRevision < 1
                 || !Array.isArray(value.documents)
                 || value.documents.length !== paths.length
                 || value.documents.some((item, index) => !isRecord(item) || item.path !== paths[index]
