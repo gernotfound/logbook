@@ -110,7 +110,7 @@ RAW STORAGE
 
 ### Formati supportati e future evoluzioni
 
-Applicare il fresh start di AGENTS. Tutti i nuovi writer usano namespace owner-scoped e formati correnti; chiavi globali pre-lancio non sono sorgenti di recupero né target di purge. Non importare backup V1/V2 o migrare Protocol 1/2 ed Envelope 4: il rifiuto conserva gli originali. Recovery dopo crash, consenso e concorrenza della baseline corrente restano obbligatori.
+Applicare il fresh start di AGENTS. **La replica D1 in sviluppo non deve leggere, tradurre o backfillare Firestore/Firebase Auth né adottare vecchi UID, sessioni, KEK/ADK, revisioni di consenso o journal come dati iniziali del nuovo backend.** Firestore è soltanto un oracle tecnico temporaneo per verificare gli invarianti del motore comune, non una sorgente dati per la nuova installazione. Tutti i nuovi writer usano namespace owner-scoped e formati correnti; chiavi globali pre-lancio non sono sorgenti di recupero né target di purge. Non importare backup V1/V2 o migrare Protocol 1/2 ed Envelope 4: il rifiuto conserva gli originali. Recovery dopo crash, consenso e concorrenza della baseline corrente restano obbligatori.
 
 Un documento Firestore presente senza marker data/sync correnti è incompatibile; non inventare causalità. Ogni documento effettivamente toccato da semantic write porta i marker correnti, senza una scansione dedicata al solo aggiornamento dei marker.
 

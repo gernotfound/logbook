@@ -53,7 +53,9 @@ L'[indice `docs/`](docs/README.md) distingue guide stabili, registri, specifiche
 
 ## Perimetro supportato e fresh start
 
-**Decisione di prodotto pre-lancio (21/10/2026, ribadita dal product owner):** non progettare supporto per installazioni, account, storage o backup pre-lancio da recuperare. Usare i formati correnti; non introdurre conversioni, fallback, export o UX per legacy ipotetici.
+**Decisione di prodotto — fresh start Cloudflare (ribadita 13/11/2026):** il nuovo backend Auth/Workers/D1 parte con **identità e dati applicativi nuovi**, senza importare o migrare utenti, password, sessioni, chiavi/ADK, consensi, journal, database o dati sanitari dell'account Firebase/Vercel attuale. Non implementare bridge di trasferimento, dual-write/backfill, import automatizzato del vecchio backend o compatibilità con versioni pre-lancio. Si migrano **funzioni e contratti**, non le informazioni dell'account o lo stato dei provider precedenti. Distinguere dai normali import/export che gli utenti potranno usare **nel nuovo sistema**. I dati già esistenti sul vecchio provider rimangono separati: nessuna cancellazione, reset, dismissione o disattivazione senza inventario live e autorizzazione specifica. Il database D1 sintetico CF-02 è una **sandbox per test**, non la destinazione dei dati esistenti.
+
+**Baseline supportata:** non progettare supporto per installazioni, account, storage o backup pre-lancio da recuperare. Usare i formati nuovi/correnti effettivamente approvati; non introdurre conversioni, fallback, export o UX per legacy ipotetici. Proteggere invece gli archivi creati dalla nuova baseline e le loro evoluzioni realmente rilasciate.
 
 - **MUST:** proteggere tutti i dati creati nella baseline supportata: isolamento owner/guest, cifratura, consenso, journal, concorrenza, crash recovery, logout, account deletion, import/export e update sicuro.
 - **MUST:** dati corrotti, ciphertext orfano e versioni sconosciute non sono archivi vuoti. Preservare gli originali e fallire chiuso secondo il boundary; non inventare identità, consenso o causalità.
