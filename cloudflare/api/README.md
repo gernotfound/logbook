@@ -64,8 +64,16 @@ Firebase/Firestore writer, IndexedDB journal and encrypted vault remain active.
   It returns `retry-staged`: this is NOT a remotely committed claim;
   another guarded resume sends the new immutable request. `committed`,
   `inconclusive`, stale/corrupt scans or races preserve the old intent.
-  Historical successful claims with changed membership, production Auth
-  wiring and provider HTTP proof remain TODO.
+  When a proven committed historical claim still has its exact active
+  incarnation/lease/sequence and a complete ADK-authenticated scan finds
+  only an advanced cloud causal clock, two matching control reads allow a
+  NEW mutationId/revision/clock to replace the original encrypted request
+  atomically in IndexedDB. It returns `retry-staged`, not a grant, and the
+  next resume sends that immutable request. A missing, retired, expired or
+  reused incarnation, altered server checkpoint/lease/sequence, unstable
+  control, forged AEAD or changed session cannot take this path. Those
+  broader historical cases, real Auth wiring and HTTP provider proof remain
+  TODO.
 - Candidate durable retirement workflow: `cloudReplicaRetirementRecovery.ts`
   writes an immutable expired-lease target/mutationId into the same
   owner-encrypted vault before sending anything. `replayStoredRetirement()`
@@ -135,8 +143,10 @@ Firebase/Firestore writer, IndexedDB journal and encrypted vault remain active.
   provider Free and design bounded recovery before release.
 - Migration 0002 fences reused replica identities against the immutable
   mutation ledger even after their original slot is replaced. The existing
-  isolated D1 sandbox still requires 0002: this branch change does not write
-  provider data or activate the API.
+  EU-jurisdiction D1 sandbox now has the index and trigger from 0002 verified
+  by provider schema readback (13/11/2026). The resource remains disconnected
+  from the published static-asset Worker; this does not prove remote HTTP
+  enforcement or activate the API.
 - The SQL subject fence prevents consent/epoch rollback, same-generation
   reactivation and revival of a deleted UID. It does not itself erase data,
   prove backup anti-resurrection, or implement CF-05/06.

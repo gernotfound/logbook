@@ -80,6 +80,38 @@ export async function stageCloudflareReplicaClaim(
 }
 
 /**
+ * A new mutation never replaces the original request in flight: the caller
+ * must first establish that it cannot still commit, or that an original
+ * request-bound receipt already proves commit. The complete new request is
+ * sealed in the same owner transaction, without touching business pending.
+ */
+async function replaceClaimIntent(
+    owner: string,
+    intent: CloudflareReplicaClaimIntent,
+    control: CloudReplicaControlSnapshot,
+    checkpointClock: Record<string, number>,
+    guard: Guard,
+): Promise<'retry-staged'> {
+    const next = parseCloudflareReplicaClaimIntent({
+        ...intent, mutationId: crypto.randomUUID(),
+        expectedRevision: control.revision, checkpointClock,
+    }, intent.consentRevision);
+    await updateArchiveRecord<unknown>(owner, raw => {
+        current(guard);
+        const saved = validateLocalEnvelope(raw, owner);
+        if (!saved || saved.cloudIntegrityFence || saved.cloudflareDelivery
+            || saved.cloudflareReplicaRetirement || saved.consentRevision !== intent.consentRevision
+            || !equal(saved.cloudflareReplicaClaim, intent)
+            || !equal(tuple(saved.replica), intent.currentReplica)) {
+            throw new Error('Rebase claim D1 concorrente o non autorizzato: intent e journal preservati.');
+        }
+        return { ...saved, cloudflareReplicaClaim: next, revision: saved.revision + 1 };
+    });
+    current(guard);
+    return 'retry-staged';
+}
+
+/**
  * Rebase a stale claim only after the primary DB has atomically observed the
  * original mutation absent AND its expected revision permanently surpassed.
  * The new request is sealed locally before any subsequent network attempt;
@@ -118,23 +150,7 @@ async function rebaseUncommittedClaim(
     current(guard);
     if (!equal(control, again)) return 'reconciliation-required';
 
-    const next = parseCloudflareReplicaClaimIntent({
-        ...intent, mutationId: crypto.randomUUID(),
-        expectedRevision: control.revision, checkpointClock: snapshotClock(verified),
-    }, intent.consentRevision);
-    await updateArchiveRecord<unknown>(owner, raw => {
-        current(guard);
-        const saved = validateLocalEnvelope(raw, owner);
-        if (!saved || saved.cloudIntegrityFence || saved.cloudflareDelivery
-            || saved.cloudflareReplicaRetirement || saved.consentRevision !== intent.consentRevision
-            || !equal(saved.cloudflareReplicaClaim, intent)
-            || !equal(tuple(saved.replica), intent.currentReplica)) {
-            throw new Error('Rebase claim D1 concorrente o non autorizzato: intent e journal preservati.');
-        }
-        return { ...saved, cloudflareReplicaClaim: next, revision: saved.revision + 1 };
-    });
-    current(guard);
-    return 'retry-staged';
+    return replaceClaimIntent(owner, intent, control, snapshotClock(verified), guard);
 }
 
 /**
@@ -142,8 +158,10 @@ async function rebaseUncommittedClaim(
  * Adoption remains safe after an unrelated control revision solely when the
  * original incarnation is still active and unchanged, a fresh complete AEAD
  * scan has the same causal clock as the staged checkpoint, and two control
- * reads agree. A changed document/lease/sequence requires a new guarded claim.
- * The pending local business journal is never ACKed by membership recovery.
+ * reads agree. A changed document clock may instead stage a fresh request,
+ * only while the exact original incarnation remains live and both controls
+ * agree; it cannot silently adopt changed data or ACK pending business.
+ * Lease, sequence or membership changes still require separate recovery.
  */
 export async function resumeCloudflareReplicaClaim(
     ownerInput: string,
@@ -211,13 +229,19 @@ export async function resumeCloudflareReplicaClaim(
     );
     current(guard);
     if (verified.revision !== control.revision || verified.fenceEpoch !== control.fenceEpoch
-        || verified.consentRevision !== control.consentRevision
-        || !equal(snapshotClock(verified), intent.checkpointClock)) {
+        || verified.consentRevision !== control.consentRevision) {
         return 'reconciliation-required';
     }
+    const verifiedClock = snapshotClock(verified);
     const currentControl = await transport.control();
     current(guard);
     if (!equal(control, currentControl)) return 'reconciliation-required';
+    if (!equal(verifiedClock, intent.checkpointClock)) {
+        // The original claim committed, but independently committed documents
+        // advanced. Restage a new request only while the original membership
+        // and its receipt metadata still match; no current grant is inferred.
+        return replaceClaimIntent(owner, intent, control, verifiedClock, guard);
+    }
     const docMap = new Map<string, Record<string, unknown>>();
     for (const [path, doc] of verified.documents) {
         docMap.set(path, { _sync: doc.sync });
