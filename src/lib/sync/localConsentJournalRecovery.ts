@@ -44,6 +44,9 @@ export async function rebaseConsentRecoveryWithExplicitChoice(
         if (!current || current.revision !== expectedLocalRevision || !current.pending.length) {
             throw new StaleLocalRevisionError(expectedLocalRevision, current?.revision ?? null);
         }
+        if (current.cloudflareDelivery) {
+            throw new Error('Intento D1 non riconciliato: recupero del journal sospeso senza alterare i dati.');
+        }
         if ((current.consentRevision ?? 0) >= revision) {
             throw new Error('Journal non appartenente alla precedente generazione di consenso');
         }
