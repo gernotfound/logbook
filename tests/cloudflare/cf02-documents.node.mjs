@@ -184,6 +184,8 @@ void test('new replica enrollment commits one guarded registration and is replay
 }));
 
 void test('a retired replica ID cannot rejoin after its slot is reused by a new generation', () => withFixture(async db => {
+  const identityIndex = db.sqlite.prepare("SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = 'sync_replica_mutations' AND name = 'sync_replica_history_identity'").get();
+  assert.equal(identityIndex?.name, 'sync_replica_history_identity');
   const oldId = 'prior-replica-id-0001';
   const first = await call(db, 'replica/claim', claim('mutation0000000600', 0, oldId));
   assert.equal(first.status, 200);
