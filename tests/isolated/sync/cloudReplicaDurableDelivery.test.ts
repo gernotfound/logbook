@@ -89,7 +89,10 @@ async function stage() {
             + ' syncMeta=' + JSON.stringify(meta)
             + ' parse=' + String(error));
     }
-    const compacted = compactSyncMetas(applied.syncMetas, {})[''];
+    const allPaths = [...new Set(initial.envelope.pending.map(op => op.docPath))];
+    const perDocument = applySemanticOperations(new Map(allPaths.map(path => [path, {}])), initial.envelope.pending);
+    const compactedByPath = compactSyncMetas(perDocument.syncMetas, {});
+    const compacted = compactedByPath[''];
     try {
         parseSyncMeta({ ...compacted, writer: {
             slot: initial.replica.slot, replicaId: initial.replica.replicaId,
@@ -100,6 +103,20 @@ async function stage() {
         throw new Error('DIAGNOSTIC compact metadata failure: '
             + String(error) + ' before=' + JSON.stringify(meta)
             + ' after=' + JSON.stringify(compacted));
+    }
+    for (const path of allPaths) {
+        const metaAtPath = compactedByPath[path];
+        try {
+            parseSyncMeta({ ...metaAtPath, writer: {
+                slot: initial.replica.slot, replicaId: initial.replica.replicaId,
+                generation: initial.replica.generation, seq: initial.envelope.pending.at(-1)!.seq,
+                consentRevision: 1,
+            } });
+        } catch (error) {
+            throw new Error('DIAGNOSTIC path=' + path + ' parse=' + String(error)
+                + ' pending=' + JSON.stringify(initial.envelope.pending)
+                + ' compacted=' + JSON.stringify(metaAtPath));
+        }
     }
     await stageCloudflareDelivery(owner, initial.envelope.pending, initial.snapshot,
         initial.control, initial.replica, 'batch000000000191', adk, () => true);
