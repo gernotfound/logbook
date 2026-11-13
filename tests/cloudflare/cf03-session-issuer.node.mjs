@@ -72,7 +72,8 @@ void test('issuer creates 32-byte random session and host-only CSRF cookies afte
     const rows = sqlite.prepare('SELECT * FROM auth_sessions WHERE uid = ?').all('verified-a');
     assert.equal(rows.length, 2);
     assert.ok(rows.every(row => row.token_hash !== a.session && row.csrf_hash !== a.csrf));
-    assert.ok(rows.some(row => row.token_hash === Buffer.from(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(a.session))).toString('hex')));
+    const expectedSessionHash = await hashSessionSecret(a.session);
+    assert.ok(rows.some(row => row.token_hash === expectedSessionHash));
     assert.equal(rows[0].auth_epoch, 1);
   } finally { sqlite.close(); }
 });
