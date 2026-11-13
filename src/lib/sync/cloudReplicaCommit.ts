@@ -32,6 +32,7 @@ export function prepareCloudflareCommit(
     if (!Number.isSafeInteger(snapshot.revision) || snapshot.revision < 0
         || !Number.isSafeInteger(snapshot.fenceEpoch) || snapshot.fenceEpoch < 1
         || control.revision !== snapshot.revision || control.fenceEpoch !== snapshot.fenceEpoch
+        || control.consentRevision !== snapshot.consentRevision
         || !Number.isSafeInteger(control.consentRevision) || control.consentRevision < 1
         || !/^[A-Za-z0-9_-]{16,128}$/.test(batchId)) throw new CloudReplicaStaleSnapshotError();
 
