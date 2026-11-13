@@ -114,6 +114,10 @@ describe('R2: Firebase Config Security & Fail-Fast Suite', () => {
             // Must NOT contain fallback operators for env vars like || "AIza..." or ?? "..."
             expect(fileContent).not.toMatch(/VITE_FIREBASE_\w+\s*\|\|\s*["']/);
             expect(fileContent).not.toMatch(/VITE_FIREBASE_\w+\s*\?\?\s*["']/);
+            expect(fileContent).not.toMatch(/import\.meta\.env\[.+\]\s*\|\|\s*["']/);
+            expect(fileContent).not.toMatch(/import\.meta\.env\[.+\]\s*\?\?\s*["']/);
+            expect(fileContent).not.toContain('.firebaseapp.com');
+            expect(fileContent).not.toContain('.firebasestorage.app');
 
             // Must NOT contain Google API key patterns or hardcoded mock project IDs
             expect(fileContent).not.toMatch(/AIza[0-9A-Za-z-_]{35}/);
@@ -180,25 +184,23 @@ describe('R2: Firebase Config Security & Fail-Fast Suite', () => {
     });
 
     describe('Fail-Fast Validation at Runtime', () => {
-        it('throws descriptive error if a single required environment variable is missing', async () => {
-            delete (import.meta.env as any).VITE_FIREBASE_API_KEY;
-
-            await expect(async () => {
-                await import('../../src/lib/firebase');
-            }).rejects.toThrowError(
-                /Configurazione Firebase incompleta: mancano le variabili d'ambiente necessarie: VITE_FIREBASE_API_KEY/
-            );
-        });
-
-        it('throws descriptive error if a required environment variable is empty or whitespace string', async () => {
-            import.meta.env.VITE_FIREBASE_PROJECT_ID = '   ';
-
-            await expect(async () => {
-                await import('../../src/lib/firebase');
-            }).rejects.toThrowError(
-                /Configurazione Firebase incompleta: mancano le variabili d'ambiente necessarie: VITE_FIREBASE_PROJECT_ID/
-            );
-        });
+        for (const envKey of requiredEnvKeys) {
+            it.each([
+                ['missing', undefined],
+                ['empty', ''],
+                ['spaces', '   '],
+                ['control whitespace', '\t\n\r'],
+            ] as const)(`rejects invalid ${envKey} (%s)`, async (_case, value) => {
+                if (value === undefined) {
+                    delete (import.meta.env as Record<string, string | undefined>)[envKey];
+                } else {
+                    import.meta.env[envKey] = value;
+                }
+                await expect(import('../../src/lib/firebase')).rejects.toThrow(
+                    new RegExp(`Configurazione Firebase incompleta:.*${envKey}`),
+                );
+            });
+        }
 
         it('throws descriptive error listing multiple missing environment variables', async () => {
             delete (import.meta.env as any).VITE_FIREBASE_AUTH_DOMAIN;
@@ -211,6 +213,20 @@ describe('R2: Firebase Config Security & Fail-Fast Suite', () => {
             );
         });
 
+        it('rejects all four empty credentials with the complete diagnostic', async () => {
+            for (const key of requiredEnvKeys) import.meta.env[key] = '';
+            await expect(import('../../src/lib/firebase')).rejects.toThrow(
+                /Configurazione Firebase incompleta: mancano le variabili d'ambiente necessarie: VITE_FIREBASE_API_KEY, VITE_FIREBASE_AUTH_DOMAIN, VITE_FIREBASE_PROJECT_ID, VITE_FIREBASE_APP_ID/,
+            );
+        });
+
+        it('rejects an arbitrary pair of absent credentials without accepting a partial config', async () => {
+            delete (import.meta.env as Record<string, string | undefined>).VITE_FIREBASE_API_KEY;
+            delete (import.meta.env as Record<string, string | undefined>).VITE_FIREBASE_AUTH_DOMAIN;
+            await expect(import('../../src/lib/firebase')).rejects.toThrow(
+                /Configurazione Firebase incompleta: mancano le variabili d'ambiente necessarie: VITE_FIREBASE_API_KEY, VITE_FIREBASE_AUTH_DOMAIN/,
+            );
+        });
         it('throws descriptive error listing all 4 variables when none are defined', async () => {
             for (const key of requiredEnvKeys) {
                 delete (import.meta.env as any)[key];
