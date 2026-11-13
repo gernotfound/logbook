@@ -45,11 +45,15 @@ Firebase/Firestore writer, IndexedDB journal and encrypted vault remain active.
 - Candidate encrypted claim workflow: `cloudReplicaClaimRecovery.ts` writes an
   immutable claim mutationId/body to the owner-vault IndexedDB before sending
   it; the next session replays the exact same request. Only an authenticated
-  matching current receipt followed by a second full ADK-open scan and two
-  stable control reads can authorize an atomic `adoptReplicaCheckpoint()`
-  that removes the stored intent with the checkpoint. A historical reply
-  returns reconciliation-required without deleting local data. Automatic
-  re-claim under a new mutationId and production wiring remain TODO.
+  matching request-bound receipt followed by a fresh complete ADK-open scan,
+  the original unchanged checkpoint clock, the exact still-active replica
+  membership (including sequence/lease), and two stable control reads can
+  authorize an atomic `adoptReplicaCheckpoint()` that removes the stored
+  intent. A historical receipt after an unrelated control revision can pass
+  ONLY these same tests; changed cloud documents, retired/reused slots, lease
+  or consent mismatch preserve the intent and journal. No business ACK is
+  inferred from a claim receipt. An automatic fresh claim under a new
+  mutationId after an uncommitted 409 and production wiring remain TODO.
 - Candidate durable retirement workflow: `cloudReplicaRetirementRecovery.ts`
   writes an immutable expired-lease target/mutationId into the same
   owner-encrypted vault before sending anything. `replayStoredRetirement()`

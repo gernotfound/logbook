@@ -3,7 +3,7 @@ import type { AuthenticatedCloudflareCheckpoint } from './cloudReplicaCheckpoint
 import { readAuthenticatedCloudflareCheckpoint } from './cloudReplicaCheckpoint';
 import {
     CloudReplicaMutationReconciliationRequiredError,
-    type CloudReplicaControlSnapshot, type createCloudflareReplicaTransport,
+    type CloudReplicaControlSnapshot, type CloudReplicaMutationResult, type createCloudflareReplicaTransport,
 } from './cloudReplicaTransport';
 import { parseCloudflareReplicaClaimIntent, type CloudflareReplicaClaimIntent } from './cloudReplicaClaimRecord';
 import { readLocal } from './localRepository';
@@ -80,10 +80,12 @@ export async function stageCloudflareReplicaClaim(
 }
 
 /**
- * A successful historical D1 receipt is NOT a current membership grant.
- * Re-read the entire encrypted account under its new revision and atomically
- * adopt only if that revision is still current and the pending intent matches.
- * On any remote uncertainty the original intent and business journal survive.
+ * A historical receipt is proof of the original claim only, not a live grant.
+ * Adoption remains safe after an unrelated control revision solely when the
+ * original incarnation is still active and unchanged, a fresh complete AEAD
+ * scan has the same causal clock as the staged checkpoint, and two control
+ * reads agree. A changed document/lease/sequence requires a new guarded claim.
+ * The pending local business journal is never ACKed by membership recovery.
  */
 export async function resumeCloudflareReplicaClaim(
     ownerInput: string,
@@ -107,22 +109,26 @@ export async function resumeCloudflareReplicaClaim(
         throw new Error('Barriera integrità D1: claim sospeso.');
     }
 
-    let receipt;
+    let receipt: CloudReplicaMutationResult;
     try {
         receipt = await transport.replayStoredClaim(intent, csrfToken);
     } catch (error) {
         current(guard);
-        if (error instanceof CloudReplicaMutationReconciliationRequiredError) {
-            return 'reconciliation-required';
-        }
-        throw error;
+        if (!(error instanceof CloudReplicaMutationReconciliationRequiredError)) throw error;
+        // The transport has already validated the request-bound historical
+        // receipt; only the guarded full AEAD scan can authorize adoption.
+        receipt = error.historicalReceipt;
     }
     current(guard);
-    if (receipt.reconciliationRequired) return 'reconciliation-required';
+    if (!['register', 'checkpoint', 'reuse-expired'].includes(receipt.action)
+        || receipt.mutationId !== intent.mutationId
+        || receipt.revision !== intent.expectedRevision + 1
+        || !Number.isSafeInteger(receipt.currentRevision)
+        || receipt.currentRevision < receipt.revision) return 'reconciliation-required';
     // A receipt proves the original request but NOT what is currently in D1.
     const control = await transport.control();
     current(guard);
-    if (control.revision !== receipt.currentRevision
+    if (control.revision < receipt.currentRevision
         || control.fenceEpoch !== intent.expectedFenceEpoch
         || control.consentRevision !== intent.consentRevision) {
         return 'reconciliation-required';

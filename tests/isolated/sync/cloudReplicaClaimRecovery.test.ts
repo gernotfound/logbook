@@ -161,6 +161,125 @@ describe('candidate encrypted D1 claim intent', () => {
         expect((await readLocal(owner))?.cloudflareReplicaClaim).toBeDefined();
     });
 
+    it('adopts a historical claim only after an unchanged active replica and a fresh AEAD scan', async () => {
+        const { staged, snapshot } = await prepare();
+        await commitLocal(owner, data(171), data(170));
+        const pendingBefore = (await readLocal(owner))!.pending;
+        const remote = transport(snapshot);
+        remote.replayStoredClaim.mockRejectedValueOnce(
+            new CloudReplicaMutationReconciliationRequiredError({
+                mutationId: staged.mutationId, action: 'register', revision: 1,
+                currentRevision: 2, reconciliationRequired: true, replayed: true,
+                baseSeq: 0, replica: remote.replica,
+            }),
+        );
+        remote.control.mockImplementation(async () => ({
+            revision: 2, fenceEpoch: 5, consentRevision: 1,
+            replicas: {
+                s01: { ...remote.replica, lastSeq: 0, status: 'active' as const,
+                    checkpointClock: { s00: 1 } },
+            },
+        }));
+        remote.scanAll.mockImplementation(async () => snapshot(2));
+
+        await expect(resumeCloudflareReplicaClaim(owner, key, remote, 'session-csrf', () => true))
+            .resolves.toBe('adopted');
+        expect(remote.replayStoredClaim).toHaveBeenCalledWith(staged, 'session-csrf');
+        expect(remote.control).toHaveBeenCalledTimes(2);
+        expect(remote.scanAll).toHaveBeenCalledOnce();
+        const local = (await readLocal(owner))!;
+        expect(local.cloudflareReplicaClaim).toBeUndefined();
+        expect(local.replica).toEqual(remote.replica);
+        expect(local.pending.length).toBeGreaterThan(0);
+        expect(local.pending.every(op => op.actorId === 's01')).toBe(true);
+        expect(pendingBefore.length).toBeGreaterThan(0);
+    });
+
+    it('retains a historical claim when the remote causal clock changed since staging', async () => {
+        const { staged, snapshot } = await prepare();
+        const sealed = await get(storage);
+        const remote = transport(snapshot);
+        remote.replayStoredClaim.mockRejectedValueOnce(
+            new CloudReplicaMutationReconciliationRequiredError({
+                mutationId: staged.mutationId, action: 'register', revision: 1,
+                currentRevision: 2, reconciliationRequired: true, replayed: true,
+                baseSeq: 0, replica: remote.replica,
+            }),
+        );
+        remote.control.mockImplementation(async () => ({
+            revision: 2, fenceEpoch: 5, consentRevision: 1,
+            replicas: {
+                s01: { ...remote.replica, lastSeq: 0, status: 'active' as const,
+                    checkpointClock: { s00: 1 } },
+            },
+        }));
+        const changed = sealCloudDocument(key, uid, '', { profile: { height: '169' } }, {
+            protocolVersion: 3, clock: { s00: 2 }, fields: {},
+            writer: { slot: 's00', replicaId: 'existing-remote', generation: 1,
+                seq: 2, consentRevision: 1 },
+        });
+        remote.scanAll.mockResolvedValueOnce({
+            revision: 2, fenceEpoch: 5, consentRevision: 1,
+            documents: [{ path: '', revision: 2, document: changed }],
+        });
+        await expect(resumeCloudflareReplicaClaim(owner, key, remote, 'session-csrf', () => true))
+            .resolves.toBe('reconciliation-required');
+        expect(remote.control).toHaveBeenCalledOnce();
+        expect(await get(storage)).toBe(sealed);
+        expect((await readLocal(owner))?.cloudflareReplicaClaim).toEqual(staged);
+        expect((await readLocal(owner))?.replica).toBeNull();
+    });
+
+    it('preserves historical claim if the replica was retired or reused', async () => {
+        const { staged, snapshot } = await prepare();
+        const remote = transport(snapshot);
+        const sealed = await get(storage);
+        remote.replayStoredClaim.mockRejectedValueOnce(
+            new CloudReplicaMutationReconciliationRequiredError({
+                mutationId: staged.mutationId, action: 'register', revision: 1,
+                currentRevision: 2, reconciliationRequired: true, replayed: true,
+                baseSeq: 0, replica: remote.replica,
+            }),
+        );
+        remote.control.mockResolvedValueOnce({
+            revision: 2, fenceEpoch: 5, consentRevision: 1,
+            replicas: { s01: { ...remote.replica, generation: 2, replicaId: 'reused-other-device',
+                lastSeq: 0, status: 'active' as const, checkpointClock: { s00: 1 } } },
+        });
+        await expect(resumeCloudflareReplicaClaim(owner, key, remote, 'session-csrf', () => true))
+            .resolves.toBe('reconciliation-required');
+        expect(remote.scanAll).not.toHaveBeenCalled();
+        expect(await get(storage)).toBe(sealed);
+    });
+
+    it('preserves historical claim if the control changes between verification reads', async () => {
+        const { staged, snapshot } = await prepare();
+        const remote = transport(snapshot);
+        const sealed = await get(storage);
+        remote.replayStoredClaim.mockRejectedValueOnce(
+            new CloudReplicaMutationReconciliationRequiredError({
+                mutationId: staged.mutationId, action: 'register', revision: 1,
+                currentRevision: 2, reconciliationRequired: true, replayed: true,
+                baseSeq: 0, replica: remote.replica,
+            }),
+        );
+        remote.control.mockResolvedValueOnce({
+            revision: 2, fenceEpoch: 5, consentRevision: 1,
+            replicas: { s01: { ...remote.replica, lastSeq: 0,
+                status: 'active' as const, checkpointClock: { s00: 1 } } },
+        }).mockResolvedValueOnce({
+            revision: 3, fenceEpoch: 5, consentRevision: 1,
+            replicas: { s01: { ...remote.replica, lastSeq: 0,
+                status: 'active' as const, checkpointClock: { s00: 1 } } },
+        });
+        remote.scanAll.mockImplementation(async () => snapshot(2));
+        await expect(resumeCloudflareReplicaClaim(owner, key, remote, 'session-csrf', () => true))
+            .resolves.toBe('reconciliation-required');
+        expect(remote.control).toHaveBeenCalledTimes(2);
+        expect(await get(storage)).toBe(sealed);
+        expect((await readLocal(owner))?.cloudflareReplicaClaim).toEqual(staged);
+    });
+
     it('refuses a changed remote control or mixed scan without dropping the stored mutation', async () => {
         const { snapshot } = await prepare();
         const remote = transport(snapshot);
