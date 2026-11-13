@@ -43,6 +43,16 @@ export interface CloudReplicaControlSnapshot {
     replicas: ReplicaControl['replicas'];
 }
 
+export interface CloudReplicaClaimRequest {
+    mutationId: string;
+    expectedRevision: number;
+    expectedFenceEpoch: number;
+    consentRevision: number;
+    candidateReplicaId: string;
+    currentReplica: Pick<ReplicaIdentity, 'slot' | 'replicaId' | 'generation'> | null;
+    checkpointClock: Record<string, number>;
+}
+
 export interface CloudReplicaMutationResult {
     mutationId: string;
     action: 'register' | 'checkpoint' | 'reuse-expired' | 'retire';
@@ -211,16 +221,26 @@ export function createCloudflareReplicaTransport(send: typeof fetch = fetch) {
                 } : null,
                 checkpointClock,
             };
+            return this.replayStoredClaim(body, csrfToken);
+        },
+
+        // Replays the immutable request saved in the owner-encrypted local
+        // vault. Only the server's SHA-bound receipt can prove it committed.
+        async replayStoredClaim(
+            body: CloudReplicaClaimRequest,
+            csrfToken: string,
+        ): Promise<CloudReplicaMutationResult> {
+            if (!csrfToken) throw new CloudReplicaTransportError(0);
             const value = await post('replica/claim', body, csrfToken);
-            const confirmed = parseMutationResponse(value, mutationId, control.revision,
+            const confirmed = parseMutationResponse(value, body.mutationId, body.expectedRevision,
                 ['register', 'checkpoint', 'reuse-expired']);
-            const matchesCurrent = currentReplica !== null
-                && confirmed.replica.slot === currentReplica.slot
-                && confirmed.replica.replicaId === currentReplica.replicaId
-                && confirmed.replica.generation === currentReplica.generation;
+            const matchesCurrent = body.currentReplica !== null
+                && confirmed.replica.slot === body.currentReplica.slot
+                && confirmed.replica.replicaId === body.currentReplica.replicaId
+                && confirmed.replica.generation === body.currentReplica.generation;
             if (confirmed.action === 'checkpoint'
-                ? confirmed.replica.replicaId !== candidateReplicaId && !matchesCurrent
-                : confirmed.replica.replicaId !== candidateReplicaId) {
+                ? confirmed.replica.replicaId !== body.candidateReplicaId && !matchesCurrent
+                : confirmed.replica.replicaId !== body.candidateReplicaId) {
                 throw new CloudReplicaTransportError(0);
             }
             if (confirmed.reconciliationRequired) {

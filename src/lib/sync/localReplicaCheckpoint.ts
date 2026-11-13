@@ -24,6 +24,7 @@ export async function adoptReplicaCheckpoint(
     claim: ReplicaCheckpoint,
     checkpoint: CloudCheckpoint,
     guard?: LocalWriteGuard,
+    expectedCloudflareClaimId?: string,
 ): Promise<LocalEnvelope> {
     owner = normalizeStorageOwner(owner);
     const catalog = await getCachedCatalog();
@@ -35,6 +36,13 @@ export async function adoptReplicaCheckpoint(
         if (!current) throw new Error('Archivio locale non trovato durante il checkpoint replica');
         if (current.cloudflareDelivery) {
             throw new Error('Intento D1 in attesa di riconciliazione: checkpoint replica sospeso senza toccare il journal.');
+        }
+        const claimIntent = current.cloudflareReplicaClaim;
+        if (expectedCloudflareClaimId !== undefined
+            ? !claimIntent || claimIntent.mutationId !== expectedCloudflareClaimId
+              || claimIntent.consentRevision !== current.consentRevision || current.cloudIntegrityFence
+            : Boolean(claimIntent)) {
+            throw new Error('Checkpoint replica incompatibile con un claim D1 pendente: journal preservato.');
         }
 
         const sameReplica = current.replica
@@ -52,6 +60,7 @@ export async function adoptReplicaCheckpoint(
                 ...currentEnvelopeVersions(),
                 clock: mergeVectors(current.clock, checkpoint.clock),
                 replica: claim.identity,
+                ...(claimIntent ? { cloudflareReplicaClaim: undefined } : {}),
                 revision: current.revision + 1,
             };
             validateLocalEnvelope(saved, owner);
@@ -95,6 +104,7 @@ export async function adoptReplicaCheckpoint(
             pending: operations,
             syncMetaByDocument: structuredClone(checkpoint.syncMetaByDocument),
             replica: claim.identity,
+            ...(claimIntent ? { cloudflareReplicaClaim: undefined } : {}),
             revision: current.revision + 1,
         };
         validateLocalEnvelope(saved, owner);

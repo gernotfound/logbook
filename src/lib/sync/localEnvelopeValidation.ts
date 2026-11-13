@@ -9,6 +9,7 @@ import { normalizeStorageOwner } from './owner';
 import { findLossyNormalization } from './businessNormalizationIntegrity';
 import { parseReplicaIdentity, type ReplicaIdentity } from './replicaProtocol';
 import { parseCloudflareDeliveryIntent, type CloudflareDeliveryIntent } from './cloudReplicaDeliveryRecord';
+import { parseCloudflareReplicaClaimIntent, type CloudflareReplicaClaimIntent } from './cloudReplicaClaimRecord';
 import {
     coversVectorClock, parseSemanticOperation, parseSyncMeta, parseVectorClock,
     type SemanticOperation, type SyncMeta, type VectorClock,
@@ -30,6 +31,8 @@ interface LocalEnvelopeV5 {
     replica: ReplicaIdentity | null;
     // Candidate D1 only: encrypted owner-vault record of exact in-flight ciphertext.
     cloudflareDelivery?: CloudflareDeliveryIntent;
+    // Candidate only. An immutable membership request, not an acknowledged replica.
+    cloudflareReplicaClaim?: CloudflareReplicaClaimIntent;
     revision: number;
     // Persistent owner-scoped barrier for unverified cloud snapshots.
     cloudIntegrityFence?: string;
@@ -172,6 +175,12 @@ export function validateLocalEnvelope(value: unknown, owner: string): LocalEnvel
     }
 
     const replica = parseReplicaIdentity(record.replica);
+    const cloudflareReplicaClaim = record.cloudflareReplicaClaim === undefined ? undefined
+        : parseCloudflareReplicaClaimIntent(record.cloudflareReplicaClaim,
+            typeof record.consentRevision === 'number' ? record.consentRevision : undefined);
+    if (cloudflareReplicaClaim !== undefined && record.cloudflareDelivery !== undefined) {
+        throw new Error('Intenti D1 incompatibili: archivio locale preservato.');
+    }
     const cloudflareDelivery = record.cloudflareDelivery === undefined ? undefined
         : parseCloudflareDeliveryIntent(record.cloudflareDelivery, canonicalOwner, pending, replica,
             typeof record.consentRevision === 'number' ? record.consentRevision : undefined);
@@ -188,6 +197,7 @@ export function validateLocalEnvelope(value: unknown, owner: string): LocalEnvel
         syncMetaByDocument,
         replica,
         ...(cloudflareDelivery ? { cloudflareDelivery } : {}),
+        ...(cloudflareReplicaClaim ? { cloudflareReplicaClaim } : {}),
         revision: record.revision,
     };
 }
