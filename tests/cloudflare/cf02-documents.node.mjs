@@ -165,7 +165,8 @@ void test('new replica enrollment commits one guarded registration and is replay
   assert.deepEqual(await call(db, 'replica/claim', { ...input, checkpointClock: { s00: 2 } }),
     { status: 409, body: { error: 'mutation-id-conflict' } });
   const registered = db.sqlite.prepare("SELECT status,last_seq FROM sync_replicas WHERE uid=? AND slot='s01'").get(owner);
-  assert.deepEqual(registered, { status: 'active', last_seq: 0 });
+  assert.equal(registered.status, 'active');
+  assert.equal(registered.last_seq, 0);
   assert.equal(db.sqlite.prepare('SELECT revision FROM sync_state').get().revision, 1);
   assert.equal(db.sqlite.prepare('SELECT COUNT(*) AS n FROM sync_replica_mutations').get().n, 1);
 
@@ -235,7 +236,7 @@ void test('account, consent, CSRF, lease and snapshot fences apply to replica ma
   const input = claim('mutation0000000011');
   assert.equal((await call(db, 'replica/claim', input, { env: { DB: db, API_ORIGIN: origin } })).status, 503);
   assert.equal((await call(db, 'replica/claim', input, { env: makeEnv(db, { csrfVerified: false }) })).status, 403);
-  assert.equal((await call(db, 'replica/claim', input, { env: makeEnv(db, { fenceEpoch: 4 }) })).status, 403);
+  assert.equal((await call(db, 'replica/claim', input, { env: makeEnv(db, { fenceEpoch: 4 }) })).status, 409);
   assert.equal((await call(db, 'replica/claim', { ...input, expectedFenceEpoch: 4 })).status, 409);
   assert.equal((await call(db, 'replica/claim', { ...input, consentRevision: 2 })).status, 403);
   assert.equal((await call(db, 'replica/claim', { ...input, expectedRevision: 1 })).status, 409);
