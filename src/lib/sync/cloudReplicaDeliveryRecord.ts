@@ -83,7 +83,9 @@ export function parseCloudflareDeliveryIntent(
             || sync.writer.slot !== replica.slot || sync.writer.replicaId !== replica.replicaId
             || sync.writer.generation !== replica.generation
             || sync.writer.seq !== batch.lastSeq || sync.writer.consentRevision !== batch.consentRevision
-            || (sync.clock[replica.slot] ?? 0) < batch.lastSeq) invalidIntent();
+            // A document may be causally behind the final batch sequence:
+            // do not reject valid multi-sequence, multi-document deliveries.
+            || (sync.clock[replica.slot] ?? 0) < 1) invalidIntent();
         seenPaths.add(entry.path);
     }
     if (seenPaths.size !== expectedPaths.size) invalidIntent();

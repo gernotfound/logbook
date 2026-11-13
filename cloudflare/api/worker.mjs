@@ -7,8 +7,10 @@ import {
   readReplicaMutationReceipt, writeReplicaMutation,
 } from './replica-maintenance.mjs';
 
-const MAX_BODY_BYTES = 1800000;
 const MAX_DOCUMENT_BYTES = 950000;
+// One causal batch can legitimately contain eight separately encrypted docs.
+// The transport body cap must not be smaller than its own eight-document contract.
+const MAX_BODY_BYTES = 8 * MAX_DOCUMENT_BYTES + 8192;
 const SLOT = /^s(?:0[0-9]|1[0-5])$/;
 const PATH = /^(?:(?:history_months|nutrition_months)\/[0-9]{4}-(?:0[1-9]|1[0-2]))?$/;
 const BASE64URL = /^[A-Za-z0-9_-]+$/;
@@ -157,7 +159,10 @@ function validateSealedBatch(input) {
     if (w.slot !== input.replica.slot || w.replicaId !== input.replica.replicaId
       || w.generation !== input.replica.generation || w.seq !== input.lastSeq
       || w.consentRevision !== input.consentRevision
-      || !Number.isSafeInteger(sealed._sync.clock[w.slot]) || sealed._sync.clock[w.slot] < w.seq) {
+      // Writer.seq identifies the whole committed batch, while a particular
+      // document may have been last touched by an earlier operation in it.
+      // Require the actor's real causal dot, not a fabricated global frontier.
+      || !Number.isSafeInteger(sealed._sync.clock[w.slot]) || sealed._sync.clock[w.slot] < 1) {
       throw new BadInput('invalid-input', 400);
     }
     if (new TextEncoder().encode(JSON.stringify(sealed)).byteLength > MAX_DOCUMENT_BYTES) {

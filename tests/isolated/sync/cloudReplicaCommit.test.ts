@@ -73,6 +73,32 @@ describe('D1 encrypted commit candidate from the shared Protocol 3 engine', () =
         });
     });
 
+    it('preserves distinct causal clocks for operations at different sequences in the same batch', () => {
+        const slowerRoot = { ...ops[0], seq: 1, clock: { s00: 1 } };
+        const laterMonth: SemanticOperation = {
+            docPath: 'nutrition_months/2026-11', path: ['2026-11-03'],
+            isDelete: true, actorId: 's00', seq: 2, clock: { s00: 2 },
+        };
+        const fullSnapshot: CloudReplicaSnapshot = {
+            ...snapshot, documents: [
+                ...snapshot.documents,
+                { path: 'nutrition_months/2026-11', revision: null, document: null },
+            ],
+        };
+        const fullReplica = { ...replica, checkpointAtMs: Date.now(),
+            leaseUntilMs: Date.now() + 86400000 };
+        const { batch } = prepareCloudflareCommit(uid, [slowerRoot, laterMonth],
+            fullSnapshot, control, fullReplica, 'batch000000000098', key, () => true);
+        expect(batch.lastSeq).toBe(2);
+        expect(batch.documents).toHaveLength(2);
+        const root = openCloudDocument(key, uid, '', batch.documents[0].document);
+        const month = openCloudDocument(key, uid, 'nutrition_months/2026-11', batch.documents[1].document);
+        expect(root.sync.clock.s00).toBe(1);
+        expect(month.sync.clock.s00).toBe(2);
+        expect(root.sync.writer?.seq).toBe(2);
+        expect(month.sync.writer?.seq).toBe(2);
+    });
+
     it('rejects incomplete or contradictory remote bases, without submitting a write', () => {
         for (const checkpoint of [
             { ...snapshot, documents: [] },

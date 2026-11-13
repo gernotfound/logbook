@@ -296,6 +296,34 @@ void test('first encrypted root/month write, coherent read and durable receipt r
   assert.equal(db.sqlite.prepare('SELECT count(*) as n FROM sync_receipts').get().n, 1);
 }));
 
+void test('a multi-sequence batch preserves per-document clocks below its writer sequence', () => withFixture(async db => {
+  const item = attempt('batch000000000077', 2, 0, ['', 'nutrition_months/2026-11']);
+  item.documents[0].document = envelope(1);
+  item.documents[0].document._sync.writer.seq = 2;
+  // This root was last touched at seq 1, while the month was touched at seq 2.
+  // The batch writer always reports lastSeq=2, exactly like Firestore Protocol 3.
+  const result = await call(db, 'commit', item);
+  assert.equal(result.status, 200);
+  assert.equal(result.body.lastSeq, 2);
+  const read = await call(db, 'read', { paths: ['', 'nutrition_months/2026-11'] });
+  assert.equal(read.status, 200);
+  assert.deepEqual(read.body.documents.map(x => x.document._sync.clock.s00), [1, 2]);
+  assert.deepEqual(read.body.documents.map(x => x.document._sync.writer.seq), [2, 2]);
+  assert.equal((await call(db, 'commit', item)).body.replayed, true);
+  assert.equal(db.sqlite.prepare('SELECT last_seq FROM sync_replicas').get().last_seq, 2);
+}));
+
+void test('up to eight individually bounded documents do not trip a smaller HTTP body cap', () => withFixture(async db => {
+  const paths = Array.from({ length: 8 }, (_, i) =>
+    `history_months/2026-${String(i + 1).padStart(2, '0')}`);
+  const item = attempt('batch000000000078', 1, 0, paths);
+  for (const doc of item.documents) doc.document._sealed.ciphertext = 'B'.repeat(250000);
+  assert.ok(Buffer.byteLength(JSON.stringify(item)) > 1800000);
+  const saved = await call(db, 'commit', item);
+  assert.equal(saved.status, 200);
+  assert.equal(db.sqlite.prepare('SELECT COUNT(*) AS n FROM sync_documents').get().n, 8);
+}));
+
 void test('real XChaCha20-Poly1305 ciphertext survives D1 HTTP save/read without business plaintext', () => withFixture(async db => {
   const key = new Uint8Array(32).fill(47);
   const nonce = new Uint8Array(24).fill(23);
@@ -509,7 +537,7 @@ void test('simultaneous stale revisions have one winner and no phantom receipt',
 }));
 
 void test('oversized streamed bodies fail with 413 before any D1 mutation', () => withFixture(async db => {
-  const largeBody = JSON.stringify({ data: 'X'.repeat(1800001) });
+  const largeBody = JSON.stringify({ data: 'X'.repeat(8 * 950000 + 8193) });
   const response = await worker.fetch(new Request(origin + '/v1/sync/commit', {
     method: 'POST', headers: { Origin: origin, 'Content-Type': 'application/json' },
     body: largeBody,

@@ -186,6 +186,20 @@ describe('candidate D1 delivery: encrypted IndexedDB intent and exact ACK', () =
         expect((await readLocal(owner))?.pending).toHaveLength(2);
     });
 
+    it('refuses a mismatched receipt even if an injected transport reports success', async () => {
+        await stage();
+        const before = await get(storeKey);
+        const transport = {
+            receipt: vi.fn(async () => ({ revision: 1, lastSeq: 999 })),
+            commit: vi.fn(),
+        };
+        await expect(resumeCloudflareDelivery(owner, adk, transport, 'csrf-session', () => true))
+            .rejects.toThrow('Ricevuta D1 assente o discordante');
+        expect(transport.commit).not.toHaveBeenCalled();
+        expect(await get(storeKey)).toBe(before);
+        expect((await readLocal(owner))?.cloudflareDelivery).toBeDefined();
+    });
+
     it('does not allow a second staging attempt or a replica checkpoint while an intent is outstanding', async () => {
         const initial = await stage();
         const previous = await get(storeKey);

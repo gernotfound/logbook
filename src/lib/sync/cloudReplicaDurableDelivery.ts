@@ -136,7 +136,10 @@ export async function resumeCloudflareDelivery(
             current(guard);
         }
     }
-    if (!confirmed) throw new Error('Ricevuta D1 mancante: journal locale preservato.');
+    if (!confirmed || confirmed.revision !== intent.batch.expectedRevision + 1
+        || confirmed.lastSeq !== intent.batch.lastSeq) {
+        throw new Error('Ricevuta D1 assente o discordante: journal e ciphertext preservati.');
+    }
     const delivered = intent.operations;
     const lastSeq = delivered.at(-1)!.seq;
     const months = [...new Set(intent.batch.documents.flatMap(({ path }) =>
