@@ -38,9 +38,21 @@ export async function adoptReplicaCheckpoint(
             throw new Error('Intento D1 in attesa di riconciliazione: checkpoint replica sospeso senza toccare il journal.');
         }
         const claimIntent = current.cloudflareReplicaClaim;
+        const sameStoredReplica = !claimIntent
+            || (claimIntent.currentReplica === null && current.replica === null)
+            || (claimIntent.currentReplica !== null && current.replica !== null
+                && claimIntent.currentReplica.slot === current.replica.slot
+                && claimIntent.currentReplica.replicaId === current.replica.replicaId
+                && claimIntent.currentReplica.generation === current.replica.generation);
         if (expectedCloudflareClaimId !== undefined
             ? !claimIntent || claimIntent.mutationId !== expectedCloudflareClaimId
               || claimIntent.consentRevision !== current.consentRevision || current.cloudIntegrityFence
+              || !sameStoredReplica
+              || (claimIntent.candidateReplicaId !== claim.identity.replicaId
+                  && !(claimIntent.currentReplica
+                    && claimIntent.currentReplica.slot === claim.identity.slot
+                    && claimIntent.currentReplica.replicaId === claim.identity.replicaId
+                    && claimIntent.currentReplica.generation === claim.identity.generation))
             : Boolean(claimIntent)) {
             throw new Error('Checkpoint replica incompatibile con un claim D1 pendente: journal preservato.');
         }

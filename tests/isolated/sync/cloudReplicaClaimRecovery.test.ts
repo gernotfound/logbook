@@ -117,7 +117,7 @@ describe('candidate encrypted D1 claim intent', () => {
         expect(local.cloudflareReplicaClaim).toBeUndefined();
         expect(local.replica).toEqual(remote.replica);
         expect(local.actorId).toBe(remote.replica.slot);
-        expect(local.clock).toEqual({ s00: 1, s01: 0 });
+        expect(local.clock).toEqual({ s00: 1 });
         expect(await resumeCloudflareReplicaClaim(owner, key, remote, 'session-csrf', () => true))
             .toBe('idle');
     });
@@ -200,6 +200,23 @@ describe('candidate encrypted D1 claim intent', () => {
             baseSeq: 0,
         }, { clock: {}, syncMetaByDocument: {} })).rejects.toThrow('Claim');
         expect(await get(storage)).toBe(sealed);
+    });
+
+    it('keeps the vault readable but refuses replay after a trusted consent generation changes', async () => {
+        await prepare();
+        await updateArchiveRecord<unknown>(owner, raw => ({
+            ...(raw as Record<string, unknown>), consentRevision: 2,
+        }));
+        const saved = await get(storage);
+        const local = await readLocal(owner);
+        expect(local?.cloudflareReplicaClaim?.consentRevision).toBe(1);
+        const brokenTransport = {
+            replayStoredClaim: vi.fn(), control: vi.fn(), scanAll: vi.fn(),
+        };
+        await expect(resumeCloudflareReplicaClaim(owner, key, brokenTransport,
+            'session-csrf', () => true)).rejects.toThrow('Barriera integrità D1');
+        expect(brokenTransport.replayStoredClaim).not.toHaveBeenCalled();
+        expect(await get(storage)).toBe(saved);
     });
 
     it('preserves tampered claim ciphertext and refuses the pending archive instead of resetting it', async () => {

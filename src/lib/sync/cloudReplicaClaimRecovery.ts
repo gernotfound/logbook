@@ -102,7 +102,8 @@ export async function resumeCloudflareReplicaClaim(
     if (!before) throw new Error('Archivio locale assente: claim sospeso.');
     const intent = before.cloudflareReplicaClaim;
     if (!intent) return 'idle';
-    if (before.cloudIntegrityFence || before.cloudflareDelivery) {
+    if (before.cloudIntegrityFence || before.cloudflareDelivery
+        || before.consentRevision !== intent.consentRevision) {
         throw new Error('Barriera integrità D1: claim sospeso.');
     }
 

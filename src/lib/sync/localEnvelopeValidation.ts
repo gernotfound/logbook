@@ -175,9 +175,10 @@ export function validateLocalEnvelope(value: unknown, owner: string): LocalEnvel
     }
 
     const replica = parseReplicaIdentity(record.replica);
+    // A revoked/reaccepted local consent may make a claim stale, not make the
+    // entire owner vault unreadable. Replay/adoption fences the revision again.
     const cloudflareReplicaClaim = record.cloudflareReplicaClaim === undefined ? undefined
-        : parseCloudflareReplicaClaimIntent(record.cloudflareReplicaClaim,
-            typeof record.consentRevision === 'number' ? record.consentRevision : undefined);
+        : parseCloudflareReplicaClaimIntent(record.cloudflareReplicaClaim);
     if (cloudflareReplicaClaim !== undefined && record.cloudflareDelivery !== undefined) {
         throw new Error('Intenti D1 incompatibili: archivio locale preservato.');
     }
