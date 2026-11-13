@@ -84,6 +84,9 @@ describe('D1 encrypted commit candidate from the shared Protocol 3 engine', () =
             ...control.replicas.s00, status: 'retired',
         } } } })).toThrow(CloudReplicaStaleSnapshotError);
         expect(() => stage({ control: { ...control, replicas: { s00: {
+            ...control.replicas.s00, checkpointClock: { s99: 999 },
+        } } } })).toThrow(CloudReplicaStaleSnapshotError);
+        expect(() => stage({ control: { ...control, replicas: { s00: {
             ...control.replicas.s00, generation: 2,
         } } } })).toThrow(CloudReplicaStaleSnapshotError);
         expect(() => stage({ control: { ...control, replicas: { s00: {
