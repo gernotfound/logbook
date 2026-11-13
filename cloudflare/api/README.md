@@ -55,9 +55,12 @@ Firebase/Firestore writer, IndexedDB journal and encrypted vault remain active.
   owner-encrypted vault before sending anything. `replayStoredRetirement()`
   reuses those bytes after a lost reply. A fresh matching retired register
   (checked twice) removes only the intent in one IndexedDB transaction; it
-  does NOT ACK business operations or prove a stable frontier. Any later
-  revision, target reuse, changed consent or torn intent preserves the local
-  ciphertext and reports reconciliation-required or fails closed.
+  does NOT ACK business operations or prove a stable frontier. A historical,
+  request-bound receipt may be reconciled after unrelated account revisions
+  only if two fresh identical control reads still show the exact target
+  incarnation retired under the same consent/epoch, with its receipt's
+  membership metadata. Reused slots, changed consent, unstable controls or
+  torn intents preserve ciphertext and report reconciliation-required or fail closed.
   Claim, retirement and document delivery intents are mutually exclusive.
   Automatic re-retirement under a new revision and runtime integration remain
   TODO; this is not a working end-to-end logout/erasure path.

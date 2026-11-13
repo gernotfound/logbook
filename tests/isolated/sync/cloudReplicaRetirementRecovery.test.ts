@@ -128,9 +128,10 @@ describe('candidate D1 durable expired-replica retirement', () => {
         expect(transport.replayStoredRetirement.mock.calls[1][0]).toEqual(intent);
     });
 
-    it('retains the original encrypted request when the historical receipt is no longer current', async () => {
+    it('reconciles a historical retirement after unrelated writes without acknowledging journal data', async () => {
+        await commitLocal(owner, data(171), data(170));
         const { target, intent } = await stagedRetirement();
-        const sealed = await get(storage);
+        const beforeJournal = (await readLocal(owner))!.pending;
         const transport = remoteRetirement(target);
         transport.replayStoredRetirement.mockRejectedValueOnce(
             new CloudReplicaMutationReconciliationRequiredError({
@@ -138,10 +139,129 @@ describe('candidate D1 durable expired-replica retirement', () => {
                 reconciliationRequired: true, replayed: true, baseSeq: 8, replica: target,
             }),
         );
-        expect(await resumeCloudflareReplicaRetirement(owner, transport, 'session-csrf', () => true))
-            .toBe('reconciliation-required');
-        expect(transport.control).not.toHaveBeenCalled();
-        expect(await get(storage)).toBe(sealed);
+        transport.control.mockImplementation(async () => ({
+            revision: 2, fenceEpoch: 5, consentRevision: 1,
+            replicas: { s02: { ...target, status: 'retired' as const, lastSeq: 8,
+                checkpointClock: { s00: 4 } } },
+        }));
+        await expect(resumeCloudflareReplicaRetirement(owner, transport, 'session-csrf', () => true))
+            .resolves.toBe('retired');
+        expect(transport.replayStoredRetirement).toHaveBeenCalledWith(intent, 'session-csrf');
+        expect(transport.control).toHaveBeenCalledTimes(2);
+        expect((await readLocal(owner))?.cloudflareReplicaRetirement).toBeUndefined();
+        expect((await readLocal(owner))?.pending).toEqual(beforeJournal);
+    });
+
+    it('preserves a historical retirement when its slot has been reused', async () => {
+        const { target, intent } = await stagedRetirement();
+        const saved = await get(storage);
+        const transport = remoteRetirement(target);
+        transport.replayStoredRetirement.mockRejectedValueOnce(
+            new CloudReplicaMutationReconciliationRequiredError({
+                mutationId: intent.mutationId, action: 'retire', revision: 1, currentRevision: 2,
+                reconciliationRequired: true, replayed: true, baseSeq: 8, replica: target,
+            }),
+        );
+        transport.control.mockResolvedValue({
+            revision: 2, fenceEpoch: 5, consentRevision: 1,
+            replicas: { s02: { ...target, generation: 2, replicaId: 'new-replica',
+                status: 'active', lastSeq: 8, checkpointClock: {} } },
+        });
+        await expect(resumeCloudflareReplicaRetirement(owner, transport, 'session-csrf', () => true))
+            .resolves.toBe('reconciliation-required');
+        expect(transport.control).toHaveBeenCalledOnce();
+        expect(await get(storage)).toBe(saved);
+        expect((await readLocal(owner))?.cloudflareReplicaRetirement).toEqual(intent);
+    });
+
+    it('keeps historical intent if the control moves during confirmation', async () => {
+        const { target, intent } = await stagedRetirement();
+        const saved = await get(storage);
+        const transport = remoteRetirement(target);
+        transport.replayStoredRetirement.mockRejectedValueOnce(
+            new CloudReplicaMutationReconciliationRequiredError({
+                mutationId: intent.mutationId, action: 'retire', revision: 1, currentRevision: 2,
+                reconciliationRequired: true, replayed: true, baseSeq: 8, replica: target,
+            }),
+        );
+        transport.control.mockResolvedValueOnce({
+            revision: 2, fenceEpoch: 5, consentRevision: 1,
+            replicas: { s02: { ...target, status: 'retired' as const, lastSeq: 8,
+                checkpointClock: { s00: 4 } } },
+        }).mockResolvedValueOnce({
+            revision: 3, fenceEpoch: 5, consentRevision: 1,
+            replicas: { s02: { ...target, status: 'retired' as const, lastSeq: 8,
+                checkpointClock: { s00: 4 } } },
+        });
+        await expect(resumeCloudflareReplicaRetirement(owner, transport, 'session-csrf', () => true))
+            .resolves.toBe('reconciliation-required');
+        expect(transport.control).toHaveBeenCalledTimes(2);
+        expect(await get(storage)).toBe(saved);
+        expect((await readLocal(owner))?.cloudflareReplicaRetirement).toEqual(intent);
+    });
+
+    it('does not clear a historical intent if the control revision is older than the receipt', async () => {
+        const { target, intent } = await stagedRetirement();
+        const saved = await get(storage);
+        const transport = remoteRetirement(target);
+        transport.replayStoredRetirement.mockRejectedValueOnce(
+            new CloudReplicaMutationReconciliationRequiredError({
+                mutationId: intent.mutationId, action: 'retire', revision: 1, currentRevision: 2,
+                reconciliationRequired: true, replayed: true, baseSeq: 8, replica: target,
+            }),
+        );
+        await expect(resumeCloudflareReplicaRetirement(owner, transport, 'session-csrf', () => true))
+            .resolves.toBe('reconciliation-required');
+        expect(transport.control).toHaveBeenCalledOnce();
+        expect(await get(storage)).toBe(saved);
+    });
+
+    it('does not clear historical retirement if receipt membership metadata differs from D1', async () => {
+        const { target, intent } = await stagedRetirement();
+        const saved = await get(storage);
+        const transport = remoteRetirement(target);
+        transport.replayStoredRetirement.mockRejectedValueOnce(
+            new CloudReplicaMutationReconciliationRequiredError({
+                mutationId: intent.mutationId, action: 'retire', revision: 1, currentRevision: 2,
+                reconciliationRequired: true, replayed: true, baseSeq: 8, replica: target,
+            }),
+        );
+        transport.control.mockResolvedValue({
+            revision: 2, fenceEpoch: 5, consentRevision: 1,
+            replicas: { s02: { ...target, status: 'retired' as const,
+                lastSeq: 9, checkpointClock: { s00: 4 } } },
+        });
+        await expect(resumeCloudflareReplicaRetirement(owner, transport, 'session-csrf', () => true))
+            .resolves.toBe('reconciliation-required');
+        expect(transport.control).toHaveBeenCalledOnce();
+        expect(await get(storage)).toBe(saved);
+    });
+
+    it('preserves historical retirement when session guard expires after remote confirmation', async () => {
+        const { target, intent } = await stagedRetirement();
+        const saved = await get(storage);
+        const transport = remoteRetirement(target);
+        transport.replayStoredRetirement.mockRejectedValueOnce(
+            new CloudReplicaMutationReconciliationRequiredError({
+                mutationId: intent.mutationId, action: 'retire', revision: 1, currentRevision: 2,
+                reconciliationRequired: true, replayed: true, baseSeq: 8, replica: target,
+            }),
+        );
+        transport.control.mockResolvedValue({
+            revision: 2, fenceEpoch: 5, consentRevision: 1,
+            replicas: { s02: { ...target, status: 'retired' as const,
+                lastSeq: 8, checkpointClock: { s00: 4 } } },
+        });
+        let current = true;
+        transport.control.mockImplementationOnce(async () => {
+            current = false;
+            return { revision: 2, fenceEpoch: 5, consentRevision: 1,
+                replicas: { s02: { ...target, status: 'retired' as const,
+                    lastSeq: 8, checkpointClock: { s00: 4 } } } };
+        });
+        await expect(resumeCloudflareReplicaRetirement(owner, transport, 'session-csrf', () => current))
+            .rejects.toThrow('sessione');
+        expect(await get(storage)).toBe(saved);
         expect((await readLocal(owner))?.cloudflareReplicaRetirement).toEqual(intent);
     });
 

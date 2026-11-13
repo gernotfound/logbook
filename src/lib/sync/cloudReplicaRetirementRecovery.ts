@@ -1,7 +1,7 @@
 import equal from 'fast-deep-equal';
 import {
     CloudReplicaMutationReconciliationRequiredError,
-    type CloudReplicaControlSnapshot, type createCloudflareReplicaTransport,
+    type CloudReplicaControlSnapshot, type CloudReplicaMutationResult, type createCloudflareReplicaTransport,
 } from './cloudReplicaTransport';
 import {
     parseCloudflareReplicaRetirementIntent, type CloudflareReplicaRetirementIntent,
@@ -82,9 +82,11 @@ export async function stageCloudflareReplicaRetirement(
 }
 
 /**
- * A historical receipt cannot prove which incarnation occupies a slot now.
- * Require a fresh, stable control with the exact retired incarnation before
- * clearing the intent atomically. No business journal entry is ACKed here.
+ * A historical receipt is proof that the original retirement committed, but
+ * not proof that the target is still retired. An unrelated control revision may
+ * advance without invalidating this completed retirement. Require two stable
+ * remote reads of the exact retired incarnation before clearing the intent.
+ * Never ACK any business journal entry from a membership receipt.
  */
 export async function resumeCloudflareReplicaRetirement(
     ownerInput: string,
@@ -105,26 +107,27 @@ export async function resumeCloudflareReplicaRetirement(
         throw new Error('Barriera integrità D1: retirement sospeso.');
     }
 
-    let receipt;
+    let receipt: CloudReplicaMutationResult;
     try {
         receipt = await transport.replayStoredRetirement(intent, csrfToken);
     } catch (error) {
         current(guard);
-        if (error instanceof CloudReplicaMutationReconciliationRequiredError) {
-            return 'reconciliation-required';
-        }
-        throw error;
+        if (!(error instanceof CloudReplicaMutationReconciliationRequiredError)) throw error;
+        // The transport already validated the original request/receipt binding.
+        // The fresh control below must still prove this exact incarnation retired.
+        receipt = error.historicalReceipt;
     }
     current(guard);
     if (receipt.action !== 'retire' || receipt.mutationId !== intent.mutationId
         || receipt.revision !== intent.expectedRevision + 1
         || !sameReplica(receipt.replica, intent.replica)
-        || receipt.reconciliationRequired) return 'reconciliation-required';
+        || !Number.isSafeInteger(receipt.currentRevision)
+        || receipt.currentRevision < receipt.revision) return 'reconciliation-required';
 
     const control = await transport.control();
     current(guard);
     const entry = control.replicas[intent.replica.slot];
-    if (control.revision !== receipt.currentRevision
+    if (control.revision < receipt.currentRevision
         || control.fenceEpoch !== intent.expectedFenceEpoch
         || control.consentRevision !== intent.consentRevision
         || !entry || entry.status !== 'retired'
