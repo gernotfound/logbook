@@ -15,6 +15,39 @@ export async function readSnapshot(db, uid, consentRevision, fenceEpoch, paths) 
   return { revision: control.revision, fenceEpoch: control.fence_epoch, documents };
 }
 
+// The replica register and sync revision are read inside one SQL snapshot.
+// All future register/checkpoint/retirement writes MUST advance the revision.
+export async function readReplicaControl(db, uid, consentRevision, fenceEpoch) {
+  const [head, list] = await db.batch([
+    db.prepare("SELECT s.revision, a.fence_epoch, a.consent_revision FROM sync_subjects a JOIN sync_state s ON s.uid = a.uid WHERE a.uid = ? AND a.status = 'active' AND a.consent_revision = ? AND a.fence_epoch = ?")
+      .bind(uid, consentRevision, fenceEpoch),
+    db.prepare("SELECT slot, replica_id, generation, lease_until_ms, checkpoint_at_ms, checkpoint_clock_json, last_seq, status FROM sync_replicas WHERE uid = ? ORDER BY slot LIMIT 17")
+      .bind(uid),
+  ]);
+  const control = head?.results?.[0];
+  if (!control) return null;
+  if (!list || !Array.isArray(list.results) || list.results.length > 16) {
+    throw new Error('invalid-replica-register');
+  }
+  const replicas = {};
+  for (const row of list.results) {
+    if (Object.hasOwn(replicas, row.slot)) throw new Error('invalid-replica-register');
+    replicas[row.slot] = {
+      replicaId: row.replica_id,
+      generation: row.generation,
+      leaseUntilMs: row.lease_until_ms,
+      checkpointAtMs: row.checkpoint_at_ms,
+      checkpointClock: JSON.parse(row.checkpoint_clock_json),
+      lastSeq: row.last_seq,
+      status: row.status,
+    };
+  }
+  return {
+    revision: control.revision, fenceEpoch: control.fence_epoch,
+    consentRevision: control.consent_revision, replicas,
+  };
+}
+
 // A full checkpoint is collected in bounded, revision-fenced pages. Each D1
 // batch is one SQL transaction: the control and its page share a consistent view.
 // No page is authoritative on its own, and callers must reject stale revisions.
