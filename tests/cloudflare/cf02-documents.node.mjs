@@ -272,6 +272,36 @@ void test('SQL schema refuses invalid months and malformed checkpoint clocks', (
   assert.equal(db.sqlite.prepare('SELECT count(*) AS n FROM sync_documents').get().n, 0);
 }));
 
+void test('database constraints forbid revision, actor and sequence regression', () => withFixture(async db => {
+  assert.throws(() => db.sqlite.prepare('UPDATE sync_state SET revision = 0 WHERE uid = ?').run(owner),
+    /sync-revision-regression/);
+  db.sqlite.prepare('UPDATE sync_state SET revision = 1 WHERE uid = ?').run(owner);
+  assert.throws(() => db.sqlite.prepare('UPDATE sync_state SET revision = 0 WHERE uid = ?').run(owner),
+    /sync-revision-regression/);
+  db.sqlite.prepare('UPDATE sync_replicas SET last_seq = 5 WHERE uid = ? AND slot = ?')
+    .run(owner, replica.slot);
+  assert.throws(() => db.sqlite.prepare('UPDATE sync_replicas SET last_seq = 4 WHERE uid = ? AND slot = ?')
+    .run(owner, replica.slot), /replica-regression/);
+  db.sqlite.prepare("UPDATE sync_replicas SET status = 'retired' WHERE uid = ? AND slot = ?")
+    .run(owner, replica.slot);
+  assert.throws(() => db.sqlite.prepare("UPDATE sync_replicas SET status = 'active' WHERE uid = ? AND slot = ?")
+    .run(owner, replica.slot), /replica-regression/);
+  db.sqlite.prepare("UPDATE sync_replicas SET generation = 2, status = 'active' WHERE uid = ? AND slot = ?")
+    .run(owner, replica.slot);
+  assert.equal(db.sqlite.prepare('SELECT last_seq FROM sync_replicas WHERE uid = ?').get(owner).last_seq, 5);
+}));
+
+void test('account epoch change revokes receipt lookup instead of implying an absent ACK', () => withFixture(async db => {
+  const batch = attempt('batch000000000065');
+  assert.equal((await call(db, 'commit', batch)).status, 200);
+  db.sqlite.prepare('UPDATE sync_subjects SET fence_epoch = 6 WHERE uid = ?').run(owner);
+  assert.deepEqual(await call(db, 'receipt', { batchId: batch.batchId }),
+    { status: 403, body: { error: 'access-revoked' } });
+  const newSession = await call(db, 'receipt', { batchId: batch.batchId },
+    { env: makeEnv(db, { fenceEpoch: 6 }) });
+  assert.deepEqual(newSession, { status: 200, body: { receipt: null } });
+}));
+
 void test('a batch from an erased account epoch cannot resurrect data at reset revision', () => withFixture(async db => {
   const stale = attempt('batch000000000035', 1, 0);
   db.sqlite.prepare('UPDATE sync_subjects SET fence_epoch = 6 WHERE uid = ?').run(owner);
