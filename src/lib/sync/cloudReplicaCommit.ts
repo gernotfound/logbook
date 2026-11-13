@@ -76,7 +76,13 @@ export function prepareCloudflareCommit(
 
     const lastSeq = ops.reduce((max, operation) => Math.max(max, operation.seq), entry.lastSeq);
     if (lastSeq < 1) throw new CloudReplicaStaleSnapshotError();
-    const writer = { ...replica, seq: lastSeq, consentRevision };
+    // TypeScript Pick does not strip runtime properties. A persisted
+    // ReplicaIdentity also carries lease/checkpoint timestamps: never spread
+    // those into the strict public writer or the HTTP replica DTO.
+    const replicaTuple = {
+        slot: replica.slot, replicaId: replica.replicaId, generation: replica.generation,
+    };
+    const writer = { ...replicaTuple, seq: lastSeq, consentRevision };
     const outcome = prepareEncryptedDocumentChanges(
         uid, ops, remote, stableFrontier, writer, accountKey,
     );
@@ -89,7 +95,7 @@ export function prepareCloudflareCommit(
         expectedRevision: snapshot.revision,
         expectedFenceEpoch: snapshot.fenceEpoch,
         consentRevision,
-        replica,
+        replica: replicaTuple,
         lastSeq,
         documents: [...outcome.sealedDocuments].map(([path, document]) => ({ path, document })),
     };
