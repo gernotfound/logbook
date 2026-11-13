@@ -1,7 +1,7 @@
 import { CloudCiphertextError } from './cloudDocumentCipher';
 import { prepareEncryptedDocumentChanges, type PreparedEncryptedDocumentChanges } from './cloudMergeEngine';
 import type { CloudReplicaBatch, CloudReplicaControlSnapshot, CloudReplicaSnapshot } from './cloudReplicaTransport';
-import { stableFrontierFromControl, type ReplicaIdentity } from './replicaProtocol';
+import { parseReplicaControl, stableFrontierFromControl, type ReplicaIdentity } from './replicaProtocol';
 import { parseSemanticOperation } from './semanticProjection/metadata';
 import type { SemanticOperation } from './semanticProjection/contracts';
 import { distinctDocumentCount, MAX_SYNC_DOCUMENTS_PER_TRANSACTION } from './syncBatching';
@@ -36,13 +36,25 @@ export function prepareCloudflareCommit(
         || !Number.isSafeInteger(control.consentRevision) || control.consentRevision < 1
         || !/^[A-Za-z0-9_-]{16,128}$/.test(batchId)) throw new CloudReplicaStaleSnapshotError();
 
-    const entry = control.replicas[replica.slot];
+    // Do not trust TypeScript types as runtime proof of a remote control.
+    // Validate every actor/clock before any stable-frontier based compaction.
+    let parsedControl;
+    try {
+        parsedControl = parseReplicaControl({
+            protocolVersion: 3, consentRevision: control.consentRevision,
+            replicas: control.replicas,
+            mutation: { slot: replica.slot, action: 'checkpoint' },
+        });
+    } catch {
+        throw new CloudReplicaStaleSnapshotError();
+    }
+    const entry = parsedControl.replicas[replica.slot];
     if (!entry || entry.status !== 'active' || entry.replicaId !== replica.replicaId
         || entry.generation !== replica.generation || !Number.isSafeInteger(entry.lastSeq)
         || entry.lastSeq < 0 || !Number.isSafeInteger(entry.leaseUntilMs)
         || entry.leaseUntilMs <= Date.now()) throw new CloudReplicaStaleSnapshotError();
     const consentRevision = control.consentRevision;
-    const stableFrontier = stableFrontierFromControl(control);
+    const stableFrontier = stableFrontierFromControl(parsedControl);
 
     const ops = rawOperations.map(parseSemanticOperation);
     const paths = [...new Set(ops.map(operation => operation.docPath))];
