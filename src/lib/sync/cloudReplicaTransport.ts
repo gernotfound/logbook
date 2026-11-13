@@ -188,7 +188,12 @@ export function createCloudflareReplicaTransport(send: typeof fetch = fetch) {
                 mutationId, expectedRevision: control.revision,
                 expectedFenceEpoch: control.fenceEpoch,
                 consentRevision: control.consentRevision,
-                candidateReplicaId, currentReplica, checkpointClock,
+                candidateReplicaId,
+                currentReplica: currentReplica ? {
+                    slot: currentReplica.slot, replicaId: currentReplica.replicaId,
+                    generation: currentReplica.generation,
+                } : null,
+                checkpointClock,
             };
             const value = await post('replica/claim', body, csrfToken);
             const confirmed = parseMutationResponse(value, mutationId, control.revision,
@@ -215,7 +220,9 @@ export function createCloudflareReplicaTransport(send: typeof fetch = fetch) {
             const value = await post('replica/retire', {
                 mutationId, expectedRevision: control.revision,
                 expectedFenceEpoch: control.fenceEpoch,
-                consentRevision: control.consentRevision, replica,
+                consentRevision: control.consentRevision,
+                replica: { slot: replica.slot, replicaId: replica.replicaId,
+                    generation: replica.generation },
             }, csrfToken);
             const confirmed = parseMutationResponse(value, mutationId, control.revision, ['retire']);
             if (confirmed.replica.slot !== replica.slot
