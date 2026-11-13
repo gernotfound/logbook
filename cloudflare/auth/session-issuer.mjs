@@ -25,7 +25,8 @@ function randomToken() {
  * as a public endpoint accepting an arbitrary uid. Sessions are valid only for
  * the current principal epoch; the separate sync gate also requires consent.
  */
-export async function issueVerifiedSession(db, authenticatedUid, nowMs = Date.now()) {
+export async function issueVerifiedSession(db, authenticatedUid) {
+  const nowMs = Date.now();
   if (!db || typeof db.prepare !== 'function' ||
     typeof authenticatedUid !== 'string' || authenticatedUid.length < 1 ||
     authenticatedUid.length > 128 || authenticatedUid.includes('/') ||
