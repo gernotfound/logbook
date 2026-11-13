@@ -11,7 +11,7 @@ describe('isolated Cloudflare document transport', () => {
     it('uses same-origin credentialed requests and never acknowledges unverified ciphertext', async () => {
         const fetcher = vi.fn(async (_url: RequestInfo | URL, _init?: RequestInit) => new Response(JSON.stringify({
             revision: 7,
-            fenceEpoch: 3,
+            fenceEpoch: 3, consentRevision: 1,
             documents: [{ path: '', revision: 7, document: { _sealed: { ciphertext: 'untrusted' } } }],
         }), { status: 200 }));
         const remote = createCloudflareReplicaTransport(fetcher as typeof fetch);
@@ -63,6 +63,29 @@ describe('isolated Cloudflare document transport', () => {
         await expect(absent.receipt(batch)).resolves.toBeNull();
     });
 
+    it('loads an authenticated replica register and rejects malformed clocks', async () => {
+        const content = { revision: 4, fenceEpoch: 7, consentRevision: 1,
+            replicas: { s00: {
+                replicaId: 'fixture-device', generation: 1, status: 'active',
+                leaseUntilMs: Date.now() + 86400000, checkpointAtMs: Date.now(),
+                checkpointClock: { s00: 1 }, lastSeq: 1,
+            } } };
+        const client = createCloudflareReplicaTransport(vi.fn(async () =>
+            new Response(JSON.stringify(content))) as typeof fetch);
+        expect(await client.control()).toEqual(content);
+        for (const bad of [
+            { ...content, replicas: { s99: content.replicas.s00 } },
+            { ...content, replicas: { s00: { ...content.replicas.s00, checkpointClock: { wrong: 1 } } } },
+            { ...content, replicas: { s00: { ...content.replicas.s00, generation: 0 } } },
+            { ...content, replicas: { s00: { ...content.replicas.s00, status: 'unknown' } } },
+            { ...content, fenceEpoch: 0 },
+        ]) {
+            const remote = createCloudflareReplicaTransport(vi.fn(async () =>
+                new Response(JSON.stringify(bad))) as typeof fetch);
+            await expect(remote.control()).rejects.toBeInstanceOf(CloudReplicaTransportError);
+        }
+    });
+
     it('requires a session-bound CSRF value before any encrypted commit', async () => {
         const fetcher = vi.fn(async () => new Response('{}'));
         const remote = createCloudflareReplicaTransport(fetcher as typeof fetch);
@@ -78,16 +101,16 @@ describe('isolated Cloudflare document transport', () => {
             `history_months/2026-${String(i + 1).padStart(2, '0')}`)];
         const document = { _sealed: { ciphertext: 'unverified, never hydrated by transport alone' } };
         const pages = [
-            { revision: 2, fenceEpoch: 5, complete: false, nextAfter: paths[7],
+            { revision: 2, fenceEpoch: 5, consentRevision: 1, complete: false, nextAfter: paths[7],
                 documents: paths.slice(0, 8).map(path => ({ path, revision: 2, document })) },
-            { revision: 2, fenceEpoch: 5, complete: true, nextAfter: null,
+            { revision: 2, fenceEpoch: 5, consentRevision: 1, complete: true, nextAfter: null,
                 documents: paths.slice(8).map(path => ({ path, revision: 2, document })) },
         ];
         let index = 0;
         const fetcher = vi.fn(async () => new Response(JSON.stringify(pages[index++])));
         const remote = createCloudflareReplicaTransport(fetcher as typeof fetch);
         const result = await remote.scanAll();
-        expect(result).toEqual({ revision: 2, fenceEpoch: 5,
+        expect(result).toEqual({ revision: 2, fenceEpoch: 5, consentRevision: 1,
             documents: pages.flatMap(page => page.documents) });
         expect(JSON.parse((fetcher.mock.calls[0] as unknown as [string, RequestInit])[1].body as string))
             .toEqual({ after: null, expectedRevision: null });
@@ -98,13 +121,14 @@ describe('isolated Cloudflare document transport', () => {
     it('rejects incomplete, stale, non-monotone and malformed paginated snapshots', async () => {
         const paths = ['', ...Array.from({ length: 7 }, (_, i) =>
             `nutrition_months/2026-${String(i + 1).padStart(2, '0')}`)];
-        const first = { revision: 2, fenceEpoch: 5, complete: false,
+        const first = { revision: 2, fenceEpoch: 5, consentRevision: 1, complete: false,
             nextAfter: paths[7], documents: paths.map(path => ({
                 path, revision: 2, document: { _sealed: {} },
             })) };
         for (const bad of [
             { ...first, revision: 3, complete: true, nextAfter: null, documents: [] },
             { ...first, fenceEpoch: 6, complete: true, nextAfter: null, documents: [] },
+            { ...first, consentRevision: 2, complete: true, nextAfter: null, documents: [] },
             { ...first, complete: true, nextAfter: null,
                 documents: [{ path: paths[7], revision: 2, document: {} }] },
             { ...first, complete: false, nextAfter: paths[7], documents: [] },
@@ -128,23 +152,25 @@ describe('isolated Cloudflare document transport', () => {
                 seq: 1, consentRevision: 1 } };
         const business = { profile: { notes: 'synthetic-health-only' } };
         const ciphertext = sealCloudDocument(key, 'synthetic-account', '', business, metadata);
-        const scan = async () => ({ revision: 1, fenceEpoch: 5,
+        const scan = async () => ({ revision: 1, fenceEpoch: 5, consentRevision: 1,
             documents: [{ path: '', revision: 1, document: ciphertext }] });
+        await expect(readAuthenticatedCloudflareCheckpoint(scan, 'synthetic-account', key, 2, () => true))
+            .rejects.toBeInstanceOf(CloudCiphertextError);
         const verified = await readAuthenticatedCloudflareCheckpoint(
-            scan, 'synthetic-account', key, () => true,
+            scan, 'synthetic-account', key, 1, () => true,
         );
         expect(verified.documents.get('')?.business).toEqual(business);
-        await expect(readAuthenticatedCloudflareCheckpoint(scan, 'different-account', key, () => true))
+        await expect(readAuthenticatedCloudflareCheckpoint(scan, 'different-account', key, 1, () => true))
             .rejects.toBeInstanceOf(CloudCiphertextError);
-        await expect(readAuthenticatedCloudflareCheckpoint(async () => ({ revision: 1, fenceEpoch: 5,
+        await expect(readAuthenticatedCloudflareCheckpoint(async () => ({ revision: 1, fenceEpoch: 5, consentRevision: 1,
             documents: [{ path: '', revision: 1, document: { ...ciphertext,
                 _sync: { ...ciphertext._sync, clock: { s00: 2 } } } }] }),
-        'synthetic-account', key, () => true)).rejects.toBeInstanceOf(CloudCiphertextError);
+        'synthetic-account', key, 1, () => true)).rejects.toBeInstanceOf(CloudCiphertextError);
         let current = true;
         await expect(readAuthenticatedCloudflareCheckpoint(async () => {
             current = false;
             return scan();
-        }, 'synthetic-account', key, () => current)).rejects.toBeInstanceOf(CloudCiphertextError);
+        }, 'synthetic-account', key, 1, () => current)).rejects.toBeInstanceOf(CloudCiphertextError);
     });
 
 });
