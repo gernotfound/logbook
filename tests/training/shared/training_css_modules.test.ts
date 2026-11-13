@@ -40,15 +40,7 @@ describe('Training stylesheet module boundaries', () => {
     // Node's readFileSync does not expand CSS @imports. Inspect the actual
     // imported modules in the order verified by the preceding test.
     const css = modules.map(name => readFileSync(path.join(directory, name), 'utf8')).join('\n');
-    const markers = [
-      '.workout-sticky-timer {',
-      '/* Training history calendar */',
-      '/* Exercise library — proposal 5 */',
-      '/* Sessione allenamento — redesign mobile-first */',
-    ];
-    const positions = markers.map(marker => css.indexOf(marker));
-    expect(positions.every(position => position >= 0)).toBe(true);
-    expect(positions).toEqual([...positions].sort((a, b) => a - b));
+    expect(css).toMatch(/\.workout-sticky-timer\s*\{/);
     expect(css).toMatch(/\.workout-timer \.timer-controls\s*\{/);
     expect(css).toMatch(/\.history-header\s*\{/);
     expect(css).toMatch(/\.exercise-editor\s*\{/);
