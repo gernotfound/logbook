@@ -1,5 +1,10 @@
 import { parse } from '@babel/parser';
 
+// Include native node:test suites in the same skip/focus quality gate as Vitest.
+export function isExecutableTestFile(name) {
+  return /\.(?:test|spec)\.[cm]?[jt]sx?$|\.node\.mjs$/.test(name);
+}
+
 const testNames = new Set(['test', 'it', 'describe']);
 const aliases = new Map([['fit', 'only'], ['fdescribe', 'only'], ['xit', 'skip'], ['xtest', 'skip'], ['xdescribe', 'skip']]);
 // Conditional Vitest helpers can silently omit tests from the canonical suite.
