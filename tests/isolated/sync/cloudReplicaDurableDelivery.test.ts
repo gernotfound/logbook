@@ -186,6 +186,46 @@ describe('candidate D1 delivery: encrypted IndexedDB intent and exact ACK', () =
         expect((await readLocal(owner))?.pending).toHaveLength(2);
     });
 
+    it('persists and acknowledges a real mixed-sequence root/month journal without inflating the root clock', async () => {
+        const seeded = await seed();
+        const updated = UserDataSchema.parse({
+            ...seeded.envelope.data,
+            nutrition: { '2026-11-13': { date: '2026-11-13', weight: 70 } },
+        }) as unknown as UserData;
+        await commitLocal(owner, updated, seeded.envelope.data);
+        const current = (await readLocal(owner))!;
+        expect(new Set(current.pending.map(op => op.docPath))).toEqual(
+            new Set(['', 'nutrition_months/2026-11']),
+        );
+        expect(current.pending.at(-1)!.seq).toBeGreaterThan(current.pending[0].seq);
+
+        await stageCloudflareDelivery(owner, current.pending, {
+            ...seeded.snapshot,
+            documents: [...seeded.snapshot.documents, {
+                path: 'nutrition_months/2026-11', document: null, revision: null,
+            }],
+        }, seeded.control, seeded.replica, 'batch000000000196', adk, () => true);
+        const saved = (await readLocal(owner))!;
+        const batch = saved.cloudflareDelivery!.batch;
+        expect(batch.lastSeq).toBe(current.pending.at(-1)!.seq);
+        expect(batch.documents.find(doc => doc.path === '')?.document._sync.clock.s00).toBe(
+            current.pending[0].seq,
+        );
+        expect(batch.documents.find(doc => doc.path === 'nutrition_months/2026-11')?.document._sync.clock.s00)
+            .toBe(batch.lastSeq);
+        expect(batch.documents.every(doc => doc.document._sync.writer?.seq === batch.lastSeq)).toBe(true);
+
+        const transport = deliveryTransport();
+        expect(await resumeCloudflareDelivery(owner, adk, transport, 'csrf-session', () => true))
+            .toBe('acknowledged');
+        const after = (await readLocal(owner))!;
+        expect(after.pending).toEqual([]);
+        expect(after.cloudflareDelivery).toBeUndefined();
+        expect(after.syncMetaByDocument[''].clock.s00).toBe(current.pending[0].seq);
+        expect(after.syncMetaByDocument['nutrition_months/2026-11'].clock.s00).toBe(batch.lastSeq);
+        expect(after.data.nutrition?.['2026-11-13']?.weight).toBe(70);
+    });
+
     it('refuses a mismatched receipt even if an injected transport reports success', async () => {
         await stage();
         const before = await get(storeKey);
