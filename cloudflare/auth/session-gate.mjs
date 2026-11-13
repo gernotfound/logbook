@@ -11,6 +11,8 @@ const MUTATION_ROUTES = new Set([
   '/v1/sync/commit', '/v1/sync/replica/claim',
   '/v1/sync/replica/retire', '/v1/sync/replica/status',
 ]);
+const IDENTITY_READ_ROUTES = new Set(['/v1/consent/status']);
+const IDENTITY_MUTATION_ROUTES = new Set(['/v1/consent/initial']);
 
 function json(payload, status) {
   return new Response(JSON.stringify(payload), {
@@ -73,7 +75,8 @@ async function authorize(request, env) {
     return json({ error: 'unauthorized' }, 403);
   }
   const route = request.headers.get('x-original-route');
-  if (!READ_ROUTES.has(route) && !MUTATION_ROUTES.has(route)) {
+  const identityOnly = IDENTITY_READ_ROUTES.has(route) || IDENTITY_MUTATION_ROUTES.has(route);
+  if (!READ_ROUTES.has(route) && !MUTATION_ROUTES.has(route) && !identityOnly) {
     return json({ error: 'unauthorized' }, 403);
   }
   const token = cookieToken(request.headers.get('cookie'));
@@ -83,6 +86,14 @@ async function authorize(request, env) {
     return json({ error: 'unavailable' }, 503);
   }
 
+  // Current legal versions are a server-side authorization fence. An old
+  // acceptance cannot enable sync merely because its original proof is intact.
+  if (!identityOnly && (typeof env.CONSENT_PRIVACY_VERSION !== 'string'
+    || typeof env.CONSENT_TERMS_VERSION !== 'string'
+    || !/^[A-Za-z0-9._-]{1,32}$/.test(env.CONSENT_PRIVACY_VERSION)
+    || !/^[A-Za-z0-9._-]{1,32}$/.test(env.CONSENT_TERMS_VERSION))) {
+    return json({ error: 'unavailable' }, 503);
+  }
   const tokenHash = await hashSessionSecret(token);
   // Approximate per-location protection against accidental/abusive session
   // traffic, not a globally strict login/email abuse quota. CF-07 still needs
@@ -90,29 +101,56 @@ async function authorize(request, env) {
   const limited = await env.API_RATE_LIMITER.limit({ key: 'sync:' + tokenHash });
   if (!limited || limited.success !== true) return json({ error: 'rate-limited' }, 429);
 
-  // A single primary SELECT prevents mixing a valid session from one account
-  // generation with a revoked consent or a different account fence.
-  const row = await env.DB.withSession('first-primary').prepare(`
-    SELECT p.uid, p.auth_epoch, s.consent_revision, s.fence_epoch,
+  // Consent bootstrap must authenticate an account with *no* consent row.
+  // Sync routes still require the stronger inner join with active consent.
+  const identitySql = `
+    SELECT p.uid, p.auth_epoch AS fence_epoch, p.verified_at_ms,
+      COALESCE(s.consent_revision, 0) AS consent_revision,
       t.csrf_hash, t.issued_at_ms, t.idle_expires_at_ms,
+      t.absolute_expires_at_ms
+    FROM auth_sessions t
+    JOIN auth_principals p ON p.uid = t.uid
+    LEFT JOIN sync_subjects s ON s.uid = p.uid
+    WHERE t.token_hash = ? AND t.revoked_at_ms IS NULL
+      AND p.status = 'active' AND t.auth_epoch = p.auth_epoch
+  `;
+  const syncSql = `
+    SELECT p.uid, p.auth_epoch, s.consent_revision, s.fence_epoch,
+      p.verified_at_ms, t.csrf_hash, t.issued_at_ms, t.idle_expires_at_ms,
       t.absolute_expires_at_ms
     FROM auth_sessions t
     JOIN auth_principals p ON p.uid = t.uid
     JOIN sync_subjects s ON s.uid = p.uid
     JOIN sync_state state ON state.uid = s.uid
+    JOIN health_consent_acceptances accepted ON accepted.uid = s.uid
     WHERE t.token_hash = ? AND t.revoked_at_ms IS NULL
       AND p.status = 'active' AND p.verified_at_ms IS NOT NULL
       AND t.auth_epoch = p.auth_epoch
-      AND s.status = 'active' AND s.consent_revision >= 1
+      AND s.status = 'active' AND s.consent_revision = 1
+      AND accepted.consent_revision = 1 AND accepted.over_18_confirmed = 1
+      AND accepted.accepted_at_ms > 0
+      AND accepted.privacy_version = ?
+      AND accepted.terms_version = ?
       AND s.fence_epoch = p.auth_epoch
-  `).bind(tokenHash).first();
+  `;
+  const parameters = identityOnly
+    ? [tokenHash]
+    : [tokenHash, env.CONSENT_PRIVACY_VERSION, env.CONSENT_TERMS_VERSION];
+  const row = await env.DB.withSession('first-primary')
+    .prepare(identityOnly ? identitySql : syncSql).bind(...parameters).first();
   const now = Date.now();
   if (!row || !Number.isSafeInteger(row.issued_at_ms) || row.issued_at_ms > now
     || !Number.isSafeInteger(row.idle_expires_at_ms) || now >= row.idle_expires_at_ms
     || !Number.isSafeInteger(row.absolute_expires_at_ms) || now >= row.absolute_expires_at_ms
-    || !Number.isSafeInteger(row.consent_revision) || row.consent_revision < 1
+    || !Number.isSafeInteger(row.consent_revision) || row.consent_revision < 0
+    || (!identityOnly && row.consent_revision < 1)
     || !Number.isSafeInteger(row.fence_epoch) || row.fence_epoch < 1
     || typeof row.uid !== 'string' || row.uid.length === 0 || row.uid.includes('/')) {
+    return json({ error: 'unauthorized' }, 401);
+  }
+  const emailVerified = Number.isSafeInteger(row.verified_at_ms)
+    && row.verified_at_ms > 0 && row.verified_at_ms <= now;
+  if ((!identityOnly || IDENTITY_MUTATION_ROUTES.has(route)) && !emailVerified) {
     return json({ error: 'unauthorized' }, 401);
   }
   const suppliedCsrf = request.headers.get('x-csrf-token');
@@ -122,17 +160,18 @@ async function authorize(request, env) {
     csrfVerified = equalHash(await hashSessionSecret(suppliedCsrf), row.csrf_hash);
     if (!csrfVerified) return json({ error: 'unauthorized' }, 403);
   }
-  if (MUTATION_ROUTES.has(route) && !csrfVerified) {
+  if ((MUTATION_ROUTES.has(route) || IDENTITY_MUTATION_ROUTES.has(route)) && !csrfVerified) {
     return json({ error: 'csrf-required' }, 403);
   }
   return json({
     uid: row.uid,
     authenticated: true,
-    emailVerified: true,
+    emailVerified,
     healthConsentRevision: row.consent_revision,
     fenceEpoch: row.fence_epoch,
     csrfVerified,
     rateGatePassed: true,
+    ...(identityOnly ? { sessionHash: tokenHash } : {}),
   }, 200);
 }
 

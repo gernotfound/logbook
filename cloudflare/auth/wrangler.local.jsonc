@@ -4,15 +4,27 @@
   "compatibility_date": "2026-11-12",
   "workers_dev": false,
   "preview_urls": false,
-  "d1_databases": [{
-    "binding": "DB",
-    "database_name": "cf02-disposable-local-only",
-    "database_id": "00000000-0000-4000-8000-000000000002",
-    "migrations_dir": "../api/migrations"
-  }],
-  "ratelimits": [{
-    "name": "API_RATE_LIMITER",
-    "namespace_id": "31003",
-    "simple": { "limit": 60, "period": 60 }
-  }]
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "cf02-disposable-local-only",
+      "database_id": "00000000-0000-4000-8000-000000000002",
+      "migrations_dir": "../api/migrations"
+    }
+  ],
+  "ratelimits": [
+    {
+      "name": "API_RATE_LIMITER",
+      "namespace_id": "31003",
+      "simple": {
+        "limit": 60,
+        "period": 60
+      }
+    }
+  ],
+  "vars": {
+    "API_ORIGIN": "https://candidate.invalid",
+    "CONSENT_PRIVACY_VERSION": "1.3.9",
+    "CONSENT_TERMS_VERSION": "1.2.5"
+  }
 }

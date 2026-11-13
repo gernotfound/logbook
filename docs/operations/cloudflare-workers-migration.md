@@ -10,9 +10,9 @@
 
 La dichiarazione di database vuoto non è un inventario provider e non autorizza cancellazioni/reset fisici. Il cutover del dominio `thelogbook.me`, OAuth, posta Production e la dismissione irreversibile richiedono un GO specifico, anche senza utenti da migrare.
 
-## Incremento CF-03 in verifica — gate di sessione interno
+## Incremento CF-03 integrato — gate di sessione interno (non distribuito)
 
-Il branch CF-03 aggiunge migration D1 `0003_auth_session_gate.sql`,
+La [PR #1076](https://github.com/gernotfound/logbook/pull/1076), integrata su `main c2352c5e23e4daf1e71f3224fdf315ab8bfefe7b`, aggiunge migration D1 `0003_auth_session_gate.sql`,
 `cloudflare/auth/session-gate.mjs` e regressioni SQL/HTTP sintetiche.
 Il nuovo endpoint è **esclusivamente un service binding privato**, con cookie
 `__Host-logbook_session` hashato, CSRF hashato, status/email verificata,
@@ -25,9 +25,9 @@ Firebase, nessun deploy o DNS. Riferimento a [CF-03 #1057](https://github.com/ge
 La configurazione Mailjet e la sua verifica vengono svolte in un filone
 separato; questo incremento non modifica provider email.
 
-## Incremento CF-03 — issuer di sessioni in verifica
+## Incremento CF-03 integrato — issuer di sessioni (non esposto)
 
-`cloudflare/auth/session-issuer.mjs` prepara l'emissione di cookie
+La [PR #1078](https://github.com/gernotfound/logbook/pull/1078), integrata su `main d744f0ff1d5828329e78188396dcc4aacc6cd987` (CI PR e main riuscite), aggiunge `cloudflare/auth/session-issuer.mjs` per l'emissione di cookie
 sessione/CSRF solo **dopo** una futura autenticazione trusted valida.
 La creazione D1 è condizionata atomicamente a principal attivo ed email
 già verificata, con `auth_epoch` corrente. Il token HttpOnly resta
@@ -38,16 +38,27 @@ sincronizzazione. Non c'è ancora un endpoint pubblico di login/Google,
 consenso o invio email, né deploy/provider; il nuovo issuer rimane un
 componente interno isolato. I test di prova sono Node/SQLite sintetici.
 
+## Incremento CF-05 in validazione — primo consenso trusted (PR #1079)
+
+Il [branch CF-05](https://github.com/gernotfound/logbook/pull/1079) prepara un Worker HTTP candidato per stato e accettazione iniziale, con contratto frontend `unregistered`/`revision`/`acceptedAt` ISO, input `acceptedTerms`, `acceptedHealthData`, `confirmsOver18`, versioni legali correnti e CSRF. D1 schema `0004`: prova
+immutabile in una transazione insieme a subject e sync_state; il gate
+interno ne richiede l'esistenza prima di qualsiasi replica. Consenso mancante, prova incompleta, versione legale superata o generazione
+sfasata non autorizzano replica, anche con cookie Auth valido. La revoca e
+la riaccettazione sono **NON IMPLEMENTATE**, così come issuer Auth reale
+e i diritti; nessuna route pubblica o migration provider applicata.
+Questo codice non abilita la PWA: serve completare l'intero ciclo di consenso
+prima del rilascio. Vedi [CF-05 #1059](https://github.com/gernotfound/logbook/issues/1059).
+
 ## Stato verificato — prove separate
 
 | Area | Evidenza | Non dimostra |
 |---|---|---|
-| Repository | [PR #1070](https://github.com/gernotfound/logbook/pull/1070) e [PR #1072](https://github.com/gernotfound/logbook/pull/1072) integrate su `main d327444dcb87fc4deadf8fe52ae471f4609e2ea7`; [CI main #43448020658](https://github.com/gernotfound/logbook/actions/runs/43448020658) **SUCCESS** (Main Release Gate + CodeQL); [Firestore legacy #43448527780](https://github.com/gernotfound/logbook/actions/runs/43448527780) **SUCCESS** | Nuovo Worker API pubblicato o runtime Cloudflare verificato |
+| Repository | [PR #1070](https://github.com/gernotfound/logbook/pull/1070), [#1072](https://github.com/gernotfound/logbook/pull/1072), [#1076](https://github.com/gernotfound/logbook/pull/1076) e [#1078](https://github.com/gernotfound/logbook/pull/1078) integrate. `main d744f0ff1d5828329e78188396dcc4aacc6cd987` (2.387.0), [CI main #43469267010](https://github.com/gernotfound/logbook/actions/runs/43469267010) **SUCCESS** (Main Release Gate e CodeQL). CF-05 [PR #1079](https://github.com/gernotfound/logbook/pull/1079) ancora candidata | Worker Auth/consenso e replica pubblicati o runtime Cloudflare verificato |
 | Frontend Cloudflare | Worker `thelogbook-frontend` su `workers.dev` e [smoke Static Assets #43223911523](https://github.com/gernotfound/logbook/actions/runs/43223911523) riuscito | Auth, Safari/iOS, update PWA, API e dominio finale |
 | D1 sandbox | `thelogbook-cf02-eu-isolated-20261113`, `jurisdiction=eu`, read replication OFF: schema `0001` + `0002` applicate e indice/trigger anti-riuso riletti via Cloudflare; un UID e un documento **sintetici**, zero mutation di replica | Database reale, HTTP Worker, performance Free, conformità GDPR |
-| Nuova API | `cloudflare/api/worker.mjs` e adapter SQL presenti nel repository, `AUTH_GATE` trusted assente, nessun binding D1 al Worker frontend | Runtime Auth o replica cloud utilizzabili |
+| Nuova API | `cloudflare/api/worker.mjs`, private `AUTH_GATE` e issuer candidati su `main`; nessun verificatore password/Google, nessun binding D1 al Worker frontend e nessuna sessione Auth reale | Runtime Auth, consenso o replica cloud utilizzabili |
 | Recupero claim D1 | [PR #1072](https://github.com/gernotfound/logbook/pull/1072) **MERGED**: ristaging durevole nel vault di claim già committato quando è avanzato soltanto il clock; receipt/lease/seq/checkpoint e AEAD verificati; lease scaduto durante scan rifiutato nella transazione | Non è integrazione AuthGate o API Production; nessun ACK o grant sul ristaging |
-| Email | [PR draft #1071](https://github.com/gernotfound/logbook/pull/1071) documenta consegna test Brevo Gmail/Proton, ma eventi apertura «Anonimizzato» ancora presenti | Email Auth senza tracking e provider definitivo |
+| Email | [PR #1071](https://github.com/gernotfound/logbook/pull/1071) integrata: scelta Mailjet Free dopo test Brevo con tracking; [PR #1077](https://github.com/gernotfound/logbook/pull/1077) in lavoro parallelo documentale Mailjet | Invio Auth Mailjet verificato, assenza tracking nel MIME ricevuto o dismissione del vecchio provider |
 | Vercel | Deployment backend Production `READY` dello SHA `8f6625a` avviato automaticamente dopo merge | Cloudflare Production o cutover DNS |
 
 Il vecchio Hosting Firebase `thelogbook` è disabilitato secondo il comando CLI attestato dal proprietario; il workflow GitHub Hosting risulta dichiarato disabilitato, ma non è stato letto autonomamente come `disabled_manually`. Non riattivarlo come rollback.
