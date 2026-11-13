@@ -181,6 +181,7 @@ async function handler(request, env) {
     if (!batchId.success) throw new BadInput('invalid-input', 400);
     const state = await readAccessState(env.DB, uid);
     if (state?.status !== 'active' || state?.consent_revision !== consentRevision
+      || state?.fence_epoch !== fenceEpoch
       || state?.revision === undefined) throw new BadInput('access-revoked', 403);
     const receipt = await readReceipt(env.DB, uid, consentRevision, fenceEpoch, batchId.data.batchId);
     return reply({ receipt: receipt ? { requestHash: receipt.request_hash, revision: receipt.committed_revision,
@@ -234,7 +235,8 @@ async function handler(request, env) {
       return reply({ batchId: input.batchId, revision: receipt.committed_revision, lastSeq: receipt.last_seq, replayed: true });
     }
     const state = await readAccessState(env.DB, uid);
-    if (state?.status !== 'active' || state?.consent_revision !== consentRevision) {
+    if (state?.status !== 'active' || state?.consent_revision !== consentRevision
+      || state?.fence_epoch !== fenceEpoch) {
       throw new BadInput('access-revoked', 403);
     }
     if (state.revision !== input.expectedRevision || /sync-fenced|UNIQUE constraint/i.test(String(error?.message))) {
