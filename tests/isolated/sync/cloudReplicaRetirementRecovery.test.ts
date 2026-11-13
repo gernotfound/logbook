@@ -16,7 +16,7 @@ import {
 } from '../../../src/lib/sync/cloudReplicaRetirementRecovery';
 import { adoptReplicaCheckpoint, commitLocal, initializeLocal, readLocal } from '../../../src/lib/sync/localRepository';
 import { createAndMigrateVault } from '../../../src/lib/sync/secureArchiveMigration';
-import { lockAllVaults } from '../../../src/lib/sync/secureArchiveSession';
+import { lockAllVaults, unlockVaultForOwner } from '../../../src/lib/sync/secureArchiveSession';
 import { updateArchiveRecord } from '../../../src/lib/sync/secureArchiveRepository';
 
 const uid = 'a';
@@ -119,6 +119,8 @@ describe('candidate D1 durable expired-replica retirement', () => {
             .rejects.toThrow('response lost');
         expect(await get(storage)).toBe(sealed);
         lockAllVaults();
+        // Account identity must reopen the real local vault after process restart.
+        await unlockVaultForOwner(owner);
         await expect(resumeCloudflareReplicaRetirement(owner, transport, 'session-csrf', () => true))
             .resolves.toBe('retired');
         expect(transport.replayStoredRetirement).toHaveBeenCalledTimes(2);
