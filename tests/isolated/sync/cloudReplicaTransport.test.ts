@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { describe, expect, it, vi } from 'vitest';
-import { CloudReplicaTransportError, createCloudflareReplicaTransport } from '../../../src/lib/sync/cloudReplicaTransport';
+import { CloudReplicaMutationReconciliationRequiredError, CloudReplicaTransportError, createCloudflareReplicaTransport } from '../../../src/lib/sync/cloudReplicaTransport';
 import { readAuthenticatedCloudflareCheckpoint } from '../../../src/lib/sync/cloudReplicaCheckpoint';
 import { CloudCiphertextError, sealCloudDocument } from '../../../src/lib/sync/cloudDocumentCipher';
 import type { SyncMeta } from '../../../src/lib/sync/semanticProjection/contracts';
@@ -101,7 +101,7 @@ describe('isolated Cloudflare document transport', () => {
         const result = { mutationId, action: 'register', revision: 6,
             replica: { slot: 's01', replicaId: 'device-new', generation: 1,
                 checkpointAtMs: Date.now(), leaseUntilMs: Date.now() + 86400000 },
-            baseSeq: 0, replayed: false };
+            baseSeq: 0, replayed: false, currentRevision: 6, reconciliationRequired: false };
         const fetcher = vi.fn(async () => new Response(JSON.stringify(result)));
         const client = createCloudflareReplicaTransport(fetcher as typeof fetch);
         await expect(client.claimCheckpoint(checkpoint, control,
@@ -129,12 +129,48 @@ describe('isolated Cloudflare document transport', () => {
         expect(fetcher).toHaveBeenCalledTimes(1);
     });
 
+    it('refuses adoption from a historical claim receipt after a concurrent control revision', async () => {
+        const key = new Uint8Array(32).fill(19);
+        const sync: SyncMeta = { protocolVersion: 3, clock: { s00: 1 }, fields: {},
+            writer: { slot: 's00', replicaId: 'device-a', generation: 1, seq: 1, consentRevision: 1 } };
+        const encrypted = sealCloudDocument(key, 'owner-fixture', '', { profile: { height: '175' } }, sync);
+        const checkpoint = await readAuthenticatedCloudflareCheckpoint(async () => ({
+            revision: 5, fenceEpoch: 3, consentRevision: 1,
+            documents: [{ path: '', revision: 5, document: encrypted }],
+        }), 'owner-fixture', key, 1, () => true);
+        const id = 'mutation0000000202';
+        const historic = {
+            mutationId: id, action: 'register', revision: 6, currentRevision: 9,
+            reconciliationRequired: true, replayed: true, baseSeq: 0,
+            replica: { slot: 's01', replicaId: 'new-device', generation: 1,
+                checkpointAtMs: Date.now(), leaseUntilMs: Date.now() + 86400000 },
+        };
+        const sender = vi.fn(async () => new Response(JSON.stringify(historic)));
+        const transport = createCloudflareReplicaTransport(sender as typeof fetch);
+        try {
+            await transport.claimCheckpoint(checkpoint, {
+                revision: 5, fenceEpoch: 3, consentRevision: 1, replicas: {},
+            }, 'new-device', null, id, 'csrf');
+            expect.unreachable();
+        } catch (error) {
+            expect(error).toBeInstanceOf(CloudReplicaMutationReconciliationRequiredError);
+            expect((error as CloudReplicaMutationReconciliationRequiredError).historicalReceipt)
+                .toMatchObject({ mutationId: id, revision: 6, currentRevision: 9 });
+        }
+        expect(sender).toHaveBeenCalledTimes(1);
+        const invalid = createCloudflareReplicaTransport(vi.fn(async () =>
+            new Response(JSON.stringify({ ...historic, reconciliationRequired: false }))) as typeof fetch);
+        await expect(invalid.claimCheckpoint(checkpoint, {
+            revision: 5, fenceEpoch: 3, consentRevision: 1, replicas: {},
+        }, 'new-device', null, id, 'csrf')).rejects.toBeInstanceOf(CloudReplicaTransportError);
+    });
+
     it('validates a retirement receipt before allowing a future local checkpoint', async () => {
         const control = { revision: 8, fenceEpoch: 3, consentRevision: 1, replicas: {} };
         const id = 'mutation0000000100';
         const target = { slot: 's00', replicaId: 'retiring-device', generation: 2 };
         const retirement = { mutationId: id, action: 'retire', revision: 9,
-            baseSeq: 8, replayed: false,
+            baseSeq: 8, replayed: false, currentRevision: 9, reconciliationRequired: false,
             replica: { ...target, checkpointAtMs: Date.now() - 300000,
                 leaseUntilMs: Date.now() - 200000 } };
         const fetcher = vi.fn(async () => new Response(JSON.stringify(retirement)));
@@ -156,6 +192,20 @@ describe('isolated Cloudflare document transport', () => {
                 mutationId: id, expectedRevision: 8, expectedFenceEpoch: 3,
                 consentRevision: 1, replica: target,
             });
+    });
+
+    it('refuses to adopt an old retire receipt after another replica changed the register', async () => {
+        const target = { slot: 's00', replicaId: 'old-device', generation: 2 };
+        const old = { mutationId: 'mutation0000000203', action: 'retire', revision: 3,
+            currentRevision: 4, reconciliationRequired: true, replayed: true, baseSeq: 8,
+            replica: { ...target, checkpointAtMs: Date.now() - 400000,
+                leaseUntilMs: Date.now() - 300000 } };
+        const transport = createCloudflareReplicaTransport(vi.fn(async () =>
+            new Response(JSON.stringify(old))) as typeof fetch);
+        await expect(transport.retireExpiredReplica({
+            revision: 2, fenceEpoch: 3, consentRevision: 1, replicas: {},
+        }, target, old.mutationId, 'csrf'))
+            .rejects.toBeInstanceOf(CloudReplicaMutationReconciliationRequiredError);
     });
 
     it('requires a session-bound CSRF value before any encrypted commit', async () => {

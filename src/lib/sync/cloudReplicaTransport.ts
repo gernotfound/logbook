@@ -50,6 +50,8 @@ export interface CloudReplicaMutationResult {
     replica: ReplicaIdentity;
     baseSeq: number;
     replayed: boolean;
+    currentRevision: number;
+    reconciliationRequired: boolean;
 }
 
 export interface CloudReplicaReceipt {
@@ -78,6 +80,17 @@ export class CloudReplicaTransportError extends Error {
     }
 }
 
+/** The original membership mutation committed, but the remote control moved.
+ * A fresh AEAD-verified scan and guarded claim is required before adoption.
+ * This receipt must never be interpreted as a current replica grant.
+ */
+export class CloudReplicaMutationReconciliationRequiredError extends CloudReplicaTransportError {
+    constructor(readonly historicalReceipt: CloudReplicaMutationResult) {
+        super(409);
+        this.name = 'CloudReplicaMutationReconciliationRequiredError';
+    }
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
     return value !== null && typeof value === 'object' && !Array.isArray(value);
 }
@@ -96,6 +109,9 @@ function parseMutationResponse(
         || !actions.includes(value.action as CloudReplicaMutationResult['action'])
         || value.revision !== expectedRevision + 1
         || !safeRevision(value.baseSeq)
+        || !safeRevision(value.currentRevision) || value.currentRevision < value.revision
+        || typeof value.reconciliationRequired !== 'boolean'
+        || (value.currentRevision !== value.revision && !value.reconciliationRequired)
         || typeof value.replayed !== 'boolean'
         || !isRecord(value.replica)
         || !/^s(?:0[0-9]|1[0-5])$/.test(String(value.replica.slot))
@@ -207,6 +223,9 @@ export function createCloudflareReplicaTransport(send: typeof fetch = fetch) {
                 : confirmed.replica.replicaId !== candidateReplicaId) {
                 throw new CloudReplicaTransportError(0);
             }
+            if (confirmed.reconciliationRequired) {
+                throw new CloudReplicaMutationReconciliationRequiredError(confirmed);
+            }
             return confirmed;
         },
 
@@ -229,6 +248,9 @@ export function createCloudflareReplicaTransport(send: typeof fetch = fetch) {
                 || confirmed.replica.replicaId !== replica.replicaId
                 || confirmed.replica.generation !== replica.generation) {
                 throw new CloudReplicaTransportError(0);
+            }
+            if (confirmed.reconciliationRequired) {
+                throw new CloudReplicaMutationReconciliationRequiredError(confirmed);
             }
             return confirmed;
         },

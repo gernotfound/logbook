@@ -70,16 +70,18 @@ function chooseReplicaClaim(control, candidateId, current, checkpointClock, now)
 export async function readReplicaMutationReceipt(db, uid, consentRevision, fenceEpoch, mutationId) {
   return db.prepare(`SELECT e.request_hash, e.action, e.committed_revision, e.slot,
     e.replica_id, e.generation, e.last_seq, e.checkpoint_at_ms, e.lease_until_ms
+    , s.revision AS current_revision,
+    CASE WHEN r.replica_id = e.replica_id AND r.generation = e.generation
+      AND r.status = CASE WHEN e.action = 'retire' THEN 'retired' ELSE 'active' END
+      THEN 1 ELSE 0 END AS current_replica_matches
     FROM sync_replica_mutations e
     JOIN sync_subjects a ON a.uid = e.uid
     JOIN sync_state s ON s.uid = e.uid
-    JOIN sync_replicas r ON r.uid = e.uid AND r.slot = e.slot
+    LEFT JOIN sync_replicas r ON r.uid = e.uid AND r.slot = e.slot
     WHERE e.uid = ? AND e.mutation_id = ?
       AND a.status = 'active' AND a.consent_revision = ?
       AND a.fence_epoch = ? AND e.consent_revision = a.consent_revision
-      AND e.fence_epoch = a.fence_epoch AND s.revision = e.committed_revision
-      AND r.replica_id = e.replica_id AND r.generation = e.generation
-      AND r.status = CASE WHEN e.action = 'retire' THEN 'retired' ELSE 'active' END`)
+      AND e.fence_epoch = a.fence_epoch AND s.revision >= e.committed_revision`)
     .bind(uid, mutationId, consentRevision, fenceEpoch).first();
 }
 
@@ -91,6 +93,11 @@ export function mutationResponse(mutationId, receipt, replayed) {
       leaseUntilMs: receipt.lease_until_ms, checkpointAtMs: receipt.checkpoint_at_ms,
     },
     baseSeq: receipt.last_seq, replayed,
+    currentRevision: receipt.current_revision ?? receipt.committed_revision,
+    // A historical receipt proves the original SQL transaction only. It is
+    // never authorization to adopt membership after another revision/slot reuse.
+    reconciliationRequired: (receipt.current_revision ?? receipt.committed_revision) !== receipt.committed_revision
+      || receipt.current_replica_matches === 0,
   };
 }
 

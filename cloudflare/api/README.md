@@ -27,8 +27,12 @@ Firebase/Firestore writer, IndexedDB journal and encrypted vault remain active.
   only after private Auth/CSRF, expected account revision/consent/epoch and
   lease/generation checks. The first SQL statement stores a digest-bound
   mutation event whose trigger fences the entire atomic D1 batch. A lost
-  response can only be reconciled to the exact same mutation while its
-  committed revision remains current.
+  response can be matched to the original immutable mutation, even after
+  a later global revision or slot reuse (within the same active account epoch).
+  The response includes currentRevision and reconciliationRequired. An old
+  receipt proves historical commit but NEVER authorizes local adoption:
+  client claim/retire throws a typed reconciliation-required error and must
+  repeat a full AEAD-verified scan with a fresh guarded mutation.
 - POST /v1/sync/read reads up to eight ciphertext envelopes under one D1
   snapshot; POST /v1/sync/scan reads a bounded page with a revision-fenced
   cursor for a complete account checkpoint. Reads/scans carry an explicit

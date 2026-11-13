@@ -161,6 +161,8 @@ void test('new replica enrollment commits one guarded registration and is replay
   const receipt = await call(db, 'replica/claim', input);
   assert.equal(receipt.status, 200);
   assert.equal(receipt.body.replayed, true);
+  assert.equal(receipt.body.currentRevision, 1);
+  assert.equal(receipt.body.reconciliationRequired, false);
   assert.deepEqual(receipt.body.replica, created.body.replica);
   assert.deepEqual(await call(db, 'replica/claim', { ...input, checkpointClock: { s00: 2 } }),
     { status: 409, body: { error: 'mutation-id-conflict' } });
@@ -176,6 +178,54 @@ void test('new replica enrollment commits one guarded registration and is replay
   write.documents[0].document._sync.clock = { s01: 1 };
   assert.equal((await call(db, 'commit', write)).status, 200);
   assert.equal(db.sqlite.prepare("SELECT last_seq FROM sync_replicas WHERE uid=? AND slot='s01'").get(owner).last_seq, 1);
+}));
+
+void test('lost claim reply after a concurrent write returns historical proof, not a fresh replica grant', () => withFixture(async db => {
+  const input = claim('mutation0000000101', 0, 'device-replay-safe');
+  const registered = await call(db, 'replica/claim', input);
+  assert.equal(registered.status, 200);
+  assert.equal(registered.body.reconciliationRequired, false);
+  assert.equal((await call(db, 'commit', attempt('batch000000000081', 1, 1))).status, 200);
+  const stale = await call(db, 'replica/claim', input);
+  assert.equal(stale.status, 200);
+  assert.equal(stale.body.replayed, true);
+  assert.equal(stale.body.revision, 1);
+  assert.equal(stale.body.currentRevision, 2);
+  assert.equal(stale.body.reconciliationRequired, true);
+  assert.deepEqual(stale.body.replica, registered.body.replica);
+  assert.deepEqual(await call(db, 'replica/claim', { ...input, candidateReplicaId: 'collision-device' }),
+    { status: 409, body: { error: 'mutation-id-conflict' } });
+  assert.equal(db.sqlite.prepare('SELECT COUNT(*) AS n FROM sync_replica_mutations').get().n, 1);
+  assert.equal(db.sqlite.prepare('SELECT revision FROM sync_state').get().revision, 2);
+
+  // The original mutation is still historical proof after its slot is reused.
+  db.sqlite.prepare("UPDATE sync_replicas SET status = 'retired' WHERE uid = ? AND slot = 's01'").run(owner);
+  db.sqlite.prepare("UPDATE sync_replicas SET replica_id = 'replacement-device', generation = 2, status = 'active' WHERE uid = ? AND slot = 's01'").run(owner);
+  const reused = await call(db, 'replica/claim', input);
+  assert.equal(reused.body.reconciliationRequired, true);
+  assert.equal(reused.body.currentRevision, 2);
+  assert.equal(reused.body.replica.replicaId, 'device-replay-safe');
+  // No action on an out-of-epoch or revoked identity can replay the receipt.
+  db.sqlite.prepare('UPDATE sync_subjects SET status = ? WHERE uid = ?').run('withdrawn', owner);
+  assert.equal((await call(db, 'replica/claim', input)).status, 403);
+}));
+
+void test('lost retirement reply after unrelated revision requires reconciliation, not stale retirement adoption', () => withFixture(async db => {
+  db.sqlite.prepare("UPDATE sync_replicas SET lease_until_ms = ? WHERE uid = ? AND slot = ?")
+    .run(Date.now() - 400000, owner, replica.slot);
+  const input = retire('mutation0000000102', 0);
+  const first = await call(db, 'replica/retire', input);
+  assert.equal(first.status, 200);
+  assert.equal(first.body.reconciliationRequired, false);
+  const next = await call(db, 'replica/claim', claim('mutation0000000103', 1, 'second-device'));
+  assert.equal(next.status, 200);
+  const replay = await call(db, 'replica/retire', input);
+  assert.equal(replay.status, 200);
+  assert.equal(replay.body.replayed, true);
+  assert.equal(replay.body.currentRevision, 2);
+  assert.equal(replay.body.reconciliationRequired, true);
+  assert.equal(replay.body.action, 'retire');
+  assert.equal(db.sqlite.prepare("SELECT status FROM sync_replicas WHERE uid = ? AND slot = 's00'").get(owner).status, 'retired');
 }));
 
 void test('checkpoint matches the public causal clock, otherwise refuses to inflate frontier', () => withFixture(async db => {
