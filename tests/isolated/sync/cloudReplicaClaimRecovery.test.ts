@@ -303,7 +303,7 @@ describe('candidate encrypted D1 claim intent', () => {
         expect((await readLocal(owner))?.cloudflareReplicaClaim).toEqual(staged);
     });
 
-    it('refuses a changed remote control or mixed scan without dropping the stored mutation', async () => {
+    it('scans after a control revision change but refuses a mixed-revision snapshot', async () => {
         const { snapshot } = await prepare();
         const remote = transport(snapshot);
         const before = await get(storage);
@@ -315,7 +315,10 @@ describe('candidate encrypted D1 claim intent', () => {
         expect(await resumeCloudflareReplicaClaim(owner, key, remote, 'session-csrf', () => true))
             .toBe('reconciliation-required');
         expect(await get(storage)).toBe(before);
-        expect(remote.scanAll).not.toHaveBeenCalled();
+        // A newer control requires a full authenticated scan; the old revision
+        // must still be rejected, without replacing the staged request.
+        expect(remote.scanAll).toHaveBeenCalledOnce();
+        expect((await readLocal(owner))?.cloudflareReplicaClaim).toBeDefined();
     });
 
     it('rejects a second stage and unrelated checkpoint while a claim intent exists', async () => {
