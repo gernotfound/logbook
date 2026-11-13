@@ -36,7 +36,7 @@ La selezione completa dei contratti resta in [AGENTS](../AGENTS.md). Qui si indi
 | Documento | Stato | Per quale attività |
 |---|---|---|
 | [Registro servizi esterni](operations/external-services-register.md) | Registro operativo; riscontri live necessari | Firebase, Vercel, GitHub e servizi ritirati |
-| [Onboarding email Brevo / CF-00](operations/brevo-transactional-email-onboarding.md) | BOZZA: account creato, dominio mittente inserito, DNS/invio non verificati | Verifica email transazionali Free su sottodominio separato |
+| [Email transazionali / CF-00](operations/brevo-transactional-email-onboarding.md) | PARZIALE: Brevo Gmail/Proton consegna verificata; pixel anonimo ancora presente; confronto Mailjet/Resend Free | Scelta provider email e gate privacy/API per nuova Auth |
 | [Collaudi E2E e affidabilità](operations/e2e-reliability.md) | Guida corrente sui limiti delle prove; collaudi live separati | CI sintetica, dispositivi reali e perimetro Production |
 | [Cutover Firebase Hosting](operations/firebase-hosting-cutover.md) | STORICO completato il 2 ottobre 2026 | Decisioni e rollback storici, non procedura di deploy corrente |
 
