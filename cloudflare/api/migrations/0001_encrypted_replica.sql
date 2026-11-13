@@ -55,6 +55,73 @@ CREATE TABLE sync_receipts (
   PRIMARY KEY (uid, batch_id)
 );
 
+-- A client cannot persist a replica membership change without an immutable,
+-- content-bound maintenance receipt. A trigger on the FIRST batched statement
+-- guarantees rollback rather than a silent zero-row CAS update.
+CREATE TABLE sync_replica_mutations (
+  uid TEXT NOT NULL REFERENCES sync_subjects(uid) ON DELETE RESTRICT,
+  mutation_id TEXT NOT NULL CHECK (length(mutation_id) BETWEEN 16 AND 128),
+  request_hash TEXT NOT NULL CHECK (length(request_hash) = 64),
+  action TEXT NOT NULL CHECK (action IN ('register', 'checkpoint', 'reuse-expired', 'retire')),
+  expected_revision INTEGER NOT NULL CHECK (expected_revision >= 0),
+  committed_revision INTEGER NOT NULL CHECK (committed_revision = expected_revision + 1),
+  consent_revision INTEGER NOT NULL CHECK (consent_revision >= 1),
+  fence_epoch INTEGER NOT NULL CHECK (fence_epoch >= 1),
+  slot TEXT NOT NULL CHECK (slot GLOB 's0[0-9]' OR slot GLOB 's1[0-5]'),
+  replica_id TEXT NOT NULL CHECK (length(replica_id) BETWEEN 1 AND 128),
+  generation INTEGER NOT NULL CHECK (generation >= 1),
+  last_seq INTEGER NOT NULL CHECK (last_seq >= 0),
+  checkpoint_at_ms INTEGER NOT NULL CHECK (checkpoint_at_ms > 0),
+  lease_until_ms INTEGER NOT NULL CHECK (lease_until_ms > 0),
+  checkpoint_clock_json TEXT NOT NULL CHECK (json_valid(checkpoint_clock_json) AND json_type(checkpoint_clock_json) = 'object'),
+  PRIMARY KEY (uid, mutation_id)
+);
+
+CREATE TRIGGER sync_replica_mutation_fence BEFORE INSERT ON sync_replica_mutations
+BEGIN
+  SELECT CASE WHEN NOT EXISTS (
+    SELECT 1 FROM sync_subjects a
+    JOIN sync_state s ON s.uid = a.uid
+    WHERE a.uid = NEW.uid AND a.status = 'active'
+      AND a.consent_revision = NEW.consent_revision
+      AND a.fence_epoch = NEW.fence_epoch
+      AND s.revision = NEW.expected_revision
+  ) THEN RAISE(ABORT, 'replica-control-fenced') END;
+
+  SELECT CASE WHEN NEW.action = 'register' AND (
+    NEW.generation != 1 OR
+    EXISTS (SELECT 1 FROM sync_replicas r WHERE r.uid = NEW.uid AND r.slot = NEW.slot) OR
+    EXISTS (SELECT 1 FROM sync_replicas r WHERE r.uid = NEW.uid AND r.replica_id = NEW.replica_id)
+  ) THEN RAISE(ABORT, 'replica-control-fenced') END;
+
+  SELECT CASE WHEN NEW.action = 'checkpoint' AND NOT EXISTS (
+    SELECT 1 FROM sync_replicas r
+    WHERE r.uid = NEW.uid AND r.slot = NEW.slot
+      AND r.replica_id = NEW.replica_id AND r.generation = NEW.generation
+      AND r.status = 'active' AND r.last_seq <= NEW.last_seq
+      AND r.lease_until_ms + 300000 >= CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER)
+  ) THEN RAISE(ABORT, 'replica-control-fenced') END;
+
+  SELECT CASE WHEN NEW.action = 'reuse-expired' AND (
+    NOT EXISTS (
+      SELECT 1 FROM sync_replicas r WHERE r.uid = NEW.uid AND r.slot = NEW.slot
+        AND NEW.generation = r.generation + 1 AND NEW.last_seq >= r.last_seq
+        AND (r.status = 'retired' OR
+          r.lease_until_ms + 300000 < CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER))
+    ) OR EXISTS (
+      SELECT 1 FROM sync_replicas r WHERE r.uid = NEW.uid AND r.replica_id = NEW.replica_id
+    )
+  ) THEN RAISE(ABORT, 'replica-control-fenced') END;
+
+  SELECT CASE WHEN NEW.action = 'retire' AND NOT EXISTS (
+    SELECT 1 FROM sync_replicas r
+    WHERE r.uid = NEW.uid AND r.slot = NEW.slot
+      AND r.replica_id = NEW.replica_id AND r.generation = NEW.generation
+      AND r.status = 'active' AND r.last_seq = NEW.last_seq
+      AND r.lease_until_ms + 300000 < CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER)
+  ) THEN RAISE(ABORT, 'replica-control-fenced') END;
+END;
+
 -- A new session may reuse a slot only with a higher generation and a
 -- nondecreasing sequence. The writer never resets a replica's causal actor.
 CREATE TRIGGER sync_replica_no_regression BEFORE UPDATE ON sync_replicas
