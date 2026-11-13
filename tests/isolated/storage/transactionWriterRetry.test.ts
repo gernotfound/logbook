@@ -64,6 +64,7 @@ vi.mock('firebase/firestore', () => ({
 }));
 
 import { applyDocumentChanges } from '../../../src/lib/sync/transactionWriter';
+import { prepareEncryptedDocumentChanges } from '../../../src/lib/sync/cloudMergeEngine';
 import type { SemanticOperation } from '../../../src/lib/sync/semanticProjection';
 import { openCloudDocument, sealCloudDocument, CloudCiphertextError } from '../../../src/lib/sync/cloudDocumentCipher';
 
@@ -128,6 +129,14 @@ describe('transaction writer retry safety', () => {
             expect(payload._sync.fields).toEqual({});
             expect(payload).not.toHaveProperty('profile');
         }
+        // The extracted provider-neutral engine must produce the same authenticated
+        // business and causal state as the legacy Firestore transaction.
+        const staged = prepareEncryptedDocumentChanges(
+            'user-a', ops, new Map([['', harness.remoteDocument]]), {},
+            { slot: 's00', replicaId: 'replica-a', generation: 1, seq: 1 }, key,
+        );
+        expect(openCloudDocument(key, 'user-a', '', staged.sealedDocuments.get(''))).toEqual(openAttempt(1).opened);
+        expect(staged.syncMeta).toEqual(outcome.syncMeta);
     });
     it('encrypts business and causal fields on BOTH Firestore transaction retries without leaking plaintext', async () => {
         const key = crypto.getRandomValues(new Uint8Array(32));

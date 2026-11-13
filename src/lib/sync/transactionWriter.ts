@@ -1,13 +1,8 @@
 import { doc, runTransaction, type Firestore } from 'firebase/firestore';
 import { generateId } from '../utils/date';
-import { UserDataSchema } from '../schema';
-import { removeUndefinedValuesForFirestore } from '../utils/object';
-import { rootDocument, type DocumentData } from './documentProjection';
-import type { UserData } from '../../types';
-import { assertHistoryMonthDocument, assertNutritionMonthDocument } from './monthlyIntegrity';
-import { type SemanticOperation, type SyncMeta, applySemanticOperations, parseSyncMeta } from './semanticProjection';
+import type { DocumentData } from './documentProjection';
+import type { SemanticOperation, SyncMeta } from './semanticProjection';
 import { getVerifiedHealthConsentRevision } from '../healthConsent';
-import { compactSyncMetas } from './causalCompaction';
 import {
     ReplicaFencedError,
     advanceReplicaControl,
@@ -17,30 +12,9 @@ import {
     type ReplicaIdentity,
 } from './replicaProtocol';
 import { distinctDocumentCount, MAX_SYNC_DOCUMENTS_PER_TRANSACTION } from './syncBatching';
-import { assertCloudBusinessPreserved } from './cloudBusinessIntegrity';
-import { CloudCiphertextError, sealCloudDocument } from './cloudDocumentCipher';
-import { readAccountCloudDocument } from './cloudDocumentRead';
+import { CloudCiphertextError } from './cloudDocumentCipher';
+import { prepareEncryptedDocumentChanges } from './cloudMergeEngine';
 export { CloudDataIntegrityError } from './cloudBusinessIntegrity';
-
-function normalizeRemote(path: string, raw: DocumentData): DocumentData {
-    if (path === '') {
-        const root = rootDocument(UserDataSchema.parse(raw) as unknown as UserData);
-        // Missing/null planning denotes absence. Defaulting it to an empty
-        // plan would add nested defaults on subsequent reads and retries.
-        if (raw.nutritionPlanning === null || raw.nutritionPlanning === undefined) root.nutritionPlanning = null;
-        return root;
-    }
-    if (path.startsWith('history_months/')) {
-        const month = path.split('/')[1];
-        assertHistoryMonthDocument(month, raw);
-        const parsed = UserDataSchema.parse({ history: Object.values(raw) }) as unknown as UserData;
-        return Object.fromEntries(Object.keys(raw).map((key, index) => [key, (parsed.history ?? [])[index]]));
-    }
-    const month = path.split('/')[1];
-    assertNutritionMonthDocument(month, raw);
-    const parsed = UserDataSchema.parse({ nutrition: raw }) as unknown as UserData;
-    return parsed.nutrition as unknown as DocumentData;
-}
 
 export interface TransactionOutcome { documents: Map<string, DocumentData>; syncMeta: Record<string, SyncMeta> }
 
@@ -89,64 +63,26 @@ export async function applyDocumentChanges(
             throw new ReplicaFencedError('Il journal locale appartiene a una replica precedente e deve essere ribasato.');
         }
         const stableFrontier = stableFrontierFromControl(control);
-
-        const baseDocs = new Map<string, DocumentData>();
-        const remoteSyncMetas: Record<string, SyncMeta> = {};
-
-        pathsToRead.forEach((path, index) => {
-            const snapshot = snapshots[index];
-            if (!snapshot.exists()) {
-                baseDocs.set(path, {});
-                return;
-            }
-
-            // The encrypted format preserves Protocol 3 semantics but stores
-            // sensitive field candidates and business entirely inside AEAD.
-            // Decode before the existing integrity and causal validation;
-            // never interpret an authenticated public clock as sufficient.
-            const normalized = readAccountCloudDocument(snapshot.data(), `Firestore ${path || 'root'} data schema`, uid, path, cloudKey);
-            remoteSyncMetas[path] = parseSyncMeta(normalized.sync);
-
-            const remote = removeUndefinedValuesForFirestore(normalizeRemote(path, normalized.business));
-            assertCloudBusinessPreserved(path, normalized.business, remote);
-            baseDocs.set(path, remote);
-        });
-
-        const { documents: newDocs, syncMetas: mergedSyncMetas } = applySemanticOperations(baseDocs, ops, remoteSyncMetas);
-        const compactedSyncMetas = compactSyncMetas(mergedSyncMetas, stableFrontier);
         const deliveredSeq = ops.reduce((max, operation) => Math.max(max, operation.seq), replicaEntry!.lastSeq);
-        const writer = { slot: replica.slot, replicaId: replica.replicaId, generation: replica.generation, seq: deliveredSeq,
+        const writer = { slot: replica.slot, replicaId: replica.replicaId,
+            generation: replica.generation, seq: deliveredSeq,
             ...(consentRevision > 0 ? { consentRevision } : {}) };
-        const newSyncMetas: Record<string, SyncMeta> = Object.fromEntries(
-            Object.entries(compactedSyncMetas).map(([path, meta]) => [path, { ...meta, writer }]),
+
+        const remoteEnvelopes = new Map<string, unknown>();
+        pathsToRead.forEach((path, index) => {
+            if (snapshots[index].exists()) remoteEnvelopes.set(path, snapshots[index].data());
+        });
+        const staged = prepareEncryptedDocumentChanges(
+            uid, ops, remoteEnvelopes, stableFrontier, writer, cloudKey,
         );
 
-        const documents = new Map<string, DocumentData>();
-        for (const [path, docData] of newDocs.entries()) {
-            const business = removeUndefinedValuesForFirestore(normalizeRemote(path, docData)) as DocumentData;
-            // Semantic merge can introduce values absent from the validated
-            // remote base. Reject lossy normalization before staging any write.
-            assertCloudBusinessPreserved(path, docData, business);
-            documents.set(path, business);
-        }
-
-        for (const [path, business] of documents.entries()) {
-            const meta = newSyncMetas[path];
-            // No plaintext fallback: a missing ADK must fail before any write,
-            // even if a ruleset is accidentally deployed out of order.
-            const finalData = sealCloudDocument(cloudKey, uid, path, business, meta);
-
-            const refIndex = pathsToRead.indexOf(path);
-
-            // Protocol 3 never physically deletes sync-owned documents from the client.
-            // Even after stable-frontier GC removes the final tombstone, the empty shell
-            // carries the fenced writer identity. This prevents a stale generation from
-            // turning an un-attributed Firestore delete into a causal state transition.
-            transaction.set(refs[refIndex], finalData);
+        // Preserve Protocol 3 empty-shell fencing: no physical client deletes.
+        for (const [path, sealed] of staged.sealedDocuments.entries()) {
+            transaction.set(refs[pathsToRead.indexOf(path)], sealed);
         }
 
         transaction.set(controlRef, advanceReplicaControl(control, replica, deliveredSeq, batchId));
 
-        return { documents, syncMeta: newSyncMetas };
+        return { documents: staged.documents, syncMeta: staged.syncMeta };
     }, { maxAttempts: 5 });
 }

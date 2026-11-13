@@ -8,6 +8,9 @@ import {
 import { normalizeStorageOwner } from './owner';
 import { findLossyNormalization } from './businessNormalizationIntegrity';
 import { parseReplicaIdentity, type ReplicaIdentity } from './replicaProtocol';
+import { parseCloudflareDeliveryIntent, type CloudflareDeliveryIntent } from './cloudReplicaDeliveryRecord';
+import { parseCloudflareReplicaClaimIntent, type CloudflareReplicaClaimIntent } from './cloudReplicaClaimRecord';
+import { parseCloudflareReplicaRetirementIntent, type CloudflareReplicaRetirementIntent } from './cloudReplicaRetirementRecord';
 import {
     coversVectorClock, parseSemanticOperation, parseSyncMeta, parseVectorClock,
     type SemanticOperation, type SyncMeta, type VectorClock,
@@ -27,6 +30,12 @@ interface LocalEnvelopeV5 {
     pending: SemanticOperation[];
     syncMetaByDocument: Record<string, SyncMeta>;
     replica: ReplicaIdentity | null;
+    // Candidate D1 only: encrypted owner-vault record of exact in-flight ciphertext.
+    cloudflareDelivery?: CloudflareDeliveryIntent;
+    // Candidate only. An immutable membership request, not an acknowledged replica.
+    cloudflareReplicaClaim?: CloudflareReplicaClaimIntent;
+    // Candidate only: immutable expired-replica retirement request (not an ACK).
+    cloudflareReplicaRetirement?: CloudflareReplicaRetirementIntent;
     revision: number;
     // Persistent owner-scoped barrier for unverified cloud snapshots.
     cloudIntegrityFence?: string;
@@ -169,6 +178,19 @@ export function validateLocalEnvelope(value: unknown, owner: string): LocalEnvel
     }
 
     const replica = parseReplicaIdentity(record.replica);
+    // A revoked/reaccepted local consent may make a claim stale, not make the
+    // entire owner vault unreadable. Replay/adoption fences the revision again.
+    const cloudflareReplicaClaim = record.cloudflareReplicaClaim === undefined ? undefined
+        : parseCloudflareReplicaClaimIntent(record.cloudflareReplicaClaim);
+    const cloudflareReplicaRetirement = record.cloudflareReplicaRetirement === undefined ? undefined
+        : parseCloudflareReplicaRetirementIntent(record.cloudflareReplicaRetirement);
+    if ([record.cloudflareDelivery, record.cloudflareReplicaClaim, record.cloudflareReplicaRetirement]
+        .filter(value => value !== undefined).length > 1) {
+        throw new Error('Intenti D1 incompatibili: archivio locale preservato.');
+    }
+    const cloudflareDelivery = record.cloudflareDelivery === undefined ? undefined
+        : parseCloudflareDeliveryIntent(record.cloudflareDelivery, canonicalOwner, pending, replica,
+            typeof record.consentRevision === 'number' ? record.consentRevision : undefined);
 
     return {
         ...(record as unknown as LocalEnvelopeV5),
@@ -181,6 +203,9 @@ export function validateLocalEnvelope(value: unknown, owner: string): LocalEnvel
         pending,
         syncMetaByDocument,
         replica,
+        ...(cloudflareDelivery ? { cloudflareDelivery } : {}),
+        ...(cloudflareReplicaClaim ? { cloudflareReplicaClaim } : {}),
+        ...(cloudflareReplicaRetirement ? { cloudflareReplicaRetirement } : {}),
         revision: record.revision,
     };
 }

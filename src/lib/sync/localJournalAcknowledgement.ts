@@ -22,7 +22,7 @@ export async function acknowledgeThrough(
     remote: UserData,
     months: string[],
     syncMeta: Record<string, SyncMeta> | undefined,
-    delivery: { operations: SemanticOperation[]; replica: ReplicaIdentity },
+    delivery: { operations: SemanticOperation[]; replica: ReplicaIdentity; cloudflareBatchId?: string },
     guard?: () => boolean,
 ): Promise<void> {
     owner = normalizeStorageOwner(owner);
@@ -49,6 +49,15 @@ export async function acknowledgeThrough(
             && replica.replicaId === delivery.replica.replicaId
             && replica.generation === delivery.replica.generation
             && current.actorId === delivery.replica.slot;
+        if (current.cloudflareDelivery) {
+            const intent = current.cloudflareDelivery;
+            if (delivery.cloudflareBatchId !== intent.batch.batchId
+                || !equal(delivery.operations, intent.operations)) {
+                throw new Error('Acknowledgement D1 senza intento durevole corrispondente; journal preservato.');
+            }
+        } else if (delivery.cloudflareBatchId !== undefined) {
+            throw new Error('Acknowledgement D1 senza intento durevole corrispondente; journal preservato.');
+        }
         const deliveredPrefix = current.pending.filter(op => op.seq <= expectedSeq);
         if (!sameReplica
             || delivery.operations.length === 0
@@ -87,6 +96,9 @@ export async function acknowledgeThrough(
         // Persist only server-confirmed metadata; replayed pending operations are
         // speculative and must never become evidence that a cloud document exists.
         const next = { ...current, clock: newClock, baseline: acknowledgedBaseline, data, pending, completeMonths: [...new Set([...current.completeMonths, ...months])], syncMetaByDocument: newSyncMeta };
+        // A proven D1 receipt and the journal ACK retire the immutable ciphertext
+        // together, in this ONE owner-encrypted IndexedDB transaction.
+        if (delivery.cloudflareBatchId !== undefined) delete next.cloudflareDelivery;
         // A partial ACK can change baseline and pending without changing the
         // displayed business state. Fence previously captured recovery previews.
         return equal(next, current) ? raw : { ...next, revision: current.revision + 1 };

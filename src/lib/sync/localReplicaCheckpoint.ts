@@ -24,6 +24,7 @@ export async function adoptReplicaCheckpoint(
     claim: ReplicaCheckpoint,
     checkpoint: CloudCheckpoint,
     guard?: LocalWriteGuard,
+    expectedCloudflareClaimId?: string,
 ): Promise<LocalEnvelope> {
     owner = normalizeStorageOwner(owner);
     const catalog = await getCachedCatalog();
@@ -33,6 +34,28 @@ export async function adoptReplicaCheckpoint(
         if (guard && !guard()) throw new Error('Checkpoint replica invalidato dal cambio sessione; journal preservato.');
         const current = validateLocalEnvelope(raw, owner);
         if (!current) throw new Error('Archivio locale non trovato durante il checkpoint replica');
+        if (current.cloudflareDelivery || current.cloudflareReplicaRetirement) {
+            throw new Error('Intento D1 in attesa di riconciliazione: checkpoint replica sospeso senza toccare il journal.');
+        }
+        const claimIntent = current.cloudflareReplicaClaim;
+        const sameStoredReplica = !claimIntent
+            || (claimIntent.currentReplica === null && current.replica === null)
+            || (claimIntent.currentReplica !== null && current.replica !== null
+                && claimIntent.currentReplica.slot === current.replica.slot
+                && claimIntent.currentReplica.replicaId === current.replica.replicaId
+                && claimIntent.currentReplica.generation === current.replica.generation);
+        if (expectedCloudflareClaimId !== undefined
+            ? !claimIntent || claimIntent.mutationId !== expectedCloudflareClaimId
+              || claimIntent.consentRevision !== current.consentRevision || current.cloudIntegrityFence
+              || !sameStoredReplica
+              || (claimIntent.candidateReplicaId !== claim.identity.replicaId
+                  && !(claimIntent.currentReplica
+                    && claimIntent.currentReplica.slot === claim.identity.slot
+                    && claimIntent.currentReplica.replicaId === claim.identity.replicaId
+                    && claimIntent.currentReplica.generation === claim.identity.generation))
+            : Boolean(claimIntent)) {
+            throw new Error('Checkpoint replica incompatibile con un claim D1 pendente: journal preservato.');
+        }
 
         const sameReplica = current.replica
             && current.replica.slot === claim.identity.slot
@@ -49,6 +72,7 @@ export async function adoptReplicaCheckpoint(
                 ...currentEnvelopeVersions(),
                 clock: mergeVectors(current.clock, checkpoint.clock),
                 replica: claim.identity,
+                ...(claimIntent ? { cloudflareReplicaClaim: undefined } : {}),
                 revision: current.revision + 1,
             };
             validateLocalEnvelope(saved, owner);
@@ -92,6 +116,7 @@ export async function adoptReplicaCheckpoint(
             pending: operations,
             syncMetaByDocument: structuredClone(checkpoint.syncMetaByDocument),
             replica: claim.identity,
+            ...(claimIntent ? { cloudflareReplicaClaim: undefined } : {}),
             revision: current.revision + 1,
         };
         validateLocalEnvelope(saved, owner);

@@ -18,6 +18,9 @@ export async function ensureBoundedPendingSequences(owner: string, expectedActor
         observed.clock,
     );
     if (!initial.changed) return observed;
+    if (observed.cloudflareDelivery) {
+        throw new Error('Intento D1 pendente: risequenziamento sospeso fino alla riconciliazione del batch.');
+    }
 
     let saved: LocalEnvelope | undefined;
     await updateArchiveRecord<unknown>(owner, raw => {
@@ -37,6 +40,9 @@ export async function ensureBoundedPendingSequences(owner: string, expectedActor
         if (!bounded.changed) {
             saved = current;
             return raw;
+        }
+        if (current.cloudflareDelivery) {
+            throw new Error('Intento D1 pendente: risequenziamento sospeso fino alla riconciliazione del batch.');
         }
 
         saved = {

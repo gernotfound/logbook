@@ -168,7 +168,7 @@ export function needsReplicaCheckpoint(replica: ReplicaIdentity | null | undefin
         || replica.leaseUntilMs - REPLICA_CHECKPOINT_INTERVAL_MS <= now;
 }
 
-export function stableFrontierFromControl(control: ReplicaControl): VectorClock {
+export function stableFrontierFromControl(control: Pick<ReplicaControl, 'replicas'>): VectorClock {
     const active = Object.values(control.replicas).filter(entry => entry.status === 'active');
     if (!active.length) return {};
     const actors = new Set<string>();
