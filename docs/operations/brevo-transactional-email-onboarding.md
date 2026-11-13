@@ -19,6 +19,8 @@
 | Inserimento dominio | Screenshot del product owner: procedura Brevo alla fase 2 «Sottodominio personalizzato (opzionale)» per `notify.thelogbook.me` | **Inserito nella procedura**, non autenticato |
 | Sottodominio link personalizzati | La UI mostra un campo con suffisso `.notify.thelogbook.me`, dichiarato opzionale | **Non necessario**; indicato di proseguire con campo vuoto |
 | Scelta metodo DNS | Screenshot 13/11: wizard alla fase «Configura metodo» con **Record DNS individuali** o **Configurazione gestita da Brevo** (NS) | **Scelta individuale raccomandata**, non ancora confermata effettuata dal proprietario |
+| Wizard Brevo, fase «Record» | Screenshot 13/11: Brevo richiede inizialmente **TXT** con nome relativo `notify` e valore di verifica `brevo-code:…` per `notify.thelogbook.me`; la schermata avverte che il record non corrisponde ancora | **Istruzioni fornite per l'inserimento manuale**; valore completo non copiato nella documentazione pubblica e salvataggio non verificato |
+| Conflitti DNS Cloudflare, lettura prima della scrittura | Cloudflare API GET della zona `thelogbook.me` attiva: 11 record; **nessun** record con nome `notify.thelogbook.me` né sotto `*.notify.thelogbook.me` al controllo del 13/11 | **Assenza di conflitto sul nome del primo TXT al momento della lettura**, non prova di un inserimento successivo |
 | Configurazione DNS | Il product owner non ha ancora fornito il successivo set di record da Brevo; nessuna scrittura DNS effettuata in questo task | **Non avviata** |
 | Stato email transazionali/API | Nessuna API key, nessuna chiamata autenticata a Brevo, nessun test inbox mostrato | **NON VALIDATO** |
 | Impatto runtime | Nessuna modifica a Worker, Firebase/Vercel, Auth, D1, dominio Production | **Nessuna integrazione** |
@@ -29,11 +31,12 @@ L'immagine della dashboard è una prova fornita dal proprietario, **non** un rea
 
 1. Proseguire senza sottodominio personalizzato per i link (schermata precedente completata secondo screenshot fase 3).
 2. Alla fase «Configura metodo», preferire **Record DNS individuali** e poi «Aggiunta manuale» nella sezione successiva; non scegliere NS gestiti da Brevo né connessione automatica con privilegi di scrittura DNS Cloudflare. La scelta individuale conserva il controllo degli esatti record in Cloudflare e non delega il sottodominio. **Questa è una raccomandazione, non una configurazione già effettuata.**
-3. Acquisire i record esatti richiesti da Brevo per l'autenticazione di `notify.thelogbook.me`; confrontarli con Cloudflare DNS **in sola lettura** prima di qualsiasi modifica.
-4. Solo con autorizzazione pertinente, aggiungere esclusivamente record non conflittuali del sottodominio, verificare SPF/DKIM/DMARC e stato autenticazione con read-back. Non intervenire su MX/SPF/DKIM/DMARC dell'apex IONOS.
-5. Verificare se l'account Free è realmente abilitato per email transazionali e quali limiti di quota e approvazione si applicano.
-6. Collaudare invio tramite HTTPS con email di test autorizzata, mittente verificato, secret escluso da repository/chat, messaggi privi di dati salute. Distinguere 201/receipt, delivery, bounce, delay, blocchi provider, quota e reset.
-7. Prima di procedere con Auth: documentare DPA/subprocessor, durata log transazionali e anteprime corpo, disattivazione del tracking non necessario, protezioni antiabuso, rate limit, token verifica/reset monouso/scadenti.
+3. Prima voce visibile nella fase «Record»: TXT host `notify` (`notify.thelogbook.me`), valore completo da copiare con il pulsante della UI Brevo e TTL automatico su Cloudflare. **Non trascrivere il valore da uno screenshot troncato**, non duplicare il suffisso del nome e non memorizzare il token nel repository pubblico. È stata fornita soltanto la guida all'inserimento manuale: **nessuna scrittura effettuata dal connettore**; attendere conferma del proprietario e read-back.
+4. Scorrere la pagina Brevo e acquisire anche gli altri record di autenticazione (se presenti). Confrontare nome/tipo e conflitti con Cloudflare DNS in sola lettura; non supporre che il primo TXT basti per DKIM/DMARC.
+5. Solo con autorizzazione pertinente, aggiungere esclusivamente record non conflittuali del sottodominio, verificare SPF/DKIM/DMARC e stato autenticazione con read-back. Non intervenire su MX/SPF/DKIM/DMARC dell'apex IONOS.
+6. Verificare se l'account Free è realmente abilitato per email transazionali e quali limiti di quota e approvazione si applicano.
+7. Collaudare invio tramite HTTPS con email di test autorizzata, mittente verificato, secret escluso da repository/chat, messaggi privi di dati salute. Distinguere 201/receipt, delivery, bounce, delay, blocchi provider, quota e reset.
+8. Prima di procedere con Auth: documentare DPA/subprocessor, durata log transazionali e anteprime corpo, disattivazione del tracking non necessario, protezioni antiabuso, rate limit, token verifica/reset monouso/scadenti.
 
 ## Fonti da rileggere al punto di integrazione
 
