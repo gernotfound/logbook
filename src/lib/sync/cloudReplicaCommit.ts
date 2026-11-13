@@ -1,9 +1,9 @@
 import { CloudCiphertextError } from './cloudDocumentCipher';
 import { prepareEncryptedDocumentChanges, type PreparedEncryptedDocumentChanges } from './cloudMergeEngine';
-import type { CloudReplicaBatch, CloudReplicaSnapshot } from './cloudReplicaTransport';
-import type { ReplicaIdentity } from './replicaProtocol';
+import type { CloudReplicaBatch, CloudReplicaControlSnapshot, CloudReplicaSnapshot } from './cloudReplicaTransport';
+import { stableFrontierFromControl, type ReplicaIdentity } from './replicaProtocol';
 import { parseSemanticOperation } from './semanticProjection/metadata';
-import type { SemanticOperation, VectorClock } from './semanticProjection/contracts';
+import type { SemanticOperation } from './semanticProjection/contracts';
 import { distinctDocumentCount, MAX_SYNC_DOCUMENTS_PER_TRANSACTION } from './syncBatching';
 
 export class CloudReplicaStaleSnapshotError extends Error {
@@ -22,10 +22,8 @@ export function prepareCloudflareCommit(
     uid: string,
     rawOperations: SemanticOperation[],
     snapshot: CloudReplicaSnapshot,
+    control: CloudReplicaControlSnapshot,
     replica: Pick<ReplicaIdentity, 'slot' | 'replicaId' | 'generation'>,
-    trustedLastSeq: number,
-    stableFrontier: VectorClock,
-    consentRevision: number,
     batchId: string,
     accountKey: Uint8Array,
     isCurrent: () => boolean,
@@ -33,9 +31,17 @@ export function prepareCloudflareCommit(
     if (!isCurrent()) throw new CloudReplicaStaleSnapshotError();
     if (!Number.isSafeInteger(snapshot.revision) || snapshot.revision < 0
         || !Number.isSafeInteger(snapshot.fenceEpoch) || snapshot.fenceEpoch < 1
-        || !Number.isSafeInteger(trustedLastSeq) || trustedLastSeq < 0
-        || !Number.isSafeInteger(consentRevision) || consentRevision < 1
+        || control.revision !== snapshot.revision || control.fenceEpoch !== snapshot.fenceEpoch
+        || !Number.isSafeInteger(control.consentRevision) || control.consentRevision < 1
         || !/^[A-Za-z0-9_-]{16,128}$/.test(batchId)) throw new CloudReplicaStaleSnapshotError();
+
+    const entry = control.replicas[replica.slot];
+    if (!entry || entry.status !== 'active' || entry.replicaId !== replica.replicaId
+        || entry.generation !== replica.generation || !Number.isSafeInteger(entry.lastSeq)
+        || entry.lastSeq < 0 || !Number.isSafeInteger(entry.leaseUntilMs)
+        || entry.leaseUntilMs <= Date.now()) throw new CloudReplicaStaleSnapshotError();
+    const consentRevision = control.consentRevision;
+    const stableFrontier = stableFrontierFromControl(control);
 
     const ops = rawOperations.map(parseSemanticOperation);
     const paths = [...new Set(ops.map(operation => operation.docPath))];
@@ -55,7 +61,7 @@ export function prepareCloudflareCommit(
         if (entry.document !== null) remote.set(entry.path, entry.document);
     }
 
-    const lastSeq = ops.reduce((max, operation) => Math.max(max, operation.seq), trustedLastSeq);
+    const lastSeq = ops.reduce((max, operation) => Math.max(max, operation.seq), entry.lastSeq);
     if (lastSeq < 1) throw new CloudReplicaStaleSnapshotError();
     const writer = { ...replica, seq: lastSeq, consentRevision };
     const outcome = prepareEncryptedDocumentChanges(
