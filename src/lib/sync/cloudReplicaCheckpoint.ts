@@ -6,6 +6,7 @@ import type { CloudReplicaCompleteScan } from './cloudReplicaTransport';
 export interface AuthenticatedCloudflareCheckpoint {
     revision: number;
     fenceEpoch: number;
+    consentRevision: number;
     documents: Map<string, NormalizedCloudDocument>;
 }
 
@@ -18,6 +19,7 @@ export async function readAuthenticatedCloudflareCheckpoint(
     scan: () => Promise<CloudReplicaCompleteScan>,
     uid: string,
     accountKey: Uint8Array,
+    consentRevision: number,
     isCurrent: () => boolean,
 ): Promise<AuthenticatedCloudflareCheckpoint> {
     if (!(accountKey instanceof Uint8Array) || accountKey.length !== 32) {
@@ -25,7 +27,10 @@ export async function readAuthenticatedCloudflareCheckpoint(
     }
     if (!isCurrent()) throw new CloudCiphertextError();
     const snapshot = await scan();
-    if (!isCurrent()) throw new CloudCiphertextError();
+    if (!isCurrent() || !Number.isSafeInteger(consentRevision)
+        || consentRevision < 1 || snapshot.consentRevision !== consentRevision) {
+        throw new CloudCiphertextError();
+    }
 
     const documents = new Map<string, NormalizedCloudDocument>();
     for (const item of snapshot.documents) {
@@ -36,5 +41,8 @@ export async function readAuthenticatedCloudflareCheckpoint(
         documents.set(item.path, verified);
     }
     if (!isCurrent()) throw new CloudCiphertextError();
-    return { revision: snapshot.revision, fenceEpoch: snapshot.fenceEpoch, documents };
+    return {
+        revision: snapshot.revision, fenceEpoch: snapshot.fenceEpoch,
+        consentRevision, documents,
+    };
 }
