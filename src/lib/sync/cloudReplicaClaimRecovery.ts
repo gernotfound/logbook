@@ -63,7 +63,7 @@ export async function stageCloudflareReplicaClaim(
         current(guard);
         const local = validateLocalEnvelope(raw, owner);
         if (!local || local.cloudIntegrityFence || local.cloudflareDelivery || local.cloudflareReplicaClaim
-            || local.consentRevision !== control.consentRevision) {
+            || local.cloudflareReplicaRetirement || local.consentRevision !== control.consentRevision) {
             throw new Error('Claim D1 non installabile: archivio, consenso o sync non coerenti.');
         }
         const input = parseCloudflareReplicaClaimIntent({
@@ -102,7 +102,7 @@ export async function resumeCloudflareReplicaClaim(
     if (!before) throw new Error('Archivio locale assente: claim sospeso.');
     const intent = before.cloudflareReplicaClaim;
     if (!intent) return 'idle';
-    if (before.cloudIntegrityFence || before.cloudflareDelivery
+    if (before.cloudIntegrityFence || before.cloudflareDelivery || before.cloudflareReplicaRetirement
         || before.consentRevision !== intent.consentRevision) {
         throw new Error('Barriera integrità D1: claim sospeso.');
     }

@@ -194,6 +194,37 @@ describe('isolated Cloudflare document transport', () => {
             });
     });
 
+    it('replays the original durable retirement body without changing its mutation identity', async () => {
+        const request = {
+            mutationId: 'mutation0000000333', expectedRevision: 2,
+            expectedFenceEpoch: 5, consentRevision: 1,
+            replica: { slot: 's03', replicaId: 'old-replica', generation: 2 },
+        };
+        const receipt = {
+            mutationId: request.mutationId, action: 'retire' as const, revision: 3,
+            currentRevision: 3, reconciliationRequired: false, replayed: true, baseSeq: 9,
+            replica: { ...request.replica,
+                checkpointAtMs: Date.now() - 86400000, leaseUntilMs: Date.now() - 360000 },
+        };
+        const fetcher = vi.fn(async () => new Response(JSON.stringify(receipt)));
+        const transport = createCloudflareReplicaTransport(fetcher as typeof fetch);
+        await expect(transport.replayStoredRetirement(request, 'csrf')).resolves.toEqual(receipt);
+        expect(fetcher).toHaveBeenCalledWith('/v1/sync/replica/retire',
+            expect.objectContaining({ method: 'POST', credentials: 'include' }));
+        expect(JSON.parse((fetcher.mock.calls[0] as unknown as [string, RequestInit])[1].body as string))
+            .toEqual(request);
+
+        const wrong = createCloudflareReplicaTransport(vi.fn(async () =>
+            new Response(JSON.stringify({ ...receipt, replica: {
+                ...receipt.replica, replicaId: 'another-replica',
+            } }))) as typeof fetch);
+        await expect(wrong.replayStoredRetirement(request, 'csrf'))
+            .rejects.toBeInstanceOf(CloudReplicaTransportError);
+        await expect(transport.replayStoredRetirement(request, ''))
+            .rejects.toBeInstanceOf(CloudReplicaTransportError);
+        expect(fetcher).toHaveBeenCalledTimes(1);
+    });
+
     it('refuses to adopt an old retire receipt after another replica changed the register', async () => {
         const target = { slot: 's00', replicaId: 'old-device', generation: 2 };
         const old = { mutationId: 'mutation0000000203', action: 'retire', revision: 3,

@@ -53,6 +53,14 @@ export interface CloudReplicaClaimRequest {
     checkpointClock: Record<string, number>;
 }
 
+export interface CloudReplicaRetirementRequest {
+    mutationId: string;
+    expectedRevision: number;
+    expectedFenceEpoch: number;
+    consentRevision: number;
+    replica: Pick<ReplicaIdentity, 'slot' | 'replicaId' | 'generation'>;
+}
+
 export interface CloudReplicaMutationResult {
     mutationId: string;
     action: 'register' | 'checkpoint' | 'reuse-expired' | 'retire';
@@ -249,30 +257,39 @@ export function createCloudflareReplicaTransport(send: typeof fetch = fetch) {
             return confirmed;
         },
 
-        async retireExpiredReplica(
-            control: CloudReplicaControlSnapshot,
-            replica: Pick<ReplicaIdentity, 'slot' | 'replicaId' | 'generation'>,
-            mutationId: string,
+        // The exact retirement request must first be staged in the encrypted
+        // owner vault; replaying a lost response never generates a new ID.
+        async replayStoredRetirement(
+            body: CloudReplicaRetirementRequest,
             csrfToken: string,
         ): Promise<CloudReplicaMutationResult> {
             if (!csrfToken) throw new CloudReplicaTransportError(0);
-            const value = await post('replica/retire', {
-                mutationId, expectedRevision: control.revision,
-                expectedFenceEpoch: control.fenceEpoch,
-                consentRevision: control.consentRevision,
-                replica: { slot: replica.slot, replicaId: replica.replicaId,
-                    generation: replica.generation },
-            }, csrfToken);
-            const confirmed = parseMutationResponse(value, mutationId, control.revision, ['retire']);
-            if (confirmed.replica.slot !== replica.slot
-                || confirmed.replica.replicaId !== replica.replicaId
-                || confirmed.replica.generation !== replica.generation) {
+            const value = await post('replica/retire', body, csrfToken);
+            const confirmed = parseMutationResponse(value, body.mutationId, body.expectedRevision, ['retire']);
+            if (confirmed.replica.slot !== body.replica.slot
+                || confirmed.replica.replicaId !== body.replica.replicaId
+                || confirmed.replica.generation !== body.replica.generation) {
                 throw new CloudReplicaTransportError(0);
             }
             if (confirmed.reconciliationRequired) {
                 throw new CloudReplicaMutationReconciliationRequiredError(confirmed);
             }
             return confirmed;
+        },
+
+        async retireExpiredReplica(
+            control: CloudReplicaControlSnapshot,
+            replica: Pick<ReplicaIdentity, 'slot' | 'replicaId' | 'generation'>,
+            mutationId: string,
+            csrfToken: string,
+        ): Promise<CloudReplicaMutationResult> {
+            return this.replayStoredRetirement({
+                mutationId, expectedRevision: control.revision,
+                expectedFenceEpoch: control.fenceEpoch,
+                consentRevision: control.consentRevision,
+                replica: { slot: replica.slot, replicaId: replica.replicaId,
+                    generation: replica.generation },
+            }, csrfToken);
         },
 
         // A partial page must never be published as a complete cloud checkpoint.

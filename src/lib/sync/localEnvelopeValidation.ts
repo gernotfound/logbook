@@ -10,6 +10,7 @@ import { findLossyNormalization } from './businessNormalizationIntegrity';
 import { parseReplicaIdentity, type ReplicaIdentity } from './replicaProtocol';
 import { parseCloudflareDeliveryIntent, type CloudflareDeliveryIntent } from './cloudReplicaDeliveryRecord';
 import { parseCloudflareReplicaClaimIntent, type CloudflareReplicaClaimIntent } from './cloudReplicaClaimRecord';
+import { parseCloudflareReplicaRetirementIntent, type CloudflareReplicaRetirementIntent } from './cloudReplicaRetirementRecord';
 import {
     coversVectorClock, parseSemanticOperation, parseSyncMeta, parseVectorClock,
     type SemanticOperation, type SyncMeta, type VectorClock,
@@ -33,6 +34,8 @@ interface LocalEnvelopeV5 {
     cloudflareDelivery?: CloudflareDeliveryIntent;
     // Candidate only. An immutable membership request, not an acknowledged replica.
     cloudflareReplicaClaim?: CloudflareReplicaClaimIntent;
+    // Candidate only: immutable expired-replica retirement request (not an ACK).
+    cloudflareReplicaRetirement?: CloudflareReplicaRetirementIntent;
     revision: number;
     // Persistent owner-scoped barrier for unverified cloud snapshots.
     cloudIntegrityFence?: string;
@@ -179,7 +182,10 @@ export function validateLocalEnvelope(value: unknown, owner: string): LocalEnvel
     // entire owner vault unreadable. Replay/adoption fences the revision again.
     const cloudflareReplicaClaim = record.cloudflareReplicaClaim === undefined ? undefined
         : parseCloudflareReplicaClaimIntent(record.cloudflareReplicaClaim);
-    if (cloudflareReplicaClaim !== undefined && record.cloudflareDelivery !== undefined) {
+    const cloudflareReplicaRetirement = record.cloudflareReplicaRetirement === undefined ? undefined
+        : parseCloudflareReplicaRetirementIntent(record.cloudflareReplicaRetirement);
+    if ([record.cloudflareDelivery, record.cloudflareReplicaClaim, record.cloudflareReplicaRetirement]
+        .filter(value => value !== undefined).length > 1) {
         throw new Error('Intenti D1 incompatibili: archivio locale preservato.');
     }
     const cloudflareDelivery = record.cloudflareDelivery === undefined ? undefined
@@ -199,6 +205,7 @@ export function validateLocalEnvelope(value: unknown, owner: string): LocalEnvel
         replica,
         ...(cloudflareDelivery ? { cloudflareDelivery } : {}),
         ...(cloudflareReplicaClaim ? { cloudflareReplicaClaim } : {}),
+        ...(cloudflareReplicaRetirement ? { cloudflareReplicaRetirement } : {}),
         revision: record.revision,
     };
 }

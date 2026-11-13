@@ -34,7 +34,7 @@ export async function adoptReplicaCheckpoint(
         if (guard && !guard()) throw new Error('Checkpoint replica invalidato dal cambio sessione; journal preservato.');
         const current = validateLocalEnvelope(raw, owner);
         if (!current) throw new Error('Archivio locale non trovato durante il checkpoint replica');
-        if (current.cloudflareDelivery) {
+        if (current.cloudflareDelivery || current.cloudflareReplicaRetirement) {
             throw new Error('Intento D1 in attesa di riconciliazione: checkpoint replica sospeso senza toccare il journal.');
         }
         const claimIntent = current.cloudflareReplicaClaim;

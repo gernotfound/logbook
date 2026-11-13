@@ -39,8 +39,9 @@ Firebase/Firestore writer, IndexedDB journal and encrypted vault remain active.
   a later global revision or slot reuse (within the same active account epoch).
   The response includes currentRevision and reconciliationRequired. An old
   receipt proves historical commit but NEVER authorizes local adoption:
-  client claim/retire throws a typed reconciliation-required error and must
-  repeat a full AEAD-verified scan with a fresh guarded mutation.
+  client claim/retire throws a typed reconciliation-required error. A claim
+  needs a fresh AEAD-verified full scan before adoption; retirement remains
+  pending until the register can be reconciled without inventing an ACK.
 - Candidate encrypted claim workflow: `cloudReplicaClaimRecovery.ts` writes an
   immutable claim mutationId/body to the owner-vault IndexedDB before sending
   it; the next session replays the exact same request. Only an authenticated
@@ -49,6 +50,17 @@ Firebase/Firestore writer, IndexedDB journal and encrypted vault remain active.
   that removes the stored intent with the checkpoint. A historical reply
   returns reconciliation-required without deleting local data. Automatic
   re-claim under a new mutationId and production wiring remain TODO.
+- Candidate durable retirement workflow: `cloudReplicaRetirementRecovery.ts`
+  writes an immutable expired-lease target/mutationId into the same
+  owner-encrypted vault before sending anything. `replayStoredRetirement()`
+  reuses those bytes after a lost reply. A fresh matching retired register
+  (checked twice) removes only the intent in one IndexedDB transaction; it
+  does NOT ACK business operations or prove a stable frontier. Any later
+  revision, target reuse, changed consent or torn intent preserves the local
+  ciphertext and reports reconciliation-required or fails closed.
+  Claim, retirement and document delivery intents are mutually exclusive.
+  Automatic re-retirement under a new revision and runtime integration remain
+  TODO; this is not a working end-to-end logout/erasure path.
 - POST /v1/sync/read reads up to eight ciphertext envelopes under one D1
   snapshot; POST /v1/sync/scan reads a bounded page with a revision-fenced
   cursor for a complete account checkpoint. Reads/scans carry an explicit

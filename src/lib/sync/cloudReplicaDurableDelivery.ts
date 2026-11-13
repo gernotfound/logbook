@@ -58,7 +58,7 @@ export async function stageCloudflareDelivery(
         current(guard);
         const envelope = validateLocalEnvelope(raw, owner);
         if (!envelope || envelope.cloudflareDelivery || envelope.cloudflareReplicaClaim
-            || envelope.cloudIntegrityFence || !envelope.replica || envelope.replica.slot !== replica.slot
+            || envelope.cloudflareReplicaRetirement || envelope.cloudIntegrityFence || !envelope.replica || envelope.replica.slot !== replica.slot
             || envelope.replica.replicaId !== replica.replicaId
             || envelope.replica.generation !== replica.generation
             || envelope.consentRevision !== intent.batch.consentRevision
@@ -98,7 +98,7 @@ export async function resumeCloudflareDelivery(
     const local = await readLocal(owner);
     current(guard);
     if (!local) throw new Error('Archivio locale assente: non è consentito un ACK.');
-    if (local.cloudIntegrityFence) {
+    if (local.cloudIntegrityFence || local.cloudflareReplicaRetirement) {
         throw new Error('Barriera cloud presente: consegna D1 sospesa e journal preservato.');
     }
     const intent = local.cloudflareDelivery;

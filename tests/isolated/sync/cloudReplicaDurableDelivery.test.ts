@@ -10,6 +10,7 @@ import { UserDataSchema } from '../../../src/lib/schema';
 import { adoptReplicaCheckpoint, acknowledgeThrough, commitLocal, initializeLocal, readLocal } from '../../../src/lib/sync/localRepository';
 import { stageCloudflareDelivery, resumeCloudflareDelivery } from '../../../src/lib/sync/cloudReplicaDurableDelivery';
 import { stageCloudflareReplicaClaim } from '../../../src/lib/sync/cloudReplicaClaimRecovery';
+import { stageCloudflareReplicaRetirement } from '../../../src/lib/sync/cloudReplicaRetirementRecovery';
 import { readAuthenticatedCloudflareCheckpoint } from '../../../src/lib/sync/cloudReplicaCheckpoint';
 import type { CloudReplicaBatch, CloudReplicaControlSnapshot, CloudReplicaSnapshot } from '../../../src/lib/sync/cloudReplicaTransport';
 import { createAndMigrateVault } from '../../../src/lib/sync/secureArchiveMigration';
@@ -278,6 +279,31 @@ describe('candidate D1 delivery: encrypted IndexedDB intent and exact ACK', () =
         expect(after.cloudflareDelivery).toBeUndefined();
         expect(after.cloudflareReplicaClaim).toBeDefined();
         expect(after.pending).toEqual(initial.envelope.pending);
+    });
+
+    it('never stages a delivery while an expired-replica retirement is pending', async () => {
+        const initial = await seed();
+        const now = Date.now();
+        const expired = {
+            slot: 's01', replicaId: 'expired-other-device', generation: 1,
+            leaseUntilMs: now - 600000, checkpointAtMs: now - 86400000,
+        };
+        const control = {
+            ...initial.control,
+            replicas: {
+                ...initial.control.replicas,
+                s01: { ...expired, status: 'active' as const, lastSeq: 0, checkpointClock: {} },
+            },
+        };
+        await stageCloudflareReplicaRetirement(owner, control, expired, () => true);
+        const sealed = await get(storeKey);
+
+        await expect(stageCloudflareDelivery(owner, initial.envelope.pending, initial.snapshot,
+            initial.control, initial.replica, 'batch000000000198', adk, () => true))
+            .rejects.toThrow('Intento D1 non installabile');
+        expect(await get(storeKey)).toBe(sealed);
+        expect((await readLocal(owner))?.cloudflareReplicaRetirement).toBeDefined();
+        expect((await readLocal(owner))?.pending).toEqual(initial.envelope.pending);
     });
 
     it('does not allow a second staging attempt or a replica checkpoint while an intent is outstanding', async () => {
