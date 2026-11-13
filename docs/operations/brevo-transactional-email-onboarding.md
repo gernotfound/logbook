@@ -1,13 +1,15 @@
 # Brevo — onboarding email transazionali Cloudflare (CF-00 B2)
 
-**Stato: DNS VERIFICATI DA BREVO / AUTENTICAZIONE FINALE E INVIO NON ANCORA PROVATI.** Checkpoint 13/11/2026. Collegato alle issue [CF-00 #1054](https://github.com/gernotfound/logbook/issues/1054), [CF-03 #1057](https://github.com/gernotfound/logbook/issues/1057) e all'[epic #1053](https://github.com/gernotfound/logbook/issues/1053). Questo documento registra soltanto l'onboarding del servizio email, senza autorizzare l'integrazione Auth, il cambio DNS o il rilascio. Riferimento normativo: `AGENTS.md` e `.agents/rules/external-services.md`.
+**Stato: DOMINIO BREVO AUTENTICATO / MITTENTE E INVIO NON ANCORA VERIFICATI.** Checkpoint 13/11/2026. Collegato alle issue [CF-00 #1054](https://github.com/gernotfound/logbook/issues/1054), [CF-03 #1057](https://github.com/gernotfound/logbook/issues/1057) e all'[epic #1053](https://github.com/gernotfound/logbook/issues/1053). Questo documento registra soltanto l'onboarding del servizio email, senza autorizzare l'integrazione Auth, il cambio DNS o il rilascio. Riferimento normativo: `AGENTS.md` e `.agents/rules/external-services.md`.
 
 ## Stato corrente verificato — 13/11/2026
 
 - Il product owner ha aggiunto manualmente i quattro record DNS richiesti per `notify.thelogbook.me`. **Read-back Cloudflare API GET**: zona `thelogbook.me` attiva, **15 record**, TXT Brevo presente; i CNAME `brevo1._domainkey.notify` e `brevo2._domainkey.notify` corrispondono agli obiettivi Brevo e sono **DNS only**, TTL Auto; il TXT `_dmarc.notify` è presente. I record email IONOS dell'apex (MX, SPF, DMARC CNAME) restano presenti. Non trascrivere in Git i valori del codice di verifica.
 - **Verifica separata tramite UI Brevo:** il product owner conferma che, dopo «Verifica record», tutti e quattro gli esiti (codice Brevo, DKIM 1, DKIM 2, DMARC) sono **verdi e corrispondono**. Non abbiamo un accesso API di Brevo per un read-back indipendente.
-- **Passo ancora da attestare:** selezione finale «Autentica dominio» su Brevo e stato dominio autenticato. Verifica record ≠ esito conclusivo del wizard.
+- **Autenticazione finale confermata da screenshot del product owner:** dopo aver premuto «Autentica dominio», Brevo mostra `notify.thelogbook.me` con punto verde e stato **«Autenticato»** nella sezione `Impostazioni > Mittenti, domini, IP > Domini`, unitamente al testo «Il tuo dominio è stato autenticato». Questa è evidenza del provider via schermata dell'owner, non read-back API indipendente; gli eventuali 48 h indicati da Brevo riguardano la propagazione DNS, **non annullano l'esito verde già visibile**.
+- **Brandizzazione:** la stessa schermata mostra «Non brandizzato» e nessun `Branded subdomain`; è una funzione opzionale per i link di tracking/brand e **non un problema dell'autenticazione di invio**. Non configurare tracking o un sottodominio ulteriore per il solo invio di email di account.
 - **CF-00 B2 NON VALIDATO:** l'account Free deve ancora risultare abilitato all'invio transazionale; nessun invio accettato/delivered/inbox è stato provato, nessun segreto API gestito dal progetto; Auth e Worker non modificati.
+- **Mittente proposto, non ancora osservato come creato:** `TheLogBook <no-reply@notify.thelogbook.me>`. Dopo autenticazione del dominio Brevo non richiede una verifica a 6 cifre per ciascun mittente (fonte: https://help.brevo.com/hc/it/articles/208836149-Creazione-di-un-nuovo-mittente-nome-ed-email-del-mittente). L'assenza di verifica individuale **non equivale** a inbox funzionante per ricevere risposte. Prima del test invio, verificare abilitazione transazionale Free ed eventuali restrizioni approvazione account; fonte: https://help.brevo.com/hc/it/articles/115000188150-Risoluzione-dei-problemi-con-Brevo-SMTP.
 - Classificazione **CRITICAL** per dipendenza futura da verifica/reset account; attività corrente circoscritta all'onboarding email. **Nessuna modifica DNS effettuata dall'assistente**: i record sono stati creati dall'owner via dashboard.
 
 I righi dei checkpoint precedenti riportati più sotto conservano la sequenza storica e **non sostituiscono questo stato corrente**.
@@ -28,7 +30,7 @@ I righi dei checkpoint precedenti riportati più sotto conservano la sequenza st
 | Voce | Evidenza | Stato |
 |---|---|---|
 | Registrazione Brevo | Screenshot del product owner: dashboard e sezione email transazionali/SMTP accessibili | **Account creato**, invio reale non provato |
-| Inserimento dominio | Screenshot product owner: wizard Brevo per `notify.thelogbook.me` e conferma successiva di tutti i record verdi | **DNS allineati; autenticazione finale ancora da attestare** |
+| Autenticazione dominio | Screenshot del product owner dopo «Autentica dominio»: `notify.thelogbook.me` con stato Brevo **Autenticato** e indicatore verde | **AUTENTICATO in Brevo (prova UI)** |
 | Sottodominio link personalizzati | La UI mostra un campo con suffisso `.notify.thelogbook.me`, dichiarato opzionale | **Non necessario**; indicato di proseguire con campo vuoto |
 | Scelta metodo DNS | Screenshot 13/11: wizard alla fase «Configura metodo» con **Record DNS individuali** o **Configurazione gestita da Brevo** (NS) | **Scelta individuale raccomandata**, non ancora confermata effettuata dal proprietario |
 | Wizard Brevo, fase «Record» | Screenshot 13/11: Brevo richiede inizialmente **TXT** con nome relativo `notify` e valore di verifica `brevo-code:…` per `notify.thelogbook.me`; la schermata avverte che il record non corrisponde ancora | **Istruzioni fornite per l'inserimento manuale**; valore completo non copiato nella documentazione pubblica e salvataggio non verificato |
@@ -44,9 +46,9 @@ L'immagine della dashboard è una prova fornita dal proprietario, **non** un rea
 
 ## Passi successivi e gate
 
-1. **Autenticare definitivamente il dominio** dalla schermata Brevo premendo `Autentica dominio` dopo le quattro verifiche verdi, poi acquisire screenshot dello stato autentico/attivo; non dichiarare il passaggio concluso prima.
-2. Verificare che il piano **Brevo Free** consenta concretamente l'invio transazionale a indirizzi arbitrari e che l'account non sia in approvazione/sospensione.
-3. Preparare il mittente `no-reply@notify.thelogbook.me`, verificando eventuali condizioni di creazione e conferma senza acquistare una casella non necessaria. Valutare indirizzo reply-to separato realmente monitorato.
+1. **Autenticazione del dominio COMPLETATA** secondo schermata Brevo del product owner, 13/11/2026. Non configurare `Branded subdomain` salvo un vero requisito futuro dei link.
+2. Da `Impostazioni > Mittenti, domini, IP > Mittenti` creare `TheLogBook <no-reply@notify.thelogbook.me>`; **stato: istruzioni fornite, salvataggio non ancora osservato**. Verificare eventuali campi aggiuntivi e un reply-to monitorato, senza esporre email private.
+3. Verificare che il piano **Brevo Free** consenta concretamente l'invio transazionale a indirizzi arbitrari e che l'account non sia in approvazione/sospensione.
 4. Eseguire un invio **solo con destinatario di test autorizzato**, tramite API HTTPS server-side con secret conservato esclusivamente nel provider/sandbox; distinguere receipt API, delivery, inbox e bounce. Non esporre chiavi nel repository o nella chat.
 5. Prima di integrare Auth, verificare quota Free, rate limit/cooldown, contenuti email privi di salute, DPA/subprocessor, retention log/anteprime e tracking disattivato quando non necessario; verificare reset e token monouso nel sottosistema Auth autonomo.
 6. Senza un GO completo CF-00 B2, non dichiarare la dipendenza email pronta per la nuova Auth. Nessun intervento su vecchia Auth/Worker e nessun cutover di dominio.
