@@ -48,7 +48,7 @@ async function fixture() {
   const fetchImpl = async (url, init) => {
     assert.equal(url, issuer + '/oauth2/token');
     assert.equal(init.method, 'POST');
-    assert.equal(init.redirect, 'error');
+    assert.equal(init.redirect, 'manual');
     assert.equal(init.headers['Content-Type'], 'application/x-www-form-urlencoded');
     const body = init.body;
     assert.equal(body.get('grant_type'), 'authorization_code');
@@ -60,7 +60,13 @@ async function fixture() {
     const nonce = nonceByCode.get(code);
     const now = Math.floor(Date.now() / 1000);
     issuedTokens += 1;
-    if (tokenStatus !== 200) return new Response('{}', { status: tokenStatus, headers: { 'Content-Type': 'application/json' } });
+    if (tokenStatus !== 200) return new Response('{}', {
+      status: tokenStatus,
+      headers: {
+        'Content-Type': 'application/json',
+        ...(tokenStatus >= 300 && tokenStatus < 400 ? { Location: 'https://redirected.invalid/token' } : {}),
+      },
+    });
     let tokens;
     if (tokenPayload) tokens = tokenPayload;
     else {
@@ -232,6 +238,21 @@ void test('provider failure or malformed token response consumes state, never re
     assert.equal(f.sqlite.prepare('SELECT COUNT(*) AS n FROM auth_sessions').get().n, 0);
     assert.equal(f.sqlite.prepare('SELECT COUNT(*) AS n FROM auth_principals').get().n, 0);
     assert.equal(f.sqlite.prepare('SELECT COUNT(*) AS n FROM auth_oauth_attempts').get().n, 0);
+  } finally { f.close(); }
+});
+
+void test('OAuth token endpoint redirects are rejected without issuing sessions or following Location', async () => {
+  const f = await fixture();
+  try {
+    f.setStatus(302);
+    const attempt = await f.start();
+    const callback = f.callback(attempt);
+    assert.equal((await f.oauth.complete(f.db, callback)).status, 503);
+    assert.equal(f.calls(), 1);
+    assert.equal((await f.oauth.complete(f.db, callback)).status, 400);
+    assert.equal(f.sqlite.prepare('SELECT COUNT(*) AS n FROM auth_oauth_attempts').get().n, 0);
+    assert.equal(f.sqlite.prepare('SELECT COUNT(*) AS n FROM auth_sessions').get().n, 0);
+    assert.equal(f.sqlite.prepare('SELECT COUNT(*) AS n FROM auth_principals').get().n, 0);
   } finally { f.close(); }
 });
 
