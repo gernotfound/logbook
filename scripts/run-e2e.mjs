@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { generateIcons } from './resize_icons.mjs';
 import { createIsolatedE2eEnvironment } from './e2e-environment.mjs';
+import { withSafariCIWorkers } from './e2e-safari-workers.mjs';
 
 const require = createRequire(import.meta.url);
 // Suppress inherited VITE_*, secrets and deployment flags before Vite runs.
@@ -40,7 +41,7 @@ try {
     preview: { host: '127.0.0.1', port: 0, strictPort: true },
   }));
   process.exitCode = await new Promise((resolve, reject) => {
-    const child = spawn(process.execPath, [require.resolve('@playwright/test/cli'), 'test', ...process.argv.slice(2)], {
+    const child = spawn(process.execPath, [require.resolve('@playwright/test/cli'), 'test', ...withSafariCIWorkers(process.argv.slice(2), Boolean(process.env.CI))], {
       stdio: 'inherit',
       windowsHide: true,
       env: {

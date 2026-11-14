@@ -6,6 +6,7 @@ import { loadConfigFromFile } from 'vite';
 import { compareAssignments, normalizePlaywrightLocation, ungroupedTestFiles, ungroupedMajorSuiteTests, validateStressAssignment, discoverNativeNodeTests } from './check-test-discovery.mjs';
 import { isCriticalTest } from './critical-test-selection.mjs';
 import { validateMutationSelection } from './check-mutation-selection.mjs';
+import { withSafariCIWorkers } from './e2e-safari-workers.mjs';
 
 await test('rejects test files at tests/ root without rejecting shared fixtures or nested suites', () => {
   assert.deepEqual(ungroupedTestFiles([
@@ -70,6 +71,18 @@ await test('Knip treats Node Cloudflare suites as entrypoints while discovery ch
   const { fileURLToPath } = await import('node:url');
   const config = JSON.parse(readFileSync(fileURLToPath(new URL('../knip.json', import.meta.url)), 'utf8'));
   assert.ok(config.entry.includes('tests/cloudflare/*.node.mjs'));
+});
+
+await test('Safari CI worker allocation preserves browser and shard selection', () => {
+  const safari = ['--project=mobile-safari', '--shard=4/4'];
+  const chromium = ['--project=chromium', '--shard=4/4'];
+  assert.deepEqual(withSafariCIWorkers(safari, true), [...safari, '--workers=3']);
+  assert.deepEqual(withSafariCIWorkers(safari, false), safari);
+  assert.deepEqual(withSafariCIWorkers(chromium, true), chromium);
+  assert.deepEqual(withSafariCIWorkers(['--project', 'mobile-safari', '--shard=1/4'], true),
+    ['--project', 'mobile-safari', '--shard=1/4', '--workers=3']);
+  assert.deepEqual(withSafariCIWorkers([...safari, '--workers=2'], true),
+    [...safari, '--workers=2']);
 });
 
 await test('rejects Playwright sharding loss and duplicate test identities', () => {
