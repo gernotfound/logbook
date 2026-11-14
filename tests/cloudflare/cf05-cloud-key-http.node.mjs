@@ -125,8 +125,12 @@ void test('top-level API: initial consent, authenticated key provision, repeat a
     assert.equal(f.count('cloud_account_keys', 'owner-a'), 0);
     await f.consent('owner-a');
     await f.consent('owner-b');
-    const first = await f.call('owner-a', SYNC);
+    const [first, raced] = await Promise.all([
+      f.call('owner-a', SYNC), f.call('owner-a', SYNC),
+    ]);
     assert.equal(first.response.status, 200);
+    assert.equal(raced.response.status, 200);
+    assert.equal(raced.body.key, first.body.key);
     assert.equal(first.response.headers.get('Cache-Control'), 'no-store');
     assert.equal(first.response.headers.get('Pragma'), 'no-cache');
     assert.equal(first.response.headers.get('Access-Control-Allow-Origin'), null);
