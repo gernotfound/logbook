@@ -1,14 +1,31 @@
 import { resumeCloudflareDelivery, stageCloudflareDelivery } from './cloudReplicaDurableDelivery';
-import type { createCloudflareReplicaTransport } from './cloudReplicaTransport';
+import { CloudReplicaTransportError, type createCloudflareReplicaTransport } from './cloudReplicaTransport';
+import { restageUncommittedCloudflareDelivery } from './cloudReplicaDeliveryRecovery';
 import { readLocal } from './localRepository';
 import { normalizeStorageOwner } from './owner';
 import { boundedPendingTransactionBatch } from './syncBatching';
 
 type CandidateTransport = Pick<
     ReturnType<typeof createCloudflareReplicaTransport>,
-    'control' | 'read' | 'commit' | 'receipt'
+    'control' | 'read' | 'commit' | 'receipt' | 'commitOutcome' | 'scanAll'
 >;
 type SessionGuard = () => boolean;
+
+async function resumeOrRestage(
+    owner: string,
+    accountKey: Uint8Array,
+    transport: CandidateTransport,
+    csrfToken: string,
+    guard: SessionGuard,
+): Promise<'idle' | 'acknowledged' | 'retry-staged' | 'reconciliation-required'> {
+    try {
+        return await resumeCloudflareDelivery(owner, accountKey, transport, csrfToken, guard);
+    } catch (error) {
+        if (!(error instanceof CloudReplicaTransportError) || error.status !== 409) throw error;
+        requireCurrent(guard);
+        return restageUncommittedCloudflareDelivery(owner, accountKey, transport, csrfToken, guard);
+    }
+}
 
 function requireCurrent(guard: SessionGuard): void {
     if (!guard()) throw new Error('Sessione D1 cambiata: journal locale preservato.');
@@ -28,7 +45,7 @@ export async function deliverCloudflareJournalCandidate(
     transport: CandidateTransport,
     csrfToken: string,
     guard: SessionGuard,
-): Promise<'idle' | 'acknowledged'> {
+): Promise<'idle' | 'acknowledged' | 'retry-staged' | 'reconciliation-required'> {
     const owner = normalizeStorageOwner(ownerInput);
     if (!owner.startsWith('user:') || !(accountKey instanceof Uint8Array)
         || accountKey.length !== 32 || !csrfToken) {
@@ -45,7 +62,7 @@ export async function deliverCloudflareJournalCandidate(
     // Always recover the original encrypted intent before considering a new
     // batch. A new nonce or batch ID after a lost response would break replay.
     if (local.cloudflareDelivery) {
-        return resumeCloudflareDelivery(owner, accountKey, transport, csrfToken, guard);
+        return resumeOrRestage(owner, accountKey, transport, csrfToken, guard);
     }
     if (!local.pending.length) return 'idle';
     if (!local.replica || local.actorId !== local.replica.slot
@@ -73,5 +90,5 @@ export async function deliverCloudflareJournalCandidate(
         owner, operations, snapshot, control, local.replica, batchId, accountKey, guard,
     );
     requireCurrent(guard);
-    return resumeCloudflareDelivery(owner, accountKey, transport, csrfToken, guard);
+    return resumeOrRestage(owner, accountKey, transport, csrfToken, guard);
 }
