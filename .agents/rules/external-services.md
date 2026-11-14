@@ -9,6 +9,10 @@ Il registro decisionale stabile e leggibile anche fuori dal codice è `docs/oper
 
 **Autorità:** [`AGENTS.md`](../../AGENTS.md). Questo contratto ne specializza gli invarianti; non amplia autorizzazioni o perimetro.
 
+## Decisione Auth Kinde e ritiro percorso Mailjet — 14/11/2026
+
+Il product owner ha scelto **Kinde** per identità email/password e Google, con email Auth gestite dal provider, evitando l'integrazione Mailjet sul nuovo backend. Kinde non è ancora configurato/attivo; Free, regione EU, API di erasure, password workflow, sessioni, cookie Safari, audit e DPA richiedono verifica su tenant isolato. La scelta non elimina i controlli owner/consenso/revoca su D1. **Mailjet: RETIRE-PLANNED, non cancellato.** La draft PR #1077 è superata; dominio `notify.thelogbook.me`, record DNS e account provider hanno storia reale e richiedono inventario e autorizzazione DNS/provider specifica prima di ogni eliminazione. Non cancellare alla cieca record SPF/DKIM/DMARC o credenziali che potrebbero essere condivisi con altri flussi. Nessuna modifica Production, DNS, account o billing implicita.
+
 ## Stato transitorio e ritiro anticipato — 14/11/2026
 
 - **Verifica provider 14/11:** Vercel `logbook` sospeso su richiesta del proprietario; evento Vercel `project-paused` osservato. Produzione bloccata in modo reversibile, nessuna eliminazione di progetto, segreti, dati o modifiche ad altri progetti. Le Functions/Cron ancora nel repository non sono un backend ora disponibile.
