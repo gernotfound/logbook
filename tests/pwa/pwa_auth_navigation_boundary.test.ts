@@ -32,7 +32,7 @@ describe('PWA trusted HTTP navigation boundary', () => {
   });
 
   it('is wired into the production Workbox navigation route, not merely a dormant helper', () => {
-    const swSource = readFileSync(new URL('../../src/sw.ts', import.meta.url), 'utf8');
+    const swSource = readFileSync('src/sw.ts', 'utf8');
     expect(swSource).toContain("import { AUTH_HTTP_NAVIGATION_DENYLIST } from './lib/pwaHttpNavigationBoundary'");
     expect(swSource).toContain(
       "denylist: [/^\\/__\\//, /^\\/(?:about|privacy)(?:\\/|\\.html|$)/, AUTH_HTTP_NAVIGATION_DENYLIST]",
