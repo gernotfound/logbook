@@ -63,6 +63,49 @@ describe('isolated Cloudflare document transport', () => {
         await expect(absent.receipt(batch)).resolves.toBeNull();
     });
 
+    it('binds a D1 commit status proof to the original batch without producing an ACK', async () => {
+        const expectedHash = createHash('sha256').update(JSON.stringify({
+            batchId: batch.batchId, consentRevision: batch.consentRevision, documents: [],
+            expectedFenceEpoch: batch.expectedFenceEpoch, expectedRevision: batch.expectedRevision,
+            lastSeq: batch.lastSeq,
+            replica: { generation: 1, replicaId: 'replica-test', slot: 's00' },
+        })).digest('hex');
+        const fetcher = vi.fn(async () => new Response(JSON.stringify({
+            outcome: 'not-committed', currentRevision: batch.expectedRevision + 1,
+        })));
+        const remote = createCloudflareReplicaTransport(fetcher as typeof fetch);
+        await expect(remote.commitOutcome(batch, 'csrf-session')).resolves.toEqual({
+            outcome: 'not-committed', currentRevision: 1,
+        });
+        expect(fetcher).toHaveBeenCalledWith('/v1/sync/commit/status', expect.objectContaining({
+            credentials: 'include', method: 'POST',
+            headers: expect.objectContaining({ 'X-CSRF-Token': 'csrf-session' }),
+        }));
+        expect(JSON.parse((fetcher.mock.calls[0] as unknown as [string, RequestInit])[1].body as string))
+            .toEqual({
+                batchId: batch.batchId, expectedRevision: 0,
+                expectedFenceEpoch: 5, consentRevision: 1, requestHash: expectedHash,
+            });
+
+        for (const invalid of [
+            { outcome: 'not-committed', currentRevision: 0 },
+            { outcome: 'committed', currentRevision: 0 },
+            { outcome: 'inconclusive', currentRevision: 1 },
+            { outcome: 'not-committed', currentRevision: '2' },
+            { outcome: 'unknown', currentRevision: 2 },
+        ]) {
+            const malformed = createCloudflareReplicaTransport(vi.fn(async () =>
+                new Response(JSON.stringify(invalid))) as typeof fetch);
+            await expect(malformed.commitOutcome(batch, 'csrf-session'))
+                .rejects.toBeInstanceOf(CloudReplicaTransportError);
+        }
+        const conflicting = createCloudflareReplicaTransport(vi.fn(async () =>
+            new Response(JSON.stringify({ error: 'batch-id-conflict' }), { status: 409 })) as typeof fetch);
+        await expect(conflicting.commitOutcome(batch, 'csrf-session')).rejects.toMatchObject({ status: 409 });
+        await expect(remote.commitOutcome(batch, '')).rejects.toBeInstanceOf(CloudReplicaTransportError);
+        expect(fetcher).toHaveBeenCalledTimes(1);
+    });
+
     it('requires a primary SQL non-commit outcome before rotating a durable claim', async () => {
         const claim = {
             mutationId: 'mutation0000000800', expectedRevision: 1,

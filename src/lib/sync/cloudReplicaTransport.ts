@@ -77,6 +77,11 @@ export interface CloudReplicaClaimMutationOutcome {
     currentRevision: number;
 }
 
+export interface CloudReplicaCommitOutcome {
+    outcome: 'committed' | 'not-committed' | 'inconclusive';
+    currentRevision: number;
+}
+
 export interface CloudReplicaReceipt {
     revision: number;
     lastSeq: number;
@@ -154,7 +159,7 @@ function parseMutationResponse(
  * validates identity, health consent and session-bound CSRF independently.
  */
 export function createCloudflareReplicaTransport(send: typeof fetch = fetch) {
-    async function post(route: 'read' | 'scan' | 'control' | 'replica/claim' | 'replica/retire' | 'replica/status' | 'commit' | 'receipt', body: unknown, csrfToken?: string): Promise<unknown> {
+    async function post(route: 'read' | 'scan' | 'control' | 'replica/claim' | 'replica/retire' | 'replica/status' | 'commit' | 'commit/status' | 'receipt', body: unknown, csrfToken?: string): Promise<unknown> {
         let response: Response;
         try {
             response = await send('/v1/sync/' + route, {
@@ -394,6 +399,26 @@ export function createCloudflareReplicaTransport(send: typeof fetch = fetch) {
                 throw new CloudReplicaTransportError(0);
             }
             return value as unknown as CloudReplicaSnapshot;
+        },
+
+        // Used only to decide whether an immutable, unacknowledged batch may
+        // eventually be rebased. Even "committed" is not an ACK: receipt()
+        // must still validate the full content hash before local deletion.
+        async commitOutcome(batch: CloudReplicaBatch, csrfToken: string): Promise<CloudReplicaCommitOutcome> {
+            if (!csrfToken) throw new CloudReplicaTransportError(0);
+            const value = await post('commit/status', {
+                batchId: batch.batchId, expectedRevision: batch.expectedRevision,
+                expectedFenceEpoch: batch.expectedFenceEpoch,
+                consentRevision: batch.consentRevision, requestHash: await batchHash(batch),
+            }, csrfToken);
+            if (!isRecord(value) || !safeRevision(value.currentRevision)
+                || (value.outcome !== 'committed' && value.outcome !== 'not-committed'
+                    && value.outcome !== 'inconclusive')
+                || (value.outcome === 'inconclusive' && value.currentRevision > batch.expectedRevision)
+                || (value.outcome !== 'inconclusive' && value.currentRevision <= batch.expectedRevision)) {
+                throw new CloudReplicaTransportError(0);
+            }
+            return value as unknown as CloudReplicaCommitOutcome;
         },
 
         async commit(batch: CloudReplicaBatch, csrfToken: string): Promise<{ revision: number; lastSeq: number; replayed: boolean }> {

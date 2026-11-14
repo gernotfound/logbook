@@ -106,6 +106,28 @@ export async function readReceipt(db, uid, consentRevision, fenceEpoch, batchId,
     .bind(uid, batchId, consentRevision, fenceEpoch, ...activeSessionArgs(sessionHash, uid, fenceEpoch)).first();
 }
 
+/**
+ * A single primary SQL read couples the authoritative revision with the
+ * immutable receipt. Receipt absence alone is never non-commit evidence.
+ */
+export async function readCommitOutcome(db, uid, consentRevision, fenceEpoch, batchId, sessionHash) {
+  if (typeof db.withSession !== 'function') throw new Error('primary-d1-session-unavailable');
+  const primary = db.withSession('first-primary');
+  return primary.prepare(`SELECT s.revision AS current_revision,
+    r.request_hash AS existing_hash,
+    r.expected_revision AS existing_expected_revision,
+    r.consent_revision AS existing_consent_revision,
+    r.fence_epoch AS existing_fence_epoch
+    FROM sync_subjects a
+    JOIN sync_state s ON s.uid = a.uid
+    LEFT JOIN sync_receipts r ON r.uid = a.uid AND r.batch_id = ?
+    WHERE a.uid = ? AND a.status = 'active'
+      AND a.consent_revision = ? AND a.fence_epoch = ?
+      AND ${activeSessionPredicateSql}`)
+    .bind(batchId, uid, consentRevision, fenceEpoch,
+      ...activeSessionArgs(sessionHash, uid, fenceEpoch)).first();
+}
+
 export async function readAccessState(db, uid, fenceEpoch, sessionHash) {
   return db.withSession('first-primary').prepare(`SELECT a.status,
     a.consent_revision, a.fence_epoch, s.revision
