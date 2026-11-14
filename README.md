@@ -1,15 +1,11 @@
 # TheLogBook
 
-**TheLogBook** è una Progressive Web App (PWA) per monitorare allenamento, alimentazione e progressi fisici.
+**TheLogBook** è una PWA per allenamenti, alimentazione e progressi fisici: routine, serie e carichi, diario nutrizionale, macronutrienti, peso, misure e grafici.
 
-Permette di creare routine, registrare allenamenti con serie, carichi e recuperi, gestire il diario alimentare e i macronutrienti, tenere traccia del peso e delle misurazioni corporee e consultare grafici e statistiche.
+È progettata per l'uso **offline**, con dati locali, backup e import/export. Accesso con account e sincronizzazione tra dispositivi sono in migrazione.
 
-Funziona anche **offline**: i dati vengono salvati sul dispositivo e possono essere sincronizzati tra dispositivi con un account.
+**Stato (novembre 2026):** il frontend è online su [thelogbook.me](https://thelogbook.me) tramite Cloudflare Workers Static Assets. **La PWA non è ancora pronta per l'uso con dati reali:** autenticazione Kinde, API Workers/D1, sincronizzazione e protezioni cloud devono completare integrazione e collaudi.
 
-Supporta backup, importazione ed esportazione dei dati.
+**Tecnologie:** React, TypeScript, Vite; Cloudflare Workers/D1 e Kinde per il nuovo backend.
 
-**Distribuzione PWA:** frontend temporaneamente non pubblicato durante la migrazione a Cloudflare. Il dominio previsto è `thelogbook.me`, ma il cutover non è ancora avvenuto: non utilizzare il precedente `thelogbook.web.app`. [Stato e blocchi della migrazione](https://github.com/gernotfound/logbook/issues/1041).
-
-**Documentazione:** [Indice completo](docs/README.md) · [AGENTS.md, punto di ingresso per agenti](AGENTS.md). La mappa in AGENTS indica quali contratti specialistici aprire per ogni task.
-
-**Lavori da pianificare e seguire:** [GitHub Issues](https://github.com/gernotfound/logbook/issues). I collaudi automatici si svolgono con fixture locali, emulatori e CI; non è configurato un ambiente Firebase/Vercel Test separato.
+[Avanzamento migrazione](https://github.com/gernotfound/logbook/issues/1053) · [Documentazione](docs/README.md) · [Regole di sviluppo](AGENTS.md).
