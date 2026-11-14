@@ -107,7 +107,7 @@ class BadInput extends Error {
 }
 function uniquePaths(paths) { return paths.length === new Set(paths).size; }
 
-async function jsonBounded(request, maxBytes) {
+function checkJsonRequestHeaders(request, maxBytes) {
   if (!/^application\/json(?:\s*;|$)/i.test(request.headers.get('content-type') ?? '')) {
     throw new BadInput('unsupported-media-type', 415);
   }
@@ -115,6 +115,10 @@ async function jsonBounded(request, maxBytes) {
   if (declared && (!/^\d+$/.test(declared) || Number(declared) > maxBytes)) {
     throw new BadInput('payload-too-large', 413);
   }
+}
+
+async function jsonBounded(request, maxBytes) {
+  checkJsonRequestHeaders(request, maxBytes);
   if (!request.body) throw new BadInput('invalid-json', 400);
   const reader = request.body.getReader();
   const parts = [];
@@ -211,6 +215,10 @@ async function handler(request, env) {
   if (!env.DB || typeof env.DB.prepare !== 'function' || typeof env.DB.batch !== 'function') {
     return reply({ error: 'storage-unavailable' }, 503);
   }
+  // Reject cheaply checkable malformed/declared-oversized bodies before
+  // spending private AuthGate rate-limit, crypto or D1 read budget.
+  // Streaming size checks still run after Auth on untrusted/chunked bodies.
+  checkJsonRequestHeaders(request, maxBodyBytes);
   const claims = await authorize(request, env, route,
     route === '/v1/sync/commit' || route === '/v1/sync/commit/status' || route === '/v1/sync/replica/claim' || route === '/v1/sync/replica/retire' || route === '/v1/sync/replica/status');
   const uid = claims.uid;

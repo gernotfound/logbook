@@ -61,6 +61,10 @@ Il codice candidato espone `commit/status` sotto AuthGate e CSRF di sessione. Un
 
 Le parti indipendenti possono avanzare in parallelo a CF-00, ma **nessuna dipendenza non validata può essere attivata nel percorso reale**. Non eseguire deploy non-main su risorse Production o test su dati Production.
 
+### CF-07 — preflight economico delle API candidate (14/11/2026)
+
+Il Worker API controlla Content-Type JSON e Content-Length dichiarato prima di chiamare il service binding privato AuthGate. Le richieste chiaramente invalide ricevono 415/413 senza consumare il rate limiter né la verifica di sessione/consenso; il corpo streaming resta limitato e letto soltanto dopo Auth, per non fare parsing costoso di payload non fidati. Un test Node/SQLite attraversa il vero handler del Worker e verifica che AuthGate non venga chiamato nei casi respinti. Il controllo degli header **non** sostituisce WAF, Turnstile, quota CPU/D1, dimensione streaming né hard cap globali. Nessun Worker API è pubblicato.
+
 ## Contratti e tracciamento
 
 [AGENTS](../../AGENTS.md) · [Account](../../.agents/rules/account-lifecycle.md) · [Archivio cifrato](../../.agents/rules/secure-storage.md) · [Storage/sync](../../.agents/rules/storage-and-sync.md) · [Consenso](../../.agents/rules/health-consent.md) · [CI](../../.agents/rules/ci-verification.md) · [CF-00 #1054](https://github.com/gernotfound/logbook/issues/1054) · [CF-09 #1063](https://github.com/gernotfound/logbook/issues/1063) · [hosting/DNS #1041](https://github.com/gernotfound/logbook/issues/1041). Lo storico degli incrementi è consultabile nella cronologia Git e nelle PR, non copiato come checklist nel runbook corrente.
