@@ -13,6 +13,26 @@ Guest: consenso e revoca sono locali alla generazione del dispositivo; nessun co
 
 Fonti: `src/lib/healthConsent.ts`, `healthConsentRecovery.ts`, `src/contexts/auth/consentLifecycle.ts`, `src/lib/sync/localConsentReconciliation.ts`, `localConsentJournalRecovery.ts`, `server/healthConsent/`, endpoint `api/health-consent*`/`api/health-data-erasure.ts` e `firestore.rules`.
 
+## Candidato Cloudflare D1 — revoca e cancellazione in attesa (14/11/2026)
+
+La migration `0005_health_withdrawal_queue.sql` e la route privata
+`POST /v1/consent/withdraw` sono **solo codice candidato**, non servizi
+distribuiti né erasure completa. Il backend accetta soltanto l'intenzione
+esplicita `action: withdraw`, `expectedRevision: 1`,
+`confirmsErasure: true` con sessione corrente e CSRF; riattesta il
+principal e la prova del consenso nella stessa SQL di INSERT del job.
+Un trigger esegue atomicamente `sync_subjects.status = withdrawn`,
+impedendo nuove operazioni replica anche se la risposta viene persa.
+D1 primaria deve attestare sessione, revoca e job prima della risposta
+`deletionStatus: pending`. La richiesta di revoca non è bloccata dalla
+perdita successiva di `emailVerified` o da una revisione legale nuova.
+Non confondere il job `pending` con dati cancellati, né richiamare il
+vecchio job Firestore per completare un job D1. Il runner D1, la gestione
+dei diritti, ADK, riaccettazione, recovery e prove runtime sono ancora
+mancanti. L'UI deve fermare localmente il trattamento fitness prima
+della richiesta HTTP, offrendo l'export facoltativo prima della conferma.
+Dopo il ritiro non deve riesumare journal o ciphertext dell'epoch precedente.
+
 ## Matrice sintetica delle autorizzazioni
 
 | Stato | Fitness locale | Cloud e diritti |

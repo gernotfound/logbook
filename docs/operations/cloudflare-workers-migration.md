@@ -51,10 +51,33 @@ La [PR #1079](https://github.com/gernotfound/logbook/pull/1079), integrata su `m
 immutabile in una transazione insieme a subject e sync_state; il gate
 interno ne richiede l'esistenza prima di qualsiasi replica. Consenso mancante, prova incompleta, versione legale superata o generazione
 sfasata non autorizzano replica, anche con cookie Auth valido. La revoca e
-la riaccettazione sono **NON IMPLEMENTATE**, così come issuer Auth reale
-e i diritti; nessuna route pubblica o migration provider applicata.
+la riaccettazione e la cancellazione effettiva erano **NON IMPLEMENTATE**
+alla PR #1079; l'incremento CF-05 successivo introduce solo richiesta
+trusted di revoca + job in stato `pending`, non l'esecutore.
+Issuer Auth reale e diritti restano assenti, come ogni deploy API. 
 Questo codice non abilita la PWA: serve completare l'intero ciclo di consenso
 prima del rilascio. Vedi [CF-05 #1059](https://github.com/gernotfound/logbook/issues/1059).
+
+## Incremento CF-05 — revoca SQL e richiesta erasure durevole (candidato isolato)
+
+`0005_health_withdrawal_queue.sql` aggiunge il job `health_erasure_jobs`
+e un trigger che trasforma **atomicamente** il soggetto in `withdrawn`
+nell'INSERT del job. La route `POST /v1/consent/withdraw` accetta soltanto
+un'intenzione esplicita, derivando UID e generazione dalla sessione AuthGate
+privata e ricontrollando hash sessione, principal e prima prova di consenso
+nella SQL di scrittura. Anche se la verifica email viene meno e l'epoch Auth
+avanza, una sessione corrente autenticata può richiedere la revoca;
+nessuna nuova sincronizzazione è consentita. Un risultato ambiguo non è
+successo: un readback su D1 primaria deve dimostrare il job pending,
+il soggetto ritirato e la sessione attuale. Non viene restituito alcun ACK
+di cancellazione completata. Node/SQLite sintetico prova revoca,
+interleaving con logout e prova rimossa, replay, rollback e isolamento owner.
+
+**NON IMPLEMENTATI**: esecuzione bounded del job, eliminazione cifrati/
+chiave cloud, ricevuta di erasure, rights-only export, riaccettazione,
+aggancio UI e prova su Worker remoto. Migration 0005 è solo versionata,
+non applicata su D1 sandbox o Production. Non pubblicare la route
+prima della disponibilità dell'intero ciclo. CF-05 #1059, CF-06 #1060.
 
 ## Audit della sessione e del contesto — PR #1083 (13–14/11/2026)
 

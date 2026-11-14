@@ -268,10 +268,10 @@ export default {
         return json({ error: 'origin-rejected' }, 403);
       }
       if (!env.DB || typeof env.DB.prepare !== 'function' || !env.AUTH_GATE
-        || typeof env.CONSENT_PRIVACY_VERSION !== 'string'
-        || typeof env.CONSENT_TERMS_VERSION !== 'string'
-        || !VERSION.test(env.CONSENT_PRIVACY_VERSION)
-        || !VERSION.test(env.CONSENT_TERMS_VERSION)) {
+        || (!withdrawRoute && (typeof env.CONSENT_PRIVACY_VERSION !== 'string'
+          || typeof env.CONSENT_TERMS_VERSION !== 'string'
+          || !VERSION.test(env.CONSENT_PRIVACY_VERSION)
+          || !VERSION.test(env.CONSENT_TERMS_VERSION)))) {
         return json({ error: 'unavailable' }, 503);
       }
       // Reject malformed instructions before consuming a trusted rate-limit

@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import { DatabaseSync } from 'node:sqlite';
 import consent from '../../cloudflare/api/consent-worker.mjs';
+import apiWorker from '../../cloudflare/api/worker.mjs';
 import sessionGate, { hashSessionSecret } from '../../cloudflare/auth/session-gate.mjs';
 import { issueVerifiedSession } from '../../cloudflare/auth/session-issuer.mjs';
 
@@ -500,6 +501,56 @@ void test('removing the original consent proof after AuthGate prevents withdrawa
     } };
     const response = await call(f, '/v1/consent/withdraw', { body: withdrawal });
     assert.equal(response.status, 503);
+    assert.equal(count(f.sqlite, 'health_erasure_jobs'), 0);
+    assert.equal(f.sqlite.prepare('SELECT status FROM sync_subjects').get().status, 'active');
+  } finally { f.sqlite.close(); }
+});
+
+void test('the unified API dispatches withdrawal without granting sync or deleting data', async () => {
+  const f = await fixture();
+  try {
+    assert.equal((await call(f, '/v1/consent/initial', { body: acceptance })).status, 200);
+    const response = await apiWorker.fetch(request('/v1/consent/withdraw', f, { body: withdrawal }), f.env);
+    assert.equal(response.status, 200);
+    assert.equal((await response.json()).deletionStatus, 'pending');
+    assert.equal(count(f.sqlite, 'health_erasure_jobs'), 1);
+    assert.equal(count(f.sqlite, 'health_consent_acceptances'), 1);
+  } finally { f.sqlite.close(); }
+});
+
+void test('revocation can be requested even if current legal-version configuration is unavailable', async () => {
+  const f = await fixture();
+  try {
+    assert.equal((await call(f, '/v1/consent/initial', { body: acceptance })).status, 200);
+    delete f.env.CONSENT_PRIVACY_VERSION;
+    delete f.env.CONSENT_TERMS_VERSION;
+    const response = await call(f, '/v1/consent/withdraw', { body: withdrawal });
+    assert.equal(response.status, 200);
+    assert.equal(response.body.deletionStatus, 'pending');
+    assert.equal(f.sqlite.prepare('SELECT status FROM sync_subjects').get().status, 'withdrawn');
+  } finally { f.sqlite.close(); }
+});
+
+void test('missing withdrawal schema fails closed without changing consent state', async () => {
+  const f = await fixture();
+  try {
+    assert.equal((await call(f, '/v1/consent/initial', { body: acceptance })).status, 200);
+    f.sqlite.exec('DROP TABLE health_erasure_jobs');
+    const response = await call(f, '/v1/consent/withdraw', { body: withdrawal });
+    assert.equal(response.status, 503);
+    assert.equal(f.sqlite.prepare('SELECT status FROM sync_subjects').get().status, 'active');
+  } finally { f.sqlite.close(); }
+});
+
+void test('a job insert for a mismatched generation aborts and cannot revoke a different subject', async () => {
+  const f = await fixture();
+  try {
+    assert.equal((await call(f, '/v1/consent/initial', { body: acceptance })).status, 200);
+    assert.throws(() => f.sqlite.prepare(`
+      INSERT INTO health_erasure_jobs
+        (uid,consent_revision,fence_epoch,requested_at_ms,status)
+      VALUES (?,2,1,?,'pending')
+    `).run(f.uid, Date.now()), /withdrawal-fenced/);
     assert.equal(count(f.sqlite, 'health_erasure_jobs'), 0);
     assert.equal(f.sqlite.prepare('SELECT status FROM sync_subjects').get().status, 'active');
   } finally { f.sqlite.close(); }
