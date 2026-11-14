@@ -27,7 +27,7 @@ for (const file of ['robots.txt', 'sitemap.xml']) {
 }
 copyFileSync('cloudflare/_headers', 'dist/_headers');
 copyFileSync('cloudflare/.assetsignore', 'dist/.assetsignore');
-for (const file of ['index.html', 'sw.js', 'manifest.webmanifest', 'robots.txt', 'sitemap.xml', '_headers']) {
+for (const file of ['index.html', 'about.html', 'privacy.html', 'legal-pages.css', 'sw.js', 'manifest.webmanifest', 'robots.txt', 'sitemap.xml', '_headers']) {
   if (!existsSync('dist/' + file)) throw new Error('Cloudflare artifact missing ' + file);
 }
 assertCloudflareHtmlOrigin(readFileSync('dist/index.html', 'utf8'), value);
