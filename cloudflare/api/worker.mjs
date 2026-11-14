@@ -70,6 +70,7 @@ const authClaims = z.strictObject({
   fenceEpoch: safeInt.min(1),
   csrfVerified: z.boolean(),
   rateGatePassed: z.literal(true),
+  sessionHash: z.string().regex(/^[a-f0-9]{64}$/),
 });
 
 function reply(body, status = 200) {
@@ -201,11 +202,11 @@ async function handler(request, env) {
     const body = await jsonBounded(request);
     const batchId = z.strictObject({ batchId: id }).safeParse(body);
     if (!batchId.success) throw new BadInput('invalid-input', 400);
-    const state = await readAccessState(env.DB, uid);
+    const state = await readAccessState(env.DB, uid, fenceEpoch, claims.sessionHash);
     if (state?.status !== 'active' || state?.consent_revision !== consentRevision
       || state?.fence_epoch !== fenceEpoch
       || state?.revision === undefined) throw new BadInput('access-revoked', 403);
-    const receipt = await readReceipt(env.DB, uid, consentRevision, fenceEpoch, batchId.data.batchId);
+    const receipt = await readReceipt(env.DB, uid, consentRevision, fenceEpoch, batchId.data.batchId, claims.sessionHash);
     return reply({ receipt: receipt ? { requestHash: receipt.request_hash, revision: receipt.committed_revision,
       lastSeq: receipt.last_seq, consentRevision: receipt.consent_revision,
       replica: { slot: receipt.slot, replicaId: receipt.replica_id, generation: receipt.generation } } : null });
@@ -213,7 +214,7 @@ async function handler(request, env) {
   const raw = await jsonBounded(request);
   if (route === '/v1/sync/control') {
     if (!z.strictObject({}).safeParse(raw).success) throw new BadInput('invalid-input', 400);
-    const control = await readReplicaControl(env.DB, uid, consentRevision, fenceEpoch);
+    const control = await readReplicaControl(env.DB, uid, consentRevision, fenceEpoch, claims.sessionHash);
     if (!control) throw new BadInput('access-revoked', 403);
     return reply(control);
   }
@@ -228,7 +229,7 @@ async function handler(request, env) {
       || input.expectedFenceEpoch !== fenceEpoch) throw new BadInput('access-revoked', 403);
     // Only the primary can establish non-commit under a concurrent lost ACK.
     // This single SELECT prevents a receipt/revision time-of-check race.
-    const row = await readReplicaMutationOutcome(env.DB, uid, consentRevision, fenceEpoch, input.mutationId);
+    const row = await readReplicaMutationOutcome(env.DB, uid, consentRevision, fenceEpoch, input.mutationId, claims.sessionHash);
     if (!row) throw new BadInput('access-revoked', 403);
     if (row.existing_hash !== null) {
       if (row.existing_hash !== await payloadHash(input)
@@ -253,12 +254,12 @@ async function handler(request, env) {
     if (input.consentRevision !== consentRevision) throw new BadInput('access-revoked', 403);
     if (input.expectedFenceEpoch !== fenceEpoch) throw new BadInput('replica-fenced-or-conflict', 409);
     const hash = await payloadHash(input);
-    const existing = await readReplicaMutationReceipt(env.DB, uid, consentRevision, fenceEpoch, input.mutationId);
+    const existing = await readReplicaMutationReceipt(env.DB, uid, consentRevision, fenceEpoch, input.mutationId, claims.sessionHash);
     if (existing) {
       if (existing.request_hash !== hash) throw new BadInput('mutation-id-conflict', 409);
       return reply(mutationResponse(input.mutationId, existing, true));
     }
-    const control = await readReplicaControl(env.DB, uid, consentRevision, fenceEpoch);
+    const control = await readReplicaControl(env.DB, uid, consentRevision, fenceEpoch, claims.sessionHash);
     if (!control) throw new BadInput('access-revoked', 403);
     if (control.revision !== input.expectedRevision) throw new BadInput('replica-fenced-or-conflict', 409);
     let selected;
@@ -266,7 +267,7 @@ async function handler(request, env) {
       // Public Protocol 3 clocks in AEAD-associated metadata provide a bounded
       // server-side cross-check; the client must separately AEAD-open a full
       // account scan before checkpoint adoption.
-      const cloudClock = await readPublicCheckpointClock(env.DB, uid);
+      const cloudClock = await readPublicCheckpointClock(env.DB, uid, fenceEpoch, claims.sessionHash);
       if (canonical(cloudClock) !== canonical(claim.data.checkpointClock)) {
         throw new BadInput('checkpoint-changed', 409);
       }
@@ -281,18 +282,18 @@ async function handler(request, env) {
     const mutation = {
       ...selected, mutationId: input.mutationId, hash,
       expectedRevision: input.expectedRevision, fenceEpoch, consentRevision,
+      sessionHash: claims.sessionHash,
     };
     try {
       const stored = await writeReplicaMutation(env.DB, uid, mutation);
       return reply(mutationResponse(input.mutationId, stored, false));
     } catch (error) {
-      const saved = await readReplicaMutationReceipt(env.DB, uid,
-        consentRevision, fenceEpoch, input.mutationId);
+      const saved = await readReplicaMutationReceipt(env.DB, uid, consentRevision, fenceEpoch, input.mutationId, claims.sessionHash);
       if (saved) {
         if (saved.request_hash !== hash) throw new BadInput('mutation-id-conflict', 409);
         return reply(mutationResponse(input.mutationId, saved, true));
       }
-      const state = await readAccessState(env.DB, uid);
+      const state = await readAccessState(env.DB, uid, fenceEpoch, claims.sessionHash);
       if (state?.status !== 'active' || state.consent_revision !== consentRevision
         || state.fence_epoch !== fenceEpoch) throw new BadInput('access-revoked', 403);
       if (state.revision !== input.expectedRevision
@@ -305,8 +306,7 @@ async function handler(request, env) {
   if (route === '/v1/sync/scan') {
     const parsed = pageInput.safeParse(raw);
     if (!parsed.success) throw new BadInput('invalid-input', 400);
-    const page = await readDocumentPage(env.DB, uid, consentRevision, fenceEpoch,
-      parsed.data.after, parsed.data.expectedRevision);
+    const page = await readDocumentPage(env.DB, uid, consentRevision, fenceEpoch, parsed.data.after, parsed.data.expectedRevision, claims.sessionHash);
     if (page.kind === 'access-revoked') throw new BadInput('access-revoked', 403);
     if (page.kind === 'snapshot-changed') throw new BadInput('snapshot-changed', 409);
     const { kind: _kind, ...data } = page;
@@ -315,7 +315,7 @@ async function handler(request, env) {
   if (route === '/v1/sync/read') {
     const parsed = readInput.safeParse(raw);
     if (!parsed.success || !uniquePaths(parsed.data.paths)) throw new BadInput('invalid-input', 400);
-    const snapshot = await readSnapshot(env.DB, uid, consentRevision, fenceEpoch, parsed.data.paths);
+    const snapshot = await readSnapshot(env.DB, uid, consentRevision, fenceEpoch, parsed.data.paths, claims.sessionHash);
     if (!snapshot) throw new BadInput('access-revoked', 403);
     return reply(snapshot);
   }
@@ -326,22 +326,22 @@ async function handler(request, env) {
   if (input.expectedFenceEpoch !== fenceEpoch) throw new BadInput('replica-fenced-or-conflict', 409);
   validateSealedBatch(input);
   const hash = await payloadHash(input);
-  const existing = await readReceipt(env.DB, uid, consentRevision, fenceEpoch, input.batchId);
+  const existing = await readReceipt(env.DB, uid, consentRevision, fenceEpoch, input.batchId, claims.sessionHash);
   if (existing) {
     if (existing.request_hash !== hash) throw new BadInput('batch-id-conflict', 409);
     return reply({ batchId: input.batchId, revision: existing.committed_revision, lastSeq: existing.last_seq, replayed: true });
   }
   try {
-    const result = await commitEncryptedBatch(env.DB, uid, fenceEpoch, input, hash);
+    const result = await commitEncryptedBatch(env.DB, uid, fenceEpoch, input, hash, claims.sessionHash);
     return reply({ ...result, replayed: false });
   } catch (error) {
     // Lost response is not evidence of no commit. Check the persisted receipt.
-    const receipt = await readReceipt(env.DB, uid, consentRevision, fenceEpoch, input.batchId);
+    const receipt = await readReceipt(env.DB, uid, consentRevision, fenceEpoch, input.batchId, claims.sessionHash);
     if (receipt) {
       if (receipt.request_hash !== hash) throw new BadInput('batch-id-conflict', 409);
       return reply({ batchId: input.batchId, revision: receipt.committed_revision, lastSeq: receipt.last_seq, replayed: true });
     }
-    const state = await readAccessState(env.DB, uid);
+    const state = await readAccessState(env.DB, uid, fenceEpoch, claims.sessionHash);
     if (state?.status !== 'active' || state?.consent_revision !== consentRevision
       || state?.fence_epoch !== fenceEpoch) {
       throw new BadInput('access-revoked', 403);

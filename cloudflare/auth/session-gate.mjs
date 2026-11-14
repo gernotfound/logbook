@@ -172,7 +172,8 @@ async function authorize(request, env) {
     fenceEpoch: row.fence_epoch,
     csrfVerified,
     rateGatePassed: true,
-    ...(identityOnly ? { sessionHash: tokenHash } : {}),
+    // Only private service-binding consumers see this digest.
+    sessionHash: tokenHash,
   }, 200);
 }
 

@@ -97,6 +97,7 @@ void test('valid verified account with current consent receives scoped claims; r
       fenceEpoch: 1,
       csrfVerified: false,
       rateGatePassed: true,
+      sessionHash: await hashSessionSecret(token),
     });
     assert.deepEqual(metrics(), { reads: 1, rateChecks: 1 });
   } finally { sqlite.close(); }

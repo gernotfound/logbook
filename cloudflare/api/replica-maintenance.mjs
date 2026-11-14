@@ -1,3 +1,5 @@
+import { activeSessionArgs, activeSessionPredicateSql, sessionFencedRequestHashSql, sessionFencedHashArgs } from '../auth/session-write-fence.mjs';
+
 // Candidate-only D1 membership writer. The caller verifies real Auth/consent,
 // session-bound CSRF and a full AEAD-verified scan before allowing adoption.
 // Public cloud clocks are queryable without decrypting business or field guards.
@@ -6,11 +8,14 @@ const SLOT_IDS = Array.from({ length: 16 }, (_, i) => `s${String(i).padStart(2, 
 const LEASE_MS = 360 * 24 * 60 * 60 * 1000;
 const SKEW_MS = 5 * 60 * 1000;
 
-export async function readPublicCheckpointClock(db, uid) {
-  const [integrity, clocks] = await db.batch([
-    db.prepare("SELECT COUNT(*) AS n, SUM(CASE WHEN json_type(envelope_json, '$._sync.clock') = 'object' THEN 0 ELSE 1 END) AS invalid FROM sync_documents WHERE uid = ?")
-      .bind(uid),
-    db.prepare("SELECT j.key AS slot, MAX(j.value) AS seq, MIN(j.type) AS min_type, MAX(j.type) AS max_type FROM sync_documents d, json_each(d.envelope_json, '$._sync.clock') j WHERE d.uid = ? GROUP BY j.key ORDER BY j.key LIMIT 17")
+export async function readPublicCheckpointClock(db, uid, fenceEpoch, sessionHash) {
+  const primary = db.withSession('first-primary');
+  const [integrity, clocks] = await primary.batch([
+    primary.prepare(`SELECT COUNT(*) AS n,
+      SUM(CASE WHEN json_type(envelope_json, '$._sync.clock') = 'object' THEN 0 ELSE 1 END) AS invalid
+      FROM sync_documents WHERE uid = ? HAVING ${activeSessionPredicateSql}`)
+      .bind(uid, ...activeSessionArgs(sessionHash, uid, fenceEpoch)),
+    primary.prepare("SELECT j.key AS slot, MAX(j.value) AS seq, MIN(j.type) AS min_type, MAX(j.type) AS max_type FROM sync_documents d, json_each(d.envelope_json, '$._sync.clock') j WHERE d.uid = ? GROUP BY j.key ORDER BY j.key LIMIT 17")
       .bind(uid),
   ]);
   if (!integrity?.results?.length || integrity.results[0].invalid !== 0 && integrity.results[0].invalid !== null
@@ -71,8 +76,8 @@ function chooseReplicaClaim(control, candidateId, current, checkpointClock, now)
 // membership grant. A later business write, another claim or slot reuse must
 // not erase evidence of the original commit. Only the same live consent/epoch
 // can look it up; currentRevision/currentReplicaMatches fence local adoption.
-export async function readReplicaMutationReceipt(db, uid, consentRevision, fenceEpoch, mutationId) {
-  return db.prepare(`SELECT e.request_hash, e.action, e.committed_revision, e.slot,
+export async function readReplicaMutationReceipt(db, uid, consentRevision, fenceEpoch, mutationId, sessionHash) {
+  return db.withSession('first-primary').prepare(`SELECT e.request_hash, e.action, e.committed_revision, e.slot,
     e.replica_id, e.generation, e.last_seq, e.checkpoint_at_ms, e.lease_until_ms
     , s.revision AS current_revision,
     CASE WHEN r.replica_id = e.replica_id AND r.generation = e.generation
@@ -85,8 +90,10 @@ export async function readReplicaMutationReceipt(db, uid, consentRevision, fence
     WHERE e.uid = ? AND e.mutation_id = ?
       AND a.status = 'active' AND a.consent_revision = ?
       AND a.fence_epoch = ? AND e.consent_revision = a.consent_revision
-      AND e.fence_epoch = a.fence_epoch AND s.revision >= e.committed_revision`)
-    .bind(uid, mutationId, consentRevision, fenceEpoch).first();
+      AND e.fence_epoch = a.fence_epoch AND s.revision >= e.committed_revision
+      AND ${activeSessionPredicateSql}`)
+    .bind(uid, mutationId, consentRevision, fenceEpoch,
+      ...activeSessionArgs(sessionHash, uid, fenceEpoch)).first();
 }
 
 /**
@@ -96,7 +103,7 @@ export async function readReplicaMutationReceipt(db, uid, consentRevision, fence
  * Once revision advanced without that ledger row, the original CAS can never
  * commit in the same consent/epoch, even if its HTTP request is still running.
  */
-export async function readReplicaMutationOutcome(db, uid, consentRevision, fenceEpoch, mutationId) {
+export async function readReplicaMutationOutcome(db, uid, consentRevision, fenceEpoch, mutationId, sessionHash) {
   if (typeof db.withSession !== 'function') throw new Error('primary-d1-session-unavailable');
   const primary = db.withSession('first-primary');
   return primary.prepare(`SELECT s.revision AS current_revision,
@@ -108,8 +115,10 @@ export async function readReplicaMutationOutcome(db, uid, consentRevision, fence
     JOIN sync_state s ON s.uid = a.uid
     LEFT JOIN sync_replica_mutations e ON e.uid = a.uid AND e.mutation_id = ?
     WHERE a.uid = ? AND a.status = 'active'
-      AND a.consent_revision = ? AND a.fence_epoch = ?`)
-    .bind(mutationId, uid, consentRevision, fenceEpoch).first();
+      AND a.consent_revision = ? AND a.fence_epoch = ?
+      AND ${activeSessionPredicateSql}`)
+    .bind(mutationId, uid, consentRevision, fenceEpoch,
+      ...activeSessionArgs(sessionHash, uid, fenceEpoch)).first();
 }
 
 export function mutationResponse(mutationId, receipt, replayed) {
@@ -131,7 +140,9 @@ export function mutationResponse(mutationId, receipt, replayed) {
 export async function writeReplicaMutation(db, uid, mutation) {
   const nextRevision = mutation.expectedRevision + 1;
   const params = [
-    uid, mutation.mutationId, mutation.hash, mutation.action,
+    uid, mutation.mutationId,
+    ...sessionFencedHashArgs(mutation.sessionHash, uid, mutation.fenceEpoch, mutation.hash),
+    mutation.action,
     mutation.expectedRevision, nextRevision, mutation.consentRevision, mutation.fenceEpoch,
     mutation.slot, mutation.replicaId, mutation.generation, mutation.lastSeq,
     mutation.checkpointAtMs, mutation.leaseUntilMs, JSON.stringify(mutation.checkpointClock),
@@ -139,7 +150,11 @@ export async function writeReplicaMutation(db, uid, mutation) {
   // First INSERT is a trigger-enforced CAS. Any later failure undoes the
   // membership mutation and its receipt in the same D1 transaction.
   const statements = [
-    db.prepare("INSERT INTO sync_replica_mutations (uid,mutation_id,request_hash,action,expected_revision,committed_revision,consent_revision,fence_epoch,slot,replica_id,generation,last_seq,checkpoint_at_ms,lease_until_ms,checkpoint_clock_json) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)")
+    db.prepare(`INSERT INTO sync_replica_mutations
+      (uid,mutation_id,request_hash,action,expected_revision,committed_revision,
+       consent_revision,fence_epoch,slot,replica_id,generation,last_seq,
+       checkpoint_at_ms,lease_until_ms,checkpoint_clock_json)
+      VALUES (?, ?, ${sessionFencedRequestHashSql}, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
       .bind(...params),
   ];
   if (mutation.action === 'retire') {
