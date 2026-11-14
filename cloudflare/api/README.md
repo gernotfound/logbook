@@ -109,6 +109,15 @@ Firebase/Firestore writer, IndexedDB journal and encrypted vault remain active.
   reject revision and replica sequence regressions. POST /v1/sync/commit atomically
   advances a guarded replica, up to eight documents and a receipt;
   POST /v1/sync/receipt retrieves the content-bound receipt.
+- POST /v1/sync/commit/status is a **candidate-only** small-body, CSRF-gated
+  primary SQL read. The SAME SELECT checks account revision and the original
+  batch receipt under the current session/owner/consent/fence. Absence of a
+  receipt at the expected revision is `inconclusive`; only a later revision
+  without that batch is `not-committed`. An existing digest-bound receipt
+  yields `committed` (historical status), but status NEVER authorizes journal
+  ACK: the client must still validate the exact `/receipt` before local
+  acknowledgement. The code to rebase a proven uncommitted batch is still
+  missing, so no user-facing D1 runtime is enabled.
 - The client must verify AEAD and perform Protocol 3 merge **before** commit.
   The shared `cloudMergeEngine.ts` powers both Firestore writes and the D1
   candidate (`cloudReplicaCommit.ts`); each D1 write binds

@@ -35,8 +35,8 @@ La selezione completa dei contratti resta in [AGENTS](../AGENTS.md). Qui si indi
 | Documento | Stato | Per quale attività |
 |---|---|---|
 | [Registro servizi esterni](operations/external-services-register.md) | Inventario corrente, rischi provider e gate target | Cloudflare, Kinde, codice legacy ancora usato e GitHub |
-| [Runbook Cloudflare](operations/cloudflare-workers-migration.md) | Guida corrente per sviluppo, gate e abbandono del vecchio stack | Workers/D1, Auth, privacy e release |
 | [Setup Kinde](operations/kinde-auth-setup.md) | Onboarding provider, application type, autenticazione email/Google e gate ancora aperti | CF-03, solo configurazione Kinde |
+| [Runbook Cloudflare](operations/cloudflare-workers-migration.md) | Guida corrente per sviluppo, gate e abbandono del vecchio stack | Workers/D1, Auth, privacy e release |
 | [Collaudi E2E e affidabilità](operations/e2e-reliability.md) | Guida corrente sui limiti delle prove; collaudi live separati | CI sintetica, dispositivi reali e perimetro Production |
 
 ## Diagnostica

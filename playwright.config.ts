@@ -25,7 +25,7 @@ export default defineConfig({
     },
     {
       name: 'mobile-safari',
-      testMatch: /(accessibility|data-history-mobile|health-consent-suspended|secure-archive-device-key|refactoring-surfaces|domain-commit-multitab|guest-revocation|brand-loading-layout)\.spec\.ts/,
+      testMatch: /(accessibility|data-history-mobile|health-consent-suspended|secure-archive-device-key|refactoring-surfaces|domain-commit-multitab|guest-revocation|brand-loading-layout|public-legal)\.spec\.ts/,
       use: { ...devices['iPhone 13'] },
     },
   ],
