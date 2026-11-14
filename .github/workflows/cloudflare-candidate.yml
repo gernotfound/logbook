@@ -141,7 +141,7 @@ jobs:
           test -n "${CLOUDFLARE_APP_ORIGIN}"
           test "$(git rev-parse HEAD)" = "${EXPECTED_SHA}"
           test "$(git ls-remote --exit-code origin refs/heads/main | awk '{print $1}')" = "${EXPECTED_SHA}"
-          for resource in dist/index.html dist/sw.js dist/manifest.webmanifest dist/_headers; do
+          for resource in dist/index.html dist/about.html dist/privacy.html dist/legal-pages.css dist/sw.js dist/manifest.webmanifest dist/_headers; do
             test -s "${resource}" || { echo "Missing ${resource}"; exit 1; }
           done
       - name: Deploy Workers Static Assets on thelogbook.me
@@ -160,9 +160,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          for path in / /sw.js /manifest.webmanifest /robots.txt /sitemap.xml; do
+          for path in / /about /privacy /legal-pages.css /sw.js /manifest.webmanifest /robots.txt /sitemap.xml; do
             local_file="dist/${path#/}"
             if [ "${path}" = "/" ]; then local_file="dist/index.html"; fi
+            if [ "${path}" = "/about" ] || [ "${path}" = "/privacy" ]; then local_file="dist${path}.html"; fi
             verified=false
             # Workers deployments propagate across edge locations. Permit a
             # bounded convergence window, but accept only verified bytes.
@@ -173,6 +174,10 @@ jobs:
                 "${CLOUDFLARE_APP_ORIGIN}${path}" -o /tmp/cloudflare-served-asset)"
               if node scripts/verify-cloudflare-served-asset.mjs \
                   "${path}" "${local_file}" /tmp/cloudflare-served-asset; then
+                case "${path}:${initial_http}" in
+                  /about:200\ text/html*|/privacy:200\ text/html*|/legal-pages.css:200\ text/css*) ;;
+                  /about:*|/privacy:*|/legal-pages.css:*) echo "Unexpected public page status/MIME: ${path} ${initial_http}"; exit 1 ;;
+                esac
                 verified=true
                 break
               fi
