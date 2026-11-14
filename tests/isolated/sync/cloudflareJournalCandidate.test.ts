@@ -11,9 +11,10 @@ import { deliverCloudflareJournalCandidate } from '../../../src/lib/sync/cloudfl
 import { stageCloudflareDelivery } from '../../../src/lib/sync/cloudReplicaDurableDelivery';
 import { sealCloudDocument } from '../../../src/lib/sync/cloudDocumentCipher';
 import { readAccountCloudDocument } from '../../../src/lib/sync/cloudDocumentRead';
+import { parseSyncMeta } from '../../../src/lib/sync/semanticProjection';
 import { CloudReplicaTransportError } from '../../../src/lib/sync/cloudReplicaTransport';
 import type {
-    CloudReplicaBatch, CloudReplicaCompleteScan, CloudReplicaControlSnapshot, CloudReplicaSnapshot,
+    CloudReplicaBatch, CloudReplicaCommitOutcome, CloudReplicaCompleteScan, CloudReplicaControlSnapshot, CloudReplicaSnapshot,
 } from '../../../src/lib/sync/cloudReplicaTransport';
 import { adoptReplicaCheckpoint, commitLocal, initializeLocal, readLocal } from '../../../src/lib/sync/localRepository';
 import { createAndMigrateVault } from '../../../src/lib/sync/secureArchiveMigration';
@@ -81,8 +82,8 @@ function transport(control: CloudReplicaControlSnapshot, snapshot: CloudReplicaS
             revision: control.revision, fenceEpoch: control.fenceEpoch,
             consentRevision: control.consentRevision, documents: [],
         })),
-        commitOutcome: vi.fn(async (_batch: CloudReplicaBatch, _csrf: string) => ({
-            outcome: 'inconclusive' as const, currentRevision: control.revision,
+        commitOutcome: vi.fn(async (_batch: CloudReplicaBatch, _csrf: string): Promise<CloudReplicaCommitOutcome> => ({
+            outcome: 'inconclusive', currentRevision: control.revision,
         })),
         commit: vi.fn(async (batch: CloudReplicaBatch, csrf: string) => {
             expect(csrf).toBe('csrf-session');
@@ -266,7 +267,7 @@ describe('isolated CF-04 journal orchestrator', () => {
             .not.toEqual(before.documents[0].document._sealed);
         const opened = readAccountCloudDocument(replacement.documents[0].document,
             'CF04 candidate rebase regression', owner.slice(5), '', adk);
-        expect(opened.sync.clock.s01).toBe(1);
+        expect(parseSyncMeta(opened.sync).clock.s01).toBe(1);
 
         // A second invocation replays the persisted replacement and does not
         // scan, reseal, or infer a prior successful acknowledgement.
