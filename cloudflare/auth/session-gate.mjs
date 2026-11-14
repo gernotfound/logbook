@@ -10,9 +10,11 @@ const READ_ROUTES = new Set([
 const MUTATION_ROUTES = new Set([
   '/v1/sync/commit', '/v1/sync/commit/status', '/v1/sync/replica/claim',
   '/v1/sync/replica/retire', '/v1/sync/replica/status',
+  '/v1/cloud-key/sync',
 ]);
 const IDENTITY_READ_ROUTES = new Set(['/v1/consent/status']);
-const IDENTITY_MUTATION_ROUTES = new Set(['/v1/consent/initial', '/v1/consent/withdraw', '/v1/auth/logout']);
+const IDENTITY_MUTATION_ROUTES = new Set(['/v1/consent/initial', '/v1/consent/withdraw', '/v1/auth/logout',
+  '/v1/cloud-key/rights-export']);
 
 function json(payload, status) {
   return new Response(JSON.stringify(payload), {
