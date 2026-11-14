@@ -144,7 +144,7 @@ async function pendingWithdrawal(db, claims) {
     JOIN auth_principals p ON p.uid = j.uid
     JOIN auth_sessions t ON t.uid = p.uid
     WHERE j.uid = ? AND j.consent_revision = ?
-      AND j.fence_epoch <= ? AND j.status = 'pending'
+      AND j.fence_epoch <= ? AND j.status IN ('pending', 'processing')
       AND j.requested_at_ms > 0 AND j.requested_at_ms <= ?
       AND s.status = 'withdrawn'
       AND s.consent_revision = j.consent_revision
@@ -158,7 +158,7 @@ async function pendingWithdrawal(db, claims) {
     claims.uid, claims.healthConsentRevision, claims.fenceEpoch, now,
     claims.fenceEpoch, claims.sessionHash, now, now, now,
   ).first();
-  return row?.status === 'pending' ? 'pending' : null;
+  return row?.status === 'pending' || row?.status === 'processing' ? row.status : null;
 }
 
 async function withdrawConsent(db, claims) {
@@ -195,7 +195,7 @@ async function withdrawConsent(db, claims) {
     // A timeout can occur AFTER the atomic insert/trigger committed. Only
     // the primary readback below can prove pending versus unknown.
   }
-  return await pendingWithdrawal(db, claims) === 'pending';
+  return await pendingWithdrawal(db, claims);
 }
 
 function validAcceptance(body, env) {
@@ -298,7 +298,8 @@ export default {
         if (claims.healthConsentRevision !== 1) {
           return json({ error: 'consent-conflict' }, 409);
         }
-        if (!await withdrawConsent(env.DB, claims)) {
+        const deletionStatus = await withdrawConsent(env.DB, claims);
+        if (!deletionStatus) {
           // Unregistered accounts have nothing to revoke. Every other
           // unproven outcome remains unavailable rather than an ACK.
           const state = await readConsent(env.DB, claims);
@@ -308,7 +309,7 @@ export default {
           throw new Error('unproven-withdrawal');
         }
         return json({ status: 'withdrawn', revision: 1,
-          fenceEpoch: claims.fenceEpoch, deletionStatus: 'pending' });
+          fenceEpoch: claims.fenceEpoch, deletionStatus });
       }
       const current = await readConsent(env.DB, claims);
       if (current.status !== 'unregistered') return json({ error: 'consent-conflict' }, 409);

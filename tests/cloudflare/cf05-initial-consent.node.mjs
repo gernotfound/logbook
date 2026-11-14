@@ -4,6 +4,7 @@ import { test } from 'node:test';
 import { DatabaseSync } from 'node:sqlite';
 import consent from '../../cloudflare/api/consent-worker.mjs';
 import apiWorker from '../../cloudflare/api/worker.mjs';
+import { runOneHealthErasureStep } from '../../cloudflare/jobs/health-erasure-worker.mjs';
 import sessionGate, { hashSessionSecret } from '../../cloudflare/auth/session-gate.mjs';
 import { issueVerifiedSession } from '../../cloudflare/auth/session-issuer.mjs';
 
@@ -47,7 +48,8 @@ async function fixture(uid = 'owner-a') {
   for (const name of ['0001_encrypted_replica.sql', '0002_reject_reused_replica_ids.sql',
     '0003_auth_session_gate.sql',
         // Consent and withdrawal depend on the trusted Auth principal schema.
-        '0004_initial_consent.sql', '0005_health_withdrawal_queue.sql']) {
+        '0004_initial_consent.sql', '0005_health_withdrawal_queue.sql',
+    '0006_health_erasure_progress.sql']) {
     sqlite.exec(readFileSync(new URL('../../cloudflare/api/migrations/' + name, import.meta.url), 'utf8'));
   }
   const db = new D1SqliteAdapter(sqlite);
@@ -553,5 +555,20 @@ void test('a job insert for a mismatched generation aborts and cannot revoke a d
     `).run(f.uid, Date.now()), /withdrawal-fenced/);
     assert.equal(count(f.sqlite, 'health_erasure_jobs'), 0);
     assert.equal(f.sqlite.prepare('SELECT status FROM sync_subjects').get().status, 'active');
+  } finally { f.sqlite.close(); }
+});
+
+void test('withdrawal replay stays acknowledged as processing while erasure is incomplete', async () => {
+  const f = await fixture();
+  try {
+    assert.equal((await call(f, '/v1/consent/initial', { body: acceptance })).status, 200);
+    assert.equal((await call(f, '/v1/consent/withdraw', { body: withdrawal })).status, 200);
+    const step = await runOneHealthErasureStep(f.db);
+    assert.equal(step.outcome, 'awaiting-keys');
+    const repeated = await call(f, '/v1/consent/withdraw', { body: withdrawal });
+    assert.equal(repeated.status, 200);
+    assert.equal(repeated.body.deletionStatus, 'processing');
+    assert.equal((await call(f, '/v1/consent/status')).body.status, 'withdrawn');
+    assert.equal(f.sqlite.prepare('SELECT status,phase FROM health_erasure_jobs').get().phase, 'awaiting-keys');
   } finally { f.sqlite.close(); }
 });

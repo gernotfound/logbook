@@ -58,6 +58,29 @@ Issuer Auth reale e diritti restano assenti, come ogni deploy API.
 Questo codice non abilita la PWA: serve completare l'intero ciclo di consenso
 prima del rilascio. Vedi [CF-05 #1059](https://github.com/gernotfound/logbook/issues/1059).
 
+## Incremento CF-06 — elaborazione cancellazione bounded con lease (candidato isolato)
+
+Il nuovo `cloudflare/jobs/health-erasure-worker.mjs` elabora **solo**
+job revocati e verificati su D1 primaria. Un lease con token casuale,
+epoch monotono e scadenza impedisce avanzamenti concorrenti: ogni DELETE
+ricontrolla nella stessa istruzione il lease corrente e il soggetto
+`withdrawn`. Ciascuna invocazione elimina al massimo quattro record di
+**una sola** tabella nota: documenti cifrati, ricevute, mutazioni replica o
+membership. Nessun full-table scan o cancellazione senza UID. La migration
+`0006_health_erasure_progress.sql` aggiunge progress/lease e i trigger
+anti-resurrection, anti-riaccettazione prematura e anti-completion fittizia.
+Solo quando tutte le quattro tabelle sono vuote, il job diventa
+`phase=awaiting-keys`, ma resta `status=processing`, **mai `complete`**.
+Questo evita di bloccare i job successivi mentre mancano le chiavi.
+
+La seconda metà è deliberatamente bloccata: inventario e cancellazione
+delle altre risorse owner-scoped, ADK/KEK, diritti/export e final receipt
+devono ancora essere implementati e verificati. Nessun cron pubblico,
+nessun Worker o schema D1 remoto distribuito. I test sintetici Node/SQLite
+non provano durata o quote Free. La route di revoca continua a riconoscere
+su D1 primaria un job già `processing` come richiesta valida, senza
+dichiarare eliminazione completata. CF-06 #1060 e CF-05 #1059.
+
 ## Incremento CF-05 — revoca SQL e richiesta erasure durevole (candidato isolato)
 
 `0005_health_withdrawal_queue.sql` aggiunge il job `health_erasure_jobs`
