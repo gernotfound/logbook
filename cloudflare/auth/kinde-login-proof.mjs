@@ -61,6 +61,7 @@ export function createKindeLoginProofVerifier(configuration, keySet) {
         || typeof payload.email !== 'string'
         || payload.email.length < 3 || payload.email.length > 320
         || !payload.email.includes('@') || /\s/.test(payload.email)
+        || typeof payload.auth_time !== 'number'
         || !Number.isSafeInteger(payload.auth_time)
         || payload.auth_time <= 0
         || payload.auth_time > now + CLOCK_TOLERANCE_SECONDS
