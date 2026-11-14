@@ -48,6 +48,10 @@ export default defineConfig({
     environment: 'jsdom',
     setupFiles: ['./tests/cssReadCompat.ts', './tests/setup.tsx'],
     testTimeout: 10000,
+    // Reuse the jsdom bootstrap between files while keeping separate processes:
+    // timezone and DST regressions mutate process.env.TZ, which threads cannot honor.
+    // Only the general CI suite opts in; isolation remains enabled per test file.
+    pool: process.env.CI && process.env.npm_lifecycle_event === 'test' ? 'vmForks' : 'forks',
     // Only general CI shards gain a third worker; stress and instrumented coverage retain their limits.
     maxWorkers: process.env.CI && process.env.npm_lifecycle_event === 'test' ? 3 : 2,
     exclude: [

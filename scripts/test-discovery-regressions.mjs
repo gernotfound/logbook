@@ -58,6 +58,20 @@ await test('native Node discovery follows nested canonical scripts and rejects l
   assert.throws(() => discoverNativeNodeTests({ 'test:pwa:m7': 'npm run absent' }), /missing Node test script: absent/);
 });
 
+await test('native Node discovery preserves test files in a bounded-concurrency batch', () => {
+  const scripts = { 'test:pwa:m7': 'node --test --test-concurrency=4 tests/cloudflare/first.node.mjs tests/cloudflare/second.node.mjs' };
+  assert.deepEqual(discoverNativeNodeTests(scripts), [
+    'tests/cloudflare/first.node.mjs', 'tests/cloudflare/second.node.mjs',
+  ]);
+});
+
+await test('Knip treats Node Cloudflare suites as entrypoints while discovery checks ownership', async () => {
+  const { readFileSync } = await import('node:fs');
+  const { fileURLToPath } = await import('node:url');
+  const config = JSON.parse(readFileSync(fileURLToPath(new URL('../knip.json', import.meta.url)), 'utf8'));
+  assert.ok(config.entry.includes('tests/cloudflare/*.node.mjs'));
+});
+
 await test('rejects Playwright sharding loss and duplicate test identities', () => {
   const tests = ['e2e/a.spec.ts:3:1 › first', 'e2e/a.spec.ts:4:1 › second'];
   assert.match(compareAssignments(tests, { shard1: [tests[0]], shard2: [tests[0]] }, 'Playwright').join('\n'), /duplicate.*undiscovered/s);

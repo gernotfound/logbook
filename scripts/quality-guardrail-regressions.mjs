@@ -503,3 +503,46 @@ await test('does not retroactively reject pre-existing minified-looking files', 
   commit(ctx.root);
   assert.equal(run({ ...ctx, base }).status, 0);
 });
+
+
+function nativeNodeBatchFixture(t) {
+  const ctx = fixture(t);
+  const pkg = read(ctx.root, 'package.json');
+  pkg.scripts['test:pwa:m7'] = 'node --test tests/cloudflare/first.node.mjs && node --test tests/cloudflare/second.node.mjs';
+  pkg.scripts['verify:m8'] += ' && npm run test:pwa:m7';
+  save(ctx.root, 'package.json', pkg);
+  commit(ctx.root);
+  return { ...ctx, base: git(ctx.root, 'rev-parse', 'HEAD') };
+}
+
+await test('accepts a bounded Node test batch only if each required file remains', t => {
+  const ctx = nativeNodeBatchFixture(t);
+  const pkg = read(ctx.root, 'package.json');
+  pkg.scripts['test:pwa:m7'] = 'node --test --test-concurrency=4 tests/cloudflare/first.node.mjs tests/cloudflare/second.node.mjs';
+  save(ctx.root, 'package.json', pkg);
+  assert.equal(run(ctx).status, 0);
+});
+
+await test('rejects a Node batch missing a previously mandatory suite', t => {
+  const ctx = nativeNodeBatchFixture(t);
+  const pkg = read(ctx.root, 'package.json');
+  pkg.scripts['test:pwa:m7'] = 'node --test --test-concurrency=4 tests/cloudflare/first.node.mjs tests/cloudflare/first.node.mjs';
+  save(ctx.root, 'package.json', pkg);
+  mustFail(run(ctx), /Mandatory verification leaf removed/);
+});
+
+await test('rejects a batch with unapproved Node test flags', t => {
+  const ctx = nativeNodeBatchFixture(t);
+  const pkg = read(ctx.root, 'package.json');
+  pkg.scripts['test:pwa:m7'] = 'node --test --test-concurrency=4 --test-skip-pattern=.* tests/cloudflare/first.node.mjs tests/cloudflare/second.node.mjs';
+  save(ctx.root, 'package.json', pkg);
+  mustFail(run(ctx), /Mandatory verification leaf removed/);
+});
+
+await test('rejects excessive concurrency for a mandatory Node batch', t => {
+  const ctx = nativeNodeBatchFixture(t);
+  const pkg = read(ctx.root, 'package.json');
+  pkg.scripts['test:pwa:m7'] = 'node --test --test-concurrency=1000 tests/cloudflare/first.node.mjs tests/cloudflare/second.node.mjs';
+  save(ctx.root, 'package.json', pkg);
+  mustFail(run(ctx), /Mandatory verification leaf removed/);
+});
