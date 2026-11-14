@@ -12,7 +12,7 @@ const MUTATION_ROUTES = new Set([
   '/v1/sync/replica/retire', '/v1/sync/replica/status',
 ]);
 const IDENTITY_READ_ROUTES = new Set(['/v1/consent/status']);
-const IDENTITY_MUTATION_ROUTES = new Set(['/v1/consent/initial', '/v1/auth/logout']);
+const IDENTITY_MUTATION_ROUTES = new Set(['/v1/consent/initial', '/v1/consent/withdraw', '/v1/auth/logout']);
 
 function json(payload, status) {
   return new Response(JSON.stringify(payload), {

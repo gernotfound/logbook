@@ -1,5 +1,5 @@
-// Candidate trusted initial consent endpoint. No public deployment until
-// real Auth issuance and all rights/withdrawal paths are integrated.
+// Candidate trusted consent endpoint. No public deployment until real Auth,
+// rights-only export and the durable erasure-job executor are integrated.
 const INTERNAL = 'https://auth-gate.internal/__internal/authorize';
 const MAX_BODY_BYTES = 2048;
 const HASH = /^[a-f0-9]{64}$/;
@@ -125,6 +125,82 @@ async function boundedJson(request) {
   }
 }
 
+function validWithdrawal(body) {
+  return !!body && typeof body === 'object' && !Array.isArray(body)
+    && Object.keys(body).sort().join(',') === 'action,confirmsErasure,expectedRevision'
+    && body.action === 'withdraw' && body.expectedRevision === 1
+    && body.confirmsErasure === true;
+}
+
+async function pendingWithdrawal(db, claims) {
+  const now = Date.now();
+  // A lost write response is not proof of a withdrawal. The primary must
+  // attest this owner's still-current session, withdrawn generation AND job.
+  const row = await db.withSession('first-primary').prepare(`
+    SELECT j.status, j.requested_at_ms
+    FROM health_erasure_jobs j
+    JOIN sync_subjects s ON s.uid = j.uid
+    JOIN auth_principals p ON p.uid = j.uid
+    JOIN auth_sessions t ON t.uid = p.uid
+    WHERE j.uid = ? AND j.consent_revision = ?
+      AND j.fence_epoch = ? AND j.status = 'pending'
+      AND j.requested_at_ms > 0 AND j.requested_at_ms <= ?
+      AND s.status = 'withdrawn'
+      AND s.consent_revision = j.consent_revision
+      AND s.fence_epoch = j.fence_epoch
+      AND p.status = 'active' AND p.auth_epoch = ?
+      AND t.token_hash = ? AND t.auth_epoch = p.auth_epoch
+      AND t.revoked_at_ms IS NULL
+      AND t.issued_at_ms <= ? AND t.idle_expires_at_ms > ?
+      AND t.absolute_expires_at_ms > ?
+  `).bind(
+    claims.uid, claims.healthConsentRevision, claims.fenceEpoch, now,
+    claims.fenceEpoch, claims.sessionHash, now, now, now,
+  ).first();
+  return row?.status === 'pending' ? 'pending' : null;
+}
+
+async function withdrawConsent(db, claims) {
+  const now = Date.now();
+  try {
+    // The trusted session, principal, age/consent proof and active generation
+    // are rechecked inside the INSERT. Its AFTER trigger atomically changes
+    // sync_subjects.status to withdrawn: later D1 writes/readbacks fail closed.
+    // A zero-row INSERT, DB error or lost ACK cannot assert erasure success.
+    await db.prepare(`
+      INSERT INTO health_erasure_jobs (
+        uid, consent_revision, fence_epoch, requested_at_ms, status
+      )
+      SELECT s.uid, s.consent_revision, s.fence_epoch, ?, 'pending'
+      FROM sync_subjects s
+      JOIN auth_principals p ON p.uid = s.uid
+      JOIN auth_sessions t ON t.uid = p.uid
+      JOIN health_consent_acceptances c ON c.uid = s.uid
+      WHERE s.uid = ? AND s.status = 'active'
+        AND s.consent_revision = ? AND s.fence_epoch = ?
+        AND c.consent_revision = s.consent_revision
+        AND c.over_18_confirmed = 1
+        AND c.accepted_at_ms > 0 AND c.accepted_at_ms <= ?
+        AND p.status = 'active' AND p.auth_epoch = s.fence_epoch
+        AND p.verified_at_ms IS NOT NULL
+        AND p.verified_at_ms <= ?
+        AND t.token_hash = ? AND t.auth_epoch = p.auth_epoch
+        AND t.revoked_at_ms IS NULL
+        AND t.issued_at_ms <= ? AND t.idle_expires_at_ms > ?
+        AND t.absolute_expires_at_ms > ?
+    `).bind(
+      now, claims.uid, claims.healthConsentRevision, claims.fenceEpoch,
+      now, now, claims.sessionHash, now, now, now,
+    ).run();
+  } catch {
+    // A timeout can occur AFTER the atomic insert/trigger committed. Only
+    // the primary readback below can prove pending versus unknown.
+  }
+  if (await pendingWithdrawal(db, claims) !== 'pending') {
+    throw new Error('unproven-withdrawal');
+  }
+}
+
 function validAcceptance(body, env) {
   if (!body || typeof body !== 'object' || Array.isArray(body)
     || Object.keys(body).sort().join(',') !== 'acceptance,action,expectedRevision'
@@ -184,7 +260,8 @@ export default {
       const url = new URL(request.url);
       const statusRoute = url.pathname === '/v1/consent/status';
       const acceptRoute = url.pathname === '/v1/consent/initial';
-      if (request.method !== 'POST' || (!statusRoute && !acceptRoute) || url.search !== '') {
+      const withdrawRoute = url.pathname === '/v1/consent/withdraw';
+      if (request.method !== 'POST' || (!statusRoute && !acceptRoute && !withdrawRoute) || url.search !== '') {
         return json({ error: 'not-found' }, 404);
       }
       if (typeof env.API_ORIGIN !== 'string' || !/^https:\/\/[^/]+$/.test(env.API_ORIGIN)
@@ -204,10 +281,15 @@ export default {
       // slot or querying D1. This validation cannot establish identity.
       if (statusRoute && request.body !== null) return json({ error: 'invalid-body' }, 400);
       let body;
-      if (acceptRoute) {
+      if (acceptRoute || withdrawRoute) {
         try { body = await boundedJson(request); }
         catch { return json({ error: 'invalid-body' }, 400); }
-        if (!validAcceptance(body, env)) return json({ error: 'invalid-acceptance' }, 400);
+        if (acceptRoute && !validAcceptance(body, env)) {
+          return json({ error: 'invalid-acceptance' }, 400);
+        }
+        if (withdrawRoute && !validWithdrawal(body)) {
+          return json({ error: 'invalid-withdrawal' }, 400);
+        }
       }
       const claims = await trustedClaims(request, env, url.pathname);
       if (!claims) return json({ error: 'unavailable' }, 503);
@@ -216,6 +298,18 @@ export default {
       if (!claims.emailVerified) return json({ error: 'unauthorized' }, 403);
       if (!claims.csrfVerified) return json({ error: 'csrf-required' }, 403);
       const current = await readConsent(env.DB, claims);
+      if (withdrawRoute) {
+        if (claims.healthConsentRevision !== 1 || current.revision !== 1) {
+          return json({ error: 'consent-conflict' }, 409);
+        }
+        if (current.status === 'active') await withdrawConsent(env.DB, claims);
+        else if (current.status !== 'withdrawn') return json({ error: 'consent-conflict' }, 409);
+        if (await pendingWithdrawal(env.DB, claims) !== 'pending') {
+          return json({ error: 'unavailable-or-conflict' }, 503);
+        }
+        return json({ status: 'withdrawn', revision: 1,
+          fenceEpoch: claims.fenceEpoch, deletionStatus: 'pending' });
+      }
       if (current.status !== 'unregistered') return json({ error: 'consent-conflict' }, 409);
       const result = await acceptInitial(env.DB, claims, body, env);
       return json(result);

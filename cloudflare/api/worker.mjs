@@ -356,7 +356,7 @@ async function handler(request, env) {
 export default {
   async fetch(request, env) {
     const route = new URL(request.url).pathname;
-    if (route === '/v1/consent/status' || route === '/v1/consent/initial') {
+    if (route === '/v1/consent/status' || route === '/v1/consent/initial' || route === '/v1/consent/withdraw') {
       return consentWorker.fetch(request, env);
     }
     if (route === '/v1/auth/logout') return logoutWorker.fetch(request, env);
