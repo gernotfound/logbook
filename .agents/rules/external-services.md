@@ -9,13 +9,11 @@ Il registro decisionale stabile e leggibile anche fuori dal codice è `docs/oper
 
 **Autorità:** [`AGENTS.md`](../../AGENTS.md). Questo contratto ne specializza gli invarianti; non amplia autorizzazioni o perimetro.
 
-## Stato corrente Kinde e ritiro Mailjet/Brevo — 14/11/2026
+## Kinde e dismissione dei fornitori email precedenti — 14/11/2026
 
-**Nuova autorizzazione e prova provider — 14/11/2026:** il proprietario chiede ritiro account Mailjet e Brevo e pulizia DNS. Il plugin Cloudflare ha cancellato 7 record solo `notify.thelogbook.me` dedicati ai due fornitori; read-back 18→11, 11 estranei invariati (posta IONOS preservata). **Account Mailjet/Brevo non cancellati**: nessun accesso alle loro console; occorre conferma del proprietario. Screenshot Kinde: business `thelogbook.kinde.com` con regione `Europe - Ireland`, onboarding incompleto. Non generalizzare il mandato ad altri DNS, OAuth, provider, segreti o ambienti. Vedere [registro](../../docs/operations/external-services-register.md).
+Kinde è il provider scelto per email/password, Google e messaggi Auth; l'integrazione reale rimane da collaudare. Sicurezza dell'account, autorizzazioni D1, owner, consenso, revoca, MFA, password ≥15, cancellazione Kinde, quote, privacy e consegna email sono gate indipendenti.
 
-## Decisione precedente — selezione Kinde (prima della pulizia DNS)
-
-Il product owner ha scelto **Kinde** per identità email/password e Google, con email Auth gestite dal provider, evitando l'integrazione Mailjet sul nuovo backend. Kinde non è ancora configurato/attivo; Free, regione EU, API di erasure, password workflow, sessioni, cookie Safari, audit e DPA richiedono verifica su tenant isolato. La scelta non elimina i controlli owner/consenso/revoca su D1. **Mailjet: RETIRE-PLANNED, non cancellato.** La PR #1077 è stata chiusa senza merge perché superata; dominio `notify.thelogbook.me`, record DNS e account provider hanno storia reale e richiedono inventario e autorizzazione DNS/provider specifica prima di ogni eliminazione. Non cancellare alla cieca record SPF/DKIM/DMARC o credenziali che potrebbero essere condivisi con altri flussi. Nessuna modifica Production, DNS, account o billing implicita.
+Il proprietario ha dichiarato **eliminati gli account Mailjet e Brevo** nelle rispettive console. La dichiarazione non è una verifica indipendente dell'erasure o della retention dei fornitori. Cloudflare ha cancellato e riletto **7 record DNS** esclusivi del sottodominio transazionale, lasciando invariati gli altri 11 record, inclusa la posta IONOS. I fornitori precedenti non appartengono al runtime target. Storico e prove tecniche nel [registro](../../docs/operations/external-services-register.md). Nessuna modifica implicita a OAuth, DNS del sito, altri provider o billing.
 
 ## Stato transitorio e ritiro anticipato — 14/11/2026
 
