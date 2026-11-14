@@ -284,13 +284,52 @@ ADK retirement and final receipt **are not implemented**. Missing migration,
 unavailable DB or an ambiguous readback fail closed.
 
 **Incomplete and release NO-GO**: full Auth credential verifier, email/Google,
-actual bounded erasure runner and receipt, rights-only, reacceptance,
+full erasure finalizer/receipt and rights-only export, reacceptance,
 legal-change handling, keys/ADK, account deletion, real HTTP Cloudflare
 measurement, frontend consent UI wiring and provider deployment. Existing Firebase
 accounts and health data are NOT transferred. No live schema, route or DNS
 is modified by the candidate. The fixture tests run Node SQLite and fake
 service binding; they do not prove D1 runtime behavior.
 
+
+## CF-06 — bounded erasure progress candidate (not deployed)
+
+Migration `0006_health_erasure_progress.sql` adds a durable lease epoch, a
+cryptographically random 32-byte internal lease token, expiry, and a
+`data → awaiting-keys` phase to `health_erasure_jobs`. Schema triggers
+prevent premature `complete`, lease regression, cross-owner reparenting,
+early reacceptance and direct SQL writes to withdrawn documents/replicas.
+The first consent acceptance and owner tombstone remain durable.
+
+`cloudflare/jobs/health-erasure-worker.mjs` implements a **private
+`scheduled` handler only**, with no public fetch, cron configuration or
+provider deployment. One invocation leases at most one eligible withdrawn
+owner and deletes no more than **four rows from one table**. The fixed,
+server-side table order is encrypted documents, commit receipts, replica
+mutation history and replica membership. Each SQL DELETE rechecks the
+still-valid lease, withdrawn consent revision and epoch within that same
+statement. An expired or stolen lease cannot continue; SQL/DB failures
+throw without producing completion. After every known table is proven
+empty in one conditional UPDATE, the job moves to `awaiting-keys`,
+remaining `processing`, **not** `complete`. That phase is excluded from
+the runnable scan to avoid starvation of younger jobs.
+
+Reissuing `POST /v1/consent/withdraw` while a job is processing returns
+only an owner/session-verified `deletionStatus: "processing"` (rather
+than a false `pending`). A lost response to a DELETE is reconciled by
+a future bounded scan after lease expiry, never by an invented ACK.
+SQLite fixture tests cover concurrent leases, lost response, takeover
+before DELETE, owner isolation, bounded batches, no resurrection,
+rollbacks and prevention of premature completion. This does **not**
+constitute provider Free-tier CPU/limits evidence.
+
+**Key boundary:** The ADK/KEK custodian, rights-only export, encrypted
+key record, final erasure of remaining account metadata, complete receipt
+and reacceptance after erasure are still missing. In particular,
+`awaiting-keys` means *the known replica tables were drained*, **not**
+that the owner's health data, keys or backups have been fully deleted.
+Never expose this worker through a route or schedule it on a real database
+until those steps and their recovery tests are complete.
 
 ## One candidate API and trusted per-session logout (CF-03)
 

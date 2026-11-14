@@ -33,6 +33,25 @@ mancanti. L'UI deve fermare localmente il trattamento fitness prima
 della richiesta HTTP, offrendo l'export facoltativo prima della conferma.
 Dopo il ritiro non deve riesumare journal o ciphertext dell'epoch precedente.
 
+## CF-06 — progresso cancellazione D1 (candidato, non in servizio)
+
+Dopo il job di revoca `0005`, la migration `0006` e il Worker privato
+`cloudflare/jobs/health-erasure-worker.mjs` consentono la cancellazione
+dei soli record di replica, al massimo quattro righe per invocazione e
+con lease di 30 secondi verificato in ciascuna DELETE. Il candidato non
+ha una route pubblica né un cron configurato. Un eventuale job in
+`phase=awaiting-keys` rimane **`status=processing`**, e blocca ancora
+la riaccettazione: mancano verifica delle altre risorse, custodia/
+distruzione ADK, retention e receipt finale. Un `DELETE` riuscito o un
+document scan vuoto non prova erasure completa. L'API di revoca può
+restituire `deletionStatus=processing` dopo verifica trusted, senza
+abilitare fitness, export incompleto o ricreare dati precedenti.
+La migration aggiunge anche vincoli SQL per bloccare la riscrittura
+diretta di documenti/repliche dopo la revoca e la riattivazione di
+consenso finché esiste un job incompleto. Richieste fallite, quote,
+lease scaduti o response-loss restano recuperabili e non causano una
+conferma di cancellazione.
+
 ## Matrice sintetica delle autorizzazioni
 
 | Stato | Fitness locale | Cloud e diritti |
