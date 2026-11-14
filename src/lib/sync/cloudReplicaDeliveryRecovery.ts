@@ -68,12 +68,10 @@ export async function restageUncommittedCloudflareDelivery(
     // scanAll() uses bounded, revision-fenced pages. Authenticate *every*
     // returned document before deriving the new write snapshot; not just the
     // documents touched by the stale journal.
-    let scan: CloudReplicaCompleteScan | undefined;
+    const scan: CloudReplicaCompleteScan = await transport.scanAll();
+    requireCurrent(guard);
     const checkpoint = await readAuthenticatedCloudflareCheckpoint(
-        async () => {
-            scan = await transport.scanAll();
-            return scan;
-        },
+        async () => scan,
         uid, accountKey, original.batch.consentRevision, guard,
     );
     requireCurrent(guard);
