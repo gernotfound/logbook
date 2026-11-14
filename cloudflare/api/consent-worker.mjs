@@ -63,7 +63,8 @@ async function readConsent(db, claims) {
   }
   if (!['active', 'withdrawn', 'deleting', 'deleted'].includes(row.status)
     || !Number.isSafeInteger(row.consent_revision) || row.consent_revision < 1
-    || !Number.isSafeInteger(row.fence_epoch) || row.fence_epoch !== claims.fenceEpoch) {
+    || !Number.isSafeInteger(row.fence_epoch) || row.fence_epoch > claims.fenceEpoch
+    || (row.status === 'active' && row.fence_epoch !== claims.fenceEpoch)) {
     throw new Error('invalid-consent-state');
   }
   if (row.status === 'active' && (row.consent_revision !== 1
@@ -143,7 +144,7 @@ async function pendingWithdrawal(db, claims) {
     JOIN auth_principals p ON p.uid = j.uid
     JOIN auth_sessions t ON t.uid = p.uid
     WHERE j.uid = ? AND j.consent_revision = ?
-      AND j.fence_epoch = ? AND j.status = 'pending'
+      AND j.fence_epoch <= ? AND j.status = 'pending'
       AND j.requested_at_ms > 0 AND j.requested_at_ms <= ?
       AND s.status = 'withdrawn'
       AND s.consent_revision = j.consent_revision
@@ -177,28 +178,24 @@ async function withdrawConsent(db, claims) {
       JOIN auth_sessions t ON t.uid = p.uid
       JOIN health_consent_acceptances c ON c.uid = s.uid
       WHERE s.uid = ? AND s.status = 'active'
-        AND s.consent_revision = ? AND s.fence_epoch = ?
+        AND s.consent_revision = ? AND s.fence_epoch <= ?
         AND c.consent_revision = s.consent_revision
         AND c.over_18_confirmed = 1
         AND c.accepted_at_ms > 0 AND c.accepted_at_ms <= ?
-        AND p.status = 'active' AND p.auth_epoch = s.fence_epoch
-        AND p.verified_at_ms IS NOT NULL
-        AND p.verified_at_ms <= ?
+        AND p.status = 'active' AND p.auth_epoch = ?
         AND t.token_hash = ? AND t.auth_epoch = p.auth_epoch
         AND t.revoked_at_ms IS NULL
         AND t.issued_at_ms <= ? AND t.idle_expires_at_ms > ?
         AND t.absolute_expires_at_ms > ?
     `).bind(
       now, claims.uid, claims.healthConsentRevision, claims.fenceEpoch,
-      now, now, claims.sessionHash, now, now, now,
+      now, claims.fenceEpoch, claims.sessionHash, now, now, now,
     ).run();
   } catch {
     // A timeout can occur AFTER the atomic insert/trigger committed. Only
     // the primary readback below can prove pending versus unknown.
   }
-  if (await pendingWithdrawal(db, claims) !== 'pending') {
-    throw new Error('unproven-withdrawal');
-  }
+  return await pendingWithdrawal(db, claims) === 'pending';
 }
 
 function validAcceptance(body, env) {
@@ -295,21 +292,25 @@ export default {
       if (!claims) return json({ error: 'unavailable' }, 503);
       if (claims.errorStatus) return json({ error: 'unauthorized' }, claims.errorStatus);
       if (statusRoute) return json(await readConsent(env.DB, claims));
-      if (!claims.emailVerified) return json({ error: 'unauthorized' }, 403);
+      if (!withdrawRoute && !claims.emailVerified) return json({ error: 'unauthorized' }, 403);
       if (!claims.csrfVerified) return json({ error: 'csrf-required' }, 403);
-      const current = await readConsent(env.DB, claims);
       if (withdrawRoute) {
-        if (claims.healthConsentRevision !== 1 || current.revision !== 1) {
+        if (claims.healthConsentRevision !== 1) {
           return json({ error: 'consent-conflict' }, 409);
         }
-        if (current.status === 'active') await withdrawConsent(env.DB, claims);
-        else if (current.status !== 'withdrawn') return json({ error: 'consent-conflict' }, 409);
-        if (await pendingWithdrawal(env.DB, claims) !== 'pending') {
-          return json({ error: 'unavailable-or-conflict' }, 503);
+        if (!await withdrawConsent(env.DB, claims)) {
+          // Unregistered accounts have nothing to revoke. Every other
+          // unproven outcome remains unavailable rather than an ACK.
+          const state = await readConsent(env.DB, claims);
+          if (state.status === 'unregistered') {
+            return json({ error: 'consent-conflict' }, 409);
+          }
+          throw new Error('unproven-withdrawal');
         }
         return json({ status: 'withdrawn', revision: 1,
           fenceEpoch: claims.fenceEpoch, deletionStatus: 'pending' });
       }
+      const current = await readConsent(env.DB, claims);
       if (current.status !== 'unregistered') return json({ error: 'consent-conflict' }, 409);
       const result = await acceptInitial(env.DB, claims, body, env);
       return json(result);

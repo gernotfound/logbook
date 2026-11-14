@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import { DatabaseSync } from 'node:sqlite';
 import consent from '../../cloudflare/api/consent-worker.mjs';
-import sessionGate from '../../cloudflare/auth/session-gate.mjs';
+import sessionGate, { hashSessionSecret } from '../../cloudflare/auth/session-gate.mjs';
 import { issueVerifiedSession } from '../../cloudflare/auth/session-issuer.mjs';
 
 const ORIGIN = 'https://candidate.invalid';
@@ -458,5 +458,49 @@ void test('withdrawal is owner-scoped and never affects another principal', asyn
     assert.equal((await call(f, '/v1/consent/withdraw', { body: withdrawal })).status, 200);
     assert.equal(f.sqlite.prepare("SELECT COUNT(*) AS n FROM health_erasure_jobs WHERE uid='owner-b'").get().n, 0);
     assert.equal(f.sqlite.prepare("SELECT status FROM sync_subjects WHERE uid='owner-a'").get().status, 'withdrawn');
+  } finally { f.sqlite.close(); }
+});
+
+void test('withdrawal remains possible after email verification is lost and Auth epoch advances', async () => {
+  const f = await fixture();
+  try {
+    assert.equal((await call(f, '/v1/consent/initial', { body: acceptance })).status, 200);
+    f.sqlite.exec("UPDATE auth_principals SET verified_at_ms=NULL, auth_epoch=2 WHERE uid='owner-a'");
+    const token = Buffer.alloc(32, 57).toString('base64url');
+    const csrf = Buffer.alloc(32, 58).toString('base64url');
+    const now = Date.now();
+    f.sqlite.prepare(`
+      INSERT INTO auth_sessions (token_hash,uid,auth_epoch,csrf_hash,
+        issued_at_ms,idle_expires_at_ms,absolute_expires_at_ms)
+      VALUES (?,?,?,?,?,?,?)
+    `).run(await hashSessionSecret(token), f.uid, 2, await hashSessionSecret(csrf),
+      now - 1000, now + 60000, now + 3600000);
+    f.cookie = '__Host-logbook_session=' + token + '; __Host-logbook_csrf=' + csrf;
+    f.csrf = csrf;
+    const outcome = await call(f, '/v1/consent/withdraw', { body: withdrawal });
+    assert.equal(outcome.status, 200);
+    assert.equal(outcome.body.status, 'withdrawn');
+    assert.equal(outcome.body.deletionStatus, 'pending');
+    assert.equal(outcome.body.fenceEpoch, 2);
+    assert.equal(f.sqlite.prepare('SELECT fence_epoch,status FROM sync_subjects').get().status, 'withdrawn');
+    assert.equal(f.sqlite.prepare('SELECT fence_epoch FROM health_erasure_jobs').get().fence_epoch, 1);
+    assert.equal((await call(f, '/v1/consent/status')).body.status, 'withdrawn');
+  } finally { f.sqlite.close(); }
+});
+
+void test('removing the original consent proof after AuthGate prevents withdrawal job creation', async () => {
+  const f = await fixture();
+  try {
+    assert.equal((await call(f, '/v1/consent/initial', { body: acceptance })).status, 200);
+    const originalGate = f.env.AUTH_GATE;
+    f.env.AUTH_GATE = { async fetch(request) {
+      const result = await originalGate.fetch(request);
+      f.sqlite.exec('DELETE FROM health_consent_acceptances');
+      return result;
+    } };
+    const response = await call(f, '/v1/consent/withdraw', { body: withdrawal });
+    assert.equal(response.status, 503);
+    assert.equal(count(f.sqlite, 'health_erasure_jobs'), 0);
+    assert.equal(f.sqlite.prepare('SELECT status FROM sync_subjects').get().status, 'active');
   } finally { f.sqlite.close(); }
 });
