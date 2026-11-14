@@ -9,7 +9,13 @@ Il registro decisionale stabile e leggibile anche fuori dal codice è `docs/oper
 
 **Autorità:** [`AGENTS.md`](../../AGENTS.md). Questo contratto ne specializza gli invarianti; non amplia autorizzazioni o perimetro.
 
-## Stato transitorio e ritiro anticipato — 13/11/2026
+## Stato transitorio e ritiro anticipato — 14/11/2026
+
+- **Verifica provider 14/11:** Vercel `logbook` sospeso su richiesta del proprietario; evento Vercel `project-paused` osservato. Produzione bloccata in modo reversibile, nessuna eliminazione di progetto, segreti, dati o modifiche ad altri progetti. Le Functions/Cron ancora nel repository non sono un backend ora disponibile.
+- **Cloudflare:** zona `thelogbook.me` active con record web ancora IONOS, nessuna route/custom-domain, unico Worker Static Assets `thelogbook-frontend` e D1 EU di test. Nessun cutover DNS eseguito; GO funzionale rimane bloccato.
+- **GitHub:** PR #1083 MERGED su `main 2d4c9d5b` v2.394.0; CI main exact-SHA e CodeQL verdi, senza prova di runtime Cloudflare.
+
+## Checkpoint storico — 13/11/2026
 
 - Firebase Hosting `thelogbook` è disabilitato secondo output CLI del proprietario; il workflow GitHub Hosting è dichiarato disabilitato, `disabled_manually` non verificato indipendentemente. Non riattivarlo.
 - Auth, Firestore/App Check e Vercel Functions/Cron sono **dipendenze del codice runtime ancora in uso**, non dati/account da migrare. Il product owner dichiara vuoti database e account; convertirne le funzionalità e abbandonare le dipendenze il prima possibile dopo i relativi test.
