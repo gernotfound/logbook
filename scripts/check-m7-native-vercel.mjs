@@ -65,7 +65,7 @@ for (const [path, maxDuration] of Object.entries(expectedFunctionDurations)) {
 }
 if (existsSync('api/legacy-service-worker.ts')) failures.push('pre-launch Vercel service-worker retirement endpoint must stay removed');
 if (vercel.functions?.['api/legacy-service-worker.ts']) failures.push('Vercel must not deploy the retired worker endpoint');
-if (vercel.git?.deploymentEnabled?.main !== true || vercel.git?.deploymentEnabled?.['**'] !== false) failures.push('Vercel Git deployments must remain enabled only for main');
+if (vercel.git?.deploymentEnabled !== false) failures.push('Vercel Git automatic deployments must remain disabled for every branch while the legacy project is paused');
 if (vercel.ignoreCommand !== 'node scripts/vercel-ignore-build.mjs') failures.push('Vercel must skip Git deployments that do not change the backend contract');
 if (!existsSync('scripts/vercel-ignore-build.mjs')) failures.push('missing Vercel selective deployment guard');
 else {
@@ -342,4 +342,4 @@ if (failures.length) {
   process.exit(1);
 }
 
-console.log('M7 hybrid Firebase Hosting/Vercel backend contract OK: mobile standalone manifest, Firebase-only production frontend build, SW precache, icons/scope, main-only native Functions and daily recovery preserved.');
+console.log('M7 hybrid Firebase Hosting/Vercel backend contract OK: mobile standalone manifest, Firebase-only production frontend build, SW precache, icons/scope, disabled Vercel Git deployment, retained legacy API inventory and recovery contract.');
