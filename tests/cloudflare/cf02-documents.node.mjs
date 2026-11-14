@@ -502,6 +502,66 @@ void test('retirement status rejects ambiguous shapes, stale consent and unauthe
   assert.equal(db.sqlite.prepare('SELECT COUNT(*) AS n FROM sync_replica_mutations').get().n, 0);
 }));
 
+void test('primary D1 commit status distinguishes inconclusive, proven non-commit and immutable receipt', () => withFixture(async db => {
+  const original = attempt('batchstatusoriginal01');
+  const status = {
+    batchId: original.batchId, expectedRevision: original.expectedRevision,
+    expectedFenceEpoch: original.expectedFenceEpoch,
+    consentRevision: original.consentRevision, requestHash: 'a'.repeat(64),
+  };
+  // A missing receipt at the current expected revision is not proof that an
+  // in-flight request cannot commit.
+  assert.deepEqual(await call(db, 'commit/status', status), {
+    status: 200, body: { outcome: 'inconclusive', currentRevision: 0 },
+  });
+  assert.equal(db.sqlite.prepare('SELECT count(*) AS n FROM sync_receipts').get().n, 0);
+
+  const winner = attempt('batchstatuswinner002');
+  assert.equal((await call(db, 'commit', winner)).status, 200);
+  assert.deepEqual(await call(db, 'commit/status', status), {
+    status: 200, body: { outcome: 'not-committed', currentRevision: 1 },
+  });
+  // The original CAS cannot ever commit under revision 1, even if the
+  // HTTP reply to that original request was lost.
+  assert.equal((await call(db, 'commit', original)).status, 409);
+  assert.equal((await call(db, 'receipt', { batchId: original.batchId })).body.receipt, null);
+
+  const originalReceipt = (await call(db, 'receipt', { batchId: winner.batchId })).body.receipt;
+  assert.equal(typeof originalReceipt.requestHash, 'string');
+  const committedStatus = { ...status, batchId: winner.batchId, requestHash: originalReceipt.requestHash };
+  assert.deepEqual(await call(db, 'commit/status', committedStatus), {
+    status: 200, body: { outcome: 'committed', currentRevision: 1 },
+  });
+  assert.deepEqual(await call(db, 'commit/status', { ...committedStatus, requestHash: 'f'.repeat(64) }), {
+    status: 409, body: { error: 'batch-id-conflict' },
+  });
+
+  const later = attempt('batchstatuslater003', 2, 1);
+  assert.equal((await call(db, 'commit', later)).status, 200);
+  assert.deepEqual(await call(db, 'commit/status', committedStatus), {
+    status: 200, body: { outcome: 'committed', currentRevision: 2 },
+  });
+  assert.equal(db.sqlite.prepare('SELECT COUNT(*) AS n FROM sync_receipts').get().n, 2);
+}));
+
+void test('commit status requires original epoch, session-bound CSRF and live trusted SQL session', () => withFixture(async db => {
+  const body = {
+    batchId: 'batchstatusguard001', expectedRevision: 0, expectedFenceEpoch: 5,
+    consentRevision: 1, requestHash: 'a'.repeat(64),
+  };
+  assert.deepEqual(await call(db, 'commit/status', { ...body, requestHash: 'not-a-hash' }), {
+    status: 400, body: { error: 'invalid-input' },
+  });
+  assert.equal((await call(db, 'commit/status', { ...body, expectedFenceEpoch: 6 })).status, 403);
+  assert.equal((await call(db, 'commit/status', body, {
+    env: makeEnv(db, { csrfVerified: false }),
+  })).status, 403);
+  db.sqlite.prepare('UPDATE auth_sessions SET revoked_at_ms = ? WHERE token_hash = ?')
+    .run(Date.now(), syntheticSessionHash);
+  assert.equal((await call(db, 'commit/status', body)).status, 403);
+  assert.equal(db.sqlite.prepare('SELECT COUNT(*) AS n FROM sync_receipts').get().n, 0);
+}));
+
 void test('first encrypted root/month write, coherent read and durable receipt replay', () => withFixture(async db => {
   const before = await call(db, 'read', { paths: ['', 'history_months/2026-11'] });
   assert.equal(before.status, 200);
@@ -817,6 +877,8 @@ void test('each sync route rejects oversized JSON before D1 work without shrinki
     ['read', { paths: [''] }, 512],
     ['scan', { after: null, expectedRevision: null }, 256],
     ['receipt', { batchId: 'batch000000000001' }, 256],
+    ['commit/status', { batchId: 'batch000000000001', expectedRevision: 0, expectedFenceEpoch: 5,
+      consentRevision: 1, requestHash: 'a'.repeat(64) }, 512],
     ['replica/claim', claim('mutation0000000901'), 4096],
     ['replica/retire', retire('mutation0000000902', 0), 4096],
     ['replica/status', claim('mutation0000000903'), 4096],

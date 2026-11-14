@@ -8,7 +8,7 @@ const READ_ROUTES = new Set([
   '/v1/sync/control', '/v1/sync/read', '/v1/sync/scan', '/v1/sync/receipt',
 ]);
 const MUTATION_ROUTES = new Set([
-  '/v1/sync/commit', '/v1/sync/replica/claim',
+  '/v1/sync/commit', '/v1/sync/commit/status', '/v1/sync/replica/claim',
   '/v1/sync/replica/retire', '/v1/sync/replica/status',
 ]);
 const IDENTITY_READ_ROUTES = new Set(['/v1/consent/status']);

@@ -120,6 +120,33 @@ void test('mutation requires session-bound CSRF; wrong, malformed, absent and re
   } finally { sqlite.close(); }
 });
 
+void test('document commit status uses the real private AuthGate mutation allowlist and CSRF', async () => {
+  const { sqlite, env } = await fixture();
+  try {
+    const authorized = await status(env, {
+      route: '/v1/sync/commit/status', csrfValue: csrf,
+    });
+    assert.equal(authorized.status, 200);
+    assert.equal((await authorized.json()).csrfVerified, true);
+
+    for (const csrfValue of [undefined, '', token, 'wrong']) {
+      const response = await status(env, {
+        route: '/v1/sync/commit/status', csrfValue,
+      });
+      assert.equal(response.status, 403);
+    }
+    const fake = await status(env, { route: '/v1/sync/commit/status/hidden', csrfValue: csrf });
+    assert.equal(fake.status, 403);
+
+    sqlite.prepare('UPDATE auth_sessions SET revoked_at_ms = ? WHERE uid = ?')
+      .run(Date.now(), 'account-a');
+    const revoked = await status(env, {
+      route: '/v1/sync/commit/status', csrfValue: csrf,
+    });
+    assert.equal(revoked.status, 401);
+  } finally { sqlite.close(); }
+});
+
 void test('invalid cookies, duplicate session cookies and unknown routes never produce claims', async () => {
   const { sqlite, env, metrics } = await fixture();
   try {
