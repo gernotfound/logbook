@@ -290,3 +290,16 @@ void test('misconfiguration and missing rate gate fail before creating an issuer
     assert.throws(() => createKindeOAuthFlow(f.config), TypeError);
   } finally { f.close(); }
 });
+
+
+void test('expired attempts are pruned in bounded batches before storing new state', async () => {
+  const f = await fixture();
+  try {
+    const attempt = await f.start();
+    f.sqlite.exec('UPDATE auth_oauth_attempts SET issued_at_ms = 1, expires_at_ms = 2');
+    const next = await f.start(attempt.cookie);
+    assert.notEqual(next.state, attempt.state);
+    assert.equal(f.sqlite.prepare('SELECT COUNT(*) AS n FROM auth_oauth_attempts').get().n, 1);
+    assert.equal(f.sqlite.prepare('SELECT COUNT(*) AS n FROM auth_oauth_attempts WHERE expires_at_ms = 2').get().n, 0);
+  } finally { f.close(); }
+});
