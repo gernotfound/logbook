@@ -98,3 +98,31 @@ il rate limiting di frontiera, la pulizia dei tentativi scaduti,
 la protezione dei percorsi HTTP e la UX completa restano gate di
 integrazione. I test Node/SQLite con JWT sintetici non certificano
 l'accesso Google/email né la PWA su Safari.
+
+
+### Preparazione HTTP candidate / API Audience (14/11/2026, NON attiva)
+
+È presente il candidato **non collegato al frontend pubblico**
+`cloudflare/auth/kinde-http-worker.mjs`, che compone i moduli
+Kinde esistenti con un servizio AuthGate privato e quattro route sullo
+stesso origin. Non è un GO e non implica autorizzazione a modificare
+il tenant OAuth di Production.
+
+La documentazione Kinde aggiornata richiede, per l'`aud` dell'access
+token di una API proprietaria: **Settings > Environment > APIs > Add API**,
+assegnare un Audience immutabile e autorizzare esplicitamente
+l'applicazione `TheLogBook` a richiederlo. Il valore definitivo
+deve corrispondere esattamente a `KINDE_API_AUDIENCE` (secret
+config server-side) e alla validazione JWT; la mera presenza di
+`Google ON` o del progetto Google OAuth pubblicato non prova
+questa autorizzazione. Fonte: https://docs.kinde.com/developer-tools/your-apis/register-manage-apis/
+
+Il percorso candidato di callback Kinde→TheLogBook è
+`https://thelogbook.me/api/auth/kinde/callback`, **non**
+`https://thelogbook.kinde.com/login/callback` (che è Google→Kinde).
+Non inserirlo nelle Allowed callback URLs di Kinde prima di avere
+un Worker pubblico che lo serva realmente e di autorizzare la modifica.
+La route HTTP attuale è ancora isolata. Si dovranno verificare
+l'accesso Kinde, la token Audience reale, sessioni, email/password
+min 15, reset, logout SSO, integrazione UI e Safari. I secret non
+devono essere trasferiti al browser né copiati nelle issue.

@@ -459,3 +459,47 @@ linking, multi-device, Safari and Free quotas remain **NO-GO**. Do not add
 this module to `auth-proxy.mjs` or the published frontend until
 the missing gates are satisfied. No provider/Production migration has been
 applied here.
+
+
+## CF-03 candidate HTTP bridge (not routed; branch increment)
+
+`cloudflare/auth/kinde-http-worker.mjs` composes the already-tested
+Kinde code+PKCE exchange with a same-origin HTTP boundary and the existing
+D1 session/CSRF gate. This module has **no** published route or service
+binding on `thelogbook-frontend`; do not enable it by deploying
+the Static Assets Worker before the remaining release gates are met.
+
+Candidate endpoints (same HTTPS origin as the PWA):
+- `POST /api/auth/kinde/start` (navigation, no body; Origin and
+  Fetch Metadata checked). Returns 303 to Kinde hosted login and sets a
+  host-only HttpOnly browser-binding cookie.
+- `GET /api/auth/kinde/callback` (Kinde browser redirect; state,
+  browser cookie, signed tokens and verified email checked).
+- `POST /api/auth/session` (same-origin, no body). Uses the
+  **private** AUTH_GATE with the identity-only route and returns only the
+  verified owner ID, current epoch, email verification and consent revision.
+  Never exposes the D1 token hash or provider access/ID tokens.
+- `POST /api/auth/logout` (same-origin, no body, session-bound
+  X-CSRF-Token). Reuses the existing conditional D1 session revoker. It
+  revokes **only one application session**, not the Kinde SSO session, and
+  never erases the local vault/journal.
+
+A mandatory AUTH_RATE_LIMITER binding applies a conservative
+location-scoped start/callback cap with server-generated fixed keys
+(no untrusted IP/header is treated as an identity). This is **not**
+a provider-wide rate limit or a substitute for WAF/Turnstile,
+request quotas and abuse measurements. Missing DB, AUTH_GATE, provider
+configuration or rate binding fail closed. An isolated local-only
+Wrangler config is at `cloudflare/auth/wrangler.kinde.local.jsonc`;
+it contains placeholders, no live route and no Client Secret. Configure
+real secret **only** in a separately authorized Workers deployment.
+
+Tests in `cf03-kinde-http-worker.node.mjs` traverse signed
+OIDC/PKCE -> stored D1 principal/session -> private gate -> session status
+-> CSRF-protected logout, plus failures. This does not validate the
+Kinde tenant, a deployed Worker, mobile Safari, or the production frontend
+lifecycle. Before public mounting: register Kinde API Audience and authorize
+the Back-end web application to request it; verify exact callback URL and
+confidential client+PKCE, password≥15 including reset, email verification,
+Google, account linking, Kinde SSO logout, session concurrency and revocation,
+device vault, consent/erasure, provider CPU/Free and privacy.
