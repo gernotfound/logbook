@@ -13,6 +13,19 @@ const MAX_DOCUMENT_BYTES = 950000;
 // One causal batch can legitimately contain eight separately encrypted docs.
 // The transport body cap must not be smaller than its own eight-document contract.
 const MAX_BODY_BYTES = 8 * MAX_DOCUMENT_BYTES + 8192;
+// Small control/receipt/membership requests must not inherit the multi-document
+// commit budget: parsing megabytes of otherwise valid JSON wastes Workers CPU.
+// These ceilings include JSON whitespace and are above the strict schemas' maxima.
+const BODY_LIMIT_BYTES = new Map([
+  ['/v1/sync/control', 128],
+  ['/v1/sync/read', 512],
+  ['/v1/sync/scan', 256],
+  ['/v1/sync/receipt', 256],
+  ['/v1/sync/replica/claim', 4096],
+  ['/v1/sync/replica/retire', 4096],
+  ['/v1/sync/replica/status', 4096],
+  ['/v1/sync/commit', MAX_BODY_BYTES],
+]);
 const SLOT = /^s(?:0[0-9]|1[0-5])$/;
 const PATH = /^(?:(?:history_months|nutrition_months)\/[0-9]{4}-(?:0[1-9]|1[0-2]))?$/;
 const BASE64URL = /^[A-Za-z0-9_-]+$/;
@@ -89,12 +102,12 @@ class BadInput extends Error {
 }
 function uniquePaths(paths) { return paths.length === new Set(paths).size; }
 
-async function jsonBounded(request) {
+async function jsonBounded(request, maxBytes) {
   if (!/^application\/json(?:\s*;|$)/i.test(request.headers.get('content-type') ?? '')) {
     throw new BadInput('unsupported-media-type', 415);
   }
   const declared = request.headers.get('content-length');
-  if (declared && (!/^\d+$/.test(declared) || Number(declared) > MAX_BODY_BYTES)) {
+  if (declared && (!/^\d+$/.test(declared) || Number(declared) > maxBytes)) {
     throw new BadInput('payload-too-large', 413);
   }
   if (!request.body) throw new BadInput('invalid-json', 400);
@@ -105,8 +118,8 @@ async function jsonBounded(request) {
     const { value, done } = await reader.read();
     if (done) break;
     size += value.byteLength;
-    if (size > MAX_BODY_BYTES) {
-      await reader.cancel();
+    if (size > maxBytes) {
+      await reader.cancel().catch(() => {});
       throw new BadInput('payload-too-large', 413);
     }
     parts.push(value);
@@ -178,8 +191,8 @@ function validateSealedBatch(input) {
 async function handler(request, env) {
   const url = new URL(request.url);
   const route = url.pathname;
-  const validRoutes = new Set(['/v1/sync/read', '/v1/sync/scan', '/v1/sync/control', '/v1/sync/replica/claim', '/v1/sync/replica/retire', '/v1/sync/replica/status', '/v1/sync/commit', '/v1/sync/receipt']);
-  if (!validRoutes.has(route)) return reply({ error: 'not-found' }, 404);
+  const maxBodyBytes = BODY_LIMIT_BYTES.get(route);
+  if (maxBodyBytes === undefined || url.search !== '') return reply({ error: 'not-found' }, 404);
   if (request.method !== 'POST') {
     return reply({ error: 'method-not-allowed' }, 405);
   }
@@ -199,7 +212,7 @@ async function handler(request, env) {
   const consentRevision = claims.healthConsentRevision;
   const fenceEpoch = claims.fenceEpoch;
   if (route === '/v1/sync/receipt') {
-    const body = await jsonBounded(request);
+    const body = await jsonBounded(request, maxBodyBytes);
     const batchId = z.strictObject({ batchId: id }).safeParse(body);
     if (!batchId.success) throw new BadInput('invalid-input', 400);
     const state = await readAccessState(env.DB, uid, fenceEpoch, claims.sessionHash);
@@ -211,7 +224,7 @@ async function handler(request, env) {
       lastSeq: receipt.last_seq, consentRevision: receipt.consent_revision,
       replica: { slot: receipt.slot, replicaId: receipt.replica_id, generation: receipt.generation } } : null });
   }
-  const raw = await jsonBounded(request);
+  const raw = await jsonBounded(request, maxBodyBytes);
   if (route === '/v1/sync/control') {
     if (!z.strictObject({}).safeParse(raw).success) throw new BadInput('invalid-input', 400);
     const control = await readReplicaControl(env.DB, uid, consentRevision, fenceEpoch, claims.sessionHash);
