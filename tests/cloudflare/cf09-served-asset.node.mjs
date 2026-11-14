@@ -53,8 +53,8 @@ void test('robots.txt rejects changed content, forged wrappers, missing markers 
     Buffer.concat([Buffer.from(managed), Buffer.alloc(9000, 0x20), expected]),
     Buffer.concat([Buffer.from(managed), Buffer.from([0xff]), expected]),
   ];
-  for (const variant of variants) {
-    assert.equal(matchesServedCloudflareAsset('/robots.txt', expected, variant), false);
+  for (const [index, variant] of variants.entries()) {
+    assert.equal(matchesServedCloudflareAsset('/robots.txt', expected, variant), false, `rejected variant ${index}`);
   }
   assert.equal(matchesServedCloudflareAsset('/robots.txt', expected, Buffer.from('')), false);
 });
