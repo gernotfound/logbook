@@ -151,6 +151,11 @@ jobs:
           accountId: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
           wranglerVersion: '4.159.0'
           command: deploy --config cloudflare/wrangler.jsonc
+      - name: Setup Node.js for exact-asset smoke
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: '24'
+          package-manager-cache: false
       - name: Non-destructive smoke of thelogbook.me
         shell: bash
         run: |
@@ -158,29 +163,26 @@ jobs:
           for path in / /sw.js /manifest.webmanifest /robots.txt /sitemap.xml; do
             local_file="dist/${path#/}"
             if [ "${path}" = "/" ]; then local_file="dist/index.html"; fi
-            initial_http="$(curl --fail --silent --show-error --retry 3 --retry-delay 2 --retry-all-errors \
-              -H 'Accept-Encoding: identity' --dump-header /tmp/cloudflare-served-headers \
-              --write-out '%{http_code} %{content_type}' \
-              "${CLOUDFLARE_APP_ORIGIN}${path}" -o /tmp/cloudflare-served-asset)"
-            if ! cmp -s "${local_file}" /tmp/cloudflare-served-asset; then
-              if [ "${path}" = "/robots.txt" ]; then
-                # Bot Preference Sync prepends Cloudflare's Content Signals
-                # policy before our robots.txt. Require the exact original
-                # suffix, a recognized managed header, and bounded overhead.
-                expected_size="$(wc -c < "${local_file}")"
-                served_size="$(wc -c < /tmp/cloudflare-served-asset)"
-                first_line="$(sed -n '1p' /tmp/cloudflare-served-asset)"
-                if [ "${served_size}" -gt "${expected_size}" ] &&
-                   [ "${served_size}" -le "$((expected_size + 8192))" ] &&
-                   [ "${first_line}" = '# As a condition of accessing this website, you agree to abide by the' ] &&
-                   tail -c "${expected_size}" /tmp/cloudflare-served-asset | cmp -s "${local_file}" -; then
-                  echo 'Verified Cloudflare-managed robots.txt prefix and exact application suffix'
-                  continue
-                fi
+            verified=false
+            # Workers deployments propagate across edge locations. Permit a
+            # bounded convergence window, but accept only verified bytes.
+            for attempt in 1 2 3 4; do
+              initial_http="$(curl --fail --silent --show-error --retry 3 --retry-delay 2 --retry-all-errors \
+                -H 'Accept-Encoding: identity' --dump-header /tmp/cloudflare-served-headers \
+                --write-out '%{http_code} %{content_type}' \
+                "${CLOUDFLARE_APP_ORIGIN}${path}" -o /tmp/cloudflare-served-asset)"
+              if node scripts/verify-cloudflare-served-asset.mjs \
+                  "${path}" "${local_file}" /tmp/cloudflare-served-asset; then
+                verified=true
+                break
               fi
+              if [ "${attempt}" != 4 ]; then sleep 3; fi
+            done
+            if [ "${verified}" != true ]; then
               bash scripts/cloudflare-asset-mismatch-diagnostics.sh \
                 "${local_file}" /tmp/cloudflare-served-asset /tmp/cloudflare-served-headers \
                 "${CLOUDFLARE_APP_ORIGIN}${path}" "${EXPECTED_SHA}" "${initial_http}"
+              exit 1
             fi
           done
           curl --fail --silent --show-error -D /tmp/cloudflare-headers -o /dev/null "${CLOUDFLARE_APP_ORIGIN}/"
