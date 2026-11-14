@@ -120,7 +120,6 @@ for (const viewport of viewports) {
       // Adjacent dates in both calendars are interactive, not disabled.
       await expect(page.locator('.training-history .history-day.outside').first()).toHaveCSS('opacity', '1');
       await capture(page, testInfo, 'training-history');
-
     });
 
     test(`data surfaces at ${viewport.width}px in ${appearance.preference}/${appearance.system}`, async ({ page }, testInfo) => {
