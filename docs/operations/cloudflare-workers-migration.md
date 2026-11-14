@@ -76,3 +76,26 @@ Il Worker API controlla Content-Type JSON e Content-Length dichiarato prima di c
 ## Contratti e tracciamento
 
 [AGENTS](../../AGENTS.md) · [Account](../../.agents/rules/account-lifecycle.md) · [Archivio cifrato](../../.agents/rules/secure-storage.md) · [Storage/sync](../../.agents/rules/storage-and-sync.md) · [Consenso](../../.agents/rules/health-consent.md) · [CI](../../.agents/rules/ci-verification.md) · [CF-00 #1054](https://github.com/gernotfound/logbook/issues/1054) · [CF-09 #1063](https://github.com/gernotfound/logbook/issues/1063) · [hosting/DNS #1041](https://github.com/gernotfound/logbook/issues/1041). Lo storico degli incrementi è consultabile nella cronologia Git e nelle PR, non copiato come checklist nel runbook corrente.
+
+
+### CF-05 — precisione dell'orologio SQL per sessioni e lease (14/11/2026)
+
+Il codice delle transazioni D1 candidate confrontava timestamp del Worker
+`Date.now()` con
+`CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER)`.
+La sottrazione su floating point seguita da troncamento poteva produrre
+un millisecondo in meno del timestamp intero, causando rifiuti
+intermittenti della sessione appena emessa. Il candidato utilizza
+un'espressione condivisa basata su
+`strftime('%s','now')` più i millisecondi frazionari, senza
+conversione Julian floating point, nei gate di custodia ADK, fence
+sessione e worker erasure. Il test SQL verifica valori fissi, limite
+di secondo e sessioni appena emesse, oltre alle regressioni CF-05.
+
+**Distinzione schema/provider:** la vecchia espressione è ancora presente
+nelle migration storiche `0001_encrypted_replica.sql` e
+`0007_cloud_key_custody.sql` (trigger D1): non riscrivere
+migration già applicate; gli eventuali trigger da correggere richiedono
+una nuova migration verificata su database sintetico/restore e un
+separato gate Provider. Nessuna modifica al D1 remoto è compresa
+in questo fix; la CI SQLite non certifica il runtime Cloudflare.
