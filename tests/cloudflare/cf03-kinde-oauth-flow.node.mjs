@@ -303,3 +303,17 @@ void test('expired attempts are pruned in bounded batches before storing new sta
     assert.equal(f.sqlite.prepare('SELECT COUNT(*) AS n FROM auth_oauth_attempts WHERE expires_at_ms = 2').get().n, 0);
   } finally { f.close(); }
 });
+
+
+void test('callback rate limiter rejects a valid bound state before D1 without consuming it', async () => {
+  const f = await fixture();
+  try {
+    const a = await f.start();
+    f.setRate(false);
+    assert.equal((await f.oauth.complete(f.db, f.callback(a))).status, 429);
+    assert.equal(f.sqlite.prepare('SELECT COUNT(*) AS n FROM auth_oauth_attempts').get().n, 1);
+    assert.equal(f.calls(), 0);
+    f.setRate(true);
+    assert.equal((await f.oauth.complete(f.db, f.callback(a))).status, 303);
+  } finally { f.close(); }
+});
