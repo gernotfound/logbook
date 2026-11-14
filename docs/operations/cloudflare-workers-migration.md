@@ -196,3 +196,9 @@ la giurisdizione EU è stata svolta direttamente con il plugin Cloudflare,
 con autorizzazione indipendente. Una PR correttiva rende il readback CI
 least-privilege sui binding Worker (negativi su 401, DB sbagliata, route
 pubbliche e gate assente); non presenta la sola CI come prova di schema.
+
+### CF-03 — test verticale Kinde → consenso → D1 (solo sintetico)
+
+La suite `tests/cloudflare/cf03-kinde-http-worker.node.mjs` attraversa insieme i **moduli reali** di callback OAuth, emissione cookie sessione, AuthGate, primo consenso e replica D1. Applica lo schema `0001`–`0008` a SQLite e usa token RS256 firmati localmente, mai credenziali del provider. Verifica rifiuto prima del consenso, CSRF, accettazione esplicita, iscrizione della replica, isolamento di due owner, revoca con job ancora `pending` e logout con revoca sessione. La registrazione della replica **non** attesta cifratura AEAD, commit documenti, ACK o restore.
+
+Questo è un test **Node/SQLite sintetico**, non un collaudo HTTP del Worker live, una prova Kinde reale, email/password/Google, Safari, sincronizzazione cross-device o recupero dei dati. Il candidato HTTP Kinde resta **non pubblicato**; gli URL e secret provider devono essere riletti e verificati prima della pubblicazione. CI/SHA e limitazioni sono tracciati in [CF-03 #1057](https://github.com/gernotfound/logbook/issues/1057).
