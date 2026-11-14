@@ -99,3 +99,15 @@ migration già applicate; gli eventuali trigger da correggere richiedono
 una nuova migration verificata su database sintetico/restore e un
 separato gate Provider. Nessuna modifica al D1 remoto è compresa
 in questo fix; la CI SQLite non certifica il runtime Cloudflare.
+
+### CF-03 — composizione HTTP Auth (solo codice candidato, 14/11/2026)
+
+Dopo l'integrazione della PR #1111 (Kinde Code+PKCE), il modulo candidato
+`cloudflare/auth/kinde-http-worker.mjs` prepara l'accesso
+HTTP HTTPS same-origin, introspezione della sessione D1 tramite
+`AUTH_GATE` e logout della singola sessione CSRF-bound.
+Nuovi test Node/SQLite/Jose e config Wrangler locale, senza collegamento
+al frontend o pubblicazione API. Kinde Audience, callback, Free,
+password/Google/email reali, rollout UI, provider DNS, consenso/recovery
+e browser Safari restano NO-GO. La presenza del file o il suo test
+non costituiscono prova di runtime Cloudflare.
