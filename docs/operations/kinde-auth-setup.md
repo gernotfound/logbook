@@ -26,6 +26,17 @@ Uno screenshot della guida `Handling the callback` ha mostrato il **Client Secre
 
 La pagina di amministrazione del tenant letta il 14/11/2026 mostra una **social connection Google già presente** con **2 applications enabled**, corredata da un collegamento **Configure**. Sono presenti anche **Email Code: 1 application enabled** e **Email Password: 1 application enabled**. Si tratta di conteggi per **l'intero business**, non di uno stato contraddittorio dell'applicazione `TheLogBook`: quest'ultima è stata confermata separatamente con Password ON, Google ON e Code OFF. L'altra app automatica `My React App` non è ancora stata verificata/disattivata. Le connessioni **Enterprise** (Google Workspace, SAML, Cloudflare Access) sono un sistema distinto: per il login Google pubblico selezionare **Social connections → Google → Configure**, non **Add enterprise connection** e non **Add social connection**. Questa osservazione dell'interfaccia non certifica credenziali Google OAuth proprie, uso Production, callback o flussi completi. Non pubblicare Client Secret né screenshot che ne mostrino il valore.
 
+### Google social connection — schermate 14/11/2026 (prima delle modifiche)
+
+Dal pannello `Settings → Authentication → Social connections → Google → Configure` risulta:
+- `Email address trust: Trust` selezionato di default. **Configurazione consigliata: `Verify, then trust`** (verifica addizionale prima di associare indirizzi email coincidenti ad account esistenti). Non presumere che il solo valore `Trust` costituisca prova di email sicura.
+- `Client ID` e `Client secret` della **connessione Google upstream** sono vuoti; Kinde utilizzerebbe le credenziali condivise per test, sconsigliate dal provider in ambiente pubblico. Prima di qualsiasi GO usare un OAuth client Google Web Application dedicato, creato nel progetto Google Cloud autorizzato e custodire il suo secret nel pannello Kinde (senza salvarlo in GitHub).
+- Callback Google mostrato dal provider: `https://thelogbook.kinde.com/login/callback`. Questa è la redirect URI **da Google verso Kinde**, distinta dalla futura callback **da Kinde verso Workers**: non confonderle.
+- `Passkeys` disattivato, `Upstream params` vuoto. In `Applications` risultano abilitate sia `My React App` sia `TheLogBook`. Consigliato disabilitare **solo** `My React App` per questa connessione, conservando `TheLogBook` attiva; non eliminare l'app automatica finché il suo utilizzo non è stato verificato.
+- Il tasto `Save` era disponibile, ma **non risulta ancora prova di queste modifiche salvate**. Chiedere conferma/screenshot del salvataggio.
+
+Documentazione ufficiale: [Google social sign-in](https://docs.kinde.com/authenticate/social-sign-in/google/) e [Kinde authentication FAQ](https://docs.kinde.com/authenticate/about-auth/kinde-authentication-faq/). I valori segreti, identificativi di account e le schermate con credenziali non devono essere riportati nel repo.
+
 ## Controlli da completare, senza dedurre risultati
 
 1. **Applicazione:** tipo Back-end web, ambiente scelto, client ID (public), autenticazione client confidenziale con secret custodito **solo** nel Worker server-side; nessun secret nel frontend, GitHub, issue o questa guida.
