@@ -16,19 +16,25 @@ async function capture(page: Page, testInfo: TestInfo, surface: string) {
   await testInfo.attach(surface, { body: await page.screenshot({ fullPage: surface !== 'data-detail', animations: 'disabled' }), contentType: 'image/png' });
 }
 
+async function enterGuest(page: Page, viewport: (typeof viewports)[number], appearance: (typeof appearances)[number]) {
+  await page.setViewportSize(viewport);
+  await page.emulateMedia({ colorScheme: appearance.system, reducedMotion: 'reduce' });
+  await page.addInitScript(preference => localStorage.setItem('logbook:appearance:v1', preference), appearance.preference);
+  await page.goto('/');
+  await expect(page.locator('html')).toHaveAttribute('data-theme', appearance.resolved);
+  await expect(page.locator('html')).toHaveAttribute('data-theme-preference', appearance.preference);
+  await page.getByRole('button', { name: 'Continua senza account' }).click();
+  await page.getByText('Aggiornamento Termini e Privacy').waitFor();
+  for (const checkbox of await page.locator('input[type="checkbox"]').all()) await checkbox.check();
+  await page.getByRole('button', { name: 'Accetta e Continua' }).click();
+}
+
+// Independent surface journeys keep expensive WebKit screenshots out of a single
+// per-test deadline, without splitting stateful actions within a workout.
 for (const viewport of viewports) {
   for (const appearance of appearances) {
-    test(`training and data surfaces at ${viewport.width}px in ${appearance.preference}/${appearance.system}`, async ({ page }, testInfo) => {
-      await page.setViewportSize(viewport);
-      await page.emulateMedia({ colorScheme: appearance.system, reducedMotion: 'reduce' });
-      await page.addInitScript(preference => localStorage.setItem('logbook:appearance:v1', preference), appearance.preference);
-      await page.goto('/');
-      await expect(page.locator('html')).toHaveAttribute('data-theme', appearance.resolved);
-      await expect(page.locator('html')).toHaveAttribute('data-theme-preference', appearance.preference);
-      await page.getByRole('button', { name: 'Continua senza account' }).click();
-      await page.getByText('Aggiornamento Termini e Privacy').waitFor();
-      for (const checkbox of await page.locator('input[type="checkbox"]').all()) await checkbox.check();
-      await page.getByRole('button', { name: 'Accetta e Continua' }).click();
+    test(`training setup and routines at ${viewport.width}px in ${appearance.preference}/${appearance.system}`, async ({ page }, testInfo) => {
+      await enterGuest(page, viewport, appearance);
       await page.getByRole('button', { name: 'Allenamento', exact: true }).click();
       await expect(page.locator('.session-setup-page')).toBeVisible();
       await capture(page, testInfo, 'training-setup');
@@ -60,6 +66,13 @@ for (const viewport of viewports) {
       await page.keyboard.press('Escape');
       await expect(trigger).toBeFocused();
 
+    });
+
+    // A free workout is independent of any saved routine; report and history
+    // still share the same completed session and must be exercised together.
+    test(`active workout and history at ${viewport.width}px in ${appearance.preference}/${appearance.system}`, async ({ page }, testInfo) => {
+      await enterGuest(page, viewport, appearance);
+      await page.getByRole('button', { name: 'Allenamento', exact: true }).click();
       await page.getByRole('tab', { name: 'Sessione', exact: true }).click();
       await page.getByRole('button', { name: 'Allenamento libero' }).click();
       await page.getByRole('button', { name: 'Salta check-in e inizia' }).click();
@@ -115,6 +128,14 @@ for (const viewport of viewports) {
       await expect(page.locator('.training-history .history-day.outside').first()).toHaveCSS('opacity', '1');
       await capture(page, testInfo, 'training-history');
 
+      // Completing a workout must leave the Data section reachable in the same session.
+      await page.getByRole('button', { name: 'Dati e statistiche', exact: true }).click();
+      await expect(page.locator('#view-data')).toBeVisible();
+      await expect(page.getByRole('tab', { name: 'Misurazioni', exact: true })).toBeVisible();
+    });
+
+    test(`data surfaces at ${viewport.width}px in ${appearance.preference}/${appearance.system}`, async ({ page }, testInfo) => {
+      await enterGuest(page, viewport, appearance);
       await page.getByRole('button', { name: 'Dati e statistiche', exact: true }).click();
       await page.getByRole('tab', { name: 'Misurazioni', exact: true }).click();
       await page.locator('#measure-weight').fill('81.4');
