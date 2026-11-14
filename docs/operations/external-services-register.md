@@ -7,10 +7,10 @@
 | Servizio | Stato osservato / perimetro | Gate prima del GO |
 |---|---|---|
 | **Kinde Identity** | Business `thelogbook.kinde.com`; regione `Europe - Ireland` selezionata nell'onboarding. **Email e Google attivati nella UI**; non sono dimostrati password, app/credential, Google OAuth o email reali. | Password ≥15 anche nel reset, OIDC/PKCE, callback, token, sessioni/erasure, anti-bot, MFA, privacy/DPA/retention, quote Free e Safari iOS. Nessun dato salute in Kinde. |
-| **Cloudflare Workers Static Assets** | Worker `thelogbook-frontend` su `workers.dev`, con solo binding `ASSETS` all'ultimo inventario provider. | UI completa, update PWA, cache/Safari, routes/dominio, privacy e smoke. Non equivale a API Auth pubblicata. |
+| **Cloudflare Workers Static Assets** | Worker `thelogbook-frontend`, binding `ASSETS`; unica esposizione pubblica autorizzata per sviluppo: `https://thelogbook.me`. Il repository disabilita `workers.dev` e preview; verificare che il provider abbia applicato il cutover. | UI completa, update PWA, cache/Safari, privacy e smoke; non equivale a Auth/API pubblicata. |
 | **Cloudflare Workers API** | Codice Worker, session gate/issuer, consenso, replica e verificatori Kinde nel repository; **nessuna API Worker Auth/D1 pubblicata** nel controllo provider disponibile. | Endpoint OIDC reali e limitati, binding isolati, rate limiting, test runtime e integrazione client/consenso/chiavi. |
 | **Cloudflare D1** | Sandbox `thelogbook-cf02-eu-isolated-20261113`, `jurisdiction=eu`, read replication disattivata; migration `0001`/`0002` applicate e lette sul provider con dati sintetici. Migrazioni ulteriori solo nel repository. | Database e binding di destinazione, auth/consent/erasure, quota Free, backup/restore e giurisdizione dell'istanza effettiva. `eu` non prova localizzazione di Workers, log o OAuth. |
-| **Cloudflare DNS / IONOS** | Zona `thelogbook.me` attiva, A/AAAA web ancora verso IONOS; nessuna route/custom domain Worker verificata. Record email IONOS rimasti invariati dopo la pulizia del vecchio sottodominio. | Cambiare dominio, TLS, Google OAuth e DNS Production soltanto su GO separato; preservare posta IONOS. |
+| **Cloudflare DNS / IONOS** | Zona `thelogbook.me` attiva; passaggio web da A/AAAA IONOS verso Workers Custom Domain autorizzato il 14/11/2026. Registrare separatamente l'esito provider e preservare invariati MX, DKIM, DMARC e gli altri record email IONOS. | TLS/route e smoke del sito pubblico; OAuth/posta Production e nuovo backend rimangono esclusi da questa autorizzazione. |
 
 ## Dipendenze del codice legacy da sostituire
 
@@ -29,6 +29,6 @@
 
 ## Verifiche e confini
 
-Il rilascio richiede conferme distinte per **Auth/email/Google, consenso sanitario, owner isolation, cifratura e chiavi, sync/ACK e offline, import/export, cancellazione e inattività, quote/rate, privacy, backup, DNS, PWA iOS, CI e rollback**. Niente spese, upgrade, dati Production, cambio DNS/OAuth Production o eliminazioni irreversibili senza autorizzazione appropriata.
+**Decisione 14/11/2026:** `thelogbook.me` è autorizzato come unico dominio di sviluppo pubblico del frontend, con `workers.dev` e preview disabilitati. Questa eccezione esplicita riguarda solo il web/DNS, **non** il GO funzionale. Il rilascio completo richiede conferme distinte per **Auth/email/Google, consenso sanitario, owner isolation, cifratura e chiavi, sync/ACK e offline, import/export, cancellazione e inattività, quote/rate, privacy, backup, PWA iOS, CI e rollback**. Niente spese, upgrade, dati Production, OAuth/posta Production o eliminazioni irreversibili senza autorizzazione appropriata.
 
 **Fonti:** [runbook Cloudflare](cloudflare-workers-migration.md), [AGENTS](../../AGENTS.md), [servizi esterni](../../.agents/rules/external-services.md), [CI](../../.agents/rules/ci-verification.md), [epic #1053](https://github.com/gernotfound/logbook/issues/1053), [CF-03 #1057](https://github.com/gernotfound/logbook/issues/1057), [CF-09 #1063](https://github.com/gernotfound/logbook/issues/1063), [hosting #1041](https://github.com/gernotfound/logbook/issues/1041).
