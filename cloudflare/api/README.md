@@ -503,3 +503,41 @@ the Back-end web application to request it; verify exact callback URL and
 confidential client+PKCE, password≥15 including reset, email verification,
 Google, account linking, Kinde SSO logout, session concurrency and revocation,
 device vault, consent/erasure, provider CPU/Free and privacy.
+
+
+## CF-05 candidate HTTP key boundary (not publicly deployed)
+
+The *same* candidate `cloudflare/api/worker.mjs` now dispatches two
+exact HTTPS same-origin POST routes with **empty request bodies**:
+
+- `/v1/cloud-key/sync`: requires a valid active session, current verified
+  health consent/legal versions, a session-bound CSRF token and the private
+  `AUTH_GATE`. The first key issuance is conditional on fresh empty D1
+  sync state and a single durable issuance marker. A readback of the stored
+  winner is required; an ambiguous SQL write is never an ACK.
+- `/v1/cloud-key/rights-export`: requires the same authenticated
+  CSRF-bound session but may read the existing ADK after an authorized
+  health-consent withdrawal with a pending/processing erasure job. It must
+  not provision a new key or reactivate fitness writes.
+
+Both call `cloud-key-store.mjs`, which verifies D1 PRIMARY
+principal/session/consent/erasure before and after WebCrypto unwrap. The
+response (only when proven) is JSON `{format:'thelogbook-account-data-key',version:1,key:'<canonical base64>'}`
+with no-store/no-cache, no CORS, and no UID, ciphertext or Kinde token
+disclosure. Worker-local ADK bytes are wiped in `finally`. This
+cannot prevent intentional access by the authenticated browser; the key
+is an online capability and must not be persisted alongside the independent
+device vault.
+
+New test `tests/cloudflare/cf05-cloud-key-http.node.mjs` calls the
+actual top-level API + private AuthGate + consent handlers + store on
+synthetic SQLite schema, covering owner isolation, concurrent/repeat
+issuance, withdrawn rights-only, invalid CSRF/origin/body, expiry,
+revocation and unavailable KEK/D1/rate gate. It runs in the M7 gate.
+
+**NO-GO:** these routes are not mounted on the live Static Assets Worker,
+and no KEK secret or D1 binding has been created there. The local
+Wrangler configs remain synthetic, and D1 sandbox still has partial
+schema. Do not expose or deploy this key endpoint before complete
+Kinde/consent/device journal/rights+erasure, secret custody/recovery,
+quota/WAF and Safari verification.

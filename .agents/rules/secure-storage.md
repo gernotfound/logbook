@@ -85,6 +85,21 @@ L'identità arriva **esclusivamente** dal token Firebase; le chiavi sono server-
 
 **MUST (rights-only e revoca):** la lettura `rights-export` dopo `withdrawn` usa esclusivamente ADK esistente e sessione ancora valida, con job di erasure per la generazione corrente. Non crea chiavi; nessun recupero ADK per principal disabilitato, sessione revocata o identità cancellata. La chiave è immutabile nella baseline e la sua cancellazione SQL è consentita soltanto con lease valido di erasure nello stato `awaiting-keys`; il registro issuance non viene cancellato. Rewrap/versione successiva, finalizzazione di CF-06, backup/restore anti-resurrection, nuova accettazione del consenso e integrazione UI richiedono gate separati: non trattare `awaiting-keys` come `complete`.
 
+**CF-05 — HTTP candidato non distribuito (14/11/2026):** l'entrypoint
+`cloudflare/api/worker.mjs` inoltra `POST /v1/cloud-key/sync`
+e `POST /v1/cloud-key/rights-export` al modulo
+`cloud-key-worker.mjs`. Entrambi richiedono origin HTTPS esatto,
+corpo assente, cookie host-only e CSRF verificato dal service binding privato
+`AUTH_GATE`; il recupero rights-only usa il percorso identity-only
+ma è ancora soggetto al vincolo dell'ADK esistente e al job di erasure
+attivo verificato sulla D1 primaria. Il Worker non prende UID o chiavi
+dal chiamante. La risposta positiva espone **solo al browser autenticato**
+la ADK in base64, indispensabile alla cifratura lato client, con cache
+disabilitata; il buffer server viene azzerato. Test HTTP Node/SQLite
+attraversano gli handler reali. Non equivale a endpoint pubblico,
+custodia KEK provisionata né recovery remoto dimostrato.
+
+
 **NON-GO:** schema 0007, modulo store e test Node/SQLite sono solo codice candidato; non esiste ancora route ADK pubblicata, autenticazione Kinde/ADK integrata nel runtime PWA, KEK Cloudflare configurata o prova della stessa semantica su D1 remota/Workers. Non dichiarare E2EE né ritorno sicuro di dati locali dopo perdita del profilo device.
 
 ## Integrazioni da preservare
