@@ -35,6 +35,15 @@ void test('strict byte identity applies to HTML, SW, manifest and other static f
   }
 });
 
+void test('HTML navigation rejects automatic Web Analytics beacon injection from the edge', () => {
+  const shell = Buffer.from('<!DOCTYPE html><html><body><main>Training</main></body></html>');
+  const injected = Buffer.from('<!DOCTYPE html><html><body><main>Training</main><script defer src="https://static.cloudflareinsights.com/beacon.min.js" data-cf-beacon=\'{"token":"synthetic"}\'></script></body></html>');
+  for (const pathname of ['/', '/index.html']) {
+    assert.equal(matchesServedCloudflareAsset(pathname, shell, shell), true);
+    assert.equal(matchesServedCloudflareAsset(pathname, shell, injected), false);
+  }
+});
+
 void test('robots.txt permits the observed Cloudflare managed header only with exact app suffix', () => {
   assert.equal(matchesServedCloudflareAsset('/robots.txt', expected, expected), true);
   assert.equal(matchesServedCloudflareAsset('/robots.txt', expected, response), true);
