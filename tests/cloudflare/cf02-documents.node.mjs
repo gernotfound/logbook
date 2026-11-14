@@ -809,6 +809,46 @@ void test('simultaneous stale revisions have one winner and no phantom receipt',
   assert.equal(db.sqlite.prepare('SELECT count(*) as n FROM sync_receipts').get().n, 1);
 }));
 
+void test('each sync route rejects oversized JSON before D1 work without shrinking the commit budget', () => withFixture(async db => {
+  // All bodies below are syntactically valid JSON: padding with whitespace
+  // proves the request budget, not Zod shape rejection, caused the 413.
+  const cases = [
+    ['control', {}, 128],
+    ['read', { paths: [''] }, 512],
+    ['scan', { after: null, expectedRevision: null }, 256],
+    ['receipt', { batchId: 'batch000000000001' }, 256],
+    ['replica/claim', claim('mutation0000000901'), 4096],
+    ['replica/retire', retire('mutation0000000902', 0), 4096],
+    ['replica/status', claim('mutation0000000903'), 4096],
+  ];
+  for (const [route, body, max] of cases) {
+    const padded = JSON.stringify(body).padEnd(max + 1, ' ');
+    const response = await worker.fetch(new Request(origin + '/v1/sync/' + route, {
+      method: 'POST', headers: { Origin: origin, 'Content-Type': 'application/json' },
+      body: padded,
+    }), makeEnv(db));
+    assert.equal(response.status, 413, route);
+    assert.deepEqual(await response.json(), { error: 'payload-too-large' }, route);
+  }
+
+  // A legitimate request at the limit still parses, and query-string aliases
+  // cannot address the same authenticated operation with different URLs.
+  const boundary = await worker.fetch(new Request(origin + '/v1/sync/control', {
+    method: 'POST', headers: { Origin: origin, 'Content-Type': 'application/json' },
+    body: '{}'.padEnd(128, ' '),
+  }), makeEnv(db));
+  assert.equal(boundary.status, 200);
+  const alias = await worker.fetch(new Request(origin + '/v1/sync/control?shadow=1', {
+    method: 'POST', headers: { Origin: origin, 'Content-Type': 'application/json' },
+    body: '{}',
+  }), makeEnv(db));
+  assert.equal(alias.status, 404);
+
+  assert.equal(db.sqlite.prepare('SELECT COUNT(*) AS n FROM sync_receipts').get().n, 0);
+  assert.equal(db.sqlite.prepare('SELECT COUNT(*) AS n FROM sync_replica_mutations').get().n, 0);
+  assert.equal(db.sqlite.prepare('SELECT revision FROM sync_state').get().revision, 0);
+}));
+
 void test('oversized streamed bodies fail with 413 before any D1 mutation', () => withFixture(async db => {
   const largeBody = JSON.stringify({ data: 'X'.repeat(8 * 950000 + 8193) });
   const response = await worker.fetch(new Request(origin + '/v1/sync/commit', {
