@@ -67,10 +67,14 @@ async function readBoundedJson(response: Response): Promise<unknown> {
                 }
                 return JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes)) as unknown;
             }
-            if (!(value instanceof Uint8Array)) throw new KindeCandidateBoundaryError();
+            // Fetch may provide a byte view from another realm (e.g. a
+            // worker or browser frame); instanceof is not a byte contract.
+            if (!ArrayBuffer.isView(value) || value.BYTES_PER_ELEMENT !== 1) {
+                throw new KindeCandidateBoundaryError();
+            }
             size += value.byteLength;
             if (size > MAX_RESPONSE_BYTES) throw new KindeCandidateBoundaryError();
-            chunks.push(value);
+            chunks.push(new Uint8Array(value.buffer, value.byteOffset, value.byteLength).slice());
         }
         throw new KindeCandidateBoundaryError();
     } catch {
