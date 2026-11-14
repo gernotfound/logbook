@@ -40,6 +40,13 @@
 
 Non duplicare nel repository indirizzi email personali, URL `/tr/op/` completi, header, ID messaggio, credenziali o link di disiscrizione individualizzati. Le evidenze qui sono sufficienti; non servono altri invii Brevo invariati.
 
+## Preparazione prova di invio API indipendente — 14/11/2026
+
+- **Preparato, NON eseguito:** lo script PowerShell 5.1 `Test_Mailjet_privacy.ps1` è stato consegnato come allegato alla conversazione del proprietario, **non** committato nel repository e senza alcuna credenziale inclusa. L'analisi statica del testo ha confermato che contiene una sola chiamata HTTPS POST a `https://api.mailjet.com/v3.1/send`, nessun retry automatico, input credenziali nascosto e `TrackOpens: disabled` / `TrackClicks: disabled` per messaggio. **Nessun test PowerShell locale o invio Mailjet reale è stato eseguito dall'agente**.
+- **Modalità per il proprietario:** prima `-Mode Text` verso Gmail personale, poi `-Mode Multipart` verso Proton personale, **un destinatario e un invio confermato per esecuzione**. Contenuto e link `https://example.com/mailjet-privacy-test` sono sintetici; nessun token reale o dato salute. La chiave e il secret sono inseriti solo nel processo locale, non in chat/GitHub o script; preferire la chiave associata al dominio già validato sul rispettivo account Mailjet, senza assumere validazione automatica tra subaccount.
+- **Gate di prova:** lo status API per messaggio `success` prova solo accettazione, non consegna. Verificare sorgente MIME originale per eventuali `<img>` e URL riscritti; su entrambi i destinatari verificare SPF/DKIM/DMARC/TLS delle intestazioni, log di aperture/clic e assenza di tracking. Mancano ancora read-back delle impostazioni globali dopo `Save`/refresh, piano Free/quote e risultato di prova. In caso di timeout l'esito è ambiguo: **nessun retry automatico**.
+- **Ambito:** il test indipendente non è un endpoint pubblico Auth né un deploy Cloudflare. Non ritirare Brevo sulla base della sola preparazione della prova.
+
 ## Sequenza di adozione Mailjet e ritiro Brevo
 
 1. **Account Mailjet**: dashboard dell'account primario osservata su screenshot; piano Free, fatturazione e disponibilità invii **non riletti indipendentemente**. Non creare chiavi API per il client. `Account > Tracking`: aperture e clic mostrati **OFF**, ma restano da confermare persistenza dopo Save/ricarica e propagazione prima dell'invio di prova.
