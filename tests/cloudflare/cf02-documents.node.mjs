@@ -1000,6 +1000,23 @@ void test('a deleted consent proof after AuthGate cannot authorize D1 data or hi
   assert.equal(db.sqlite.prepare('SELECT revision FROM sync_state').get().revision, 1);
 }));
 
+void test('a consent proof removed after the gate but before SQL cannot commit ciphertext', () => withFixture(async db => {
+  const intercepted = Object.create(db);
+  intercepted.batch = async statements => {
+    if (statements[0]?.sql.includes('INSERT INTO sync_receipts')) {
+      db.sqlite.prepare('DELETE FROM health_consent_acceptances WHERE uid = ?').run(owner);
+    }
+    return db.batch(statements);
+  };
+  const result = await call(db, 'commit', attempt('batch000000001003'), {
+    env: { ...makeEnv(db), DB: intercepted },
+  });
+  assert.deepEqual(result, { status: 403, body: { error: 'access-revoked' } });
+  assert.equal(db.sqlite.prepare('SELECT COUNT(*) AS n FROM sync_receipts').get().n, 0);
+  assert.equal(db.sqlite.prepare('SELECT COUNT(*) AS n FROM sync_documents').get().n, 0);
+  assert.equal(db.sqlite.prepare('SELECT revision FROM sync_state').get().revision, 0);
+}));
+
 void test('a consent proof removed between gate and SQL rolls back replica membership', () => withFixture(async db => {
   const intercepted = Object.create(db);
   intercepted.batch = async statements => {
