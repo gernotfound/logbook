@@ -11,6 +11,8 @@
 
 ## Decisione di prodotto e sequenza di abbandono
 
+**Decisione Auth — 14/11/2026 (CRITICAL):** il product owner sceglie **Kinde come provider di identità gestita** per nuove registrazioni email/password (minimo 15 caratteri), Google e verifica/reset email. L'integrazione Kinde è **candidata e non ancora configurata o validata sul provider**; nessun login nuovo è operativo. Cloudflare Workers/D1 conservano sessioni applicative, autorizzazioni, consenso, revoca, diritti ed erasure, mentre Kinde NON riceve dati sanitari. L'access token firmato non autorizza da solo una sessione D1: verificarne firma/issuer/audience/azp/scadenza e accertare identità umana ed email verificata mediante canale trusted prima dell'issuance. La revoca applicativa D1 deve essere immediata anche se il JWT Kinde rimane valido. **Mailjet è ritirato dalla nuova architettura di email Auth**: Kinde invia i messaggi di login/verifica/reset; la documentazione Mailjet diventa storico, la PR #1077 è da chiudere come superata. Questo NON certifica consegna/privacy delle email Kinde e NON autorizza cancellazione dell'account Mailjet, delle credenziali o dei record DNS/posta senza inventario e GO specifico. Nessuna migrazione legacy di account/dati, nessun cutover Production.
+
 **Database e account precedenti vuoti secondo il product owner.** Il sistema Cloudflare partirà con **nuove identità, chiavi, consensi e dati**, senza trasferimenti Firebase/Vercel e senza adapter o formati di compatibilità pre-lancio. Conservare invece la normale funzione import/export per i dati generati nel nuovo sistema, la durabilità locale e tutti i diritti previsti.
 
 **Abbandonare Firebase/Vercel il prima possibile**, non lasciarli attivi per un'ipotetica migrazione di utenti. Tuttavia oggi il codice PWA richiama ancora Firebase Authentication, Firestore/App Check e le Functions Vercel; il candidato D1 non è collegato al runtime. La rimozione anticipata di questi chiamanti romperebbe login, consenso, sincronizzazione e diritti. Realizzare vertical slice coerenti e testate sul nuovo stack, poi disattivare subito il precedente percorso secondo l'autorizzazione provider pertinente. Nessun dual-write o backfill.
@@ -29,8 +31,7 @@ le prove coerenti; gli errori non restituiscono dati o SQL. Mancano ancora
 issuance Auth reale (password/Google), verifica/reset email, consent provision,
 API live, CPU/quote e test su provider. Nessuna migrazione di account
 Firebase, nessun deploy o DNS. Riferimento a [CF-03 #1057](https://github.com/gernotfound/logbook/issues/1057).
-La configurazione Mailjet e la sua verifica vengono svolte in un filone
-separato; questo incremento non modifica provider email.
+Il precedente filone Mailjet è **superato dalla scelta Kinde del 14/11**: Kinde gestirà le email Auth. Nessun provider email è stato cancellato e le prove su consegna, privacy, durata e abuso delle email Kinde sono ancora aperte.
 
 ## Incremento CF-03 integrato — issuer di sessioni (non esposto)
 
@@ -157,7 +158,7 @@ e [CI main #43489162305](https://github.com/gernotfound/logbook/actions/runs/434
 | D1 sandbox | `thelogbook-cf02-eu-isolated-20261113`, `jurisdiction=eu`, read replication OFF: schema `0001` + `0002` applicate e indice/trigger anti-riuso riletti via Cloudflare; un UID e un documento **sintetici**, zero mutation di replica | Database reale, HTTP Worker, performance Free, conformità GDPR |
 | Nuova API | `cloudflare/api/worker.mjs`, `cloudflare/auth/session-gate.mjs`, issuer e `cloudflare/api/consent-worker.mjs` e `logout-worker.mjs` integrati nel repository come ingresso unico, ma senza Auth password/Google reale, binding remoto o collegamento al client. SQL 0003/0004 solo versionate, non applicate su D1 Cloudflare | Runtime Auth, consenso, cancellazione o replica cloud utilizzabili |
 | Recupero claim D1 | [PR #1072](https://github.com/gernotfound/logbook/pull/1072) **MERGED**: ristaging durevole nel vault di claim già committato quando è avanzato soltanto il clock; receipt/lease/seq/checkpoint e AEAD verificati; lease scaduto durante scan rifiutato nella transazione | Non è integrazione AuthGate o API Production; nessun ACK o grant sul ristaging |
-| Email | [PR #1077](https://github.com/gernotfound/logbook/pull/1077) ancora draft parallela: la PR riporta screenshot del 14/11 con `notify.thelogbook.me` Active e SPF/DKIM OK nel pannello Mailjet; non è un collaudo delle intestazioni ricevute, dell'API, del MIME o di Auth. Il registro servizi è gestito dal filone Mailjet. Brevo registra tracking | Mailjet validato e collaudato su Worker, tracking e DNS definitivi, ritiro Brevo |
+| Email Auth | **Kinde selezionato, non configurato**: verifica/reset/OTP previsti sul provider Kinde, Mailjet non più nel percorso target. [Storico Mailjet PR #1077](https://github.com/gernotfound/logbook/pull/1077) | Consegna reale, MIME/tracking/retention, abusi e quota Free, nessun DNS/posta Production modificato |
 | Vercel | Verifica provider del 13/11: deployment backend precedente `READY` su `4e25427ffbe0a4f4a7a695d25dec211b4ff16200`; i tentativi intermedi su altri SHA risultano `CANCELED`. Non è un Worker Cloudflare | Cloudflare Production o cutover DNS |
 
 Il vecchio Hosting Firebase `thelogbook` è disabilitato secondo il comando CLI attestato dal proprietario; il workflow GitHub Hosting risulta dichiarato disabilitato, ma non è stato letto autonomamente come `disabled_manually`. Non riattivarlo come rollback.
@@ -180,7 +181,7 @@ I test Node/SQLite transazionali e fake-IndexedDB/AEAD di CI verificano **candid
 
 ## Percorso critico per lo spegnimento rapido del vecchio stack
 
-1. **CF-03 + CF-00:** completare Workers Auth/Session con email/password minimo 15 caratteri, Google, email verifica/reset, maggiorenne, issuer/CSRF, limite tentativi, anti-bot, session recovery e privacy email. Provider email definitivo richiede prova API Workers e assenza tracking non richiesto.
+1. **CF-03 + CF-00:** integrare **Kinde OIDC + sessione D1 trusted**, con email/password minimo 15 caratteri (workflow), Google e verifica/reset, maggiorenne, issuer/CSRF, limite tentativi, anti-bot, session recovery e privacy email. Le email Auth Kinde richiedono prova di consegna/abuso; verifica Workers e assenza tracking non richiesto.
 2. **CF-05:** collegare consenso sanitario trusted e revoca, ADK/cloud KEK + DEK device indipendente, cifratura solo client, erase/export e anti-replay. Il server non deve conoscere plaintext salute.
 3. **CF-04 + CF-02:** collegare journal D1 e hydration a identità e consenso reali, con commit/ACK verificabili, offline, multitab/multi-device, crash/lost ack/GC, Safari/iOS e protezioni quote Free. Mai mutare una replica sulla base di un mock non trusted.
 4. **CF-06 + CF-08:** convertire Vercel Functions/Cron, cancellazione account e soli dati, inattività, diritti, backup/restore, retention, supporto failure/retry/rollback senza perdita.

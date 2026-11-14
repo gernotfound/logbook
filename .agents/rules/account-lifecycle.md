@@ -5,6 +5,12 @@
 
 **Autorità:** [`AGENTS.md`](../../AGENTS.md). Questo contratto ne specializza gli invarianti; non amplia autorizzazioni o perimetro.
 
+## Target Kinde selezionato — 14/11/2026 (non ancora attivo)
+
+Kinde è il provider di identità per la **nuova baseline fresh start**. Lo stack legacy Firebase descritto nelle sezioni successive documenta ancora il runtime attuale e i suoi invarianti, **non** impone di usare Firebase dopo il cutover. Nessun dato/credenziale/UID vecchio viene migrato. Il backend Worker verifica token Kinde con RS256/JWKS, `iss` e `aud` esatti, `azp` per il solo client autorizzato e scadenze brevi; un token valido **non** costituisce da solo prova di email verificata, consenso salute, o autorizzazione D1. L'identità Kinde (`iss` + `sub`) deve essere associata all'owner interno senza collisioni e verificata tramite flusso trusted prima che `session-issuer.mjs` crei una sessione. Nessun endpoint pubblico può emettere sessioni con UID forniti dal chiamante. Revoca/erasure aggiornano il fence applicativo in D1 e impediscono subito accesso, indipendentemente dalla vita residua degli access token Kinde. Login, reset, signup e cambio password devono rispettare minimo 15 caratteri tramite workflow `NewPasswordProvided`, collaudato anche dopo reset. Google, emailVerified, guest→account, Safari/PWA, anti-replay, multi-tab/device e cancellazione account sono gate; audit dei test prima di ritirare i flussi Firebase.
+
+Kinde è responsabile delle email Auth; niente Mailjet nel percorso nuovo. Per **cancellazione account** prima completare e provare revoca e cancellazione D1/chiavi, poi eliminare identità Kinde con ricevuta autorevole, senza dichiarare `complete` su timeout o errore. La revoca del solo consenso sanitario non elimina necessariamente l'identità Kinde. Nessuna Kinde console/configurazione è stata letta o attivata in questo incremento.
+
 ## Perimetro e contratti collegati
 
 **MUST:** applicare il fresh start definito in `AGENTS.md`. Non è necessario recuperare account o backup pre-lancio e non si introducono nuovi percorsi per importare o migrare chiavi ownerless. Il purge di ogni account deve agire solo sull'archivio owner-scoped e sui marker tecnici/Auth con proprietà verificabile; i vecchi nomi business/IndexedDB globali non sono letti, attribuiti o cancellati. Restano obbligatori Web Locks e fence, verifica del journal, consenso, cancellazione server-complete, recupero da crash e protezione dei dati **della baseline corrente**. Nessun reset automatico di provider o storage di altri account.

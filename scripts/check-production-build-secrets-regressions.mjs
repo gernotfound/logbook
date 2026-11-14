@@ -71,7 +71,8 @@ void test('direct dependencies require explicit review before a new runtime or b
   const lockRoot = JSON.parse(readFileSync('package-lock.json', 'utf8')).packages[''];
   const approvedRuntime = new Set([
     '@noble/ciphers', 'chart.js', 'date-fns', 'fast-deep-equal', 'firebase',
-    'firebase-admin', 'fuse.js', 'idb-keyval', 'lucide-react', 'react',
+    // JOSE 5.10.0 is the reviewed, locked runtime JWT/JWKS verifier for Kinde; no install hook.
+    'firebase-admin', 'fuse.js', 'idb-keyval', 'jose', 'lucide-react', 'react',
     'react-chartjs-2', 'react-dom', 'zod', 'zustand',
   ]);
   const approvedDev = new Set([
