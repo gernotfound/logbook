@@ -4,8 +4,8 @@ This is a candidate API, **not an enabled production route**. The existing
 Firebase/Firestore writer, IndexedDB journal and encrypted vault remain active.
 
 - Schema: migrations/0001_encrypted_replica.sql through
-  migrations/0007_cloud_key_custody.sql; only 0001/0002 have remote
-  synthetic D1 readback evidence. Local-only rollback is **destructive,
+  migrations/0008_kinde_oauth_attempts.sql; all 0001–0008 have remote
+  isolated D1 schema readback evidence (14/11/2026). Local-only rollback is **destructive,
   disposable-only** rollback in rollback/ (never apply it to user data).
 - Local-only Wrangler configuration: wrangler.local.jsonc; placeholder database
   ID, workers.dev and preview URLs disabled, no domain route or public fixture.
@@ -13,7 +13,8 @@ Firebase/Firestore writer, IndexedDB journal and encrypted vault remain active.
 - Provider verification 2026-11-13: isolated **EU-jurisdiction** D1 resource
   `thelogbook-cf02-eu-isolated-20261113` (UUID
   `9aa51833-8adc-495f-bdfc-93b5542e8023`) was provisioned without
-  connecting a Worker/domain. Migration 0001 was accepted (6 tables,
+  a public Worker/domain. All migrations 0001–0008 are now applied;
+  the original migration 0001 was accepted (6 tables,
   5 triggers). Synthetic CAS and consent-regression requests were rejected,
   and a late failed statement rolled back an earlier receipt insert. This
   proves SQL behavior on remote D1, NOT HTTP Worker/Auth, quota or runtime.
@@ -536,8 +537,27 @@ issuance, withdrawn rights-only, invalid CSRF/origin/body, expiry,
 revocation and unavailable KEK/D1/rate gate. It runs in the M7 gate.
 
 **NO-GO:** these routes are not mounted on the live Static Assets Worker,
-and no KEK secret or D1 binding has been created there. The local
-Wrangler configs remain synthetic, and D1 sandbox still has partial
-schema. Do not expose or deploy this key endpoint before complete
+and no KEK secret or D1 binding has been created there. The local Wrangler config remains synthetic; the isolated D1 now has
+schema 0001–0008, but the private API bindings and real HTTP runtime remain
+unverified until the post-main Cloudflare deployment and provider readback. Do not expose or deploy this key endpoint before complete
 Kinde/consent/device journal/rights+erasure, secret custody/recovery,
 quota/WAF and Safari verification.
+
+## Private Cloudflare provider wiring, 14 November 2026
+
+The isolated EU D1 has a Wrangler-compatible `d1_migrations` ledger for all
+eight migration files; direct Cloudflare readback found the expected tables
+and triggers, with the original synthetic rows unchanged. No account or session
+is provisioned. Cloudflare's REST endpoint rejects `PRAGMA integrity_check`;
+this operation is **not** verified and no restore was performed.
+
+`cloudflare/api/wrangler.isolated.jsonc` and
+`cloudflare/auth/wrangler.isolated.jsonc` pin the real sandbox by UUID,
+use a private `AUTH_GATE` service binding and a separate rate-limit binding.
+Neither config enables workers.dev, preview URLs, routes or custom domains.
+The main-only post-verification workflow `cloudflare-api-isolated.yml` can
+deploy these two private Workers and read back their bindings. A green config
+test or a completed schema migration is **not proof of deployed Workers**;
+consult the exact GitHub Actions run and provider readback. These Workers
+must not be mounted on `thelogbook.me` until Kinde session/consent, ciphertext,
+quota, and recovery paths are proven on real runtime with synthetic data.

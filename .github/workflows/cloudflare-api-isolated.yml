@@ -1,0 +1,98 @@
+name: Cloudflare Isolated D1 API (private only)
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - cloudflare/api/**
+      - cloudflare/auth/**
+      - scripts/check-cloudflare-api-isolation.mjs
+      - scripts/verify-cloudflare-api-provider.mjs
+      - .github/workflows/cloudflare-api-isolated.yml
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: cloudflare-isolated-api
+  cancel-in-progress: false
+
+jobs:
+  private-api:
+    name: Deploy and verify private Auth Gate + D1 API
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    env:
+      EXPECTED_SHA: ${{ github.sha }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Checkout exact validated main
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ env.EXPECTED_SHA }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify lease on exact current main (no credentials)
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "${EXPECTED_SHA}" =~ ^[a-f0-9]{40}$ ]] || exit 1
+          test "$(git rev-parse HEAD)" = "${EXPECTED_SHA}"
+          test "$(git ls-remote --exit-code origin refs/heads/main | awk '{print $1}')" = "${EXPECTED_SHA}"
+      - name: Wait for verified release gate of this exact main SHA
+        shell: bash
+        run: |
+          set -euo pipefail
+          verified=false
+          for attempt in 1 2 3 4 5 6 7 8 9 10 11 12; do
+            gate="$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/verification.yml/runs?event=push&head_sha=${EXPECTED_SHA}&per_page=40" \
+              --jq ".workflow_runs | any(.head_sha == \"${EXPECTED_SHA}\" and .event == \"push\" and .conclusion == \"success\")")"
+            if [ "${gate}" = true ]; then verified=true; break; fi
+            if [ "${attempt}" != 12 ]; then sleep 15; fi
+          done
+          test "${verified}" = true
+          test "$(git ls-remote --exit-code origin refs/heads/main | awk '{print $1}')" = "${EXPECTED_SHA}"
+      - name: Setup Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: '24'
+          package-manager-cache: false
+      - name: Audit dependency install and verify private config
+        run: |
+          set -euo pipefail
+          node scripts/check-install-scripts.mjs
+          node scripts/check-cloudflare-api-isolation.mjs
+          node --test tests/cloudflare/cf02-api-isolation.node.mjs
+          npm ci
+      - name: Verify Worker bundling without provider side effects
+        run: |
+          set -euo pipefail
+          npx --yes wrangler@4.159.0 deploy --dry-run --config cloudflare/auth/wrangler.isolated.jsonc
+          npx --yes wrangler@4.159.0 deploy --dry-run --config cloudflare/api/wrangler.isolated.jsonc
+      - name: Verify main lease again immediately before provider writes
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git ls-remote --exit-code origin refs/heads/main | awk '{print $1}')" = "${EXPECTED_SHA}"
+      - name: Deploy private auth gate (no route, workers.dev or preview)
+        uses: cloudflare/wrangler-action@953926a2e2182532811c01a25e53647d93bf07c0 # v4
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          wranglerVersion: '4.159.0'
+          command: deploy --config cloudflare/auth/wrangler.isolated.jsonc
+      - name: Deploy private API service binding (no public route)
+        uses: cloudflare/wrangler-action@953926a2e2182532811c01a25e53647d93bf07c0 # v4
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          wranglerVersion: '4.159.0'
+          command: deploy --config cloudflare/api/wrangler.isolated.jsonc
+      - name: Verify actual EU D1 migrations, bindings and URL isolation
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+        run: node scripts/verify-cloudflare-api-provider.mjs
