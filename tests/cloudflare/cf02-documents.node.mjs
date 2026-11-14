@@ -869,6 +869,41 @@ void test('simultaneous stale revisions have one winner and no phantom receipt',
   assert.equal(db.sqlite.prepare('SELECT count(*) as n FROM sync_receipts').get().n, 1);
 }));
 
+void test('cheap HTTP preflight rejects bad media types and declared overflow before private AuthGate', () => withFixture(async db => {
+  let authCalls = 0;
+  const env = makeEnv(db);
+  env.AUTH_GATE = {
+    async fetch() {
+      authCalls += 1;
+      throw new Error('synthetic AuthGate should not be called for rejected headers');
+    },
+  };
+  for (const input of [
+    { body: '{}', type: 'text/plain', expected: 415 },
+    { body: '{}'.padEnd(129, ' '), type: 'application/json', expected: 413 },
+  ]) {
+    const response = await worker.fetch(new Request(origin + '/v1/sync/control', {
+      method: 'POST',
+      headers: {
+        Origin: origin, 'Content-Type': input.type,
+        'Content-Length': String(Buffer.byteLength(input.body)),
+      },
+      body: input.body,
+    }), env);
+    assert.equal(response.status, input.expected);
+  }
+  assert.equal(authCalls, 0);
+  assert.equal(db.sqlite.prepare('SELECT revision FROM sync_state').get().revision, 0);
+  assert.equal(db.sqlite.prepare('SELECT COUNT(*) AS n FROM sync_receipts').get().n, 0);
+
+  const valid = await worker.fetch(new Request(origin + '/v1/sync/control', {
+    method: 'POST', headers: { Origin: origin, 'Content-Type': 'application/json' },
+    body: '{}',
+  }), env);
+  assert.equal(valid.status, 503);
+  assert.equal(authCalls, 1);
+}));
+
 void test('each sync route rejects oversized JSON before D1 work without shrinking the commit budget', () => withFixture(async db => {
   // All bodies below are syntactically valid JSON: padding with whitespace
   // proves the request budget, not Zod shape rejection, caused the 413.
