@@ -429,3 +429,33 @@ and the actual frontend flow remain release blockers.
 ## Target Kinde identity proof (not yet an API route)
 
 `cloudflare/auth/kinde-token-verifier.mjs` validates signed user access tokens for the configured API. `cloudflare/auth/kinde-login-proof.mjs` additionally verifies the signed ID token, verified email, server-owned OAuth nonce and matching subject before any future trusted session issuance. Kinde uses separate token audiences; pin each per environment after live tenant observation. Neither helper implements OAuth state/PKCE, user provisioning, session creation, or an authenticated route, and neither is deployed. Never issue an app session based on an arbitrary client UID or self-reported email verification. The new Kinde identity flow must remain separate from the existing D1 consent/owner/session fences.
+
+
+## CF-03 trusted OAuth candidate (not mounted)
+
+`cloudflare/auth/kinde-oauth-flow.mjs` contains an isolated server-only
+start/callback pair using Kinde Authorization Code + S256 PKCE. `POST /api/auth/kinde/start`
+is **not currently routed**; the companion `GET /api/auth/kinde/callback`
+is only a candidate callback path, not an allowed URL configured at Kinde.
+The start request requires a same-origin `Origin` and an injected trusted
+abuse limiter. D1 migration `0008_kinde_oauth_attempts.sql` stores only
+a hash of the state, a browser-binding cookie hash, and short-lived
+server-held verifier/nonce (10 minutes). Callback performs one atomic
+`DELETE ... RETURNING` on the primary before any token exchange.
+The browser cannot supply its own nonce, verifier, UID or redirect. Signed
+verified email/ID+access token proof, owner provisioning and the existing
+conditional D1 session issuer run in sequence. Access/ID tokens never reach
+the browser or enter the D1 account tables.
+
+The state is intentionally **not retryable** on token-provider timeout,
+signature failure or ambiguous response. A crashed callback can leave a
+short-lived unused principal/session, never an authorized response. Browser
+binding is reused across concurrent tabs. The start handler prunes at most
+16 expired attempts before each new state; independent low-traffic retention
+and provider-side operational checks are still required before deployment. Perimeter rate limits, Kinde API
+audience registration, PKCE with confidential client verified on the actual
+tenant, provider credentials, live browser session/CSRF lifecycle, account
+linking, multi-device, Safari and Free quotas remain **NO-GO**. Do not add
+this module to `auth-proxy.mjs` or the published frontend until
+the missing gates are satisfied. No provider/Production migration has been
+applied here.
