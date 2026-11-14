@@ -59,17 +59,21 @@ if (!productionWorkflow.includes('"${CLOUDFLARE_APP_ORIGIN}/?tab=training"') ||
   failures.push('Cloudflare smoke must cover the real PWA shortcut and strict 404 for absent JS, CSS and pathnames');
 }
 const mismatchDiagnostics = readFileSync('scripts/cloudflare-asset-mismatch-diagnostics.sh', 'utf8');
-if (!productionWorkflow.includes('if ! cmp -s "${local_file}" /tmp/cloudflare-served-asset; then') ||
-    !productionWorkflow.includes('if [ "${path}" = "/robots.txt" ]; then') ||
-    !productionWorkflow.includes("[ \"${first_line}\" = '# As a condition of accessing this website, you agree to abide by the' ]") ||
-    !productionWorkflow.includes('tail -c "${expected_size}" /tmp/cloudflare-served-asset | cmp -s "${local_file}" -') ||
+const verifiedAsset = readFileSync('scripts/verify-cloudflare-served-asset.mjs', 'utf8');
+if (!productionWorkflow.includes('for attempt in 1 2 3 4; do') ||
+    !productionWorkflow.includes('if [ "${attempt}" != 4 ]; then sleep 3; fi') ||
+    !productionWorkflow.includes('if node scripts/verify-cloudflare-served-asset.mjs') ||
+    !productionWorkflow.includes('if [ "${verified}" != true ]; then') ||
     !productionWorkflow.includes('bash scripts/cloudflare-asset-mismatch-diagnostics.sh') ||
     !productionWorkflow.includes('"${CLOUDFLARE_APP_ORIGIN}${path}" "${EXPECTED_SHA}" "${initial_http}"') ||
+    !verifiedAsset.includes('actual.subarray(prefixSize).equals(expected)') ||
+    !verifiedAsset.includes("if (pathname !== '/robots.txt') return false;") ||
+    !verifiedAsset.includes('MAX_MANAGED_PREFIX_BYTES = 8192') ||
     !mismatchDiagnostics.includes('sha256sum') ||
     !mismatchDiagnostics.includes('--dump-header') ||
     !mismatchDiagnostics.includes('for probe in exact cache-busted; do') ||
     !mismatchDiagnostics.includes('exit 1')) {
-  failures.push('Cloudflare byte mismatch must remain a failing gate with bounded SHA-256, HTTP and cache diagnostics');
+  failures.push('Cloudflare smoke must require byte-level asset verification, a bounded managed robots wrapper and fail-closed retries');
 }
 if (failures.length) { for (const problem of failures) console.error(problem); process.exit(1); }
 console.log('Cloudflare domain-only static assets, release workflow and Auth proxy configuration contract OK');
