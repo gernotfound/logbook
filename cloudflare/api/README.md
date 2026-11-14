@@ -561,3 +561,25 @@ test or a completed schema migration is **not proof of deployed Workers**;
 consult the exact GitHub Actions run and provider readback. These Workers
 must not be mounted on `thelogbook.me` until Kinde session/consent, ciphertext,
 quota, and recovery paths are proven on real runtime with synthetic data.
+
+## Private Worker runtime/provider checkpoint — 14 November 2026
+
+On merged `main f3fc9b138e62bfc1fc6beb22ce6f2c7ba5d4e2f0`,
+GitHub Actions [Cloudflare private deploy #43638837192](https://github.com/gernotfound/logbook/actions/runs/43638837192)
+successfully built and uploaded both workers. Wrangler output confirmed
+the D1 and Auth Gate service bindings, with *no deployed public targets*.
+Direct Cloudflare connector readback subsequently confirmed live settings:
+`DB` points to EU isolated D1 UUID `9aa51833-8adc-495f-bdfc-93b5542e8023`
+on both workers, `AUTH_GATE` targets the private gate, the gate has
+rate-limiter namespace `31003`, and both workers have disabled workers.dev
+and preview URLs. The public `thelogbook-frontend` still only binds `ASSETS`.
+No authenticated HTTP/runtime test has occurred, and user-facing API is NO-GO.
+
+The deploy job's final readback failed HTTP 401 on a **D1 REST read**
+because its GitHub deployment token is scoped for Workers. The D1 schema
+0001–0008 was independently inspected with a different authorized
+Cloudflare connector. Do not increase a deployment token's scope to
+execute D1 SQL. Instead, the automated deploy readback verifies only the
+Workers' actual binding IDs and disabled public URLs; schema/jurisdiction
+are independently verified by the provider. Denied Worker reads still fail
+closed. See `tests/cloudflare/cf02-provider-bindings.node.mjs`.
