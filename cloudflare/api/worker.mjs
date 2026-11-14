@@ -3,6 +3,7 @@
 import { z } from 'zod';
 import consentWorker from './consent-worker.mjs';
 import logoutWorker from './logout-worker.mjs';
+import cloudKeyWorker from './cloud-key-worker.mjs';
 import { commitEncryptedBatch, readAccessState, readCommitOutcome, readDocumentPage, readReceipt, readReplicaControl, readSnapshot } from './d1-document-store.mjs';
 import {
   mutationResponse, prepareReplicaClaim, prepareReplicaRetirement, readPublicCheckpointClock,
@@ -415,6 +416,9 @@ export default {
       return consentWorker.fetch(request, env);
     }
     if (route === '/v1/auth/logout') return logoutWorker.fetch(request, env);
+    if (route === '/v1/cloud-key/sync' || route === '/v1/cloud-key/rights-export') {
+      return cloudKeyWorker.fetch(request, env);
+    }
     try { return await handler(request, env); }
     catch (error) {
       if (error instanceof BadInput) return reply({ error: error.message }, error.status);
