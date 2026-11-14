@@ -4,7 +4,7 @@ This is a candidate API, **not an enabled production route**. The existing
 Firebase/Firestore writer, IndexedDB journal and encrypted vault remain active.
 
 - Schema: migrations/0001_encrypted_replica.sql through
-  migrations/0008_kinde_oauth_attempts.sql; all 0001–0008 have remote
+  migrations/0009_require_cloud_key_for_replica_writes.sql; only 0001–0008 have remote
   isolated D1 schema readback evidence (14/11/2026). Local-only rollback is **destructive,
   disposable-only** rollback in rollback/ (never apply it to user data).
 - Local-only Wrangler configuration: wrangler.local.jsonc; placeholder database
@@ -18,6 +18,20 @@ Firebase/Firestore writer, IndexedDB journal and encrypted vault remain active.
   5 triggers). Synthetic CAS and consent-regression requests were rejected,
   and a late failed statement rolled back an earlier receipt insert. This
   proves SQL behavior on remote D1, NOT HTTP Worker/Auth, quota or runtime.
+- **B-01 (branch-only, not applied to remote D1):** migration 0009 adds a shared
+  active-owner/key grant and SQL fences for receipt insertion, replica mutation,
+  direct document/replica writes and control revision advances. A valid grant
+  needs an actual wrapped ADK row and an issuance marker matching uid, consent
+  revision and issued timestamp, alongside active Auth, explicit consent and
+  no unfinished erasure. A historical marker without the key is insufficient.
+  Active receipts/causal ledger are immutable and direct SQL deletes are
+  disallowed while the owner is active; bounded erasure DELETEs remain available
+  after withdrawal, as does rights-only key release and eventual leased key
+  deletion. Existing synthetic rows are not rewritten on migration. A keyless
+  pre-existing replica cannot be silently provisioned or resumed: it requires
+  separate authorized remediation, not an automatic reset. SQLite regression
+  coverage uses all migrations, but neither real D1 enforcement nor authenticated
+  end-to-end browser integration is certified by that test.
 - The database contains ciphertext envelopes and public causal metadata only.
   Root and monthly paths retain the existing cloud cipher v1 / Sync Protocol 3.
 - Account identity, consent and epoch remain provisioned only by a separate
