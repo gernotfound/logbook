@@ -177,6 +177,32 @@ void test('same-origin HTTP start and callback issue only a signed, verified ses
   } finally { f.close(); }
 });
 
+void test('native empty form POST can initiate OAuth without allowing a body or forged length', async () => {
+  const f = await fixture();
+  try {
+    const form = f.post(START, '', '', { body: '' });
+    assert.notEqual(form.body, null);
+    assert.equal(form.headers.get('content-type'), 'text/plain;charset=UTF-8');
+    const response = await f.handler(form, f.env);
+    assert.equal(response.status, 303);
+    assert.equal(new URL(response.headers.get('Location')).pathname, '/oauth2/auth');
+    assert.equal(f.sqlite.prepare('SELECT COUNT(*) AS n FROM auth_oauth_attempts').get().n, 1);
+
+    assert.equal((await f.handler(f.post(START, '', '', { body: 'attacker=1' }), f.env)).status, 403);
+    const forged = new Request(ORIGIN + START, {
+      method: 'POST',
+      headers: {
+        origin: ORIGIN, 'sec-fetch-site': 'same-origin',
+        'content-type': 'application/x-www-form-urlencoded',
+        'content-length': '0',
+      },
+      body: 'x',
+    });
+    assert.equal((await f.handler(forged, f.env)).status, 403);
+    assert.equal(f.sqlite.prepare('SELECT COUNT(*) AS n FROM auth_oauth_attempts').get().n, 1);
+  } finally { f.close(); }
+});
+
 void test('missing cookies, wrong origin, URL aliases and forged headers fail closed', async () => {
   const f = await fixture();
   try {
