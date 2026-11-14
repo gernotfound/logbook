@@ -3,8 +3,9 @@
 This is a candidate API, **not an enabled production route**. The existing
 Firebase/Firestore writer, IndexedDB journal and encrypted vault remain active.
 
-- Schema: migrations/0001_encrypted_replica.sql and
-  migrations/0002_reject_reused_replica_ids.sql; optional **destructive,
+- Schema: migrations/0001_encrypted_replica.sql through
+  migrations/0007_cloud_key_custody.sql; only 0001/0002 have remote
+  synthetic D1 readback evidence. Local-only rollback is **destructive,
   disposable-only** rollback in rollback/ (never apply it to user data).
 - Local-only Wrangler configuration: wrangler.local.jsonc; placeholder database
   ID, workers.dev and preview URLs disabled, no domain route or public fixture.
@@ -116,8 +117,9 @@ Firebase/Firestore writer, IndexedDB journal and encrypted vault remain active.
   without that batch is `not-committed`. An existing digest-bound receipt
   yields `committed` (historical status), but status NEVER authorizes journal
   ACK: the client must still validate the exact `/receipt` before local
-  acknowledgement. The code to rebase a proven uncommitted batch is still
-  missing, so no user-facing D1 runtime is enabled.
+  acknowledgement. The candidate can restage only a proven uncommitted batch
+  after a complete AEAD scan, two stable control reads and one atomic local
+  intent replacement, but it is NOT wired to the active PWA.
 - The client must verify AEAD and perform Protocol 3 merge **before** commit.
   The shared `cloudMergeEngine.ts` powers both Firestore writes and the D1
   candidate (`cloudReplicaCommit.ts`); each D1 write binds
@@ -300,6 +302,36 @@ accounts and health data are NOT transferred. No live schema, route or DNS
 is modified by the candidate. The fixture tests run Node SQLite and fake
 service binding; they do not prove D1 runtime behavior.
 
+
+## CF-05 — candidate ADK/KEK custody in Workers/D1 (not deployed)
+
+- `migrations/0007_cloud_key_custody.sql` adds `cloud_account_keys` and a
+  **per-owner, per-consent** immutable issuance record. The issuance trigger
+  runs within the same D1 transaction as the first key insert; missing wrapped
+  bytes after issuance can never be silently re-provisioned for that generation.
+- `cloud-key-crypto.mjs` uses Workers WebCrypto AES-256-GCM to wrap only a
+  **random 32-byte account ADK**, with a random 12-byte IV, owner/version AAD,
+  canonical base64 fields and authenticated 16-byte tag. The KEK binding is
+  `CLOUD_ACCOUNT_KEK_V1`, a separate Workers secret that has NOT been created.
+  The old Vercel secret value is not imported into Cloudflare.
+- `cloud-key-store.mjs` is an internal boundary, **not a user-facing key API**.
+  Its caller must obtain trusted claims from private AuthGate with verified
+  email, CSRF and rate admission. A D1 primary SQL statement rechecks current
+  auth session, consent version, epoch, owner and erasure status for reads and
+  first-key conditional insert. On lost write replies or competing provisioners,
+  the store re-reads and unwraps only the persisted winner. The session is
+  checked again after asynchronous decrypt. A rights-export may read an
+  existing ADK after withdrawal for the matching erasure generation; it NEVER
+  provisions a new ADK.
+- SQL blocks blind key overwrites and key deletion unless the account is
+  withdrawn and an erasure worker holds an active `awaiting-keys` lease.
+  The issuance marker survives erasure for anti-rekey; separate completed-job
+  and selective-restore fences remain open.
+- `tests/cloudflare/cf05-cloud-key-custody.node.mjs` exercises the actual
+  WebCrypto codec, D1/SQLite triggers, private AuthGate, lost response,
+  concurrent issuance, wrong KEK/AAD, missing key, revocation and rights-only.
+  None of these tests proves real Worker binding, Kinde login or KEK recovery.
+  This increment does NOT deploy an API Worker or initialize a live KEK.
 
 ## CF-06 — bounded erasure progress candidate (not deployed)
 
