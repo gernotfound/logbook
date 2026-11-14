@@ -49,7 +49,7 @@ e i diritti; nessuna route pubblica o migration provider applicata.
 Questo codice non abilita la PWA: serve completare l'intero ciclo di consenso
 prima del rilascio. Vedi [CF-05 #1059](https://github.com/gernotfound/logbook/issues/1059).
 
-## Audit della sessione e del contesto — candidato su branch (13/11/2026)
+## Audit della sessione e del contesto — PR #1083 (13–14/11/2026)
 
 Durante l'audit post-PR #1081 è stata rilevata una finestra AuthGate→D1:
 una revoca della sessione già confermata poteva precedere il primo INSERT
@@ -74,9 +74,12 @@ flusso di riaccettazione richiederà di evolvere insieme gate e fence.
 
 Regressioni SQL/HTTP dedicate: logout nel tratto gate→D1, perdita del
 token, scadenza, epoch divergente, letture/ACK negati dopo revoca e
-nessun documento/receipt fantasma. **Candidato sul branch #1083,
-non distribuito**. Registrare gli esiti CI solo dopo la verifica
-exact-SHA; i test Node/SQLite non dimostrano il runtime remoto.
+nessun documento/receipt fantasma, anche quando la prova del
+consenso scompare dopo AuthGate. **Candidato sulla PR #1083,
+non distribuito**. La [CI #43536847159](https://github.com/gernotfound/logbook/actions/runs/43536847159)
+è **SUCCESS** sul precedente HEAD `4e8c0915` (Canonical Verification,
+CodeQL, suite Cloudflare). Ogni commit successivo richiede nuova
+verifica exact-SHA; SQLite non dimostra il runtime remoto.
 
 ### API unica integrata prima di questo audit (PR #1081)
 
