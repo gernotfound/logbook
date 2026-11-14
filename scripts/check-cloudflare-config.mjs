@@ -59,7 +59,10 @@ if (!productionWorkflow.includes('"${CLOUDFLARE_APP_ORIGIN}/?tab=training"') ||
   failures.push('Cloudflare smoke must cover the real PWA shortcut and strict 404 for absent JS, CSS and pathnames');
 }
 const mismatchDiagnostics = readFileSync('scripts/cloudflare-asset-mismatch-diagnostics.sh', 'utf8');
-if (!productionWorkflow.includes('cmp -s "${local_file}" /tmp/cloudflare-served-asset ||') ||
+if (!productionWorkflow.includes('if ! cmp -s "${local_file}" /tmp/cloudflare-served-asset; then') ||
+    !productionWorkflow.includes('if [ "${path}" = "/robots.txt" ]; then') ||
+    !productionWorkflow.includes("first_line\" = '# As a condition of accessing this website") ||
+    !productionWorkflow.includes('tail -c "${expected_size}" /tmp/cloudflare-served-asset | cmp -s "${local_file}" -') ||
     !productionWorkflow.includes('bash scripts/cloudflare-asset-mismatch-diagnostics.sh') ||
     !productionWorkflow.includes('"${CLOUDFLARE_APP_ORIGIN}${path}" "${EXPECTED_SHA}" "${initial_http}"') ||
     !mismatchDiagnostics.includes('sha256sum') ||
