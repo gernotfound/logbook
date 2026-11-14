@@ -38,10 +38,12 @@ async function fixture() {
       .setProtectedHeader({ alg: 'RS256', kid: 'synthetic' }).sign(signingKey);
     return { accessToken: access, idToken: id, expectedNonce: nonce };
   }
-  const provision = createKindePrincipalProvisioner(
+  const rawProvision = createKindePrincipalProvisioner(
     { issuer, clientId, apiAudience, idTokenAudience }, localKeys,
   );
-  return { verify, tokens, provision };
+  // Simulate only a trusted callback: the saved nonce is never read from the token payload.
+  const provision = (db, proof) => rawProvision(db, proof, nonce);
+  return { verify, tokens, provision, rawProvision };
 }
 
 void test('Kinde login proof: strict signed identity, nonce, distinct audiences and access binding', async () => {
@@ -140,7 +142,7 @@ void test('Kinde owner: a signed verified identity creates one stable principal,
   const { sqlite, db } = principalDb();
   try {
     const signed = await tokens();
-    const first = await provision(db, signed);
+    const first = await provision(db, { ...signed, expectedNonce: 'untrusted-client-nonce' });
     const firstRow = sqlite.prepare('SELECT * FROM auth_principals WHERE uid = ?').get(first.uid);
     assert.match(first.uid, /^k_[A-Za-z0-9_-]{43}$/);
     assert.equal(firstRow.status, 'active');
@@ -179,12 +181,14 @@ void test('Kinde owner: a fresh login never resurrects a disabled/deleted princi
 });
 
 void test('Kinde owner: nonce/email/subject/machine-proof failures cause no D1 principal write', async () => {
-  const { provision, tokens } = await fixture();
+  const { provision, rawProvision, tokens } = await fixture();
   const { sqlite, db } = principalDb();
   try {
     const valid = await tokens();
+    await assert.rejects(rawProvision(db, valid, Buffer.alloc(32, 8).toString('base64url')),
+      KindePrincipalProvisionError);
     const altered = [
-      { ...valid, expectedNonce: Buffer.alloc(32, 8).toString('base64url') },
+      await tokens({ idClaims: { nonce: Buffer.alloc(32, 8).toString('base64url') } }),
       await tokens({ idClaims: { email_verified: false } }),
       await tokens({ idClaims: { sub: 'kp_swapped_identity' } }),
       await tokens({ accessClaims: { gty: 'client_credentials' } }),
