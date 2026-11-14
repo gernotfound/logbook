@@ -8,12 +8,13 @@
 - Metodi di accesso scelti nell'onboarding: **Email + Google**, con Facebook/X disattivati. Questo non prova che sia stata attivata la connessione **Email + password**: nei nuovi business Kinde il metodo email potrebbe essere basato su codice monouso.
 - Dashboard aperta in ambiente **Production**, indicato **Not live**. Visualizzati **0 utenti totali** e **0 utenti attivi negli ultimi 30 giorni**. Questi conteggi sono un'istantanea della schermata, non una verifica API o conferma futura.
 - L'onboarding ha creato automaticamente l'applicazione `My React App`, categoria **Front-end and mobile**. Non risultano dalle schermate URL di callback/logout, client ID, app server-side né una prova di token/sessione reali.
+- **Nuova applicazione `TheLogBook` creata tramite `Add application`**, tipologia **Back-end web**: screenshot successivo mostra il wizard **Quick start** per i Back-end SDK. Questa è evidenza visiva di applicazione creata, **non** di configurazione callback, credenziali, login o Go live.
 
 ## Decisione tecnica per la configurazione da completare
 
 La PWA rimane React/Vite, ma l'architettura target già selezionata centralizza OAuth code exchange, PKCE/state/nonce, sessione HTTP-only e controlli D1 sui **Cloudflare Workers API**, non in JavaScript eseguito nel browser. In [Kinde — Authenticating SPA](https://docs.kinde.com/build/applications/authenticating-spa/) l'opzione server-side con cookie condiviso sullo stesso dominio frontend/API richiede un'applicazione **Back-end web**; l'app Front-end and mobile attuale è invece un public client per token browser/PKCE.
 
-**Prossima operazione sul provider:** tramite **Add application** esaminare la creazione di una nuova applicazione `TheLogBook` di tipo `Back-end web`, senza eliminare/alterare `My React App` prima di averne verificato il ruolo. Il nome è una proposta tecnica coerente con il brand, non una creazione già verificata. Non usare starter kit al posto dell'app esistente. Non attivare Go live, billing, custom domain, DNS/OAuth Production o dati personali reali in questa fase.
+**Prossimo passaggio sul provider:** nella pagina **Quick start** dell'applicazione `TheLogBook` già creata come `Back-end web`, scegliere **Other back end** (sezione `Supported, but no SDK yet`) per l'integrazione OAuth standard da Cloudflare Workers, non **Node.js**: il runtime Workers non è un server Node classico. Scelta consigliata e documentata, **non ancora confermata come salvata dall'utente**. [Kinde senza SDK](https://docs.kinde.com/developer-tools/about/using-kinde-without-an-sdk/) · [JWT su Workers](https://docs.kinde.com/integrate/third-party-tools/verifying-jwts-cloudflare-workers/). Non usare starter kit; non eliminare/alterare `My React App` prima di averne verificato il ruolo. Non attivare Go live, billing, custom domain, DNS/OAuth Production o dati personali reali in questa fase.
 
 ## Controlli da completare, senza dedurre risultati
 
