@@ -7,9 +7,9 @@ const OAUTH_COOKIE = '__Host-logbook_oauth';
 const STATE_LIFETIME_MS = 10 * 60 * 1000;
 const TOKEN_BODY_LIMIT = 16384;
 const TOKEN = /^[A-Za-z0-9_-]{43}$/;
-const CODE = /^[A-Za-z0-9._~+/-]{1,2048}$/;
+const CODE = /^[\x21-\x7E]{1,2048}$/;
 
-export class KindeOAuthError extends Error {
+class KindeOAuthError extends Error {
   constructor() {
     super('kinde-oauth-unavailable');
     this.name = 'KindeOAuthError';
@@ -155,6 +155,11 @@ async function tokenResponse(response) {
  * rateLimit is mandatory and must use a trusted, server-derived abuse key
  * rather than an arbitrary client header. It is not a global Free-tier quota.
  */
+/**
+ * @param {{ issuer: string, clientId: string, clientSecret: string, apiAudience: string, idTokenAudience: string, appOrigin: string }} configuration
+ * @param {{ rateLimit?: (request: Request) => Promise<boolean>, fetchImpl?: typeof fetch,
+ * keySet?: (header: import('jose').JWSHeaderParameters, token: import('jose').FlattenedJWSInput) => Promise<import('jose').KeyLike | Uint8Array> }} [dependencies]
+ */
 export function createKindeOAuthFlow(configuration, { rateLimit, fetchImpl = fetch, keySet } = {}) {
   const config = requireConfiguration(configuration);
   if (typeof rateLimit !== 'function' || typeof fetchImpl !== 'function') {
@@ -186,6 +191,13 @@ export function createKindeOAuthFlow(configuration, { rateLimit, fetchImpl = fet
       const codeChallenge = btoa(String.fromCharCode(...new Uint8Array(challenge)))
         .replaceAll('+', '-').replaceAll('/', '_').replace(/=+$/, '');
       const primary = db.withSession('first-primary');
+      // A bounded, indexed sweep stops abandoned PKCE verifiers accumulating
+      // under ordinary traffic without a full-table operation on login.
+      const pruned = await primary.prepare(
+        'DELETE FROM auth_oauth_attempts WHERE state_hash IN (SELECT state_hash FROM auth_oauth_attempts WHERE expires_at_ms <= ? ORDER BY expires_at_ms LIMIT 16)'
+      ).bind(now).run();
+      if (pruned?.success !== true || !Number.isSafeInteger(pruned.meta?.changes)
+        || pruned.meta.changes < 0 || pruned.meta.changes > 16) throw new KindeOAuthError();
       const inserted = await primary.prepare(
         'INSERT INTO auth_oauth_attempts (state_hash, browser_hash, code_verifier, nonce, issued_at_ms, expires_at_ms) VALUES (?, ?, ?, ?, ?, ?)'
       ).bind(stateHash, browserHash, verifier, nonce, now, now + STATE_LIFETIME_MS).run();
