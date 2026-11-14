@@ -16,19 +16,25 @@ async function capture(page: Page, testInfo: TestInfo, surface: string) {
   await testInfo.attach(surface, { body: await page.screenshot({ fullPage: surface !== 'data-detail', animations: 'disabled' }), contentType: 'image/png' });
 }
 
+async function enterGuest(page: Page, viewport: (typeof viewports)[number], appearance: (typeof appearances)[number]) {
+  await page.setViewportSize(viewport);
+  await page.emulateMedia({ colorScheme: appearance.system, reducedMotion: 'reduce' });
+  await page.addInitScript(preference => localStorage.setItem('logbook:appearance:v1', preference), appearance.preference);
+  await page.goto('/');
+  await expect(page.locator('html')).toHaveAttribute('data-theme', appearance.resolved);
+  await expect(page.locator('html')).toHaveAttribute('data-theme-preference', appearance.preference);
+  await page.getByRole('button', { name: 'Continua senza account' }).click();
+  await page.getByText('Aggiornamento Termini e Privacy').waitFor();
+  for (const checkbox of await page.locator('input[type="checkbox"]').all()) await checkbox.check();
+  await page.getByRole('button', { name: 'Accetta e Continua' }).click();
+}
+
+// These independent journeys each capture numerous WebKit screenshots; they must not
+// consume the same per-test deadline while keeping their full UI assertions.
 for (const viewport of viewports) {
   for (const appearance of appearances) {
-    test(`training and data surfaces at ${viewport.width}px in ${appearance.preference}/${appearance.system}`, async ({ page }, testInfo) => {
-      await page.setViewportSize(viewport);
-      await page.emulateMedia({ colorScheme: appearance.system, reducedMotion: 'reduce' });
-      await page.addInitScript(preference => localStorage.setItem('logbook:appearance:v1', preference), appearance.preference);
-      await page.goto('/');
-      await expect(page.locator('html')).toHaveAttribute('data-theme', appearance.resolved);
-      await expect(page.locator('html')).toHaveAttribute('data-theme-preference', appearance.preference);
-      await page.getByRole('button', { name: 'Continua senza account' }).click();
-      await page.getByText('Aggiornamento Termini e Privacy').waitFor();
-      for (const checkbox of await page.locator('input[type="checkbox"]').all()) await checkbox.check();
-      await page.getByRole('button', { name: 'Accetta e Continua' }).click();
+    test(`training surfaces at ${viewport.width}px in ${appearance.preference}/${appearance.system}`, async ({ page }, testInfo) => {
+      await enterGuest(page, viewport, appearance);
       await page.getByRole('button', { name: 'Allenamento', exact: true }).click();
       await expect(page.locator('.session-setup-page')).toBeVisible();
       await capture(page, testInfo, 'training-setup');
@@ -115,6 +121,10 @@ for (const viewport of viewports) {
       await expect(page.locator('.training-history .history-day.outside').first()).toHaveCSS('opacity', '1');
       await capture(page, testInfo, 'training-history');
 
+    });
+
+    test(`data surfaces at ${viewport.width}px in ${appearance.preference}/${appearance.system}`, async ({ page }, testInfo) => {
+      await enterGuest(page, viewport, appearance);
       await page.getByRole('button', { name: 'Dati e statistiche', exact: true }).click();
       await page.getByRole('tab', { name: 'Misurazioni', exact: true }).click();
       await page.locator('#measure-weight').fill('81.4');
