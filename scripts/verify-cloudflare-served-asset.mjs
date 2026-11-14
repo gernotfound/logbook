@@ -4,7 +4,8 @@ import { pathToFileURL } from 'node:url';
 
 const MANAGED_HEADER = '# As a condition of accessing this website, you agree to abide by the following\n';
 const MANAGED_START = '# BEGIN Cloudflare Managed content\n';
-const MANAGED_END = '# END Cloudflare Managed Content\n\n';
+const MANAGED_END_LINE = '# END Cloudflare Managed Content\n';
+const MANAGED_END = MANAGED_END_LINE + '\n';
 const MAX_MANAGED_PREFIX_BYTES = 8192;
 
 // Cloudflare Bot Preference Sync prepends its own policy to the application's
@@ -25,10 +26,10 @@ export function matchesServedCloudflareAsset(pathname, expected, actual) {
       !prefix.startsWith(MANAGED_HEADER) || !prefix.endsWith(MANAGED_END)) return false;
 
   const start = prefix.indexOf(MANAGED_START);
-  const end = prefix.indexOf(MANAGED_END);
+  const end = prefix.indexOf(MANAGED_END_LINE);
   if (start < MANAGED_HEADER.length || end <= start ||
       prefix.indexOf(MANAGED_START, start + 1) !== -1 ||
-      prefix.indexOf(MANAGED_END, end + 1) !== -1 ||
+      prefix.indexOf(MANAGED_END_LINE, end + 1) !== -1 ||
       end + MANAGED_END.length !== prefix.length) return false;
 
   const managedRules = prefix.slice(start + MANAGED_START.length, end);
