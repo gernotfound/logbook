@@ -71,3 +71,30 @@ La precedente finestra Google era stata chiusa tramite **Save** secondo il propr
 ## Confini con le altre chat
 
 Questo branch documenta soltanto l'onboarding e la configurazione Kinde. Non modifica il codice/AuthGate su `main`, Cloudflare/DNS, database D1, OAuth Google Production, billing o infrastruttura in uso. Il codice e i gate correnti sono in [CF-03 #1057](https://github.com/gernotfound/logbook/issues/1057), [runbook Cloudflare](cloudflare-workers-migration.md) e [registro fornitori](external-services-register.md). Il product owner ha successivamente **autorizzato l'integrazione della documentazione in `main`**; non ha autorizzato con ciò l'attivazione delle API Auth/Sync o altre configurazioni Production. La pubblicazione OAuth Google era stata eseguita dal proprietario e resta distinta dal rilascio dell'applicazione.
+
+
+### CF-03 — candidato code+PKCE isolato (branch, 14/11/2026)
+
+Il codice in `cloudflare/auth/kinde-oauth-flow.mjs` predispone le route
+**non pubblicate** `POST /api/auth/kinde/start` e
+`GET /api/auth/kinde/callback`. Il callback indicato è un
+**percorso candidato**: la configurazione Kinde `Allowed callback URLs`
+non deve ancora essere cambiata, perché nessun Worker lo espone sul
+dominio. La callback Google→Kinde rimane distinta e invariata.
+
+La nuova migration D1 `0008_kinde_oauth_attempts.sql` registra
+state hash, binding del browser, verifier PKCE e nonce server-side con
+scadenza massima di 10 minuti. Il claim via singola
+`DELETE ... RETURNING` impedisce il replay tra Workers
+concorrenti. L'exchange usa solo `client_secret` dal server
+più il verifier S256: verificare sul tenant Kinde reale la combinazione
+per **Back-end web** prima dell'attivazione. Token validi sono verificati dai
+moduli già esistenti; sessioni D1 sono emesse soltanto dopo
+`email_verified` e provisioning dell'owner. Non si è
+testato né configurato il tenant Production da questa PR.
+
+L'host finale, i parametri delle audience API, i valori credenziali,
+il rate limiting di frontiera, la pulizia dei tentativi scaduti,
+la protezione dei percorsi HTTP e la UX completa restano gate di
+integrazione. I test Node/SQLite con JWT sintetici non certificano
+l'accesso Google/email né la PWA su Safari.
