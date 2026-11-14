@@ -1,10 +1,17 @@
-name: Cloudflare Workers Static Assets Candidate
+name: Cloudflare Workers Static Assets Production
 
 on:
+  workflow_run: # zizmor: ignore[dangerous-triggers] Deploy only gated, exact current main SHA after trusted Firestore reconciliation.
+    workflows:
+      - Firebase Firestore Production
+    types:
+      - completed
+    branches:
+      - main
   workflow_dispatch:
     inputs:
       expected_sha:
-        description: Exact validated main commit to deploy to the isolated workers.dev candidate
+        description: Exact validated main commit to deploy to thelogbook.me
         required: true
         type: string
 
@@ -13,22 +20,28 @@ permissions:
   actions: read
 
 concurrency:
-  group: cloudflare-workers-static-assets-candidate
+  group: cloudflare-workers-static-assets-production
   cancel-in-progress: false
 
 jobs:
   build:
-    name: Build exact main candidate (no Cloudflare credentials)
-    if: github.ref == 'refs/heads/main'
+    name: Build exact verified main (no Cloudflare credentials)
+    if: >-
+      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') ||
+      (github.event_name == 'workflow_run' &&
+       github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.head_branch == 'main' &&
+       github.event.workflow_run.head_repository.full_name == github.repository &&
+       github.event.workflow_run.event == 'workflow_run')
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     permissions:
       contents: read
       actions: read
     env:
-      EXPECTED_SHA: ${{ inputs.expected_sha }}
-      LOGBOOK_BUILD_SHA: ${{ inputs.expected_sha }}
-      CLOUDFLARE_APP_ORIGIN: ${{ vars.CLOUDFLARE_APP_ORIGIN }}
+      EXPECTED_SHA: ${{ github.event_name == 'workflow_dispatch' && inputs.expected_sha || github.event.workflow_run.head_sha }}
+      LOGBOOK_BUILD_SHA: ${{ github.event_name == 'workflow_dispatch' && inputs.expected_sha || github.event.workflow_run.head_sha }}
+      CLOUDFLARE_APP_ORIGIN: https://thelogbook.me
       VITE_FIREBASE_API_KEY: ${{ vars.VITE_FIREBASE_API_KEY }}
       VITE_FIREBASE_PROJECT_ID: ${{ vars.VITE_FIREBASE_PROJECT_ID }}
       VITE_FIREBASE_APP_ID: ${{ vars.VITE_FIREBASE_APP_ID }}
@@ -41,7 +54,7 @@ jobs:
       - name: Checkout exact main
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
-          ref: ${{ inputs.expected_sha }}
+          ref: ${{ env.EXPECTED_SHA }}
           fetch-depth: 0
           persist-credentials: false
       - name: Validate main identity and verified Firestore reconciliation
@@ -82,33 +95,39 @@ jobs:
       - name: Upload same-run verified asset artifact
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
-          name: cloudflare-candidate-${{ inputs.expected_sha }}
+          name: cloudflare-production-${{ env.EXPECTED_SHA }}
           path: dist/
           if-no-files-found: error
           retention-days: 1
 
   deploy:
-    name: Deploy isolated candidate from same-run artifact
+    name: Deploy thelogbook.me from same-run artifact
     needs: build
-    if: github.ref == 'refs/heads/main'
+    if: >-
+      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') ||
+      (github.event_name == 'workflow_run' &&
+       github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.head_branch == 'main' &&
+       github.event.workflow_run.head_repository.full_name == github.repository &&
+       github.event.workflow_run.event == 'workflow_run')
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     permissions:
       contents: read
     env:
-      EXPECTED_SHA: ${{ inputs.expected_sha }}
-      CLOUDFLARE_APP_ORIGIN: ${{ vars.CLOUDFLARE_APP_ORIGIN }}
+      EXPECTED_SHA: ${{ github.event_name == 'workflow_dispatch' && inputs.expected_sha || github.event.workflow_run.head_sha }}
+      CLOUDFLARE_APP_ORIGIN: https://thelogbook.me
     steps:
       - name: Checkout exact main
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
-          ref: ${{ inputs.expected_sha }}
+          ref: ${{ env.EXPECTED_SHA }}
           fetch-depth: 0
           persist-credentials: false
       - name: Download same-run assets
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
-          name: cloudflare-candidate-${{ inputs.expected_sha }}
+          name: cloudflare-production-${{ env.EXPECTED_SHA }}
           path: dist/
       - name: Validate deployment input and exact-main lease
         shell: bash
@@ -125,14 +144,14 @@ jobs:
           for resource in dist/index.html dist/sw.js dist/manifest.webmanifest dist/_headers; do
             test -s "${resource}" || { echo "Missing ${resource}"; exit 1; }
           done
-      - name: Deploy Workers Static Assets candidate
+      - name: Deploy Workers Static Assets on thelogbook.me
         uses: cloudflare/wrangler-action@953926a2e2182532811c01a25e53647d93bf07c0 # v4
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
           wranglerVersion: '4.159.0'
           command: deploy --config cloudflare/wrangler.jsonc
-      - name: Non-destructive smoke of the Cloudflare candidate
+      - name: Non-destructive smoke of thelogbook.me
         shell: bash
         run: |
           set -euo pipefail
@@ -201,4 +220,4 @@ jobs:
           helper_status="$(curl --silent --show-error --output /tmp/cloudflare-auth-helper \
             --write-out '%{http_code}' "${CLOUDFLARE_APP_ORIGIN}/__/auth")"
           test "${helper_status}" = 404 || { echo 'Unrecognized Auth helper route must fail closed'; exit 1; }
-          echo 'Static assets verified; authenticated flows still require the provider and browser gates'
+          echo 'thelogbook.me static assets verified; authenticated flows still require independent provider and browser gates'

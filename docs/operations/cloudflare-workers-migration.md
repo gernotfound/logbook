@@ -1,6 +1,6 @@
 # TheLogBook — migrazione Cloudflare: runbook corrente
 
-**Classificazione: CRITICAL · stato PARZIALE / NO-GO Production.** La fonte di verità per il codice e i test è `main` GitHub; per risorse e runtime sono i rispettivi provider. Questo documento descrive **contratti correnti e blocchi**, non lo storico di commit. [EPIC #1053](https://github.com/gernotfound/logbook/issues/1053) · [registro servizi](external-services-register.md) · [CF-09 #1063](https://github.com/gernotfound/logbook/issues/1063).
+**Classificazione: CRITICAL · stato PARZIALE / NO-GO funzionale (dominio pubblico di sviluppo autorizzato).** La fonte di verità per il codice e i test è `main` GitHub; per risorse e runtime sono i rispettivi provider. Questo documento descrive **contratti correnti e blocchi**, non lo storico di commit. [EPIC #1053](https://github.com/gernotfound/logbook/issues/1053) · [registro servizi](external-services-register.md) · [CF-09 #1063](https://github.com/gernotfound/logbook/issues/1063).
 
 ## Decisioni confermate
 
@@ -8,18 +8,19 @@
 - **Frontend:** Cloudflare Workers Static Assets; **backend:** API Workers e D1 SQL con giurisdizione `eu` da verificare sull'istanza effettiva. Nessun billing o upgrade autorizzato.
 - **Identità:** Kinde scelto per Email e Google; questi pulsanti sono stati abilitati nell'onboarding. **Metodo email/password ≥15 caratteri, Google OAuth, reset/verifica e sessioni non sono ancora collaudati**. I messaggi Auth saranno gestiti da Kinde, senza un servizio email separato.
 - **Confini di fiducia:** Kinde conferma l'identità; Workers/D1 devono autorizzare owner, stato account, consenso salute, revoca, cancellazione, sessioni e quote. Nessun dato salute in chiaro su Kinde o D1. Una sessione valida e un JWT firmato non sostituiscono consenso e owner fence.
-- **Dismissione:** eliminare funzioni Firebase/Vercel solo dopo aver verificato il percorso equivalente. Non mantenere compatibilità con installazioni pre-lancio inesistenti. Cutover `thelogbook.me`, DNS, OAuth/posta Production, credenziali e dismissioni irreversibili richiedono mandato e GO separati.
+- **Dominio di sviluppo (decisione 14/11/2026):** `https://thelogbook.me` è l'unico origin pubblico richiesto per il frontend. Il proprietario autorizza il cambio DNS/Workers per il sito e la disabilitazione dei collegamenti `workers.dev` e preview del solo Worker TheLogBook. Il deployment resta vincolato a `main` verificato, con esito runtime da osservare. Il dominio pubblico **non** certifica una release funzionale: Auth, consenso cloud, replica, chiavi e diritti rimangono non attivi finché non sono verificati.
+- **Dismissione:** eliminare funzioni Firebase/Vercel solo dopo aver verificato il percorso equivalente. Non mantenere compatibilità con installazioni pre-lancio inesistenti. OAuth/posta Production, credenziali, billing e dismissioni irreversibili richiedono mandato e GO separati.
 
 ## Stato osservato e limiti delle prove
 
 | Componente | Stato osservato | Prova ancora mancante |
 |---|---|---|
 | GitHub | Candidati Cloudflare e verificatori Kinde integrati; CI e CodeQL su SHA specifici | La CI non dimostra API Cloudflare o login live |
-| Static Assets | Worker `thelogbook-frontend` pubblicato su `workers.dev`, solo binding `ASSETS` nell'ultimo inventario Cloudflare | Custom domain, PWA aggiornata, login/UX e Safari iOS |
+| Static Assets | Worker `thelogbook-frontend`, solo binding `ASSETS` nell'ultimo inventario; configurazione target: `thelogbook.me` senza `workers.dev`/preview | Riscontro provider post-release, PWA aggiornata, guest/UX e Safari iOS; Auth cloud separata |
 | D1 | Sandbox `thelogbook-cf02-eu-isolated-20261113`, `jurisdiction=eu`; migration `0001` e `0002` osservate sul provider con dati sintetici | Le migration successive, API HTTP, query/CPU/quote reali e database Production non sono attestati |
 | Workers API/Auth | `cloudflare/api/worker.mjs`, session gate, issuer, consenso e replica nel repository; **nessuna API Worker pubblicata** nel controllo provider disponibile | Binding isolati, callback OAuth trusted, session issuance end-to-end, prove browser e runtime |
 | Kinde | Business `thelogbook.kinde.com` in regione `Europe - Ireland` secondo schermate; selezionati metodi Email e Google nell'onboarding | Applicazione OAuth, codice autorizzazione + PKCE/state/nonce monouso, password, email, claim reali, retention e antiabuso |
-| DNS e provider legacy | Zona Cloudflare attiva, web ancora su IONOS; Hosting Firebase disabilitato secondo proprietario, Vercel `logbook` sospeso secondo verifica provider | Cutover del dominio, nuovo backend e ritiro del codice legacy dopo test |
+| DNS e provider legacy | Zona Cloudflare attiva; prima del passaggio gli A/AAAA web puntavano a IONOS; posta IONOS da preservare. Hosting Firebase già disabilitato secondo proprietario, Vercel `logbook` sospeso secondo precedente verifica | Riscontro DNS/TLS e route Worker live dopo il cutover; API e codice legacy da sostituire e verificare separatamente |
 
 Il `jurisdiction=eu` della D1 **non garantisce** localizzazione europea di Workers, log, email, Google OAuth o tutti i subprocessori. Non dedurre conformità GDPR da un singolo flag.
 
@@ -39,7 +40,7 @@ Il `jurisdiction=eu` della D1 **non garantisce** localizzazione europea di Worke
 2. Implementare callback OAuth code + PKCE/state/nonce server-owned monouso, mappatura account D1 e sessione applicativa con cookie Secure/HttpOnly/SameSite + CSRF; prova multi-tab/multi-device e revoca effettiva.
 3. Collegare ADK/device vault e consenso prima della replica; provare D1 su dati sintetici, ACK, offline, conflitti, crash, lost-response e owner isolation, sempre senza salute plaintext lato server.
 4. Completare export/delete, revoca salute, cancellazione account (identità Kinde compresa), inattività 12 mesi, backup/restore e job bounded; errori e retry devono lasciare ricevute verificabili.
-5. Misurare quote Free, CPU/storage, denial-of-service, privacy e sicurezza; verificare UX per viewport/theme/accessibilità, update PWA e rollback su Safari. Solo dopo i gate GitHub exact-SHA, provider e GO del proprietario effettuare eventuale cutover del dominio.
+5. Misurare quote Free, CPU/storage, denial-of-service, privacy e sicurezza; verificare UX per viewport/theme/accessibilità, update PWA e rollback su Safari. Il dominio è autorizzato **solo per lo sviluppo pubblico**; il GO funzionale completo resta vincolato ai gate GitHub, provider e prodotto. Non usare il cutover del dominio come prova di funzionalità o di continuità dati.
 
 Le parti indipendenti possono avanzare in parallelo a CF-00, ma **nessuna dipendenza non validata può essere attivata nel percorso reale**. Non eseguire deploy non-main su risorse Production o test su dati Production.
 

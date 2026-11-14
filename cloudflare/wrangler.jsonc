@@ -2,7 +2,7 @@
   "name": "thelogbook-frontend",
   "main": "./auth-proxy.mjs",
   "compatibility_date": "2026-11-11",
-  "workers_dev": true,
+  "workers_dev": false,
   "assets": {
     "directory": "../dist",
     "binding": "ASSETS",
@@ -11,5 +11,12 @@
       "/__/auth",
       "/__/auth/*"
     ]
-  }
+  },
+  "preview_urls": false,
+  "routes": [
+    {
+      "pattern": "thelogbook.me",
+      "custom_domain": true
+    }
+  ]
 }
