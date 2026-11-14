@@ -47,6 +47,35 @@ function validateClaims(claims) {
     && typeof claims.sessionHash === 'string' && HASH.test(claims.sessionHash);
 }
 
+// Native empty HTML forms may expose a body stream even when their payload is
+// zero bytes. Drain only this OAuth-start request before creating state; do
+// not accept arbitrary form fields or trust a forged Content-Length: 0.
+async function strictlyEmptyFormPost(request) {
+  const length = request.headers.get('content-length');
+  if (length !== null && length !== '0') return false;
+  if (!request.body) return true;
+  const reader = request.body.getReader();
+  let timer;
+  const deadline = new Promise(resolve => {
+    timer = setTimeout(() => resolve(null), 2000);
+  });
+  try {
+    for (let count = 0; count < 4; count += 1) {
+      const chunk = await Promise.race([reader.read(), deadline]);
+      if (chunk === null) return false;
+      if (chunk.done) return true;
+      if (!(chunk.value instanceof Uint8Array) || chunk.value.byteLength > 0) return false;
+    }
+    return false;
+  } catch {
+    return false;
+  } finally {
+    clearTimeout(timer);
+    void reader.cancel().catch(() => {});
+    try { reader.releaseLock(); } catch { /* A timed-out stream may have a pending read. */ }
+  }
+}
+
 async function sessionStatus(request, env) {
   if (!env.AUTH_GATE || typeof env.AUTH_GATE.fetch !== 'function') return json('unavailable', 503);
   try {
@@ -118,13 +147,19 @@ export function createKindeHttpHandler({ fetchImpl = fetch, keySet } = {}) {
       return json('unavailable', 503);
     }
     const callback = url.pathname === '/api/auth/kinde/callback';
-    if (!callback && (url.search !== '' || request.body !== null
+    if (!callback && (url.search !== ''
+      || (request.body !== null && url.pathname !== '/api/auth/kinde/start')
       || (request.headers.has('content-length')
         && request.headers.get('content-length') !== '0')
       || !sameOrigin(request, env.APP_ORIGIN))) {
       return json('origin-or-input-rejected', 403);
     }
     if (callback && request.body !== null) return json('origin-or-input-rejected', 403);
+    if (url.pathname === '/api/auth/kinde/start' && request.body !== null) {
+      if (!await strictlyEmptyFormPost(request)) return json('origin-or-input-rejected', 403);
+      // The OAuth flow's direct-call boundary accepts no body at all.
+      request = new Request(request.url, { method: 'POST', headers: request.headers });
+    }
 
     if (url.pathname === '/api/auth/session') return sessionStatus(request, env);
     if (url.pathname === '/api/auth/logout') return logout(request, env);
