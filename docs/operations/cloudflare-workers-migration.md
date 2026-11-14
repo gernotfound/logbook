@@ -2,10 +2,14 @@
 
 **Stato:** sviluppo CRITICAL / fresh start, checkpoint provider e main del 14 novembre 2026. Questo è il runbook operativo corrente; non è una prova di rilascio Production. Le informazioni temporali vanno aggiornate dopo ogni merge o prova provider. [EPIC #1053](https://github.com/gernotfound/logbook/issues/1053), [registro servizi](external-services-register.md), [hosting/DNS #1041](https://github.com/gernotfound/logbook/issues/1041).
 
-## Checkpoint operativo — 14/11/2026
+## Checkpoint provider aggiornato — 14/11/2026 (dopo pulizia DNS)
+
+**Provider 14/11/2026:** rimossi via Cloudflare 7 record email dedicati a Mailjet/Brevo su `notify.thelogbook.me`; 11 DNS rimasti e verificati identici, inclusa posta IONOS. **Account provider non ancora chiusi.** Screenshot Kinde business `thelogbook.kinde.com`, regione `Europe - Ireland`, onboarding in corso (nessun login funzionante). Dettagli nel [registro servizi](external-services-register.md); GO Production ancora negato.
+
+## Checkpoint operativo precedente — 14/11/2026 (storico)
 
 - **GitHub:** [PR #1083](https://github.com/gernotfound/logbook/pull/1083) integrata su `main 2d4c9d5b` (v2.394.0). [CI candidata](https://github.com/gernotfound/logbook/actions/runs/43538181345) e [main](https://github.com/gernotfound/logbook/actions/runs/43538480775) SUCCESS; SQL sessione/consenso non distribuito.
-- **Cloudflare:** zona `thelogbook.me` attiva ma apex A/AAAA ancora verso IONOS; nessuna Workers Route né Custom Domain. Unico Worker `thelogbook-frontend`, D1 sandbox EU sintetica, nessun Worker API/Auth pubblicato. DNS non cambiato.
+- **Cloudflare (prima della pulizia email):** zona `thelogbook.me` attiva ma apex A/AAAA ancora verso IONOS; nessuna Workers Route né Custom Domain. Unico Worker `thelogbook-frontend`, D1 sandbox EU sintetica, nessun Worker API/Auth pubblicato. Il DNS era allora invariato; aggiornamento DNS Mailjet/Brevo descritto nel checkpoint superiore.
 - **Vercel:** progetto `logbook` **PAUSED** per richiesta del proprietario, evento provider `project-paused` confermato. Traffico Production bloccato; nessun account/dato/secret eliminato, nessun altro progetto toccato. Il codice frontend e il cron backend storico mantengono riferimenti legacy.
 - **Release:** `thelogbook.me` resta NO-GO per PWA completa; Auth, consenso, ADK, sync D1, diritti/erasure, quote, privacy e test reali non sono conclusi. La sospensione reversibile Vercel non è una dismissione irreversibile.
 
