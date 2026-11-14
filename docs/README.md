@@ -37,7 +37,7 @@ La selezione completa dei contratti resta in [AGENTS](../AGENTS.md). Qui si indi
 |---|---|---|
 | [Registro servizi esterni](operations/external-services-register.md) | Registro operativo; riscontri live necessari | Firebase, Vercel, GitHub e servizi ritirati |
 | [Runbook Cloudflare](operations/cloudflare-workers-migration.md) | Guida corrente per sviluppo, gate e abbandono del vecchio stack | Workers/D1, Auth, privacy e release |
-| [Email transazionali — archivio Brevo/Mailjet](operations/transactional-email-provider-evaluation.md) | **Storico, non piano attivo**: Kinde selezionato per email Auth dal 14/11 | CF-00 B2, Auth CF-03, privacy, DNS e ritiro provider |
+| [Archivio fornitori email dismessi](operations/transactional-email-provider-evaluation.md) | Storico tecnico, non piano operativo; email Auth tramite Kinde | CF-00, CF-03, privacy e retention storica |
 | [Collaudi E2E e affidabilità](operations/e2e-reliability.md) | Guida corrente sui limiti delle prove; collaudi live separati | CI sintetica, dispositivi reali e perimetro Production |
 | [Cutover Firebase Hosting](operations/firebase-hosting-cutover.md) | STORICO completato il 2 ottobre 2026 | Decisioni e rollback storici, non procedura di deploy corrente |
 

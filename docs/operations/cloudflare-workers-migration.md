@@ -4,12 +4,12 @@
 
 ## Checkpoint provider aggiornato — 14/11/2026 (dopo pulizia DNS)
 
-**Provider 14/11/2026:** rimossi via Cloudflare 7 record email dedicati a Mailjet/Brevo su `notify.thelogbook.me`; 11 DNS rimasti e verificati identici, inclusa posta IONOS. **Account provider non ancora chiusi.** Screenshot Kinde business `thelogbook.kinde.com`, regione `Europe - Ireland`, onboarding in corso (nessun login funzionante). Dettagli nel [registro servizi](external-services-register.md); GO Production ancora negato.
+**Provider 14/11/2026:** la pulizia DNS degli ex fornitori email è verificata (7 record eliminati, 11 non pertinenti invariati, posta IONOS intatta). Il proprietario conferma la cancellazione dei relativi account; nessuna verifica diretta delle console o della retention. Business Kinde `thelogbook.kinde.com` con regione Irlanda selezionata, onboarding in corso; Auth e cutover Production restano NO-GO.
 
 ## Checkpoint operativo precedente — 14/11/2026 (storico)
 
 - **GitHub:** [PR #1083](https://github.com/gernotfound/logbook/pull/1083) integrata su `main 2d4c9d5b` (v2.394.0). [CI candidata](https://github.com/gernotfound/logbook/actions/runs/43538181345) e [main](https://github.com/gernotfound/logbook/actions/runs/43538480775) SUCCESS; SQL sessione/consenso non distribuito.
-- **Cloudflare (prima della pulizia email):** zona `thelogbook.me` attiva ma apex A/AAAA ancora verso IONOS; nessuna Workers Route né Custom Domain. Unico Worker `thelogbook-frontend`, D1 sandbox EU sintetica, nessun Worker API/Auth pubblicato. Il DNS era allora invariato; aggiornamento DNS Mailjet/Brevo descritto nel checkpoint superiore.
+- **Cloudflare (prima della pulizia email):** zona `thelogbook.me` attiva ma apex A/AAAA ancora verso IONOS; nessuna Workers Route né Custom Domain. Unico Worker `thelogbook-frontend`, D1 sandbox EU sintetica, nessun Worker API/Auth pubblicato. Il DNS era allora invariato; aggiornamento DNS del sottodominio email storico descritto sopra.
 - **Vercel:** progetto `logbook` **PAUSED** per richiesta del proprietario, evento provider `project-paused` confermato. Traffico Production bloccato; nessun account/dato/secret eliminato, nessun altro progetto toccato. Il codice frontend e il cron backend storico mantengono riferimenti legacy.
 - **Release:** `thelogbook.me` resta NO-GO per PWA completa; Auth, consenso, ADK, sync D1, diritti/erasure, quote, privacy e test reali non sono conclusi. La sospensione reversibile Vercel non è una dismissione irreversibile.
 
@@ -19,7 +19,7 @@ Il candidato `cloudflare/auth/kinde-login-proof.mjs` verifica **insieme** un acc
 
 ## Decisione di prodotto e sequenza di abbandono
 
-**Decisione Auth — 14/11/2026 (CRITICAL):** il product owner sceglie **Kinde come provider di identità gestita** per nuove registrazioni email/password (minimo 15 caratteri), Google e verifica/reset email. L'integrazione Kinde è **candidata e non ancora configurata o validata sul provider**; nessun login nuovo è operativo. Cloudflare Workers/D1 conservano sessioni applicative, autorizzazioni, consenso, revoca, diritti ed erasure, mentre Kinde NON riceve dati sanitari. L'access token firmato non autorizza da solo una sessione D1: verificarne firma/issuer/audience/azp/scadenza e accertare identità umana ed email verificata mediante canale trusted prima dell'issuance. La revoca applicativa D1 deve essere immediata anche se il JWT Kinde rimane valido. **Mailjet è ritirato dalla nuova architettura di email Auth**: Kinde invia i messaggi di login/verifica/reset; la documentazione Mailjet diventa storico, la PR #1077 è da chiudere come superata. Questo NON certifica consegna/privacy delle email Kinde e NON autorizza cancellazione dell'account Mailjet, delle credenziali o dei record DNS/posta senza inventario e GO specifico. Nessuna migrazione legacy di account/dati, nessun cutover Production.
+**Decisione Auth — 14/11/2026 (CRITICAL):** il product owner ha scelto **Kinde** per nuove identità email/password (minimo 15 caratteri), Google e verifica/reset. L'integrazione Kinde non è ancora configurata o validata sul provider e il login non è operativo. Workers/D1 mantengono sessioni applicative, owner, consenso, revoche, diritti ed erasure; niente dati sanitari in Kinde. Il token d'accesso non autorizza da solo una sessione D1 senza prova d'identità trusted. Le email Auth saranno gestite da Kinde, ma consegna, privacy e quote richiedono test. Le integrazioni email precedenti sono dismesse; il proprietario ha confermato la chiusura dei relativi account (non verificata direttamente sulle console), mentre i record DNS dedicati sono stati eliminati e verificati su Cloudflare. Nessuna migrazione di account/dati legacy e nessun cutover Production.
 
 **Database e account precedenti vuoti secondo il product owner.** Il sistema Cloudflare partirà con **nuove identità, chiavi, consensi e dati**, senza trasferimenti Firebase/Vercel e senza adapter o formati di compatibilità pre-lancio. Conservare invece la normale funzione import/export per i dati generati nel nuovo sistema, la durabilità locale e tutti i diritti previsti.
 
@@ -39,7 +39,7 @@ le prove coerenti; gli errori non restituiscono dati o SQL. Mancano ancora
 issuance Auth reale (password/Google), verifica/reset email, consent provision,
 API live, CPU/quote e test su provider. Nessuna migrazione di account
 Firebase, nessun deploy o DNS. Riferimento a [CF-03 #1057](https://github.com/gernotfound/logbook/issues/1057).
-Il precedente filone Mailjet è **superato dalla scelta Kinde del 14/11**: Kinde gestirà le email Auth. Nessun provider email è stato cancellato e le prove su consegna, privacy, durata e abuso delle email Kinde sono ancora aperte.
+Il precedente filone sull'email transazionale è **archiviato**; il proprietario conferma gli account chiusi e i relativi record DNS sono stati rimossi su Cloudflare. Kinde gestirà le email Auth, ma consegna, privacy e difese dagli abusi restano da validare.
 
 ## Incremento CF-03 integrato — issuer di sessioni (non esposto)
 
@@ -166,7 +166,7 @@ e [CI main #43489162305](https://github.com/gernotfound/logbook/actions/runs/434
 | D1 sandbox | `thelogbook-cf02-eu-isolated-20261113`, `jurisdiction=eu`, read replication OFF: schema `0001` + `0002` applicate e indice/trigger anti-riuso riletti via Cloudflare; un UID e un documento **sintetici**, zero mutation di replica | Database reale, HTTP Worker, performance Free, conformità GDPR |
 | Nuova API | `cloudflare/api/worker.mjs`, `cloudflare/auth/session-gate.mjs`, issuer e `cloudflare/api/consent-worker.mjs` e `logout-worker.mjs` integrati nel repository come ingresso unico, ma senza Auth password/Google reale, binding remoto o collegamento al client. SQL 0003/0004 solo versionate, non applicate su D1 Cloudflare | Runtime Auth, consenso, cancellazione o replica cloud utilizzabili |
 | Recupero claim D1 | [PR #1072](https://github.com/gernotfound/logbook/pull/1072) **MERGED**: ristaging durevole nel vault di claim già committato quando è avanzato soltanto il clock; receipt/lease/seq/checkpoint e AEAD verificati; lease scaduto durante scan rifiutato nella transazione | Non è integrazione AuthGate o API Production; nessun ACK o grant sul ristaging |
-| Email Auth | **Kinde selezionato, non configurato**: verifica/reset/OTP previsti sul provider Kinde, Mailjet non più nel percorso target. [Storico Mailjet PR #1077](https://github.com/gernotfound/logbook/pull/1077) | Consegna reale, MIME/tracking/retention, abusi e quota Free, nessun DNS/posta Production modificato |
+| Email Auth | Kinde selezionato, non ancora integrato: verifica/reset/OTP dal provider, senza altre dipendenze email transazionali | Test consegna MIME/tracking, rate/quote Free, privacy, OAuth e Safari prima del GO |
 | Vercel | Verifica provider del 13/11: deployment backend precedente `READY` su `4e25427ffbe0a4f4a7a695d25dec211b4ff16200`; i tentativi intermedi su altri SHA risultano `CANCELED`. Non è un Worker Cloudflare | Cloudflare Production o cutover DNS |
 
 Il vecchio Hosting Firebase `thelogbook` è disabilitato secondo il comando CLI attestato dal proprietario; il workflow GitHub Hosting risulta dichiarato disabilitato, ma non è stato letto autonomamente come `disabled_manually`. Non riattivarlo come rollback.
