@@ -127,7 +127,7 @@ Il servizio reCAPTCHA Enterprise ha raggiunto la quota Free secondo la notifica 
 4. **MUST:** un merge concorrente richiede controllo del delta, ricalcolo della versione e rivalidazione del nuovo SHA. Non applicare bump dopo CI/review né introdurre commit automatici su main.
 5. **MUST:** rivedere il diff completo, risolvere blocker e conversazioni aperte sul candidato esatto. Squash merge autonomo solo quando autorizzato, con gate e review richiesti soddisfatti; non indebolire il ruleset.
 
-Il bump applicativo non modifica schema/protocollo, catalogo o `LEGAL_VERSIONS`. I manifest package sono anche input del selettore backend Vercel: perfino un bump può richiedere deploy dopo il merge.
+Il bump applicativo non modifica schema/protocollo, catalogo o `LEGAL_VERSIONS`. Il selettore backend Vercel resta nel repository come contratto transitorio, ma il progetto `logbook` è sospeso e `vercel.json` vieta gli auto-deploy Git su ogni branch, incluso `main`; un bump non autorizza né riattiva Vercel.
 
 ## Validazione, rilascio e conclusione
 
