@@ -68,6 +68,11 @@ if (!productionWorkflow.includes("node-version: '24'\n          package-manager-
 }
 const mismatchDiagnostics = readFileSync('scripts/cloudflare-asset-mismatch-diagnostics.sh', 'utf8');
 const verifiedAsset = readFileSync('scripts/verify-cloudflare-served-asset.mjs', 'utf8');
+if (!productionWorkflow.includes('for path in / /about /privacy /legal-pages.css') ||
+    !productionWorkflow.includes('dist/about.html dist/privacy.html dist/legal-pages.css') ||
+    !productionWorkflow.includes('Unexpected public page status/MIME')) {
+  failures.push('Public HTML must be verified byte-for-byte by the Cloudflare production smoke');
+}
 if (!productionWorkflow.includes('for attempt in 1 2 3 4; do') ||
     !productionWorkflow.includes('if [ "${attempt}" != 4 ]; then sleep 3; fi') ||
     !productionWorkflow.includes('if node scripts/verify-cloudflare-served-asset.mjs') ||

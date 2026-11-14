@@ -22,9 +22,10 @@ precacheAndRoute(self.__WB_MANIFEST, { ignoreURLParametersMatching: [/^v$/] });
 
 // Treat same-origin document navigations as SPA app-shell requests so manifest
 // shortcuts such as /?tab=training keep working offline. Firebase reserves /__/
-// for Auth/Hosting helpers: never intercept that namespace with the app shell.
+// for Auth/Hosting helpers. Public legal pages are standalone static documents:
+// never return an authenticated app shell for /about or /privacy.
 registerRoute(new NavigationRoute(
     createHandlerBoundToURL('/index.html'),
-    { denylist: [/^\/__\//] },
+    { denylist: [/^\/__\//, /^\/(?:about|privacy)(?:\/|\.html|$)/] },
 ));
 
