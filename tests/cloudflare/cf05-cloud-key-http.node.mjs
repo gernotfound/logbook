@@ -232,7 +232,6 @@ void test('missing dependencies, invalid KEK, private gate failure and quotas fa
       { ...f.env, DB: undefined },
       { ...f.env, AUTH_GATE: undefined },
       { ...f.env, CLOUD_ACCOUNT_KEK_V1: undefined },
-      { ...f.env, CLOUD_ACCOUNT_KEK_V1: Buffer.alloc(32, 93).toString('base64') },
       { ...f.env, AUTH_GATE: { fetch: async () => Response.json({ error: 'rate-limited' }, { status: 429 }) } },
       { ...f.env, DB: { withSession() { throw new Error('synthetic-DB-quota'); } } },
     ]) {
@@ -242,6 +241,15 @@ void test('missing dependencies, invalid KEK, private gate failure and quotas fa
     }
     assert.equal(f.count('cloud_account_keys', 'owner-a'), 0);
     assert.equal(f.count('cloud_key_issuance', 'owner-a'), 0);
+    const valid = await f.call('owner-a', SYNC);
+    assert.equal(valid.response.status, 200);
+    // A valid-looking but different KEK cannot open an already issued ADK.
+    const changedKek = { ...f.env,
+      CLOUD_ACCOUNT_KEK_V1: Buffer.alloc(32, 93).toString('base64') };
+    assert.equal((await f.call('owner-a', SYNC, { env: changedKek })).response.status, 503);
+    assert.equal(f.count('cloud_account_keys', 'owner-a'), 1);
+    assert.equal(f.count('cloud_key_issuance', 'owner-a'), 1);
+    assert.equal((await f.call('owner-a', SYNC)).body.key, valid.body.key);
   } finally { f.close(); }
 });
 
