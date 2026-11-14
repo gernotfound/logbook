@@ -128,3 +128,24 @@ suite Vitest esercita la regex production e verifica l'integrazione
 nel vero `src/sw.ts`; restano da verificare il comportamento
 di WebKit/iOS installato, il rilascio PWA e l'API Auth effettivamente
 montata. Nessuna route Auth pubblica viene abilitata da questo diff.
+
+
+### CF-05 — accesso HTTP alle chiavi ADK, solo candidato (14/11/2026)
+
+Il Worker API candidato `cloudflare/api/worker.mjs` integra due nuove route
+`POST /v1/cloud-key/sync` e
+`POST /v1/cloud-key/rights-export`. Richiedono sessione Kinde
+verificata e D1 corrente tramite `AUTH_GATE`, token CSRF,
+origin esatto, nessun corpo e guardia di consenso specifica. Una chiave
+viene restituita al browser soltanto dopo controlli D1 primari pre/post
+decifratura; dopo la revoca rights-only è lettura di ADK preesistente,
+mai nuova emissione. Risposta in formato compatibile con
+`thelogbook-account-data-key`, senza cache o telemetria.
+Test integrati in M7 su SQLite sintetica con API e AuthGate autentici.
+
+**Non attivo in rete:** `cloudflare/wrangler.jsonc` non espone
+queste route né contiene binding D1/KEK. Non sono state eseguite
+migrazioni remote né configurati segreti; servono ancora custodia e
+recupero KEK indipendenti, completo contratto erasure/rights, consenso
+client, journal e session lifecycle Kinde, WAF/quote e prove reali
+iOS/Workers/D1. I test Node e la CI non attestano runtime cloud.
