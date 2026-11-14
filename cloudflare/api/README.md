@@ -173,7 +173,11 @@ to this private Worker; neither config exposes the gate on workers.dev or a
 custom route. The gate rejects any missing configuration, external route,
 invalid/duplicated cookie, expired/revoked session, unverified or disabled
 account, stale account epoch, missing/withdrawn consent and unmatched D1
-fence. It performs one primary SQL read joining session, principal and
+fence. The second SQL fence inside protected reads and write batches also
+requires the actual active subject and immutable revision-1 acceptance,
+so removing the acceptance after the private gate cannot authorize a
+ciphertext read, mutation, or historical receipt. Future reacceptance must
+update both the gate and this SQL predicate together. It performs one primary SQL read joining session, principal and
 consent, and validates a session-bound CSRF header on mutations. An
 approximate Cloudflare rate-limit binding must approve before the D1 query,
 otherwise no trusted claim is returned. Rate limiting is per-session and

@@ -974,3 +974,43 @@ void test('revocation between replica-control read and clock scan prevents a new
   assert.equal(db.sqlite.prepare('SELECT COUNT(*) AS n FROM sync_replica_mutations').get().n, 0);
   assert.equal(db.sqlite.prepare('SELECT revision FROM sync_state').get().revision, 0);
 }));
+
+void test('a deleted consent proof after AuthGate cannot authorize D1 data or historical receipts', () => withFixture(async db => {
+  const original = attempt('batch000000001001');
+  assert.equal((await call(db, 'commit', original)).status, 200);
+  db.sqlite.prepare('DELETE FROM health_consent_acceptances WHERE uid = ?').run(owner);
+  // The synthetic gate deliberately returns claims issued before deletion.
+  const cases = [
+    ['control', {}],
+    ['read', { paths: [''] }],
+    ['scan', { after: null, expectedRevision: null }],
+    ['receipt', { batchId: original.batchId }],
+    ['replica/status', claim('mutation0000001001', 1)],
+    ['replica/claim', claim('mutation0000001002', 1)],
+    ['commit', attempt('batch000000001002', 2, 1)],
+  ];
+  for (const [route, body] of cases) {
+    const result = await call(db, route, body);
+    assert.deepEqual(result, { status: 403, body: { error: 'access-revoked' } }, route);
+  }
+  assert.equal(db.sqlite.prepare('SELECT COUNT(*) AS n FROM sync_receipts').get().n, 1);
+  assert.equal(db.sqlite.prepare('SELECT COUNT(*) AS n FROM sync_replica_mutations').get().n, 0);
+  assert.equal(db.sqlite.prepare('SELECT revision FROM sync_state').get().revision, 1);
+}));
+
+void test('a consent proof removed between gate and SQL rolls back replica membership', () => withFixture(async db => {
+  const intercepted = Object.create(db);
+  intercepted.batch = async statements => {
+    if (statements[0]?.sql.includes('INSERT INTO sync_replica_mutations')) {
+      db.sqlite.prepare('DELETE FROM health_consent_acceptances WHERE uid = ?').run(owner);
+    }
+    return db.batch(statements);
+  };
+  const result = await call(db, 'replica/claim', claim('mutation0000001003'), {
+    env: { ...makeEnv(db), DB: intercepted },
+  });
+  assert.deepEqual(result, { status: 403, body: { error: 'access-revoked' } });
+  assert.equal(db.sqlite.prepare('SELECT COUNT(*) AS n FROM sync_replica_mutations').get().n, 0);
+  assert.equal(db.sqlite.prepare('SELECT COUNT(*) AS n FROM sync_replicas').get().n, 1);
+  assert.equal(db.sqlite.prepare('SELECT revision FROM sync_state').get().revision, 0);
+}));

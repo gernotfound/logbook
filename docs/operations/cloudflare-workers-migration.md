@@ -65,7 +65,12 @@ repliche e ricevute. L'autorizzazione passa nella stessa query sulla D1
 primaria, con batch SQL atomico per le pagine e per le letture composte.
 Una revoca confermata *prima della transazione* blocca l'operazione;
 una risposta già autorizzata e in volo dopo quella transazione non può
-essere richiamata retroattivamente.
+essere richiamata retroattivamente. La revisione successiva del branch
+richiede nel medesimo predicato SQL anche soggetto attivo e ricevuta del
+primo consenso effettivamente presente: il solo digest di una sessione
+valida non basta se una cancellazione del consenso si interpone dopo
+AuthGate. La revisione 1 è quella corrente del candidato; un futuro
+flusso di riaccettazione richiederà di evolvere insieme gate e fence.
 
 Regressioni SQL/HTTP dedicate: logout nel tratto gate→D1, perdita del
 token, scadenza, epoch divergente, letture/ACK negati dopo revoca e
@@ -96,7 +101,7 @@ e [CI main #43489162305](https://github.com/gernotfound/logbook/actions/runs/434
 | D1 sandbox | `thelogbook-cf02-eu-isolated-20261113`, `jurisdiction=eu`, read replication OFF: schema `0001` + `0002` applicate e indice/trigger anti-riuso riletti via Cloudflare; un UID e un documento **sintetici**, zero mutation di replica | Database reale, HTTP Worker, performance Free, conformità GDPR |
 | Nuova API | `cloudflare/api/worker.mjs`, `cloudflare/auth/session-gate.mjs`, issuer e `cloudflare/api/consent-worker.mjs` e `logout-worker.mjs` integrati nel repository come ingresso unico, ma senza Auth password/Google reale, binding remoto o collegamento al client. SQL 0003/0004 solo versionate, non applicate su D1 Cloudflare | Runtime Auth, consenso, cancellazione o replica cloud utilizzabili |
 | Recupero claim D1 | [PR #1072](https://github.com/gernotfound/logbook/pull/1072) **MERGED**: ristaging durevole nel vault di claim già committato quando è avanzato soltanto il clock; receipt/lease/seq/checkpoint e AEAD verificati; lease scaduto durante scan rifiutato nella transazione | Non è integrazione AuthGate o API Production; nessun ACK o grant sul ristaging |
-| Email | [PR #1077](https://github.com/gernotfound/logbook/pull/1077) ancora draft parallela: record TXT Mailjet sotto `notify.thelogbook.me` confermati anche con lettura Cloudflare il 13/11; nessuna conferma SMTP/API/MIME o sessione Auth. Brevo registra tracking | Mailjet validato e collaudato su Worker, tracking e DNS definitivi, ritiro Brevo |
+| Email | [PR #1077](https://github.com/gernotfound/logbook/pull/1077) ancora draft parallela: la PR riporta screenshot del 14/11 con `notify.thelogbook.me` Active e SPF/DKIM OK nel pannello Mailjet; non è un collaudo delle intestazioni ricevute, dell'API, del MIME o di Auth. Il registro servizi è gestito dal filone Mailjet. Brevo registra tracking | Mailjet validato e collaudato su Worker, tracking e DNS definitivi, ritiro Brevo |
 | Vercel | Verifica provider del 13/11: deployment backend precedente `READY` su `4e25427ffbe0a4f4a7a695d25dec211b4ff16200`; i tentativi intermedi su altri SHA risultano `CANCELED`. Non è un Worker Cloudflare | Cloudflare Production o cutover DNS |
 
 Il vecchio Hosting Firebase `thelogbook` è disabilitato secondo il comando CLI attestato dal proprietario; il workflow GitHub Hosting risulta dichiarato disabilitato, ma non è stato letto autonomamente come `disabled_manually`. Non riattivarlo come rollback.
