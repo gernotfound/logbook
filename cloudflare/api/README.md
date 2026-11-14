@@ -229,7 +229,8 @@ synthetic and cannot validate provider CPU, OAuth or email delivery.
 ## CF-05 — candidate first-consent boundary (not deployed)
 
 `cloudflare/api/consent-worker.mjs` accepts identity-only requests
-`POST /v1/consent/status` and `POST /v1/consent/initial`.
+`POST /v1/consent/status`, `POST /v1/consent/initial` and
+`POST /v1/consent/withdraw`.
 These are candidate HTTP routes not bound to the public frontend or domain.
 The private `AUTH_GATE` accepts the two routes only with a valid, non-revoked
 host-only session. The first-accept mutation additionally requires session
@@ -265,10 +266,27 @@ configuration. Its placeholder legal versions must match
 consent config was removed in PR #1081. Missing or inconsistent provider
 configuration denies acceptance.
 
+Migration `0005_health_withdrawal_queue.sql` introduces a durable, owner-
+and revision-scoped `health_erasure_jobs` record. The strictly validated
+withdrawal intent `{ action: "withdraw", expectedRevision: 1,
+confirmsErasure: true }` requires the private current Auth session and
+CSRF but does not require the email to remain verified. A single conditional
+SQL INSERT rechecks the current session, account status and immutable first
+consent proof. Its AFTER INSERT trigger flips `sync_subjects.status`
+to `withdrawn` in the same statement, rejecting a mismatched generation
+rather than retaining a job with a writable subject. A replay or lost ACK
+returns `{ status: "withdrawn", revision: 1, fenceEpoch, deletionStatus:
+"pending" }` only when primary D1 confirms the user's still-valid session,
+withdrawn grant and pending job. Auth epoch advances may not hide the
+right to withdraw; the old consent fence is preserved as job metadata.
+No request may claim erasure `complete`: the runner, rights-only export,
+ADK retirement and final receipt **are not implemented**. Missing migration,
+unavailable DB or an ambiguous readback fail closed.
+
 **Incomplete and release NO-GO**: full Auth credential verifier, email/Google,
-revocation with atomic erasure job, rights-only, reacceptance, legal-change
-handling, keys/ADK, account deletion, real HTTP Cloudflare measurement,
-frontend consent UI wiring and provider deployment. Existing Firebase
+actual bounded erasure runner and receipt, rights-only, reacceptance,
+legal-change handling, keys/ADK, account deletion, real HTTP Cloudflare
+measurement, frontend consent UI wiring and provider deployment. Existing Firebase
 accounts and health data are NOT transferred. No live schema, route or DNS
 is modified by the candidate. The fixture tests run Node SQLite and fake
 service binding; they do not prove D1 runtime behavior.

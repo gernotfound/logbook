@@ -12,7 +12,7 @@ const MUTATION_ROUTES = new Set([
   '/v1/sync/replica/retire', '/v1/sync/replica/status',
 ]);
 const IDENTITY_READ_ROUTES = new Set(['/v1/consent/status']);
-const IDENTITY_MUTATION_ROUTES = new Set(['/v1/consent/initial', '/v1/auth/logout']);
+const IDENTITY_MUTATION_ROUTES = new Set(['/v1/consent/initial', '/v1/consent/withdraw', '/v1/auth/logout']);
 
 function json(payload, status) {
   return new Response(JSON.stringify(payload), {
@@ -151,7 +151,8 @@ async function authorize(request, env) {
   const emailVerified = Number.isSafeInteger(row.verified_at_ms)
     && row.verified_at_ms > 0 && row.verified_at_ms <= now;
   // A session may be closed before verification or first health consent.
-  if ((!identityOnly || (IDENTITY_MUTATION_ROUTES.has(route) && route !== '/v1/auth/logout')) && !emailVerified) {
+  if ((!identityOnly || (IDENTITY_MUTATION_ROUTES.has(route)
+    && !['/v1/auth/logout', '/v1/consent/withdraw'].includes(route))) && !emailVerified) {
     return json({ error: 'unauthorized' }, 401);
   }
   const suppliedCsrf = request.headers.get('x-csrf-token');
