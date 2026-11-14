@@ -13,7 +13,8 @@ export class KindePrincipalProvisionError extends Error {
  * Internal callback-only boundary. The caller MUST consume its server-owned
  * OAuth state exactly once and supply the saved nonce after a successful
  * authorization-code/PKCE exchange. Never expose this to a request with a
- * client-chosen nonce or use it as a standalone login endpoint.
+ * client-chosen nonce or use it as a standalone login endpoint. Pass the saved
+ * nonce separately from the tokens returned by the browser.
  *
  * A domain-separated digest of (issuer, subject) is the stable new-baseline
  * owner ID. It contains neither email nor health data and avoids an
@@ -22,10 +23,14 @@ export class KindePrincipalProvisionError extends Error {
  */
 export function createKindePrincipalProvisioner(configuration, keySet) {
   const verifyLoginProof = createKindeLoginProofVerifier(configuration, keySet);
-  return async function provisionVerifiedPrincipal(db, oauthProof) {
+  return async function provisionVerifiedPrincipal(db, oauthTokens, trustedNonce) {
     try {
       if (!db || typeof db.withSession !== 'function') throw new Error('missing-db');
-      const identity = await verifyLoginProof(oauthProof);
+      const identity = await verifyLoginProof({
+        accessToken: oauthTokens?.accessToken,
+        idToken: oauthTokens?.idToken,
+        expectedNonce: trustedNonce,
+      });
       if (identity.emailVerified !== true) throw new Error('unverified-identity');
       const bytes = new TextEncoder().encode(
         UID_CONTEXT + identity.issuer + '\0' + identity.subject,
