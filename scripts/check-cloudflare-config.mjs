@@ -58,6 +58,9 @@ if (!productionWorkflow.includes('"${CLOUDFLARE_APP_ORIGIN}/?tab=training"') ||
     !productionWorkflow.includes('test "${miss_status}" = 404')) {
   failures.push('Cloudflare smoke must cover the real PWA shortcut and strict 404 for absent JS, CSS and pathnames');
 }
+if (!productionWorkflow.includes("node-version: '24'\n          package-manager-cache: false")) {
+  failures.push('Cloudflare deploy Node setup must disable package-manager cache in privileged job');
+}
 const mismatchDiagnostics = readFileSync('scripts/cloudflare-asset-mismatch-diagnostics.sh', 'utf8');
 const verifiedAsset = readFileSync('scripts/verify-cloudflare-served-asset.mjs', 'utf8');
 if (!productionWorkflow.includes('for attempt in 1 2 3 4; do') ||
