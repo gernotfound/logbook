@@ -12,7 +12,8 @@
 | Archivio device per owner | DEK casuale wrappata con CryptoKey AES-GCM non esportabile in IndexedDB | `secureArchiveKeys.ts`, `secureArchiveSession.ts`, `secureArchiveControlRecovery.ts` |
 | Local Envelope e record device | XChaCha20-Poly1305 sincrono, chiave device sbloccata | `secureArchiveCipher.ts`, `secureArchiveRepository.ts`, `deviceStorage.ts` |
 | Documenti business cloud per account | ADK casuale per UID, acquisita online e non persistita nel browser | `cloudAccountKeyAccess.ts`, `cloudDocumentCipher.ts` |
-| Custodia ADK trusted | AES-256-GCM server con secret versionato `CLOUD_ACCOUNT_KEK_V1` | `server/cloudKeys/accountKeyEnvelope.ts`, `accountDataKey.ts` |
+| Custodia ADK trusted attiva (Firebase/Vercel) | AES-256-GCM Node con KEK server-only v1 | `server/cloudKeys/accountKeyEnvelope.ts`, `accountDataKey.ts` |
+| Custodia ADK candidata Workers/D1 (CF-05, non attiva) | AES-256-GCM WebCrypto su ADK casuale e KEK secret v1 dedicata; registro D1 immutabile per consenso | `cloudflare/api/cloud-key-crypto.mjs`, `cloud-key-store.mjs`, migration `0007_cloud_key_custody.sql` |
 
 I moduli client della tabella sono in `src/lib/sync/`. Nessuna passphrase, PIN o recovery code aggiuntivo nella UX ordinaria; identità Firebase/guest e consenso restano gate, non materiale crittografico.
 
@@ -75,6 +76,16 @@ La richiesta normale `POST /api/cloud-key` richiede Firebase ID token verificato
 L'identità arriva **esclusivamente** dal token Firebase; le chiavi sono server-only in `user_data_keys/{uid}` e non accessibili alle Security Rules client; il vecchio formato cloud non deve essere convertito o sovrascritto dalla sola presenza di una nuova chiave. La cancellazione account ora cancella e verifica il record della chiave nel job trusted. La cancellazione dei soli dati sanitari conserva la chiave durante retry e pagine non ancora verificate; la rimuove atomicamente nel commit finale della cancellazione completa e controlla che manchi prima di autorizzare il purge locale.
 
 **MUST per ogni modifica futura al contratto cifrato:** verificare insieme lettura/scrittura root e shard, backup/esportazione diritti dopo revoca, Firestore Rules restrittive, recovery PWA, `verify:m8`/CI equivalente exact-SHA, review e deploy/smoke pertinenti. Merge e CI non dimostrano da soli recuperabilità indipendente delle chiavi, assenza di errori nei flussi autenticati reali o garanzie di riservatezza ulteriori rispetto al modello di minaccia documentato.
+
+### Candidato CF-05 — custodia ADK Workers/D1, NON pubblicata
+
+**MUST (chiavi Cloudflare):** la ADK cloud per account è generata casualmente nel Worker, senza derivarla da Kinde, token, password, KEK o DEK device. Il codec WebCrypto `cloud-key-crypto.mjs` usa AES-256-GCM con nonce 96-bit casuale, tag 128-bit, AAD UID/versione, encoding base64 canonico e formato stretto v1. La KEK `CLOUD_ACCOUNT_KEK_V1` da 32 byte deve essere un **secret binding Workers distinto dal valore live Vercel**, non una variabile Vite; nessun secret è creato o pubblicato da questo incremento. Perdita/rotazione arbitraria della KEK impedisce il recupero dei ciphertext: una copia indipendente sicura e un restore verificato sono obbligatori prima del GO.
+
+**MUST (provisioning):** `cloud-key-store.mjs` accetta soltanto claims provenienti dal vero AuthGate privato, con CSRF verificato; tutte le operazioni rileggono sessione, principal, email verified, consenso/epoch e stato cancellazione dalla D1 primaria **nella SELECT/INSERT**, e ripetono il controllo dopo la decifratura. La creazione è una singola INSERT condizionale che richiede il primo consenso attivo, revisione replica 0, assenza totale di ciphertext/repliche/ricevute/job non conclusi e di precedente issuance per la stessa generazione. Il trigger SQL registra nello stesso commit `cloud_key_issuance(uid, consent_revision)` in forma permanente. Un account senza chiave ma già emesso, o con dati cloud presenti, è **corrotto/incompleto, non vuoto**: non creare una nuova ADK. Concorrenza o ACK ambiguo richiedono lettura primaria del winner, mai restituzione del candidato non provato.
+
+**MUST (rights-only e revoca):** la lettura `rights-export` dopo `withdrawn` usa esclusivamente ADK esistente e sessione ancora valida, con job di erasure per la generazione corrente. Non crea chiavi; nessun recupero ADK per principal disabilitato, sessione revocata o identità cancellata. La chiave è immutabile nella baseline e la sua cancellazione SQL è consentita soltanto con lease valido di erasure nello stato `awaiting-keys`; il registro issuance non viene cancellato. Rewrap/versione successiva, finalizzazione di CF-06, backup/restore anti-resurrection, nuova accettazione del consenso e integrazione UI richiedono gate separati: non trattare `awaiting-keys` come `complete`.
+
+**NON-GO:** schema 0007, modulo store e test Node/SQLite sono solo codice candidato; non esiste ancora route ADK pubblicata, autenticazione Kinde/ADK integrata nel runtime PWA, KEK Cloudflare configurata o prova della stessa semantica su D1 remota/Workers. Non dichiarare E2EE né ritorno sicuro di dati locali dopo perdita del profilo device.
 
 ## Integrazioni da preservare
 
