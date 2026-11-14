@@ -704,15 +704,17 @@ void test('account epoch change revokes receipt lookup instead of implying an ab
   assert.deepEqual(newSession, { status: 200, body: { receipt: null } });
 }));
 
-void test('old consent receipts are never visible after trusted reacceptance', () => withFixture(async db => {
+void test('revision-2 consent cannot reuse the initial proof or old receipts', () => withFixture(async db => {
   const batch = attempt('batch000000000066');
   assert.equal((await call(db, 'commit', batch)).status, 200);
+  // Reacceptance is not implemented: changing only the subject revision
+  // cannot turn the immutable revision-1 acceptance into a valid new grant.
   db.sqlite.prepare('UPDATE sync_subjects SET consent_revision = 2 WHERE uid = ?').run(owner);
   assert.deepEqual(await call(db, 'receipt', { batchId: batch.batchId }),
     { status: 403, body: { error: 'access-revoked' } });
   assert.deepEqual(await call(db, 'receipt', { batchId: batch.batchId },
     { env: makeEnv(db, { healthConsentRevision: 2 }) }),
-    { status: 200, body: { receipt: null } });
+    { status: 403, body: { error: 'access-revoked' } });
 }));
 
 void test('D1 account generation cannot regress or reactivate without fresh consent and epoch', () => withFixture(async db => {
