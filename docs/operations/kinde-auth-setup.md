@@ -128,3 +128,7 @@ La route HTTP attuale è ancora isolata. Si dovranno verificare
 l'accesso Kinde, la token Audience reale, sessioni, email/password
 min 15, reset, logout SSO, integrazione UI e Safari. I secret non
 devono essere trasferiti al browser né copiati nelle issue.
+
+### CF-03 — integrazione sintetica degli endpoint (non operativa su Kinde live)
+
+Il candidato `cloudflare/auth/kinde-http-worker.mjs` non è collegato a un'origine pubblica. La suite `tests/cloudflare/cf03-kinde-http-worker.node.mjs` usa firme RS256 sintetiche per attraversare i boundary reali callback → sessione D1 → AuthGate → primo consenso → replica, incluse revoca, logout e isolamento owner. Non verifica le callback abilitate nel tenant Kinde, la policy password, invio email, login Google, browser Safari, cifratura cloud o ripristino. I valori reali del client secret restano esclusivamente nei secret server una volta autorizzati. Consultare [runbook Cloudflare](cloudflare-workers-migration.md) e [CF-03 #1057](https://github.com/gernotfound/logbook/issues/1057).

@@ -6,6 +6,7 @@ import test from 'node:test';
 import { createLocalJWKSet, exportJWK, generateKeyPair, SignJWT } from 'jose';
 import kindeHttpWorker, { createKindeHttpHandler } from '../../cloudflare/auth/kinde-http-worker.mjs';
 import gate from '../../cloudflare/auth/session-gate.mjs';
+import apiWorker from '../../cloudflare/api/worker.mjs';
 
 const ORIGIN = 'https://candidate.invalid';
 const ISSUER = 'https://synthetic-kinde.example';
@@ -20,6 +21,7 @@ class Stmt {
   constructor(sqlite, sql, args = []) { this.sqlite = sqlite; this.sql = sql; this.args = args; }
   bind(...args) { return new Stmt(this.sqlite, this.sql, args); }
   async first() { return this.sqlite.prepare(this.sql).get(...this.args) ?? null; }
+  async all() { return { results: this.sqlite.prepare(this.sql).all(...this.args) }; }
   async run() {
     const r = this.sqlite.prepare(this.sql).run(...this.args);
     return { success: true, meta: { changes: r.changes } };
@@ -29,6 +31,21 @@ class DB {
   constructor(sqlite) { this.sqlite = sqlite; }
   prepare(sql) { return new Stmt(this.sqlite, sql); }
   withSession(mode) { assert.equal(mode, 'first-primary'); return this; }
+  async batch(statements) {
+    this.sqlite.exec('BEGIN IMMEDIATE');
+    try {
+      const output = [];
+      for (const statement of statements) {
+        output.push(statement.sql.trimStart().toUpperCase().startsWith('SELECT')
+          ? await statement.all() : await statement.run());
+      }
+      this.sqlite.exec('COMMIT');
+      return output;
+    } catch (error) {
+      this.sqlite.exec('ROLLBACK');
+      throw error;
+    }
+  }
 }
 
 async function fixture() {
@@ -50,6 +67,8 @@ async function fixture() {
   });
   let nonce;
   let callCount = 0;
+  let subject = 'kp_synthetic_user_20261114';
+  let loginCount = 0;
   const fetchImpl = async (url, options) => {
     callCount += 1;
     assert.equal(url, ISSUER + '/oauth2/token');
@@ -57,14 +76,15 @@ async function fixture() {
     assert.equal(options.redirect, 'manual');
     assert.equal(options.body.get('client_secret'), 'synthetic-private-secret');
     const now = Math.floor(Date.now() / 1000);
-    const sub = 'kp_synthetic_user_20261114';
+    const sub = subject;
     const accessToken = await new SignJWT({ azp: CLIENT, sub })
       .setProtectedHeader({ alg: 'RS256', kid: 'synthetic' })
       .setIssuer(ISSUER).setAudience(API_AUD)
       .setIssuedAt(now - 2).setExpirationTime(now + 300).sign(privateKey);
     const at_hash = createHash('sha256').update(accessToken).digest().subarray(0, 16).toString('base64url');
     const idToken = await new SignJWT({
-      azp: CLIENT, sub, nonce, email: 'verified@example.invalid',
+      azp: CLIENT, sub, nonce,
+      email: sub === 'kp_synthetic_user_20261114' ? 'verified@example.invalid' : 'other@example.invalid',
       email_verified: true, auth_time: now - 60, at_hash,
     }).setProtectedHeader({ alg: 'RS256', kid: 'synthetic' })
       .setIssuer(ISSUER).setAudience(ISSUER).setIssuedAt(now - 2)
@@ -110,7 +130,8 @@ async function fixture() {
     const state = url.searchParams.get('state');
     nonce = url.searchParams.get('nonce');
     const cookie = start.headers.getSetCookie()[0].split(';')[0];
-    const callbackRequest = new Request(ORIGIN + CALLBACK + '?code=synthetic-code&state=' + state, {
+    loginCount += 1;
+    const callbackRequest = new Request(ORIGIN + CALLBACK + '?code=synthetic-code-' + loginCount + '&state=' + state, {
       headers: { cookie },
     });
     const completed = await handler(callbackRequest, env);
@@ -127,6 +148,7 @@ async function fixture() {
     sqlite, db, env, handler, post, login,
     calls: () => callCount,
     setRate: value => { allowLogin = value; },
+    setSubject: value => { subject = value; },
     close: () => sqlite.close(),
   };
 }
@@ -223,6 +245,124 @@ void test('login abuse limiter rejects before OAuth state creation or token exch
   } finally { f.close(); }
 });
 
+
+
+const acceptance = {
+  action: 'accept-initial', expectedRevision: 0,
+  acceptance: {
+    confirmsOver18: true, acceptedHealthData: true, acceptedTerms: true,
+    privacyVersion: '1.3.9', termsVersion: '1.2.5',
+  },
+};
+
+// A signed synthetic Kinde exchange runs through the production HTTP, AuthGate,
+// consent and D1 handlers. This does not attest Kinde itself or AEAD recovery.
+async function cloudCall(f, route, login, body, csrf = login.csrf) {
+  const headers = {
+    origin: ORIGIN, 'sec-fetch-site': 'same-origin',
+    cookie: login.cookie, 'x-csrf-token': csrf,
+  };
+  if (body !== undefined) headers['content-type'] = 'application/json';
+  const response = await apiWorker.fetch(new Request(ORIGIN + route, {
+    method: 'POST', headers,
+    ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+  }), {
+    ...f.env, API_ORIGIN: ORIGIN,
+    CONSENT_PRIVACY_VERSION: '1.3.9', CONSENT_TERMS_VERSION: '1.2.5',
+  });
+  return { status: response.status, body: await response.json() };
+}
+
+void test('Kinde callback crosses consent and D1 replica gates only after explicit verified acceptance', async () => {
+  const f = await fixture();
+  try {
+    const login = await f.login();
+    assert.deepEqual(await cloudCall(f, '/v1/consent/status', login), {
+      status: 200, body: { status: 'unregistered', revision: 0, fenceEpoch: 1 },
+    });
+    assert.equal((await cloudCall(f, '/v1/sync/control', login, {})).status, 401);
+    assert.equal((await cloudCall(f, '/v1/consent/initial', login, acceptance, 'invalid-csrf')).status, 403);
+    assert.equal(f.sqlite.prepare('SELECT COUNT(*) AS n FROM sync_subjects').get().n, 0);
+
+    const accepted = await cloudCall(f, '/v1/consent/initial', login, acceptance);
+    assert.equal(accepted.status, 200);
+    assert.deepEqual({
+      status: accepted.body.status, revision: accepted.body.revision,
+      fenceEpoch: accepted.body.fenceEpoch,
+    }, { status: 'active', revision: 1, fenceEpoch: 1 });
+    assert.equal(f.sqlite.prepare('SELECT COUNT(*) AS n FROM health_consent_acceptances').get().n, 1);
+    assert.equal((await cloudCall(f, '/v1/consent/initial', login, acceptance)).status, 409);
+    const session = await f.handler(f.post(SESSION, login.cookie), f.env);
+    assert.equal((await session.json()).healthConsentRevision, 1);
+    assert.deepEqual(await cloudCall(f, '/v1/sync/control', login, {}), {
+      status: 200, body: { revision: 0, consentRevision: 1, fenceEpoch: 1, replicas: {} },
+    });
+
+    const claim = {
+      mutationId: 'kinde-synthetic-claim-0001', expectedRevision: 0,
+      expectedFenceEpoch: 1, consentRevision: 1,
+      candidateReplicaId: 'kinde-synthetic-device-0001',
+      currentReplica: null, checkpointClock: {},
+    };
+    assert.equal((await cloudCall(f, '/v1/sync/replica/claim', login, claim, 'invalid-csrf')).status, 403);
+    const registered = await cloudCall(f, '/v1/sync/replica/claim', login, claim);
+    assert.equal(registered.status, 200);
+    assert.equal(registered.body.action, 'register');
+    assert.equal(registered.body.replica.replicaId, claim.candidateReplicaId);
+    assert.equal((await cloudCall(f, '/v1/sync/control', login, {})).body.revision, 1);
+    assert.equal(f.sqlite.prepare('SELECT COUNT(*) AS n FROM sync_replicas').get().n, 1);
+  } finally { f.close(); }
+});
+
+void test('Kinde consent withdrawal fences replica but permits status and session logout', async () => {
+  const f = await fixture();
+  try {
+    const login = await f.login();
+    assert.equal((await cloudCall(f, '/v1/consent/initial', login, acceptance)).status, 200);
+    const withdrawn = await cloudCall(f, '/v1/consent/withdraw', login, {
+      action: 'withdraw', expectedRevision: 1, confirmsErasure: true,
+    });
+    assert.deepEqual(withdrawn, { status: 200, body: {
+      status: 'withdrawn', revision: 1, fenceEpoch: 1, deletionStatus: 'pending',
+    } });
+    assert.equal((await cloudCall(f, '/v1/sync/control', login, {})).status, 401);
+    assert.equal((await cloudCall(f, '/v1/consent/status', login)).body.status, 'withdrawn');
+    assert.equal(f.sqlite.prepare('SELECT status FROM health_erasure_jobs').get().status, 'pending');
+    assert.equal((await f.handler(f.post(SESSION, login.cookie), f.env)).status, 200);
+    assert.equal((await f.handler(f.post(LOGOUT, login.cookie, login.csrf), f.env)).status, 200);
+    assert.equal((await f.handler(f.post(SESSION, login.cookie), f.env)).status, 401);
+    assert.equal((await cloudCall(f, '/v1/consent/status', login)).status, 401);
+    assert.equal(f.sqlite.prepare('SELECT status FROM health_erasure_jobs').get().status, 'pending');
+  } finally { f.close(); }
+});
+
+void test('Kinde signed subjects retain separate D1 consent and replica registers', async () => {
+  const f = await fixture();
+  try {
+    const a = await f.login();
+    const principalA = await (await f.handler(f.post(SESSION, a.cookie), f.env)).json();
+    assert.equal((await cloudCall(f, '/v1/consent/initial', a, acceptance)).status, 200);
+    const claim = {
+      mutationId: 'kinde-synthetic-claim-owner-a', expectedRevision: 0,
+      expectedFenceEpoch: 1, consentRevision: 1,
+      candidateReplicaId: 'kinde-synthetic-device-owner-a',
+      currentReplica: null, checkpointClock: {},
+    };
+    assert.equal((await cloudCall(f, '/v1/sync/replica/claim', a, claim)).status, 200);
+    f.setSubject('kp_other_synthetic_user_20261114');
+    const b = await f.login();
+    const principalB = await (await f.handler(f.post(SESSION, b.cookie), f.env)).json();
+    assert.notEqual(principalA.uid, principalB.uid);
+    assert.equal((await cloudCall(f, '/v1/sync/control', b, {})).status, 401);
+    assert.deepEqual((await cloudCall(f, '/v1/consent/status', b)).body,
+      { status: 'unregistered', revision: 0, fenceEpoch: 1 });
+    assert.equal((await cloudCall(f, '/v1/consent/initial', b, acceptance)).status, 200);
+    assert.deepEqual((await cloudCall(f, '/v1/sync/control', b, {})).body.replicas, {});
+    assert.equal(Object.keys((await cloudCall(f, '/v1/sync/control', a, {})).body.replicas).length, 1);
+    assert.equal(f.sqlite.prepare('SELECT COUNT(*) AS n FROM auth_principals').get().n, 2);
+    assert.equal(f.sqlite.prepare('SELECT COUNT(*) AS n FROM health_consent_acceptances').get().n, 2);
+  } finally { f.close(); }
+});
 
 void test('candidate Worker is not routed publicly and shares only the disposable AuthGate D1', () => {
   const here = new URL('../../cloudflare/auth/', import.meta.url);
