@@ -227,6 +227,9 @@ export function createKindeOAuthFlow(configuration, { rateLimit, fetchImpl = fet
     const browser = browserCookie(request.headers.get('cookie'));
     if (!input || !browser) return denied(400);
     try {
+      // Random-state floods with an existing browser binding must be
+      // throttled before they consume D1 queries or remote token requests.
+      if (await rateLimit(request) !== true) return denied(429);
       const stateHash = await digestHex(input.state);
       const browserHash = await digestHex(browser);
       // DELETE ... RETURNING is the sole consume operation. Only one
