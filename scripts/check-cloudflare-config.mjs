@@ -54,6 +54,11 @@ if (!vite.includes('CLOUDFLARE_APP_ORIGIN') || !vite.includes('transformIndexHtm
 // assets and unsupported deep links must fail on the static edge without
 // consuming Worker invocations or returning the app shell to module loads.
 if (!productionWorkflow.includes('"${CLOUDFLARE_APP_ORIGIN}/?tab=training"') ||
+    !productionWorkflow.includes('shortcut_verified=false') ||
+    !productionWorkflow.includes('if node scripts/verify-cloudflare-served-asset.mjs \\') ||
+    !productionWorkflow.includes('/ dist/index.html /tmp/cloudflare-tab-shortcut; then') ||
+    !productionWorkflow.includes('if [ "${shortcut_verified}" != true ]; then') ||
+    !productionWorkflow.includes('dist/index.html /tmp/cloudflare-tab-shortcut /tmp/cloudflare-tab-headers') ||
     !productionWorkflow.includes('for missing_path in /assets/missing-synthetic.js /assets/missing-synthetic.css /training; do') ||
     !productionWorkflow.includes('test "${miss_status}" = 404')) {
   failures.push('Cloudflare smoke must cover the real PWA shortcut and strict 404 for absent JS, CSS and pathnames');
