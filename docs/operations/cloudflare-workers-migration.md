@@ -111,3 +111,20 @@ al frontend o pubblicazione API. Kinde Audience, callback, Free,
 password/Google/email reali, rollout UI, provider DNS, consenso/recovery
 e browser Safari restano NO-GO. La presenza del file o il suo test
 non costituiscono prova di runtime Cloudflare.
+
+
+### CF-03 — Service Worker: navigazioni Auth fuori dall'app shell (14/11/2026)
+
+La registrazione Workbox della PWA intercettava ogni navigazione GET
+non esclusa e poteva restituire `index.html` al posto della
+callback OAuth, anche dopo un futuro deployment del Worker API. Il
+perimetro condiviso `src/lib/pwaHttpNavigationBoundary.ts` esclude
+dal fallback `/api/auth` e `/v1` (inclusi i figli), così
+un codice di autorizzazione Kinde non viene scambiato per un documento
+offline, e un endpoint API mancante fallisce attraverso HTTP invece di
+mostrare la pagina applicativa. Le shortcut
+`/?tab=training` e le pagine pubbliche non cambiano. La
+suite Vitest esercita la regex production e verifica l'integrazione
+nel vero `src/sw.ts`; restano da verificare il comportamento
+di WebKit/iOS installato, il rilascio PWA e l'API Auth effettivamente
+montata. Nessuna route Auth pubblica viene abilitata da questo diff.
