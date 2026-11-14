@@ -18,7 +18,7 @@
 | GitHub | Candidati Cloudflare e verificatori Kinde integrati; CI e CodeQL su SHA specifici | La CI non dimostra API Cloudflare o login live |
 | Static Assets | Provider verificato 14/11: Worker `thelogbook-frontend` associato al Custom Domain `thelogbook.me` con certificato TLS assegnato; `workers.dev` e preview disabilitati, solo binding `ASSETS`. Checkpoint verificati del frontend statico: `main 2077ece8fe9f1deacc3222958b98b3a26b30ac60` (v2.409.0), [workflow #43609342261](https://github.com/gernotfound/logbook/actions/runs/43609342261) tentativo 3 **SUCCESS** dopo la disattivazione dell'iniezione Web Analytics; successivamente `main dd40b6652788bde12b8a8e32b25857ef6db7dcf9` (v2.410.0), [workflow #43611888502](https://github.com/gernotfound/logbook/actions/runs/43611888502) tentativo 1 **SUCCESS** (asset, headers, 404, JS/CSS, shortcut PWA). Per lo SHA più recente consultare [issue #1041](https://github.com/gernotfound/logbook/issues/1041) e GitHub Actions; un nuovo merge invalida il confronto con questi SHA storici. | Smoke completo sullo SHA distribuito, comportamento guest/PWA, cache/update e Safari iOS; Auth cloud separata |
 | D1 | Sandbox `thelogbook-cf02-eu-isolated-20261113`, `jurisdiction=eu`; migrazioni `0001`–`0008` applicate e registro Wrangler confermato sul provider il 14/11, dati sintetici invariati | API HTTP, query/CPU/quote reali, restore e database Production non attestati |
-| Workers API/Auth | `cloudflare/api/worker.mjs`, session gate, issuer, consenso e replica nel repository; **nessuna API Worker pubblicata** nel controllo provider disponibile | Binding isolati, callback OAuth trusted, session issuance end-to-end, prove browser e runtime |
+| Workers API/Auth | Worker `thelogbook-api-isolated` e `thelogbook-cf03-auth-gate-isolated` caricati privatamente dopo `main f3fc9b1`; **binding D1 EU, service `AUTH_GATE`, limiter e workers.dev/preview disabilitati riletti sul provider 14/11** | Nessuna route HTTP pubblica o sessione Kinde end-to-end; servono prove runtime, consenso, recovery e integrazione browser |
 | Kinde | Business `thelogbook.kinde.com` in regione `Europe - Ireland` secondo schermate; selezionati metodi Email e Google nell'onboarding | Applicazione OAuth, codice autorizzazione + PKCE/state/nonce monouso, password, email, claim reali, retention e antiabuso |
 | DNS e provider legacy | Il DNS web dell'apice serve il Worker tramite record Cloudflare originless proxied; record MX/DKIM/DMARC IONOS invariati nel controllo provider del 14/11. Hosting Firebase disabilitato secondo proprietario, Vercel `logbook` sospeso secondo precedente verifica. | HTTPS smoke della release esatta, browser guest/PWA; API e codice legacy da sostituire e verificare separatamente |
 
@@ -174,3 +174,25 @@ da una `main` verificata e controlla i binding live dopo il deploy.
 La presenza della pipeline non è prova di esecuzione: per dichiarare
 "binding collegato" servono run riuscita e readback provider.
 Non certifica Auth Kinde, HTTP runtime, sincronizzazione o release PWA.
+
+### CF-02 — worker privati collegati, distinzione token D1 (14/11/2026)
+
+Il merge [#1117](https://github.com/gernotfound/logbook/pull/1117)
+su `main f3fc9b138e62bfc1fc6beb22ce6f2c7ba5d4e2f0` ha superato
+Canonical Verification e Main Release Gate; CodeQL sul push main è verde.
+La [run privata #43638837192](https://github.com/gernotfound/logbook/actions/runs/43638837192)
+ha compilato e caricato i Worker, confermando in Wrangler binding D1 e
+service e **nessuna route pubblica**. Readback indipendente del provider
+Cloudflare: due Worker privati presenti, `DB` collegata alla stessa D1 EU
+`9aa51833-8adc-495f-bdfc-93b5542e8023`, `AUTH_GATE` corretto,
+rate limiter presente, workers.dev e preview disabilitati. Frontend live
+rimane con solo `ASSETS`. **Non equivale a chiamata API autenticata,
+session issuance Kinde, consenso browser o sync funzionante.**
+
+Il passo finale della run ha fallito HTTP 401 sul **read D1** con il
+token di deploy GitHub; le permissions di D1 non vanno aggiunte a un token
+Workers destinato alla pubblicazione. La lettura del ledger 0001–0008 e
+la giurisdizione EU è stata svolta direttamente con il plugin Cloudflare,
+con autorizzazione indipendente. Una PR correttiva rende il readback CI
+least-privilege sui binding Worker (negativi su 401, DB sbagliata, route
+pubbliche e gate assente); non presenta la sola CI come prova di schema.
