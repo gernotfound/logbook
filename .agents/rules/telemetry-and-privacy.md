@@ -19,7 +19,7 @@
 
 ## Servizi tecnici necessari
 
-Firebase Hosting, Authentication, Firestore, App Check e le API Vercel restano operativi e possono elaborare metadati di rete e log tecnici necessari al servizio. La documentazione legale li distingue dall'assenza di reporting automatico degli errori client.
+Firebase Authentication, Firestore e App Check rimangono dipendenze del codice legacy; Hosting Firebase è disabilitato e il backend Vercel risulta sospeso. Kinde e Cloudflare possono trattare metadati tecnici per il servizio, da verificare con contratti e impostazioni live. Nessun SDK di telemetria client esterno deve essere aggiunto.
 
 Il client non scrive raccolte diagnostiche e il backend non ha più processi di retention dedicati a diagnostica pre-lancio. Le Security Rules negano per impostazione predefinita gli accessi a raccolte non previste. Cancellazione account, erasure dei dati salute, isolamento owner e verifica fail-closed delle sottoraccolte inattese restano invariati.
 

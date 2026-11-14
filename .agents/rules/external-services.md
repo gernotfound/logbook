@@ -9,27 +9,15 @@ Il registro decisionale stabile e leggibile anche fuori dal codice è `docs/oper
 
 **Autorità:** [`AGENTS.md`](../../AGENTS.md). Questo contratto ne specializza gli invarianti; non amplia autorizzazioni o perimetro.
 
-## Kinde e dismissione dei fornitori email precedenti — 14/11/2026
+## Stato operativo e fornitori target
 
-Kinde è il provider scelto per email/password, Google e messaggi Auth; l'integrazione reale rimane da collaudare. Sicurezza dell'account, autorizzazioni D1, owner, consenso, revoca, MFA, password ≥15, cancellazione Kinde, quote, privacy e consegna email sono gate indipendenti.
+- Kinde è il target per login email/password e Google e invii Auth. Il provider non è integrato: verificare configurazione, identità, MFA, sessioni, policy password ≥15, reset/verifica email, sicurezza, quote Free, erasure e privacy.
+- Cloudflare: frontend Static Assets e D1 sintetica EU sono separati da API/identità, non ancora pubblicate o collegate. `jurisdiction=eu` non certifica email, Workers o trattamento GDPR.
+- Firebase Auth/Firestore/App Check rimangono nei chiamanti del frontend legacy; Hosting Firebase è disabilitato. Non rimuovere i loro gate fino alla sostituzione verificata.
+- Vercel: progetto backend sospeso secondo precedente riscontro; `vercel.json` imposta `git.deploymentEnabled=false` per tutti i branch. Functions e cron sono ancora nel codice, non equivalgono a un backend attivo.
+- I servizi di posta dismessi non fanno parte della nuova architettura; i vecchi test sono rintracciabili solo nella cronologia Git, senza istruzioni attive concorrenti.
 
-Il proprietario ha dichiarato **eliminati gli account Mailjet e Brevo** nelle rispettive console. La dichiarazione non è una verifica indipendente dell'erasure o della retention dei fornitori. Cloudflare ha cancellato e riletto **7 record DNS** esclusivi del sottodominio transazionale, lasciando invariati gli altri 11 record, inclusa la posta IONOS. I fornitori precedenti non appartengono al runtime target. Storico e prove tecniche nel [registro](../../docs/operations/external-services-register.md). Nessuna modifica implicita a OAuth, DNS del sito, altri provider o billing.
-
-## Stato transitorio e ritiro anticipato — 14/11/2026
-
-- **Verifica provider 14/11:** Vercel `logbook` sospeso su richiesta del proprietario; evento Vercel `project-paused` osservato. Produzione bloccata in modo reversibile, nessuna eliminazione di progetto, segreti, dati o modifiche ad altri progetti. Le Functions/Cron ancora nel repository non sono un backend ora disponibile.
-- **Controllo esterno GitHub `Vercel` — 14/11:** `main bc4a6296` riportava stato `failure` pubblicato dall'app Vercel, per l'ultimo deployment bloccato, pur con `Canonical Verification` e post-merge CodeQL verdi. Il ruleset GitHub `protect main branch` richiede soltanto `Canonical Verification`: `Vercel` non è un gate canonico. Il product owner ha richiesto di eliminare quel controllo superfluo. La configurazione repository pone `vercel.json.git.deploymentEnabled=false` per impedire **tutti gli auto-deploy Git**, incluso `main`, finché lo stack è sospeso. Questo non elimina gli stati già pubblicati né prova la disconnessione Git sul provider; verificare gli stati su nuovi commit dopo merge. La rimozione definitiva dell'app dal progetto non è autorizzata da questa sola modifica.
-- **Cloudflare:** zona `thelogbook.me` active con record web ancora IONOS, nessuna route/custom-domain, unico Worker Static Assets `thelogbook-frontend` e D1 EU di test. Nessun cutover DNS eseguito; GO funzionale rimane bloccato.
-- **GitHub:** PR #1083 MERGED su `main 2d4c9d5b` v2.394.0; CI main exact-SHA e CodeQL verdi, senza prova di runtime Cloudflare.
-
-## Checkpoint storico — 13/11/2026
-
-- Firebase Hosting `thelogbook` è disabilitato secondo output CLI del proprietario; il workflow GitHub Hosting è dichiarato disabilitato, `disabled_manually` non verificato indipendentemente. Non riattivarlo.
-- Auth, Firestore/App Check e Vercel Functions/Cron sono **dipendenze del codice runtime ancora in uso**, non dati/account da migrare. Il product owner dichiara vuoti database e account; convertirne le funzionalità e abbandonare le dipendenze il prima possibile dopo i relativi test.
-- PR [#1070](https://github.com/gernotfound/logbook/pull/1070), [#1072](https://github.com/gernotfound/logbook/pull/1072), [#1076](https://github.com/gernotfound/logbook/pull/1076), [#1078](https://github.com/gernotfound/logbook/pull/1078), [#1079](https://github.com/gernotfound/logbook/pull/1079) e [#1081](https://github.com/gernotfound/logbook/pull/1081) integrate; l'eventuale nuovo lavoro deve comunque verificare lo SHA corrente. Static Assets `thelogbook-frontend` senza binding D1, sandbox D1 `eu` con `0001`/`0002` soltanto; nessun Worker API/AuthGate pubblicato. Il percorso Auth/consenso/replica e il logout D1 restano candidati isolati.
-- Il controllo Vercel del 13/11 ha mostrato un deployment Production `READY` su `4e25427ffbe0a4f4a7a695d25dec211b4ff16200` (backend precedente) e tentativi intermedi `CANCELED`: nessuno certifica Cloudflare o una PWA funzionante. Ri-verificare lo stato del provider quando rilevante. La rimozione di provider, credenziali, OAuth, DNS, cron e dati reali non è autorizzata da un merge, anche quando il prodotto nuovo parte vuoto.
-- Dati precedenti, App Check quota e screenshot OAuth sono checkpoint storici. Stato live, vincoli Free, giurisdizioni e dismissioni vanno verificati nelle fonti competenti: [registro](../../docs/operations/external-services-register.md), [runbook](../../docs/operations/cloudflare-workers-migration.md), [CF-09](https://github.com/gernotfound/logbook/issues/1063).
-
+Ogni affermazione live va riletta presso il provider competente. [Registro](../../docs/operations/external-services-register.md).
 ## Fonte di verità
 
 - **MUST:** codice/config repository e stato del provider esterno sono fonti di verità separate. Non dedurre la configurazione live dal solo repository.
@@ -56,11 +44,9 @@ Il repository è pubblico.
 - **MUST:** origin e domini di deployment ritirati vengono rimossi dalla configurazione applicativa e dalle allowlist esterne quando non sono più necessari.
 - **MUST:** non mantenere autorizzato un vecchio origin per sola compatibilità storica se nessun runtime reale lo usa.
 - **MUST:** il ritiro di un origin che ha ospitato una PWA deve considerare anche i Service Worker già installati: un redirect HTTP del root non basta se un worker legacy può ancora servire l'app shell dalla propria cache.
-- **MUST (baseline fresh start pre-lancio):** il Service Worker di ritiro su `/sw.js` dell'origin Vercel è dismesso: non esistono installazioni pre-lancio da supportare. Vercel continua a ospitare solo backend trusted e il redirect del vecchio root verso il precedente frontend Firebase; questo redirect **non certifica un sito raggiungibile** dopo il disable. Il Service Worker della PWA era distribuito da Firebase Hosting; il nuovo runtime candidato Cloudflare va validato separatamente. Non re-autorizzare il vecchio origin in Firebase Auth/App Check.
+- **MUST (fresh start):** non mantenere Service Worker di ritiro per installazioni pre-lancio inesistenti. Il progetto Vercel sospeso non è una strategia di rollback; non autorizzare vecchi origin in Kinde/Cloudflare senza una necessità verificata.
 - **MUST:** prima di eliminare una funzione generica di portabilità, dimostrare che sia specifica del provider ritirato. Il supporto generico a base path/subpath non è automaticamente codice legacy di deployment.
 - **VERIFY:** restrizioni referrer API key, origin/redirect OAuth, domini autorizzati Firebase Auth, domini reCAPTCHA/Fraud Defense e proprietà Search Console sono stato esterno.
-
-**Incidente quota 12/11/2026, Google Cloud:** notifica del provider per `logbook-db-98cc4` attesta **10.000 valutazioni gratuite reCAPTCHA consumate** e circa **12.813 azioni senza valutazione**. Non significa 12.813 richieste Firebase accettate. Sul piano senza billing, nuove `CreateAssessment` oltre quota falliscono `429 RESOURCE_EXHAUSTED`; App Check può non ottenere nuovi token. Mantieni enforcement, nessun upgrade a pagamento né bypass; il solo Cloudflare Hosting non mitiga questa quota. Considerare un provider custom App Check verificato via Turnstile Free e backend trusted, dopo analisi di IAM, rate-limit e failure path. Screenshot OAuth owner aggiornato mostra `thelogbook.me` e callback presenti e `thelogbook.web.app` rimossi: **non riattivare il vecchio sito per rollback non richiesto**. Verifica di salvataggio e login live ancora aperta. Dettagli nel registro e issue #1041.
 
 ## Boundary dei provider
 
@@ -75,15 +61,11 @@ Firebase Hosting, Firebase Authentication, Firestore, Firebase Admin e App Check
 - **MUST:** le chiamate REST dirette a Firebase Authentication/Identity Toolkit non ricevono automaticamente l'attestazione App Check dal Firebase SDK. Con enforcement Auth, il collegamento email/password in `src/lib/auth/accountEmail.ts` deve acquisire un token App Check **standard** e inviarlo nell'header `X-Firebase-AppCheck`, ricontrollando la sessione prima di trasmettere le credenziali; se il token manca, non effettuare la richiesta. Il token limited-use con consumo una tantum resta riservato alle API trusted Vercel. Con protezione anti-enumerazione attiva, il collegamento usa `accounts:signUp` con `idToken`, non il vecchio `accounts:update`.
 
 
-### Vercel
+### Vercel — backend legacy sospeso
 
-- Vercel è il boundary backend trusted Production: contiene env server-only, Functions e cron; il frontend/PWA precedentemente su Firebase Hosting è disabilitato e il target Cloudflare attende i gate di rilascio.
-- **MUST:** il deployment Vercel non deve eseguire né pubblicare il build Vite/Firebase del frontend. Il suo output statico è un artefatto backend-only dedicato; in particolare non deve esporre il Service Worker PWA generato per Firebase.
-- `main` resta l'unico branch abilitato al deployment salvo cambio deliberato del contratto repository.
-- Le credenziali server-only non devono mai avere prefisso `VITE_`.
-- Un deployment Vercel verde non prova la CI GitHub; la CI verde non prova il deployment Production.
-- **VERIFY:** `scripts/vercel-ignore-build.mjs` controlla sempre `package.json` e `package-lock.json`, ignorando esclusivamente i campi root del numero di versione PWA quando entrambi i manifest sono coerenti. Qualsiasi modifica a dipendenze, script, lockfile non relativa a questi campi, file server o impossibilità di verificare la cronologia Git deve mantenere il deploy Vercel. I test di regressione canonici sono in `scripts/vercel-ignore-build-regressions.mjs`.
-
+- Il repository imposta `git.deploymentEnabled=false` su tutti i branch; `ignoreCommand`, Functions e cron non riabilitano i deployment.
+- Non riattivare il vecchio backend né distribuire frontend Vite su Vercel. Prima di rimuovere codice e test, verificare quali contratti non sono ancora stati convertiti e collaudati in Workers.
+- Le credenziali server-only non devono mai usare prefisso `VITE_`.
 ### GitHub / CodeQL / Snyk
 
 - GitHub è la fonte di verità per repository, PR/ruleset e CI canonica.
@@ -94,7 +76,7 @@ Firebase Hosting, Firebase Authentication, Firestore, Firebase Admin e App Check
 
 - Google Analytics 4/Firebase Analytics, Vercel Analytics e Speed Insights non fanno parte del runtime corrente.
 - **MUST:** non inviare page view, eventi di utilizzo, dati sanitari o report automatici degli errori client a fornitori esterni di analytics o monitoraggio. I log necessari ai servizi Firebase/Vercel costituiscono un trattamento distinto, da verificare nei rispettivi provider.
-- **NOTE:** il product owner ha confermato lo scollegamento GA4 dal progetto Firebase, la dismissione della proprietà Google Analytics e la rimozione della variabile GitHub del Measurement ID. La PR #320 attesta separatamente la rimozione dal codice e dai workflow. La decisione di dismissione non certifica oggi lo stato delle console o la cancellazione di dati presso i provider.
+- **NOTE:** l'assenza di SDK dal codice non prova l'erasure presso i vecchi provider; non è motivo per riattivare servizi dismessi.
 
 ### Monitoraggio errori esterno
 
@@ -121,4 +103,3 @@ Prima di sostituire, rimuovere o riconfigurare materialmente un servizio esterno
 ## Documenti collegati
 
 - [Registro dei servizi esterni](../../docs/operations/external-services-register.md): decisioni e stato da rivalidare in console.
-- [Cutover Firebase Hosting](../../docs/operations/firebase-hosting-cutover.md): **storico**, non checklist di deployment attuale.
