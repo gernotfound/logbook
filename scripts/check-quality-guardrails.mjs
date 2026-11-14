@@ -251,6 +251,17 @@ for (const path of ['tsconfig.json', 'tsconfig.m5-tests.json', 'tsconfig.m7-serv
   }
 }
 
+// A bounded Node test batch is equivalent to separate invocations only when
+// each argument is a test file. Refuse optional flags that could hide tests.
+function expandNativeNodeTestBatch(command) {
+  const args = command.split(/\s+/);
+  if (args[0] !== 'node' || args[1] !== '--test' || args[2] !== '--test-concurrency=4') return null;
+  const files = args.slice(3);
+  if (files.length < 2 || !files.every(file => /^(?:tests|scripts)\/[A-Za-z0-9_./-]+\.mjs$/.test(file)
+    && !file.includes('..'))) return null;
+  return files.map(file => 'node --test ' + file);
+}
+
 function expandScript(pkg, name, stack = []) {
   if (stack.includes(name)) throw new Error('Recursive verification script: ' + [...stack, name].join(' -> '));
   const command = pkg.scripts?.[name];
@@ -259,7 +270,7 @@ function expandScript(pkg, name, stack = []) {
   for (const part of command.split(/\s*&&\s*/).map(x => x.trim()).filter(Boolean)) {
     const nested = /^npm run ([A-Za-z0-9:_-]+)$/.exec(part);
     if (nested) leaves.push(...expandScript(pkg, nested[1], [...stack, name]));
-    else leaves.push(part);
+    else leaves.push(...(expandNativeNodeTestBatch(part) ?? [part]));
   }
   return leaves;
 }

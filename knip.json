@@ -8,6 +8,7 @@
     "tests/emulator/setup.ts",
     "vitest.emulator.config.ts",
     "src/sw.ts",
-    "vitest.mutation.config.mjs"
+    "vitest.mutation.config.mjs",
+    "tests/cloudflare/*.node.mjs"
   ]
 }
