@@ -1,0 +1,26 @@
+{
+  "name": "thelogbook-api-isolated",
+  "main": "./worker.mjs",
+  "compatibility_date": "2026-11-12",
+  "workers_dev": false,
+  "preview_urls": false,
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "thelogbook-cf02-eu-isolated-20261113",
+      "database_id": "9aa51833-8adc-495f-bdfc-93b5542e8023",
+      "migrations_dir": "./migrations"
+    }
+  ],
+  "services": [
+    {
+      "binding": "AUTH_GATE",
+      "service": "thelogbook-cf03-auth-gate-isolated"
+    }
+  ],
+  "vars": {
+    "API_ORIGIN": "https://thelogbook.me",
+    "CONSENT_PRIVACY_VERSION": "1.3.9",
+    "CONSENT_TERMS_VERSION": "1.2.5"
+  }
+}

@@ -17,7 +17,7 @@
 |---|---|---|
 | GitHub | Candidati Cloudflare e verificatori Kinde integrati; CI e CodeQL su SHA specifici | La CI non dimostra API Cloudflare o login live |
 | Static Assets | Provider verificato 14/11: Worker `thelogbook-frontend` associato al Custom Domain `thelogbook.me` con certificato TLS assegnato; `workers.dev` e preview disabilitati, solo binding `ASSETS`. Checkpoint verificati del frontend statico: `main 2077ece8fe9f1deacc3222958b98b3a26b30ac60` (v2.409.0), [workflow #43609342261](https://github.com/gernotfound/logbook/actions/runs/43609342261) tentativo 3 **SUCCESS** dopo la disattivazione dell'iniezione Web Analytics; successivamente `main dd40b6652788bde12b8a8e32b25857ef6db7dcf9` (v2.410.0), [workflow #43611888502](https://github.com/gernotfound/logbook/actions/runs/43611888502) tentativo 1 **SUCCESS** (asset, headers, 404, JS/CSS, shortcut PWA). Per lo SHA più recente consultare [issue #1041](https://github.com/gernotfound/logbook/issues/1041) e GitHub Actions; un nuovo merge invalida il confronto con questi SHA storici. | Smoke completo sullo SHA distribuito, comportamento guest/PWA, cache/update e Safari iOS; Auth cloud separata |
-| D1 | Sandbox `thelogbook-cf02-eu-isolated-20261113`, `jurisdiction=eu`; migration `0001` e `0002` osservate sul provider con dati sintetici | Le migration successive, API HTTP, query/CPU/quote reali e database Production non sono attestati |
+| D1 | Sandbox `thelogbook-cf02-eu-isolated-20261113`, `jurisdiction=eu`; migrazioni `0001`–`0008` applicate e registro Wrangler confermato sul provider il 14/11, dati sintetici invariati | API HTTP, query/CPU/quote reali, restore e database Production non attestati |
 | Workers API/Auth | `cloudflare/api/worker.mjs`, session gate, issuer, consenso e replica nel repository; **nessuna API Worker pubblicata** nel controllo provider disponibile | Binding isolati, callback OAuth trusted, session issuance end-to-end, prove browser e runtime |
 | Kinde | Business `thelogbook.kinde.com` in regione `Europe - Ireland` secondo schermate; selezionati metodi Email e Google nell'onboarding | Applicazione OAuth, codice autorizzazione + PKCE/state/nonce monouso, password, email, claim reali, retention e antiabuso |
 | DNS e provider legacy | Il DNS web dell'apice serve il Worker tramite record Cloudflare originless proxied; record MX/DKIM/DMARC IONOS invariati nel controllo provider del 14/11. Hosting Firebase disabilitato secondo proprietario, Vercel `logbook` sospeso secondo precedente verifica. | HTTPS smoke della release esatta, browser guest/PWA; API e codice legacy da sostituire e verificare separatamente |
@@ -45,7 +45,7 @@ Il codice candidato espone `commit/status` sotto AuthGate e CSRF di sessione. Un
 
 `cloudflare/api/cloud-key-crypto.mjs` è il codec WebCrypto AES-256-GCM di una ADK random per UID con AAD owner-bound, IV casuale, formato v1 stretto. `cloud-key-store.mjs` legge e rilascia la chiave wrappata solo attraverso claims fidati del private AuthGate e una nuova verifica SQL primaria di sessione, consenso, epoch e scopo. La creazione condizionale richiede consenso appena accettato, nessun documento/replica/ricevuta o job attivo e registro issuance assente per quella generazione; il trigger della migration `0007_cloud_key_custody.sql` crea la prova `cloud_key_issuance` **nella stessa transazione**. Anche senza la riga wrapped, un marker issuance persistente impedisce rigenerazione sopra dati orfani. I concorrenti leggono il winner salvato, senza credere a un ACK perso. Dopo revoca `rights-export` legge soltanto una ADK già presente, senza provisioning. Update della chiave vietato; DELETE richiede un job di erasure lease-fenced in fase `awaiting-keys`.
 
-**Non attivato:** nessuna route API delle chiavi, secret Cloudflare, migration 0007 live o integrazione browser. La KEK v1 di Cloudflare richiede provisioning autorizzato, custodia esterna indipendente e prova di restore/rotation senza perdere ADK. CF-06 deve ancora cancellare la chiave con prova durevole e terminare il job; CF-08 deve bloccare ripristini anti-resurrection. I test SQLite/fake AuthGate non certificano il runtime D1 Free, Kinde reale o GDPR.
+**Non attivato:** nessuna route API delle chiavi, secret Cloudflare o integrazione browser; la migration 0007 è installata nella D1 isolata ma non rilascia chiavi. La KEK v1 di Cloudflare richiede provisioning autorizzato, custodia esterna indipendente e prova di restore/rotation senza perdere ADK. CF-06 deve ancora cancellare la chiave con prova durevole e terminare il job; CF-08 deve bloccare ripristini anti-resurrection. I test SQLite/fake AuthGate non certificano il runtime D1 Free, Kinde reale o GDPR.
 
 ## Integrazioni candidate presenti nel repository
 
@@ -146,8 +146,31 @@ mai nuova emissione. Risposta in formato compatibile con
 Test integrati in M7 su SQLite sintetica con API e AuthGate autentici.
 
 **Non attivo in rete:** `cloudflare/wrangler.jsonc` non espone
-queste route né contiene binding D1/KEK. Non sono state eseguite
-migrazioni remote né configurati segreti; servono ancora custodia e
+queste route né contiene binding D1/KEK. Le migrazioni 0001–0008 sono state installate **solo nella sandbox D1 EU**;
+non sono stati configurati segreti KEK né collaudata la route;
+ servono ancora custodia e
 recupero KEK indipendenti, completo contratto erasure/rights, consenso
 client, journal e session lifecycle Kinde, WAF/quote e prove reali
 iOS/Workers/D1. I test Node e la CI non attestano runtime cloud.
+
+### CF-02 — D1 schema e binding API privato (14/11/2026)
+
+Read-back diretto Cloudflare: sandbox D1
+`thelogbook-cf02-eu-isolated-20261113` con `jurisdiction=eu`,
+primaria `EEUR`, read replication disattivata e registro
+`d1_migrations` da 0001 a 0008. Le tabelle di principal/sessioni,
+consenso/revoca/cancellazione, custodia ADK e tentativi OAuth sono presenti.
+L'identità, i documenti e la ricevuta **sintetici** precedenti non sono stati
+alterati; nuove tabelle Auth/OAuth vuote. Un bookmark Time Travel precedente
+alle migrazioni è stato acquisito, ma nessun restore è stato eseguito.
+Il provider rifiuta `PRAGMA integrity_check` via REST: prova non eseguita.
+
+Il Worker frontend live resta distinto dal backend. Le configurazioni
+`cloudflare/api/wrangler.isolated.jsonc` e
+`cloudflare/auth/wrangler.isolated.jsonc` vincolano il D1 isolato
+a due servizi privati senza URL pubblici e senza DNS. La pipeline
+`.github/workflows/cloudflare-api-isolated.yml` distribuisce solo
+da una `main` verificata e controlla i binding live dopo il deploy.
+La presenza della pipeline non è prova di esecuzione: per dichiarare
+"binding collegato" servono run riuscita e readback provider.
+Non certifica Auth Kinde, HTTP runtime, sincronizzazione o release PWA.

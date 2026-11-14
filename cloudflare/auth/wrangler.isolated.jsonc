@@ -1,0 +1,30 @@
+{
+  "name": "thelogbook-cf03-auth-gate-isolated",
+  "main": "./session-gate.mjs",
+  "compatibility_date": "2026-11-12",
+  "workers_dev": false,
+  "preview_urls": false,
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "thelogbook-cf02-eu-isolated-20261113",
+      "database_id": "9aa51833-8adc-495f-bdfc-93b5542e8023",
+      "migrations_dir": "../api/migrations"
+    }
+  ],
+  "ratelimits": [
+    {
+      "name": "API_RATE_LIMITER",
+      "namespace_id": "31003",
+      "simple": {
+        "limit": 60,
+        "period": 60
+      }
+    }
+  ],
+  "vars": {
+    "API_ORIGIN": "https://thelogbook.me",
+    "CONSENT_PRIVACY_VERSION": "1.3.9",
+    "CONSENT_TERMS_VERSION": "1.2.5"
+  }
+}
