@@ -7,9 +7,9 @@ Questo file è la **mappa dei documenti**; non è un contratto di esecuzione né
 1. **Istruzioni per agenti:** [`AGENTS.md`](../AGENTS.md) è il file comandante e contiene la mappa dei [contratti specialistici](../.agents/rules/), da aprire esplicitamente secondo il task. I sottofile specializzano, senza contraddire o ampliare il mandato.
 2. **Implementazione:** codice, tipi, test e workflow al vero HEAD GitHub di `main` definiscono il comportamento verificabile; indagare divergenze con le istruzioni, non ignorarle.
 3. **Provider esterni:** stato live di Firebase, Google Cloud, Vercel, GitHub e altri va verificato nel provider, mai dedotto dai documenti.
-4. **Questa cartella:** contiene decisioni di prodotto, guide, registri, documenti legali incompleti, proposte e storico. Le etichette qui descrivono *lo stato del documento*, non certificano runtime, privacy o conformità legale.
+4. **Questa cartella:** contiene decisioni di prodotto, guide, registri e documenti legali incompleti. Le etichette qui descrivono *lo stato del documento*, non certificano runtime, privacy o conformità legale.
 
-Leggere **solo ciò che riguarda il task**; per cambi trasversali consultare tutti i riferimenti pertinenti. Una **PROPOSTA NON IMPLEMENTATA** non diventa un requisito corrente; uno **STORICO** non è una checklist per il prossimo deploy; un **template** non è approvato né firmato.
+Leggere **solo ciò che riguarda il task**; per cambi trasversali consultare tutti i riferimenti pertinenti. Una **PROPOSTA NON IMPLEMENTATA** non diventa un requisito corrente; un **template** non è approvato né firmato.
 
 ## Contratti e guide: quale fonte usare
 
@@ -29,17 +29,14 @@ La selezione completa dei contratti resta in [AGENTS](../AGENTS.md). Qui si indi
 | Documento | Stato | Per quale attività |
 |---|---|---|
 | [Archivio locale cifrato](architecture/secure-local-archive-design.md) | Specifica approvata e rilasciata; smoke reali separati | Cifratura, migrazione, recovery, modello di minaccia |
-| [Gateway cloud trusted](architecture/trusted-sync-gateway-design.md) | STORICO: proposta superata dal programma Cloudflare | Solo decisioni passate; non riaprire il vecchio gateway per inerzia |
 
 ## Operazioni e configurazioni esterne
 
 | Documento | Stato | Per quale attività |
 |---|---|---|
-| [Registro servizi esterni](operations/external-services-register.md) | Registro operativo; riscontri live necessari | Firebase, Vercel, GitHub e servizi ritirati |
+| [Registro servizi esterni](operations/external-services-register.md) | Inventario corrente, rischi provider e gate target | Cloudflare, Kinde, codice legacy ancora usato e GitHub |
 | [Runbook Cloudflare](operations/cloudflare-workers-migration.md) | Guida corrente per sviluppo, gate e abbandono del vecchio stack | Workers/D1, Auth, privacy e release |
-| [Archivio fornitori email dismessi](operations/transactional-email-provider-evaluation.md) | Storico tecnico, non piano operativo; email Auth tramite Kinde | CF-00, CF-03, privacy e retention storica |
 | [Collaudi E2E e affidabilità](operations/e2e-reliability.md) | Guida corrente sui limiti delle prove; collaudi live separati | CI sintetica, dispositivi reali e perimetro Production |
-| [Cutover Firebase Hosting](operations/firebase-hosting-cutover.md) | STORICO completato il 2 ottobre 2026 | Decisioni e rollback storici, non procedura di deploy corrente |
 
 ## Diagnostica
 
