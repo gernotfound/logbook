@@ -54,6 +54,7 @@ async function fixture() {
     callCount += 1;
     assert.equal(url, ISSUER + '/oauth2/token');
     assert.equal(options.method, 'POST');
+    assert.equal(options.redirect, 'manual');
     assert.equal(options.body.get('client_secret'), 'synthetic-private-secret');
     const now = Math.floor(Date.now() / 1000);
     const sub = 'kp_synthetic_user_20261114';

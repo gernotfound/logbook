@@ -249,9 +249,11 @@ export function createKindeOAuthFlow(configuration, { rateLimit, fetchImpl = fet
       });
       // No automatic retry of an ambiguous code exchange: consumed state
       // requires a fresh login, not a second attempt with the same code.
+      // Workers do not support redirect:'error'; manual mode lets tokenResponse
+      // reject a 3xx without following a Location with the client secret.
       const response = await fetchImpl(config.issuer + '/oauth2/token', {
         method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body, redirect: 'error', signal: AbortSignal.timeout(5000),
+        body, redirect: 'manual', signal: AbortSignal.timeout(5000),
       });
       const tokens = await tokenResponse(response);
       const principal = await provision(db, tokens, saved.nonce);
