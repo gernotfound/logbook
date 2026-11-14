@@ -61,7 +61,7 @@ if (!productionWorkflow.includes('"${CLOUDFLARE_APP_ORIGIN}/?tab=training"') ||
 const mismatchDiagnostics = readFileSync('scripts/cloudflare-asset-mismatch-diagnostics.sh', 'utf8');
 if (!productionWorkflow.includes('if ! cmp -s "${local_file}" /tmp/cloudflare-served-asset; then') ||
     !productionWorkflow.includes('if [ "${path}" = "/robots.txt" ]; then') ||
-    !productionWorkflow.includes("first_line\" = '# As a condition of accessing this website") ||
+    !productionWorkflow.includes("[ \"${first_line}\" = '# As a condition of accessing this website, you agree to abide by the' ]") ||
     !productionWorkflow.includes('tail -c "${expected_size}" /tmp/cloudflare-served-asset | cmp -s "${local_file}" -') ||
     !productionWorkflow.includes('bash scripts/cloudflare-asset-mismatch-diagnostics.sh') ||
     !productionWorkflow.includes('"${CLOUDFLARE_APP_ORIGIN}${path}" "${EXPECTED_SHA}" "${initial_http}"') ||
