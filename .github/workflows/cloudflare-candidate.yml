@@ -205,14 +205,27 @@ jobs:
             cmp -s "${file}" /tmp/cloudflare-chunk || { echo "Chunk byte mismatch: ${path}"; exit 1; }
           done
 
-          # The PWA uses query-string shortcuts, not server-side pathname routes.
-          curl --fail --silent --show-error \
-            -H 'Sec-Fetch-Mode: navigate' -H 'Accept: text/html' \
-            "${CLOUDFLARE_APP_ORIGIN}/?tab=training" -o /tmp/cloudflare-tab-shortcut
-          cmp -s dist/index.html /tmp/cloudflare-tab-shortcut || {
-            echo 'PWA query shortcut must serve the root app shell'
+          # A query-string shortcut is still the same app shell. Validate
+          # exact bytes after bounded edge propagation, not just HTTP 200.
+          shortcut_verified=false
+          for attempt in 1 2 3 4; do
+            shortcut_http="$(curl --fail --silent --show-error --retry 3 --retry-delay 2 --retry-all-errors \
+              -H 'Accept-Encoding: identity' -H 'Sec-Fetch-Mode: navigate' -H 'Accept: text/html' \
+              --dump-header /tmp/cloudflare-tab-headers --write-out '%{http_code} %{content_type}' \
+              "${CLOUDFLARE_APP_ORIGIN}/?tab=training" -o /tmp/cloudflare-tab-shortcut)"
+            if node scripts/verify-cloudflare-served-asset.mjs \
+                / dist/index.html /tmp/cloudflare-tab-shortcut; then
+              shortcut_verified=true
+              break
+            fi
+            if [ "${attempt}" != 4 ]; then sleep 3; fi
+          done
+          if [ "${shortcut_verified}" != true ]; then
+            bash scripts/cloudflare-asset-mismatch-diagnostics.sh \
+              dist/index.html /tmp/cloudflare-tab-shortcut /tmp/cloudflare-tab-headers \
+              "${CLOUDFLARE_APP_ORIGIN}/?tab=training" "${EXPECTED_SHA}" "${shortcut_http}"
             exit 1
-          }
+          fi
 
           # Missing static resources must never fall back to index.html. Verify
           # browser script/style loads as well as a navigation to an unknown path.
