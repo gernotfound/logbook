@@ -101,7 +101,15 @@ async function post(
     assertCurrent(stillCurrent);
     if (response.redirected || response.type === 'opaqueredirect' || response.type === 'opaque'
         || response.type === 'error') throw new KindeCandidateBoundaryError();
-    if (response.status === 401) return { unauthorized: true };
+    if (response.status === 401) {
+        const denied = await readBoundedJson(response);
+        assertCurrent(stillCurrent);
+        if (!record(denied) || !exactKeys(denied, ['error'])
+            || denied.error !== 'unauthorized') {
+            throw new KindeCandidateBoundaryError();
+        }
+        return { unauthorized: true };
+    }
     if (response.status !== 200) throw new KindeCandidateBoundaryError(response.status);
     const body = await readBoundedJson(response);
     assertCurrent(stillCurrent);

@@ -68,6 +68,10 @@ describe('candidate first-party Kinde client boundary', () => {
 
     it('distinguishes absent session from transport failure, logout races and consent suspension', async () => {
         await expect(read(responses(reply({ error: 'unauthorized' }, 401)))).resolves.toEqual({ kind: 'signed-out' });
+        await expect(read(responses(reply({ error: 'unknown' }, 401)))).rejects.toBeInstanceOf(KindeCandidateBoundaryError);
+        await expect(read(responses(new Response('<html>Unauthorized</html>', { status: 401,
+            headers: { 'Content-Type': 'text/html', 'Cache-Control': 'no-store' },
+        })))).rejects.toBeInstanceOf(KindeCandidateBoundaryError);
         await expect(read(responses(reply({ error: 'unavailable' }, 503)))).rejects.toBeInstanceOf(KindeCandidateBoundaryError);
         await expect(read(responses(reply(session(A, 1, 1)), reply(status('withdrawn', 1)),
             reply(session(A, 1, 1))))).resolves.toMatchObject({ kind: 'consent-suspended', status: 'withdrawn' });
