@@ -1,6 +1,13 @@
 # Cloudflare full-stack — sviluppo, verifiche e cutover TheLogBook
 
-**Stato:** sviluppo CRITICAL / fresh start, audit branch 13 novembre 2026. Questo è il runbook operativo corrente; non è una prova di rilascio Production. Le informazioni temporali vanno aggiornate dopo ogni merge o prova provider. [EPIC #1053](https://github.com/gernotfound/logbook/issues/1053), [registro servizi](external-services-register.md), [hosting/DNS #1041](https://github.com/gernotfound/logbook/issues/1041).
+**Stato:** sviluppo CRITICAL / fresh start, checkpoint provider e main del 14 novembre 2026. Questo è il runbook operativo corrente; non è una prova di rilascio Production. Le informazioni temporali vanno aggiornate dopo ogni merge o prova provider. [EPIC #1053](https://github.com/gernotfound/logbook/issues/1053), [registro servizi](external-services-register.md), [hosting/DNS #1041](https://github.com/gernotfound/logbook/issues/1041).
+
+## Checkpoint operativo — 14/11/2026
+
+- **GitHub:** [PR #1083](https://github.com/gernotfound/logbook/pull/1083) integrata su `main 2d4c9d5b` (v2.394.0). [CI candidata](https://github.com/gernotfound/logbook/actions/runs/43538181345) e [main](https://github.com/gernotfound/logbook/actions/runs/43538480775) SUCCESS; SQL sessione/consenso non distribuito.
+- **Cloudflare:** zona `thelogbook.me` attiva ma apex A/AAAA ancora verso IONOS; nessuna Workers Route né Custom Domain. Unico Worker `thelogbook-frontend`, D1 sandbox EU sintetica, nessun Worker API/Auth pubblicato. DNS non cambiato.
+- **Vercel:** progetto `logbook` **PAUSED** per richiesta del proprietario, evento provider `project-paused` confermato. Traffico Production bloccato; nessun account/dato/secret eliminato, nessun altro progetto toccato. Il codice frontend e il cron backend storico mantengono riferimenti legacy.
+- **Release:** `thelogbook.me` resta NO-GO per PWA completa; Auth, consenso, ADK, sync D1, diritti/erasure, quote, privacy e test reali non sono conclusi. La sospensione reversibile Vercel non è una dismissione irreversibile.
 
 ## Decisione di prodotto e sequenza di abbandono
 
@@ -75,7 +82,7 @@ flusso di riaccettazione richiederà di evolvere insieme gate e fence.
 Regressioni SQL/HTTP dedicate: logout nel tratto gate→D1, perdita del
 token, scadenza, epoch divergente, letture/ACK negati dopo revoca e
 nessun documento/receipt fantasma, anche quando la prova del
-consenso scompare dopo AuthGate. **Candidato sulla PR #1083,
+consenso scompare dopo AuthGate. **Integrato su main dalla PR #1083,
 non distribuito**. La [CI #43536847159](https://github.com/gernotfound/logbook/actions/runs/43536847159)
 è **SUCCESS** sul precedente HEAD `4e8c0915` (Canonical Verification,
 CodeQL, suite Cloudflare). Ogni commit successivo richiede nuova
@@ -99,7 +106,7 @@ e [CI main #43489162305](https://github.com/gernotfound/logbook/actions/runs/434
 
 | Area | Evidenza | Non dimostra |
 |---|---|---|
-| Repository | [PR #1070](https://github.com/gernotfound/logbook/pull/1070), [#1072](https://github.com/gernotfound/logbook/pull/1072), [#1076](https://github.com/gernotfound/logbook/pull/1076), [#1078](https://github.com/gernotfound/logbook/pull/1078), [#1079](https://github.com/gernotfound/logbook/pull/1079) e [#1081](https://github.com/gernotfound/logbook/pull/1081) integrate. Checkpoint main letto durante l'audit: `4e25427ffbe0a4f4a7a695d25dec211b4ff16200` (2.393.0; merge della PR #1085, successivo al lavoro sui test). CI #1081 [PR #43488510948](https://github.com/gernotfound/logbook/actions/runs/43488510948) e [main #43489162305](https://github.com/gernotfound/logbook/actions/runs/43489162305) **SUCCESS**, inclusi CodeQL e gate exact-SHA | Nuovo Worker Auth/consenso, API e replica pubblicati o runtime Cloudflare verificato |
+| Repository | [PR #1070](https://github.com/gernotfound/logbook/pull/1070), [#1072](https://github.com/gernotfound/logbook/pull/1072), [#1076](https://github.com/gernotfound/logbook/pull/1076), [#1078](https://github.com/gernotfound/logbook/pull/1078), [#1079](https://github.com/gernotfound/logbook/pull/1079) e [#1081](https://github.com/gernotfound/logbook/pull/1081) integrate. Checkpoint storico main letto durante l'audit: `4e25427ffbe0a4f4a7a695d25dec211b4ff16200` (2.393.0; merge della PR #1085, successivo al lavoro sui test). CI #1081 [PR #43488510948](https://github.com/gernotfound/logbook/actions/runs/43488510948) e [main #43489162305](https://github.com/gernotfound/logbook/actions/runs/43489162305) **SUCCESS**, inclusi CodeQL e gate exact-SHA | Nuovo Worker Auth/consenso, API e replica pubblicati o runtime Cloudflare verificato |
 | Frontend Cloudflare | Worker `thelogbook-frontend` su `workers.dev` e [smoke Static Assets #43223911523](https://github.com/gernotfound/logbook/actions/runs/43223911523) riuscito | Auth, Safari/iOS, update PWA, API e dominio finale |
 | D1 sandbox | `thelogbook-cf02-eu-isolated-20261113`, `jurisdiction=eu`, read replication OFF: schema `0001` + `0002` applicate e indice/trigger anti-riuso riletti via Cloudflare; un UID e un documento **sintetici**, zero mutation di replica | Database reale, HTTP Worker, performance Free, conformità GDPR |
 | Nuova API | `cloudflare/api/worker.mjs`, `cloudflare/auth/session-gate.mjs`, issuer e `cloudflare/api/consent-worker.mjs` e `logout-worker.mjs` integrati nel repository come ingresso unico, ma senza Auth password/Google reale, binding remoto o collegamento al client. SQL 0003/0004 solo versionate, non applicate su D1 Cloudflare | Runtime Auth, consenso, cancellazione o replica cloud utilizzabili |
