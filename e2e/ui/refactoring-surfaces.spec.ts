@@ -29,11 +29,11 @@ async function enterGuest(page: Page, viewport: (typeof viewports)[number], appe
   await page.getByRole('button', { name: 'Accetta e Continua' }).click();
 }
 
-// These independent journeys each capture numerous WebKit screenshots; they must not
-// consume the same per-test deadline while keeping their full UI assertions.
+// Independent surface journeys keep expensive WebKit screenshots out of a single
+// per-test deadline, without splitting stateful actions within a workout.
 for (const viewport of viewports) {
   for (const appearance of appearances) {
-    test(`training surfaces at ${viewport.width}px in ${appearance.preference}/${appearance.system}`, async ({ page }, testInfo) => {
+    test(`training setup and routines at ${viewport.width}px in ${appearance.preference}/${appearance.system}`, async ({ page }, testInfo) => {
       await enterGuest(page, viewport, appearance);
       await page.getByRole('button', { name: 'Allenamento', exact: true }).click();
       await expect(page.locator('.session-setup-page')).toBeVisible();
@@ -66,6 +66,13 @@ for (const viewport of viewports) {
       await page.keyboard.press('Escape');
       await expect(trigger).toBeFocused();
 
+    });
+
+    // A free workout is independent of any saved routine; report and history
+    // still share the same completed session and must be exercised together.
+    test(`active workout and history at ${viewport.width}px in ${appearance.preference}/${appearance.system}`, async ({ page }, testInfo) => {
+      await enterGuest(page, viewport, appearance);
+      await page.getByRole('button', { name: 'Allenamento', exact: true }).click();
       await page.getByRole('tab', { name: 'Sessione', exact: true }).click();
       await page.getByRole('button', { name: 'Allenamento libero' }).click();
       await page.getByRole('button', { name: 'Salta check-in e inizia' }).click();
@@ -120,6 +127,11 @@ for (const viewport of viewports) {
       // Adjacent dates in both calendars are interactive, not disabled.
       await expect(page.locator('.training-history .history-day.outside').first()).toHaveCSS('opacity', '1');
       await capture(page, testInfo, 'training-history');
+
+      // Completing a workout must leave the Data section reachable in the same session.
+      await page.getByRole('button', { name: 'Dati e statistiche', exact: true }).click();
+      await expect(page.locator('#view-data')).toBeVisible();
+      await expect(page.getByRole('tab', { name: 'Misurazioni', exact: true })).toBeVisible();
     });
 
     test(`data surfaces at ${viewport.width}px in ${appearance.preference}/${appearance.system}`, async ({ page }, testInfo) => {
