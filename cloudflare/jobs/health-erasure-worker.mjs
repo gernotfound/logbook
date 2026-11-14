@@ -1,9 +1,11 @@
+import { D1_NOW_MS } from '../sql/d1-time.mjs';
+
 // Candidate-only D1 erasure worker. No public fetch, route, or cron binding.
 // This step removes bounded encrypted replica rows; it cannot remove a cloud
 // ADK or issue an erasure-complete receipt until those trusted flows exist.
 const MAX_ROWS_PER_STEP = 4;
 const LEASE_MS = 30_000;
-const SERVER_NOW = "CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER)";
+const SERVER_NOW = D1_NOW_MS;
 const TABLES = Object.freeze([
   { name: 'sync_documents', key: 'path' },
   { name: 'sync_receipts', key: 'batch_id' },

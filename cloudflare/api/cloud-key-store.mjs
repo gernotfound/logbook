@@ -2,9 +2,11 @@ import {
   CloudKeyUnavailableError, wrapCloudAccountDataKey, unwrapCloudAccountDataKey,
 } from './cloud-key-crypto.mjs';
 
+import { D1_NOW_MS } from '../sql/d1-time.mjs';
+
 const HASH = /^[a-f0-9]{64}$/;
 const LEGAL = /^[A-Za-z0-9._-]{1,32}$/;
-const NOW = "CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER)";
+const NOW = D1_NOW_MS;
 
 // Read the live session and consent at the same D1 primary that stores the
 // wrapped ADK. The private AuthGate is necessary but not sufficient: a logout
