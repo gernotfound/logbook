@@ -37,6 +37,8 @@ void test('public pages bypass Workers API and unknown paths remain 404', () => 
 });
 
 void test('PWA navigation fallback excludes both public documents', () => {
-  assert.ok(sw.includes('denylist: [/^\\/__/\\//, /^\\/(?:about|privacy)(?:\\/|\\.html|$)/]'));
+  const denylist = sw.match(/denylist:\s*\[([^\]]*)\]/)?.[1] ?? '';
+  assert.ok(denylist.includes("/^\\/__\\//"), 'Firebase Auth helper exclusion must remain');
+  assert.ok(denylist.includes("/^\\/(?:about|privacy)(?:\\/|\\.html|$)/"), 'public legal page exclusion must remain');
   assert.match(sw, /createHandlerBoundToURL\('\/index\.html'\)/);
 });
