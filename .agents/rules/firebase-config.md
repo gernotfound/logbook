@@ -200,16 +200,11 @@ Root app shell, `index.html`, manifest, service worker e Workbox devono essere e
 
 **VERIFY (configurazione backend effettiva):** distinguere il framework configurato nel progetto Vercel dall'output effettivo del deployment. Il `framework: null` dichiarato in `vercel.json` non prova da solo l'output Production, così come un'impostazione Vite nel dashboard non dimostra che il frontend sia stato pubblicato. Per modifiche al backend o al selettore deploy confrontare configurazione risolta, artefatti effettivamente serviti e comportamento HTTP autorizzato; non cambiare impostazioni sulla sola differenza nominale.
 
-## Vercel branch deployment policy
+## Vercel — deploy Git disabilitato nel repository
 
-`vercel.json` contiene il contratto repository corrente per Git deployment, imposta `framework: null` per il preset **Other** (backend-only, senza dipendere dal preset Vite del progetto) e `fluid: true` per rendere esplicito Fluid Compute:
+`vercel.json` imposta `git.deploymentEnabled=false` per tutti i branch, incluso `main`. Il progetto legacy è sospeso secondo l'ultimo riscontro, da riverificare nel provider. La presenza di `ignoreCommand`, `framework: null`, `fluid: true` e Functions/Cron non prova alcun deploy attivo.
 
-- `main`: integrazione Git abilitata, ma `ignoreCommand` salta i commit che non modificano il boundary backend;
-- altri branch: deployment disabilitato;
-- modifiche a `api/`, `server/`, `vercel.json`, dipendenze/runtime o configurazione TypeScript server continuano a produrre il deployment Production necessario.
-
-**MUST:** i branch di sviluppo non generano Preview Deployment. Non allargare `git.deploymentEnabled` per usare Vercel Preview come sostituto della CI. Il selettore dei deploy deve confrontare il commit corrente con l'ultimo deployment Vercel riuscito e, se non può determinare con sicurezza il diff, deve consentire il deployment invece di saltarlo. Il deployment di produzione Vercel, quando richiesto, deriva da `main`.
-
+Non riattivare Vercel senza mandato specifico. Conservare i test del selettore `scripts/vercel-ignore-build.mjs` finché il selettore e i suoi chiamanti esistono; eliminarli insieme alla vecchia funzionalità solo dopo che il nuovo backend è stato provato.
 ## Sicurezza HTTP
 
 Gli header browser del frontend sono configurati in `firebase.json`; `vercel.json` disciplina invece routing/runtime del backend Vercel. Leggere entrambi i file prima di descrivere il contratto HTTP corrente.
@@ -223,4 +218,3 @@ Gli header browser del frontend sono configurati in `firebase.json`; `vercel.jso
 ## Riferimenti operativi
 
 - [Registro dei servizi esterni](../../docs/operations/external-services-register.md): decisioni e configurazioni esterne da verificare direttamente nei provider.
-- [Cutover Firebase Hosting](../../docs/operations/firebase-hosting-cutover.md): documento **storico completato**, non usare come procedura di deploy corrente senza rivalidare workflow e provider.

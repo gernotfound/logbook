@@ -1,65 +1,34 @@
-# Registro dei servizi esterni — stato operativo TheLogBook
+# Registro dei servizi esterni — stato corrente TheLogBook
 
-**Ultima revisione:** 14 novembre 2026 (Cloudflare DNS Mailjet/Brevo ripulito, account provider dichiarati chiusi dal proprietario; Kinde in onboarding; cutover Cloudflare NO-GO). **Scopo:** inventario sintetico e verificabile dei servizi, dei confini e delle attività residue. GitHub documenta codice, gate e merge; ogni provider certifica il proprio stato runtime. Le verifiche storiche non sono una fotografia live.
+**Classificazione: CRITICAL.** Questo registro contiene **soltanto servizi necessari, ancora presenti nel codice oppure da validare prima del GO**. La storia delle configurazioni superate rimane nella cronologia Git e nelle PR. GitHub prova SHA e verifiche; i provider provano le rispettive risorse e il runtime. Un riscontro datato non autorizza cambi Production.
 
-**Archivio:** il precedente registro di circa 130 KB aggregava verifiche datate di OAuth, Hosting, IAM, Vercel, App Check, Search Console e vecchi cutover. Queste evidenze restano accessibili nella [versione Git precedente al consolidamento](https://github.com/gernotfound/logbook/blob/8f6625a9100ef96c391a816e5639e8e83ffcc4d5/docs/operations/external-services-register.md), nella cronologia PR/issue e nei contratti di [AGENTS](../../AGENTS.md). Non usarle come istruzioni concorrenti.
+## Target Cloudflare / Kinde
 
-## Decisione vigente
-
-**Inventario Cloudflare 14/11/2026:** Email Routing `enabled=false/unconfigured`, unico Worker `thelogbook-frontend` con binding `ASSETS`. Nessun collegamento aggiuntivo ai fornitori email dismessi osservato; i segreti GitHub e le console esterne non sono stati verificati.
-
-**Stato servizi email 14/11/2026:** il proprietario conferma la **cancellazione degli account Mailjet e Brevo**, che non è stata verificata sulle console dei provider. La pulizia DNS Cloudflare è invece verificata: rimossi 7 record esclusivi di `notify.thelogbook.me` (18→11), gli 11 altri record invariati (MX, SPF e DKIM IONOS inclusi). Non dedurre cancellazione di backup, metadati, fatture o log dei provider. Le evidenze restano nell'[archivio](transactional-email-provider-evaluation.md) e nella [PR #1077](https://github.com/gernotfound/logbook/pull/1077) chiusa senza merge. L'onboarding Kinde (business `thelogbook.kinde.com`, regione Irlanda selezionata) non dimostra un login funzionante.
-
-**Decisione Auth — 14/11/2026 (CRITICAL):** il product owner ha scelto **Kinde** per nuove identità email/password (minimo 15 caratteri), Google e verifica/reset. L'integrazione Kinde non è ancora configurata o validata sul provider e il login non è operativo. Workers/D1 mantengono sessioni applicative, owner, consenso, revoche, diritti ed erasure; niente dati sanitari in Kinde. Il token d'accesso non autorizza da solo una sessione D1 senza prova d'identità trusted. Le email Auth saranno gestite da Kinde, ma consegna, privacy e quote richiedono test. Le integrazioni email precedenti sono dismesse; il proprietario ha confermato la chiusura dei relativi account (non verificata direttamente sulle console), mentre i record DNS dedicati sono stati eliminati e verificati su Cloudflare. Nessuna migrazione di account/dati legacy e nessun cutover Production.
-
-Il product owner conferma **database e account applicativi precedenti vuoti**, senza dati da trasferire. **Fresh start:** costruire nuove funzionalità Cloudflare senza import di account/chiavi/consensi/journal da Firebase, senza dual-write, backfill o supporto a versioni pre-lancio inesistenti.
-
-**Priorità:** abbandonare Firebase e Vercel quanto prima, una volta che le funzionalità equivalenti siano realmente collaudate. Questo non autorizza dismissioni, cancellazioni, reset, DNS o credenziali Production senza inventario live e autorizzazioni specifiche. Il codice della PWA attuale richiama ancora Firebase Auth, Firestore/App Check e Vercel: eliminare quei chiamanti prima di completare gli adapter Workers/D1 romperebbe le funzioni, anche senza utenti.
-
-## Inventario corrente
-
-| Sistema | Stato e prova disponibile | Gate / azione residua |
+| Servizio | Stato osservato / perimetro | Gate prima del GO |
 |---|---|---|
-| Cloudflare Workers Static Assets | Worker `thelogbook-frontend` su `workers.dev`. [Smoke storico #43223911523](https://github.com/gernotfound/logbook/actions/runs/43223911523) riuscito su asset. Il Worker pubblicato espone un binding `assets`, non D1 | Verifiche aggiornamenti PWA, cache, Safari iOS, login e public origin |
-| Cloudflare D1 + Worker API | **Candidato, non pubblicato.** D1 isolata `thelogbook-cf02-eu-isolated-20261113`, `jurisdiction=eu` e read replication OFF, con un UID e documento **sintetici**. Migration SQL `0001` e `0002` applicate; SQL `0003`/`0004` solo nel repository, nessuna API D1 pubblicata; indice `sync_replica_history_identity` e trigger `sync_replica_id_no_reuse` riletti sul provider. [PR #1070](https://github.com/gernotfound/logbook/pull/1070), [#1079](https://github.com/gernotfound/logbook/pull/1079) e [#1081](https://github.com/gernotfound/logbook/pull/1081) integrate; fence SQL sessione/consenso **integrato** nella [PR #1083](https://github.com/gernotfound/logbook/pull/1083), main `2d4c9d5b` v2.394.0; non distribuito su Worker API | Worker API HTTP/AuthGate/ADK, CPU/quote Free, prove reali sync e backup/erasure. Non utilizzare la D1 sintetica come DB utente |
-| Cloudflare DNS `thelogbook.me` | Zona `active`, provider verificato il 14/11: 7 record email dismessi rimossi (18→11), tutti gli 11 non pertinenti invariati, inclusa la posta IONOS. A/AAAA web ancora IONOS e nessun cutover Workers. | Nessun altro intervento sul vecchio sottodominio email richiesto; GO separato per dominio web/OAuth. |
-| Firebase Hosting `thelogbook` | Disabilitato secondo output CLI del proprietario 12/11; workflow Hosting GitHub dichiarato disabilitato. Stato `disabled_manually` non verificato indipendentemente | **Non riattivare**; rollback del futuro stack solo verso release Cloudflare valida |
-| Firebase Authentication / Firestore / App Check | **Dipendenze ancora presenti nel runtime attuale**, non una necessità di conservazione di utenti pre-lancio. Controlli Auth/Rules/consenso preesistenti non provano equivalenza Workers | Rimuovere dopo test Auth, consenso, replica, logout, cancellazione ed offline sul nuovo stack; non abbassare enforcement intanto |
-| Vercel Functions/Cron + Firebase Admin | **Vercel `logbook` PAUSED il 14/11/2026** su richiesta specifica del proprietario, evento provider `project-paused` confermato. Traffico Production bloccato, operazione reversibile; nessun progetto, segreto o dato eliminato e nessun altro progetto toccato. Ultimo backend legacy READY `4e25427f`; tentativo su main `2d4c9d5b` CANCELED (ignored build). Functions e cron sono ancora nel repository, non migrati. GitHub main `bc4a6296` aveva status esterno `Vercel` = `failure` da deployment bloccato; la configurazione candidato imposta `vercel.json.git.deploymentEnabled=false` per tutti i branch. Il ruleset main richiede invece soltanto `Canonical Verification`; i vecchi status non sono cancellabili dal repository. Non è stato ispezionato lo stato live di eventuali job di cancellazione o dati residui | Convertire API/cron, rights, erasure e inattività nel nuovo backend prima del GO; non dismettere definitivamente risorse/credenziali prima di inventario e permessi |
-| Kinde Identity (target) | Business `thelogbook.kinde.com`, regione `Europe - Ireland` selezionata negli screenshot dell'onboarding, applicazione e OAuth non ancora configurati o testati. | Per la guida scegliere **React** (PWA React/Vite; backend Workers separato); verificare credenziali Google, password ≥15, email, MFA, quote Free, erasure e Safari. |
-| OAuth Google, link di verifica/reset email | Le precedenti allowlist e i callback Firebase sono checkpoint del vecchio sistema, **non configurazione valida per il nuovo Auth Workers** | Test cookie HttpOnly/Secure/SameSite, CSRF, callback, code-verifier/replay, origine, rate limit e browser senza toccare Production prima del GO |
-| GitHub Actions / CodeQL | PR #1083 [CI exact SHA](https://github.com/gernotfound/logbook/actions/runs/43538181345) SUCCESS; [main #43538480775](https://github.com/gernotfound/logbook/actions/runs/43538480775) SUCCESS su `2d4c9d5b` (Main Release Gate + CodeQL); [Firestore reconcile #43538760086](https://github.com/gernotfound/logbook/actions/runs/43538760086) SUCCESS. Nessuno di questi check prova Worker runtime Cloudflare | CI exact-SHA, CodeQL e gate post-merge rimangono obbligatori |
-| Snyk / Dependabot | Supplementari; CodeQL resta il SAST bloccante | Non aggirare i controlli per quota Snyk |
-| Google Search Console / SEO | Canonical, sitemap e proprietà storiche riferite al vecchio frontend Firebase; niente passaggio di dominio completato | Adeguare canonical, sitemap, robots e proprietà GSC al cutover Cloudflare con esito verificato |
-| Analytics e monitoraggio esterno | GA4, Vercel Analytics/Speed Insights e SDK di segnalazione automatica ritirati dal frontend, secondo decisione di prodotto e codice | Non reintrodurre tracking senza una decisione esplicita |
-| Test cloud Firebase/Vercel separati | Dismessi nell'ottobre 2026; non sono infrastruttura da recuperare | Test locali/CI, emulatori e sandbox Cloudflare isolata con dati sintetici |
+| **Kinde Identity** | Business `thelogbook.kinde.com`; regione `Europe - Ireland` selezionata nell'onboarding. **Email e Google attivati nella UI**; non sono dimostrati password, app/credential, Google OAuth o email reali. | Password ≥15 anche nel reset, OIDC/PKCE, callback, token, sessioni/erasure, anti-bot, MFA, privacy/DPA/retention, quote Free e Safari iOS. Nessun dato salute in Kinde. |
+| **Cloudflare Workers Static Assets** | Worker `thelogbook-frontend` su `workers.dev`, con solo binding `ASSETS` all'ultimo inventario provider. | UI completa, update PWA, cache/Safari, routes/dominio, privacy e smoke. Non equivale a API Auth pubblicata. |
+| **Cloudflare Workers API** | Codice Worker, session gate/issuer, consenso, replica e verificatori Kinde nel repository; **nessuna API Worker Auth/D1 pubblicata** nel controllo provider disponibile. | Endpoint OIDC reali e limitati, binding isolati, rate limiting, test runtime e integrazione client/consenso/chiavi. |
+| **Cloudflare D1** | Sandbox `thelogbook-cf02-eu-isolated-20261113`, `jurisdiction=eu`, read replication disattivata; migration `0001`/`0002` applicate e lette sul provider con dati sintetici. Migrazioni ulteriori solo nel repository. | Database e binding di destinazione, auth/consent/erasure, quota Free, backup/restore e giurisdizione dell'istanza effettiva. `eu` non prova localizzazione di Workers, log o OAuth. |
+| **Cloudflare DNS / IONOS** | Zona `thelogbook.me` attiva, A/AAAA web ancora verso IONOS; nessuna route/custom domain Worker verificata. Record email IONOS rimasti invariati dopo la pulizia del vecchio sottodominio. | Cambiare dominio, TLS, Google OAuth e DNS Production soltanto su GO separato; preservare posta IONOS. |
 
-## Evidenze storiche precedenti alla pulizia DNS — merge #1083 e stop Vercel (14/11/2026)
+## Dipendenze del codice legacy da sostituire
 
-La [PR #1083](https://github.com/gernotfound/logbook/pull/1083) è
-**MERGED** su main `2d4c9d5b` (v2.394.0). Il fence SQL ripete la
-verifica di sessione e consenso sanitario dentro D1 per letture, commit
-e ricevute. Le verifiche CI PR e main sono riuscite; **nessuna API Cloudflare
-è stata pubblicata e nessun frontend reale è collegato a D1**.
+| Servizio | Stato verificato / limite | Prossima azione tecnica |
+|---|---|---|
+| **Firebase Authentication / Firestore / App Check** | Import e chiamanti frontend/Rules sono ancora nel repository; l'Hosting Firebase storico è disabilitato secondo attestazione del proprietario. L'assenza di account/dati da migrare non dimostra equivalenza del nuovo runtime. | Portare login, autorizzazione, consenso, sync, cifratura, logout, diritti ed erasure e rimuovere codice/config/test obsoleti **solo dopo prove equivalenti**; non riattivare Hosting. |
+| **Vercel Functions/Cron + Firebase Admin** | Il progetto `logbook` risultava sospeso dall'ultima lettura del provider. `vercel.json.git.deploymentEnabled=false` per ogni branch; Functions/Cron e test di supporto sono ancora presenti nel repository. | Convertire ogni endpoint e cron con limiti CPU Workers Free, poi rimuovere chiamanti, credenziali e provider con inventario/mandato specifico. Nessun deploy Vercel per inerzia. |
 
-Il solo progetto Vercel `logbook` è stato **messo in pausa** in modo
-reversibile su richiesta del proprietario; l'evento `project-paused`
-è presente sul provider. Cloudflare conferma zona `thelogbook.me` attiva,
-A/AAAA web ancora IONOS, nessuna route/custom-domain Workers, unico Worker
-`thelogbook-frontend` e sandbox D1 `eu`.
-In questo checkpoint anteriore nessun DNS era stato cancellato; **successivamente sono stati rimossi sette record del servizio email precedente**, come descritto sopra. SSL, OAuth, dati applicativi, credenziali e altri servizi non sono stati modificati da questa pulizia.
-La PWA non è pronta al GO. Il precedente lavoro email è archiviato senza merge dopo la scelta Kinde.
+## Sistemi tecnici e privacy
 
-## Protezioni non rinunciabili nel fresh start
+- **GitHub:** repository, PR, `Canonical Verification`, CodeQL, gate post-merge e review. CI verde non certifica provider o runtime.
+- **Google OAuth:** nel target passa da Kinde. Le vecchie origin/redirect Firebase non sono configurazioni automaticamente valide per Kinde; test browser e redirect reali prima del GO.
+- **Ricerca e indicizzazione:** Google Search Console richiede URL canonico, robots/sitemap e verifica proprietà da riallineare dopo cutover; non è backend di fitness.
+- **Analytics ed error monitoring:** nessun SDK esterno di telemetria automatica del client deve essere reintrodotto senza decisione di prodotto. Log tecnici provider da valutare per minimizzazione e retention.
+- **Fornitori email dismessi:** nessuna dipendenza operativa nel target. Gli account sono stati dichiarati chiusi dal proprietario e i record DNS dedicati sono stati eliminati e verificati su Cloudflare; l'eventuale retention delle vecchie console non è stata controllata indipendentemente. Nessuna riattivazione o attività di collaudo del vecchio percorso.
 
-Le nuove chiavi device/cloud sono casuali e indipendenti; salute cifrata sul client, niente dati sanitari in chiaro in D1. Owner/consenso/fence e sessione trusted autorizzano la rete; journal locale durevole prima della richiesta, commit cloud e ACK IndexedDB distinti; multi-tab, multi-device, iOS Safari, offline, lost-ACK, restore, revoca, esportazione e cancellazione sono requisiti correnti. Nessun PIN/codice di recupero ordinario e nessuna promessa E2EE o recovery non dimostrata. Password minima 15 caratteri, Google, email verifica/reset, maggiore età, policy di inattività e diritti utenti.
+## Verifiche e confini
 
-La giurisdizione `eu` di D1 **non garantisce** localizzazione di Workers, log, OAuth, email o conformità GDPR. Quota Free, CPU, limite giornaliero, abuso, rate limiting, privacy del provider email, backup e restore sono prove distinte. Niente billing, upgrade o fallback insicuri.
+Il rilascio richiede conferme distinte per **Auth/email/Google, consenso sanitario, owner isolation, cifratura e chiavi, sync/ACK e offline, import/export, cancellazione e inattività, quote/rate, privacy, backup, DNS, PWA iOS, CI e rollback**. Niente spese, upgrade, dati Production, cambio DNS/OAuth Production o eliminazioni irreversibili senza autorizzazione appropriata.
 
-## Conclusioni operative
-
-**Prodotto nuovo:** una vertical slice completa alla volta, senza aspettare che tutti i componenti indipendenti siano già validati. Priorità: Auth + email + consenso/chiavi, poi adapter D1 e journal, quindi deletion/rights/cron e rilascio PWA. Collegare realmente i percorsi prima di rimuovere Firebase/Vercel; **non mantenere i vecchi provider per ipotetiche migrazioni**. La dismissione fisica è un atto separato e necessita controllo di risorse/credenziali/routing e autorizzazione specifica.
-
-**Fonti:** [runbook Cloudflare](cloudflare-workers-migration.md), [EPIC #1053](https://github.com/gernotfound/logbook/issues/1053), [CF-00 #1054](https://github.com/gernotfound/logbook/issues/1054), [CF-02 #1056](https://github.com/gernotfound/logbook/issues/1056), [CF-03 #1057](https://github.com/gernotfound/logbook/issues/1057), [CF-04 #1058](https://github.com/gernotfound/logbook/issues/1058), [CF-05 #1059](https://github.com/gernotfound/logbook/issues/1059), [CF-06 #1060](https://github.com/gernotfound/logbook/issues/1060), [CF-09 #1063](https://github.com/gernotfound/logbook/issues/1063), [hosting/DNS #1041](https://github.com/gernotfound/logbook/issues/1041), [servizi esterni](../../.agents/rules/external-services.md), [CI](../../.agents/rules/ci-verification.md).
-
-Non committare segreti, token, credenziali, email personali, valori env Production, dati salute o URL con parametri sensibili. Il contratto pubblico delle variabili è `.env.example`; il loro valore e scope sono nel provider.
+**Fonti:** [runbook Cloudflare](cloudflare-workers-migration.md), [AGENTS](../../AGENTS.md), [servizi esterni](../../.agents/rules/external-services.md), [CI](../../.agents/rules/ci-verification.md), [epic #1053](https://github.com/gernotfound/logbook/issues/1053), [CF-03 #1057](https://github.com/gernotfound/logbook/issues/1057), [CF-09 #1063](https://github.com/gernotfound/logbook/issues/1063), [hosting #1041](https://github.com/gernotfound/logbook/issues/1041).

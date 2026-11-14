@@ -6,6 +6,8 @@
 
 **Fonti:** [Consenso salute](../../.agents/rules/health-consent.md), [Account](../../.agents/rules/account-lifecycle.md), [Cifratura](../../.agents/rules/secure-storage.md), [Telemetria](../../.agents/rules/telemetry-and-privacy.md), [protocollo tecnico](health-consent-technical-protocol.md), [registro fornitori](vendor-transfer-register.md). Le precedenti proposte di cancellazione su secondo pulsante e riaccettazione offline sul vecchio archivio sono storiche, conservate in Git e non più vigenti.
 
+**Ambito del porting:** le righe Firebase/Firestore/Vercel descrivono il runtime legacy ancora nel codice, **non** il target Kinde/Workers/D1. Le politiche e i job di inattività, revoca e account deletion dovranno essere reimplementati e provati sui nuovi provider; non importare utenti o dati pre-lancio. La cancellazione dei dati salute non equivale a cancellazione dell'identità Kinde.
+
 ## Politica di inattività deliberata, non ancora attiva
 
 **Decisione prodotto del 6 novembre 2026:** cancellare gli account dopo **12 mesi senza utilizzo autenticato rilevato online**, anche se l'utente consulta soltanto i dati; **nessuna email preventiva**. La beta è pubblica, con utenti maggiorenni e dati reali. Questi 12 mesi sono una preferenza del prodotto, **non un termine imposto dal GDPR né una politica di cancellazione già approvata o verificata attiva in Production**.

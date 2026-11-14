@@ -2,6 +2,8 @@
 
 **Fonte normativa tecnica:** [AGENTS](../../AGENTS.md) e [Consenso salute](../../.agents/rules/health-consent.md). Le prove delle PR storiche citate sotto non attestano la release attuale; l'indice compliance mantiene separate approvazione legale e verifiche tecniche.
 
+**Questa procedura dettaglia il runtime Firebase/Firestore non ancora completamente sostituito.** Il target Cloudflare/Kinde deve offrire gli stessi gate di consenso, revoca ed erasure con verifiche indipendenti; nessun claim Firebase può essere trattato come contratto del nuovo provider senza conversione. 
+
 Decisione corrente del product owner (6 novembre 2026): dopo la revoca nessuna funzione fitness è accessibile. Il backup JSON è facoltativo **prima della conferma**; la revoca account trusted accoda automaticamente la cancellazione dei dati applicativi mantenendo Firebase Auth. Una nuova accettazione esplicita può avviare soltanto un archivio vuoto dopo completamento verificato. Non esiste una modalità fitness ridotta.
 
 ## Confine autorevole

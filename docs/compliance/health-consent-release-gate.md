@@ -54,7 +54,7 @@ L'endpoint rights-only può continuare a gestire stati di revoca previsti dal pr
 - [x] Decisione prodotto e implementazione integrate: PR #826 (revoca con cancellazione automatica e backup precedente facoltativo), PR #829 (rimozione riaccettazione offline obsoleta).
 - [ ] Collaudo end-to-end **autenticato** con dati sintetici su dispositivi distinti, inclusi fallimenti, retry, copie offline e verifica delle raccolte/chiave cloud. CI e deploy non sostituiscono la prova runtime.
 - [ ] Verifica live di Firestore location, PITR/backup e regole di restore, configurazioni Firebase/App Check, trattamento log e trasferimenti dei provider.
-- [ ] Chiarimento contrattuale su DPA Vercel **Hobby**, subprocessori, localizzazioni, retention e opzione AI applicabile; nessuna deduzione dai soli log.
+- [ ] Verificare DPA, subprocessori, localizzazione, trasferimenti, log, email/OAuth e retention dei fornitori **effettivamente usati al GO Cloudflare/Kinde**; il vecchio Vercel sospeso non è automaticamente un requisito contrattuale del nuovo stack.
 - [ ] Matrice per finalità con artt. 6 e 9, minimizzazione e termini motivati per marker/ricevute/Auth/copie provider, procedura diritti e screening DPIA validati da professionista competente.
 - [ ] Informativa pubblica e documenti approvati per i primi utenti esterni; decisione GO motivata. Sino ad allora: **NO-GO**.
 
