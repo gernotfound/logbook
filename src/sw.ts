@@ -2,6 +2,7 @@
 import { clientsClaim } from '@vite-pwa/workbox-swkit/core';
 import { createHandlerBoundToURL, precacheAndRoute } from '@vite-pwa/workbox-swkit/precaching';
 import { NavigationRoute, registerRoute } from '@vite-pwa/workbox-swkit/routing';
+import { AUTH_HTTP_NAVIGATION_DENYLIST } from './lib/pwaHttpNavigationBoundary';
 
 declare let self: ServiceWorkerGlobalScope;
 
@@ -24,8 +25,9 @@ precacheAndRoute(self.__WB_MANIFEST, { ignoreURLParametersMatching: [/^v$/] });
 // shortcuts such as /?tab=training keep working offline. Firebase reserves /__/
 // for Auth/Hosting helpers. Public legal pages are standalone static documents:
 // never return an authenticated app shell for /about or /privacy.
+// OAuth callbacks and API navigations must bypass the offline shell too.
 registerRoute(new NavigationRoute(
     createHandlerBoundToURL('/index.html'),
-    { denylist: [/^\/__\//, /^\/(?:about|privacy)(?:\/|\.html|$)/] },
+    { denylist: [/^\/__\//, /^\/(?:about|privacy)(?:\/|\.html|$)/, AUTH_HTTP_NAVIGATION_DENYLIST] },
 ));
 
