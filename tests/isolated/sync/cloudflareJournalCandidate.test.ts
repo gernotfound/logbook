@@ -11,9 +11,9 @@ import { deliverCloudflareJournalCandidate } from '../../../src/lib/sync/cloudfl
 import { stageCloudflareDelivery } from '../../../src/lib/sync/cloudReplicaDurableDelivery';
 import { sealCloudDocument } from '../../../src/lib/sync/cloudDocumentCipher';
 import { readAccountCloudDocument } from '../../../src/lib/sync/cloudDocumentRead';
+import { CloudReplicaTransportError } from '../../../src/lib/sync/cloudReplicaTransport';
 import type {
     CloudReplicaBatch, CloudReplicaCompleteScan, CloudReplicaControlSnapshot, CloudReplicaSnapshot,
-    CloudReplicaTransportError,
 } from '../../../src/lib/sync/cloudReplicaTransport';
 import { adoptReplicaCheckpoint, commitLocal, initializeLocal, readLocal } from '../../../src/lib/sync/localRepository';
 import { createAndMigrateVault } from '../../../src/lib/sync/secureArchiveMigration';
