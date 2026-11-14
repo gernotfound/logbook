@@ -1,0 +1,28 @@
+# Kinde — configurazione del provider per TheLogBook
+
+**Stato: onboarding in corso, CRITICAL, non operativo.** Questa è la fonte corrente per i passaggi di configurazione **Kinde** osservati o da verificare, distinta dal runtime Cloudflare. Evidenze dalle schermate del proprietario fornite nella chat del 14/11/2026 e dalla [documentazione ufficiale Kinde per SPA con API](https://docs.kinde.com/build/applications/authenticating-spa/); nessun accesso amministrativo diretto al tenant Kinde da parte dell'agente. La configurazione reale va riletta nel provider prima di procedere al GO.
+
+## Stato verificato tramite schermate del proprietario
+
+- Business: `thelogbook.kinde.com`; selezione iniziale regione dati **Europe – Ireland** (onboarding, non prova dell'intero percorso internazionale di dati, email o subprocessori).
+- Metodi di accesso scelti nell'onboarding: **Email + Google**, con Facebook/X disattivati. Questo non prova che sia stata attivata la connessione **Email + password**: nei nuovi business Kinde il metodo email potrebbe essere basato su codice monouso.
+- Dashboard aperta in ambiente **Production**, indicato **Not live**. Visualizzati **0 utenti totali** e **0 utenti attivi negli ultimi 30 giorni**. Questi conteggi sono un'istantanea della schermata, non una verifica API o conferma futura.
+- L'onboarding ha creato automaticamente l'applicazione `My React App`, categoria **Front-end and mobile**. Non risultano dalle schermate URL di callback/logout, client ID, app server-side né una prova di token/sessione reali.
+
+## Decisione tecnica per la configurazione da completare
+
+La PWA rimane React/Vite, ma l'architettura target già selezionata centralizza OAuth code exchange, PKCE/state/nonce, sessione HTTP-only e controlli D1 sui **Cloudflare Workers API**, non in JavaScript eseguito nel browser. In [Kinde — Authenticating SPA](https://docs.kinde.com/build/applications/authenticating-spa/) l'opzione server-side con cookie condiviso sullo stesso dominio frontend/API richiede un'applicazione **Back-end web**; l'app Front-end and mobile attuale è invece un public client per token browser/PKCE.
+
+**Prossima operazione sul provider:** tramite **Add application** esaminare la creazione di una nuova applicazione `TheLogBook` di tipo `Back-end web`, senza eliminare/alterare `My React App` prima di averne verificato il ruolo. Il nome è una proposta tecnica coerente con il brand, non una creazione già verificata. Non usare starter kit al posto dell'app esistente. Non attivare Go live, billing, custom domain, DNS/OAuth Production o dati personali reali in questa fase.
+
+## Controlli da completare, senza dedurre risultati
+
+1. **Applicazione:** tipo Back-end web, ambiente scelto, client ID (public), autenticazione client confidenziale con secret custodito **solo** nel Worker server-side; nessun secret nel frontend, GitHub, issue o questa guida.
+2. **Callback e logout:** origin e percorsi HTTPS esatti devono essere definiti dal codice candidato e allineati a Kinde; nessun URL di callback inventato o aggiunto a Production sulla sola base della documentazione. Cookie SameSite/Secure/HttpOnly, CSRF e stesso host per frontend/API verificati.
+3. **Email/password:** attivare esplicitamente **Email + password** sull'app (non solo Email + code). Minimo **15 caratteri** anche per signup/reset: Kinde documenta il workflow `user:new_password_provided` per validazioni aggiuntive. Verificare errori, verifica email e reset reali. [Password authentication](https://docs.kinde.com/authenticate/authentication-methods/password-authentication/) · [Workflow](https://docs.kinde.com/workflows/example-workflows/new-password-provided-workflow/).
+4. **Google:** verificare l'effettiva social connection, il trust della email, e l'uso di credenziali OAuth Google proprie prima del Go live; la sola visibilità del pulsante non certifica la configurazione. [Google social sign in](https://docs.kinde.com/authenticate/social-sign-in/google/).
+5. **Sicurezza e privacy:** MFA per accesso amministrativo/utenti dove applicabile, bot/attack protection, enumerazione utenti, quote del piano Free, logout e revoca, gestione account eliminati, privacy EU/DPA, subprocessori e metadata email, test Safari/iOS. WAF Cloudflare sul sito non prova protezione degli endpoint Kinde-hosted.
+
+## Confini con le altre chat
+
+Questo branch documenta soltanto l'onboarding e la configurazione Kinde. Non modifica il codice/AuthGate su `main`, Cloudflare/DNS, database D1, OAuth Google Production, billing o infrastruttura in uso. Il codice e i gate correnti sono in [CF-03 #1057](https://github.com/gernotfound/logbook/issues/1057), [runbook Cloudflare](cloudflare-workers-migration.md) e [registro fornitori](external-services-register.md). Nessun merge è autorizzato da questo lavoro su branch.
