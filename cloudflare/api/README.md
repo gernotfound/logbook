@@ -384,3 +384,7 @@ Consent withdrawal/erasure, global logout and account deletion still need
 their own transactional protocol. Tests here run against synthetic
 SQLite, not the deployed Workers/D1 runtime; CPU, quotas, mobile recovery
 and the actual frontend flow remain release blockers.
+
+## Target Kinde identity proof (not yet an API route)
+
+`cloudflare/auth/kinde-token-verifier.mjs` validates signed user access tokens for the configured API. `cloudflare/auth/kinde-login-proof.mjs` additionally verifies the signed ID token, verified email, server-owned OAuth nonce and matching subject before any future trusted session issuance. Kinde uses separate token audiences; pin each per environment after live tenant observation. Neither helper implements OAuth state/PKCE, user provisioning, session creation, or an authenticated route, and neither is deployed. Never issue an app session based on an arbitrary client UID or self-reported email verification. The new Kinde identity flow must remain separate from the existing D1 consent/owner/session fences.

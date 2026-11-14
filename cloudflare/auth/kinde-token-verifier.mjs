@@ -49,7 +49,8 @@ export function createKindeAccessTokenVerifier(configuration, keySet) {
       const now = Math.floor(Date.now() / 1000);
       if (payload.azp !== clientId
         || typeof payload.sub !== 'string'
-        || !/^[A-Za-z0-9_:-]{2,128}$/.test(payload.sub)
+        || !/^kp[_:][A-Za-z0-9_:-]{1,125}$/.test(payload.sub)
+        || payload.gty === 'client_credentials'
         || !Number.isSafeInteger(payload.iat)
         || !Number.isSafeInteger(payload.exp)
         || payload.iat > now + CLOCK_TOLERANCE_SECONDS

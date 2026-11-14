@@ -16,10 +16,11 @@ async function fixture() {
   async function token({
     iss = issuer, aud = audience, azp = clientId, sub = subject,
     issuedAt = Math.floor(Date.now() / 1000) - 2,
+    grantType,
     expiresAt = Math.floor(Date.now() / 1000) + 300,
     signingKey = privateKey,
   } = {}) {
-    return new SignJWT({ azp, sub }).setProtectedHeader({ alg: 'RS256', kid: 'synthetic-key' })
+    return new SignJWT({ azp, sub, ...(grantType ? { gty: grantType } : {}) }).setProtectedHeader({ alg: 'RS256', kid: 'synthetic-key' })
       .setIssuer(iss).setAudience(aud).setIssuedAt(issuedAt)
       .setExpirationTime(expiresAt).sign(signingKey);
   }
@@ -44,6 +45,8 @@ void test('Kinde token rejects wrong issuer, audience and client', async () => {
     { aud: 'unrelated-api' },
     { azp: 'different-client' },
     { sub: '../other-owner' },
+    { sub: 'machine-client' },
+    { grantType: 'client_credentials' },
   ]) {
     await assert.rejects(verify(await token(altered)), /invalid-kinde-token/);
   }
