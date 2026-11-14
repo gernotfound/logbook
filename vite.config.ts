@@ -4,7 +4,8 @@ import react from '@vitejs/plugin-react'
 import { VitePWA } from '@unplugin-pwa/vite'
 import { visualizer } from 'rollup-plugin-visualizer'
 
-// Firebase Hosting remains the active production origin until the authorized cutover.
+// Cloudflare serves the public development frontend on thelogbook.me.
+// Firebase account/data/App Check SDKs remain until their replacements are verified.
 
 const appVersion = process.env.npm_package_version || '0.0.0-dev'
 const buildSha = process.env.LOGBOOK_BUILD_SHA || process.env.EXPECTED_SHA || process.env.GITHUB_SHA || process.env.VERCEL_GIT_COMMIT_SHA || 'dev'

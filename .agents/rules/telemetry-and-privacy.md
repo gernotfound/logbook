@@ -17,6 +17,12 @@
 
 **MUST:** `firebase.json` non autorizza endpoint esterni di monitoraggio degli errori in `connect-src`; il workflow Firebase Hosting non richiede DSN, token, organization/project o upload di source map. `scripts/check-production-build-secrets.mjs` impedisce la reintroduzione accidentale di variabili di monitoraggio nel workflow.
 
+## Frontend Cloudflare: nessuna iniezione di Analytics
+
+**MUST:** il solo frontend pubblico di sviluppo su `thelogbook.me` non deve ricevere script Web Analytics/RUM di Cloudflare tramite inserimento automatico del provider. L'audit del 14/11/2026 ha verificato che `auto_install=true` e RUM attivo alteravano le risposte HTML: `/?tab=training` riceveva 4004 byte invece dei 3637 byte della build. Sono stati impostati `auto_install=false` e il ruleset Web Analytics `enabled=false`; il provider espone la modalità zona `rum=manual`, che **non** significa raccolta attiva quando nessuno snippet manuale è presente. Non eliminare il sito Analytics storico senza inventario e mandato separato.
+
+**MUST:** i deploy confrontano il contenuto dell'HTML pubblico e delle scorciatoie PWA con l'asset esatto costruito su `main`; un beacon iniettato, anche se bloccato dalla CSP, è un errore di privacy e integrità del rilascio. Non disabilitare né allentare lo smoke per rendere verde la CI. In caso di difformità, verificare configurazione RUM/auto-install e trasformazioni edge sul provider prima di ipotizzare una cache obsoleta; i purge URL non hanno risolto questo incidente.
+
 ## Servizi tecnici necessari
 
 Firebase Authentication, Firestore e App Check rimangono dipendenze del codice legacy; Hosting Firebase è disabilitato e il backend Vercel risulta sospeso. Kinde e Cloudflare possono trattare metadati tecnici per il servizio, da verificare con contratti e impostazioni live. Nessun SDK di telemetria client esterno deve essere aggiunto.

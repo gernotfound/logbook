@@ -151,6 +151,11 @@ jobs:
           accountId: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
           wranglerVersion: '4.159.0'
           command: deploy --config cloudflare/wrangler.jsonc
+      - name: Setup Node.js for exact-asset smoke
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: '24'
+          package-manager-cache: false
       - name: Non-destructive smoke of thelogbook.me
         shell: bash
         run: |
@@ -158,14 +163,27 @@ jobs:
           for path in / /sw.js /manifest.webmanifest /robots.txt /sitemap.xml; do
             local_file="dist/${path#/}"
             if [ "${path}" = "/" ]; then local_file="dist/index.html"; fi
-            initial_http="$(curl --fail --silent --show-error --retry 3 --retry-delay 2 --retry-all-errors \
-              -H 'Accept-Encoding: identity' --dump-header /tmp/cloudflare-served-headers \
-              --write-out '%{http_code} %{content_type}' \
-              "${CLOUDFLARE_APP_ORIGIN}${path}" -o /tmp/cloudflare-served-asset)"
-            cmp -s "${local_file}" /tmp/cloudflare-served-asset || \
+            verified=false
+            # Workers deployments propagate across edge locations. Permit a
+            # bounded convergence window, but accept only verified bytes.
+            for attempt in 1 2 3 4; do
+              initial_http="$(curl --fail --silent --show-error --retry 3 --retry-delay 2 --retry-all-errors \
+                -H 'Accept-Encoding: identity' --dump-header /tmp/cloudflare-served-headers \
+                --write-out '%{http_code} %{content_type}' \
+                "${CLOUDFLARE_APP_ORIGIN}${path}" -o /tmp/cloudflare-served-asset)"
+              if node scripts/verify-cloudflare-served-asset.mjs \
+                  "${path}" "${local_file}" /tmp/cloudflare-served-asset; then
+                verified=true
+                break
+              fi
+              if [ "${attempt}" != 4 ]; then sleep 3; fi
+            done
+            if [ "${verified}" != true ]; then
               bash scripts/cloudflare-asset-mismatch-diagnostics.sh \
                 "${local_file}" /tmp/cloudflare-served-asset /tmp/cloudflare-served-headers \
                 "${CLOUDFLARE_APP_ORIGIN}${path}" "${EXPECTED_SHA}" "${initial_http}"
+              exit 1
+            fi
           done
           curl --fail --silent --show-error -D /tmp/cloudflare-headers -o /dev/null "${CLOUDFLARE_APP_ORIGIN}/"
           grep -qi '^x-content-type-options: nosniff' /tmp/cloudflare-headers
@@ -187,14 +205,27 @@ jobs:
             cmp -s "${file}" /tmp/cloudflare-chunk || { echo "Chunk byte mismatch: ${path}"; exit 1; }
           done
 
-          # The PWA uses query-string shortcuts, not server-side pathname routes.
-          curl --fail --silent --show-error \
-            -H 'Sec-Fetch-Mode: navigate' -H 'Accept: text/html' \
-            "${CLOUDFLARE_APP_ORIGIN}/?tab=training" -o /tmp/cloudflare-tab-shortcut
-          cmp -s dist/index.html /tmp/cloudflare-tab-shortcut || {
-            echo 'PWA query shortcut must serve the root app shell'
+          # A query-string shortcut is still the same app shell. Validate
+          # exact bytes after bounded edge propagation, not just HTTP 200.
+          shortcut_verified=false
+          for attempt in 1 2 3 4; do
+            shortcut_http="$(curl --fail --silent --show-error --retry 3 --retry-delay 2 --retry-all-errors \
+              -H 'Accept-Encoding: identity' -H 'Sec-Fetch-Mode: navigate' -H 'Accept: text/html' \
+              --dump-header /tmp/cloudflare-tab-headers --write-out '%{http_code} %{content_type}' \
+              "${CLOUDFLARE_APP_ORIGIN}/?tab=training" -o /tmp/cloudflare-tab-shortcut)"
+            if node scripts/verify-cloudflare-served-asset.mjs \
+                / dist/index.html /tmp/cloudflare-tab-shortcut; then
+              shortcut_verified=true
+              break
+            fi
+            if [ "${attempt}" != 4 ]; then sleep 3; fi
+          done
+          if [ "${shortcut_verified}" != true ]; then
+            bash scripts/cloudflare-asset-mismatch-diagnostics.sh \
+              dist/index.html /tmp/cloudflare-tab-shortcut /tmp/cloudflare-tab-headers \
+              "${CLOUDFLARE_APP_ORIGIN}/?tab=training" "${EXPECTED_SHA}" "${shortcut_http}"
             exit 1
-          }
+          fi
 
           # Missing static resources must never fall back to index.html. Verify
           # browser script/style loads as well as a navigation to an unknown path.
