@@ -1,210 +1,48 @@
-# Cloudflare full-stack — sviluppo, verifiche e cutover TheLogBook
+# TheLogBook — migrazione Cloudflare: runbook corrente
 
-**Stato:** sviluppo CRITICAL / fresh start, checkpoint provider e main del 14 novembre 2026. Questo è il runbook operativo corrente; non è una prova di rilascio Production. Le informazioni temporali vanno aggiornate dopo ogni merge o prova provider. [EPIC #1053](https://github.com/gernotfound/logbook/issues/1053), [registro servizi](external-services-register.md), [hosting/DNS #1041](https://github.com/gernotfound/logbook/issues/1041).
+**Classificazione: CRITICAL · stato PARZIALE / NO-GO Production.** La fonte di verità per il codice e i test è `main` GitHub; per risorse e runtime sono i rispettivi provider. Questo documento descrive **contratti correnti e blocchi**, non lo storico di commit. [EPIC #1053](https://github.com/gernotfound/logbook/issues/1053) · [registro servizi](external-services-register.md) · [CF-09 #1063](https://github.com/gernotfound/logbook/issues/1063).
 
-## Checkpoint provider aggiornato — 14/11/2026 (dopo pulizia DNS)
+## Decisioni confermate
 
-**Provider 14/11/2026:** la pulizia DNS degli ex fornitori email è verificata (7 record eliminati, 11 non pertinenti invariati, posta IONOS intatta). Il proprietario conferma la cancellazione dei relativi account; nessuna verifica diretta delle console o della retention. Business Kinde `thelogbook.kinde.com` con regione Irlanda selezionata, onboarding in corso; Auth e cutover Production restano NO-GO.
+- **Fresh start:** non esistono account/dati pre-lancio da trasferire; niente migrazioni Firebase→D1 di utenti, password, chiavi, consensi, sessioni o dati sanitari. Preservare invece tutte le funzioni approvate, il motore locale e i formati che il sistema nuovo effettivamente creerà.
+- **Frontend:** Cloudflare Workers Static Assets; **backend:** API Workers e D1 SQL con giurisdizione `eu` da verificare sull'istanza effettiva. Nessun billing o upgrade autorizzato.
+- **Identità:** Kinde scelto per Email e Google; questi pulsanti sono stati abilitati nell'onboarding. **Metodo email/password ≥15 caratteri, Google OAuth, reset/verifica e sessioni non sono ancora collaudati**. I messaggi Auth saranno gestiti da Kinde, senza un servizio email separato.
+- **Confini di fiducia:** Kinde conferma l'identità; Workers/D1 devono autorizzare owner, stato account, consenso salute, revoca, cancellazione, sessioni e quote. Nessun dato salute in chiaro su Kinde o D1. Una sessione valida e un JWT firmato non sostituiscono consenso e owner fence.
+- **Dismissione:** eliminare funzioni Firebase/Vercel solo dopo aver verificato il percorso equivalente. Non mantenere compatibilità con installazioni pre-lancio inesistenti. Cutover `thelogbook.me`, DNS, OAuth/posta Production, credenziali e dismissioni irreversibili richiedono mandato e GO separati.
 
-## Checkpoint operativo precedente — 14/11/2026 (storico)
+## Stato osservato e limiti delle prove
 
-- **GitHub:** [PR #1083](https://github.com/gernotfound/logbook/pull/1083) integrata su `main 2d4c9d5b` (v2.394.0). [CI candidata](https://github.com/gernotfound/logbook/actions/runs/43538181345) e [main](https://github.com/gernotfound/logbook/actions/runs/43538480775) SUCCESS; SQL sessione/consenso non distribuito.
-- **Cloudflare (prima della pulizia email):** zona `thelogbook.me` attiva ma apex A/AAAA ancora verso IONOS; nessuna Workers Route né Custom Domain. Unico Worker `thelogbook-frontend`, D1 sandbox EU sintetica, nessun Worker API/Auth pubblicato. Il DNS era allora invariato; aggiornamento DNS del sottodominio email storico descritto sopra.
-- **Vercel:** progetto `logbook` **PAUSED** per richiesta del proprietario, evento provider `project-paused` confermato. Traffico Production bloccato; nessun account/dato/secret eliminato, nessun altro progetto toccato. Il codice frontend e il cron backend storico mantengono riferimenti legacy.
-- **Release:** `thelogbook.me` resta NO-GO per PWA completa; Auth, consenso, ADK, sync D1, diritti/erasure, quote, privacy e test reali non sono conclusi. La sospensione reversibile Vercel non è una dismissione irreversibile.
-
-## Incremento CF-03 successivo — prova di identità OIDC Kinde (non pubblicato)
-
-Il candidato `cloudflare/auth/kinde-login-proof.mjs` verifica **insieme** un access token Kinde destinato all'API e l'ID token della stessa identità tramite JWKS RS256. Applica issuer, due audience configurate separatamente (Kinde può usare audience diverse per i token), client autorizzato, email verificata, subject coincidente, nonce imprevedibile derivato dal **flusso OAuth server-side** e controllo `at_hash` quando presente. Non restituisce email né token. Non può essere chiamato per emettere una sessione D1 senza una transazione di callback OAuth trusted con `state` monouso, PKCE, token exchange e successivo mapping `issuer+sub`→UID verificato: **questo non è ancora implementato**. Mai usare nonce ricevuto dal client come prova. Le prove sono sintetiche e non dimostrano claim, quota o cookie reali Kinde; per l'ID-token audience bisogna collaudare il tenant Kinde Free EU e configurare esattamente il valore realmente emesso.
-
-## Decisione di prodotto e sequenza di abbandono
-
-**Decisione Auth — 14/11/2026 (CRITICAL):** il product owner ha scelto **Kinde** per nuove identità email/password (minimo 15 caratteri), Google e verifica/reset. L'integrazione Kinde non è ancora configurata o validata sul provider e il login non è operativo. Workers/D1 mantengono sessioni applicative, owner, consenso, revoche, diritti ed erasure; niente dati sanitari in Kinde. Il token d'accesso non autorizza da solo una sessione D1 senza prova d'identità trusted. Le email Auth saranno gestite da Kinde, ma consegna, privacy e quote richiedono test. Le integrazioni email precedenti sono dismesse; il proprietario ha confermato la chiusura dei relativi account (non verificata direttamente sulle console), mentre i record DNS dedicati sono stati eliminati e verificati su Cloudflare. Nessuna migrazione di account/dati legacy e nessun cutover Production.
-
-**Database e account precedenti vuoti secondo il product owner.** Il sistema Cloudflare partirà con **nuove identità, chiavi, consensi e dati**, senza trasferimenti Firebase/Vercel e senza adapter o formati di compatibilità pre-lancio. Conservare invece la normale funzione import/export per i dati generati nel nuovo sistema, la durabilità locale e tutti i diritti previsti.
-
-**Abbandonare Firebase/Vercel il prima possibile**, non lasciarli attivi per un'ipotetica migrazione di utenti. Tuttavia oggi il codice PWA richiama ancora Firebase Authentication, Firestore/App Check e le Functions Vercel; il candidato D1 non è collegato al runtime. La rimozione anticipata di questi chiamanti romperebbe login, consenso, sincronizzazione e diritti. Realizzare vertical slice coerenti e testate sul nuovo stack, poi disattivare subito il precedente percorso secondo l'autorizzazione provider pertinente. Nessun dual-write o backfill.
-
-La dichiarazione di database vuoto non è un inventario provider e non autorizza cancellazioni/reset fisici. Il cutover del dominio `thelogbook.me`, OAuth, posta Production e la dismissione irreversibile richiedono un GO specifico, anche senza utenti da migrare.
-
-## Incremento CF-03 integrato — gate di sessione interno (non distribuito)
-
-La [PR #1076](https://github.com/gernotfound/logbook/pull/1076), integrata su `main c2352c5e23e4daf1e71f3224fdf315ab8bfefe7b`, aggiunge migration D1 `0003_auth_session_gate.sql`,
-`cloudflare/auth/session-gate.mjs` e regressioni SQL/HTTP sintetiche.
-Il nuovo endpoint è **esclusivamente un service binding privato**, con cookie
-`__Host-logbook_session` hashato, CSRF hashato, status/email verificata,
-revoca/scadenza, generazione Auth allineata al fence del consenso e rate limiter
-di sessione obbligatorio. Si usa una SELECT sulla D1 primaria per ottenere
-le prove coerenti; gli errori non restituiscono dati o SQL. Mancano ancora
-issuance Auth reale (password/Google), verifica/reset email, consent provision,
-API live, CPU/quote e test su provider. Nessuna migrazione di account
-Firebase, nessun deploy o DNS. Riferimento a [CF-03 #1057](https://github.com/gernotfound/logbook/issues/1057).
-Il precedente filone sull'email transazionale è **archiviato**; il proprietario conferma gli account chiusi e i relativi record DNS sono stati rimossi su Cloudflare. Kinde gestirà le email Auth, ma consegna, privacy e difese dagli abusi restano da validare.
-
-## Incremento CF-03 integrato — issuer di sessioni (non esposto)
-
-La [PR #1078](https://github.com/gernotfound/logbook/pull/1078), integrata su `main d744f0ff1d5828329e78188396dcc4aacc6cd987` (CI PR e main riuscite), aggiunge `cloudflare/auth/session-issuer.mjs` per l'emissione di cookie
-sessione/CSRF solo **dopo** una futura autenticazione trusted valida.
-La creazione D1 è condizionata atomicamente a principal attivo ed email
-già verificata, con `auth_epoch` corrente. Il token HttpOnly resta
-indipendente dal CSRF leggibile dal frontend, che sopravvive a reload e
-nuove schede senza salvare il token di sessione nel JavaScript. Con consenso
-assente la sessione può esistere, ma il gate interno non autorizza
-sincronizzazione. Non c'è ancora un endpoint pubblico di login/Google,
-consenso o invio email, né deploy/provider; il nuovo issuer rimane un
-componente interno isolato. I test di prova sono Node/SQLite sintetici.
-
-## Incremento CF-05 integrato — primo consenso trusted (non distribuito)
-
-La [PR #1079](https://github.com/gernotfound/logbook/pull/1079), integrata su `main fc1423cc03bc488787d218a7f13b184f4c410ae7` (2.388.0), ha aggiunto un Worker HTTP candidato per stato e accettazione iniziale, con contratto frontend `unregistered`/`revision`/`acceptedAt` ISO, input `acceptedTerms`, `acceptedHealthData`, `confirmsOver18`, versioni legali correnti e CSRF. D1 schema `0004`: prova
-immutabile in una transazione insieme a subject e sync_state; il gate
-interno ne richiede l'esistenza prima di qualsiasi replica. Consenso mancante, prova incompleta, versione legale superata o generazione
-sfasata non autorizzano replica, anche con cookie Auth valido. La revoca e
-la riaccettazione e la cancellazione effettiva erano **NON IMPLEMENTATE**
-alla PR #1079; l'incremento CF-05 successivo introduce solo richiesta
-trusted di revoca + job in stato `pending`, non l'esecutore.
-Issuer Auth reale e diritti restano assenti, come ogni deploy API. 
-Questo codice non abilita la PWA: serve completare l'intero ciclo di consenso
-prima del rilascio. Vedi [CF-05 #1059](https://github.com/gernotfound/logbook/issues/1059).
-
-## Incremento CF-06 — elaborazione cancellazione bounded con lease (candidato isolato)
-
-Il nuovo `cloudflare/jobs/health-erasure-worker.mjs` elabora **solo**
-job revocati e verificati su D1 primaria. Un lease con token casuale,
-epoch monotono e scadenza impedisce avanzamenti concorrenti: ogni DELETE
-ricontrolla nella stessa istruzione il lease corrente e il soggetto
-`withdrawn`. Ciascuna invocazione elimina al massimo quattro record di
-**una sola** tabella nota: documenti cifrati, ricevute, mutazioni replica o
-membership. Nessun full-table scan o cancellazione senza UID. La migration
-`0006_health_erasure_progress.sql` aggiunge progress/lease e i trigger
-anti-resurrection, anti-riaccettazione prematura e anti-completion fittizia.
-Solo quando tutte le quattro tabelle sono vuote, il job diventa
-`phase=awaiting-keys`, ma resta `status=processing`, **mai `complete`**.
-Questo evita di bloccare i job successivi mentre mancano le chiavi.
-
-La seconda metà è deliberatamente bloccata: inventario e cancellazione
-delle altre risorse owner-scoped, ADK/KEK, diritti/export e final receipt
-devono ancora essere implementati e verificati. Nessun cron pubblico,
-nessun Worker o schema D1 remoto distribuito. I test sintetici Node/SQLite
-non provano durata o quote Free. La route di revoca continua a riconoscere
-su D1 primaria un job già `processing` come richiesta valida, senza
-dichiarare eliminazione completata. CF-06 #1060 e CF-05 #1059.
-
-## Incremento CF-05 — revoca SQL e richiesta erasure durevole (candidato isolato)
-
-`0005_health_withdrawal_queue.sql` aggiunge il job `health_erasure_jobs`
-e un trigger che trasforma **atomicamente** il soggetto in `withdrawn`
-nell'INSERT del job. La route `POST /v1/consent/withdraw` accetta soltanto
-un'intenzione esplicita, derivando UID e generazione dalla sessione AuthGate
-privata e ricontrollando hash sessione, principal e prima prova di consenso
-nella SQL di scrittura. Anche se la verifica email viene meno e l'epoch Auth
-avanza, una sessione corrente autenticata può richiedere la revoca;
-nessuna nuova sincronizzazione è consentita. Un risultato ambiguo non è
-successo: un readback su D1 primaria deve dimostrare il job pending,
-il soggetto ritirato e la sessione attuale. Non viene restituito alcun ACK
-di cancellazione completata. Node/SQLite sintetico prova revoca,
-interleaving con logout e prova rimossa, replay, rollback e isolamento owner.
-
-**NON IMPLEMENTATI**: esecuzione bounded del job, eliminazione cifrati/
-chiave cloud, ricevuta di erasure, rights-only export, riaccettazione,
-aggancio UI e prova su Worker remoto. Migration 0005 è solo versionata,
-non applicata su D1 sandbox o Production. Non pubblicare la route
-prima della disponibilità dell'intero ciclo. CF-05 #1059, CF-06 #1060.
-
-## Audit della sessione e del contesto — PR #1083 (13–14/11/2026)
-
-Durante l'audit post-PR #1081 è stata rilevata una finestra AuthGate→D1:
-una revoca della sessione già confermata poteva precedere il primo INSERT
-di un commit cifrato o di una mutazione replica, perché i trigger iniziali
-verificavano consenso/epoch/lease/revisione ma non il **token di sessione
-revocato**. La correzione candidata fa passare il digest del token attraverso
-il solo service binding privato e lo ricontrolla nella stessa prima INSERT
-SQL (senza cambiare il formato o le tabelle). Una revoca/scadenza, un
-principal disabilitato o una generazione diversa provocano errore di
-vincolo e rollback dell'intero batch. La correzione aggiuntiva **sullo stesso branch** estende il guard
-anche alle SELECT che restituiscono snapshot cifrati, pagine, registro
-repliche e ricevute. L'autorizzazione passa nella stessa query sulla D1
-primaria, con batch SQL atomico per le pagine e per le letture composte.
-Una revoca confermata *prima della transazione* blocca l'operazione;
-una risposta già autorizzata e in volo dopo quella transazione non può
-essere richiamata retroattivamente. La revisione successiva del branch
-richiede nel medesimo predicato SQL anche soggetto attivo e ricevuta del
-primo consenso effettivamente presente: il solo digest di una sessione
-valida non basta se una cancellazione del consenso si interpone dopo
-AuthGate. La revisione 1 è quella corrente del candidato; un futuro
-flusso di riaccettazione richiederà di evolvere insieme gate e fence.
-
-Regressioni SQL/HTTP dedicate: logout nel tratto gate→D1, perdita del
-token, scadenza, epoch divergente, letture/ACK negati dopo revoca e
-nessun documento/receipt fantasma, anche quando la prova del
-consenso scompare dopo AuthGate. **Integrato su main dalla PR #1083,
-non distribuito**. La [CI #43536847159](https://github.com/gernotfound/logbook/actions/runs/43536847159)
-è **SUCCESS** sul precedente HEAD `4e8c0915` (Canonical Verification,
-CodeQL, suite Cloudflare). Ogni commit successivo richiede nuova
-verifica exact-SHA; SQLite non dimostra il runtime remoto.
-
-### API unica integrata prima di questo audit (PR #1081)
-
-Il candidato HTTP in `cloudflare/api/worker.mjs` riunisce
-`/v1/sync/*`, `/v1/consent/status`, `/v1/consent/initial` e
-`POST /v1/auth/logout`. Logout revoca una sola sessione; richiede
-CSRF, origin e una conferma della revoca stessa prima di cancellare
-i cookie HttpOnly e CSRF. Non cancella archivi locali né revoca altre
-sessioni. La vecchia configurazione Wrangler separata del consenso
-è stata rimossa; rimane soltanto la configurazione locale dell'API.
-PR [#1081](https://github.com/gernotfound/logbook/pull/1081):
-[CI PR #43488510948](https://github.com/gernotfound/logbook/actions/runs/43488510948)
-e [CI main #43489162305](https://github.com/gernotfound/logbook/actions/runs/43489162305)
-**SUCCESS** sul relativo SHA, senza prova Worker remoto.
-
-## Stato verificato — prove separate
-
-| Area | Evidenza | Non dimostra |
+| Componente | Stato osservato | Prova ancora mancante |
 |---|---|---|
-| Repository | [PR #1070](https://github.com/gernotfound/logbook/pull/1070), [#1072](https://github.com/gernotfound/logbook/pull/1072), [#1076](https://github.com/gernotfound/logbook/pull/1076), [#1078](https://github.com/gernotfound/logbook/pull/1078), [#1079](https://github.com/gernotfound/logbook/pull/1079) e [#1081](https://github.com/gernotfound/logbook/pull/1081) integrate. Checkpoint storico main letto durante l'audit: `4e25427ffbe0a4f4a7a695d25dec211b4ff16200` (2.393.0; merge della PR #1085, successivo al lavoro sui test). CI #1081 [PR #43488510948](https://github.com/gernotfound/logbook/actions/runs/43488510948) e [main #43489162305](https://github.com/gernotfound/logbook/actions/runs/43489162305) **SUCCESS**, inclusi CodeQL e gate exact-SHA | Nuovo Worker Auth/consenso, API e replica pubblicati o runtime Cloudflare verificato |
-| Frontend Cloudflare | Worker `thelogbook-frontend` su `workers.dev` e [smoke Static Assets #43223911523](https://github.com/gernotfound/logbook/actions/runs/43223911523) riuscito | Auth, Safari/iOS, update PWA, API e dominio finale |
-| D1 sandbox | `thelogbook-cf02-eu-isolated-20261113`, `jurisdiction=eu`, read replication OFF: schema `0001` + `0002` applicate e indice/trigger anti-riuso riletti via Cloudflare; un UID e un documento **sintetici**, zero mutation di replica | Database reale, HTTP Worker, performance Free, conformità GDPR |
-| Nuova API | `cloudflare/api/worker.mjs`, `cloudflare/auth/session-gate.mjs`, issuer e `cloudflare/api/consent-worker.mjs` e `logout-worker.mjs` integrati nel repository come ingresso unico, ma senza Auth password/Google reale, binding remoto o collegamento al client. SQL 0003/0004 solo versionate, non applicate su D1 Cloudflare | Runtime Auth, consenso, cancellazione o replica cloud utilizzabili |
-| Recupero claim D1 | [PR #1072](https://github.com/gernotfound/logbook/pull/1072) **MERGED**: ristaging durevole nel vault di claim già committato quando è avanzato soltanto il clock; receipt/lease/seq/checkpoint e AEAD verificati; lease scaduto durante scan rifiutato nella transazione | Non è integrazione AuthGate o API Production; nessun ACK o grant sul ristaging |
-| Email Auth | Kinde selezionato, non ancora integrato: verifica/reset/OTP dal provider, senza altre dipendenze email transazionali | Test consegna MIME/tracking, rate/quote Free, privacy, OAuth e Safari prima del GO |
-| Vercel | Verifica provider del 13/11: deployment backend precedente `READY` su `4e25427ffbe0a4f4a7a695d25dec211b4ff16200`; i tentativi intermedi su altri SHA risultano `CANCELED`. Non è un Worker Cloudflare | Cloudflare Production o cutover DNS |
+| GitHub | Candidati Cloudflare e verificatori Kinde integrati; CI e CodeQL su SHA specifici | La CI non dimostra API Cloudflare o login live |
+| Static Assets | Worker `thelogbook-frontend` pubblicato su `workers.dev`, solo binding `ASSETS` nell'ultimo inventario Cloudflare | Custom domain, PWA aggiornata, login/UX e Safari iOS |
+| D1 | Sandbox `thelogbook-cf02-eu-isolated-20261113`, `jurisdiction=eu`; migration `0001` e `0002` osservate sul provider con dati sintetici | Le migration successive, API HTTP, query/CPU/quote reali e database Production non sono attestati |
+| Workers API/Auth | `cloudflare/api/worker.mjs`, session gate, issuer, consenso e replica nel repository; **nessuna API Worker pubblicata** nel controllo provider disponibile | Binding isolati, callback OAuth trusted, session issuance end-to-end, prove browser e runtime |
+| Kinde | Business `thelogbook.kinde.com` in regione `Europe - Ireland` secondo schermate; selezionati metodi Email e Google nell'onboarding | Applicazione OAuth, codice autorizzazione + PKCE/state/nonce monouso, password, email, claim reali, retention e antiabuso |
+| DNS e provider legacy | Zona Cloudflare attiva, web ancora su IONOS; Hosting Firebase disabilitato secondo proprietario, Vercel `logbook` sospeso secondo verifica provider | Cutover del dominio, nuovo backend e ritiro del codice legacy dopo test |
 
-Il vecchio Hosting Firebase `thelogbook` è disabilitato secondo il comando CLI attestato dal proprietario; il workflow GitHub Hosting risulta dichiarato disabilitato, ma non è stato letto autonomamente come `disabled_manually`. Non riattivarlo come rollback.
+Il `jurisdiction=eu` della D1 **non garantisce** localizzazione europea di Workers, log, email, Google OAuth o tutti i subprocessori. Non dedurre conformità GDPR da un singolo flag.
 
-## Architettura già implementata nel candidato isolato
+## Integrazioni candidate presenti nel repository
 
-**Storage D1.** Le migration `cloudflare/api/migrations/0001_encrypted_replica.sql` e `0002_reject_reused_replica_ids.sql` creano schema per soggetto/consenso/epoch, revisione CAS, registro repliche, documenti root/mensili cifrati, mutation e receipt immutabili. Trigger e vincoli bloccano rollback di revisione/epoch, sequenza regressiva, identità storica riutilizzata dopo il cambio slot. La seconda migration contiene un indice `(uid, replica_id)` per non eseguire scansioni lineari del ledger. Le migration `0003_auth_session_gate.sql` e `0004_initial_consent.sql` sono integrate nel repository, **non applicate alla D1 sandbox Cloudflare**: modellano principal/sessioni hashate, primo consenso e proof immutabile. **La presenza dello schema non implementa erasure/restore né Auth reale.** Gli script `rollback/` sono solo per database disposable: mai su dati reali senza autorizzazione.
+**Auth (CF-03):** `cloudflare/auth/kinde-token-verifier.mjs` verifica firma JWKS RS256, issuer, audience API, client/azp, scadenza e subject. `kinde-login-proof.mjs` verifica in più ID token, audience distinta, `email_verified`, nonce, corrispondenza del soggetto e `at_hash` se presente. **Non sono endpoint di login.** Il callback deve creare e consumare un `state` monouso server-side, verificare PKCE, risolvere `iss+sub` verso un principal D1 trusted e usare `session-issuer.mjs` soltanto dopo tutte le prove. `session-gate.mjs` controlla sessione e autorizzazioni per accessi successivi. Mai accettare UID o nonce direttamente dal client come prova sufficiente. [CF-03 #1057](https://github.com/gernotfound/logbook/issues/1057).
 
-**Worker e protocollo.** `cloudflare/api/worker.mjs`, `replica-maintenance.mjs`, `d1-document-store.mjs`: POST con body/documenti limitati, schema Zod strict, same-origin, CSRF e claim `AUTH_GATE` verificati prima di ogni accesso, con ulteriore prova di sessione dentro il SQL di lettura/scrittura sul candidato branch. CAS D1 e mutazioni immutabili hash-bound, batch atomicamente trigger-fenced. Fino a otto documenti cifrati, massimo 950 KB per documento: body cap complessivo coerente, ma **non ancora misurato sul Worker Free**. Niente AuthGate mock in runtime reale, no trusted identity via header controllabile dal client.
+**Replica (CF-01/02/04):** `cloudflare/api/worker.mjs`, `d1-document-store.mjs` e `replica-maintenance.mjs` definiscono il trasporto D1 con SQL CAS, session/consent fence e receipt. `cloudReplicaDurableDelivery.ts` e i moduli contigui persistono il batch ciphertext e il prefisso journal in IndexedDB **prima** della rete; una ricevuta originale verificata autorizza solo l'ACK di quel prefisso, mai un successo su timeout o stato ambiguo. È vietato esporre un'API con AuthGate sintetico o collegare D1 a `replicateJournal()` prima del percorso identità/consenso reale. [CF-04 #1058](https://github.com/gernotfound/logbook/issues/1058).
 
-**Client.** `cloudReplicaTransport.ts` verifica revisioni, epoch e pagine complete; `cloudReplicaCheckpoint.ts` apre e autentica via AEAD tutti i documenti prima dell'adozione; `cloudReplicaCommit.ts` ricostruisce un batch D1. `cloudReplicaDurableDelivery.ts` salva nel vault IndexedDB owner-scoped l'intero batch ciphertext e il prefisso journal **prima** della rete. La receipt della richiesta originale autorizza soltanto l'ACK transazionale del prefisso identico, mai un successo inventato dopo timeout. `cloudMergeEngine.ts` è il core puro condiviso con il writer Firestore ancora attivo. **La nuova rete D1 non passa ancora per `replicateJournal()`.**
+**Consenso, cifratura e cancellazione (CF-05/06):** migrazioni `0003`–`0006`, gate del consenso e worker di cancellazione health sono candidati locali nel repository. Il runner bounded usa lease/epoch, avanzamento per tabelle e rifiuto di completamento fittizio: uno stato `awaiting-keys` **non è** `complete`. Restano da collegare chiavi cloud, diritti, export, erasure completa e receipt, recovery, account Kinde e cron sul Worker reale. La DEK device e la chiave cloud account rimangono indipendenti. Non promettere E2EE/zero-knowledge né recupero impossibile. [CF-05 #1059](https://github.com/gernotfound/logbook/issues/1059) · [CF-06 #1060](https://github.com/gernotfound/logbook/issues/1060).
 
-**Claim e retirement.** Una richiesta di mutazione replica è resa durevole nel vault con mutationId immutabile. Il retry usa gli stessi byte e un 409 non prova l'assenza di commit. `replica/status` legge **insieme** dalla D1 primaria il ledger e la revisione: soltanto `not-committed` + revisione ormai avanzata autorizzano una nuova richiesta **persistita prima della rete**, senza ACK di business. Una ricevuta storica non è un grant di membership; adozione di claim richiede la stessa incarnazione attiva/lease/seq/checkpoint, due controlli remoti identici e full scan AEAD con clock coerente. Il retirement committato può concludere come `retired` oppure `superseded` quando nuova generazione/differente replicaId sono dimostrati; chiude **solo l'intento amministrativo**, mai journal o GC.
+**Sicurezza perimetrale (CF-07):** Turnstile, quando usato, deve avere Siteverify server-side con hostname/action e token monouso; Cloudflare WAF non protegge automaticamente gli endpoint hosted Kinde. Limitare richieste, body, CPU, query e abuso di email/login; verificare anche accessi diretti tramite `workers.dev`, version/preview e custom domain. Un limite Free o un errore del provider devono fallire in sicurezza senza perdere journal o concedere ACK fittizi. [CF-07 #1061](https://github.com/gernotfound/logbook/issues/1061).
 
-La PR #1072 **già integrata** implementa per claim committati con **solo clock cloud avanzato** la scansione AEAD, il doppio controllo stabile e il ristaging dell'intento con nuovo mutationId/clock, persistito prima del retry. Se il lease scade durante lo scan, la verifica ulteriore e il guard nella transazione IndexedDB impediscono l'adozione. Repliche ritirate/riusate, lease/seq/checkpoint mutati, consenso/epoch o controllo instabile restano fail-closed. Questa prova in CI non sostituisce l'integrazione HTTP Worker/Auth/PWA.
+## Sequenza di completamento
 
-**Causalità Protocol 3:** `writer.seq` è globale al batch, non il dot di ciascun documento. Il documento deve mantenere un dot positivo del writer nel range `1..writer.seq`. Nessuna falsificazione di frontier per uniformare i clock.
+1. Su tenant Kinde isolato: verificare policy password ≥15 su registrazione e reset, login Google, email verificata, MFA, logout/revoca, erasure via API nel Free, privacy/retention e redirect Safari/iOS. Non trascrivere token, chiavi o dati personali nel repo.
+2. Implementare callback OAuth code + PKCE/state/nonce server-owned monouso, mappatura account D1 e sessione applicativa con cookie Secure/HttpOnly/SameSite + CSRF; prova multi-tab/multi-device e revoca effettiva.
+3. Collegare ADK/device vault e consenso prima della replica; provare D1 su dati sintetici, ACK, offline, conflitti, crash, lost-response e owner isolation, sempre senza salute plaintext lato server.
+4. Completare export/delete, revoca salute, cancellazione account (identità Kinde compresa), inattività 12 mesi, backup/restore e job bounded; errori e retry devono lasciare ricevute verificabili.
+5. Misurare quote Free, CPU/storage, denial-of-service, privacy e sicurezza; verificare UX per viewport/theme/accessibilità, update PWA e rollback su Safari. Solo dopo i gate GitHub exact-SHA, provider e GO del proprietario effettuare eventuale cutover del dominio.
 
-I test Node/SQLite transazionali e fake-IndexedDB/AEAD di CI verificano **candidati isolati**, non API/provider reale, concorrenza cross-device, browser iOS o resilienza alle quote.
+Le parti indipendenti possono avanzare in parallelo a CF-00, ma **nessuna dipendenza non validata può essere attivata nel percorso reale**. Non eseguire deploy non-main su risorse Production o test su dati Production.
 
-## Percorso critico per lo spegnimento rapido del vecchio stack
+## Contratti e tracciamento
 
-1. **CF-03 + CF-00:** integrare **Kinde OIDC + sessione D1 trusted**, con email/password minimo 15 caratteri (workflow), Google e verifica/reset, maggiorenne, issuer/CSRF, limite tentativi, anti-bot, session recovery e privacy email. Le email Auth Kinde richiedono prova di consegna/abuso; verifica Workers e assenza tracking non richiesto.
-2. **CF-05:** collegare consenso sanitario trusted e revoca, ADK/cloud KEK + DEK device indipendente, cifratura solo client, erase/export e anti-replay. Il server non deve conoscere plaintext salute.
-3. **CF-04 + CF-02:** collegare journal D1 e hydration a identità e consenso reali, con commit/ACK verificabili, offline, multitab/multi-device, crash/lost ack/GC, Safari/iOS e protezioni quote Free. Mai mutare una replica sulla base di un mock non trusted.
-4. **CF-06 + CF-08:** convertire Vercel Functions/Cron, cancellazione account e soli dati, inattività, diritti, backup/restore, retention, supporto failure/retry/rollback senza perdita.
-5. **CF-07 + CF-09:** misurare CPU, query, storage e rate su Cloudflare Free e sicurezza/abuso; verificare worker/static hosting, URL alternativi, DNS, TLS, mail, Google OAuth, privacy, legal/GDPR, accessibilità, PWA update/rollback su dispositivi reali. **GO separato** per dominio e dismissioni; nessun billing/upgrade implicito.
-
-Le componenti indipendenti possono procedere in parallelo a CF-00. Una dipendenza non verificata non può essere attivata in un percorso reale. Non aspettare il completamento di tutta la piattaforma per realizzare incrementi isolati, ma **non mantenere il vecchio provider per proteggere account pre-lancio inesistenti**.
-
-## Gate non negoziabili
-
-- **CI:** branch dal vero GitHub main, PR draft, exact-SHA suite e CodeQL, review dove richiesta, squash merge, gate main/post-merge e smoke provider separati. Un test verde non prova Production.
-- **D1/provider:** utilizzare risorse e dati **sintetici isolati**; binding, route/preview/hostname e account verificati prima di qualsiasi deployment. Misurare costi/Free e recupero quando una quota termina: errore chiaro, nessun ACK fictizio, journal preservato.
-- **Privacy:** `eu` di D1 non certifica la residenza di Workers, log, OAuth o email. Verificare regioni, DPA/retention e flussi; nessun dato sanitario in chiaro o chiave nel repository.
-- **Rilascio:** il cutover `thelogbook.me`/OAuth/posta richiede il GO esplicito del product owner. Verificare Auth, consenso, export/delete, cifratura, sync, cron, backup/restore, offline/Safari, sicurezza, PWA update e rollback. Dismissione provider/chiavi e cancellazioni irreversibili richiedono ulteriore mandato specifico e inventario live.
-- **Rollback:** solo verso una release **Cloudflare valida** della nuova baseline; non riattivare il precedente Firebase Hosting. Proteggere i dati creati dopo il fresh start, non riadattare formati pre-lancio.
-
-## Tracciamento
-
-[AGENTS](../../AGENTS.md), [Storage e sync](../../.agents/rules/storage-and-sync.md), [Crash consistency](../../.agents/rules/crash-consistency.md), [Cifratura](../../.agents/rules/secure-storage.md), [Consenso](../../.agents/rules/health-consent.md), [CI](../../.agents/rules/ci-verification.md); [EPIC #1053](https://github.com/gernotfound/logbook/issues/1053), [CF-00 #1054](https://github.com/gernotfound/logbook/issues/1054), [CF-01 #1055](https://github.com/gernotfound/logbook/issues/1055), [CF-02 #1056](https://github.com/gernotfound/logbook/issues/1056), [CF-03 #1057](https://github.com/gernotfound/logbook/issues/1057), [CF-04 #1058](https://github.com/gernotfound/logbook/issues/1058), [CF-05 #1059](https://github.com/gernotfound/logbook/issues/1059), [CF-06 #1060](https://github.com/gernotfound/logbook/issues/1060), [CF-07 #1061](https://github.com/gernotfound/logbook/issues/1061), [CF-08 #1062](https://github.com/gernotfound/logbook/issues/1062), [CF-09 #1063](https://github.com/gernotfound/logbook/issues/1063) e [hosting/DNS #1041](https://github.com/gernotfound/logbook/issues/1041). Dettagli dei vecchi cutover nella cronologia Git, **non istruzioni attive**.
+[AGENTS](../../AGENTS.md) · [Account](../../.agents/rules/account-lifecycle.md) · [Archivio cifrato](../../.agents/rules/secure-storage.md) · [Storage/sync](../../.agents/rules/storage-and-sync.md) · [Consenso](../../.agents/rules/health-consent.md) · [CI](../../.agents/rules/ci-verification.md) · [CF-00 #1054](https://github.com/gernotfound/logbook/issues/1054) · [CF-09 #1063](https://github.com/gernotfound/logbook/issues/1063) · [hosting/DNS #1041](https://github.com/gernotfound/logbook/issues/1041). Lo storico degli incrementi è consultabile nella cronologia Git e nelle PR, non copiato come checklist nel runbook corrente.
