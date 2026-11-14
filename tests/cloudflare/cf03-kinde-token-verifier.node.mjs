@@ -26,7 +26,7 @@ async function fixture() {
   return { verify, token };
 }
 
-test('Kinde access token: verified RS256, issuer, API audience and authorized client only', async () => {
+void test('Kinde access token: verified RS256, issuer, API audience and authorized client only', async () => {
   const { verify, token } = await fixture();
   const principal = await verify(await token());
   assert.deepEqual(principal, {
@@ -37,7 +37,7 @@ test('Kinde access token: verified RS256, issuer, API audience and authorized cl
   assert.ok(Object.isFrozen(principal));
 });
 
-test('Kinde token rejects wrong issuer, audience and client', async () => {
+void test('Kinde token rejects wrong issuer, audience and client', async () => {
   const { verify, token } = await fixture();
   for (const altered of [
     { iss: 'https://other-kinde.example' },
@@ -49,7 +49,7 @@ test('Kinde token rejects wrong issuer, audience and client', async () => {
   }
 });
 
-test('Kinde token rejects expiry, future iat and access-token lifetime over 15 minutes', async () => {
+void test('Kinde token rejects expiry, future iat and access-token lifetime over 15 minutes', async () => {
   const { verify, token } = await fixture();
   const now = Math.floor(Date.now() / 1000);
   for (const altered of [
@@ -61,7 +61,7 @@ test('Kinde token rejects expiry, future iat and access-token lifetime over 15 m
   }
 });
 
-test('Kinde token rejects signature spoofing and malformed JWT', async () => {
+void test('Kinde token rejects signature spoofing and malformed JWT', async () => {
   const { verify, token } = await fixture();
   const { privateKey } = await generateKeyPair('RS256');
   await assert.rejects(verify(await token({ signingKey: privateKey })), /invalid-kinde-token/);
@@ -70,7 +70,7 @@ test('Kinde token rejects signature spoofing and malformed JWT', async () => {
   }
 });
 
-test('Kinde verifier fails closed for invalid environment configuration', () => {
+void test('Kinde verifier fails closed for invalid environment configuration', () => {
   for (const bad of [
     { issuer: 'http://localhost', audience, clientId },
     { issuer: 'https://synthetic-kinde.example/x', audience, clientId },

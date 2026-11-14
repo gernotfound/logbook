@@ -5,6 +5,7 @@ const MAX_ACCESS_TOKEN_SECONDS = 15 * 60;
 const CLOCK_TOLERANCE_SECONDS = 5;
 const COMPACT_JWS = /^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/;
 
+/** @param {{issuer?: string, audience?: string, clientId?: string}} [config] */
 function requireConfiguration({ issuer, audience, clientId } = {}) {
   if (typeof issuer !== 'string' || typeof audience !== 'string'
     || typeof clientId !== 'string' || audience.length === 0
