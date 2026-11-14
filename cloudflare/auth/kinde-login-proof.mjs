@@ -41,6 +41,7 @@ export function createKindeLoginProofVerifier(configuration, keySet) {
   const verifyAccessToken = createKindeAccessTokenVerifier(
     { issuer, audience: apiAudience, clientId }, jwks,
   );
+  /** @param {{accessToken?: string, idToken?: string, expectedNonce?: string}} [proof] */
   return async function verifyKindeLoginProof({ accessToken, idToken, expectedNonce } = {}) {
     if (typeof expectedNonce !== 'string' || !OAUTH_NONCE.test(expectedNonce)
       || typeof accessToken !== 'string'
