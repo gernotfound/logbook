@@ -37,6 +37,12 @@ Dal pannello `Settings → Authentication → Social connections → Google → 
 
 Documentazione ufficiale: [Google social sign-in](https://docs.kinde.com/authenticate/social-sign-in/google/) e [Kinde authentication FAQ](https://docs.kinde.com/authenticate/about-auth/kinde-authentication-faq/). I valori segreti, identificativi di account e le schermate con credenziali non devono essere riportati nel repo.
 
+### Applicazione iniziale non utilizzata — verifica prima della cancellazione
+
+La schermata `Settings → Authentication` del 14/11/2026 mostra **Google social connection: 1 application enabled**, contro le 2 precedentemente rilevate. Il proprietario aveva disattivato Google su `My React App` lasciandolo attivo su `TheLogBook`; il conteggio business è coerente con la modifica, **ma non dimostra direttamente l'assenza di ogni altra dipendenza**. L'app `My React App` è stata creata automaticamente nell'onboarding come `Front-end and mobile`, mentre l'integrazione target usa `TheLogBook` di tipo `Back-end web`.
+
+**Decisione operativa proposta, non ancora eseguita:** si può cancellare **soltanto `My React App`** dopo aver controllato in `Settings → Environment → Applications → My React App` che i suoi Client ID/callback, sessioni, API link, token e impostazioni non siano collegati al codice o a un'applicazione operativa. Il progetto è ancora in onboarding, ma la cancellazione di un'app Kinde è **irreversibile** e rimuove configurazioni, sessioni e link API relativi a quell'app. Non cancellare il business, la connessione Google condivisa o l'app `TheLogBook`. Guida ufficiale: [Delete an application](https://docs.kinde.com/build/applications/add-and-manage-applications/#delete-an-application). **La cancellazione non è stata ancora confermata dal proprietario.**
+
 ## Controlli da completare, senza dedurre risultati
 
 1. **Applicazione:** tipo Back-end web, ambiente scelto, client ID (public), autenticazione client confidenziale con secret custodito **solo** nel Worker server-side; nessun secret nel frontend, GitHub, issue o questa guida.
