@@ -3,7 +3,15 @@
 **Classificazione: CRITICAL.** Questo registro contiene **soltanto servizi necessari, ancora presenti nel codice oppure da validare prima del GO**. La storia delle configurazioni superate rimane nella cronologia Git e nelle PR. GitHub prova SHA e verifiche; i provider provano le rispettive risorse e il runtime. Un riscontro datato non autorizza cambi Production.
 
 
-## Checkpoint corrente dei servizi — v2.473.0, 15/11/2026
+## Ricognizione provider — 16/11/2026 (baseline v2.474.0)
+
+**Fonte GitHub:** `main` `519f80c077b8ca40e8f3630ea4f110ffb342e012`, v2.474.0; PR #1168 solo documentazione/versione. Workflow `Milestone Verification` [#43771473060](https://github.com/gernotfound/logbook/actions/runs/43771473060), Firestore [#43771679958](https://github.com/gernotfound/logbook/actions/runs/43771679958), Static Assets [#43771707785](https://github.com/gernotfound/logbook/actions/runs/43771707785) con conclusione `success` sullo stesso SHA. La CI non prova i flussi Auth/Sync/erasure.
+
+**Fonte Cloudflare:** Worker `thelogbook-frontend` con unico binding `ASSETS`; Worker privati `thelogbook-api-isolated` (`DB`, `AUTH_GATE`) e `thelogbook-cf03-auth-gate-isolated` (`DB`, rate limiter). `workers.dev` e preview disabilitati sui tre script; D1 sintetica `thelogbook-cf02-eu-isolated-20261113` ancora `jurisdiction=eu`. Lo script `thelogbook-cf03-kinde-http-isolated` **non figura nell'elenco dei Worker attivi**. Nessun readback di schema/ledger, dati sanitari, secret o configurazione Kinde in questa sessione, e nessuna mutazione Cloudflare.
+
+**Stato servizi:** frontend `ACTIVE` soltanto per Static Assets; API e Auth Gate `ACTIVE-ISOLATED`, non equivalenti a endpoint applicativi pubblici; HTTP Kinde `CANDIDATE` non distribuito; Kinde `VERIFY-LIVE`; percorso Firebase nel browser `LEGACY-ACTIVE`; GO Auth/D1 e rilascio completo `NO-GO`. Non inferire localizzazione dell'intero trattamento da `jurisdiction=eu`.
+
+## Checkpoint storico dei servizi — v2.473.0, 15/11/2026
 
 **GitHub main:** `2702a5898004451028201d872112e58a5a800ab0` (v2.473.0). La baseline v2.464.0 descritta sotto è storica. Le [PR #1166](https://github.com/gernotfound/logbook/pull/1166) e [#1167](https://github.com/gernotfound/logbook/pull/1167) hanno introdotto soltanto chiamanti **candidati** browser per sessione Kinde → consenso → ADK → journal D1 e prima accettazione sanitaria D1. Non sono montati su `AuthContext`, né sono state attivate route o credenziali provider. CI PR [#43769436716](https://github.com/gernotfound/logbook/actions/runs/43769436716) e [#43770249310](https://github.com/gernotfound/logbook/actions/runs/43770249310) SUCCESS.
 
