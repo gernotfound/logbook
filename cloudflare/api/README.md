@@ -709,18 +709,38 @@ exact HTTPS same-origin POST routes with **empty request bodies**:
 
 Both call `cloud-key-store.mjs`, which verifies D1 PRIMARY
 principal/session/consent/erasure before and after WebCrypto unwrap. The
-response (only when proven) is JSON `{format:'thelogbook-account-data-key',version:1,key:'<canonical base64>'}`
-with no-store/no-cache, no CORS, and no UID, ciphertext or Kinde token
-disclosure. Worker-local ADK bytes are wiped in `finally`. This
+response (only when proven) is JSON
+`{format:'thelogbook-account-data-key',version:1,key:'<canonical base64>',uid,fenceEpoch,consentRevision,purpose}`.
+UID, server Auth epoch and consent revision come from the private AuthGate claims
+revalidated by the custodian; purpose is selected by the actual handler route.
+Responses use no-store/no-cache and no CORS. The authenticated browser receives
+its UID as the response-owner fence; wrapped-key ciphertext and Kinde tokens
+are never returned. Worker-local ADK bytes are wiped in `finally`. This
 cannot prevent intentional access by the authenticated browser; the key
 is an online capability and must not be persisted alongside the independent
 device vault.
 
-New test `tests/cloudflare/cf05-cloud-key-http.node.mjs` calls the
+Test `tests/cloudflare/cf05-cloud-key-http.node.mjs` calls the
 actual top-level API + private AuthGate + consent handlers + store on
 synthetic SQLite schema, covering owner isolation, concurrent/repeat
 issuance, withdrawn rights-only, invalid CSRF/origin/body, expiry,
 revocation and unavailable KEK/D1/rate gate. It runs in the M7 gate.
+
+`src/lib/sync/cloudflareAccountKeyCandidate.ts` implements the candidate browser
+adapter without Firebase initialization, persistent cache or vault/journal writes.
+It checks a captured Kinde UID, server epoch, consent revision and operation
+purpose against the complete response; its caller supplies the local Auth
+generation guard, including A→B→A. Same-origin cookie/CSRF requests have a
+12-second deadline and a 1024-byte JSON response cap, including streamed bodies.
+Malformed headers/encoding, owner/generation/purpose mismatch and stale guards
+fail closed; transient transport/HTTP failures remain distinguishable. HTTP 503
+does not prove that a KEK/configuration problem is transient. Decoded bytes are
+wiped on a late guard failure; the caller must wipe a returned ADK after its one
+operation. The shared material codec/error is independent of either Auth backend.
+Vitest integration calls this adapter through the actual Worker/AuthGate and
+SQLite fixture shared with the Node HTTP suite: wrapped winner, lost response,
+owner isolation, AEAD and unverified rights-only recovery are synthetic proofs,
+not live Kinde, durable journal ACK, restore or public activation.
 
 **NO-GO:** these routes are not mounted on the live Static Assets Worker,
 and no KEK secret or D1 binding has been created there. The local Wrangler config remains synthetic; the isolated D1 now has

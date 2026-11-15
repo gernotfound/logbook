@@ -95,7 +95,13 @@ export default {
         return reply({ error: 'unavailable' }, 503);
       }
       const key = btoa(String.fromCharCode(...adk));
-      return reply({ format: 'thelogbook-account-data-key', version: 1, key }, 200);
+      return reply({
+        format: 'thelogbook-account-data-key', version: 1, key,
+        uid: granted.claims.uid,
+        fenceEpoch: granted.claims.fenceEpoch,
+        consentRevision: granted.claims.healthConsentRevision,
+        purpose: pathname === RIGHTS ? 'rights-export' : 'sync',
+      }, 200);
     } catch {
       return reply({ error: 'unavailable' }, 503);
     } finally {

@@ -3,6 +3,9 @@ import { auth, ensureAppCheck } from '../firebase';
 import { getLimitedUseAppCheckToken } from '../appCheck';
 import { getVerifiedHealthConsentRevision, isHealthConsentCloudWritable } from '../healthConsent';
 import { captureSessionForOwner, isCurrentSession, userOwner } from './session';
+import { CloudKeyAccessUnavailableError, decodeCloudAccountKey, isRetryableCloudKeyTransportFailure } from './cloudAccountKeyMaterial';
+
+export { CloudKeyAccessUnavailableError } from './cloudAccountKeyMaterial';
 
 /**
  * Account Data Keys are ONLINE capabilities, not a second local archive key.
@@ -14,34 +17,6 @@ import { captureSessionForOwner, isCurrentSession, userOwner } from './session';
  * The caller may reuse the returned bytes only within that single operation,
  * after checking its captured Auth/session/consent fence.
  */
-export class CloudKeyAccessUnavailableError extends Error {
-    readonly code = 'cloud-key-unavailable';
-    constructor(readonly retryable = false) {
-        super('Chiave cloud temporaneamente non disponibile. I dati locali sono conservati.');
-        this.name = 'CloudKeyAccessUnavailableError';
-    }
-}
-
-function isRetryableTransportFailure(error: unknown): boolean {
-    return error instanceof TypeError || (error instanceof DOMException
-        && (error.name === 'AbortError' || error.name === 'TimeoutError' || error.name === 'NetworkError'));
-}
-
-function decodeKey(value: unknown): Uint8Array {
-    if (typeof value !== 'string' || !/^[A-Za-z0-9+/]{43}=$/.test(value)) {
-        throw new CloudKeyAccessUnavailableError();
-    }
-    try {
-        const bytes = Uint8Array.from(atob(value), char => char.charCodeAt(0));
-        if (bytes.length !== 32 || btoa(String.fromCharCode(...bytes)) !== value) {
-            throw new CloudKeyAccessUnavailableError();
-        }
-        return bytes;
-    } catch {
-        throw new CloudKeyAccessUnavailableError();
-    }
-}
-
 async function acquireAccountDataKey(
     uid: string, assertCurrent: () => void, purpose: 'sync' | 'rights-export',
 ): Promise<Uint8Array> {
@@ -89,7 +64,7 @@ async function acquireAccountDataKey(
         });
     } catch (error) {
         checkCurrent();
-        throw new CloudKeyAccessUnavailableError(isRetryableTransportFailure(error));
+        throw new CloudKeyAccessUnavailableError(isRetryableCloudKeyTransportFailure(error));
     }
     checkCurrent();
     if (!response.ok) {
@@ -99,7 +74,7 @@ async function acquireAccountDataKey(
     let payload: unknown;
     try { payload = await response.json(); } catch (error) {
         checkCurrent();
-        throw new CloudKeyAccessUnavailableError(isRetryableTransportFailure(error));
+        throw new CloudKeyAccessUnavailableError(isRetryableCloudKeyTransportFailure(error));
     }
     checkCurrent();
     if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
@@ -112,7 +87,7 @@ async function acquireAccountDataKey(
     }
     // Never persist a cloud key on the device; only the independent device
     // vault supports offline use. A failed post-decode fence wipes the bytes.
-    const key = decodeKey(parsed.key);
+    const key = decodeCloudAccountKey(parsed.key);
     try {
         checkCurrent();
         return key;
