@@ -147,6 +147,43 @@ void test('document commit status uses the real private AuthGate mutation allowl
   } finally { sqlite.close(); }
 });
 
+
+void test('rights-only AuthGate accepts a renewed unverified session, never sync or initial consent', async () => {
+  const { sqlite, env } = await fixture();
+  try {
+    const newToken = Buffer.alloc(32, 73).toString('base64url');
+    const newCsrf = Buffer.alloc(32, 74).toString('base64url');
+    const now = Date.now();
+    sqlite.exec("UPDATE auth_principals SET verified_at_ms = NULL, auth_epoch = 2 WHERE uid = 'account-a'");
+    sqlite.prepare(`INSERT INTO auth_sessions
+      (token_hash,uid,auth_epoch,csrf_hash,issued_at_ms,idle_expires_at_ms,absolute_expires_at_ms)
+      VALUES (?,?,?,?,?,?,?)`).run(
+      await hashSessionSecret(newToken), 'account-a', 2, await hashSessionSecret(newCsrf),
+      now - 1000, now + 60000, now + 3600000,
+    );
+    // The ordinary fixture's limiter asserts the original session token.
+    env.API_RATE_LIMITER = { limit: async () => ({ success: true }) };
+    const claim = await status(env, { route: '/v1/cloud-key/rights-export',
+      cookie: newToken, csrfValue: newCsrf });
+    assert.equal(claim.status, 200);
+    const body = await claim.json();
+    assert.equal(body.uid, 'account-a');
+    assert.equal(body.fenceEpoch, 2);
+    assert.equal(body.emailVerified, false);
+    assert.equal(body.csrfVerified, true);
+    assert.equal((await status(env, { route: '/v1/cloud-key/rights-export',
+      cookie: newToken })).status, 403);
+    assert.equal((await status(env, { route: '/v1/cloud-key/rights-export',
+      cookie: newToken, csrfValue: csrf })).status, 403);
+    assert.equal((await status(env, { route: '/v1/cloud-key/rights-export',
+      csrfValue: csrf })).status, 401);
+    for (const route of ['/v1/cloud-key/sync', '/v1/consent/initial', '/v1/sync/read']) {
+      assert.equal((await status(env, { route, cookie: newToken,
+        csrfValue: newCsrf })).status, 401, route);
+    }
+  } finally { sqlite.close(); }
+});
+
 void test('invalid cookies, duplicate session cookies and unknown routes never produce claims', async () => {
   const { sqlite, env, metrics } = await fixture();
   try {

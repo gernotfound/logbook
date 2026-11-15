@@ -338,6 +338,7 @@ void test('unverified gate, missing database and quota/SQL failures cannot relea
     for (const changed of [
       { ...payload, csrfVerified: false },
       { ...payload, emailVerified: false },
+      { ...payload, emailVerified: 'false' },
       { ...payload, sessionHash: 'a'.repeat(64) },
       { ...payload, fenceEpoch: 999 },
       { ...payload, uid: 'owner-b' },

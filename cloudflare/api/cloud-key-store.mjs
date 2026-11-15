@@ -19,8 +19,6 @@ const IDENTITY_SQL = `
   LEFT JOIN cloud_account_keys k ON k.uid = s.uid
   LEFT JOIN cloud_key_issuance i ON i.uid = k.uid AND i.consent_revision = k.consent_revision
   WHERE p.uid = ? AND p.status = 'active' AND p.auth_epoch = ?
-    AND p.verified_at_ms IS NOT NULL
-    AND p.verified_at_ms > 0 AND p.verified_at_ms <= ${NOW}
     AND t.token_hash = ? AND t.uid = p.uid AND t.auth_epoch = p.auth_epoch
     AND t.revoked_at_ms IS NULL
     AND t.issued_at_ms <= ${NOW}
@@ -32,12 +30,16 @@ const IDENTITY_SQL = `
     AND s.consent_revision = ?
 `;
 const ACTIVE_SQL = `
+  AND p.verified_at_ms IS NOT NULL
+  AND p.verified_at_ms > 0 AND p.verified_at_ms <= ${NOW}
   AND s.status = 'active' AND s.fence_epoch = p.auth_epoch
   AND c.privacy_version = ? AND c.terms_version = ?
   AND NOT EXISTS (SELECT 1 FROM health_erasure_jobs j
     WHERE j.uid = s.uid AND j.status != 'complete')
 `;
 const RIGHTS_SQL = `
+  -- Rights-only depends on the live session and original acceptance, not
+  -- current email verification. It cannot issue keys or enable fitness sync.
   AND s.status = 'withdrawn' AND s.fence_epoch <= p.auth_epoch
   AND EXISTS (SELECT 1 FROM health_erasure_jobs j
     WHERE j.uid = s.uid AND j.consent_revision = s.consent_revision
@@ -47,7 +49,8 @@ const RIGHTS_SQL = `
 
 function trustedClaims(claims, env, purpose) {
   if (!claims || typeof claims !== 'object' || Array.isArray(claims)
-    || claims.authenticated !== true || claims.emailVerified !== true
+    || claims.authenticated !== true || typeof claims.emailVerified !== 'boolean'
+    || (purpose === 'sync' && !claims.emailVerified)
     || claims.rateGatePassed !== true || claims.csrfVerified !== true
     || typeof claims.uid !== 'string' || !claims.uid
     || claims.uid.length > 128 || claims.uid.trim() !== claims.uid
