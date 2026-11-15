@@ -235,7 +235,7 @@ describe('candidate first-party Kinde client boundary', () => {
     });
 
     it('requires CSRF-bound server logout and a fresh session 401 before reporting revocation', async () => {
-        const csrf = 'C'.repeat(43);
+        const csrf = 'A'.repeat(43);
         const send = responses(reply({ status: 'signed-out' }), reply({ error: 'unauthorized' }, 401));
         await expect(revokeKindeCandidateSession({
             send, stillCurrent: () => true,
@@ -253,7 +253,7 @@ describe('candidate first-party Kinde client boundary', () => {
     });
 
     it('refuses missing, forged or ambiguous CSRF cookies before reaching the server', async () => {
-        const csrf = 'C'.repeat(43);
+        const csrf = 'A'.repeat(43);
         for (const cookies of [
             '', 'unrelated=x', '__Host-logbook_csrf=short',
             '__Host-logbook_csrf=' + csrf + '; __Host-logbook_csrf=' + csrf,
@@ -268,7 +268,7 @@ describe('candidate first-party Kinde client boundary', () => {
     });
 
     it('never treats an ambiguous logout result or an active replacement session as signed out', async () => {
-        const cookies = () => '__Host-logbook_csrf=' + 'C'.repeat(43);
+        const cookies = () => '__Host-logbook_csrf=' + 'A'.repeat(43);
         for (const responsesAfterLogout of [
             [reply({ status: 'signed-out' }), reply(session(B, 1, 1))],
             [reply({ status: 'signed-out' }), reply({ error: 'unavailable' }, 503)],
@@ -298,7 +298,7 @@ describe('candidate first-party Kinde client boundary', () => {
         });
         await expect(revokeKindeCandidateSession({
             send, stillCurrent: () => current,
-            browserCookies: () => '__Host-logbook_csrf=' + 'C'.repeat(43),
+            browserCookies: () => '__Host-logbook_csrf=' + 'A'.repeat(43),
         })).rejects.toBeInstanceOf(KindeCandidateBoundaryError);
         expect(send).toHaveBeenCalledTimes(1);
     });
