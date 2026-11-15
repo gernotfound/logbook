@@ -3,6 +3,26 @@
 **Classificazione: CRITICAL · stato PARZIALE / NO-GO funzionale (dominio pubblico di sviluppo autorizzato).** La fonte di verità per il codice e i test è `main` GitHub; per risorse e runtime sono i rispettivi provider. Questo documento descrive **contratti correnti e blocchi**, non lo storico di commit. [EPIC #1053](https://github.com/gernotfound/logbook/issues/1053) · [registro servizi](external-services-register.md) · [CF-09 #1063](https://github.com/gernotfound/logbook/issues/1063).
 
 
+## Prossimo incremento CF-03/05 — regressione full-schema (15/11/2026)
+
+**Root cause identificata nel codice:** due test di integrazione
+`cf03-kinde-http-worker.node.mjs` e
+`cf05-cloud-key-http.node.mjs` applicavano ancora soltanto
+`0001`–`0008`, sebbene il D1 isolato usi `0001`–`0010`.
+La fixture precedente poteva ammettere una registrazione replica
+dopo il solo consenso, senza mai esercitare il guard `0009` sulla
+chiave cloud effettivamente custodita.
+
+**Correzione candidata:** fixture SQLite con tutte le dieci migrazioni,
+test di rifiuto della replica prima dell'ADK e nessuna mutazione
+SQL/ACK, rilascio chiave tramite percorso HTTP trusted, successiva
+registrazione riuscita, separazione dei due proprietari e revoca
+che rimuove il grant SQL preservando rights-export. Gli altri
+test storici che verificano deliberatamente una specifica versione
+di migrazione restano separati e non vengono riscritti come
+baseline corrente. Sono regressioni di integrazione **sintetiche**,
+non attestazioni del provider Kinde o del runtime Worker reale.
+
 ## D1 isolata aggiornata — 10/10 migrazioni verificate (15/11/2026)
 
 **Prova GitHub:** [workflow manuale #43702489692](https://github.com/gernotfound/logbook/actions/runs/43702489692)
