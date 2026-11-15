@@ -31,6 +31,26 @@ restano conservati. Questi controlli sono di sola lettura. I checkpoint
 esplicitamente storici sotto non descrivono il ledger corrente e non
 richiedono di ricreare token o ripetere migrazioni già riuscite.
 
+## CF-03/04 — precondizione ADK e lettura candidata Kinde (15/11/2026)
+
+La verifica **retrospettiva** della PR #1139 (annotata nella sua
+conversazione GitHub) ha rilevato che gli assert `status != 200`
+non distinguevano un ADK assente da un guasto transitorio. Non è una
+review formalmente indipendente precedente al merge.
+Nuovo contratto candidato: HTTP `428 cloud-key-required` soltanto
+dopo prova D1 primary che chiave e marker mancano, revisione zero e
+nessun documento cifrato, replica, receipt, mutation o erasure pendente,
+con sessione/consenso tuttora validi;
+`503` per guasti o stato chiave incoerente. Il client mantiene il
+journal e il claim sigillato senza rebase automatico né ACK.
+L'adapter read-only Kinde→consenso→controllo replica ricontrolla
+UID/epoch/generazione dopo I/O **e richiede l'UID autenticato sulla
+risposta stessa del controllo D1**. Questo blocca un cambio A→B→A
+anche quando A e B condividono epoch e revisioni; un risultato senza
+UID è rifiutato. Non abilita login reale, vault o Sync pubblici. OAuth/posta Production, KEK e dati reali restano NO-GO.
+Per gli incrementi CRITICAL le review realmente indipendenti devono
+essere registrate sullo SHA esatto, non dedotte dalla CI.
+
 ## Regressione CF-03/05 full-schema integrata (15/11/2026)
 
 **Root cause identificata nel codice:** due test di integrazione
@@ -416,7 +436,7 @@ pubbliche e gate assente); non presenta la sola CI come prova di schema.
 
 ### CF-03 — test verticale Kinde → consenso → D1 (solo sintetico)
 
-La suite `tests/cloudflare/cf03-kinde-http-worker.node.mjs` attraversa insieme i **moduli reali** di callback OAuth, emissione cookie sessione, AuthGate, primo consenso e replica D1. Applica lo schema `0001`–`0010` a SQLite e usa token RS256 firmati localmente, mai credenziali del provider. Verifica rifiuto prima del consenso, CSRF, accettazione esplicita, accesso ADK prima dell'iscrizione della replica, isolamento di due owner, revoca con job ancora `pending` e logout con revoca sessione. La registrazione della replica **non** attesta cifratura AEAD, commit documenti, ACK o restore.
+La suite `tests/cloudflare/cf03-kinde-http-worker.node.mjs` attraversa insieme i **moduli reali** di callback OAuth, emissione cookie sessione, AuthGate, primo consenso e replica D1. Applica lo schema corrente `0001`–`0010` a SQLite e usa token RS256 firmati localmente, mai credenziali del provider. Verifica rifiuto prima del consenso, CSRF, accettazione esplicita, accesso ADK prima dell'iscrizione della replica, isolamento di due owner, revoca con job ancora `pending` e logout con revoca sessione. La registrazione della replica **non** attesta cifratura AEAD, commit documenti, ACK o restore.
 
 Questo è un test **Node/SQLite sintetico**, non un collaudo HTTP del Worker live, una prova Kinde reale, email/password/Google, Safari, sincronizzazione cross-device o recupero dei dati. Il candidato HTTP Kinde resta **non pubblicato**; gli URL e secret provider devono essere riletti e verificati prima della pubblicazione. CI/SHA e limitazioni sono tracciati in [CF-03 #1057](https://github.com/gernotfound/logbook/issues/1057).
 
@@ -425,3 +445,7 @@ Questo è un test **Node/SQLite sintetico**, non un collaudo HTTP del Worker liv
 Il modulo `src/lib/auth/kindeCandidateClient.ts` prepara il **confine di applicazione** per Kinde senza modificare l'attuale `AuthContext` Firebase e senza avviare fetch automatiche. La lettura consultiva usa solo endpoint HTTP same-origin (`/api/auth/session` e `/v1/consent/status`), credenziali cookie, no-store, controllo dei campi e ricontrollo finale UID/epoch/revisione, con guard del chiamante per cambi di generazione. Rifiuta errori trasporto, app shell HTML, redirect e inconsistenze; `signed-out` è distinto da `unavailable`. Non pubblica dati sanitari, non tocca IndexedDB, non riconosce il consenso guest e non avanza ACK.
 
 L'avvio OAuth è predisposto come navigazione HTML `POST /api/auth/kinde/start` **senza body applicativo**; `fetch` non può leggere in sicurezza un redirect 303 cross-origin opaque. Il candidato `cloudflare/auth/kinde-http-worker.mjs` ora ammette una form POST con stream di **zero byte**, verificando dimensione effettiva prima del rate limiter e del salvataggio dello state; ogni byte non vuoto è rifiutato. Test sintetici Node + Vitest coprono la forma di navigazione, i rifiuti e la lettura client con fence. Il Worker HTTP Kinde e l'adapter **non sono montati nel frontend pubblico**: non hanno route reali e non attestano login/email/Google, quota, consenso browser, ADK, sync o recovery. Attivazione, UX guest→account e integrazione `AuthProvider` rimangono gate separati e non possono riutilizzare Firebase `User` come identità Kinde.
+
+### CF-03/04 — precondizione ADK e revoca concorrente
+
+Il claim distingue `428 cloud-key-required` dalla custodia incoerente o dal guasto D1 (`503`), dalla revoca (`403`) e dal conflitto CAS (`409`). Dopo un fallimento SQL per ADK assente, sessione, consenso, revisione e assenza di dati/chiavi sono letti **nella stessa SELECT primaria**: una revoca o un claim concorrente intervenuti prima di quella lettura non possono diventare una nuova autorizzazione al provisioning. Il client conserva intent e journal; la precondizione non è un ACK né una concessione della chiave. La suite ADK usa tutte le migrazioni canoniche e il finalizzatore atomico effettivo, con regressioni su sessione/revoca intercalate, claim vincente concorrente e guasto della lettura primaria. Sono prove sintetiche, non login Kinde, custodia KEK o sync live.

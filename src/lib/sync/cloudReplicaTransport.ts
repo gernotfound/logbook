@@ -37,6 +37,9 @@ const MAX_SCAN_PAGES = 1024;
 const DOCUMENT_PATH = /^(?:(?:history_months|nutrition_months)\/\d{4}-(?:0[1-9]|1[0-2]))?$/;
 
 export interface CloudReplicaControlSnapshot {
+    // Real Worker responses bind the authenticated UID. Legacy isolated
+    // fixtures may omit it; Kinde ownership observers reject unbound reads.
+    uid?: string;
     revision: number;
     fenceEpoch: number;
     consentRevision: number;
@@ -105,6 +108,16 @@ export class CloudReplicaTransportError extends Error {
     constructor(readonly status: number) {
         super('Trasporto replica cloud non confermato: journal locale da preservare.');
         this.name = 'CloudReplicaTransportError';
+    }
+}
+
+/** No wrapped key or issuance marker exists for the authorized owner.
+ * This is a precondition, never an ACK, grant or vault reset authority.
+ */
+export class CloudReplicaCloudKeyRequiredError extends CloudReplicaTransportError {
+    constructor() {
+        super(428);
+        this.name = 'CloudReplicaCloudKeyRequiredError';
     }
 }
 
@@ -177,6 +190,21 @@ export function createCloudflareReplicaTransport(send: typeof fetch = fetch) {
         } catch {
             throw new CloudReplicaTransportError(0);
         }
+        if (route === 'replica/claim' && response.status === 428) {
+            const media = response.headers.get('content-type')?.toLowerCase() ?? '';
+            const noStore = response.headers.get('cache-control')?.toLowerCase()
+                .split(',').some(item => item.trim() === 'no-store') ?? false;
+            if ((media !== 'application/json' && !media.startsWith('application/json;'))
+                || !noStore) throw new CloudReplicaTransportError(428);
+            let condition: unknown;
+            try { condition = await response.json() as unknown; }
+            catch { throw new CloudReplicaTransportError(428); }
+            if (isRecord(condition) && Object.keys(condition).length === 1
+                && condition.error === 'cloud-key-required') {
+                throw new CloudReplicaCloudKeyRequiredError();
+            }
+            throw new CloudReplicaTransportError(428);
+        }
         if (!response.ok) throw new CloudReplicaTransportError(response.status);
         try {
             return await response.json() as unknown;
@@ -210,6 +238,9 @@ export function createCloudflareReplicaTransport(send: typeof fetch = fetch) {
             if (!isRecord(raw) || !safeRevision(raw.revision)
                 || !safeRevision(raw.fenceEpoch) || raw.fenceEpoch < 1
                 || !safeRevision(raw.consentRevision) || raw.consentRevision < 1
+                || (raw.uid !== undefined && (typeof raw.uid !== 'string'
+                    || raw.uid.length < 1 || raw.uid.length > 128
+                    || raw.uid.trim() !== raw.uid || raw.uid.includes('/')))
                 || !isRecord(raw.replicas)) throw new CloudReplicaTransportError(0);
             try {
                 const parsed = parseReplicaControl({
@@ -217,6 +248,7 @@ export function createCloudflareReplicaTransport(send: typeof fetch = fetch) {
                     replicas: raw.replicas, mutation: { slot: 's00', action: 'checkpoint' },
                 });
                 return {
+                    ...(typeof raw.uid === 'string' ? { uid: raw.uid } : {}),
                     revision: raw.revision, fenceEpoch: raw.fenceEpoch,
                     consentRevision: raw.consentRevision,
                     replicas: parsed.replicas,

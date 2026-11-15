@@ -1,5 +1,30 @@
 # CF-01/02 — isolated encrypted D1 replica candidate
 
+## Candidate CF-03/04: cloud-key precondition and Kinde read boundary
+
+An ADK-free replica claim now returns `428 {"error":"cloud-key-required"}`
+only if the D1 primary confirms both key and issuance marker absent,
+**revision zero and no existing ciphertext, replicas, receipts, mutations or
+erasure job** after trusted session/consent, immutable receipt and CAS
+checks. Session, consent, CAS and key state are read in **one primary SQL
+snapshot**: an intervening revocation yields 403 and a competing committed
+claim yields 409, not a stale 428. The ADK fence suite loads every canonical
+migration and proves key deletion only through the real atomic finalizer.
+A corrupt marker/old key or transient outage remains
+`503 cloud-unavailable`; stale revision remains 409 and revoked
+consent is denied. The network-only candidate client maps only the
+exact 428 response to `CloudReplicaCloudKeyRequiredError` without
+discarding the staged journal, rekeying automatically or inventing ACK.
+`inspectKindeCandidateReplicaControl` binds trusted Kinde identity
+and consent to an advisory D1 control read with a second session
+check **and an authenticated owner UID returned by the control Worker**.
+Even an A→B→A tab switch with equal revisions must reject the middle
+owner; a missing control UID fails closed. The adapter cannot claim a
+replica or open the local vault. Public
+Firebase AuthContext and API exposure are unchanged.
+
+
+
 ## CF-03/05 full-schema trusted flow regression (15 November 2026)
 
 The signed *synthetic* Kinde callback, first health consent, cloud-ADK
@@ -32,8 +57,10 @@ Firebase/Firestore writer, IndexedDB journal and encrypted vault remain active.
 - Provider verification 2026-11-13: isolated **EU-jurisdiction** D1 resource
   `thelogbook-cf02-eu-isolated-20261113` (UUID
   `9aa51833-8adc-495f-bdfc-93b5542e8023`) was provisioned without
-  a public Worker/domain. All migrations 0001–0008 are now applied;
-  the original migration 0001 was accepted (6 tables,
+  a public Worker/domain. **At that 13 November checkpoint** only
+  0001–0008 were applied; subsequent [manual workflow #43702489692](https://github.com/gernotfound/logbook/actions/runs/43702489692)
+  and independent Cloudflare readback on 15 November confirmed **0001–0010**.
+  The original migration 0001 was accepted (6 tables,
   5 triggers). Synthetic CAS and consent-regression requests were rejected,
   and a late failed statement rolled back an earlier receipt insert. This
   proves SQL behavior on remote D1, NOT HTTP Worker/Auth, quota or runtime.

@@ -1,4 +1,8 @@
 import { LEGAL_VERSIONS } from '../legalVersions';
+import {
+    CloudReplicaTransportError, createCloudflareReplicaTransport,
+    type CloudReplicaControlSnapshot,
+} from '../sync/cloudReplicaTransport';
 
 const UID = /^k_[A-Za-z0-9_-]{43}$/;
 const VERSION = /^[A-Za-z0-9._-]{1,32}$/;
@@ -198,6 +202,40 @@ export async function readKindeCandidateAccess({
     const status = consentState(consent.body, verified);
     assertCurrent(stillCurrent);
     return status;
+}
+
+export type KindeCandidateReplicaObservation =
+    | Exclude<KindeCandidateAccess, { kind: 'consent-confirmed' }>
+    | { kind: 'replica-control-observed'; principal: CandidatePrincipal; control: CloudReplicaControlSnapshot };
+
+/**
+ * Candidate-only read bridge between Kinde session/consent and D1 control.
+ * Recheck trusted owner, epoch and consent after the network boundary; never
+ * claim a replica, touch the vault or acknowledge the journal from this hint.
+ */
+export async function inspectKindeCandidateReplicaControl({
+    send = fetch, stillCurrent,
+}: { send?: typeof fetch; stillCurrent: () => boolean }): Promise<KindeCandidateReplicaObservation> {
+    const first = await readKindeCandidateAccess({ send, stillCurrent });
+    if (first.kind !== 'consent-confirmed') return first;
+    let control: CloudReplicaControlSnapshot;
+    try { control = await createCloudflareReplicaTransport(send).control(); }
+    catch (error) {
+        throw new KindeCandidateBoundaryError(error instanceof CloudReplicaTransportError ? error.status : 0);
+    }
+    assertCurrent(stillCurrent);
+    const last = await readKindeCandidateAccess({ send, stillCurrent });
+    if (last.kind !== 'consent-confirmed' || last.principal.uid !== first.principal.uid
+        || last.principal.fenceEpoch !== first.principal.fenceEpoch
+        || last.principal.healthConsentRevision !== first.principal.healthConsentRevision
+        // Equal revision and consent are insufficient under A→B→A reuse.
+        || control.uid !== first.principal.uid
+        || control.fenceEpoch !== first.principal.fenceEpoch
+        || control.consentRevision !== first.principal.healthConsentRevision) {
+        throw new KindeCandidateBoundaryError();
+    }
+    assertCurrent(stillCurrent);
+    return { kind: 'replica-control-observed', principal: last.principal, control };
 }
 
 /**

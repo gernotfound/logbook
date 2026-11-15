@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { describe, expect, it, vi } from 'vitest';
-import { CloudReplicaMutationReconciliationRequiredError, CloudReplicaTransportError, createCloudflareReplicaTransport } from '../../../src/lib/sync/cloudReplicaTransport';
+import { CloudReplicaCloudKeyRequiredError, CloudReplicaMutationReconciliationRequiredError, CloudReplicaTransportError, createCloudflareReplicaTransport } from '../../../src/lib/sync/cloudReplicaTransport';
 import { readAuthenticatedCloudflareCheckpoint } from '../../../src/lib/sync/cloudReplicaCheckpoint';
 import { CloudCiphertextError, sealCloudDocument } from '../../../src/lib/sync/cloudDocumentCipher';
 import type { SyncMeta } from '../../../src/lib/sync/semanticProjection/contracts';
@@ -35,6 +35,31 @@ describe('isolated Cloudflare document transport', () => {
             JSON.stringify({ receipt: { revision: '1', lastSeq: 1 } }),
         )) as typeof fetch);
         await expect(malformed.receipt(batch)).rejects.toBeInstanceOf(CloudReplicaTransportError);
+    });
+
+    it('treats only exact 428 no-key as a provisioning precondition', async () => {
+        const claim = { mutationId: 'mutation0000000001', expectedRevision: 0,
+            expectedFenceEpoch: 1, consentRevision: 1, candidateReplicaId: 'device-a',
+            currentReplica: null, checkpointClock: {} };
+        const missing = createCloudflareReplicaTransport(vi.fn(async () =>
+            new Response(JSON.stringify({ error: 'cloud-key-required' }), {
+                status: 428, headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' },
+            })) as typeof fetch);
+        await expect(missing.replayStoredClaim(claim, 'csrf'))
+            .rejects.toBeInstanceOf(CloudReplicaCloudKeyRequiredError);
+        for (const response of [
+            new Response('{"error":"unavailable"}', { status: 503 }),
+            new Response('{"error":"cloud-key-required"}', { status: 409 }),
+            new Response('{"error":"cloud-key-required","owner":"forged"}', {
+                status: 428, headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' },
+            }),
+            new Response('<html>unavailable</html>', { status: 428,
+                headers: { 'Content-Type': 'text/html', 'Cache-Control': 'no-store' } }),
+        ]) {
+            const client = createCloudflareReplicaTransport(vi.fn(async () => response) as typeof fetch);
+            await expect(client.replayStoredClaim(claim, 'csrf'))
+                .rejects.not.toBeInstanceOf(CloudReplicaCloudKeyRequiredError);
+        }
     });
 
     it('checks the exact batch fingerprint before recognizing a lost ACK receipt', async () => {
@@ -180,7 +205,14 @@ describe('isolated Cloudflare document transport', () => {
         const client = createCloudflareReplicaTransport(vi.fn(async () =>
             new Response(JSON.stringify(content))) as typeof fetch);
         expect(await client.control()).toEqual(content);
+        const owned = { ...content, uid: 'k_' + 'A'.repeat(43) };
+        const withOwner = createCloudflareReplicaTransport(vi.fn(async () =>
+            new Response(JSON.stringify(owned))) as typeof fetch);
+        expect(await withOwner.control()).toEqual(owned);
         for (const bad of [
+            { ...owned, uid: 'bad/uid' },
+            { ...owned, uid: ' spaced ' },
+            { ...owned, uid: 42 },
             { ...content, replicas: { s99: content.replicas.s00 } },
             { ...content, replicas: { s00: { ...content.replicas.s00, checkpointClock: { wrong: 1 } } } },
             { ...content, replicas: { s00: { ...content.replicas.s00, generation: 0 } } },

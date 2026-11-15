@@ -452,7 +452,7 @@ void test('Kinde callback crosses consent and D1 replica gates only after explic
     const session = await f.handler(f.post(SESSION, login.cookie), f.env);
     assert.equal((await session.json()).healthConsentRevision, 1);
     assert.deepEqual(await cloudCall(f, '/v1/sync/control', login, {}), {
-      status: 200, body: { revision: 0, consentRevision: 1, fenceEpoch: 1, replicas: {} },
+      status: 200, body: { uid: trustedSession.uid, revision: 0, consentRevision: 1, fenceEpoch: 1, replicas: {} },
     });
 
     const claim = {
@@ -465,7 +465,7 @@ void test('Kinde callback crosses consent and D1 replica gates only after explic
     // The current D1 triggers refuse membership writes even after valid Kinde
     // and explicit consent until this owner has a durable, wrapped ADK.
     const withoutKey = await cloudCall(f, '/v1/sync/replica/claim', login, claim);
-    assert.notEqual(withoutKey.status, 200);
+    assert.deepEqual(withoutKey, { status: 428, body: { error: 'cloud-key-required' } });
     assert.equal(f.sqlite.prepare('SELECT COUNT(*) AS n FROM sync_replica_mutations').get().n, 0);
     assert.equal(f.sqlite.prepare('SELECT COUNT(*) AS n FROM sync_replicas').get().n, 0);
     assert.equal(f.sqlite.prepare('SELECT revision FROM sync_state').get().revision, 0);
@@ -521,7 +521,8 @@ void test('Kinde signed subjects retain separate D1 consent and replica register
       candidateReplicaId: 'kinde-synthetic-device-owner-a',
       currentReplica: null, checkpointClock: {},
     };
-    assert.notEqual((await cloudCall(f, '/v1/sync/replica/claim', a, claim)).status, 200);
+    assert.deepEqual(await cloudCall(f, '/v1/sync/replica/claim', a, claim),
+      { status: 428, body: { error: 'cloud-key-required' } });
     assert.equal(f.sqlite.prepare('SELECT COUNT(*) AS n FROM sync_replica_mutations').get().n, 0);
     assert.equal((await cloudCall(f, '/v1/cloud-key/sync', a)).status, 200);
     assert.equal((await cloudCall(f, '/v1/sync/replica/claim', a, claim)).status, 200);
@@ -538,7 +539,8 @@ void test('Kinde signed subjects retain separate D1 consent and replica register
       ...claim, mutationId: 'kinde-synthetic-claim-owner-b',
       candidateReplicaId: 'kinde-synthetic-device-owner-b',
     };
-    assert.notEqual((await cloudCall(f, '/v1/sync/replica/claim', b, claimB)).status, 200);
+    assert.deepEqual(await cloudCall(f, '/v1/sync/replica/claim', b, claimB),
+      { status: 428, body: { error: 'cloud-key-required' } });
     assert.equal(f.sqlite.prepare('SELECT COUNT(*) AS n FROM sync_replica_mutations').get().n, 1);
     assert.equal((await cloudCall(f, '/v1/cloud-key/sync', b)).status, 200);
     assert.equal((await cloudCall(f, '/v1/sync/replica/claim', b, claimB)).status, 200);

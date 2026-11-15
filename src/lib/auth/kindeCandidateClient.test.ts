@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
-    KindeCandidateBoundaryError, readKindeCandidateAccess, submitKindeHostedSignIn,
+    KindeCandidateBoundaryError, inspectKindeCandidateReplicaControl, readKindeCandidateAccess, submitKindeHostedSignIn,
 } from './kindeCandidateClient';
 
 const A = 'k_' + 'A'.repeat(43);
@@ -177,6 +177,60 @@ describe('candidate first-party Kinde client boundary', () => {
         const none = vi.fn<typeof fetch>();
         await expect(read(none, () => false)).rejects.toBeInstanceOf(KindeCandidateBoundaryError);
         expect(none).not.toHaveBeenCalled();
+    });
+
+    it('reads Kinde consent and D1 control without granting a key or replica', async () => {
+        const control = { uid: A, revision: 0, fenceEpoch: 1, consentRevision: 1, replicas: {} };
+        const send = responses(
+            reply(session(A, 1, 1)), reply(status('active', 1)), reply(session(A, 1, 1)),
+            reply(control),
+            reply(session(A, 1, 1)), reply(status('active', 1)), reply(session(A, 1, 1)),
+        );
+        await expect(inspectKindeCandidateReplicaControl({ send, stillCurrent: () => true }))
+            .resolves.toEqual({ kind: 'replica-control-observed',
+                principal: { uid: A, fenceEpoch: 1, healthConsentRevision: 1 }, control });
+        expect(send.mock.calls.map(([path]) => path)).toEqual([
+            '/api/auth/session', '/v1/consent/status', '/api/auth/session', '/v1/sync/control',
+            '/api/auth/session', '/v1/consent/status', '/api/auth/session',
+        ]);
+        const noConsent = responses(reply(session()), reply(status('unregistered', 0)), reply(session()));
+        await expect(inspectKindeCandidateReplicaControl({ send: noConsent, stillCurrent: () => true }))
+            .resolves.toMatchObject({ kind: 'consent-required' });
+        expect(noConsent).toHaveBeenCalledTimes(3);
+    });
+
+    it('refuses an owner switch, epoch change, stale control or temporary outage', async () => {
+        const control = { uid: A, revision: 0, fenceEpoch: 1, consentRevision: 1, replicas: {} };
+        for (const changed of [session(B, 1, 1), session(A, 2, 1), session(A, 1, 0)]) {
+            const send = responses(reply(session(A, 1, 1)), reply(status('active', 1)),
+                reply(session(A, 1, 1)), reply(control), reply(changed));
+            await expect(inspectKindeCandidateReplicaControl({ send, stillCurrent: () => true }))
+                .rejects.toBeInstanceOf(KindeCandidateBoundaryError);
+        }
+        const stale = responses(reply(session(A, 1, 1)), reply(status('active', 1)),
+            reply(session(A, 1, 1)), reply({ ...control, fenceEpoch: 2 }),
+            reply(session(A, 1, 1)), reply(status('active', 1)), reply(session(A, 1, 1)));
+        await expect(inspectKindeCandidateReplicaControl({ send: stale, stillCurrent: () => true }))
+            .rejects.toBeInstanceOf(KindeCandidateBoundaryError);
+        const outage = responses(reply(session(A, 1, 1)), reply(status('active', 1)),
+            reply(session(A, 1, 1)), reply({ error: 'unavailable' }, 503));
+        await expect(inspectKindeCandidateReplicaControl({ send: outage, stillCurrent: () => true }))
+            .rejects.toMatchObject({ status: 503 });
+        // A→B→A can preserve the same consent/revision and epoch. Only
+        // the UID from the middle authenticated control read exposes B.
+        for (const middleControl of [{ ...control, uid: B }, {
+            revision: control.revision, fenceEpoch: control.fenceEpoch,
+            consentRevision: control.consentRevision, replicas: {},
+        }]) {
+            const mixed = responses(
+                reply(session(A, 1, 1)), reply(status('active', 1)), reply(session(A, 1, 1)),
+                reply(middleControl),
+                reply(session(A, 1, 1)), reply(status('active', 1)), reply(session(A, 1, 1)),
+            );
+            await expect(inspectKindeCandidateReplicaControl({ send: mixed, stillCurrent: () => true }))
+                .rejects.toBeInstanceOf(KindeCandidateBoundaryError);
+            expect(mixed).toHaveBeenCalledTimes(7);
+        }
     });
 
     it('initiates OAuth only through an empty same-origin native POST navigation', () => {

@@ -4,7 +4,7 @@ import { z } from 'zod';
 import consentWorker from './consent-worker.mjs';
 import logoutWorker from './logout-worker.mjs';
 import cloudKeyWorker from './cloud-key-worker.mjs';
-import { commitEncryptedBatch, readAccessState, readCommitOutcome, readDocumentPage, readReceipt, readReplicaControl, readSnapshot } from './d1-document-store.mjs';
+import { commitEncryptedBatch, readAccessState, readCloudKeyPrecondition, readCommitOutcome, readDocumentPage, readReceipt, readReplicaControl, readSnapshot } from './d1-document-store.mjs';
 import {
   mutationResponse, prepareReplicaClaim, prepareReplicaRetirement, readPublicCheckpointClock,
   readReplicaMutationReceipt, readReplicaMutationOutcome, writeReplicaMutation,
@@ -272,7 +272,9 @@ async function handler(request, env) {
     if (!z.strictObject({}).safeParse(raw).success) throw new BadInput('invalid-input', 400);
     const control = await readReplicaControl(env.DB, uid, consentRevision, fenceEpoch, claims.sessionHash);
     if (!control) throw new BadInput('access-revoked', 403);
-    return reply(control);
+    // Account A and B may share epoch and revision during an A→B→A race.
+    // Bind the control snapshot to its server-verified session owner.
+    return reply({ uid, ...control });
   }
   if (route === '/v1/sync/replica/status') {
     // The two strict schemas are disjoint: a status lookup proves absence
@@ -349,12 +351,20 @@ async function handler(request, env) {
         if (saved.request_hash !== hash) throw new BadInput('mutation-id-conflict', 409);
         return reply(mutationResponse(input.mutationId, saved, true));
       }
-      const state = await readAccessState(env.DB, uid, fenceEpoch, claims.sessionHash);
+      const missingKey = isClaim && String(error?.message).includes('replica-cloud-key-required');
+      const state = missingKey
+        ? await readCloudKeyPrecondition(env.DB, uid, fenceEpoch, claims.sessionHash)
+        : await readAccessState(env.DB, uid, fenceEpoch, claims.sessionHash);
       if (state?.status !== 'active' || state.consent_revision !== consentRevision
         || state.fence_epoch !== fenceEpoch) throw new BadInput('access-revoked', 403);
       if (state.revision !== input.expectedRevision
         || /replica-control-fenced|replica-id-reuse|UNIQUE constraint|replica-regression/i.test(String(error?.message))) {
         throw new BadInput('replica-fenced-or-conflict', 409);
+      }
+      if (missingKey && state.revision === 0 && state.stored_keys === 0 && state.issued_keys === 0
+        && state.documents === 0 && state.replicas === 0
+        && state.receipts === 0 && state.mutations === 0 && state.erasures === 0) {
+        throw new BadInput('cloud-key-required', 428);
       }
       throw error;
     }
