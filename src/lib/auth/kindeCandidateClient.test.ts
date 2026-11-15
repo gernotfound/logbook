@@ -9,8 +9,8 @@ const session = (uid = A, epoch = 1, consent = 0) => ({
     authenticated: true, uid, emailVerified: true,
     fenceEpoch: epoch, healthConsentRevision: consent,
 });
-const status = (state: string, revision: number, epoch = 1) => ({
-    status: state, revision, fenceEpoch: epoch,
+const status = (state: string, revision: number, epoch = 1, uid = A) => ({
+    uid, status: state, revision, fenceEpoch: epoch,
     ...(state === 'active' ? {
         acceptedAt: '2026-11-14T10:00:00.000Z',
         privacyVersion: '1.3.9', termsVersion: '1.2.5',
@@ -86,6 +86,56 @@ describe('candidate first-party Kinde client boundary', () => {
         }
     });
 
+    it('rejects A→B→A consent identity changes despite equal session epochs and revisions', async () => {
+        for (const [state, consentRevision] of [
+            ['unregistered', 0], ['active', 1], ['withdrawn', 1],
+            ['deleting', 1], ['deleted', 1],
+        ] as const) {
+            const send = responses(
+                reply(session(A, 1, consentRevision)),
+                reply(status(state, consentRevision, 1, B)),
+                reply(session(A, 1, consentRevision)),
+            );
+            await expect(read(send)).rejects.toBeInstanceOf(KindeCandidateBoundaryError);
+            expect(send.mock.calls.map(([path]) => path)).toEqual([
+                '/api/auth/session', '/v1/consent/status', '/api/auth/session',
+            ]);
+        }
+    });
+
+    it('rejects old or malformed trusted consent UIDs for every status', async () => {
+        for (const [state, consentRevision] of [
+            ['unregistered', 0], ['active', 1], ['withdrawn', 1],
+            ['deleting', 1], ['deleted', 1],
+        ] as const) {
+            for (const invalidUid of [
+                undefined, null, '', 1, 'firebase-user',
+                'k_' + 'A'.repeat(42), A + ' ', B,
+            ]) {
+                const send = responses(
+                    reply(session(A, 1, consentRevision)),
+                    reply({ ...status(state, consentRevision), uid: invalidUid }),
+                    reply(session(A, 1, consentRevision)),
+                );
+                await expect(read(send)).rejects.toBeInstanceOf(KindeCandidateBoundaryError);
+                expect(send).toHaveBeenCalledTimes(3);
+            }
+        }
+    });
+
+    it('rejects a stale caller generation immediately after the consent response', async () => {
+        let current = true;
+        const send = vi.fn<typeof fetch>().mockImplementation(async path => {
+            if (path === '/v1/consent/status') {
+                current = false;
+                return reply(status('active', 1));
+            }
+            return reply(session(A, 1, 1));
+        });
+        await expect(read(send, () => current)).rejects.toBeInstanceOf(KindeCandidateBoundaryError);
+        expect(send).toHaveBeenCalledTimes(2);
+    });
+
     it('never adopts malformed, unverified or inconsistent backend claims', async () => {
         for (const invalid of [
             { ...session(), emailVerified: false },
@@ -102,7 +152,7 @@ describe('candidate first-party Kinde client boundary', () => {
             { ...status('active', 1), acceptedAt: 'invalid' },
             status('unexpected', 0),
         ]) {
-            await expect(read(responses(reply(session()), reply(invalid)))).rejects.toBeInstanceOf(KindeCandidateBoundaryError);
+            await expect(read(responses(reply(session()), reply(invalid), reply(session())))).rejects.toBeInstanceOf(KindeCandidateBoundaryError);
         }
     });
 

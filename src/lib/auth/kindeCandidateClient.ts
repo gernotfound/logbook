@@ -137,20 +137,21 @@ function principal(value: unknown): CandidatePrincipal {
 
 function consentState(value: unknown, owner: CandidatePrincipal): KindeCandidateAccess {
     if (!record(value) || typeof value.status !== 'string'
+        || typeof value.uid !== 'string' || !UID.test(value.uid) || value.uid !== owner.uid
         || !revision(value.revision) || !revision(value.fenceEpoch, 1)
         || value.revision !== owner.healthConsentRevision
         || value.fenceEpoch > owner.fenceEpoch) {
         throw new KindeCandidateBoundaryError();
     }
     if (value.status === 'unregistered') {
-        if (!exactKeys(value, ['status', 'revision', 'fenceEpoch'])
+        if (!exactKeys(value, ['uid', 'status', 'revision', 'fenceEpoch'])
             || value.revision !== 0 || value.fenceEpoch !== owner.fenceEpoch) {
             throw new KindeCandidateBoundaryError();
         }
         return { kind: 'consent-required', principal: owner };
     }
     if (value.status === 'active') {
-        if (!exactKeys(value, ['status', 'revision', 'fenceEpoch', 'acceptedAt', 'privacyVersion', 'termsVersion'])
+        if (!exactKeys(value, ['uid', 'status', 'revision', 'fenceEpoch', 'acceptedAt', 'privacyVersion', 'termsVersion'])
             || value.revision !== 1 || value.fenceEpoch !== owner.fenceEpoch
             || typeof value.privacyVersion !== 'string' || !VERSION.test(value.privacyVersion)
             || typeof value.termsVersion !== 'string' || !VERSION.test(value.termsVersion)
@@ -164,7 +165,7 @@ function consentState(value: unknown, owner: CandidatePrincipal): KindeCandidate
         return { kind: 'consent-confirmed', principal: owner };
     }
     if (value.status === 'withdrawn' || value.status === 'deleting' || value.status === 'deleted') {
-        if (!exactKeys(value, ['status', 'revision', 'fenceEpoch']) || value.revision < 1) {
+        if (!exactKeys(value, ['uid', 'status', 'revision', 'fenceEpoch']) || value.revision < 1) {
             throw new KindeCandidateBoundaryError();
         }
         return { kind: 'consent-suspended', principal: owner, status: value.status };
@@ -175,8 +176,8 @@ function consentState(value: unknown, owner: CandidatePrincipal): KindeCandidate
 /**
  * Candidate read-only browser adapter, not wired to Firebase AuthContext or
  * cloud hydration. Two separate Worker reads can straddle a session switch;
- * the final session read and caller's generation guard prevent publishing a
- * mixed-owner hint. Even 'consent-confirmed' is NOT an ACK, vault unlock,
+ * the final session read, trusted consent UID and caller's generation
+ * guard reject mixed-owner hints, including A→B→A with equal epochs. Even 'consent-confirmed' is NOT an ACK, vault unlock,
  * session continuity proof, or permission to synchronize.
  */
 export async function readKindeCandidateAccess({
@@ -187,7 +188,6 @@ export async function readKindeCandidateAccess({
     const owner = principal(first.body);
     const consent = await post('/v1/consent/status', send, stillCurrent);
     if (consent.unauthorized) throw new KindeCandidateBoundaryError(401);
-    const status = consentState(consent.body, owner);
     const last = await post('/api/auth/session', send, stillCurrent);
     if (last.unauthorized) throw new KindeCandidateBoundaryError(401);
     const verified = principal(last.body);
@@ -195,6 +195,7 @@ export async function readKindeCandidateAccess({
         || verified.healthConsentRevision !== owner.healthConsentRevision) {
         throw new KindeCandidateBoundaryError();
     }
+    const status = consentState(consent.body, verified);
     assertCurrent(stillCurrent);
     return status;
 }
