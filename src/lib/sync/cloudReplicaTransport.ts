@@ -146,7 +146,7 @@ export class CloudReplicaMutationReconciliationRequiredError extends CloudReplic
  */
 async function readBoundedResponse(response: Response, maxBytes: number): Promise<unknown> {
     const declared = response.headers.get('content-length');
-    if (declared !== null && (!/^\\d+$/.test(declared) || Number(declared) > maxBytes)
+    if (declared !== null && (!/^\d+$/.test(declared) || Number(declared) > maxBytes)
         || response.body === null) {
         throw new CloudReplicaTransportError(0);
     }
