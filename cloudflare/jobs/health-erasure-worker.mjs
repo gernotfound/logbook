@@ -1,8 +1,8 @@
 import { D1_NOW_MS } from '../sql/d1-time.mjs';
 
-// Candidate-only D1 erasure worker. No public fetch, route, or cron binding.
-// This step removes bounded encrypted replica rows; it cannot remove a cloud
-// ADK or issue an erasure-complete receipt until those trusted flows exist.
+// Candidate-only D1 erasure worker. No public fetch, route or cron binding.
+// Terminal key erasure requires migration 0010: a single SQL INSERT atomically
+// destroys the wrapped ADK and records the complete, generation-fenced proof.
 const MAX_ROWS_PER_STEP = 4;
 const LEASE_MS = 30_000;
 const SERVER_NOW = D1_NOW_MS;
@@ -54,7 +54,7 @@ const FIND_JOB = [
   'SELECT j.uid, j.consent_revision, j.fence_epoch',
   'FROM health_erasure_jobs j',
   'JOIN sync_subjects s ON s.uid = j.uid',
-  "WHERE j.phase = 'data' AND j.status IN ('pending', 'processing')",
+  "WHERE j.phase = ? AND j.status IN ('pending', 'processing')",
   '  AND j.lease_until_ms <= ' + SERVER_NOW,
   "  AND s.status = 'withdrawn'",
   '  AND s.consent_revision = j.consent_revision AND s.fence_epoch = j.fence_epoch',
@@ -66,7 +66,7 @@ const CLAIM_JOB = [
   "  status = 'processing', lease_epoch = lease_epoch + 1,",
   '  lease_token = ?, lease_until_ms = ' + SERVER_NOW + ' + ' + LEASE_MS,
   'WHERE uid = ? AND consent_revision = ? AND fence_epoch = ?',
-  "  AND phase = 'data' AND status IN ('pending', 'processing')",
+  "  AND phase = ? AND status IN ('pending', 'processing')",
   '  AND lease_until_ms <= ' + SERVER_NOW,
   '  AND EXISTS (SELECT 1 FROM sync_subjects s',
   "    WHERE s.uid = health_erasure_jobs.uid AND s.status = 'withdrawn'",
@@ -74,6 +74,135 @@ const CLAIM_JOB = [
   '      AND s.fence_epoch = health_erasure_jobs.fence_epoch)',
   'RETURNING lease_epoch, lease_until_ms',
 ].join('\n');
+
+// Exact contract of B-02 migration 0010, as tested in
+// cf06-atomic-erasure-finalization.node.mjs at B-02 SHA 7196ebcd.
+// The INSERT itself owns ALL effects via SQLite triggers, not a D1 batch.
+const FINALIZE = `
+INSERT INTO health_erasure_finalizations (
+  uid, consent_revision, fence_epoch, lease_epoch, lease_token,
+  completed_at_ms, erased_before_revision, sync_revision_at_erasure,
+  key_disposition, key_issued_at_ms
+)
+SELECT j.uid, j.consent_revision, j.fence_epoch, j.lease_epoch, j.lease_token,
+  CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER),
+  j.consent_revision + 1, rev.revision,
+  CASE WHEN issuance.uid IS NULL THEN 'never-issued' ELSE 'destroyed' END,
+  issuance.issued_at_ms
+FROM health_erasure_jobs j
+JOIN sync_state rev ON rev.uid = j.uid
+LEFT JOIN cloud_key_issuance issuance
+  ON issuance.uid = j.uid AND issuance.consent_revision = j.consent_revision
+WHERE j.uid = ? AND j.consent_revision = ? AND j.fence_epoch = ?
+  AND j.lease_epoch = ? AND j.lease_token = ?
+  AND j.status = 'processing' AND j.phase = 'awaiting-keys'
+RETURNING uid, consent_revision, fence_epoch, lease_epoch, completed_at_ms,
+  erased_before_revision, sync_revision_at_erasure, key_disposition
+`;
+
+// This is an independent first-primary read, not a claim about the INSERT's
+// network acknowledgement. Verify the immutable proof AND all current owner
+// facts before reporting a result, including when a prior response was lost.
+const COMPLETE_PROOF = `
+SELECT f.uid, f.consent_revision, f.fence_epoch, f.lease_epoch,
+  f.completed_at_ms, f.erased_before_revision, f.sync_revision_at_erasure,
+  f.key_disposition, f.key_issued_at_ms,
+  j.status AS job_status, j.phase AS job_phase,
+  j.lease_epoch AS job_lease_epoch, j.lease_token AS job_lease_token,
+  j.completed_at_ms AS job_completed_at_ms,
+  j.erased_before_revision AS job_erased_before_revision,
+  j.key_disposition AS job_key_disposition,
+  s.status AS subject_status,
+  s.consent_revision AS subject_consent_revision,
+  s.fence_epoch AS subject_fence_epoch,
+  s.erased_before_revision AS subject_erased_before_revision,
+  rev.revision AS current_sync_revision
+FROM health_erasure_finalizations f
+JOIN health_erasure_jobs j
+  ON j.uid = f.uid AND j.consent_revision = f.consent_revision
+JOIN sync_subjects s ON s.uid = f.uid
+JOIN sync_state rev ON rev.uid = f.uid
+WHERE f.uid = ? AND f.consent_revision = ? AND f.fence_epoch = ?
+  AND f.lease_epoch = ? AND f.lease_token = ?
+  AND NOT EXISTS (SELECT 1 FROM cloud_account_keys k WHERE k.uid = f.uid)
+  AND NOT EXISTS (SELECT 1 FROM sync_documents d WHERE d.uid = f.uid)
+  AND NOT EXISTS (SELECT 1 FROM sync_receipts r WHERE r.uid = f.uid)
+  AND NOT EXISTS (SELECT 1 FROM sync_replica_mutations m WHERE m.uid = f.uid)
+  AND NOT EXISTS (SELECT 1 FROM sync_replicas r WHERE r.uid = f.uid)
+  AND (
+    (f.key_disposition = 'destroyed' AND f.key_issued_at_ms IS NOT NULL
+      AND EXISTS (SELECT 1 FROM cloud_key_issuance i
+        WHERE i.uid = f.uid AND i.consent_revision = f.consent_revision
+          AND i.issued_at_ms = f.key_issued_at_ms))
+    OR (f.key_disposition = 'never-issued' AND f.key_issued_at_ms IS NULL
+      AND NOT EXISTS (SELECT 1 FROM cloud_key_issuance i
+        WHERE i.uid = f.uid AND i.consent_revision = f.consent_revision))
+  )
+`;
+
+async function readTerminalProof(db, scope) {
+  // Always acquire a fresh primary session: a previous preflight SELECT, a
+  // stale read replica or the INSERT's own RETURNING is not terminal evidence.
+  const primary = db.withSession('first-primary');
+  if (!primary || typeof primary.prepare !== 'function') throw new Error('erasure-db-unavailable');
+  const row = await primary.prepare(COMPLETE_PROOF).bind(...scope).first();
+  if (!row) return null;
+  const [uid, revision, epoch, leaseEpoch, token] = scope;
+  const nextRevision = revision + 1;
+  if (!Number.isSafeInteger(nextRevision) || nextRevision < 2
+    || !Number.isSafeInteger(epoch + 1)
+    || row.uid !== uid || row.consent_revision !== revision
+    || row.fence_epoch !== epoch || row.lease_epoch !== leaseEpoch
+    || !Number.isSafeInteger(row.completed_at_ms) || row.completed_at_ms < 1
+    || row.erased_before_revision !== nextRevision
+    || !Number.isSafeInteger(row.sync_revision_at_erasure)
+    || row.sync_revision_at_erasure < 0
+    || row.job_status !== 'complete' || row.job_phase !== 'awaiting-keys'
+    || row.job_lease_epoch !== leaseEpoch || row.job_lease_token !== token
+    || row.job_completed_at_ms !== row.completed_at_ms
+    || row.job_erased_before_revision !== nextRevision
+    || row.job_key_disposition !== row.key_disposition
+    || row.subject_status !== 'withdrawn'
+    || row.subject_consent_revision !== nextRevision
+    || row.subject_fence_epoch !== epoch + 1
+    || row.subject_erased_before_revision !== nextRevision
+    || row.current_sync_revision !== row.sync_revision_at_erasure
+    || (row.key_disposition !== 'destroyed' && row.key_disposition !== 'never-issued')) {
+    return null;
+  }
+  return { outcome: 'complete', keyDisposition: row.key_disposition };
+}
+
+async function finalizeHealthErasureLease(db, lease) {
+  let result;
+  try {
+    // No standalone ADK DELETE, job UPDATE or D1.batch() is permitted here.
+    result = await lease.primary.prepare(FINALIZE).bind(...lease.scope).first();
+  } catch (error) {
+    // The INSERT may have committed before its response was lost. Read the
+    // exact terminal proof; if unproven, preserve the error for retry/triage.
+    const recovered = await readTerminalProof(db, lease.scope);
+    if (recovered) return recovered;
+    throw error;
+  }
+  // A zero-row RETURNING does NOT prove the caller's attempt completed.
+  if (!result) return { outcome: 'contended' };
+  const [uid, revision, epoch, leaseEpoch] = lease.scope;
+  if (result.uid !== uid || result.consent_revision !== revision
+    || result.fence_epoch !== epoch || result.lease_epoch !== leaseEpoch
+    || !Number.isSafeInteger(result.completed_at_ms) || result.completed_at_ms < 1
+    || result.erased_before_revision !== revision + 1
+    || !Number.isSafeInteger(result.sync_revision_at_erasure)
+    || result.sync_revision_at_erasure < 0
+    || (result.key_disposition !== 'destroyed' && result.key_disposition !== 'never-issued')) {
+    throw new Error('erasure-returning-unproven');
+  }
+  const verified = await readTerminalProof(db, lease.scope);
+  if (!verified || verified.keyDisposition !== result.key_disposition) {
+    throw new Error('erasure-terminal-proof-unproven');
+  }
+  return verified;
+}
 
 const AWAIT_KEYS = [
   "UPDATE health_erasure_jobs SET phase = 'awaiting-keys'",
@@ -92,32 +221,72 @@ const AWAIT_KEYS = [
 ].join('\n');
 
 /**
- * Process at most four rows in one D1 statement. Each statement rechecks the
- * lease and withdrawn generation inside SQL, so a stolen or expired lease
- * cannot authorize later writes. Missing schema, quota, or uncertain ACK
- * raises: this runner never advances the job to complete/failed.
+ * Lease acquisition is shared by the bounded data phase and the future key
+ * finalizer. The single UPDATE ... RETURNING CAS fences the selected owner,
+ * consent generation, phase, previous lease and current withdrawn status.
+ * A lost claim acknowledgement cannot be interpreted as ownership.
  */
-export async function runOneHealthErasureStep(db) {
+async function claimOneHealthErasureLease(db, phase) {
+  if (phase !== 'data' && phase !== 'awaiting-keys') throw new Error('invalid-erasure-phase');
   if (!db || typeof db.withSession !== 'function') throw new Error('erasure-db-unavailable');
   const primary = db.withSession('first-primary');
   if (!primary || typeof primary.prepare !== 'function') throw new Error('erasure-db-unavailable');
-  const candidate = await primary.prepare(FIND_JOB).first();
+  const candidate = await primary.prepare(FIND_JOB).bind(phase).first();
   if (!candidate) return { outcome: 'idle' };
   if (typeof candidate.uid !== 'string' || candidate.uid.length < 1
+    || candidate.uid.length > 128 || candidate.uid.includes('/')
+    || candidate.uid.trim() !== candidate.uid
     || !Number.isSafeInteger(candidate.consent_revision) || candidate.consent_revision < 1
     || !Number.isSafeInteger(candidate.fence_epoch) || candidate.fence_epoch < 1) {
     throw new Error('invalid-erasure-job');
   }
   const token = newLeaseToken();
   const claimed = await primary.prepare(CLAIM_JOB)
-    .bind(token, candidate.uid, candidate.consent_revision, candidate.fence_epoch).first();
+    .bind(token, candidate.uid, candidate.consent_revision, candidate.fence_epoch, phase).first();
   if (!claimed) return { outcome: 'contended' };
   if (!Number.isSafeInteger(claimed.lease_epoch) || claimed.lease_epoch < 1
     || !Number.isSafeInteger(claimed.lease_until_ms) || claimed.lease_until_ms < 1) {
     throw new Error('erasure-lease-unproven');
   }
-  const scope = [candidate.uid, candidate.consent_revision,
-    candidate.fence_epoch, claimed.lease_epoch, token];
+  return {
+    primary, candidate, claimed,
+    scope: [candidate.uid, candidate.consent_revision,
+      candidate.fence_epoch, claimed.lease_epoch, token],
+  };
+}
+
+/**
+ * Internal lease acquisition for the key phase. This is NOT an erasure grant:
+ * only the 0010-backed atomic proof INSERT may consume the exact lease token.
+ */
+export async function acquireOneHealthErasureKeyPhaseLease(db) {
+  const lease = await claimOneHealthErasureLease(db, 'awaiting-keys');
+  if (lease.outcome) return { outcome: lease.outcome };
+  return {
+    outcome: 'leased',
+    uid: lease.candidate.uid,
+    consentRevision: lease.candidate.consent_revision,
+    fenceEpoch: lease.candidate.fence_epoch,
+    leaseEpoch: lease.claimed.lease_epoch,
+    leaseToken: lease.scope[4],
+    leaseUntilMs: lease.claimed.lease_until_ms,
+  };
+}
+
+/**
+ * One bounded data step OR one atomic terminal INSERT per invocation.
+ * The 0010 SQL trigger is the only authority for completion. This module is
+ * still private and cannot schedule itself or expose a public endpoint.
+ */
+export async function runOneHealthErasureStep(db) {
+  const lease = await claimOneHealthErasureLease(db, 'data');
+  if (lease.outcome === 'idle') {
+    const keyLease = await claimOneHealthErasureLease(db, 'awaiting-keys');
+    if (keyLease.outcome) return { outcome: keyLease.outcome };
+    return finalizeHealthErasureLease(db, keyLease);
+  }
+  if (lease.outcome) return { outcome: lease.outcome };
+  const { primary, candidate, scope } = lease;
   for (const table of TABLES) {
     const result = await primary.prepare(deleteBoundedSql(table))
       .bind(candidate.uid, candidate.uid, ...scope).run();

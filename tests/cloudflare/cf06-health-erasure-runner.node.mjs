@@ -2,13 +2,14 @@ import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
 import { test } from 'node:test';
 import { DatabaseSync } from 'node:sqlite';
-import erasureWorker, { runOneHealthErasureStep } from '../../cloudflare/jobs/health-erasure-worker.mjs';
+import erasureWorker, { acquireOneHealthErasureKeyPhaseLease, runOneHealthErasureStep } from '../../cloudflare/jobs/health-erasure-worker.mjs';
+import { wrapCloudAccountDataKey } from '../../cloudflare/api/cloud-key-crypto.mjs';
 
 const SQL_FILES = readdirSync(new URL('../../cloudflare/api/migrations/', import.meta.url))
-  .filter(name => /^000[1-6]_[a-z0-9_]+\.sql$/.test(name))
+  .filter(name => /^000[1-8]_[a-z0-9_]+\.sql$/.test(name))
   .sort();
 assert.deepEqual(SQL_FILES.map(name => name.slice(0, 4)),
-  ['0001', '0002', '0003', '0004', '0005', '0006']);
+  ['0001', '0002', '0003', '0004', '0005', '0006', '0007', '0008']);
 
 class Statement {
   constructor(sqlite, sql, args = []) { this.sqlite = sqlite; this.sql = sql; this.args = args; }
@@ -84,6 +85,32 @@ function expire(f, uid) {
 }
 function job(f, uid) {
   return f.sqlite.prepare('SELECT * FROM health_erasure_jobs WHERE uid=?').get(uid);
+}
+
+const SYNTHETIC_KEK = Buffer.alloc(32, 71).toString('base64');
+
+async function ownerWithWrappedKey(f, uid) {
+  f.sqlite.prepare(`INSERT INTO auth_principals(uid,status,verified_at_ms,auth_epoch)
+    VALUES (?,'active',?,1)`).run(uid, Date.now() - 20_000);
+  owner(f, uid);
+  const adk = crypto.getRandomValues(new Uint8Array(32));
+  const wrapped = await wrapCloudAccountDataKey(uid, adk, SYNTHETIC_KEK);
+  adk.fill(0);
+  f.sqlite.prepare(`INSERT INTO cloud_account_keys
+    (uid,consent_revision,format,version,key_version,iv,ciphertext,tag,issued_at_ms)
+    VALUES (?,?,?,?,?,?,?,?,?)`).run(uid, 1, wrapped.format, wrapped.version,
+    wrapped.keyVersion, wrapped.iv, wrapped.ciphertext, wrapped.tag, Date.now() - 1_000);
+  assert.equal(count(f, 'cloud_key_issuance', uid), 1);
+}
+
+async function drainDataToKeyPhase(f, uid) {
+  for (let attempt = 0; attempt < 16; attempt += 1) {
+    const result = await runOneHealthErasureStep(f.db);
+    if (result.outcome === 'awaiting-keys') return;
+    assert.equal(result.outcome, 'progress');
+    expire(f, uid);
+  }
+  assert.fail('bounded runner did not reach awaiting-keys');
 }
 
 void test('bounded erasure drains every known replica table but never claims key erasure or completion', async () => {
@@ -289,6 +316,175 @@ void test('missing D1 schema and failed provider writes never claim deletion suc
     assert.equal(job(f, 'owner-a').status, 'pending');
     assert.equal(job(f, 'owner-a').lease_epoch, 0);
   } finally { f.sqlite.close(); }
+});
+
+void test('awaiting-keys reacquires the exact leased generation without deleting the ADK', async () => {
+  const f = fixture();
+  try {
+    await ownerWithWrappedKey(f, 'owner-a');
+    await ownerWithWrappedKey(f, 'owner-b');
+    insertDocuments(f, 'owner-a', 7);
+    withdraw(f, 'owner-a');
+    await drainDataToKeyPhase(f, 'owner-a');
+    assert.equal((await acquireOneHealthErasureKeyPhaseLease(f.db)).outcome, 'idle');
+    expire(f, 'owner-a');
+    const initialEpoch = job(f, 'owner-a').lease_epoch;
+    const first = await acquireOneHealthErasureKeyPhaseLease(f.db);
+    assert.equal(first.outcome, 'leased');
+    assert.equal(first.uid, 'owner-a');
+    assert.equal(first.consentRevision, 1);
+    assert.equal(first.fenceEpoch, 1);
+    assert.equal(first.leaseEpoch, initialEpoch + 1);
+    assert.match(first.leaseToken, /^[0-9a-f]{64}$/);
+    assert.equal(first.leaseUntilMs, job(f, 'owner-a').lease_until_ms);
+    assert.equal(first.leaseToken, job(f, 'owner-a').lease_token);
+    assert.equal(job(f, 'owner-a').status, 'processing');
+    assert.equal(job(f, 'owner-a').phase, 'awaiting-keys');
+    for (const uid of ['owner-a', 'owner-b']) {
+      assert.equal(count(f, 'cloud_account_keys', uid), 1);
+      assert.equal(count(f, 'cloud_key_issuance', uid), 1);
+    }
+    assert.throws(() => f.sqlite.exec("UPDATE health_erasure_jobs SET status='complete'"),
+      /erasure-progress-fenced/);
+    assert.equal((await acquireOneHealthErasureKeyPhaseLease(f.db)).outcome, 'idle');
+    expire(f, 'owner-a');
+    const second = await acquireOneHealthErasureKeyPhaseLease(f.db);
+    assert.equal(second.outcome, 'leased');
+    assert.equal(second.leaseEpoch, first.leaseEpoch + 1);
+    assert.notEqual(second.leaseToken, first.leaseToken);
+    assert.equal(count(f, 'cloud_account_keys', 'owner-a'), 1);
+    assert.equal(job(f, 'owner-a').status, 'processing');
+    assert.equal((await runOneHealthErasureStep(f.db)).outcome, 'idle');
+  } finally { f.sqlite.close(); }
+});
+
+void test('concurrent key-phase lease claims have at most one winner', async () => {
+  const f = fixture();
+  try {
+    await ownerWithWrappedKey(f, 'owner-a');
+    withdraw(f, 'owner-a');
+    await drainDataToKeyPhase(f, 'owner-a');
+    expire(f, 'owner-a');
+    const results = await Promise.all([
+      acquireOneHealthErasureKeyPhaseLease(f.db),
+      acquireOneHealthErasureKeyPhaseLease(f.db),
+    ]);
+    assert.equal(results.filter(result => result.outcome === 'leased').length, 1);
+    assert.ok(results.some(result => result.outcome === 'idle' || result.outcome === 'contended'));
+    assert.equal(count(f, 'cloud_account_keys', 'owner-a'), 1);
+    assert.equal(count(f, 'cloud_key_issuance', 'owner-a'), 1);
+    assert.equal(job(f, 'owner-a').status, 'processing');
+  } finally { f.sqlite.close(); }
+});
+
+void test('ambiguous key-phase lease ACK fails closed and can resume only after expiration', async () => {
+  const f = fixture();
+  try {
+    await ownerWithWrappedKey(f, 'owner-a');
+    withdraw(f, 'owner-a');
+    await drainDataToKeyPhase(f, 'owner-a');
+    expire(f, 'owner-a');
+    let lost = false;
+    const flaky = {
+      withSession(mode) {
+        const real = f.db.withSession(mode);
+        return { prepare(sql) {
+          const statement = real.prepare(sql);
+          if (!sql.startsWith('UPDATE health_erasure_jobs SET')) return statement;
+          return { bind(...args) { return { async first() {
+            const result = await statement.bind(...args).first();
+            if (!lost) { lost = true; throw new Error('synthetic lease ACK lost'); }
+            return result;
+          } }; } };
+        } };
+      },
+    };
+    await assert.rejects(acquireOneHealthErasureKeyPhaseLease(flaky),
+      /synthetic lease ACK lost/);
+    assert.equal(lost, true);
+    assert.equal(job(f, 'owner-a').phase, 'awaiting-keys');
+    assert.equal(job(f, 'owner-a').status, 'processing');
+    assert.equal(count(f, 'cloud_account_keys', 'owner-a'), 1);
+    assert.equal((await acquireOneHealthErasureKeyPhaseLease(f.db)).outcome, 'idle');
+    expire(f, 'owner-a');
+    assert.equal((await acquireOneHealthErasureKeyPhaseLease(f.db)).outcome, 'leased');
+    assert.equal(count(f, 'cloud_account_keys', 'owner-a'), 1);
+  } finally { f.sqlite.close(); }
+});
+
+void test('withdrawn owner and consent epoch must still match before key-phase lease', async () => {
+  for (const mutation of [
+    "UPDATE sync_subjects SET status='deleting' WHERE uid='owner-a'",
+    "UPDATE sync_subjects SET fence_epoch=fence_epoch+1 WHERE uid='owner-a'",
+  ]) {
+    const f = fixture();
+    try {
+      await ownerWithWrappedKey(f, 'owner-a');
+      withdraw(f, 'owner-a');
+      await drainDataToKeyPhase(f, 'owner-a');
+      expire(f, 'owner-a');
+      f.sqlite.prepare(mutation).run();
+      assert.equal((await acquireOneHealthErasureKeyPhaseLease(f.db)).outcome, 'idle');
+      assert.equal(count(f, 'cloud_account_keys', 'owner-a'), 1);
+      assert.equal(job(f, 'owner-a').status, 'processing');
+    } finally { f.sqlite.close(); }
+  }
+});
+
+void test('a changed consent epoch between SELECT and lease claim prevents acquisition', async () => {
+  const f = fixture();
+  try {
+    await ownerWithWrappedKey(f, 'owner-a');
+    withdraw(f, 'owner-a');
+    await drainDataToKeyPhase(f, 'owner-a');
+    expire(f, 'owner-a');
+    const previousLeaseEpoch = job(f, 'owner-a').lease_epoch;
+    let raced = false;
+    const racingDb = {
+      withSession(mode) {
+        const primary = f.db.withSession(mode);
+        return { prepare(sql) {
+          const statement = primary.prepare(sql);
+          if (!sql.startsWith('UPDATE health_erasure_jobs SET')) return statement;
+          return { bind(...args) { return { async first() {
+            if (!raced) {
+              raced = true;
+              f.sqlite.prepare("UPDATE sync_subjects SET fence_epoch=2 WHERE uid='owner-a'").run();
+            }
+            return statement.bind(...args).first();
+          } }; } };
+        } };
+      },
+    };
+    assert.equal((await acquireOneHealthErasureKeyPhaseLease(racingDb)).outcome, 'contended');
+    assert.equal(raced, true);
+    assert.equal(job(f, 'owner-a').lease_epoch, previousLeaseEpoch);
+    assert.equal(count(f, 'cloud_account_keys', 'owner-a'), 1);
+    assert.equal(job(f, 'owner-a').status, 'processing');
+  } finally { f.sqlite.close(); }
+});
+
+void test('keyless never-issued and missing-issued-key jobs remain incomplete, distinct and recoverable', async () => {
+  for (const issued of [false, true]) {
+    const f = fixture();
+    try {
+      owner(f, 'owner-a');
+      if (issued) {
+        f.sqlite.prepare('INSERT INTO cloud_key_issuance(uid,consent_revision,issued_at_ms) VALUES (?,1,?)')
+          .run('owner-a', Date.now() - 1000);
+      }
+      withdraw(f, 'owner-a');
+      await drainDataToKeyPhase(f, 'owner-a');
+      expire(f, 'owner-a');
+      const lease = await acquireOneHealthErasureKeyPhaseLease(f.db);
+      assert.equal(lease.outcome, 'leased');
+      assert.equal(count(f, 'cloud_account_keys', 'owner-a'), 0);
+      assert.equal(count(f, 'cloud_key_issuance', 'owner-a'), issued ? 1 : 0);
+      assert.equal(job(f, 'owner-a').status, 'processing');
+      assert.throws(() => f.sqlite.exec("UPDATE health_erasure_jobs SET status='complete'"),
+        /erasure-progress-fenced/);
+    } finally { f.sqlite.close(); }
+  }
 });
 
 void test('scheduler has no public fetch endpoint and handles only one bounded step per tick', async () => {
