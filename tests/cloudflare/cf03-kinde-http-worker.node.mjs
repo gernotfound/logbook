@@ -241,10 +241,12 @@ void test('real email-proof removal requires a new epoch and denies the original
 });
 
 void test('session status fails closed for revoked, expired, superseded or disabled accounts', async () => {
+  // Backdate issuance and expiry together: issued_at+1 may still be in the
+  // future on a fast run, and the schema requires expiry > issuance.
   const scenarios = [
     ['revoked', 'UPDATE auth_sessions SET revoked_at_ms=issued_at_ms'],
-    ['idle-expired', 'UPDATE auth_sessions SET idle_expires_at_ms=issued_at_ms+1'],
-    ['absolute-expired', 'UPDATE auth_sessions SET idle_expires_at_ms=issued_at_ms+1, absolute_expires_at_ms=issued_at_ms+1'],
+    ['idle-expired', 'UPDATE auth_sessions SET issued_at_ms=issued_at_ms-60000, idle_expires_at_ms=issued_at_ms-30000'],
+    ['absolute-expired', 'UPDATE auth_sessions SET issued_at_ms=issued_at_ms-60000, idle_expires_at_ms=issued_at_ms-30000, absolute_expires_at_ms=issued_at_ms-30000'],
     ['epoch-changed', 'UPDATE auth_principals SET auth_epoch=auth_epoch+1'],
     ['owner-disabled', "UPDATE auth_principals SET status='disabled'"],
   ];
@@ -254,6 +256,11 @@ void test('session status fails closed for revoked, expired, superseded or disab
       const login = await f.login();
       assert.equal((await f.handler(f.post(SESSION, login.cookie), f.env)).status, 200, name);
       f.sqlite.exec(mutation);
+      if (name.endsWith('expired')) {
+        const expired = f.sqlite.prepare('SELECT idle_expires_at_ms,absolute_expires_at_ms FROM auth_sessions').get();
+        assert.ok(expired.idle_expires_at_ms < Date.now(), name);
+        if (name === 'absolute-expired') assert.ok(expired.absolute_expires_at_ms < Date.now(), name);
+      }
       const response = await f.handler(f.post(SESSION, login.cookie), f.env);
       assert.equal(response.status, 401, name);
       assert.deepEqual(await response.json(), { error: 'unauthorized' }, name);

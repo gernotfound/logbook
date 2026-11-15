@@ -198,7 +198,7 @@ void test('rights-only after withdrawal returns an existing ADK but cannot provi
 void test('revoked/expired/changed session or consent blocks release even with cached AuthGate claims', async () => {
   for (const sql of [
     "UPDATE auth_sessions SET revoked_at_ms=issued_at_ms WHERE uid='owner-a'",
-    "UPDATE auth_sessions SET idle_expires_at_ms=issued_at_ms+1 WHERE uid='owner-a'",
+    "UPDATE auth_sessions SET issued_at_ms=issued_at_ms-60000, idle_expires_at_ms=issued_at_ms-30000 WHERE uid='owner-a'",
     "UPDATE auth_principals SET auth_epoch=2 WHERE uid='owner-a'",
     "UPDATE auth_principals SET status='disabled' WHERE uid='owner-a'",
     "UPDATE health_consent_acceptances SET privacy_version='invalid' WHERE uid='owner-a'",
