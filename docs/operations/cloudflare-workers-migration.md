@@ -3,7 +3,35 @@
 **Classificazione: CRITICAL · stato PARZIALE / NO-GO funzionale (dominio pubblico di sviluppo autorizzato).** La fonte di verità per il codice e i test è `main` GitHub; per risorse e runtime sono i rispettivi provider. Questo documento descrive **contratti correnti e blocchi**, non lo storico di commit. [EPIC #1053](https://github.com/gernotfound/logbook/issues/1053) · [registro servizi](external-services-register.md) · [CF-09 #1063](https://github.com/gernotfound/logbook/issues/1063).
 
 
-## Prossimo incremento CF-03/05 — regressione full-schema (15/11/2026)
+## Coordinamento e prove correnti — 15/11/2026
+
+Gli aggiornamenti [Lucide #1146](https://github.com/gernotfound/logbook/pull/1146),
+[jsdom #1148](https://github.com/gernotfound/logbook/pull/1148) e
+[Zustand #1149](https://github.com/gernotfound/logbook/pull/1149) sono integrati.
+SHA, CI PR, gate main e smoke sono registrati nelle rispettive PR: non
+certificano login Kinde, API D1 o completamento della migrazione.
+
+Restano candidati **non integrati**, con review indipendente CRITICAL ancora
+richiesta: Auth/replica [#1141](https://github.com/gernotfound/logbook/pull/1141),
+builder PWA [#1143](https://github.com/gernotfound/logbook/pull/1143),
+erasure [#1152](https://github.com/gernotfound/logbook/pull/1152),
+sicurezza Stryker [#1153](https://github.com/gernotfound/logbook/pull/1153),
+fixture D1 [#1154](https://github.com/gernotfound/logbook/pull/1154) e
+trasporto ADK browser [#1155](https://github.com/gernotfound/logbook/pull/1155).
+Vite #1144 è incluso in #1143, da chiudere come assorbito soltanto dopo
+merge e verifica. La CI precedente resta una prova del proprio SHA:
+base, bump e gate dei candidati vanno riallineati quando main avanza.
+
+Il readback Cloudflare del 15/11 conferma frontend con solo `ASSETS`,
+dominio `thelogbook.me`, `workers.dev` e preview disabilitati; i due
+Worker API/Auth Gate sono privati e collegati alla stessa D1 EU, senza
+binding KEK. Le dieci migrazioni D1 sono presenti; principal, sessioni,
+ADK e job erasure sono zero, un documento e una receipt sintetici
+restano conservati. Questi controlli sono di sola lettura. I checkpoint
+esplicitamente storici sotto non descrivono il ledger corrente e non
+richiedono di ricreare token o ripetere migrazioni già riuscite.
+
+## Regressione CF-03/05 full-schema integrata (15/11/2026)
 
 **Root cause identificata nel codice:** due test di integrazione
 `cf03-kinde-http-worker.node.mjs` e
@@ -13,7 +41,7 @@ La fixture precedente poteva ammettere una registrazione replica
 dopo il solo consenso, senza mai esercitare il guard `0009` sulla
 chiave cloud effettivamente custodita.
 
-**Correzione candidata:** fixture SQLite con tutte le dieci migrazioni,
+**Correzione integrata con [PR #1139](https://github.com/gernotfound/logbook/pull/1139):** fixture SQLite con tutte le dieci migrazioni,
 test di rifiuto della replica prima dell'ADK e nessuna mutazione
 SQL/ACK, rilascio chiave tramite percorso HTTP trusted, successiva
 registrazione riuscita, separazione dei due proprietari e revoca
@@ -22,6 +50,9 @@ test storici che verificano deliberatamente una specifica versione
 di migrazione restano separati e non vengono riscritti come
 baseline corrente. Sono regressioni di integrazione **sintetiche**,
 non attestazioni del provider Kinde o del runtime Worker reale.
+La precisione del contratto HTTP e i fence concorrenti sono ulteriori
+interventi nella PR #1141, ancora non integrata; le altre otto suite
+runtime sono oggetto della PR #1154.
 
 ## D1 isolata aggiornata — 10/10 migrazioni verificate (15/11/2026)
 
@@ -201,10 +232,10 @@ operazioni su account reali, OAuth Production, DNS o GO sanitario.
 
 | Componente | Stato osservato | Prova ancora mancante |
 |---|---|---|
-| GitHub | Nove PR integrate su `main f10dd7089` v2.442.0; Main Release Gate e CodeQL SUCCESS ([run #43658661516](https://github.com/gernotfound/logbook/actions/runs/43658661516)) | La CI non prova login Kinde o API live |
-| Static Assets | Provider letto 14/11: `thelogbook-frontend` su `thelogbook.me`, TLS, solo `ASSETS`, `workers.dev`/preview disabilitati. [Smoke #43658905338](https://github.com/gernotfound/logbook/actions/runs/43658905338) SUCCESS sullo SHA esatto `f10dd7089` (v2.442.0). | Installazione/update Safari iOS, comportamento guest, rollback e Auth cloud separata |
-| D1 | Ultimo readback provider 14/11: sandbox `thelogbook-cf02-eu-isolated-20261113`, `jurisdiction=eu`, ledger `0001`–`0008`. SQL `0009/0010` ora in `main` e testato in SQLite sintetico, **non verificato come applicato alla D1 remota**. | Migrazioni/provider reali, recupero, quote/CPU e protezione anti-resurrection |
-| Workers API/Auth | Provider letto 14/11: Worker `thelogbook-api-isolated` e `thelogbook-cf03-auth-gate-isolated` privati, binding D1/`AUTH_GATE` e limiter; nessuna route pubblica. Le ultime modifiche al codice sono integrate ma non sono test Auth live. | Kinde OAuth/password/Google reale, session scope, consenso/ADK, sync e recovery HTTP |
+| GitHub | Incrementi integrati e candidati distinti nel checkpoint sopra e nell'epic #1053; prove exact-SHA nelle PR, nessuna review indipendente CRITICAL sostituita dalla sessione autrice. | Riallineamento/review dei candidati; la CI non prova login Kinde o API live |
+| Static Assets | Provider riletto 15/11: `thelogbook-frontend` su `thelogbook.me`, solo `ASSETS`, `workers.dev`/preview disabilitati. Deploy e smoke exact-SHA registrati nelle PR integrate. | Installazione/update Safari iOS, comportamento guest, rollback e Auth cloud separata |
+| D1 | Readback 15/11: sandbox `thelogbook-cf02-eu-isolated-20261113`, `jurisdiction=eu`, primaria EEUR, repliche off, ledger `0001`–`0010` applicato. Zero principal/sessioni/ADK/job; documento e receipt sintetici conservati. | Recupero, quote/CPU, custodia KEK e protezione anti-resurrection; nessun restore provato |
+| Workers API/Auth | Provider riletto 15/11: Worker `thelogbook-api-isolated` e `thelogbook-cf03-auth-gate-isolated` privati, binding D1/`AUTH_GATE` e limiter; `workers.dev`/preview off e nessun binding KEK. La presenza dei servizi non è un test Auth HTTP live. | Kinde OAuth/password/Google reale, session scope, consenso/ADK, sync e recovery HTTP |
 | Kinde | Business `thelogbook.kinde.com` in regione `Europe - Ireland` secondo schermate; selezionati metodi Email e Google nell'onboarding | Applicazione OAuth, codice autorizzazione + PKCE/state/nonce monouso, password, email, claim reali, retention e antiabuso |
 | DNS e provider legacy | Il DNS web dell'apice serve il Worker tramite record Cloudflare originless proxied; record MX/DKIM/DMARC IONOS invariati nel controllo provider del 14/11. Hosting Firebase disabilitato secondo proprietario, Vercel `logbook` sospeso secondo precedente verifica. | HTTPS smoke della release esatta, browser guest/PWA; API e codice legacy da sostituire e verificare separatamente |
 
@@ -243,7 +274,7 @@ Il codice candidato espone `commit/status` sotto AuthGate e CSRF di sessione. Un
 
 **Replica (CF-01/02/04):** `cloudflare/api/worker.mjs`, `d1-document-store.mjs` e `replica-maintenance.mjs` definiscono il trasporto D1 con SQL CAS, session/consent fence e receipt. `cloudReplicaDurableDelivery.ts` e i moduli contigui persistono il batch ciphertext e il prefisso journal in IndexedDB **prima** della rete; una ricevuta originale verificata autorizza solo l'ACK di quel prefisso, mai un successo su timeout o stato ambiguo. È vietato esporre un'API con AuthGate sintetico o collegare D1 a `replicateJournal()` prima del percorso identità/consenso reale. [CF-04 #1058](https://github.com/gernotfound/logbook/issues/1058).
 
-**Consenso, cifratura e cancellazione (CF-05/06):** migrazioni `0003`–`0010`, custodia ADK, job e runner D-02a sono integrate. Dopo il drain bounded, una sola istruzione SQL `0010` finalizza ADK, prova terminale e job `complete` con lease valido; un ACK ambiguo richiede readback D1 primaria e `awaiting-keys` da solo non basta. Gli 8 test di finalizzazione sono passati sullo schema SQLite sintetico. Mancano applicazione D1 remota, cron, export, account Kinde, retention e restore anti-resurrection. La DEK device e la chiave cloud account rimangono indipendenti. Non promettere E2EE/zero-knowledge né recupero impossibile. [CF-05 #1059](https://github.com/gernotfound/logbook/issues/1059) · [CF-06 #1060](https://github.com/gernotfound/logbook/issues/1060).
+**Consenso, cifratura e cancellazione (CF-05/06):** migrazioni `0003`–`0010`, custodia ADK, job e runner D-02a sono integrate. Dopo il drain bounded, una sola istruzione SQL `0010` finalizza ADK, prova terminale e job `complete` con lease valido; un ACK ambiguo richiede readback D1 primaria e `awaiting-keys` da solo non basta. Gli 8 test di finalizzazione sono passati sullo schema SQLite sintetico. Lo schema è applicato sulla D1 isolata; mancano esecuzione trusted end-to-end dei job, cron, export, account Kinde, retention e restore anti-resurrection. La DEK device e la chiave cloud account rimangono indipendenti. Non promettere E2EE/zero-knowledge né recupero impossibile. [CF-05 #1059](https://github.com/gernotfound/logbook/issues/1059) · [CF-06 #1060](https://github.com/gernotfound/logbook/issues/1060).
 
 **Sicurezza perimetrale (CF-07):** il candidato `cloudflare/api/worker.mjs` applica budget JSON **per route**, prima del parsing: `control` 128 B, `read` 512 B, `scan` e `receipt` 256 B, membership `claim/retire/status` 4 KiB; il commit mantiene il budget di otto documenti cifrati (~7,6 MB). Lo stream viene limitato anche senza `Content-Length`; URL di sync con query non sono alias validi. Questi limiti sono verificati su fixture HTTP/SQLite e **non dimostrano ancora** CPU/abuso su Workers Free. Turnstile, quando usato, deve avere Siteverify server-side con hostname/action e token monouso; Cloudflare WAF non protegge automaticamente gli endpoint hosted Kinde. Limitare richieste, CPU, query e abuso di email/login; verificare anche accessi diretti tramite `workers.dev`, version/preview e custom domain. Un limite Free o un errore del provider devono fallire in sicurezza senza perdere journal o concedere ACK fittizi. [CF-07 #1061](https://github.com/gernotfound/logbook/issues/1061).
 
@@ -332,7 +363,7 @@ mai nuova emissione. Risposta in formato compatibile con
 Test integrati in M7 su SQLite sintetica con API e AuthGate autentici.
 
 **Non attivo in rete:** `cloudflare/wrangler.jsonc` non espone
-queste route né contiene binding D1/KEK. Le migrazioni 0001–0008 sono state installate **solo nella sandbox D1 EU**;
+queste route né contiene binding D1/KEK. Le migrazioni 0001–0010 sono installate **solo nella sandbox D1 EU** (readback 15/11);
 non sono stati configurati segreti KEK né collaudata la route;
  servono ancora custodia e
 recupero KEK indipendenti, completo contratto erasure/rights, consenso
@@ -385,7 +416,7 @@ pubbliche e gate assente); non presenta la sola CI come prova di schema.
 
 ### CF-03 — test verticale Kinde → consenso → D1 (solo sintetico)
 
-La suite `tests/cloudflare/cf03-kinde-http-worker.node.mjs` attraversa insieme i **moduli reali** di callback OAuth, emissione cookie sessione, AuthGate, primo consenso e replica D1. Applica lo schema `0001`–`0008` a SQLite e usa token RS256 firmati localmente, mai credenziali del provider. Verifica rifiuto prima del consenso, CSRF, accettazione esplicita, iscrizione della replica, isolamento di due owner, revoca con job ancora `pending` e logout con revoca sessione. La registrazione della replica **non** attesta cifratura AEAD, commit documenti, ACK o restore.
+La suite `tests/cloudflare/cf03-kinde-http-worker.node.mjs` attraversa insieme i **moduli reali** di callback OAuth, emissione cookie sessione, AuthGate, primo consenso e replica D1. Applica lo schema `0001`–`0010` a SQLite e usa token RS256 firmati localmente, mai credenziali del provider. Verifica rifiuto prima del consenso, CSRF, accettazione esplicita, accesso ADK prima dell'iscrizione della replica, isolamento di due owner, revoca con job ancora `pending` e logout con revoca sessione. La registrazione della replica **non** attesta cifratura AEAD, commit documenti, ACK o restore.
 
 Questo è un test **Node/SQLite sintetico**, non un collaudo HTTP del Worker live, una prova Kinde reale, email/password/Google, Safari, sincronizzazione cross-device o recupero dei dati. Il candidato HTTP Kinde resta **non pubblicato**; gli URL e secret provider devono essere riletti e verificati prima della pubblicazione. CI/SHA e limitazioni sono tracciati in [CF-03 #1057](https://github.com/gernotfound/logbook/issues/1057).
 
