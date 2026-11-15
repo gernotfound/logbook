@@ -44,11 +44,11 @@ Cloudflare readback su D1 sandbox conferma `eu`, primaria `EEUR`,
 repliche lettura disabilitate e tutte le otto migrazioni applicate.
 Nessun principal, sessione o OAuth attempt reale; vecchie fixture cifrate
 preservate. Time Travel bookmark acquisito, restore non eseguito,
-`PRAGMA integrity_check` non autorizzato nell'API REST. Al primo checkpoint, prima del deploy privato,
-della PR e al suo readback il provider registrava **solo** il Worker
-`thelogbook-frontend` (binding `ASSETS`), senza API Worker. Le nuove
-configurazioni private di Auth Gate e API non aggiungono route DNS o
-pubbliche. Non dichiarare completato login, sessioni, consenso o sync.
+`PRAGMA integrity_check` non autorizzato nell'API REST. Al checkpoint iniziale, prima del deploy privato della PR #1117, il
+provider registrava soltanto `thelogbook-frontend` (binding `ASSETS`).
+La successiva verifica provider del 14/11 ha confermato anche i due
+Worker API/Auth Gate privati, senza alcuna route pubblica. Non dichiarare
+completato login, sessioni, consenso o sincronizzazione.
 
 ### CF-02 — verifica provider Workers API e permessi minimi (14/11/2026)
 
