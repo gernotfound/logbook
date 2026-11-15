@@ -1,7 +1,7 @@
 {
   "name": "logbook",
   "private": true,
-  "version": "2.452.0",
+  "version": "2.453.0",
   "type": "module",
   "packageManager": "npm@11.21.0",
   "engines": {
@@ -76,7 +76,7 @@
     "fuse.js": "^7.5.0",
     "idb-keyval": "^6.3.0",
     "jose": "5.10.0",
-    "lucide-react": "^1.69.0",
+    "lucide-react": "^1.72.0",
     "react": "^19.3.1",
     "react-chartjs-2": "^5.3.1",
     "react-dom": "^19.3.1",
