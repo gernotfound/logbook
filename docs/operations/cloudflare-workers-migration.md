@@ -3,7 +3,15 @@
 **Classificazione: CRITICAL · stato PARZIALE / NO-GO funzionale (dominio pubblico di sviluppo autorizzato).** La fonte di verità per il codice e i test è `main` GitHub; per risorse e runtime sono i rispettivi provider. Questo documento descrive **contratti correnti e blocchi**, non lo storico di commit. [EPIC #1053](https://github.com/gernotfound/logbook/issues/1053) · [registro servizi](external-services-register.md) · [CF-09 #1063](https://github.com/gernotfound/logbook/issues/1063).
 
 
-## Checkpoint corrente — v2.473.0, 15/11/2026
+## Ricognizione del 16/11/2026 — baseline GitHub v2.474.0
+
+**GitHub:** `main` `519f80c077b8ca40e8f3630ea4f110ffb342e012` (`2.474.0`). La [PR #1168](https://github.com/gernotfound/logbook/pull/1168) ha aggiornato documentazione e versione, **senza attivare il percorso Kinde/D1**. Riletti direttamente i workflow [Main Release Gate/CodeQL #43771473060](https://github.com/gernotfound/logbook/actions/runs/43771473060), [Firestore #43771679958](https://github.com/gernotfound/logbook/actions/runs/43771679958) e [Static Assets/smoke #43771707785](https://github.com/gernotfound/logbook/actions/runs/43771707785): tutti `success` per il medesimo SHA. I gate non equivalgono a prove di login, sincronizzazione o erasure.
+
+**Cloudflare (readback 16/11, sola lettura):** Worker `thelogbook-frontend` attivo, con solo binding `ASSETS`; `thelogbook-api-isolated` conserva il binding `DB` alla D1 sintetica EU e il service binding `AUTH_GATE` verso `thelogbook-cf03-auth-gate-isolated`; quest'ultimo ha `DB` e rate limiter. Su tutti e tre i Worker `workers.dev` e preview sono disabilitati, con deployment al 100% delle rispettive versioni. La D1 `thelogbook-cf02-eu-isolated-20261113` espone `jurisdiction=eu`; **in questa ricognizione non sono stati interrogati schema, ledger SQL, dati o query runtime**. Il Worker `thelogbook-cf03-kinde-http-isolated` non compare nell'inventario degli script distribuiti. Non sono stati letti né modificati valori di secret.
+
+**Conseguenza:** il confine HTTP Kinde non è distribuito; il frontend resta statico e l'applicazione pubblica non è ancora passata ad Auth/consenso/chiavi/Sync Workers+D1. **CF-03/04/05 e CF-09 restano PARZIALI / NO-GO funzionale.** Per un GO servono ancora validazione del provider Kinde (incluso minimo 15 caratteri nel reset), callback, secret e KEK, integrazione client, test autenticati con fixture isolate, quote/abuso, privacy e recovery. Non distribuire su Production API sanitarie o eseguire cambi DNS/OAuth/posta/billing per il solo fatto che questa nota è stata aggiornata.
+
+## Checkpoint storico — v2.473.0, 15/11/2026
 
 **GitHub `main` verificata:** `2702a5898004451028201d872112e58a5a800ab0`, v2.473.0. Il precedente checkpoint v2.464.0 riportato sotto è storico, non il codice corrente.
 
