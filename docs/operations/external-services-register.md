@@ -3,6 +3,18 @@
 **Classificazione: CRITICAL.** Questo registro contiene **soltanto servizi necessari, ancora presenti nel codice oppure da validare prima del GO**. La storia delle configurazioni superate rimane nella cronologia Git e nelle PR. GitHub prova SHA e verifiche; i provider provano le rispettive risorse e il runtime. Un riscontro datato non autorizza cambi Production.
 
 
+## Checkpoint B-03 post-merge verificato — 15/11/2026
+
+La [PR #1135](https://github.com/gernotfound/logbook/pull/1135) è stata
+squash-merged in `main ed31c42af38e065dd448308e6c7d546ae80978e6` (v2.444.0). CI PR [#43662166211](https://github.com/gernotfound/logbook/actions/runs/43662166211), [Main Release Gate/CodeQL #43696757160](https://github.com/gernotfound/logbook/actions/runs/43696757160), [Worker API e Auth Gate privati #43696757245](https://github.com/gernotfound/logbook/actions/runs/43696757245), [Firestore #43696941939](https://github.com/gernotfound/logbook/actions/runs/43696941939) e [Cloudflare Static Assets/smoke #43696964223](https://github.com/gernotfound/logbook/actions/runs/43696964223) tutti **SUCCESS** sull'esatto SHA. Firestore non ha effettuato scritture: Rules e indici erano già convergenti.
+
+La D1 sintetica EU resta al ledger remoto `0001`–`0008` (otto su dieci),
+verificato direttamente dopo il merge: non sono presenti identità, sessioni,
+chiavi cloud o job reali. Il workflow di migrazione D1 isolata è disponibile
+soltanto per dispatch manuale dopo preflight/CI, ma non eseguito; richiede
+`CLOUDFLARE_D1_API_TOKEN` separato in GitHub Secrets. Non è stato autorizzato
+il GO funzionale dei Worker, della sincronizzazione o di OAuth/posta Production.
+
 ## Verifica provider Cloudflare — 15/11/2026 · schema isolato
 
 Readback diretto del provider: la D1 isolata ha giurisdizione `eu`,
@@ -14,7 +26,7 @@ erasure. API e Auth Gate Workers sono privati, entrambi legati a questa
 D1, senza workers.dev né preview, e non sono pubblicati agli utenti.
 Il frontend su `thelogbook.me` rimane un percorso distinto.
 
-Un workflow main-only ad attivazione manuale prepara l'applicazione delle
+Il workflow main-only integrato in PR #1135 attende l'attivazione manuale per l'applicazione delle
 migrazioni `0009`/`0010` con Wrangler ufficiale, backup, allowlist
 SQL, preflight dell'identità e post-readback del ledger. **Non è stato
 ancora eseguito**. È necessario un secret GitHub separato
@@ -23,7 +35,7 @@ ampliare il token Workers già esistente. Nessuna modifica a DNS, OAuth,
 Cloudflare pubblica o dati Production; nessun GO Auth/Sync/erasure/restore.
 Conservare il checkpoint storico del 14/11 come tale.
 
-## Checkpoint GitHub — 15/11/2026
+## Checkpoint GitHub storico precedente al merge B-03 — 15/11/2026
 
 `main f10dd7089a4633096869faf88482250fe26b8edc` (v2.442.0): nove PR #1125–#1133 squash-merged, zero PR aperte al checkpoint; [Main Release Gate/CodeQL #43658661516](https://github.com/gernotfound/logbook/actions/runs/43658661516), [Firestore #43658877933](https://github.com/gernotfound/logbook/actions/runs/43658877933) e [Cloudflare Static Assets #43658905338](https://github.com/gernotfound/logbook/actions/runs/43658905338) sono SUCCESS sull'esatto SHA. Firestore non ha richiesto modifiche a Rules o indici; il frontend ha superato lo smoke. Le attestazioni provider D1/Workers sotto sono del **14/11**, non nuove letture: `0009/0010` integrate su GitHub **non equivalgono a migrations applicate** sulla D1 remota.
 

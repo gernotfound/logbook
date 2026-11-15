@@ -3,6 +3,20 @@
 **Classificazione: CRITICAL · stato PARZIALE / NO-GO funzionale (dominio pubblico di sviluppo autorizzato).** La fonte di verità per il codice e i test è `main` GitHub; per risorse e runtime sono i rispettivi provider. Questo documento descrive **contratti correnti e blocchi**, non lo storico di commit. [EPIC #1053](https://github.com/gernotfound/logbook/issues/1053) · [registro servizi](external-services-register.md) · [CF-09 #1063](https://github.com/gernotfound/logbook/issues/1063).
 
 
+## Checkpoint B-03 post-merge verificato — 15/11/2026
+
+La [PR #1135](https://github.com/gernotfound/logbook/pull/1135) è stata integrata
+con squash in `main ed31c42af38e065dd448308e6c7d546ae80978e6` (v2.444.0). CI PR [#43662166211](https://github.com/gernotfound/logbook/actions/runs/43662166211), [Main Release Gate/CodeQL #43696757160](https://github.com/gernotfound/logbook/actions/runs/43696757160), [Worker API e Auth Gate privati #43696757245](https://github.com/gernotfound/logbook/actions/runs/43696757245), [Firestore #43696941939](https://github.com/gernotfound/logbook/actions/runs/43696941939) e [Cloudflare Static Assets/smoke #43696964223](https://github.com/gernotfound/logbook/actions/runs/43696964223) tutti **SUCCESS** sull'esatto SHA. Firestore non ha effettuato scritture: Rules e indici erano già convergenti.
+
+La verifica diretta D1 successiva al merge conferma ancora **otto migrazioni
+applicate su dieci** (`0001`–`0008`), giurisdizione EU, repliche disabilitate,
+bookmark Time Travel disponibile e nessun principal/sessione/ADK/job erasure.
+Il workflow manuale per `0009`/`0010` è ora presente in `main`, ma **non è
+stato eseguito**. Per avviarlo servono un token separato di minimo privilegio
+in GitHub Secrets e le verifiche preflight già implementate. Il successo dei
+deploy e della CI non prova l'applicazione delle migrazioni, né autorizza il
+GO di Auth, sync, cifratura cloud, consenso o cancellazione completa.
+
 ## Verifica provider Cloudflare — 15/11/2026 · schema isolato
 
 Readback diretto Cloudflare su D1 `thelogbook-cf02-eu-isolated-20261113`:
@@ -17,7 +31,7 @@ entrambi binding verso questa D1 e URL workers.dev/preview disabilitati; il
 Worker frontend rimane separato con solo ASSETS. Il workflow Static Assets
 su `main fd6570c6` è SUCCESS, ma non prova la migrazione API.
 
-**Incremento B-03 in preparazione:** workflow manuale **solo su main**
+**Incremento B-03 integrato (PR #1135; workflow ancora non eseguito):** workflow manuale **solo su main**
 `.github/workflows/cloudflare-d1-isolated-migrations.yml`, con guard
 sull'esatto SHA di main già verificato, identità D1, schema in allowlist,
 assenza di account veri, disponibilità Time Travel, applicazione ufficiale
@@ -28,7 +42,7 @@ deve essere ampliato. **Finché il workflow non viene eseguito e verificato,
 D1 resta 0008/0010.** Non sono autorizzate route API pubbliche,
 operazioni su account reali, OAuth Production, DNS o GO sanitario.
 
-## Checkpoint integrazione e pubblicazione — 15/11/2026
+## Checkpoint storico precedente al merge B-03 — 15/11/2026
 
 **HEAD verificato GitHub:** `f10dd7089a4633096869faf88482250fe26b8edc` (v2.442.0). Tutte le nove PR #1125–#1133 sono squash-merged, con **zero PR aperte** al checkpoint: C-02 (split test UI WebKit), B-01 (`0009` fence ADK/replica), B-02 (`0010` finalizzazione erasure atomica), A-06 (prova identità OIDC separata dal login verificato), A-04 (`emailVerified` attendibile), D-01 (UID consenso e diritti), A-01 (UID client), D-02a (runner con lease e proof primaria), C-01 (regressioni IDB journal/receipt). Sul candidato D-02a gli **otto test full-schema del finalizzatore** sono stati eseguiti, zero skip.
 
