@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { readFileSync } from 'node:fs';
+import { applyCurrentD1Schema } from './current-d1-schema.mjs';
 import { DatabaseSync } from 'node:sqlite';
 import { createLocalJWKSet, exportJWK, generateKeyPair, SignJWT } from 'jose';
 import { createKindeIdentityProofVerifier, createKindeLoginProofVerifier } from '../../cloudflare/auth/kinde-login-proof.mjs';
@@ -216,9 +216,7 @@ void test('Kinde ID proof rejects misconfigured audience and invalid nonce origi
 function principalDb() {
   const sqlite = new DatabaseSync(':memory:');
   sqlite.exec('PRAGMA foreign_keys=ON');
-  sqlite.exec(readFileSync(new URL(
-    '../../cloudflare/api/migrations/0003_auth_session_gate.sql', import.meta.url,
-  ), 'utf8'));
+  applyCurrentD1Schema(sqlite);
   const db = {
     withSession(mode) {
       assert.equal(mode, 'first-primary');

@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { applyCurrentD1Schema } from './current-d1-schema.mjs';
 import { test } from 'node:test';
 import { DatabaseSync } from 'node:sqlite';
 import consent from '../../cloudflare/api/consent-worker.mjs';
@@ -45,13 +45,7 @@ class D1SqliteAdapter {
 async function fixture(uid = 'owner-a') {
   const sqlite = new DatabaseSync(':memory:');
   sqlite.exec('PRAGMA foreign_keys=ON');
-  for (const name of ['0001_encrypted_replica.sql', '0002_reject_reused_replica_ids.sql',
-    '0003_auth_session_gate.sql',
-        // Consent and withdrawal depend on the trusted Auth principal schema.
-        '0004_initial_consent.sql', '0005_health_withdrawal_queue.sql',
-    '0006_health_erasure_progress.sql']) {
-    sqlite.exec(readFileSync(new URL('../../cloudflare/api/migrations/' + name, import.meta.url), 'utf8'));
-  }
+  applyCurrentD1Schema(sqlite);
   const db = new D1SqliteAdapter(sqlite);
   sqlite.prepare('INSERT INTO auth_principals(uid,status,verified_at_ms,auth_epoch) VALUES (?, ?, ?, ?)')
     .run(uid, 'active', Date.now() - 60000, 1);

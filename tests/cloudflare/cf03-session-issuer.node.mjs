@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { applyCurrentD1Schema } from './current-d1-schema.mjs';
 import { test } from 'node:test';
 import { DatabaseSync } from 'node:sqlite';
 import { issueVerifiedSession, SessionIssuanceError } from '../../cloudflare/auth/session-issuer.mjs';
@@ -10,13 +10,7 @@ const ORIGIN = 'https://candidate.example.invalid';
 function fixture() {
   const sqlite = new DatabaseSync(':memory:');
   sqlite.exec('PRAGMA foreign_keys=ON');
-  for (const name of [
-    '0001_encrypted_replica.sql', '0002_reject_reused_replica_ids.sql', '0003_auth_session_gate.sql',
-        // Initial consent depends on the Auth principal schema.
-        '0004_initial_consent.sql',
-  ]) {
-    sqlite.exec(readFileSync(new URL('../../cloudflare/api/migrations/' + name, import.meta.url), 'utf8'));
-  }
+  applyCurrentD1Schema(sqlite);
   const db = {
     prepare(sql) {
       return {
