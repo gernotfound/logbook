@@ -48,7 +48,7 @@ function assertCurrent(stillCurrent: () => boolean): void {
     }
 }
 
-async function readBoundedJson(response: Response): Promise<unknown> {
+export async function readKindeCandidateJson(response: Response): Promise<unknown> {
     const declared = response.headers.get('content-length');
     if (!/^application\/json(?:\s*;|$)/i.test(response.headers.get('content-type') ?? '')
         || !/\bno-store\b/i.test(response.headers.get('cache-control') ?? '')
@@ -110,7 +110,7 @@ async function post(
     if (response.redirected || response.type === 'opaqueredirect' || response.type === 'opaque'
         || response.type === 'error') throw new KindeCandidateBoundaryError();
     if (response.status === 401) {
-        const denied = await readBoundedJson(response);
+        const denied = await readKindeCandidateJson(response);
         assertCurrent(stillCurrent);
         if (!record(denied) || !exactKeys(denied, ['error'])
             || denied.error !== 'unauthorized') {
@@ -119,7 +119,7 @@ async function post(
         return { unauthorized: true };
     }
     if (response.status !== 200) throw new KindeCandidateBoundaryError(response.status);
-    const body = await readBoundedJson(response);
+    const body = await readKindeCandidateJson(response);
     assertCurrent(stillCurrent);
     return { unauthorized: false, body };
 }
@@ -319,7 +319,7 @@ export async function revokeKindeCandidateSession({
         || response.type === 'error' || response.status !== 200) {
         throw new KindeCandidateBoundaryError(response.status);
     }
-    const revoked = await readBoundedJson(response);
+    const revoked = await readKindeCandidateJson(response);
     assertCurrent(stillCurrent);
     if (!record(revoked) || !exactKeys(revoked, ['status'])
         || revoked.status !== 'signed-out') throw new KindeCandidateBoundaryError();
