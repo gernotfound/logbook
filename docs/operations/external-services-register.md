@@ -11,6 +11,8 @@ Il repository è su `c2ebcbc670c2807f5927f632089dcdc86fa397f6`. [Main/CodeQL](ht
 
 **Kinde è VERIFY-LIVE / non operativo nell'app:** l'issuer ed il client backend reali, redirect registrati, policy password ≥15, Google, verifica/reset email, quota e disponibilità di secret non sono verificabili dal readback Cloudflare; servono attestazioni del tenant Kinde. Il Worker HTTP candidato richiede `/api/auth/kinde/callback`; nessuna azione su callback, OAuth, DNS, secrets o Kinde Production è stata effettuata in questo checkpoint. L'attivazione sicura e i test sono descritti nel [runbook](cloudflare-workers-migration.md) e nel [setup Kinde](kinde-auth-setup.md).
 
+**Nuova configurazione candidata, non distribuita:** `cloudflare/auth/wrangler.kinde.isolated.jsonc` definisce il futuro Worker HTTP Kinde privato e senza secret nel repo. La CI esegue controlli di isolamento e un dry-run; il provider non è stato modificato per questa configurazione e non va conteggiato come terzo Worker attivo.
+
 ## D1 EU isolata — schema remoto 10/10 verificato (15/11/2026)
 
 **Readback ripetuto il 15/11, dopo gli incrementi di manutenzione:**

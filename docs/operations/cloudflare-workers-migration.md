@@ -22,6 +22,10 @@ Sul nuovo `main`: [Main Release Gate/CodeQL](https://github.com/gernotfound/logb
 
 **Stato:** PARZIALE / NO-GO funzionale. L'audit approfondito delle prestazioni resta deliberatamente post-migrazione [#1123](https://github.com/gernotfound/logbook/issues/1123), senza rinunciare ai controlli minimi di quota e sicurezza necessari prima del GO.
 
+### Preflight Kinde HTTP senza attivazione (incremento CF-03)
+
+`cloudflare/auth/wrangler.kinde.isolated.jsonc` è una configurazione **candidata**, non una nuova risorsa dichiarata attiva: Worker `thelogbook-cf03-kinde-http-isolated`, `workers_dev=false`, preview disabilitate, D1 EU isolata, `AUTH_GATE` privato e limiter OAuth. La configurazione contiene solo `APP_ORIGIN` come variabile pubblica; issuer, client ID, audience, client secret e KEK devono essere verificati e configurati esclusivamente sul server dopo autorizzazione specifica. Non esistono route Kinde nel frontend. Il controllo `validateIsolatedKindeCandidate()` rifiuta esposizione di route, alterazione DB/Auth Gate, segreti in `vars` o attivazione anticipata del frontend; test Node e compilazione Wrangler `--dry-run` sono integrati nel gate privato. **Il dry-run non effettua deployment né collaudo OAuth reale.** L'eventuale nuovo Worker Kinde richiede una pipeline di deploy separata, binding verificati, test e GO.
+
 ## CF-03/04 — precondizione ADK e lettura candidata Kinde (15/11/2026)
 
 La verifica **retrospettiva** della PR #1139 (annotata nella sua

@@ -17,6 +17,8 @@ Il codice candidato HTTP Kinde è presente in `cloudflare/auth/kinde-http-worker
 
 **Stato: provider configurato nell'interfaccia, CRITICAL, autenticazione applicativa NON OPERATIVA.** Questa è la fonte corrente per i passaggi di configurazione **Kinde** osservati o da verificare, distinta dal runtime Cloudflare. Evidenze dalle schermate del proprietario fornite nella chat del 14/11/2026 e dalla [documentazione ufficiale Kinde per SPA con API](https://docs.kinde.com/build/applications/authenticating-spa/); nessun accesso amministrativo diretto al tenant Kinde da parte dell'agente. La configurazione reale va riletta nel provider prima di procedere al GO.
 
+**Preflight codice candidato:** `cloudflare/auth/wrangler.kinde.isolated.jsonc` aggiunge una configurazione non pubblica e senza credenziali; il gate CI ne verifica D1, service binding, limiter, assenza di routes e compilazione senza deploy. Le variabili provider necessarie rimangono NON configurate in questo candidato e non consentono una login reale.
+
 ## Checkpoint del codice — 15/11/2026
 
 Su `main f10dd7089a4633096869faf88482250fe26b8edc` (v2.442.0) sono integrate A-06 #1133 (identity proof OIDC senza abilitare login ordinario non verificato), A-04 #1129 (stato `emailVerified` trusted), D-01 #1128 (UID consenso/diritti ADK) e A-01 #1125 (UID client verificato). CI JWT/SQLite e gate candidati verdi. **Non è un nuovo login rights-only:** una revoca effettiva della verifica email aumenta l'epoch e invalida la sessione precedente; un accesso rights-only futuro richiede nuova attestazione Kinde e scope persistente che non possa acquisire fitness automaticamente. Il modulo OAuth resta candidato non pubblicato e la configurazione tenant va riletta prima di modificarla.
