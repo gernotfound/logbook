@@ -4,8 +4,8 @@ This is a candidate API, **not an enabled production route**. The existing
 Firebase/Firestore writer, IndexedDB journal and encrypted vault remain active.
 
 - Schema: migrations/0001_encrypted_replica.sql through
-  migrations/0010_atomic_health_erasure_finalization.sql; only 0001–0008 have remote
-  isolated D1 schema readback evidence (14/11/2026). Local-only rollback is **destructive,
+  migrations/0010_atomic_health_erasure_finalization.sql; all 0001–0010 have remote
+  isolated D1 schema readback evidence (15/11/2026). Local-only rollback is **destructive,
   disposable-only** rollback in rollback/ (never apply it to user data).
 - Local-only Wrangler configuration: wrangler.local.jsonc; placeholder database
   ID, workers.dev and preview URLs disabled, no domain route or public fixture.
@@ -18,7 +18,7 @@ Firebase/Firestore writer, IndexedDB journal and encrypted vault remain active.
   5 triggers). Synthetic CAS and consent-regression requests were rejected,
   and a late failed statement rolled back an earlier receipt insert. This
   proves SQL behavior on remote D1, NOT HTTP Worker/Auth, quota or runtime.
-- **B-01 (merged to main, not applied to remote D1 at 15/11 readback):** migration 0009 adds a shared
+- **B-01 (merged to main, applied to isolated EU D1 on 15/11):** migration 0009 adds a shared
   active-owner/key grant and SQL fences for receipt insertion, replica mutation,
   direct document/replica writes and control revision advances. A valid grant
   needs an actual wrapped ADK row and an issuance marker matching uid, consent
@@ -32,7 +32,7 @@ Firebase/Firestore writer, IndexedDB journal and encrypted vault remain active.
   separate authorized remediation, not an automatic reset. SQLite regression
   coverage uses all migrations, but neither real D1 enforcement nor authenticated
   end-to-end browser integration is certified by that test.
-- **B-02 (merged to main, no D1 remote migration at 15/11 readback):** 0010
+- **B-02 (merged to main, applied to isolated EU D1 on 15/11):** 0010
   introduces an immutable owner-scoped `health_erasure_finalizations` terminal
   receipt, `health_erasure_jobs.completed_at_ms`,
   `health_erasure_jobs.erased_before_revision`,
@@ -226,7 +226,41 @@ its local database command. The node:test suite uses a transactional SQLite
 adapter and is not evidence of remote D1 performance, IAM or quota.
 
 
-## Isolated schema migration operations (merged; awaiting execution on 15 November 2026)
+## Isolated EU D1 remote migrations verified — 15 November 2026
+
+The [manual main-only run #43702489692](https://github.com/gernotfound/logbook/actions/runs/43702489692)
+completed **SUCCESS** on `main 5ca7afaca94e4431e298595eecdd2a023546fd21`
+(v2.446.0), applying migrations `0009` and `0010` via
+Wrangler. Independent Cloudflare readback verified **all 10
+ordered migration ledger rows**, EU jurisdiction, disabled
+read replication, Time Travel bookmark, the
+`sync_writable_cloud_key` view, `health_erasure_finalizations`
+table, receipt/key and erasure triggers, and finalization
+columns. There were no real principals, sessions, cloud
+keys or erasure jobs, and the one synthetic ciphertext
+document and receipt were preserved. No Firebase data
+was imported.
+
+This establishes **only the isolated D1 schema milestone**.
+The dedicated GitHub token was accessible and authorized
+sufficiently for this run; exact IAM scope/expiry were not
+independently inspected. There was no backup restore test,
+authenticated Kinde HTTP test, KEK recovery, consent, sync,
+erasure or production GO. Keep public Auth/Sync routes disabled.
+
+## Isolated schema migration operations (historical checkpoint before manual run)
+
+**Credential checkpoint, 15 November:** the product owner reports creating a
+dedicated Cloudflare D1 API token and adding it to GitHub repository Actions
+secrets as `CLOUDFLARE_D1_API_TOKEN`. The secret value was not shared.
+Its effective permissions, scope, expiry, GitHub Actions availability and the
+`CLOUDFLARE_ACCOUNT_ID` variable are not independently verified.
+A separate Cloudflare readback still reports **8 of 10** migrations on
+the EU isolated D1. No manual migration workflow run has been observed.
+Token provisioning is not migration execution; the existing manual,
+main-only Wrangler workflow must still pass its preflight and post-readback.
+
+
 
 **Live readback 15 November, after main v2.445.0:** the EU synthetic D1 still
 has only migration IDs 1–8, while the `0009` view and `0010` table/trigger
@@ -633,7 +667,7 @@ revocation and unavailable KEK/D1/rate gate. It runs in the M7 gate.
 
 **NO-GO:** these routes are not mounted on the live Static Assets Worker,
 and no KEK secret or D1 binding has been created there. The local Wrangler config remains synthetic; the isolated D1 now has
-schema 0001–0008, but the private API bindings and real HTTP runtime remain
+schema 0001–0010, but the private API bindings and real HTTP runtime remain
 unverified until the post-main Cloudflare deployment and provider readback. Do not expose or deploy this key endpoint before complete
 Kinde/consent/device journal/rights+erasure, secret custody/recovery,
 quota/WAF and Safari verification.
