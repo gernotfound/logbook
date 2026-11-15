@@ -3,33 +3,24 @@
 **Classificazione: CRITICAL · stato PARZIALE / NO-GO funzionale (dominio pubblico di sviluppo autorizzato).** La fonte di verità per il codice e i test è `main` GitHub; per risorse e runtime sono i rispettivi provider. Questo documento descrive **contratti correnti e blocchi**, non lo storico di commit. [EPIC #1053](https://github.com/gernotfound/logbook/issues/1053) · [registro servizi](external-services-register.md) · [CF-09 #1063](https://github.com/gernotfound/logbook/issues/1063).
 
 
-## Coordinamento e prove correnti — 15/11/2026
+## Coordinamento e prove correnti — 15/11/2026 (dopo v2.462.0)
 
-Gli aggiornamenti [Lucide #1146](https://github.com/gernotfound/logbook/pull/1146),
-[jsdom #1148](https://github.com/gernotfound/logbook/pull/1148) e
-[Zustand #1149](https://github.com/gernotfound/logbook/pull/1149) sono integrati.
-SHA, CI PR, gate main e smoke sono registrati nelle rispettive PR: non
-certificano login Kinde, API D1 o completamento della migrazione.
+**Main verificata:** `c2ebcbc670c2807f5927f632089dcdc86fa397f6`, **v2.462.0**. I sei incrementi CRITICAL dell'handoff sono **integrati**, non più draft: [#1153](https://github.com/gernotfound/logbook/pull/1153) sicurezza `minimatch`, [#1154](https://github.com/gernotfound/logbook/pull/1154) fixture D1 0001–0010, [#1152](https://github.com/gernotfound/logbook/pull/1152) fairness erasure, [#1141](https://github.com/gernotfound/logbook/pull/1141) 428/UID Kinde, [#1155](https://github.com/gernotfound/logbook/pull/1155) trasporto ADK browser e [#1143](https://github.com/gernotfound/logbook/pull/1143) aggiornamento PWA/Vite. [#1144](https://github.com/gernotfound/logbook/pull/1144) risulta **chiusa senza merge** perché assorbita dall'aggiornamento Vite di #1143. Le review tecniche sono annotate sulle PR: commenti dello stesso account autore non sono approvazioni GitHub di un soggetto distinto.
 
-Restano candidati **non integrati**, con review indipendente CRITICAL ancora
-richiesta: Auth/replica [#1141](https://github.com/gernotfound/logbook/pull/1141),
-builder PWA [#1143](https://github.com/gernotfound/logbook/pull/1143),
-erasure [#1152](https://github.com/gernotfound/logbook/pull/1152),
-sicurezza Stryker [#1153](https://github.com/gernotfound/logbook/pull/1153),
-fixture D1 [#1154](https://github.com/gernotfound/logbook/pull/1154) e
-trasporto ADK browser [#1155](https://github.com/gernotfound/logbook/pull/1155).
-Vite #1144 è incluso in #1143, da chiudere come assorbito soltanto dopo
-merge e verifica. La CI precedente resta una prova del proprio SHA:
-base, bump e gate dei candidati vanno riallineati quando main avanza.
+Sul nuovo `main`: [Main Release Gate/CodeQL](https://github.com/gernotfound/logbook/actions/runs/43753851256), [Firestore](https://github.com/gernotfound/logbook/actions/runs/43754055387) e [Static Assets + smoke HTTPS](https://github.com/gernotfound/logbook/actions/runs/43754087775) sono **SUCCESS** sullo SHA esatto. Il workflow **Cloudflare Isolated D1 API** era stato verificato con esito SUCCESS sul precedente main v2.461.0 ([run #43753229314](https://github.com/gernotfound/logbook/actions/runs/43753229314)); non sostituisce un nuovo collaudo sulla release connessa né prove Kinde reali.
 
-Il readback Cloudflare del 15/11 conferma frontend con solo `ASSETS`,
-dominio `thelogbook.me`, `workers.dev` e preview disabilitati; i due
-Worker API/Auth Gate sono privati e collegati alla stessa D1 EU, senza
-binding KEK. Le dieci migrazioni D1 sono presenti; principal, sessioni,
-ADK e job erasure sono zero, un documento e una receipt sintetici
-restano conservati. Questi controlli sono di sola lettura. I checkpoint
-esplicitamente storici sotto non descrivono il ledger corrente e non
-richiedono di ricreare token o ripetere migrazioni già riuscite.
+**Readback diretto del provider Cloudflare, 15/11/2026:** `thelogbook-frontend` ha soltanto il binding `ASSETS` ed è distribuito al 100%; `thelogbook-api-isolated` e `thelogbook-cf03-auth-gate-isolated` sono privati, con binding D1 alla risorsa EU `thelogbook-cf02-eu-isolated-20261113`, service binding `AUTH_GATE` e limiter nel gate. D1 riporta `jurisdiction=eu`, read replication disabilitata. **Non** è stato osservato un binding KEK; il candidato HTTP Kinde `cloudflare/auth/kinde-http-worker.mjs` non è montato sul frontend. Il frontend ancora usa Firebase Auth/Firestore e l'helper Firebase `/__/auth/`. Non inferire login, OAuth, sync, diritti o recupero funzionanti dai deploy verdi. I conteggi D1 e il ledger 0001–0010 riportati nei checkpoint del 15/11 restano evidenza storica, non sono stati ripetuti durante questo readback.
+
+### Gate prima di attivazione e collaudo Cloudflare/Kinde
+
+1. **Confine HTTP ed identità:** predisporre routing deliberato e limitato al Kinde HTTP Worker per `POST /api/auth/kinde/start`, `GET /api/auth/kinde/callback`, `POST /api/auth/session` e `POST /api/auth/logout`, con binding privati e verifiche contro open redirect, replay, CSRF, sessioni scadute e rate limit. Il solo `auth-proxy.mjs` attuale intercetta `/__/auth/` per Firebase; non instrada queste route. Un codice candidato privo di route non è un sito autentificabile.
+2. **Provider Kinde reale:** rileggere l'applicazione Back-end web, issuer, client ID, callback/logout registrati e metodi Password + Google; verificare policy minima **15 caratteri**, email verificata/reset, trust e unicità dell'owner. Il codice costruisce **esattamente** `https://thelogbook.me/api/auth/kinde/callback`; non sostituirlo con `/auth/callback` per analogia. La callback Google→Kinde `https://thelogbook.kinde.com/login/callback` è un flusso diverso. Senza accesso amministrativo Kinde non affermare che la callback sia configurata.
+3. **Configurazione sicura server:** predisporre i binding necessari, incluso servizio privato Auth Gate, D1, limiter, client secret e KEK **solo come secret server-side**; verificare che la custodia ADK sia isolata dal vault device e che non vi siano dati salute in chiaro lato server. Non collegare un database di prova a dati reali né introdurre costi.
+4. **App e recovery:** sostituire realmente `AuthContext`/azioni Firebase con l'identità Kinde, preservando guest puramente locale, consenso salute 18+, journal IndexedDB prima della rete, ADK separata, isolamento A→B→A, sessione e revoca, import/export, cancellazione e update PWA. Adapter e fixture attuali non sostituiscono questa integrazione.
+5. **Prove verticali in sequenza:** test sintetici/CI exact-SHA e isolamento Worker; poi test controllati su provider con sole identità/dati sintetici autorizzati; verifica password, Google, verifica/reset, sessioni e cookie, consenso, cifratura, commit/ACK, offline/retry, diritti e cancellazione, Safari/iOS e quota CPU/D1. Ogni prova fallita o incerta deve essere NO-GO e non deve eliminare dati locali.
+6. **Autorizzazioni separate:** mutazioni dell'app Kinde/Google OAuth Production, configurazioni segreti/IAM Production, esposizione di route che trattano dati sanitari, DNS e GO pubblico finale richiedono il mandato specifico del product owner previsto da AGENTS. I deploy automatici del solo frontend autorizzato non estendono tale mandato.
+
+**Stato:** PARZIALE / NO-GO funzionale. L'audit approfondito delle prestazioni resta deliberatamente post-migrazione [#1123](https://github.com/gernotfound/logbook/issues/1123), senza rinunciare ai controlli minimi di quota e sicurezza necessari prima del GO.
 
 ## CF-03/04 — precondizione ADK e lettura candidata Kinde (15/11/2026)
 
