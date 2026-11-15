@@ -9,6 +9,15 @@
 
 Kinde è il provider di identità per la **nuova baseline fresh start**. Lo stack legacy Firebase descritto nelle sezioni successive documenta ancora il runtime attuale e i suoi invarianti, **non** impone di usare Firebase dopo il cutover. Nessun dato/credenziale/UID vecchio viene migrato. Il backend Worker verifica token Kinde con RS256/JWKS, `iss` e `aud` esatti, `azp` per il solo client autorizzato e scadenze brevi; un token valido **non** costituisce da solo prova di email verificata, consenso salute, o autorizzazione D1. L'identità Kinde (`iss` + `sub`) deve essere associata all'owner interno senza collisioni e verificata tramite flusso trusted prima che `session-issuer.mjs` crei una sessione. Nessun endpoint pubblico può emettere sessioni con UID forniti dal chiamante. Il candidato interno `cloudflare/auth/kinde-principal-provisioner.mjs` deriva un owner ID `k_` dal digest SHA-256 separato per dominio di `issuer + subject` **solo dopo** verifica OIDC con email verificata e nonce dal callback trusted. Il primo insert in D1 è idempotente e una read primaria valida lo stato; login successivi non riattivano owner disabled/deleted e non reimpostano `auth_epoch`. La derivazione non è una chiave cifrante né una prova di sessione. Il candidato HTTP `kinde-oauth-flow.mjs` già consuma state e PKCE monouso, verifica nonce e token firmati e crea la sessione D1; `kinde-http-worker.mjs` non è collegato al frontend o pubblicato. Il percorso con il provider Kinde reale, la gestione completa di revoca/email cambiata e il login browser restano da implementare o verificare. Revoca/erasure aggiornano il fence applicativo in D1 e impediscono subito accesso, indipendentemente dalla vita residua degli access token Kinde. Login, reset, signup e cambio password devono rispettare minimo 15 caratteri tramite workflow `NewPasswordProvided`, collaudato anche dopo reset. Google, emailVerified, guest→account, Safari/PWA, anti-replay, multi-tab/device e cancellazione account sono gate; audit dei test prima di ritirare i flussi Firebase.
 
+Il candidato `acceptKindeCandidateInitialConsent()` raccoglie la decisione esplicita
+(maggiore età, Termini e dati salute), invia solo il formato Server-D1 corrente
+e richiede una successiva lettura autorevole di sessione e consenso con UID,
+epoca e versioni legali esatte. Errori 409/503 o risposta persa non autorizzano
+un retry automatico: si verifica lo stato primario senza considerare un 200
+come consenso già provato. Consente la scelta esplicita anche mentre il guest
+ha un archivio da migrare, ma non ne assume mai proprietà e non lo cancella.
+Il componente non è ancora montato nella UX pubblica.
+
 La nuova composizione candidata `deliverKindeCandidateJournal()` richiede una prova HTTPS
 Kinde di sessione, prima accettazione, revisione e stato attivo, e una
 verifica continua della generazione in memoria e del cookie CSRF casuale per

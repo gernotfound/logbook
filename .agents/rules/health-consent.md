@@ -13,6 +13,20 @@ Guest: consenso e revoca sono locali alla generazione del dispositivo; nessun co
 
 Fonti: `src/lib/healthConsent.ts`, `healthConsentRecovery.ts`, `src/contexts/auth/consentLifecycle.ts`, `src/lib/sync/localConsentReconciliation.ts`, `localConsentJournalRecovery.ts`, `server/healthConsent/`, endpoint `api/health-consent*`/`api/health-data-erasure.ts` e `firestore.rules`.
 
+## Primo consenso Kinde → D1: chiamante browser candidato (15/11/2026)
+
+Il client `src/lib/auth/kindeCandidateConsent.ts` genera il corpo esatto
+`accept-initial` soltanto dopo tre conferme esplicite separate del maggiorenne,
+Termini e trattamento dati salute. Una sessione Kinde verificata senza riga
+consenso non autorizza altro. Il chiamante richiede CSRF per-sessione,
+rifiuta switch identità/epoch e accetta successo solo dopo una nuova lettura
+del consenso `active` sulla stessa identità con versioni legali attuali.
+Una risposta SQL persa/409/503 si riconcilia tramite la prova remota, **non**
+con replay del POST o ottimismo UI. Il guest può esprimere il primo consenso
+account prima del trasferimento: nessuna eredità del consenso locale guest,
+nessun trasferimento o purge implicito. Non collegato alla UX corrente;
+email, policy password e provider runtime restano gate autonomi.
+
 ## Candidato Cloudflare D1 — revoca e cancellazione in attesa (14/11/2026)
 
 La migration `0005_health_withdrawal_queue.sql` e la route privata
