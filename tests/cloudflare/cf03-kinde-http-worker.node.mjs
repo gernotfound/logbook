@@ -13,6 +13,7 @@ const ORIGIN = 'https://candidate.invalid';
 const ISSUER = 'https://synthetic-kinde.example';
 const CLIENT = 'synthetic-kinde-client';
 const API_AUD = 'thelogbook:synthetic-api';
+const KEK = Buffer.alloc(32, 41).toString('base64');
 const SESSION = '/api/auth/session';
 const START = '/api/auth/kinde/start';
 const CALLBACK = '/api/auth/kinde/callback';
@@ -55,9 +56,9 @@ async function fixture() {
   // The identity gate joins sync_subjects even before consent. Exercise the
   // complete current D1 schema, not a partial Auth-only test database.
   const migrations = readdirSync(new URL('../../cloudflare/api/migrations/', import.meta.url))
-    .filter(name => /^000[1-8]_[a-z0-9_]+\.sql$/.test(name)).sort();
+    .filter(name => /^00(?:0[1-9]|10)_[a-z0-9_]+\.sql$/.test(name)).sort();
   assert.deepEqual(migrations.map(name => name.slice(0, 4)),
-    Array.from({ length: 8 }, (_, index) => String(index + 1).padStart(4, '0')));
+    Array.from({ length: 10 }, (_, index) => String(index + 1).padStart(4, '0')));
   for (const file of migrations) {
     sqlite.exec(readFileSync(new URL('../../cloudflare/api/migrations/' + file, import.meta.url), 'utf8'));
   }
@@ -97,7 +98,8 @@ async function fixture() {
     APP_ORIGIN: ORIGIN, KINDE_ISSUER: ISSUER,
     KINDE_CLIENT_ID: CLIENT, KINDE_CLIENT_SECRET: 'synthetic-private-secret',
     KINDE_API_AUDIENCE: API_AUD, KINDE_ID_TOKEN_AUDIENCE: ISSUER,
-    DB: db,
+    DB: db, CLOUD_ACCOUNT_KEK_V1: KEK,
+    CONSENT_PRIVACY_VERSION: '1.3.9', CONSENT_TERMS_VERSION: '1.2.5',
     AUTH_RATE_LIMITER: { limit: async () => ({ success: allowLogin }) },
     AUTH_GATE: {
       fetch(request) {
@@ -460,6 +462,22 @@ void test('Kinde callback crosses consent and D1 replica gates only after explic
       currentReplica: null, checkpointClock: {},
     };
     assert.equal((await cloudCall(f, '/v1/sync/replica/claim', login, claim, 'invalid-csrf')).status, 403);
+    // The current D1 triggers refuse membership writes even after valid Kinde
+    // and explicit consent until this owner has a durable, wrapped ADK.
+    const withoutKey = await cloudCall(f, '/v1/sync/replica/claim', login, claim);
+    assert.notEqual(withoutKey.status, 200);
+    assert.equal(f.sqlite.prepare('SELECT COUNT(*) AS n FROM sync_replica_mutations').get().n, 0);
+    assert.equal(f.sqlite.prepare('SELECT COUNT(*) AS n FROM sync_replicas').get().n, 0);
+    assert.equal(f.sqlite.prepare('SELECT revision FROM sync_state').get().revision, 0);
+    assert.equal(f.sqlite.prepare('SELECT COUNT(*) AS n FROM sync_writable_cloud_key').get().n, 0);
+
+    const key = await cloudCall(f, '/v1/cloud-key/sync', login);
+    assert.equal(key.status, 200);
+    assert.equal(key.body.format, 'thelogbook-account-data-key');
+    assert.equal(Buffer.from(key.body.key, 'base64').length, 32);
+    assert.equal(f.sqlite.prepare('SELECT COUNT(*) AS n FROM cloud_account_keys').get().n, 1);
+    assert.equal(f.sqlite.prepare('SELECT COUNT(*) AS n FROM cloud_key_issuance').get().n, 1);
+    assert.equal(f.sqlite.prepare('SELECT COUNT(*) AS n FROM sync_writable_cloud_key').get().n, 1);
     const registered = await cloudCall(f, '/v1/sync/replica/claim', login, claim);
     assert.equal(registered.status, 200);
     assert.equal(registered.body.action, 'register');
@@ -503,6 +521,9 @@ void test('Kinde signed subjects retain separate D1 consent and replica register
       candidateReplicaId: 'kinde-synthetic-device-owner-a',
       currentReplica: null, checkpointClock: {},
     };
+    assert.notEqual((await cloudCall(f, '/v1/sync/replica/claim', a, claim)).status, 200);
+    assert.equal(f.sqlite.prepare('SELECT COUNT(*) AS n FROM sync_replica_mutations').get().n, 0);
+    assert.equal((await cloudCall(f, '/v1/cloud-key/sync', a)).status, 200);
     assert.equal((await cloudCall(f, '/v1/sync/replica/claim', a, claim)).status, 200);
     f.setSubject('kp_other_synthetic_user_20261114');
     const b = await f.login();
@@ -513,6 +534,17 @@ void test('Kinde signed subjects retain separate D1 consent and replica register
       { uid: principalB.uid, status: 'unregistered', revision: 0, fenceEpoch: 1 });
     assert.equal((await cloudCall(f, '/v1/consent/initial', b, acceptance)).status, 200);
     assert.deepEqual((await cloudCall(f, '/v1/sync/control', b, {})).body.replicas, {});
+    const claimB = {
+      ...claim, mutationId: 'kinde-synthetic-claim-owner-b',
+      candidateReplicaId: 'kinde-synthetic-device-owner-b',
+    };
+    assert.notEqual((await cloudCall(f, '/v1/sync/replica/claim', b, claimB)).status, 200);
+    assert.equal(f.sqlite.prepare('SELECT COUNT(*) AS n FROM sync_replica_mutations').get().n, 1);
+    assert.equal((await cloudCall(f, '/v1/cloud-key/sync', b)).status, 200);
+    assert.equal((await cloudCall(f, '/v1/sync/replica/claim', b, claimB)).status, 200);
+    assert.equal(f.sqlite.prepare('SELECT COUNT(*) AS n FROM sync_replicas').get().n, 2);
+    assert.equal(f.sqlite.prepare('SELECT COUNT(*) AS n FROM cloud_account_keys').get().n, 2);
+    assert.equal(Object.keys((await cloudCall(f, '/v1/sync/control', b, {})).body.replicas).length, 1);
     assert.equal(Object.keys((await cloudCall(f, '/v1/sync/control', a, {})).body.replicas).length, 1);
     assert.equal(f.sqlite.prepare('SELECT COUNT(*) AS n FROM auth_principals').get().n, 2);
     assert.equal(f.sqlite.prepare('SELECT COUNT(*) AS n FROM health_consent_acceptances').get().n, 2);

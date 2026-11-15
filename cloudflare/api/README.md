@@ -1,5 +1,24 @@
 # CF-01/02 — isolated encrypted D1 replica candidate
 
+## CF-03/05 full-schema trusted flow regression (15 November 2026)
+
+The signed *synthetic* Kinde callback, first health consent, cloud-ADK
+provision and replica-claim integration tests now apply the **entire current
+D1 schema (0001–0010)**. The previous eight-migration fixture could report
+a successful replica claim after consent without a wrapped ADK, because it
+never installed the 0009 write fences. The full-schema scenario must deny a
+claim before key provision **without a receipt, membership, or revision
+change**, then grant it only after the real cloud-key HTTP worker stores
+matching wrapped ADK and issuance metadata. A second owner is independently
+fenced, provisioned and registered. Key HTTP tests additionally assert the
+owner-specific SQL grant disappears on withdrawal while rights-only access
+to an existing key remains permitted.
+
+These checks exercise real candidate Worker/SQLite logic, not an active
+Kinde tenant or deployed HTTP endpoint. Do not configure a public route,
+cloud KEK or real health data based on synthetic CI success.
+
+
 This is a candidate API, **not an enabled production route**. The existing
 Firebase/Firestore writer, IndexedDB journal and encrypted vault remain active.
 

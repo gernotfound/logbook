@@ -53,9 +53,9 @@ async function fixture() {
   const sqlite = new DatabaseSync(':memory:');
   sqlite.exec('PRAGMA foreign_keys=ON');
   const migrations = readdirSync(new URL('../../cloudflare/api/migrations/', import.meta.url))
-    .filter(file => /^000[1-8]_[a-z0-9_]+\.sql$/.test(file)).sort();
+    .filter(file => /^00(?:0[1-9]|10)_[a-z0-9_]+\.sql$/.test(file)).sort();
   assert.deepEqual(migrations.map(file => file.slice(0, 4)),
-    Array.from({ length: 8 }, (_, i) => String(i + 1).padStart(4, '0')));
+    Array.from({ length: 10 }, (_, i) => String(i + 1).padStart(4, '0')));
   for (const file of migrations) {
     sqlite.exec(readFileSync(new URL('../../cloudflare/api/migrations/' + file, import.meta.url), 'utf8'));
   }
@@ -146,6 +146,7 @@ void test('top-level API: initial consent, authenticated key provision, repeat a
     assert.equal(f.count('cloud_account_keys', 'owner-a'), 0);
     await f.consent('owner-a');
     await f.consent('owner-b');
+    assert.equal(f.sqlite.prepare('SELECT COUNT(*) AS n FROM sync_writable_cloud_key').get().n, 0);
     const [first, raced] = await Promise.all([
       f.call('owner-a', SYNC), f.call('owner-a', SYNC),
     ]);
@@ -165,6 +166,8 @@ void test('top-level API: initial consent, authenticated key provision, repeat a
     assert.equal(repeated.body.key, first.body.key);
     assert.equal(f.count('cloud_key_issuance', 'owner-a'), 1);
     assert.equal(f.count('cloud_account_keys', 'owner-a'), 1);
+    assert.equal(f.sqlite.prepare("SELECT COUNT(*) AS n FROM sync_writable_cloud_key WHERE uid='owner-a'").get().n, 1);
+    assert.equal(f.sqlite.prepare("SELECT COUNT(*) AS n FROM sync_writable_cloud_key WHERE uid='owner-b'").get().n, 0);
     const sealed = f.sqlite.prepare('SELECT ciphertext, iv, tag FROM cloud_account_keys WHERE uid=?')
       .get('owner-a');
     assert.notEqual(sealed.ciphertext, first.body.key);
@@ -174,6 +177,7 @@ void test('top-level API: initial consent, authenticated key provision, repeat a
     assert.equal(other.response.status, 200);
     assert.notEqual(other.body.key, first.body.key);
     assert.equal(f.count('cloud_key_issuance', 'owner-b'), 1);
+    assert.equal(f.sqlite.prepare('SELECT COUNT(*) AS n FROM sync_writable_cloud_key').get().n, 2);
     // Forged identity headers cannot redirect the trusted session owner.
     const forged = new Request(ORIGIN + SYNC, {
       method: 'POST',
@@ -193,8 +197,10 @@ void test('withdrawal stops sync; rights-only returns existing key without repro
     await f.consent('owner-a');
     await f.consent('owner-b');
     const aKey = (await f.call('owner-a', SYNC)).body.key;
+    assert.equal(f.sqlite.prepare('SELECT COUNT(*) AS n FROM sync_writable_cloud_key').get().n, 1);
     await f.withdraw('owner-a');
     await f.withdraw('owner-b');
+    assert.equal(f.sqlite.prepare('SELECT COUNT(*) AS n FROM sync_writable_cloud_key').get().n, 0);
     assert.equal((await f.call('owner-a', SYNC)).response.status, 401);
     const rights = await f.call('owner-a', RIGHTS);
     assert.equal(rights.response.status, 200);
