@@ -72,6 +72,8 @@ jobs:
           set -euo pipefail
           npx --yes wrangler@4.159.0 deploy --dry-run --config cloudflare/auth/wrangler.isolated.jsonc
           npx --yes wrangler@4.159.0 deploy --dry-run --config cloudflare/api/wrangler.isolated.jsonc
+          # Candidate Kinde HTTP is compile-only: never deploy or publish it at this gate.
+          npx --yes wrangler@4.159.0 deploy --dry-run --config cloudflare/auth/wrangler.kinde.isolated.jsonc
       - name: Verify main lease again immediately before provider writes
         shell: bash
         run: |

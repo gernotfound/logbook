@@ -1,0 +1,34 @@
+{
+  "name": "thelogbook-cf03-kinde-http-isolated",
+  "main": "./kinde-http-worker.mjs",
+  "compatibility_date": "2026-11-14",
+  "workers_dev": false,
+  "preview_urls": false,
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "thelogbook-cf02-eu-isolated-20261113",
+      "database_id": "9aa51833-8adc-495f-bdfc-93b5542e8023",
+      "migrations_dir": "../api/migrations"
+    }
+  ],
+  "services": [
+    {
+      "binding": "AUTH_GATE",
+      "service": "thelogbook-cf03-auth-gate-isolated"
+    }
+  ],
+  "ratelimits": [
+    {
+      "name": "AUTH_RATE_LIMITER",
+      "namespace_id": "31004",
+      "simple": {
+        "limit": 20,
+        "period": 60
+      }
+    }
+  ],
+  "vars": {
+    "APP_ORIGIN": "https://thelogbook.me"
+  }
+}

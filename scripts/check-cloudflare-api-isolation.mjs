@@ -49,10 +49,54 @@ export function validateIsolatedWorkers(api, gate) {
   return errors;
 }
 
+// Pre-activation only: this configuration is compiled in CI, never deployed
+// or publicly routed without explicit provider and privacy authorization.
+export function validateIsolatedKindeCandidate(kinde, gate, frontend) {
+  const errors = [];
+  const check = (ok, message) => { if (!ok) errors.push(message); };
+  check(kinde?.name === 'thelogbook-cf03-kinde-http-isolated'
+    && kinde?.main === './kinde-http-worker.mjs'
+    && kinde?.compatibility_date === '2026-11-14', 'kinde: wrong Worker or runtime');
+  check(kinde?.workers_dev === false && kinde?.preview_urls === false
+    && !['route', 'routes', 'assets', 'triggers', 'unsafe'].some(key => Object.hasOwn(kinde ?? {}, key)),
+  'kinde: public exposure');
+  const db = kinde?.d1_databases?.[0], gateDb = gate?.d1_databases?.[0];
+  check(kinde?.d1_databases?.length === 1 && db?.binding === 'DB'
+    && db?.database_name === DB_NAME && db?.database_id === DB_ID
+    && db?.migrations_dir === '../api/migrations'
+    && gateDb?.database_name === db?.database_name && gateDb?.database_id === db?.database_id,
+  'kinde: wrong or inconsistent D1');
+  check(kinde?.services?.length === 1
+    && kinde?.services[0]?.binding === 'AUTH_GATE'
+    && kinde?.services[0]?.service === GATE && gate?.name === GATE,
+  'kinde: private authorization service missing');
+  check(kinde?.ratelimits?.length === 1
+    && kinde.ratelimits[0]?.name === 'AUTH_RATE_LIMITER'
+    && kinde.ratelimits[0]?.namespace_id === '31004'
+    && kinde.ratelimits[0]?.simple?.limit === 20
+    && kinde.ratelimits[0]?.simple?.period === 60, 'kinde: OAuth rate gate changed');
+  check(kinde?.vars?.APP_ORIGIN === ORIGIN
+    && Object.keys(kinde?.vars ?? {}).join(',') === 'APP_ORIGIN',
+  'kinde: origin/provider configuration unexpectedly committed');
+  check(Object.keys(kinde ?? {}).sort().join(',') ===
+    'compatibility_date,d1_databases,main,name,preview_urls,ratelimits,services,vars,workers_dev',
+  'kinde: unreviewed binding');
+  check(frontend?.name === 'thelogbook-frontend'
+    && frontend?.main === './auth-proxy.mjs'
+    && frontend?.assets?.run_worker_first?.join(',') === '/__/auth,/__/auth/*',
+  'kinde: public frontend route enabled without GO');
+  return errors;
+}
+
 if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
   assert.deepEqual(validateIsolatedWorkers(
     JSON.parse(readFileSync('cloudflare/api/wrangler.isolated.jsonc', 'utf8')),
     JSON.parse(readFileSync('cloudflare/auth/wrangler.isolated.jsonc', 'utf8')),
   ), []);
-  console.log('Verified isolated API/Auth Gate config, private binding and EU D1 identity');
+  assert.deepEqual(validateIsolatedKindeCandidate(
+    JSON.parse(readFileSync('cloudflare/auth/wrangler.kinde.isolated.jsonc', 'utf8')),
+    JSON.parse(readFileSync('cloudflare/auth/wrangler.isolated.jsonc', 'utf8')),
+    JSON.parse(readFileSync('cloudflare/wrangler.jsonc', 'utf8')),
+  ), []);
+  console.log('Verified private API/Auth Gate and unrouted Kinde candidate on the EU D1');
 }
