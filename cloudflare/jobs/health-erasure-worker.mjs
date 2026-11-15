@@ -51,10 +51,10 @@ function deleteBoundedSql(table) {
 }
 
 const FIND_JOB = [
-  'SELECT j.uid, j.consent_revision, j.fence_epoch',
+  'SELECT j.uid, j.consent_revision, j.fence_epoch, j.phase',
   'FROM health_erasure_jobs j',
   'JOIN sync_subjects s ON s.uid = j.uid',
-  "WHERE j.phase = ? AND j.status IN ('pending', 'processing')",
+  "WHERE (? IS NULL OR j.phase = ?) AND j.status IN ('pending', 'processing')",
   '  AND j.lease_until_ms <= ' + SERVER_NOW,
   "  AND s.status = 'withdrawn'",
   '  AND s.consent_revision = j.consent_revision AND s.fence_epoch = j.fence_epoch',
@@ -221,28 +221,31 @@ const AWAIT_KEYS = [
 ].join('\n');
 
 /**
- * Lease acquisition is shared by the bounded data phase and the future key
- * finalizer. The single UPDATE ... RETURNING CAS fences the selected owner,
+ * Select the oldest eligible request across both phases: a continuing stream
+ * of data jobs must not starve a terminal key erasure. The explicit key-only
+ * helper retains its narrower selection, without granting terminal authority.
+ * The single UPDATE ... RETURNING CAS fences the selected owner,
  * consent generation, phase, previous lease and current withdrawn status.
  * A lost claim acknowledgement cannot be interpreted as ownership.
  */
-async function claimOneHealthErasureLease(db, phase) {
-  if (phase !== 'data' && phase !== 'awaiting-keys') throw new Error('invalid-erasure-phase');
+async function claimOneHealthErasureLease(db, phase = null) {
+  if (phase !== null && phase !== 'data' && phase !== 'awaiting-keys') throw new Error('invalid-erasure-phase');
   if (!db || typeof db.withSession !== 'function') throw new Error('erasure-db-unavailable');
   const primary = db.withSession('first-primary');
   if (!primary || typeof primary.prepare !== 'function') throw new Error('erasure-db-unavailable');
-  const candidate = await primary.prepare(FIND_JOB).bind(phase).first();
+  const candidate = await primary.prepare(FIND_JOB).bind(phase, phase).first();
   if (!candidate) return { outcome: 'idle' };
   if (typeof candidate.uid !== 'string' || candidate.uid.length < 1
     || candidate.uid.length > 128 || candidate.uid.includes('/')
     || candidate.uid.trim() !== candidate.uid
+    || (candidate.phase !== 'data' && candidate.phase !== 'awaiting-keys')
     || !Number.isSafeInteger(candidate.consent_revision) || candidate.consent_revision < 1
     || !Number.isSafeInteger(candidate.fence_epoch) || candidate.fence_epoch < 1) {
     throw new Error('invalid-erasure-job');
   }
   const token = newLeaseToken();
   const claimed = await primary.prepare(CLAIM_JOB)
-    .bind(token, candidate.uid, candidate.consent_revision, candidate.fence_epoch, phase).first();
+    .bind(token, candidate.uid, candidate.consent_revision, candidate.fence_epoch, candidate.phase).first();
   if (!claimed) return { outcome: 'contended' };
   if (!Number.isSafeInteger(claimed.lease_epoch) || claimed.lease_epoch < 1
     || !Number.isSafeInteger(claimed.lease_until_ms) || claimed.lease_until_ms < 1) {
@@ -279,13 +282,9 @@ export async function acquireOneHealthErasureKeyPhaseLease(db) {
  * still private and cannot schedule itself or expose a public endpoint.
  */
 export async function runOneHealthErasureStep(db) {
-  const lease = await claimOneHealthErasureLease(db, 'data');
-  if (lease.outcome === 'idle') {
-    const keyLease = await claimOneHealthErasureLease(db, 'awaiting-keys');
-    if (keyLease.outcome) return { outcome: keyLease.outcome };
-    return finalizeHealthErasureLease(db, keyLease);
-  }
+  const lease = await claimOneHealthErasureLease(db);
   if (lease.outcome) return { outcome: lease.outcome };
+  if (lease.candidate.phase === 'awaiting-keys') return finalizeHealthErasureLease(db, lease);
   const { primary, candidate, scope } = lease;
   for (const table of TABLES) {
     const result = await primary.prepare(deleteBoundedSql(table))

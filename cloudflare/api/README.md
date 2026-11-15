@@ -494,15 +494,22 @@ The first consent acceptance and owner tombstone remain durable.
 `cloudflare/jobs/health-erasure-worker.mjs` implements a **private
 `scheduled` handler only**, with no public fetch, cron configuration or
 provider deployment. One invocation leases at most one eligible withdrawn
-owner and deletes no more than **four rows from one table**. The fixed,
+owner, selected by original request time across **both** phases. A continuing
+stream of newer data jobs cannot overtake an older eligible key finalization;
+an unexpired lease remains excluded. The key-only lease helper retains its
+explicit phase filter. One data step deletes no more than **four rows from
+one table**. The fixed,
 server-side table order is encrypted documents, commit receipts, replica
 mutation history and replica membership. Each SQL DELETE rechecks the
 still-valid lease, withdrawn consent revision and epoch within that same
 statement. An expired or stolen lease cannot continue; SQL/DB failures
 throw without producing completion. After every known table is proven
 empty in one conditional UPDATE, the job moves to `awaiting-keys`,
-remaining `processing`, **not** `complete`. That phase is excluded from
-the runnable scan to avoid starvation of younger jobs.
+remaining `processing`, **not** `complete`. After lease expiry it remains
+eligible for the next bounded invocation in the same request order.
+The `0010`-backed finalizer then performs one atomic terminal INSERT and
+verifies the durable primary proof before reporting `complete`; see the
+SQL contract above. Selection does not bypass the per-job lease CAS.
 
 Reissuing `POST /v1/consent/withdraw` while a job is processing returns
 only an owner/session-verified `deletionStatus: "processing"` (rather
@@ -510,12 +517,16 @@ than a false `pending`). A lost response to a DELETE is reconciled by
 a future bounded scan after lease expiry, never by an invented ACK.
 SQLite fixture tests cover concurrent leases, lost response, takeover
 before DELETE, owner isolation, bounded batches, no resurrection,
-rollbacks and prevention of premature completion. This does **not**
+rollbacks and prevention of premature completion. Both runner and finalizer
+suites apply every canonical migration, require the terminal schema and seed
+ordinary encrypted data only after wrapped ADK issuance. The former
+pre-integration branch skip is no longer supported. This does **not**
 constitute provider Free-tier CPU/limits evidence.
 
-**Key boundary:** The ADK/KEK custodian, rights-only export, encrypted
-key record, final erasure of remaining account metadata, complete receipt
-and reacceptance after erasure are still missing. In particular,
+**Key boundary:** ADK custody and terminal key erasure exist in the candidate
+code, not as an activated lifecycle. Cloud KEK custody/recovery, end-to-end
+rights-only export, account deletion, retention and reacceptance still need
+their separate verification and integration. In particular,
 `awaiting-keys` means *the known replica tables were drained*, **not**
 that the owner's health data, keys or backups have been fully deleted.
 Never expose this worker through a route or schedule it on a real database

@@ -115,7 +115,9 @@ Il recupero esplicito di un vecchio journal richiede una seconda verifica truste
 
 **MUST:** `cloudflare/api/migrations/0010_atomic_health_erasure_finalization.sql` e `cloudflare/jobs/health-erasure-worker.mjs` autorizzano `awaiting-keys → complete` esclusivamente tramite SQL atomica `INSERT ... SELECT ... RETURNING` che verifica UID, consenso, epoch, lease, assenza di documenti/ricevute/mutazioni/repliche e ADK. Il runner effettua readback primario della prova durevole anche dopo ACK perso; non dichiara `complete` da una chiave mancante o da `RETURNING` vuoto. Il consenso server ora restituisce UID trusted; il client candidato lo verifica anche negli scambi identità A→B→A. La lettura ADK rights-only non abilita fitness e richiede sessione valida e job di erasure coerente.
 
-**VERIFY:** lo schema e il runner con i test full-schema sono integrati su GitHub, non attestati sulla D1 remota; cron, OAuth rights-only, account deletion, retention e restore anti-resurrection restano gate NO-GO. I contratti Firestore/Vercel sopra descrivono ancora il vecchio codice applicativo e non provano la migrazione del runtime.
+**MUST (ordine dei job):** il runner ordinario seleziona la richiesta eleggibile più vecchia fra `data` e `awaiting-keys`, senza priorità fissa alla fase dati. Nuove richieste non possono rimandare indefinitamente una finalizzazione precedente. La selezione non attribuisce il lease: il CAS successivo ricontrolla fase, owner, generazione ed epoch; un lease non scaduto resta escluso. Il helper dedicato alle sole chiavi conserva il filtro esplicito.
+
+**VERIFY:** presenza dello schema D1 e codice del runner non provano l'esecuzione dei job. Per le migrazioni effettivamente applicate consultare il [runbook corrente](../../docs/operations/cloudflare-workers-migration.md) e rileggere il provider. Cron, OAuth rights-only, account deletion, retention e restore anti-resurrection restano gate separati. I contratti Firestore/Vercel sopra descrivono ancora il vecchio codice applicativo e non provano la migrazione del runtime.
 
 ## Relazioni e limiti delle verifiche
 
