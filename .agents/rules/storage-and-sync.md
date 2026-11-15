@@ -13,6 +13,19 @@
 - [Portabilità](backup-and-portability.md): backup/import/export; [Privacy tecnica](telemetry-and-privacy.md): nessun invio automatico di errori.
 - [Crash consistency](crash-consistency.md), [Causal GC](causal-gc.md), [Domain Operations](domain-operations.md): specifiche di commit/ACK e protocollo.
 
+## Protezione trasporto D1 candidato (CF-04)
+
+`src/lib/sync/cloudReplicaTransport.ts` applica un timeout HTTP di 15 secondi e
+limiti di lettura alle risposte JSON prima del parsing: fino a otto documenti
+cifrati da 950 KB più overhead per `read`/`scan`, 64 KB per il controllo
+replica e 16 KB per ricevute, mutation e risposte 428. Il limite è distinto
+dalle dimensioni dei *request body* imposte dal Worker D1. Un timeout, una
+risposta incompleta o superiore ai limiti, oppure una prova 428 malformata
+non autorizzano ACK, riavvii o purge del journal durevole: restano errori di
+trasporto e richiedono recovery secondo il protocollo. Il trasporto è ancora
+un candidato non collegato al percorso cloud pubblico, dunque questi test
+non equivalgono a un collaudo con Kinde/D1 Production.
+
 ## Stati di durabilità e relative prove
 
 | Stato | Prova disponibile | Cosa non dimostra |

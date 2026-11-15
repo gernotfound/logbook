@@ -34,6 +34,13 @@ export interface CloudReplicaCompleteScan {
 
 const SCAN_PAGE_SIZE = 8;
 const MAX_SCAN_PAGES = 1024;
+// The Worker accepts at most eight documents of 950 KB per read/page.
+// Bound response memory without rejecting a legitimate maximum-size page.
+const MAX_DOCUMENT_RESPONSE_BYTES = SCAN_PAGE_SIZE * 950_000 + 16_384;
+const MAX_CONTROL_RESPONSE_BYTES = 64 * 1024;
+const MAX_SMALL_RESPONSE_BYTES = 16 * 1024;
+const MAX_RESPONSE_CHUNKS = 32_768;
+const CLOUD_REQUEST_TIMEOUT_MS = 15_000;
 const DOCUMENT_PATH = /^(?:(?:history_months|nutrition_months)\/\d{4}-(?:0[1-9]|1[0-2]))?$/;
 
 export interface CloudReplicaControlSnapshot {
@@ -132,6 +139,51 @@ export class CloudReplicaMutationReconciliationRequiredError extends CloudReplic
     }
 }
 
+/**
+ * Bound every candidate D1 response before JSON allocation. A failed read is
+ * never evidence of a missing commit or a remote ACK; the caller must retain
+ * its durable local journal and reconcile with the trusted receipt endpoint.
+ */
+async function readBoundedResponse(response: Response, maxBytes: number): Promise<unknown> {
+    const declared = response.headers.get('content-length');
+    if (declared !== null && (!/^\\d+$/.test(declared) || Number(declared) > maxBytes)
+        || response.body === null) {
+        throw new CloudReplicaTransportError(0);
+    }
+    const reader = response.body.getReader();
+    const chunks: Uint8Array[] = [];
+    let length = 0;
+    let complete = false;
+    try {
+        for (let index = 0; index < MAX_RESPONSE_CHUNKS; index += 1) {
+            const { value, done } = await reader.read();
+            if (done) {
+                complete = true;
+                break;
+            }
+            if (!ArrayBuffer.isView(value) || value.BYTES_PER_ELEMENT !== 1) {
+                throw new CloudReplicaTransportError(0);
+            }
+            length += value.byteLength;
+            if (length > maxBytes) throw new CloudReplicaTransportError(0);
+            chunks.push(new Uint8Array(value.buffer, value.byteOffset, value.byteLength).slice());
+        }
+        if (!complete) throw new CloudReplicaTransportError(0);
+        const bytes = new Uint8Array(length);
+        let offset = 0;
+        for (const chunk of chunks) {
+            bytes.set(chunk, offset);
+            offset += chunk.byteLength;
+        }
+        return JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes)) as unknown;
+    } catch {
+        throw new CloudReplicaTransportError(0);
+    } finally {
+        if (!complete) void reader.cancel().catch(() => {});
+        try { reader.releaseLock(); } catch { /* A timed-out transport read may still be pending. */ }
+    }
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
     return value !== null && typeof value === 'object' && !Array.isArray(value);
 }
@@ -186,6 +238,7 @@ export function createCloudflareReplicaTransport(send: typeof fetch = fetch) {
                     ...(csrfToken ? { 'X-CSRF-Token': csrfToken } : {}),
                 },
                 body: JSON.stringify(body),
+                signal: AbortSignal.timeout(CLOUD_REQUEST_TIMEOUT_MS),
             });
         } catch {
             throw new CloudReplicaTransportError(0);
@@ -197,7 +250,7 @@ export function createCloudflareReplicaTransport(send: typeof fetch = fetch) {
             if ((media !== 'application/json' && !media.startsWith('application/json;'))
                 || !noStore) throw new CloudReplicaTransportError(428);
             let condition: unknown;
-            try { condition = await response.json() as unknown; }
+            try { condition = await readBoundedResponse(response, MAX_SMALL_RESPONSE_BYTES); }
             catch { throw new CloudReplicaTransportError(428); }
             if (isRecord(condition) && Object.keys(condition).length === 1
                 && condition.error === 'cloud-key-required') {
@@ -206,11 +259,10 @@ export function createCloudflareReplicaTransport(send: typeof fetch = fetch) {
             throw new CloudReplicaTransportError(428);
         }
         if (!response.ok) throw new CloudReplicaTransportError(response.status);
-        try {
-            return await response.json() as unknown;
-        } catch {
-            throw new CloudReplicaTransportError(0);
-        }
+        const maxResponseBytes = route === 'read' || route === 'scan'
+            ? MAX_DOCUMENT_RESPONSE_BYTES
+            : route === 'control' ? MAX_CONTROL_RESPONSE_BYTES : MAX_SMALL_RESPONSE_BYTES;
+        return readBoundedResponse(response, maxResponseBytes);
     }
 
     // A 409 is not absence-of-commit evidence. Only an authenticated
