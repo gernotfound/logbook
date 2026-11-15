@@ -1,5 +1,10 @@
 # Kinde — configurazione del provider per TheLogBook
 
+## Ricognizione indipendente 16/11/2026 — ancora NO-GO
+
+Su `main` v2.474.0 (`519f80c077b8ca40e8f3630ea4f110ffb342e012`) e nell'inventario live Cloudflare, il Worker HTTP `thelogbook-cf03-kinde-http-isolated` non risulta distribuito. Il frontend dispone del solo binding `ASSETS`; i due Worker API/Auth Gate restano privati. **Nessun readback Kinde è stato possibile in questa verifica**: stato di callback/logout, workflow di password ≥15 caratteri e recapitabilità delle email non sono attestati. La configurazione del workflow in repository non significa che il tenant la esegua. Non attivare route di login/Sync o interpretare il frontend pubblico come un GO applicativo.
+
+
 ## Candidato del workflow password Kinde (codice, non provider)
 
 Il file [`kindeSrc/environment/workflows/thelogbookPassword/Workflow.js`](../../kindeSrc/environment/workflows/thelogbookPassword/Workflow.js) prepara il trigger ufficiale `user:new_password_provided` con `failurePolicy: stop` e lunghezza minima **15 code point Unicode** in registrazione e reset. La suite Node `tests/cloudflare/cf03-kinde-password-workflow.node.mjs` testa entrambi i motivi, Unicode e input non disponibile. Il codice usa soltanto il binding widget previsto da Kinde e non richiede dipendenze npm aggiuntive. Il manifest radice [`kinde.json`](../../kinde.json) fissa `rootDir=kindeSrc` e la versione runtime documentata `2024-12-09`, obbligatoria per la futura sincronizzazione; tale configurazione non attiva il workflow e la compatibilità effettiva va verificata nel tenant.
