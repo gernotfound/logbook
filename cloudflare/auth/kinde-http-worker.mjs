@@ -165,7 +165,9 @@ export function createKindeHttpHandler({ fetchImpl = fetch, keySet } = {}) {
     if (url.pathname === '/api/auth/session') return sessionStatus(request, env);
     if (url.pathname === '/api/auth/logout') return logout(request, env);
 
-    if (!env.DB || typeof env.DB.withSession !== 'function'
+    // OAuth must not create state or sessions without the private authorization boundary.
+    if (!env.AUTH_GATE || typeof env.AUTH_GATE.fetch !== 'function'
+      || !env.DB || typeof env.DB.withSession !== 'function'
       || !env.AUTH_RATE_LIMITER || typeof env.AUTH_RATE_LIMITER.limit !== 'function') {
       return json('unavailable', 503);
     }
