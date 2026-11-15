@@ -3,7 +3,26 @@
 **Classificazione: CRITICAL.** Questo registro contiene **soltanto servizi necessari, ancora presenti nel codice oppure da validare prima del GO**. La storia delle configurazioni superate rimane nella cronologia Git e nelle PR. GitHub prova SHA e verifiche; i provider provano le rispettive risorse e il runtime. Un riscontro datato non autorizza cambi Production.
 
 
-## Verifica D1 corrente e impedimento operativo — 15/11/2026
+## Checkpoint credenziali D1 — 15/11/2026
+
+**Stato dichiarato dal proprietario (non attestato mediante lettura IAM):**
+creato un API token Cloudflare distinto da quello Worker e salvato nel repository
+GitHub Actions con il nome **`CLOUDFLARE_D1_API_TOKEN`**. Nessun valore del
+secret è stato ricevuto né salvato nel codice. Scope D1 Edit, durata, account
+autorizzato, accessibilità del secret al workflow e valore della variabile
+`CLOUDFLARE_ACCOUNT_ID` devono ancora essere convalidati al gate manuale.
+
+**Stato D1 verificato separatamente:** provider EU isolato
+`thelogbook-cf02-eu-isolated-20261113`, ledger ancora a
+**`0008/0010`**, repliche disabilitate. Non risulta ancora un
+`workflow_dispatch` per la migrazione remota; nessuna modifica SQL è stata
+eseguita in questo aggiornamento. Il prossimo intervento è il dispatch
+main-only della procedura Wrangler già versionata, con controllo successivo
+diretto di schema e ledger. Il registro non dà GO ad Auth, Sync, consenso,
+cifratura o erasure. Dettagli nel
+[runbook operativo](cloudflare-workers-migration.md).
+
+## Verifica D1 e impedimento operativo precedenti alla conferma del token — 15/11/2026
 
 Sul `main 53f8a5562d9952c3f70c0175ee212f88e7f92d6b` (v2.445.0)
 la lettura diretta Cloudflare della D1 EU isolata, UUID fissato dal

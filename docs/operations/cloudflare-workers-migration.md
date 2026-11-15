@@ -3,7 +3,36 @@
 **Classificazione: CRITICAL · stato PARZIALE / NO-GO funzionale (dominio pubblico di sviluppo autorizzato).** La fonte di verità per il codice e i test è `main` GitHub; per risorse e runtime sono i rispettivi provider. Questo documento descrive **contratti correnti e blocchi**, non lo storico di commit. [EPIC #1053](https://github.com/gernotfound/logbook/issues/1053) · [registro servizi](external-services-register.md) · [CF-09 #1063](https://github.com/gernotfound/logbook/issues/1063).
 
 
-## B-04 — gate operativo migrazioni D1 isolate (15/11/2026)
+## Checkpoint credenziali D1 isolate — 15/11/2026
+
+**Nuova evidenza dichiarata dal proprietario:** creato su Cloudflare un token API
+separato dedicato alle migrazioni D1 e aggiunto su GitHub Actions come repository
+secret `CLOUDFLARE_D1_API_TOKEN`. L'utente ha confermato entrambe le operazioni
+in chat il 15/11/2026, **senza condividere il valore del segreto**. La
+presenza/accessibilità del secret al job, l'esatta policy IAM (D1 Edit,
+account target, scadenza), e la variabile Actions `CLOUDFLARE_ACCOUNT_ID`
+**non sono state verificate da letture indipendenti**: la conferma utente
+non sostituisce un preflight del workflow.
+
+**Readback provider indipendente, 15/11/2026:** la D1 isolata
+`thelogbook-cf02-eu-isolated-20261113` è ancora in giurisdizione `eu`,
+repliche disabilitate e ledger `0001`–`0008` (**8/10**). Su GitHub non
+risulta ancora alcuna esecuzione del workflow manuale di migrazione.
+Quindi `0009`/`0010` **non sono applicate** e nessun GO funzionale è
+implicito nella creazione della credenziale.
+
+**Prossimo gate:** verificare su GitHub che il secret esista e che
+`CLOUDFLARE_ACCOUNT_ID` punti all'account atteso, poi avviare **solo su
+`main`**, con autorizzazione operativa, il workflow
+[`Cloudflare isolated D1 migrations`](../../.github/workflows/cloudflare-d1-isolated-migrations.yml).
+Il job deve verificare exact-SHA/gate di release, token e D1 target in
+preflight, applicare con Wrangler le migration autorizzate e attestare
+ledger/oggetti SQL post-scrittura. In caso di errore non ripetere alla cieca;
+registrare run SHA ed esito provider prima di procedere. Né questo
+checkpoint né il secret autorizzano attivazione di API pubbliche, login Kinde,
+dati salute reali, DNS o cancellazioni.
+
+## B-04 — gate operativo migrazioni D1 isolate (stato precedente alla conferma del token, 15/11/2026)
 
 **Evidenza live successiva a `main 53f8a5562d9952c3f70c0175ee212f88e7f92d6b` (v2.445.0):**
 readback Cloudflare in sola lettura sulla **sola** D1 sintetica

@@ -228,6 +228,18 @@ adapter and is not evidence of remote D1 performance, IAM or quota.
 
 ## Isolated schema migration operations (merged; awaiting execution on 15 November 2026)
 
+**Credential checkpoint, 15 November:** the product owner reports creating a
+dedicated Cloudflare D1 API token and adding it to GitHub repository Actions
+secrets as `CLOUDFLARE_D1_API_TOKEN`. The secret value was not shared.
+Its effective permissions, scope, expiry, GitHub Actions availability and the
+`CLOUDFLARE_ACCOUNT_ID` variable are not independently verified.
+A separate Cloudflare readback still reports **8 of 10** migrations on
+the EU isolated D1. No manual migration workflow run has been observed.
+Token provisioning is not migration execution; the existing manual,
+main-only Wrangler workflow must still pass its preflight and post-readback.
+
+
+
 **Live readback 15 November, after main v2.445.0:** the EU synthetic D1 still
 has only migration IDs 1–8, while the `0009` view and `0010` table/trigger
 are absent. The Time Travel bookmark is available; zero principals, sessions,
