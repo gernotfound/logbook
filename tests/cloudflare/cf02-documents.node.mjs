@@ -128,7 +128,7 @@ void test('replica control snapshot is owner-scoped and revision-bound', () => w
   const initial = await call(db, 'control', {});
   assert.equal(initial.status, 200);
   assert.deepEqual(initial.body, {
-    revision: 0, fenceEpoch: 5, consentRevision: 1,
+    uid: owner, revision: 0, fenceEpoch: 5, consentRevision: 1,
     replicas: { s00: {
       replicaId: replica.replicaId, generation: 1, leaseUntilMs: initial.body.replicas.s00.leaseUntilMs,
       checkpointAtMs: initial.body.replicas.s00.checkpointAtMs,

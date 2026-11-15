@@ -10,7 +10,7 @@ import { UserDataSchema } from '../../../src/lib/schema';
 import { sealCloudDocument } from '../../../src/lib/sync/cloudDocumentCipher';
 import { readAuthenticatedCloudflareCheckpoint } from '../../../src/lib/sync/cloudReplicaCheckpoint';
 import { stageCloudflareReplicaClaim, resumeCloudflareReplicaClaim } from '../../../src/lib/sync/cloudReplicaClaimRecovery';
-import { CloudReplicaMutationReconciliationRequiredError, CloudReplicaTransportError, type CloudReplicaClaimMutationOutcome, type CloudReplicaControlSnapshot, type CloudReplicaMutationResult } from '../../../src/lib/sync/cloudReplicaTransport';
+import { CloudReplicaCloudKeyRequiredError, CloudReplicaMutationReconciliationRequiredError, CloudReplicaTransportError, type CloudReplicaClaimMutationOutcome, type CloudReplicaControlSnapshot, type CloudReplicaMutationResult } from '../../../src/lib/sync/cloudReplicaTransport';
 import { initializeLocal, readLocal, commitLocal, adoptReplicaCheckpoint } from '../../../src/lib/sync/localRepository';
 import { createAndMigrateVault } from '../../../src/lib/sync/secureArchiveMigration';
 import { lockAllVaults, unlockVaultForOwner } from '../../../src/lib/sync/secureArchiveSession';
@@ -146,6 +146,20 @@ describe('candidate encrypted D1 claim intent', () => {
         expect(remote.replayStoredClaim.mock.calls[1][0]).toEqual(staged);
         expect((await readLocal(owner))!.pending.length).toBeGreaterThan(0);
         expect((await readLocal(owner))!.pending.every(op => op.actorId === 's01')).toBe(true);
+    });
+
+    it('preserves the sealed claim and journal when the cloud key is missing', async () => {
+        const { staged, snapshot } = await prepare();
+        await commitLocal(owner, data(171), data(170));
+        const sealed = await get(storage);
+        const remote = transport(snapshot);
+        remote.replayStoredClaim.mockRejectedValueOnce(new CloudReplicaCloudKeyRequiredError());
+        await expect(resumeCloudflareReplicaClaim(owner, key, remote, 'session-csrf', () => true))
+            .rejects.toBeInstanceOf(CloudReplicaCloudKeyRequiredError);
+        expect(await get(storage)).toBe(sealed);
+        expect((await readLocal(owner))?.cloudflareReplicaClaim).toEqual(staged);
+        expect(remote.claimMutationOutcome).not.toHaveBeenCalled();
+        expect(remote.scanAll).not.toHaveBeenCalled();
     });
 
     it('rebases only a provably uncommitted stale claim and journals its new request before retry', async () => {

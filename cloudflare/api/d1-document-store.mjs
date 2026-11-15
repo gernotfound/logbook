@@ -136,6 +136,26 @@ export async function readAccessState(db, uid, fenceEpoch, sessionHash) {
     .bind(uid, ...activeSessionArgs(sessionHash, uid, fenceEpoch)).first();
 }
 
+// The 428 precondition is decided at one primary snapshot. A separate access
+// read could precede a revocation or competing claim and mislabel 403/409 as
+// first-key provisioning; absence of an ADK is never itself authorization.
+export async function readCloudKeyPrecondition(db, uid, fenceEpoch, sessionHash) {
+  return db.withSession('first-primary').prepare(`SELECT a.status,
+    a.consent_revision, a.fence_epoch, s.revision,
+    (SELECT COUNT(*) FROM cloud_account_keys WHERE uid = a.uid) AS stored_keys,
+    (SELECT COUNT(*) FROM cloud_key_issuance
+      WHERE uid = a.uid AND consent_revision = a.consent_revision) AS issued_keys,
+    (SELECT COUNT(*) FROM sync_documents WHERE uid = a.uid) AS documents,
+    (SELECT COUNT(*) FROM sync_replicas WHERE uid = a.uid) AS replicas,
+    (SELECT COUNT(*) FROM sync_receipts WHERE uid = a.uid) AS receipts,
+    (SELECT COUNT(*) FROM sync_replica_mutations WHERE uid = a.uid) AS mutations,
+    (SELECT COUNT(*) FROM health_erasure_jobs
+      WHERE uid = a.uid AND status != 'complete') AS erasures
+    FROM sync_subjects a JOIN sync_state s ON s.uid = a.uid
+    WHERE a.uid = ? AND ${activeSessionPredicateSql}`)
+    .bind(uid, ...activeSessionArgs(sessionHash, uid, fenceEpoch)).first();
+}
+
 export async function commitEncryptedBatch(db, uid, fenceEpoch, attempt, hash, sessionHash) {
   const { batchId, expectedRevision, consentRevision, replica, lastSeq, documents } = attempt;
   const nextRevision = expectedRevision + 1;
