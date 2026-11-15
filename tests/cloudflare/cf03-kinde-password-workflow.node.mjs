@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { readFileSync } from 'node:fs';
 import Workflow, { workflowSettings } from '../../kindeSrc/environment/workflows/thelogbookPassword/Workflow.js';
 
 function event(password, reason) {
@@ -20,6 +21,12 @@ async function invoke(password, reason) {
     else globalThis.kinde = previous;
   }
 }
+
+void test('Kinde workflow root is discoverable with an explicit provider runtime version', () => {
+  const root = JSON.parse(readFileSync(new URL('../../kinde.json', import.meta.url), 'utf8'));
+  assert.deepEqual(root, { rootDir: 'kindeSrc', version: '2024-12-09' });
+  assert.equal(workflowSettings.id, 'thelogbook-minimum-password-15');
+});
 
 void test('Kinde candidate declares a fail-closed password trigger and widget binding', () => {
   assert.equal(workflowSettings.trigger, 'user:new_password_provided');
