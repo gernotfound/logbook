@@ -228,6 +228,18 @@ adapter and is not evidence of remote D1 performance, IAM or quota.
 
 ## Isolated schema migration operations (merged; awaiting execution on 15 November 2026)
 
+**Live readback 15 November, after main v2.445.0:** the EU synthetic D1 still
+has only migration IDs 1–8, while the `0009` view and `0010` table/trigger
+are absent. The Time Travel bookmark is available; zero principals, sessions,
+cloud keys, or erasure jobs. Exactly one synthetic encrypted document and one
+receipt remain. No GitHub manual D1 migration run exists. The operator must
+configure the dedicated GitHub Actions secret (Cloudflare account D1 Edit only)
+and dispatch the main-only workflow: see the
+[operational runbook](../../docs/operations/cloudflare-workers-migration.md).
+Direct SQL execution is **not** an equivalent substitute for Wrangler's
+preflight, migration ledger, backup/rollback, and post-readback.
+
+
 Direct provider readback on 15 November confirmed the synthetic EU D1 is at
 **0008/0010**: no Kinde principal/session, no wrapped cloud key and no
 erasure job, but one existing synthetic ciphertext document and receipt.

@@ -3,6 +3,26 @@
 **Classificazione: CRITICAL.** Questo registro contiene **soltanto servizi necessari, ancora presenti nel codice oppure da validare prima del GO**. La storia delle configurazioni superate rimane nella cronologia Git e nelle PR. GitHub prova SHA e verifiche; i provider provano le rispettive risorse e il runtime. Un riscontro datato non autorizza cambi Production.
 
 
+## Verifica D1 corrente e impedimento operativo — 15/11/2026
+
+Sul `main 53f8a5562d9952c3f70c0175ee212f88e7f92d6b` (v2.445.0)
+la lettura diretta Cloudflare della D1 EU isolata, UUID fissato dal
+`wrangler.isolated.jsonc`, ha restituito otto migrazioni su dieci e
+nessuno degli oggetti nuovi di `0009`/`0010`. Time Travel è disponibile,
+read replicas sono disattivate; nessun principal, sessione, ADK o job reale,
+ma un documento e una ricevuta sintetici esistono. Non è stato eseguito
+un workflow D1 manuale su GitHub.
+
+**Stato: VERIFY-LIVE / BLOCCATO sull'esecuzione delle due migration remote.**
+Le credenziali GitHub `CLOUDFLARE_D1_API_TOKEN` sono di disponibilità
+non verificabile dal connettore; il workflow ha comunque bisogno del
+permesso minimo **D1 Edit** su un token diverso da quello Workers e di
+avvio manuale `workflow_dispatch` su `main`. Nessun SQL eseguito via
+connettore Cloudflare per bypassare backup, preflight o audit del workflow.
+I passaggi operativi e i criteri di accettazione sono riportati nel
+[runbook Cloudflare](cloudflare-workers-migration.md). Nessun nuovo
+permesso provider, costo, deploy pubblico o GO Auth/Sync è stato attivato.
+
 ## Checkpoint B-03 post-merge verificato — 15/11/2026
 
 La [PR #1135](https://github.com/gernotfound/logbook/pull/1135) è stata
