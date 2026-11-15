@@ -102,7 +102,7 @@ custodia KEK provisionata né recovery remoto dimostrato.
 
 **MUST (CF-05/06, codice `0009/0010` integrato 15/11/2026):** una scrittura replica richiede wrapped ADK presente e marker issuance coerente; il solo marker non autorizza mutazioni. La finalizzazione sanitaria, dopo drain bounded delle tabelle, richiede una sola `INSERT ... SELECT ... RETURNING` SQL lease-fenced che elimina ADK, registra prova terminale immutabile e stato job `complete`/barriera `erased_before_revision` **atomicamente**. `RETURNING` vuoto è contesa; ACK perso/ambiguo richiede lettura D1 primaria di job, prova, stato, residui e chiave, non successo presunto. `never-issued` è diverso da marker presente ma ADK mancante; il marker resta durevole. Il runner D-02a ha eseguito 8/8 test finalizzatore sintetici.
 
-**NON-GO runtime:** `0007`, `0009` e `0010` sono nel codice ma l'ultima verifica D1 remota attestava `0001`–`0008`; non esiste route ADK pubblica, Kinde/ADK integrata nella PWA, KEK Cloudflare provisionata o restore verificato. Non dichiarare E2EE né ritorno sicuro di dati locali dopo perdita del profilo device.
+**NON-GO runtime:** lo schema D1 effettivamente applicato va verificato presso il provider e nel [runbook corrente](../../docs/operations/cloudflare-workers-migration.md), separatamente dalla presenza delle migrazioni nel codice. Questo non prova route ADK pubblica, Kinde/ADK integrata nella PWA, custodia KEK Cloudflare o restore verificato. Non dichiarare E2EE né ritorno sicuro di dati locali dopo perdita del profilo device.
 
 ## Integrazioni da preservare
 

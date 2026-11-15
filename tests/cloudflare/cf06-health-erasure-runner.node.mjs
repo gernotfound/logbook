@@ -6,10 +6,11 @@ import erasureWorker, { acquireOneHealthErasureKeyPhaseLease, runOneHealthErasur
 import { wrapCloudAccountDataKey } from '../../cloudflare/api/cloud-key-crypto.mjs';
 
 const SQL_FILES = readdirSync(new URL('../../cloudflare/api/migrations/', import.meta.url))
-  .filter(name => /^000[1-8]_[a-z0-9_]+\.sql$/.test(name))
+  .filter(name => /^[0-9]{4}_[a-z0-9_]+\.sql$/.test(name))
   .sort();
+assert.ok(SQL_FILES.length >= 10, 'full erasure schema required');
 assert.deepEqual(SQL_FILES.map(name => name.slice(0, 4)),
-  ['0001', '0002', '0003', '0004', '0005', '0006', '0007', '0008']);
+  Array.from({ length: SQL_FILES.length }, (_, i) => String(i + 1).padStart(4, '0')));
 
 class Statement {
   constructor(sqlite, sql, args = []) { this.sqlite = sqlite; this.sql = sql; this.args = args; }
@@ -34,6 +35,8 @@ function fixture() {
   return { sqlite, db: new D1Sqlite(sqlite) };
 }
 function owner(f, uid) {
+  f.sqlite.prepare(`INSERT INTO auth_principals(uid,status,verified_at_ms,auth_epoch)
+    VALUES (?,'active',?,1)`).run(uid, Date.now() - 20_000);
   f.sqlite.prepare('INSERT INTO sync_subjects (uid,status,consent_revision,fence_epoch) VALUES (?,\'active\',1,1)').run(uid);
   f.sqlite.prepare('INSERT INTO sync_state (uid,revision) VALUES (?,0)').run(uid);
   f.sqlite.prepare(`INSERT INTO health_consent_acceptances
@@ -90,8 +93,6 @@ function job(f, uid) {
 const SYNTHETIC_KEK = Buffer.alloc(32, 71).toString('base64');
 
 async function ownerWithWrappedKey(f, uid) {
-  f.sqlite.prepare(`INSERT INTO auth_principals(uid,status,verified_at_ms,auth_epoch)
-    VALUES (?,'active',?,1)`).run(uid, Date.now() - 20_000);
   owner(f, uid);
   const adk = crypto.getRandomValues(new Uint8Array(32));
   const wrapped = await wrapCloudAccountDataKey(uid, adk, SYNTHETIC_KEK);
@@ -113,10 +114,10 @@ async function drainDataToKeyPhase(f, uid) {
   assert.fail('bounded runner did not reach awaiting-keys');
 }
 
-void test('bounded erasure drains every known replica table but never claims key erasure or completion', async () => {
+void test('bounded data steps drain known replica tables and preserve keys until terminal proof', async () => {
   const f = fixture();
   try {
-    owner(f, 'owner-a');
+    await ownerWithWrappedKey(f, 'owner-a');
     insertDocuments(f, 'owner-a', 7);
     seedReplicaHistory(f, 'owner-a');
     withdraw(f, 'owner-a');
@@ -149,7 +150,7 @@ void test('bounded erasure drains every known replica table but never claims key
 void test('simultaneous workers cannot both acquire one lease and double-delete a batch', async () => {
   const f = fixture();
   try {
-    owner(f, 'owner-a');
+    await ownerWithWrappedKey(f, 'owner-a');
     insertDocuments(f, 'owner-a', 7);
     withdraw(f, 'owner-a');
     const results = await Promise.all([
@@ -166,7 +167,7 @@ void test('simultaneous workers cannot both acquire one lease and double-delete 
 void test('a stolen lease blocks the old worker even when it had already selected the owner', async () => {
   const f = fixture();
   try {
-    owner(f, 'owner-a');
+    await ownerWithWrappedKey(f, 'owner-a');
     insertDocuments(f, 'owner-a', 3);
     withdraw(f, 'owner-a');
     const db = {
@@ -203,7 +204,7 @@ void test('a stolen lease blocks the old worker even when it had already selecte
 void test('a lost DELETE acknowledgement never returns success and retries from durable remaining rows', async () => {
   const f = fixture();
   try {
-    owner(f, 'owner-a');
+    await ownerWithWrappedKey(f, 'owner-a');
     insertDocuments(f, 'owner-a', 6);
     withdraw(f, 'owner-a');
     let lost = false;
@@ -239,8 +240,8 @@ void test('a lost DELETE acknowledgement never returns success and retries from 
 void test('owner isolation and oldest eligible job selection preserve other users', async () => {
   const f = fixture();
   try {
-    owner(f, 'owner-a');
-    owner(f, 'owner-b');
+    await ownerWithWrappedKey(f, 'owner-a');
+    await ownerWithWrappedKey(f, 'owner-b');
     insertDocuments(f, 'owner-a', 3);
     insertDocuments(f, 'owner-b', 2);
     withdraw(f, 'owner-a');
@@ -257,20 +258,25 @@ void test('owner isolation and oldest eligible job selection preserve other user
 void test('direct writes and premature reacceptance cannot resurrect a withdrawn owner', async () => {
   const f = fixture();
   try {
-    owner(f, 'owner-a');
+    await ownerWithWrappedKey(f, 'owner-a');
     insertDocuments(f, 'owner-a', 1);
     withdraw(f, 'owner-a');
-    assert.throws(() => insertDocuments(f, 'owner-a', 2), /withdrawn-document-write/);
+    // Both the withdrawal trigger and the ADK grant fence reject this write.
+    // SQLite does not promise which BEFORE trigger reports the denial first.
+    const documentDenied = /withdrawn-document-write|replica-cloud-key-required/;
+    assert.throws(() => insertDocuments(f, 'owner-a', 2), documentDenied);
     assert.throws(() => f.sqlite.prepare(`UPDATE sync_documents SET envelope_json='{}' WHERE uid='owner-a'`).run(),
-      /withdrawn-document-write/);
+      documentDenied);
     assert.throws(() => f.sqlite.prepare(`INSERT INTO sync_replicas
       (uid,slot,replica_id,generation,lease_until_ms,checkpoint_at_ms,checkpoint_clock_json,last_seq,status)
       VALUES ('owner-a','s00','illegal',1,9999999999999,1,'{}',0,'active')`).run(),
-    /withdrawn-replica-write/);
+    /withdrawn-replica-write|replica-cloud-key-required/);
     assert.throws(() => f.sqlite.prepare(`UPDATE sync_subjects
       SET status='active', consent_revision=2, fence_epoch=2
       WHERE uid='owner-a'`).run(), /erasure-not-complete/);
     assert.equal(count(f, 'sync_documents', 'owner-a'), 1);
+    assert.equal(count(f, 'cloud_account_keys', 'owner-a'), 1);
+    assert.equal(count(f, 'sync_replicas', 'owner-a'), 0);
     assert.equal(job(f, 'owner-a').status, 'pending');
   } finally { f.sqlite.close(); }
 });
@@ -278,7 +284,7 @@ void test('direct writes and premature reacceptance cannot resurrect a withdrawn
 void test('moving to the key phase requires all known data gone and does not bypass a lease', async () => {
   const f = fixture();
   try {
-    owner(f, 'owner-a');
+    await ownerWithWrappedKey(f, 'owner-a');
     insertDocuments(f, 'owner-a', 2);
     withdraw(f, 'owner-a');
     assert.throws(() => f.sqlite.prepare(`UPDATE health_erasure_jobs SET
@@ -297,7 +303,7 @@ void test('missing D1 schema and failed provider writes never claim deletion suc
   await assert.rejects(runOneHealthErasureStep({}), /erasure-db-unavailable/);
   const f = fixture();
   try {
-    owner(f, 'owner-a');
+    await ownerWithWrappedKey(f, 'owner-a');
     insertDocuments(f, 'owner-a', 1);
     withdraw(f, 'owner-a');
     const blocked = {
@@ -491,7 +497,7 @@ void test('scheduler has no public fetch endpoint and handles only one bounded s
   assert.equal(typeof erasureWorker.fetch, 'undefined');
   const f = fixture();
   try {
-    owner(f, 'owner-a');
+    await ownerWithWrappedKey(f, 'owner-a');
     insertDocuments(f, 'owner-a', 6);
     withdraw(f, 'owner-a');
     await erasureWorker.scheduled({}, { DB: f.db });
