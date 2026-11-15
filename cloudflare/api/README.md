@@ -4,7 +4,7 @@ This is a candidate API, **not an enabled production route**. The existing
 Firebase/Firestore writer, IndexedDB journal and encrypted vault remain active.
 
 - Schema: migrations/0001_encrypted_replica.sql through
-  migrations/0009_require_cloud_key_for_replica_writes.sql; only 0001–0008 have remote
+  migrations/0010_atomic_health_erasure_finalization.sql; only 0001–0008 have remote
   isolated D1 schema readback evidence (14/11/2026). Local-only rollback is **destructive,
   disposable-only** rollback in rollback/ (never apply it to user data).
 - Local-only Wrangler configuration: wrangler.local.jsonc; placeholder database
@@ -32,6 +32,47 @@ Firebase/Firestore writer, IndexedDB journal and encrypted vault remain active.
   separate authorized remediation, not an automatic reset. SQLite regression
   coverage uses all migrations, but neither real D1 enforcement nor authenticated
   end-to-end browser integration is certified by that test.
+- **B-02 (stacked on B-01, branch-only; no D1 remote migration):** 0010
+  introduces an immutable owner-scoped `health_erasure_finalizations` terminal
+  receipt, `health_erasure_jobs.completed_at_ms`,
+  `health_erasure_jobs.erased_before_revision`,
+  `health_erasure_jobs.key_disposition` and
+  `sync_subjects.erased_before_revision`. Its value N fences all consent
+  revisions **strictly below N**; it is independent of the technical CAS
+  counter `sync_state.revision`, which is not incremented at erasure.
+  The complete operation is a **single** `INSERT ... SELECT ... RETURNING`
+  into `health_erasure_finalizations`. Supply the five job-lease arguments
+  `uid, consent_revision, fence_epoch, lease_epoch, lease_token` in that
+  order; compute the server timestamp, `consent_revision + 1`, current
+  `sync_state.revision` and key disposition/issuance timestamp inside the
+  INSERT SELECT from trusted D1 tables. The SQL tested contract is
+  `FINALIZE` in `tests/cloudflare/cf06-atomic-erasure-finalization.node.mjs`;
+  the D-owned job worker must use the same statement, not separate DELETE/UPDATE
+  commands. The job must hold a still-valid lease while in
+  `processing/awaiting-keys`; if that lease expires, D must re-claim that
+  phase using the existing monotone lease epoch and a new token before retry.
+  `0006`'s current scheduler only claims `phase='data'`: the finalizer
+  must explicitly cover `awaiting-keys` without weakening its fencing.
+  BEFORE INSERT verifies the lease, withdrawn subject, matching owner/epoch,
+  empty documents/receipts/mutations/replicas and exact ADK/issuance match.
+  The AFTER INSERT trigger deletes the wrapped ADK if issued, changes the job
+  to `complete`, and advances the subject consent+epoch and durable erasure
+  floor. Every required DELETE or UPDATE checks `changes()=1`; any failure
+  aborts the **same SQLite statement**, removing all partial side effects
+  including the tentative receipt. It is not an assumption about D1.batch().
+  `destroyed` requires a present, exactly matching ADK+marker.
+  `never-issued` requires neither an ADK nor that generation's issuance
+  marker. Marker-present/key-missing is corruption and always blocks complete.
+  Direct standalone key DELETE and direct job status=complete are fenced.
+  The issuance marker is never removed; job receipts are immutable and survive
+  optional completed-job retention separately.
+  The runner must regard a zero-row RETURNING as non-completion. Following an
+  ambiguous/lost SQL reply it must re-read from D1 **first-primary**, verify
+  terminal receipt, matching owner/generation, job `complete`, withdrawn
+  subject revision/epoch/floor, no ADK and no ciphertext/replica/ledger residue.
+  Only that combined durable proof can be reported as `complete`. A timeout,
+  status 409 or missing receipt is not success. No Kinde identity deletion or
+  user-data migration is performed by this SQL.
 - The database contains ciphertext envelopes and public causal metadata only.
   Root and monthly paths retain the existing cloud cipher v1 / Sync Protocol 3.
 - Account identity, consent and epoch remain provisioned only by a separate
