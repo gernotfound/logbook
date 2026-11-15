@@ -111,6 +111,12 @@ Il recupero esplicito di un vecchio journal richiede una seconda verifica truste
 
 **MUST (retention sanitaria):** il cron scansiona in ordine le ricevute `health_data_erasures` `complete` con `purgeAfter` scaduto. Ogni invocazione limita sia le cancellazioni sia i record ispezionati (al massimo il doppio del budget di cancellazioni). La cancellazione richiede una prova transazionale valida dell'UID, della revisione/epoch e di `erasedBeforeRevision`. Se la prova manca, il job non viene cancellato: la transazione rinvia `purgeAfter` di sette giorni e conserva la ricevuta per un nuovo tentativo. Il rinvio impedisce che gli stessi record non eliminabili blocchino indefinitamente quelli successivi tra cron consecutivi; non è prova di cancellazione né autorizzazione ad attenuare i controlli.
 
+### Contratto candidato Workers/D1 dopo la migration `0010` (15/11/2026)
+
+**MUST:** `cloudflare/api/migrations/0010_atomic_health_erasure_finalization.sql` e `cloudflare/jobs/health-erasure-worker.mjs` autorizzano `awaiting-keys → complete` esclusivamente tramite SQL atomica `INSERT ... SELECT ... RETURNING` che verifica UID, consenso, epoch, lease, assenza di documenti/ricevute/mutazioni/repliche e ADK. Il runner effettua readback primario della prova durevole anche dopo ACK perso; non dichiara `complete` da una chiave mancante o da `RETURNING` vuoto. Il consenso server ora restituisce UID trusted; il client candidato lo verifica anche negli scambi identità A→B→A. La lettura ADK rights-only non abilita fitness e richiede sessione valida e job di erasure coerente.
+
+**VERIFY:** lo schema e il runner con i test full-schema sono integrati su GitHub, non attestati sulla D1 remota; cron, OAuth rights-only, account deletion, retention e restore anti-resurrection restano gate NO-GO. I contratti Firestore/Vercel sopra descrivono ancora il vecchio codice applicativo e non provano la migrazione del runtime.
+
 ## Relazioni e limiti delle verifiche
 
 - [Ciclo account](account-lifecycle.md): verifica email, guest→account, revoca globale sessioni, logout e account deletion sono failure path distinti.
