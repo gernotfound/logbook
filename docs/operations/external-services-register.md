@@ -3,7 +3,30 @@
 **Classificazione: CRITICAL.** Questo registro contiene **soltanto servizi necessari, ancora presenti nel codice oppure da validare prima del GO**. La storia delle configurazioni superate rimane nella cronologia Git e nelle PR. GitHub prova SHA e verifiche; i provider provano le rispettive risorse e il runtime. Un riscontro datato non autorizza cambi Production.
 
 
-## Checkpoint credenziali D1 — 15/11/2026
+## D1 EU isolata — schema remoto 10/10 verificato (15/11/2026)
+
+**COMPLETATO limitatamente allo schema D1 isolato.** Il
+[workflow manuale #43702489692](https://github.com/gernotfound/logbook/actions/runs/43702489692) è terminato
+**SUCCESS** sullo SHA `5ca7afaca94e4431e298595eecdd2a023546fd21`
+di `main` (v2.446.0). Wrangler ha applicato `0009` e
+`0010`. La lettura diretta successiva di Cloudflare conferma
+il ledger **`0001`–`0010`**, `jurisdiction=eu`, repliche
+disabilitate, Time Travel bookmark disponibile, view
+`sync_writable_cloud_key`, tabella
+`health_erasure_finalizations`, relativi trigger e colonne
+erasure. Zero account/sessioni/ADK/job erasure reali;
+**un documento e una ricevuta sintetici preservati**.
+Nessun dato Firebase trasferito.
+
+Il token GitHub `CLOUDFLARE_D1_API_TOKEN` ha funzionato
+nel workflow: disponibilità e permessi sufficienti verificati
+per questa esecuzione, **non** policy IAM esatta, scadenza
+o eventuale revoca. Non sono stati eseguiti restore, prove
+end-to-end Auth/Sync/consenso/cifratura/erasure, né verifiche
+prestazionali o di quote. **NO-GO full-stack**; Worker API
+e Auth Gate non sono resi pubblici dalla migration.
+
+## Checkpoint storico credenziali prima dell'esecuzione — 15/11/2026
 
 **Stato dichiarato dal proprietario (non attestato mediante lettura IAM):**
 creato un API token Cloudflare distinto da quello Worker e salvato nel repository
@@ -22,7 +45,7 @@ diretto di schema e ledger. Il registro non dà GO ad Auth, Sync, consenso,
 cifratura o erasure. Dettagli nel
 [runbook operativo](cloudflare-workers-migration.md).
 
-## Verifica D1 e impedimento operativo precedenti alla conferma del token — 15/11/2026
+## Verifica D1 storica precedente a token e migrazione — 15/11/2026
 
 Sul `main 53f8a5562d9952c3f70c0175ee212f88e7f92d6b` (v2.445.0)
 la lettura diretta Cloudflare della D1 EU isolata, UUID fissato dal
@@ -42,7 +65,7 @@ I passaggi operativi e i criteri di accettazione sono riportati nel
 [runbook Cloudflare](cloudflare-workers-migration.md). Nessun nuovo
 permesso provider, costo, deploy pubblico o GO Auth/Sync è stato attivato.
 
-## Checkpoint B-03 post-merge verificato — 15/11/2026
+## Checkpoint B-03 storico precedente alla migrazione D1 — 15/11/2026
 
 La [PR #1135](https://github.com/gernotfound/logbook/pull/1135) è stata
 squash-merged in `main ed31c42af38e065dd448308e6c7d546ae80978e6` (v2.444.0). CI PR [#43662166211](https://github.com/gernotfound/logbook/actions/runs/43662166211), [Main Release Gate/CodeQL #43696757160](https://github.com/gernotfound/logbook/actions/runs/43696757160), [Worker API e Auth Gate privati #43696757245](https://github.com/gernotfound/logbook/actions/runs/43696757245), [Firestore #43696941939](https://github.com/gernotfound/logbook/actions/runs/43696941939) e [Cloudflare Static Assets/smoke #43696964223](https://github.com/gernotfound/logbook/actions/runs/43696964223) tutti **SUCCESS** sull'esatto SHA. Firestore non ha effettuato scritture: Rules e indici erano già convergenti.
@@ -54,7 +77,7 @@ soltanto per dispatch manuale dopo preflight/CI, ma non eseguito; richiede
 `CLOUDFLARE_D1_API_TOKEN` separato in GitHub Secrets. Non è stato autorizzato
 il GO funzionale dei Worker, della sincronizzazione o di OAuth/posta Production.
 
-## Verifica provider Cloudflare — 15/11/2026 · schema isolato
+## Verifica provider Cloudflare storica pre-migrazione — 15/11/2026
 
 Readback diretto del provider: la D1 isolata ha giurisdizione `eu`,
 repliche disabilitate e Time Travel bookmark disponibile, ma il ledger
@@ -86,7 +109,7 @@ Conservare il checkpoint storico del 14/11 come tale.
 | **Cloudflare Workers Static Assets** | Ultimo provider readback 14/11: `thelogbook-frontend` su `thelogbook.me`, certificato TLS, solo binding ASSETS, `workers.dev`/preview disabilitati. [Workflow #43658905338](https://github.com/gernotfound/logbook/actions/runs/43658905338): build/deploy/smoke stesso `main f10dd7089` v2.442.0 **SUCCESS** al primo tentativo. Web Analytics non ha iniettato script nello smoke; impostazioni provider non rilette ora. | Browser/guest, aggiornamento PWA e Safari fisico, rollback; lo statico non prova Auth/D1. |
 | **Cloudflare Web Analytics / RUM** | Il 14/11 il provider aveva automatic setup attivo e iniettava script nel documento, contrariamente al requisito no telemetry. Corretto senza eliminazioni: **`auto_install=false`, ruleset `enabled=false`, zona `rum=manual`** (valore restituito dopo disattivazione auto-install); nessun snippet nel build. Resta esistente la risorsa Analytics storica. | Monitorare configurazione provider e risposta byte-exact su `thelogbook.me`; non riattivare tracking né cancellare dati storici senza autorizzazione separata. |
 | **Cloudflare Workers API** | Ultima lettura provider 14/11: `thelogbook-api-isolated` e `thelogbook-cf03-auth-gate-isolated` privati, binding D1 EU/`AUTH_GATE`, limiter e nessuna route pubblica. I nuovi contratti Auth/consenso/erasure sono nel codice main ma non eseguiti contro Kinde reale. | Nuova verifica provider, test HTTP Kinde/CSRF/session rights-only, ADK, quote/abuso e recovery prima di API pubbliche. |
-| **Cloudflare D1** | Sandbox `thelogbook-cf02-eu-isolated-20261113`, `jurisdiction=eu`, read replication off; ultimo readback provider 14/11 con `0001`–`0008`. SQL `0009/0010` versionato e testato su SQLite, **applicazione D1 remota non attestata**. Nessun erasure cron attivato. | Verificare ledger/schema D1 reale isolato, restore, quote, KEK e backup/anti-resurrection; `eu` non localizza Workers, OAuth e log. |
+| **Cloudflare D1** | Sandbox `thelogbook-cf02-eu-isolated-20261113` EU, repliche off: **`0001`–`0010` applicate e verificate**, [workflow #43702489692](https://github.com/gernotfound/logbook/actions/runs/43702489692) SUCCESS + readback Cloudflare indipendente su ledger, view, tabella, trigger e colonne; fixture sintetiche conservate, zero account/chiavi/job reali. Nessun cron erasure attivo. | Test restore, quote/CPU, custodia KEK, Auth/consenso/sync/erasure end-to-end e anti-resurrection. D1 EU non localizza Workers, OAuth o log. |
 | **Cloudflare DNS / IONOS** | Zona attiva; il web apicale è instradato al Worker tramite DNS proxied originless; MX, DKIM, DMARC e altri record email IONOS rimasti invariati alla verifica provider del 14/11/2026. | Certificato assegnato e route attiva non sostituiscono smoke HTTPS e test browser sulla versione rilasciata; OAuth/posta Production e backend rimangono esclusi da questa autorizzazione. |
 
 ## Dipendenze del codice legacy da sostituire

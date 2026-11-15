@@ -3,7 +3,42 @@
 **Classificazione: CRITICAL · stato PARZIALE / NO-GO funzionale (dominio pubblico di sviluppo autorizzato).** La fonte di verità per il codice e i test è `main` GitHub; per risorse e runtime sono i rispettivi provider. Questo documento descrive **contratti correnti e blocchi**, non lo storico di commit. [EPIC #1053](https://github.com/gernotfound/logbook/issues/1053) · [registro servizi](external-services-register.md) · [CF-09 #1063](https://github.com/gernotfound/logbook/issues/1063).
 
 
-## Checkpoint credenziali D1 isolate — 15/11/2026
+## D1 isolata aggiornata — 10/10 migrazioni verificate (15/11/2026)
+
+**Prova GitHub:** [workflow manuale #43702489692](https://github.com/gernotfound/logbook/actions/runs/43702489692)
+**SUCCESS** su `main 5ca7afaca94e4431e298595eecdd2a023546fd21`
+(v2.446.0). Il job ha verificato il target e il gate release,
+poi Wrangler ha applicato `0009_require_cloud_key_for_replica_writes.sql`
+e `0010_atomic_health_erasure_finalization.sql` e ha superato il
+readback finale.
+
+**Prova indipendente Cloudflare:** D1
+`thelogbook-cf02-eu-isolated-20261113` (UUID
+`9aa51833-8adc-495f-bdfc-93b5542e8023`), `jurisdiction=eu`,
+repliche disabilitate, bookmark Time Travel disponibile.
+Il ledger contiene **tutte e dieci** le migrazioni ordinate
+`0001`–`0010`. Sono presenti la view
+`sync_writable_cloud_key`, la tabella
+`health_erasure_finalizations`, i trigger
+`sync_receipt_requires_cloud_key`,
+`health_erasure_finalization_fence` e
+`health_erasure_finalize_atomically`, e i nuovi campi per
+la finalizzazione dell'erasure su subject/job. Zero principal
+Auth, sessioni, ADK cloud e job erasure; il documento cifrato e la
+ricevuta **sintetici** preesistenti (uno ciascuno) sono conservati.
+
+**Risultato limitato:** schema della sola D1 EU sintetica **COMPLETATO**;
+il token dedicato `CLOUDFLARE_D1_API_TOKEN` è stato effettivamente
+utilizzabile dal job, ma non è stata ispezionata la policy IAM completa,
+né la scadenza/revoca. Nessuna migrazione di account/dati Firebase.
+La disponibilità del bookmark non dimostra un restore provato:
+restano da validare backup/restore, Auth Kinde, consenso,
+KEK/cloud keys, sincronizzazione/ACK, erasure end-to-end,
+quote/abuso e iOS/Safari. **NO-GO funzionale**, API Auth/Sync
+pubbliche ancora escluse. Non ripetere la migration per attivare
+funzioni estranee allo schema.
+
+## Checkpoint storico credenziali D1 prima dell'esecuzione — 15/11/2026
 
 **Nuova evidenza dichiarata dal proprietario:** creato su Cloudflare un token API
 separato dedicato alle migrazioni D1 e aggiunto su GitHub Actions come repository
@@ -32,7 +67,7 @@ registrare run SHA ed esito provider prima di procedere. Né questo
 checkpoint né il secret autorizzano attivazione di API pubbliche, login Kinde,
 dati salute reali, DNS o cancellazioni.
 
-## B-04 — gate operativo migrazioni D1 isolate (stato precedente alla conferma del token, 15/11/2026)
+## B-04 — checkpoint storico precedente alla migrazione D1 (15/11/2026)
 
 **Evidenza live successiva a `main 53f8a5562d9952c3f70c0175ee212f88e7f92d6b` (v2.445.0):**
 readback Cloudflare in sola lettura sulla **sola** D1 sintetica
@@ -86,7 +121,7 @@ prima di ripetere. La sola conclusione del workflow non prova restore,
 Auth Kinde, cifratura, replica/ACK, revoca o erasure end-to-end; non è GO
 full-stack.
 
-## Checkpoint B-03 post-merge verificato — 15/11/2026
+## Checkpoint B-03 storico post-merge, pre-migrazione D1 — 15/11/2026
 
 La [PR #1135](https://github.com/gernotfound/logbook/pull/1135) è stata integrata
 con squash in `main ed31c42af38e065dd448308e6c7d546ae80978e6` (v2.444.0). CI PR [#43662166211](https://github.com/gernotfound/logbook/actions/runs/43662166211), [Main Release Gate/CodeQL #43696757160](https://github.com/gernotfound/logbook/actions/runs/43696757160), [Worker API e Auth Gate privati #43696757245](https://github.com/gernotfound/logbook/actions/runs/43696757245), [Firestore #43696941939](https://github.com/gernotfound/logbook/actions/runs/43696941939) e [Cloudflare Static Assets/smoke #43696964223](https://github.com/gernotfound/logbook/actions/runs/43696964223) tutti **SUCCESS** sull'esatto SHA. Firestore non ha effettuato scritture: Rules e indici erano già convergenti.
@@ -100,7 +135,7 @@ in GitHub Secrets e le verifiche preflight già implementate. Il successo dei
 deploy e della CI non prova l'applicazione delle migrazioni, né autorizza il
 GO di Auth, sync, cifratura cloud, consenso o cancellazione completa.
 
-## Verifica provider Cloudflare — 15/11/2026 · schema isolato
+## Verifica provider Cloudflare storica pre-migrazione — 15/11/2026
 
 Readback diretto Cloudflare su D1 `thelogbook-cf02-eu-isolated-20261113`:
 giurisdizione `eu`, read replication disabilitata, bookmark Time Travel
