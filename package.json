@@ -1,7 +1,7 @@
 {
   "name": "logbook",
   "private": true,
-  "version": "2.461.0",
+  "version": "2.462.0",
   "type": "module",
   "packageManager": "npm@11.21.0",
   "engines": {
@@ -117,11 +117,11 @@
     "sharp": "^0.35.5",
     "@babel/parser": "8.1.2",
     "typescript": "^7.0.2",
-    "vite": "^8.3.6",
+    "vite": "^8.3.8",
     "vitest": "^5.0.5",
-    "@unplugin-pwa/vite": "0.0.3",
-    "@vite-pwa/workbox-swkit": "8.0.13",
-    "@unplugin-pwa/core": "0.0.3",
+    "@unplugin-pwa/vite": "0.0.6",
+    "@vite-pwa/workbox-swkit": "8.0.15",
+    "@unplugin-pwa/core": "0.0.6",
     "@stryker-mutator/core": "10.1.1",
     "@stryker-mutator/vitest-runner": "10.1.1"
   },
