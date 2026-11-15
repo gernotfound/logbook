@@ -16,6 +16,11 @@ const TOOLSETS = {
   },
 };
 
+const MAX_ARCHIVE_BYTES = 64 * 1024 * 1024;
+const MAX_BINARY_BYTES = 96 * 1024 * 1024;
+const DOWNLOAD_TIMEOUT_MS = 90_000;
+const EXTRACTION_TIMEOUT_MS = 60_000;
+
 class ToolFailure extends Error {
   constructor(tool, status) {
     super(`${tool} exited with status ${status}`);
@@ -48,9 +53,30 @@ export function scanRange() {
   return `${base}..HEAD`;
 }
 
+// Only the pinned archive SHA-256 may authorize scanner bytes to be written.
+// tar emits the named executable to stdout, never archive-controlled paths to disk.
+async function readBoundedArchive(response, maxBytes) {
+  const advertisedLength = response.headers?.get('content-length');
+  if (advertisedLength !== null && advertisedLength !== undefined) {
+    if (!/^\d+$/.test(advertisedLength) || BigInt(advertisedLength) > BigInt(maxBytes)) {
+      throw new Error('Security scanner archive exceeds the download size limit');
+    }
+  }
+  if (!response.body) throw new Error('Security scanner archive has no response body');
+
+  const chunks = [];
+  let total = 0;
+  for await (const chunk of response.body) {
+    total += chunk.byteLength;
+    if (total > maxBytes) throw new Error('Security scanner archive exceeds the download size limit');
+    chunks.push(Buffer.from(chunk));
+  }
+  return Buffer.concat(chunks, total);
+}
+
 // The release page and the official asset API serve the same pinned archive.
 // Retry only transfer failures; a checksum mismatch must never be recoverable.
-export async function fetchVerifiedToolArchive(tool, request = fetch) {
+export async function fetchVerifiedToolArchive(tool, request = fetch, { maxBytes = MAX_ARCHIVE_BYTES, timeoutMs = DOWNLOAD_TIMEOUT_MS } = {}) {
   const sources = [
     { url: tool.url },
     ...(tool.assetApiUrl ? [{
@@ -64,34 +90,53 @@ export async function fetchVerifiedToolArchive(tool, request = fetch) {
     try {
       response = await request(source.url, {
         redirect: 'follow',
+        signal: AbortSignal.timeout(timeoutMs),
         ...(source.headers ? { headers: source.headers } : {}),
       });
     } catch (error) {
       if (index + 1 === sources.length) throw error;
-      console.warn(`Release download unavailable for ${tool.binary}; retrying official GitHub asset API.`);
+      console.warn('Release download unavailable for ' + tool.binary + '; retrying official GitHub asset API.');
       continue;
     }
     if (!response.ok) {
       if (index + 1 < sources.length && [500, 502, 503, 504].includes(response.status)) {
-        console.warn(`Release download HTTP ${response.status} for ${tool.binary}; retrying official GitHub asset API.`);
+        console.warn('Release download HTTP ' + response.status + ' for ' + tool.binary + '; retrying official GitHub asset API.');
         continue;
       }
-      throw new Error(`Unable to download ${tool.binary} ${tool.version}: HTTP ${response.status}`);
+      throw new Error('Unable to download ' + tool.binary + ' ' + tool.version + ': HTTP ' + response.status);
     }
-    const bytes = Buffer.from(await response.arrayBuffer());
+    const bytes = await readBoundedArchive(response, maxBytes);
     const digest = createHash('sha256').update(bytes).digest('hex');
-    if (digest !== tool.sha256) throw new Error(`${tool.binary} ${tool.version} checksum mismatch`);
+    if (digest !== tool.sha256) throw new Error(tool.binary + ' ' + tool.version + ' checksum mismatch');
     return bytes;
   }
-  throw new Error(`Unable to download ${tool.binary} ${tool.version} from official release sources`);
+  throw new Error('Unable to download ' + tool.binary + ' ' + tool.version + ' from official release sources');
+}
+
+export async function extractVerifiedToolBinary(tool, root, archiveBytes) {
+  if (!/^[a-zA-Z0-9_-]+(?:\.exe)?$/.test(tool.binary)) {
+    throw new Error('Invalid security scanner executable name');
+  }
+  const archiveFlag = tool.archive.endsWith('.tar.gz') ? '-xOzf' : '-xOf';
+  const extracted = spawnSync('tar', [archiveFlag, '-', tool.binary], {
+    input: archiveBytes,
+    encoding: 'buffer',
+    maxBuffer: MAX_BINARY_BYTES,
+    timeout: EXTRACTION_TIMEOUT_MS,
+    windowsHide: true,
+  });
+  if (extracted.error) throw extracted.error;
+  if (extracted.status !== 0 || !extracted.stdout?.length) {
+    throw new Error('Unable to extract verified ' + tool.binary + ' archive member');
+  }
+  const binaryPath = join(root, tool.binary);
+  await writeFile(binaryPath, extracted.stdout, { flag: 'wx', mode: 0o700 });
+  return binaryPath;
 }
 
 async function installTool(tool, root) {
-  const archivePath = join(root, tool.archive);
   const bytes = await fetchVerifiedToolArchive(tool);
-  await writeFile(archivePath, bytes);
-  run('tar', [tool.archive.endsWith('.tar.gz') ? '-xzf' : '-xf', archivePath, '-C', root]);
-  return join(root, tool.binary);
+  return extractVerifiedToolBinary(tool, root, bytes);
 }
 
 async function main() {
