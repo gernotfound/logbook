@@ -22,6 +22,46 @@ describe('isolated Cloudflare document transport', () => {
         }));
     });
 
+    it('bounds D1 responses and request lifetime without treating malformed bytes as receipt proof', async () => {
+        const declaredOversize = createCloudflareReplicaTransport(vi.fn(async () =>
+            new Response('{"receipt":null}', {
+                headers: { 'Content-Length': String(16 * 1024 + 1) },
+            })) as typeof fetch);
+        await expect(declaredOversize.receipt(batch)).rejects.toBeInstanceOf(CloudReplicaTransportError);
+
+        let cancelled = false;
+        const oversizedStream = new ReadableStream<Uint8Array>({
+            start(controller) {
+                controller.enqueue(new Uint8Array(16 * 1024 + 1));
+            },
+            cancel() { cancelled = true; },
+        });
+        const oversized = createCloudflareReplicaTransport(vi.fn(async () =>
+            new Response(oversizedStream)) as typeof fetch);
+        await expect(oversized.receipt(batch)).rejects.toBeInstanceOf(CloudReplicaTransportError);
+        await vi.waitFor(() => expect(cancelled).toBe(true));
+
+        const csrf = vi.fn(async (_url: RequestInfo | URL, _init?: RequestInit) =>
+            new Response(JSON.stringify({ receipt: null })));
+        await expect(createCloudflareReplicaTransport(csrf as typeof fetch).receipt(batch)).resolves.toBeNull();
+        const sent = (csrf.mock.calls[0] as [RequestInfo | URL, RequestInit])[1];
+        expect(sent.signal).toBeInstanceOf(AbortSignal);
+        expect(sent.signal?.aborted).toBe(false);
+
+        const claimedMissingKey = createCloudflareReplicaTransport(vi.fn(async () =>
+            new Response(JSON.stringify({ error: 'cloud-key-required' }), {
+                status: 428, headers: { 'Content-Type': 'application/json',
+                    'Cache-Control': 'no-store', 'Content-Length': String(16 * 1024 + 1) },
+            })) as typeof fetch);
+        const claim = { mutationId: 'mutation0000000001', expectedRevision: 0,
+            expectedFenceEpoch: 1, consentRevision: 1, candidateReplicaId: 'device-a',
+            currentReplica: null, checkpointClock: {} };
+        await expect(claimedMissingKey.replayStoredClaim(claim, 'csrf'))
+            .rejects.toMatchObject({ status: 428 });
+        await expect(claimedMissingKey.replayStoredClaim(claim, 'csrf'))
+            .rejects.not.toBeInstanceOf(CloudReplicaCloudKeyRequiredError);
+    });
+
     it('does not consider a conflict, timeout or malformed response to be a remote ACK', async () => {
         const conflict = createCloudflareReplicaTransport(vi.fn(async () => new Response(
             JSON.stringify({ error: 'replica-fenced-or-conflict' }), { status: 409 },
