@@ -3,7 +3,15 @@
 **Classificazione: CRITICAL.** Questo registro contiene **soltanto servizi necessari, ancora presenti nel codice oppure da validare prima del GO**. La storia delle configurazioni superate rimane nella cronologia Git e nelle PR. GitHub prova SHA e verifiche; i provider provano le rispettive risorse e il runtime. Un riscontro datato non autorizza cambi Production.
 
 
-## Checkpoint servizi corrente — 15/11/2026 (baseline v2.464.0)
+## Checkpoint corrente dei servizi — v2.473.0, 15/11/2026
+
+**GitHub main:** `2702a5898004451028201d872112e58a5a800ab0` (v2.473.0). La baseline v2.464.0 descritta sotto è storica. Le [PR #1166](https://github.com/gernotfound/logbook/pull/1166) e [#1167](https://github.com/gernotfound/logbook/pull/1167) hanno introdotto soltanto chiamanti **candidati** browser per sessione Kinde → consenso → ADK → journal D1 e prima accettazione sanitaria D1. Non sono montati su `AuthContext`, né sono state attivate route o credenziali provider. CI PR [#43769436716](https://github.com/gernotfound/logbook/actions/runs/43769436716) e [#43770249310](https://github.com/gernotfound/logbook/actions/runs/43770249310) SUCCESS.
+
+**Gate v2.473.0:** [Main/CodeQL #43770520566](https://github.com/gernotfound/logbook/actions/runs/43770520566), [Firestore #43770738175](https://github.com/gernotfound/logbook/actions/runs/43770738175) e [Static Assets + smoke HTTPS #43770785236](https://github.com/gernotfound/logbook/actions/runs/43770785236) SUCCESS sullo SHA esatto. Rilettura provider Cloudflare: `thelogbook-frontend` **ACTIVE** e solo binding `ASSETS`; `thelogbook-api-isolated` e `thelogbook-cf03-auth-gate-isolated` **ACTIVE ma privati**; `thelogbook-cf03-kinde-http-isolated` **NON distribuito**; database `thelogbook-cf02-eu-isolated-20261113` con giurisdizione `eu`. La presenza del database non prova l'intera residenza dei dati o GDPR.
+
+**Mappa stati:** Kinde **VERIFY-LIVE**, nessun login/Google/password/reset live validato e workflow ≥15 non sincronizzato né collaudato; Firebase Auth/Firestore/App Check **LEGACY ma ancora chiamati dal browser**; Vercel backend **sospeso secondo evidenze precedenti**, con codice residuale e nessuna riattivazione autorizzata. Nessuna KEK o segreto Cloudflare attivo verificato in questo passaggio; nessun cambiamento al tenant Kinde, OAuth Google, DNS, servizi di posta o billing. API sanitaria pubblica e cutover restano **NO-GO**. Il [runbook](cloudflare-workers-migration.md) documenta i blocchi verificabili prima del GO.
+
+## Checkpoint storico — 15/11/2026 (baseline v2.464.0)
 
 **Baseline verificata prima di questo aggiornamento documentale:** `547915c1d98c9566d0951ccc04aeb2b7a32e69f6`, **v2.464.0**. L'HEAD effettivo e il suo SHA si leggono su GitHub. Sono integrati gli incrementi CRITICAL [#1153](https://github.com/gernotfound/logbook/pull/1153), [#1154](https://github.com/gernotfound/logbook/pull/1154), [#1152](https://github.com/gernotfound/logbook/pull/1152), [#1141](https://github.com/gernotfound/logbook/pull/1141), [#1155](https://github.com/gernotfound/logbook/pull/1155) e [#1143](https://github.com/gernotfound/logbook/pull/1143). Anche [#1157](https://github.com/gernotfound/logbook/pull/1157) e [#1158](https://github.com/gernotfound/logbook/pull/1158) sono integrate; Vite #1144 è chiusa senza merge perché assorbita. I loro controlli non dimostrano il GO applicativo.
 
