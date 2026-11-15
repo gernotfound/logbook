@@ -13,6 +13,19 @@
 - [Portabilità](backup-and-portability.md): backup/import/export; [Privacy tecnica](telemetry-and-privacy.md): nessun invio automatico di errori.
 - [Crash consistency](crash-consistency.md), [Causal GC](causal-gc.md), [Domain Operations](domain-operations.md): specifiche di commit/ACK e protocollo.
 
+## Collegamento candidato sessione Kinde → journal D1 (CF-03/04)
+
+`src/lib/sync/kindeCandidateJournalBridge.ts` mette in sequenza il boundary
+sessione+consenso Kinde, lo stato dell'archivio locale verificato, l'acquisizione
+ADK per una sola operazione e la consegna D1 con receipt sul journal durabile.
+Il CSRF random della sessione deve restare identico ad ogni attesa e durante
+l'ACK: UID e revisioni uguali dopo un re-login **non** dimostrano la stessa
+sessione. Nessuna ADK viene acquisita per un journal vuoto; la chiave viene
+azzerata anche su errore. Le verifiche non eseguono purge, registrazione
+replica o sincronizzazione iniziale; la composizione **non è ancora collegata**
+a Firebase AuthContext né a route Cloudflare pubbliche. In particolare non
+certifica recovery, multi-device o integrità E2E Production.
+
 ## Protezione trasporto D1 candidato (CF-04)
 
 `src/lib/sync/cloudReplicaTransport.ts` applica un timeout HTTP di 15 secondi e

@@ -241,6 +241,15 @@ export async function inspectKindeCandidateReplicaControl({
 const CSRF_COOKIE = '__Host-logbook_csrf';
 const CSRF_TOKEN = /^[A-Za-z0-9_-]{43}$/;
 
+function canonicalCsrf(token: string): boolean {
+    if (!CSRF_TOKEN.test(token)) return false;
+    try {
+        const raw = atob(token.replaceAll('-', '+').replaceAll('_', '/') + '=');
+        return raw.length === 32
+            && btoa(raw).replaceAll('+', '-').replaceAll('/', '_').replace(/=+$/, '') === token;
+    } catch { return false; }
+}
+
 function sessionCsrf(cookies: string): string {
     if (typeof cookies !== 'string' || cookies.length > 4096) {
         throw new KindeCandidateBoundaryError();
@@ -249,8 +258,32 @@ function sessionCsrf(cookies: string): string {
         .filter(part => part.startsWith(CSRF_COOKIE + '='));
     if (matches.length !== 1) throw new KindeCandidateBoundaryError();
     const token = matches[0].slice(CSRF_COOKIE.length + 1);
-    if (!CSRF_TOKEN.test(token)) throw new KindeCandidateBoundaryError();
+    if (!canonicalCsrf(token)) throw new KindeCandidateBoundaryError();
     return token;
+}
+
+/**
+ * Session identity is opaque to the browser: the HttpOnly cookie cannot be
+ * compared across awaits. Its independently random, readable CSRF partner
+ * changes with each issued D1 session and fences same-UID reauthentication
+ * and A→B→A during candidate cloud operations.
+ */
+export function captureKindeCandidateSessionFence({
+    stillCurrent, browserCookies = () => document.cookie,
+}: {
+    stillCurrent: () => boolean;
+    browserCookies?: () => string;
+}): { csrfToken: string; stillCurrent: () => boolean } {
+    if (typeof stillCurrent !== 'function') throw new KindeCandidateBoundaryError();
+    let csrfToken: string;
+    try { csrfToken = sessionCsrf(browserCookies()); }
+    catch { throw new KindeCandidateBoundaryError(); }
+    const current = () => {
+        try { return stillCurrent() === true && sessionCsrf(browserCookies()) === csrfToken; }
+        catch { return false; }
+    };
+    assertCurrent(current);
+    return { csrfToken, stillCurrent: current };
 }
 
 /**
