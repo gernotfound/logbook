@@ -226,7 +226,7 @@ its local database command. The node:test suite uses a transactional SQLite
 adapter and is not evidence of remote D1 performance, IAM or quota.
 
 
-## Isolated schema migration operations (prepared 15 November 2026)
+## Isolated schema migration operations (merged; awaiting execution on 15 November 2026)
 
 Direct provider readback on 15 November confirmed the synthetic EU D1 is at
 **0008/0010**: no Kinde principal/session, no wrapped cloud key and no
@@ -248,7 +248,7 @@ and has negative-regression tests. The workflow never deploys Workers,
 modifies DNS or runs against a user database. It needs a dedicated
 `CLOUDFLARE_D1_API_TOKEN` GitHub secret with least-privilege D1 write
 permission; the existing Workers-only deployment secret must not be
-expanded for SQL writes. **Preparing the workflow is not executing it**.
+expanded for SQL writes. **PR #1135 merged the workflow into main (`ed31c42a`), but the D1 migration workflow has not been dispatched**.
 Do not dispatch until its exact-main CI gates pass and the token/target
 are reviewed. A green migration does not prove Auth, consent, erasure
 execution, ciphertext sync, backup restore or production safety.
