@@ -40,7 +40,7 @@ function originConfiguration(env) {
 function validateClaims(claims) {
   return !!claims && typeof claims === 'object' && !Array.isArray(claims)
     && claims.authenticated === true && claims.rateGatePassed === true
-    && claims.emailVerified === true && UID.test(claims.uid)
+    && typeof claims.emailVerified === 'boolean' && UID.test(claims.uid)
     && Number.isSafeInteger(claims.fenceEpoch) && claims.fenceEpoch >= 1
     && Number.isSafeInteger(claims.healthConsentRevision)
     && claims.healthConsentRevision >= 0
@@ -94,9 +94,10 @@ async function sessionStatus(request, env) {
       [401, 403, 429].includes(response.status) ? response.status : 503);
     }
     const claims = await response.json();
+    // Identity status reflects the gate; fitness permissions are enforced elsewhere.
     if (!validateClaims(claims)) return json('unavailable', 503);
     return Response.json({
-      authenticated: true, uid: claims.uid, emailVerified: true,
+      authenticated: true, uid: claims.uid, emailVerified: claims.emailVerified,
       fenceEpoch: claims.fenceEpoch,
       healthConsentRevision: claims.healthConsentRevision,
     }, { headers: {
