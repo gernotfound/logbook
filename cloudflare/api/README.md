@@ -18,7 +18,7 @@ Firebase/Firestore writer, IndexedDB journal and encrypted vault remain active.
   5 triggers). Synthetic CAS and consent-regression requests were rejected,
   and a late failed statement rolled back an earlier receipt insert. This
   proves SQL behavior on remote D1, NOT HTTP Worker/Auth, quota or runtime.
-- **B-01 (branch-only, not applied to remote D1):** migration 0009 adds a shared
+- **B-01 (merged to main, not applied to remote D1 at 15/11 readback):** migration 0009 adds a shared
   active-owner/key grant and SQL fences for receipt insertion, replica mutation,
   direct document/replica writes and control revision advances. A valid grant
   needs an actual wrapped ADK row and an issuance marker matching uid, consent
@@ -32,7 +32,7 @@ Firebase/Firestore writer, IndexedDB journal and encrypted vault remain active.
   separate authorized remediation, not an automatic reset. SQLite regression
   coverage uses all migrations, but neither real D1 enforcement nor authenticated
   end-to-end browser integration is certified by that test.
-- **B-02 (stacked on B-01, branch-only; no D1 remote migration):** 0010
+- **B-02 (merged to main, no D1 remote migration at 15/11 readback):** 0010
   introduces an immutable owner-scoped `health_erasure_finalizations` terminal
   receipt, `health_erasure_jobs.completed_at_ms`,
   `health_erasure_jobs.erased_before_revision`,
@@ -224,6 +224,34 @@ Firebase/Firestore writer, IndexedDB journal and encrypted vault remain active.
 For disposable local D1 only, Wrangler can apply the versioned migration with
 its local database command. The node:test suite uses a transactional SQLite
 adapter and is not evidence of remote D1 performance, IAM or quota.
+
+
+## Isolated schema migration operations (prepared 15 November 2026)
+
+Direct provider readback on 15 November confirmed the synthetic EU D1 is at
+**0008/0010**: no Kinde principal/session, no wrapped cloud key and no
+erasure job, but one existing synthetic ciphertext document and receipt.
+Both API/Auth Gate Workers remain private and bound to that D1; there is no
+public Auth/Sync route. The source migrations 0009 and 0010 are on main,
+but **not yet applied to the remote D1** at this checkpoint.
+
+A main-only, manually dispatched workflow
+[`cloudflare-d1-isolated-migrations.yml`](../../.github/workflows/cloudflare-d1-isolated-migrations.yml)
+performs a read-only preflight of D1 identity, EU jurisdiction, read-replica
+mode, Time Travel bookmark, exact ordered migration ledger and absence of
+real identities/keys/jobs. It then invokes the official, pinned Wrangler
+`d1 migrations apply --remote` command (backup and per-migration rollback
+provided by Wrangler), followed by an independent schema/ledger readback.
+The migration allowlist is pinned in
+[`verify-cloudflare-isolated-d1-schema.mjs`](../../scripts/verify-cloudflare-isolated-d1-schema.mjs)
+and has negative-regression tests. The workflow never deploys Workers,
+modifies DNS or runs against a user database. It needs a dedicated
+`CLOUDFLARE_D1_API_TOKEN` GitHub secret with least-privilege D1 write
+permission; the existing Workers-only deployment secret must not be
+expanded for SQL writes. **Preparing the workflow is not executing it**.
+Do not dispatch until its exact-main CI gates pass and the token/target
+are reviewed. A green migration does not prove Auth, consent, erasure
+execution, ciphertext sync, backup restore or production safety.
 
 ## CF-03 private session gate candidate (not activated)
 

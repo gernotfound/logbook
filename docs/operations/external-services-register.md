@@ -2,6 +2,27 @@
 
 **Classificazione: CRITICAL.** Questo registro contiene **soltanto servizi necessari, ancora presenti nel codice oppure da validare prima del GO**. La storia delle configurazioni superate rimane nella cronologia Git e nelle PR. GitHub prova SHA e verifiche; i provider provano le rispettive risorse e il runtime. Un riscontro datato non autorizza cambi Production.
 
+
+## Verifica provider Cloudflare — 15/11/2026 · schema isolato
+
+Readback diretto del provider: la D1 isolata ha giurisdizione `eu`,
+repliche disabilitate e Time Travel bookmark disponibile, ma il ledger
+attesta solo `0001`–`0008` su dieci migration SQL in `main`.
+Sono presenti soltanto fixture sintetiche (un record documento e una
+ricevuta); non risultano principal Kinde, sessioni, ADK cloud o job
+erasure. API e Auth Gate Workers sono privati, entrambi legati a questa
+D1, senza workers.dev né preview, e non sono pubblicati agli utenti.
+Il frontend su `thelogbook.me` rimane un percorso distinto.
+
+Un workflow main-only ad attivazione manuale prepara l'applicazione delle
+migrazioni `0009`/`0010` con Wrangler ufficiale, backup, allowlist
+SQL, preflight dell'identità e post-readback del ledger. **Non è stato
+ancora eseguito**. È necessario un secret GitHub separato
+`CLOUDFLARE_D1_API_TOKEN` con permesso D1 write minimo, senza
+ampliare il token Workers già esistente. Nessuna modifica a DNS, OAuth,
+Cloudflare pubblica o dati Production; nessun GO Auth/Sync/erasure/restore.
+Conservare il checkpoint storico del 14/11 come tale.
+
 ## Checkpoint GitHub — 15/11/2026
 
 `main f10dd7089a4633096869faf88482250fe26b8edc` (v2.442.0): nove PR #1125–#1133 squash-merged, zero PR aperte al checkpoint; [Main Release Gate/CodeQL #43658661516](https://github.com/gernotfound/logbook/actions/runs/43658661516), [Firestore #43658877933](https://github.com/gernotfound/logbook/actions/runs/43658877933) e [Cloudflare Static Assets #43658905338](https://github.com/gernotfound/logbook/actions/runs/43658905338) sono SUCCESS sull'esatto SHA. Firestore non ha richiesto modifiche a Rules o indici; il frontend ha superato lo smoke. Le attestazioni provider D1/Workers sotto sono del **14/11**, non nuove letture: `0009/0010` integrate su GitHub **non equivalgono a migrations applicate** sulla D1 remota.
