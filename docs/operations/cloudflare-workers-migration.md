@@ -3,6 +3,60 @@
 **Classificazione: CRITICAL · stato PARZIALE / NO-GO funzionale (dominio pubblico di sviluppo autorizzato).** La fonte di verità per il codice e i test è `main` GitHub; per risorse e runtime sono i rispettivi provider. Questo documento descrive **contratti correnti e blocchi**, non lo storico di commit. [EPIC #1053](https://github.com/gernotfound/logbook/issues/1053) · [registro servizi](external-services-register.md) · [CF-09 #1063](https://github.com/gernotfound/logbook/issues/1063).
 
 
+## B-04 — gate operativo migrazioni D1 isolate (15/11/2026)
+
+**Evidenza live successiva a `main 53f8a5562d9952c3f70c0175ee212f88e7f92d6b` (v2.445.0):**
+readback Cloudflare in sola lettura sulla **sola** D1 sintetica
+`thelogbook-cf02-eu-isolated-20261113`. Identità database e UUID
+corrispondono a `cloudflare/api/wrangler.isolated.jsonc`;
+`jurisdiction=eu`, repliche disattivate, bookmark Time Travel disponibile.
+Il ledger è esattamente `0001`–`0008` (8/10), gli oggetti introdotti
+da `0009`/`0010` sono assenti, principal Auth/sessioni/ADK/job di
+cancellazione sono zero. Restano una riga documento e una ricevuta
+**sintetiche**, da preservare. Nessuna migrazione remota è stata eseguita;
+la lista GitHub dei run `workflow_dispatch` non contiene un run D1.
+
+**Blocco esterno per l'esecuzione:** il workflow
+[`cloudflare-d1-isolated-migrations.yml`](../../.github/workflows/cloudflare-d1-isolated-migrations.yml)
+è già integrato, con guard exact-`main`, verifiche preflight in sola lettura,
+migrazione via Wrangler ufficiale (backup/rollback), controllo post-migrazione
+e test CI sul candidato. Serve il secret GitHub **dedicato**
+`CLOUDFLARE_D1_API_TOKEN`; il connettore GitHub disponibile in questa
+sessione non consente di creare secret né di avviare il `workflow_dispatch`.
+Non aggirare il workflow eseguendo SQL/mutazioni dirette sulla D1 o riusando/
+ampliando il token Worker. L'assenza del secret non è verificabile tramite
+l'interfaccia del connettore: deve controllarla il proprietario su GitHub.
+
+**Passaggio manuale minimo del proprietario (senza condividere il token):**
+
+1. Cloudflare dashboard → account TheLogBook → **Manage Account → API Tokens**
+   (oppure **My Profile → API Tokens**) → **Create Token → Custom token**.
+   Concedere solo **Account → D1 → Edit** sull'account Cloudflare pertinente,
+   senza Workers/DNS/altre permission, limitando durata e risorse dove
+   consentito dalla UI. La policy D1 è di ambito account: non presumere
+   isolamento del token a un singolo database.
+2. GitHub repository `gernotfound/logbook` → **Settings → Secrets and
+   variables → Actions → Secrets → New repository secret**. Nome esatto
+   `CLOUDFLARE_D1_API_TOKEN`, valore uguale al token appena creato.
+   Controllare inoltre che la variabile Actions `CLOUDFLARE_ACCOUNT_ID`
+   sia valorizzata per l'account corretto. Mai pubblicare il valore in
+   issue, chat, commit o log.
+3. GitHub → **Actions → Cloudflare isolated D1 migrations (manual,
+   main-only) → Run workflow**, selezionando **main**. Dopo il gate
+   exact-SHA, il job applicherà solo i file consentiti `0009`/`0010`.
+   Non modificare l'ambiente né riavviare su un branch separato.
+
+**Accettazione del risultato:** richiedere run conclusa `success` e
+rilettura indipendente provider su UUID/giurisdizione, dieci entry contigue
+nel ledger `d1_migrations`, view `sync_writable_cloud_key`, tabella
+`health_erasure_finalizations`, trigger
+`health_erasure_finalization_fence`, assenza di account/chiavi/job reali
+e preservazione delle fixture sintetiche. Un run fallito o un ledger parziale
+resta **BLOCCATO**: conservare il checkpoint Time Travel e diagnosticare
+prima di ripetere. La sola conclusione del workflow non prova restore,
+Auth Kinde, cifratura, replica/ACK, revoca o erasure end-to-end; non è GO
+full-stack.
+
 ## Checkpoint B-03 post-merge verificato — 15/11/2026
 
 La [PR #1135](https://github.com/gernotfound/logbook/pull/1135) è stata integrata
