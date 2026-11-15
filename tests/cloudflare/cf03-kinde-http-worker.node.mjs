@@ -397,6 +397,28 @@ void test('missing trusted service bindings or rate limiter cannot mint a login'
   } finally { f.close(); }
 });
 
+void test('OAuth start and callback require the private authorization service before touching identity state', async () => {
+  const f = await fixture();
+  try {
+    const missingGate = { ...f.env, AUTH_GATE: undefined };
+    assert.equal((await f.handler(f.post(START), missingGate)).status, 503);
+    assert.equal(f.sqlite.prepare('SELECT COUNT(*) AS n FROM auth_oauth_attempts').get().n, 0);
+
+    const started = await f.handler(f.post(START), f.env);
+    assert.equal(started.status, 303);
+    const state = new URL(started.headers.get('location')).searchParams.get('state');
+    const browserCookie = started.headers.getSetCookie()[0].split(';')[0];
+    const callback = new Request(ORIGIN + CALLBACK + '?code=synthetic-code&state=' + state, {
+      headers: { cookie: browserCookie },
+    });
+    assert.equal((await f.handler(callback, missingGate)).status, 503);
+    assert.equal(f.calls(), 0);
+    assert.equal(f.sqlite.prepare('SELECT COUNT(*) AS n FROM auth_oauth_attempts').get().n, 1);
+    assert.equal(f.sqlite.prepare('SELECT COUNT(*) AS n FROM auth_principals').get().n, 0);
+    assert.equal(f.sqlite.prepare('SELECT COUNT(*) AS n FROM auth_sessions').get().n, 0);
+  } finally { f.close(); }
+});
+
 void test('login abuse limiter rejects before OAuth state creation or token exchange', async () => {
   const f = await fixture();
   try {
