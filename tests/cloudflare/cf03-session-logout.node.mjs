@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { applyCurrentD1Schema } from './current-d1-schema.mjs';
 import { test } from 'node:test';
 import { DatabaseSync } from 'node:sqlite';
 import api from '../../cloudflare/api/worker.mjs';
@@ -43,12 +43,7 @@ class D1Adapter {
 async function fixture() {
   const sqlite = new DatabaseSync(':memory:');
   sqlite.exec('PRAGMA foreign_keys=ON');
-  for (const file of [
-    '0001_encrypted_replica.sql', '0002_reject_reused_replica_ids.sql',
-    '0003_auth_session_gate.sql',
-    // First consent requires the principal and session schema.
-    '0004_initial_consent.sql',
-  ]) sqlite.exec(readFileSync(new URL('../../cloudflare/api/migrations/' + file, import.meta.url), 'utf8'));
+  applyCurrentD1Schema(sqlite);
   const db = new D1Adapter(sqlite);
   for (const uid of ['owner-a', 'owner-b']) {
     sqlite.prepare('INSERT INTO auth_principals(uid,status,verified_at_ms,auth_epoch) VALUES (?, ?, ?, 1)')

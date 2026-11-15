@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { readFileSync } from 'node:fs';
+import { applyCurrentD1Schema } from './current-d1-schema.mjs';
 import { DatabaseSync } from 'node:sqlite';
 import { createLocalJWKSet, exportJWK, generateKeyPair, SignJWT } from 'jose';
 import { createKindeOAuthFlow } from '../../cloudflare/auth/kinde-oauth-flow.mjs';
@@ -14,9 +14,7 @@ const apiAudience = 'thelogbook:synthetic-api';
 async function fixture() {
   const sqlite = new DatabaseSync(':memory:');
   sqlite.exec('PRAGMA foreign_keys=ON');
-  for (const migration of ['0003_auth_session_gate.sql', '0008_kinde_oauth_attempts.sql']) {
-    sqlite.exec(readFileSync(new URL('../../cloudflare/api/migrations/' + migration, import.meta.url), 'utf8'));
-  }
+  applyCurrentD1Schema(sqlite);
   const db = {
     prepare(sql) {
       return {

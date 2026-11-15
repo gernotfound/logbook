@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { readFileSync, readdirSync } from 'node:fs';
+import { applyCurrentD1Schema } from './current-d1-schema.mjs';
 import { test } from 'node:test';
 import { DatabaseSync } from 'node:sqlite';
 import gate from '../../cloudflare/auth/session-gate.mjs';
@@ -8,15 +8,12 @@ import {
   CloudKeyUnavailableError, wrapCloudAccountDataKey, unwrapCloudAccountDataKey,
 } from '../../cloudflare/api/cloud-key-crypto.mjs';
 import { releaseCloudAccountDataKey } from '../../cloudflare/api/cloud-key-store.mjs';
+import { runOneHealthErasureStep } from '../../cloudflare/jobs/health-erasure-worker.mjs';
 
 const ORIGIN = 'https://cf05-synthetic.invalid';
 const KEK = Buffer.alloc(32, 42).toString('base64');
 const VERSION = '1.3.9';
 const TERMS = '1.2.5';
-const FILES = readdirSync(new URL('../../cloudflare/api/migrations/', import.meta.url))
-  .filter(name => /^000[1-7]_[a-z0-9_]+\.sql$/.test(name)).sort();
-assert.deepEqual(FILES.map(file => file.slice(0, 4)),
-  Array.from({ length: 7 }, (_, index) => String(index + 1).padStart(4, '0')));
 class Statement {
   constructor(sqlite, sql, args = []) { this.sqlite = sqlite; this.sql = sql; this.args = args; }
   bind(...args) { return new Statement(this.sqlite, this.sql, args); }
@@ -37,9 +34,7 @@ function sqlCount(f, table, uid) {
 async function fixture() {
   const sqlite = new DatabaseSync(':memory:');
   sqlite.exec('PRAGMA foreign_keys=ON');
-  for (const file of FILES) {
-    sqlite.exec(readFileSync(new URL('../../cloudflare/api/migrations/' + file, import.meta.url), 'utf8'));
-  }
+  applyCurrentD1Schema(sqlite);
   const db = new D1Sqlite(sqlite);
   const env = {
     DB: db, CLOUD_ACCOUNT_KEK_V1: KEK, API_ORIGIN: ORIGIN,
@@ -306,7 +301,7 @@ void test('lost ADK never silently regenerates for the same consent generation',
   } finally { f.sqlite.close(); }
 });
 
-void test('key deletion is forbidden without leased, withdrawn, awaiting-keys erasure', async () => {
+void test('key deletion requires atomic finalization, not only an awaiting-keys lease', async () => {
   const f = await fixture();
   try {
     const claims = (await f.claims('owner-a')).payload;
@@ -321,12 +316,28 @@ void test('key deletion is forbidden without leased, withdrawn, awaiting-keys er
       .run('a'.repeat(64), Date.now() + 60_000, 'owner-a');
     f.sqlite.prepare("UPDATE health_erasure_jobs SET phase='awaiting-keys' WHERE uid=?")
       .run('owner-a');
-    f.sqlite.prepare('DELETE FROM cloud_account_keys WHERE uid=?').run('owner-a');
+    assert.throws(() => f.sqlite.prepare('DELETE FROM cloud_account_keys WHERE uid=?').run('owner-a'),
+      /cloud-key-erasure-fenced/);
+    assert.equal(sqlCount(f, 'cloud_account_keys', 'owner-a'), 1);
+    assert.equal(sqlCount(f, 'health_erasure_finalizations', 'owner-a'), 0);
+    // Only the real runner may acquire a new lease and commit the proof and
+    // key destruction together; an unexpired fixture lease is not stolen.
+    assert.equal((await runOneHealthErasureStep(f.db)).outcome, 'idle');
+    f.sqlite.prepare('UPDATE health_erasure_jobs SET lease_until_ms=? WHERE uid=?')
+      .run(Date.now() - 60_000, 'owner-a');
+    assert.equal((await runOneHealthErasureStep(f.db)).outcome, 'complete');
     assert.equal(sqlCount(f, 'cloud_account_keys', 'owner-a'), 0);
     assert.equal(sqlCount(f, 'cloud_key_issuance', 'owner-a'), 1);
+    const proof = f.sqlite.prepare('SELECT * FROM health_erasure_finalizations WHERE uid=?').get('owner-a');
+    assert.equal(proof.key_disposition, 'destroyed');
+    assert.equal(proof.consent_revision, 1);
+    const job = f.sqlite.prepare('SELECT status,phase FROM health_erasure_jobs WHERE uid=?').get('owner-a');
+    assert.equal(job.status, 'complete');
+    assert.equal(job.phase, 'awaiting-keys');
     assert.throws(() => f.sqlite.exec('DELETE FROM cloud_key_issuance'));
-    const rights = (await f.claims('owner-a', '/v1/consent/status')).payload;
-    await assert.rejects(releaseCloudAccountDataKey(f.db, f.env, rights, 'rights-export'),
+    const rights = await f.claims('owner-a', '/v1/consent/status');
+    assert.equal(rights.status, 200);
+    await assert.rejects(releaseCloudAccountDataKey(f.db, f.env, rights.payload, 'rights-export'),
       CloudKeyUnavailableError);
   } finally { f.sqlite.close(); }
 });

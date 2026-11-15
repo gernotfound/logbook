@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { applyCurrentD1Schema } from './current-d1-schema.mjs';
 import { test } from 'node:test';
 import { DatabaseSync } from 'node:sqlite';
 import gate, { hashSessionSecret } from '../../cloudflare/auth/session-gate.mjs';
@@ -11,14 +11,7 @@ const csrf = Buffer.alloc(32, 11).toString('base64url');
 async function fixture() {
   const sqlite = new DatabaseSync(':memory:');
   sqlite.exec('PRAGMA foreign_keys=ON');
-  for (const file of [
-    '0001_encrypted_replica.sql', '0002_reject_reused_replica_ids.sql',
-    '0003_auth_session_gate.sql',
-        // Initial consent depends on the Auth principal schema.
-        '0004_initial_consent.sql',
-  ]) {
-    sqlite.exec(readFileSync(new URL('../../cloudflare/api/migrations/' + file, import.meta.url), 'utf8'));
-  }
+  applyCurrentD1Schema(sqlite);
   const epoch = 1;
   const now = Date.now();
   sqlite.prepare('INSERT INTO sync_subjects(uid,status,consent_revision,fence_epoch) VALUES (?,?,?,?)')

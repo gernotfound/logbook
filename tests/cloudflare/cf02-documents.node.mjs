@@ -6,11 +6,11 @@ import { test } from 'node:test';
 import { DatabaseSync } from 'node:sqlite';
 import { xchacha20poly1305 } from '@noble/ciphers/chacha.js';
 import worker from '../../cloudflare/api/worker.mjs';
+import { releaseCloudAccountDataKey } from '../../cloudflare/api/cloud-key-store.mjs';
+import { applyCurrentD1Schema } from './current-d1-schema.mjs';
 
 const migration = readFileSync(new URL('../../cloudflare/api/migrations/0001_encrypted_replica.sql', import.meta.url), 'utf8');
 const identityMigration = readFileSync(new URL('../../cloudflare/api/migrations/0002_reject_reused_replica_ids.sql', import.meta.url), 'utf8');
-const sessionMigration = readFileSync(new URL('../../cloudflare/api/migrations/0003_auth_session_gate.sql', import.meta.url), 'utf8');
-const consentMigration = readFileSync(new URL('../../cloudflare/api/migrations/0004_initial_consent.sql', import.meta.url), 'utf8');
 const syntheticSessionHash = 'b'.repeat(64);
 const rollback = readFileSync(new URL('../../cloudflare/api/rollback/0001_encrypted_replica_down.sql', import.meta.url), 'utf8');
 const origin = 'https://candidate.invalid';
@@ -51,19 +51,25 @@ async function withFixture(run) {
   const db = new D1SqliteAdapter(filename);
   const second = new D1SqliteAdapter(filename);
   try {
-    db.sqlite.exec(migration);
-    db.sqlite.exec(identityMigration);
-    db.sqlite.exec(sessionMigration);
-    db.sqlite.exec(consentMigration);
+    applyCurrentD1Schema(db.sqlite);
     const issuedAt = Date.now() - 5000;
     db.sqlite.prepare('INSERT INTO auth_principals (uid,status,verified_at_ms,auth_epoch) VALUES (?,?,?,?)')
       .run(owner, 'active', issuedAt, 5);
     db.sqlite.prepare('INSERT INTO auth_sessions (token_hash,uid,auth_epoch,csrf_hash,issued_at_ms,idle_expires_at_ms,absolute_expires_at_ms) VALUES (?,?,?,?,?,?,?)')
       .run(syntheticSessionHash, owner, 5, 'c'.repeat(64), issuedAt, issuedAt + 86400000, issuedAt + 2592000000);
-    db.sqlite.prepare('INSERT INTO sync_subjects VALUES (?, ?, ?, ?)').run(owner, 'active', 1, 5);
+    db.sqlite.prepare('INSERT INTO sync_subjects (uid,status,consent_revision,fence_epoch) VALUES (?, ?, ?, ?)').run(owner, 'active', 1, 5);
     db.sqlite.prepare('INSERT INTO health_consent_acceptances (uid,consent_revision,privacy_version,terms_version,accepted_at_ms,over_18_confirmed) VALUES (?,1,?,?,?,1)')
       .run(owner, '1.3.9', '1.2.5', issuedAt);
     db.sqlite.prepare('INSERT INTO sync_state (uid, revision) VALUES (?, 0)').run(owner);
+    const dataKey = await releaseCloudAccountDataKey(db, {
+      CLOUD_ACCOUNT_KEK_V1: Buffer.alloc(32, 41).toString('base64'),
+      CONSENT_PRIVACY_VERSION: '1.3.9', CONSENT_TERMS_VERSION: '1.2.5',
+    }, {
+      uid: owner, authenticated: true, emailVerified: true,
+      healthConsentRevision: 1, fenceEpoch: 5, csrfVerified: true,
+      rateGatePassed: true, sessionHash: syntheticSessionHash,
+    });
+    dataKey.fill(0);
     const now = Date.now();
     db.sqlite.prepare('INSERT INTO sync_replicas (uid, slot, replica_id, generation, lease_until_ms, checkpoint_at_ms, checkpoint_clock_json, last_seq, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)').run(
       owner, replica.slot, replica.replicaId, 1, now + 86400000, now, '{}', 0, 'active');
