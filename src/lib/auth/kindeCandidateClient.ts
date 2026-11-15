@@ -238,6 +238,64 @@ export async function inspectKindeCandidateReplicaControl({
     return { kind: 'replica-control-observed', principal: last.principal, control };
 }
 
+const CSRF_COOKIE = '__Host-logbook_csrf';
+const CSRF_TOKEN = /^[A-Za-z0-9_-]{43}$/;
+
+function sessionCsrf(cookies: string): string {
+    if (typeof cookies !== 'string' || cookies.length > 4096) {
+        throw new KindeCandidateBoundaryError();
+    }
+    const matches = cookies.split(';').map(part => part.trim())
+        .filter(part => part.startsWith(CSRF_COOKIE + '='));
+    if (matches.length !== 1) throw new KindeCandidateBoundaryError();
+    const token = matches[0].slice(CSRF_COOKIE.length + 1);
+    if (!CSRF_TOKEN.test(token)) throw new KindeCandidateBoundaryError();
+    return token;
+}
+
+/**
+ * Candidate-only D1 session logout, NOT Kinde identity-provider SSO logout or
+ * device-vault cleanup. A lost 200 or a concurrent new login must never be
+ * misreported as a completed remote logout: require a fresh, unambiguous 401
+ * status after the server's conditional session revocation.
+ */
+export async function revokeKindeCandidateSession({
+    send = fetch, stillCurrent, browserCookies = () => document.cookie,
+}: {
+    send?: typeof fetch;
+    stillCurrent: () => boolean;
+    browserCookies?: () => string;
+}): Promise<void> {
+    assertCurrent(stillCurrent);
+    let csrf: string;
+    try { csrf = sessionCsrf(browserCookies()); }
+    catch { throw new KindeCandidateBoundaryError(); }
+    assertCurrent(stillCurrent);
+
+    let response: Response;
+    try {
+        response = await send('/api/auth/logout', {
+            method: 'POST', credentials: 'same-origin', mode: 'same-origin',
+            cache: 'no-store', redirect: 'error',
+            headers: { Accept: 'application/json', 'X-CSRF-Token': csrf },
+            signal: AbortSignal.timeout(5000),
+        });
+    } catch { throw new KindeCandidateBoundaryError(); }
+    assertCurrent(stillCurrent);
+    if (response.redirected || response.type === 'opaqueredirect' || response.type === 'opaque'
+        || response.type === 'error' || response.status !== 200) {
+        throw new KindeCandidateBoundaryError(response.status);
+    }
+    const revoked = await readBoundedJson(response);
+    assertCurrent(stillCurrent);
+    if (!record(revoked) || !exactKeys(revoked, ['status'])
+        || revoked.status !== 'signed-out') throw new KindeCandidateBoundaryError();
+
+    const status = await post('/api/auth/session', send, stillCurrent);
+    if (!status.unauthorized) throw new KindeCandidateBoundaryError();
+    assertCurrent(stillCurrent);
+}
+
 /**
  * A cross-origin OAuth 303 must be a browser navigation, not a fetch whose
  * manual redirect is opaque to JS. No password, PKCE secret or return URL is

@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
-    KindeCandidateBoundaryError, inspectKindeCandidateReplicaControl, readKindeCandidateAccess, submitKindeHostedSignIn,
+    KindeCandidateBoundaryError, inspectKindeCandidateReplicaControl, readKindeCandidateAccess,
+    revokeKindeCandidateSession, submitKindeHostedSignIn,
 } from './kindeCandidateClient';
 
 const A = 'k_' + 'A'.repeat(43);
@@ -231,6 +232,75 @@ describe('candidate first-party Kinde client boundary', () => {
                 .rejects.toBeInstanceOf(KindeCandidateBoundaryError);
             expect(mixed).toHaveBeenCalledTimes(7);
         }
+    });
+
+    it('requires CSRF-bound server logout and a fresh session 401 before reporting revocation', async () => {
+        const csrf = 'C'.repeat(43);
+        const send = responses(reply({ status: 'signed-out' }), reply({ error: 'unauthorized' }, 401));
+        await expect(revokeKindeCandidateSession({
+            send, stillCurrent: () => true,
+            browserCookies: () => '__Host-logbook_csrf=' + csrf + '; unrelated=1',
+        })).resolves.toBeUndefined();
+        expect(send.mock.calls.map(([path]) => path))
+            .toEqual(['/api/auth/logout', '/api/auth/session']);
+        expect(send.mock.calls[0][1]).toEqual(expect.objectContaining({
+            method: 'POST', credentials: 'same-origin', mode: 'same-origin',
+            cache: 'no-store', redirect: 'error',
+            headers: { Accept: 'application/json', 'X-CSRF-Token': csrf },
+        }));
+        expect(send.mock.calls[0][1]).not.toHaveProperty('body');
+        expect(send.mock.calls[0][1]).not.toHaveProperty('Authorization');
+    });
+
+    it('refuses missing, forged or ambiguous CSRF cookies before reaching the server', async () => {
+        const csrf = 'C'.repeat(43);
+        for (const cookies of [
+            '', 'unrelated=x', '__Host-logbook_csrf=short',
+            '__Host-logbook_csrf=' + csrf + '; __Host-logbook_csrf=' + csrf,
+            '__Host-logbook_csrf=' + 'X'.repeat(5000),
+        ]) {
+            const send = responses();
+            await expect(revokeKindeCandidateSession({
+                send, stillCurrent: () => true, browserCookies: () => cookies,
+            })).rejects.toBeInstanceOf(KindeCandidateBoundaryError);
+            expect(send).not.toHaveBeenCalled();
+        }
+    });
+
+    it('never treats an ambiguous logout result or an active replacement session as signed out', async () => {
+        const cookies = () => '__Host-logbook_csrf=' + 'C'.repeat(43);
+        for (const responsesAfterLogout of [
+            [reply({ status: 'signed-out' }), reply(session(B, 1, 1))],
+            [reply({ status: 'signed-out' }), reply({ error: 'unavailable' }, 503)],
+            [reply({ status: 'signed-out' }), reply({ error: 'unknown' }, 401)],
+            [reply({ status: 'pending' })],
+            [reply({ status: 'signed-out', uid: A })],
+            [reply({ error: 'unauthorized' }, 403)],
+            [reply({ error: 'unavailable' }, 503)],
+        ]) {
+            const send = responses(...responsesAfterLogout);
+            await expect(revokeKindeCandidateSession({
+                send, stillCurrent: () => true, browserCookies: cookies,
+            })).rejects.toBeInstanceOf(KindeCandidateBoundaryError);
+        }
+        const lostAck = responses();
+        await expect(revokeKindeCandidateSession({
+            send: lostAck, stillCurrent: () => true, browserCookies: cookies,
+        })).rejects.toBeInstanceOf(KindeCandidateBoundaryError);
+        // The caller must preserve the vault until the server state is proven.
+    });
+
+    it('does not accept a stale UI generation after the remote logout response', async () => {
+        let current = true;
+        const send = vi.fn<typeof fetch>().mockImplementation(async () => {
+            current = false;
+            return reply({ status: 'signed-out' });
+        });
+        await expect(revokeKindeCandidateSession({
+            send, stillCurrent: () => current,
+            browserCookies: () => '__Host-logbook_csrf=' + 'C'.repeat(43),
+        })).rejects.toBeInstanceOf(KindeCandidateBoundaryError);
+        expect(send).toHaveBeenCalledTimes(1);
     });
 
     it('initiates OAuth only through an empty same-origin native POST navigation', () => {
