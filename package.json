@@ -1,7 +1,7 @@
 {
   "name": "logbook",
   "private": true,
-  "version": "2.456.0",
+  "version": "2.457.0",
   "type": "module",
   "packageManager": "npm@11.21.0",
   "engines": {
@@ -84,6 +84,7 @@
     "zustand": "^5.1.0"
   },
   "overrides": {
+    "minimatch": "11.0.8",
     "jwks-rsa": {
       "jose": "5.10.0"
     },
