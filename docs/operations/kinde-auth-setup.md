@@ -1,5 +1,11 @@
 # Kinde — configurazione del provider per TheLogBook
 
+## Candidato del workflow password Kinde (codice, non provider)
+
+Il file [`kindeSrc/environment/workflows/thelogbookPassword/Workflow.js`](../../kindeSrc/environment/workflows/thelogbookPassword/Workflow.js) prepara il trigger ufficiale `user:new_password_provided` con `failurePolicy: stop` e lunghezza minima **15 code point Unicode** in registrazione e reset. La suite Node `tests/cloudflare/cf03-kinde-password-workflow.node.mjs` testa entrambi i motivi, Unicode e input non disponibile. Il codice usa soltanto il binding widget previsto da Kinde e non richiede dipendenze npm aggiuntive.
+
+**NON È ATTIVO.** Un commit GitHub non certifica la sincronizzazione o l'esecuzione del workflow su Kinde. Prima di collegare il repository/sincronizzare su Production verificare il workflow già presente per lo stesso trigger, l'ambiente e le conseguenze: `Sync code` può attivare l'autenticazione reale e richiede specifica autorizzazione; non applicare alcuna configurazione provider tramite questa PR. La release finale richiede test reali 8–14 contro 15+ caratteri sia in registrazione sia in reset, incluso il fallimento dell'esecuzione del workflow. Nessun requisito di composizione aggiuntivo (simboli/maiuscole) è introdotto.
+
 ## Stato operativo corrente — 15/11/2026 (baseline verificata v2.464.0)
 
 **Baseline verificata prima di questo aggiornamento documentale:** `547915c1d98c9566d0951ccc04aeb2b7a32e69f6`, **v2.464.0**. L'HEAD effettivo e il suo SHA si leggono su GitHub. Sono integrati gli incrementi CRITICAL [#1153](https://github.com/gernotfound/logbook/pull/1153), [#1154](https://github.com/gernotfound/logbook/pull/1154), [#1152](https://github.com/gernotfound/logbook/pull/1152), [#1141](https://github.com/gernotfound/logbook/pull/1141), [#1155](https://github.com/gernotfound/logbook/pull/1155) e [#1143](https://github.com/gernotfound/logbook/pull/1143). Anche [#1157](https://github.com/gernotfound/logbook/pull/1157) e [#1158](https://github.com/gernotfound/logbook/pull/1158) sono integrate; Vite #1144 è chiusa senza merge perché assorbita. I loro controlli non dimostrano il GO applicativo.
