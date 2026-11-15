@@ -15,6 +15,8 @@
 
 **Preflight v2.464.0:** `cloudflare/auth/wrangler.kinde.isolated.jsonc` è solo una configurazione senza credenziali e senza route pubbliche. Il workflow ne ha verificato isolamento, test negativi e compilazione `--dry-run`, ma non ha creato un terzo Worker Kinde. La sequenza necessaria prima del GO è nel [runbook](cloudflare-workers-migration.md) e nella [guida Kinde](kinde-auth-setup.md).
 
+**Gate password Kinde da verificare prima del GO:** Kinde per default richiede 8 caratteri, TheLogBook 15; servono workflow `user:new_password_provided` e collaudi di registrazione/reset sul provider. [Guida Kinde](kinde-auth-setup.md) · [docs ufficiali](https://docs.kinde.com/authenticate/authentication-methods/password-authentication/). Nessuna modifica al tenant né alla password policy effettuata.
+
 ## D1 EU isolata — schema remoto 10/10 verificato (15/11/2026)
 
 **Readback ripetuto il 15/11, dopo gli incrementi di manutenzione:**
