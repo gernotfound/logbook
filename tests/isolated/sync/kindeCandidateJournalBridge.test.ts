@@ -106,13 +106,15 @@ describe('Kinde candidate trusted D1 journal bridge (no Firebase or production b
         expect(acquireCloudflareAccountKeyCandidate).not.toHaveBeenCalled();
     });
 
-    it('refuses a simultaneous guest session or unreadable ownership before network access', async () => {
-        localStorage.setItem('logbook_is_guest', 'true');
-        const send = vi.fn(acceptedSession());
-        await expect(deliverKindeCandidateJournal({
-            send: send as typeof fetch, stillCurrent: () => true, browserCookies: () => cookie(),
-        })).rejects.toBeInstanceOf(KindeCandidateBoundaryError);
-        expect(send).not.toHaveBeenCalled();
+    it('refuses an active or malformed guest ownership flag before network access', async () => {
+        for (const guestFlag of ['true', 'malformed']) {
+            localStorage.setItem('logbook_is_guest', guestFlag);
+            const send = vi.fn(acceptedSession());
+            await expect(deliverKindeCandidateJournal({
+                send: send as typeof fetch, stillCurrent: () => true, browserCookies: () => cookie(),
+            })).rejects.toBeInstanceOf(KindeCandidateBoundaryError);
+            expect(send).not.toHaveBeenCalled();
+        }
     });
 
     it('does not acquire ADK when consent or tab changed during the owner archive read', async () => {

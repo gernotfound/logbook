@@ -29,7 +29,9 @@ export async function deliverKindeCandidateJournal({
     const fence = captureKindeCandidateSessionFence({ stillCurrent, browserCookies });
     const current = () => {
         try {
-            return fence.stillCurrent() && readBrowserValueStrict('logbook_is_guest') !== 'true';
+            if (!fence.stillCurrent()) return false;
+            const guestFlag = readBrowserValueStrict('logbook_is_guest');
+            return guestFlag === null || guestFlag === 'false';
         } catch { return false; }
     };
     if (!current()) throw new KindeCandidateBoundaryError();
