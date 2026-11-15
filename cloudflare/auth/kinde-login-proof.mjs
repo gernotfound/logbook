@@ -15,16 +15,18 @@ async function sha256AtHash(accessToken) {
 }
 
 /**
- * This proof is for an already completed, trusted OAuth code+PKCE exchange.
+ * This identity proof is for an already completed, trusted OAuth code+PKCE exchange.
  * The caller MUST first consume server-owned state once and retrieve its
  * original nonce; never take expectedNonce from untrusted callback input.
+ * A successful identity proof alone grants neither verified-email privileges
+ * nor a D1 session; the ordinary login wrapper retains its verified-only gate.
  * The ID token audience can differ from the API audience in Kinde and
  * therefore is pinned independently. This helper does not create D1 sessions.
  *
  * @param {{issuer: string, apiAudience: string, idTokenAudience: string, clientId: string}} configuration
  * @param {(header: import('jose').JWSHeaderParameters, token: import('jose').FlattenedJWSInput) => Promise<import('jose').KeyLike | Uint8Array>} [keySet]
  */
-export function createKindeLoginProofVerifier(configuration, keySet) {
+export function createKindeIdentityProofVerifier(configuration, keySet) {
   const { issuer, apiAudience, idTokenAudience, clientId } = configuration ?? {};
   if (typeof issuer !== 'string'
     || typeof idTokenAudience !== 'string'
@@ -42,7 +44,7 @@ export function createKindeLoginProofVerifier(configuration, keySet) {
     { issuer, audience: apiAudience, clientId }, jwks,
   );
   /** @param {{accessToken?: string, idToken?: string, expectedNonce?: string}} [proof] */
-  return async function verifyKindeLoginProof({ accessToken, idToken, expectedNonce } = {}) {
+  return async function verifyKindeIdentityProof({ accessToken, idToken, expectedNonce } = {}) {
     if (typeof expectedNonce !== 'string' || !OAUTH_NONCE.test(expectedNonce)
       || typeof accessToken !== 'string'
       || typeof idToken !== 'string'
@@ -58,7 +60,7 @@ export function createKindeLoginProofVerifier(configuration, keySet) {
       });
       const now = Math.floor(Date.now() / 1000);
       if (payload.azp !== clientId || payload.nonce !== expectedNonce
-        || payload.sub !== access.subject || payload.email_verified !== true
+        || payload.sub !== access.subject || typeof payload.email_verified !== 'boolean'
         || typeof payload.email !== 'string'
         || payload.email.length < 3 || payload.email.length > 320
         || !payload.email.includes('@') || /\s/.test(payload.email)
@@ -83,10 +85,24 @@ export function createKindeLoginProofVerifier(configuration, keySet) {
         throw new Error('invalid-kinde-token-binding');
       }
       return Object.freeze({
-        issuer: access.issuer, subject: access.subject, emailVerified: true,
+        issuer: access.issuer, subject: access.subject, emailVerified: payload.email_verified,
       });
     } catch {
       throw new Error('invalid-kinde-login-proof');
     }
+  };
+}
+
+/**
+ * Existing verified-only boundary used by principal provisioning and the
+ * regular OAuth callback. Never issue an ordinary session from identity proof
+ * alone: a signed false email_verified must remain denied here.
+ */
+export function createKindeLoginProofVerifier(configuration, keySet) {
+  const verifyIdentity = createKindeIdentityProofVerifier(configuration, keySet);
+  return async function verifyKindeLoginProof(proof) {
+    const identity = await verifyIdentity(proof);
+    if (identity.emailVerified !== true) throw new Error('invalid-kinde-login-proof');
+    return identity;
   };
 }

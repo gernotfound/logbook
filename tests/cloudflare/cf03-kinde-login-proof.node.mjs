@@ -4,7 +4,7 @@ import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
 import { createLocalJWKSet, exportJWK, generateKeyPair, SignJWT } from 'jose';
-import { createKindeLoginProofVerifier } from '../../cloudflare/auth/kinde-login-proof.mjs';
+import { createKindeIdentityProofVerifier, createKindeLoginProofVerifier } from '../../cloudflare/auth/kinde-login-proof.mjs';
 import { createKindePrincipalProvisioner, KindePrincipalProvisionError } from '../../cloudflare/auth/kinde-principal-provisioner.mjs';
 
 const issuer = 'https://synthetic-kinde.example';
@@ -19,22 +19,28 @@ async function fixture() {
   const localKeys = createLocalJWKSet({
     keys: [{ ...await exportJWK(publicKey), kid: 'synthetic', use: 'sig', alg: 'RS256' }],
   });
-  const verify = createKindeLoginProofVerifier(
-    { issuer, clientId, apiAudience, idTokenAudience }, localKeys,
-  );
-  async function tokens({ accessClaims = {}, idClaims = {}, signingKey = privateKey } = {}) {
+  const config = { issuer, clientId, apiAudience, idTokenAudience };
+  const verify = createKindeLoginProofVerifier(config, localKeys);
+  const verifyIdentity = createKindeIdentityProofVerifier(config, localKeys);
+  async function tokens({
+    accessClaims = {}, idClaims = {}, signingKey = privateKey,
+    accessIssuer = issuer, idIssuer = issuer,
+    accessAudience = apiAudience, idAudience = idTokenAudience,
+    accessIssuedBefore = 2, idIssuedBefore = 2,
+    accessExpiresIn = 300, idExpiresIn = 300,
+  } = {}) {
     const now = Math.floor(Date.now() / 1000);
     const access = await new SignJWT({
       azp: clientId, sub, ...accessClaims,
-    }).setIssuer(issuer).setAudience(apiAudience)
-      .setIssuedAt(now - 2).setExpirationTime(now + 300)
+    }).setIssuer(accessIssuer).setAudience(accessAudience)
+      .setIssuedAt(now - accessIssuedBefore).setExpirationTime(now + accessExpiresIn)
       .setProtectedHeader({ alg: 'RS256', kid: 'synthetic' }).sign(privateKey);
     const at_hash = createHash('sha256').update(access).digest().subarray(0, 16).toString('base64url');
     const id = await new SignJWT({
       azp: clientId, sub, nonce, email_verified: true, email: 'sample@example.invalid',
       auth_time: now - 60, at_hash, ...idClaims,
-    }).setIssuer(issuer).setAudience(idTokenAudience)
-      .setIssuedAt(now - 2).setExpirationTime(now + 300)
+    }).setIssuer(idIssuer).setAudience(idAudience)
+      .setIssuedAt(now - idIssuedBefore).setExpirationTime(now + idExpiresIn)
       .setProtectedHeader({ alg: 'RS256', kid: 'synthetic' }).sign(signingKey);
     return { accessToken: access, idToken: id, expectedNonce: nonce };
   }
@@ -43,8 +49,109 @@ async function fixture() {
   );
   // Simulate only a trusted callback: the saved nonce is never read from the token payload.
   const provision = (db, proof) => rawProvision(db, proof, nonce);
-  return { verify, tokens, provision, rawProvision };
+  return { verify, verifyIdentity, tokens, provision, rawProvision };
 }
+
+
+void test('identity-only proof returns only signed issuer, subject and explicit email boolean', async () => {
+  const { verify, verifyIdentity, tokens } = await fixture();
+  for (const emailVerified of [true, false]) {
+    const signed = await tokens({ idClaims: { email_verified: emailVerified } });
+    const identity = await verifyIdentity(signed);
+    assert.deepEqual(identity, { issuer, subject: sub, emailVerified });
+    assert.deepEqual(Object.keys(identity).sort(), ['emailVerified', 'issuer', 'subject']);
+    assert.ok(Object.isFrozen(identity));
+    if (emailVerified) {
+      assert.deepEqual(await verify(signed), identity);
+    } else {
+      await assert.rejects(verify(signed), /invalid-kinde-login-proof/);
+    }
+  }
+});
+
+void test('identity-only proof refuses missing or non-boolean email_verified', async () => {
+  const { verify, verifyIdentity, tokens } = await fixture();
+  for (const value of [undefined, null, 'true', 'false', 0, 1, [], {}]) {
+    const signed = await tokens({ idClaims: { email_verified: value } });
+    await assert.rejects(verifyIdentity(signed), /invalid-kinde-login-proof/);
+    await assert.rejects(verify(signed), /invalid-kinde-login-proof/);
+  }
+});
+
+void test('unverified identity proof still enforces both signed tokens, issuer, audiences, azp, subject and trusted nonce', async () => {
+  const { verifyIdentity, tokens } = await fixture();
+  const { privateKey: forgedKey } = await generateKeyPair('RS256');
+  const wrong = [
+    { signingKey: forgedKey },
+    { accessIssuer: 'https://other-kinde.example' },
+    { idIssuer: 'https://other-kinde.example' },
+    { accessAudience: 'other-api' },
+    { idAudience: 'other-client' },
+    { accessClaims: { azp: 'other-client' } },
+    { idClaims: { azp: 'other-client' } },
+    { accessClaims: { sub: 'kp_other' } },
+    { idClaims: { sub: 'kp_other' } },
+    { accessClaims: { gty: 'client_credentials' } },
+    { idClaims: { nonce: Buffer.alloc(32, 2).toString('base64url') } },
+    { idClaims: { nonce: null } },
+    { idClaims: { email: '' } },
+    { idClaims: { auth_time: Math.floor(Date.now() / 1000) + 900 } },
+    { idClaims: { at_hash: 'wrong-binding' } },
+  ];
+  for (const invalid of wrong) {
+    const signed = await tokens({ ...invalid, idClaims: {
+      email_verified: false, ...invalid.idClaims,
+    } });
+    await assert.rejects(verifyIdentity(signed), /invalid-kinde-login-proof/);
+  }
+  const valid = await tokens({ idClaims: { email_verified: false } });
+  for (const expectedNonce of ['client-selected', undefined, null]) {
+    await assert.rejects(verifyIdentity({ ...valid, expectedNonce }), /invalid-kinde-login-proof/);
+  }
+  // Optional at_hash is valid in Authorization Code; if present it must match.
+  assert.equal((await verifyIdentity(await tokens({
+    idClaims: { email_verified: false, at_hash: undefined },
+  }))).emailVerified, false);
+});
+
+void test('identity-only proof rejects expired, future-issued, overlong and oversized JWTs', async () => {
+  const { verifyIdentity, tokens } = await fixture();
+  const rejected = [
+    { accessExpiresIn: -1 },
+    { idExpiresIn: -1 },
+    { accessIssuedBefore: -30 },
+    { idIssuedBefore: -30 },
+    { accessExpiresIn: 901 },
+    { idExpiresIn: 3601 },
+  ];
+  for (const invalid of rejected) {
+    await assert.rejects(verifyIdentity(await tokens({
+      idClaims: { email_verified: false }, ...invalid,
+    })), /invalid-kinde-login-proof/);
+  }
+  const valid = await tokens({ idClaims: { email_verified: false } });
+  for (const changed of [
+    { ...valid, accessToken: 'a'.repeat(8193) },
+    { ...valid, idToken: 'a'.repeat(8193) },
+  ]) {
+    await assert.rejects(verifyIdentity(changed), /invalid-kinde-login-proof/);
+  }
+});
+
+void test('identity-only proof never provisions a principal or issues a D1 session', async () => {
+  const { verifyIdentity, verify, provision, tokens } = await fixture();
+  const { sqlite, db } = principalDb();
+  try {
+    const signed = await tokens({ idClaims: { email_verified: false } });
+    assert.equal((await verifyIdentity(signed)).emailVerified, false);
+    assert.equal(sqlite.prepare('SELECT COUNT(*) AS n FROM auth_principals').get().n, 0);
+    assert.equal(sqlite.prepare('SELECT COUNT(*) AS n FROM auth_sessions').get().n, 0);
+    await assert.rejects(verify(signed), /invalid-kinde-login-proof/);
+    await assert.rejects(provision(db, signed), KindePrincipalProvisionError);
+    assert.equal(sqlite.prepare('SELECT COUNT(*) AS n FROM auth_principals').get().n, 0);
+    assert.equal(sqlite.prepare('SELECT COUNT(*) AS n FROM auth_sessions').get().n, 0);
+  } finally { sqlite.close(); }
+});
 
 void test('Kinde login proof: strict signed identity, nonce, distinct audiences and access binding', async () => {
   const { verify, tokens } = await fixture();
