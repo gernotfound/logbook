@@ -178,7 +178,6 @@ void test('same-origin HTTP start and callback issue only a signed, verified ses
   } finally { f.close(); }
 });
 
-
 void test('a live Kinde session reports a non-current email proof without changing cookie or epoch', async () => {
   const f = await fixture();
   try {
@@ -431,8 +430,10 @@ void test('Kinde callback crosses consent and D1 replica gates only after explic
   const f = await fixture();
   try {
     const login = await f.login();
+    const trustedSession = await (await f.handler(f.post(SESSION, login.cookie), f.env)).json();
     assert.deepEqual(await cloudCall(f, '/v1/consent/status', login), {
-      status: 200, body: { status: 'unregistered', revision: 0, fenceEpoch: 1 },
+      status: 200, body: { uid: trustedSession.uid,
+        status: 'unregistered', revision: 0, fenceEpoch: 1 },
     });
     assert.equal((await cloudCall(f, '/v1/sync/control', login, {})).status, 401);
     assert.equal((await cloudCall(f, '/v1/consent/initial', login, acceptance, 'invalid-csrf')).status, 403);
@@ -441,9 +442,9 @@ void test('Kinde callback crosses consent and D1 replica gates only after explic
     const accepted = await cloudCall(f, '/v1/consent/initial', login, acceptance);
     assert.equal(accepted.status, 200);
     assert.deepEqual({
-      status: accepted.body.status, revision: accepted.body.revision,
+      uid: accepted.body.uid, status: accepted.body.status, revision: accepted.body.revision,
       fenceEpoch: accepted.body.fenceEpoch,
-    }, { status: 'active', revision: 1, fenceEpoch: 1 });
+    }, { uid: trustedSession.uid, status: 'active', revision: 1, fenceEpoch: 1 });
     assert.equal(f.sqlite.prepare('SELECT COUNT(*) AS n FROM health_consent_acceptances').get().n, 1);
     assert.equal((await cloudCall(f, '/v1/consent/initial', login, acceptance)).status, 409);
     const session = await f.handler(f.post(SESSION, login.cookie), f.env);
@@ -509,7 +510,7 @@ void test('Kinde signed subjects retain separate D1 consent and replica register
     assert.notEqual(principalA.uid, principalB.uid);
     assert.equal((await cloudCall(f, '/v1/sync/control', b, {})).status, 401);
     assert.deepEqual((await cloudCall(f, '/v1/consent/status', b)).body,
-      { status: 'unregistered', revision: 0, fenceEpoch: 1 });
+      { uid: principalB.uid, status: 'unregistered', revision: 0, fenceEpoch: 1 });
     assert.equal((await cloudCall(f, '/v1/consent/initial', b, acceptance)).status, 200);
     assert.deepEqual((await cloudCall(f, '/v1/sync/control', b, {})).body.replicas, {});
     assert.equal(Object.keys((await cloudCall(f, '/v1/sync/control', a, {})).body.replicas).length, 1);

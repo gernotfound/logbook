@@ -41,7 +41,7 @@ async function readConsent(db, claims) {
   // revocation can happen between the two Workers' D1 reads.
   const now = Date.now();
   const row = await db.withSession('first-primary').prepare(`
-    SELECT s.status, s.consent_revision, s.fence_epoch, state.revision AS sync_revision,
+    SELECT p.uid AS uid, s.status, s.consent_revision, s.fence_epoch, state.revision AS sync_revision,
       a.privacy_version, a.terms_version, a.accepted_at_ms, a.over_18_confirmed
     FROM auth_principals p
     JOIN auth_sessions t ON t.uid = p.uid
@@ -54,12 +54,12 @@ async function readConsent(db, claims) {
       AND t.issued_at_ms <= ? AND t.idle_expires_at_ms > ?
       AND t.absolute_expires_at_ms > ?
   `).bind(claims.uid, claims.fenceEpoch, claims.sessionHash, now, now, now).first();
-  if (!row) throw new Error('identity-changed');
+  if (!row || row.uid !== claims.uid) throw new Error('identity-changed');
   if (row.status === null) {
     if (row.privacy_version !== null || row.consent_revision !== null || row.fence_epoch !== null) {
       throw new Error('invalid-consent-state');
     }
-    return { status: 'unregistered', revision: 0, fenceEpoch: claims.fenceEpoch };
+    return { uid: row.uid, status: 'unregistered', revision: 0, fenceEpoch: claims.fenceEpoch };
   }
   if (!['active', 'withdrawn', 'deleting', 'deleted'].includes(row.status)
     || !Number.isSafeInteger(row.consent_revision) || row.consent_revision < 1
@@ -79,7 +79,7 @@ async function readConsent(db, claims) {
     throw new Error('missing-consent-proof');
   }
   return {
-    status: row.status, revision: row.consent_revision, fenceEpoch: row.fence_epoch,
+    uid: row.uid, status: row.status, revision: row.consent_revision, fenceEpoch: row.fence_epoch,
     ...(row.status === 'active' ? {
       acceptedAt: new Date(row.accepted_at_ms).toISOString(),
       privacyVersion: row.privacy_version,

@@ -90,7 +90,7 @@ void test('a verified session without consent may read status but cannot use syn
   try {
     const status = await call(f, '/v1/consent/status');
     assert.equal(status.status, 200);
-    assert.deepEqual(status.body, { status: 'unregistered', revision: 0, fenceEpoch: 1 });
+    assert.deepEqual(status.body, { uid: f.uid, status: 'unregistered', revision: 0, fenceEpoch: 1 });
     const denied = await sessionGate.fetch(new Request('https://auth-gate.internal/__internal/authorize', {
       method: 'POST', headers: {
         origin: ORIGIN, cookie: f.cookie, 'x-csrf-token': f.csrf,
@@ -104,12 +104,74 @@ void test('a verified session without consent may read status but cannot use syn
   } finally { f.sqlite.close(); }
 });
 
+
+void test('consent status returns the exact trusted SQL owner for all five states', async () => {
+  const f = await fixture();
+  try {
+    const expected = (status, revision) => ({
+      uid: f.uid, status, revision, fenceEpoch: 1,
+    });
+    assert.deepEqual((await call(f, '/v1/consent/status')).body,
+      expected('unregistered', 0));
+    const accepted = await call(f, '/v1/consent/initial', { body: acceptance });
+    assert.equal(accepted.status, 200);
+    const acceptedAtMs = f.sqlite.prepare(
+      'SELECT accepted_at_ms FROM health_consent_acceptances WHERE uid=?',
+    ).get(f.uid).accepted_at_ms;
+    const active = { ...expected('active', 1),
+      acceptedAt: new Date(acceptedAtMs).toISOString(),
+      privacyVersion: '1.3.9', termsVersion: '1.2.5' };
+    assert.deepEqual(accepted.body, active);
+    assert.deepEqual((await call(f, '/v1/consent/status')).body, active);
+
+    const withdrawn = await call(f, '/v1/consent/withdraw', {
+      body: { action: 'withdraw', expectedRevision: 1, confirmsErasure: true },
+    });
+    assert.equal(withdrawn.status, 200);
+    assert.deepEqual((await call(f, '/v1/consent/status')).body,
+      expected('withdrawn', 1));
+
+    for (const state of ['deleting', 'deleted']) {
+      f.sqlite.prepare('UPDATE sync_subjects SET status=? WHERE uid=?').run(state, f.uid);
+      assert.deepEqual((await call(f, '/v1/consent/status')).body, expected(state, 1));
+    }
+    assert.equal(count(f.sqlite, 'health_consent_acceptances'), 1);
+  } finally { f.sqlite.close(); }
+});
+
+void test('consent status cannot substitute a forged owner or stale trusted gate session', async () => {
+  const f = await fixture();
+  try {
+    const forged = new Request(ORIGIN + '/v1/consent/status', {
+      method: 'POST', headers: {
+        origin: ORIGIN, cookie: f.cookie, 'x-csrf-token': f.csrf,
+        'x-user-id': 'owner-b', 'x-original-route': '/v1/consent/status',
+      },
+    });
+    const response = await consent.fetch(forged, f.env);
+    assert.equal(response.status, 200);
+    assert.deepEqual(await response.json(),
+      { uid: f.uid, status: 'unregistered', revision: 0, fenceEpoch: 1 });
+
+    const trusted = f.env.AUTH_GATE;
+    f.env.AUTH_GATE = { async fetch(request) {
+      const allowed = await trusted.fetch(request);
+      const claims = await allowed.json();
+      return Response.json({ ...claims, uid: 'owner-b' });
+    } };
+    const mismatch = await call(f, '/v1/consent/status');
+    assert.equal(mismatch.status, 503);
+    assert.equal('uid' in mismatch.body, false);
+  } finally { f.sqlite.close(); }
+});
+
 void test('first explicit acceptance commits consent, sync state and immutable proof atomically', async () => {
   const f = await fixture();
   try {
     const result = await call(f, '/v1/consent/initial', { body: acceptance });
     assert.equal(result.status, 200);
     assert.equal(result.body.status, 'active');
+    assert.equal(result.body.uid, f.uid);
     assert.equal(result.body.revision, 1);
     assert.equal(result.body.fenceEpoch, 1);
     assert.equal(result.body.privacyVersion, '1.3.9');
@@ -216,7 +278,8 @@ void test('separate identities never adopt another account consent', async () =>
       csrf: otherSession.setCookies[1].split(';')[0].split('=')[1],
     };
     assert.equal((await call(f, '/v1/consent/initial', { body: acceptance })).status, 200);
-    assert.equal((await call(b, '/v1/consent/status')).body.status, 'unregistered');
+    assert.deepEqual((await call(b, '/v1/consent/status')).body,
+      { uid: other, status: 'unregistered', revision: 0, fenceEpoch: 1 });
     assert.equal(count(f.sqlite, 'sync_subjects'), 1);
   } finally { f.sqlite.close(); }
 });

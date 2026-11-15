@@ -154,7 +154,8 @@ async function authorize(request, env) {
     && row.verified_at_ms > 0 && row.verified_at_ms <= now;
   // A session may be closed before verification or first health consent.
   if ((!identityOnly || (IDENTITY_MUTATION_ROUTES.has(route)
-    && !['/v1/auth/logout', '/v1/consent/withdraw'].includes(route))) && !emailVerified) {
+    && !['/v1/auth/logout', '/v1/consent/withdraw',
+      '/v1/cloud-key/rights-export'].includes(route))) && !emailVerified) {
     return json({ error: 'unauthorized' }, 401);
   }
   const suppliedCsrf = request.headers.get('x-csrf-token');

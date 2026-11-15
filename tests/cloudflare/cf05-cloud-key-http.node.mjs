@@ -3,7 +3,7 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { test } from 'node:test';
 import { DatabaseSync } from 'node:sqlite';
 import api from '../../cloudflare/api/worker.mjs';
-import gate from '../../cloudflare/auth/session-gate.mjs';
+import gate, { hashSessionSecret } from '../../cloudflare/auth/session-gate.mjs';
 import { issueVerifiedSession } from '../../cloudflare/auth/session-issuer.mjs';
 
 const ORIGIN = 'https://cf05-key-http.example.invalid';
@@ -118,6 +118,27 @@ async function fixture() {
   };
 }
 
+
+async function renewSessionWithoutEmail(f, uid) {
+  const current = f.sessions.get(uid);
+  const token = Buffer.alloc(32, 96).toString('base64url');
+  const csrf = Buffer.alloc(32, 97).toString('base64url');
+  const now = Date.now();
+  f.sqlite.prepare(`UPDATE auth_principals
+    SET verified_at_ms=NULL, auth_epoch=auth_epoch+1 WHERE uid=?`).run(uid);
+  const epoch = f.sqlite.prepare('SELECT auth_epoch FROM auth_principals WHERE uid=?')
+    .get(uid).auth_epoch;
+  f.sqlite.prepare(`INSERT INTO auth_sessions
+    (token_hash,uid,auth_epoch,csrf_hash,issued_at_ms,idle_expires_at_ms,absolute_expires_at_ms)
+    VALUES (?,?,?,?,?,?,?)`).run(
+    await hashSessionSecret(token), uid, epoch, await hashSessionSecret(csrf),
+    now - 1000, now + 60000, now + 3600000,
+  );
+  f.sessions.set(uid, { cookies: '__Host-logbook_session=' + token
+    + '; __Host-logbook_csrf=' + csrf, csrf });
+  return current;
+}
+
 void test('top-level API: initial consent, authenticated key provision, repeat and isolated owner', async () => {
   const f = await fixture();
   try {
@@ -184,6 +205,79 @@ void test('withdrawal stops sync; rights-only returns existing key without repro
     assert.equal(f.count('cloud_key_issuance', 'owner-b'), 0);
     assert.equal(f.count('health_erasure_jobs', 'owner-a'), 1);
     assert.equal(f.count('health_erasure_jobs', 'owner-b'), 1);
+  } finally { f.close(); }
+});
+
+
+void test('rights export survives lost email verification and a renewed owner session, with no provisioning', async () => {
+  const f = await fixture();
+  try {
+    await f.consent('owner-a');
+    await f.consent('owner-b');
+    const issued = await f.call('owner-a', SYNC);
+    assert.equal(issued.response.status, 200);
+    const key = issued.body.key;
+    assert.equal((await f.call('owner-a', RIGHTS)).response.status, 503);
+    await f.withdraw('owner-a');
+    await f.withdraw('owner-b');
+    const oldSession = await renewSessionWithoutEmail(f, 'owner-a');
+    assert.equal((await f.call('owner-a', RIGHTS, {
+      cookie: oldSession.cookies, csrf: oldSession.csrf,
+    })).response.status, 401);
+    const rights = await f.call('owner-a', RIGHTS);
+    assert.equal(rights.response.status, 200);
+    assert.equal(rights.body.key, key);
+    assert.equal((await f.call('owner-a', '/v1/consent/status')).body.uid, 'owner-a');
+    assert.equal((await f.call('owner-a', SYNC)).response.status, 401);
+    assert.equal((await f.call('owner-a', '/v1/consent/initial', { body: ACCEPT }))
+      .response.status, 401);
+    assert.equal((await f.call('owner-a', RIGHTS, { csrf: '' })).response.status, 403);
+    assert.equal((await f.call('owner-a', RIGHTS, { csrf: oldSession.csrf }))
+      .response.status, 403);
+    assert.equal((await f.call('owner-b', RIGHTS)).response.status, 503);
+    assert.equal(f.count('cloud_account_keys', 'owner-a'), 1);
+    assert.equal(f.count('cloud_key_issuance', 'owner-a'), 1);
+    assert.equal(f.count('cloud_account_keys', 'owner-b'), 0);
+    assert.equal(f.count('cloud_key_issuance', 'owner-b'), 0);
+  } finally { f.close(); }
+});
+
+void test('rights-only denies stale session on the post-decrypt primary read', async () => {
+  const f = await fixture();
+  try {
+    await f.consent('owner-a');
+    assert.equal((await f.call('owner-a', SYNC)).response.status, 200);
+    await f.withdraw('owner-a');
+    await renewSessionWithoutEmail(f, 'owner-a');
+    let keyReads = 0;
+    const racingDb = {
+      withSession(mode) {
+        const primary = f.db.withSession(mode);
+        return { prepare(sql) {
+          const original = primary.prepare(sql);
+          if (!sql.includes('SELECT k.uid AS key_uid')) return original;
+          return { bind(...args) {
+            const bound = original.bind(...args);
+            return { async first() {
+              keyReads += 1;
+              if (keyReads === 2) {
+                f.sqlite.prepare(`UPDATE auth_sessions SET revoked_at_ms=issued_at_ms
+                  WHERE uid='owner-a' AND auth_epoch=2`).run();
+              }
+              return bound.first();
+            } };
+          } };
+        } };
+      },
+    };
+    const response = await f.call('owner-a', RIGHTS, {
+      env: { ...f.env, DB: racingDb },
+    });
+    assert.equal(response.response.status, 503);
+    assert.deepEqual(response.body, { error: 'unavailable' });
+    assert.equal(keyReads, 2);
+    assert.equal(f.count('cloud_account_keys', 'owner-a'), 1);
+    assert.equal(f.count('cloud_key_issuance', 'owner-a'), 1);
   } finally { f.close(); }
 });
 
