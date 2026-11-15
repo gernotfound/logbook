@@ -8,12 +8,6 @@ import { deliverCloudflareJournalCandidate } from './cloudflareJournalCandidate'
 import { createCloudflareReplicaTransport } from './cloudReplicaTransport';
 
 type JournalOutcome = Awaited<ReturnType<typeof deliverCloudflareJournalCandidate>>;
-type CandidateDeps = {
-    readLocalArchive?: typeof readLocal;
-    acquireKey?: typeof acquireCloudflareAccountKeyCandidate;
-    deliver?: typeof deliverCloudflareJournalCandidate;
-};
-
 /**
  * Pre-activation Kinde → consent → ADK → durable D1 journal bridge.
  *
@@ -27,12 +21,10 @@ type CandidateDeps = {
  */
 export async function deliverKindeCandidateJournal({
     stillCurrent, send = fetch, browserCookies = () => document.cookie,
-    deps = {},
 }: {
     stillCurrent: () => boolean;
     send?: typeof fetch;
     browserCookies?: () => string;
-    deps?: CandidateDeps;
 }): Promise<JournalOutcome> {
     const fence = captureKindeCandidateSessionFence({ stillCurrent, browserCookies });
     const current = () => {
@@ -50,7 +42,7 @@ export async function deliverKindeCandidateJournal({
     }
     const { uid, fenceEpoch, healthConsentRevision } = access.principal;
     const owner = userOwner(uid);
-    const local = await (deps.readLocalArchive ?? readLocal)(owner);
+    const local = await readLocal(owner);
     if (!current() || !local || local.cloudIntegrityFence
         || local.cloudflareReplicaClaim || local.cloudflareReplicaRetirement) {
         throw new KindeCandidateBoundaryError();
@@ -59,13 +51,13 @@ export async function deliverKindeCandidateJournal({
     // empty local journal. Hydration and replica claim have separate gates.
     if (!local.cloudflareDelivery && local.pending.length === 0) return 'idle';
 
-    const key = await (deps.acquireKey ?? acquireCloudflareAccountKeyCandidate)({
+    const key = await acquireCloudflareAccountKeyCandidate({
         expected: { uid, fenceEpoch, consentRevision: healthConsentRevision },
         purpose: 'sync', stillCurrent: current, csrfToken: () => fence.csrfToken, send,
     });
     try {
         if (!current()) throw new KindeCandidateBoundaryError();
-        const result = await (deps.deliver ?? deliverCloudflareJournalCandidate)(
+        const result = await deliverCloudflareJournalCandidate(
             owner, key, createCloudflareReplicaTransport(send), fence.csrfToken, current,
         );
         if (!current()) throw new KindeCandidateBoundaryError();
