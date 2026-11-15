@@ -6,6 +6,7 @@ import test from 'node:test';
 import { createLocalJWKSet, exportJWK, generateKeyPair, SignJWT } from 'jose';
 import kindeHttpWorker, { createKindeHttpHandler } from '../../cloudflare/auth/kinde-http-worker.mjs';
 import gate from '../../cloudflare/auth/session-gate.mjs';
+import { issueVerifiedSession } from '../../cloudflare/auth/session-issuer.mjs';
 import apiWorker from '../../cloudflare/api/worker.mjs';
 
 const ORIGIN = 'https://candidate.invalid';
@@ -174,6 +175,133 @@ void test('same-origin HTTP start and callback issue only a signed, verified ses
     assert.equal(body.emailVerified, true);
     assert.equal(body.healthConsentRevision, 0);
     assert.equal(Object.hasOwn(body, 'sessionHash'), false);
+  } finally { f.close(); }
+});
+
+
+void test('a live Kinde session reports a non-current email proof without changing cookie or epoch', async () => {
+  const f = await fixture();
+  try {
+    const login = await f.login();
+    const first = await f.handler(f.post(SESSION, login.cookie), f.env);
+    assert.equal(first.status, 200);
+    const verified = await first.json();
+    assert.equal(verified.emailVerified, true);
+    assert.equal((await cloudCall(f, '/v1/consent/initial', login, acceptance)).status, 200);
+    const before = f.sqlite.prepare('SELECT * FROM auth_sessions WHERE uid=?').get(verified.uid);
+    assert.ok(before);
+    const sessionCount = f.sqlite.prepare('SELECT COUNT(*) AS n FROM auth_sessions').get().n;
+
+    // A future-dated proof is the only non-current verification that keeps
+    // this D1 schema's session epoch: clearing the proof requires an epoch bump.
+    f.sqlite.prepare('UPDATE auth_principals SET verified_at_ms=? WHERE uid=?')
+      .run(Date.now() + 3_600_000, verified.uid);
+    const result = await f.handler(f.post(SESSION, login.cookie), f.env);
+    assert.equal(result.status, 200);
+    assert.deepEqual(await result.json(), {
+      ...verified, emailVerified: false, healthConsentRevision: 1,
+    });
+    assert.equal(result.headers.get('Cache-Control'), 'no-store');
+    assert.equal(result.headers.get('Set-Cookie'), null);
+    assert.deepEqual(f.sqlite.prepare('SELECT * FROM auth_sessions WHERE uid=?').get(verified.uid), before);
+    assert.equal((await cloudCall(f, '/v1/sync/control', login, {})).status, 401);
+    assert.equal((await cloudCall(f, '/v1/cloud-key/sync', login)).status, 401);
+    assert.equal((await cloudCall(f, '/v1/consent/initial', login, acceptance)).status, 401);
+    await assert.rejects(issueVerifiedSession(f.db, verified.uid));
+    assert.equal(f.sqlite.prepare('SELECT COUNT(*) AS n FROM auth_sessions').get().n, sessionCount);
+
+    const withdrawn = await cloudCall(f, '/v1/consent/withdraw', login, {
+      action: 'withdraw', expectedRevision: 1, confirmsErasure: true,
+    });
+    assert.equal(withdrawn.status, 200);
+    assert.equal((await f.handler(f.post(SESSION, login.cookie), f.env)).status, 200);
+    assert.equal(f.sqlite.prepare('SELECT COUNT(*) AS n FROM auth_sessions').get().n, sessionCount);
+  } finally { f.close(); }
+});
+
+void test('real email-proof removal requires a new epoch and denies the original session', async () => {
+  const f = await fixture();
+  try {
+    const login = await f.login();
+    const verified = await (await f.handler(f.post(SESSION, login.cookie), f.env)).json();
+    const before = f.sqlite.prepare('SELECT * FROM auth_sessions WHERE uid=?').get(verified.uid);
+    assert.throws(() => f.sqlite.prepare(
+      'UPDATE auth_principals SET verified_at_ms=NULL WHERE uid=?',
+    ).run(verified.uid), /auth-principal-regression/);
+    assert.equal((await f.handler(f.post(SESSION, login.cookie), f.env)).status, 200);
+
+    f.sqlite.prepare('UPDATE auth_principals SET verified_at_ms=NULL, auth_epoch=auth_epoch+1 WHERE uid=?')
+      .run(verified.uid);
+    assert.deepEqual(f.sqlite.prepare('SELECT * FROM auth_sessions WHERE uid=?').get(verified.uid), before);
+    assert.equal((await f.handler(f.post(SESSION, login.cookie), f.env)).status, 401);
+    await assert.rejects(issueVerifiedSession(f.db, verified.uid));
+    assert.equal(f.sqlite.prepare('SELECT COUNT(*) AS n FROM auth_sessions').get().n, 1);
+  } finally { f.close(); }
+});
+
+void test('session status fails closed for revoked, expired, superseded or disabled accounts', async () => {
+  const scenarios = [
+    ['revoked', 'UPDATE auth_sessions SET revoked_at_ms=issued_at_ms'],
+    ['idle-expired', 'UPDATE auth_sessions SET idle_expires_at_ms=issued_at_ms+1'],
+    ['absolute-expired', 'UPDATE auth_sessions SET idle_expires_at_ms=issued_at_ms+1, absolute_expires_at_ms=issued_at_ms+1'],
+    ['epoch-changed', 'UPDATE auth_principals SET auth_epoch=auth_epoch+1'],
+    ['owner-disabled', "UPDATE auth_principals SET status='disabled'"],
+  ];
+  for (const [name, mutation] of scenarios) {
+    const f = await fixture();
+    try {
+      const login = await f.login();
+      assert.equal((await f.handler(f.post(SESSION, login.cookie), f.env)).status, 200, name);
+      f.sqlite.exec(mutation);
+      const response = await f.handler(f.post(SESSION, login.cookie), f.env);
+      assert.equal(response.status, 401, name);
+      assert.deepEqual(await response.json(), { error: 'unauthorized' }, name);
+      assert.equal(response.headers.get('Cache-Control'), 'no-store');
+    } finally { f.close(); }
+  }
+});
+
+void test('session status uses trusted owner, and rejects malformed private-gate claims', async () => {
+  const f = await fixture();
+  try {
+    const a = await f.login();
+    const ownerA = await (await f.handler(f.post(SESSION, a.cookie), f.env)).json();
+    f.setSubject('kp_other_synthetic_user_20261114');
+    const b = await f.login();
+    const ownerB = await (await f.handler(f.post(SESSION, b.cookie), f.env)).json();
+    assert.notEqual(ownerA.uid, ownerB.uid);
+
+    const forged = new Request(ORIGIN + SESSION, {
+      method: 'POST',
+      headers: {
+        origin: ORIGIN, 'sec-fetch-site': 'same-origin',
+        cookie: a.cookie, 'x-user-id': ownerB.uid,
+      },
+    });
+    assert.deepEqual(await (await f.handler(forged, f.env)).json(), ownerA);
+    assert.deepEqual(await (await f.handler(f.post(SESSION, b.cookie), f.env)).json(), ownerB);
+
+    const trustedFetch = f.env.AUTH_GATE.fetch;
+    for (const malformed of [
+      { uid: ownerB.uid + 'trailing' }, { uid: 'firebase-user' },
+      { emailVerified: undefined }, { emailVerified: 'false' },
+      { emailVerified: null }, { authenticated: false },
+      { rateGatePassed: false }, { fenceEpoch: 0 },
+      { healthConsentRevision: -1 }, { sessionHash: 'untrusted' },
+    ]) {
+      const env = { ...f.env, AUTH_GATE: {
+        fetch: async request => {
+          const granted = await trustedFetch(request);
+          assert.equal(granted.status, 200);
+          return Response.json({ ...await granted.json(), ...malformed });
+        },
+      } };
+      const response = await f.handler(f.post(SESSION, a.cookie), env);
+      assert.equal(response.status, 503);
+      assert.deepEqual(await response.json(), { error: 'unavailable' });
+      assert.equal(response.headers.get('Cache-Control'), 'no-store');
+    }
+    assert.equal(f.sqlite.prepare('SELECT COUNT(*) AS n FROM auth_sessions').get().n, 2);
   } finally { f.close(); }
 });
 
