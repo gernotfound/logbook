@@ -3,6 +3,14 @@
 **Classificazione: CRITICAL.** Questo registro contiene **soltanto servizi necessari, ancora presenti nel codice oppure da validare prima del GO**. La storia delle configurazioni superate rimane nella cronologia Git e nelle PR. GitHub prova SHA e verifiche; i provider provano le rispettive risorse e il runtime. Un riscontro datato non autorizza cambi Production.
 
 
+## Checkpoint servizi corrente — 15/11/2026, main v2.462.0
+
+Il repository è su `c2ebcbc670c2807f5927f632089dcdc86fa397f6`. [Main/CodeQL](https://github.com/gernotfound/logbook/actions/runs/43753851256), [Firestore](https://github.com/gernotfound/logbook/actions/runs/43754055387) e [Cloudflare Static Assets/smoke](https://github.com/gernotfound/logbook/actions/runs/43754087775) sono SUCCESS. Le PR #1153, #1154, #1152, #1141, #1155, #1143 sono integrate, non più candidate. La PR #1144 (Vite) è chiusa come assorbita. Questi esiti non provano un GO full-stack.
+
+**Lettura provider Cloudflare non mutante** sul Worker frontend: solo `ASSETS`, distribuzione 100%. La API privata `thelogbook-api-isolated` ha `DB` D1 EU, `AUTH_GATE` e variabili non segrete di consenso/origin; `thelogbook-cf03-auth-gate-isolated` ha `DB`, limiter e variabili di consenso/origin. La D1 `thelogbook-cf02-eu-isolated-20261113` riporta `jurisdiction=eu` e repliche disabilitate. **Binding KEK non presente** nel set osservato; la route Kinde HTTP non è installata sul frontend. Restano **LEGACY, realmente chiamati dal client** Firebase Auth/Firestore/App Check e il proxy `/__/auth/`, mentre il frontend statico è **ACTIVE** su Cloudflare. Non associare i provider legacy a un nuovo account Cloudflare: fresh start senza migrazione dati.
+
+**Kinde è VERIFY-LIVE / non operativo nell'app:** l'issuer ed il client backend reali, redirect registrati, policy password ≥15, Google, verifica/reset email, quota e disponibilità di secret non sono verificabili dal readback Cloudflare; servono attestazioni del tenant Kinde. Il Worker HTTP candidato richiede `/api/auth/kinde/callback`; nessuna azione su callback, OAuth, DNS, secrets o Kinde Production è stata effettuata in questo checkpoint. L'attivazione sicura e i test sono descritti nel [runbook](cloudflare-workers-migration.md) e nel [setup Kinde](kinde-auth-setup.md).
+
 ## D1 EU isolata — schema remoto 10/10 verificato (15/11/2026)
 
 **Readback ripetuto il 15/11, dopo gli incrementi di manutenzione:**
