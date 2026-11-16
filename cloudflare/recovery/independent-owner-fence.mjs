@@ -110,9 +110,23 @@ export async function enrollIndependentOwner(fenceDb, uid, epoch = 1) {
     const expected = {
       uid, status: 'pending', consentRevision: 0, fenceEpoch: epoch, erasedBeforeRevision: 0,
     };
-    await primary(fenceDb).prepare(`INSERT INTO recovery_owner_fences
-      (uid,status,consent_revision,fence_epoch,erased_before_revision,change_seq)
-      VALUES (?,'pending',0,1,0,1) ON CONFLICT(uid) DO NOTHING`).bind(uid).run();
+    const existing = await readRegistry(fenceDb, uid);
+    if (!existing || !['sealed', 'open'].includes(existing.mode)) {
+      throw new IndependentFenceUnavailableError();
+    }
+    if (existing.owner && !matches(existing.owner, expected)) {
+      throw new IndependentFenceUnavailableError();
+    }
+    if (!existing.owner) {
+      try {
+        await primary(fenceDb).prepare(`INSERT INTO recovery_owner_fences
+          (uid,status,consent_revision,fence_epoch,erased_before_revision,change_seq)
+          VALUES (?,'pending',0,1,0,1)`).bind(uid).run();
+      } catch {
+        // A concurrent enrollment may have committed, but only the primary
+        // readback below can distinguish it from an unavailable write.
+      }
+    }
     const readback = await readRegistry(fenceDb, uid);
     if (!matches(readback?.owner, expected)) throw new IndependentFenceUnavailableError();
     return expected;
