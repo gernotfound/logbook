@@ -166,7 +166,7 @@ La pipeline V4 mantiene debounce e protocollo causale delle milestone precedenti
 
 **MUST:** il limite non si applica facendo slice arbitrari delle operation. Tutte le operation dello stesso documento restano nello stesso gruppo; se una mutazione bulk tocca più di 8 documenti, `commitLocal` / `commitDomainOperations` assegnano sequence causali successive. `replicateJournal` può coalescere più sequence complete nella stessa transazione finché l’unione resta entro 8 documenti, poi acknowledge fino all’ultima sequence effettivamente consegnata.
 
-**MUST:** un journal nel formato supportato con una singola sequence oltre il limite viene resequenziato atomicamente in IndexedDB prima della prima consegna; questo guard protegge il batching corrente, non importa un protocollo pre-lancio. Una sequence non può essere consegnata parzialmente con lo stesso numero causale.
+**MUST:** un journal nel formato supportato con una singola sequence oltre il limite viene resequenziato atomicamente in IndexedDB prima della prima consegna; questo guard protegge il batching corrente, non importa un protocollo pre-lancio. Una sequence non può essere consegnata parzialmente con lo stesso numero causale. Il candidato D1 applica `ensureBoundedPendingSequences()` sul journal senza intento pendente prima di leggere il controllo remoto o sigillare il batch; una preflight di rete fallita non annulla la normalizzazione già durevole, né autorizza ACK.
 
 
 ### Sync Protocol 3 — causal core e replica fencing
