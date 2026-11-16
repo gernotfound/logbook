@@ -42,7 +42,21 @@ async function readConsent(db, claims) {
   const now = Date.now();
   const row = await db.withSession('first-primary').prepare(`
     SELECT p.uid AS uid, s.status, s.consent_revision, s.fence_epoch, state.revision AS sync_revision,
-      a.privacy_version, a.terms_version, a.accepted_at_ms, a.over_18_confirmed
+      a.privacy_version, a.terms_version, a.accepted_at_ms, a.over_18_confirmed,
+      s.erased_before_revision,
+      EXISTS (
+        SELECT 1 FROM health_erasure_finalizations f
+        JOIN health_erasure_jobs j
+          ON j.uid = f.uid AND j.consent_revision = f.consent_revision
+        WHERE f.uid = s.uid
+          AND f.erased_before_revision = s.erased_before_revision
+          AND f.erased_before_revision = s.consent_revision
+          AND f.fence_epoch + 1 = s.fence_epoch
+          AND j.status = 'complete'
+          AND j.completed_at_ms = f.completed_at_ms
+          AND j.erased_before_revision = f.erased_before_revision
+          AND j.key_disposition = f.key_disposition
+      ) AS erasure_proven
     FROM auth_principals p
     JOIN auth_sessions t ON t.uid = p.uid
     LEFT JOIN sync_subjects s ON s.uid = p.uid
@@ -63,7 +77,16 @@ async function readConsent(db, claims) {
   }
   if (!['active', 'withdrawn', 'deleting', 'deleted'].includes(row.status)
     || !Number.isSafeInteger(row.consent_revision) || row.consent_revision < 1
-    || !Number.isSafeInteger(row.fence_epoch) || row.fence_epoch > claims.fenceEpoch
+    || !Number.isSafeInteger(row.fence_epoch) || row.fence_epoch < 1
+    || (row.fence_epoch > claims.fenceEpoch && !(
+      // Terminal erasure advances the subject, not the Auth principal.
+      // Permit a rights/status read one epoch ahead only with the immutable
+      // SQL completion proof; this never authorizes the active fitness gate.
+      row.status === 'withdrawn'
+      && row.fence_epoch === claims.fenceEpoch + 1
+      && row.erased_before_revision === row.consent_revision
+      && row.erasure_proven === 1
+    ))
     || (row.status === 'active' && row.fence_epoch !== claims.fenceEpoch)) {
     throw new Error('invalid-consent-state');
   }
