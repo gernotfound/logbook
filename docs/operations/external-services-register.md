@@ -1,5 +1,13 @@
 # Registro dei servizi esterni — stato corrente TheLogBook
 
+
+## Distribuzione privata HTTP Kinde autorizzata — candidato v2.479.0 (16/11/2026)
+
+L'owner ha autorizzato esclusivamente la **creazione del Worker HTTP Kinde privato**, senza aggiungere segreti, OAuth, URL pubblici, DNS, IAM, billing o operazioni su dati reali. Il workflow `.github/workflows/cloudflare-kinde-private.yml` verrà eseguito solo dopo il merge su `main` e il `Main Release Gate` exact-SHA. Riuso del token CI Workers già esistente; **solo** `cloudflare/auth/wrangler.kinde.isolated.jsonc` viene pubblicato, non il frontend né altri Worker. La verifica legge D1 UUID, service binding `AUTH_GATE`, limiter `AUTH_RATE_LIMITER`, origin e disabilitazione workers.dev/preview. L'esito del deploy va attestato separatamente nel provider: la presenza di questo testo non prova lo stato remoto.
+
+Il tenant Kinde e il flusso account rimangono **VERIFY-LIVE / NO-GO** finché non sono provati configurazione callback, password >=15 incl. reset, Google, verifica email, sessioni, KEK, consenso e client completo. Dopo il deploy privato il Worker non ha ingressi HTTP pubblici.
+
+
 **Classificazione: CRITICAL.** Questo registro contiene **soltanto servizi necessari, ancora presenti nel codice oppure da validare prima del GO**. La storia delle configurazioni superate rimane nella cronologia Git e nelle PR. GitHub prova SHA e verifiche; i provider provano le rispettive risorse e il runtime. Un riscontro datato non autorizza cambi Production.
 
 

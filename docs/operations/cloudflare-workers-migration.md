@@ -1,5 +1,11 @@
 # TheLogBook — migrazione Cloudflare: runbook corrente
 
+
+## CF-03 — deploy HTTP Kinde privato approvato, da attestare (16/11/2026)
+
+L'autorizzazione odierna riguarda **solo** il Worker `thelogbook-cf03-kinde-http-isolated`: si può pubblicare su Cloudflare tramite il nuovo workflow `.github/workflows/cloudflare-kinde-private.yml`, dopo gate exact-SHA su main, usando la configurazione `cloudflare/auth/wrangler.kinde.isolated.jsonc` senza route, workers.dev, preview, segreti Kinde e modifiche a frontend/API/Auth Gate. Il verifier `scripts/verify-cloudflare-kinde-private-provider.mjs` rifiuta binding inattesi, UUID D1 diverso, Auth Gate errato, rate limiter diverso e URL workers.dev/preview pubblici. La CI e la distribuzione reale sono prove distinte. **Non dichiarare Worker distribuito prima del readback provider**, né considerarlo attivo nel login browser: `AuthContext` resta Firebase, e Kinde OAuth/posta/chiavi/Sync non sono configurati o validati.
+
+
 **Classificazione: CRITICAL · stato PARZIALE / NO-GO funzionale (dominio pubblico di sviluppo autorizzato).** La fonte di verità per il codice e i test è `main` GitHub; per risorse e runtime sono i rispettivi provider. Questo documento descrive **contratti correnti e blocchi**, non lo storico di commit. [EPIC #1053](https://github.com/gernotfound/logbook/issues/1053) · [registro servizi](external-services-register.md) · [CF-09 #1063](https://github.com/gernotfound/logbook/issues/1063).
 
 
