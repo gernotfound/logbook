@@ -1,5 +1,12 @@
 # TheLogBook — migrazione Cloudflare: runbook corrente
 
+## CF-03 — compatibilità callback Kinde con scope nel redirect (candidato 16/11/2026)
+
+Il primo percorso live di registrazione ha raggiunto il provider Kinde ed eseguito la verifica email e la regola password 15+, ma il ritorno `GET /api/auth/kinde/callback` è fallito con HTTP 400. Il parser OAuth accettava esclusivamente `code`/`state`/`error`/`error_description`, mentre Kinde ha inviato anche `scope`, comportamento documentato dal provider. Causa immediata verificata sul codice; altre cause concorrenti non ancora escluse perché il parser si fermava prima della validazione state/cookie e dello scambio dei token.
+
+La patch autorizza l'eventuale `scope` **solo se equivalente all'insieme esatto richiesto** `openid email profile`, senza ammettere parametri aggiuntivi o bypass di CSRF/PKCE, replay/nonce, verifica JWT o limite di durata. Suite Node/SQLite ed HTTP gateway coprono callback di forma reale, eventuale scope assente, scope alterato/duplicato e state non consumato prematuramente. **Resta NO-GO l'autenticazione end-to-end finché non si osserva un nuovo percorso browser dopo i gate GitHub e lo smoke Cloudflare.** Non usare o registrare codici OAuth o stati del tentativo fallito.
+
+
 ## CF-03 — collaudo browser Kinde con diagnostica strettamente isolata (candidato v2.486.0)
 
 Per poter collaudare login email/password, Google, verifica email e callback reali senza collegare prematuramente `AuthContext` Firebase o API salute D1, il candidato introduce un documento standalone `/verifica-accesso`, non linkato dal sito ordinario. Il suo form invia `POST /api/auth/kinde/start` senza payload; un'azione esplicita separata legge `POST /api/auth/session` nello stesso browser. Lato client non tratta password, ID token o dati fitness, non persiste nulla e non stampa UID. Il risultato positivo segnala solo una sessione server Kinde email-verificata; mai consenso, cloud key o diritto a salvare dati salute. Noindex, no-store, asset smoke byte-exact e service-worker denylist sono obbligatori.
