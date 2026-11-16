@@ -246,6 +246,9 @@ void test('operator census scans both full D1 tables while sealed, not caller-se
     applyFenceSchema(ledger);
     const appDb = new D1Sqlite(app);
     const fenceDb = new D1Sqlite(ledger);
+    assert.deepEqual(await inspectRestoredD1Census(appDb, fenceDb), {
+      outcome: 'blocked', reason: 'independent-coverage-empty',
+    });
     for (const uid of ['owner-a', 'owner-b']) {
       addOwner(app, uid);
       await enrollIndependentOwner(fenceDb, uid);
@@ -367,6 +370,33 @@ void test('operator census rejects failed D1 reads and malformed independent row
     assert.deepEqual(await inspectRestoredD1Census(appDb, new MissingSequenceD1(ledger)), {
       outcome: 'blocked', reason: 'independent-row-sequence-invalid',
     });
+  } finally {
+    app.close();
+    ledger.close();
+  }
+});
+
+void test('operator census rejects owner counts beyond its bounded D1 read budget', async () => {
+  const app = new DatabaseSync(':memory:');
+  const ledger = new DatabaseSync(':memory:');
+  try {
+    app.exec('PRAGMA foreign_keys=ON');
+    applyCurrentD1Schema(app);
+    applyFenceSchema(ledger);
+    for (let i = 0; i < 513; i++) {
+      const uid = 'owner-' + String(i).padStart(4, '0');
+      addOwner(app, uid);
+      ledger.prepare(`INSERT INTO recovery_owner_fences
+        (uid,status,consent_revision,fence_epoch,erased_before_revision,change_seq)
+        VALUES (?,'pending',0,1,0,1)`).run(uid);
+      ledger.prepare(`UPDATE recovery_owner_fences SET status='active',
+        consent_revision=1,change_seq=2 WHERE uid=?`).run(uid);
+    }
+    assert.deepEqual(await inspectRestoredD1Census(new D1Sqlite(app), new D1Sqlite(ledger)), {
+      outcome: 'blocked', reason: 'coverage-limit-exceeded',
+    });
+    assert.equal(app.prepare('SELECT COUNT(*) AS n FROM sync_subjects').get().n, 513);
+    assert.equal(ledger.prepare('SELECT COUNT(*) AS n FROM recovery_owner_fences').get().n, 513);
   } finally {
     app.close();
     ledger.close();
