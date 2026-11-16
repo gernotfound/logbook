@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { copyFileSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { copyFileSync, mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
@@ -13,7 +13,17 @@ import {
   requireIndependentOwnerFence,
 } from '../../cloudflare/recovery/independent-owner-fence.mjs';
 
-const FENCE_SCHEMA = new URL('../../cloudflare/recovery/migrations/0001_independent_owner_fences.sql', import.meta.url);
+const FENCE_MIGRATION_DIR = new URL('../../cloudflare/recovery/migrations/', import.meta.url);
+const FENCE_MIGRATIONS = readdirSync(FENCE_MIGRATION_DIR)
+  .filter(name => /^[0-9]{4}_[a-z0-9_]+\.sql$/.test(name)).sort();
+assert.deepEqual(FENCE_MIGRATIONS.map(name => name.slice(0, 4)),
+  Array.from({ length: FENCE_MIGRATIONS.length }, (_, i) => String(i + 1).padStart(4, '0')));
+assert.equal(FENCE_MIGRATIONS.length, 2);
+function applyFenceSchema(sqlite) {
+  for (const name of FENCE_MIGRATIONS) {
+    sqlite.exec(readFileSync(new URL(name, FENCE_MIGRATION_DIR), 'utf8'));
+  }
+}
 class Statement {
   constructor(sqlite, sql, args = []) { this.sqlite = sqlite; this.sql = sql; this.args = args; }
   bind(...args) { return new Statement(this.sqlite, this.sql, args); }
@@ -65,7 +75,7 @@ void test('independent monotone fence blocks old consent after a physical applic
     app.exec('PRAGMA foreign_keys=ON');
     applyCurrentD1Schema(app);
     ledger = new DatabaseSync(fenceFile);
-    ledger.exec(readFileSync(FENCE_SCHEMA, 'utf8'));
+    applyFenceSchema(ledger);
     const appDb = new D1Sqlite(app);
     const fenceDb = new D1Sqlite(ledger);
     addOwner(app, 'owner-a');
@@ -129,7 +139,7 @@ void test('independent monotone fence blocks old consent after a physical applic
 void test('missing, unavailable or altered external proof and duplicate enrollment fail closed', async () => {
   const ledger = new DatabaseSync(':memory:');
   try {
-    ledger.exec(readFileSync(FENCE_SCHEMA, 'utf8'));
+    applyFenceSchema(ledger);
     const db = new D1Sqlite(ledger);
     const subjectA = {
       uid: 'owner-a', status: 'active', consentRevision: 1,
@@ -157,6 +167,19 @@ void test('missing, unavailable or altered external proof and duplicate enrollme
     assert.throws(() => ledger.prepare(
       "UPDATE recovery_control SET mode='open',generation=1 WHERE singleton=1"
     ).run(), /recovery-control-regression/);
+    assert.equal(ledger.prepare('PRAGMA recursive_triggers').get().recursive_triggers, 0);
+    assert.throws(() => ledger.prepare(
+      "INSERT OR REPLACE INTO recovery_control(singleton,mode,generation) VALUES (1,'open',2)"
+    ).run(), /recovery-control-exists/);
+    assert.deepEqual(ledger.prepare('SELECT mode,generation FROM recovery_control').get(),
+      { mode: 'sealed', generation: 1 });
+    assert.throws(() => ledger.prepare(
+      "INSERT OR REPLACE INTO recovery_owner_fences VALUES ('owner-a','pending',0,1,0,1)"
+    ).run(), /recovery-owner-exists/);
+    assert.throws(() => ledger.prepare(
+      "INSERT OR IGNORE INTO recovery_owner_fences VALUES ('owner-a','pending',0,1,0,1)"
+    ).run(), /recovery-owner-exists/);
+    assert.equal(fence(ledger, 'owner-a').status, 'pending');
     assert.equal(fence(ledger, 'owner-a').change_seq, 1);
   } finally { ledger.close(); }
 });
@@ -164,7 +187,7 @@ void test('missing, unavailable or altered external proof and duplicate enrollme
 void test('duplicate or late write does not undo a durable independent deny', async () => {
   const ledger = new DatabaseSync(':memory:');
   try {
-    ledger.exec(readFileSync(FENCE_SCHEMA, 'utf8'));
+    applyFenceSchema(ledger);
     const fenceDb = new D1Sqlite(ledger);
     const a = {
       uid: 'owner-a', status: 'active', consentRevision: 1,
