@@ -84,7 +84,14 @@ export function KindeAccountEntry({
 
     useEffect(() => {
         mounted.current = true;
-        void refresh();
+        const effectGeneration = ++generation.current;
+        // React's commit must finish before an HTTP result may publish UI state.
+        // A StrictMode teardown or owner-mode change invalidates this start.
+        queueMicrotask(() => {
+            if (mounted.current && generation.current === effectGeneration) {
+                void refresh();
+            }
+        });
         return () => {
             mounted.current = false;
             generation.current += 1;
