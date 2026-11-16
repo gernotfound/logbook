@@ -44,7 +44,7 @@ export function KindeAccountEntry({
     const privacyDetails = useRef<HTMLDetailsElement>(null);
     const termsDetails = useRef<HTMLDetailsElement>(null);
 
-    const refresh = useCallback(async (showLoading = true) => {
+    const refresh = useCallback(async () => {
         const token = ++generation.current;
         const current = () => mounted.current && generation.current === token && !guestArchivePresent;
         if (guestArchivePresent) {
@@ -52,7 +52,6 @@ export function KindeAccountEntry({
             if (mounted.current && generation.current === token) setPhase('guest-blocked');
             return;
         }
-        if (showLoading) setPhase('checking');
         try {
             const identity: KindeCandidateIdentity = await readKindeCandidateIdentity({
                 stillCurrent: current,
@@ -85,7 +84,7 @@ export function KindeAccountEntry({
 
     useEffect(() => {
         mounted.current = true;
-        void refresh(false);
+        void refresh();
         return () => {
             mounted.current = false;
             generation.current += 1;
@@ -179,7 +178,7 @@ export function KindeAccountEntry({
                 && phase !== 'guest-blocked' && <p role="status">{copy[phase]}</p>}
             {phase === 'unavailable' && (
                 <button type="button" className="btn" disabled={busy}
-                    onClick={() => { void refresh(); }}>Riprova la verifica</button>
+                    onClick={() => { setPhase('checking'); void refresh(); }}>Riprova la verifica</button>
             )}
             {['email-unverified', 'consent-required', 'consent-confirmed',
                 'legal-update-required', 'consent-suspended'].includes(phase) && (
