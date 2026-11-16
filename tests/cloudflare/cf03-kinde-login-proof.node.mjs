@@ -163,7 +163,6 @@ void test('Kinde login proof: strict signed identity, nonce, distinct audiences 
 
 void test('Kinde default 24h access token validates only in nonce-bound login proof', async () => {
   const { verify, verifyIdentity, tokens } = await fixture();
-  const now = Math.floor(Date.now() / 1000);
   const signed = await tokens({ accessExpiresIn: 24 * 60 * 60 - 2 });
   assert.deepEqual(await verify(signed), { issuer, subject: sub, emailVerified: true });
   assert.equal((await verifyIdentity(signed)).subject, sub);
