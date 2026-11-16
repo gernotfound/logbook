@@ -1,5 +1,14 @@
 # TheLogBook — migrazione Cloudflare: runbook corrente
 
+## CF-03 — gateway OAuth-only candidato, gated sul provider (16/11/2026)
+
+Su branch di integrazione si prepara un percorso **limitato a quattro route esatte** `/api/auth/kinde/start`, `/api/auth/kinde/callback`, `/api/auth/session`, `/api/auth/logout` con service binding `KINDE_HTTP` al solo Worker HTTP Kinde privato. Nessun binding D1 API al frontend, nessuna route `/v1/*`, nessuna chiave salute, nessun frontend AuthContext Kinde attivo. Si conserva il Proxy Firebase helper fino alla migrazione completa. La CSP consente il reindirizzamento form verso il dominio Kinde, preservando le altre restrizioni. Il gateway conserva il rate limiter, i controlli cookie CSRF/OAuth state+PKCE e un solo consumo D1 del callback del Worker privato.
+
+**Gate obbligatorio PRIMA del deploy:** il workflow statico deve leggere le impostazioni del Worker privato e attestare esattamente l'insieme dei cinque secret OAuth server-side, più binding D1/Auth Gate/rate limiter e URL pubblici disattivati. Il provider, all'ultima osservazione di questa sessione, ha **zero secret** Kinde; le modifiche del branch **NON sono live** e non vanno considerate distribuite prima di CI, merge, segreti e smoke. Le route dei dati salute rimangono isolate.
+
+**Blocco corrente:** tenant Kinde Audience API non provata/registrazione da verificare; Kinde Client Secret disponibile soltanto al proprietario nel pannello Kinde e non accessibile in chiaro da questa connessione. Non trasferire segreti in chat; inserirli nel pannello Cloudflare Worker privato. Lo stato Live del workflow password è distinto dal suo comportamento non ancora collaudato. L'abilitazione OAuth-only non equivale a GO fitness.
+
+
 
 ## CF-03 — Worker Kinde HTTP privato distribuito e verificato (16/11/2026)
 
