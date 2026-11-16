@@ -68,6 +68,7 @@ if (!productionWorkflow.includes("node-version: '24'\n          package-manager-
 }
 const mismatchDiagnostics = readFileSync('scripts/cloudflare-asset-mismatch-diagnostics.sh', 'utf8');
 const verifiedAsset = readFileSync('scripts/verify-cloudflare-served-asset.mjs', 'utf8');
+const verifiedChunk = readFileSync('scripts/verify-cloudflare-served-chunk.sh', 'utf8');
 if (!productionWorkflow.includes('for path in / /about /privacy /legal-pages.css') ||
     !productionWorkflow.includes('dist/about.html dist/privacy.html dist/legal-pages.css') ||
     !productionWorkflow.includes('Unexpected public page status/MIME')) {
@@ -87,6 +88,14 @@ if (!productionWorkflow.includes('for attempt in 1 2 3 4; do') ||
     !mismatchDiagnostics.includes('for probe in exact cache-busted; do') ||
     !mismatchDiagnostics.includes('exit 1')) {
   failures.push('Cloudflare smoke must require byte-level asset verification, a bounded managed robots wrapper and fail-closed retries');
+}
+if (!productionWorkflow.includes('bash scripts/verify-cloudflare-served-chunk.sh') ||
+    !productionWorkflow.includes('chunks=(dist/assets/**/*.{js,css})') ||
+    !verifiedChunk.includes('for attempt in 1 2 3 4; do') ||
+    !verifiedChunk.includes('if cmp -s "$file" "$body"; then') ||
+    !verifiedChunk.includes('cloudflare-asset-mismatch-diagnostics.sh') ||
+    !verifiedChunk.includes('exit 0')) {
+  failures.push('Hashed JS/CSS smoke must use the exercised bounded exact-byte verifier, not a one-shot curl or status-only success');
 }
 if (failures.length) { for (const problem of failures) console.error(problem); process.exit(1); }
 console.log('Cloudflare domain-only static assets, release workflow and Auth proxy configuration contract OK');
