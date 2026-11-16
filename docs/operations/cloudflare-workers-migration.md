@@ -1,5 +1,14 @@
 # TheLogBook — migrazione Cloudflare: runbook corrente
 
+## CF-03 — compatibilità della durata dei token nella callback Kinde (candidato v2.489.0)
+
+Il collaudo browser ha dimostrato che la callback reale ora raggiunge il backend oltre il precedente rifiuto del parametro `scope`, ma ritorna **503**. Il percorso di errore aggrega fallimenti di exchange, JWKS, verifica claim, D1 e session issuer, quindi la causa specifica **non è osservata**. È stata però riscontrata una difformità riproducibile fra la policy locale dei token sintetici (access max 15 min) e la durata predefinita documentata dal provider Kinde (access 24h, ID 1h: https://docs.kinde.com/build/tokens/configure-tokens/). Il tenant Kinde potrebbe avere una scadenza personalizzata, non ancora verificata.
+
+Il candidato separa **due boundary**: l'API token verifier rimane limitato a 15 minuti; il token JWT ottenuto esclusivamente tramite callback server code+PKCE monouso può avere fino a 24h di scadenza in fase di **prova immediata**, legata a ID token (max 1h), nonce, email verificata e firme/issuer/audience/client ID. I token non attraversano il browser e non conferiscono diritti fitness autonomi. La sessione applicativa ha una propria durata e il proprio controllo di revoca in D1. Test di regressione real-shaped e valore Kinde default 86400 su JWT, D1 e replay; negazione di token alterati e di usi API long-lived.
+
+Il prossimo collaudo deve partire da un **nuovo login** dopo la distribuzione verificata del Worker privato; la CI verde non equivale alla riuscita del codice OAuth reale, e non autorizza l'attivazione dell'API dati sanitari.
+
+
 **Deploy effettivo del fix OAuth:** il workflow `Cloudflare Kinde HTTP Worker (private, main-only)` in passato partiva automaticamente soltanto dopo modifiche al suo YAML; quindi il merge del parser non garantiva il deploy del Worker privato, mentre il normale workflow Cloudflare Static Assets pubblica il solo frontend. Per prevenire un runtime privato obsoleto, il candidato attiva il workflow private Kinde anche per modifiche a `cloudflare/auth/**` e `cloudflare/api/logout-worker.mjs`, lasciando invariati la restrizione a `main`, la verifica CI trusted exact-SHA e l'isolamento `workers.dev`/preview. Dopo il merge serve leggere **versione effettiva e ultimo deployment del Worker Kinde**, oltre ai gate post-merge e allo smoke frontend. Un deploy verde di Static Assets da solo non certifica il nuovo parser OAuth.
 
 

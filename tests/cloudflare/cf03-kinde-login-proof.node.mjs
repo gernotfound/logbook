@@ -121,7 +121,7 @@ void test('identity-only proof rejects expired, future-issued, overlong and over
     { idExpiresIn: -1 },
     { accessIssuedBefore: -30 },
     { idIssuedBefore: -30 },
-    { accessExpiresIn: 901 },
+    { accessExpiresIn: 24 * 60 * 60 + 1 },
     { idExpiresIn: 3601 },
   ];
   for (const invalid of rejected) {
@@ -159,6 +159,23 @@ void test('Kinde login proof: strict signed identity, nonce, distinct audiences 
   assert.deepEqual(proof, { issuer, subject: sub, emailVerified: true });
   assert.ok(Object.isFrozen(proof));
   assert.equal(Object.hasOwn(proof, 'email'), false);
+});
+
+void test('Kinde default 24h access token validates only in nonce-bound login proof', async () => {
+  const { verify, verifyIdentity, tokens } = await fixture();
+  const signed = await tokens({ accessExpiresIn: 24 * 60 * 60 - 2 });
+  assert.deepEqual(await verify(signed), { issuer, subject: sub, emailVerified: true });
+  assert.equal((await verifyIdentity(signed)).subject, sub);
+
+  for (const bad of [
+    { accessExpiresIn: 24 * 60 * 60 + 1 },
+    { accessAudience: 'unapproved-api', accessExpiresIn: 24 * 60 * 60 - 2 },
+    { idClaims: { email_verified: false }, accessExpiresIn: 24 * 60 * 60 - 2 },
+    { idClaims: { nonce: Buffer.alloc(32, 20).toString('base64url') },
+      accessExpiresIn: 24 * 60 * 60 - 2 },
+  ]) {
+    await assert.rejects(verify(await tokens(bad)), /invalid-kinde-login-proof/);
+  }
 });
 
 void test('Kinde identity proof denies missing email verification and mismatched subject, nonce, audience', async () => {

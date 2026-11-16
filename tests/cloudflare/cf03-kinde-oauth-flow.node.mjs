@@ -42,6 +42,7 @@ async function fixture() {
   let tokenStatus = 200;
   let tokenPayload = null;
   let issuedTokens = 0;
+  let accessLifetimeSeconds = 301;
   const nonceByCode = new Map();
   const fetchImpl = async (url, init) => {
     assert.equal(url, issuer + '/oauth2/token');
@@ -70,7 +71,7 @@ async function fixture() {
     else {
       const accessToken = await new SignJWT({ azp: clientId, sub: 'kp_verified_test_12345' })
         .setProtectedHeader({ alg: 'RS256', kid: 'synthetic' })
-        .setIssuer(issuer).setAudience(apiAudience).setIssuedAt(now - 1).setExpirationTime(now + 300)
+        .setIssuer(issuer).setAudience(apiAudience).setIssuedAt(now - 1).setExpirationTime(now - 1 + accessLifetimeSeconds)
         .sign(privateKey);
       const at_hash = createHash('sha256').update(accessToken).digest().subarray(0, 16).toString('base64url');
       const idToken = await new SignJWT({
@@ -130,6 +131,7 @@ async function fixture() {
     setRate: value => { rateAllowed = value; },
     setStatus: value => { tokenStatus = value; },
     setPayload: value => { tokenPayload = value; },
+    setAccessLifetime: value => { accessLifetimeSeconds = value; },
     calls: () => issuedTokens,
     close: () => sqlite.close(),
   };
@@ -168,6 +170,29 @@ void test('signed and verified callback mints one owner and one session; replay 
     assert.equal(f.sqlite.prepare('SELECT COUNT(*) AS n FROM auth_oauth_attempts').get().n, 0);
     assert.equal((await f.oauth.complete(f.db, request)).status, 400);
     assert.equal(f.calls(), 1);
+    assert.equal(f.sqlite.prepare('SELECT COUNT(*) AS n FROM auth_sessions').get().n, 1);
+  } finally { f.close(); }
+});
+
+void test('real-shaped callback mints one session with provider-default 24h access token but never API access', async () => {
+  const f = await fixture();
+  try {
+    f.setAccessLifetime(24 * 60 * 60);
+    const attempt = await f.start();
+    const callback = f.callback(attempt, 'synthetic.code-with-dot');
+    const completed = await f.oauth.complete(f.db, callback);
+    assert.equal(completed.status, 303);
+    assert.equal(f.sqlite.prepare('SELECT COUNT(*) AS n FROM auth_principals').get().n, 1);
+    assert.equal(f.sqlite.prepare('SELECT COUNT(*) AS n FROM auth_sessions').get().n, 1);
+    assert.equal(f.calls(), 1);
+    assert.equal((await f.oauth.complete(f.db, callback)).status, 400);
+    assert.equal(f.calls(), 1);
+
+    f.setAccessLifetime(24 * 60 * 60 + 1);
+    const second = await f.start(attempt.cookie);
+    const rejected = await f.oauth.complete(f.db, f.callback(second, 'synthetic-code-bad-ttl'));
+    assert.equal(rejected.status, 503);
+    assert.equal(rejected.headers.getSetCookie().length, 0);
     assert.equal(f.sqlite.prepare('SELECT COUNT(*) AS n FROM auth_sessions').get().n, 1);
   } finally { f.close(); }
 });
