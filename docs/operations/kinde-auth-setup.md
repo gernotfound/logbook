@@ -1,5 +1,18 @@
 # Kinde — configurazione del provider per TheLogBook
 
+## CF-03 — errore callback 400 dopo prima registrazione: correzione candidata (16/11/2026)
+
+**Prova runtime riportata dall'owner:** il form OAuth ora raggiunge Kinde; il provider ha inviato la verifica email, ha rifiutato una password troppo breve e accettato una password conforme di almeno 15 caratteri. Il ritorno browser `GET /api/auth/kinde/callback` ha restituito `400 {"error":"authentication-unavailable"}`. L'URL osservato conteneva `code`, `state` e `scope=openid%20email%20profile`. **Non copiare codici OAuth, state o URL completi in issue o log:** sono dati transitori sensibili.
+
+**Root cause dimostrata nel codice:** `callbackParameters` in `cloudflare/auth/kinde-oauth-flow.mjs` rifiutava qualsiasi chiave diversa da `state`, `code`, `error`, `error_description`; Kinde può includere anche `scope` nel redirect (documentazione ufficiale: https://docs.kinde.com/authenticate/custom-configurations/redirect-users/). La risposta HTTP 400 avveniva prima di leggere la riga D1 di OAuth state, scambiare il code o verificare i token. **Non si è ancora verificato** se dopo questa correzione emergeranno altri blocchi, ad esempio cookie Lax non trasmesso, state oltre la scadenza 10 minuti o token reali non accettati.
+
+**Correzione:** accettare `scope` come parametro opzionale **soltanto se contiene l'insieme esatto dei tre scope richiesti** (`openid`, `email`, `profile`), in qualsiasi ordine ma senza duplicati, scope mancanti, aggiunti o spaziature malformate. Mantenere il rifiuto di parametri sconosciuti/duplicati, cookie browser `__Host-`, legame stato/nonce/PKCE, consumo atomico e verifica firma/audience; le callback senza `scope` restano valide. Test real-shaped su schema D1 corrente per successo, replay e rifiuti prima del consumo, più attraversamento gateway HTTP pubblico e Worker privato.
+
+**Stato dell'attivazione:** nuovo tentativo con avvio OAuth fresco **solo dopo CI exact-SHA, merge, deploy Cloudflare e smoke**. La callback precedente non va ripetuta/reincollata. Gli avvisi `background.js` / `runtime.lastError` sembrano di un'estensione Chrome, e il suggerimento DOM password compare sulla pagina ospitata Kinde: non costituiscono evidenza della causa del 400. Dopo la correzione testare sessione, verifica email, reset e Google separatamente senza usare dati salute.
+
+**Preferenza UX del PO:** registrazione solo email, senza richiedere nome e cognome. Kinde documenta l'opzione `Authentication experience → Ask for user first name and last name` disattivabile per applicazione (https://docs.kinde.com/authenticate/custom-configurations/authentication-experience/). Non modifica il contratto OAuth; da verificare e configurare nel pannello provider, separatamente da questo fix.
+
+
 ## CF-03 — HTTP 403 sulla pagina diagnostica: correzione candidata (16/11/2026)
 
 **Segnalazione browser reale:** dalla pagina `/verifica-accesso`, il form nativo `POST /api/auth/kinde/start` termina con HTTP 403 prima del redirect a Kinde. L'HTML della v2.486.0 impostava `<meta name="referrer" content="no-referrer">`; la specifica Fetch/MDN documenta che in una navigazione POST non-CORS tale policy può produrre `Origin: null`, correttamente respinta dai controlli CSRF first-party dei due Worker. È una causa coerente con il rifiuto osservato, **non una traccia Network della singola richiesta**: altri fattori (es. policy Cloudflare) restano da escludere col collaudo dopo la correzione.
