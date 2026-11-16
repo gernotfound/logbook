@@ -1,5 +1,18 @@
 # Kinde — configurazione del provider per TheLogBook
 
+## CF-03 — Gateway OAuth-only in preparazione (16/11/2026; NON pubblicato)
+
+L'autorizzazione ricevuta consente soltanto gli endpoint `/api/auth/kinde/start`, `/api/auth/kinde/callback`, `/api/auth/session` e `/api/auth/logout` per collaudi con identità sintetiche. Il candidato frontend usa `KINDE_HTTP` service binding verso il Worker privato, senza binding `D1_API` e senza esporre `/v1/*` salute/consenso/replica. La PWA React resta Firebase: nessun login Kinde nel menu ordinario. La CSP autorizza soltanto Kinde hosted in `form-action` per il redirect del modulo POST, senza allentare script/connect-src.
+
+**Prima del deploy pubblico del gateway OAuth:** il workflow Cloudflare verifica in lettura il Worker Kinde privato, il suo D1/Auth Gate/rate limiter, l'assenza di URL pubblici, e la presenza **tutti o nessuno** dei cinque secret server-side `KINDE_ISSUER`, `KINDE_CLIENT_ID`, `KINDE_CLIENT_SECRET`, `KINDE_API_AUDIENCE`, `KINDE_ID_TOKEN_AUDIENCE`. Per il deploy del gateway **sono richiesti tutti e cinque**, non bastano nomi generici o valori inventati. Questi segreti sono configurati **solo** nel Worker privato `thelogbook-cf03-kinde-http-isolated` tramite provider, mai in GitHub, Vite o browser. Il plugin Cloudflare attualmente osserva zero secret: assenza di certificazione live sui valori Kinde.
+
+**Kinde Production:** la UI fornita dall'owner mostra il workflow password `TheLogBook password: minimum 15 code points` come `Live`, trigger `Set password` e `Sync event details` success su SHA `2b10c36214ba283266338a81b99666e9cdcb84e7`. I Runtime logs risultano vuoti: manca **test reale** iniziale e reset; validazione contro lunghezze 8–14 e 15+ inclusi guasti. L'app Back-end web è stata creata e la callback `https://thelogbook.me/api/auth/kinde/callback` salvata secondo owner, ma non ancora verificata tramite Kinde API. Nessun account sintetico è stato creato in questo step.
+
+**Audience API Kinde:** registrare in `Settings → Environment → APIs` l'audience scelta del backend, autorizzare l'applicazione TheLogBook, verificare l'`aud` effettivo di access/ID token secondo specifiche Kinde. Il solo Client ID non produce automaticamente audience autorizzata. Se l'audience non è ancora registrata o non è autorizzata, lasciare il gate pubblico spento e documentare il blocco. L'URI finale dei token deve essere validato sul runtime, non inferito dall'app frontend.
+
+**Sequenza sicura:** prerequisiti Kinde/Audience e segreti diretti CF → readback provider → CI/merge verified exact SHA → smoke HTTP OAuth-only fail-closed → form POST same-origin con stato/PKCE creato dal Worker e identità sintetica → registrazione breve/lunga e reset, errori workflow nei Runtime logs. **Non costruire manualmente URL OAuth senza cookie/state server-owned**; non creare un endpoint sanitario, non dichiarare il sito pronto dopo un solo login. Il gateway OAuth non è un GO, né autorizza dati reali e cutover AuthContext.
+
+
 ## Stato Worker privato (16/11/2026)
 
 `thelogbook-cf03-kinde-http-isolated` è **distribuito privatamente** e verificato su Cloudflare dopo [PR #1173](https://github.com/gernotfound/logbook/pull/1173), `main` v2.479.0 SHA `44c294bf69261c31e37c2cdb3f78432941ae6aba`, [workflow #43830734570](https://github.com/gernotfound/logbook/actions/runs/43830734570). Esistono esclusivamente binding DB D1 isolato, Auth Gate, limiter e origin; workers.dev, preview, routes e custom domains assenti. **Non** contiene secret Kinde e non è collegato all'app pubblica. Il riferimento storico sotto a 'non distribuito' risale a v2.474.0, prima di questa attivazione privata.
