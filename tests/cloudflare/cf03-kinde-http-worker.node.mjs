@@ -670,7 +670,7 @@ void test('first-party gateway completes synthetic Kinde → consent → ADK →
   } finally { f.close(); }
 });
 
-void test('candidate Worker is not routed publicly and shares only the disposable AuthGate D1', () => {
+void test('private Kinde Worker remains unrouted while frontend exposes only four OAuth endpoints', () => {
   const here = new URL('../../cloudflare/auth/', import.meta.url);
   const read = name => JSON.parse(readFileSync(new URL(name, here), 'utf8'));
   const candidate = read('wrangler.kinde.local.jsonc');
@@ -689,7 +689,7 @@ void test('candidate Worker is not routed publicly and shares only the disposabl
   assert.equal(candidate.d1_databases[0].database_name, gate.d1_databases[0].database_name);
   assert.equal(candidate.services[0].service, gate.name);
   assert.equal(candidate.ratelimits[0].name, 'AUTH_RATE_LIMITER');
-  assert.deepEqual(publicFrontend.assets.run_worker_first, ['/__/auth', '/__/auth/*']);
+  assert.deepEqual(publicFrontend.assets.run_worker_first, ['/__/auth', '/__/auth/*', '/api/auth/kinde/start', '/api/auth/kinde/callback', '/api/auth/session', '/api/auth/logout']);
   assert.equal(publicFrontend.main, './auth-proxy.mjs');
 });
 
