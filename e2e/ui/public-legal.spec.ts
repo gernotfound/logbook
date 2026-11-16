@@ -45,7 +45,8 @@ test('native Kinde form POST keeps the real same-origin Origin in Chromium and W
   ]);
   const request = await post;
   expect(request.isNavigationRequest()).toBe(true);
-  expect(request.headers().origin).toBe(origin);
-  const fetchSite = request.headers()['sec-fetch-site'];
+  const headers = await request.allHeaders();
+  expect(headers.origin).toBe(origin);
+  const fetchSite = headers['sec-fetch-site'];
   if (fetchSite !== undefined) expect(fetchSite).toBe('same-origin');
 });
