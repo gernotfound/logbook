@@ -1,5 +1,12 @@
 # TheLogBook — migrazione Cloudflare: runbook corrente
 
+## CF-03 — collaudo browser Kinde con diagnostica strettamente isolata (candidato v2.486.0)
+
+Per poter collaudare login email/password, Google, verifica email e callback reali senza collegare prematuramente `AuthContext` Firebase o API salute D1, il candidato introduce un documento standalone `/verifica-accesso`, non linkato dal sito ordinario. Il suo form invia `POST /api/auth/kinde/start` senza payload; un'azione esplicita separata legge `POST /api/auth/session` nello stesso browser. Lato client non tratta password, ID token o dati fitness, non persiste nulla e non stampa UID. Il risultato positivo segnala solo una sessione server Kinde email-verificata; mai consenso, cloud key o diritto a salvare dati salute. Noindex, no-store, asset smoke byte-exact e service-worker denylist sono obbligatori.
+
+L'incremento è **solo uno strumento di test**, non costituisce un login completo della PWA. Il provider Kinde non offre un grant password senza interazione (vedi [guida Kinde](https://docs.kinde.com/authenticate/about-auth/kinde-authentication-faq/)); registrazione, reset, email verification e Google richiedono azione browser e verifica del relativo esito. Non esporre token/codici nei log o simulare una login Production tramite fixture; usare account di prova su D1 sintetica isolata. Le quattro route OAuth esistenti e l'isolamento di `/v1/*` non cambiano.
+
+
 ## CF-03 — gateway OAuth-only pubblico, backend sanitario ancora isolato (16/11/2026)
 
 **Codice e gate:** [PR #1175](https://github.com/gernotfound/logbook/pull/1175) integrata su `main` v2.484.0 SHA `dd93ad16fa47f795f1690a31cec4e20c146f29e6`. [CI PR](https://github.com/gernotfound/logbook/actions/runs/43873755312), [Main/CodeQL](https://github.com/gernotfound/logbook/actions/runs/43879661972), [Firestore](https://github.com/gernotfound/logbook/actions/runs/43880098527), [Worker privati](https://github.com/gernotfound/logbook/actions/runs/43879661927) e [Cloudflare Static Assets + smoke fail-closed](https://github.com/gernotfound/logbook/actions/runs/43880148635) tutti SUCCESS per la versione pertinente. Quattro route esatte `/api/auth/kinde/start`, `/api/auth/kinde/callback`, `/api/auth/session`, `/api/auth/logout` esposte su `thelogbook.me` tramite unico service binding `KINDE_HTTP`. Nessuna route sanitaria `/v1/*` né binding `D1_API` sul frontend; helper Firebase mantenuti fino alla migrazione verificata.
