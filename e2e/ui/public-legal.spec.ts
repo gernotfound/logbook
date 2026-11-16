@@ -28,11 +28,10 @@ test('native Kinde form POST keeps the real same-origin Origin in Chromium and W
 
   await page.route('**/api/auth/kinde/start', async route => {
     await route.fulfill({
-      status: 303,
-      headers: {
-        Location: '/verifica-accesso.html?post-checked',
-        'Cache-Control': 'no-store',
-      },
+      status: 200,
+      contentType: 'text/plain',
+      headers: { 'Cache-Control': 'no-store' },
+      body: 'Synthetic form target: no provider request',
     });
   });
 
@@ -40,7 +39,7 @@ test('native Kinde form POST keeps the real same-origin Origin in Chromium and W
     new URL(request.url()).pathname === '/api/auth/kinde/start' && request.method() === 'POST',
   );
   await Promise.all([
-    page.waitForURL('**/verifica-accesso.html?post-checked'),
+    page.waitForURL('**/api/auth/kinde/start'),
     page.getByRole('button', { name: 'Avvia accesso con Kinde' }).click(),
   ]);
   const request = await post;
