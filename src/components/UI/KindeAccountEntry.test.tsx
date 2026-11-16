@@ -92,7 +92,7 @@ describe('isolated Kinde account entry candidate', () => {
         expect(screen.getByText(/Termini di prova/)).not.toBeNull();
         fireEvent.click(boxes[0]);
         fireEvent.click(boxes[1]);
-        expect(accept).toBeDisabled();
+        expect(accept.hasAttribute('disabled')).toBe(true);
         fireEvent.click(boxes[2]);
         expect(accept.hasAttribute('disabled')).toBe(false);
         fireEvent.click(accept);
