@@ -1,5 +1,5 @@
 import { createRemoteJWKSet, jwtVerify } from 'jose';
-import { createKindeAccessTokenVerifier } from './kinde-token-verifier.mjs';
+import { createKindeCodeExchangeAccessTokenVerifier } from './kinde-token-verifier.mjs';
 
 const MAX_ID_TOKEN_BYTES = 8192;
 const MAX_ID_TOKEN_AGE_SECONDS = 3600;
@@ -20,6 +20,9 @@ async function sha256AtHash(accessToken) {
  * original nonce; never take expectedNonce from untrusted callback input.
  * A successful identity proof alone grants neither verified-email privileges
  * nor a D1 session; the ordinary login wrapper retains its verified-only gate.
+ * The code-exchanged access token is only used here, immediately with
+ * signed ID-token nonce, email and client proofs. It is never a reusable
+ * API authorization credential; the API verifier retains its 15-minute cap.
  * The ID token audience can differ from the API audience in Kinde and
  * therefore is pinned independently. This helper does not create D1 sessions.
  *
@@ -40,7 +43,7 @@ export function createKindeIdentityProofVerifier(configuration, keySet) {
     cooldownDuration: 30000,
     cacheMaxAge: 600000,
   });
-  const verifyAccessToken = createKindeAccessTokenVerifier(
+  const verifyAccessToken = createKindeCodeExchangeAccessTokenVerifier(
     { issuer, audience: apiAudience, clientId }, jwks,
   );
   /** @param {{accessToken?: string, idToken?: string, expectedNonce?: string}} [proof] */
