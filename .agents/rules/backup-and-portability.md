@@ -11,6 +11,26 @@ Applicare il fresh start e la protezione dei dati correnti di AGENTS. Fonti: `sr
 
 **MUST (UX):** nessun backup periodico manuale richiesto: lo storage cifrato e la replica cloud dei dati business autorizzati sono automatici. Backup JSON resta una funzione volontaria di portabilità. Non descriverlo come requisito ordinario di protezione, né promettere che sessioni guest, bozze device-only o modifiche mai sincronizzate sopravvivano alla perdita totale del profilo.
 
+## CF-08 — D1 Time Travel e prova di cancellazione indipendente (16/11/2026)
+
+Un `restore` D1 Time Travel riporta indietro **anche** `health_erasure_finalizations`,
+`sync_subjects.erased_before_revision`, sessioni, consensi e ADK wrapped
+della stessa D1: il trigger SQL `0010` non dimostra anti-resurrection fuori
+dallo snapshot ripristinato. `cloudflare/recovery/restore-preflight.mjs`
+è un diagnostico non collegato al runtime, e soltanto se gli viene fornito
+un floor da una risorsa *indipendente*; `consistent-for-diagnostics-only`
+non è approvazione a riaprire l'accesso. I test `cf08-restore-preflight.node.mjs`
+riproducono un rollback sintetico con schema corrente e AuthGate reale.
+
+**MUST prima di GO restore:** prova monotona indipendente e completa per
+tutti gli owner, protocollo di scritture cross-resource che fallisce chiuso,
+fence applicato ad Auth/consenso/chiavi/sync/diritti anche durante il
+ripristino, e collaudo provider su ambiente sintetico isolato. Un backup
+JSON locale o una seconda copia della stessa D1 non è l'autorità richiesta.
+L'assenza di tale infrastruttura significa **NO-GO**: non usare la simulazione
+SQLite per giustificare un restore live. Specifica e limiti nel runbook
+`docs/operations/cloudflare-workers-migration.md`.
+
 ## Copertura e limiti dei percorsi
 
 | Percorso | Prova di completezza | Cosa non autorizza |
