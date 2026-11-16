@@ -239,7 +239,10 @@ void test('candidate route is private in the published frontend configuration', 
   assert.equal(config.main, './auth-proxy.mjs');
   assert.equal(config.workers_dev, false);
   assert.equal(config.preview_urls, false);
-  assert.deepEqual(config.assets.run_worker_first, ['/__/auth', '/__/auth/*']);
+  assert.deepEqual(config.assets.run_worker_first, ['/__/auth', '/__/auth/*', '/api/auth/kinde/start', '/api/auth/kinde/callback', '/api/auth/session', '/api/auth/logout']);
   assert.equal(config.d1_databases, undefined);
-  assert.equal(config.services, undefined);
+  assert.deepEqual(config.services, [{
+    binding: 'KINDE_HTTP', service: 'thelogbook-cf03-kinde-http-isolated',
+  }]);
+  assert.equal(config.services.find(item => item.binding === 'D1_API'), undefined);
 });
