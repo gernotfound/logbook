@@ -32,6 +32,13 @@ dallo snapshot ripristinato. `cloudflare/recovery/restore-preflight.mjs`
 un floor da una risorsa *indipendente*; `consistent-for-diagnostics-only`
 non è approvazione a riaprire l'accesso. Anche il controllo diagnostico multi-owner `inspectRestoredOwnerCoverage` verifica solo la corrispondenza fra due elenchi forniti: **non** autentica la fonte esterna e non dimostra che siano stati censiti tutti gli owner. I test `cf08-restore-preflight.node.mjs`
 riproducono un rollback sintetico con schema corrente e AuthGate reale.
+Il censimento operatore `cloudflare/recovery/restore-census.mjs` legge
+direttamente entrambe le tabelle complete dalle rispettive D1 primarie,
+esclusivamente con controllo indipendente `sealed`. Limita il numero
+di owner, confronta doppie letture e contatori, e rifiuta omissioni e
+cambiamenti rilevati durante il controllo; **non** crea uno snapshot atomico
+cross-D1, non verifica l'isolamento IAM e non autorizza restore o riapertura
+degli accessi. Il risultato positivo resta soltanto diagnostico.
 
 **MUST prima di GO restore:** prova monotona indipendente e completa per
 tutti gli owner, protocollo di scritture cross-resource che fallisce chiuso,

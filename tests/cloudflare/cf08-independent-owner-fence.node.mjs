@@ -6,6 +6,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { test } from 'node:test';
 import { applyCurrentD1Schema } from './current-d1-schema.mjs';
 import { runOneHealthErasureStep } from '../../cloudflare/jobs/health-erasure-worker.mjs';
+import { inspectRestoredD1Census } from '../../cloudflare/recovery/restore-census.mjs';
 import {
   IndependentFenceUnavailableError, enrollIndependentOwner,
   recordVerifiedInitialConsent, armIndependentHealthWithdrawal,
@@ -28,6 +29,9 @@ class Statement {
   constructor(sqlite, sql, args = []) { this.sqlite = sqlite; this.sql = sql; this.args = args; }
   bind(...args) { return new Statement(this.sqlite, this.sql, args); }
   async first() { return this.sqlite.prepare(this.sql).get(...this.args) ?? null; }
+  async all() {
+    return { success: true, results: this.sqlite.prepare(this.sql).all(...this.args) };
+  }
   async run() {
     const result = this.sqlite.prepare(this.sql).run(...this.args);
     return { success: true, meta: { changes: result.changes } };
@@ -129,6 +133,10 @@ void test('independent monotone fence blocks old consent after a physical applic
     assert.equal(await requireIndependentOwnerFence(fenceDb, subject(app, 'owner-b')), true);
     await rejected(recordVerifiedTerminalErasure(new D1Sqlite(app), fenceDb, 'owner-a'));
     assert.equal(fence(ledger, 'owner-a').erased_before_revision, 2);
+    ledger.prepare("UPDATE recovery_control SET mode='sealed',generation=3 WHERE singleton=1").run();
+    assert.deepEqual(await inspectRestoredD1Census(new D1Sqlite(app), fenceDb), {
+      outcome: 'blocked', reason: 'restored-generation-older-than-independent-floor',
+    });
   } finally {
     app?.close();
     ledger?.close();
@@ -227,4 +235,170 @@ void test('isolated migration manifest cannot route traffic or bind the primary 
     database_id: '19dad53f-0dda-4503-b161-758ac8cb7b21',
     migrations_dir: './migrations',
   });
+});
+
+void test('operator census scans both full D1 tables while sealed, not caller-selected owner lists', async () => {
+  const app = new DatabaseSync(':memory:');
+  const ledger = new DatabaseSync(':memory:');
+  try {
+    app.exec('PRAGMA foreign_keys=ON');
+    applyCurrentD1Schema(app);
+    applyFenceSchema(ledger);
+    const appDb = new D1Sqlite(app);
+    const fenceDb = new D1Sqlite(ledger);
+    assert.deepEqual(await inspectRestoredD1Census(appDb, fenceDb), {
+      outcome: 'blocked', reason: 'independent-coverage-empty',
+    });
+    for (const uid of ['owner-a', 'owner-b']) {
+      addOwner(app, uid);
+      await enrollIndependentOwner(fenceDb, uid);
+      await recordVerifiedInitialConsent(appDb, fenceDb, uid);
+    }
+    assert.deepEqual(await inspectRestoredD1Census(appDb, fenceDb), {
+      outcome: 'consistent-for-diagnostics-only',
+    });
+    assert.deepEqual(await inspectRestoredD1Census(appDb, appDb), {
+      outcome: 'blocked', reason: 'independent-database-required',
+    });
+    assert.deepEqual(await inspectRestoredD1Census(null, fenceDb), {
+      outcome: 'blocked', reason: 'independent-database-required',
+    });
+
+    ledger.prepare("UPDATE recovery_control SET mode='open',generation=2 WHERE singleton=1").run();
+    assert.deepEqual(await inspectRestoredD1Census(appDb, fenceDb), {
+      outcome: 'blocked', reason: 'independent-authority-not-sealed',
+    });
+    ledger.prepare("UPDATE recovery_control SET mode='sealed',generation=3 WHERE singleton=1").run();
+    addOwner(app, 'owner-c');
+    assert.deepEqual(await inspectRestoredD1Census(appDb, fenceDb), {
+      outcome: 'blocked', reason: 'owner-coverage-mismatch',
+    });
+  } finally {
+    app.close();
+    ledger.close();
+  }
+});
+
+void test('operator census detects a registry write racing two primary reads', async () => {
+  const app = new DatabaseSync(':memory:');
+  const ledger = new DatabaseSync(':memory:');
+  try {
+    app.exec('PRAGMA foreign_keys=ON');
+    applyCurrentD1Schema(app);
+    applyFenceSchema(ledger);
+    const appDb = new D1Sqlite(app);
+    const fenceDb = new D1Sqlite(ledger);
+    addOwner(app, 'owner-a');
+    await enrollIndependentOwner(fenceDb, 'owner-a');
+    await recordVerifiedInitialConsent(appDb, fenceDb, 'owner-a');
+    let changed = false;
+    class RacingD1 extends D1Sqlite {
+      prepare(sql) {
+        const original = super.prepare(sql);
+        if (!sql.includes('FROM recovery_owner_fences') || !sql.includes('ORDER BY uid')) {
+          return original;
+        }
+        return {
+          bind(...args) {
+            const bound = original.bind(...args);
+            return {
+              async all() {
+                const reply = await bound.all();
+                if (!changed) {
+                  changed = true;
+                  ledger.prepare(`UPDATE recovery_owner_fences
+                    SET status='blocked', change_seq=change_seq+1 WHERE uid='owner-a'`).run();
+                }
+                return reply;
+              },
+            };
+          },
+        };
+      }
+    }
+    assert.deepEqual(await inspectRestoredD1Census(appDb, new RacingD1(ledger)), {
+      outcome: 'blocked', reason: 'coverage-changed-during-scan',
+    });
+    assert.equal(changed, true);
+    assert.equal(fence(ledger, 'owner-a').status, 'blocked');
+  } finally {
+    app.close();
+    ledger.close();
+  }
+});
+
+void test('operator census rejects failed D1 reads and malformed independent row sequences', async () => {
+  const app = new DatabaseSync(':memory:');
+  const ledger = new DatabaseSync(':memory:');
+  try {
+    app.exec('PRAGMA foreign_keys=ON');
+    applyCurrentD1Schema(app);
+    applyFenceSchema(ledger);
+    const appDb = new D1Sqlite(app);
+    addOwner(app, 'owner-a');
+    const fenceDb = new D1Sqlite(ledger);
+    await enrollIndependentOwner(fenceDb, 'owner-a');
+    await recordVerifiedInitialConsent(appDb, fenceDb, 'owner-a');
+    const unavailable = {
+      withSession(mode) {
+        assert.equal(mode, 'first-primary');
+        throw new Error('synthetic D1 read quota exceeded');
+      },
+    };
+    assert.deepEqual(await inspectRestoredD1Census(appDb, unavailable), {
+      outcome: 'blocked', reason: 'scan-unavailable',
+    });
+    class MissingSequenceD1 extends D1Sqlite {
+      prepare(sql) {
+        const statement = super.prepare(sql);
+        if (!sql.includes('FROM recovery_owner_fences') || !sql.includes('ORDER BY uid')) {
+          return statement;
+        }
+        return {
+          bind(...args) {
+            const bound = statement.bind(...args);
+            return {
+              async all() {
+                const reply = await bound.all();
+                return { ...reply, results: reply.results.map(row => ({ ...row, change_seq: null })) };
+              },
+            };
+          },
+        };
+      }
+    }
+    assert.deepEqual(await inspectRestoredD1Census(appDb, new MissingSequenceD1(ledger)), {
+      outcome: 'blocked', reason: 'independent-row-sequence-invalid',
+    });
+  } finally {
+    app.close();
+    ledger.close();
+  }
+});
+
+void test('operator census rejects owner counts beyond its bounded D1 read budget', async () => {
+  const app = new DatabaseSync(':memory:');
+  const ledger = new DatabaseSync(':memory:');
+  try {
+    app.exec('PRAGMA foreign_keys=ON');
+    applyCurrentD1Schema(app);
+    applyFenceSchema(ledger);
+    for (let i = 0; i < 513; i++) {
+      const uid = 'owner-' + String(i).padStart(4, '0');
+      addOwner(app, uid);
+      ledger.prepare(`INSERT INTO recovery_owner_fences
+        (uid,status,consent_revision,fence_epoch,erased_before_revision,change_seq)
+        VALUES (?,'pending',0,1,0,1)`).run(uid);
+      ledger.prepare(`UPDATE recovery_owner_fences SET status='active',
+        consent_revision=1,change_seq=2 WHERE uid=?`).run(uid);
+    }
+    assert.deepEqual(await inspectRestoredD1Census(new D1Sqlite(app), new D1Sqlite(ledger)), {
+      outcome: 'blocked', reason: 'coverage-limit-exceeded',
+    });
+    assert.equal(app.prepare('SELECT COUNT(*) AS n FROM sync_subjects').get().n, 513);
+    assert.equal(ledger.prepare('SELECT COUNT(*) AS n FROM recovery_owner_fences').get().n, 513);
+  } finally {
+    app.close();
+    ledger.close();
+  }
 });
