@@ -33,7 +33,7 @@ export function KindeAccountEntry({
 }: {
     guestArchivePresent?: boolean;
 }) {
-    const [phase, setPhase] = useState<Phase>('checking');
+    const [phase, setPhase] = useState<Phase>(guestArchivePresent ? 'guest-blocked' : 'checking');
     const [busy, setBusy] = useState(false);
     const [over18, setOver18] = useState(false);
     const [terms, setTerms] = useState(false);
@@ -41,15 +41,18 @@ export function KindeAccountEntry({
     const generation = useRef(0);
     const mounted = useRef(false);
     const titleId = useId();
+    const privacyDetails = useRef<HTMLDetailsElement>(null);
+    const termsDetails = useRef<HTMLDetailsElement>(null);
 
-    const refresh = useCallback(async () => {
+    const refresh = useCallback(async (showLoading = true) => {
         const token = ++generation.current;
         const current = () => mounted.current && generation.current === token && !guestArchivePresent;
         if (guestArchivePresent) {
-            setPhase('guest-blocked');
+            await Promise.resolve();
+            if (mounted.current && generation.current === token) setPhase('guest-blocked');
             return;
         }
-        setPhase('checking');
+        if (showLoading) setPhase('checking');
         try {
             const identity: KindeCandidateIdentity = await readKindeCandidateIdentity({
                 stillCurrent: current,
@@ -82,7 +85,7 @@ export function KindeAccountEntry({
 
     useEffect(() => {
         mounted.current = true;
-        void refresh();
+        void refresh(false);
         return () => {
             mounted.current = false;
             generation.current += 1;
@@ -166,8 +169,8 @@ export function KindeAccountEntry({
                         onChange={event => setTerms(event.target.checked)} /> Ho letto e accetto i Termini e Condizioni.</label>
                     <label><input type="checkbox" checked={health} disabled={busy}
                         onChange={event => setHealth(event.target.checked)} /> Acconsento esplicitamente al trattamento dei dati sanitari per il servizio.</label>
-                    <details><summary>Leggi l'informativa sulla privacy</summary><PrivacyPolicy /></details>
-                    <details><summary>Leggi i Termini e Condizioni</summary><TermsAndConditions /></details>
+                    <details ref={privacyDetails}><summary>Leggi l'informativa sulla privacy</summary><PrivacyPolicy onClose={() => { if (privacyDetails.current) privacyDetails.current.open = false; }} /></details>
+                    <details ref={termsDetails}><summary>Leggi i Termini e Condizioni</summary><TermsAndConditions onClose={() => { if (termsDetails.current) termsDetails.current.open = false; }} /></details>
                     <button type="button" className="btn btn-primary" disabled={busy || !over18 || !terms || !health}
                         onClick={() => { void handleConsent(); }}>Conferma consenso</button>
                 </section>
