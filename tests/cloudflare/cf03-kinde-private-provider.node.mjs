@@ -102,6 +102,11 @@ void test('deployment changes only Kinde Worker after exact-main verification an
   assert.match(yml, /npx --yes wrangler@4\.159\.0 deploy --dry-run --config cloudflare\/auth\/wrangler\.kinde\.isolated\.jsonc/);
   assert.match(yml, /command: deploy --config cloudflare\/auth\/wrangler\.kinde\.isolated\.jsonc/);
   assert.match(yml, /node scripts\/verify-cloudflare-kinde-private-provider\.mjs/);
+  assert.equal(
+    yml.split('node scripts/verify-cloudflare-kinde-private-provider.mjs --require-configured-oauth').length - 1,
+    2,
+    'Both preflight and post-deploy readbacks must attest all five Kinde secrets',
+  );
   assert.doesNotMatch(yml, /command: deploy --config cloudflare\/(?:api\/wrangler|auth\/wrangler\.isolated|wrangler\.jsonc)/);
   assert.doesNotMatch(yml, /route:|routes:|workers_dev: true|preview_urls: true|secret put/);
 });
