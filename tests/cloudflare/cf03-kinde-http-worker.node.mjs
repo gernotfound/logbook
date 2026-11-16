@@ -8,6 +8,7 @@ import kindeHttpWorker, { createKindeHttpHandler } from '../../cloudflare/auth/k
 import gate from '../../cloudflare/auth/session-gate.mjs';
 import { issueVerifiedSession } from '../../cloudflare/auth/session-issuer.mjs';
 import apiWorker from '../../cloudflare/api/worker.mjs';
+import { routeCandidateFirstPartyApi } from '../../cloudflare/first-party-api-candidate.mjs';
 
 const ORIGIN = 'https://candidate.invalid';
 const ISSUER = 'https://synthetic-kinde.example';
@@ -150,6 +151,7 @@ async function fixture() {
   return {
     sqlite, db, env, handler, post, login,
     calls: () => callCount,
+    setNonce: value => { nonce = value; },
     setRate: value => { allowLogin = value; },
     setSubject: value => { subject = value; },
     close: () => sqlite.close(),
@@ -579,6 +581,92 @@ void test('Kinde signed subjects retain separate D1 consent and replica register
     assert.equal(Object.keys((await cloudCall(f, '/v1/sync/control', a, {})).body.replicas).length, 1);
     assert.equal(f.sqlite.prepare('SELECT COUNT(*) AS n FROM auth_principals').get().n, 2);
     assert.equal(f.sqlite.prepare('SELECT COUNT(*) AS n FROM health_consent_acceptances').get().n, 2);
+  } finally { f.close(); }
+});
+
+void test('first-party gateway completes synthetic Kinde → consent → ADK → D1 → logout with production Workers', async () => {
+  const f = await fixture();
+  try {
+    // Exercise the real HTTP identity handler and private consent boundary
+    // Workers and ten-migration SQLite schema behind the future gateway.
+    // Token signing is synthetic; no request reaches a provider account.
+    const gateway = {
+      APP_ORIGIN: ORIGIN,
+      KINDE_HTTP: { fetch: request => f.handler(request, f.env) },
+      D1_API: { fetch: request => apiWorker.fetch(request, { ...f.env, API_ORIGIN: ORIGIN }) },
+    };
+    const through = request => routeCandidateFirstPartyApi(request, gateway);
+    const start = await through(f.post(START));
+    assert.equal(start.status, 303);
+    const authorize = new URL(start.headers.get('location'));
+    assert.equal(authorize.origin, ISSUER);
+    f.setNonce(authorize.searchParams.get('nonce'));
+    const browserBinding = start.headers.getSetCookie()[0].split(';')[0];
+    const returned = await through(new Request(ORIGIN + CALLBACK
+      + '?code=short&state=' + authorize.searchParams.get('state'), {
+      headers: { cookie: browserBinding, 'sec-fetch-site': 'cross-site' },
+    }));
+    assert.equal(returned.status, 303);
+    assert.equal(returned.headers.get('location'), ORIGIN + '/');
+    const issuedCookies = returned.headers.getSetCookie();
+    assert.equal(issuedCookies.length, 2);
+    const cookie = issuedCookies.map(value => value.split(';')[0]).join('; ');
+    const csrf = issuedCookies[1].split(';')[0].split('=')[1];
+    const principal = await (await through(f.post(SESSION, cookie))).json();
+    assert.equal(principal.authenticated, true);
+    assert.equal(principal.emailVerified, true);
+    assert.equal(principal.healthConsentRevision, 0);
+
+    const api = async (route, payload, suppliedCsrf = csrf) => {
+      const headers = {
+        origin: ORIGIN, 'sec-fetch-site': 'same-origin',
+        cookie, 'x-csrf-token': suppliedCsrf,
+      };
+      if (payload !== undefined) headers['content-type'] = 'application/json';
+      const response = await through(new Request(ORIGIN + route, {
+        method: 'POST', headers,
+        ...(payload === undefined ? {} : { body: JSON.stringify(payload) }),
+      }));
+      return { status: response.status, body: await response.json() };
+    };
+
+    assert.deepEqual(await api('/v1/consent/status'), {
+      status: 200, body: { uid: principal.uid, status: 'unregistered', revision: 0, fenceEpoch: 1 },
+    });
+    assert.equal((await api('/v1/sync/control', {})).status, 401);
+    assert.equal((await api('/v1/consent/initial', acceptance, 'invalid-csrf')).status, 403);
+    assert.equal(f.sqlite.prepare('SELECT COUNT(*) AS n FROM health_consent_acceptances').get().n, 0);
+
+    const consent = await api('/v1/consent/initial', acceptance);
+    assert.equal(consent.status, 200);
+    assert.equal(consent.body.uid, principal.uid);
+    assert.equal((await (await through(f.post(SESSION, cookie))).json()).healthConsentRevision, 1);
+    const claim = {
+      mutationId: 'a'.repeat(20), expectedRevision: 0,
+      expectedFenceEpoch: 1, consentRevision: 1,
+      candidateReplicaId: 'b'.repeat(20),
+      currentReplica: null, checkpointClock: {},
+    };
+    assert.deepEqual(await api('/v1/sync/replica/claim', claim),
+      { status: 428, body: { error: 'cloud-key-required' } });
+    assert.equal(f.sqlite.prepare('SELECT COUNT(*) AS n FROM sync_replicas').get().n, 0);
+    const key = await api('/v1/cloud-key/sync');
+    assert.equal(key.status, 200);
+    assert.equal(Buffer.from(key.body.key, 'base64').length, 32);
+    assert.equal(f.sqlite.prepare('SELECT COUNT(*) AS n FROM cloud_account_keys').get().n, 1);
+    assert.equal((await api('/v1/sync/replica/claim', claim)).status, 200);
+    assert.equal((await api('/v1/sync/control', {})).body.revision, 1);
+
+    const withdrawal = await api('/v1/consent/withdraw', {
+      action: 'withdraw', expectedRevision: 1, confirmsErasure: true,
+    });
+    assert.equal(withdrawal.status, 200);
+    assert.equal(withdrawal.body.status, 'withdrawn');
+    assert.equal((await api('/v1/sync/control', {})).status, 401);
+    assert.equal(f.sqlite.prepare('SELECT status FROM health_erasure_jobs').get().status, 'pending');
+    assert.equal((await through(f.post(LOGOUT, cookie, csrf))).status, 200);
+    assert.equal((await through(f.post(SESSION, cookie))).status, 401);
+    assert.equal((await api('/v1/consent/status')).status, 401);
   } finally { f.close(); }
 });
 
