@@ -1,5 +1,11 @@
 # Registro dei servizi esterni — stato corrente TheLogBook
 
+## CF-08 — D1 di isolamento recupero creata, non attiva (16/11/2026)
+
+**Cloudflare, letto direttamente sul provider:** oltre alla D1 applicativa di test `thelogbook-cf02-eu-isolated-20261113`, esiste la D1 `thelogbook-cf08-fence-eu-isolated-20261116` (`jurisdiction=eu`, read replication disabilitata), creata senza upgrade o billing. È un registro futuro di floor per negare il ripristino di consensi revocati dopo Time Travel della prima D1. **Stato OPTIONAL / NON ATTIVO:** nessun binding ai Worker, route pubblica o record utente, migration da applicare separatamente. Il codice e la migrazione sono nel percorso `cloudflare/recovery/`; la copertura del sistema reale e il restore sicuro rimangono NO-GO. Non usare la D1 come copia del database principale né estendere retroattivamente la prova GDPR all'esecuzione Workers.
+
+
+
 ## CF-03 — gateway Kinde OAuth-only distribuito; login completo ancora NO-GO (16/11/2026)
 
 **GitHub (fonte del codice):** `main` v2.484.0, SHA `dd93ad16fa47f795f1690a31cec4e20c146f29e6`, integra con squash la [PR #1175](https://github.com/gernotfound/logbook/pull/1175) con ingressi esclusivi `/api/auth/kinde/start`, `/api/auth/kinde/callback`, `/api/auth/session` e `/api/auth/logout`. [CI candidata exact-SHA](https://github.com/gernotfound/logbook/actions/runs/43873755312), [Main Release Gate/CodeQL](https://github.com/gernotfound/logbook/actions/runs/43879661972), [Firestore](https://github.com/gernotfound/logbook/actions/runs/43880098527), [Worker isolati](https://github.com/gernotfound/logbook/actions/runs/43879661927) e [deploy Static Assets + smoke HTTPS](https://github.com/gernotfound/logbook/actions/runs/43880148635) tutti SUCCESS sullo SHA pertinente. I test automatizzati non certificano il login reale Kinde.

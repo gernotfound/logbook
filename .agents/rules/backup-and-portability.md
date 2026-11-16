@@ -13,6 +13,17 @@ Applicare il fresh start e la protezione dei dati correnti di AGENTS. Fonti: `sr
 
 ## CF-08 — D1 Time Travel e prova di cancellazione indipendente (16/11/2026)
 
+Il registro candidato `cloudflare/recovery/independent-owner-fence.mjs` e la sua
+migration in `cloudflare/recovery/migrations/` sono **isolati, non collegati
+ai gate live**. La D1 EU separata esiste ma non dimostra ancora sicurezza
+del restore. Il deny esterno deve precedere la revoca nella D1 originale;
+il gate globale è inizialmente `sealed`, quindi qualunque uso senza
+provisioning, copertura e collaudo completo deve fallire chiuso. Il ritorno
+positivo di una lettura esterna non sostituisce il recheck della sessione e
+dell'owner sul database autorevole; vietata riaccettazione implicitamente
+basata su uno snapshot precedente.
+
+
 Un `restore` D1 Time Travel riporta indietro **anche** `health_erasure_finalizations`,
 `sync_subjects.erased_before_revision`, sessioni, consensi e ADK wrapped
 della stessa D1: il trigger SQL `0010` non dimostra anti-resurrection fuori
