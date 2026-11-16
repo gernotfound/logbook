@@ -17,6 +17,8 @@ import type {
     CloudReplicaBatch, CloudReplicaCommitOutcome, CloudReplicaCompleteScan, CloudReplicaControlSnapshot, CloudReplicaSnapshot,
 } from '../../../src/lib/sync/cloudReplicaTransport';
 import { adoptReplicaCheckpoint, commitLocal, initializeLocal, readLocal } from '../../../src/lib/sync/localRepository';
+import type { LocalEnvelope } from '../../../src/lib/sync/localEnvelopeValidation';
+import { updateArchiveRecord } from '../../../src/lib/sync/secureArchiveRepository';
 import { createAndMigrateVault } from '../../../src/lib/sync/secureArchiveMigration';
 import { lockAllVaults } from '../../../src/lib/sync/secureArchiveSession';
 
@@ -147,6 +149,43 @@ describe('isolated CF-04 journal orchestrator', () => {
         expect(saved.cloudflareDelivery).toBeUndefined();
         expect(saved.data.profile?.height).toBe('171');
         expect(saved.syncMetaByDocument[''].clock).toEqual({ s00: 1 });
+    });
+
+    it('durably bounds a nine-document causal group before D1 preflight and never ACKs a failed request', async () => {
+        const { local, control, snapshot } = await seed();
+        const initialSeq = local.pending[0].seq;
+        const oversized = Array.from({ length: 9 }, (_, index) => ({
+            ...structuredClone(local.pending[0]),
+            docPath: `history_months/2026-${String(index + 1).padStart(2, '0')}`,
+        }));
+        await updateArchiveRecord<LocalEnvelope>(owner, current => {
+            if (!current) throw new Error('Archivio sintetico assente');
+            return { ...current, pending: oversized, revision: current.revision + 1 };
+        });
+        expect((await readLocal(owner))?.pending.map(op => op.seq))
+            .toEqual(Array(9).fill(initialSeq));
+
+        const remote = transport(control, snapshot);
+        remote.control.mockRejectedValue(new CloudReplicaTransportError(503));
+        await expect(deliverCloudflareJournalCandidate(owner, adk, remote, 'csrf-session', () => true))
+            .rejects.toMatchObject({ status: 503 });
+
+        const preserved = (await readLocal(owner))!;
+        expect(preserved.pending.map(op => op.seq))
+            .toEqual([...Array(8).fill(initialSeq), initialSeq + 1]);
+        expect(preserved.pending.map(op => op.docPath)).toEqual(oversized.map(op => op.docPath));
+        expect(preserved.actorSeq).toBe(local.actorSeq + 1);
+        expect(preserved.clock.s00).toBe(local.actorSeq + 1);
+        expect(preserved.cloudflareDelivery).toBeUndefined();
+        expect(remote.read).not.toHaveBeenCalled();
+        expect(remote.commit).not.toHaveBeenCalled();
+        expect(remote.receipt).not.toHaveBeenCalled();
+
+        const ciphertext = await get(storeKey);
+        await expect(deliverCloudflareJournalCandidate(owner, adk, remote, 'csrf-session', () => true))
+            .rejects.toMatchObject({ status: 503 });
+        expect(await get(storeKey)).toBe(ciphertext);
+        expect((await readLocal(owner))?.pending).toEqual(preserved.pending);
     });
 
     it('recovers an existing immutable intent before fetching a new snapshot', async () => {

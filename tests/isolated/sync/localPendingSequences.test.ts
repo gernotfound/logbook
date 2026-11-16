@@ -216,6 +216,30 @@ describe('bounded pending journal compaction', () => {
         expect(await readLocal('a')).toEqual(concurrent.envelope);
     });
 
+    it.each([
+        { label: 'claim', pendingIntent: { cloudflareReplicaClaim: {
+            mutationId: 'claim-race-00000001', expectedRevision: 0, expectedFenceEpoch: 5,
+            consentRevision: 1, candidateReplicaId: 'other-tab-device',
+            currentReplica: null, checkpointClock: {},
+        } } },
+        { label: 'retirement', pendingIntent: { cloudflareReplicaRetirement: {
+            mutationId: 'retire-race-0000001', expectedRevision: 0, expectedFenceEpoch: 5,
+            consentRevision: 1,
+            replica: { slot: 's01', replicaId: 'other-tab-device', generation: 1 },
+        } } },
+    ])('preserves the competing $label intent when another tab stages it before the atomic resequence', async ({ pendingIntent }) => {
+        const before = await installOversizedJournal('a');
+        const concurrent = changeAfterObservedRead(current => ({
+            ...current, ...pendingIntent, revision: current.revision + 1,
+        }));
+
+        await expect(ensureBoundedPendingSequences('a', 's00', () => true))
+            .rejects.toThrow('Intento D1 pendente');
+        expect(await get(storageKey('a'))).toBe(concurrent.ciphertext);
+        expect(await readLocal('a')).toEqual(concurrent.envelope);
+        expect((await readLocal('a'))?.pending).toEqual(before.pending);
+    });
+
     it('preserves a journal already drained by another tab without advancing its revision', async () => {
         await installOversizedJournal('a');
         const concurrent = changeAfterObservedRead(current => ({

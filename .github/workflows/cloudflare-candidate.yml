@@ -201,18 +201,15 @@ jobs:
           grep -qi '^cache-control: .*no-store' /tmp/cloudflare-headers
           grep -qi '^x-robots-tag: noindex, nofollow' /tmp/cloudflare-headers
 
+          # HTML and hashed chunks can temporarily resolve against different
+          # Worker versions while the deployment propagates across edges.
+          # Retry only within a bounded window; require byte-exact 200/MIME.
           shopt -s nullglob globstar
           chunks=(dist/assets/**/*.{js,css})
           test "${#chunks[@]}" -gt 0
           for file in "${chunks[@]}"; do
-            path="/${file#dist/}"
-            mime="$(curl --fail --silent --show-error -H 'Accept-Encoding: identity' \
-              --output /tmp/cloudflare-chunk --write-out '%{content_type}' "${CLOUDFLARE_APP_ORIGIN}${path}")"
-            case "${file}:${mime}" in
-              *.js:text/javascript*|*.js:application/javascript*|*.css:text/css*) ;;
-              *) echo "Unexpected MIME: ${path} ${mime}"; exit 1 ;;
-            esac
-            cmp -s "${file}" /tmp/cloudflare-chunk || { echo "Chunk byte mismatch: ${path}"; exit 1; }
+            bash scripts/verify-cloudflare-served-chunk.sh \
+              "${file}" "${CLOUDFLARE_APP_ORIGIN}" "${EXPECTED_SHA}"
           done
 
           # A query-string shortcut is still the same app shell. Validate
