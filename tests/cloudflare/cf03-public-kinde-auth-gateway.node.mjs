@@ -137,3 +137,27 @@ void test('backend error or missing no-store cannot be promoted to frontend succ
   const unavailable = harness(async () => { throw Error('backend unavailable'); });
   assert.equal((await frontend.fetch(post(paths[0]), unavailable.env)).status, 503);
 });
+
+void test('OAuth publication is gated by complete private Worker readback before edge deployment', () => {
+  const workflow = readFileSync(
+    new URL('../../.github/workflows/cloudflare-candidate.yml', import.meta.url),
+    'utf8',
+  );
+  const gate = workflow.indexOf(
+    'node scripts/verify-cloudflare-kinde-private-provider.mjs --require-configured-oauth',
+  );
+  const deploy = workflow.indexOf('command: deploy --config cloudflare/wrangler.jsonc');
+  assert.ok(gate > 0 && deploy > gate, 'OAuth provider gate must precede public deploy');
+  assert.match(workflow, /for path in \/api\/auth\/kinde\/start \/api\/auth\/session \/api\/auth\/logout; do/);
+  assert.match(workflow, /for path in \/api\/auth\/kinde\/unapproved \/v1\/cloud-key\/sync \/v1\/consent\/status; do/);
+});
+
+void test('CSP permits only the Kinde hosted form redirect, never a wildcard destination', () => {
+  const headers = readFileSync(new URL('../../cloudflare/_headers', import.meta.url), 'utf8');
+  const csp = headers.split('\n').find(line => line.startsWith('  Content-Security-Policy:'));
+  assert.ok(csp);
+  assert.ok(csp.includes("form-action 'self' https://thelogbook.kinde.com;"));
+  assert.ok(csp.includes("frame-ancestors 'none';"));
+  assert.ok(csp.includes("base-uri 'self';"));
+  assert.doesNotMatch(csp, /form-action [^;]*\*/);
+});
