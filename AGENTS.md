@@ -127,7 +127,7 @@ Il servizio reCAPTCHA Enterprise ha raggiunto la quota Free secondo la notifica 
 2. **MUST:** aprire una PR draft quando esiste un insieme coerente da verificare; mantenerla draft durante sviluppo, CI e correzioni. Renderla pronta solo dopo la validazione finale e nei limiti del mandato.
 3. **MUST:** prima del candidato finale includere il bump applicativo previsto per lo squash merge: da `MAJOR.MINOR.PATCH` a `MAJOR.(MINOR+1).0`, con i due campi root di `package-lock.json` coerenti. Calcolarlo dal vero main remoto; non incrementare per ogni commit intermedio.
 4. **MUST:** un merge concorrente richiede controllo del delta, ricalcolo della versione e rivalidazione del nuovo SHA. Non applicare bump dopo la CI o un'eventuale review né introdurre commit automatici su main.
-5. **MUST:** rivedere il diff completo, risolvere blocker e conversazioni aperte sul candidato esatto. Squash merge autonomo solo quando autorizzato e con i gate effettivamente richiesti soddisfatti; non introdurre approvazioni non previste dal ruleset, né aggirare quelle che impone.
+5. **MUST:** rivedere il diff completo, risolvere blocker e conversazioni aperte sul candidato esatto. Squash merge autonomo solo quando autorizzato e con i gate effettivamente richiesti soddisfatti; non imporre review indipendenti supplementari per prassi e rispettare le approvazioni richieste dal ruleset o dal mandato esplicito.
 
 Il bump applicativo non modifica schema/protocollo, catalogo o `LEGAL_VERSIONS`. Il selettore backend Vercel resta nel repository come contratto transitorio, ma il progetto `logbook` è sospeso e `vercel.json` vieta gli auto-deploy Git su ogni branch, incluso `main`; un bump non autorizza né riattiva Vercel.
 
