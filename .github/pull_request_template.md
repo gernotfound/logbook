@@ -21,7 +21,7 @@ Descrivere problema, comportamento atteso e root cause se pertinente.
 - `main` base SHA e SHA **candidato**: compilare con dati reali, non anticipare la CI.
 - Test locali realmente eseguiti e relativo esito; subset diagnostici distinti.
 - Distinguere `npm run verify:m8` locale dalla CI PR `Milestone Verification` (`Canonical Verification`, inclusa `Security / CodeQL`): indicare esiti realmente osservati sullo SHA esatto e link alla run; altrimenti segnare *non eseguito / in corso / mancante*.
-- Review: verificare le approvazioni effettivamente richieste dal ruleset e la risoluzione dei thread bloccanti; nuovi commit invalidano i risultati precedenti.
+- Review: non richiedere un revisore indipendente per default, neppure per CRITICAL. Verificare le sole approvazioni imposte dal ruleset corrente o dal mandato esplicito; risolvere i thread bloccanti. Se una review è presente, riportarne lo SHA; i nuovi commit ne invalidano la validità sul candidato.
 
 ## Dopo il merge (solo se autorizzato; non anticipare)
 - SHA remoto di `main`, `Main Release Gate` e CodeQL post-merge: riportare soltanto esiti realmente osservati sullo SHA di `main`, separati dalla CI della PR.

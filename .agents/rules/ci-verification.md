@@ -47,7 +47,7 @@ Il gate verifica il candidato del branch; non autorizza merge o deploy. Se l'ute
 - MUST: tutti gli shard della stessa run verificano lo stesso exact SHA.
 - MUST: anche il job CodeQL fa checkout e verifica esplicita dello stesso exact SHA prima dell'analisi.
 - MUST: ogni report di validazione indica lo SHA esatto realmente verificato.
-- MUST: ogni revisione indipendente citata come evidenza si riferisce allo stesso SHA candidato o dichiara esplicitamente una baseline diversa.
+- MUST: una review indipendente non è un gate obbligatorio per impostazione predefinita, neppure per i task CRITICAL. Verificare il ruleset GitHub attuale e gli eventuali requisiti espliciti del mandato: solo questi possono renderla obbligatoria. Quando una review indipendente è svolta o citata come evidenza, indicare lo SHA candidato esaminato oppure dichiarare esplicitamente la diversa baseline; non usarla al posto di CI e prove runtime.
 
 ## Clean worktree
 
@@ -82,7 +82,7 @@ Il gate verifica il candidato del branch; non autorizza merge o deploy. Se l'ute
 - MUST: `test:quality-guardrails` confronta lo SHA della PR con `github.event.pull_request.base.sha` (o `HEAD^` nei push su main) usando storia Git completa. La baseline può soltanto diminuire per identità e molteplicità: nuovi warning e sostituzioni con conteggio invariato bloccano la PR anche dopo `lint:baseline:update`.
 - MUST: il gate previene anche downgrade delle regole/configurazioni lint (incluse categorie implicite, eccezioni nuove e opzioni delle regole esistenti), disattivazioni dei controlli TypeScript (incluso `noCheck`), esclusioni dei file JS/TS tracciati tramite `.gitignore`, altri ignore file, configurazioni Oxlint annidate o nuovi nomi che Oxlint ignora automaticamente come minificati, rimozione di leaf preesistenti di `verify:m8` e nuove direttive di soppressione anche inline e nei sorgenti alla radice. La CI esegue le regressioni negative del gate e il suo controllo main-relative nello shard statico; `test:ci-contract` tutela la composizione del comando canonico.
 - MUST: la baseline dei warning può descrivere solo debito già esistente e revisionato; un aggiornamento della baseline è consentito per **rimuovere** warning, non per accettarne altri. Nei path di persistenza non si aggiunge `void` meccanicamente alle Promise per far sparire `no-floating-promises`.
-- NOTE: i gate versionati nel repository non possono essere immuni da una modifica deliberata simultanea del checker e del workflow; il ruleset GitHub e una review delle modifiche ai gate restano protezioni distinte.
+- NOTE: i gate versionati nel repository non possono essere immuni da una modifica deliberata simultanea del checker e del workflow; il ruleset GitHub resta una protezione distinta; una review delle modifiche ai gate è raccomandata, ma è obbligatoria solo se richiesta dai vincoli effettivi.
 - MUST: M8 aggiunge test Domain Operations V4 e il boundary checker che impedisce nuovi consumer UI/hook snapshot-based fuori dall'allowlist documentata.
 - MUST: workflow temporanei di migrazione non devono esistere nell'HEAD candidato.
 - MUST: workflow legacy che duplicano test/E2E non restano attivi in parallelo.

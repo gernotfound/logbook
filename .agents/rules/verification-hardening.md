@@ -42,4 +42,4 @@ Per le mutazioni meal, il valore normativo è che il percorso reale di produzion
 
 `test:quality:m5` e `test:no-skips` rifiutano le scorciatoie sintattiche che riconoscono (skip/focus/todo e tautologie evidenti), ma non certificano automaticamente che ogni test attraversi il boundary giusto o usi un oracle indipendente. Queste proprietà richiedono l'esame del percorso realmente invocato e asserzioni osservabili, oltre all'esito dei gate.
 
-Non dichiarare M5 verde senza output reale dei comandi. Se l'ambiente che produce la patch non può eseguire il repository, la mancanza di evidenza va dichiarata e la validazione deve essere completata tramite CI o revisione indipendente sull'HEAD esatto.
+Non dichiarare M5 verde senza output reale dei comandi. Se l'ambiente che produce la patch non può eseguire il repository, dichiarare il limite e ottenere la prova attraverso la CI sullo SHA esatto; una review indipendente è supplementare, non obbligatoria di default e non sostituisce il gate eseguibile.
