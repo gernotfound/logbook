@@ -1,0 +1,207 @@
+import assert from 'node:assert/strict';
+import { copyFileSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { DatabaseSync } from 'node:sqlite';
+import { test } from 'node:test';
+import { applyCurrentD1Schema } from './current-d1-schema.mjs';
+import { runOneHealthErasureStep } from '../../cloudflare/jobs/health-erasure-worker.mjs';
+import {
+  IndependentFenceUnavailableError, enrollIndependentOwner,
+  recordVerifiedInitialConsent, armIndependentHealthWithdrawal,
+  recordVerifiedHealthWithdrawal, recordVerifiedTerminalErasure,
+  requireIndependentOwnerFence,
+} from '../../cloudflare/recovery/independent-owner-fence.mjs';
+
+const FENCE_SCHEMA = new URL('../../cloudflare/recovery/migrations/0001_independent_owner_fences.sql', import.meta.url);
+class Statement {
+  constructor(sqlite, sql, args = []) { this.sqlite = sqlite; this.sql = sql; this.args = args; }
+  bind(...args) { return new Statement(this.sqlite, this.sql, args); }
+  async first() { return this.sqlite.prepare(this.sql).get(...this.args) ?? null; }
+  async run() {
+    const result = this.sqlite.prepare(this.sql).run(...this.args);
+    return { success: true, meta: { changes: result.changes } };
+  }
+}
+class D1Sqlite {
+  constructor(sqlite) { this.sqlite = sqlite; }
+  withSession(mode) { assert.equal(mode, 'first-primary'); return this; }
+  prepare(sql) { return new Statement(this.sqlite, sql); }
+}
+function addOwner(sqlite, uid) {
+  const now = Date.now() - 10000;
+  sqlite.prepare("INSERT INTO auth_principals(uid,status,verified_at_ms,auth_epoch) VALUES (?,'active',?,1)")
+    .run(uid, now);
+  sqlite.prepare("INSERT INTO sync_subjects(uid,status,consent_revision,fence_epoch) VALUES (?,'active',1,1)")
+    .run(uid);
+  sqlite.prepare('INSERT INTO sync_state(uid,revision) VALUES (?,0)').run(uid);
+  sqlite.prepare(`INSERT INTO health_consent_acceptances
+    (uid,consent_revision,privacy_version,terms_version,accepted_at_ms,over_18_confirmed)
+    VALUES (?,1,'1.3.9','1.2.5',?,1)`).run(uid, now);
+}
+function subject(sqlite, uid) {
+  const row = sqlite.prepare(`SELECT uid, status, consent_revision, fence_epoch,
+    erased_before_revision FROM sync_subjects WHERE uid = ?`).get(uid);
+  return row && {
+    uid: row.uid, status: row.status,
+    consentRevision: row.consent_revision, fenceEpoch: row.fence_epoch,
+    erasedBeforeRevision: row.erased_before_revision,
+  };
+}
+function fence(sqlite, uid) {
+  return sqlite.prepare('SELECT * FROM recovery_owner_fences WHERE uid=?').get(uid);
+}
+const rejected = promise => assert.rejects(promise, IndependentFenceUnavailableError);
+
+void test('independent monotone fence blocks old consent after a physical application DB rollback', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'logbook-cf08-authority-'));
+  const dbFile = join(dir, 'primary.sqlite');
+  const oldFile = join(dir, 'before-withdrawal.sqlite');
+  const fenceFile = join(dir, 'independent.sqlite');
+  let app;
+  let ledger;
+  try {
+    app = new DatabaseSync(dbFile);
+    app.exec('PRAGMA foreign_keys=ON');
+    applyCurrentD1Schema(app);
+    ledger = new DatabaseSync(fenceFile);
+    ledger.exec(readFileSync(FENCE_SCHEMA, 'utf8'));
+    const appDb = new D1Sqlite(app);
+    const fenceDb = new D1Sqlite(ledger);
+    addOwner(app, 'owner-a');
+    addOwner(app, 'owner-b');
+    for (const uid of ['owner-a', 'owner-b']) {
+      assert.equal((await enrollIndependentOwner(fenceDb, uid)).status, 'pending');
+      assert.equal((await recordVerifiedInitialConsent(appDb, fenceDb, uid)).status, 'active');
+    }
+    // An independent registry starts SEALED, even for a valid app consent.
+    await rejected(requireIndependentOwnerFence(fenceDb, subject(app, 'owner-a')));
+    ledger.prepare("UPDATE recovery_control SET mode='open',generation=2 WHERE singleton=1").run();
+    assert.equal(await requireIndependentOwnerFence(fenceDb, subject(app, 'owner-a')), true);
+    app.close();
+    app = undefined;
+    copyFileSync(dbFile, oldFile);
+
+    app = new DatabaseSync(dbFile);
+    app.exec('PRAGMA foreign_keys=ON');
+    const currentApp = new D1Sqlite(app);
+    const armed = await armIndependentHealthWithdrawal(fenceDb, subject(app, 'owner-a'));
+    assert.equal(armed.status, 'blocked');
+    // Crash here: the main DB is still active, but the external floor already denies fitness.
+    assert.equal(subject(app, 'owner-a').status, 'active');
+    await rejected(requireIndependentOwnerFence(fenceDb, subject(app, 'owner-a')));
+    await rejected(recordVerifiedHealthWithdrawal(currentApp, fenceDb, 'owner-a'));
+    app.prepare(`INSERT INTO health_erasure_jobs
+      (uid,consent_revision,fence_epoch,requested_at_ms) VALUES (?,1,1,?)`)
+      .run('owner-a', Date.now());
+    assert.equal(subject(app, 'owner-a').status, 'withdrawn');
+    assert.equal((await recordVerifiedHealthWithdrawal(currentApp, fenceDb, 'owner-a')).status, 'withdrawn');
+    assert.equal(await requireIndependentOwnerFence(fenceDb, subject(app, 'owner-a'), 'rights'), true);
+    assert.equal((await runOneHealthErasureStep(currentApp)).outcome, 'awaiting-keys');
+    app.prepare(`UPDATE health_erasure_jobs SET lease_until_ms = ?
+      WHERE uid = ? AND status = 'processing'`).run(Date.now() - 1000, 'owner-a');
+    assert.deepEqual(await runOneHealthErasureStep(currentApp),
+      { outcome: 'complete', keyDisposition: 'never-issued' });
+    const closed = await recordVerifiedTerminalErasure(currentApp, fenceDb, 'owner-a');
+    assert.equal(closed.consentRevision, 2);
+    assert.equal(closed.erasedBeforeRevision, 2);
+    assert.equal(fence(ledger, 'owner-a').fence_epoch, 2);
+    assert.equal(fence(ledger, 'owner-b').status, 'active');
+
+    app.close();
+    app = undefined;
+    copyFileSync(oldFile, dbFile);
+    app = new DatabaseSync(dbFile);
+    app.exec('PRAGMA foreign_keys=ON');
+    assert.equal(subject(app, 'owner-a').status, 'active');
+    assert.equal(subject(app, 'owner-a').consentRevision, 1);
+    await rejected(requireIndependentOwnerFence(fenceDb, subject(app, 'owner-a')));
+    assert.equal(await requireIndependentOwnerFence(fenceDb, subject(app, 'owner-b')), true);
+    await rejected(recordVerifiedTerminalErasure(new D1Sqlite(app), fenceDb, 'owner-a'));
+    assert.equal(fence(ledger, 'owner-a').erased_before_revision, 2);
+  } finally {
+    app?.close();
+    ledger?.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+void test('missing, unavailable or altered external proof and duplicate enrollment fail closed', async () => {
+  const ledger = new DatabaseSync(':memory:');
+  try {
+    ledger.exec(readFileSync(FENCE_SCHEMA, 'utf8'));
+    const db = new D1Sqlite(ledger);
+    const subjectA = {
+      uid: 'owner-a', status: 'active', consentRevision: 1,
+      fenceEpoch: 1, erasedBeforeRevision: 0,
+    };
+    await rejected(requireIndependentOwnerFence(db, subjectA));
+    await rejected(requireIndependentOwnerFence(null, subjectA));
+    await rejected(requireIndependentOwnerFence({ withSession() { throw Error('quota-outage'); } }, subjectA));
+    await rejected(requireIndependentOwnerFence(db, { ...subjectA, uid: 'owner-b' }));
+    await rejected(enrollIndependentOwner(db, '../untrusted'));
+    assert.equal((await enrollIndependentOwner(db, 'owner-a')).status, 'pending');
+    assert.equal((await enrollIndependentOwner(db, 'owner-a')).status, 'pending');
+    await rejected(enrollIndependentOwner(db, 'owner-a', 2));
+    await rejected(enrollIndependentOwner(db, 'new-owner', 2));
+    assert.equal(fence(ledger, 'new-owner'), undefined);
+    await rejected(armIndependentHealthWithdrawal(db, subjectA));
+    const original = fence(ledger, 'owner-a');
+    assert.equal(original.status, 'pending');
+    assert.throws(() => ledger.prepare(
+      "UPDATE recovery_owner_fences SET status='active', consent_revision=2, change_seq=2 WHERE uid='owner-a'"
+    ).run(), /recovery-fence-regression/);
+    assert.throws(() => ledger.prepare(
+      "DELETE FROM recovery_owner_fences WHERE uid='owner-a'"
+    ).run(), /recovery-owner-immutable/);
+    assert.throws(() => ledger.prepare(
+      "UPDATE recovery_control SET mode='open',generation=1 WHERE singleton=1"
+    ).run(), /recovery-control-regression/);
+    assert.equal(fence(ledger, 'owner-a').change_seq, 1);
+  } finally { ledger.close(); }
+});
+
+void test('duplicate or late write does not undo a durable independent deny', async () => {
+  const ledger = new DatabaseSync(':memory:');
+  try {
+    ledger.exec(readFileSync(FENCE_SCHEMA, 'utf8'));
+    const fenceDb = new D1Sqlite(ledger);
+    const a = {
+      uid: 'owner-a', status: 'active', consentRevision: 1,
+      fenceEpoch: 1, erasedBeforeRevision: 0,
+    };
+    await enrollIndependentOwner(fenceDb, 'owner-a');
+    ledger.prepare(`UPDATE recovery_owner_fences SET status='active',
+      consent_revision=1,change_seq=2 WHERE uid='owner-a'`).run();
+    const blocked = await armIndependentHealthWithdrawal(fenceDb, a);
+    assert.equal(blocked.status, 'blocked');
+    assert.deepEqual(await armIndependentHealthWithdrawal(fenceDb, a), blocked);
+    assert.equal(fence(ledger, 'owner-a').change_seq, 3);
+    assert.throws(() => ledger.prepare(`UPDATE recovery_owner_fences
+      SET status='active',change_seq=4 WHERE uid='owner-a'`).run(),
+      /recovery-fence-regression/);
+    assert.equal(fence(ledger, 'owner-a').status, 'blocked');
+    ledger.prepare("UPDATE recovery_control SET mode='open',generation=2 WHERE singleton=1").run();
+    await rejected(requireIndependentOwnerFence(fenceDb, a));
+    await rejected(requireIndependentOwnerFence(fenceDb,
+      { ...a, uid: 'owner-b' }, 'rights'));
+  } finally { ledger.close(); }
+});
+
+void test('isolated migration manifest cannot route traffic or bind the primary D1', () => {
+  const cfg = JSON.parse(readFileSync(new URL(
+    '../../cloudflare/recovery/wrangler.isolated.jsonc', import.meta.url), 'utf8'));
+  assert.equal(cfg.name, 'thelogbook-cf08-fence-schema-isolated');
+  assert.equal(cfg.workers_dev, false);
+  assert.equal(cfg.preview_urls, false);
+  for (const forbidden of ['main', 'routes', 'route', 'triggers', 'assets', 'services', 'vars']) {
+    assert.equal(Object.hasOwn(cfg, forbidden), false);
+  }
+  assert.equal(cfg.d1_databases?.length, 1);
+  assert.deepEqual(cfg.d1_databases[0], {
+    binding: 'RECOVERY_DB',
+    database_name: 'thelogbook-cf08-fence-eu-isolated-20261116',
+    database_id: '19dad53f-0dda-4503-b161-758ac8cb7b21',
+    migrations_dir: './migrations',
+  });
+});
