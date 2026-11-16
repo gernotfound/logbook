@@ -1,12 +1,13 @@
 # Registro dei servizi esterni — stato corrente TheLogBook
 
 
-## Distribuzione privata HTTP Kinde autorizzata — candidato v2.479.0 (16/11/2026)
+## Worker Kinde HTTP PRIVATO — distribuito e attestato 16/11/2026
 
-L'owner ha autorizzato esclusivamente la **creazione del Worker HTTP Kinde privato**, senza aggiungere segreti, OAuth, URL pubblici, DNS, IAM, billing o operazioni su dati reali. Il workflow `.github/workflows/cloudflare-kinde-private.yml` verrà eseguito solo dopo il merge su `main` e il `Main Release Gate` exact-SHA. Riuso del token CI Workers già esistente; **solo** `cloudflare/auth/wrangler.kinde.isolated.jsonc` viene pubblicato, non il frontend né altri Worker. La verifica legge D1 UUID, service binding `AUTH_GATE`, limiter `AUTH_RATE_LIMITER`, origin e disabilitazione workers.dev/preview. L'esito del deploy va attestato separatamente nel provider: la presenza di questo testo non prova lo stato remoto.
+**GitHub:** `main` v2.479.0 `44c294bf69261c31e37c2cdb3f78432941ae6aba`, [PR #1173](https://github.com/gernotfound/logbook/pull/1173); CI candidata [#43830350700](https://github.com/gernotfound/logbook/actions/runs/43830350700) SUCCESS, Main Release Gate/CodeQL [#43830734390](https://github.com/gernotfound/logbook/actions/runs/43830734390) SUCCESS, [workflow privato #43830734570](https://github.com/gernotfound/logbook/actions/runs/43830734570) SUCCESS. SHA esatti non intercambiabili.
 
-Il tenant Kinde e il flusso account rimangono **VERIFY-LIVE / NO-GO** finché non sono provati configurazione callback, password >=15 incl. reset, Google, verifica email, sessioni, KEK, consenso e client completo. Dopo il deploy privato il Worker non ha ingressi HTTP pubblici.
+**Cloudflare (readback diretto dopo deploy):** Worker `thelogbook-cf03-kinde-http-isolated` **ACTIVE-ISOLATED** (deploy 16/11/2026 08:25:57 UTC; version ID `593d695d-b9f3-44b3-bf4b-422074ff1e01`, 100%). Esattamente quattro binding: `DB` alla D1 sintetica EU `9aa51833-8adc-495f-bdfc-93b5542e8023`, `AUTH_GATE` a `thelogbook-cf03-auth-gate-isolated`, `AUTH_RATE_LIMITER` namespace `31004`, `APP_ORIGIN=https://thelogbook.me`. `workers.dev` e preview disabilitati; **zero Worker Routes o Custom Domains** assegnati nella zona `thelogbook.me`; **nessun Kinde secret**. Nessun dato D1 scritto né modifica a OAuth, DNS, IAM, posta, billing, frontend, API o Auth Gate.
 
+**Stato:** Worker privato **COMPLETATO**, ma Kinde provider/hosted login **VERIFY-LIVE / NO-GO**, `AuthContext` ancora Firebase, niente ingresso pubblico Auth/D1; mancano policy password >=15 anche nel reset, callback/Google/email, segreti server-side, consenso/ADK e client/Sync/diritti con test reali. Il deploy Worker non costituisce GO applicativo.
 
 **Classificazione: CRITICAL.** Questo registro contiene **soltanto servizi necessari, ancora presenti nel codice oppure da validare prima del GO**. La storia delle configurazioni superate rimane nella cronologia Git e nelle PR. GitHub prova SHA e verifiche; i provider provano le rispettive risorse e il runtime. Un riscontro datato non autorizza cambi Production.
 
