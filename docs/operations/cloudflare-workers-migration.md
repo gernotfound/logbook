@@ -1,5 +1,16 @@
 # TheLogBook — migrazione Cloudflare: runbook corrente
 
+## CF-03 — gateway OAuth-only candidato, gated sul provider (16/11/2026)
+
+Su branch di integrazione si prepara un percorso **limitato a quattro route esatte** `/api/auth/kinde/start`, `/api/auth/kinde/callback`, `/api/auth/session`, `/api/auth/logout` con service binding `KINDE_HTTP` al solo Worker HTTP Kinde privato. Nessun binding D1 API al frontend, nessuna route `/v1/*`, nessuna chiave salute, nessun frontend AuthContext Kinde attivo. Si conserva il Proxy Firebase helper fino alla migrazione completa. La CSP consente il reindirizzamento form verso il dominio Kinde, preservando le altre restrizioni. Il gateway conserva il rate limiter, i controlli cookie CSRF/OAuth state+PKCE e un solo consumo D1 del callback del Worker privato.
+
+**Gate obbligatorio PRIMA del deploy:** il workflow statico deve leggere le impostazioni del Worker privato e attestare tutti e cinque i Secret OAuth server-side, binding D1/Auth Gate/limiter e URL pubblici disattivati. **Readback diretto Cloudflare 16/11/2026 ore 13:04 UTC (versione `0250015b-7953-4bb9-8a4a-d58984fb4978`):** `KINDE_ISSUER`, `KINDE_CLIENT_ID` e `KINDE_CLIENT_SECRET` risultano presenti come `secret_text`, 3/5; deployment privato 100%, workers.dev/preview disabilitati. Mancano `KINDE_API_AUDIENCE` e `KINDE_ID_TOKEN_AUDIENCE`. Le modifiche della [PR draft #1175](https://github.com/gernotfound/logbook/pull/1175) **NON sono live**: la CI candidata sullo SHA `216227f33cb064590d9066abce899cec5867f1ca` è riuscita, ma il commit è cambiato per documentazione successiva e dovrà essere riverificato exact-SHA prima del merge. Il gateway deve fallire in sicurezza finché i Secret non sono completi. Le route dei dati salute rimangono isolate.
+
+**Stato API Kinde secondo screenshot owner (16/11/2026):** `TheLogBook API`, audience `https://thelogbook.me/api`, creata su Production; l'app Back-end web `TheLogBook` è contrassegnata come **Is authorized** nella scheda Applications, senza scope indicati. La callback Kinde è salvata secondo l'owner, non verificata via API. Sono ancora da provare l'audience dei token di accesso, l'audience dell'ID token, il Client Secret, il login/callback e l'esecuzione del workflow password (Live ma Runtime logs vuoti). Non trasferire segreti in chat; inserirli nel pannello Cloudflare Worker privato. L'abilitazione OAuth-only non equivale a GO fitness.
+
+
+
+
 ## CF-04/CF-09 — Journal D1 e smoke Static Assets (16/11/2026)
 
 **GitHub `main` v2.482.0 `5f02f88a59f07ad1ba585c0263fc7fd665cd2a6e`:** la [PR #1176](https://github.com/gernotfound/logbook/pull/1176) ha integrato il risequenziamento atomico delle sequenze causali D1 oltre otto documenti, protezione del journal cifrato in caso di errore 503 e fencing degli intenti concorrenti claim/retirement. [CI candidato #43866294737](https://github.com/gernotfound/logbook/actions/runs/43866294737) e [gate main #43868884368](https://github.com/gernotfound/logbook/actions/runs/43868884368) **SUCCESS**. Firestore reconciliation [#43869286467](https://github.com/gernotfound/logbook/actions/runs/43869286467) SUCCESS, con deploy Rules/indici skipped. **CF-04 resta PARZIALE**: la replica D1 non è ancora collegata alla PWA Kinde, né sono provati HTTP Auth/ADK, primo claim, hydration, lost ACK, secondo dispositivo e offline reale.

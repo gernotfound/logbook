@@ -52,3 +52,20 @@ void test('pre-activation Kinde rejects public routes, wrong storage, no rate li
     ...frontend, assets: { ...frontend.assets, run_worker_first: ['/__/auth', '/__/auth/*', '/api/auth/*'] },
   }), []);
 });
+
+void test('OAuth-only frontend rejects extra D1 routes and unapproved service or secret bindings', () => {
+  for (const wrong of [
+    { ...frontend, services: [] },
+    { ...frontend, services: [{ binding: 'KINDE_HTTP', service: 'untrusted' }] },
+    { ...frontend, services: [...frontend.services, { binding: 'D1_API', service: 'thelogbook-api-isolated' }] },
+    { ...frontend, vars: { ...frontend.vars, KINDE_CLIENT_SECRET: 'forbidden' } },
+    { ...frontend, assets: { ...frontend.assets, run_worker_first: [
+      ...frontend.assets.run_worker_first, '/v1/consent/*',
+    ] } },
+    { ...frontend, assets: { ...frontend.assets, run_worker_first: [
+      '/__/auth', '/__/auth/*', '/api/auth/*',
+    ] } },
+  ]) {
+    assert.notDeepEqual(validateIsolatedKindeCandidate(kinde, gate, wrong), []);
+  }
+});

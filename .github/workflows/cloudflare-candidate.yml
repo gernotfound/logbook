@@ -144,6 +144,11 @@ jobs:
           for resource in dist/index.html dist/about.html dist/privacy.html dist/legal-pages.css dist/sw.js dist/manifest.webmanifest dist/_headers; do
             test -s "${resource}" || { echo "Missing ${resource}"; exit 1; }
           done
+      - name: Attest Kinde private Worker and complete server-side OAuth secrets
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+        run: node scripts/verify-cloudflare-kinde-private-provider.mjs --require-configured-oauth
       - name: Deploy Workers Static Assets on thelogbook.me
         uses: cloudflare/wrangler-action@953926a2e2182532811c01a25e53647d93bf07c0 # v4
         with:
@@ -253,4 +258,16 @@ jobs:
           helper_status="$(curl --silent --show-error --output /tmp/cloudflare-auth-helper \
             --write-out '%{http_code}' "${CLOUDFLARE_APP_ORIGIN}/__/auth")"
           test "${helper_status}" = 404 || { echo 'Unrecognized Auth helper route must fail closed'; exit 1; }
-          echo 'thelogbook.me static assets verified; authenticated flows still require independent provider and browser gates'
+          # These are non-mutating probes: wrong methods and absent routes must
+          # remain errors even after OAuth is enabled for synthetic tests.
+          for path in /api/auth/kinde/start /api/auth/session /api/auth/logout; do
+            status="$(curl --silent --show-error --output /tmp/kinde-method-probe \
+              --write-out '%{http_code}' "${CLOUDFLARE_APP_ORIGIN}${path}")"
+            test "${status}" = 405 || { echo "Unexpected Kinde method response ${path}: ${status}"; exit 1; }
+          done
+          for path in /api/auth/kinde/unapproved /v1/cloud-key/sync /v1/consent/status; do
+            status="$(curl --silent --show-error --output /tmp/kinde-isolation-probe \
+              --write-out '%{http_code}' "${CLOUDFLARE_APP_ORIGIN}${path}")"
+            test "${status}" = 404 || { echo "Unexpected exposed API route ${path}: ${status}"; exit 1; }
+          done
+          echo 'thelogbook.me assets + OAuth-only ingress verified; live Kinde/health flows require separate runtime gates'

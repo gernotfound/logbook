@@ -8,10 +8,20 @@ const vite = readFileSync('vite.config.ts', 'utf8');
 const sw = readFileSync('src/sw.ts', 'utf8');
 const productionWorkflow = readFileSync('.github/workflows/cloudflare-candidate.yml', 'utf8');
 
+const authorizedWorkerFirst = [
+  '/__/auth', '/__/auth/*',
+  '/api/auth/kinde/start', '/api/auth/kinde/callback',
+  '/api/auth/session', '/api/auth/logout',
+];
 if (wrangler.main !== './auth-proxy.mjs' || wrangler.assets?.directory !== '../dist' ||
     wrangler.assets?.binding !== 'ASSETS' || wrangler.assets?.not_found_handling !== '404-page' ||
-    JSON.stringify(wrangler.assets?.run_worker_first) !== JSON.stringify(['/__/auth', '/__/auth/*'])) {
-  failures.push('Wrangler must serve static assets first and invoke only the Firebase Auth proxy explicitly');
+    JSON.stringify(wrangler.assets?.run_worker_first) !== JSON.stringify(authorizedWorkerFirst) ||
+    wrangler.services?.length !== 1 ||
+    wrangler.services[0]?.binding !== 'KINDE_HTTP' ||
+    wrangler.services[0]?.service !== 'thelogbook-cf03-kinde-http-isolated' ||
+    wrangler.vars?.APP_ORIGIN !== 'https://thelogbook.me' ||
+    Object.keys(wrangler.vars ?? {}).join(',') !== 'APP_ORIGIN') {
+  failures.push('Frontend must expose only explicit OAuth/session paths to the isolated Kinde Worker');
 }
 if (wrangler.workers_dev !== false || wrangler.preview_urls !== false ||
     JSON.stringify(wrangler.routes) !== JSON.stringify([{ pattern: 'thelogbook.me', custom_domain: true }]) ||
@@ -33,8 +43,14 @@ if (!productionWorkflow.includes('name: Cloudflare Workers Static Assets Product
 
 const baselineHeaders = firebase.hosting?.headers?.find(item => item.source === '/**')?.headers ?? [];
 for (const header of baselineHeaders) {
-  if (!headers.includes('  ' + header.key + ': ' + header.value)) {
-    failures.push('Cloudflare headers must preserve Firebase security header: ' + header.key);
+  // Chrome and Safari can enforce form-action on 303 redirects. The only
+  // allowed difference from the legacy CSP is Kinde's exact hosted origin.
+  const value = header.key === 'Content-Security-Policy'
+    ? header.value.replace("form-action 'self';",
+      "form-action 'self' https://thelogbook.kinde.com;")
+    : header.value;
+  if (!headers.includes('  ' + header.key + ': ' + value)) {
+    failures.push('Cloudflare headers must preserve reviewed security header: ' + header.key);
   }
 }
 for (const path of ['/', '/index.html', '/sw.js', '/manifest.webmanifest', '/appearance.js', '/appearance.css', '/workbox-*.js']) {
