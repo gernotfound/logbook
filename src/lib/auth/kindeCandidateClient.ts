@@ -144,7 +144,12 @@ function consentState(value: unknown, owner: CandidatePrincipal): KindeCandidate
         || typeof value.uid !== 'string' || !UID.test(value.uid) || value.uid !== owner.uid
         || !revision(value.revision) || !revision(value.fenceEpoch, 1)
         || value.revision !== owner.healthConsentRevision
-        || value.fenceEpoch > owner.fenceEpoch) {
+        // Terminal SQL erasure moves the subject fence one generation ahead
+        // of an otherwise valid identity session. This is suspension ONLY:
+        // it must never make an active fitness grant appear current.
+        || (value.fenceEpoch > owner.fenceEpoch
+            && !(value.status === 'withdrawn' && value.revision === 2
+                && value.fenceEpoch === owner.fenceEpoch + 1))) {
         throw new KindeCandidateBoundaryError();
     }
     if (value.status === 'unregistered') {
