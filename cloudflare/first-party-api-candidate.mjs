@@ -77,7 +77,7 @@ export async function routeCandidateFirstPartyApi(request, env) {
 
   const declared = request.headers.get('content-length');
   if (declared !== null) {
-    if (!/^\\d+$/.test(declared) || Number(declared) > MAX_DECLARED_BYTES) return denied(413);
+    if (!/^\d+$/.test(declared) || Number(declared) > MAX_DECLARED_BYTES) return denied(413);
   }
   const service = env[route.binding];
   if (!service || typeof service.fetch !== 'function') return denied(503);
