@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { test } from 'node:test';
 import { applyCurrentD1Schema } from './current-d1-schema.mjs';
-import { inspectRestoredOwnerFence } from '../../cloudflare/recovery/restore-preflight.mjs';
+import { inspectRestoredOwnerCoverage, inspectRestoredOwnerFence } from '../../cloudflare/recovery/restore-preflight.mjs';
 import { runOneHealthErasureStep } from '../../cloudflare/jobs/health-erasure-worker.mjs';
 import { issueVerifiedSession } from '../../cloudflare/auth/session-issuer.mjs';
 import sessionGate from '../../cloudflare/auth/session-gate.mjs';
@@ -137,6 +137,17 @@ void test('SQLite snapshot rollback resurrects old consent; independent external
     assert.deepEqual(inspectRestoredOwnerFence(subject(restored, 'owner-a'), null), {
       outcome: 'blocked', reason: 'independent-proof-missing-or-invalid',
     });
+    const restoredSubjects = ['owner-a', 'owner-b'].map(uid => subject(restored, uid));
+    const independentFloors = ['owner-a', 'owner-b'].map(evidence);
+    assert.deepEqual(inspectRestoredOwnerCoverage(restoredSubjects, independentFloors), {
+      outcome: 'blocked', reason: 'restored-generation-older-than-independent-floor',
+    });
+    assert.deepEqual(inspectRestoredOwnerCoverage([restoredSubjects[1]], independentFloors), {
+      outcome: 'blocked', reason: 'owner-coverage-mismatch',
+    });
+    assert.deepEqual(inspectRestoredOwnerCoverage(restoredSubjects, [independentFloors[1]]), {
+      outcome: 'blocked', reason: 'owner-coverage-mismatch',
+    });
   } finally {
     restored?.close();
     ledger?.close();
@@ -175,4 +186,41 @@ void test('restore preflight fails closed for unknown, mismatched, stale and del
       outcome: 'blocked', reason: 'independent-proof-missing-or-invalid',
     });
   }
+});
+
+void test('multi-owner diagnostic rejects absent, duplicate or untrusted coverage without treating a match as restore approval', () => {
+  const a = {
+    uid: 'owner-a', status: 'withdrawn',
+    consentRevision: 2, fenceEpoch: 2, erasedBeforeRevision: 2,
+  };
+  const b = {
+    uid: 'owner-b', status: 'active',
+    consentRevision: 1, fenceEpoch: 1, erasedBeforeRevision: 0,
+  };
+  const consistent = { outcome: 'consistent-for-diagnostics-only' };
+  assert.deepEqual(inspectRestoredOwnerCoverage([b, a], [a, b]), consistent);
+  for (const floors of [null, [], [a, null]]) {
+    assert.deepEqual(inspectRestoredOwnerCoverage([a, b], floors), {
+      outcome: 'blocked', reason: 'independent-coverage-missing-or-invalid',
+    });
+  }
+  for (const restored of [null, [a, null]]) {
+    assert.deepEqual(inspectRestoredOwnerCoverage(restored, [a, b]), {
+      outcome: 'blocked', reason: 'restored-coverage-missing-or-invalid',
+    });
+  }
+  assert.deepEqual(inspectRestoredOwnerCoverage([a, b], [a, { ...a }]), {
+    outcome: 'blocked', reason: 'independent-owner-duplicate',
+  });
+  assert.deepEqual(inspectRestoredOwnerCoverage([a, { ...a }], [a, b]), {
+    outcome: 'blocked', reason: 'restored-owner-duplicate',
+  });
+  for (const restored of [[a], [a, { ...b, uid: 'owner-c' }], []]) {
+    assert.deepEqual(inspectRestoredOwnerCoverage(restored, [a, b]), {
+      outcome: 'blocked', reason: 'owner-coverage-mismatch',
+    });
+  }
+  assert.deepEqual(inspectRestoredOwnerCoverage([{ ...a, status: 'active' }, b], [a, b]), {
+    outcome: 'blocked', reason: 'withdrawn-owner-resurrected',
+  });
 });

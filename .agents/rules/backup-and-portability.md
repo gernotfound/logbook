@@ -19,7 +19,7 @@ della stessa D1: il trigger SQL `0010` non dimostra anti-resurrection fuori
 dallo snapshot ripristinato. `cloudflare/recovery/restore-preflight.mjs`
 è un diagnostico non collegato al runtime, e soltanto se gli viene fornito
 un floor da una risorsa *indipendente*; `consistent-for-diagnostics-only`
-non è approvazione a riaprire l'accesso. I test `cf08-restore-preflight.node.mjs`
+non è approvazione a riaprire l'accesso. Anche il controllo diagnostico multi-owner `inspectRestoredOwnerCoverage` verifica solo la corrispondenza fra due elenchi forniti: **non** autentica la fonte esterna e non dimostra che siano stati censiti tutti gli owner. I test `cf08-restore-preflight.node.mjs`
 riproducono un rollback sintetico con schema corrente e AuthGate reale.
 
 **MUST prima di GO restore:** prova monotona indipendente e completa per
