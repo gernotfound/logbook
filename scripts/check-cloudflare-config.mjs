@@ -53,7 +53,7 @@ for (const header of baselineHeaders) {
     failures.push('Cloudflare headers must preserve reviewed security header: ' + header.key);
   }
 }
-for (const path of ['/', '/index.html', '/sw.js', '/manifest.webmanifest', '/appearance.js', '/appearance.css', '/workbox-*.js']) {
+for (const path of ['/', '/index.html', '/sw.js', '/manifest.webmanifest', '/appearance.js', '/appearance.css', '/workbox-*.js', '/verifica-accesso', '/verifica-accesso.html', '/verifica-accesso.js']) {
   if (!headers.includes(path + '\n  Cache-Control: no-cache, no-store, must-revalidate')) {
     failures.push('No-store policy missing for ' + path);
   }
