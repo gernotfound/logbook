@@ -8,6 +8,11 @@ const vite = readFileSync('vite.config.ts', 'utf8');
 const sw = readFileSync('src/sw.ts', 'utf8');
 const productionWorkflow = readFileSync('.github/workflows/cloudflare-candidate.yml', 'utf8');
 
+const authorizedWorkerFirst = [
+  '/__/auth', '/__/auth/*',
+  '/api/auth/kinde/start', '/api/auth/kinde/callback',
+  '/api/auth/session', '/api/auth/logout',
+];
 if (wrangler.main !== './auth-proxy.mjs' || wrangler.assets?.directory !== '../dist' ||
     wrangler.assets?.binding !== 'ASSETS' || wrangler.assets?.not_found_handling !== '404-page' ||
     JSON.stringify(wrangler.assets?.run_worker_first) !== JSON.stringify(authorizedWorkerFirst) ||
