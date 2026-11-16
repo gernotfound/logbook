@@ -13,6 +13,26 @@ Guest: consenso e revoca sono locali alla generazione del dispositivo; nessun co
 
 Fonti: `src/lib/healthConsent.ts`, `healthConsentRecovery.ts`, `src/contexts/auth/consentLifecycle.ts`, `src/lib/sync/localConsentReconciliation.ts`, `localConsentJournalRecovery.ts`, `server/healthConsent/`, endpoint `api/health-consent*`/`api/health-data-erasure.ts` e `firestore.rules`.
 
+## Lettura dello stato dopo erasure terminale D1 (16/11/2026)
+
+Quando il finalizzatore SQL `0010` porta `sync_subjects` da consenso 1/epoch 1 a
+consenso 2/epoch 2, l'epoch del principal Auth può rimanere 1: la sessione
+valida non diventa automaticamente una nuova autorizzazione fitness.
+Il solo endpoint trusted `/v1/consent/status` può restituire `withdrawn`
+per la generazione successiva, **solo** se il DB primario conferma la
+prova terminale immutabile, il job `complete`, il floor di cancellazione
+e l'incremento esatto di una epoch. Il lettore candidato accetta quel
+risultato esclusivamente come `consent-suspended`; non come
+`consent-confirmed`, nuovo consenso, sync, export o ACK.
+
+Una subject epoch successiva senza prova terminale, un owner/sessione
+variato o uno stato `active` con epoch diversa continuano a fallire chiusi.
+Una risposta `withdrawn` non attesta da sola erasure completa:
+per la finalizzazione occorre la prova SQL esatta, e per il recovery da
+backup resta necessario il guard esterno anti-resurrection CF-08.
+Questi percorsi restano candidati finché Auth/consenso/chiavi e revoca
+sono collaudati sul runtime pubblico previsto.
+
 ## Primo consenso Kinde → D1: chiamante browser candidato (15/11/2026)
 
 Il client `src/lib/auth/kindeCandidateConsent.ts` genera il corpo esatto

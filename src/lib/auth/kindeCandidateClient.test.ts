@@ -80,6 +80,31 @@ describe('candidate first-party Kinde client boundary', () => {
             reply({ error: 'unauthorized' }, 401)))).rejects.toBeInstanceOf(KindeCandidateBoundaryError);
     });
 
+    it('reads only suspended consent one epoch ahead after terminal erasure', async () => {
+        const terminal = responses(
+            reply(session(A, 1, 2)), reply(status('withdrawn', 2, 2)),
+            reply(session(A, 1, 2)),
+        );
+        await expect(read(terminal)).resolves.toEqual({
+            kind: 'consent-suspended', status: 'withdrawn',
+            principal: { uid: A, fenceEpoch: 1, healthConsentRevision: 2 },
+        });
+        for (const invalid of [
+            status('active', 2, 2),
+            status('deleting', 2, 2),
+            status('deleted', 2, 2),
+            status('withdrawn', 2, 3),
+        ]) {
+            await expect(read(responses(
+                reply(session(A, 1, 2)), reply(invalid), reply(session(A, 1, 2)),
+            ))).rejects.toBeInstanceOf(KindeCandidateBoundaryError);
+        }
+        await expect(read(responses(
+            reply(session(A, 1, 3)), reply(status('withdrawn', 3, 2)),
+            reply(session(A, 1, 3)),
+        ))).rejects.toBeInstanceOf(KindeCandidateBoundaryError);
+    });
+
     it('rejects cross-account and epoch changes between consent and session reads', async () => {
         for (const changed of [session(B, 1, 1), session(A, 2, 1), session(A, 1, 0)]) {
             await expect(read(responses(reply(session(A, 1, 1)), reply(status('active', 1)),

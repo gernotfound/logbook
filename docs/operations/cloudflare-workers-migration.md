@@ -1,5 +1,12 @@
 # TheLogBook — migrazione Cloudflare: runbook corrente
 
+## CF-05 — Stato consenso dopo cancellazione terminale (candidato v2.490.0, 16/11/2026)
+
+**Base di lavoro:** `main` v2.489.0 SHA `86e1bd4e3f64c2164f723b97b7e0ab31efe76d4c`; branch `fix/cf05-post-erasure-consent-status-20261116`. Il finalizzatore SQL 0010 aumenta la generazione del soggetto sanitario senza obbligare l'identity principal a cambiare epoch. Precedentemente `/v1/consent/status` rispondeva HTTP 503 a una sessione ancora valida dopo tale completamento, impedendo la lettura dello stato revocato. Il candidato introduce un'eccezione **solo consultiva**: la lettura `withdrawn` un'epoch avanti richiede sul D1 primario il job `complete` e la prova finale immutabile con floor esatto. Il client legge solo `consent-suspended`, senza riaprire fitness, vault, repliche o dati cancellati. Test Node/SQLite esercitano primo consenso, revoca, esecuzione del vero runner, finalizzazione, readback del Worker e divieto di sync; casi negativi coprono un epoch contraffatto senza prova e i falsi stati attivi/deleted lato client.
+
+**Confine dell'evidenza:** questa è una regressione candidata, non un attivazione o test live di Kinde. Nessuna route pubblica, secret, D1 remoto, cron o record reale è modificato. La risposta di stato non è prova sufficiente di anti-resurrection dopo restore; CF-08 resta NO-GO. Il client PWA attivo usa ancora il percorso legacy e restano necessari collaudi integrati di revoca, esportazione diritti e recupero, nonché gate CI/CodeQL exact-SHA e runtime Cloudflare.
+
+
 ## CF-03 — compatibilità della durata dei token nella callback Kinde (candidato v2.489.0)
 
 Il collaudo browser ha dimostrato che la callback reale ora raggiunge il backend oltre il precedente rifiuto del parametro `scope`, ma ritorna **503**. Il percorso di errore aggrega fallimenti di exchange, JWKS, verifica claim, D1 e session issuer, quindi la causa specifica **non è osservata**. È stata però riscontrata una difformità riproducibile fra la policy locale dei token sintetici (access max 15 min) e la durata predefinita documentata dal provider Kinde (access 24h, ID 1h: https://docs.kinde.com/build/tokens/configure-tokens/). Il tenant Kinde potrebbe avere una scadenza personalizzata, non ancora verificata.
