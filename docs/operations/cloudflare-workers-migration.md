@@ -1,5 +1,8 @@
 # TheLogBook — migrazione Cloudflare: runbook corrente
 
+**Deploy effettivo del fix OAuth:** il workflow `Cloudflare Kinde HTTP Worker (private, main-only)` in passato partiva automaticamente soltanto dopo modifiche al suo YAML; quindi il merge del parser non garantiva il deploy del Worker privato, mentre il normale workflow Cloudflare Static Assets pubblica il solo frontend. Per prevenire un runtime privato obsoleto, il candidato attiva il workflow private Kinde anche per modifiche a `cloudflare/auth/**` e `cloudflare/api/logout-worker.mjs`, lasciando invariati la restrizione a `main`, la verifica CI trusted exact-SHA e l'isolamento `workers.dev`/preview. Dopo il merge serve leggere **versione effettiva e ultimo deployment del Worker Kinde**, oltre ai gate post-merge e allo smoke frontend. Un deploy verde di Static Assets da solo non certifica il nuovo parser OAuth.
+
+
 ## CF-03 — compatibilità callback Kinde con scope nel redirect (candidato 16/11/2026)
 
 Il primo percorso live di registrazione ha raggiunto il provider Kinde ed eseguito la verifica email e la regola password 15+, ma il ritorno `GET /api/auth/kinde/callback` è fallito con HTTP 400. Il parser OAuth accettava esclusivamente `code`/`state`/`error`/`error_description`, mentre Kinde ha inviato anche `scope`, comportamento documentato dal provider. Causa immediata verificata sul codice; altre cause concorrenti non ancora escluse perché il parser si fermava prima della validazione state/cookie e dello scambio dei token.
