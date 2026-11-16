@@ -3,6 +3,7 @@ import { issueVerifiedSession } from './session-issuer.mjs';
 
 const START_PATH = '/api/auth/kinde/start';
 const CALLBACK_PATH = '/api/auth/kinde/callback';
+const REQUESTED_SCOPES = Object.freeze(['openid', 'email', 'profile']);
 const OAUTH_COOKIE = '__Host-logbook_oauth';
 const STATE_LIFETIME_MS = 10 * 60 * 1000;
 const TOKEN_BODY_LIMIT = 16384;
@@ -92,15 +93,27 @@ function requestUrl(request, origin, path, method) {
   return url.origin === origin && url.pathname === path && !url.hash ? url : null;
 }
 
+function allowedReturnedScope(value) {
+  if (value === null) return true;
+  const scopes = value.split(' ');
+  // Kinde can echo the granted scopes in the authorization redirect.
+  // Accept the exact requested set in any order, but not a narrower,
+  // broader, duplicated or malformed grant.
+  return scopes.length === REQUESTED_SCOPES.length
+    && new Set(scopes).size === REQUESTED_SCOPES.length
+    && scopes.every(scope => REQUESTED_SCOPES.includes(scope));
+}
+
 function callbackParameters(url) {
-  const allowed = new Set(['state', 'code', 'error', 'error_description']);
+  const allowed = new Set(['state', 'code', 'scope', 'error', 'error_description']);
   for (const [key] of url.searchParams) {
     if (!allowed.has(key) || url.searchParams.getAll(key).length !== 1) return null;
   }
   const state = url.searchParams.get('state');
   const code = url.searchParams.get('code');
   const error = url.searchParams.get('error');
-  if (!canonicalToken(state) || (!!code === !!error) ||
+  if (!canonicalToken(state) || !allowedReturnedScope(url.searchParams.get('scope'))
+    || (!!code === !!error) ||
     (code !== null && !CODE.test(code)) ||
     (error !== null && (!/^[a-z_]{1,64}$/.test(error)
       || (url.searchParams.get('error_description') ?? '').length > 512))) {
@@ -206,7 +219,7 @@ export function createKindeOAuthFlow(configuration, { rateLimit, fetchImpl = fet
       const authorize = new URL(config.issuer + '/oauth2/auth');
       for (const [name, value] of Object.entries({
         response_type: 'code', client_id: config.clientId,
-        redirect_uri: config.redirectUri, scope: 'openid email profile',
+        redirect_uri: config.redirectUri, scope: REQUESTED_SCOPES.join(' '),
         audience: config.apiAudience, state, nonce,
         code_challenge: codeChallenge, code_challenge_method: 'S256',
       })) authorize.searchParams.set(name, value);

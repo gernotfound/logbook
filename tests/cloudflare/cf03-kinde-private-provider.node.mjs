@@ -88,6 +88,13 @@ void test('deployment changes only Kinde Worker after exact-main verification an
     'utf8',
   );
   assert.match(yml, /^    branches:\n      - main$/m);
+  // A change to the OAuth implementation must update the *private* live Worker,
+  // not just the Static Assets frontend, after the exact-main release gate.
+  const watch = yml.split('    paths:\n')[1]?.split('  workflow_dispatch:')[0] ?? '';
+  assert.ok(watch.includes("      - 'cloudflare/auth/**'"));
+  assert.ok(watch.includes('      - cloudflare/api/logout-worker.mjs'));
+  assert.ok(watch.includes('      - .github/workflows/cloudflare-kinde-private.yml'));
+
   assert.match(yml, /github.ref == 'refs\/heads\/main'/);
   assert.match(yml, /Wait for|Verify current main and its complete trusted release gate/);
   assert.match(yml, /actions\/workflows\/verification\.yml\/runs\?event=push/);
@@ -95,6 +102,11 @@ void test('deployment changes only Kinde Worker after exact-main verification an
   assert.match(yml, /npx --yes wrangler@4\.159\.0 deploy --dry-run --config cloudflare\/auth\/wrangler\.kinde\.isolated\.jsonc/);
   assert.match(yml, /command: deploy --config cloudflare\/auth\/wrangler\.kinde\.isolated\.jsonc/);
   assert.match(yml, /node scripts\/verify-cloudflare-kinde-private-provider\.mjs/);
+  assert.equal(
+    yml.split('node scripts/verify-cloudflare-kinde-private-provider.mjs --require-configured-oauth').length - 1,
+    2,
+    'Both preflight and post-deploy readbacks must attest all five Kinde secrets',
+  );
   assert.doesNotMatch(yml, /command: deploy --config cloudflare\/(?:api\/wrangler|auth\/wrangler\.isolated|wrangler\.jsonc)/);
   assert.doesNotMatch(yml, /route:|routes:|workers_dev: true|preview_urls: true|secret put/);
 });
