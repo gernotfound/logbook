@@ -35,7 +35,7 @@ describe('PWA trusted HTTP navigation boundary', () => {
     const swSource = readFileSync('src/sw.ts', 'utf8');
     expect(swSource).toContain("import { AUTH_HTTP_NAVIGATION_DENYLIST } from './lib/pwaHttpNavigationBoundary'");
     expect(swSource).toContain(
-      "denylist: [/^\\/__\\//, /^\\/(?:about|privacy)(?:\\/|\\.html|$)/, AUTH_HTTP_NAVIGATION_DENYLIST]",
+      "denylist: [/^\\/__\\//, /^\\/(?:about|privacy|verifica-accesso)(?:\\/|\\.html|$)/, AUTH_HTTP_NAVIGATION_DENYLIST]",
     );
     expect(swSource).toContain("createHandlerBoundToURL('/index.html')");
   });
