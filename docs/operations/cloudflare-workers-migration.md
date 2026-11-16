@@ -1,5 +1,12 @@
 # TheLogBook — migrazione Cloudflare: runbook corrente
 
+## CF-07 — Quota D1 e recupero ACK: regressioni v2.492.0
+
+**Base verificata:** `main` v2.491.0 SHA `e9a0b7154b8d139815e7eb22818251640e395cb7`; PR #1184 riallineata senza riscrivere codice Kinde, CF-05 o CF-08. Due test Node esercitano il Worker reale `cloudflare/api/worker.mjs` con schema SQL D1 completo: un rifiuto quota sintetico non crea ciphertext, ricevute o ACK e il retry recupera; un commit persistito con risposta persa e lettura primaria indisponibile produce 503 (non successo inventato), poi riconcilia la ricevuta esatta e il replay è idempotente. Non cambia il runtime, solo le regressioni e questa nota.
+
+**Limiti:** le fault injection SQLite non misurano quote/CPU, rate limiting o comportamento D1 Free reale, né sicurezza browser/offline. Nessun Cloudflare, Auth/Kinde, DB reale o segreto modificato da questo test. CF-07/CF-08 restano PARZIALI/NO-GO e la CI exact-SHA sul nuovo branch è una prova diversa da quella del vecchio candidato v2.489.0.
+
+
 
 ## CF-08 — Recupero D1 e rischio di resurrection (candidato v2.491.0)
 

@@ -463,3 +463,83 @@ void test('withdrawal preserves rights-only release, then bounded erasure and ke
     assert.deepEqual(await http(f, 'replica/claim', claim('mutation0000000085')),
       { status: 403, body: { error: 'access-revoked' } });
   }));
+
+void test('D1 write quota failure returns 503 without receipt, mutation or false acknowledgement; retry succeeds', () =>
+  withFixture(async f => {
+    (await provision(f)).fill(0);
+    const enrolled = await http(f, 'replica/claim', claim());
+    assert.equal(enrolled.status, 200, JSON.stringify(enrolled.body));
+    const input = commit(enrolled.body.replica);
+    const originalBatch = f.db.batch.bind(f.db);
+    let rejectedWrites = 0;
+    f.db.batch = async statements => {
+      if (statements[0].sql.includes('INSERT INTO sync_receipts')) {
+        rejectedWrites += 1;
+        throw new Error('synthetic-d1-write-quota-exceeded');
+      }
+      return originalBatch(statements);
+    };
+
+    assert.deepEqual(await http(f, 'commit', input),
+      { status: 503, body: { error: 'cloud-unavailable' } });
+    assert.equal(rejectedWrites, 1);
+    assert.equal(count(f, 'sync_documents'), 0);
+    assert.equal(count(f, 'sync_receipts'), 0);
+    assert.equal(currentRevision(f), 1);
+    assert.equal(f.sqlite.prepare("SELECT last_seq FROM sync_replicas WHERE uid='owner-a'").get().last_seq, 0);
+    f.db.batch = originalBatch;
+
+    const recovered = await http(f, 'commit', input);
+    assert.equal(recovered.status, 200, JSON.stringify(recovered.body));
+    assert.equal(recovered.body.replayed, false);
+    assert.equal(count(f, 'sync_documents'), 1);
+    assert.equal(count(f, 'sync_receipts'), 1);
+    assert.equal(currentRevision(f), 2);
+  }));
+
+void test('post-commit D1 read outage is ambiguous 503 until exact durable receipt can be recovered', () =>
+  withFixture(async f => {
+    (await provision(f)).fill(0);
+    const enrolled = await http(f, 'replica/claim', claim());
+    assert.equal(enrolled.status, 200, JSON.stringify(enrolled.body));
+    const input = commit(enrolled.body.replica);
+    const originalBatch = f.db.batch.bind(f.db);
+    const originalWithSession = f.db.withSession.bind(f.db);
+    let primaryUnavailable = false;
+    f.db.batch = async statements => {
+      const result = await originalBatch(statements);
+      if (statements[0].sql.includes('INSERT INTO sync_receipts')) {
+        primaryUnavailable = true;
+        throw new Error('synthetic-lost-d1-commit-response');
+      }
+      return result;
+    };
+    f.db.withSession = mode => {
+      if (primaryUnavailable) throw new Error('synthetic-d1-primary-read-quota-exceeded');
+      return originalWithSession(mode);
+    };
+
+    // The SQL transaction completed, but the response and every independent
+    // readback are unavailable. Nothing may be acknowledged from the exception.
+    assert.deepEqual(await http(f, 'commit', input),
+      { status: 503, body: { error: 'cloud-unavailable' } });
+    assert.deepEqual(await http(f, 'receipt', { batchId: input.batchId }),
+      { status: 503, body: { error: 'cloud-unavailable' } });
+    assert.equal(count(f, 'sync_documents'), 1);
+    assert.equal(count(f, 'sync_receipts'), 1);
+    assert.equal(currentRevision(f), 2);
+
+    f.db.withSession = originalWithSession;
+    f.db.batch = originalBatch;
+    const proof = await http(f, 'receipt', { batchId: input.batchId });
+    assert.equal(proof.status, 200, JSON.stringify(proof.body));
+    assert.match(proof.body.receipt.requestHash, /^[a-f0-9]{64}$/);
+    assert.equal(proof.body.receipt.revision, 2);
+    assert.equal(proof.body.receipt.lastSeq, 1);
+    const replay = await http(f, 'commit', input);
+    assert.equal(replay.status, 200, JSON.stringify(replay.body));
+    assert.equal(replay.body.replayed, true);
+    assert.equal(count(f, 'sync_documents'), 1);
+    assert.equal(count(f, 'sync_receipts'), 1);
+    assert.equal(currentRevision(f), 2);
+  }));
