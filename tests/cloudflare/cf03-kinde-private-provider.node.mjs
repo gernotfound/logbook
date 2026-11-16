@@ -98,3 +98,31 @@ void test('deployment changes only Kinde Worker after exact-main verification an
   assert.doesNotMatch(yml, /command: deploy --config cloudflare\/(?:api\/wrangler|auth\/wrangler\.isolated|wrangler\.jsonc)/);
   assert.doesNotMatch(yml, /route:|routes:|workers_dev: true|preview_urls: true|secret put/);
 });
+
+void test('OAuth secrets are accepted only when all five names exist as server-only secrets', async () => {
+  const secretNames = [
+    'KINDE_ISSUER', 'KINDE_CLIENT_ID', 'KINDE_CLIENT_SECRET',
+    'KINDE_API_AUDIENCE', 'KINDE_ID_TOKEN_AUDIENCE',
+  ];
+  const complete = [...bindings, ...secretNames.map(name => ({ name, type: 'secret_text' }))];
+  const valid = fakeClient({
+    [prefix + '/settings']: { success: true, result: { bindings: complete } },
+  });
+  await verifyPrivateKindeWorker({ ...args(valid), requireConfiguredOAuth: true });
+  await assert.rejects(verifyPrivateKindeWorker({
+    ...args(fakeClient()), requireConfiguredOAuth: true,
+  }), /not provisioned/);
+  for (const omitted of secretNames) {
+    const client = fakeClient({ [prefix + '/settings']: {
+      success: true,
+      result: { bindings: complete.filter(item => item.name !== omitted) },
+    } });
+    await assert.rejects(verifyPrivateKindeWorker(args(client)), /incomplete/);
+  }
+  const plaintext = fakeClient({ [prefix + '/settings']: {
+    success: true,
+    result: { bindings: complete.map(item => item.name === 'KINDE_CLIENT_SECRET'
+      ? { ...item, type: 'plain_text' } : item) },
+  } });
+  await assert.rejects(verifyPrivateKindeWorker(args(plaintext)));
+});
