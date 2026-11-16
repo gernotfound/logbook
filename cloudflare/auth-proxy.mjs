@@ -1,9 +1,17 @@
+import { routeCandidateFirstPartyApi } from './first-party-api-candidate.mjs';
+
 // Only the Firebase Auth helpers need a first-party reverse proxy.
 // The helper upstream remains a Firebase Hosting dependency; verify its availability
 // separately because Firebase Hosting transfer quotas apply at project scope.
 const AUTH_UPSTREAM = 'https://logbook-db-98cc4.firebaseapp.com';
 const AUTH_PREFIX = '/__/auth/';
 const MAX_AUTH_BODY = 65536;
+const KINDE_AUTH_ROUTES = new Set([
+  '/api/auth/kinde/start',
+  '/api/auth/kinde/callback',
+  '/api/auth/session',
+  '/api/auth/logout',
+]);
 const FORWARDED = ['accept', 'accept-language', 'content-type', 'cookie', 'origin', 'referer', 'user-agent'];
 
 function fail(status) {
@@ -37,8 +45,16 @@ async function readBoundedBody(request) {
 }
 
 export default {
-  async fetch(request) {
+  async fetch(request, env) {
     const url = new URL(request.url);
+    if (KINDE_AUTH_ROUTES.has(url.pathname)) {
+      // Only OAuth/session routes cross this binding. All fitness, consent
+      // and cloud-key APIs remain unavailable at the public edge.
+      return routeCandidateFirstPartyApi(request, {
+        APP_ORIGIN: env?.APP_ORIGIN,
+        KINDE_HTTP: env?.KINDE_HTTP,
+      });
+    }
     if (!url.pathname.startsWith(AUTH_PREFIX)) return fail(404);
     if (!['GET', 'HEAD', 'POST'].includes(request.method)) return fail(405);
     const declaredLength = request.headers.get('content-length');
