@@ -70,7 +70,7 @@ L'[indice `docs/`](docs/README.md) distingue guide stabili, registri, specifiche
 
 Classificare il task come **STANDARD**, **SENSITIVE** o **CRITICAL** e motivare la scelta nelle evidenze. La documentazione normativa su un boundary critico richiede la stessa attenzione ai suoi invarianti anche quando il diff non cambia il runtime.
 
-**MUST:** aumentare profondità di analisi, test e review in proporzione al rischio del task e dei boundary coinvolti.
+**MUST:** aumentare profondità di analisi e test in proporzione al rischio del task e dei boundary coinvolti. Valutare l'utilità di una review indipendente, ma **non richiederla automaticamente**, nemmeno per i task CRITICAL: non è un gate di merge per classe di rischio. È obbligatoria soltanto se il ruleset GitHub effettivo, il mandato esplicito del proprietario o un altro vincolo esterno verificato la impongono. Restano obbligatori l'esame critico del diff, le regressioni pertinenti e la CI canonica sullo SHA esatto.
 
 **MUST (audit per file):** verificare sia il comportamento funzionale sia la qualità ingegneristica nel perimetro pertinente, seguendo chiamanti, contratti, tipi, stato, recovery e test. Valutare responsabilità, coesione, accoppiamento, duplicazioni, complessità, codice inutilizzato, error handling, leggibilità, manutenibilità e documentazione. Distinguere difetti dimostrati, debito tecnico e opportunità: correggere solo refactoring giustificati, motivare l'assenza di interventi utili e non passare al file successivo finché i percorsi o le verifiche pertinenti sono aperti.
 
@@ -85,7 +85,7 @@ Sono CRITICAL almeno: dati utente, IndexedDB/persistenza, sync, Firestore/Rules,
 
 ## Mandato e strumenti
 
-Un incarico operativo copre il normale ciclo tecnico pertinente fino a review, merge e verifiche post-merge **solo entro i limiti espressi dall'utente**.
+Un incarico operativo copre il normale ciclo tecnico pertinente fino a verifiche, eventuale review, merge e controlli post-merge **solo entro i limiti espressi dall'utente**.
 
 - **MUST:** sola analisi autorizza soltanto letture. Un mandato limitato al branch o un divieto di merge/deploy ferma la pipeline a quel punto; non abilitare auto-merge.
 - **MUST:** non chiedere nuove approvazioni per decisioni tecniche ordinarie, CI rossa, conflitti o correzioni intermedie. Chiedere solo decisioni reali di prodotto/UX non deducibili, permessi per azioni distruttive non autorizzate o aiuto per blocchi esterni indispensabili.
@@ -126,8 +126,8 @@ Il servizio reCAPTCHA Enterprise ha raggiunto la quota Free secondo la notifica 
 1. **MUST:** branch dedicato dal main GitHub verificato; mai push diretto a `main` o bypass di protezioni. Controllare che i branch non-main non generino deploy Vercel.
 2. **MUST:** aprire una PR draft quando esiste un insieme coerente da verificare; mantenerla draft durante sviluppo, CI e correzioni. Renderla pronta solo dopo la validazione finale e nei limiti del mandato.
 3. **MUST:** prima del candidato finale includere il bump applicativo previsto per lo squash merge: da `MAJOR.MINOR.PATCH` a `MAJOR.(MINOR+1).0`, con i due campi root di `package-lock.json` coerenti. Calcolarlo dal vero main remoto; non incrementare per ogni commit intermedio.
-4. **MUST:** un merge concorrente richiede controllo del delta, ricalcolo della versione e rivalidazione del nuovo SHA. Non applicare bump dopo CI/review né introdurre commit automatici su main.
-5. **MUST:** rivedere il diff completo, risolvere blocker e conversazioni aperte sul candidato esatto. Squash merge autonomo solo quando autorizzato, con gate e review richiesti soddisfatti; non indebolire il ruleset.
+4. **MUST:** un merge concorrente richiede controllo del delta, ricalcolo della versione e rivalidazione del nuovo SHA. Non applicare bump dopo la CI o un'eventuale review né introdurre commit automatici su main.
+5. **MUST:** rivedere il diff completo, risolvere blocker e conversazioni aperte sul candidato esatto. Squash merge autonomo solo quando autorizzato e con i gate effettivamente richiesti soddisfatti; non imporre review indipendenti supplementari per prassi e rispettare le approvazioni richieste dal ruleset o dal mandato esplicito.
 
 Il bump applicativo non modifica schema/protocollo, catalogo o `LEGAL_VERSIONS`. Il selettore backend Vercel resta nel repository come contratto transitorio, ma il progetto `logbook` è sospeso e `vercel.json` vieta gli auto-deploy Git su ogni branch, incluso `main`; un bump non autorizza né riattiva Vercel.
 
@@ -135,13 +135,13 @@ Il bump applicativo non modifica schema/protocollo, catalogo o `LEGAL_VERSIONS`.
 
 Il gate canonico locale è `npm run verify:m8`. **Sulle PR** l'equivalente GitHub è `Milestone Verification` sullo SHA esatto con shard, E2E, CodeQL e `Canonical Verification` verdi. **Sui push a `main`**, il workflow non riesegue la suite PR: richiede `Main Release Gate`, che attesta PR integrata, base, identità del tree e CI sul candidato, ed esegue CodeQL sullo SHA di `main`. Il gate riuscito è prerequisito dei workflow Firebase. I dettagli normativi ed eseguibili sono in [Verifica CI](.agents/rules/ci-verification.md).
 
-- **MUST:** registrare l'HEAD candidato prima delle verifiche. Ogni nuovo commit invalida test e review del vecchio SHA; subset diagnostici non sostituiscono il gate.
+- **MUST:** registrare l'HEAD candidato prima delle verifiche. Ogni nuovo commit invalida test ed eventuali review del vecchio SHA; subset diagnostici non sostituiscono il gate.
 - **MUST:** non indebolire suite/no-skips, oracle, Emulator, lint/warning baseline, security check, workflow o protezioni GitHub.
 - **MUST:** i test normativi attraversano boundary reali e oracle indipendenti. Il consenso fra agenti non sostituisce evidenze eseguibili.
 - **MUST:** dopo un merge autorizzato verificare SHA remoto di `main` e CI post-merge sullo stesso SHA. Poi verificare separatamente Firestore Rules/indici, Cloudflare Workers e Vercel Production secondo il diff, con smoke pertinenti; Firebase Hosting si verifica soltanto se è ancora il provider pertinente e il relativo deploy è autorizzato. **Non riattivare Firebase Hosting come effetto collaterale della CI**: dal 12/11/2026 il proprietario ne ha dichiarato disabilitati sia il sito `thelogbook` sia il workflow GitHub di distribuzione. Per Vercel controllare deploy backend richiesto oppure skip giustificato.
 - **MUST:** non usare Production come sandbox distruttiva. L'ambiente Firebase/Vercel Test separato è dismesso; restano fixture locali, emulatori e CI. Verifiche UI richiedono temi, viewport, overlay e dispositivi pertinenti oppure una limitazione esplicita.
 - **MUST:** distinguere risultato osservato, ipotesi, test locali, CI PR, merge, CI main, deploy, runtime, configurazioni esterne e rischi residui. Non dichiarare letto, testato o verificato ciò che non è stato osservato.
-- **MUST:** dichiarare COMPLETATO rispetto al perimetro autorizzato solo con analisi, soluzione, regressioni appropriate, gate/review necessari e nessun blocker noto. Se è richiesto il rilascio, servono anche merge, CI main e verifiche Production/runtime applicabili. Se il mandato termina al branch, dichiarare esplicitamente che non è integrato né rilasciato.
+- **MUST:** dichiarare COMPLETATO rispetto al perimetro autorizzato solo con analisi, soluzione, regressioni appropriate, gate obbligatori ed eventuali approvazioni effettivamente richieste, senza blocker noti. Se è richiesto il rilascio, servono anche merge, CI main e verifiche Production/runtime applicabili. Se il mandato termina al branch, dichiarare esplicitamente che non è integrato né rilasciato.
 - **MUST:** per blocchi o passaggio di chat preparare un HANDOFF con obiettivo, SHA main/branch, PR, diff, contratti, prove, ipotesi escluse e attività residue; non chiedere all'utente di ricostruire informazioni già disponibili. Un gate obbligatorio bloccato lascia il task PARZIALE/BLOCCATO e il branch preservato.
 
 ## Manutenzione del contesto

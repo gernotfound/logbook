@@ -84,8 +84,7 @@ UID/epoch/generazione dopo I/O **e richiede l'UID autenticato sulla
 risposta stessa del controllo D1**. Questo blocca un cambio A→B→A
 anche quando A e B condividono epoch e revisioni; un risultato senza
 UID è rifiutato. Non abilita login reale, vault o Sync pubblici. OAuth/posta Production, KEK e dati reali restano NO-GO.
-Per gli incrementi CRITICAL le review realmente indipendenti devono
-essere registrate sullo SHA esatto, non dedotte dalla CI.
+Una review indipendente degli incrementi CRITICAL è raccomandabile quando aggiunge una verifica utile, ma **non è obbligatoria per default**. Se effettuata, registrarne lo SHA esatto e non dedurla dalla CI; le approvazioni sono obbligatorie solo quando richieste dal ruleset GitHub o dal mandato esplicito. Il gate CI, le prove di sicurezza e i collaudi provider restano distinti.
 
 ## Regressione CF-03/05 full-schema integrata (15/11/2026)
 
