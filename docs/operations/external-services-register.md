@@ -1,5 +1,12 @@
 # Registro dei servizi esterni — stato corrente TheLogBook
 
+## CF-03 — preparazione verifica OAuth-only, senza cambi provider aggiuntivi (16/11/2026)
+
+**Kinde Production VERIFY-LIVE:** secondo screenshot dell'owner, il workflow `TheLogBook password: minimum 15 code points` è `Live`, trigger `Set password`, codice su SHA `2b10c36214ba283266338a81b99666e9cdcb84e7`; i Runtime logs sono vuoti, quindi non sono testati minimo 15 in signup/reset né guasti. La callback Kinde→TheLogBook è stata salvata secondo conferma owner, ma non letta via API. Il connettore Kinde non è disponibile: l'utente deve effettuare operazioni sulle credenziali nel pannello provider, senza condividerle.
+
+**Cloudflare ACTIVE-ISOLATED:** Worker `thelogbook-cf03-kinde-http-isolated` privato con 4 binding e **zero secret OAuth** all'ultima lettura del provider; frontend ancora statico con solo `ASSETS`. Il gateway OAuth-only in preparazione non è pubblicato. L'eventuale aggiunta dei cinque secret Kinde è autorizzata ma deve avvenire con input confidenziale direttamente al Worker, mai repository/chat. Prima di esporre quattro route OAuth serve prova di binding, configurazione completa e audience Kinde autorizzata; poi HTTP/Browser synthetic e gate Cloudflare exact-SHA.
+
+
 
 ## Worker Kinde HTTP PRIVATO — distribuito e attestato 16/11/2026
 
