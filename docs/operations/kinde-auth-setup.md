@@ -1,5 +1,12 @@
 # Kinde — configurazione del provider per TheLogBook
 
+## CF-03 — HTTP 403 sulla pagina diagnostica: correzione candidata (16/11/2026)
+
+**Segnalazione browser reale:** dalla pagina `/verifica-accesso`, il form nativo `POST /api/auth/kinde/start` termina con HTTP 403 prima del redirect a Kinde. L'HTML della v2.486.0 impostava `<meta name="referrer" content="no-referrer">`; la specifica Fetch/MDN documenta che in una navigazione POST non-CORS tale policy può produrre `Origin: null`, correttamente respinta dai controlli CSRF first-party dei due Worker. È una causa coerente con il rifiuto osservato, **non una traccia Network della singola richiesta**: altri fattori (es. policy Cloudflare) restano da escludere col collaudo dopo la correzione.
+
+**Soluzione minima:** impostare soltanto sul documento diagnostico `Referrer-Policy: same-origin` tramite meta, senza allentare il requisito `Origin=https://thelogbook.me` o i controlli `Sec-Fetch-Site` dei Worker. Nessuna referenza a URL di callback/credential/token cambia; la policy non trasmette referrer ai domini esterni, incluso Kinde. Regressioni: unit test del meta e Playwright Chromium/WebKit che sottomette il vero form nello stesso origin e osserva l'header `Origin` senza contattare l'API reale. La conferma in Production richiede CI exact-SHA, deployment/smoke e un nuovo tentativo browser dell'owner; non considerare la prova sintetica equivalente al login hosted riuscito.
+
+
 ## CF-03 — accesso diagnostico first-party per collaudo provider (candidato v2.486.0)
 
 Il percorso temporaneo `/verifica-accesso` prepara un form HTML `POST /api/auth/kinde/start` **senza campi** e una lettura esplicita `POST /api/auth/session` nel browser: la prima richiesta ottiene dal Worker state, nonce, cookie e PKCE propri; la seconda verifica esclusivamente il contratto HTTP 401 oppure 200 con principal verificato, senza mostrare UID o token. Nessun login viene avviato automaticamente. Non sono presenti credenziali, tracking, storage di diagnostica, collegamenti alla UI ordinaria o API dei dati sanitari. Il servizio SW esclude il documento diagnostico dal fallback SPA, l'HTML e lo script hanno no-store e noindex. Questa pagina non è un secondo provider Auth e non concede accesso fitness, consenso o ADK.
