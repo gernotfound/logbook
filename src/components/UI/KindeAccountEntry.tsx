@@ -175,8 +175,8 @@ export function KindeAccountEntry({
                         onChange={event => setTerms(event.target.checked)} /> Ho letto e accetto i Termini e Condizioni.</label>
                     <label><input type="checkbox" checked={health} disabled={busy}
                         onChange={event => setHealth(event.target.checked)} /> Acconsento esplicitamente al trattamento dei dati sanitari per il servizio.</label>
-                    <details ref={privacyDetails}><summary>Leggi l'informativa sulla privacy</summary><PrivacyPolicy onClose={() => { if (privacyDetails.current) privacyDetails.current.open = false; }} /></details>
-                    <details ref={termsDetails}><summary>Leggi i Termini e Condizioni</summary><TermsAndConditions onClose={() => { if (termsDetails.current) termsDetails.current.open = false; }} /></details>
+                    <details ref={privacyDetails}><summary className="disclosure-summary">Leggi l'informativa sulla privacy</summary><PrivacyPolicy onClose={() => { if (privacyDetails.current) privacyDetails.current.open = false; }} /></details>
+                    <details ref={termsDetails}><summary className="disclosure-summary">Leggi i Termini e Condizioni</summary><TermsAndConditions onClose={() => { if (termsDetails.current) termsDetails.current.open = false; }} /></details>
                     <button type="button" className="btn btn-primary" disabled={busy || !over18 || !terms || !health}
                         onClick={() => { void handleConsent(); }}>Conferma consenso</button>
                 </section>
