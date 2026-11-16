@@ -93,7 +93,7 @@ if (!productionWorkflow.includes('dist/verifica-accesso.html dist/verifica-acces
   failures.push('Kinde diagnostic HTML/JS must be checked byte-exact with explicit MIME and no OAuth state creation');
 }
 if (!productionWorkflow.includes('for path in / /about /privacy /legal-pages.css') ||
-    !productionWorkflow.includes('dist/about.html dist/privacy.html dist/legal-pages.css') ||
+    !productionWorkflow.includes('dist/about.html dist/privacy.html dist/verifica-accesso.html dist/verifica-accesso.js dist/legal-pages.css') ||
     !productionWorkflow.includes('Unexpected public page status/MIME')) {
   failures.push('Public HTML must be verified byte-for-byte by the Cloudflare production smoke');
 }
