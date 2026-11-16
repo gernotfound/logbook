@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { readFileSync } from 'node:fs';
 import { verifyPrivateKindeWorker } from '../../scripts/verify-cloudflare-kinde-private-provider.mjs';
 
 const account = '0123456789abcdef0123456789abcdef';
@@ -79,4 +80,21 @@ void test('fails closed on public workers.dev, preview and unverified provider r
     success: false, result: { bindings },
   } });
   await assert.rejects(verifyPrivateKindeWorker(args(malformed)), /readback failed/);
+});
+
+void test('deployment changes only Kinde Worker after exact-main verification and no public route', () => {
+  const yml = readFileSync(
+    new URL('../../.github/workflows/cloudflare-kinde-private.yml', import.meta.url),
+    'utf8',
+  );
+  assert.match(yml, /^    branches:\n      - main$/m);
+  assert.match(yml, /github.ref == 'refs\/heads\/main'/);
+  assert.match(yml, /Wait for|Verify current main and its complete trusted release gate/);
+  assert.match(yml, /actions\/workflows\/verification\.yml\/runs\?event=push/);
+  assert.match(yml, /git ls-remote --exit-code origin refs\/heads\/main/);
+  assert.match(yml, /npx --yes wrangler@4\.159\.0 deploy --dry-run --config cloudflare\/auth\/wrangler\.kinde\.isolated\.jsonc/);
+  assert.match(yml, /command: deploy --config cloudflare\/auth\/wrangler\.kinde\.isolated\.jsonc/);
+  assert.match(yml, /node scripts\/verify-cloudflare-kinde-private-provider\.mjs/);
+  assert.doesNotMatch(yml, /command: deploy --config cloudflare\/(?:api\/wrangler|auth\/wrangler\.isolated|wrangler\.jsonc)/);
+  assert.doesNotMatch(yml, /route:|routes:|workers_dev: true|preview_urls: true|secret put/);
 });
