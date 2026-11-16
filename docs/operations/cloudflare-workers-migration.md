@@ -1,5 +1,13 @@
 # TheLogBook — migrazione Cloudflare: runbook corrente
 
+## CF-04/CF-09 — Journal D1 e smoke Static Assets (16/11/2026)
+
+**GitHub `main` v2.482.0 `5f02f88a59f07ad1ba585c0263fc7fd665cd2a6e`:** la [PR #1176](https://github.com/gernotfound/logbook/pull/1176) ha integrato il risequenziamento atomico delle sequenze causali D1 oltre otto documenti, protezione del journal cifrato in caso di errore 503 e fencing degli intenti concorrenti claim/retirement. [CI candidato #43866294737](https://github.com/gernotfound/logbook/actions/runs/43866294737) e [gate main #43868884368](https://github.com/gernotfound/logbook/actions/runs/43868884368) **SUCCESS**. Firestore reconciliation [#43869286467](https://github.com/gernotfound/logbook/actions/runs/43869286467) SUCCESS, con deploy Rules/indici skipped. **CF-04 resta PARZIALE**: la replica D1 non è ancora collegata alla PWA Kinde, né sono provati HTTP Auth/ADK, primo claim, hydration, lost ACK, secondo dispositivo e offline reale.
+
+**Anomalia CF-09 confermata:** il deploy Workers Static Assets è riuscito su `main` v2.481.0 e v2.482.0, ma gli smoke [#43866124393](https://github.com/gernotfound/logbook/actions/runs/43866124393) e [#43869344824](https://github.com/gernotfound/logbook/actions/runs/43869344824) sono **FAILURE**: HTML/SW/manifest corrispondono al build dopo propagazione bounded, poi una richiesta a chunk JS/CSS riceve HTTP 404. Il workflow verificava i chunk **una sola volta** subito dopo il deploy, senza riportare quale file mancasse. Cloudflare documenta il *version skew* tra HTML e asset durante la propagazione dei deployment: è una causa plausibile, non una diagnosi runtime definitiva. La correzione candidata CF-09 introduce retry temporizzati anche per i chunk, accettando solo HTTP 200, MIME corretto e byte identici al build e fallendo con diagnostica del file specifico dopo il limite. **Non dichiararla validata o distribuita finché CI e smoke nuovo main non siano verdi.** Nessuna route/API/secret Kinde, Auth o D1 viene modificata.
+
+La [PR Kinde #1175](https://github.com/gernotfound/logbook/pull/1175) resta di competenza separata. Non dedurre GO funzionale o disponibilità PWA da questi incrementi. Le issue [CF-04 #1058](https://github.com/gernotfound/logbook/issues/1058) e [CF-09 #1063](https://github.com/gernotfound/logbook/issues/1063) registrano gli esiti per fase.
+
 
 ## CF-03 — Worker Kinde HTTP privato distribuito e verificato (16/11/2026)
 

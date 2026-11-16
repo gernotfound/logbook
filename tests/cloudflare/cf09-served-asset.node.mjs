@@ -1,9 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
+import { createServer } from 'node:http';
 import { fileURLToPath } from 'node:url';
 import { matchesServedCloudflareAsset } from '../../scripts/verify-cloudflare-served-asset.mjs';
 
@@ -90,4 +91,109 @@ void test('CLI preserves explicit exit codes for valid and corrupted served asse
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }
+});
+
+const chunkVerifier = fileURLToPath(new URL('../../scripts/verify-cloudflare-served-chunk.sh', import.meta.url));
+const smokeSha = '0123456789abcdef0123456789abcdef01234567';
+
+async function runChunkSmoke(responses, extension = '.js') {
+  const directory = mkdtempSync(join(tmpdir(), 'cf09-chunk-'));
+  const folder = join(directory, 'dist', 'assets');
+  mkdirSync(folder, { recursive: true });
+  const relative = 'dist/assets/synthetic' + extension;
+  const payload = 'synthetic-bundle-bytes';
+  writeFileSync(join(directory, relative), payload);
+  const urls = [];
+  const server = createServer((request, response) => {
+    urls.push(request.url);
+    const chosen = responses[Math.min(urls.length - 1, responses.length - 1)];
+    if (chosen.drop) {
+      request.socket.destroy();
+      return;
+    }
+    response.writeHead(chosen.status, { 'Content-Type': chosen.mime });
+    response.end(chosen.body);
+  });
+  try {
+    await new Promise((done, fail) => {
+      server.once('error', fail);
+      server.listen(0, '127.0.0.1', done);
+    });
+    const origin = 'http://127.0.0.1:' + server.address().port;
+    const result = await new Promise((done, fail) => {
+      const child = spawn('bash', [chunkVerifier, relative, origin, smokeSha], {
+        cwd: directory,
+        env: { ...process.env, CLOUDFLARE_CHUNK_RETRY_DELAY_SECONDS: '0',
+          CLOUDFLARE_DIAG_RETRY_DELAY_SECONDS: '0' },
+      });
+      let stdout = '';
+      let stderr = '';
+      child.stdout.on('data', chunk => { stdout += chunk; });
+      child.stderr.on('data', chunk => { stderr += chunk; });
+      child.once('error', fail);
+      child.once('close', code => done({ code, stdout, stderr }));
+    });
+    return { ...result, urls };
+  } finally {
+    if (server.listening) await new Promise(done => server.close(done));
+    rmSync(directory, { recursive: true, force: true });
+  }
+}
+
+void test('chunk smoke tolerates a transient 404 only after checking exact JS bytes and MIME', async () => {
+  const result = await runChunkSmoke([
+    { status: 404, mime: 'text/html', body: 'old deployment manifest' },
+    { status: 200, mime: 'application/javascript', body: 'synthetic-bundle-bytes' },
+  ]);
+  assert.equal(result.code, 0, result.stdout + result.stderr);
+  assert.deepEqual(result.urls, ['/assets/synthetic.js', '/assets/synthetic.js']);
+  assert.match(result.stdout, /verified on attempt 2\/4/);
+});
+
+void test('chunk smoke rejects wrong bytes and MIME until a later exact response', async () => {
+  const result = await runChunkSmoke([
+    { status: 200, mime: 'application/javascript', body: 'wrong bytes' },
+    { status: 200, mime: 'text/html', body: 'synthetic-bundle-bytes' },
+    { status: 200, mime: 'text/javascript', body: 'synthetic-bundle-bytes' },
+  ]);
+  assert.equal(result.code, 0, result.stdout + result.stderr);
+  assert.equal(result.urls.length, 3);
+  assert.match(result.stdout, /verified on attempt 3\/4/);
+});
+
+void test('chunk smoke handles a broken connection without faking an ACK for the asset', async () => {
+  const result = await runChunkSmoke([
+    { drop: true },
+    { status: 200, mime: 'application/javascript', body: 'synthetic-bundle-bytes' },
+  ]);
+  assert.equal(result.code, 0, result.stdout + result.stderr);
+  assert.equal(result.urls.length, 2);
+});
+
+void test('chunk smoke accepts exact CSS only with text/css and HTTP 200', async () => {
+  const result = await runChunkSmoke([
+    { status: 200, mime: 'text/css', body: 'synthetic-bundle-bytes' },
+  ], '.css');
+  assert.equal(result.code, 0, result.stdout + result.stderr);
+  assert.deepEqual(result.urls, ['/assets/synthetic.css']);
+});
+
+void test('chunk smoke fails closed after bounded 404 retries and reports the missing asset', async () => {
+  const result = await runChunkSmoke([
+    { status: 404, mime: 'text/html', body: 'still missing' },
+  ]);
+  assert.equal(result.code, 1, result.stdout + result.stderr);
+  assert.equal(result.urls.length, 6);
+  assert.match(result.stdout, /Cloudflare initial asset mismatch on .*\/assets\/synthetic.js/);
+  assert.match(result.stdout, /Initial HTTP: 404 text\/html/);
+  assert.match(result.stdout, /Deployment rejected/);
+  assert.doesNotMatch(result.stdout, /chunk verified on attempt/);
+});
+
+void test('chunk smoke fails closed for consistently incorrect MIME even with matching bytes', async () => {
+  const result = await runChunkSmoke([
+    { status: 200, mime: 'text/html', body: 'synthetic-bundle-bytes' },
+  ]);
+  assert.equal(result.code, 1, result.stdout + result.stderr);
+  assert.equal(result.urls.length, 6);
 });
