@@ -12,11 +12,11 @@
 
 ---
 
-## Stato Worker privato (16/11/2026)
+## Checkpoint storico — primo deploy Worker privato (16/11/2026, v2.479.0)
 
-`thelogbook-cf03-kinde-http-isolated` è **distribuito privatamente** e verificato su Cloudflare dopo [PR #1173](https://github.com/gernotfound/logbook/pull/1173), `main` v2.479.0 SHA `44c294bf69261c31e37c2cdb3f78432941ae6aba`, [workflow #43830734570](https://github.com/gernotfound/logbook/actions/runs/43830734570). Alla prima pubblicazione privata (v2.479.0) erano presenti soltanto i binding DB D1 isolato, Auth Gate, limiter e origin, senza secret Kinde, route o domini pubblici. **Stato corrente aggiornato sopra:** i primi due Secret sono stati inseriti successivamente dal proprietario, senza pubblicare il login. Il riferimento storico sotto a 'non distribuito' risale a v2.474.0, prima di questa attivazione privata.
+`thelogbook-cf03-kinde-http-isolated` è **distribuito privatamente** e verificato su Cloudflare dopo [PR #1173](https://github.com/gernotfound/logbook/pull/1173), `main` v2.479.0 SHA `44c294bf69261c31e37c2cdb3f78432941ae6aba`, [workflow #43830734570](https://github.com/gernotfound/logbook/actions/runs/43830734570). Alla prima pubblicazione privata (v2.479.0) erano presenti soltanto i binding DB D1 isolato, Auth Gate, limiter e origin, senza secret Kinde, route o domini pubblici. **Nota storica:** nella fase successiva sono stati inseriti tutti e cinque i Secret e pubblicato soltanto l'ingresso OAuth; lo stato effettivo è nel checkpoint corrente all'inizio del documento. Il riferimento storico sotto a 'non distribuito' risale a v2.474.0, prima di questa attivazione privata.
 
-**Prossimo blocco operativo:** verificare **in lettura** nel tenant Kinde l'applicazione Back-end web scelta, il client ID, l'issuer e gli Allowed callback URLs (callback implementata: `https://thelogbook.me/api/auth/kinde/callback`), poi la policy password >=15 in registrazione e reset. Non sincronizzare workflow né inserire segreti o modificare OAuth Production prima della relativa autorizzazione specifica. L'integrazione completa di `AuthContext`, consenso, ADK e journal resta necessaria prima di qualunque route pubblica.
+**Vincolo ancora valido:** l'integrazione completa di `AuthContext`, consenso, ADK e journal richiede verifiche indipendenti. La callback è stata riletta successivamente nella console Kinde (vedere il checkpoint corrente); la password policy in registrazione/reset non è ancora collaudata.
 
 ## CF-03 — ingresso account React candidato (16/11/2026, non attivato)
 
@@ -25,7 +25,7 @@ Il modulo `src/lib/auth/kindeCandidateIdentity.ts` legge due volte `POST /api/au
 **È un componente candidato non montato nella PWA corrente**: `src/main.tsx`, `src/App.tsx` e `AuthContext` usano ancora Firebase. La sua sola presenza, con test Vitest di interazione e identity-only readback, non abilita Kinde, non promette email/reset/Google live né consente la pubblicazione delle route. Prima del GO occorre completare la vera adozione dell'identità Kinde e guest→account; verificare separatamente D1/KEK, tenant/15 caratteri, OAuth, consenso, dati, backup/erasure, recovery, multi-tab e Safari.
 
 
-## Ricognizione indipendente 16/11/2026 — ancora NO-GO
+## Checkpoint storico — ricognizione precedente (v2.474.0, ancora NO-GO)
 
 Su `main` v2.474.0 (`519f80c077b8ca40e8f3630ea4f110ffb342e012`) e nell'inventario live Cloudflare, il Worker HTTP `thelogbook-cf03-kinde-http-isolated` non risulta distribuito. Il frontend dispone del solo binding `ASSETS`; i due Worker API/Auth Gate restano privati. **Nessun readback Kinde è stato possibile in questa verifica**: stato di callback/logout, workflow di password ≥15 caratteri e recapitabilità delle email non sono attestati. La configurazione del workflow in repository non significa che il tenant la esegua. Non attivare route di login/Sync o interpretare il frontend pubblico come un GO applicativo.
 
@@ -34,7 +34,7 @@ Su `main` v2.474.0 (`519f80c077b8ca40e8f3630ea4f110ffb342e012`) e nell'inventari
 
 Il file [`kindeSrc/environment/workflows/thelogbookPassword/Workflow.js`](../../kindeSrc/environment/workflows/thelogbookPassword/Workflow.js) prepara il trigger ufficiale `user:new_password_provided` con `failurePolicy: stop` e lunghezza minima **15 code point Unicode** in registrazione e reset. La suite Node `tests/cloudflare/cf03-kinde-password-workflow.node.mjs` testa entrambi i motivi, Unicode e input non disponibile. Il codice usa soltanto il binding widget previsto da Kinde e non richiede dipendenze npm aggiuntive. Il manifest radice [`kinde.json`](../../kinde.json) fissa `rootDir=kindeSrc` e la versione runtime documentata `2024-12-09`, obbligatoria per la futura sincronizzazione; tale configurazione non attiva il workflow e la compatibilità effettiva va verificata nel tenant.
 
-**NON È ATTIVO.** Un commit GitHub non certifica la sincronizzazione o l'esecuzione del workflow su Kinde. Prima di collegare il repository/sincronizzare su Production verificare il workflow già presente per lo stesso trigger, l'ambiente e le conseguenze: `Sync code` può attivare l'autenticazione reale e richiede specifica autorizzazione; non applicare alcuna configurazione provider tramite questa PR. La release finale richiede test reali 8–14 contro 15+ caratteri sia in registrazione sia in reset, incluso il fallimento dell'esecuzione del workflow. Nessun requisito di composizione aggiuntivo (simboli/maiuscole) è introdotto.
+**Nota cronologica:** alla creazione del candidato il workflow non era attivo per effetto del solo commit GitHub. La schermata Kinde fornita successivamente dal proprietario mostra `Live`, ma non ne certifica ancora l'esecuzione in registrazione e reset. Prima di collegare il repository/sincronizzare su Production verificare il workflow già presente per lo stesso trigger, l'ambiente e le conseguenze: `Sync code` può attivare l'autenticazione reale e richiede specifica autorizzazione; non applicare alcuna configurazione provider tramite questa PR. La release finale richiede test reali 8–14 contro 15+ caratteri sia in registrazione sia in reset, incluso il fallimento dell'esecuzione del workflow. Nessun requisito di composizione aggiuntivo (simboli/maiuscole) è introdotto.
 
 ## Stato operativo corrente — 15/11/2026 (baseline verificata v2.464.0)
 
