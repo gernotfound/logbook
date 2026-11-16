@@ -119,10 +119,11 @@ async function fixture() {
     assert.equal(response.headers.get('Cache-Control'), 'no-store');
     return { auth, cookie: boundCookie, state: auth.searchParams.get('state'), nonce: auth.searchParams.get('nonce') };
   }
-  function callback(attempt, code = 'good-code', cookie = attempt.cookie) {
+  function callback(attempt, code = 'good-code', cookie = attempt.cookie, scope = 'openid email profile') {
     nonceByCode.set(code, attempt.nonce);
-    return new Request(appOrigin + '/api/auth/kinde/callback?state=' + attempt.state + '&code=' + code,
-      { headers: { cookie } });
+    const query = new URLSearchParams({ code, state: attempt.state });
+    if (scope !== null) query.set('scope', scope);
+    return new Request(appOrigin + '/api/auth/kinde/callback?' + query, { headers: { cookie } });
   }
   return {
     sqlite, db, oauth, startRequest, start, callback, config,
@@ -168,6 +169,54 @@ void test('signed and verified callback mints one owner and one session; replay 
     assert.equal((await f.oauth.complete(f.db, request)).status, 400);
     assert.equal(f.calls(), 1);
     assert.equal(f.sqlite.prepare('SELECT COUNT(*) AS n FROM auth_sessions').get().n, 1);
+  } finally { f.close(); }
+});
+
+void test('hosted Kinde callback with scope completes a session without weakening state and scope validation', async () => {
+  const f = await fixture();
+  try {
+    const attempt = await f.start();
+    const invalid = [
+      'openid email', 'openid profile', 'email profile',
+      'openid email profile offline', 'openid email email',
+      'openid  email profile', 'openid email profile ',
+      'Openid email profile', '',
+    ];
+    for (const scope of invalid) {
+      const response = await f.oauth.complete(f.db, f.callback(attempt, 'synthetic.code-with-dot', attempt.cookie, scope));
+      assert.equal(response.status, 400, JSON.stringify(scope));
+      assert.equal(f.calls(), 0);
+      assert.equal(f.sqlite.prepare('SELECT COUNT(*) AS n FROM auth_oauth_attempts').get().n, 1);
+      assert.equal(f.sqlite.prepare('SELECT COUNT(*) AS n FROM auth_sessions').get().n, 0);
+    }
+    const duplicate = f.callback(attempt, 'synthetic.code-with-dot');
+    assert.equal((await f.oauth.complete(f.db, new Request(
+      duplicate.url + '&scope=openid%20email%20profile', { headers: { cookie: attempt.cookie } },
+    ))).status, 400);
+    const unknown = f.callback(attempt, 'synthetic.code-with-dot');
+    assert.equal((await f.oauth.complete(f.db, new Request(
+      unknown.url + '&unexpected=1', { headers: { cookie: attempt.cookie } },
+    ))).status, 400);
+    assert.equal(f.calls(), 0);
+    assert.equal(f.sqlite.prepare('SELECT COUNT(*) AS n FROM auth_oauth_attempts').get().n, 1);
+
+    // OAuth scope ordering is immaterial. The authorization code and its
+    // one-use browser binding must still pass verified token exchange.
+    const completed = await f.oauth.complete(f.db, f.callback(
+      attempt, 'synthetic.code-with-dot', attempt.cookie, 'profile openid email',
+    ));
+    assert.equal(completed.status, 303);
+    assert.equal(f.calls(), 1);
+    assert.equal(f.sqlite.prepare('SELECT COUNT(*) AS n FROM auth_sessions').get().n, 1);
+    assert.equal((await f.oauth.complete(f.db, f.callback(attempt))).status, 400);
+    assert.equal(f.calls(), 1);
+
+    // A provider that omits the optional scope stays supported.
+    const another = await f.start(attempt.cookie);
+    assert.equal((await f.oauth.complete(f.db, f.callback(
+      another, 'synthetic-code-without-scope', another.cookie, null,
+    ))).status, 303);
+    assert.equal(f.calls(), 2);
   } finally { f.close(); }
 });
 
