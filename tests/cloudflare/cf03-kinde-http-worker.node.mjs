@@ -135,7 +135,7 @@ async function fixture() {
     nonce = url.searchParams.get('nonce');
     const cookie = start.headers.getSetCookie()[0].split(';')[0];
     loginCount += 1;
-    const callbackRequest = new Request(ORIGIN + CALLBACK + '?code=synthetic-code-' + loginCount + '&state=' + state, {
+    const callbackRequest = new Request(ORIGIN + CALLBACK + '?code=synthetic-code-' + loginCount + '&scope=openid%20email%20profile&state=' + state, {
       headers: { cookie },
     });
     const completed = await handler(callbackRequest, env);
