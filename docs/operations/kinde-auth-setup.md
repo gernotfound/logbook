@@ -1,5 +1,12 @@
 # Kinde — configurazione del provider per TheLogBook
 
+## CF-03 — ingresso account React candidato (16/11/2026, non attivato)
+
+Il modulo `src/lib/auth/kindeCandidateIdentity.ts` legge due volte `POST /api/auth/session` con richiesta first-party no-store, valida rigidamente il principal e separa il caso **email non verificata** dal caso signed-out e dagli errori. Usa il cookie CSRF casuale per rilevare il cambio della sessione anche con UID, epoch e revisione invariati, senza diventare una prova di consenso salute. Il nuovo `src/components/UI/KindeAccountEntry.tsx` usa tale lettura e i boundary già esistenti per login Kinde hosted, primo consenso esplicito con tre scelte, stati di revoca e logout della sola sessione D1. Preserva i dati guest: quando viene segnalata la presenza dell'archivio ospite, non invia richieste account né propone un trasferimento non implementato. In caso di errore o consenso dubbio non concede l'accesso fitness. Anche un consenso verificato mostra il blocco dell'archivio finché non sia effettivo il passaggio del vault/replica/UX.
+
+**È un componente candidato non montato nella PWA corrente**: `src/main.tsx`, `src/App.tsx` e `AuthContext` usano ancora Firebase. La sua sola presenza, con test Vitest di interazione e identity-only readback, non abilita Kinde, non promette email/reset/Google live né consente la pubblicazione delle route. Prima del GO occorre completare la vera adozione dell'identità Kinde e guest→account; verificare separatamente D1/KEK, tenant/15 caratteri, OAuth, consenso, dati, backup/erasure, recovery, multi-tab e Safari.
+
+
 ## Ricognizione indipendente 16/11/2026 — ancora NO-GO
 
 Su `main` v2.474.0 (`519f80c077b8ca40e8f3630ea4f110ffb342e012`) e nell'inventario live Cloudflare, il Worker HTTP `thelogbook-cf03-kinde-http-isolated` non risulta distribuito. Il frontend dispone del solo binding `ASSETS`; i due Worker API/Auth Gate restano privati. **Nessun readback Kinde è stato possibile in questa verifica**: stato di callback/logout, workflow di password ≥15 caratteri e recapitabilità delle email non sono attestati. La configurazione del workflow in repository non significa che il tenant la esegua. Non attivare route di login/Sync o interpretare il frontend pubblico come un GO applicativo.
