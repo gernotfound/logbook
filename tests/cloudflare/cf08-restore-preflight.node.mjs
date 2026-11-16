@@ -74,7 +74,7 @@ void test('SQLite snapshot rollback resurrects old consent; independent external
     createOwner(sqlite, 'owner-a');
     createOwner(sqlite, 'owner-b');
     const issued = await issueVerifiedSession(new D1Sqlite(sqlite), 'owner-a');
-    const cookie = issued.setCookies.map(x => x.split(';')[0]).join('; ';
+    const cookie = issued.setCookies.map(x => x.split(';')[0]).join('; ');
     assert.equal((await sessionGate.fetch(gateRequest(cookie), gateEnv(sqlite))).status, 200);
     sqlite.close();
     sqlite = undefined;
