@@ -171,7 +171,7 @@ void test('missing, unavailable or altered external proof and duplicate enrollme
     assert.throws(() => ledger.prepare(
       "INSERT OR REPLACE INTO recovery_control(singleton,mode,generation) VALUES (1,'open',2)"
     ).run(), /recovery-control-exists/);
-    assert.deepEqual(ledger.prepare('SELECT mode,generation FROM recovery_control').get(),
+    assert.deepEqual({ ...ledger.prepare('SELECT mode,generation FROM recovery_control').get() },
       { mode: 'sealed', generation: 1 });
     assert.throws(() => ledger.prepare(
       "INSERT OR REPLACE INTO recovery_owner_fences VALUES ('owner-a','pending',0,1,0,1)"
