@@ -18,7 +18,9 @@ export async function ensureBoundedPendingSequences(owner: string, expectedActor
         observed.clock,
     );
     if (!initial.changed) return observed;
-    if (observed.cloudflareDelivery) {
+    // Claim and retirement are also immutable remote requests: another tab
+    // must not change their causal source while a response may be outstanding.
+    if (observed.cloudflareDelivery || observed.cloudflareReplicaClaim || observed.cloudflareReplicaRetirement) {
         throw new Error('Intento D1 pendente: risequenziamento sospeso fino alla riconciliazione del batch.');
     }
 
@@ -41,7 +43,7 @@ export async function ensureBoundedPendingSequences(owner: string, expectedActor
             saved = current;
             return raw;
         }
-        if (current.cloudflareDelivery) {
+        if (current.cloudflareDelivery || current.cloudflareReplicaClaim || current.cloudflareReplicaRetirement) {
             throw new Error('Intento D1 pendente: risequenziamento sospeso fino alla riconciliazione del batch.');
         }
 

@@ -1,7 +1,7 @@
 import { resumeCloudflareDelivery, stageCloudflareDelivery } from './cloudReplicaDurableDelivery';
 import { CloudReplicaTransportError, type createCloudflareReplicaTransport } from './cloudReplicaTransport';
 import { restageUncommittedCloudflareDelivery } from './cloudReplicaDeliveryRecovery';
-import { readLocal } from './localRepository';
+import { ensureBoundedPendingSequences, readLocal } from './localRepository';
 import { normalizeStorageOwner } from './owner';
 import { boundedPendingTransactionBatch } from './syncBatching';
 
@@ -71,12 +71,28 @@ export async function deliverCloudflareJournalCandidate(
         throw new Error('Replica o consenso D1 non validi: journal preservato.');
     }
 
-    const operations = boundedPendingTransactionBatch(local.pending);
+    // A causal sequence must never be sliced across D1 batches. Resequence
+    // atomically in the owner vault before staging any immutable ciphertext.
+    const prepared = await ensureBoundedPendingSequences(owner, local.actorId, guard);
+    requireCurrent(guard);
+    if (!prepared || prepared.cloudIntegrityFence || prepared.cloudflareDelivery
+        || prepared.cloudflareReplicaClaim || prepared.cloudflareReplicaRetirement
+        || !prepared.replica || prepared.actorId !== prepared.replica.slot
+        || prepared.replica.replicaId !== local.replica.replicaId
+        || prepared.replica.generation !== local.replica.generation
+        || prepared.replica.leaseUntilMs <= Date.now()
+        || prepared.consentRevision !== local.consentRevision
+        || prepared.pending.some(op => op.actorId !== prepared.replica?.slot)) {
+        throw new Error('Replica o journal D1 variati: operazioni locali preservate.');
+    }
+    if (!prepared.pending.length) return 'idle';
+
+    const operations = boundedPendingTransactionBatch(prepared.pending);
     if (!operations.length) throw new Error('Prefisso causale D1 assente: journal preservato.');
     const paths = [...new Set(operations.map(op => op.docPath))];
     const control = await transport.control();
     requireCurrent(guard);
-    if (control.consentRevision !== local.consentRevision) {
+    if (control.consentRevision !== prepared.consentRevision) {
         throw new Error('Consenso cloud D1 differente: journal preservato.');
     }
     const snapshot = await transport.read(paths);
@@ -87,7 +103,7 @@ export async function deliverCloudflareJournalCandidate(
     const batchId = Array.from(crypto.getRandomValues(new Uint8Array(16)),
         byte => byte.toString(16).padStart(2, '0')).join('');
     await stageCloudflareDelivery(
-        owner, operations, snapshot, control, local.replica, batchId, accountKey, guard,
+        owner, operations, snapshot, control, prepared.replica, batchId, accountKey, guard,
     );
     requireCurrent(guard);
     return resumeOrRestage(owner, accountKey, transport, csrfToken, guard);
