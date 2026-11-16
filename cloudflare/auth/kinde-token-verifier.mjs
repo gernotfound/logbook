@@ -2,6 +2,7 @@ import { createRemoteJWKSet, jwtVerify } from 'jose';
 
 const MAX_TOKEN_LENGTH = 8192;
 const MAX_ACCESS_TOKEN_SECONDS = 15 * 60;
+const MAX_CODE_EXCHANGE_ACCESS_TOKEN_SECONDS = 24 * 60 * 60;
 const CLOCK_TOLERANCE_SECONDS = 5;
 const COMPACT_JWS = /^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/;
 
@@ -30,7 +31,7 @@ function requireConfiguration({ issuer, audience, clientId } = {}) {
  * Restrict JWT audience and authorized party to prevent a token for another
  * application from being accepted by the TheLogBook API.
  */
-export function createKindeAccessTokenVerifier(configuration, keySet) {
+function createVerifiedAccessToken(configuration, keySet, maxLifetimeSeconds) {
   const { issuer, audience, clientId } = requireConfiguration(configuration);
   const jwks = keySet ?? createRemoteJWKSet(new URL(issuer + '/.well-known/jwks'), {
     timeoutDuration: 3000,
@@ -56,7 +57,7 @@ export function createKindeAccessTokenVerifier(configuration, keySet) {
         || payload.iat > now + CLOCK_TOLERANCE_SECONDS
         || payload.exp <= now
         || payload.exp <= payload.iat
-        || payload.exp - payload.iat > MAX_ACCESS_TOKEN_SECONDS) {
+        || payload.exp - payload.iat > maxLifetimeSeconds) {
         throw new Error('invalid-kinde-claims');
       }
       // The subject is scoped by the exact issuer. An access token does not
@@ -71,4 +72,25 @@ export function createKindeAccessTokenVerifier(configuration, keySet) {
       throw new Error('invalid-kinde-token');
     }
   };
+}
+
+/**
+ * The API credential verifier deliberately keeps a 15-minute ceiling. A
+ * token from this function must never by itself grant email verification,
+ * consent, an owner session or access to health data.
+ */
+export function createKindeAccessTokenVerifier(configuration, keySet) {
+  return createVerifiedAccessToken(configuration, keySet, MAX_ACCESS_TOKEN_SECONDS);
+}
+
+/**
+ * Kinde defaults to 24-hour access tokens. After a one-time, server-side
+ * authorization-code+PKCE exchange, the access token is used immediately
+ * alongside a separate signed, nonce-bound and email-verified ID token,
+ * and is neither returned to the browser nor used as an API credential.
+ * Accept the provider's documented maximum only in this login-proof path.
+ * The ordinary API verifier stays bounded to 15 minutes.
+ */
+export function createKindeCodeExchangeAccessTokenVerifier(configuration, keySet) {
+  return createVerifiedAccessToken(configuration, keySet, MAX_CODE_EXCHANGE_ACCESS_TOKEN_SECONDS);
 }
