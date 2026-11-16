@@ -42,7 +42,7 @@ function environment(overrides = {}) {
   return { calls, env: { APP_ORIGIN: ORIGIN, KINDE_HTTP, D1_API, ...overrides } };
 }
 
-test('candidate gateway is not a generic proxy or an SPA fallback', async () => {
+void test('candidate gateway is not a generic proxy or an SPA fallback', async () => {
   const { env, calls } = environment();
   for (const path of ['/', '/login', '/favicon.ico', '/__/auth/handler',
     '/api/auth/unknown', '/v1/auth/logout', '/v1/admin', '/v1/sync/missing']) {
@@ -54,7 +54,7 @@ test('candidate gateway is not a generic proxy or an SPA fallback', async () => 
   assert.equal(calls.data.length, 0);
 });
 
-test('routes only explicitly named POST endpoints to private service bindings', async () => {
+void test('routes only explicitly named POST endpoints to private service bindings', async () => {
   const { env, calls } = environment();
   const auth = await routeCandidateFirstPartyApi(request('/api/auth/session'), env);
   assert.equal(auth.status, 429);
@@ -77,7 +77,7 @@ test('routes only explicitly named POST endpoints to private service bindings', 
   assert.equal(calls.data.length, 14);
 });
 
-test('rejects wrong methods, queries and missing bindings before private I/O', async () => {
+void test('rejects wrong methods, queries and missing bindings before private I/O', async () => {
   const { env, calls } = environment();
   for (const p of [KINDE_START, '/api/auth/session', CONTROL]) {
     assert.equal((await routeCandidateFirstPartyApi(request(p, { method: 'GET' }), env)).status, 405);
@@ -91,7 +91,7 @@ test('rejects wrong methods, queries and missing bindings before private I/O', a
   assert.equal(calls.kinde.length + calls.data.length, 0);
 });
 
-test('POST requires exact origin and same-origin fetch-site, not merely a cookie', async () => {
+void test('POST requires exact origin and same-origin fetch-site, not merely a cookie', async () => {
   const { env, calls } = environment();
   for (const headers of [
     { origin: 'https://attacker.invalid' },
@@ -110,7 +110,7 @@ test('POST requires exact origin and same-origin fetch-site, not merely a cookie
   assert.equal(calls.kinde.length + calls.data.length, 0);
 });
 
-test('rejects mismatched/malformed deployment origin and never resolves public bindings', async () => {
+void test('rejects mismatched/malformed deployment origin and never resolves public bindings', async () => {
   const { env, calls } = environment();
   for (const APP_ORIGIN of ['http://thelogbook.me', ORIGIN + '/', ORIGIN + ':443',
     'https://attacker.invalid', '', null]) {
@@ -123,7 +123,7 @@ test('rejects mismatched/malformed deployment origin and never resolves public b
   assert.equal(calls.kinde.length, 0);
 });
 
-test('rejects oversized, malformed and non-decimal declared request bodies', async () => {
+void test('rejects oversized, malformed and non-decimal declared request bodies', async () => {
   const { env, calls } = environment();
   for (const length of ['7608193', '99999999', '-1', '1e10', '1.5', 'unknown']) {
     const response = await routeCandidateFirstPartyApi(request(CONTROL, {
@@ -134,7 +134,7 @@ test('rejects oversized, malformed and non-decimal declared request bodies', asy
   assert.equal(calls.data.length, 0);
 });
 
-test('forwards only cookie, per-session CSRF, content and browser headers', async () => {
+void test('forwards only cookie, per-session CSRF, content and browser headers', async () => {
   const { env, calls } = environment();
   const body = '{"paths":[""]}';
   const r = await routeCandidateFirstPartyApi(request('/v1/sync/read', {
@@ -163,7 +163,7 @@ test('forwards only cookie, per-session CSRF, content and browser headers', asyn
   assert.equal(forwarded.headers.get('origin'), ORIGIN);
 });
 
-test('allows a cross-site OAuth GET callback but never a cross-site POST', async () => {
+void test('allows a cross-site OAuth GET callback but never a cross-site POST', async () => {
   const { calls, env } = environment();
   const params = '?state=' + 'A'.repeat(43) + '&code=test';
   const callback = new Request(ORIGIN + CALLBACK + params, {
@@ -180,7 +180,7 @@ test('allows a cross-site OAuth GET callback but never a cross-site POST', async
   }), env)).status, 403);
 });
 
-test('preserves 303 redirects and separate session cookies without parsing private response', async () => {
+void test('preserves 303 redirects and separate session cookies without parsing private response', async () => {
   const headers = new Headers({ 'Cache-Control': 'no-store', Location: 'https://provider.invalid/oauth2/auth' });
   headers.append('Set-Cookie', '__Host-logbook_session=A; Secure; HttpOnly; Path=/');
   headers.append('Set-Cookie', '__Host-logbook_csrf=B; Secure; Path=/');
@@ -194,7 +194,7 @@ test('preserves 303 redirects and separate session cookies without parsing priva
   assert.equal(response.headers.get('cache-control'), 'no-store');
 });
 
-test('propagates private 401/409/429 and refuses non-cache-safe or unavailable responses', async () => {
+void test('propagates private 401/409/429 and refuses non-cache-safe or unavailable responses', async () => {
   const { env } = environment();
   for (const status of [401, 409, 429]) {
     const response = await routeCandidateFirstPartyApi(request(CONTROL), {
@@ -211,7 +211,7 @@ test('propagates private 401/409/429 and refuses non-cache-safe or unavailable r
   })).status, 503);
 });
 
-test('missing or invalid runtime bindings fail closed even with a matching URL', async () => {
+void test('missing or invalid runtime bindings fail closed even with a matching URL', async () => {
   const { env } = environment();
   for (const binding of [undefined, {}, { fetch: 'not-a-function' }]) {
     assert.equal((await routeCandidateFirstPartyApi(request(CONTROL),
