@@ -49,8 +49,8 @@ export function validateIsolatedWorkers(api, gate) {
   return errors;
 }
 
-// Pre-activation only: this configuration is compiled in CI, never deployed
-// or publicly routed without explicit provider and privacy authorization.
+// Keep the Kinde Worker privately isolated even when the public frontend
+// exposes only four authentication endpoints for controlled OAuth testing.
 export function validateIsolatedKindeCandidate(kinde, gate, frontend) {
   const errors = [];
   const check = (ok, message) => { if (!ok) errors.push(message); };
@@ -83,8 +83,14 @@ export function validateIsolatedKindeCandidate(kinde, gate, frontend) {
   'kinde: unreviewed binding');
   check(frontend?.name === 'thelogbook-frontend'
     && frontend?.main === './auth-proxy.mjs'
-    && frontend?.assets?.run_worker_first?.join(',') === '/__/auth,/__/auth/*',
-  'kinde: public frontend route enabled without GO');
+    && frontend?.assets?.run_worker_first?.join(',') ===
+      '/__/auth,/__/auth/*,/api/auth/kinde/start,/api/auth/kinde/callback,/api/auth/session,/api/auth/logout'
+    && frontend?.services?.length === 1
+    && frontend.services[0]?.binding === 'KINDE_HTTP'
+    && frontend.services[0]?.service === 'thelogbook-cf03-kinde-http-isolated'
+    && frontend?.vars?.APP_ORIGIN === ORIGIN
+    && Object.keys(frontend?.vars ?? {}).join(',') === 'APP_ORIGIN',
+  'kinde: frontend OAuth-only route or binding mismatch');
   return errors;
 }
 
