@@ -79,7 +79,7 @@ void test('OAuth start passes only first-party headers and preserves browser 303
 
 void test('OAuth callback accepts cross-site navigation while preserving state and original cookies', async () => {
   const { env, requests } = harness();
-  const query = '?code=synthetic&state=' + 'A'.repeat(43);
+  const query = '?code=synthetic&scope=openid%20email%20profile&state=' + 'A'.repeat(43);
   const response = await frontend.fetch(get(paths[1] + query, {
     'Sec-Fetch-Site': 'cross-site',
     Cookie: '__Host-logbook_oauth=synthetic',
