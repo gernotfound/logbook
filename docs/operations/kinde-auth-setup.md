@@ -1,5 +1,11 @@
 # Kinde — configurazione del provider per TheLogBook
 
+## Stato Worker privato (16/11/2026)
+
+`thelogbook-cf03-kinde-http-isolated` è **distribuito privatamente** e verificato su Cloudflare dopo [PR #1173](https://github.com/gernotfound/logbook/pull/1173), `main` v2.479.0 SHA `44c294bf69261c31e37c2cdb3f78432941ae6aba`, [workflow #43830734570](https://github.com/gernotfound/logbook/actions/runs/43830734570). Esistono esclusivamente binding DB D1 isolato, Auth Gate, limiter e origin; workers.dev, preview, routes e custom domains assenti. **Non** contiene secret Kinde e non è collegato all'app pubblica. Il riferimento storico sotto a 'non distribuito' risale a v2.474.0, prima di questa attivazione privata.
+
+**Prossimo blocco operativo:** verificare **in lettura** nel tenant Kinde l'applicazione Back-end web scelta, il client ID, l'issuer e gli Allowed callback URLs (callback implementata: `https://thelogbook.me/api/auth/kinde/callback`), poi la policy password >=15 in registrazione e reset. Non sincronizzare workflow né inserire segreti o modificare OAuth Production prima della relativa autorizzazione specifica. L'integrazione completa di `AuthContext`, consenso, ADK e journal resta necessaria prima di qualunque route pubblica.
+
 ## CF-03 — ingresso account React candidato (16/11/2026, non attivato)
 
 Il modulo `src/lib/auth/kindeCandidateIdentity.ts` legge due volte `POST /api/auth/session` con richiesta first-party no-store, valida rigidamente il principal e separa il caso **email non verificata** dal caso signed-out e dagli errori. Usa il cookie CSRF casuale per rilevare il cambio della sessione anche con UID, epoch e revisione invariati, senza diventare una prova di consenso salute. Il nuovo `src/components/UI/KindeAccountEntry.tsx` usa tale lettura e i boundary già esistenti per login Kinde hosted, primo consenso esplicito con tre scelte, stati di revoca e logout della sola sessione D1. Preserva i dati guest: quando viene segnalata la presenza dell'archivio ospite, non invia richieste account né propone un trasferimento non implementato. In caso di errore o consenso dubbio non concede l'accesso fitness. Anche un consenso verificato mostra il blocco dell'archivio finché non sia effettivo il passaggio del vault/replica/UX.
