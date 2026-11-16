@@ -5,12 +5,11 @@ import { pathToFileURL } from 'node:url';
 const DB_ID = '9aa51833-8adc-495f-bdfc-93b5542e8023';
 const GATE_NAME = 'thelogbook-cf03-auth-gate-isolated';
 const DATA_WORKER_NAME = 'thelogbook-api-isolated';
-const KINDE_WORKER_NAME = 'thelogbook-cf03-kinde-http-isolated';
 
 // The deploy token is scoped to Workers only. D1 schema and jurisdiction
 // require an independently authorized provider readback, not a broader
 // deployment credential with permission to execute remote SQL.
-export async function verifyPrivateWorkerBindings({ account, bearer, request = fetch, includeKinde = false }) {
+export async function verifyPrivateWorkerBindings({ account, bearer, request = fetch }) {
   assert.match(account ?? '', /^[a-f0-9]{32}$/, 'invalid Cloudflare account id');
   assert.ok(typeof bearer === 'string' && bearer.length > 0, 'missing Cloudflare token');
 
@@ -23,32 +22,22 @@ export async function verifyPrivateWorkerBindings({ account, bearer, request = f
     return body.result;
   }
 
-  for (const name of [GATE_NAME, DATA_WORKER_NAME, ...(includeKinde ? [KINDE_WORKER_NAME] : [])]) {
+  for (const name of [GATE_NAME, DATA_WORKER_NAME]) {
     const settings = await read('/workers/scripts/' + name + '/settings');
     const bindings = settings?.bindings ?? [];
     assert.ok(bindings.some(binding => binding.name === 'DB' &&
       binding.type === 'd1' && binding.id === DB_ID &&
       (!binding.database_id || binding.database_id === DB_ID)),
       name + ': D1 UUID binding absent or incorrect');
-    if (name === DATA_WORKER_NAME || name === KINDE_WORKER_NAME) {
+    if (name === DATA_WORKER_NAME) {
       assert.ok(bindings.some(binding => binding.name === 'AUTH_GATE' &&
         binding.type === 'service' && binding.service === GATE_NAME),
-        name + ': private authorization service absent');
-    }
-    if (name === GATE_NAME || name === KINDE_WORKER_NAME) {
-      assert.ok(bindings.some(binding => binding.name ===
-        (name === GATE_NAME ? 'API_RATE_LIMITER' : 'AUTH_RATE_LIMITER') &&
+        'private API authorization binding absent');
+    } else {
+      assert.ok(bindings.some(binding => binding.name === 'API_RATE_LIMITER' &&
         (binding.type === 'ratelimit' || binding.type === 'rate_limit') &&
-        binding.namespace_id === (name === GATE_NAME ? '31003' : '31004')),
-        name + ': rate limiter absent or incorrect');
-    }
-    if (name === KINDE_WORKER_NAME) {
-      assert.ok(bindings.some(binding => binding.name === 'APP_ORIGIN' &&
-        binding.type === 'plain_text' && binding.text === 'https://thelogbook.me'),
-        'Kinde Worker first-party origin absent or incorrect');
-      assert.deepEqual(bindings.map(binding => binding.name).sort(),
-        ['APP_ORIGIN', 'AUTH_GATE', 'AUTH_RATE_LIMITER', 'DB'],
-        'Kinde Worker has an unapproved binding or credential');
+        binding.namespace_id === '31003'),
+        'Auth Gate limiter absent or incorrect');
     }
     const subdomain = await read('/workers/scripts/' + name + '/subdomain');
     assert.equal(subdomain.enabled, false, name + ': workers.dev exposed');
@@ -60,7 +49,6 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
   await verifyPrivateWorkerBindings({
     account: process.env.CLOUDFLARE_ACCOUNT_ID,
     bearer: process.env['CLOUDFLARE_API_TOKEN'],
-    includeKinde: process.argv[2] === '--kinde',
   });
-  console.log('Cloudflare provider verified private Worker bindings, EU D1 UUID and disabled public URLs');
+  console.log('Cloudflare provider verified private API/Auth Gate, EU D1 UUID bindings and disabled public URLs');
 }
