@@ -1,5 +1,14 @@
 # Kinde — configurazione del provider per TheLogBook
 
+## CF-03 — accesso diagnostico first-party per collaudo provider (candidato v2.486.0)
+
+Il percorso temporaneo `/verifica-accesso` prepara un form HTML `POST /api/auth/kinde/start` **senza campi** e una lettura esplicita `POST /api/auth/session` nel browser: la prima richiesta ottiene dal Worker state, nonce, cookie e PKCE propri; la seconda verifica esclusivamente il contratto HTTP 401 oppure 200 con principal verificato, senza mostrare UID o token. Nessun login viene avviato automaticamente. Non sono presenti credenziali, tracking, storage di diagnostica, collegamenti alla UI ordinaria o API dei dati sanitari. Il servizio SW esclude il documento diagnostico dal fallback SPA, l'HTML e lo script hanno no-store e noindex. Questa pagina non è un secondo provider Auth e non concede accesso fitness, consenso o ADK.
+
+**Percorso di collaudo manuale necessario:** aprire `https://thelogbook.me/verifica-accesso`, premere il pulsante per avviare il login ospitato Kinde, completare il flusso con un'identità dedicata di prova (registrazione e verifica email, Google e reset, con controllo delle password 8–14/15+), poi tornare allo stesso URL e selezionare **Verifica sessione Kinde**. La callback applicativa torna alla homepage: questo è previsto, non è prova di errore. Una risposta `verified` è una prova di sessione backend in questo browser, non di correttezza della procedura email/Google/reset in ogni scenario. Eseguire ogni caso separatamente e osservare gli esiti Kinde senza incollare password, codici, cookie o token nelle issue.
+
+**Stato:** il codice candidato e i test sintetici non dimostrano il login reale nel tenant. Non creare account o inviare email automatizzate durante CI; l'interazione con Kinde richiede il browser dell'operatore. Rimuovere la diagnostica dalla pubblicazione una volta concluso il collaudo, tramite nuova PR verificata. Nessun cutover automatico della PWA.
+
+
 ## CF-03 — gateway OAuth-only distribuito sul dominio; collaudo Kinde necessario (16/11/2026)
 
 **Stato pubblicazione verificato:** [PR #1175](https://github.com/gernotfound/logbook/pull/1175) integrata su `main` v2.484.0, SHA `dd93ad16fa47f795f1690a31cec4e20c146f29e6`; [CI candidata](https://github.com/gernotfound/logbook/actions/runs/43873755312) e [Main Release Gate/CodeQL](https://github.com/gernotfound/logbook/actions/runs/43879661972) SUCCESS. [Deploy Cloudflare e smoke HTTPS](https://github.com/gernotfound/logbook/actions/runs/43880148635) SUCCESS exact-SHA. Su `thelogbook.me` sono esposte **solo** quattro route `/api/auth/kinde/start`, `/api/auth/kinde/callback`, `/api/auth/session`, `/api/auth/logout`, inoltrate tramite `KINDE_HTTP` al Worker Kinde privato. Il frontend non ha `D1_API`, non espone `/v1/*`, e `AuthContext` continua a usare Firebase. La CSP consente `form-action` soltanto per `https://thelogbook.kinde.com` oltre alla stessa origin.

@@ -53,7 +53,7 @@ for (const header of baselineHeaders) {
     failures.push('Cloudflare headers must preserve reviewed security header: ' + header.key);
   }
 }
-for (const path of ['/', '/index.html', '/sw.js', '/manifest.webmanifest', '/appearance.js', '/appearance.css', '/workbox-*.js']) {
+for (const path of ['/', '/index.html', '/sw.js', '/manifest.webmanifest', '/appearance.js', '/appearance.css', '/workbox-*.js', '/verifica-accesso', '/verifica-accesso.html', '/verifica-accesso.js']) {
   if (!headers.includes(path + '\n  Cache-Control: no-cache, no-store, must-revalidate')) {
     failures.push('No-store policy missing for ' + path);
   }
@@ -85,8 +85,15 @@ if (!productionWorkflow.includes("node-version: '24'\n          package-manager-
 const mismatchDiagnostics = readFileSync('scripts/cloudflare-asset-mismatch-diagnostics.sh', 'utf8');
 const verifiedAsset = readFileSync('scripts/verify-cloudflare-served-asset.mjs', 'utf8');
 const verifiedChunk = readFileSync('scripts/verify-cloudflare-served-chunk.sh', 'utf8');
+if (!productionWorkflow.includes('dist/verifica-accesso.html dist/verifica-accesso.js') ||
+    !productionWorkflow.includes('/verifica-accesso /verifica-accesso.js; do') ||
+    !productionWorkflow.includes('local_file="dist' + '${path}.html"') ||
+    !productionWorkflow.includes('/verifica-accesso:200\\ text/html*') ||
+    !productionWorkflow.includes('/verifica-accesso.js:200\\ text/javascript*')) {
+  failures.push('Kinde diagnostic HTML/JS must be checked byte-exact with explicit MIME and no OAuth state creation');
+}
 if (!productionWorkflow.includes('for path in / /about /privacy /legal-pages.css') ||
-    !productionWorkflow.includes('dist/about.html dist/privacy.html dist/legal-pages.css') ||
+    !productionWorkflow.includes('dist/about.html dist/privacy.html dist/verifica-accesso.html dist/verifica-accesso.js dist/legal-pages.css') ||
     !productionWorkflow.includes('Unexpected public page status/MIME')) {
   failures.push('Public HTML must be verified byte-for-byte by the Cloudflare production smoke');
 }
