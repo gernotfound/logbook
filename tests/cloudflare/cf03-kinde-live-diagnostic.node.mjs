@@ -25,7 +25,8 @@ function json(status, body, overrides = {}) {
 void test('first-party diagnostic is an inert, noindex, password-free OAuth launcher', () => {
   assert.match(page, /<html lang="it">/);
   assert.match(page, /<meta name="robots" content="noindex, nofollow">/);
-  assert.match(page, /<meta name="referrer" content="no-referrer">/);
+  // A native form POST under no-referrer sends Origin: null and is correctly denied by the CSRF gate.
+  assert.match(page, /<meta name="referrer" content="same-origin">/);
   assert.match(page, /<form method="post" action="\/api\/auth\/kinde\/start" autocomplete="off">/);
   assert.match(page, /<script type="module" src="\/verifica-accesso\.js"><\/script>/);
   assert.match(page, /id="check-session"/);
