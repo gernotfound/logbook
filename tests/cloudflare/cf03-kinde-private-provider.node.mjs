@@ -88,6 +88,13 @@ void test('deployment changes only Kinde Worker after exact-main verification an
     'utf8',
   );
   assert.match(yml, /^    branches:\n      - main$/m);
+  // A change to the OAuth implementation must update the *private* live Worker,
+  // not just the Static Assets frontend, after the exact-main release gate.
+  const watch = yml.split('    paths:\n')[1]?.split('  workflow_dispatch:')[0] ?? '';
+  assert.ok(watch.includes("      - 'cloudflare/auth/**'"));
+  assert.ok(watch.includes('      - cloudflare/api/logout-worker.mjs'));
+  assert.ok(watch.includes('      - .github/workflows/cloudflare-kinde-private.yml'));
+
   assert.match(yml, /github.ref == 'refs\/heads\/main'/);
   assert.match(yml, /Wait for|Verify current main and its complete trusted release gate/);
   assert.match(yml, /actions\/workflows\/verification\.yml\/runs\?event=push/);
