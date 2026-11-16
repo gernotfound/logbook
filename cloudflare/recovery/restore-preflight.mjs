@@ -39,3 +39,39 @@ export function inspectRestoredOwnerFence(restored, independentFloor) {
   }
   return { outcome: 'consistent-for-diagnostics-only' };
 }
+
+/**
+ * Check whether a supplied multi-owner diagnostic scan matches an independently
+ * supplied list of floors, with no owner silently omitted, repeated or added.
+ * The caller MUST separately authenticate the source and establish that its
+ * owner list is complete; matching two incomplete lists proves nothing.
+ * This is never an authorization to restore or reopen access.
+ */
+export function inspectRestoredOwnerCoverage(restoredOwners, independentFloors) {
+  const blocked = reason => ({ outcome: 'blocked', reason });
+  if (!Array.isArray(independentFloors) || independentFloors.length === 0
+    || independentFloors.some(row => !valid(row))) {
+    return blocked('independent-coverage-missing-or-invalid');
+  }
+  if (!Array.isArray(restoredOwners) || restoredOwners.some(row => !valid(row))) {
+    return blocked('restored-coverage-missing-or-invalid');
+  }
+  const floors = new Map();
+  for (const row of independentFloors) {
+    if (floors.has(row.uid)) return blocked('independent-owner-duplicate');
+    floors.set(row.uid, row);
+  }
+  const subjects = new Map();
+  for (const row of restoredOwners) {
+    if (subjects.has(row.uid)) return blocked('restored-owner-duplicate');
+    subjects.set(row.uid, row);
+  }
+  if (subjects.size !== floors.size || [...floors.keys()].some(uid => !subjects.has(uid))) {
+    return blocked('owner-coverage-mismatch');
+  }
+  for (const [uid, floor] of floors) {
+    const result = inspectRestoredOwnerFence(subjects.get(uid), floor);
+    if (result.outcome === 'blocked') return result;
+  }
+  return { outcome: 'consistent-for-diagnostics-only' };
+}
