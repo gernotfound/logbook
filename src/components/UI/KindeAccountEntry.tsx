@@ -132,6 +132,7 @@ export function KindeAccountEntry({
                 setOver18(false);
                 setTerms(false);
                 setHealth(false);
+                setBusy(false);
                 await refresh();
             }
         } catch {
