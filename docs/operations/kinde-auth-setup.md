@@ -1,5 +1,8 @@
 # Kinde — configurazione del provider per TheLogBook
 
+**Catena di rilascio verificabile:** in precedenza il workflow `.github/workflows/cloudflare-kinde-private.yml` aveva un trigger push limitato a modifiche del solo file del workflow e `workflow_dispatch`: una modifica al codice `kinde-oauth-flow.mjs` poteva quindi essere integrata su `main` senza aggiornare il Worker privato, lasciando invariato il 400 nonostante i gate frontend. Il candidato amplia in modo mirato il trigger main-only a `cloudflare/auth/**` e `cloudflare/api/logout-worker.mjs`, mantenendo il controllo dello SHA di `main`, l'attestazione `Milestone Verification` trusted completa, la compilazione/dry-run, la pubblicazione esclusivamente del Worker privato e il readback no-public-URLs. Include un test di contratto CI per evitare regressioni del trigger. Nessun deploy viene eseguito da un branch o prima dei gate.
+
+
 ## CF-03 — errore callback 400 dopo prima registrazione: correzione candidata (16/11/2026)
 
 **Prova runtime riportata dall'owner:** il form OAuth ora raggiunge Kinde; il provider ha inviato la verifica email, ha rifiutato una password troppo breve e accettato una password conforme di almeno 15 caratteri. Il ritorno browser `GET /api/auth/kinde/callback` ha restituito `400 {"error":"authentication-unavailable"}`. L'URL osservato conteneva `code`, `state` e `scope=openid%20email%20profile`. **Non copiare codici OAuth, state o URL completi in issue o log:** sono dati transitori sensibili.
