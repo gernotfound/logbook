@@ -143,6 +143,8 @@ void test('missing, unavailable or altered external proof and duplicate enrollme
     assert.equal((await enrollIndependentOwner(db, 'owner-a')).status, 'pending');
     assert.equal((await enrollIndependentOwner(db, 'owner-a')).status, 'pending');
     await rejected(enrollIndependentOwner(db, 'owner-a', 2));
+    await rejected(enrollIndependentOwner(db, 'new-owner', 2));
+    assert.equal(fence(ledger, 'new-owner'), undefined);
     await rejected(armIndependentHealthWithdrawal(db, subjectA));
     const original = fence(ledger, 'owner-a');
     assert.equal(original.status, 'pending');
@@ -184,4 +186,22 @@ void test('duplicate or late write does not undo a durable independent deny', as
     await rejected(requireIndependentOwnerFence(fenceDb,
       { ...a, uid: 'owner-b' }, 'rights'));
   } finally { ledger.close(); }
+});
+
+void test('isolated migration manifest cannot route traffic or bind the primary D1', () => {
+  const cfg = JSON.parse(readFileSync(new URL(
+    '../../cloudflare/recovery/wrangler.isolated.jsonc', import.meta.url), 'utf8'));
+  assert.equal(cfg.name, 'thelogbook-cf08-fence-schema-isolated');
+  assert.equal(cfg.workers_dev, false);
+  assert.equal(cfg.preview_urls, false);
+  for (const forbidden of ['main', 'routes', 'route', 'triggers', 'assets', 'services', 'vars']) {
+    assert.equal(Object.hasOwn(cfg, forbidden), false);
+  }
+  assert.equal(cfg.d1_databases?.length, 1);
+  assert.deepEqual(cfg.d1_databases[0], {
+    binding: 'RECOVERY_DB',
+    database_name: 'thelogbook-cf08-fence-eu-isolated-20261116',
+    database_id: '19dad53f-0dda-4503-b161-758ac8cb7b21',
+    migrations_dir: './migrations',
+  });
 });

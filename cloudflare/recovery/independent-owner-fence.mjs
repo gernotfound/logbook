@@ -104,7 +104,7 @@ function matches(row, expected) {
 // readback; it never creates an active/consented owner.
 export async function enrollIndependentOwner(fenceDb, uid, epoch = 1) {
   try {
-    if (!validUid(uid) || !Number.isSafeInteger(epoch) || epoch < 1) {
+    if (!validUid(uid) || epoch !== 1) {
       throw new IndependentFenceUnavailableError();
     }
     const expected = {
