@@ -54,7 +54,7 @@ describe('isolated Kinde account entry candidate', () => {
         expect(readKindeCandidateAccess).not.toHaveBeenCalled();
         fireEvent.click(start);
         expect(submitKindeHostedSignIn).toHaveBeenCalledTimes(1);
-        expect(screen.queryByText(/Identità e consenso verificati/)).not.toBeInTheDocument();
+        expect(screen.queryByText(/Identità e consenso verificati/)).toBeNull();
     });
 
     it('a missing backend is an explicit blocked state, never a guest or fitness success', async () => {
@@ -85,16 +85,16 @@ describe('isolated Kinde account entry candidate', () => {
         vi.mocked(readKindeCandidateIdentity).mockResolvedValue(verified);
         render(<KindeAccountEntry />);
         const accept = await screen.findByRole('button', { name: 'Conferma consenso' });
-        expect(accept).toBeDisabled();
+        expect(accept.hasAttribute('disabled')).toBe(true);
         const boxes = screen.getAllByRole('checkbox');
         expect(boxes).toHaveLength(3);
-        expect(screen.getByText(/Informativa privacy di prova/)).toBeInTheDocument();
-        expect(screen.getByText(/Termini di prova/)).toBeInTheDocument();
+        expect(screen.getByText(/Informativa privacy di prova/)).not.toBeNull();
+        expect(screen.getByText(/Termini di prova/)).not.toBeNull();
         fireEvent.click(boxes[0]);
         fireEvent.click(boxes[1]);
         expect(accept).toBeDisabled();
         fireEvent.click(boxes[2]);
-        expect(accept).toBeEnabled();
+        expect(accept.hasAttribute('disabled')).toBe(false);
         fireEvent.click(accept);
         await waitFor(() => expect(acceptKindeCandidateInitialConsent).toHaveBeenCalledWith(
             expect.objectContaining({
@@ -115,7 +115,7 @@ describe('isolated Kinde account entry candidate', () => {
         });
         render(<KindeAccountEntry />);
         await screen.findByRole('button', { name: 'Riprova la verifica' });
-        expect(screen.queryByRole('button', { name: 'Conferma consenso' })).not.toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: 'Conferma consenso' })).toBeNull();
         expect(acceptKindeCandidateInitialConsent).not.toHaveBeenCalled();
     });
 
@@ -124,7 +124,7 @@ describe('isolated Kinde account entry candidate', () => {
         await screen.findByText(/archivio ospite/);
         expect(readKindeCandidateIdentity).not.toHaveBeenCalled();
         expect(readKindeCandidateAccess).not.toHaveBeenCalled();
-        expect(screen.queryByRole('button', { name: 'Accedi o registrati' })).not.toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: 'Accedi o registrati' })).toBeNull();
     });
 
     it('an ambiguous consent POST never unlocks the fitness UI', async () => {
@@ -135,7 +135,7 @@ describe('isolated Kinde account entry candidate', () => {
         for (const checkbox of screen.getAllByRole('checkbox')) fireEvent.click(checkbox);
         fireEvent.click(accept);
         await screen.findByRole('button', { name: 'Riprova la verifica' });
-        expect(screen.queryByText(/Identità e consenso verificati/)).not.toBeInTheDocument();
+        expect(screen.queryByText(/Identità e consenso verificati/)).toBeNull();
     });
 
     it('suspended consent and an old legal version do not expose the initial consent form', async () => {
@@ -147,7 +147,7 @@ describe('isolated Kinde account entry candidate', () => {
             vi.mocked(readKindeCandidateAccess).mockResolvedValue(access);
             const rendered = render(<KindeAccountEntry />);
             await screen.findByRole('button', { name: 'Termina sessione TheLogBook' });
-            expect(screen.queryByRole('button', { name: 'Conferma consenso' })).not.toBeInTheDocument();
+            expect(screen.queryByRole('button', { name: 'Conferma consenso' })).toBeNull();
             rendered.unmount();
         }
     });
