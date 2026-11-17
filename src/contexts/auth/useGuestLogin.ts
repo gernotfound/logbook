@@ -1,5 +1,4 @@
 import { useCallback, type Dispatch, type RefObject, type SetStateAction } from 'react';
-import { auth } from '../../lib/firebase';
 import { DB } from '../../lib/db';
 import { useAppStore } from '../../store/useAppStore';
 import { useDialogStore } from '../../store/useDialogStore';
@@ -27,6 +26,9 @@ export function isGuestVaultReadinessCurrent(
 
 type GuestMigrationStatus = 'idle' | 'pending' | 'failed';
 type GuestLoginDependencies = {
+    // The host provider supplies its opaque session object (never just a UID).
+    // Equality after async locks rejects an account swap, including A→B→A.
+    readAuthIdentity: () => unknown;
     authRunRef: RefObject<number>;
     isGuestRef: RefObject<boolean>;
     setIsGuest: Dispatch<SetStateAction<boolean>>;
@@ -39,14 +41,15 @@ type GuestLoginDependencies = {
 // archive cleanup and vault readiness before publishing guest data.
 export function useGuestLogin({
     authRunRef, isGuestRef, setIsGuest, setGuestMigrationStatus, setUserData, setSaveError,
+    readAuthIdentity,
 }: GuestLoginDependencies) {
     const loginAsGuest = useCallback(async () => {
-        const originalUser = auth.currentUser;
+        const originalUser = readAuthIdentity();
         const authRun = authRunRef.current;
         // Guest cleanup cancels store syncs and advances their epoch. That
         // expected reset must not invalidate a queued guest login, whereas
         // any Auth generation change (including null -> account -> null) must.
-        const isOriginalAttemptCurrent = () => auth.currentUser === originalUser && authRunRef.current === authRun;
+        const isOriginalAttemptCurrent = () => readAuthIdentity() === originalUser && authRunRef.current === authRun;
         const activation: { session: SessionSnapshot | null } = { session: null };
         try {
             // Serialize the entire cleanup-to-activation transition across tabs.
@@ -121,7 +124,7 @@ export function useGuestLogin({
         setIsGuest(true);
         setGuestMigrationStatus('idle');
         if (nextData) setUserData(nextData);
-    }, [authRunRef, isGuestRef, setIsGuest, setGuestMigrationStatus, setSaveError, setUserData]);
+    }, [authRunRef, isGuestRef, setIsGuest, setGuestMigrationStatus, setSaveError, setUserData, readAuthIdentity]);
 
     return loginAsGuest;
 }

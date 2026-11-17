@@ -1,5 +1,10 @@
 # TheLogBook — migrazione Cloudflare: runbook corrente
 
+## CF-03 · decoupling controllo identità guest (17/11/2026, candidato v2.508.0)
+
+L'attivazione guest legge l'oggetto di identità dal provider, non più direttamente da `firebase.auth`: il provider legacy passa lo stesso oggetto e mantiene la semantica originale, mentre quello Kinde potrà usare una sessione verificata e una generazione antireplay indipendente. I fence owner/guest/vault e i controlli dopo gli await restano invariati. Non sono ancora implementati il provider Cloudflare pubblico, la sincronizzazione né il porting dell'owner cloud: questo diff non significa sostituzione completa di Firebase.
+
+
 ## CF-03 · ingresso account Kinde in React, dati salute ancora negati (17/11/2026, candidato v2.506.0)
 
 L'account entry React è ora candidato pubblico **identity-only** su `src/App.tsx` per visitatori non guest e senza identità Firebase: verifica la sessione Kinde, permette il login hosted e mantiene la scelta guest isolata anche quando il servizio Kinde è indisponibile/offline. Il fallimento di verifica Auth non autorizza il cloud. Non monta il consenso candidato e non inoltra alcuna chiamata D1 health/consent. Il legacy `AuthProvider` rimane operativo anche per guest/vecchi percorsi, quindi questa fase non autorizza la dichiarazione di rimozione Firebase. Occorre sostituire interamente il provider, il lifecycle owner/guest, i journal e i diritti prima del GO. Regressioni isolate verificano che il login Kinde non sblocchi la PWA; il browser reale e le sessioni esistenti richiedono collaudo dopo deploy.

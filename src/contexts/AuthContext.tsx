@@ -284,8 +284,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         isGuestActiveStrict, setSaveError, setEmailVerificationRequired, migrationDataRef,
     });
 
+    const readLegacyAuthIdentity = useCallback(() => auth.currentUser, []);
     const loginAsGuest = useGuestLogin({
         authRunRef, isGuestRef, setIsGuest, setGuestMigrationStatus, setUserData, setSaveError,
+        readAuthIdentity: readLegacyAuthIdentity,
     });
 
     const continueUnverifiedLocally = useUnverifiedLocalContinuation({
