@@ -1,5 +1,9 @@
 # Kinde — configurazione del provider per TheLogBook
 
+## CF-03 · disaccoppiamento sorgente UID da Firebase (17/11/2026)
+
+Il core `session.ts` usa un lettore di identità autenticata fornito dal provider attivo, invece di importare Firebase. Il provider legacy resta temporaneamente registrato in `src/lib/firebase.ts`, senza modificare il flusso runtime del vecchio account. Il lettore non assegna permessi, vault né consenso: per adottare Kinde occorrerà rimuovere il provider Firebase, gestire generazioni e cookie di sessione, e collaudare il trasferimento dell'owner e i journal D1. Questo passaggio non abilita la registrazione fitness dei nuovi account.
+
 ## CF-03 · protezione sincrona delle azioni Kinde da eventi foreground (17/11/2026)
 
 Durante logout, primo consenso candidato o avvio modalità ospite, un evento `focus`/`online` può arrivare prima che React pubblichi lo stato `busy`. La schermata usa perciò un latch sincrono della singola azione: l'osservatore foreground non invalida la relativa generazione nel mezzo dell'operazione. Una risposta già obsoleta continua a non concedere alcun permesso; il latch viene sempre rilasciato anche in caso di errore. I callback registrati da un effetto smontato non possono avviare controlli tardivi. Regressioni riproducono deliberatamente gli eventi nello stesso turno della richiesta.

@@ -1,5 +1,9 @@
 # Ciclo account, Auth e guest — TheLogBook
 
+### Confine lettore di identità autenticata indipendente dal provider (17/11/2026, candidato)
+
+`src/lib/sync/session.ts` non importa più Firebase direttamente. Il lettore sincrono di identità è registrato dal **solo provider attivo** e restituisce `null` se non è autenticato; un secondo provider concorrente, un UID malformato o un errore della sorgente falliscono chiusi. La registrazione legacy corrente vive temporaneamente in `src/lib/firebase.ts`. Per il passaggio a Kinde sarà obbligatorio rimuovere il vecchio provider e registrare la sorgente soltanto dopo la verifica della sessione Kinde, con fencing delle sue generazioni. La sola presenza di un UID non sblocca vault, consenso o operazioni D1.
+
 **Quando leggere:** email verificata, accesso guest→account, sessioni, account deletion, logout e purge.
 **Non inferire:** Auth assente, timeout o tombstone scaduto non provano cancellazione completa né autorizzano purge locale.
 
