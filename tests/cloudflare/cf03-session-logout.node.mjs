@@ -2,6 +2,8 @@ import assert from 'node:assert/strict';
 import { applyCurrentD1Schema } from './current-d1-schema.mjs';
 import { test } from 'node:test';
 import { DatabaseSync } from 'node:sqlite';
+import { readFileSync } from 'node:fs';
+import { enrollIndependentOwner, recordVerifiedInitialConsent } from '../../cloudflare/recovery/independent-owner-fence.mjs';
 import api from '../../cloudflare/api/worker.mjs';
 import gate, { hashSessionSecret } from '../../cloudflare/auth/session-gate.mjs';
 import { issueVerifiedSession } from '../../cloudflare/auth/session-issuer.mjs';
@@ -45,6 +47,12 @@ async function fixture() {
   sqlite.exec('PRAGMA foreign_keys=ON');
   applyCurrentD1Schema(sqlite);
   const db = new D1Adapter(sqlite);
+  const registry = new DatabaseSync(':memory:');
+  for (const name of ['0001_independent_owner_fences.sql', '0002_block_replace_bypass.sql']) {
+    registry.exec(readFileSync(new URL('../../cloudflare/recovery/migrations/' + name, import.meta.url), 'utf8'));
+  }
+  registry.prepare("UPDATE recovery_control SET mode='open',generation=2 WHERE singleton=1").run();
+  const recoveryDb = new D1Adapter(registry);
   for (const uid of ['owner-a', 'owner-b']) {
     sqlite.prepare('INSERT INTO auth_principals(uid,status,verified_at_ms,auth_epoch) VALUES (?, ?, ?, 1)')
       .run(uid, 'active', Date.now() - 60000);
@@ -54,14 +62,21 @@ async function fixture() {
   const b = await issueVerifiedSession(db, 'owner-b');
   const cookie = a.setCookies.map(item => item.split(';')[0]).join('; ');
   const csrf = a.setCookies[1].split(';')[0].split('=')[1];
-  const env = { DB: db, API_ORIGIN: ORIGIN,
+  const env = { DB: db, RECOVERY_DB: recoveryDb, API_ORIGIN: ORIGIN,
     CONSENT_PRIVACY_VERSION: '1.3.9', CONSENT_TERMS_VERSION: '1.2.5',
     AUTH_GATE: { fetch: request => gate.fetch(request, {
       DB: db, API_ORIGIN: ORIGIN,
       CONSENT_PRIVACY_VERSION: '1.3.9', CONSENT_TERMS_VERSION: '1.2.5',
       API_RATE_LIMITER: { limit: async () => ({ success: true }) },
     }) } };
-  return { sqlite, db, env, cookie, csrf, a, another, b };
+  return {
+    sqlite, registry, db, env, cookie, csrf, a, another, b,
+    async recordIndependentInitialConsent(uid) {
+      await enrollIndependentOwner(recoveryDb, uid);
+      await recordVerifiedInitialConsent(db, recoveryDb, uid);
+    },
+    close() { registry.close(); sqlite.close(); },
+  };
 }
 function request(f, route = '/v1/auth/logout', options = {}) {
   const headers = new Headers({
@@ -97,6 +112,7 @@ void test('the same API entry serves consent, encrypted sync and session-only lo
   try {
     assert.equal((await call(f, '/v1/consent/status')).body.status, 'unregistered');
     assert.equal((await call(f, '/v1/consent/initial', { body: ACCEPT })).response.status, 200);
+    await f.recordIndependentInitialConsent('owner-a');
     assert.equal((await call(f, '/v1/sync/control', { body: {} })).response.status, 200);
     const result = await call(f);
     assert.equal(result.response.status, 200);

@@ -1,5 +1,0 @@
-/* Preserve original Data stylesheet cascade order; DataView imports this entrypoint. */
-@import './data-fields.css';
-@import './data-activity.css';
-@import './data-history.css';
-@import './data-responsive.css';

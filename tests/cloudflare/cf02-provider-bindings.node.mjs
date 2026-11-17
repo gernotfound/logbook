@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { verifyPrivateWorkerBindings } from '../../scripts/verify-cloudflare-api-provider.mjs';
 
 const db = '9aa51833-8adc-495f-bdfc-93b5542e8023';
+const registry = '19dad53f-0dda-4503-b161-758ac8cb7b21';
 const gate = 'thelogbook-cf03-auth-gate-isolated';
 const dataWorker = 'thelogbook-api-isolated';
 const settings = {
@@ -12,6 +13,7 @@ const settings = {
   ] },
   [dataWorker]: { bindings: [
     { type: 'd1', name: 'DB', id: db, database_id: db },
+    { type: 'd1', name: 'RECOVERY_DB', id: registry, database_id: registry },
     { type: 'service', name: 'AUTH_GATE', service: gate },
   ] },
 };
@@ -48,7 +50,7 @@ void test('verifies real Worker binding shapes and uses no D1 SQL permissions', 
 
 void test('rejects absent D1 binding, authorization service or limiter', async () => {
   for (const [name, bindingName] of [[gate, 'DB'], [gate, 'API_RATE_LIMITER'],
-    [dataWorker, 'DB'], [dataWorker, 'AUTH_GATE']]) {
+    [dataWorker, 'DB'], [dataWorker, 'RECOVERY_DB'], [dataWorker, 'AUTH_GATE']]) {
     const path = '/client/v4/accounts/0123456789abcdef0123456789abcdef/workers/scripts/' + name + '/settings';
     const bindings = settings[name].bindings.filter(item => item.name !== bindingName);
     const mock = cloudflareMock({ [path]: { success: true, result: { bindings } } });
@@ -79,4 +81,16 @@ void test('rejects HTTP 401 and provider-level failures (never treats absent pro
     success: false, result: null,
   } });
   await assert.rejects(verifyPrivateWorkerBindings(args(providerError)), /readback failed/);
+});
+
+void test('rejects substituted or main-DB alias recovery bindings', async () => {
+  const prefix = '/client/v4/accounts/0123456789abcdef0123456789abcdef/workers/scripts/';
+  for (const wrong of [db, 'other']) {
+    const broken = settings[dataWorker].bindings.map(binding =>
+      binding.name === 'RECOVERY_DB' ? { ...binding, id: wrong, database_id: wrong } : binding);
+    const mock = cloudflareMock({ [prefix + dataWorker + '/settings']: {
+      success: true, result: { bindings: broken },
+    } });
+    await assert.rejects(verifyPrivateWorkerBindings(args(mock)), /recovery D1/);
+  }
 });

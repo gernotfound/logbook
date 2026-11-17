@@ -28,12 +28,19 @@ export function verifyLocalMigrationTarget(config, names) {
   assert.equal(config.preview_urls, false);
   assert.equal(config.routes, undefined);
   assert.equal(config.route, undefined);
-  assert.equal(config.d1_databases?.length, 1);
-  const binding = config.d1_databases[0];
+  // The API Worker now binds a second D1 for independent revocation floors.
+  // This operator workflow still migrates ONLY the first application DB.
+  assert.equal(config.d1_databases?.length, 2);
+  const [binding, recovery] = config.d1_databases;
   assert.equal(binding.binding, 'DB');
   assert.equal(binding.database_name, DATABASE);
   assert.equal(binding.database_id, DATABASE_ID);
   assert.equal(binding.migrations_dir, './migrations');
+  assert.equal(recovery.binding, 'RECOVERY_DB');
+  assert.equal(recovery.database_name, 'thelogbook-cf08-fence-eu-isolated-20261116');
+  assert.equal(recovery.database_id, '19dad53f-0dda-4503-b161-758ac8cb7b21');
+  assert.equal(recovery.migrations_dir, '../recovery/migrations');
+  assert.notEqual(binding.database_id, recovery.database_id);
 }
 
 export function verifyMigrationLedger(rows, phase) {

@@ -406,7 +406,7 @@ void test('account, consent, CSRF, lease and snapshot fences apply to replica ma
   const input = claim('mutation0000000011');
   assert.equal((await call(db, 'replica/claim', input, { env: { DB: db, API_ORIGIN: origin } })).status, 503);
   assert.equal((await call(db, 'replica/claim', input, { env: makeEnv(db, { csrfVerified: false }) })).status, 403);
-  assert.equal((await call(db, 'replica/claim', input, { env: makeEnv(db, { fenceEpoch: 4 }) })).status, 409);
+  assert.equal((await call(db, 'replica/claim', input, { env: makeEnv(db, { fenceEpoch: 4 }) })).status, 403);
   assert.equal((await call(db, 'replica/claim', { ...input, expectedFenceEpoch: 4 })).status, 409);
   assert.equal((await call(db, 'replica/claim', { ...input, consentRevision: 2 })).status, 403);
   assert.equal((await call(db, 'replica/claim', { ...input, expectedRevision: 1 })).status, 409);
@@ -791,7 +791,9 @@ void test('account epoch change revokes receipt lookup instead of implying an ab
     .run(freshSessionHash, owner, 6, 'e'.repeat(64), now - 1000, now + 86400000, now + 2592000000);
   const newSession = await call(db, 'receipt', { batchId: batch.batchId },
     { env: makeEnv(db, { fenceEpoch: 6, sessionHash: freshSessionHash }) });
-  assert.deepEqual(newSession, { status: 200, body: { receipt: null } });
+  // New auth epoch has no independent recovery enrollment. A fresh main-D1
+  // session alone cannot authorize even the absence of an old receipt.
+  assert.deepEqual(newSession, { status: 503, body: { error: 'cloud-unavailable' } });
 }));
 
 void test('revision-2 consent cannot reuse the initial proof or old receipts', () => withFixture(async db => {
@@ -839,7 +841,7 @@ void test('a batch from an erased account epoch cannot resurrect data at reset r
   const stale = attempt('batch000000000035', 1, 0);
   db.sqlite.prepare('UPDATE sync_subjects SET fence_epoch = 6 WHERE uid = ?').run(owner);
   const result = await call(db, 'commit', stale, { env: makeEnv(db, { fenceEpoch: 6 }) });
-  assert.deepEqual(result, { status: 409, body: { error: 'replica-fenced-or-conflict' } });
+  assert.deepEqual(result, { status: 403, body: { error: 'access-revoked' } });
   assert.equal(db.sqlite.prepare('SELECT revision FROM sync_state').get().revision, 0);
   assert.equal(db.sqlite.prepare('SELECT count(*) AS n FROM sync_receipts').get().n, 0);
   assert.equal(db.sqlite.prepare('SELECT count(*) AS n FROM sync_documents').get().n, 0);
@@ -870,7 +872,7 @@ void test('trusted identity, epoch, consent, origin, CSRF and strict schemas fai
   assert.equal((await call(db, 'commit', item, { headers: { 'Sec-Fetch-Site': 'cross-site' } })).status, 403);
   assert.equal((await call(db, 'commit', item, { env: makeEnv(db, { csrfVerified: false }) })).status, 403);
   assert.equal((await call(db, 'commit', item, { env: makeEnv(db, { rateGatePassed: false }) })).status, 503);
-  assert.equal((await call(db, 'commit', item, { env: makeEnv(db, { fenceEpoch: 4 }) })).status, 409);
+  assert.equal((await call(db, 'commit', item, { env: makeEnv(db, { fenceEpoch: 4 }) })).status, 403);
   assert.equal((await call(db, 'commit', { ...item, expectedFenceEpoch: 4 })).status, 409);
   assert.equal((await call(db, 'commit', item, { env: makeEnv(db, { healthConsentRevision: 2 }) })).status, 403);
   assert.equal((await call(db, 'commit', { ...item, uid: 'other-user' })).status, 400);

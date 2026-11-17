@@ -1,4 +1,0 @@
-User-agent: *
-Allow: /
-
-Sitemap: https://thelogbook.web.app/sitemap.xml

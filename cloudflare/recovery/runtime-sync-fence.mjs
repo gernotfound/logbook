@@ -3,7 +3,7 @@ import { requireIndependentOwnerFence } from './independent-owner-fence.mjs';
 // The registry is independent of the application's Time Travel timeline.
 // Both primary reads are necessary: neither trusted AuthGate claims nor the
 // independent registry alone can authorize fitness or a replayed sync ACK.
-export class RuntimeSyncFenceUnavailableError extends Error {
+class RuntimeSyncFenceUnavailableError extends Error {
   constructor() {
     super('independent-sync-fence-unavailable');
     this.name = 'RuntimeSyncFenceUnavailableError';
