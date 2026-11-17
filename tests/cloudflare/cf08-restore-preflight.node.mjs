@@ -34,7 +34,7 @@ function createOwner(sqlite, uid) {
   sqlite.prepare('INSERT INTO sync_state(uid,revision) VALUES (?,0)').run(uid);
   sqlite.prepare(`INSERT INTO health_consent_acceptances
     (uid,consent_revision,privacy_version,terms_version,accepted_at_ms,over_18_confirmed)
-    VALUES (?,1,'1.3.9','1.2.5',?,1)`).run(uid, acceptedAt);
+    VALUES (?,1,'1.3.10','1.2.5',?,1)`).run(uid, acceptedAt);
 }
 function subject(sqlite, uid) {
   const row = sqlite.prepare(`SELECT uid, status, consent_revision, fence_epoch, erased_before_revision
@@ -54,7 +54,7 @@ function gateRequest(cookie) {
 }
 function gateEnv(sqlite) {
   return { DB: new D1Sqlite(sqlite), API_ORIGIN: ORIGIN,
-    CONSENT_PRIVACY_VERSION: '1.3.9', CONSENT_TERMS_VERSION: '1.2.5',
+    CONSENT_PRIVACY_VERSION: '1.3.10', CONSENT_TERMS_VERSION: '1.2.5',
     API_RATE_LIMITER: { limit: async () => ({ success: true }) } };
 }
 

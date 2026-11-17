@@ -70,7 +70,7 @@ async function withFixture(run) {
       .run(syntheticSessionHash, owner, 5, 'c'.repeat(64), issuedAt, issuedAt + 86400000, issuedAt + 2592000000);
     db.sqlite.prepare('INSERT INTO sync_subjects (uid,status,consent_revision,fence_epoch) VALUES (?, ?, ?, ?)').run(owner, 'active', 1, 5);
     db.sqlite.prepare('INSERT INTO health_consent_acceptances (uid,consent_revision,privacy_version,terms_version,accepted_at_ms,over_18_confirmed) VALUES (?,1,?,?,?,1)')
-      .run(owner, '1.3.9', '1.2.5', issuedAt);
+      .run(owner, '1.3.10', '1.2.5', issuedAt);
     db.sqlite.prepare('INSERT INTO sync_state (uid, revision) VALUES (?, 0)').run(owner);
     fence.sqlite.prepare(`INSERT INTO recovery_owner_fences
       (uid,status,consent_revision,fence_epoch,erased_before_revision,change_seq)
@@ -79,7 +79,7 @@ async function withFixture(run) {
       SET status='active',consent_revision=1,change_seq=2 WHERE uid=?`).run(owner);
     const dataKey = await releaseCloudAccountDataKey(db, {
       CLOUD_ACCOUNT_KEK_V1: Buffer.alloc(32, 41).toString('base64'),
-      CONSENT_PRIVACY_VERSION: '1.3.9', CONSENT_TERMS_VERSION: '1.2.5',
+      CONSENT_PRIVACY_VERSION: '1.3.10', CONSENT_TERMS_VERSION: '1.2.5',
     }, {
       uid: owner, authenticated: true, emailVerified: true,
       healthConsentRevision: 1, fenceEpoch: 5, csrfVerified: true,
@@ -123,7 +123,7 @@ function attempt(batchId = 'batch000000000001', seq = 1, rev = 0, paths = ['']) 
 function makeEnv(db, claims = {}) {
   return {
     DB: db, RECOVERY_DB: independentDatabases.get(db), API_ORIGIN: origin,
-    CONSENT_PRIVACY_VERSION: '1.3.9', CONSENT_TERMS_VERSION: '1.2.5',
+    CONSENT_PRIVACY_VERSION: '1.3.10', CONSENT_TERMS_VERSION: '1.2.5',
     AUTH_GATE: {
       async fetch() {
         return new Response(JSON.stringify({

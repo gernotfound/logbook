@@ -63,7 +63,7 @@ function makeFixture({ legacy = false } = {}) {
   const env = {
     DB: db, RECOVERY_DB: new SqliteD1(ledger),
     API_ORIGIN: ORIGIN, CLOUD_ACCOUNT_KEK_V1: KEK,
-    CONSENT_PRIVACY_VERSION: '1.3.9', CONSENT_TERMS_VERSION: '1.2.5',
+    CONSENT_PRIVACY_VERSION: '1.3.10', CONSENT_TERMS_VERSION: '1.2.5',
     AUTH_GATE: { async fetch() {
       return new Response(JSON.stringify({
         uid: 'owner-a', authenticated: true, emailVerified: true,
@@ -79,7 +79,7 @@ function makeFixture({ legacy = false } = {}) {
     sqlite.prepare('INSERT INTO sync_state(uid,revision) VALUES (?,0)').run(uid);
     sqlite.prepare(`INSERT INTO health_consent_acceptances
       (uid,consent_revision,privacy_version,terms_version,accepted_at_ms,over_18_confirmed)
-      VALUES (?,1,'1.3.9','1.2.5',?,1)`).run(uid, issued);
+      VALUES (?,1,'1.3.10','1.2.5',?,1)`).run(uid, issued);
     sqlite.prepare(`INSERT INTO auth_sessions
       (token_hash,uid,auth_epoch,csrf_hash,issued_at_ms,idle_expires_at_ms,absolute_expires_at_ms)
       VALUES (?,?,1,?,?,?,?)`).run(uid === 'owner-a' ? SESSION_HASH : 'b'.repeat(64),

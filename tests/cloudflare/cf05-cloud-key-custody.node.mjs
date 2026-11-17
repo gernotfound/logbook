@@ -12,7 +12,7 @@ import { runOneHealthErasureStep } from '../../cloudflare/jobs/health-erasure-wo
 
 const ORIGIN = 'https://cf05-synthetic.invalid';
 const KEK = Buffer.alloc(32, 42).toString('base64');
-const VERSION = '1.3.9';
+const VERSION = '1.3.10';
 const TERMS = '1.2.5';
 class Statement {
   constructor(sqlite, sql, args = []) { this.sqlite = sqlite; this.sql = sql; this.args = args; }

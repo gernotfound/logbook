@@ -48,7 +48,7 @@ function owner(f, uid = 'owner-a') {
   f.sqlite.prepare("INSERT INTO sync_subjects(uid,status,consent_revision,fence_epoch) VALUES (?,'active',1,1)").run(uid);
   f.sqlite.prepare('INSERT INTO sync_state(uid,revision) VALUES (?,0)').run(uid);
   f.sqlite.prepare('INSERT INTO health_consent_acceptances (uid,consent_revision,privacy_version,terms_version,accepted_at_ms,over_18_confirmed) VALUES (?,1,?,?,?,1)')
-    .run(uid, '1.3.9', '1.2.5', at);
+    .run(uid, '1.3.10', '1.2.5', at);
   const hash = uid === 'owner-a' ? 'a'.repeat(64) : 'b'.repeat(64);
   f.sqlite.prepare('INSERT INTO auth_sessions (token_hash,uid,auth_epoch,csrf_hash,issued_at_ms,idle_expires_at_ms,absolute_expires_at_ms) VALUES (?,?,1,?,?,?,?)')
     .run(hash, uid, 'c'.repeat(64), at, at + 3600000, at + 7200000);
@@ -310,7 +310,7 @@ void test('D-01 rights-only ADK read delayed through finalization is rejected', 
       } };
     } };
     await assert.rejects(releaseCloudAccountDataKey(intercepted,
-      { CLOUD_ACCOUNT_KEK_V1: KEK, CONSENT_PRIVACY_VERSION: '1.3.9',
+      { CLOUD_ACCOUNT_KEK_V1: KEK, CONSENT_PRIVACY_VERSION: '1.3.10',
         CONSENT_TERMS_VERSION: '1.2.5' },
       { uid: 'owner-a', authenticated: true, emailVerified: true,
         rateGatePassed: true, csrfVerified: true, fenceEpoch: 1,

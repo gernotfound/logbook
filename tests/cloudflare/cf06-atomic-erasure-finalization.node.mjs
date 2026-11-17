@@ -99,7 +99,7 @@ function owner(f, uid) {
   f.sqlite.prepare('INSERT INTO sync_state(uid,revision) VALUES (?,0)').run(uid);
   f.sqlite.prepare(`INSERT INTO health_consent_acceptances
     (uid,consent_revision,privacy_version,terms_version,accepted_at_ms,over_18_confirmed)
-    VALUES (?,1,'1.3.9','1.2.5',?,1)`).run(uid, at);
+    VALUES (?,1,'1.3.10','1.2.5',?,1)`).run(uid, at);
   f.sqlite.prepare(`INSERT INTO auth_sessions
     (token_hash,uid,auth_epoch,csrf_hash,issued_at_ms,idle_expires_at_ms,absolute_expires_at_ms)
     VALUES (?,?,1,?,?,?,?)`).run(sessionHash, uid, 'c'.repeat(64),
@@ -108,7 +108,7 @@ function owner(f, uid) {
 }
 async function provision(f, uid = 'owner-a') {
   const key = await releaseCloudAccountDataKey(f.db, {
-    CLOUD_ACCOUNT_KEK_V1: KEK, CONSENT_PRIVACY_VERSION: '1.3.9',
+    CLOUD_ACCOUNT_KEK_V1: KEK, CONSENT_PRIVACY_VERSION: '1.3.10',
     CONSENT_TERMS_VERSION: '1.2.5',
   }, {
     uid, authenticated: true, emailVerified: true, csrfVerified: true,

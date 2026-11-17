@@ -51,7 +51,7 @@ function addOwner(sqlite, uid) {
   sqlite.prepare('INSERT INTO sync_state(uid,revision) VALUES (?,0)').run(uid);
   sqlite.prepare(`INSERT INTO health_consent_acceptances
     (uid,consent_revision,privacy_version,terms_version,accepted_at_ms,over_18_confirmed)
-    VALUES (?,1,'1.3.9','1.2.5',?,1)`).run(uid, now);
+    VALUES (?,1,'1.3.10','1.2.5',?,1)`).run(uid, now);
 }
 function subject(sqlite, uid) {
   const row = sqlite.prepare(`SELECT uid, status, consent_revision, fence_epoch,

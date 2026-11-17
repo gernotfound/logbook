@@ -41,7 +41,7 @@ function owner(f, uid) {
   f.sqlite.prepare('INSERT INTO sync_state (uid,revision) VALUES (?,0)').run(uid);
   f.sqlite.prepare(`INSERT INTO health_consent_acceptances
     (uid,consent_revision,privacy_version,terms_version,accepted_at_ms,over_18_confirmed)
-    VALUES (?,1,'1.3.9','1.2.5',?,1)`).run(uid, Date.now() - 10_000);
+    VALUES (?,1,'1.3.10','1.2.5',?,1)`).run(uid, Date.now() - 10_000);
 }
 function insertDocuments(f, uid, count) {
   for (let i = 0; i < count; i += 1) {
