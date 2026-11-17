@@ -17,11 +17,18 @@
 
 **MUST:** `firebase.json` non autorizza endpoint esterni di monitoraggio degli errori in `connect-src`; il workflow Firebase Hosting non richiede DSN, token, organization/project o upload di source map. `scripts/check-production-build-secrets.mjs` impedisce la reintroduzione accidentale di variabili di monitoraggio nel workflow.
 
-## Frontend Cloudflare: nessuna iniezione di Analytics
+## Frontend Cloudflare: Web Analytics manuale, senza iniezione edge
 
-**MUST:** il solo frontend pubblico di sviluppo su `thelogbook.me` non deve ricevere script Web Analytics/RUM di Cloudflare tramite inserimento automatico del provider. L'audit del 14/11/2026 ha verificato che `auto_install=true` e RUM attivo alteravano le risposte HTML: `/?tab=training` riceveva 4004 byte invece dei 3637 byte della build. Sono stati impostati `auto_install=false` e il ruleset Web Analytics `enabled=false`; il provider espone la modalità zona `rum=manual`, che **non** significa raccolta attiva quando nessuno snippet manuale è presente. Non eliminare il sito Analytics storico senza inventario e mandato separato.
+**MUST:** il frontend pubblico su `thelogbook.me` non deve ricevere script Web Analytics/RUM tramite inserimento automatico del provider. **Eccezione autorizzata 17/11/2026:** il solo `public/analytics-loader.js` può caricare Cloudflare Web Analytics per visite e prestazioni su `/`, `/index.html` e `/about` senza query, frammenti o referrer sensibili, rispettando DNT/GPC. Restano vietati error monitoring, dati personali/sanitari, eventi comportamentali, OAuth, API e percorsi non ammessi. Il piano Free ha zero regole Web Analytics per-path: l'esclusione è a livello di codice, con regressioni obbligatorie. L'audit del 14/11/2026 ha verificato che `auto_install=true` e RUM attivo alteravano le risposte HTML: `/?tab=training` riceveva 4004 byte invece dei 3637 byte della build. Sono stati impostati `auto_install=false` e il ruleset Web Analytics `enabled=false`; il provider espone la modalità zona `rum=manual`, che **non** significa raccolta attiva quando nessuno snippet manuale è presente. Non eliminare il sito Analytics storico senza inventario e mandato separato. La modalità manuale deve rimanere attiva: non abilitare l'iniezione automatica che altera l'HTML dopo il build.
 
-**MUST:** i deploy confrontano il contenuto dell'HTML pubblico e delle scorciatoie PWA con l'asset esatto costruito su `main`; un beacon iniettato, anche se bloccato dalla CSP, è un errore di privacy e integrità del rilascio. Non disabilitare né allentare lo smoke per rendere verde la CI. In caso di difformità, verificare configurazione RUM/auto-install e trasformazioni edge sul provider prima di ipotizzare una cache obsoleta; i purge URL non hanno risolto questo incidente.
+**MUST:** i deploy confrontano il contenuto dell'HTML pubblico e delle scorciatoie PWA con l'asset esatto costruito su `main`; un beacon iniettato **dall'edge**, anche se bloccato dalla CSP, è un errore di privacy e integrità del rilascio. Il beacon esplicitamente caricato dal bundle revisionato non deve modificare i byte dell'HTML servito. Non disabilitare né allentare lo smoke per rendere verde la CI. In caso di difformità, verificare configurazione RUM/auto-install e trasformazioni edge sul provider prima di ipotizzare una cache obsoleta; i purge URL non hanno risolto questo incidente.
+
+## Misurazioni autorizzate
+
+- Cloudflare Web Analytics: pageview e Core Web Vitals, non tracciamento individuale, session replay, error monitoring, eventi su azioni, contenuti salute o identificatori.
+- Lo script esterno ammesso dalla CSP Cloudflare è `https://static.cloudflareinsights.com`; il beacon invia a `/cdn-cgi/rum` sullo stesso origin.
+- `auto_install=false`, `rum=manual` e ruleset disabilitato sono misure contro iniezione non revisionata. La raccolta è solo mediante loader esplicito, da verificare sul runtime reale.
+- L'informativa pubblica descrive le misure e la versione `LEGAL_VERSIONS.privacy` deve essere incrementata; la base giuridica e l'effettiva raccolta, anche su Safari, vanno rivalidate prima del GO.
 
 ## Servizi tecnici necessari
 

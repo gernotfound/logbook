@@ -1,5 +1,12 @@
 # Registro dei servizi esterni — stato corrente TheLogBook
 
+## CF-07 — Web Analytics gratuito e manuale (candidato 17/11/2026)
+
+Audit provider Cloudflare: zona `thelogbook.me` nel piano Free, sito Web Analytics già esistente con `auto_install=false`, ruleset `enabled=false`, RUM zona `manual`. Observability risponde piano free con 200.000 eventi/giorno alla data. Dal 1/12/2026 la documentazione prevede 0,5 GB/die Free con acquisizione interrotta al limite. Non sono stati modificati provider, DNS, billing o configurazioni Kinde; la lettura del billing subscription non è accessibile al connettore.
+
+Candidato con beacon manuale solo su `/` e `/about` senza query/hash o referrer sensibili, DNT/GPC, nessun evento fitness, nessun error monitoring. La modalità manuale deve rimanere invariata per gli smoke byte-exact. Informativa privacy e versione legale aggiornate; l'arrivo di dati dal browser e la valutazione giuridica complessiva sono verifiche successive al deploy autorizzato, distinte da CI e dal GO funzionale Kinde/D1.
+
+
 ## CF-03 · durata access token Kinde vs callback monouso (17/11/2026, v2.501.0 candidata)
 
 **Evidenza browser dopo v2.500.0:** `503 phase=access-token-lifetime`, che nasce da `exp-iat>86400` nella prova access JWT firmata e non da token scaduto. La durata esatta e l'impostazione live *Tokens* nel tenant Kinde non sono state lette: non concludere una TTL specifica. Kinde documenta access JWT predefinito 24h, configurabile, e sconsiglia un valore maggiore. [Fonte ufficiale](https://docs.kinde.com/build/tokens/configure-tokens/).

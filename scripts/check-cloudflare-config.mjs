@@ -46,8 +46,8 @@ for (const header of baselineHeaders) {
   // Chrome and Safari can enforce form-action on 303 redirects. The only
   // allowed difference from the legacy CSP is Kinde's exact hosted origin.
   const value = header.key === 'Content-Security-Policy'
-    ? header.value.replace("form-action 'self';",
-      "form-action 'self' https://thelogbook.kinde.com;")
+    ? header.value.replace("script-src 'self' ", "script-src 'self' https://static.cloudflareinsights.com ")
+      .replace("form-action 'self';", "form-action 'self' https://thelogbook.kinde.com;")
     : header.value;
   if (!headers.includes('  ' + header.key + ': ' + value)) {
     failures.push('Cloudflare headers must preserve reviewed security header: ' + header.key);
