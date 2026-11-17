@@ -32,7 +32,7 @@ const CALLBACK_FAILURE_PHASES = new Set([
   'access-token-format', 'access-token-audience', 'access-token-issuer',
   'access-token-expired', 'access-token-key', 'access-token-signature',
   'access-token-algorithm', 'access-token-client', 'access-token-subject',
-  'access-token-grant', 'access-token-timestamps', 'access-token-lifetime',
+  'access-token-grant', 'access-token-timestamps',
   'id-token', 'id-token-audience', 'id-token-issuer',
   'id-token-expired', 'id-token-key', 'id-token-signature',
   'id-token-algorithm', 'id-claims', 'token-binding',
