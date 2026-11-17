@@ -68,6 +68,12 @@ function payload(height: string) {
 
 async function loadModules() {
     vi.resetModules();
+    // Importing the mocked Firebase module cannot register a real identity
+    // provider. Bind this synthetic realm before authenticated hydration and
+    // storage modules capture their first owner-specific session.
+    const { authenticatedIdentitySource } =
+        await import('../../../src/lib/sync/authenticatedIdentitySource');
+    authenticatedIdentitySource.install(() => authState.currentUser);
     const [{ loadAuthenticatedData }, { readLocal, initializeLocal, commitDomainOperations }, { invalidateSession }, { createAndMigrateVault }] = await Promise.all([
         import('../../../src/contexts/auth/loadAuthenticatedData'),
         import('../../../src/lib/sync/localRepository'),
