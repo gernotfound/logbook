@@ -1,11 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { LEGAL_VERSIONS } from '../../../src/lib/legalVersions';
-import { KindeCandidateBoundaryError } from '../../../src/lib/auth/kindeCandidateClient';
-import { inspectKindeCandidateCloudCheckpoint } from '../../../src/lib/sync/kindeCandidateCheckpointBridge';
-import { CloudCiphertextError, sealCloudDocument } from '../../../src/lib/sync/cloudDocumentCipher';
-import type { SyncMeta } from '../../../src/lib/sync/semanticProjection/contracts';
+import { LEGAL_VERSIONS } from '../legalVersions';
+import { KindeCandidateBoundaryError } from '../auth/kindeCandidateClient';
+import { inspectKindeCandidateCloudCheckpoint } from './kindeCandidateCheckpointBridge';
+import { CloudCiphertextError, sealCloudDocument } from './cloudDocumentCipher';
+import type { SyncMeta } from './semanticProjection/contracts';
 
-vi.mock('../../../src/lib/firebase', () => {
+vi.mock('../firebase', () => {
     throw Error('Kinde D1 checkpoint must not initialize the Firebase SDK');
 });
 
