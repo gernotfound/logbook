@@ -1,5 +1,12 @@
 # Registro dei servizi esterni — stato corrente TheLogBook
 
+## CF-03 · readback Kinde e diagnostica access JWT (17/11/2026, candidato v2.500.0)
+
+**Provider Cloudflare prima della modifica:** `thelogbook-cf03-kinde-http-isolated` distribuito al 100% con versione `d90cb9a8-c645-4349-8633-058b897551ca` e binding `APP_ORIGIN`, `DB`, `AUTH_GATE`, `AUTH_RATE_LIMITER`, più cinque Secret OAuth presenti come tipo `secret_text` (nessun valore letto). Il frontend espone esclusivamente `KINDE_HTTP` e static assets, mai `D1_API`. La callback reale dell'owner sulla v2.499.0 mostra `503 phase=access-token`, **non** una sessione confermata. Non sono autorizzati cambi di token, API audience, IAM, DNS, email o billing.
+
+**Incompatibilità del codice dimostrata:** il verifier locale non distingueva le diverse cause del rifiuto JWT, e confrontava `gty` solo come stringa quando Kinde documenta anche array per i token M2M; la patch candidata rende il rifiuto esplicito senza modificare issuer/audience/JWKS o i cinque Secret. La successiva verifica provider deve essere fatta sul nuovo deployment, separatamente dalla CI e dal collaudo hosted. Il codice legacy Firebase/AuthContext/App Check/Firestore/Vercel rimane un perimetro di migrazione **distinto** dalla callback Kinde. Non riattivare hosting o backend sospesi e non sbloccare API sanitaria fino al GO.
+
+
 ## CF-08 — candidato binding runtime privato sul Worker sync (17/11/2026, PR #1191)
 
 **GitHub, non ancora prova di deploy provider:** il candidato v2.497.0 collega soltanto `thelogbook-api-isolated` alla D1 indipendente CF-08 via binding `RECOVERY_DB`, lasciando il binding `DB` originale, AuthGate, Kinde e frontend invariati. Ogni `/v1/sync/*` richiede evidenza aggiornata da entrambe le D1 primarie, con verifica prima delle operazioni e delle risposte positive, comprese ricevute e replay. Il provider deve essere verificato *dopo* il merge: il controllo locale dei manifest e i test con SQLite sintetico non provano che Wrangler abbia distribuito il binding.
