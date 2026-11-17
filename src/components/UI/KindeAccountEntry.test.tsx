@@ -154,6 +154,55 @@ describe('isolated Kinde account entry candidate', () => {
 });
 
 describe('public Kinde identity-only entry boundary', () => {
+    it('does not let an immediate foreground event supersede a pending logout operation', async () => {
+        let finishLogout!: () => void;
+        vi.mocked(readKindeCandidateIdentity).mockResolvedValueOnce(verified)
+            .mockResolvedValue({ kind: 'signed-out' });
+        vi.mocked(revokeKindeCandidateSession).mockImplementationOnce(async () => {
+            // This is synchronous with the click, before React commits busy=true.
+            window.dispatchEvent(new Event('focus'));
+            window.dispatchEvent(new Event('online'));
+            await new Promise<void>(resolve => { finishLogout = resolve; });
+        });
+        render(<KindeAccountEntry identityOnly />);
+        await screen.findByText(/Sessione Kinde verificata/);
+        fireEvent.click(screen.getByRole('button', { name: 'Termina sessione TheLogBook' }));
+        await waitFor(() => expect(revokeKindeCandidateSession).toHaveBeenCalledTimes(1));
+        await act(async () => { await Promise.resolve(); });
+        expect(readKindeCandidateIdentity).toHaveBeenCalledTimes(1);
+        await act(async () => { finishLogout(); });
+        await screen.findByRole('button', { name: 'Accedi o registrati' });
+        expect(readKindeCandidateIdentity).toHaveBeenCalledTimes(2);
+    });
+
+    it('preserves a pending consent operation against a same-turn focus event', async () => {
+        vi.mocked(readKindeCandidateIdentity).mockResolvedValue(verified);
+        vi.mocked(acceptKindeCandidateInitialConsent).mockImplementationOnce(async () => {
+            window.dispatchEvent(new Event('focus'));
+            return confirmed;
+        });
+        render(<KindeAccountEntry />);
+        const accept = await screen.findByRole('button', { name: 'Conferma consenso' });
+        for (const checkbox of screen.getAllByRole('checkbox')) fireEvent.click(checkbox);
+        fireEvent.click(accept);
+        await screen.findByText(/Identità e consenso verificati/);
+        expect(readKindeCandidateIdentity).toHaveBeenCalledTimes(1);
+        expect(acceptKindeCandidateInitialConsent).toHaveBeenCalledTimes(1);
+    });
+
+    it('keeps a local guest activation fenced from a foreground probe during the action', async () => {
+        const onLocalGuest = vi.fn(async () => {
+            window.dispatchEvent(new Event('focus'));
+            window.dispatchEvent(new Event('online'));
+        });
+        render(<KindeAccountEntry identityOnly onLocalGuest={onLocalGuest} />);
+        const guest = await screen.findByRole('button', { name: /Continua senza account/ });
+        fireEvent.click(guest);
+        await waitFor(() => expect(onLocalGuest).toHaveBeenCalledTimes(1));
+        expect(readKindeCandidateIdentity).toHaveBeenCalledTimes(1);
+        expect(readKindeCandidateAccess).not.toHaveBeenCalled();
+    });
+
     it('refreshes a stale verified identity on foreground, without enabling consent or fitness', async () => {
         vi.mocked(readKindeCandidateIdentity).mockResolvedValueOnce(verified)
             .mockResolvedValue({ kind: 'signed-out' });

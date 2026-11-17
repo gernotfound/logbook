@@ -1,5 +1,9 @@
 # Kinde — configurazione del provider per TheLogBook
 
+## CF-03 · protezione sincrona delle azioni Kinde da eventi foreground (17/11/2026)
+
+Durante logout, primo consenso candidato o avvio modalità ospite, un evento `focus`/`online` può arrivare prima che React pubblichi lo stato `busy`. La schermata usa perciò un latch sincrono della singola azione: l'osservatore foreground non invalida la relativa generazione nel mezzo dell'operazione. Una risposta già obsoleta continua a non concedere alcun permesso; il latch viene sempre rilasciato anche in caso di errore. I callback registrati da un effetto smontato non possono avviare controlli tardivi. Regressioni riproducono deliberatamente gli eventi nello stesso turno della richiesta.
+
 ## CF-03 · verifica della sessione Kinde al ritorno in primo piano (17/11/2026)
 
 La variante React `KindeAccountEntry identityOnly` ricontrolla la sessione applicativa Kinde quando la finestra riprende il focus, torna visibile o recupera la connettività. Eventi di visibilità/focus nello stesso turno vengono accorpati; le risposte vecchie non possono prevalere su una lettura successiva grazie alla generazione dell'osservatore. In caso di errore il pannello resta bloccato, senza autorizzare consenso, chiavi cloud, fitness o replica; un accesso hosted successivo rimane una scelta esplicita. Nessun evento di foreground legge dati guest.
