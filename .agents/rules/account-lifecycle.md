@@ -5,6 +5,10 @@
 
 **Autorità:** [`AGENTS.md`](../../AGENTS.md). Questo contratto ne specializza gli invarianti; non amplia autorizzazioni o perimetro.
 
+### Confine identità per l'avvio guest (17/11/2026)
+
+`useGuestLogin` non legge più direttamente `firebase.auth.currentUser`: il provider fornisce `readAuthIdentity(): unknown`, oggetto opaco che deve conservare identità stabile soltanto durante la stessa sessione, e un `authRunRef` monotono. La vecchia implementazione Firebase passa esattamente il suo oggetto `auth.currentUser`, preservando il comportamento corrente; il nuovo provider Cloudflare dovrà passare un token di sessione stabile, **non** solo UID, e incrementare la generazione a ogni cambio/riaccesso A→B→A. Dopo ogni await il guest lock continua a verificare generazione, owner, sessione e vault prima di pubblicare dati. Questo è un refactoring preparatorio, **non** l'adozione della sessione Kinde o il cutover dell'AuthProvider.
+
 ### Riavvio OAuth senza sessione attestata (17/11/2026)
 
 Nell'ingresso React `identityOnly`, un errore di lettura dell'identità non deve bloccare un nuovo accesso esplicito attraverso il Worker Kinde: il POST same-origin di avvio ha propri gate CSRF/state/rate-limit. **Non** trasformare questo errore in un login autenticato, consenso o permesso cloud. La pagina diagnostica `/verifica-accesso` usa un form HTML nativo separato; il mancato avanzamento nel browser normale non è ancora causalmente dimostrato e va distinto dal blocco della vecchia sessione Firebase sul frontend.
