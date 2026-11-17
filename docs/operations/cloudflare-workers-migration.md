@@ -1,5 +1,14 @@
 # TheLogBook — migrazione Cloudflare: runbook corrente
 
+## CF-03 · JWT code exchange e TTL non persistente (17/11/2026, v2.501.0 candidata)
+
+L'owner ha ottenuto sulla v2.500.0 `503 phase=access-token-lifetime`. Il verifier ha già verificato firma/JWKS, issuer/audience, client, subject e scadenza, poi ha rifiutato perché `exp-iat>86400`; ciò non significa che il JWT fosse scaduto. Kinde [documenta un default di 24h, personalizzabile](https://docs.kinde.com/build/tokens/configure-tokens/). La configurazione reale del tenant non è stata riletta e non va indovinata.
+
+Il codice candidato rimuove solo dalla **prova access JWT monouso dopo state D1 consumato + code/PKCE server-side** l'ulteriore tetto di durata previsto per credenziali API; l'access JWT non viene persistito, restituito o riutilizzato per l'autorizzazione sanitaria. Rimangono `jwtVerify` RS256/JWKS, issuer/audience, client/subject/grant, `iat` e `exp` validi, ID JWT firmato max 1h con nonce/emails verificate e sessione D1 autonoma con revoca. **Il verificatore API indipendente rimane max15min** e continua a rifiutare token dalla durata maggiore. Nuove regressioni attraversano vero flusso OAuth+SQLite current-schema, replay e login negativo su token scaduto e nonce/email errati.
+
+Per il GO futuro verificare la configurazione token Kinde sul provider ed eventualmente riportare a un valore di sicurezza consigliato, senza cambiare password, token, Secret o DNS in questo incremento. Nessun dato salute, AuthContext, App Check o Vercel modificato. Il login reale resta da collaudare e la diagnostica temporanea da rimuovere prima del GO generale.
+
+
 ## CF-03 · delimitazione 503 `access-token` senza workaround (17/11/2026, candidato v2.500.0)
 
 Un nuovo tentativo di login hosted Kinde sulla v2.499.0 è arrivato alla verifica dell'access token con `503 phase=access-token`, dopo lo state monouso e la token response. I percorsi `/__ /auth` Firebase, App Check e Vercel non sono chiamati da quella verifica e restano un problema separato di migrazione dell'AuthContext. La richiesta Kinde include già esplicitamente `audience` e `scope=openid email profile`. Non si può dedurre la causa del 503 dai test JWT sintetici né dal precedente `id-token` visto in un diverso tentativo.
