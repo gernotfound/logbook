@@ -1,4 +1,4 @@
-import { createKindePrincipalProvisioner } from './kinde-principal-provisioner.mjs';
+import { createKindePrincipalProvisioner, KindePrincipalProvisionError } from './kinde-principal-provisioner.mjs';
 import { issueVerifiedSession } from './session-issuer.mjs';
 
 const START_PATH = '/api/auth/kinde/start';
@@ -28,7 +28,8 @@ function noStoreHeaders() {
 // Expose only fixed, non-identifying phases after a valid browser-bound OAuth
 // state has been consumed. No token, user identifier or provider error escapes.
 const CALLBACK_FAILURE_PHASES = new Set([
-  'token-transport', 'token-response', 'identity', 'session',
+  'token-transport', 'token-response', 'identity-input', 'access-token',
+  'id-token', 'id-claims', 'token-binding', 'principal-storage', 'session',
 ]);
 
 function denied(status = 400, phase = null) {
@@ -282,8 +283,17 @@ export function createKindeOAuthFlow(configuration, { rateLimit, fetchImpl = fet
       });
       phase = 'token-response';
       const tokens = await tokenResponse(response);
-      phase = 'identity';
-      const principal = await provision(db, tokens, saved.nonce);
+      phase = 'identity-input';
+      let principal;
+      try {
+        principal = await provision(db, tokens, saved.nonce);
+      } catch (error) {
+        if (error instanceof KindePrincipalProvisionError
+          && CALLBACK_FAILURE_PHASES.has(error.phase)) {
+          phase = error.phase;
+        }
+        throw error;
+      }
       phase = 'session';
       const issued = await issueVerifiedSession(db, principal.uid);
       if (!issued || !Array.isArray(issued.setCookies) || issued.setCookies.length !== 2) {
