@@ -28,7 +28,7 @@ function scriptsFor(url, options = {}) {
   return collected;
 }
 void test('the reviewed manual beacon is limited to known public no-query paths', () => {
-  for (const path of ['/', '/about', '/index.html']) {
+  for (const path of ['/', '/index.html']) {
     const scripts = scriptsFor('https://thelogbook.me' + path);
     assert.equal(scripts.length, 1);
     assert.equal(scripts[0].src, 'https://static.cloudflareinsights.com/beacon.min.js');
@@ -44,6 +44,7 @@ void test('no beacon on OAuth, health, query, fragments, other origins and HTTP'
     'https://thelogbook.me/?code=secret&state=secret',
     'https://thelogbook.me/#secret',
     'https://thelogbook.me/privacy',
+    'https://thelogbook.me/about',
     'https://thelogbook.me/verifica-accesso',
     'https://thelogbook.me/api/auth/kinde/callback?code=secret',
     'https://thelogbook.me/training',
@@ -68,7 +69,7 @@ void test('respects DNT and GPC', () => {
 });
 void test('source and CSP enforce explicit manual installation, excluding auth and privacy', () => {
   assert.ok(index.includes('<script defer src="/analytics-loader.js"></script>'));
-  assert.ok(about.includes('<script defer src="/analytics-loader.js"></script>'));
+  assert.ok(!about.includes('analytics-loader.js'));
   assert.ok(!privacy.includes('analytics-loader.js') && !diagnostic.includes('analytics-loader.js'));
   assert.ok(headers.includes("script-src 'self' https://static.cloudflareinsights.com "));
 });

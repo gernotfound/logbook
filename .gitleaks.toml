@@ -1,0 +1,12 @@
+# The Cloudflare Web Analytics site token is a public browser-side identifier.
+# Keep every default Gitleaks rule active; exempt only this exact identifier
+# in its reviewed loader and dedicated regression test.
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Known public Cloudflare Web Analytics site token in the explicit loader and its tests only"
+condition = "AND"
+regexTarget = "line"
+paths = ['''^(public/analytics-loader\.js|tests/cloudflare/cf07-web-analytics\.node\.mjs)$''']
+regexes = ['''c375a573603f448f87a2d1b14cfc540[e]''']

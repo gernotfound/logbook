@@ -1,6 +1,6 @@
 // Never send OAuth state, client health data or sensitive URL information.
 (() => {
-  const allowedPaths = new Set(['/', '/index.html', '/about']);
+  const allowedPaths = new Set(['/', '/index.html']);
   const current = window.location;
   if (current.protocol !== 'https:' || current.hostname !== 'thelogbook.me'
     || !allowedPaths.has(current.pathname) || current.search || current.hash) return;

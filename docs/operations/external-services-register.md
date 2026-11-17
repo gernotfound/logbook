@@ -4,7 +4,7 @@
 
 Audit provider Cloudflare: zona `thelogbook.me` nel piano Free, sito Web Analytics già esistente con `auto_install=false`, ruleset `enabled=false`, RUM zona `manual`. Observability risponde piano free con 200.000 eventi/giorno alla data. Dal 1/12/2026 la documentazione prevede 0,5 GB/die Free con acquisizione interrotta al limite. Non sono stati modificati provider, DNS, billing o configurazioni Kinde; la lettura del billing subscription non è accessibile al connettore.
 
-Candidato con beacon manuale solo su `/` e `/about` senza query/hash o referrer sensibili, DNT/GPC, nessun evento fitness, nessun error monitoring. La modalità manuale deve rimanere invariata per gli smoke byte-exact. Informativa privacy e versione legale aggiornate; l'arrivo di dati dal browser e la valutazione giuridica complessiva sono verifiche successive al deploy autorizzato, distinte da CI e dal GO funzionale Kinde/D1.
+Candidato con beacon manuale solo su `/` senza query/hash o referrer sensibili, DNT/GPC, nessun evento fitness, nessun error monitoring. La modalità manuale deve rimanere invariata per gli smoke byte-exact. Informativa privacy e versione legale aggiornate; l'arrivo di dati dal browser e la valutazione giuridica complessiva sono verifiche successive al deploy autorizzato, distinte da CI e dal GO funzionale Kinde/D1.
 
 
 ## CF-03 · durata access token Kinde vs callback monouso (17/11/2026, v2.501.0 candidata)
