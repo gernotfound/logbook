@@ -152,3 +152,60 @@ describe('isolated Kinde account entry candidate', () => {
         }
     });
 });
+
+describe('public Kinde identity-only entry boundary', () => {
+    it('reads only the trusted session, never calls consent, cloud key or Firebase login', async () => {
+        vi.mocked(readKindeCandidateIdentity).mockResolvedValue(verified);
+        render(<KindeAccountEntry identityOnly />);
+        await screen.findByText(/Sessione Kinde verificata/);
+        expect(readKindeCandidateAccess).not.toHaveBeenCalled();
+        expect(acceptKindeCandidateInitialConsent).not.toHaveBeenCalled();
+        expect(screen.queryByRole('button', { name: 'Conferma consenso' })).toBeNull();
+        expect(screen.queryByRole('checkbox')).toBeNull();
+        expect(screen.getByRole('button', { name: 'Termina sessione TheLogBook' })).toBeTruthy();
+    });
+
+    it('allows explicit local guest only when the identity read proves signed-out', async () => {
+        const onLocalGuest = vi.fn(async () => {});
+        render(<KindeAccountEntry identityOnly onLocalGuest={onLocalGuest} />);
+        const guest = await screen.findByRole('button', { name: /Continua senza account/ });
+        fireEvent.click(guest);
+        await waitFor(() => expect(onLocalGuest).toHaveBeenCalledTimes(1));
+        expect(readKindeCandidateAccess).not.toHaveBeenCalled();
+        expect(acceptKindeCandidateInitialConsent).not.toHaveBeenCalled();
+        expect(submitKindeHostedSignIn).not.toHaveBeenCalled();
+    });
+
+    it('cannot enter guest mode from a verified Kinde session', async () => {
+        vi.mocked(readKindeCandidateIdentity).mockResolvedValue(verified);
+        const onLocalGuest = vi.fn(async () => {});
+        render(<KindeAccountEntry identityOnly onLocalGuest={onLocalGuest} />);
+        await screen.findByText(/Sessione Kinde verificata/);
+        expect(screen.queryByRole('button', { name: /Continua senza account/ })).toBeNull();
+        expect(onLocalGuest).not.toHaveBeenCalled();
+    });
+
+    it('allows isolated local guest when Kinde is unavailable, without any account or consent permission', async () => {
+        vi.mocked(readKindeCandidateIdentity).mockRejectedValue(new Error('503'));
+        const onLocalGuest = vi.fn(async () => {});
+        render(<KindeAccountEntry identityOnly onLocalGuest={onLocalGuest} />);
+        await screen.findByRole('button', { name: 'Riprova la verifica' });
+        const guest = screen.getByRole('button', { name: /Continua senza account/ });
+        expect(readKindeCandidateAccess).not.toHaveBeenCalled();
+        expect(acceptKindeCandidateInitialConsent).not.toHaveBeenCalled();
+        fireEvent.click(guest);
+        await waitFor(() => expect(onLocalGuest).toHaveBeenCalledTimes(1));
+        expect(submitKindeHostedSignIn).not.toHaveBeenCalled();
+    });
+
+    it('never offers a guest transition from an unverified Kinde identity', async () => {
+        vi.mocked(readKindeCandidateIdentity).mockResolvedValue({
+            kind: 'email-unverified', principal: { ...principal, emailVerified: false },
+        });
+        const onLocalGuest = vi.fn(async () => {});
+        render(<KindeAccountEntry identityOnly onLocalGuest={onLocalGuest} />);
+        await screen.findByText(/Verifica il tuo indirizzo email/);
+        expect(screen.queryByRole('button', { name: /Continua senza account/ })).toBeNull();
+        expect(onLocalGuest).not.toHaveBeenCalled();
+    });
+});

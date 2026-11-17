@@ -1,5 +1,10 @@
 # TheLogBook — migrazione Cloudflare: runbook corrente
 
+## CF-03 · ingresso account Kinde in React, dati salute ancora negati (17/11/2026, candidato v2.506.0)
+
+L'account entry React è ora candidato pubblico **identity-only** su `src/App.tsx` per visitatori non guest e senza identità Firebase: verifica la sessione Kinde, permette il login hosted e mantiene la scelta guest isolata anche quando il servizio Kinde è indisponibile/offline. Il fallimento di verifica Auth non autorizza il cloud. Non monta il consenso candidato e non inoltra alcuna chiamata D1 health/consent. Il legacy `AuthProvider` rimane operativo anche per guest/vecchi percorsi, quindi questa fase non autorizza la dichiarazione di rimozione Firebase. Occorre sostituire interamente il provider, il lifecycle owner/guest, i journal e i diritti prima del GO. Regressioni isolate verificano che il login Kinde non sblocchi la PWA; il browser reale e le sessioni esistenti richiedono collaudo dopo deploy.
+
+
 ## CF-03 · login reale verificato e logout applicativo isolato (17/11/2026)
 
 Registrazione email/password con Kinde e letture ripetute `POST /api/auth/session` confermate dal proprietario: identità verificata ed epoca 1, consenso sanitario 0. Un nuovo logout D1 diagnostico verifica CSRF e successivo 401 prima di dichiarare la disconnessione; nessun purge, logout SSO o grant fitness. Il frontend React/Firebase non è migrato: consenso, ADK, journal, replica e diritti sono NO-GO per i nuovi account finché non integrati e collaudati.
