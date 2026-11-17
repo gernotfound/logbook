@@ -234,6 +234,59 @@ void test('missing dependencies, invalid KEK, private gate failure and quotas fa
   } finally { f.close(); }
 });
 
+void test('fitness key provisioning requires an independent active owner and open registry', async () => {
+  const f = await fixture();
+  try {
+    await f.consent('owner-a', { register: false });
+    await f.consent('owner-b');
+    const unregistered = await f.call('owner-a', SYNC);
+    assert.equal(unregistered.response.status, 503);
+    assert.deepEqual(unregistered.body, { error: 'unavailable' });
+
+    for (const RECOVERY_DB of [undefined, f.db]) {
+      const unreadable = await f.call('owner-b', SYNC, { env: { ...f.env, RECOVERY_DB } });
+      assert.equal(unreadable.response.status, 503);
+      assert.deepEqual(unreadable.body, { error: 'unavailable' });
+    }
+    f.registry.exec("UPDATE recovery_control SET mode='sealed', generation=3 WHERE singleton=1");
+    const sealed = await f.call('owner-b', SYNC);
+    assert.equal(sealed.response.status, 503);
+    assert.deepEqual(sealed.body, { error: 'unavailable' });
+    assert.equal(f.count('cloud_key_issuance', 'owner-a'), 0);
+    assert.equal(f.count('cloud_key_issuance', 'owner-b'), 0);
+  } finally { f.close(); }
+});
+
+void test('fitness key is withheld when independent withdrawal is armed during issuance', async () => {
+  const f = await fixture();
+  try {
+    await f.consent('owner-a');
+    let registryReads = 0;
+    const racingRegistry = {
+      withSession(mode) {
+        if (++registryReads === 2) {
+          f.registry.exec(`UPDATE recovery_owner_fences SET status='blocked',
+            change_seq=change_seq+1 WHERE uid='owner-a'`);
+        }
+        return f.recoveryDb.withSession(mode);
+      },
+    };
+    const refused = await f.call('owner-a', SYNC, {
+      env: { ...f.env, RECOVERY_DB: racingRegistry },
+    });
+    assert.equal(refused.response.status, 503);
+    assert.deepEqual(refused.body, { error: 'unavailable' });
+    assert.equal(refused.response.headers.get('Cache-Control'), 'no-store');
+    assert.equal(registryReads, 2);
+    assert.equal(f.count('cloud_account_keys', 'owner-a'), 1);
+    assert.equal(f.count('cloud_key_issuance', 'owner-a'), 1);
+    assert.equal(f.sqlite.prepare("SELECT status FROM sync_subjects WHERE uid='owner-a'").get().status, 'active');
+    assert.equal((await f.call('owner-a', SYNC)).response.status, 503);
+    await f.consent('owner-b');
+    assert.equal((await f.call('owner-b', SYNC)).response.status, 200);
+  } finally { f.close(); }
+});
+
 void test('candidate route is private in the published frontend configuration', () => {
   const config = JSON.parse(readFileSync(new URL('../../cloudflare/wrangler.jsonc', import.meta.url), 'utf8'));
   assert.equal(config.main, './auth-proxy.mjs');
