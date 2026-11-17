@@ -1,5 +1,6 @@
-// Candidate same-origin HTTP boundary for Kinde. Not mounted on the public
-// Static Assets Worker: enabling routes needs a separate provider/runtime GO.
+// Private same-origin Kinde HTTP boundary reached only through the public
+// frontend's OAuth/session-only service binding. Health APIs are not exposed;
+// full application Auth/consent/sync still require a separate functional GO.
 import { createKindeOAuthFlow } from './kinde-oauth-flow.mjs';
 import logoutWorker from '../api/logout-worker.mjs';
 
