@@ -1,0 +1,326 @@
+import { useEffect, useMemo, useRef, useState, type MouseEvent } from 'react';
+import {
+    Activity,
+    ChevronLeft,
+    ChevronRight,
+    Copy,
+    Dumbbell,
+    Pencil,
+    Search,
+    Timer,
+    Trash2,
+    X,
+} from 'lucide-react';
+import type { useTrainingExercises } from '../../../hooks/useTrainingExercises';
+import { Logic } from '../../../lib/logic';
+import MuscleModel from '../MuscleModel';
+
+type TrainingExercisesHook = ReturnType<typeof useTrainingExercises>;
+type ExerciseItem = TrainingExercisesHook['library'][number];
+const ARCHIVE_PAGE_SIZE = 50;
+
+interface ExerciseArchiveProps {
+    library: TrainingExercisesHook['library'];
+    routines: TrainingExercisesHook['routines'];
+    selectedExId: string | null;
+    onSelectedExIdChange: (id: string | null) => void;
+    onEditItem: (exercise: ExerciseItem) => void;
+    onDuplicate: TrainingExercisesHook['handleDuplicate'];
+    onDelete: (id: string, event: MouseEvent) => void | Promise<void>;
+}
+
+function normalizeSearch(value: string): string {
+    return value
+        .toLocaleLowerCase('it')
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .trim();
+}
+
+function trackingLabel(exercise: ExerciseItem): string {
+    if (exercise.trackingType === 'time') return 'Tempo';
+    if (exercise.trackingType === 'cardio') return 'Cardio';
+    return 'Peso e ripetizioni';
+}
+
+function TrackingIcon({ exercise }: { exercise: ExerciseItem }) {
+    if (exercise.trackingType === 'cardio') return <Activity size={18} aria-hidden="true" />;
+    if (exercise.trackingType === 'time') return <Timer size={18} aria-hidden="true" />;
+    return <Dumbbell size={18} aria-hidden="true" />;
+}
+
+function muscleName(id: string): string {
+    return Logic.getMuscleName(id) || id;
+}
+
+function muscleList(ids?: string[]): string {
+    if (!ids?.length) return 'Nessuno';
+    return ids.map(muscleName).join(', ');
+}
+
+export function ExerciseArchive({
+    library,
+    routines,
+    selectedExId,
+    onSelectedExIdChange,
+    onEditItem,
+    onDuplicate,
+    onDelete,
+}: ExerciseArchiveProps) {
+    const [query, setQuery] = useState('');
+    const [page, setPage] = useState(() => ({ query: '', source: library, count: ARCHIVE_PAGE_SIZE }));
+    const updateQuery = (value: string) => {
+        setQuery(value);
+        setPage({ query: value, source: library, count: ARCHIVE_PAGE_SIZE });
+    };
+    const [detailActionPending, setDetailActionPending] = useState(false);
+    const detailActionPendingRef = useRef(false);
+
+    const runDetailAction = async (action: () => void | Promise<void>) => {
+        // The ref closes the repeat-click window before React commits disabled controls.
+        if (detailActionPendingRef.current) return;
+        detailActionPendingRef.current = true;
+        setDetailActionPending(true);
+        try {
+            await action();
+        } catch (error) {
+            console.error('Azione sulla libreria esercizi non completata:', error);
+        } finally {
+            detailActionPendingRef.current = false;
+            setDetailActionPending(false);
+        }
+    };
+
+    const routineCounts = useMemo(() => {
+        const counts = new Map<string, number>();
+        routines.forEach(routine => {
+            const exerciseIds = new Set<string>(
+                (routine.exercises || [])
+                    .map(exercise => exercise.exId)
+                    .filter((id: unknown): id is string => typeof id === 'string')
+            );
+            exerciseIds.forEach(id => counts.set(id, (counts.get(id) || 0) + 1));
+        });
+        return counts;
+    }, [routines]);
+
+    const searchableLibrary = useMemo(() => library.map(exercise => ({
+        exercise,
+        searchable: normalizeSearch([
+            exercise.name,
+            ...(exercise.muscles || []).map(muscleName),
+            ...(exercise.secondaryMuscles || []).map(muscleName),
+            trackingLabel(exercise),
+            exercise.isDefault ? 'Catalogo' : 'Personale',
+            exercise.notes || '',
+        ].join(' ')),
+    })), [library]);
+
+    const filteredLibrary = useMemo(() => {
+        const normalized = normalizeSearch(query);
+        if (!normalized) return library;
+
+        const terms = normalized.split(/\s+/).filter(Boolean);
+        return searchableLibrary
+            .filter(({ searchable }) => terms.every(term => searchable.includes(term)))
+            .map(({ exercise }) => exercise);
+    }, [library, searchableLibrary, query]);
+
+    const visibleCount = page.query === query && page.source === library ? page.count : ARCHIVE_PAGE_SIZE;
+    const visibleLibrary = filteredLibrary.slice(0, visibleCount);
+
+    const selectedExercise = useMemo(
+        () => library.find(exercise => exercise.id === selectedExId) || null,
+        [library, selectedExId]
+    );
+
+    useEffect(() => {
+        // An ID selected in a previous library snapshot must not reopen an
+        // unrelated detail view if an item with that ID appears later.
+        if (selectedExId !== null && !selectedExercise) onSelectedExIdChange(null);
+    }, [selectedExId, selectedExercise, onSelectedExIdChange]);
+
+    if (selectedExercise) {
+        const routineCount = routineCounts.get(selectedExercise.id) || 0;
+        return (
+            <section className="exercise-detail-page" aria-label="Dettaglio esercizio">
+                <div className="exercise-detail-top">
+                    <button
+                        className="exercise-icon-button"
+                        type="button"
+                        aria-label="Torna all’elenco"
+                        disabled={detailActionPending}
+                        onClick={() => onSelectedExIdChange(null)}
+                    >
+                        <ChevronLeft size={20} aria-hidden="true" />
+                    </button>
+                    <h3>{selectedExercise.name}</h3>
+                </div>
+
+                <section className="exercise-detail-muscle-section" aria-label="Muscoli coinvolti">
+                    <strong className="exercise-detail-muscle-title">Muscoli coinvolti</strong>
+                    <div className="exercise-detail-muscle-map">
+                        <MuscleModel
+                            selectedMuscles={selectedExercise.muscles || []}
+                            secondaryMuscles={selectedExercise.secondaryMuscles || []}
+                            showLegend={false}
+                            showTextSelection={false}
+                        />
+                    </div>
+                    <div className="exercise-detail-muscle-legend">
+                        <span>
+                            <i className="primary" aria-hidden="true" />
+                            Primari: {muscleList(selectedExercise.muscles)}
+                        </span>
+                        <span>
+                            <i className="secondary" aria-hidden="true" />
+                            Secondari: {muscleList(selectedExercise.secondaryMuscles)}
+                        </span>
+                    </div>
+                </section>
+
+                <div className="exercise-detail-facts">
+                    <div className="exercise-detail-fact">
+                        <span>Tracciamento</span>
+                        <strong>{trackingLabel(selectedExercise)}</strong>
+                    </div>
+                    <div className="exercise-detail-fact">
+                        <span>Muscoli</span>
+                        <strong>
+                            {muscleList(selectedExercise.muscles)}
+                            {selectedExercise.secondaryMuscles?.length
+                                ? ` + ${muscleList(selectedExercise.secondaryMuscles)}`
+                                : ''}
+                        </strong>
+                    </div>
+                    <div className="exercise-detail-fact">
+                        <span>Utilizzo</span>
+                        <strong>{routineCount} {routineCount === 1 ? 'scheda' : 'schede'}</strong>
+                    </div>
+                    <div className="exercise-detail-fact">
+                        <span>Origine</span>
+                        <strong>{selectedExercise.isDefault ? 'Catalogo' : 'Personale'}</strong>
+                    </div>
+                </div>
+
+                <div className="exercise-detail-notes">
+                    <span>Note</span>
+                    <p>{selectedExercise.notes?.trim() || 'Nessuna nota.'}</p>
+                </div>
+
+                <div className="exercise-detail-actions">
+                    <button
+                        className="btn exercise-action-button"
+                        type="button"
+                        disabled={detailActionPending}
+                        onClick={() => onEditItem(selectedExercise)}
+                    >
+                        <Pencil size={17} aria-hidden="true" />
+                        Modifica
+                    </button>
+                    <button
+                        className="btn exercise-action-button"
+                        type="button"
+                        disabled={detailActionPending}
+                        onClick={() => { void runDetailAction(() => onDuplicate(selectedExercise)); }}
+                    >
+                        <Copy size={17} aria-hidden="true" />
+                        Duplica
+                    </button>
+                    {!selectedExercise.isDefault && (
+                        <button
+                            className="btn exercise-action-button exercise-action-danger"
+                            type="button"
+                            disabled={detailActionPending}
+                            onClick={event => { void runDetailAction(() => onDelete(selectedExercise.id, event)); }}
+                        >
+                            <Trash2 size={17} aria-hidden="true" />
+                            Elimina
+                        </button>
+                    )}
+                </div>
+            </section>
+        );
+    }
+
+    return (
+        <section className="exercise-library-list" aria-label="Libreria esercizi">
+            <div className="exercise-search-wrap">
+                <Search size={18} aria-hidden="true" />
+                <input
+                    className="exercise-search-input"
+                    type="text"
+                    inputMode="search"
+                    role="searchbox"
+                    value={query}
+                    onChange={event => updateQuery(event.target.value)}
+                    placeholder="Cerca esercizio"
+                    aria-label="Cerca esercizio"
+                />
+                {query && (
+                    <button
+                        className="exercise-search-clear"
+                        type="button"
+                        aria-label="Cancella ricerca"
+                        onClick={() => updateQuery('')}
+                    >
+                        <X size={18} aria-hidden="true" />
+                    </button>
+                )}
+            </div>
+
+            <div className="exercise-section-head">
+                <h3>La tua libreria</h3>
+                <span>{filteredLibrary.length} {filteredLibrary.length === 1 ? 'esercizio' : 'esercizi'}</span>
+            </div>
+
+            {filteredLibrary.length === 0 ? (
+                <div className="exercise-empty-state">
+                    {library.length === 0 ? 'Nessun esercizio disponibile.' : 'Nessun esercizio trovato.'}
+                </div>
+            ) : (
+                <>
+                <div className="exercise-compact-list">
+                    {visibleLibrary.map(exercise => {
+                        const routineCount = routineCounts.get(exercise.id) || 0;
+                        const primaryMuscle = exercise.muscles?.[0]
+                            ? muscleName(exercise.muscles[0])
+                            : 'Nessun muscolo';
+
+                        return (
+                            <button
+                                key={exercise.id}
+                                className="exercise-compact-row"
+                                type="button"
+                                onClick={() => onSelectedExIdChange(exercise.id)}
+                                aria-label={`Apri dettaglio di ${exercise.name}`}
+                            >
+                                <span className={`exercise-compact-icon ${exercise.trackingType === 'cardio' ? 'cardio' : ''}`}>
+                                    <TrackingIcon exercise={exercise} />
+                                </span>
+                                <span className="exercise-compact-copy">
+                                    <span className="exercise-compact-name">{exercise.name}</span>
+                                    <span className="exercise-compact-meta">
+                                        {primaryMuscle} · {routineCount} {routineCount === 1 ? 'scheda' : 'schede'}
+                                    </span>
+                                </span>
+                                <ChevronRight className="exercise-compact-chevron" size={18} aria-hidden="true" />
+                            </button>
+                        );
+                    })}
+                </div>
+                {visibleLibrary.length < filteredLibrary.length && (
+                    <button
+                        type="button"
+                        className="btn btn-secondary"
+                        onClick={() => setPage({ query, source: library, count: visibleCount + ARCHIVE_PAGE_SIZE })}
+                        aria-label={`Mostra altri esercizi (${filteredLibrary.length - visibleLibrary.length} rimanenti)`}
+                    >
+                        Mostra altri esercizi
+                    </button>
+                )}
+                </>
+            )}
+        </section>
+    );
+}

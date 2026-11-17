@@ -1,0 +1,128 @@
+import type { UserData } from '../../types';
+import { UserDataSchema } from '../schema';
+import { getCachedCatalog } from '../catalog/catalogService';
+import { CURRENT_DATA_SCHEMA, CURRENT_LOCAL_ENVELOPE, CURRENT_SYNC_PROTOCOL } from '../schemaEvolution';
+import { normalizeStorageOwner } from './owner';
+import { updateArchiveRecord } from './secureArchiveRepository';
+import { validateLocalEnvelope, type LocalEnvelope } from './localEnvelopeValidation';
+import { projectDocuments } from './documentProjection';
+import { diffDocuments, mergeVectors, type VectorClock } from './semanticProjection';
+import { enforceMonthlyEntityTombstones } from './monthlyEntityTombstones';
+import { sequenceOperationsForBoundedTransactions } from './syncBatching';
+import type { ReplicaCheckpoint, CloudCheckpoint } from './replicaProtocol';
+
+type LocalWriteGuard = () => boolean;
+const parse = (value: unknown) => UserDataSchema.parse(value) as unknown as UserData;
+const currentEnvelopeVersions = () => ({
+    version: CURRENT_LOCAL_ENVELOPE,
+    dataSchemaVersion: CURRENT_DATA_SCHEMA,
+    syncProtocolVersion: CURRENT_SYNC_PROTOCOL,
+});
+
+export async function adoptReplicaCheckpoint(
+    owner: string,
+    claim: ReplicaCheckpoint,
+    checkpoint: CloudCheckpoint,
+    guard?: LocalWriteGuard,
+    expectedCloudflareClaimId?: string,
+): Promise<LocalEnvelope> {
+    owner = normalizeStorageOwner(owner);
+    const catalog = await getCachedCatalog();
+    let saved: LocalEnvelope | undefined;
+
+    await updateArchiveRecord<unknown>(owner, raw => {
+        if (guard && !guard()) throw new Error('Checkpoint replica invalidato dal cambio sessione; journal preservato.');
+        const current = validateLocalEnvelope(raw, owner);
+        if (!current) throw new Error('Archivio locale non trovato durante il checkpoint replica');
+        if (current.cloudflareDelivery || current.cloudflareReplicaRetirement) {
+            throw new Error('Intento D1 in attesa di riconciliazione: checkpoint replica sospeso senza toccare il journal.');
+        }
+        const claimIntent = current.cloudflareReplicaClaim;
+        const sameStoredReplica = !claimIntent
+            || (claimIntent.currentReplica === null && current.replica === null)
+            || (claimIntent.currentReplica !== null && current.replica !== null
+                && claimIntent.currentReplica.slot === current.replica.slot
+                && claimIntent.currentReplica.replicaId === current.replica.replicaId
+                && claimIntent.currentReplica.generation === current.replica.generation);
+        if (expectedCloudflareClaimId !== undefined
+            ? !claimIntent || claimIntent.mutationId !== expectedCloudflareClaimId
+              || claimIntent.consentRevision !== current.consentRevision || current.cloudIntegrityFence
+              || !sameStoredReplica
+              || (claimIntent.candidateReplicaId !== claim.identity.replicaId
+                  && !(claimIntent.currentReplica
+                    && claimIntent.currentReplica.slot === claim.identity.slot
+                    && claimIntent.currentReplica.replicaId === claim.identity.replicaId
+                    && claimIntent.currentReplica.generation === claim.identity.generation))
+            : Boolean(claimIntent)) {
+            throw new Error('Checkpoint replica incompatibile con un claim D1 pendente: journal preservato.');
+        }
+
+        const sameReplica = current.replica
+            && current.replica.slot === claim.identity.slot
+            && current.replica.replicaId === claim.identity.replicaId
+            && current.replica.generation === claim.identity.generation;
+
+        if (sameReplica) {
+            if ((checkpoint.clock[current.actorId] ?? 0) > current.actorSeq
+                || claim.baseSeq > current.actorSeq) {
+                throw new Error('Checkpoint replica incoerente con la sequenza locale: journal preservato.');
+            }
+            saved = {
+                ...current,
+                ...currentEnvelopeVersions(),
+                clock: mergeVectors(current.clock, checkpoint.clock),
+                replica: claim.identity,
+                ...(claimIntent ? { cloudflareReplicaClaim: undefined } : {}),
+                revision: current.revision + 1,
+            };
+            validateLocalEnvelope(saved, owner);
+            return saved;
+        }
+
+        const baseline = structuredClone(parse(current.baseline));
+        const desired = structuredClone(parse(current.data));
+        const baseDocs = projectDocuments(baseline, catalog);
+        const desiredDocs = projectDocuments(desired, catalog);
+        const actorId = claim.identity.slot;
+        if ((checkpoint.clock[actorId] ?? 0) > claim.baseSeq) {
+            throw new Error('Checkpoint replica incoerente con la sequenza assegnata: journal preservato.');
+        }
+        const provisionalSeq = claim.baseSeq + 1;
+        const provisionalClock: VectorClock = { ...checkpoint.clock, [actorId]: provisionalSeq };
+
+        let operations = diffDocuments(baseDocs, desiredDocs, actorId, provisionalSeq, provisionalClock);
+        operations = enforceMonthlyEntityTombstones(baseDocs, desiredDocs, operations, actorId, provisionalSeq, provisionalClock);
+        const sequenced = sequenceOperationsForBoundedTransactions(
+            operations,
+            actorId,
+            claim.baseSeq,
+            checkpoint.clock,
+        );
+        operations = sequenced.operations;
+
+        const actorSeq = operations.length ? sequenced.actorSeq : claim.baseSeq;
+        const clock: VectorClock = operations.length
+            ? sequenced.clock
+            : { ...checkpoint.clock, ...(claim.baseSeq > 0 ? { [actorId]: claim.baseSeq } : {}) };
+
+        saved = {
+            ...current,
+            ...currentEnvelopeVersions(),
+            actorId,
+            actorSeq,
+            clock,
+            data: desired,
+            baseline,
+            pending: operations,
+            syncMetaByDocument: structuredClone(checkpoint.syncMetaByDocument),
+            replica: claim.identity,
+            ...(claimIntent ? { cloudflareReplicaClaim: undefined } : {}),
+            revision: current.revision + 1,
+        };
+        validateLocalEnvelope(saved, owner);
+        return saved;
+    });
+
+    if (!saved) throw new Error('Checkpoint replica invalidato o non riuscito');
+    return saved;
+}

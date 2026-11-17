@@ -1,0 +1,533 @@
+import { readFileSync } from 'node:fs';
+import { afterAll, beforeAll, beforeEach, expect, it } from 'vitest';
+import { initializeTestEnvironment, assertFails, assertSucceeds, type RulesTestEnvironment } from '@firebase/rules-unit-testing';
+import { collection, doc, getDocs, setDoc, getDoc, deleteDoc, updateDoc, writeBatch } from 'firebase/firestore';
+import { CURRENT_SYNC_PROTOCOL } from '../../src/lib/schemaEvolution';
+import { sealCloudDocument, openCloudDocument, CloudCiphertextError } from '../../src/lib/sync/cloudDocumentCipher';
+import type { SyncMeta } from '../../src/lib/sync/semanticProjection/contracts';
+import { seedTrustedConsent, registerReplica, asModularFirestore } from './replicaHarness';
+
+let env: RulesTestEnvironment;
+beforeAll(async () => {
+    if (process.env.FIRESTORE_EMULATOR_HOST !== '127.0.0.1:8080') throw new Error('Run via test:rules: only the isolated local emulator is allowed');
+    env = await initializeTestEnvironment({ projectId: 'demo-logbook-audit', firestore: { host: '127.0.0.1', port: 8080, rules: readFileSync('firestore.rules', 'utf8') } });
+});
+beforeEach(async () => { await env.clearFirestore(); await seedTrustedConsent(env); });
+afterAll(async () => { await env?.cleanup(); });
+
+it('gates every private owner path on the Firebase verified-email token claim', async () => {
+    const paths = [
+        'users/a',
+        'users/a/history_months/2026-09',
+        'users/a/nutrition_months/2026-09',
+        'users/a/sync_control/state',
+    ];
+    await env.withSecurityRulesDisabled(async context => {
+        for (const path of paths.filter(path => !path.endsWith('/sync_control/state'))) {
+            await setDoc(doc(asModularFirestore(context.firestore()), path), { marker: true });
+        }
+    });
+
+    const verified = asModularFirestore(env.authenticatedContext('a', { email_verified: true }).firestore());
+    const unverified = asModularFirestore(env.authenticatedContext('a', { email_verified: false }).firestore());
+    const missingClaim = asModularFirestore(env.authenticatedContext('a').firestore());
+    for (const path of paths) {
+        await assertSucceeds(getDoc(doc(verified, path)));
+        await assertFails(getDoc(doc(unverified, path)));
+        await assertFails(getDoc(doc(missingClaim, path)));
+    }
+
+    await assertFails(registerReplica(unverified, 'a'));
+    await assertFails(registerReplica(missingClaim, 'a'));
+    await assertSucceeds(registerReplica(verified, 'a'));
+    await assertSucceeds(getDoc(doc(asModularFirestore(env.unauthenticatedContext().firestore()), 'global_catalog/public')));
+});
+
+it('permits direct public catalog reads but denies catalog enumeration and nested documents', async () => {
+    await env.withSecurityRulesDisabled(async context => {
+        const admin = asModularFirestore(context.firestore());
+        await setDoc(doc(admin, 'global_catalog/manifest'), { version: 'test' });
+        await setDoc(doc(admin, 'global_catalog/exercises_v1'), { items: [] });
+        await setDoc(doc(admin, 'global_catalog/manifest/internal/secret'), { marker: true });
+    });
+
+    const anonymous = asModularFirestore(env.unauthenticatedContext().firestore());
+    const owner = asModularFirestore(env.authenticatedContext('a', { email_verified: true }).firestore());
+    await assertSucceeds(getDoc(doc(anonymous, 'global_catalog/manifest')));
+    await assertSucceeds(getDoc(doc(anonymous, 'global_catalog/exercises_v1')));
+    await assertSucceeds(getDoc(doc(owner, 'global_catalog/manifest')));
+    await assertFails(getDocs(collection(anonymous, 'global_catalog')));
+    await assertFails(getDocs(collection(owner, 'global_catalog')));
+    await assertFails(getDoc(doc(anonymous, 'global_catalog/manifest/internal/secret')));
+    await assertFails(setDoc(doc(owner, 'global_catalog/manifest'), { version: 'tampered' }));
+});
+
+function protocol3Registration() {
+    const now = Date.now();
+    return {
+        protocolVersion: CURRENT_SYNC_PROTOCOL,
+        consentRevision: 1,
+        replicas: {
+            s00: {
+                replicaId: 'replica-s00',
+                generation: 1,
+                status: 'active',
+                lastSeq: 0,
+                checkpointAtMs: now,
+                leaseUntilMs: now + 360 * 24 * 60 * 60 * 1000,
+                checkpointClock: {},
+            },
+        },
+        mutation: { slot: 's00', action: 'register' },
+    };
+}
+
+async function fencedWrite(db: any, path: string, business: Record<string, unknown>, replica?: any) {
+    const activeReplica = replica ?? await registerReplica(db, 'a');
+    const controlRef = doc(db, 'users/a/sync_control/state');
+    const control = (await getDoc(controlRef)).data()!;
+    const currentEntry = control.replicas[activeReplica.slot];
+    const seq = currentEntry.lastSeq + 1;
+    const writer = {
+        slot: activeReplica.slot,
+        replicaId: activeReplica.replicaId,
+        generation: activeReplica.generation,
+        seq,
+        consentRevision: 1,
+    };
+    const batch = writeBatch(db);
+    batch.set(controlRef, {
+        ...control,
+        replicas: {
+            ...control.replicas,
+            [activeReplica.slot]: { ...currentEntry, lastSeq: seq },
+        },
+        mutation: { slot: activeReplica.slot, action: 'advance', batchId: `test-${crypto.randomUUID()}` },
+    });
+    const sync: SyncMeta = {
+        protocolVersion: CURRENT_SYNC_PROTOCOL,
+        clock: { [activeReplica.slot]: seq },
+        fields: {},
+        writer,
+    };
+    batch.set(doc(db, path), sealCloudDocument(new Uint8Array(32).fill(5),
+        'a', path.slice('users/a'.length).replace(/^\//, ''), business, sync));
+    await batch.commit();
+    return activeReplica;
+}
+
+it('allows only Protocol 3 fenced owner writes and denies direct root deletion', async () => {
+    const db = asModularFirestore(env.authenticatedContext('a', { email_verified: true }).firestore());
+    const ref = doc(db, 'users/a');
+    const replica = await fencedWrite(db, 'users/a', { profile: { height: '175' }, nutritionPlanningOrigin: 'user-edited' });
+    expect((openCloudDocument(new Uint8Array(32).fill(5), 'a', '', (await assertSucceeds(getDoc(ref))).data()).business.profile as Record<string, string>).height).toBe('175');
+    await fencedWrite(db, 'users/a', { profile: { height: '176' }, nutritionPlanningOrigin: 'user-edited' }, replica);
+    expect((openCloudDocument(new Uint8Array(32).fill(5), 'a', '', (await assertSucceeds(getDoc(ref))).data()).business.profile as Record<string, string>).height).toBe('176');
+    await assertFails(deleteDoc(ref));
+});
+
+it('requires a fresh in-transaction control advance on every business write, including replay', async () => {
+    const db = asModularFirestore(env.authenticatedContext('a', { email_verified: true }).firestore());
+    const root = doc(db, 'users/a');
+    const controlRef = doc(db, 'users/a/sync_control/state');
+    const replica = await fencedWrite(db, 'users/a', { profile: { height: '175' } });
+    const rootData = (await getDoc(root)).data()!;
+
+    // The old "advance" action and lastSeq remain stored after commit. That
+    // state must not authorize a later standalone business write.
+    await assertFails(setDoc(root, { ...rootData, profile: { height: '999' } }));
+    for (const collection of ['history_months', 'nutrition_months']) {
+        const ref = doc(db, `users/a/${collection}/2026-09`);
+        await fencedWrite(db, ref.path, {}, replica);
+        const month = (await getDoc(ref)).data()!;
+        await assertFails(setDoc(ref, month));
+    }
+
+    const latestControl = (await getDoc(controlRef)).data()!;
+    const unchangedControlBatch = writeBatch(db);
+    unchangedControlBatch.set(controlRef, latestControl);
+    unchangedControlBatch.set(root, { ...rootData, profile: { height: '999' } });
+    await assertFails(unchangedControlBatch.commit());
+
+    // After a lost ack, lastSeq may legitimately stay unchanged, but the
+    // replay must publish a distinct batch ID atomically with its document.
+    const replay = writeBatch(db);
+    replay.set(controlRef, { ...latestControl,
+        mutation: { slot: replica.slot, action: 'advance', batchId: `replay-${crypto.randomUUID()}` } });
+    replay.set(root, rootData);
+    await assertSucceeds(replay.commit());
+    await assertFails(setDoc(root, { ...rootData, profile: { height: '999' } }));
+    expect((openCloudDocument(new Uint8Array(32).fill(5), 'a', '', (await getDoc(root)).data()).business.profile as Record<string, string>).height).toBe('175');
+});
+
+it('rejects markerless or unfenced business writes while allowing the current first-account baseline', async () => {
+    const db = asModularFirestore(env.authenticatedContext('a', { email_verified: true }).firestore());
+    const root = doc(db, 'users/a');
+    await assertFails(setDoc(root, { profile: { name: 'markerless' } }));
+    await assertFails(setDoc(root, { profile: { name: 'schema-only' }, _schemaVersion: 1 }));
+
+    const replica = await fencedWrite(db, 'users/a', { profile: { name: 'current' } });
+    expect((openCloudDocument(new Uint8Array(32).fill(5), 'a', '', (await getDoc(root)).data()).business.profile as Record<string, string>).name).toBe('current');
+
+    for (const collection of ['history_months', 'nutrition_months']) {
+        const ref = doc(db, `users/a/${collection}/2026-09`);
+        await assertFails(setDoc(ref, {}));
+        await assertFails(setDoc(ref, { _schemaVersion: 1 }));
+        await fencedWrite(db, `users/a/${collection}/2026-09`, {}, replica);
+        expect((await getDoc(ref)).data()?._schemaVersion).toBe(1);
+    }
+});
+
+it('denies client-side monthly physical deletion before and after Protocol 3 registration', async () => {
+    const db = asModularFirestore(env.authenticatedContext('a', { email_verified: true }).firestore());
+    const monthRef = doc(db, 'users/a/nutrition_months/2026-09');
+
+    await env.withSecurityRulesDisabled(async context => {
+        await setDoc(doc(asModularFirestore(context.firestore()), 'users/a/nutrition_months/2026-09'), {
+            _schemaVersion: 1,
+            _sync: { protocolVersion: 3, clock: {}, fields: {}, writer: { slot: 's00', replicaId: 'seed', generation: 1, seq: 0 } },
+        });
+    });
+    await assertFails(deleteDoc(monthRef));
+
+    await registerReplica(db, 'a');
+    const controlRef = doc(db, 'users/a/sync_control/state');
+    const control = (await getDoc(controlRef)).data()!;
+    const forgedDeleteBatch = writeBatch(db);
+    forgedDeleteBatch.set(controlRef, {
+        ...control,
+        replicas: {
+            ...control.replicas,
+            s00: { ...control.replicas.s00, lastSeq: control.replicas.s00.lastSeq + 1 },
+        },
+        mutation: { slot: 's00', action: 'advance', batchId: `test-${crypto.randomUUID()}` },
+    });
+    forgedDeleteBatch.delete(monthRef);
+
+    await assertFails(forgedDeleteBatch.commit());
+    expect((await getDoc(monthRef)).exists()).toBe(true);
+});
+
+it.each(['history_months', 'nutrition_months'])(
+    'denies Protocol 3 registration combined with a legacy physical delete from %s in the same batch',
+    async collectionName => {
+        const db = asModularFirestore(env.authenticatedContext('a', { email_verified: true }).firestore());
+        const monthRef = doc(db, `users/a/${collectionName}/2026-09`);
+        const controlRef = doc(db, 'users/a/sync_control/state');
+        await env.withSecurityRulesDisabled(async context => {
+            await setDoc(doc(asModularFirestore(context.firestore()), `users/a/${collectionName}/2026-09`), {
+                _schemaVersion: 1,
+                _sync: { protocolVersion: 3, clock: {}, fields: {}, writer: { slot: 's00', replicaId: 'seed', generation: 1, seq: 0 } },
+            });
+        });
+
+        const batch = writeBatch(db);
+        batch.set(controlRef, protocol3Registration());
+        batch.delete(monthRef);
+
+        await assertFails(batch.commit());
+        expect((await getDoc(monthRef)).exists()).toBe(true);
+        expect((await getDoc(controlRef)).exists()).toBe(false);
+    },
+);
+
+it.each([
+    ['root', 'users/a', { profile: { name: 'legacy' }, _schemaVersion: 1, _sync: { protocolVersion: 1, clock: {}, fields: {} } }],
+    ['history month', 'users/a/history_months/2026-09', { _schemaVersion: 1, _sync: { protocolVersion: 1, clock: {}, fields: {} } }],
+    ['nutrition month', 'users/a/nutrition_months/2026-09', { _schemaVersion: 1, _sync: { protocolVersion: 1, clock: {}, fields: {} } }],
+])(
+    'denies Protocol 3 registration combined with a legacy %s write in the same batch',
+    async (_label, path, legacyDocument) => {
+        const db = asModularFirestore(env.authenticatedContext('a', { email_verified: true }).firestore());
+        const controlRef = doc(db, 'users/a/sync_control/state');
+        const targetRef = doc(db, path);
+
+        const batch = writeBatch(db);
+        batch.set(controlRef, protocol3Registration());
+        batch.set(targetRef, legacyDocument);
+
+        await assertFails(batch.commit());
+        expect((await getDoc(controlRef)).exists()).toBe(false);
+        expect((await getDoc(targetRef)).exists()).toBe(false);
+    },
+);
+
+it('rejects Protocol 1/2 writes even before the account creates its Protocol 3 control', async () => {
+    const db = asModularFirestore(env.authenticatedContext('a', { email_verified: true }).firestore());
+    for (const protocolVersion of [1, 2]) {
+        const legacySync = { protocolVersion, clock: {}, fields: {} };
+        await assertFails(setDoc(doc(db, 'users/a'), { profile: { name: 'legacy' }, _schemaVersion: 1, _sync: legacySync }));
+        await assertFails(setDoc(doc(db, 'users/a/history_months/2026-09'), { _schemaVersion: 1, _sync: legacySync }));
+        await assertFails(setDoc(doc(db, 'users/a/nutrition_months/2026-09'), { _schemaVersion: 1, _sync: legacySync }));
+    }
+    expect((await getDoc(doc(db, 'users/a/sync_control/state'))).exists()).toBe(false);
+});
+
+it.each(['anonymous', 'b'])('denies %s all operations on another user and their private collections', async identity => {
+    const db = identity === 'anonymous' ? asModularFirestore(env.unauthenticatedContext().firestore()) : asModularFirestore(env.authenticatedContext(identity, { email_verified: true }).firestore());
+    for (const path of ['users/a', 'users/a/history_months/2026-09', 'users/a/nutrition_months/2026-09', 'users/a/unrecognized_records/e']) {
+        const ref = doc(db, path);
+        await assertFails(getDoc(ref));
+        await assertFails(setDoc(ref, {}));
+        await assertFails(deleteDoc(ref));
+    }
+});
+
+it.each([
+    ['anonymous', null],
+    ['owner', 'a'],
+    ['other account', 'b'],
+])('keeps wrapped cloud account keys server-only for %s', async (_label, uid) => {
+    const db = uid === null
+        ? asModularFirestore(env.unauthenticatedContext().firestore())
+        : asModularFirestore(env.authenticatedContext(uid, { email_verified: true }).firestore());
+    const ref = doc(db, 'user_data_keys/a');
+    await assertFails(getDoc(ref));
+    await assertFails(setDoc(ref, { uid: 'a', ciphertext: 'attacker' }));
+    await assertFails(deleteDoc(ref));
+});
+
+it('makes account_deletions server-only and immediately blocks the owner on every private path', async () => {
+    const ownerDb = asModularFirestore(env.authenticatedContext('a', { email_verified: true }).firestore());
+    const privatePaths = [
+        'users/a',
+        'users/a/history_months/2026-09',
+        'users/a/nutrition_months/2026-09',
+        'users/a/unrecognized_records/e',
+    ];
+
+    await assertFails(getDoc(doc(ownerDb, 'account_deletions/a')));
+    await assertFails(setDoc(doc(ownerDb, 'account_deletions/a'), { status: 'requested' }));
+
+    await env.withSecurityRulesDisabled(async context => {
+        const adminDb = asModularFirestore(context.firestore());
+        await setDoc(doc(adminDb, 'users/a'), { profile: { name: 'before barrier' } });
+        await setDoc(doc(adminDb, 'users/a/history_months/2026-09'), { value: true });
+        await setDoc(doc(adminDb, 'users/a/nutrition_months/2026-09'), { value: true });
+        await setDoc(doc(adminDb, 'users/a/unrecognized_records/e'), { type: 'x' });
+        await setDoc(doc(adminDb, 'account_deletions/a'), { uid: 'a', status: 'requested', attempts: 0 });
+    });
+
+    for (const path of privatePaths) {
+        const ref = doc(ownerDb, path);
+        await assertFails(getDoc(ref));
+        await assertFails(setDoc(ref, path === 'users/a' ? { profile: { name: 'resurrected' } } : {}));
+        await assertFails(deleteDoc(ref));
+    }
+
+    await env.withSecurityRulesDisabled(async context => {
+        await deleteDoc(doc(asModularFirestore(context.firestore()), 'account_deletions/a'));
+    });
+    await assertSucceeds(getDoc(doc(ownerDb, 'users/a')));
+});
+
+it.each([
+    ['anonymous', null],
+    ['owner', 'a'],
+    ['other user', 'b'],
+])('keeps account_deletion_devices server-only for %s clients', async (_label, uid) => {
+    const db = uid === null ? asModularFirestore(env.unauthenticatedContext().firestore()) : asModularFirestore(env.authenticatedContext(uid, { email_verified: true }).firestore());
+    await env.withSecurityRulesDisabled(async context => {
+        await setDoc(doc(asModularFirestore(context.firestore()), 'account_deletion_devices/a'), {
+            uid: 'a',
+            tokenHashes: ['0'.repeat(64)],
+            registeredAt: new Date(),
+            updatedAt: new Date(),
+        });
+    });
+
+    const existingRef = doc(db, 'account_deletion_devices/a');
+    const createRef = doc(db, 'account_deletion_devices/new-device');
+    await assertFails(getDoc(existingRef));
+    await assertFails(setDoc(createRef, { uid: 'new-device', tokenHashes: [] }));
+    await assertFails(updateDoc(existingRef, { updatedAt: new Date() }));
+    await assertFails(deleteDoc(existingRef));
+});
+
+it.each([
+    ['anonymous', null],
+    ['owner', 'a'],
+    ['other user', 'b'],
+])('keeps health_data_erasures server-only for %s clients', async (_label, uid) => {
+    const db = uid === null
+        ? asModularFirestore(env.unauthenticatedContext().firestore())
+        : asModularFirestore(env.authenticatedContext(uid, { email_verified: true }).firestore());
+    await env.withSecurityRulesDisabled(async context => {
+        const adminDb = asModularFirestore(context.firestore());
+        await setDoc(doc(adminDb, 'health_data_erasures/a'), {
+            uid: 'a', status: 'requested', consentRevision: 1,
+        });
+    });
+    const existingRef = doc(db, 'health_data_erasures/a');
+    await assertFails(getDoc(existingRef));
+    await assertFails(setDoc(doc(db, 'health_data_erasures/new'), { status: 'complete' }));
+    await assertFails(updateDoc(existingRef, { status: 'complete' }));
+    await assertFails(deleteDoc(existingRef));
+});
+
+it('accepts only ciphertext envelopes and refuses malformed document paths', async () => {
+    const db = asModularFirestore(env.authenticatedContext('a', { email_verified: true }).firestore());
+    const replica = await registerReplica(db, 'a');
+    await assertSucceeds(fencedWrite(db, 'users/a', { profile: { height: '175' } }, replica));
+    const root = doc(db, 'users/a');
+    const ciphertext = (await getDoc(root)).data()!;
+    expect(ciphertext).not.toHaveProperty('profile');
+    expect(ciphertext._sync.fields).toEqual({});
+    await assertFails(setDoc(root, { profile: { height: 'private' }, _schemaVersion: 1,
+        _sync: ciphertext._sync }));
+    for (const name of ['history_months', 'nutrition_months']) {
+        await expect(fencedWrite(db, `users/a/${name}/2026-13`, {}, replica)).rejects.toThrow(CloudCiphertextError);
+        await fencedWrite(db, `users/a/${name}/2026-09`, {}, replica);
+    }
+});
+
+it('rejects malformed sync envelopes while allowing the current structural contract', async () => {
+    const db = asModularFirestore(env.authenticatedContext('a', { email_verified: true }).firestore());
+    const root = doc(db, 'users/a');
+    const legacySync = { protocolVersion: 1, clock: {}, fields: {} };
+
+    await assertFails(setDoc(root, { profile: { name: 'legacy' }, _schemaVersion: 1, _sync: legacySync }));
+
+    const replica = await registerReplica(db, 'a');
+    const controlRef = doc(db, 'users/a/sync_control/state');
+    const writer = { slot: replica.slot, replicaId: replica.replicaId, generation: replica.generation, seq: 1, consentRevision: 1 };
+    const validSync = { protocolVersion: CURRENT_SYNC_PROTOCOL, clock: { s00: 1 }, fields: {}, writer };
+    const authorizedWrite = async (sync: any, name: string, seq = 1) => {
+        const control = (await getDoc(controlRef)).data()!;
+        const batch = writeBatch(db);
+        batch.set(controlRef, {
+            ...control,
+            replicas: {
+                ...control.replicas,
+                s00: { ...control.replicas.s00, lastSeq: seq },
+            },
+            mutation: { slot: 's00', action: 'advance', batchId: `test-${crypto.randomUUID()}` },
+        });
+        const validEnvelope = sealCloudDocument(new Uint8Array(32).fill(5), 'a', '',
+            { profile: { name } }, validSync);
+        batch.set(root, { ...validEnvelope, _sync: sync });
+        await batch.commit();
+    };
+
+    await assertSucceeds(authorizedWrite(validSync, 'valid'));
+    await assertFails(setDoc(root, { profile: { name: 'downgrade' }, _schemaVersion: 1, _sync: legacySync }));
+
+    const nextWriter = { ...writer, seq: 2 };
+    await assertFails(authorizedWrite({ ...validSync, protocolVersion: CURRENT_SYNC_PROTOCOL + 1, writer: nextWriter }, 'wrong protocol', 2));
+    await assertFails(authorizedWrite({ protocolVersion: CURRENT_SYNC_PROTOCOL, fields: {}, writer: nextWriter }, 'missing clock', 2));
+    await assertFails(authorizedWrite({ protocolVersion: CURRENT_SYNC_PROTOCOL, clock: [], fields: {}, writer: nextWriter }, 'bad clock', 2));
+    await assertFails(authorizedWrite({ protocolVersion: CURRENT_SYNC_PROTOCOL, clock: { s00: 2 }, fields: [], writer: nextWriter }, 'bad fields', 2));
+    await assertFails(authorizedWrite({ ...validSync, clock: { s00: 2 }, writer: nextWriter, unexpected: true }, 'extra sync key', 2));
+});
+
+it('rejects unknown causal clock actors on fenced root and monthly writes without disturbing valid slots', async () => {
+    const db = asModularFirestore(env.authenticatedContext('a', { email_verified: true }).firestore());
+    const replica = await registerReplica(db, 'a');
+    const controlRef = doc(db, 'users/a/sync_control/state');
+    const targets = [
+        ['users/a', { profile: { name: 'Clock validation' } }],
+        ['users/a/history_months/2026-10', {
+            workoutA: { id: 'workoutA', date: '2026-10-01', exercises: [] },
+        }],
+        ['users/a/nutrition_months/2026-10', {
+            '2026-10-01': { date: '2026-10-01' },
+        }],
+    ] as const;
+
+    const commitWithClock = async (path: string, business: Record<string, unknown>, unexpectedActor: boolean) => {
+        const control = (await getDoc(controlRef)).data()!;
+        const entry = control.replicas[replica.slot];
+        const seq = entry.lastSeq + 1;
+        const batch = writeBatch(db);
+        batch.set(controlRef, {
+            ...control,
+            replicas: { ...control.replicas, [replica.slot]: { ...entry, lastSeq: seq } },
+            mutation: { slot: replica.slot, action: 'advance', batchId: `test-${crypto.randomUUID()}` },
+        });
+        const target = path.slice('users/a'.length).replace(/^\//, '');
+        const writer = { slot: replica.slot, replicaId: replica.replicaId,
+            generation: replica.generation, seq, consentRevision: 1 };
+        const validSync = { protocolVersion: CURRENT_SYNC_PROTOCOL,
+            clock: { [replica.slot]: seq, s15: 1 }, fields: {}, writer };
+        const sealed = sealCloudDocument(new Uint8Array(32).fill(5), 'a', target, business, validSync);
+        // Forge only the externally visible causal actor to test Rules,
+        // without trying to encrypt an invalid client-side metadata payload.
+        batch.set(doc(db, path), { ...sealed, _sync: { ...sealed._sync, clock:
+            { [replica.slot]: seq, [unexpectedActor ? 'unregistered-client' : 's15']: 1 } } });
+        await batch.commit();
+    };
+
+    for (const [path, business] of targets) {
+        await assertFails(commitWithClock(path, business, true));
+        expect((await getDoc(doc(db, path))).exists()).toBe(false);
+    }
+    for (const [path, business] of targets) {
+        await assertSucceeds(commitWithClock(path, business, false));
+        expect((await getDoc(doc(db, path))).exists()).toBe(true);
+    }
+});
+
+it('rejects unsafe Protocol 3 clock coordinates in otherwise fenced business writes', async () => {
+    const db = asModularFirestore(env.authenticatedContext('a', { email_verified: true }).firestore());
+    const replica = await registerReplica(db, 'a');
+    const controlRef = doc(db, 'users/a/sync_control/state');
+    const invalidCoordinates = [-1, '1', 9007199254740992];
+    for (const invalid of invalidCoordinates) {
+        const control = (await getDoc(controlRef)).data()!;
+        const entry = control.replicas[replica.slot];
+        const seq = entry.lastSeq + 1;
+        const batch = writeBatch(db);
+        batch.set(controlRef, {
+            ...control,
+            replicas: { ...control.replicas, [replica.slot]: { ...entry, lastSeq: seq } },
+            mutation: { slot: replica.slot, action: 'advance', batchId: `test-${crypto.randomUUID()}` },
+        });
+        const valid = sealCloudDocument(new Uint8Array(32).fill(5), 'a', '',
+            { profile: { height: '175' } }, {
+                protocolVersion: CURRENT_SYNC_PROTOCOL,
+                clock: { [replica.slot]: seq }, fields: {},
+                writer: { slot: replica.slot, replicaId: replica.replicaId,
+                    generation: replica.generation, seq, consentRevision: 1 },
+            });
+        batch.set(doc(db, 'users/a'), { ...valid,
+            _sync: { ...valid._sync, clock: { [replica.slot]: invalid } } });
+        await assertFails(batch.commit());
+        expect((await getDoc(doc(db, 'users/a'))).exists()).toBe(false);
+    }
+    await assertSucceeds(fencedWrite(db, 'users/a', { profile: { height: '175' } }, replica));
+});
+
+it('permits public catalog reads but denies client writes', async () => {
+    for (const db of [asModularFirestore(env.unauthenticatedContext().firestore()), asModularFirestore(env.authenticatedContext('a', { email_verified: true }).firestore())]) {
+        for (const path of ['global_catalog/manifest', 'global_catalog/exercises_v1']) {
+            const ref = doc(db, path);
+            await assertSucceeds(getDoc(ref));
+            await assertFails(setDoc(ref, { version: 'tampered' }));
+        }
+    }
+});
+
+it('rejects plaintext root documents even with otherwise valid replica headers', async () => {
+    const db = asModularFirestore(env.authenticatedContext('a', { email_verified: true }).firestore());
+    const replica = await registerReplica(db, 'a');
+    await assertSucceeds(fencedWrite(db, 'users/a', { profile: { height: '175' } }, replica));
+    const saved = (await getDoc(doc(db, 'users/a'))).data()!;
+    await assertFails(setDoc(doc(db, 'users/a'), { ...saved, profile: 'injected-private-value' }));
+    await assertFails(setDoc(doc(db, 'users/a'), { ...saved, _sealed: null }));
+    expect(saved).not.toHaveProperty('profile');
+});
+
+it('stores monthly contents only in the sealed envelope regardless of business entry count', async () => {
+    const db = asModularFirestore(env.authenticatedContext('a', { email_verified: true }).firestore());
+    const replica = await registerReplica(db, 'a');
+    const days = Object.fromEntries(Array.from({ length: 31 }, (_, i) => {
+        const date = '2026-10-' + String(i + 1).padStart(2, '0');
+        return [date, { date, kcal: 2000 }];
+    }));
+    await assertSucceeds(fencedWrite(db, 'users/a/nutrition_months/2026-10', days, replica));
+    const saved = (await getDoc(doc(db, 'users/a/nutrition_months/2026-10'))).data()!;
+    expect(saved).not.toHaveProperty('2026-10-01');
+    expect(saved._sync.fields).toEqual({});
+    expect(openCloudDocument(new Uint8Array(32).fill(5), 'a', 'nutrition_months/2026-10', saved).business)
+        .toMatchObject(days);
+});

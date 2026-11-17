@@ -1,0 +1,41 @@
+name: CF-00 Local workerd Feasibility
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'cloudflare/cf00/**'
+      - 'tests/cloudflare/cf00-*'
+      - '.github/workflows/cf00-workerd-local.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  workerd:
+    name: Local workerd, synthetic D1 and Durable Object only
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout exact candidate
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify exact candidate SHA
+        shell: bash
+        env:
+          EXPECTED_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+      - name: Setup Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: '24'
+      - name: Exercise simulated D1, Durable Object and CPU work factors
+        run: node tests/cloudflare/cf00-workerd-local.mjs

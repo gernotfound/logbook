@@ -1,0 +1,912 @@
+import type {
+    Exercise,
+    NutritionDay,
+    ProgressionContract,
+    SessionExercise,
+    SessionExerciseSet,
+    SetContinuationTechnique,
+    SetSegment,
+    SetTechnique,
+    TrainingCycleIntent,
+    TrainingCycleProgressionFocus,
+    WorkoutSession,
+} from '../../types';
+import { getSetSegments, getSetTechnique } from '../advancedSets';
+import { getWorkoutDurationSeconds } from './workoutDuration';
+import { compareSessionChronology, orderedEarlierSessions } from './progressionHistory';
+
+export type ProgressionExerciseRef = Pick<Exercise, 'id' | 'name' | 'trackingType' | 'isBodyweight' | 'equipmentWeight' | 'muscles' | 'secondaryMuscles'>;
+
+type ComparisonLevel = 'high' | 'medium' | 'none';
+export type ProgressionQuality = 'clear' | 'preliminary' | 'limited';
+type ProgressionClassification =
+    | 'performance_record'
+    | 'progression'
+    | 'output_up_effort_up'
+    | 'output_lower'
+    | 'stable'
+    | 'stable_less_effort'
+    | 'stable_more_effort'
+    | 'volume_progression'
+    | 'maintenance_stable'
+    | 'maintenance_change'
+    | 'deload_change'
+    | 'new_baseline'
+    | 'execution_baseline'
+    | 'density_limited'
+    | 'descriptive_change'
+    | 'insufficient_data';
+
+type OutputChange = 'better' | 'same' | 'worse' | 'longer' | 'shorter' | 'mixed' | 'unknown';
+type TrendDirection = 'up' | 'stable' | 'down' | 'duration_up' | 'duration_down' | 'mixed' | 'insufficient';
+
+export interface ProgressionBodyweightContext {
+    nutrition?: Record<string, NutritionDay>;
+    explicitBodyweightKg?: number;
+}
+
+interface NormalizedSet {
+    technique: SetTechnique;
+    executionMode: 'standard' | 'stop_reps';
+    kg?: number;
+    effectiveKg?: number;
+    reps?: number;
+    rir?: number;
+    timeSeconds?: number;
+    segments: Array<{
+        technique?: SetContinuationTechnique;
+        kg?: number;
+        effectiveKg?: number;
+        reps?: number;
+        timeSeconds?: number;
+        restBeforeSeconds?: number;
+        targetReps?: number;
+    }>;
+    targetReps?: number;
+}
+
+export interface NormalizedExposure {
+    sessionId: string;
+    date: string;
+    routineId?: string;
+    cycleId?: string;
+    intent?: TrainingCycleIntent;
+    focus?: TrainingCycleProgressionFocus;
+    technicalStandard?: string;
+    progressionContract?: ProgressionContract;
+    exId: string;
+    exName: string;
+    trackingType: Exercise['trackingType'];
+    isBodyweight: boolean;
+    bodyweightKg?: number;
+    sets: NormalizedSet[];
+    workSets: number;
+    totalReps: number;
+    tonnageKg?: number;
+    tonnageComplete: boolean;
+    referenceSet?: NormalizedSet;
+}
+
+export interface ExposureComparison {
+    level: ComparisonLevel;
+    reasons: string[];
+}
+
+interface HistoricalExposureComparison {
+    exposure: NormalizedExposure;
+    comparison: ExposureComparison;
+}
+
+export interface ExerciseProgressionAnalysis {
+    exId: string;
+    exName: string;
+    intent?: TrainingCycleIntent;
+    focus?: TrainingCycleProgressionFocus;
+    priority: 'primary' | 'secondary' | 'other';
+    current: NormalizedExposure;
+    latestExposure?: NormalizedExposure;
+    previousComparable?: NormalizedExposure;
+    cycleBaseline?: NormalizedExposure;
+    bestHistorical?: NormalizedExposure;
+    recentComparable: NormalizedExposure[];
+    comparison: ExposureComparison;
+    comparisonStatus: 'comparable' | 'limited' | 'not_comparable';
+    progressionContract?: ProgressionContract;
+    quality: ProgressionQuality;
+    qualityReasons: string[];
+    classification: ProgressionClassification;
+    outputChange: OutputChange;
+    trendDirection: TrendDirection;
+    isRecord: boolean;
+    headline: string;
+    detail: string;
+}
+
+export interface DensityProgressionAnalysis {
+    quality: ProgressionQuality;
+    headline: string;
+    detail: string;
+    previousDurationSeconds?: number;
+    currentDurationSeconds?: number;
+}
+
+export interface ProgressionEngineResult {
+    exercises: ExerciseProgressionAnalysis[];
+    density?: DensityProgressionAnalysis;
+}
+
+function numberValue(value: unknown): number | undefined {
+    const raw = typeof value === 'string' ? value.trim().replace(',', '.') : value;
+    if (raw === '' || raw === null || raw === undefined) return undefined;
+    const parsed = Number(raw);
+    return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+function positiveInt(value: unknown): number | undefined {
+    const parsed = numberValue(value);
+    if (parsed === undefined || !Number.isSafeInteger(parsed) || parsed < 0) return undefined;
+    return parsed;
+}
+
+function parseTimeSeconds(value: unknown): number | undefined {
+    if (typeof value === 'number' && Number.isFinite(value) && value >= 0) return value;
+    if (typeof value !== 'string' || !value.trim()) return undefined;
+    const raw = value.trim().toLowerCase().replace(/\s+/g, '');
+    if (/^\d+(?:[.,]\d+)?s$/.test(raw)) return numberValue(raw.slice(0, -1));
+    if (/^\d+(?:[.,]\d+)?$/.test(raw)) return numberValue(raw);
+    const parts = raw.split(':').map(Number);
+    if (parts.some(part => !Number.isFinite(part) || part < 0)) return undefined;
+    if (parts.length === 2) return parts[0] * 60 + parts[1];
+    if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2];
+    return undefined;
+}
+
+function validRir(value: unknown): number | undefined {
+    return typeof value === 'number' && Number.isInteger(value) && value >= 0 && value <= 10 ? value : undefined;
+}
+
+function historicalBodyweight(
+    date: string,
+    context: ProgressionBodyweightContext,
+): number | undefined {
+    if (Number.isFinite(context.explicitBodyweightKg) && (context.explicitBodyweightKg ?? 0) > 0) return context.explicitBodyweightKg;
+    if (!date || !context.nutrition) return undefined;
+    let latestDate = '';
+    let latestWeight: number | undefined;
+    for (const [day, entry] of Object.entries(context.nutrition)) {
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(day) || day > date || day <= latestDate) continue;
+        const weight = numberValue(entry?.weight);
+        if (weight !== undefined && weight > 0) {
+            latestDate = day;
+            latestWeight = weight;
+        }
+    }
+    return latestWeight;
+}
+
+
+function createHistoricalBodyweightLookup(nutrition: ProgressionBodyweightContext['nutrition']): (date: string) => number | undefined {
+    // Standalone normalisation keeps its existing lookup contract. A complete
+    // report can index dated weigh-ins once rather than sort them per exercise.
+    const measurements = Object.keys(nutrition ?? {})
+        .filter(date => /^\d{4}-\d{2}-\d{2}$/.test(date))
+        .sort()
+        .flatMap(date => {
+            const weight = numberValue(nutrition?.[date]?.weight);
+            return weight !== undefined && weight > 0 ? [{ date, weight }] : [];
+        });
+    return (date: string) => {
+        if (!date) return undefined;
+        let low = 0;
+        let high = measurements.length;
+        while (low < high) {
+            const mid = Math.floor((low + high) / 2);
+            if (measurements[mid].date <= date) low = mid + 1;
+            else high = mid;
+        }
+        return low ? measurements[low - 1].weight : undefined;
+    };
+}
+
+function effectiveLoad(
+    kg: number | undefined,
+    exercise: ProgressionExerciseRef | undefined,
+    bodyweightKg: number | undefined,
+): number | undefined {
+    const equipment = numberValue(exercise?.equipmentWeight) ?? 0;
+    if (exercise?.isBodyweight) {
+        if (bodyweightKg === undefined) return undefined;
+        return (kg ?? 0) + bodyweightKg + equipment;
+    }
+    if (kg === undefined && equipment === 0) return undefined;
+    return (kg ?? 0) + equipment;
+}
+
+function normalizeSegment(
+    segment: SetSegment,
+    exercise: ProgressionExerciseRef | undefined,
+    bodyweightKg: number | undefined,
+): NormalizedSet['segments'][number] {
+    const kg = numberValue(segment.kg);
+    const effectiveKg = effectiveLoad(kg, exercise, bodyweightKg);
+    const reps = positiveInt(segment.reps);
+    const timeSeconds = parseTimeSeconds(segment.time);
+    return {
+        ...(segment.technique ? { technique: segment.technique } : {}),
+        ...(kg !== undefined ? { kg } : {}),
+        ...(effectiveKg !== undefined ? { effectiveKg } : {}),
+        ...(reps !== undefined ? { reps } : {}),
+        ...(timeSeconds !== undefined ? { timeSeconds } : {}),
+        ...(segment.restBeforeSeconds !== undefined ? { restBeforeSeconds: segment.restBeforeSeconds } : {}),
+        ...(segment.target?.type === 'reps' ? { targetReps: segment.target.reps } : {}),
+    };
+}
+
+function normalizeSet(
+    set: SessionExerciseSet,
+    exercise: ProgressionExerciseRef | undefined,
+    bodyweightKg: number | undefined,
+): NormalizedSet {
+    const kg = numberValue(set.kg);
+    const reps = positiveInt(set.reps);
+    const effectiveKg = effectiveLoad(kg, exercise, bodyweightKg);
+    const rir = validRir(set.rir);
+    const timeSeconds = parseTimeSeconds(set.time);
+    return {
+        technique: getSetTechnique(set),
+        executionMode: set.executionMode ?? 'standard',
+        ...(kg !== undefined ? { kg } : {}),
+        ...(effectiveKg !== undefined ? { effectiveKg } : {}),
+        ...(reps !== undefined ? { reps } : {}),
+        ...(rir !== undefined ? { rir } : {}),
+        ...(timeSeconds !== undefined ? { timeSeconds } : {}),
+        segments: getSetSegments(set).map(segment => normalizeSegment(segment, exercise, bodyweightKg)),
+        ...(set.target?.type === 'reps' ? { targetReps: set.target.reps } : {}),
+    };
+}
+
+function hasObservedSet(set: NormalizedSet, trackingType: Exercise['trackingType']): boolean {
+    if (trackingType === 'time') {
+        return (set.timeSeconds ?? 0) > 0 || set.segments.some(segment => (segment.timeSeconds ?? 0) > 0);
+    }
+    if (trackingType === 'cardio') {
+        return (set.timeSeconds ?? 0) > 0 || (set.reps ?? 0) > 0
+            || set.segments.some(segment => (segment.timeSeconds ?? 0) > 0 || (segment.reps ?? 0) > 0);
+    }
+    return (set.reps ?? 0) > 0
+        || set.segments.some(segment => (segment.reps ?? 0) > 0 || (segment.timeSeconds ?? 0) > 0);
+}
+
+function referenceSet(sets: NormalizedSet[], trackingType: Exercise['trackingType']): NormalizedSet | undefined {
+    const observed = sets.filter(set => hasObservedSet(set, trackingType));
+    if (observed.length === 0) return undefined;
+    if (trackingType !== 'weight_reps') return observed[0];
+    return observed.reduce<NormalizedSet | undefined>((best, candidate) => {
+        if (!best) return candidate;
+        const bestLoad = best.effectiveKg ?? best.kg ?? -Infinity;
+        const candidateLoad = candidate.effectiveKg ?? candidate.kg ?? -Infinity;
+        if (candidateLoad !== bestLoad) return candidateLoad > bestLoad ? candidate : best;
+        return (candidate.reps ?? 0) > (best.reps ?? 0) ? candidate : best;
+    }, undefined);
+}
+
+function normalizeExerciseExposureWithWeight(
+    session: WorkoutSession,
+    sessionExercise: SessionExercise,
+    exercise: ProgressionExerciseRef | undefined,
+    bodyweightKg: number | undefined,
+): NormalizedExposure {
+    const date = session.date ?? '';
+    const trackingType = exercise?.trackingType ?? 'weight_reps';
+    const sets = (sessionExercise.sets ?? []).map(set => normalizeSet(set, exercise, bodyweightKg));
+    const observedSets = sets.filter(set => hasObservedSet(set, trackingType));
+    let totalReps = 0;
+    let tonnage = 0;
+    let tonnageComplete = true;
+    for (const set of observedSets) {
+        if (set.timeSeconds && !set.reps) tonnageComplete = false;
+        if (set.reps) {
+            totalReps += set.reps;
+            if (set.effectiveKg === undefined) tonnageComplete = false;
+            else tonnage += set.effectiveKg * set.reps;
+        }
+        for (const segment of set.segments) {
+            if (segment.timeSeconds && !segment.reps) tonnageComplete = false;
+            if (!segment.reps) continue;
+            totalReps += segment.reps;
+            if (segment.effectiveKg === undefined) tonnageComplete = false;
+            else tonnage += segment.effectiveKg * segment.reps;
+        }
+    }
+    const ref = referenceSet(sets, trackingType);
+    return {
+        sessionId: session.id ?? '',
+        date,
+        ...(session.routineId ? { routineId: session.routineId } : {}),
+        ...(session.cycleId ? { cycleId: session.cycleId } : {}),
+        ...(session.cycleStrategy?.intent ? { intent: session.cycleStrategy.intent } : {}),
+        ...((sessionExercise.progressionContract?.metric ?? session.cycleStrategy?.progressionFocus)
+            ? { focus: (sessionExercise.progressionContract?.metric ?? session.cycleStrategy?.progressionFocus) as TrainingCycleProgressionFocus }
+            : {}),
+        ...(sessionExercise.technicalStandard?.trim() ? { technicalStandard: sessionExercise.technicalStandard.trim() } : {}),
+        ...(sessionExercise.progressionContract ? { progressionContract: structuredClone(sessionExercise.progressionContract) } : {}),
+        exId: sessionExercise.exId,
+        exName: exercise?.name ?? 'Esercizio',
+        trackingType,
+        isBodyweight: Boolean(exercise?.isBodyweight),
+        ...(bodyweightKg !== undefined ? { bodyweightKg } : {}),
+        sets,
+        workSets: observedSets.length,
+        totalReps,
+        ...(tonnageComplete ? { tonnageKg: tonnage } : {}),
+        tonnageComplete,
+        ...(ref ? { referenceSet: ref } : {}),
+    };
+}
+
+export function normalizeExerciseExposure(
+    session: WorkoutSession,
+    sessionExercise: SessionExercise,
+    exercise: ProgressionExerciseRef | undefined,
+    context: ProgressionBodyweightContext = {},
+): NormalizedExposure {
+    const bodyweightKg = exercise?.isBodyweight ? historicalBodyweight(session.date ?? '', context) : undefined;
+    return normalizeExerciseExposureWithWeight(session, sessionExercise, exercise, bodyweightKg);
+}
+
+function setShape(set?: NormalizedSet): string {
+    if (!set) return 'missing';
+    const segmentShapes = set.segments
+        .map(segment => [
+            segment.technique ?? set.technique,
+            segment.restBeforeSeconds === undefined ? '?' : String(segment.restBeforeSeconds),
+            segment.targetReps === undefined ? 'no-target' : `target:${segment.targetReps}`,
+        ].join(':'))
+        .join(',');
+    return [
+        set.technique,
+        set.executionMode,
+        set.segments.length,
+        set.targetReps === undefined ? 'no-target' : `target:${set.targetReps}`,
+        `segments:${segmentShapes}`,
+    ].join('|');
+}
+
+function exposureStructurePalette(exposure: NormalizedExposure): string[] {
+    return [...new Set(exposure.sets.map(setShape))].sort();
+}
+
+export function compareExposureCompatibility(
+    current: NormalizedExposure,
+    previous: NormalizedExposure,
+): ExposureComparison {
+    const reasons: string[] = [];
+    if (current.exId !== previous.exId) return { level: 'none', reasons: ['Esercizio diverso.'] };
+    if (current.routineId !== previous.routineId) {
+        return {
+            level: 'none',
+            reasons: ['Scheda diversa: la progressione viene confrontata nello stesso utilizzo dell’esercizio nella scheda.'],
+        };
+    }
+    if (current.trackingType !== previous.trackingType) return { level: 'none', reasons: ['Tipo di tracciamento diverso.'] };
+    if (!current.referenceSet || !previous.referenceSet) return { level: 'none', reasons: ['Manca un set di riferimento osservabile.'] };
+
+    const currentStandard = current.technicalStandard?.trim().replace(/\s+/g, ' ').toLocaleLowerCase('it');
+    const previousStandard = previous.technicalStandard?.trim().replace(/\s+/g, ' ').toLocaleLowerCase('it');
+    if (currentStandard && previousStandard && currentStandard !== previousStandard) {
+        return { level: 'none', reasons: ['Standard tecnico registrato diverso.'] };
+    }
+    if (Boolean(currentStandard) !== Boolean(previousStandard)) reasons.push('Standard tecnico registrato solo in una delle esposizioni.');
+
+    const currentMetric = current.progressionContract?.metric;
+    const previousMetric = previous.progressionContract?.metric;
+    if (currentMetric && previousMetric && currentMetric !== previousMetric) reasons.push('Metrica del contratto di progressione diversa.');
+
+    const currentRef = current.referenceSet;
+    const previousRef = previous.referenceSet;
+    if (currentRef.technique !== previousRef.technique) {
+        return { level: 'none', reasons: [`Tecnica diversa: ${previousRef.technique} → ${currentRef.technique}.`] };
+    }
+    if (currentRef.executionMode !== previousRef.executionMode) {
+        return { level: 'none', reasons: [`Modalità di esecuzione diversa: ${previousRef.executionMode} → ${currentRef.executionMode}.`] };
+    }
+    if (currentRef.segments.length !== previousRef.segments.length) {
+        return { level: 'none', reasons: ['Struttura dei segmenti diversa.'] };
+    }
+    for (let index = 0; index < currentRef.segments.length; index++) {
+        const currentSegment = currentRef.segments[index];
+        const previousSegment = previousRef.segments[index];
+        const currentTechnique = currentSegment?.technique ?? currentRef.technique;
+        const previousTechnique = previousSegment?.technique ?? previousRef.technique;
+        if (currentTechnique !== previousTechnique) {
+            return { level: 'none', reasons: ['Sequenza delle tecniche avanzate diversa.'] };
+        }
+        const currentRest = currentSegment?.restBeforeSeconds;
+        const previousRest = previousSegment?.restBeforeSeconds;
+        if (currentRest !== undefined && previousRest !== undefined && currentRest !== previousRest) {
+            return { level: 'none', reasons: ['Recuperi strutturati delle tecniche avanzate diversi.'] };
+        }
+        if ((currentRest === undefined) !== (previousRest === undefined)) {
+            reasons.push('Manca parte dei recuperi strutturati delle tecniche avanzate.');
+        }
+        if (currentSegment?.targetReps !== previousSegment?.targetReps) {
+            reasons.push('Target di una tecnica avanzata diverso o non disponibile in entrambe le esposizioni.');
+        }
+    }
+    if (currentRef.targetReps !== previousRef.targetReps) reasons.push('Target strutturato diverso o non disponibile in entrambe le esposizioni.');
+    const currentPalette = exposureStructurePalette(current);
+    const previousPalette = exposureStructurePalette(previous);
+    if (currentPalette.length !== previousPalette.length || currentPalette.some((shape, index) => shape !== previousPalette[index])) {
+        reasons.push('Il mix di tecniche o strutture delle serie è cambiato tra le esposizioni.');
+    }
+    if (current.isBodyweight && (current.bodyweightKg === undefined || previous.bodyweightKg === undefined)) {
+        reasons.push('Peso corporeo storico mancante in almeno una esposizione.');
+    }
+    if (
+        current.trackingType === 'weight_reps'
+        && ((currentRef.effectiveKg ?? currentRef.kg) === undefined || (previousRef.effectiveKg ?? previousRef.kg) === undefined)
+    ) {
+        reasons.push('Carico osservato mancante in almeno una esposizione.');
+    }
+    if (current.trackingType === 'weight_reps' && (currentRef.rir === undefined || previousRef.rir === undefined)) {
+        reasons.push(`RIR mancante in almeno una esposizione (${previous.date || 'precedente'} / ${current.date || 'corrente'}).`);
+    }
+    return { level: reasons.length ? 'medium' : 'high', reasons };
+}
+
+function partPairs(current?: NormalizedSet, previous?: NormalizedSet) {
+    if (!current || !previous || setShape(current) !== setShape(previous)) return [];
+    return [
+        [current, previous] as const,
+        ...current.segments.map((segment, index) => [segment, previous.segments[index]] as const),
+    ];
+}
+
+function compareReferenceOutput(
+    current?: NormalizedSet,
+    previous?: NormalizedSet,
+    trackingType: Exercise['trackingType'] = 'weight_reps',
+): OutputChange {
+    if (!current || !previous) return 'unknown';
+    const pairs = partPairs(current, previous);
+    if (!pairs.length) return 'unknown';
+    if (trackingType === 'time') {
+        let compared = 0;
+        let anyLonger = false;
+        let anyShorter = false;
+        for (const [index, [curr, prev]] of pairs.entries()) {
+            const currentSeconds = curr?.timeSeconds;
+            const previousSeconds = prev?.timeSeconds;
+            // The primary set may be unmeasured when its segments carry the time.
+            // Missing time in a recorded segment cannot prove stable duration.
+            if (index === 0 && !(currentSeconds !== undefined && currentSeconds > 0)
+                && !(previousSeconds !== undefined && previousSeconds > 0)) continue;
+            if (currentSeconds === undefined || previousSeconds === undefined
+                || currentSeconds <= 0 || previousSeconds <= 0) return 'unknown';
+            compared++;
+            if (currentSeconds > previousSeconds) anyLonger = true;
+            if (currentSeconds < previousSeconds) anyShorter = true;
+        }
+        if (compared === 0) return 'unknown';
+        if (anyLonger && anyShorter) return 'mixed';
+        if (anyLonger) return 'longer';
+        if (anyShorter) return 'shorter';
+        return 'same';
+    }
+    let anyBetter = false;
+    let anyWorse = false;
+    for (const [curr, prev] of pairs) {
+        const currLoad = curr.effectiveKg ?? curr.kg;
+        const prevLoad = prev.effectiveKg ?? prev.kg;
+        const currReps = curr.reps;
+        const prevReps = prev.reps;
+        if (currLoad === undefined || prevLoad === undefined || currReps === undefined || prevReps === undefined) return 'unknown';
+        if (currLoad >= prevLoad && currReps >= prevReps && (currLoad > prevLoad || currReps > prevReps)) anyBetter = true;
+        else if (currLoad <= prevLoad && currReps <= prevReps && (currLoad < prevLoad || currReps < prevReps)) anyWorse = true;
+        else if (currLoad !== prevLoad || currReps !== prevReps) {
+            anyBetter = true;
+            anyWorse = true;
+        }
+    }
+    if (anyBetter && anyWorse) return 'mixed';
+    if (anyBetter) return 'better';
+    if (anyWorse) return 'worse';
+    return 'same';
+}
+
+function rirChange(current?: NormalizedSet, previous?: NormalizedSet): 'less' | 'same' | 'more' | 'unknown' {
+    if (current?.rir === undefined || previous?.rir === undefined) return 'unknown';
+    if (current.rir > previous.rir) return 'less';
+    if (current.rir < previous.rir) return 'more';
+    return 'same';
+}
+
+function strongRecord(current: NormalizedExposure, comparisons: HistoricalExposureComparison[]): boolean {
+    if (current.trackingType !== 'weight_reps' || !current.referenceSet || current.referenceSet.rir === undefined) return false;
+    const recentComparable = comparisons
+        .filter(item => item.comparison.level !== 'none')
+        .slice(-3);
+    if (recentComparable.some(item => item.comparison.level === 'medium')) return false;
+
+    const candidates = comparisons
+        .filter(item => item.comparison.level === 'high')
+        .map(item => item.exposure);
+    if (!candidates.length) return false;
+    return candidates.every(previous => {
+        const change = compareReferenceOutput(current.referenceSet, previous.referenceSet);
+        const effort = rirChange(current.referenceSet, previous.referenceSet);
+        return change === 'better' && (effort === 'same' || effort === 'less');
+    });
+}
+
+function selectBestHistorical(
+    comparisons: HistoricalExposureComparison[],
+    trackingType: Exercise['trackingType'],
+): NormalizedExposure | undefined {
+    // No best duration exists without knowing whether the exercise rewards more or less time.
+    if (trackingType === 'time') return undefined;
+    const candidates = comparisons
+        .filter(item => item.comparison.level === 'high')
+        .map(item => item.exposure);
+    if (!candidates.length) return undefined;
+    // With distinct sessions, a lower known RIR always implies more effort than
+    // at least one candidate. Such a reference cannot dominate every exposure.
+    // Duplicate session IDs retain the original full comparison semantics.
+    const distinctSessions = new Set(candidates.map(candidate => candidate.sessionId)).size === candidates.length;
+    const maxKnownRir = distinctSessions
+        ? candidates.reduce((max, candidate) => Math.max(max, candidate.referenceSet?.rir ?? -Infinity), -Infinity)
+        : -Infinity;
+    return candidates.find(candidate => {
+        if (candidate.referenceSet?.rir !== undefined && candidate.referenceSet.rir < maxKnownRir) return false;
+        return candidates.every(other => {
+        if (candidate.sessionId === other.sessionId) return true;
+        const change = compareReferenceOutput(candidate.referenceSet, other.referenceSet);
+        const effort = rirChange(candidate.referenceSet, other.referenceSet);
+        return (change === 'better' && effort !== 'more')
+            || (change === 'same' && (effort === 'same' || effort === 'less'));
+        });
+    });
+}
+
+function qualityFor(
+    comparison: ExposureComparison,
+    recentCount: number,
+    hasRecentLimitations: boolean,
+): ProgressionQuality {
+    if (comparison.level === 'none') return 'limited';
+    if (comparison.level === 'medium' || hasRecentLimitations) return 'preliminary';
+    return recentCount >= 3 ? 'clear' : 'preliminary';
+}
+
+export function formatProgressionReference(exposure?: NormalizedExposure): string {
+    const set = exposure?.referenceSet;
+    if (!set) return 'dati insufficienti';
+    if (exposure?.trackingType === 'time') {
+        const main = set.timeSeconds !== undefined && set.timeSeconds > 0 ? `${set.timeSeconds}s` : '';
+        const segments = set.segments.length
+            ? `segmenti ${set.segments.map(segment => segment.timeSeconds !== undefined && segment.timeSeconds > 0 ? `${segment.timeSeconds}s` : '?').join(' + ')}`
+            : '';
+        return [main, segments].filter(Boolean).join(' · ') || 'tempo non disponibile';
+    }
+    const load = set.effectiveKg ?? set.kg;
+    const output = `${load !== undefined ? load : '?'} kg × ${set.reps ?? '?'}`;
+    return set.rir === undefined ? output : `${output} · RIR ${set.rir}`;
+}
+
+function classificationFor(
+    current: NormalizedExposure,
+    previous: NormalizedExposure | undefined,
+    output: OutputChange,
+    isRecord: boolean,
+): ProgressionClassification {
+    if (!previous) return 'new_baseline';
+    if (current.intent === 'deload') return 'deload_change';
+    if (current.focus === 'density') return 'density_limited';
+    if (current.focus === 'execution') return 'execution_baseline';
+    const effort = rirChange(current.referenceSet, previous.referenceSet);
+    if (current.intent === 'maintenance') {
+        return output === 'same' && current.workSets <= previous.workSets ? 'maintenance_stable' : 'maintenance_change';
+    }
+    if (current.focus === 'volume') {
+        const tonnageUp = current.tonnageKg !== undefined && previous.tonnageKg !== undefined && current.tonnageKg > previous.tonnageKg;
+        if (current.workSets > previous.workSets || current.totalReps > previous.totalReps || tonnageUp) return 'volume_progression';
+    }
+    if (isRecord) return 'performance_record';
+    if (output === 'better' && effort === 'more') return 'output_up_effort_up';
+    if (output === 'better') return 'progression';
+    if (output === 'same' && effort === 'less') return 'stable_less_effort';
+    if (output === 'same' && effort === 'more') return 'stable_more_effort';
+    if (output === 'same') return 'stable';
+    if (output === 'worse') return 'output_lower';
+    if (output === 'unknown') return 'insufficient_data';
+    return 'descriptive_change';
+}
+
+function describe(
+    classification: ProgressionClassification,
+    current: NormalizedExposure,
+    previous?: NormalizedExposure,
+): { headline: string; detail: string } {
+    const currentRef = formatProgressionReference(current);
+    const previousRef = formatProgressionReference(previous);
+    switch (classification) {
+        case 'performance_record':
+            return { headline: 'Record nelle condizioni confrontabili confrontabile', detail: `${previousRef} → ${currentRef}, migliore delle esposizioni storiche direttamente confrontabili.` };
+        case 'output_up_effort_up':
+            return { headline: 'Output aumentato con effort maggiore', detail: `${previousRef} → ${currentRef}. L'output è salito insieme all'effort dichiarato.` };
+        case 'progression':
+            return { headline: 'Progressione osservata', detail: `${previousRef} → ${currentRef}.` };
+        case 'stable_less_effort':
+            return { headline: 'Output stabile, effort minore', detail: `${currentRef}. Stesso output con RIR dichiarato più alto.` };
+        case 'stable_more_effort':
+            return { headline: 'Output stabile, effort maggiore', detail: `${currentRef}. Stesso output con RIR dichiarato più basso.` };
+        case 'stable':
+            if (current.trackingType === 'time') {
+                return { headline: 'Durata registrata stabile', detail: `${previousRef} → ${currentRef}. La stessa durata non prova da sola una prestazione equivalente.` };
+            }
+            return { headline: 'Prestazione stabile', detail: `${previousRef} → ${currentRef}.` };
+        case 'output_lower':
+            return { headline: 'Output di riferimento inferiore', detail: `${previousRef} → ${currentRef}. È una variazione osservata della prestazione, non una conclusione fisiologica.` };
+        case 'volume_progression':
+            return {
+                headline: 'Volume di lavoro aumentato',
+                detail: `${previous?.workSets ?? 0} → ${current.workSets} serie, ${previous?.totalReps ?? 0} → ${current.totalReps} ripetizioni. Set di riferimento: ${previousRef} → ${currentRef}.`,
+            };
+        case 'maintenance_stable':
+            return { headline: 'Performance di riferimento stabile nel mantenimento', detail: `Set di riferimento: ${previousRef} → ${currentRef}. Dose osservata: ${previous?.workSets ?? 0} → ${current.workSets} serie.` };
+        case 'maintenance_change':
+            return { headline: 'Mantenimento: variazione osservata', detail: `Set di riferimento: ${previousRef} → ${currentRef}. Dose osservata: ${previous?.workSets ?? 0} → ${current.workSets} serie. Il dato descrive la prestazione, non il mantenimento della massa muscolare.` };
+        case 'deload_change':
+            return { headline: 'Deload: variazione descrittiva', detail: `Set di riferimento: ${previousRef} → ${currentRef}. Dose osservata: ${previous?.workSets ?? 0} → ${current.workSets} serie. Le riduzioni programmate non vengono classificate come regressione.` };
+        case 'execution_baseline':
+            return { headline: 'Esecuzione: baseline registrata', detail: 'TheLogBook usa modalità, standard tecnico e parametri registrati. Non deduce la qualità tecnica da dati non inseriti.' };
+        case 'density_limited':
+            return { headline: 'Densità: confronto limitato alla sessione', detail: 'Non sono disponibili timestamp per attribuire una densità precisa al singolo esercizio.' };
+        case 'new_baseline':
+            return { headline: 'Nuova baseline', detail: previous ? 'Le condizioni registrate sono sostanzialmente diverse; evito un confronto diretto.' : `Prima esposizione confrontabile registrata: ${currentRef}.` };
+        case 'descriptive_change':
+            if (current.trackingType === 'time') {
+                return {
+                    headline: 'Variazione della durata registrata',
+                    detail: `${previousRef} → ${currentRef}. La durata è cambiata, ma senza una direzione-obiettivo non indica automaticamente un miglioramento o un peggioramento.`,
+                };
+            }
+            return { headline: 'Variazione descrittiva', detail: `${previousRef} → ${currentRef}. Carico e ripetizioni sono cambiati in direzioni che non supportano una conclusione univoca.` };
+        default:
+            return { headline: 'Dati insufficienti', detail: 'Le informazioni disponibili non supportano una conclusione diretta robusta.' };
+    }
+}
+
+function trendFor(exposures: NormalizedExposure[]): TrendDirection {
+    if (exposures.length < 3) return 'insufficient';
+    const directions: OutputChange[] = [];
+    for (let index = 1; index < exposures.length; index++) {
+        const current = exposures[index];
+        const previous = exposures[index - 1];
+        const output = compareReferenceOutput(current.referenceSet, previous.referenceSet, current.trackingType);
+        if (output === 'better' && rirChange(current.referenceSet, previous.referenceSet) === 'more') directions.push('mixed');
+        else directions.push(output);
+    }
+    if (directions.every(value => value === 'same')) return 'stable';
+    if (exposures.at(-1)?.trackingType === 'time') {
+        if (directions.includes('unknown')) return 'insufficient';
+        if (directions.every(value => value === 'longer' || value === 'same')) return 'duration_up';
+        if (directions.every(value => value === 'shorter' || value === 'same')) return 'duration_down';
+        return 'mixed';
+    }
+    if (directions.every(value => value === 'better' || value === 'same') && directions.some(value => value === 'better')) return 'up';
+    if (directions.every(value => value === 'worse' || value === 'same') && directions.some(value => value === 'worse')) return 'down';
+    return 'mixed';
+}
+
+function priorityFor(
+    exercise: ProgressionExerciseRef | undefined,
+    session: WorkoutSession,
+    contractRole?: ProgressionContract['role'],
+): ExerciseProgressionAnalysis['priority'] {
+    if (contractRole === 'primary') return 'primary';
+    if (contractRole === 'secondary') return 'secondary';
+    const muscles = new Set([...(exercise?.muscles ?? []), ...(exercise?.secondaryMuscles ?? [])]);
+    if ((session.cycleStrategy?.primaryMuscles ?? []).some(muscle => muscles.has(muscle))) return 'primary';
+    if ((session.cycleStrategy?.secondaryMuscles ?? []).some(muscle => muscles.has(muscle))) return 'secondary';
+    return 'other';
+}
+
+function observedSessionWorkSets(
+    session: WorkoutSession,
+    libraryMap: Map<string, ProgressionExerciseRef>,
+    context: ProgressionBodyweightContext,
+): number {
+    return (session.exercises ?? []).reduce((sum, exercise) => {
+        if (!exercise?.exId) return sum;
+        return sum + normalizeExerciseExposure(session, exercise, libraryMap.get(exercise.exId), context).workSets;
+    }, 0);
+}
+
+function densityAnalysis(
+    current: WorkoutSession,
+    orderedHistory: WorkoutSession[],
+    libraryMap: Map<string, ProgressionExerciseRef>,
+    context: ProgressionBodyweightContext,
+): DensityProgressionAnalysis | undefined {
+    if (current.cycleStrategy?.progressionFocus !== 'density') return undefined;
+    const currentDuration = getWorkoutDurationSeconds(current);
+    let previous: WorkoutSession | undefined;
+    for (const item of orderedHistory) {
+        if (item.id === current.id
+            || item.routineId !== current.routineId
+            || item.cycleStrategy?.progressionFocus !== 'density'
+            || (current.cycleId && item.cycleId !== current.cycleId)) continue;
+        // Earlier sessions are already ordered. Preserve the first input
+        // occurrence when multiple sessions have identical chronology.
+        if (!previous || compareSessionChronology(item, previous) > 0) previous = item;
+    }
+    const previousDuration = previous ? getWorkoutDurationSeconds(previous) : undefined;
+    if (!previous || currentDuration === undefined || previousDuration === undefined) {
+        return { quality: 'limited', headline: 'Confronto densità limitato', detail: 'Serve la durata di due sessioni della stessa scheda; non vengono inventati tempi per esercizio.' };
+    }
+    const currentSets = observedSessionWorkSets(current, libraryMap, context);
+    const previousSets = observedSessionWorkSets(previous, libraryMap, context);
+    if (currentSets === 0 || previousSets === 0) {
+        return {
+            quality: 'limited',
+            headline: 'Confronto densità senza lavoro osservabile',
+            detail: 'Serve almeno una serie eseguita osservabile in entrambe le sessioni; la sola durata non misura la densità.',
+            previousDurationSeconds: previousDuration,
+            currentDurationSeconds: currentDuration,
+        };
+    }
+    const similarWork = Math.abs(currentSets - previousSets) <= Math.max(1, Math.round(previousSets * 0.1));
+    if (!similarWork) {
+        return { quality: 'limited', headline: 'Durata cambiata con lavoro diverso', detail: `${Math.round(previousDuration / 60)} → ${Math.round(currentDuration / 60)} min, ma il numero di serie è cambiato: non dichiaro una progressione di densità.`, previousDurationSeconds: previousDuration, currentDurationSeconds: currentDuration };
+    }
+    const direction = currentDuration < previousDuration ? 'ridotta' : currentDuration > previousDuration ? 'aumentata' : 'stabile';
+    return {
+        quality: 'preliminary',
+        headline: `Durata sessione ${direction} con lavoro osservabile simile`,
+        detail: `${Math.round(previousDuration / 60)} → ${Math.round(currentDuration / 60)} min. È un'indicazione a livello di sessione, non una misura precisa per esercizio.`,
+        previousDurationSeconds: previousDuration,
+        currentDurationSeconds: currentDuration,
+    };
+}
+
+export function computeProgressionEngine(
+    currentWorkout: WorkoutSession,
+    history: WorkoutSession[],
+    libraryMap: Map<string, ProgressionExerciseRef>,
+    context: ProgressionBodyweightContext = {},
+): ProgressionEngineResult {
+    const analyses: ExerciseProgressionAnalysis[] = [];
+    const orderedHistory = orderedEarlierSessions(history, currentWorkout);
+    const requestedIds = new Set((currentWorkout.exercises ?? [])
+        .filter(item => Boolean(item?.exId))
+        .map(item => item.exId));
+    const historicalById = new Map<string, { session: WorkoutSession; exercise: SessionExercise }[]>();
+    // Search each historical session's exercise list once; the first matching
+    // exercise in a session remains authoritative if legacy duplicates exist.
+    for (const session of orderedHistory) {
+        const seen = new Set<string>();
+        for (const exercise of session.exercises ?? []) {
+            const id = exercise?.exId;
+            if (!id || !requestedIds.has(id) || seen.has(id)) continue;
+            seen.add(id);
+            const matches = historicalById.get(id) ?? [];
+            matches.push({ session, exercise });
+            historicalById.set(id, matches);
+        }
+    }
+    const usesBodyweight = [...requestedIds].some(id => libraryMap.get(id)?.isBodyweight);
+    const weightAtDate = usesBodyweight ? createHistoricalBodyweightLookup(context.nutrition) : undefined;
+    const currentBodyweight = usesBodyweight
+        ? historicalBodyweight(currentWorkout.date ?? '', context)
+        : undefined;
+    for (const currentExercise of currentWorkout.exercises ?? []) {
+        if (!currentExercise?.exId) continue;
+        const exercise = libraryMap.get(currentExercise.exId);
+        const current = normalizeExerciseExposureWithWeight(currentWorkout, currentExercise, exercise,
+            exercise?.isBodyweight ? currentBodyweight : undefined);
+        // A current-only explicit weight is never used to rewrite historic loads.
+        const historical = (historicalById.get(currentExercise.exId) ?? []).map(({ session, exercise: prior }) =>
+            normalizeExerciseExposureWithWeight(session, prior, exercise,
+                exercise?.isBodyweight ? weightAtDate?.(session.date ?? '') : undefined)
+        );
+
+        const comparisons: HistoricalExposureComparison[] = historical.map(exposure => ({
+            exposure,
+            comparison: compareExposureCompatibility(current, exposure),
+        }));
+        const latestExposure = historical.at(-1);
+        const comparable = comparisons.filter(item => item.comparison.level !== 'none');
+        const previousComparable = comparable.at(-1)?.exposure;
+        const comparison = comparable.at(-1)?.comparison
+            ?? comparisons.at(-1)?.comparison
+            ?? { level: 'none' as const, reasons: ['Nessuna esposizione precedente disponibile.'] };
+        const recentHistorical = comparable.slice(-3);
+        const recentComparable = [...recentHistorical.map(item => item.exposure), current];
+        const recentLimitations = recentHistorical.filter(item => item.comparison.level === 'medium');
+        const cycleBaseline = current.cycleId
+            ? comparable.find(item => item.exposure.cycleId === current.cycleId)?.exposure
+            : undefined;
+        const bestHistorical = selectBestHistorical(comparisons, current.trackingType);
+        const isRecord = strongRecord(current, comparisons);
+        const outputChange = previousComparable
+            ? compareReferenceOutput(current.referenceSet, previousComparable.referenceSet, current.trackingType)
+            : 'unknown';
+        const classification = !current.referenceSet
+            ? 'insufficient_data'
+            : comparison.level === 'none' && latestExposure
+                ? 'new_baseline'
+                : classificationFor(current, previousComparable, outputChange, isRecord);
+        const timedOutputUnverified = current.trackingType === 'time'
+            && Boolean(previousComparable) && outputChange === 'unknown';
+        const quality = timedOutputUnverified
+            ? 'limited'
+            : qualityFor(comparison, recentComparable.length, recentLimitations.length > 0);
+        const qualityReasons = [
+            ...comparison.reasons,
+            ...(timedOutputUnverified ? ['Durata non verificabile per tutti i segmenti temporizzati confrontati.'] : []),
+        ];
+        for (const limitation of recentLimitations) {
+            if (limitation.exposure.sessionId === previousComparable?.sessionId) continue;
+            qualityReasons.push(
+                ...limitation.comparison.reasons.map(
+                    reason => `Esposizione del ${limitation.exposure.date || 'data non disponibile'}: ${reason}`,
+                ),
+            );
+        }
+        if (latestExposure && previousComparable && latestExposure.sessionId !== previousComparable.sessionId) {
+            const latestComparison = comparisons.at(-1)?.comparison;
+            if (latestComparison) qualityReasons.unshift(...latestComparison.reasons.map(reason => `Esposizione più recente esclusa: ${reason}`));
+        }
+        const description = describe(classification, current, previousComparable ?? latestExposure);
+        analyses.push({
+            exId: current.exId,
+            exName: current.exName,
+            ...(current.intent ? { intent: current.intent } : {}),
+            ...(current.focus ? { focus: current.focus } : {}),
+            priority: priorityFor(exercise, currentWorkout, current.progressionContract?.role),
+            current,
+            ...(latestExposure ? { latestExposure } : {}),
+            ...(previousComparable ? { previousComparable } : {}),
+            ...(cycleBaseline ? { cycleBaseline } : {}),
+            ...(bestHistorical ? { bestHistorical } : {}),
+            recentComparable,
+            comparison,
+            comparisonStatus: comparison.level === 'high' ? 'comparable' : comparison.level === 'medium' ? 'limited' : 'not_comparable',
+            ...(current.progressionContract ? { progressionContract: current.progressionContract } : {}),
+            quality,
+            qualityReasons,
+            classification,
+            outputChange,
+            trendDirection: trendFor(recentComparable),
+            isRecord: classification === 'performance_record',
+            ...description,
+        });
+    }
+
+    const priorityOrder = { primary: 0, secondary: 1, other: 2 } as const;
+    analyses.sort((a, b) => priorityOrder[a.priority] - priorityOrder[b.priority]);
+    const density = densityAnalysis(currentWorkout, orderedHistory, libraryMap, context);
+    return { exercises: analyses, ...(density ? { density } : {}) };
+}
+
+export function progressionQualityLabel(quality: ProgressionQuality): string {
+    if (quality === 'clear') return 'Trend chiaro';
+    if (quality === 'preliminary') return 'Indicazione preliminare';
+    return 'Confronto limitato';
+}
+
+export function progressionTrendLabel(
+    direction: ExerciseProgressionAnalysis['trendDirection'],
+    intent?: TrainingCycleIntent,
+): string {
+    if (intent === 'deload') return 'Deload: andamento descrittivo';
+    if (intent === 'maintenance') return 'Andamento in mantenimento';
+    if (direction === 'duration_up') return 'Durata in aumento';
+    if (direction === 'duration_down') return 'Durata in diminuzione';
+    if (direction === 'up') return 'Trend in crescita';
+    if (direction === 'stable') return 'Trend stabile';
+    if (direction === 'down') return 'Trend in calo';
+    if (direction === 'mixed') return 'Trend misto';
+    return 'Trend non ancora definito';
+}

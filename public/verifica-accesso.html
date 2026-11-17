@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<!-- A native form POST needs a non-null Origin for the strict same-origin CSRF gate. -->
+<meta name="referrer" content="same-origin">
+<link rel="icon" href="/icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/legal-pages.css">
+<script type="module" src="/verifica-accesso.js"></script>
+<title>Verifica accesso Kinde — TheLogBook</title>
+</head>
+<body>
+<div class="wrap">
+<header class="top"><a class="brand" href="/">TheLogBook</a><nav aria-label="Navigazione principale"><a href="/">Sito</a><a href="/privacy">Privacy</a></nav></header>
+<main id="contenuto">
+<div class="kicker">Verifica autenticazione · Fase di migrazione</div>
+<h1>Collaudo controllato dell'accesso Kinde</h1>
+<p class="lead">Questa pagina verifica esclusivamente l'identità e la sessione di accesso. Non abilita allenamenti, dati salute, consenso o sincronizzazione.</p>
+<section aria-labelledby="inizia">
+<h2 id="inizia">1. Avvia l'accesso</h2>
+<p>Utilizza soltanto un account di prova. L'indirizzo email, la password e l'eventuale accesso Google vengono gestiti sulle pagine ospitate da Kinde, non qui.</p>
+<form method="post" action="/api/auth/kinde/start" autocomplete="off">
+<div class="actions"><button class="primary" type="submit">Avvia accesso con Kinde</button></div>
+</form>
+</section>
+<section aria-labelledby="controlla">
+<h2 id="controlla">2. Controlla la sessione</h2>
+<p>Dopo il ritorno automatico da Kinde alla homepage, riapri <strong>thelogbook.me/verifica-accesso</strong> nello stesso browser e seleziona il controllo. Non inserire credenziali in questa pagina.</p>
+<div class="actions"><button type="button" id="check-session">Verifica sessione Kinde</button></div>
+<p id="session-result" role="status" aria-live="polite">Nessuna verifica eseguita.</p>
+</section>
+<section aria-labelledby="limiti">
+<h2 id="limiti">Limiti del collaudo</h2>
+<p>Una sessione riconosciuta prova soltanto l'accesso applicativo. Il test di registrazione, verifica email, Google e reset password deve essere confermato separatamente. La normale PWA utilizza ancora i percorsi precedenti fino al completamento della migrazione.</p>
+</section>
+</main><footer class="foot"><span>TheLogBook · Diagnostica temporanea</span><a href="/privacy">Informativa sulla privacy</a></footer>
+</div>
+</body>
+</html>

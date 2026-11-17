@@ -1,0 +1,348 @@
+name: Milestone Verification
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: verification-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  shards:
+    if: github.event_name == 'pull_request'
+    name: "Verification / ${{ matrix.label }}"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - id: core
+            label: Static, isolated and recovery
+            command: "npm run test:ci-production-secrets && npm run test:install-scripts && npm audit --audit-level=high && npm run test:security-static && npm run lint && npm run lint:a11y && npm run lint:type-aware && npm run lint:baseline && npm run test:quality-guardrails && npm run test:typecheck-coverage && npm run test:typecheck:m5 && npm run test:quality:m5 && npm run test:repo-hygiene && npm run test:version-bump && npm run test:ci-contract && npm run test:discovery && npm run test:dead-code && npm run test:no-skips && npm run test:isolated && npm run test:fuzz && npm run test:recovery && npm run test:gc"
+            java: false
+          - id: unit-1
+            label: Unit and integration 1/3
+            command: "npm run test -- --shard=1/3"
+            java: false
+          - id: unit-2
+            label: Unit and integration 2/3
+            command: "npm run test -- --shard=2/3"
+            java: false
+          - id: unit-3
+            label: Unit and integration 3/3
+            command: "npm run test -- --shard=3/3"
+            java: false
+          - id: hardening-stress
+            label: Hardening and stress
+            command: "npm run test:hardening && npm run test:stress"
+            java: false
+          - id: rules
+            label: Firestore Rules
+            command: "npm run test:rules"
+            java: true
+          - id: m7-m8
+            label: Build and M7-M8
+            command: "npm run build && npm run test:typecheck:m7 && npm run test:typecheck:cloudflare && npm run test:m7 && npm run test:pwa:m7 && npm run test:smoke:m7 && npm run test:m8 && npm run test:domain-boundary:m8"
+            java: false
+          - id: critical-coverage
+            label: Critical module coverage
+            command: "npm run test:coverage:critical"
+            java: false
+    env:
+      EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+      GITLEAKS_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+      QUALITY_BASE_SHA: ${{ github.event.pull_request.base.sha || '' }}
+      LOGBOOK_VERSION_BASE_SHA: ${{ github.event.pull_request.base.sha || '' }}
+
+    steps:
+      - name: Checkout exact event head
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Verify exact checkout
+        shell: bash
+        run: |
+          set -euo pipefail
+          actual_sha="$(git rev-parse HEAD)"
+          echo "Expected SHA: ${EXPECTED_SHA}"
+          echo "Actual SHA:   ${actual_sha}"
+          if [ "${actual_sha}" != "${EXPECTED_SHA}" ]; then
+            echo "Exact-head verification failed" >&2
+            exit 1
+          fi
+
+      - name: Setup Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: '24'
+          cache: npm
+
+      - name: Setup Java for Firebase Emulator
+        if: matrix.java == true
+        uses: actions/setup-java@77dd5b2ce225ea11469928ac317850245a74ae78 # v6.2.0
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Verify npm 11 runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm_version="$(npm --version)"
+          echo "npm runtime: ${npm_version}"
+          if [[ "${npm_version}" != 11.* ]]; then
+            echo "Expected npm 11.x; found ${npm_version}" >&2
+            exit 1
+          fi
+
+      - name: Reject unreviewed dependency install scripts
+        run: node scripts/check-install-scripts.mjs
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run verification shard
+        shell: bash
+        run: |
+          set -o pipefail
+          ${{ matrix.command }} 2>&1 | tee "verification-${{ matrix.id }}.log"
+
+      - name: Generate CycloneDX dependency SBOM
+        if: matrix.id == 'core'
+        shell: bash
+        run: npm sbom --sbom-format cyclonedx --sbom-type application > sbom.cdx.json
+
+      - name: Upload dependency SBOM
+        if: matrix.id == 'core'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: dependency-sbom-${{ env.EXPECTED_SHA }}
+          path: sbom.cdx.json
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload critical coverage report
+        if: matrix.id == 'critical-coverage'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: critical-coverage-${{ env.EXPECTED_SHA }}
+          if-no-files-found: error
+          retention-days: 14
+          path: coverage/critical/coverage-summary.json
+
+      - name: Upload failure artifacts
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: verification-failure-${{ matrix.id }}-${{ github.run_id }}
+          if-no-files-found: ignore
+          retention-days: 7
+          path: |
+            verification-${{ matrix.id }}.log
+            playwright-report/
+            test-results/
+            firestore-debug.log
+            firebase-debug.log
+            dist/sw.js
+            dist/manifest.webmanifest
+
+
+  e2e:
+    if: github.event_name == 'pull_request'
+    name: "Verification / Playwright E2E ${{ matrix.project }} ${{ matrix.shard }}/4"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        project: [chromium, mobile-safari]
+        shard: [1, 2, 3, 4]
+    container:
+      image: mcr.microsoft.com/playwright:v1.64.1-noble
+      options: --ipc=host
+    defaults:
+      run:
+        shell: bash
+    env:
+      EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+
+    steps:
+      - name: Checkout exact event head
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Verify exact checkout
+        run: |
+          set -euo pipefail
+          actual_sha="$(git -c safe.directory="${GITHUB_WORKSPACE}" rev-parse HEAD)"
+          echo "Expected SHA: ${EXPECTED_SHA}"
+          echo "Actual SHA:   ${actual_sha}"
+          if [ "${actual_sha}" != "${EXPECTED_SHA}" ]; then
+            echo "Exact-head verification failed" >&2
+            exit 1
+          fi
+
+      - name: Setup Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: '24'
+          cache: npm
+
+      - name: Verify npm 11 runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm_version="$(npm --version)"
+          echo "npm runtime: ${npm_version}"
+          if [[ "${npm_version}" != 11.* ]]; then
+            echo "Expected npm 11.x; found ${npm_version}" >&2
+            exit 1
+          fi
+
+      - name: Reject unreviewed dependency install scripts
+        run: node scripts/check-install-scripts.mjs
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run Playwright E2E
+        run: |
+          set -o pipefail
+          npm run test:e2e -- --project=${{ matrix.project }} --shard=${{ matrix.shard }}/4 2>&1 | tee "verification-e2e-${{ matrix.project }}-${{ matrix.shard }}.log"
+
+      - name: Upload Playwright evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: verification-e2e-${{ matrix.project }}-${{ matrix.shard }}-${{ env.EXPECTED_SHA }}
+          if-no-files-found: ignore
+          retention-days: 7
+          path: |
+            verification-e2e-${{ matrix.project }}-${{ matrix.shard }}.log
+            playwright-report/
+            test-results/
+
+  codeql:
+    name: "Security / CodeQL"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      security-events: write
+    env:
+      EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - name: Checkout exact event head
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Verify exact checkout
+        shell: bash
+        run: |
+          set -euo pipefail
+          actual_sha="$(git rev-parse HEAD)"
+          echo "Expected SHA: ${EXPECTED_SHA}"
+          echo "Actual SHA:   ${actual_sha}"
+          if [ "${actual_sha}" != "${EXPECTED_SHA}" ]; then
+            echo "Exact-head verification failed" >&2
+            exit 1
+          fi
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@33d7b85da1a04171e211befe2c739303b9a4c066 # v4
+        with:
+          languages: javascript-typescript
+          queries: security-extended
+
+      - name: Analyze with CodeQL
+        uses: github/codeql-action/analyze@33d7b85da1a04171e211befe2c739303b9a4c066 # v4
+        with:
+          category: "/language:javascript-typescript"
+
+  canonical:
+    name: "Canonical Verification"
+    runs-on: ubuntu-24.04
+    needs:
+      - shards
+      - e2e
+      - codeql
+    if: ${{ always() && github.event_name == 'pull_request' }}
+    steps:
+      - name: Require verification and security analysis
+        env:
+          SHARD_RESULT: ${{ needs.shards.result }}
+          E2E_RESULT: ${{ needs.e2e.result }}
+          CODEQL_RESULT: ${{ needs.codeql.result }}
+        shell: bash
+        run: |
+          echo "Parallel verification result: ${SHARD_RESULT}"
+          echo "Playwright E2E result: ${E2E_RESULT}"
+          echo "CodeQL result: ${CODEQL_RESULT}"
+          if [ "${SHARD_RESULT}" != "success" ]; then
+            echo "At least one verification shard failed or was cancelled" >&2
+            exit 1
+          fi
+          if [ "${E2E_RESULT}" != "success" ]; then
+            echo "Playwright E2E failed or was cancelled" >&2
+            exit 1
+          fi
+          if [ "${CODEQL_RESULT}" != "success" ]; then
+            echo "CodeQL security analysis failed or was cancelled" >&2
+            exit 1
+          fi
+
+  release:
+    name: "Main Release Gate"
+    if: github.event_name == 'push'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      actions: read
+      checks: read
+      pull-requests: read
+    steps:
+      - name: Checkout exact main SHA
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Verify exact checkout
+        shell: bash
+        env:
+          EXPECTED_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+
+      - name: Setup Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: '24'
+
+      - name: Attest already-verified pull request and merge tree
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          EXPECTED_SHA: ${{ github.sha }}
+        run: node scripts/verify-main-release.mjs

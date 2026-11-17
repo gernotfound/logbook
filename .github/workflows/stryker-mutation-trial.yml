@@ -1,0 +1,146 @@
+name: Stryker Mutation Diagnostic
+
+on:
+  # Creating a diagnostic branch at main must not attach checks to main's SHA.
+  # A PR requires its own changes; every run below checks out that exact PR head.
+  pull_request:
+    branches:
+      - main
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: stryker-trial-pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  mutation:
+    if: (startsWith(github.head_ref, 'test/stryker-') || startsWith(github.head_ref, 'D-stryker-')) && github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.head.sha != github.event.pull_request.base.sha
+    name: Mutation diagnostic / ${{ matrix.area }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix:
+        # Overlap slow sync classification with the shorter diagnostic areas.
+        area:
+          - secure-control-recovery
+          - secure-archive-session
+          - secure-archive-repository
+          - archive-bootstrap
+          - consent-reconciliation
+          - nutrition-conflict
+          - monthly-tombstones
+          - business-normalization
+          - sync-failure
+          - csv
+          - meal-totals
+          - meal-item
+          - workout-duration
+          - secure-id
+          - cycle-limits
+          - password-policy
+          - sync-batching
+          - journal-retry
+          - causal-compaction
+          - pending-sequences
+          - replica-checkpoint
+          - cloud-integrity
+          - cloud-hydration
+          - journal-acknowledgement
+          - consent-journal-recovery
+    env:
+      EXPECTED_SHA: ${{ github.event.pull_request.head.sha }}
+      BASE_SHA: ${{ github.event.pull_request.base.sha }}
+      STRYKER_AREA: ${{ matrix.area }}
+
+    steps:
+      - name: Checkout exact branch SHA
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Verify exact SHA
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+          test "$(git rev-list --count "$BASE_SHA..$EXPECTED_SHA")" -gt 0
+
+      - name: Setup Node 24
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: '24'
+          cache: npm
+
+      - name: Verify npm and approved project install scripts
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$(npm --version)" == 11.* ]]
+          node scripts/check-install-scripts.mjs
+
+      - name: Install project dependencies
+        run: npm ci
+
+      - name: Verify locked diagnostic tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          node -e "for (const n of ['@stryker-mutator/core','@stryker-mutator/vitest-runner']) { const p = require(n + '/package.json'); if (p.version !== '10.1.1') process.exit(1); }"
+
+      - name: Run diagnostic mutations
+        shell: bash
+        run: |
+          set -o pipefail
+          npm run test:mutation:trial 2>&1 | tee stryker-trial.log
+
+      - name: Summarize findings without treating uncovered mutants as passing
+        shell: bash
+        run: |
+          node --input-type=module <<'NODE'
+          import { readFileSync } from 'node:fs';
+          const { trialCases } = await import('./stryker.trial.config.mjs');
+          const report = JSON.parse(readFileSync('coverage/mutation-trial/mutation.json', 'utf8'));
+          const expectedFiles = trialCases[process.env.STRYKER_AREA].testFiles;
+          const testedFiles = Object.keys(report.testFiles ?? {}).sort();
+          if (JSON.stringify(testedFiles) !== JSON.stringify([...expectedFiles].sort())) {
+            throw new Error('Mutation test discovery differs from the selected suites: ' + testedFiles.join(', '));
+          }
+          console.log(JSON.stringify({ testedFiles }));
+          const mutants = Object.values(report.files ?? {}).flatMap(file => file.mutants ?? []);
+          if (mutants.length === 0) throw new Error('No mutations were generated: diagnostic invalid');
+          const counts = {};
+          for (const mutant of mutants) counts[mutant.status] = (counts[mutant.status] ?? 0) + 1;
+          console.log(JSON.stringify({ area: process.env.STRYKER_AREA, generated: mutants.length, ...counts }));
+          // The clear-text reporter omits individual timeout locations.
+          for (const [file, result] of Object.entries(report.files ?? {})) {
+            for (const mutant of result.mutants ?? []) {
+              if (mutant.status === 'Timeout') {
+                console.log(JSON.stringify({ timedOutMutant: {
+                  file, id: mutant.id, mutator: mutant.mutatorName,
+                  location: mutant.location, replacement: mutant.replacement,
+                } }));
+              }
+            }
+          }
+          if ((counts.Killed ?? 0) === 0) {
+            throw new Error('No mutations killed: check runner correctness and test discovery');
+          }
+          NODE
+
+      - name: Preserve area-specific diagnostic evidence
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: stryker-${{ matrix.area }}-${{ env.EXPECTED_SHA }}
+          if-no-files-found: ignore
+          retention-days: 7
+          path: |
+            stryker-trial.log
+            coverage/mutation-trial/

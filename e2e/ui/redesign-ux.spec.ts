@@ -1,0 +1,279 @@
+import { expect, test, type Page } from '../fixtures';
+
+test.use({ viewport: { width: 320, height: 850 } });
+
+test('welcome heading stays above the login card on narrow screens in both themes', async ({ page }) => {
+  for (const theme of ['light', 'dark'] as const) {
+    await page.emulateMedia({ colorScheme: theme });
+    await page.goto('/');
+    const title = page.getByRole('heading', { name: 'TheLogBook', level: 1 });
+    const card = page.locator('#auth-login-box');
+    await expect(title).toBeVisible();
+    await expect(card).toBeVisible();
+    await expect(card.getByRole('heading', { name: 'TheLogBook' })).toHaveCount(0);
+    const titleBounds = await title.boundingBox();
+    const cardBounds = await card.boundingBox();
+    expect(titleBounds).not.toBeNull();
+    expect(cardBounds).not.toBeNull();
+    expect(titleBounds!.y + titleBounds!.height).toBeLessThan(cardBounds!.y);
+    const titleSize = await title.evaluate(element => Number.parseFloat(getComputedStyle(element).fontSize));
+    expect(titleSize).toBeGreaterThan(22);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth)).toBe(false);
+
+    await page.setViewportSize({ width: 320, height: 568 });
+    await expect(title).toBeVisible();
+    await expect(card).toBeVisible();
+    await page.setViewportSize({ width: 320, height: 850 });
+  }
+});
+
+
+test('brand stays aligned across login and registration and guest guidance is inside its button', async ({ page }) => {
+  for (const theme of ['light', 'dark'] as const) {
+    await page.emulateMedia({ colorScheme: theme });
+    for (const viewport of [{ width: 390, height: 844 }, { width: 320, height: 568 }]) {
+      await page.setViewportSize(viewport);
+      await page.goto('/');
+      const overlay = page.locator('#auth-overlay.auth-entry-overlay');
+      const title = overlay.getByRole('heading', { name: 'TheLogBook' });
+      const card = page.locator('#auth-login-box');
+      const modes = page.getByRole('group', { name: 'Modalità di accesso' });
+      const beforeTitle = await title.boundingBox();
+      const beforeCard = await card.boundingBox();
+      expect(beforeTitle).not.toBeNull();
+      expect(beforeCard).not.toBeNull();
+      await modes.getByRole('button', { name: 'Registrati' }).click();
+      const registrationTitle = await title.boundingBox();
+      const registrationCard = await card.boundingBox();
+      expect(registrationTitle).not.toBeNull();
+      expect(registrationCard).not.toBeNull();
+      expect(Math.abs(registrationTitle!.y - beforeTitle!.y)).toBeLessThanOrEqual(1);
+      expect(Math.abs(registrationCard!.y - beforeCard!.y)).toBeLessThanOrEqual(1);
+      await modes.getByRole('button', { name: 'Accedi' }).click();
+      const backTitle = await title.boundingBox();
+      expect(backTitle).not.toBeNull();
+      expect(Math.abs(backTitle!.y - beforeTitle!.y)).toBeLessThanOrEqual(1);
+      const guestAction = page.getByRole('button', { name: 'Continua senza account' });
+      const guidance = guestAction.getByText('I dati saranno salvati solo sul dispositivo.');
+      await expect(guidance).toBeAttached();
+      await expect(guestAction).toHaveAccessibleName(/Continua senza account\s+I dati saranno salvati solo sul dispositivo\./i);
+      await guestAction.scrollIntoViewIfNeeded();
+      await expect(guidance).toBeVisible();
+      expect(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)).toBe(false);
+    }
+  }
+});
+
+test('access layout retains one scroll area and clear action hierarchy on small screens', async ({ page }) => {
+  for (const theme of ['light', 'dark'] as const) {
+    await page.emulateMedia({ colorScheme: theme });
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto('/');
+    const card = page.locator('#auth-login-box');
+    const overlay = page.locator('#auth-overlay');
+    const switcher = page.getByRole('group', { name: 'Modalità di accesso' });
+    const loginMode = switcher.getByRole('button', { name: 'Accedi' });
+    const registerMode = switcher.getByRole('button', { name: 'Registrati' });
+    await expect(loginMode).toHaveAttribute('aria-pressed', 'true');
+    await expect(registerMode).toHaveAttribute('aria-pressed', 'false');
+    await expect(page.getByText('Email', { exact: true })).toBeVisible();
+    await expect(page.getByText('Password', { exact: true }).first()).toBeVisible();
+    expect(await card.evaluate(el => getComputedStyle(el).overflowY)).toBe('visible');
+    expect(await overlay.evaluate(el => getComputedStyle(el).overflowY)).toBe('auto');
+    expect((await card.boundingBox())!.width).toBeGreaterThan(350);
+    const activeBg = await loginMode.evaluate(el => getComputedStyle(el).backgroundColor);
+    const submitBg = await card.getByRole('button', { name: 'Accedi' }).last().evaluate(el => getComputedStyle(el).backgroundColor);
+    expect(activeBg).not.toBe(submitBg);
+
+    await page.setViewportSize({ width: 320, height: 568 });
+    await registerMode.click();
+    await expect(registerMode).toHaveAttribute('aria-pressed', 'true');
+    await expect(loginMode).toHaveAttribute('aria-pressed', 'false');
+    const confirm = page.getByLabel('Conferma password');
+    await confirm.scrollIntoViewIfNeeded();
+    await expect(confirm).toBeVisible();
+    const title = page.getByRole('heading', { name: 'TheLogBook' });
+    await overlay.evaluate(el => { el.scrollTop = 0; });
+    expect((await title.boundingBox())!.y).toBeGreaterThanOrEqual(-1);
+    await page.getByLabel('Email').focus();
+    await expect(page.getByLabel('Email')).toBeFocused();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)).toBe(false);
+    await loginMode.click();
+    await page.getByRole('button', { name: 'Continua senza account' }).scrollIntoViewIfNeeded();
+    await expect(page.getByText('I dati saranno salvati solo sul dispositivo.')).toBeVisible();
+    await page.setViewportSize({ width: 320, height: 850 });
+  }
+});
+
+async function continueAsGuest(page: Page) {
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Continua senza account' }).click();
+  await page.getByText('Aggiornamento Termini e Privacy').waitFor();
+  for (const checkbox of await page.locator('input[type="checkbox"]').all()) await checkbox.check();
+  await page.getByRole('button', { name: 'Accetta e Continua' }).click();
+  await page.getByRole('button', { name: 'Allenamento', exact: true }).waitFor();
+}
+
+test('registration password rules and visibility control stay aligned on mobile in both themes', async ({ page }) => {
+  for (const theme of ['light', 'dark'] as const) {
+    await page.emulateMedia({ colorScheme: theme });
+    await page.goto('/');
+    await page.getByRole('button', { name: 'Registrati' }).first().click();
+    const password = page.locator('input.ui-login-box-9');
+    await password.fill('caccapuou');
+    await expect(password).toHaveAttribute('aria-invalid', 'true');
+    await expect(page.getByRole('list', { name: 'Requisiti della password' }).locator('li').first()).toHaveAttribute('data-status', 'missing');
+
+    const inputBox = await password.boundingBox();
+    const eye = await page.getByRole('button', { name: 'Mostra password' }).boundingBox();
+    expect(inputBox).not.toBeNull();
+    expect(eye).not.toBeNull();
+    expect(eye!.width).toBeGreaterThanOrEqual(44);
+    expect(eye!.height).toBeGreaterThanOrEqual(44);
+    expect(Math.abs((eye!.y + eye!.height / 2) - (inputBox!.y + inputBox!.height / 2))).toBeLessThanOrEqual(1);
+
+    await page.getByRole('button', { name: 'Mostra password' }).click();
+    await expect(password).toHaveAttribute('type', 'text');
+    expect(await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth)).toBe(false);
+  }
+});
+
+test('food search results remain visible and can be added to a meal', async ({ page }) => {
+  await continueAsGuest(page);
+  await page.getByRole('button', { name: 'Nutrizione', exact: true }).click();
+  await page.getByRole('button', { name: 'Crea alimento' }).click();
+  await page.locator('#cf-name').fill('Avena visuale');
+  await page.locator('#cf-pro').fill('12');
+  await page.locator('#cf-carbs').fill('60');
+  await page.locator('#cf-fat').fill('6');
+  await page.getByRole('button', { name: 'Salva alimento' }).click();
+  await page.getByRole('searchbox', { name: 'Cerca alimento' }).fill('Avena visuale');
+  const results = page.getByLabel('Alimenti trovati');
+  await expect(results.getByText('Avena visuale')).toBeVisible();
+  await results.getByRole('button', { name: 'Colazione' }).click();
+  await expect(page.getByRole('button', { name: /Modifica porzione di Avena visuale/i })).toBeVisible();
+});
+
+test('completed workout report has a reachable close control on a narrow viewport', async ({ page }) => {
+  await continueAsGuest(page);
+  await page.getByRole('button', { name: 'Allenamento', exact: true }).click();
+  await page.getByRole('button', { name: 'Allenamento libero' }).click();
+  await page.getByRole('button', { name: 'Salta check-in e inizia' }).click();
+  await page.getByRole('button', { name: /Termina/ }).click();
+  await expect(page.getByRole('heading', { name: /andato l.allenamento/i })).toBeVisible();
+  await page.getByRole('button', { name: 'Salva e termina' }).click();
+  const dialog = page.getByRole('dialog');
+  await expect(dialog).toBeVisible();
+  const close = dialog.getByRole('button', { name: 'Chiudi', exact: true });
+  await expect(close).toBeVisible();
+  await expect(close).toBeFocused();
+  await page.keyboard.press('Shift+Tab');
+  await expect(dialog.getByRole('button', { name: 'Chiudi e torna alla Home' })).toBeFocused();
+  await page.keyboard.press('Tab');
+  await expect(close).toBeFocused();
+  const bounds = await close.boundingBox();
+  expect(bounds).not.toBeNull();
+  expect(bounds!.x).toBeGreaterThanOrEqual(0);
+  expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(320);
+  await close.click();
+  await expect(dialog).toHaveCount(0);
+});
+
+
+test('Schede stays inside a 320px viewport and keeps the full muscle model in both themes', async ({ page }) => {
+  await page.emulateMedia({ colorScheme: 'light' });
+  await continueAsGuest(page);
+  await page.getByRole('button', { name: 'Allenamento', exact: true }).click();
+  await page.getByRole('tab', { name: 'Schede', exact: true }).click();
+
+  await expect(page.getByRole('heading', { name: 'Schede', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Crea scheda' })).toBeVisible();
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
+
+  await page.getByRole('button', { name: 'Crea scheda' }).click();
+  await page.getByPlaceholder('Nome scheda').fill('Scheda mobile');
+  const muscleSvg = page.locator('.routine-editor-muscle-map svg');
+  await expect(muscleSvg).toBeVisible();
+
+  const muscleFitsViewBox = await muscleSvg.evaluate((svgElement) => {
+    const svg = svgElement as SVGSVGElement;
+    const group = svg.querySelector('g') as SVGGElement | null;
+    if (!group) return false;
+    const contentBounds = group.getBBox();
+    const viewBox = svg.viewBox.baseVal;
+    return contentBounds.x >= viewBox.x
+      && contentBounds.y >= viewBox.y
+      && contentBounds.x + contentBounds.width <= viewBox.x + viewBox.width
+      && contentBounds.y + contentBounds.height <= viewBox.y + viewBox.height;
+  });
+  expect(muscleFitsViewBox).toBe(true);
+
+  for (const width of [320, 390]) {
+    await page.setViewportSize({ width, height: 850 });
+    const rect = await muscleSvg.evaluate(svg => {
+      const parent = svg.parentElement?.getBoundingClientRect();
+      const own = svg.getBoundingClientRect();
+      return { svgWidth: own.width, svgLeft: own.left, svgRight: own.right, parentWidth: parent?.width ?? 0 };
+    });
+    expect(rect.parentWidth).toBeGreaterThan(0);
+    expect(rect.svgWidth / rect.parentWidth).toBeGreaterThanOrEqual(0.9);
+    expect(rect.svgLeft).toBeGreaterThanOrEqual(0);
+    expect(rect.svgRight).toBeLessThanOrEqual(width);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)).toBe(false);
+  }
+  await page.setViewportSize({ width: 320, height: 850 });
+
+  await page.locator('#routine-creation-form').getByRole('button', { name: 'Salva', exact: true }).click();
+  await expect(page.getByText('Scheda mobile', { exact: true })).toBeVisible();
+  const routineCard = page.locator('.routine-library-card').filter({ hasText: 'Scheda mobile' });
+  const menuTrigger = routineCard.getByRole('button', { name: 'Opzioni' });
+  await menuTrigger.click();
+  const menu = routineCard.getByRole('menu');
+  await expect(menu).toBeVisible();
+  // Inject a stress-length label into the actual DOM to exercise browser wrapping.
+  await menu.locator('.context-menu-item-label').first().evaluate(label => {
+    label.textContent = 'Voce lunga del menu SupercalifragilisticexpialidociousSupercalifragilisticexpialidocious';
+  });
+  for (const width of [320, 390]) {
+    await page.setViewportSize({ width, height: 850 });
+    const bounds = await menu.boundingBox();
+    const trigger = await menuTrigger.boundingBox();
+    expect(bounds).not.toBeNull();
+    expect(trigger).not.toBeNull();
+    expect(bounds!.x).toBeGreaterThanOrEqual(0);
+    expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(width);
+    expect(trigger!.width).toBeGreaterThanOrEqual(44);
+    expect(trigger!.height).toBeGreaterThanOrEqual(44);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)).toBe(false);
+  }
+  await page.keyboard.press('Escape');
+  await expect(menu).toHaveCount(0);
+  await page.setViewportSize({ width: 320, height: 850 });
+  await page.getByRole('button', { name: 'Apri scheda Scheda mobile' }).click();
+  await expect(page.getByText('Muscoli coinvolti')).toBeVisible();
+
+  const hasOverflow = await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth);
+  expect(hasOverflow).toBe(false);
+
+  await page.evaluate(() => localStorage.setItem('logbook:appearance:v1', 'dark'));
+  await page.reload();
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+  await page.getByRole('button', { name: 'Allenamento', exact: true }).click();
+  await page.getByRole('tab', { name: 'Schede', exact: true }).click();
+  await expect(page.getByText('Scheda mobile', { exact: true })).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth)).toBe(false);
+});
+
+test('adaptive appearance resolves system light and explicit dark on desktop', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.emulateMedia({ colorScheme: 'light' });
+  await continueAsGuest(page);
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
+  await expect(page.locator('html')).toHaveAttribute('data-theme-preference', 'system');
+
+  await page.evaluate(() => localStorage.setItem('logbook:appearance:v1', 'dark'));
+  await page.reload();
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+  await expect(page.locator('html')).toHaveAttribute('data-theme-preference', 'dark');
+  await expect(page.getByRole('button', { name: 'Allenamento', exact: true })).toBeVisible();
+});

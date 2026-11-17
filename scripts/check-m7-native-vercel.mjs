@@ -1,0 +1,346 @@
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
+
+const failures = [];
+const packageJson = JSON.parse(readFileSync('package.json', 'utf8'));
+const vercel = JSON.parse(readFileSync('vercel.json', 'utf8'));
+const firebase = JSON.parse(readFileSync('firebase.json', 'utf8'));
+const hostingWorkflow = readFileSync('.github/workflows/firebase-hosting-production.yml', 'utf8');
+const firestoreWorkflow = readFileSync('.github/workflows/firebase-firestore-production.yml', 'utf8');
+const firestoreVerifier = readFileSync('scripts/verify-firestore-production.mjs', 'utf8');
+const firestoreProductionState = readFileSync('scripts/firestore-production-state.mjs', 'utf8');
+const firestoreIndexes = JSON.parse(readFileSync('firestore.indexes.json', 'utf8'));
+const vite = readFileSync('vite.config.ts', 'utf8');
+const iconGenerator = readFileSync('scripts/resize_icons.mjs', 'utf8');
+const swSource = readFileSync('src/sw.ts', 'utf8');
+const accountApi = readFileSync('api/account-deletion.ts', 'utf8');
+const accountDeletionBudget = readFileSync('server/accountDeletion/budget.ts', 'utf8');
+const accountDeletionRunner = readFileSync('server/accountDeletion/runner.ts', 'utf8');
+const accountClient = readFileSync('src/lib/db/db_account.ts', 'utf8');
+const cronApi = readFileSync('api/account-deletion-cron.ts', 'utf8');
+const vercelBackendBuild = readFileSync('scripts/prepare-vercel-backend-static.mjs', 'utf8');
+
+const allDeps = { ...packageJson.dependencies, ...packageJson.devDependencies };
+if (!existsSync('assets/brand/thelogbook-icon-master.svg')) failures.push('missing canonical SVG brand master');
+if (existsSync('public/icon-source.png')) failures.push('legacy raster icon source must not remain canonical or tracked');
+if (!iconGenerator.includes("const source = 'assets/brand/thelogbook-icon-master.svg'")) failures.push('icon generator must consume the canonical SVG master');
+if (!iconGenerator.includes("const publicVectorOutput = 'public/icon.svg'")) failures.push('icon generator must publish the scalable browser/PWA icon');
+if (!iconGenerator.includes("const socialOutput = 'public/social-share.png'")) failures.push('social share card must be generated as lossless PNG');
+for (const forbidden of ['nitro', 'workflow']) {
+  if (allDeps[forbidden]) failures.push(`forbidden M7 dependency present: ${forbidden}`);
+}
+if (/workflow\/vite|nitro\/vite|\bnitro\s*\(/.test(vite)) failures.push('vite.config.ts must remain a plain Vite/PWA configuration without Nitro/Workflow');
+if (!swSource.includes("createHandlerBoundToURL('/index.html')") || !swSource.includes('new NavigationRoute(')) failures.push('service worker must route document navigations to the precached SPA shell');
+const navigationDenylist = swSource.match(/denylist:\s*\[([^\]]*)\]/)?.[1] ?? '';
+if (!navigationDenylist.includes("/^\\/__\\//")) failures.push('service worker SPA navigation fallback must exclude Firebase /__/ helpers');
+if (!packageJson.dependencies?.['firebase-admin']) failures.push('firebase-admin must be a runtime dependency for native Vercel Functions');
+if (packageJson.devDependencies?.['firebase-admin']) failures.push('firebase-admin must not remain dev-only');
+
+// Every native API must have an explicit, reviewed timeout. In Other-framework
+// projects, vercel.json is authoritative; a source-level maxDuration export alone
+// is not evidence of the deployed function configuration.
+const expectedFunctionDurations = {
+  'api/account-activity.ts': 30,
+  'api/account-deletion-cron.ts': 300,
+  'api/account-deletion-device.ts': 30,
+  'api/account-deletion.ts': 300,
+  'api/account-sessions.ts': 30,
+  'api/cloud-key.ts': 30,
+  'api/health-consent-export.ts': 30,
+  'api/health-consent.ts': 30,
+  'api/health-data-erasure.ts': 300,
+};
+const apiEntrypoints = readdirSync('api').filter(name => name.endsWith('.ts')).map(name => `api/${name}`).sort();
+const expectedEntrypoints = Object.keys(expectedFunctionDurations).sort();
+const configuredEntrypoints = Object.keys(vercel.functions ?? {}).sort();
+if (JSON.stringify(apiEntrypoints) !== JSON.stringify(expectedEntrypoints)) {
+  failures.push('Native Vercel API inventory changed without reviewing its execution budget');
+}
+if (JSON.stringify(configuredEntrypoints) !== JSON.stringify(expectedEntrypoints)) {
+  failures.push('Vercel Functions configuration must cover exactly the reviewed native API entrypoints');
+}
+for (const [path, maxDuration] of Object.entries(expectedFunctionDurations)) {
+  if (!existsSync(path)) failures.push(`missing native Vercel Function: ${path}`);
+  if (vercel.functions?.[path]?.maxDuration !== maxDuration) {
+    failures.push(`${path} must have maxDuration ${maxDuration}`);
+  }
+}
+if (existsSync('api/legacy-service-worker.ts')) failures.push('pre-launch Vercel service-worker retirement endpoint must stay removed');
+if (vercel.functions?.['api/legacy-service-worker.ts']) failures.push('Vercel must not deploy the retired worker endpoint');
+if (vercel.git?.deploymentEnabled !== false) failures.push('Vercel Git automatic deployments must remain disabled for every branch while the legacy project is paused');
+if (vercel.ignoreCommand !== 'node scripts/vercel-ignore-build.mjs') failures.push('Vercel must skip Git deployments that do not change the backend contract');
+if (!existsSync('scripts/vercel-ignore-build.mjs')) failures.push('missing Vercel selective deployment guard');
+else {
+  const vercelIgnoreBuild = readFileSync('scripts/vercel-ignore-build.mjs', 'utf8');
+  for (const requiredPath of ['api', 'server', 'src/lib/legalVersions.ts', 'vercel.json', 'package.json', 'package-lock.json', 'tsconfig.json', 'tsconfig.m7-server.json', 'scripts/prepare-vercel-backend-static.mjs']) {
+    if (!vercelIgnoreBuild.includes(`'${requiredPath}'`)) failures.push(`Vercel selective deployment guard missing backend-sensitive path: ${requiredPath}`);
+  }
+  if (!vercelIgnoreBuild.includes('VERCEL_GIT_PREVIOUS_SHA') || !vercelIgnoreBuild.includes('VERCEL_GIT_COMMIT_SHA')) {
+    failures.push('Vercel selective deployment guard must compare against the previous successful deployment SHA');
+  }
+  if (!vercelIgnoreBuild.includes("process.exit(0)") || !vercelIgnoreBuild.includes("process.exit(1)")) {
+    failures.push('Vercel selective deployment guard must skip unchanged frontend-only commits and deploy backend changes');
+  }
+}
+if (vercel.framework !== null) failures.push('Vercel must use the Other framework preset so Production is backend-only instead of rebuilding the Vite frontend');
+if (vercel.buildCommand !== 'node scripts/prepare-vercel-backend-static.mjs') failures.push('Vercel must override the project build command with the backend-only static-output preparer');
+if (vercel.outputDirectory !== 'vercel-backend-static') failures.push('Vercel must publish only the dedicated backend static output instead of the Vite dist directory');
+if (!existsSync('scripts/prepare-vercel-backend-static.mjs')) failures.push('missing Vercel backend-only static-output preparer');
+for (const marker of ["const outputDirectory = 'vercel-backend-static'", 'rmSync(outputDirectory', 'mkdirSync(outputDirectory', 'backend-only.txt']) {
+  if (!vercelBackendBuild.includes(marker)) failures.push(`Vercel backend-only build preparer missing marker: ${marker}`);
+}
+if (vercelBackendBuild.includes('npm run build') || vercelBackendBuild.includes('vite build') || vercel.outputDirectory === 'dist') {
+  failures.push('Vercel backend deployment must never build or publish the Firebase/Vite frontend');
+}
+if (vercel.fluid !== true) failures.push('Vercel Fluid compute must be explicitly enabled to preserve the 300s Hobby function ceiling');
+
+// This deployment hosts only trusted APIs. Never forward its root to the
+// retired Firebase Hosting site; the new frontend domain has not cut over yet.
+if (vercel.redirects?.some(item => item.source === '/' || item.destination?.includes('thelogbook.web.app'))) {
+  failures.push('Backend-only Vercel must not redirect to the retired Firebase frontend');
+}
+
+if (vercel.rewrites?.some(item => item.source === '/sw.js')
+    || vercel.headers?.some(item => item.source === '/sw.js')) {
+  failures.push('retired Vercel origin must not serve or configure pre-launch /sw.js');
+}
+
+const deletionCron = vercel.crons?.find(item => item.path === '/api/account-deletion-cron');
+if (!deletionCron) failures.push('missing daily account deletion recovery cron');
+else if (deletionCron.schedule !== '0 3 * * *') failures.push('account deletion recovery cron must run once daily at 03:00 UTC');
+
+const interactiveDeletionBudgetText = accountDeletionBudget.match(/ACCOUNT_DELETION_INTERACTIVE_BUDGET_MS\s*=\s*([0-9_]+)/)?.[1];
+const interactiveDeletionSafetyText = accountDeletionBudget.match(/ACCOUNT_DELETION_INTERACTIVE_SAFETY_BUFFER_MS\s*=\s*([0-9_]+)/)?.[1];
+const interactiveDeletionBudgetMs = interactiveDeletionBudgetText ? Number(interactiveDeletionBudgetText.replaceAll('_', '')) : NaN;
+const interactiveDeletionSafetyMs = interactiveDeletionSafetyText ? Number(interactiveDeletionSafetyText.replaceAll('_', '')) : NaN;
+if (interactiveDeletionBudgetMs !== 5_000) failures.push('interactive account deletion budget must remain bounded to 5s');
+if (!Number.isFinite(interactiveDeletionSafetyMs) || interactiveDeletionSafetyMs < 0 || interactiveDeletionSafetyMs >= interactiveDeletionBudgetMs) {
+  failures.push('interactive account deletion runner safety headroom must be non-negative and smaller than the 5s work budget');
+}
+if (!accountApi.includes('Date.now() + ACCOUNT_DELETION_INTERACTIVE_BUDGET_MS')
+  || !accountApi.includes('safetyBufferMs: ACCOUNT_DELETION_INTERACTIVE_SAFETY_BUFFER_MS')) {
+  failures.push('POST/GET account deletion must pass the canonical interactive work budget and runner headroom');
+}
+if (!accountDeletionRunner.includes('options.safetyBufferMs ?? ACCOUNT_DELETION_BACKGROUND_SAFETY_BUFFER_MS')) {
+  failures.push('account deletion runner must honor caller-specific safety headroom while retaining the background default');
+}
+if (!accountApi.includes('export async function POST') || !accountApi.includes('export async function GET')) failures.push('account deletion API must expose native POST and GET handlers');
+if (accountClient.includes("store/useAppStore")) failures.push('account deletion infrastructure must not import the Zustand store');
+if (!accountClient.includes('context.cancelPendingSyncs()') || !accountClient.includes('context.resetStore()')) {
+  failures.push('account deletion infrastructure must receive application lifecycle callbacks through its context');
+}
+if (!cronApi.includes('CRON_SECRET')) failures.push('cron endpoint must require CRON_SECRET');
+const hostingSecurityHeaders = firebase.hosting?.headers?.find(item => item.source === '/**')?.headers ?? [];
+const csp = hostingSecurityHeaders.find(item => item.key === 'Content-Security-Policy')?.value ?? '';
+for (const source of ['/', '/index.html', '/manifest.webmanifest', '/sw.js']) {
+  const rule = firebase.hosting?.headers?.find(item => item.source === source)?.headers ?? [];
+  const cacheControl = rule.find(item => item.key === 'Cache-Control')?.value ?? '';
+  if (!cacheControl.includes('no-cache') || !cacheControl.includes('no-store') || !cacheControl.includes('must-revalidate')) {
+    failures.push(`Firebase Hosting ${source} must explicitly disable caching/revalidate to prevent a stale app shell`);
+  }
+}
+const requiredCspOrigins = [
+  'https://apis.google.com',
+  'https://lh3.googleusercontent.com',
+];
+for (const origin of requiredCspOrigins) {
+  if (!csp.includes(origin)) failures.push(`Firebase Hosting CSP missing required Auth/UI origin: ${origin}`);
+}
+const requiredConnectOrigins = [
+  'https://firestore.googleapis.com',
+  'https://identitytoolkit.googleapis.com',
+  'https://securetoken.googleapis.com',
+  'https://www.googleapis.com',
+  'https://content-firebaseappcheck.googleapis.com',
+  'https://firebaseappcheck.googleapis.com',
+  'https://firebaseinstallations.googleapis.com',
+  'https://firebase.googleapis.com',
+  'https://apis.google.com',
+  'https://logbook-gnf.vercel.app',
+];
+for (const analyticsOrigin of ['google-analytics.com', 'googletagmanager.com']) {
+  if (csp.includes(analyticsOrigin)) failures.push(`Retired Analytics origin must not remain in Hosting CSP: ${analyticsOrigin}`);
+}
+if (csp.includes('*.googleapis.com')) failures.push('Firebase Hosting CSP must not use a broad googleapis wildcard');
+for (const origin of requiredConnectOrigins) {
+  if (!csp.includes(origin)) failures.push(`Firebase Hosting CSP missing required connect origin: ${origin}`);
+}
+if (!hostingWorkflow.includes('      - Firebase Firestore Production') || !hostingWorkflow.includes("github.event.workflow_run.event == 'workflow_run'") || !hostingWorkflow.includes("github.event.workflow_run.head_branch == 'main'")) {
+  failures.push('Firebase Hosting workflow must activate only after the exact-main Firestore production reconciliation');
+}
+if (!hostingWorkflow.includes('git ls-remote --exit-code origin refs/heads/main') ||
+    !hostingWorkflow.includes('Recheck exact main SHA before Hosting deployment') ||
+    !hostingWorkflow.includes('firebase-tools@15.30.2 deploy --only hosting')) {
+  failures.push('Firebase Hosting workflow must re-check current main immediately before deploying Hosting with the pinned CLI');
+}
+if (!hostingWorkflow.includes('      contents: read\n      id-token: write') ||
+    !hostingWorkflow.includes('      - name: Download same-run verified frontend') ||
+    !hostingWorkflow.includes('      - name: Upload verified main frontend') ||
+    !hostingWorkflow.includes('      - name: Authenticate to Google Cloud with Workload Identity Federation')) {
+  failures.push('Firebase Hosting workflow must preserve isolated build/artifact/deploy and privileged WIF');
+}
+if (!hostingWorkflow.includes('thelogbook-index-headers.txt') || !hostingWorkflow.includes("^cache-control: .*no-cache.*no-store.*must-revalidate")) {
+  failures.push('Firebase Hosting post-deploy smoke must verify app-shell cache revalidation');
+}
+const requiredHostingActionPins = [
+  'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7',
+  'actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7',
+  'google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3',
+];
+for (const actionPin of requiredHostingActionPins) {
+  if (!hostingWorkflow.includes(actionPin)) failures.push(`Firebase Hosting production workflow must pin privileged action: ${actionPin}`);
+}
+if (!hostingWorkflow.includes('GCP_WORKLOAD_IDENTITY_PROVIDER')) {
+  failures.push('Firebase Hosting workflow must use Workload Identity Federation');
+}
+if (!hostingWorkflow.includes('VITE_FIREBASE_AUTH_DOMAIN') || !hostingWorkflow.includes('thelogbook.web.app')) {
+  failures.push('Firebase Hosting production workflow must enforce the Firebase Hosting origin as authDomain');
+}
+
+if (!firestoreWorkflow.includes('    branches:\n      - main') || !firestoreWorkflow.includes("github.event.workflow_run.event == 'push'") || !firestoreWorkflow.includes("github.event.workflow_run.head_branch == 'main'")) {
+  failures.push('Firestore Production workflow must only activate after the canonical push-to-main verification run');
+}
+if (!firestoreWorkflow.includes('git ls-remote --exit-code origin refs/heads/main') || !firestoreWorkflow.includes('Refusing to deploy a stale or mismatched main SHA')) {
+  failures.push('Firestore Production workflow must re-check the exact current main SHA without mutating checkout history before any live operation');
+}
+if (!firestoreWorkflow.includes('GCP_FIRESTORE_DEPLOY_SERVICE_ACCOUNT') || firestoreWorkflow.includes('service_account: ${{ env.GCP_FIREBASE_DEPLOY_SERVICE_ACCOUNT }}')) {
+  failures.push('Firestore Production must use a dedicated deployer identity instead of the Hosting service account');
+}
+if (firestoreWorkflow.includes('git rev-parse "${EXPECTED_SHA}^"') || firestoreWorkflow.includes('git diff --quiet "${parent}"')) {
+  failures.push('Firestore Production must not use the immediate parent commit as the deployment baseline');
+}
+if (!firestoreWorkflow.includes('scripts/verify-firestore-production.mjs status') || !firestoreWorkflow.includes("steps.reconcile.outputs.deploy == 'true'")) {
+  failures.push('Firestore Production workflow must reconcile the desired exact-main state against the live provider before deciding to deploy');
+}
+if (!firestoreWorkflow.includes('firebase-tools@15.30.2 deploy') || !firestoreWorkflow.includes('--only firestore:rules,firestore:indexes') || !firestoreWorkflow.includes('--non-interactive')) {
+  failures.push('Firestore Production workflow must use the pinned Firebase CLI and deploy only Rules/indexes');
+}
+if (firestoreWorkflow.includes('--force')) {
+  failures.push('Firestore Production workflow must never force-delete unmanaged indexes');
+}
+for (const actionPin of requiredHostingActionPins) {
+  if (!firestoreWorkflow.includes(actionPin)) failures.push(`Firestore Production workflow must pin privileged action: ${actionPin}`);
+}
+if (!firestoreWorkflow.includes('scripts/verify-firestore-production.mjs status') || !firestoreWorkflow.includes('scripts/verify-firestore-production.mjs verify')) {
+  failures.push('Firestore Production workflow must reconcile and verify the live target');
+}
+if (!firestoreVerifier.includes("process.exit(10)") || !firestoreVerifier.includes("process.exit(11)")) {
+  failures.push('Firestore Production verifier must distinguish deploy-required drift from index convergence');
+}
+if (!firestoreVerifier.includes('releases/cloud.firestore') || !firestoreVerifier.includes('/indexes') || !firestoreVerifier.includes('Authorization:')) {
+  failures.push('Firestore Production verifier must read back authenticated live Rules and composite indexes');
+}
+if (!firestoreVerifier.includes('/fields') || !firestoreVerifier.includes('fieldOverrideListParent') || !firestoreVerifier.includes('mismatchedFieldOverrides')) {
+  failures.push('Firestore Production verifier must read back and compare explicit field exemptions');
+}
+if (!firestoreProductionState.includes('collectionGroups/-') || !firestoreProductionState.includes('indexConfig.usesAncestorConfig=false OR ttlConfig:*')) {
+  failures.push('Firestore Production field exemption readback must use the database-wide explicit-override list scope');
+}
+if (!firestoreProductionState.includes('usesAncestorConfig !== true')) {
+  failures.push('Firestore Production field exemption readback must tolerate omitted false protobuf booleans while rejecting inherited configs');
+}
+if (!firestoreVerifier.includes('/operations') || !firestoreVerifier.includes("filter', 'done:false'") || !firestoreVerifier.includes('pendingFieldOverrides')) {
+  failures.push('Firestore Production verifier must distinguish active field-index convergence from stable field exemption drift');
+}
+if (!firestoreProductionState.includes('indexConfigDeltas') || !firestoreProductionState.includes("changeType === 'REMOVE'")) {
+  failures.push('Firestore Production field convergence must be tied to an exact active REMOVE operation');
+}
+if (!firestoreWorkflow.includes('deadline=$((SECONDS + 2100))') || !firestoreWorkflow.includes('did not converge within 35 minutes')) {
+  failures.push('Firestore Production must allow the documented bounded convergence window for field-index operations');
+}
+const requiredIndexExemptions = ['users', 'history_months', 'nutrition_months', 'sync_control', 'global_catalog'];
+for (const collectionGroup of requiredIndexExemptions) {
+  const exemption = firestoreIndexes.fieldOverrides?.find(item =>
+    item.collectionGroup === collectionGroup
+    && item.fieldPath === '*'
+    && Array.isArray(item.indexes)
+    && item.indexes.length === 0
+  );
+  if (!exemption) failures.push(`Firestore automatic-index exemption missing for path-read collection group: ${collectionGroup}`);
+}
+if (!firestoreVerifier.includes("status.state !== 'READY'")) {
+  failures.push('Firestore Production verifier must require desired composite indexes to be READY');
+}
+if (firestoreVerifier.includes("searchParams.set('pageSize'")) {
+  failures.push('Firestore Production verifier must not send unsupported pageSize when listing composite indexes');
+}
+
+
+for (const output of ['dist/sw.js', 'dist/manifest.webmanifest', 'dist/index.html', 'dist/icon.svg', 'dist/favicon.ico', 'dist/social-share.png', 'dist/loading-wait.svg']) {
+  if (!existsSync(output)) failures.push(`PWA build artifact missing after verify:m6 build: ${output}`);
+}
+
+if (existsSync('dist/sw.js')) {
+  const sw = readFileSync('dist/sw.js', 'utf8');
+  if (sw.length < 500) failures.push(`generated service worker is unexpectedly small (${sw.length} bytes)`);
+  if (sw.includes('__WB_MANIFEST')) failures.push('generated service worker still contains raw __WB_MANIFEST placeholder');
+  if (!sw.includes('index.html')) failures.push('generated service worker does not include index.html in its precache payload');
+  if (!sw.includes('icon-maskable-512.png')) failures.push('generated service worker does not precache the dedicated maskable icon');
+  if (!sw.includes('icon.svg')) failures.push('generated service worker does not precache the scalable icon');
+  if (sw.includes('social-share.png')) failures.push('social share card should not be precached by the offline app shell');
+  // Preserve the former Workbox orphan-asset assertions in the build-dependent
+  // checker. They were previously conditional on dist/ existing in a stress job.
+  for (const obsoleteAsset of ['icon-cropped.png', 'test_manichino.html', 'foods.ts']) {
+    if (sw.includes(obsoleteAsset)) failures.push(`generated service worker precaches an unintended asset: ${obsoleteAsset}`);
+  }
+}
+
+if (existsSync('dist/index.html')) {
+  const builtHtml = readFileSync('dist/index.html', 'utf8');
+  const requiredBranding = [
+    '<title>TheLogBook</title>',
+    'name="apple-mobile-web-app-title" content="TheLogBook"',
+    'name="description" content="Traccia i tuoi allenamenti, l\'alimentazione e i progressi corporei con TheLogBook."',
+    'property="og:title" content="TheLogBook"',
+    'property="og:site_name" content="TheLogBook"',
+    'property="og:description" content="Traccia i tuoi allenamenti, l\'alimentazione e i progressi corporei con TheLogBook."',
+    'property="og:image:alt" content="Icona TheLogBook con stickman chef su sfondo nero"',
+    'name="twitter:title" content="TheLogBook"',
+    'name="twitter:description" content="Traccia i tuoi allenamenti, l\'alimentazione e i progressi corporei con TheLogBook."',
+    'name="twitter:image:alt" content="Icona TheLogBook con stickman chef su sfondo nero"',
+  ];
+  for (const branding of requiredBranding) {
+    if (!builtHtml.includes(branding)) failures.push(`built HTML missing canonical TheLogBook branding: ${branding}`);
+  }
+  if (!builtHtml.includes('<h1>CARICAMENT<span class="brand-loading-screen__spinner" aria-hidden="true"></span></h1>')) failures.push('built HTML must render the approved monochrome loading wordmark');
+  if (!builtHtml.includes('loading-wait.svg?v=20261007-waiting-mascot')) failures.push('built HTML must preload and render the approved waiting mascot');
+  if (!builtHtml.includes('https://thelogbook.web.app/social-share.png?v=20261006-vector-master')) failures.push('built HTML must expose the revisioned social share card URL');
+  if (!builtHtml.includes('property="og:image:type" content="image/png"')) failures.push('built HTML must declare the lossless PNG social card type');
+  if (!builtHtml.includes('name="twitter:card" content="summary_large_image"')) failures.push('built HTML must request a large Twitter/social preview card');
+  if (!builtHtml.includes('apple-touch-icon.png?v=20261006-vector-master')) failures.push('built HTML must revision the Apple touch icon URL');
+  if (!builtHtml.includes('icon.svg?v=20261006-vector-master')) failures.push('built HTML must expose the scalable SVG favicon');
+  if (!builtHtml.includes('favicon.png?v=20261006-vector-master')) failures.push('built HTML must revision the PNG favicon URL');
+  if (!builtHtml.includes('favicon.ico?v=20261006-vector-master')) failures.push('built HTML must expose the ICO favicon fallback');
+}
+
+if (existsSync('dist/manifest.webmanifest')) {
+  try {
+    const manifest = JSON.parse(readFileSync('dist/manifest.webmanifest', 'utf8'));
+    if (manifest.name !== 'TheLogBook') failures.push(`PWA manifest name changed: ${String(manifest.name)}`);
+    if (manifest.short_name !== 'TheLogBook') failures.push(`PWA manifest short_name changed: ${String(manifest.short_name)}`);
+    if (manifest.start_url !== '/') failures.push(`PWA manifest start_url changed: ${String(manifest.start_url)}`);
+    if (manifest.scope !== '/') failures.push(`PWA manifest scope changed: ${String(manifest.scope)}`);
+    if (manifest.display !== 'standalone') failures.push(`PWA manifest display changed: ${String(manifest.display)}`);
+    if ('orientation' in manifest) failures.push('PWA manifest must not lock the app to a single screen orientation');
+    if ('display_override' in manifest) failures.push('PWA manifest must not request desktop display overrides');
+
+    const icons = Array.isArray(manifest.icons) ? manifest.icons : [];
+    const hasStandard192 = icons.some(icon => icon?.src === 'icon-192.png?v=20261006-vector-master' && icon?.sizes === '192x192' && icon?.type === 'image/png');
+    const standard512Icons = icons.filter(icon => icon?.src === 'icon-512.png?v=20261006-vector-master' && icon?.sizes === '512x512' && icon?.type === 'image/png' && icon?.purpose !== 'maskable');
+    const hasScalableIcon = icons.some(icon => icon?.src === 'icon.svg?v=20261006-vector-master' && icon?.sizes === 'any' && icon?.type === 'image/svg+xml' && icon?.purpose === 'any');
+    const hasDedicatedMaskable = icons.some(icon => icon?.src === 'icon-maskable-512.png?v=20261006-vector-master' && icon?.sizes === '512x512' && icon?.type === 'image/png' && icon?.purpose === 'maskable');
+    if (!hasStandard192) failures.push('PWA manifest missing standard 192x192 PNG icon');
+    if (standard512Icons.length !== 1) failures.push(`PWA manifest must contain exactly one standard 512x512 PNG icon; found ${standard512Icons.length}`);
+    if (!hasScalableIcon) failures.push('PWA manifest missing scalable SVG icon with sizes any');
+    if (!hasDedicatedMaskable) failures.push('PWA manifest missing dedicated 512x512 maskable PNG icon');
+  } catch (error) {
+    failures.push(`PWA manifest is not valid JSON: ${error instanceof Error ? error.message : String(error)}`);
+  }
+}
+
+if (failures.length) {
+  console.error('M7 hybrid Firebase Hosting/Vercel backend contract failed:');
+  for (const failure of failures) console.error(`- ${failure}`);
+  process.exit(1);
+}
+
+console.log('M7 hybrid Firebase Hosting/Vercel backend contract OK: mobile standalone manifest, Firebase-only production frontend build, SW precache, icons/scope, disabled Vercel Git deployment, retained legacy API inventory and recovery contract.');

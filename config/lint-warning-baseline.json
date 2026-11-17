@@ -1,0 +1,18 @@
+[
+  {
+    "suite": "default",
+    "file": "src/App.tsx",
+    "code": "react(set-state-in-effect)",
+    "message": "Calling setState synchronously within an effect can trigger cascading renders",
+    "source": "setShowGuestLogin(false);",
+    "count": 1
+  },
+  {
+    "suite": "default",
+    "file": "src/components/Training/TrainingSession.tsx",
+    "code": "react(set-state-in-effect)",
+    "message": "Calling setState synchronously within an effect can trigger cascading renders",
+    "source": "setPostSessionDraft(recovered.draft);",
+    "count": 1
+  }
+]

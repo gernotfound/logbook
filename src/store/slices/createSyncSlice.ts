@@ -1,0 +1,440 @@
+import type { StateCreator } from 'zustand';
+import { DB } from '../../lib/db';
+import { isHealthConsentWritable, requireHealthConsentWritable } from '../../lib/healthConsent';
+import type { UserData, SyncResult } from '../../types';
+import { DEBOUNCE_DELAY_GLOBAL } from '../../constants';
+import { saveUserDataToCache } from './createDataSlice';
+import type { AppState } from '../useAppStore';
+import { captureSession, invalidateSession, isActiveGuestSession, isCurrentSession } from '../../lib/sync/session';
+import { commitDomainOperations, readLocal, revertRejectedConsent, WorkoutIntentConflictError } from '../../lib/sync/localRepository';
+import { releaseCommittedWorkoutSlot } from '../../lib/sync/workoutDeviceIntent';
+import { findPendingAccountDeletion, isAccountDeletionPending } from '../../lib/sync/accountGate';
+import { UserDataSchema } from '../../lib/schema';
+import { isUpdateRequiredError } from '../../lib/schemaEvolution';
+import { applyDomainOperations, type DomainOperationBatch } from '../../lib/sync/domainOperations';
+import { markTabSnapshotClean, markTabSnapshotDirty } from '../../lib/sync/tabSnapshotCausality';
+import { requiredUpdateRecoveryRegistry } from '../../lib/sync/requiredUpdateRecovery';
+
+type SyncHealth = 'saving' | 'synced' | 'local-pending' | 'rejected' | 'failed';
+type SyncPresentation = 'normal' | 'quiet-workout';
+type CompatibilityStatus = 'ok' | 'update-required';
+export interface SyncSlice {
+    saveError: string | null;
+    syncing: boolean;
+    syncHealth: SyncHealth;
+    syncPresentation: SyncPresentation;
+    syncGeneration: number;
+    localPersistenceBlocked: boolean;
+    // UI-only projection of the durable IndexedDB cloud-integrity fence.
+    cloudIntegrityBlocked: boolean;
+    compatibilityStatus: CompatibilityStatus;
+    compatibilityError: string | null;
+    setSyncing: (value: boolean) => void;
+    setSaveError: (value: string | null) => void;
+    setUpdateRequired: (error: unknown) => void;
+    saveUserData: (data: UserData | null | ((previous: UserData | null) => UserData | null), options?: { expectedRevision?: number }) => Promise<SyncResult>;
+    dispatchDomainOperation: (operation: DomainOperationBatch, options?: { workoutIntent?: { generation: string; sequence: number; consentRevision?: number; intentId: string; parentIntentId?: string; ancestorIds?: string[]; baseline: import('../../types').WorkoutSession | null } }) => Promise<SyncResult>;
+    submitLegalConsent: (consent: NonNullable<UserData['legalConsent']>) => Promise<void>;
+    flushPendingSyncs: () => Promise<void>;
+    cancelPendingSyncs: () => void;
+    settleBlockedSyncJobs: () => void;
+    resetStore: (options?: { force?: boolean }) => void;
+}
+
+type CacheResult = { ok: true } | { ok: false; error: unknown };
+type Job = {
+    session: ReturnType<typeof captureSession>;
+    generation: number;
+    cache: Promise<CacheResult>;
+    resolve: (result: SyncResult) => void;
+    reject: (error: unknown) => void;
+};
+let timer: ReturnType<typeof setTimeout> | null = null;
+let pending: Job[] = [];
+let active: Job[] = [];
+let running: Promise<void> | null = null;
+const synced: SyncResult = { ok: true, status: 'synced' };
+const LOCAL_PERSISTENCE_BLOCKED_MESSAGE = 'Archivio locale non leggibile dopo un errore di salvataggio. Le modifiche sono bloccate per evitare perdita di dati; riapri TheLogBook prima di continuare.';
+const localPersistenceFailure = () => new Error(LOCAL_PERSISTENCE_BLOCKED_MESSAGE);
+
+function rejectBlockedJobs(): void {
+    if (timer) clearTimeout(timer);
+    timer = null;
+    const blocked = [...pending, ...active];
+    pending = [];
+    blocked.forEach(job => job.reject(localPersistenceFailure()));
+}
+const updateRequiredMessage = (error: unknown) => error instanceof Error
+    ? error.message
+    : 'Questi dati sono stati scritti da una versione più recente di TheLogBook. Aggiorna l’app prima di continuare.';
+const updateRequiredResult = (message: string): SyncResult => ({ ok: false, status: 'failed', error: new Error(message) });
+
+function relevantDeletionPending(): boolean {
+    let guestOptIn = false;
+    try { guestOptIn = localStorage.getItem('logbook_is_guest') === 'true'; }
+    catch { /* Fail closed below when the owner cannot be resolved as an authenticated user. */ }
+    if (guestOptIn) return false;
+
+    const owner = captureSession().owner;
+    if (owner.startsWith('user:')) return isAccountDeletionPending(owner);
+    try {
+        return findPendingAccountDeletion() !== null;
+    } catch {
+        // A present-but-corrupt deletion marker is not proof that no deletion
+        // is in progress. Keep destructive resets blocked until recovery.
+        return true;
+    }
+}
+
+/**
+ * The pending-deletion marker protects a recovery view only if it belongs to
+ * the owner of the data actually displayed. A different owner's receipt must
+ * not keep their previous account's data visible across an auth-less reset.
+ */
+function shouldPreserveDeletionRecoveryView(dataOwner: string | null): boolean {
+    if (!dataOwner?.startsWith('user:')) return false;
+    try {
+        if (localStorage.getItem('logbook_is_guest') === 'true') return false;
+        const currentOwner = captureSession().owner;
+        if (currentOwner !== 'guest' && currentOwner !== dataOwner) return false;
+    } catch {
+        // If ownership storage is unreadable, preserve this owner's view only
+        // when its deletion marker cannot be ruled out.
+    }
+    return isAccountDeletionPending(dataOwner);
+}
+
+export function clearSyncTimers() {
+    if (timer) clearTimeout(timer);
+    timer = null;
+    pending = [];
+}
+
+export const createSyncSlice: StateCreator<AppState, [], [], SyncSlice> = (set, get) => {
+    const assertLocalPersistenceWritable = () => {
+        const state = get();
+        if (state.userData !== null && state.dataOwner !== captureSession().owner) {
+            throw new Error('Dati in memoria senza proprietario valido per questa sessione.');
+        }
+        // Refuse the intent BEFORE advancing optimistic Zustand state. The
+        // IDB commit also repeats this check for late cross-tab races.
+        if (get().dataOwner === 'guest' && !isActiveGuestSession()) {
+            throw new Error('Sessione locale terminata in un’altra scheda. I dati non possono essere modificati.');
+        }
+        if (get().localPersistenceBlocked) throw new Error(LOCAL_PERSISTENCE_BLOCKED_MESSAGE);
+        if (relevantDeletionPending()) throw new Error('Cancellazione account in corso. Le modifiche sono bloccate finché il server non conferma il completamento.');
+    };
+
+    const enterUpdateRequired = (error: unknown) => {
+        const message = updateRequiredMessage(error);
+        try {
+            // Future persisted data must never be interpreted or mutated by this build.
+            // Capture only version-independent volatile UI drafts before invalidating
+            // the session that owns them.
+            requiredUpdateRecoveryRegistry.captureAll();
+        } catch (recoveryError) {
+            const recoveryMessage = recoveryError instanceof Error
+                ? recoveryError.message
+                : 'Impossibile mettere al sicuro le modifiche ancora presenti nell’interfaccia.';
+            set({
+                localPersistenceBlocked: true,
+                syncing: false,
+                syncHealth: 'failed',
+                syncPresentation: 'normal',
+                saveError: `Aggiornamento richiesto, ma il ricaricamento è bloccato: ${recoveryMessage}`,
+                compatibilityError: message,
+                syncGeneration: get().syncGeneration + 1,
+            });
+            return;
+        }
+
+        invalidateSession();
+        if (timer) clearTimeout(timer);
+        timer = null;
+        const queued = pending;
+        pending = [];
+        const blocked = updateRequiredResult(message);
+        queued.forEach(job => job.resolve(blocked));
+        set({
+            compatibilityStatus: 'update-required',
+            compatibilityError: message,
+            syncing: false,
+            syncHealth: 'failed',
+            syncPresentation: 'normal',
+            saveError: null,
+            syncGeneration: get().syncGeneration + 1,
+        });
+    };
+
+    const run = async (): Promise<void> => {
+        if (running) {
+            await running;
+            if (pending.length) await run();
+            return;
+        }
+        if (get().localPersistenceBlocked) { get().settleBlockedSyncJobs(); return; }
+        if (!pending.length || get().compatibilityStatus === 'update-required') return;
+        const jobs = pending;
+        pending = [];
+        active = jobs;
+        const last = jobs[jobs.length - 1];
+        const session = last.session;
+        const current = () => isCurrentSession(session);
+        running = (async () => {
+            let failureStatus: SyncHealth = 'failed';
+            let blockLocalPersistence = false;
+            let blockedReason = LOCAL_PERSISTENCE_BLOCKED_MESSAGE;
+            try {
+                const commits = await Promise.all(jobs.map(job => job.cache));
+                if (get().localPersistenceBlocked) throw localPersistenceFailure();
+                const failed = commits.find(result => !result.ok);
+                if (failed && !failed.ok) {
+                    if (failed.error instanceof WorkoutIntentConflictError) {
+                        // A different payload with the same device-intent sequence
+                        // cannot be repaired by adopting the durable envelope alone.
+                        blockLocalPersistence = true;
+                        blockedReason = failed.error.message;
+                    }
+                    if (current() && get().syncGeneration === last.generation) {
+                        try {
+                            const durable = await readLocal(session.owner);
+                            if (current() && get().syncGeneration === last.generation) {
+                                if (!durable) blockLocalPersistence = true;
+                                else {
+                                    const aligned = durable.data;
+                                    set({ userData: aligned, dataOwner: session.owner });
+                                    markTabSnapshotClean(session, aligned);
+                                }
+                            }
+                        } catch {
+                            if (current() && get().syncGeneration === last.generation) blockLocalPersistence = true;
+                        }
+                    }
+                    throw failed.error;
+                }
+                if (!current()) throw new Error('Sessione cambiata durante il salvataggio');
+                const envelope = await readLocal(session.owner);
+                if (!current()) throw new Error('Sessione cambiata durante il salvataggio');
+                if (!envelope) throw new Error('Copia locale non disponibile');
+                if (get().localPersistenceBlocked) throw localPersistenceFailure();
+                const result = await DB.saveUserData(envelope.data, envelope.revision);
+                if (get().localPersistenceBlocked) throw localPersistenceFailure();
+                if (!current()) throw new Error('Sessione cambiata durante la sincronizzazione');
+                if (result.ok) {
+                    const saved = await readLocal(session.owner);
+                    if (saved && current() && get().syncGeneration === last.generation) {
+                        const aligned = saved.data;
+                        set({ userData: aligned, dataOwner: session.owner });
+                        markTabSnapshotClean(session, aligned);
+                    }
+                } else if (result.status === 'local-pending') {
+                    // The IndexedDB commit is already durable even when cloud replication is pending.
+                    // Reconcile Zustand only after the remote outcome is known so rejected/failed
+                    // workflows (notably legal consent) can keep their intentional rollback view.
+                    const saved = await readLocal(session.owner);
+                    if (saved && current() && get().syncGeneration === last.generation) {
+                        const aligned = saved.data;
+                        set({ userData: aligned, dataOwner: session.owner });
+                        markTabSnapshotClean(session, aligned);
+                    }
+                } else {
+                    failureStatus = result.status;
+                    throw result.status === 'rejected'
+                        ? new Error("Sincronizzazione rifiutata dal server. Verifica l'accesso e riprova.", { cause: result.error })
+                        : result.error instanceof Error ? result.error : new Error('Salvataggio fallito', { cause: result.error });
+                }
+                if (current() && get().syncGeneration === last.generation) {
+                    set({ syncHealth: result.status, saveError: result.status === 'local-pending' ? 'Salvato localmente. Sincronizzazione in attesa.' : null });
+                }
+                jobs.forEach(job => job.resolve(result));
+            } catch (error) {
+                // Preserve the original failing IndexedDB/transport error for the
+                // owning operation before a fail-closed store update notifies listeners.
+                jobs.forEach(job => job.reject(error));
+                if (current() && get().syncGeneration === last.generation && !get().localPersistenceBlocked) {
+                    if (isUpdateRequiredError(error)) enterUpdateRequired(error);
+                    else if (blockLocalPersistence) set({ localPersistenceBlocked: true, syncHealth: 'failed', saveError: blockedReason });
+                    else set({ syncHealth: failureStatus, saveError: error instanceof Error ? error.message : 'Impossibile salvare i dati.' });
+                }
+            } finally {
+                active = [];
+                if (current() && !pending.length && get().compatibilityStatus !== 'update-required') set({ syncing: false });
+            }
+        })();
+        try { await running; } finally { running = null; }
+    };
+
+    const enqueue = (session: ReturnType<typeof captureSession>, generation: number, cache: Promise<CacheResult>) =>
+        new Promise<SyncResult>((resolve, reject) => {
+            pending.push({ session, generation, cache, resolve, reject });
+            if (timer) clearTimeout(timer);
+            timer = setTimeout(() => { timer = null; void run(); }, DEBOUNCE_DELAY_GLOBAL);
+        });
+
+    return {
+        saveError: null,
+        syncing: false,
+        syncHealth: 'synced',
+        syncPresentation: 'normal',
+        syncGeneration: 0,
+        localPersistenceBlocked: false,
+        cloudIntegrityBlocked: false,
+        compatibilityStatus: 'ok',
+        compatibilityError: null,
+        setSyncing: value => set({ syncing: value }),
+        setSaveError: value => set({ saveError: value }),
+        setUpdateRequired: enterUpdateRequired,
+        saveUserData: async (dataOrUpdater, options) => {
+            if (get().compatibilityStatus === 'update-required') {
+                return updateRequiredResult(get().compatibilityError ?? 'Aggiornamento richiesto.');
+            }
+            assertLocalPersistenceWritable();
+            requireHealthConsentWritable(captureSession().owner);
+            const { userData } = get();
+            const next = typeof dataOrUpdater === 'function' ? dataOrUpdater(userData) : dataOrUpdater;
+            if (!next) {
+                // A reset clears only the view; deletion requires the explicit purge flow.
+                get().cancelPendingSyncs();
+                set({ userData: null, dataOwner: null, saveError: null });
+                return synced;
+            }
+            const data = UserDataSchema.parse(next) as unknown as UserData;
+            const generation = get().syncGeneration + 1;
+            const session = captureSession();
+            if (userData) markTabSnapshotDirty(session, userData);
+            set({ userData: data, dataOwner: session.owner, syncing: true, syncHealth: 'saving', syncPresentation: 'normal', saveError: null, syncGeneration: generation });
+            // Snapshot writes remain for bulk boundaries (hydration/import/guest merge), not ordinary domain actions.
+            const cache = saveUserDataToCache(
+                data,
+                userData ?? UserDataSchema.parse({}) as unknown as UserData,
+                options?.expectedRevision,
+            ).then<CacheResult>(() => ({ ok: true })).catch<CacheResult>(error => ({ ok: false, error }));
+            return enqueue(session, generation, cache);
+        },
+        dispatchDomainOperation: async (operation, options) => {
+            if (get().compatibilityStatus === 'update-required') {
+                return updateRequiredResult(get().compatibilityError ?? 'Aggiornamento richiesto.');
+            }
+            assertLocalPersistenceWritable();
+            requireHealthConsentWritable(captureSession().owner);
+            const userData = get().userData;
+            if (!userData) throw new Error('Dati utente non caricati');
+
+            const session = captureSession();
+            const dataOwner = get().dataOwner;
+            if (dataOwner !== session.owner) {
+                throw new Error('Dati locali non allineati con la sessione corrente. Attendi il completamento dell’accesso.');
+            }
+
+            const data = applyDomainOperations(userData, operation);
+            const generation = get().syncGeneration + 1;
+            const operations = Array.isArray(operation) ? operation : [operation];
+            const syncPresentation: SyncPresentation = operations.length > 0 && operations.every(item => item.type === 'active-workout.set')
+                ? 'quiet-workout'
+                : 'normal';
+            markTabSnapshotDirty(session, userData);
+            set({ userData: data, dataOwner: session.owner, syncing: true, syncHealth: 'saving', syncPresentation, saveError: null, syncGeneration: generation });
+
+            // The business state and compiled SemanticOperation batch are committed by one IndexedDB update.
+            const cache = commitDomainOperations(session.owner, operation, userData, () => isCurrentSession(session), options?.workoutIntent)
+                .then<CacheResult>(async () => {
+                    if (options?.workoutIntent?.intentId) {
+                        // A cleanup error must not turn a committed edit into a failed save.
+                        try { await releaseCommittedWorkoutSlot(session.owner, options.workoutIntent); }
+                        catch { /* encrypted recovery witnesses remain available */ }
+                    }
+                    return { ok: true };
+                })
+                .catch<CacheResult>(error => ({ ok: false, error }));
+            return enqueue(session, generation, cache);
+        },
+        submitLegalConsent: async consent => {
+            if (get().compatibilityStatus === 'update-required') throw new Error(get().compatibilityError ?? 'Aggiornamento richiesto.');
+            assertLocalPersistenceWritable();
+            const session = captureSession();
+            const previous = get().userData?.legalConsent;
+            const result = get().dispatchDomainOperation({ type: 'legal-consent.set', consent });
+            // Keep the form mounted until the durable operation has an explicit outcome.
+            set(state => ({ userData: state.userData ? { ...state.userData, legalConsent: previous } : null }));
+            const observed = result.then(value => ({ value }), error => ({ error }));
+            await get().flushPendingSyncs();
+            const settled = await observed;
+            if ('error' in settled) {
+                await revertRejectedConsent(session.owner, consent, previous, () => isCurrentSession(session));
+                throw settled.error;
+            }
+            if (isCurrentSession(session)) set(state => ({ userData: state.userData ? { ...state.userData, legalConsent: consent } : null }));
+        },
+        flushPendingSyncs: async () => {
+            if (!isHealthConsentWritable(captureSession().owner)) return;
+            if (get().localPersistenceBlocked) { get().settleBlockedSyncJobs(); return; }
+            if (get().compatibilityStatus === 'update-required') return;
+            if (timer) clearTimeout(timer);
+            timer = null;
+            if (pending.length || running) {
+                await run();
+                return;
+            }
+            const session = captureSession();
+            const saved = await readLocal(session.owner);
+            if (!isCurrentSession(session) || !saved) return;
+            if (!saved.pending.length) {
+                // A previous ambiguous cloud outcome can have completed and
+                // acknowledged while the UI was suspended. An empty durable
+                // journal is the recovery proof; do not retry indefinitely.
+                if (get().syncHealth === 'local-pending') {
+                    set({ syncHealth: 'synced', saveError: null });
+                }
+                return;
+            }
+            const generation = get().syncGeneration + 1;
+            const localWorkout = get().localWorkout;
+            const syncPresentation: SyncPresentation = localWorkout && !localWorkout.isEditingHistory
+                ? 'quiet-workout'
+                : 'normal';
+            set({ syncing: true, syncHealth: 'saving', syncPresentation, syncGeneration: generation });
+            const completion = new Promise<SyncResult>((resolve, reject) => pending.push({ session, generation, cache: Promise.resolve({ ok: true }), resolve, reject }));
+            const observed = completion.then(() => undefined, error => { throw error; });
+            void observed.catch(() => {});
+            await run();
+            await observed;
+        },
+        settleBlockedSyncJobs: () => {
+            if (!get().localPersistenceBlocked) return;
+            rejectBlockedJobs();
+            set({ syncing: false, syncHealth: 'failed', syncPresentation: 'normal',
+                syncGeneration: get().syncGeneration + 1,
+                saveError: get().saveError ?? LOCAL_PERSISTENCE_BLOCKED_MESSAGE });
+        },
+        cancelPendingSyncs: () => {
+            invalidateSession();
+            [...pending, ...active].forEach(job => job.reject(new Error('Sincronizzazione annullata per cambio sessione')));
+            clearSyncTimers();
+            set({ syncing: false, syncPresentation: 'normal', syncGeneration: get().syncGeneration + 1 });
+        },
+        resetStore: options => {
+            // Preserve the recovery view only for the deletion that belongs to the active
+            // authenticated owner, or for an auth-less post-deletion restart. A stale marker
+            // from account A must not block/reset account B or an explicitly active guest.
+            if (!options?.force && shouldPreserveDeletionRecoveryView(get().dataOwner)) {
+                get().cancelPendingSyncs();
+                set({ syncing: false, saveError: 'Cancellazione account in verifica. Copia locale conservata fino alla conferma del server.' });
+                return;
+            }
+            get().cancelPendingSyncs();
+            set({
+                userData: null,
+                dataOwner: null,
+                localWorkout: null,
+                saveError: null,
+                syncing: false,
+                syncHealth: 'synced',
+                syncPresentation: 'normal',
+                localPersistenceBlocked: false,
+                cloudIntegrityBlocked: false,
+                compatibilityStatus: 'ok',
+                compatibilityError: null,
+            });
+        },
+    };
+};

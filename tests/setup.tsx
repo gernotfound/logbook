@@ -1,0 +1,679 @@
+import { vi, beforeEach, afterEach } from 'vitest';
+
+// Model the browser's origin-scoped Web Locks across concurrent UI callbacks.
+// The queue is shared by each mounted AuthProvider in the test realm.
+const guestLockQueue = new Map<string, Promise<void>>();
+Object.defineProperty(navigator, 'locks', {
+  configurable: true,
+  value: {
+    request: async <T,>(name: string, options: LockOptions, callback: (lock: Lock) => Promise<T>): Promise<T> => {
+      const preceding = guestLockQueue.get(name) ?? Promise.resolve();
+      let release!: () => void;
+      const held = new Promise<void>(resolve => { release = resolve; });
+      guestLockQueue.set(name, held);
+      await preceding;
+      try {
+        return await callback({ name, mode: options.mode ?? 'exclusive' } as Lock);
+      } finally {
+        release();
+        if (guestLockQueue.get(name) === held) guestLockQueue.delete(name);
+      }
+    },
+  },
+});
+
+
+// Existing UI/integration suites start from an already authenticated, active-consent
+// test account. Stub only that separate trusted boundary here; the dedicated
+// health-consent tests import the REAL module and verify its denial paths.
+// Do not use a production bypass in the application source.
+vi.mock('../src/lib/healthConsent', () => ({
+  subscribeHealthConsent: vi.fn(() => () => {}),
+  currentHealthConsentStatus: vi.fn(() => 'active'),
+  isVerifiedHealthWithdrawal: vi.fn(() => false),
+  getServerConfirmedLegalConsent: vi.fn(() => null),
+  registerInitialHealthConsent: vi.fn(),
+  beginHealthConsentVerification: vi.fn(),
+  refreshHealthConsent: vi.fn(async () => 'active'),
+  refreshHealthConsentFromStorage: vi.fn(),
+  getGuestHealthConsentStatus: vi.fn(() => 'active'),
+  withdrawGuestHealthConsent: vi.fn(),
+  isHealthConsentWritable: vi.fn(() => true),
+  isHealthConsentCloudWritable: vi.fn(() => true),
+  suspendHealthConsentCloudAccess: vi.fn(),
+  getVerifiedHealthConsentRevision: vi.fn(() => 0),
+  requireHealthConsentWritable: vi.fn(),
+  withdrawHealthConsent: vi.fn(),
+  reacceptHealthConsent: vi.fn(),
+  finishHealthConsentReacceptance: vi.fn(),
+}));
+
+// UI suites exercise application session/journal lifecycles against an
+// already authenticated synthetic account. The real trusted key-transport
+// contract is tested separately in Node (isolated runner) and emulator.
+// Never generate real App Check tokens or contact Vercel in UI tests.
+vi.mock('../src/lib/sync/cloudAccountKeyAccess', () => ({
+  requireCloudAccountDataKey: vi.fn(async () => new Uint8Array(32).fill(18)),
+  requireRightsExportAccountDataKey: vi.fn(async () => new Uint8Array(32).fill(18)),
+}));
+
+// Fail closed: UI tests must not contact real services. Record unexpected
+// requests so even errors swallowed by application catch handlers fail the test.
+const unexpectedNetworkRequests: string[] = [];
+function blockUnexpectedFetch(input: RequestInfo | URL): never {
+  const target = String(input);
+  unexpectedNetworkRequests.push(target);
+  throw new Error(`Unexpected network request in Vitest: ${target}`);
+}
+Object.defineProperty(globalThis, 'fetch', {
+  configurable: true,
+  writable: true,
+  value: blockUnexpectedFetch,
+});
+beforeEach(() => {
+  unexpectedNetworkRequests.length = 0;
+  globalThis.fetch = blockUnexpectedFetch;
+});
+afterEach(() => {
+  if (unexpectedNetworkRequests.length > 0) {
+    throw new Error(`Unexpected unmocked network requests: ${unexpectedNetworkRequests.join(', ')}`);
+  }
+});
+
+const storageMocks = vi.hoisted(() => {
+  const localStorageStore: Record<string, string> = {};
+  const localStorageMock = {
+    getItem: vi.fn((key: string): string | null => localStorageStore[key] ?? null),
+    setItem: vi.fn((key: string, value: string) => {
+      localStorageStore[key] = String(value);
+    }),
+    removeItem: vi.fn((key: string) => {
+      delete localStorageStore[key];
+    }),
+    clear: vi.fn(() => {
+      for (const k of Object.keys(localStorageStore)) delete localStorageStore[k];
+    }),
+    get length() {
+      return Object.keys(localStorageStore).length;
+    },
+    key: vi.fn((index: number) => Object.keys(localStorageStore)[index] ?? null),
+  };
+
+  Object.defineProperty(globalThis, 'localStorage', {
+    value: localStorageMock,
+    configurable: true,
+    writable: true,
+  });
+  if (typeof window !== 'undefined') {
+    Object.defineProperty(window, 'localStorage', {
+      value: localStorageMock,
+      configurable: true,
+      writable: true,
+    });
+  }
+
+  const sessionStorageStore: Record<string, string> = {};
+  const sessionStorageMock = {
+    getItem: vi.fn((key: string) => sessionStorageStore[key] ?? null),
+    setItem: vi.fn((key: string, value: string) => {
+      sessionStorageStore[key] = String(value);
+    }),
+    removeItem: vi.fn((key: string) => {
+      delete sessionStorageStore[key];
+    }),
+    clear: vi.fn(() => {
+      for (const k of Object.keys(sessionStorageStore)) delete sessionStorageStore[k];
+    }),
+    get length() {
+      return Object.keys(sessionStorageStore).length;
+    },
+    key: vi.fn((index: number) => Object.keys(sessionStorageStore)[index] ?? null),
+  };
+
+  Object.defineProperty(globalThis, 'sessionStorage', {
+    value: sessionStorageMock,
+    configurable: true,
+    writable: true,
+  });
+  if (typeof window !== 'undefined') {
+    Object.defineProperty(window, 'sessionStorage', {
+      value: sessionStorageMock,
+      configurable: true,
+      writable: true,
+    });
+  }
+
+  return { localStorageMock, sessionStorageMock };
+});
+
+export const localStorageMock = storageMocks.localStorageMock;
+export const sessionStorageMock = storageMocks.sessionStorageMock;
+
+import { storageOwner } from '../src/lib/sync/session';
+import React from 'react';
+import { render, act } from '@testing-library/react';
+import { AuthProvider } from '../src/contexts/AuthContext';
+import { AuthContext, defaultAuthContext } from '../src/contexts/AuthContextDef';
+import { auth } from '../src/lib/firebase';
+import { useAppStore } from '../src/store/useAppStore';
+import type { UserData } from '../src/types';
+
+Object.defineProperty(window, 'matchMedia', {
+  writable: true,
+  value: vi.fn().mockImplementation(query => ({
+    matches: false,
+    media: query,
+    onchange: null,
+    addListener: vi.fn(), // Deprecated
+    removeListener: vi.fn(), // Deprecated
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+    dispatchEvent: vi.fn(),
+  })),
+});
+
+// Mock window methods
+if (typeof window !== 'undefined') {
+  window.scrollTo = vi.fn();
+  window.alert = vi.fn();
+  window.confirm = vi.fn(() => true);
+}
+
+// Global stubs for Vite define constants
+vi.stubGlobal('__APP_VERSION__', '1.0.0-test');
+vi.stubGlobal('__BUILD_HASH__', 'abcdef1');
+vi.stubGlobal('__BUILD_SHA__', 'abcdef1234567890abcdef1234567890abcdef12');
+vi.stubGlobal('__BUILD_TIME__', '2026-08-26T00:00:00Z');
+
+// Mock ResizeObserver
+(globalThis as any).ResizeObserver = class {
+  observe = vi.fn();
+  unobserve = vi.fn();
+  disconnect = vi.fn();
+} as any;
+
+// Mock useDialogStore
+vi.mock('../src/store/useDialogStore', () => {
+  const defaultState = {
+    isOpen: false,
+    type: 'confirm',
+    title: '',
+    message: '',
+    onConfirm: vi.fn(),
+    onCancel: vi.fn(),
+    showAlert: vi.fn().mockResolvedValue(undefined),
+    showConfirm: vi.fn().mockResolvedValue(true),
+    showPasswordPrompt: vi.fn().mockResolvedValue(null),
+    onInputConfirm: undefined,
+    showUnsyncedDataLogout: vi.fn().mockResolvedValue('cancel'),
+    closeDialog: vi.fn(),
+    cancelAll: vi.fn(),
+  };
+  const useDialogStore = Object.assign(
+    (selector?: any) => (typeof selector === 'function' ? selector(defaultState) : defaultState),
+    {
+      getState: () => defaultState,
+      setState: vi.fn(),
+      subscribe: vi.fn(),
+    }
+  );
+  return { useDialogStore };
+});
+
+export const emptyUserData: UserData = {
+  profile: {},
+  library: [],
+  routines: [],
+  history: [],
+  nutrition: {},
+  customFoods: [],
+  activeWorkout: null,
+  nutritionPlanning: {
+    weight: 80,
+    onDaysCount: 4,
+    avgMacros: { carbsPerKg: 3.5, proPerKg: 2.0, fatPerKg: 1.0 },
+    onBoost: { carbsPercent: 20, proPercent: 0, fatPercent: 0 },
+    normocalorica: { kcal: 2500, carbs: 300, pro: 160, fat: 70 }
+  },
+  trainingCycles: [],
+  activeCycleId: null,
+  supplements: [],
+  activePains: [],
+  catalogOverrides: { exercises: {}, foods: {}, hiddenExerciseIds: [], hiddenFoodIds: [] }
+};
+
+// Mock HTMLCanvasElement context for Chart.js
+HTMLCanvasElement.prototype.getContext = vi.fn().mockImplementation(function (this: any) { return { canvas: this,
+  fillRect: vi.fn(),
+  clearRect: vi.fn(),
+  getImageData: vi.fn(() => ({ data: new Array(4) })),
+  putImageData: vi.fn(),
+  createImageData: vi.fn(),
+  setTransform: vi.fn(),
+  resetTransform: vi.fn(),
+  drawFocusIfNeeded: vi.fn(),
+  createRadialGradient: vi.fn(() => ({ addColorStop: vi.fn() })),
+  createLinearGradient: vi.fn(() => ({ addColorStop: vi.fn() })),
+  beginPath: vi.fn(),
+  fill: vi.fn(),
+  stroke: vi.fn(),
+  arc: vi.fn(),
+  arcTo: vi.fn(),
+  scale: vi.fn(),
+  measureText: vi.fn(() => ({ width: 0 })),
+  transform: vi.fn(),
+  rect: vi.fn(),
+  clip: vi.fn(),
+  save: vi.fn(),
+  restore: vi.fn(),
+  translate: vi.fn(),
+  rotate: vi.fn(),
+  moveTo: vi.fn(),
+  lineTo: vi.fn(),
+  closePath: vi.fn(),
+  strokeRect: vi.fn(),
+  strokeText: vi.fn(),
+  fillText: vi.fn(),
+}; }) as any;
+
+// Mock idb-keyval
+export const idbStore: Record<string, any> = {};
+// The shared object store orders overlapping readonly/readwrite transactions
+// by creation, including get after a write and set/del/clear after update.
+let idbTransactionTail: Promise<void> = Promise.resolve();
+function queueIdbTransaction<T>(work: () => T): Promise<T> {
+  const previous = idbTransactionTail;
+  let release!: () => void;
+  const pending = new Promise<void>(resolve => { release = resolve; });
+  idbTransactionTail = pending;
+  return previous.then(work).finally(() => {
+    release();
+    if (idbTransactionTail === pending) idbTransactionTail = Promise.resolve();
+  });
+}
+
+// IndexedDB clones both stored and retrieved values. Without this isolation,
+// an updater that mutates its input and throws could change the mock's data.
+export function readMockIdbValue<T = unknown>(key: IDBValidKey): Promise<T | undefined> {
+  return queueIdbTransaction(() => {
+    const storageKey = String(key);
+    return Object.prototype.hasOwnProperty.call(idbStore, storageKey)
+      ? structuredClone(idbStore[storageKey]) as T : undefined;
+  });
+}
+beforeEach(() => {
+  idbTransactionTail = Promise.resolve();
+  for (const key of Object.keys(idbStore)) delete idbStore[key];
+  localStorageMock.clear();
+  sessionStorageMock.clear();
+});
+vi.mock('idb-keyval', () => ({
+  get: vi.fn(readMockIdbValue),
+  set: vi.fn((key: string, value: any) => queueIdbTransaction(() => {
+    idbStore[key] = structuredClone(value);
+  })),
+  update: vi.fn((key: string, updater: (value: any) => any) => queueIdbTransaction(() => {
+    const previous = Object.prototype.hasOwnProperty.call(idbStore, key)
+      ? structuredClone(idbStore[key]) : undefined;
+    const next = updater(previous);
+    // An IndexedDB updater cannot persist an async result or an uncloneable value.
+    if (next !== null && (typeof next === 'object' || typeof next === 'function')
+      && typeof next.then === 'function') {
+      throw new DOMException('Asynchronous IndexedDB update result', 'DataCloneError');
+    }
+    idbStore[key] = structuredClone(next);
+  })),
+  del: vi.fn((key: string) => queueIdbTransaction(() => {
+    delete idbStore[key];
+  })),
+  clear: vi.fn(() => queueIdbTransaction(() => {
+    for (const k in idbStore) delete idbStore[k];
+  })),
+}));
+
+// Mock the app's PWA registration boundary
+vi.mock('../src/lib/pwaRegistration', () => ({
+  useRegisterSW: vi.fn(() => ({
+    needRefresh: [false, vi.fn()],
+    offlineReady: [false, vi.fn()],
+    updateServiceWorker: vi.fn(),
+  })),
+}));
+
+// Shared UI tests start authenticated unless the test explicitly changes the session.
+// A single auth object is used by both Firebase constructors, as in production.
+const firebaseAuthFixture = vi.hoisted(() => {
+  const createUser = (options: { email?: string; verified?: boolean; providerId?: 'password' | 'google.com' } = {}) => ({
+    uid: 'test-user-id',
+    email: options.email ?? 'test@example.com',
+    displayName: 'Test User',
+    emailVerified: options.verified ?? true,
+    providerData: [{ providerId: options.providerId ?? 'password' }],
+    getIdToken: vi.fn(async () => 'test-id-token'),
+  });
+  const listeners = new Set<(user: ReturnType<typeof createUser> | null) => void>();
+  const auth = {
+    currentUser: createUser() as ReturnType<typeof createUser> | null,
+    authStateReady: vi.fn(async () => undefined),
+  };
+
+  // Resolve successful Firebase sign-in and emit the same auth transition
+  // observed by AuthProvider; returning a user alone would hide session bugs.
+  const signIn = (options: { email?: string; verified?: boolean; providerId?: 'password' | 'google.com' } = {}) => {
+    const user = createUser(options);
+    auth.currentUser = user;
+    for (const listener of listeners) listener(user);
+    return { user, providerId: options.providerId ?? 'password', operationType: 'signIn' as const };
+  };
+
+  return { createUser, listeners, auth, signIn };
+});
+
+export const mockFirebaseAuth = firebaseAuthFixture.auth;
+
+beforeEach(() => {
+  // A previous test's logout must not leak into another test. Null remains null
+  // within a test: onAuthStateChanged must never silently re-authenticate it.
+  firebaseAuthFixture.listeners.clear();
+  firebaseAuthFixture.auth.currentUser = firebaseAuthFixture.createUser();
+});
+
+// Mock Firebase
+vi.mock('firebase/app', () => ({
+  initializeApp: vi.fn(() => ({})),
+}));
+
+vi.mock('firebase/auth', () => ({
+  getAuth: vi.fn(() => firebaseAuthFixture.auth),
+  initializeAuth: vi.fn(() => firebaseAuthFixture.auth),
+  GoogleAuthProvider: class { setCustomParameters = vi.fn(); },
+  EmailAuthProvider: { credential: vi.fn((email: string, password: string) => ({ email, password })) },
+  signInWithPopup: vi.fn(async () => firebaseAuthFixture.signIn({ providerId: 'google.com' })),
+  signInWithRedirect: vi.fn(),
+  signInWithEmailAndPassword: vi.fn(async (_auth: unknown, email: string) => firebaseAuthFixture.signIn({ email })),
+  createUserWithEmailAndPassword: vi.fn(async (_auth: unknown, email: string) => firebaseAuthFixture.signIn({ email, verified: false })),
+  sendPasswordResetEmail: vi.fn().mockResolvedValue(undefined),
+  updateEmail: vi.fn().mockResolvedValue(undefined),
+  updatePassword: vi.fn().mockResolvedValue(undefined),
+  linkWithCredential: vi.fn().mockResolvedValue(undefined),
+  linkWithPopup: vi.fn().mockResolvedValue(undefined),
+  linkWithRedirect: vi.fn().mockResolvedValue(undefined),
+  reauthenticateWithCredential: vi.fn().mockResolvedValue(undefined),
+  reauthenticateWithPopup: vi.fn().mockResolvedValue(undefined),
+  reauthenticateWithRedirect: vi.fn().mockResolvedValue(undefined),
+  reload: vi.fn().mockResolvedValue(undefined),
+  sendEmailVerification: vi.fn().mockResolvedValue(undefined),
+  verifyBeforeUpdateEmail: vi.fn().mockResolvedValue(undefined),
+  validatePassword: vi.fn().mockResolvedValue({
+    isValid: true,
+    meetsMinPasswordLength: true,
+    meetsMaxPasswordLength: true,
+    containsLowercaseLetter: true,
+    containsUppercaseLetter: true,
+    containsNumericCharacter: true,
+    containsNonAlphanumericCharacter: true,
+    passwordPolicy: { customStrengthOptions: { minPasswordLength: 8, maxPasswordLength: 4096 } },
+  }),
+  getRedirectResult: vi.fn().mockResolvedValue(null),
+  signOut: vi.fn(async (_auth) => {
+    _auth.currentUser = null;
+    for (const listener of firebaseAuthFixture.listeners) listener(null);
+  }),
+  onAuthStateChanged: vi.fn((_auth, callback) => {
+    firebaseAuthFixture.listeners.add(callback);
+    callback(_auth.currentUser);
+    return () => { firebaseAuthFixture.listeners.delete(callback); };
+  }),
+  setPersistence: vi.fn().mockResolvedValue(undefined),
+  browserLocalPersistence: {},
+  browserPopupRedirectResolver: { name: 'browser-popup-redirect-resolver' },
+  indexedDBLocalPersistence: {},
+}));
+
+// UI tests must not register real recovery devices as an incidental mount effect.
+// Dedicated recovery suites explicitly opt into the real implementation.
+vi.mock('../src/lib/deletionDeviceRecovery', async (importOriginal) => ({
+  ...await importOriginal<typeof import('../src/lib/deletionDeviceRecovery')>(),
+  watchDeletionRecoveryDeviceRegistration: vi.fn(() => () => {}),
+}));
+
+vi.mock('firebase/app-check', () => ({
+  initializeAppCheck: vi.fn(() => ({})),
+  ReCaptchaEnterpriseProvider: vi.fn(),
+  getToken: vi.fn().mockResolvedValue({ token: 'mock-token' }),
+  getLimitedUseToken: vi.fn().mockResolvedValue({ token: 'mock-limited-use-token' }),
+  isSupported: vi.fn().mockResolvedValue(true),
+}));
+
+export const firestoreMockStore: Record<string, any> = {};
+beforeEach(() => {
+  for (const key of Object.keys(firestoreMockStore)) delete firestoreMockStore[key];
+});
+
+vi.mock('firebase/firestore', () => {
+  const refPath = (ref: any) => typeof ref?.path === 'string' ? ref.path : '';
+  const snapshot = (data: any) => ({
+    exists: () => data !== undefined,
+    data: () => data,
+  });
+  const defaultControl = () => {
+    const now = Date.now();
+    return {
+      protocolVersion: 3,
+      replicas: {
+        s00: {
+          replicaId: 'test-replica',
+          generation: 1,
+          status: 'active',
+          lastSeq: 0,
+          checkpointAtMs: now,
+          leaseUntilMs: now + 360 * 24 * 60 * 60 * 1000,
+          checkpointClock: {},
+        },
+      },
+      mutation: { slot: 's00', action: 'checkpoint' },
+    };
+  };
+  const getDoc = vi.fn(async (ref: any) => snapshot(firestoreMockStore[refPath(ref)]));
+  // Distinct server-read mock: production hydration must never fall back to getDoc/cache.
+  const getDocFromServer = vi.fn(async (ref: any) => snapshot(firestoreMockStore[refPath(ref)]));
+  const createBatch = () => {
+    const staged: Array<{ kind: 'set' | 'delete'; ref: any; data?: any }> = [];
+    return {
+      set: vi.fn((ref: any, data: any) => staged.push({ kind: 'set', ref, data: structuredClone(data) })),
+      delete: vi.fn((ref: any) => staged.push({ kind: 'delete', ref })),
+      commit: vi.fn(async () => {
+        for (const item of staged) {
+          const path = refPath(item.ref);
+          if (!path) continue;
+          if (item.kind === 'delete') delete firestoreMockStore[path];
+          else firestoreMockStore[path] = structuredClone(item.data);
+        }
+      }),
+    };
+  };
+  const writeBatch = vi.fn(() => createBatch());
+  return {
+    getFirestore: vi.fn(() => ({})), initializeFirestore: vi.fn(() => ({})),
+    memoryLocalCache: vi.fn(() => ({})),
+    waitForPendingWrites: vi.fn().mockResolvedValue(undefined),
+    doc: vi.fn((_db: unknown, ...parts: string[]) => ({ path: parts.join('/') })), getDoc, getDocFromServer,
+    setDoc: vi.fn(async (ref: any, data: any) => { firestoreMockStore[refPath(ref)] = structuredClone(data); }),
+    deleteDoc: vi.fn(async (ref: any) => { delete firestoreMockStore[refPath(ref)]; }),
+    collection: vi.fn((_db: unknown, ...parts: string[]) => ({ path: parts.join('/') })),
+    getDocs: vi.fn().mockResolvedValue({ docs: [] }),
+    getDocsFromServer: vi.fn().mockResolvedValue({ docs: [], size: 0 }),
+    documentId: vi.fn(() => '__name__'), orderBy: vi.fn(() => ({})),
+    limit: vi.fn(() => ({})), startAfter: vi.fn(() => ({})), query: vi.fn((ref: any) => ref),
+    deleteField: vi.fn(), writeBatch,
+    // Adapter for UI/contract tests only. Emulator suites exercise real Rules/fencing.
+    runTransaction: vi.fn(async (_db, callback) => {
+      const batch = writeBatch();
+      const txGet = async (ref: any) => {
+        const path = refPath(ref);
+        if (firestoreMockStore[path] !== undefined) return snapshot(firestoreMockStore[path]);
+        if (path.endsWith('/sync_control/state')) return snapshot(defaultControl());
+        return getDoc(ref);
+      };
+      const result = await callback({ get: txGet, set: batch.set, delete: batch.delete });
+      if (!result?.conflicts?.length) await batch.commit();
+      return result;
+    }),
+  };
+});
+
+// Mock DB module
+vi.mock('../src/lib/db', () => ({
+  DB: {
+    loadCloudPayload: vi.fn().mockImplementation(() => {
+      const state = useAppStore.getState();
+      return state.userData ? { data: state.userData, completeMonths: [], cloudDocuments: new Map() } : null;
+    }),
+    saveUserData: vi.fn().mockResolvedValue({ ok: true, status: 'synced' }),
+    secureLogOut: vi.fn().mockResolvedValue(undefined),
+    deleteAccount: vi.fn().mockResolvedValue(undefined),
+    purgeAllLocalUserData: vi.fn().mockImplementation(async (owner = 'user:test-user-id') => {
+      delete idbStore[`logbook:v2:${owner}`];
+      const ownerPrefix = 'logbook:v2:' + owner + ':';
+      for (let i = localStorage.length - 1; i >= 0; i--) {
+        const key = localStorage.key(i);
+        if (key?.startsWith(ownerPrefix) && !key.endsWith(':account-deletion')
+          && !key.endsWith(':secure-vault-control')) localStorage.removeItem(key);
+      }
+      if (owner === 'guest') {
+        localStorage.removeItem('guest_migration_intent_v1');
+        localStorage.removeItem('logbook_guest_session_id_v1');
+      }
+      if (owner === 'guest') localStorage.removeItem('logbook_is_guest');
+    }),
+  },
+}));
+
+// Default Mock User Data
+export const defaultMockUserData: UserData = {
+  profile: { dob: '1995-01-01', height: '175', gender: 'M' },
+  library: [
+    { id: 'ex1', name: 'Panca Piana', notes: 'Esecuzione controllata', setsCount: 3, muscles: ['chest'], secondaryMuscles: ['triceps'], trackingType: 'weight_reps', isDefault: false, sets: [] },
+    { id: 'ex2', name: 'Squat', notes: 'Accosciata completa', setsCount: 3, muscles: ['legs'], secondaryMuscles: [], trackingType: 'weight_reps', isDefault: false, sets: [] }
+  ],
+  routines: [
+    {
+      id: 'r1',
+      name: 'Scheda A - Upper',
+      exercises: [{ exId: 'ex1', setsCount: 3 }]
+    }
+  ],
+  history: [
+    {
+      id: 'w1',
+      date: '2026-07-25',
+      routineName: 'Scheda A - Upper',
+      globalDurationStr: '45m',
+      moodRating: 4,
+      pumpRating: 4,
+      fatigueRating: 3,
+      waterLiters: 2,
+      exercises: [
+        { id: 'se-w1-ex1', exId: 'ex1', sets: [{ id: 's1', kg: '80', reps: '10' }], sessionNote: 'Ottimo allenamento' }
+      ]
+    }
+  ],
+  nutrition: {
+    '2026-07-26': { date: '2026-07-26', weight: 75, kcal: 2400, pro: 160, carbs: 280, fat: 65, meals: [], supplementsIntake: [] }
+  },
+  customFoods: [
+    { id: 'cf1', name: 'Proteine Whey', kcal: 380, pro: 80, carbs: 5, fat: 3, unit: '100g', isCustom: true }
+  ],
+  activeWorkout: null,
+  nutritionPlanning: {
+    weight: 75,
+    onDaysCount: 4,
+    avgMacros: { carbsPerKg: 3.5, proPerKg: 2.0, fatPerKg: 1.0 },
+    onBoost: { carbsPercent: 20, proPercent: 0, fatPercent: 0 },
+    normocalorica: { kcal: 2500, carbs: 300, pro: 160, fat: 70 }
+  },
+  trainingCycles: [],
+  activeCycleId: null,
+  supplements: [],
+  activePains: [],
+  catalogOverrides: { exercises: {}, foods: {}, hiddenExerciseIds: [], hiddenFoodIds: [] }
+};
+
+export function createMockUserData(overrides?: Partial<UserData>): UserData {
+  return {
+    ...defaultMockUserData,
+    ...overrides,
+    profile: { ...defaultMockUserData.profile, ...(overrides?.profile || {}) },
+    catalogOverrides: {
+      ...defaultMockUserData.catalogOverrides,
+      ...(overrides?.catalogOverrides || {})
+    },
+    nutritionPlanning: overrides?.nutritionPlanning !== undefined
+      ? overrides.nutritionPlanning
+      : defaultMockUserData.nutritionPlanning,
+  };
+}
+
+
+function setOwnerBoundUserData(userData: UserData | null, owner = storageOwner()): void {
+  useAppStore.setState({
+    userData,
+    dataOwner: userData ? owner : null,
+  });
+}
+
+export interface RenderOptions {
+  userData?: any;
+  localWorkout?: any;
+  dataOwner?: string;
+}
+
+/**
+ * Nominal authenticated UI suites mount components after the account is ready,
+ * as production App does. Unlike AuthProvider integration tests, these tests
+ * must not transiently present the guest timer while an account vault is active.
+ */
+export function renderWithAuthenticatedTestOwner(ui: React.ReactElement, options: RenderOptions = {}) {
+  const initialUserData = options.userData !== undefined ? options.userData : defaultMockUserData;
+  const initialLocalWorkout = options.localWorkout !== undefined ? options.localWorkout : null;
+  setOwnerBoundUserData(initialUserData, options.dataOwner ?? storageOwner());
+  useAppStore.setState({
+    localWorkout: initialLocalWorkout,
+    syncing: false,
+    saveError: null,
+    localPersistenceBlocked: false,
+    compatibilityStatus: 'ok',
+  });
+  return render(
+    <AuthContext.Provider value={{
+      ...defaultAuthContext,
+      currentUser: auth.currentUser,
+      loading: false,
+      isGuest: false,
+    }}>
+      {ui}
+    </AuthContext.Provider>,
+  );
+}
+
+export function renderWithProviders(ui: React.ReactElement, options: RenderOptions = {}) {
+  const initialUserData = options.userData !== undefined ? options.userData : defaultMockUserData;
+  const initialLocalWorkout = options.localWorkout !== undefined ? options.localWorkout : null;
+  setOwnerBoundUserData(initialUserData, options.dataOwner ?? storageOwner());
+
+  useAppStore.setState({
+    localWorkout: initialLocalWorkout,
+    syncing: false,
+    saveError: null,
+  });
+
+  let result: any;
+  act(() => {
+    result = render(
+      <AuthProvider>
+        {ui}
+      </AuthProvider>
+    );
+  });
+  return result;
+}

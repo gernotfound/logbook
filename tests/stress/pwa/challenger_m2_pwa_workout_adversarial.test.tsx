@@ -1,0 +1,451 @@
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { renderHook, act, render, screen, fireEvent } from '@testing-library/react';
+import React from 'react';
+import { UserDataSchema } from '../../../src/lib/schema';
+import { usePWAInstall } from '../../../src/hooks/usePWAInstall';
+import { useWorkoutSession } from '../../../src/hooks/useWorkoutSession';
+import { useAppStore } from '../../../src/store/useAppStore';
+import { useDialogStore } from '../../../src/store/useDialogStore';
+import SettingsView from '../../../src/components/SettingsView';
+import type { UserData, WorkoutSession } from '../../../src/types';
+import { captureSession } from '../../../src/lib/sync/session';
+import { initializeLocal, readLocal } from '../../../src/lib/sync/localRepository';
+import { prepareUnlockedTestArchive } from '../../secureVaultFixture';
+import { emptyUserData, idbStore } from '../../setup';
+
+describe('Milestone 2 Challenger Suite: PWA and Offline Workout Stress Tests', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    sessionStorage.clear();
+    vi.clearAllMocks();
+    vi.useRealTimers();
+    useAppStore.getState().resetStore();
+
+    Object.defineProperty(navigator, 'onLine', { value: true, configurable: true });
+
+    useDialogStore.setState({
+      showConfirm: vi.fn().mockResolvedValue(true),
+      showAlert: vi.fn().mockResolvedValue(undefined),
+    });
+
+    window.dispatchEvent(new Event('appinstalled'));
+  });
+
+  afterEach(() => {
+    localStorage.clear();
+    sessionStorage.clear();
+    vi.restoreAllMocks();
+    vi.useRealTimers();
+
+    Object.defineProperty(navigator, 'onLine', { value: true, configurable: true });
+  });
+
+  // =========================================================================
+  // 1. PWA Install Adversarial & Edge Cases
+  // =========================================================================
+  describe('1. PWA Install Funnel Stress & Unusual Events', () => {
+    it('handles beforeinstallprompt event where prompt() throws synchronously', async () => {
+
+      const { result } = renderHook(() => usePWAInstall());
+
+      const mockPromptEvent = new Event('beforeinstallprompt');
+      Object.assign(mockPromptEvent, {
+        prompt: vi.fn().mockImplementation(() => {
+          throw new Error('Immediate DOMException');
+        }),
+        userChoice: Promise.resolve({ outcome: 'accepted', platform: 'web' }),
+      });
+
+      act(() => {
+        window.dispatchEvent(mockPromptEvent);
+      });
+
+      expect(result.current.isInstallable).toBe(true);
+
+      await act(async () => {
+        await expect(result.current.promptInstall()).resolves.not.toThrow();
+      });
+
+      // deferredPrompt should be cleared even after synchronous error
+      expect(result.current.isInstallable).toBe(false);
+    });
+
+    it('handles fast double-clicks on promptInstall without firing prompt() twice', async () => {
+
+      const { result } = renderHook(() => usePWAInstall());
+
+      let resolveUserChoice: any;
+      const userChoicePromise = new Promise<{ outcome: 'accepted'; platform: string }>((res) => {
+        resolveUserChoice = res;
+      });
+
+      const mockPrompt = vi.fn().mockResolvedValue(undefined);
+      const mockPromptEvent = new Event('beforeinstallprompt');
+      Object.assign(mockPromptEvent, {
+        prompt: mockPrompt,
+        userChoice: userChoicePromise,
+      });
+
+      act(() => {
+        window.dispatchEvent(mockPromptEvent);
+      });
+
+      expect(result.current.isInstallable).toBe(true);
+
+      // Fast double click: trigger promptInstall twice concurrently
+      let p1: Promise<void>;
+      let p2: Promise<void>;
+
+      await act(async () => {
+        p1 = result.current.promptInstall();
+        p2 = result.current.promptInstall();
+      });
+
+      // Now resolve user choice
+      act(() => {
+        resolveUserChoice({ outcome: 'accepted', platform: 'web' });
+      });
+
+      await act(async () => {
+        await Promise.all([p1, p2]);
+      });
+
+      // prompt() should only have been called once
+      expect(mockPrompt).toHaveBeenCalledTimes(1);
+      expect(result.current.isInstallable).toBe(false);
+    });
+
+    it('handles userChoice resolving to null, undefined, or unexpected shapes gracefully', async () => {
+
+      const { result } = renderHook(() => usePWAInstall());
+
+      const mockPromptEvent = new Event('beforeinstallprompt');
+      Object.assign(mockPromptEvent, {
+        prompt: vi.fn().mockResolvedValue(undefined),
+        userChoice: Promise.resolve(null as any), // Corrupted browser output
+      });
+
+      act(() => {
+        window.dispatchEvent(mockPromptEvent);
+      });
+
+      await act(async () => {
+        await result.current.promptInstall();
+      });
+
+      expect(result.current.isInstallable).toBe(false);
+      await new Promise(resolve => setTimeout(resolve, 0));
+    });
+
+    it('handles multiple rapid beforeinstallprompt events and appinstalled sequence', async () => {
+
+      const { result } = renderHook(() => usePWAInstall());
+
+      const event1 = new Event('beforeinstallprompt');
+      Object.assign(event1, { prompt: vi.fn(), userChoice: Promise.resolve({ outcome: 'dismissed' }) });
+      const event2 = new Event('beforeinstallprompt');
+      Object.assign(event2, { prompt: vi.fn(), userChoice: Promise.resolve({ outcome: 'accepted' }) });
+
+      act(() => {
+        window.dispatchEvent(event1);
+        window.dispatchEvent(event2);
+      });
+
+      expect(result.current.isInstallable).toBe(true);
+
+      // Now dispatch native appinstalled event
+      act(() => {
+        window.dispatchEvent(new Event('appinstalled'));
+      });
+
+      // Should reset isInstallable to false
+      expect(result.current.isInstallable).toBe(false);
+
+      await new Promise(resolve => setTimeout(resolve, 0));
+    });
+  });
+
+  // =========================================================================
+  // 2. Offline Workout Tracking with Corrupted / 0 Exercises
+  // =========================================================================
+  describe('2. Offline Workout Lifecycle with 0 Exercises & Corrupted Structures', () => {
+    it('handles starting and saving a workout with 0 exercises without throwing or crashing', async () => {
+      const ownerForConsent = captureSession().owner;
+      if (ownerForConsent.startsWith('user:')) localStorage.setItem(`logbook:v2:${ownerForConsent}:health-consent-generation`, '1');
+
+      const emptyRoutineUserData: UserData = {
+        ...emptyUserData,
+        profile: { name: 'Empty Routine User' },
+        routines: [
+          {
+            id: 'routine_empty',
+            name: 'Cardio Only / Empty',
+            exercises: [], // 0 exercises in routine
+          },
+        ],
+        library: [],
+        history: [],
+      } as unknown as UserData;
+
+      const owner = captureSession().owner;
+      await prepareUnlockedTestArchive(owner);
+      await initializeLocal(owner, emptyRoutineUserData);
+      useAppStore.setState({
+        dataOwner: owner,
+        userData: emptyRoutineUserData,
+        localWorkout: null,
+      });
+      expect(idbStore['logbook:v2:' + owner]).toMatch(/^tlb-sealed:v1:/);
+
+      const { result } = renderHook(() => useWorkoutSession());
+
+      // Start empty workout
+      await act(async () => {
+        await result.current.startWorkout('routine_empty');
+      });
+
+      const active = useAppStore.getState().localWorkout;
+      expect(active).not.toBeNull();
+      expect(active?.exercises).toEqual([]);
+
+      // End empty workout
+      await act(async () => {
+        await result.current.endWorkout();
+      });
+
+      expect(useAppStore.getState().localWorkout).toBeNull();
+      expect(useAppStore.getState().userData?.activePains).toEqual([]);
+      expect((await readLocal(owner))?.data.activeWorkout).toBeNull();
+      expect(idbStore['logbook:v2:' + owner]).toMatch(/^tlb-sealed:v1:/);
+
+      await new Promise(resolve => setTimeout(resolve, 0));
+    });
+
+    it('handles ending a workout with corrupted/missing exercises array (null/undefined)', async () => {
+      await prepareUnlockedTestArchive(captureSession().owner);
+
+      const baseUserData: UserData = {
+        profile: { name: 'Corrupt Workout User' },
+        routines: [],
+        library: [],
+        history: [],
+      } as unknown as UserData;
+
+      useAppStore.setState({
+        dataOwner: 'user:test-user-id',
+        userData: baseUserData,
+        localWorkout: {
+          id: 'w_corrupt_1',
+          routineId: 'r_unknown',
+          routineName: 'Malformed',
+          date: '2026-08-24',
+          globalStartTime: Date.now() - 600000,
+          exercises: null as any, // Corrupted exercises
+          pains: null as any, // Corrupted pains
+        } as any,
+      });
+
+      const { result } = renderHook(() => useWorkoutSession());
+
+      await act(async () => {
+        await expect(result.current.endWorkout()).resolves.not.toThrow();
+      });
+
+      expect(useAppStore.getState().localWorkout).toBeNull();
+
+      await new Promise(resolve => setTimeout(resolve, 0));
+    });
+
+    it('handles workout with invalid ratings and non-numeric water values safely', async () => {
+      const ownerForConsent = captureSession().owner;
+      if (ownerForConsent.startsWith('user:')) localStorage.setItem(`logbook:v2:${ownerForConsent}:health-consent-generation`, '1');
+      await prepareUnlockedTestArchive(captureSession().owner);
+
+      const currentSession = {
+        id: 'w_bad_ratings',
+        routineId: 'r1',
+        date: '2026-08-24',
+        globalStartTime: Date.now() - 900000,
+        exercises: [{ id: 'se1', exId: 'ex1', sets: [] }],
+      };
+      const baseUserData = UserDataSchema.parse({
+        ...emptyUserData, profile: { name: 'User' },
+        routines: [], library: [], history: [], activeWorkout: currentSession,
+      }) as unknown as UserData;
+      await initializeLocal(ownerForConsent, baseUserData);
+
+      useAppStore.setState({
+        dataOwner: 'user:test-user-id',
+        userData: baseUserData,
+        localWorkout: {
+          id: 'w_bad_ratings',
+          routineId: 'r1',
+          date: '2026-08-24',
+          globalStartTime: Date.now() - 900000,
+          moodRating: 'super-happy' as any,
+          pumpRating: 'extreme' as any,
+          fatigueRating: 'none' as any,
+          waterLiters: 'invalid_number' as any,
+          exercises: [{ id: 'se1', exId: 'ex1', sets: [] }],
+        } as any,
+      });
+
+      const { result } = renderHook(() => useWorkoutSession());
+
+      act(() => {
+        result.current.setWater('3,5');
+        result.current.setMood('bad_input');
+      });
+
+      await act(async () => {
+        await expect(result.current.endWorkout()).resolves.not.toThrow();
+      });
+
+      expect(useAppStore.getState().localWorkout).toBeNull();
+    });
+
+
+  });
+
+  // =========================================================================
+  // 3. Historical Workout Editing Stress & Resilience
+  // =========================================================================
+  describe('3. Historical Workout Editing & Pain Persistence Stress', () => {
+    it('handles startEditHistoricalWorkout with missing sets/segments safely', async () => {
+      const owner = captureSession().owner;
+      if (owner.startsWith('user:')) localStorage.setItem(`logbook:v2:${owner}:health-consent-generation`, '1');
+      await prepareUnlockedTestArchive(owner);
+      const { result } = renderHook(() => useWorkoutSession());
+
+      const malformedHistorical: WorkoutSession = {
+        id: 'hist_123',
+        routineId: 'r_legacy',
+        date: '2026-08-01',
+        globalStartTime: Date.now() - 7200000,
+        globalEndTime: Date.now() - 3600000,
+        exercises: [
+          {
+            id: 'ex_legacy_1',
+            exId: 'bench',
+            sets: [
+              { kg: 80, reps: 8 } as any, // Missing id, numeric types
+              { kg: null, reps: null, segments: null } as any,
+            ],
+          } as any,
+          {
+            id: 'ex_legacy_2',
+            exId: 'squat',
+            sets: null as any, // Missing sets completely
+          } as any,
+        ],
+      };
+
+      // An editor must be opened from an item that still exists in the
+      // owner's history; corrupted legacy fields are normalized at the editor boundary.
+      useAppStore.setState({
+        dataOwner: 'user:test-user-id',
+        userData: {
+          profile: { name: 'Stress' },
+          history: [malformedHistorical],
+          routines: [],
+          library: [],
+          activeWorkout: null,
+        } as unknown as UserData,
+        localWorkout: null,
+      });
+
+      await act(async () => {
+        const ok = await result.current.startEditHistoricalWorkout(malformedHistorical);
+        expect(ok).toBe(true);
+      });
+
+      const active = useAppStore.getState().localWorkout;
+      expect(active).not.toBeNull();
+      expect(active?.isEditingHistory).toBe(true);
+      expect(active?.originalHistoryId).toBe('hist_123');
+      expect(active?.exercises[0].sets[0].kg).toBe('80');
+      expect(active?.exercises[0].sets[0].id).toBeDefined();
+      expect(active?.exercises[1].sets).toEqual([]);
+    });
+
+    it('rejects saveHistoryEdit when localWorkout is not a history editor', async () => {
+      const { result } = renderHook(() => useWorkoutSession());
+
+      useAppStore.setState({
+        dataOwner: 'user:test-user-id',
+        userData: {
+          profile: { name: 'Test' },
+          history: [],
+          routines: [],
+          library: [],
+          activePains: ['petto'],
+        } as unknown as UserData,
+        localWorkout: {
+          id: 'w_orphan',
+          date: '2026-08-24',
+          exercises: [],
+        } as any,
+      });
+
+      const orphan = useAppStore.getState().localWorkout;
+      await act(async () => {
+        const success = await result.current.saveHistoryEdit();
+        expect(success).toBe(false);
+      });
+
+      expect(useAppStore.getState().localWorkout).toBe(orphan);
+      expect(useAppStore.getState().userData?.history).toEqual([]);
+    });
+  });
+
+  // =========================================================================
+  // 4. SettingsView UI & Storage Resilience Stress Tests
+  // =========================================================================
+  describe('4. SettingsView UI & Storage Resilience Stress Tests', () => {
+    it('handles rapid privacy navigation without a usage tracking toggle and checks updates', async () => {
+      useAppStore.setState({
+        dataOwner: 'user:test-user-id',
+        userData: {
+          profile: { name: 'Settings Tester' },
+          routines: [],
+          library: [],
+          history: [],
+        } as unknown as UserData,
+      });
+
+      const { unmount } = render(React.createElement(SettingsView));
+
+      // Privacy must retain legal links without shipping the retired GA4 toggle.
+      for (let index = 0; index < 3; index += 1) {
+        fireEvent.click(screen.getByRole('button', { name: /^Privacy/i }));
+        expect(screen.getByRole('button', { name: 'Informativa sulla privacy' })).toBeDefined();
+        expect(screen.getByRole('button', { name: 'Termini e condizioni' })).toBeDefined();
+        expect(screen.queryByRole('checkbox', { name: 'Statistiche di utilizzo' })).toBeNull();
+        fireEvent.click(screen.getByRole('button', { name: 'Torna alle impostazioni' }));
+      }
+
+      fireEvent.click(screen.getByRole('button', { name: /Aspetto e applicazione/i }));
+
+      const updateBtn = screen.getByRole('button', { name: /Cerca aggiornamenti/i });
+      await act(async () => {
+        fireEvent.click(updateBtn);
+        fireEvent.click(updateBtn);
+      });
+
+      expect(useDialogStore.getState().showAlert).toHaveBeenCalled();
+
+      unmount();
+    });
+
+    it('handles missing window.matchMedia and navigator properties in SSR/worker context without crashing', () => {
+      const originalMatchMedia = window.matchMedia;
+      try {
+        delete (window as any).matchMedia;
+        const { result } = renderHook(() => usePWAInstall());
+        expect(result.current.isStandalone).toBe(false);
+      } finally {
+        window.matchMedia = originalMatchMedia;
+      }
+    });
+  });
+});

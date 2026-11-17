@@ -1,0 +1,46 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "git": {
+    "deploymentEnabled": false
+  },
+  "functions": {
+    "api/account-activity.ts": {
+      "maxDuration": 30
+    },
+    "api/account-deletion-cron.ts": {
+      "maxDuration": 300
+    },
+    "api/account-deletion-device.ts": {
+      "maxDuration": 30
+    },
+    "api/account-deletion.ts": {
+      "maxDuration": 300
+    },
+    "api/account-sessions.ts": {
+      "maxDuration": 30
+    },
+    "api/cloud-key.ts": {
+      "maxDuration": 30
+    },
+    "api/health-consent-export.ts": {
+      "maxDuration": 30
+    },
+    "api/health-consent.ts": {
+      "maxDuration": 30
+    },
+    "api/health-data-erasure.ts": {
+      "maxDuration": 300
+    }
+  },
+  "crons": [
+    {
+      "path": "/api/account-deletion-cron",
+      "schedule": "0 3 * * *"
+    }
+  ],
+  "fluid": true,
+  "framework": null,
+  "ignoreCommand": "node scripts/vercel-ignore-build.mjs",
+  "buildCommand": "node scripts/prepare-vercel-backend-static.mjs",
+  "outputDirectory": "vercel-backend-static"
+}

@@ -1,0 +1,157 @@
+import { lazy, Suspense, useState } from 'react';
+import { useNutritionMeasurements } from '../../hooks/useNutritionMeasurements';
+import { useSleepMeasurements } from '../../hooks/useSleepMeasurements';
+import DataMeasurements from './DataMeasurements';
+import DataBiometry from './DataBiometry';
+import DataSleep from './DataSleep';
+
+import type { DataSubTab, MeasurementHistoryDay } from '../../types';
+import { useLocalToday } from '../../hooks/useLocalToday';
+import SubNav from '../UI/SubNav';
+import './data.css';
+
+const DataActivity = lazy(() => import('./DataActivity'));
+const DataHistory = lazy(() => import('./DataHistory'));
+const SUBTAB_LOADING = <p role="status" className="text-muted">Caricamento sottosezione in corso…</p>;
+
+const DATA_TABS: ReadonlyArray<{ id: DataSubTab; label: string }> = [
+    { id: 'measurements', label: 'Misurazioni' },
+    { id: 'sleep', label: 'Sonno' },
+    { id: 'activity', label: 'Attività' },
+    { id: 'biometry', label: 'Biometria' },
+    { id: 'history', label: 'Storico' }
+];
+
+interface DataViewProps {
+    subTab?: DataSubTab;
+    setSubTab?: (tab: DataSubTab) => void;
+    isActive?: boolean;
+}
+
+const DataView: React.FC<DataViewProps> = ({
+    subTab = 'measurements',
+    setSubTab,
+    isActive = true,
+}) => {
+    const today = useLocalToday();
+    const [chosenDate, setChosenDate] = useState<string | null>(null);
+    const selectedDate = chosenDate ?? today;
+    const setSelectedDate = (date: string) => setChosenDate(date === today ? null : date);
+    const [localSubTab, setLocalSubTab] = useState<DataSubTab>('measurements');
+    const currentSubTab = setSubTab ? subTab : localSubTab;
+    const measurementsHook = useNutritionMeasurements(selectedDate, isActive && currentSubTab === 'history');
+    const sleepHook = useSleepMeasurements();
+    const changeSubTab = setSubTab || setLocalSubTab;
+
+    const handleSelectEdit = (day: MeasurementHistoryDay) => {
+        setSelectedDate(day.date);
+        measurementsHook.handleEditClick(day);
+        // Keep both editors on the historical day; release sleep edit state
+        // when the measurement edit is completed, without discarding sleep drafts.
+        sleepHook.setSelectedDate(day.date);
+        sleepHook.setEditingDate(day.date);
+        changeSubTab('measurements');
+    };
+
+    return (
+        <div id="view-data" className="view-section active">
+            <SubNav
+                id="data"
+                label="Sotto-menu Dati"
+                items={DATA_TABS}
+                value={currentSubTab}
+                onChange={changeSubTab}
+            />
+
+            {currentSubTab === 'measurements' && (
+                <div id="data-panel-measurements" role="tabpanel" aria-labelledby="data-tab-measurements" className="data-sub-view active">
+                    <DataMeasurements
+                        profile={measurementsHook.profile}
+                        selectedDate={selectedDate}
+                        setSelectedDate={setSelectedDate}
+                        targetDateStr={measurementsHook.targetDateStr}
+                        editingDate={measurementsHook.editingDate}
+                        hasExistingData={measurementsHook.hasExistingData}
+                        bfProvenance={measurementsHook.bfProvenance}
+                        measureTime={measurementsHook.measureTime}
+                        setMeasureTime={measurementsHook.setMeasureTime}
+                        weight={measurementsHook.weight}
+                        setWeight={measurementsHook.setWeight}
+                        waist={measurementsHook.waist}
+                        setWaist={measurementsHook.setWaist}
+                        neck={measurementsHook.neck}
+                        setNeck={measurementsHook.setNeck}
+                        hip={measurementsHook.hip}
+                        setHip={measurementsHook.setHip}
+                        chest={measurementsHook.chest}
+                        setChest={measurementsHook.setChest}
+                        shoulders={measurementsHook.shoulders}
+                        setShoulders={measurementsHook.setShoulders}
+                        biceps={measurementsHook.biceps}
+                        setBiceps={measurementsHook.setBiceps}
+                        thighs={measurementsHook.thighs}
+                        setThighs={measurementsHook.setThighs}
+                        calves={measurementsHook.calves}
+                        setCalves={measurementsHook.setCalves}
+                        onDeleteMeasurement={measurementsHook.handleDeleteMeasurement}
+                        handleCancelEdit={() => {
+                            const wasEditing = !!measurementsHook.editingDate;
+                            const cancelled = measurementsHook.handleCancelEdit();
+                            if (wasEditing && cancelled) {
+                                sleepHook.setEditingDate(null);
+                                changeSubTab('history');
+                            }
+                        }}
+                        calculateAndSave={async (e, calculateBf) => {
+                            const wasEditing = !!measurementsHook.editingDate;
+                            const saved = await measurementsHook.calculateAndSave(e, calculateBf);
+                            if (wasEditing && saved) {
+                                sleepHook.setEditingDate(null);
+                                changeSubTab('history');
+                            }
+                        }}
+                        onOpenBiometry={() => changeSubTab('biometry')}
+                    />
+                </div>
+            )}
+
+            {currentSubTab === 'biometry' && (
+                <div id="data-panel-biometry" role="tabpanel" aria-labelledby="data-tab-biometry" className="data-sub-view active">
+                    <DataBiometry />
+                </div>
+            )}
+
+            {currentSubTab === 'activity' && (
+                <div id="data-panel-activity" role="tabpanel" aria-labelledby="data-tab-activity" className="data-sub-view active">
+                    <Suspense fallback={SUBTAB_LOADING}><DataActivity /></Suspense>
+                </div>
+            )}
+
+            {currentSubTab === 'sleep' && (
+                <div id="data-panel-sleep" role="tabpanel" aria-labelledby="data-tab-sleep" className="data-sub-view active">
+                    <DataSleep
+                        sleepHook={sleepHook}
+                        selectedDate={sleepHook.selectedDate}
+                        setSelectedDate={sleepHook.setSelectedDate}
+                        todayDateStr={today}
+                    />
+                </div>
+            )}
+
+            {currentSubTab === 'history' && (
+                <div id="data-panel-history" role="tabpanel" aria-labelledby="data-tab-history" className="data-sub-view active">
+                    <Suspense fallback={SUBTAB_LOADING}>
+                        <DataHistory
+                            measurementsHistory={measurementsHook.measurementsHistory}
+                            editingDate={measurementsHook.editingDate}
+                            onSelectEdit={handleSelectEdit}
+                            onDeleteMeasurement={measurementsHook.handleDeleteMeasurement}
+                        />
+                    </Suspense>
+                </div>
+            )}
+        </div>
+    );
+};
+
+export default DataView;

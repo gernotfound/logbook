@@ -1,0 +1,269 @@
+import equal from 'fast-deep-equal';
+import { isHealthConsentWritable, isHealthConsentCloudWritable, getVerifiedHealthConsentRevision } from '../healthConsent';
+import { needsLegalUpdate } from '../legalVersions';
+import { auth, getDb, ensureAppCheck, waitForPendingWrites } from '../firebase';
+import type { UserData, SyncResult } from '../../types';
+import { readLocal, acknowledgeThrough, ensureBoundedPendingSequences, markReplicaCheckpointRequired } from './localRepository';
+import { captureSession, isCurrentSession } from './session';
+import { applyRemoteDocuments } from './documentProjection';
+import { applyDocumentChanges } from './transactionWriter';
+import { requireCloudAccountDataKey } from './cloudAccountKeyAccess';
+import { getCachedCatalog } from '../catalog/catalogService';
+import { SyncTimeoutError, withTimeout } from '../db/db_core';
+import { isAccountDeletionPending } from './accountGate';
+import type { SemanticOperation } from './semanticProjection';
+import { classifySyncFailure } from './syncFailure';
+import { ReplicaFencedError } from './replicaProtocol';
+import { boundedPendingTransactionBatch, distinctDocumentCount, MAX_SYNC_DOCUMENTS_PER_TRANSACTION } from './syncBatching';
+
+export class LegalConsentRequiredError extends Error {
+    readonly code = 'legal-consent-required';
+    constructor() {
+        super('Consenso dell’account necessario prima della sincronizzazione cloud. I dati restano conservati localmente.');
+        this.name = 'LegalConsentRequiredError';
+    }
+}
+
+export const isLegalConsentRequiredError = (error: unknown): error is LegalConsentRequiredError =>
+    error instanceof LegalConsentRequiredError || (typeof error === 'object' && error !== null && 'code' in error && error.code === 'legal-consent-required');
+
+class DurableAcknowledgementPendingError extends Error {
+    constructor(cause: unknown) {
+        super('Commit remoto confermato; acknowledgement locale ancora pendente', { cause });
+        this.name = 'DurableAcknowledgementPendingError';
+    }
+}
+
+class UnsafeDeliveredBatchError extends Error {
+    constructor(cause: unknown) {
+        super('Esito remoto ambiguo senza prova di un journal locale completo e verificabile', { cause });
+        this.name = 'UnsafeDeliveredBatchError';
+    }
+}
+
+type DeliveryState = {
+    delivered: SemanticOperation[] | null;
+};
+
+function sameDeliveredOperation(left: SemanticOperation, right: SemanticOperation): boolean {
+    return equal(left, right);
+}
+
+function containsDeliveredBatch(pending: SemanticOperation[], delivered: SemanticOperation[]): boolean {
+    const unmatched = [...pending];
+    for (const operation of delivered) {
+        const index = unmatched.findIndex(candidate => sameDeliveredOperation(operation, candidate));
+        if (index < 0) return false;
+        unmatched.splice(index, 1);
+    }
+    return true;
+}
+
+function isWritableSession(session: ReturnType<typeof captureSession>): boolean {
+    return isCurrentSession(session)
+        && isHealthConsentCloudWritable(session.owner)
+        && auth.currentUser?.uid === session.owner.slice(5)
+        && !isAccountDeletionPending(session.owner);
+}
+
+async function requireDurableDeliveredBatch(
+    session: ReturnType<typeof captureSession>,
+    delivered: SemanticOperation[],
+    cause: unknown,
+): Promise<never> {
+    if (!isWritableSession(session)) throw new UnsafeDeliveredBatchError(cause);
+
+    let retained: Awaited<ReturnType<typeof readLocal>>;
+    try {
+        retained = await readLocal(session.owner);
+    } catch {
+        throw new UnsafeDeliveredBatchError(cause);
+    }
+
+    if (!isWritableSession(session)) throw new UnsafeDeliveredBatchError(cause);
+    if (retained && containsDeliveredBatch(retained.pending, delivered)) {
+        throw new DurableAcknowledgementPendingError(cause);
+    }
+    throw new UnsafeDeliveredBatchError(cause);
+}
+
+const running = new Map<string, Promise<void>>();
+export async function waitForJournalIdle(owner: string): Promise<void> {
+    const work = running.get(owner);
+    if (work) { try { await work; } catch { /* Cancellation/rejection has settled; no writer remains active. */ } }
+}
+async function drain(session: ReturnType<typeof captureSession>, deliveryState: DeliveryState): Promise<void> {
+    const current = () => isWritableSession(session);
+    deliveryState.delivered = null;
+    if (!current()) throw new Error('Sessione cambiata');
+    await ensureAppCheck();
+    // Cloud ADK is an online capability. Without it the journal remains
+    // durable and no plaintext data can be written to Firestore.
+    const cloudKey = await requireCloudAccountDataKey(session.owner.slice(5), () => {
+        if (!current()) throw new Error('Sessione cambiata prima della sincronizzazione cifrata.');
+    });
+    try {
+    if (!current()) throw new Error('Sessione cambiata');
+    await waitForPendingWrites(getDb());
+    const catalog = await getCachedCatalog();
+    while (current()) {
+        let envelope = await readLocal(session.owner);
+        if (!current()) throw new Error('Sessione cambiata');
+        if (!envelope) throw new Error('Archivio locale non disponibile');
+        if (envelope.cloudIntegrityFence) throw new ReplicaFencedError('Divergenza cloud rilevata durante il replay: journal preservato.');
+        if (!envelope.pending?.length) return;
+        if ((envelope.consentRevision ?? 0) !== getVerifiedHealthConsentRevision(session.owner.slice(5))) {
+            throw new ReplicaFencedError('Journal locale precedente al nuovo consenso: esporta il backup prima di procedere.');
+        }
+        if (needsLegalUpdate(envelope.data.legalConsent)) throw new LegalConsentRequiredError();
+        if (!envelope.replica) throw new ReplicaFencedError('Replica non registrata: attendi il checkpoint cloud completo.');
+        const replica = envelope.replica;
+        if (envelope.actorId !== replica.slot || envelope.pending.some(operation => operation.actorId !== replica.slot)) {
+            throw new ReplicaFencedError('Journal appartenente a una replica precedente: checkpoint completo richiesto.');
+        }
+        if (replica.leaseUntilMs < Date.now()) {
+            throw new ReplicaFencedError('Lease replica scaduta: checkpoint completo richiesto.');
+        }
+
+        envelope = await ensureBoundedPendingSequences(session.owner, replica.slot, current);
+        if (!current()) throw new Error('Sessione cambiata');
+        if (!envelope) throw new Error('Archivio locale non disponibile');
+        if (envelope.cloudIntegrityFence) throw new ReplicaFencedError('Divergenza cloud rilevata durante il replay: journal preservato.');
+        if (!envelope.pending?.length) return;
+        if (!envelope.replica || envelope.actorId !== envelope.replica.slot) {
+            throw new ReplicaFencedError('Replica cambiata durante la preparazione del journal.');
+        }
+
+        const delivered = structuredClone(boundedPendingTransactionBatch(envelope.pending));
+        if (!delivered.length) return;
+        if (distinctDocumentCount(delivered) > MAX_SYNC_DOCUMENTS_PER_TRANSACTION) {
+            throw new ReplicaFencedError('Gruppo causale troppo grande: checkpoint completo richiesto.');
+        }
+        deliveryState.delivered = delivered;
+
+        let outcome: Awaited<ReturnType<typeof applyDocumentChanges>>;
+        try {
+            outcome = await applyDocumentChanges(getDb(), session.owner.slice(5), delivered, current, envelope.replica, cloudKey);
+        } catch (error) {
+            const failure = classifySyncFailure(error);
+            if (failure.status === 'local-pending') {
+                await requireDurableDeliveredBatch(session, delivered, error);
+            }
+            throw error;
+        }
+
+        if (!current()) throw new Error('Sessione cambiata');
+
+        const remote: UserData = applyRemoteDocuments(envelope.data, outcome.documents, catalog);
+        const seq = delivered[delivered.length - 1].seq;
+        const changedPaths = [...new Set(delivered.map(op => op.docPath))];
+        const changedMonths = changedPaths.flatMap(path => path ? [path.split('/')[1]] : []);
+
+        try {
+            await acknowledgeThrough(session.owner, seq, remote, changedMonths, outcome.syncMeta, { operations: delivered, replica: envelope.replica }, current);
+        } catch (error) {
+            // A remote transaction is already confirmed here. An acknowledgement failure is retryable
+            // only when a fresh, validated IndexedDB read proves that the exact delivered batch remains.
+            await requireDurableDeliveredBatch(session, delivered, error);
+        }
+
+        deliveryState.delivered = null;
+    }
+    throw new Error('Sessione cambiata');
+    } finally {
+        // The timed-out UI may have returned already; the real writer owns
+        // this key until its remote transaction and local ACK have settled.
+        cloudKey.fill(0);
+    }
+}
+
+async function classifyTimedOutWork(
+    session: ReturnType<typeof captureSession>,
+    error: SyncTimeoutError,
+    deliveryState: DeliveryState,
+): Promise<SyncResult> {
+    if (!isWritableSession(session)) return { ok: false, status: 'failed', error };
+
+    let retained: Awaited<ReturnType<typeof readLocal>>;
+    try {
+        retained = await readLocal(session.owner);
+    } catch {
+        return { ok: false, status: 'failed', error: new UnsafeDeliveredBatchError(error) };
+    }
+
+    if (!isWritableSession(session) || !retained) {
+        return { ok: false, status: 'failed', error: new UnsafeDeliveredBatchError(error) };
+    }
+
+    const delivered = deliveryState.delivered;
+    if (delivered?.length) {
+        if (!containsDeliveredBatch(retained.pending, delivered)) {
+            return { ok: false, status: 'failed', error: new UnsafeDeliveredBatchError(error) };
+        }
+        return { ok: false, status: 'local-pending', error };
+    }
+
+    if (!retained.pending.length) return { ok: true, status: 'synced' };
+    return { ok: false, status: 'local-pending', error };
+}
+
+export async function replicateJournal(expectedOwner?: string): Promise<SyncResult> {
+    const session = captureSession();
+    try {
+        if (expectedOwner && session.owner !== expectedOwner) throw new Error('Sessione cambiata');
+        if (!isHealthConsentWritable(session.owner) || (session.owner !== 'guest' && !isHealthConsentCloudWritable(session.owner))) return { ok: false, status: 'local-pending', error: new LegalConsentRequiredError() };
+        if (isAccountDeletionPending(session.owner)) throw new Error('Cancellazione account in sospeso. Riprendila dalle impostazioni; copia locale conservata.');
+        const envelope = await readLocal(session.owner);
+        // Even an empty journal is not a synced result after an async read
+        // crossed an Auth/consent epoch (including a same-UID A→B→A roundtrip).
+        if (!isCurrentSession(session)
+            || (session.owner !== 'guest' && !isWritableSession(session))) {
+            throw new Error('Sessione cambiata');
+        }
+        if (!envelope) throw new Error('Copia locale non disponibile');
+        if (envelope.cloudIntegrityFence) throw new ReplicaFencedError('Snapshot cloud incompleto: verifica completa richiesta prima di sincronizzare.');
+        if (session.owner === 'guest' || !envelope.pending?.length) return { ok: true, status: 'synced' };
+        if (needsLegalUpdate(envelope.data.legalConsent)) {
+            return { ok: false, status: 'local-pending', error: new LegalConsentRequiredError() };
+        }
+        if (typeof navigator !== 'undefined' && !navigator.onLine) return { ok: false, status: 'local-pending', error: new Error('Connessione assente') };
+        const previous = running.get(session.owner);
+        // A queued attempt must not inherit the prior writer's delivered batch.
+        const deliveryState: DeliveryState = { delivered: null };
+        const work = (async () => {
+            if (previous) { try { await previous; } catch { /* A new epoch retries its own remaining journal. */ } }
+            await drain(session, deliveryState);
+        })();
+        running.set(session.owner, work);
+        // The actual task keeps its lock and acknowledgement path after a UI timeout.
+        void work.finally(() => {
+            if (running.get(session.owner) === work) {
+                running.delete(session.owner);
+            }
+        }).catch(() => {});
+        try {
+            await withTimeout(work, 7000, 'Sincronizzazione in attesa; copia locale conservata');
+            return { ok: true, status: 'synced' };
+        } catch (error) {
+            if (error instanceof SyncTimeoutError) return classifyTimedOutWork(session, error, deliveryState);
+            throw error;
+        }
+    } catch (error) {
+        // A retryable network failure is not evidence that a preflight still
+        // belongs to the current Auth/consent epoch (including A→B→A).
+        if (!isWritableSession(session)) return { ok: false, status: 'failed', error };
+        if (error instanceof ReplicaFencedError && session.owner.startsWith('user:') && isWritableSession(session)) {
+            try {
+                const durable = await readLocal(session.owner);
+                await markReplicaCheckpointRequired(session.owner, durable?.replica ?? undefined, () => isWritableSession(session));
+            } catch {
+                // The original fencing error remains authoritative. A local storage
+                // failure is handled by the caller's normal persistence safety path.
+            }
+        }
+        if (isLegalConsentRequiredError(error)) {
+            return { ok: false, status: 'local-pending', error };
+        }
+        return classifySyncFailure(error, { retryable: error instanceof DurableAcknowledgementPendingError });
+    }
+}

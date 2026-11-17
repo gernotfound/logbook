@@ -1,0 +1,5 @@
+/* Keep the original cascade order; TrainingView imports only this entrypoint. */
+@import './training-overview.css';
+@import './training-history.css';
+@import './training-exercises.css';
+@import './training-session.css';

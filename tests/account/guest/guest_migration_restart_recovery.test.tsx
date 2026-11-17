@@ -1,0 +1,519 @@
+import { LEGAL_VERSIONS } from '../../../src/lib/legalVersions';
+import React from 'react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { get } from 'idb-keyval';
+
+vi.mock('../../../src/components/UI/ErrorBoundary', () => ({ default: ({ children }: { children: React.ReactNode }) => <>{children}</> }));
+vi.mock('../../../src/components/UI/BottomNav', () => ({ default: () => <nav data-testid="bottom-nav" /> }));
+vi.mock('../../../src/components/UI/GlobalDialog', () => ({ GlobalDialog: () => null }));
+vi.mock('../../../src/components/UI/ReloadPrompt', () => ({ default: () => null }));
+vi.mock('../../../src/components/UI/ConsentOverlay', () => ({ ConsentOverlay: () => null }));
+vi.mock('../../../src/components/UI/LoginBox', () => ({ LoginBox: () => <div data-testid="guest-login-box" /> }));
+vi.mock('../../../src/components/Home/HomeView', () => ({ default: () => <div>Home view</div> }));
+vi.mock('../../../src/components/Training/TrainingView', () => ({ default: () => <div>Training view</div> }));
+vi.mock('../../../src/components/Nutrition/NutritionView', () => ({ default: () => <div>Nutrition view</div> }));
+vi.mock('../../../src/components/Data/DataView', () => ({ default: () => <div>Data view</div> }));
+vi.mock('../../../src/components/SettingsView', () => ({ default: () => <div>Settings view</div> }));
+
+import { runTransaction } from 'firebase/firestore';
+import App from '../../../src/App';
+import { AuthProvider } from '../../../src/contexts/AuthContext';
+import { DB } from '../../../src/lib/db';
+import { auth, onAuthStateChanged } from '../../../src/lib/firebase';
+import { UserDataSchema } from '../../../src/lib/schema';
+import * as localRepository from '../../../src/lib/sync/localRepository';
+import { useAppStore } from '../../../src/store/useAppStore';
+import type { UserData } from '../../../src/types';
+import { beginGuestMigrationIntent } from '../../../src/lib/auth/guestMigrationIntent';
+import { bootstrapAuthenticatedSession } from '../../../src/contexts/auth/bootstrapAuthenticatedSession';
+import { createAndMigrateVault } from '../../../src/lib/sync/secureArchiveMigration';
+import { lockAllVaults } from '../../../src/lib/sync/secureArchiveSession';
+import { saveWorkoutDeviceIntent } from '../../../src/lib/sync/workoutDeviceIntent';
+import { markGuestMigrationSyncRecovery } from '../../../src/lib/auth/guestMigrationSyncRecovery';
+import { activateGuestSession, GUEST_SESSION_KEY } from '../../../src/lib/sync/session';
+import { draftRegistry } from '../../../src/lib/utils/draftRegistry';
+import { resumePersistedGuestMigration } from '../../../src/contexts/auth/resumePersistedGuestMigration';
+
+const defaultRunTransaction = vi.mocked(runTransaction).getMockImplementation();
+
+const GUEST_KEY = 'logbook_is_guest';
+const GUEST_ARCHIVE_KEY = 'logbook:v2:guest';
+const OVERLAY_SESSION_KEY = 'logbook_guest_login_overlay';
+const parse = (value: unknown) => UserDataSchema.parse(value) as unknown as UserData;
+const user = { uid: 'guest-restart-user', email: 'restart@example.com', displayName: 'Guest Restart' } as any;
+const SYNC_RECOVERY_KEY = `logbook:v2:user:${user.uid}:guest-migration-sync-recovery`;
+let onlineSpy: { mockRestore: () => void; mockReturnValue: (value: boolean) => unknown } | undefined;
+
+function fixtures() {
+    const cloud = parse({ profile: { gender: 'M' }, routines: [{ id: 'cloud-routine', name: 'Cloud', exercises: [] }], legalConsent: { hasAcceptedTerms: true, hasAcceptedHealthData: true, acceptedAt: '2026-10-11T10:00:00.000Z', privacyVersion: LEGAL_VERSIONS.privacy, termsVersion: LEGAL_VERSIONS.terms } });
+    const guest = parse({ profile: { height: '175' }, routines: [{ id: 'guest-routine', name: 'Guest', exercises: [] }] });
+    return { cloud, guest };
+}
+
+// The real handoff persists its witness while the guest generation still
+// exists, then retires the guest flag/generation before a later restart.
+function markPersistedGuestHandoff(): string {
+    localStorage.setItem(GUEST_SESSION_KEY, 'guest-restart-generation');
+    try {
+        return markGuestMigrationSyncRecovery(user.uid);
+    } finally {
+        localStorage.removeItem(GUEST_SESSION_KEY);
+    }
+}
+
+beforeEach(async () => {
+    lockAllVaults();
+    vi.clearAllMocks();
+    vi.mocked(runTransaction).mockReset();
+    if (defaultRunTransaction) vi.mocked(runTransaction).mockImplementation(defaultRunTransaction);
+    localStorage.clear();
+    sessionStorage.clear();
+    useAppStore.getState().resetStore({ force: true });
+    (auth as any).currentUser = user;
+    vi.mocked(onAuthStateChanged).mockImplementation((_auth, callback: any) => { callback(user); return () => {}; });
+    // The fixture is a current-format guest archive, not a pre-vault plaintext envelope.
+    // Restore the guest flag only in scenarios that actually exercise a guest session.
+    localStorage.setItem(GUEST_KEY, 'true');
+    localStorage.setItem(GUEST_SESSION_KEY, 'guest-restart-generation');
+    activateGuestSession('guest-restart-generation');
+    await createAndMigrateVault('guest');
+    const { guest } = fixtures();
+    await localRepository.initializeLocal('guest', guest, []);
+    expect(await get(GUEST_ARCHIVE_KEY)).toMatch(/^tlb-sealed:v1:/);
+    localStorage.removeItem(GUEST_KEY);
+    localStorage.removeItem(GUEST_SESSION_KEY);
+    await createAndMigrateVault('user:guest-restart-user');
+    onlineSpy = vi.spyOn(window.navigator, 'onLine', 'get').mockReturnValue(false) as any;
+});
+
+afterEach(() => {
+    onlineSpy?.mockRestore();
+    vi.restoreAllMocks();
+    onlineSpy = undefined;
+});
+
+describe('guest migration restart recovery', () => {
+    it('mounts only the blocking migration UI during automatic guest recovery without a session overlay marker', async () => {
+        const { cloud, guest } = fixtures();
+        localStorage.setItem(GUEST_KEY, 'true');
+        localStorage.setItem(GUEST_SESSION_KEY, 'guest-restart-generation');
+        activateGuestSession('guest-restart-generation');
+        await beginGuestMigrationIntent('merge', 'recovery', { uid: user.uid });
+        useAppStore.getState().setUserData(guest);
+        let resolveCloud!: (value: any) => void;
+        const cloudRequest = new Promise(resolve => { resolveCloud = resolve; });
+        vi.mocked(DB.loadCloudPayload).mockImplementationOnce(() => cloudRequest as any);
+        render(<AuthProvider><App /></AuthProvider>);
+        await waitFor(() => expect(screen.getByRole('status', { name: 'Preparazione account in corso' })).toBeTruthy());
+        expect(sessionStorage.getItem(OVERLAY_SESSION_KEY)).toBeNull();
+        expect(screen.queryByTestId('bottom-nav')).toBeNull();
+        expect(screen.queryByTestId('guest-login-box')).toBeNull();
+        expect(screen.queryByText('Home view')).toBeNull();
+        expect(document.getElementById('app-container')).toBeNull();
+        resolveCloud({ data: cloud, completeMonths: [], cloudDocuments: new Map() });
+        await waitFor(() => expect(useAppStore.getState().saveError).toContain('Offline: account preparato sul dispositivo'));
+        await waitFor(() => expect(screen.getByTestId('bottom-nav')).toBeTruthy());
+        expect(document.getElementById('app-container')).toBeTruthy();
+    });
+
+    it('ends authenticated bootstrap in a recoverable failed state when another tab retires guest ownership while waiting', async () => {
+        const { guest } = fixtures();
+        localStorage.setItem(GUEST_KEY, 'true');
+        localStorage.setItem(GUEST_SESSION_KEY, 'guest-restart-generation');
+        activateGuestSession('guest-restart-generation');
+        await beginGuestMigrationIntent('merge', 'recovery', { uid: user.uid });
+        useAppStore.getState().setUserData(guest);
+        const before = await localRepository.readLocal('guest');
+        const ciphertextBefore = await get(GUEST_ARCHIVE_KEY);
+
+        // The auth gate observes the original guest. Between the last
+        // wasGuest observation and lock acquisition a different tab removes
+        // its flag. This must not silently leave loading=true or load a
+        // foreign in-memory snapshot into the authenticated owner.
+        let observations = 0;
+        const isGuestActiveStrict = () => {
+            observations++;
+            const active = localStorage.getItem(GUEST_KEY) === 'true';
+            if (observations === 2) localStorage.removeItem(GUEST_KEY);
+            return active;
+        };
+        const setIsGuest = vi.fn();
+        const setLoading = vi.fn();
+        const setGuestMigrationStatus = vi.fn();
+        const setSaveError = vi.fn();
+        const loadData = vi.fn(async () => {});
+        const markRecovery = vi.fn();
+
+        await bootstrapAuthenticatedSession(user, () => true, {
+            guestKey: GUEST_KEY,
+            isGuestActiveStrict,
+            readGuestMigrationRecoveryStrict: () => false,
+            isGuestRef: { current: true },
+            migrationDataRef: { current: null },
+            setIsGuest,
+            setCurrentUser: vi.fn(),
+            setEmailVerificationRequired: vi.fn(),
+            setGuestMigrationStatus,
+            setLoading,
+            setUserData: vi.fn(),
+            setSyncing: vi.fn(),
+            setSaveError,
+            markGuestMigrationSyncRecovery: markRecovery,
+            clearGuestMigrationSyncRecovery: vi.fn(),
+            loadData,
+        });
+
+        expect(observations).toBeGreaterThanOrEqual(2);
+        expect(setGuestMigrationStatus).toHaveBeenCalledWith('failed');
+        expect(setIsGuest).toHaveBeenCalledWith(false);
+        expect(setLoading).toHaveBeenCalledWith(false);
+        expect(setSaveError).toHaveBeenCalledWith(expect.stringContaining('sessione locale è cambiata'));
+        expect(markRecovery).not.toHaveBeenCalled();
+        expect(loadData).not.toHaveBeenCalled();
+        expect(DB.loadCloudPayload).not.toHaveBeenCalled();
+        expect(before?.data.routines?.map(routine => routine.id)).toContain('guest-routine');
+        expect(await get(GUEST_ARCHIVE_KEY)).toBe(ciphertextBefore);
+        await expect(localRepository.readLocal('guest')).rejects.toMatchObject({ code: 'local-vault-locked' });
+        expect(localStorage.getItem('guest_migration_intent_v1')).not.toBeNull();
+    });
+
+    it('does not consume guest data without an explicit migration intent', async () => {
+        const { guest } = fixtures();
+        localStorage.setItem(GUEST_KEY, 'true');
+        localStorage.setItem(GUEST_SESSION_KEY, 'guest-restart-generation');
+        activateGuestSession('guest-restart-generation');
+        useAppStore.getState().setUserData(guest);
+        const purge = vi.spyOn(DB, 'purgeAllLocalUserData');
+
+        render(<AuthProvider><App /></AuthProvider>);
+
+        await waitFor(() => expect(useAppStore.getState().saveError).toContain('scegli come gestire i dati locali'));
+        expect(localStorage.getItem(GUEST_KEY)).toBe('true');
+        expect(localStorage.getItem(SYNC_RECOVERY_KEY)).toBeNull();
+        expect((await localRepository.readLocal('guest'))?.data.routines?.map(routine => routine.id))
+            .toContain('guest-routine');
+        expect(purge).not.toHaveBeenCalled();
+        expect(DB.loadCloudPayload).not.toHaveBeenCalled();
+    });
+
+
+    it.each(['merge', 'skip'] as const)(
+        'preserves the guest and its reservation when a draft fails before %s handoff',
+        async policy => {
+            const { guest } = fixtures();
+            localStorage.setItem(GUEST_KEY, 'true');
+            localStorage.setItem(GUEST_SESSION_KEY, 'guest-restart-generation');
+            activateGuestSession('guest-restart-generation');
+            await beginGuestMigrationIntent(policy, 'recovery', { uid: user.uid });
+            useAppStore.setState({ userData: guest, dataOwner: 'guest', localWorkout: null });
+            const reservation = localStorage.getItem('guest_migration_intent_v1');
+            const ciphertext = await get(GUEST_ARCHIVE_KEY);
+            const failDraft = () => { throw new Error('Draft capture failed'); };
+            draftRegistry.register(failDraft);
+            try {
+                render(<AuthProvider><App /></AuthProvider>);
+                await waitFor(() => expect(screen.getByText('Accesso non completato')).toBeTruthy());
+
+                expect(DB.loadCloudPayload).not.toHaveBeenCalled();
+                expect(localStorage.getItem(GUEST_KEY)).toBe('true');
+                expect(localStorage.getItem(SYNC_RECOVERY_KEY)).toBeNull();
+                expect(JSON.parse(localStorage.getItem('guest_migration_intent_v1')!))
+                    .toMatchObject(JSON.parse(reservation!));
+                expect(await get(GUEST_ARCHIVE_KEY)).toBe(ciphertext);
+                expect(await localRepository.readLocal(user.uid)).toBeUndefined();
+                expect(useAppStore.getState().dataOwner).toBe('guest');
+                expect(useAppStore.getState().userData).toEqual(guest);
+            } finally {
+                draftRegistry.unregister(failDraft);
+            }
+        },
+    );
+
+    it('transfers the current guest snapshot after flushing instead of the older login snapshot', async () => {
+        const { cloud, guest } = fixtures();
+        const latest = parse({
+            ...guest,
+            routines: [...(guest.routines || []), { id: 'flushed-routine', name: 'Latest draft', exercises: [] }],
+        });
+        localStorage.setItem(GUEST_KEY, 'true');
+        localStorage.setItem(GUEST_SESSION_KEY, 'guest-restart-generation');
+        activateGuestSession('guest-restart-generation');
+        await beginGuestMigrationIntent('merge', 'recovery', { uid: user.uid });
+        useAppStore.setState({ userData: guest, dataOwner: 'guest', localWorkout: null });
+        const migrationDataRef = { current: guest as UserData | null };
+        const flushDraft = () => useAppStore.getState().setUserData(latest);
+        draftRegistry.register(flushDraft);
+        vi.mocked(DB.loadCloudPayload).mockResolvedValueOnce({
+            data: cloud, completeMonths: [], cloudDocuments: new Map(),
+        });
+        try {
+            await bootstrapAuthenticatedSession(user, () => true, {
+                guestKey: GUEST_KEY,
+                isGuestActiveStrict: () => localStorage.getItem(GUEST_KEY) === 'true',
+                readGuestMigrationRecoveryStrict: () => false,
+                isGuestRef: { current: true }, migrationDataRef,
+                setIsGuest: vi.fn(), setCurrentUser: vi.fn(),
+                setEmailVerificationRequired: vi.fn(), setGuestMigrationStatus: vi.fn(),
+                setLoading: vi.fn(),
+                setUserData: useAppStore.getState().setUserData,
+                setSyncing: useAppStore.getState().setSyncing,
+                setSaveError: useAppStore.getState().setSaveError,
+                markGuestMigrationSyncRecovery,
+                clearGuestMigrationSyncRecovery: vi.fn(),
+                loadData: vi.fn(),
+            });
+            const durable = await localRepository.readLocal(user.uid);
+            expect(durable?.data.routines?.map(routine => routine.id))
+                .toEqual(expect.arrayContaining(['cloud-routine', 'guest-routine', 'flushed-routine']));
+            expect(durable?.pending.length).toBeGreaterThan(0);
+            expect(localStorage.getItem(GUEST_KEY)).toBeNull();
+            expect(localStorage.getItem('guest_migration_intent_v1')).toBeNull();
+            expect(migrationDataRef.current).toBeNull();
+        } finally {
+            draftRegistry.unregister(flushDraft);
+        }
+    });
+
+    it('restores an already-durable authenticated archive without rewriting a stale guest view', async () => {
+        const { cloud, guest } = fixtures();
+        await localRepository.initializeLocal(user.uid, cloud, []);
+        const guestCiphertextBefore = await get(GUEST_ARCHIVE_KEY);
+        expect(guestCiphertextBefore).toMatch(/^tlb-sealed:v1:/);
+        const accountBefore = await localRepository.readLocal(user.uid);
+        // After a crash the guest snapshot can remain in memory, while the
+        // recovery marker already makes storageOwner() resolve to the account.
+        localStorage.setItem(GUEST_KEY, 'true');
+        localStorage.setItem(GUEST_SESSION_KEY, 'guest-restart-generation');
+        activateGuestSession('guest-restart-generation');
+        useAppStore.setState({ userData: guest, dataOwner: 'guest', localWorkout: null });
+        markGuestMigrationSyncRecovery(user.uid);
+
+        render(<AuthProvider><App /></AuthProvider>);
+
+        await waitFor(() => expect(localStorage.getItem(SYNC_RECOVERY_KEY)).toBeNull());
+        expect(localStorage.getItem(GUEST_KEY)).toBeNull();
+        expect(useAppStore.getState().dataOwner).toBe('user:' + user.uid);
+        expect(useAppStore.getState().localPersistenceBlocked).toBe(false);
+        expect(useAppStore.getState().userData?.routines?.map(item => item.id)).toEqual(['cloud-routine']);
+        expect((await localRepository.readLocal(user.uid))?.pending).toEqual(accountBefore?.pending);
+        expect((await localRepository.readLocal(user.uid))?.data).toEqual(accountBefore?.data);
+        expect(await get(GUEST_ARCHIVE_KEY)).toBe(guestCiphertextBefore);
+        await expect(localRepository.readLocal('guest')).rejects.toMatchObject({ code: 'local-vault-locked' });
+        expect(screen.getByTestId('bottom-nav')).toBeTruthy();
+    });
+
+    it('reconciles a newer authenticated workout device intent before publishing recovered account data', async () => {
+        const { cloud, guest } = fixtures();
+        const guestCiphertextBefore = await get(GUEST_ARCHIVE_KEY);
+        expect(guestCiphertextBefore).toMatch(/^tlb-sealed:v1:/);
+        const originalWorkout = {
+            id: 'recovery-workout', date: '2026-10-14', routineName: 'Recupero',
+            exercises: [{ id: 'exercise-1', exId: 'bench', sets: [{ id: 'set-1', kg: '50', reps: '8' }] }],
+        };
+        const initial = parse({ ...cloud, activeWorkout: originalWorkout });
+        localStorage.setItem(`logbook:v2:user:${user.uid}:health-consent-generation`, '1');
+        await localRepository.initializeLocal(user.uid, initial, []);
+        const updatedWorkout = {
+            ...initial.activeWorkout!,
+            exercises: [{ ...initial.activeWorkout!.exercises[0], sets: [
+                { ...initial.activeWorkout!.exercises[0].sets[0], kg: '55' },
+            ] }],
+        };
+        saveWorkoutDeviceIntent('user:' + user.uid, initial.activeWorkout!, updatedWorkout, initial.activeWorkout!);
+        localStorage.setItem(GUEST_KEY, 'true');
+        localStorage.setItem(GUEST_SESSION_KEY, 'guest-restart-generation');
+        activateGuestSession('guest-restart-generation');
+        useAppStore.setState({ userData: guest, dataOwner: 'guest', localWorkout: null });
+        markGuestMigrationSyncRecovery(user.uid);
+
+        render(<AuthProvider><App /></AuthProvider>);
+
+        await waitFor(async () => {
+            const envelope = await localRepository.readLocal(user.uid);
+            expect(envelope?.data.activeWorkout?.exercises[0].sets[0].kg).toBe('55');
+            expect(envelope?.pending.length).toBeGreaterThan(0);
+            expect(useAppStore.getState().localWorkout?.exercises[0].sets[0].kg).toBe('55');
+        });
+        await waitFor(() => expect(localStorage.getItem(SYNC_RECOVERY_KEY)).toBeNull());
+        expect(useAppStore.getState().localPersistenceBlocked).toBe(false);
+        expect(await get(GUEST_ARCHIVE_KEY)).toBe(guestCiphertextBefore);
+        await expect(localRepository.readLocal('guest')).rejects.toMatchObject({ code: 'local-vault-locked' });
+    });
+
+    it('retains the recovery marker and blocks account data if the authenticated envelope is missing', async () => {
+        markPersistedGuestHandoff();
+        expect(localStorage.getItem(GUEST_SESSION_KEY)).toBeNull();
+        expect(await localRepository.readLocal(user.uid)).toBeUndefined();
+        const purge = vi.spyOn(DB, 'purgeAllLocalUserData');
+
+        render(<AuthProvider><App /></AuthProvider>);
+
+        await waitFor(() => expect(screen.getByText('Accesso non completato')).toBeTruthy());
+        expect(JSON.parse(localStorage.getItem(SYNC_RECOVERY_KEY)!))
+            .toMatchObject({ uid: user.uid, guestSessionId: 'guest-restart-generation' });
+        expect(useAppStore.getState().saveError).toContain('copia locale autenticata non disponibile');
+        expect(screen.queryByTestId('bottom-nav')).toBeNull();
+        expect(purge).not.toHaveBeenCalled();
+    });
+
+    it('does not retire a newer guest generation while resuming an older account handoff', async () => {
+        const { cloud } = fixtures();
+        await localRepository.initializeLocal(user.uid, cloud, []);
+        localStorage.setItem(GUEST_SESSION_KEY, 'guest-original');
+        markGuestMigrationSyncRecovery(user.uid);
+        const witness = localStorage.getItem(SYNC_RECOVERY_KEY);
+        localStorage.setItem(GUEST_KEY, 'true');
+        localStorage.setItem(GUEST_SESSION_KEY, 'guest-new-generation');
+        activateGuestSession('guest-new-generation');
+        const before = await localRepository.readLocal(user.uid);
+        const setGuestMigrationStatus = vi.fn();
+        const setSaveError = vi.fn();
+        const setIsGuest = vi.fn();
+        await resumePersistedGuestMigration(user, () => true, {
+            guestKey: GUEST_KEY,
+            isGuestRef: { current: true },
+            migrationDataRef: { current: null },
+            setIsGuest, setGuestMigrationStatus, setSyncing: vi.fn(),
+            setSaveError, clearGuestMigrationSyncRecovery: vi.fn(),
+        });
+        expect(setGuestMigrationStatus).toHaveBeenCalledWith('failed');
+        expect(setSaveError).toHaveBeenCalledWith(expect.stringContaining('nuova sessione locale'));
+        expect(setIsGuest).not.toHaveBeenCalled();
+        expect(localStorage.getItem(GUEST_KEY)).toBe('true');
+        expect(localStorage.getItem(GUEST_SESSION_KEY)).toBe('guest-new-generation');
+        expect(localStorage.getItem(SYNC_RECOVERY_KEY)).toBe(witness);
+        expect(await localRepository.readLocal(user.uid)).toEqual(before);
+    });
+
+    it('retains the recovery marker when the authenticated envelope cannot be read', async () => {
+        markPersistedGuestHandoff();
+        expect(localStorage.getItem(GUEST_SESSION_KEY)).toBeNull();
+        const readLocal = localRepository.readLocal;
+        vi.spyOn(localRepository, 'readLocal').mockImplementation(async owner => {
+            if (owner === user.uid) throw new Error('Simulated encrypted envelope read failure');
+            return readLocal(owner);
+        });
+        const purge = vi.spyOn(DB, 'purgeAllLocalUserData');
+
+        render(<AuthProvider><App /></AuthProvider>);
+
+        await waitFor(() => expect(screen.getByText('Accesso non completato')).toBeTruthy());
+        expect(JSON.parse(localStorage.getItem(SYNC_RECOVERY_KEY)!)).toMatchObject({ uid: user.uid });
+        expect(useAppStore.getState().saveError).toContain('I dati locali sono stati lasciati intatti');
+        expect(screen.queryByTestId('bottom-nav')).toBeNull();
+        expect(purge).not.toHaveBeenCalled();
+    });
+
+    it('keeps a rejected post-commit migration durable across restarts without sessionStorage, then clears it on local-pending retry', async () => {
+        const { cloud, guest } = fixtures();
+        const merged = parse({ ...cloud, profile: { ...cloud.profile, ...guest.profile }, routines: [...(cloud.routines || []), ...(guest.routines || [])] });
+        await localRepository.initializeLocal(user.uid, cloud, []);
+        await localRepository.commitLocal(user.uid, merged, cloud);
+        useAppStore.getState().setUserData(merged);
+        expect((await localRepository.readLocal(user.uid))?.pending.length).toBeGreaterThan(0);
+        markPersistedGuestHandoff();
+        expect(localStorage.getItem(GUEST_SESSION_KEY)).toBeNull();
+        expect(sessionStorage.getItem(OVERLAY_SESSION_KEY)).toBeNull();
+        onlineSpy?.mockReturnValue(true);
+        const permissionDenied = Object.assign(new Error('permission denied'), { code: 'permission-denied' });
+        vi.mocked(runTransaction).mockRejectedValueOnce(permissionDenied);
+        const firstRender = render(<AuthProvider><App /></AuthProvider>);
+        await waitFor(() => expect(screen.getByText('Accesso non completato')).toBeTruthy());
+        expect(JSON.parse(localStorage.getItem(SYNC_RECOVERY_KEY)!)).toMatchObject({ uid: user.uid });
+        expect(sessionStorage.getItem(OVERLAY_SESSION_KEY)).toBeNull();
+        expect(screen.queryByTestId('bottom-nav')).toBeNull();
+        expect(document.getElementById('app-container')).toBeNull();
+        expect((await localRepository.readLocal(user.uid))?.pending.length).toBeGreaterThan(0);
+        firstRender.unmount();
+        vi.mocked(runTransaction).mockRejectedValueOnce(permissionDenied);
+        render(<AuthProvider><App /></AuthProvider>);
+        await waitFor(() => expect(screen.getByText('Accesso non completato')).toBeTruthy());
+        expect(JSON.parse(localStorage.getItem(SYNC_RECOVERY_KEY)!)).toMatchObject({ uid: user.uid });
+        expect(sessionStorage.getItem(OVERLAY_SESSION_KEY)).toBeNull();
+        expect(screen.queryByTestId('bottom-nav')).toBeNull();
+        expect(document.getElementById('app-container')).toBeNull();
+        expect((await localRepository.readLocal(user.uid))?.pending.length).toBeGreaterThan(0);
+        onlineSpy?.mockReturnValue(false);
+        fireEvent.click(screen.getByRole('button', { name: 'Riprova' }));
+        await waitFor(() => expect(localStorage.getItem(SYNC_RECOVERY_KEY)).toBeNull());
+        expect(sessionStorage.getItem(OVERLAY_SESSION_KEY)).toBeNull();
+        expect(screen.getByTestId('bottom-nav')).toBeTruthy();
+        expect(document.getElementById('app-container')).toBeTruthy();
+        expect(useAppStore.getState().saveError).toContain('Offline: i dati sono salvati sul dispositivo');
+    });
+
+    it('invalidates an A migration suspended at local commit before account B can take ownership', async () => {
+        const guest = parse({ profile: { height: '175' }, routines: [{ id: 'guest-routine', name: 'Guest', exercises: [] }] });
+        const cloudA = parse({ profile: { gender: 'M' }, routines: [{ id: 'cloud-a', name: 'Cloud A', exercises: [] }] });
+        const cloudB = parse({ profile: { gender: 'F' }, routines: [{ id: 'cloud-b', name: 'Cloud B', exercises: [] }] });
+        const userA = { uid: 'account-a', email: 'a@example.com', displayName: 'A' } as any;
+        const userB = { uid: 'account-b', email: 'b@example.com', displayName: 'B' } as any;
+        localStorage.setItem(GUEST_KEY, 'true');
+        localStorage.setItem(GUEST_SESSION_KEY, 'guest-restart-generation');
+        activateGuestSession('guest-restart-generation');
+        await beginGuestMigrationIntent('merge', 'recovery', { uid: userA.uid });
+        useAppStore.getState().setUserData(guest);
+        let authCallback!: (nextUser: any) => Promise<void>;
+        vi.mocked(onAuthStateChanged).mockImplementation((_auth, callback: any) => { authCallback = callback; return () => {}; });
+        let releaseBCloud!: (value: any) => void;
+        const bCloudRequest = new Promise(resolve => { releaseBCloud = resolve; });
+        vi.mocked(DB.loadCloudPayload).mockImplementation(() => {
+            if ((auth as any).currentUser?.uid === userA.uid) return Promise.resolve({ data: cloudA, completeMonths: [], cloudDocuments: new Map() }) as any;
+            if ((auth as any).currentUser?.uid === userB.uid) return bCloudRequest as any;
+            return Promise.resolve(null) as any;
+        });
+        const realCommitLocal = localRepository.commitLocal;
+        let releaseACommit!: () => void;
+        let markACommitEntered!: () => void;
+        const aCommitEntered = new Promise<void>(resolve => { markACommitEntered = resolve; });
+        const aCommitGate = new Promise<void>(resolve => { releaseACommit = resolve; });
+        vi.spyOn(localRepository, 'commitLocal').mockImplementation(async (owner, data, baseline, guard) => {
+            if (owner === userA.uid) { markACommitEntered(); await aCommitGate; }
+            return realCommitLocal(owner, data, baseline, guard);
+        });
+        (auth as any).currentUser = null;
+        render(<AuthProvider><App /></AuthProvider>);
+        let aRun!: Promise<void>;
+        act(() => { (auth as any).currentUser = userA; aRun = authCallback(userA); });
+        await aCommitEntered;
+        expect(screen.getByRole('status', { name: 'Preparazione account in corso' })).toBeTruthy();
+        let bRun!: Promise<void>;
+        act(() => { (auth as any).currentUser = userB; bRun = authCallback(userB); });
+        // B must wait behind A's held guest lifecycle lock. Releasing A's
+        // suspended local commit comes BEFORE observing B's rejection.
+        releaseACommit();
+        await act(async () => { await aRun; await bRun; });
+
+        // B cannot inherit the merge/skip decision that was bound to A.
+        await waitFor(() => expect(screen.getByText('Accesso non completato')).toBeTruthy());
+        expect(DB.loadCloudPayload).toHaveBeenCalledTimes(1);
+        expect(localStorage.getItem(GUEST_KEY)).toBe('true');
+        expect(localStorage.getItem(SYNC_RECOVERY_KEY)).toBeNull();
+        expect(document.getElementById('app-container')).toBeNull();
+
+        // An account B session must not be able to decrypt A's archive, even
+        // in a regression test. The suspended A commit is fenced, not granted
+        // access through an artificial test-only unlock.
+        await expect(localRepository.readLocal(userA.uid)).rejects.toMatchObject({
+            code: 'local-vault-locked',
+        });
+        expect(await localRepository.readLocal(userB.uid)).toBeUndefined();
+
+        // A fresh explicit decision for B is required before B may own the guest data.
+        await beginGuestMigrationIntent('merge', 'recovery', { uid: userB.uid });
+        let retryB!: Promise<void>;
+        act(() => { retryB = authCallback(userB); });
+        await waitFor(() => expect(DB.loadCloudPayload).toHaveBeenCalledTimes(2));
+        releaseBCloud({ data: cloudB, completeMonths: [], cloudDocuments: new Map() });
+        await act(async () => { await retryB; });
+
+        await waitFor(() => expect(document.getElementById('app-container')).toBeTruthy());
+        expect(localStorage.getItem(GUEST_KEY)).toBeNull();
+        expect(localStorage.getItem(SYNC_RECOVERY_KEY)).toBeNull();
+        const envelopeB = await localRepository.readLocal(userB.uid);
+        expect(envelopeB?.data.routines?.map(routine => routine.id)).toContain('cloud-b');
+        expect(envelopeB?.data.routines?.map(routine => routine.id)).toContain('guest-routine');
+        expect(envelopeB?.data.routines?.map(routine => routine.id)).not.toContain('cloud-a');
+    });
+});

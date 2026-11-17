@@ -1,0 +1,109 @@
+# Crash Consistency e Recovery - TheLogBook
+
+**Quando leggere:** commit locale, replay, lost acknowledgement, interruzioni e concorrenza remote-to-ack.
+**Non inferire:** esito remoto ambiguo non è né ack certo né prova di fallimento: preservare e verificare il journal.
+
+**Autorità:** [`AGENTS.md`](../../AGENTS.md). Questo contratto ne specializza gli invarianti; non amplia autorizzazioni o perimetro.
+
+## Obiettivo
+
+La pipeline local-first deve rimanere recuperabile quando il processo viene interrotto o una singola boundary I/O fallisce. M3 non introduce una seconda coda o un secondo protocollo: rende verificabile il contratto già implicito in IndexedDB journal + semantic replay.
+
+## Invarianti obbligatorie
+
+### Local commit
+
+`commitLocal()` usa una transazione IndexedDB atomica.
+
+**MUST:** se la transazione locale fallisce, `data`, `actorSeq`, `clock` e `pending` precedenti restano invariati.
+
+**MUST:** se la transazione locale riesce, il nuovo business state e le relative `SemanticOperation` diventano durevoli insieme prima del debounce cloud.
+
+**MUST:** una sessione invalidata dal guard verificato all'interno della transazione IndexedDB fa rigettare `commitLocal()`, anche se nessun record è stato modificato: un commit annullato non può essere restituito come successo (neppure con un journal vuoto).
+
+### Remote delivery
+
+Firestore applica il batch semantico tramite transazione.
+
+**MUST:** un failure prima del remote commit lascia il journal locale intatto e replayabile.
+
+**MUST:** un remote commit completato non dipende dal completamento dell'ack locale per la propria correttezza.
+
+**MUST:** prima della consegna a Firestore, errori esplicitamente ritentabili del token App Check limited-use, errori Auth `auth/network-request-failed`, guasti di rete/timeout del trasporto ADK e risposte HTTP `408`, `429`, `500`, `502`, `503`, `504` mantengono il journal ritentabile dal controller foreground. Configurazione assente, identità/epoch/consenso non più correnti, rifiuti HTTP e payload chiave malformati restano fail-closed. Ricontrollare la sessione anche sul percorso di errore di rete; un wrapper non prova che il risultato complessivo sia sicuro.
+
+### Lost acknowledgement
+
+È lecito che Firestore abbia già committato mentre `acknowledgeThrough()` non riesce a persistere l'ack locale.
+
+**MUST:** in questo caso la pending operation resta durevole e può essere reinviata.
+
+**MUST:** `replicateJournal()` classifica il risultato come `local-pending` dopo qualunque esito remoto ambiguo — inclusi perdita della risposta di `runTransaction`, `unavailable`/`deadline-exceeded` dopo la consegna e timeout del chiamante — solo dopo aver riletto IndexedDB e verificato che l'intero batch di operation consegnato sia ancora presente nel journal con payload semantico completo identico, inclusi value, clock e guard.
+Se l'envelope è assente, corrotto, incompatibile o conserva solo una parte del batch consegnato, l'esito è `failed`. Un timeout non cancella il writer in-flight e deve quindi usare la stessa prova durevole del batch prima di essere presentato come pending sicuro.
+
+**MUST:** quando un tentativo di replica è in coda dietro un writer di un epoch precedente, la classificazione del proprio timeout considera soltanto il batch consegnato da quel tentativo, non il batch ancora in-flight dell'altro writer. Un journal integro ribasato resta recuperabile.
+
+**MUST:** il replay della stessa operation non deve modificare nuovamente il business winner né produrre causal metadata differenti.
+
+**MUST:** un successivo ack riuscito deve poter rimuovere la pending già applicata senza perdita di dati.
+
+### Concurrent local edit durante remote -> ack
+
+Un nuovo `commitLocal()` può completarsi mentre una generazione precedente è tra remote commit e local acknowledgement.
+
+**MUST:** l'ack della generazione precedente rimuove solo operation con `seq <= expectedSeq`.
+
+**MUST:** la replica trasmette all'ACK il guard della sessione catturata. Verificarlo anche dentro la callback atomica IndexedDB, dopo l'attesa catalogo e della transazione: cambio epoch Auth (incluso A→B→A), marker/generazione consenso o cancellazione account invalidano l'ACK prima di qualsiasi modifica. Conservare ciphertext e journal per il retry della sessione corrente; la sola disponibilità del vault dello stesso owner non autorizza un risultato obsoleto.
+
+**MUST:** la replica che riceve un esito remoto confermato passa ad `acknowledgeThrough()` il batch effettivamente consegnato e l'identità della replica. Nella stessa transazione IndexedDB, prima di rimuovere qualunque `pending`, l'ack deve verificare che l'esatto prefisso causale fino a `expectedSeq` sia ancora presente e immutato e che `slot`, `replicaId` e `generation` corrispondano. In caso contrario l'ack fallisce senza mutare l'envelope: un numero di sequenza da solo non è prova dell'identità del journal dopo un checkpoint concorrente.
+
+**MUST:** se `actorSeq` locale è già avanzato, `acknowledgeThrough()` non deve sostituire `data` con lo snapshot remoto più vecchio.
+
+**MUST:** l'ack di un batch attestato riconcilia esclusivamente i `docPath` effettivamente consegnati; se una scheda ha installato durante remote→ack un root o mese estraneo al batch, tanto `data` quanto `baseline` devono conservarne il valore più recente. Un documento mensile vuoto incluso nel batch può essere svuotato, ma la sua assenza dal batch non autorizza a cancellare altri mesi.
+
+### Restart / hydration
+
+Un reload può avvenire con journal non vuoto anche quando il remote commit corrispondente è già stato applicato.
+
+**MUST:** `hydrateLocal()` conserva le pending esistenti e le riproduce sul causal state cloud osservato.
+
+**MUST:** dopo hydration, il successivo journal replay converge allo stesso business + causal state del cloud già committato e può essere acknowledged.
+
+### Session/process boundary
+
+La memoria volatile (`running`, timeout, debounce) non è fonte di durabilità.
+
+**MUST:** un nuovo process/session epoch deve poter riprendere esclusivamente dall'envelope owner-scoped persistito.
+
+**MUST:** un risultato tardivo appartenente a un epoch precedente non deve mutare lo stato della sessione corrente.
+
+**MUST (CRITICAL, transizioni cloud→IndexedDB):** hydration, adozione del checkpoint replica e sblocco della barriera di integrità verificano il guard Auth/consenso/scheda **dentro** la callback atomica IndexedDB, dopo qualsiasi attesa di catalogo o storage. Se l'epoch è cambiato, il commit rigetta anche quando avrebbe avuto risultato no-op: preservare byte cifrati, journal, replica e fence, senza riportare successo a un chiamante obsoleto. Il gate UI successivo non sostituisce questo rifiuto al boundary di persistenza.
+
+**MUST:** il gate M3 comprende anche una prova Playwright che distrugge il document/JS realm, riapre l'app offline e verifica che `UserData` persistito nell'envelope IndexedDB sia ancora disponibile. La semantic replay correctness del journal autenticato resta verificata deterministicamente dalla recovery suite isolata.
+
+## Fault injection
+
+I test M3 in `tests/recovery/` devono usare failure deterministici, non timing casuale.
+
+Sono boundary valide da iniettare:
+- IndexedDB `put` prima del local journal commit;
+- remote error prima del commit;
+- remote commit seguito da risposta persa/errore di trasporto ambiguo;
+- timeout del chiamante mentre il batch è in-flight;
+- IndexedDB `put` durante acknowledgement dopo remote commit;
+- session/process epoch change tra local commit e replay;
+- nuovo local commit tra remote commit e acknowledgement;
+- hydration con pending già applicata remotamente.
+
+I test che patchano primitive globali IndexedDB devono girare single-worker.
+
+## Gate M3
+
+Il subgate introdotto da M3 è:
+
+```bash
+npm run verify:m3
+```
+
+Include integralmente i gate precedenti e aggiunge `npm run test:recovery` e `npm run test:e2e`. Per M3 questa formulazione supersedeva i vecchi gate minimi M0/M1.
+
+Nel repository corrente `verify:m3` resta un sottogate storico; l'umbrella ricompone le suite richieste attraverso `verify:m5`, senza dover invocare ogni vecchio comando. Il gate umbrella canonico è `npm run verify:m8` come definito in `.agents/rules/ci-verification.md`. Un sottoinsieme verde non equivale al superamento del gate corrente completo.

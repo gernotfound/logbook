@@ -1,0 +1,28 @@
+# M5 hardening suite
+
+**Contesto:** [AGENTS.md](../../AGENTS.md) governa processo e autorizzazioni; [Verifica CI](../../.agents/rules/ci-verification.md) definisce il gate canonico corrente `npm run verify:m8` o CI equivalente exact-SHA. I comandi delle milestone sotto sono subset diagnostici, non il gate finale.
+
+Questa directory e `vitest.hardening.config.ts` definiscono il gate normativo M5.
+
+## Comandi
+
+- `npm run test:hardening` — esegue i test di accettazione M5 in un worker singolo.
+- `npm run test:typecheck:m5` — typecheck dei test normativi selezionati insieme ai contratti production importati.
+- `npm run test:quality:m5` — rifiuta skip/todo, test `.only`, marker di lavoro incompleto e assertion tautologiche nei file normativi; i test sotto `tests/hardening/` vengono scoperti automaticamente.
+- `npm run verify:m5` — gate cumulativo M0–M5.
+
+## Cosa vale come prova
+
+I test M5 devono attraversare il boundary production che dichiarano di verificare. In particolare:
+
+- logout guest/autenticato: `AuthProvider` + `useAuth`;
+- migrazione guest → account: `AuthProvider` + `localRepository`/journal al boundary testato;
+- catalogo: `catalogService` e `deltaResolver` reali;
+- nutrizione: `useNutritionMeals` e il suo indice `createFoodSearcher` reali, con risultati attesi espliciti; `DB` resta il boundary esterno mocked nella suite jsdom. `Logic.searchFoods` usa lo stesso algoritmo e non è un oracle indipendente;
+- totali meal: confronto con `calculateLoggedMealTotals` e valori attesi espliciti.
+
+Le suite stress `tests/stress/catalog/tier5_adversarial_guest_catalog_*.test.ts`, ora suddivise per scenario, forniscono copertura supplementare ma non sostituiscono questi acceptance oracle.
+
+## Confini della suite
+
+Questa è integrazione Vitest/jsdom, non Playwright E2E. La persistenza browser/process boundary resta coperta dal gate Playwright già incluso in `verify:m5`; recovery, fuzz e GC restano nelle rispettive suite M2–M4.

@@ -1,0 +1,222 @@
+import { useCallback, useEffect, useRef, useState } from 'react';
+
+const LOOKAHEAD_MS = 25;
+const SCHEDULE_AHEAD_SECONDS = 0.08;
+const CLICK_DURATION_SECONDS = 0.035;
+const CLICK_FREQUENCY_HZ = 1000;
+
+type AudioContextConstructor = typeof AudioContext;
+
+function getAudioContextConstructor(): AudioContextConstructor | null {
+    if (typeof window === 'undefined') return null;
+    const webkitWindow = window as typeof window & { webkitAudioContext?: AudioContextConstructor };
+    return window.AudioContext ?? webkitWindow.webkitAudioContext ?? null;
+}
+
+export interface MetronomeController {
+    isRunning: boolean;
+    isSupported: boolean;
+    error: string | null;
+    start: () => Promise<boolean>;
+    stop: () => void;
+}
+
+export function useMetronome(bpm: number): MetronomeController {
+    const [isRunning, setIsRunning] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+    const contextRef = useRef<AudioContext | null>(null);
+    const schedulerRef = useRef<number | null>(null);
+    const nextBeatTimeRef = useRef(0);
+    const runningRef = useRef(false);
+    // Fences an AudioContext.resume() that completes after stop or unmount.
+    const startGenerationRef = useRef(0);
+    // Rapid taps must share one pending activation, not create two schedulers.
+    const startInFlightRef = useRef<Promise<boolean> | null>(null);
+    const bpmRef = useRef(bpm);
+    const scheduledOscillatorsRef = useRef(new Set<OscillatorNode>());
+
+    const isSupported = getAudioContextConstructor() !== null;
+
+    useEffect(() => {
+        bpmRef.current = bpm;
+    }, [bpm]);
+
+    const clearScheduler = useCallback(() => {
+        if (schedulerRef.current !== null) {
+            window.clearInterval(schedulerRef.current);
+            schedulerRef.current = null;
+        }
+    }, []);
+
+    const stopScheduledClicks = useCallback(() => {
+        for (const oscillator of scheduledOscillatorsRef.current) {
+            try {
+                oscillator.stop();
+            } catch {
+                // A node that already ended cannot be stopped twice; cleanup remains best-effort.
+            }
+        }
+        scheduledOscillatorsRef.current.clear();
+    }, []);
+
+    const scheduleClick = useCallback((context: AudioContext, atTime: number) => {
+        const oscillator = context.createOscillator();
+        const gain = context.createGain();
+
+        oscillator.type = 'sine';
+        oscillator.frequency.setValueAtTime(CLICK_FREQUENCY_HZ, atTime);
+        gain.gain.setValueAtTime(0.0001, atTime);
+        gain.gain.exponentialRampToValueAtTime(0.18, atTime + 0.002);
+        gain.gain.exponentialRampToValueAtTime(0.0001, atTime + CLICK_DURATION_SECONDS);
+
+        oscillator.connect(gain);
+        gain.connect(context.destination);
+
+        scheduledOscillatorsRef.current.add(oscillator);
+        oscillator.onended = () => {
+            scheduledOscillatorsRef.current.delete(oscillator);
+            oscillator.disconnect();
+            gain.disconnect();
+        };
+
+        oscillator.start(atTime);
+        oscillator.stop(atTime + CLICK_DURATION_SECONDS);
+    }, []);
+
+    const failPlayback = useCallback((cause?: unknown) => {
+        if (cause) console.error('Riproduzione metronomo interrotta:', cause);
+        runningRef.current = false;
+        clearScheduler();
+        stopScheduledClicks();
+        setIsRunning(false);
+        setError('Audio interrotto. Tocca di nuovo Avvia.');
+    }, [clearScheduler, stopScheduledClicks]);
+
+    const runScheduler = useCallback((): boolean => {
+        if (!runningRef.current) return false;
+        const context = contextRef.current;
+        if (!context || context.state !== 'running') {
+            failPlayback();
+            return false;
+        }
+
+        const now = context.currentTime;
+        const secondsPerBeat = 60 / bpmRef.current;
+        const schedulingLimit = now + SCHEDULE_AHEAD_SECONDS;
+        // The audio clock may advance while JavaScript is throttled. Missed
+        // beats must not be replayed in a burst when the scheduler wakes up.
+        if (nextBeatTimeRef.current < now) {
+            nextBeatTimeRef.current = now + 0.03;
+        }
+
+        try {
+            while (nextBeatTimeRef.current < schedulingLimit) {
+                scheduleClick(context, nextBeatTimeRef.current);
+                nextBeatTimeRef.current += secondsPerBeat;
+            }
+            return true;
+        } catch (cause) {
+            failPlayback(cause);
+            return false;
+        }
+    }, [failPlayback, scheduleClick]);
+
+    const stop = useCallback(() => {
+        startGenerationRef.current += 1;
+        startInFlightRef.current = null;
+        runningRef.current = false;
+        clearScheduler();
+        stopScheduledClicks();
+        setIsRunning(false);
+    }, [clearScheduler, stopScheduledClicks]);
+
+    const start = useCallback(async (): Promise<boolean> => {
+        if (runningRef.current) return true;
+        if (startInFlightRef.current) return startInFlightRef.current;
+
+        const generation = ++startGenerationRef.current;
+        const activate = async (): Promise<boolean> => {
+            const AudioContextCtor = getAudioContextConstructor();
+            if (!AudioContextCtor) {
+                if (startGenerationRef.current === generation) {
+                    setError('Audio non disponibile su questo dispositivo.');
+                }
+                return false;
+            }
+
+            try {
+                let context = contextRef.current;
+                if (!context || context.state === 'closed') {
+                    context = new AudioContextCtor();
+                    contextRef.current = context;
+                }
+
+                if (context.state !== 'running') {
+                    await context.resume();
+                }
+
+                // A suspended resume can finish after Stop, visibility hide or unmount.
+                // Only the latest start attempt may schedule clicks or mutate UI state.
+                if (startGenerationRef.current !== generation) return false;
+                if (context.state !== 'running') {
+                    throw new Error('Contesto audio non attivo');
+                }
+
+                setError(null);
+                runningRef.current = true;
+                setIsRunning(true);
+                nextBeatTimeRef.current = context.currentTime + 0.03;
+                if (!runScheduler()) return false;
+                schedulerRef.current = window.setInterval(runScheduler, LOOKAHEAD_MS);
+                return true;
+            } catch (cause) {
+                if (startGenerationRef.current !== generation) return false;
+                console.error('Impossibile avviare il metronomo:', cause);
+                runningRef.current = false;
+                clearScheduler();
+                stopScheduledClicks();
+                setIsRunning(false);
+                setError('Impossibile avviare il metronomo. Tocca di nuovo Avvia.');
+                return false;
+            }
+        };
+
+        const attempt = activate();
+        startInFlightRef.current = attempt;
+        try {
+            return await attempt;
+        } finally {
+            if (startInFlightRef.current === attempt) startInFlightRef.current = null;
+        }
+    }, [clearScheduler, runScheduler, stopScheduledClicks]);
+
+    useEffect(() => {
+        const handleVisibilityChange = () => {
+            // A hidden page must also cancel an AudioContext.resume() still pending.
+            if (document.visibilityState === 'hidden' && (runningRef.current || startInFlightRef.current)) {
+                stop();
+            }
+        };
+
+        document.addEventListener('visibilitychange', handleVisibilityChange);
+        return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+    }, [stop]);
+
+    useEffect(() => {
+        return () => {
+            startGenerationRef.current += 1;
+            startInFlightRef.current = null;
+            runningRef.current = false;
+            clearScheduler();
+            stopScheduledClicks();
+
+            const context = contextRef.current;
+            contextRef.current = null;
+            if (context && context.state !== 'closed') {
+                void context.close().catch(() => {});
+            }
+        };
+    }, [clearScheduler, stopScheduledClicks]);
+
+    return { isRunning, isSupported, error, start, stop };
+}

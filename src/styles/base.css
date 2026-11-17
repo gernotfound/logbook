@@ -1,0 +1,265 @@
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+html {
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+    scroll-padding-top: calc(var(--sticky-top) + 5rem);
+}
+
+body {
+    font-family: var(--font-system);
+    font-size: var(--font-size-body);
+    line-height: 1.5;
+    color: var(--text-main);
+    background: var(--bg-color);
+    padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px) calc(var(--nav-height) + env(safe-area-inset-bottom, 0px) + 1rem) env(safe-area-inset-left, 0px);
+    -webkit-tap-highlight-color: transparent;
+    overscroll-behavior-y: contain;
+}
+
+button,
+input,
+select,
+textarea {
+    font: inherit;
+    color: inherit;
+}
+
+button,
+[role="button"],
+a {
+    touch-action: manipulation;
+}
+
+button,
+[role="button"],
+[role="link"],
+a {
+    min-width: 2.75rem;
+    min-height: 2.75rem;
+}
+
+button { cursor: pointer; }
+button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+button,
+.btn,
+.nav-item {
+    -webkit-user-select: none;
+    user-select: none;
+}
+
+:focus-visible {
+    outline: 0.1875rem solid var(--primary-color);
+    outline-offset: 0.1875rem;
+}
+
+button,
+input,
+textarea,
+select,
+[role="button"] {
+    scroll-margin-bottom: calc(var(--nav-height) + 2rem);
+}
+
+a { color: var(--primary-color); }
+svg { flex-shrink: 0; }
+
+h1,
+h2,
+h3,
+h4,
+h5 {
+    color: var(--text-main);
+    font-weight: 700;
+    line-height: 1.25;
+    letter-spacing: -0.025em;
+    margin-bottom: 0.75rem;
+    overflow-wrap: anywhere;
+}
+
+h1 { font-size: var(--font-size-page); }
+h2 { font-size: var(--font-size-section); }
+h3 { font-size: var(--font-size-control); }
+h4,
+h5 { font-size: var(--font-size-control); }
+
+p {
+    color: var(--text-muted);
+    font-size: var(--font-size-body);
+    line-height: 1.5;
+    margin-bottom: 0.75rem;
+}
+
+#app-container {
+    max-width: 40rem;
+    margin: 0 auto;
+    position: relative;
+    min-height: 100vh;
+    min-height: 100dvh;
+    display: block;
+    overflow-x: clip;
+}
+
+.view-section {
+    display: none;
+    padding: var(--spacing);
+}
+
+.view-section.active { display: block; }
+
+.card {
+    background: var(--surface-color);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-card);
+    padding: 1rem;
+    margin-bottom: 1rem;
+}
+
+.section-divider {
+    margin-bottom: 1.5rem;
+    padding-bottom: 1.5rem;
+    border-bottom: 1px solid var(--glass-border);
+}
+
+.section-divider-last {
+    margin-bottom: 1.5rem;
+    padding-bottom: 1.5rem;
+}
+
+.training-sub-view,
+.nutrition-sub-view {
+    display: none;
+}
+
+.training-sub-view.active,
+.nutrition-sub-view.active {
+    display: block;
+}
+
+input[type="text"],
+input[type="number"],
+input[type="date"],
+input[type="time"],
+input[type="datetime-local"],
+input[type="password"],
+input[type="email"],
+input[type="search"],
+select,
+textarea {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    min-height: 2.75rem;
+    padding: 0.75rem;
+    margin-bottom: 0.75rem;
+    background: var(--surface-color);
+    border: 1px solid var(--border-strong);
+    color: var(--text-main);
+    border-radius: 0.75rem;
+    display: block;
+    appearance: none;
+    -webkit-appearance: none;
+}
+
+input,
+select,
+textarea {
+    font-size: 16px !important;
+    touch-action: manipulation;
+}
+
+input::placeholder,
+textarea::placeholder {
+    color: var(--text-muted);
+    opacity: 1;
+}
+
+input[type="checkbox"],
+input[type="radio"] {
+    accent-color: var(--primary-color);
+    width: 1.375rem;
+    height: 1.375rem;
+    flex: 0 0 auto;
+}
+
+label:has(> input[type="checkbox"]),
+label:has(> input[type="radio"]) {
+    min-height: 2.75rem;
+}
+
+select {
+    padding-right: 2.25rem;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24'%3E%3Cpath d='m6 9 6 6 6-6' fill='none' stroke='%23747b86' stroke-width='2'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 0.75rem center;
+}
+
+select option {
+    background: var(--surface-color);
+    color: var(--text-main);
+}
+
+input[type="date"]::-webkit-date-and-time-value,
+input[type="time"]::-webkit-date-and-time-value {
+    text-align: center;
+    min-height: 1.5em;
+    width: 100%;
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+    border-color: var(--primary-color);
+}
+
+.input-row {
+    display: flex;
+    gap: 0.75rem;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.input-row > * { min-width: 0; }
+
+#auth-overlay,
+#startup-overlay {
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    background: var(--bg-color);
+    z-index: 10001;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    overflow-y: auto;
+    padding: max(1rem, env(safe-area-inset-top, 0px)) max(1rem, env(safe-area-inset-right, 0px)) max(1rem, env(safe-area-inset-bottom, 0px)) max(1rem, env(safe-area-inset-left, 0px));
+}
+
+/* Allow the access panel to scroll from its top when keyboard or zoom reduces the viewport. */
+#auth-overlay {
+    justify-content: safe center;
+    overscroll-behavior: contain;
+}
+
+/* Keep the brand anchored when switching between short and long authentication forms. */
+#auth-overlay.auth-entry-overlay {
+    justify-content: flex-start;
+    padding-top: calc(env(safe-area-inset-top, 0px) + 1.5rem);
+}
+
+@keyframes fadeSlideUp {
+    from { opacity: 0; transform: translateY(0.25rem); }
+    to { opacity: 1; transform: none; }
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}

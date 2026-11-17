@@ -1,0 +1,273 @@
+name: Cloudflare Workers Static Assets Production
+
+on:
+  workflow_run: # zizmor: ignore[dangerous-triggers] Deploy only gated, exact current main SHA after trusted Firestore reconciliation.
+    workflows:
+      - Firebase Firestore Production
+    types:
+      - completed
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      expected_sha:
+        description: Exact validated main commit to deploy to thelogbook.me
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: cloudflare-workers-static-assets-production
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build exact verified main (no Cloudflare credentials)
+    if: >-
+      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') ||
+      (github.event_name == 'workflow_run' &&
+       github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.head_branch == 'main' &&
+       github.event.workflow_run.head_repository.full_name == github.repository &&
+       github.event.workflow_run.event == 'workflow_run')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      actions: read
+    env:
+      EXPECTED_SHA: ${{ github.event_name == 'workflow_dispatch' && inputs.expected_sha || github.event.workflow_run.head_sha }}
+      LOGBOOK_BUILD_SHA: ${{ github.event_name == 'workflow_dispatch' && inputs.expected_sha || github.event.workflow_run.head_sha }}
+      CLOUDFLARE_APP_ORIGIN: https://thelogbook.me
+      VITE_FIREBASE_API_KEY: ${{ vars.VITE_FIREBASE_API_KEY }}
+      VITE_FIREBASE_PROJECT_ID: ${{ vars.VITE_FIREBASE_PROJECT_ID }}
+      VITE_FIREBASE_APP_ID: ${{ vars.VITE_FIREBASE_APP_ID }}
+      VITE_ACCOUNT_DELETION_API_ORIGIN: ${{ vars.VITE_ACCOUNT_DELETION_API_ORIGIN }}
+      VITE_ACCOUNT_INACTIVITY_TRACKING: ${{ vars.VITE_ACCOUNT_INACTIVITY_TRACKING }}
+      VITE_RECAPTCHA_ENTERPRISE_SITE_KEY: ${{ vars.VITE_RECAPTCHA_ENTERPRISE_SITE_KEY }}
+      GH_TOKEN: ${{ github.token }}
+
+    steps:
+      - name: Checkout exact main
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ env.EXPECTED_SHA }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Validate main identity and verified Firestore reconciliation
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "${EXPECTED_SHA}" =~ ^[a-f0-9]{40}$ ]] || { echo 'Invalid SHA'; exit 1; }
+          actual="$(git rev-parse HEAD)"
+          remote="$(git ls-remote --exit-code origin refs/heads/main | awk '{print $1}')"
+          if [ "${actual}" != "${EXPECTED_SHA}" ] || [ "${remote}" != "${EXPECTED_SHA}" ]; then
+            echo 'Refusing non-main or stale commit'; exit 1
+          fi
+          gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/firebase-firestore-production.yml/runs?head_sha=${EXPECTED_SHA}&per_page=50" \
+            --jq '[.workflow_runs[] | select(.head_sha == "'"${EXPECTED_SHA}"'" and .conclusion == "success" and .event == "workflow_run")] | length > 0' \
+            | grep -Fx true || { echo 'Exact-main Firestore release gate missing'; exit 1; }
+          for key in CLOUDFLARE_APP_ORIGIN VITE_FIREBASE_API_KEY VITE_FIREBASE_PROJECT_ID VITE_FIREBASE_APP_ID VITE_ACCOUNT_DELETION_API_ORIGIN VITE_RECAPTCHA_ENTERPRISE_SITE_KEY; do
+            if [ -z "${!key:-}" ]; then echo "Missing public build variable: ${key}"; exit 1; fi
+          done
+          test "${VITE_FIREBASE_PROJECT_ID}" = "logbook-db-98cc4"
+          test "${VITE_ACCOUNT_DELETION_API_ORIGIN}" = "https://logbook-gnf.vercel.app"
+      - name: Setup Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: '24'
+          cache: npm
+      - name: Verify npm runtime
+        run: |
+          set -euo pipefail
+          [[ "$(npm --version)" == 11.* ]]
+      - name: Audit install scripts
+        run: node scripts/check-install-scripts.mjs
+      - name: Install locked dependencies
+        run: npm ci
+      - name: Build origin-specific Static Assets
+        run: node scripts/build-cloudflare-assets.mjs
+      - name: Check host and security contract
+        run: node scripts/check-cloudflare-config.mjs
+      - name: Upload same-run verified asset artifact
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: cloudflare-production-${{ env.EXPECTED_SHA }}
+          path: dist/
+          if-no-files-found: error
+          retention-days: 1
+
+  deploy:
+    name: Deploy thelogbook.me from same-run artifact
+    needs: build
+    if: >-
+      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') ||
+      (github.event_name == 'workflow_run' &&
+       github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.head_branch == 'main' &&
+       github.event.workflow_run.head_repository.full_name == github.repository &&
+       github.event.workflow_run.event == 'workflow_run')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    env:
+      EXPECTED_SHA: ${{ github.event_name == 'workflow_dispatch' && inputs.expected_sha || github.event.workflow_run.head_sha }}
+      CLOUDFLARE_APP_ORIGIN: https://thelogbook.me
+    steps:
+      - name: Checkout exact main
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ env.EXPECTED_SHA }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Download same-run assets
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: cloudflare-production-${{ env.EXPECTED_SHA }}
+          path: dist/
+      - name: Validate deployment input and exact-main lease
+        shell: bash
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          set -euo pipefail
+          test -n "${CLOUDFLARE_ACCOUNT_ID}"
+          test -n "${CLOUDFLARE_API_TOKEN}"
+          test -n "${CLOUDFLARE_APP_ORIGIN}"
+          test "$(git rev-parse HEAD)" = "${EXPECTED_SHA}"
+          test "$(git ls-remote --exit-code origin refs/heads/main | awk '{print $1}')" = "${EXPECTED_SHA}"
+          for resource in dist/index.html dist/about.html dist/privacy.html dist/verifica-accesso.html dist/verifica-accesso.js dist/legal-pages.css dist/sw.js dist/manifest.webmanifest dist/_headers; do
+            test -s "${resource}" || { echo "Missing ${resource}"; exit 1; }
+          done
+      - name: Attest Kinde private Worker and complete server-side OAuth secrets
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+        run: node scripts/verify-cloudflare-kinde-private-provider.mjs --require-configured-oauth
+      - name: Deploy Workers Static Assets on thelogbook.me
+        uses: cloudflare/wrangler-action@953926a2e2182532811c01a25e53647d93bf07c0 # v4
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          wranglerVersion: '4.159.0'
+          command: deploy --config cloudflare/wrangler.jsonc
+      - name: Setup Node.js for exact-asset smoke
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: '24'
+          package-manager-cache: false
+      - name: Non-destructive smoke of thelogbook.me
+        shell: bash
+        run: |
+          set -euo pipefail
+          for path in / /about /privacy /legal-pages.css /sw.js /manifest.webmanifest /robots.txt /sitemap.xml /verifica-accesso /verifica-accesso.js; do
+            local_file="dist/${path#/}"
+            if [ "${path}" = "/" ]; then local_file="dist/index.html"; fi
+            if [ "${path}" = "/about" ] || [ "${path}" = "/privacy" ] || [ "${path}" = "/verifica-accesso" ]; then local_file="dist${path}.html"; fi
+            verified=false
+            # Workers deployments propagate across edge locations. Permit a
+            # bounded convergence window, but accept only verified bytes.
+            for attempt in 1 2 3 4; do
+              initial_http="$(curl --fail --silent --show-error --retry 3 --retry-delay 2 --retry-all-errors \
+                -H 'Accept-Encoding: identity' --dump-header /tmp/cloudflare-served-headers \
+                --write-out '%{http_code} %{content_type}' \
+                "${CLOUDFLARE_APP_ORIGIN}${path}" -o /tmp/cloudflare-served-asset)"
+              if node scripts/verify-cloudflare-served-asset.mjs \
+                  "${path}" "${local_file}" /tmp/cloudflare-served-asset; then
+                case "${path}:${initial_http}" in
+                  /about:200\ text/html*|/privacy:200\ text/html*|/verifica-accesso:200\ text/html*|/verifica-accesso.js:200\ text/javascript*|/verifica-accesso.js:200\ application/javascript*|/legal-pages.css:200\ text/css*) ;;
+                  /about:*|/privacy:*|/verifica-accesso:*|/verifica-accesso.js:*|/legal-pages.css:*) echo "Unexpected public page status/MIME: ${path} ${initial_http}"; exit 1 ;;
+                esac
+                verified=true
+                break
+              fi
+              if [ "${attempt}" != 4 ]; then sleep 3; fi
+            done
+            if [ "${verified}" != true ]; then
+              bash scripts/cloudflare-asset-mismatch-diagnostics.sh \
+                "${local_file}" /tmp/cloudflare-served-asset /tmp/cloudflare-served-headers \
+                "${CLOUDFLARE_APP_ORIGIN}${path}" "${EXPECTED_SHA}" "${initial_http}"
+              exit 1
+            fi
+          done
+          curl --fail --silent --show-error -D /tmp/cloudflare-headers -o /dev/null "${CLOUDFLARE_APP_ORIGIN}/"
+          grep -qi '^x-content-type-options: nosniff' /tmp/cloudflare-headers
+          grep -qi '^content-security-policy:' /tmp/cloudflare-headers
+          grep -qi '^cache-control: .*no-store' /tmp/cloudflare-headers
+          grep -qi '^x-robots-tag: noindex, nofollow' /tmp/cloudflare-headers
+
+          # HTML and hashed chunks can temporarily resolve against different
+          # Worker versions while the deployment propagates across edges.
+          # Retry only within a bounded window; require byte-exact 200/MIME.
+          shopt -s nullglob globstar
+          chunks=(dist/assets/**/*.{js,css})
+          test "${#chunks[@]}" -gt 0
+          for file in "${chunks[@]}"; do
+            bash scripts/verify-cloudflare-served-chunk.sh \
+              "${file}" "${CLOUDFLARE_APP_ORIGIN}" "${EXPECTED_SHA}"
+          done
+
+          # A query-string shortcut is still the same app shell. Validate
+          # exact bytes after bounded edge propagation, not just HTTP 200.
+          shortcut_verified=false
+          for attempt in 1 2 3 4; do
+            shortcut_http="$(curl --fail --silent --show-error --retry 3 --retry-delay 2 --retry-all-errors \
+              -H 'Accept-Encoding: identity' -H 'Sec-Fetch-Mode: navigate' -H 'Accept: text/html' \
+              --dump-header /tmp/cloudflare-tab-headers --write-out '%{http_code} %{content_type}' \
+              "${CLOUDFLARE_APP_ORIGIN}/?tab=training" -o /tmp/cloudflare-tab-shortcut)"
+            if node scripts/verify-cloudflare-served-asset.mjs \
+                / dist/index.html /tmp/cloudflare-tab-shortcut; then
+              shortcut_verified=true
+              break
+            fi
+            if [ "${attempt}" != 4 ]; then sleep 3; fi
+          done
+          if [ "${shortcut_verified}" != true ]; then
+            bash scripts/cloudflare-asset-mismatch-diagnostics.sh \
+              dist/index.html /tmp/cloudflare-tab-shortcut /tmp/cloudflare-tab-headers \
+              "${CLOUDFLARE_APP_ORIGIN}/?tab=training" "${EXPECTED_SHA}" "${shortcut_http}"
+            exit 1
+          fi
+
+          # Missing static resources must never fall back to index.html. Verify
+          # browser script/style loads as well as a navigation to an unknown path.
+          for missing_path in /assets/missing-synthetic.js /assets/missing-synthetic.css /training; do
+            case "${missing_path}" in
+              *.js) accept='application/javascript'; mode='cors'; destination='script' ;;
+              *.css) accept='text/css'; mode='no-cors'; destination='style' ;;
+              *) accept='text/html'; mode='navigate'; destination='document' ;;
+            esac
+            miss_result="$(curl --silent --show-error --output /tmp/cloudflare-missing \
+              --write-out '%{http_code} %{content_type}' \
+              -H "Accept: ${accept}" \
+              -H "Sec-Fetch-Mode: ${mode}" -H "Sec-Fetch-Dest: ${destination}" \
+              -H 'Sec-Fetch-Site: same-origin' \
+              "${CLOUDFLARE_APP_ORIGIN}${missing_path}")"
+            miss_status="${miss_result%% *}"
+            test "${miss_status}" = 404 || {
+              echo "Missing Cloudflare path ${missing_path} must be a real 404; got HTTP ${miss_result}"
+              exit 1
+            }
+          done
+
+          helper_status="$(curl --silent --show-error --output /tmp/cloudflare-auth-helper \
+            --write-out '%{http_code}' "${CLOUDFLARE_APP_ORIGIN}/__/auth")"
+          test "${helper_status}" = 404 || { echo 'Unrecognized Auth helper route must fail closed'; exit 1; }
+          # These are non-mutating probes: wrong methods and absent routes must
+          # remain errors even after OAuth is enabled for synthetic tests.
+          for path in /api/auth/kinde/start /api/auth/session /api/auth/logout; do
+            status="$(curl --silent --show-error --output /tmp/kinde-method-probe \
+              --write-out '%{http_code}' "${CLOUDFLARE_APP_ORIGIN}${path}")"
+            test "${status}" = 405 || { echo "Unexpected Kinde method response ${path}: ${status}"; exit 1; }
+          done
+          for path in /api/auth/kinde/unapproved /v1/cloud-key/sync /v1/consent/status; do
+            status="$(curl --silent --show-error --output /tmp/kinde-isolation-probe \
+              --write-out '%{http_code}' "${CLOUDFLARE_APP_ORIGIN}${path}")"
+            test "${status}" = 404 || { echo "Unexpected exposed API route ${path}: ${status}"; exit 1; }
+          done
+          echo 'thelogbook.me assets + OAuth-only ingress verified; live Kinde/health flows require separate runtime gates'

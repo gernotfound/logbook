@@ -1,0 +1,524 @@
+import { describe, expect, it } from 'vitest';
+import { previewRoutineSets } from '../../../src/lib/routineSessionLimits';
+import type { UserData, WorkoutRoutine, WorkoutSession } from '../../../src/types';
+import {
+    applyWorkoutCompletionDraft,
+    buildFreeWorkout,
+    buildRoutineWorkout,
+    prepareCompletedWorkout,
+    prepareHistoricalWorkoutForEditing,
+    prepareHistoricalWorkoutForSave,
+    type WorkoutPreparationRuntime,
+} from '../../../src/hooks/workout/workoutSessionPreparation';
+
+function createRuntime(): WorkoutPreparationRuntime {
+    let sequence = 0;
+    return {
+        generateId: prefix => `${prefix}_${++sequence}`,
+        getLocalDateString: () => '2026-09-16',
+        now: () => 1_700_000_000_000,
+    };
+}
+
+describe('workout session preparation', () => {
+    it('bounds rendering work for an imported routine without changing its stored count', () => {
+        const imported = { setsCount: 1_000_000_000 };
+        expect(previewRoutineSets(imported.setsCount)).toBe(20);
+        expect(previewRoutineSets(-5)).toBe(1);
+        expect(previewRoutineSets('2.5', [{}, {}, {}, {}])).toBe(4);
+        expect(previewRoutineSets('2e0', [{}, {}, {}, {}])).toBe(4);
+        expect(previewRoutineSets('2.5', [])).toBe(0);
+        expect(imported.setsCount).toBe(1_000_000_000);
+    });
+
+    it('fails before creating a session from excessive imported set or segment counts without altering the routine', () => {
+        const badSegment = { id: 'unsafe', name: 'Storica', exercises: [{
+            exId: 'bench', setsCount: 1,
+            setPlans: [{ technique: 'cluster' as const, segmentCount: 1_000_000_000 }],
+        }] };
+        const oversizedSets = { ...badSegment, exercises: [{ exId: 'bench', setsCount: 1_000_000_000 }] };
+        const snapshot = JSON.stringify(badSegment);
+        expect(() => buildRoutineWorkout({}, badSegment, undefined, createRuntime()))
+            .toThrow('La scheda contiene troppe serie o segmenti');
+        expect(() => buildRoutineWorkout({}, oversizedSets, undefined, createRuntime()))
+            .toThrow('La scheda contiene troppe serie o segmenti');
+        expect(JSON.stringify(badSegment)).toBe(snapshot);
+
+        const safe = { ...badSegment, exercises: [{
+            exId: 'bench', setsCount: 20,
+            setPlans: [{ technique: 'cluster' as const, segmentCount: 20 }],
+        }] };
+        const workout = buildRoutineWorkout({}, safe, undefined, createRuntime());
+        expect(workout.exercises[0].sets).toHaveLength(20);
+        expect(workout.exercises[0].sets[0].segments).toHaveLength(19);
+    });
+
+    it('rejects missing or zero sets instead of silently converting them to three', () => {
+        for (const setsCount of [undefined, null, '', '0', 0, -1, 2.5, 'invalid']) {
+            const routine = {
+                id: 'unproven-count', name: 'Scheda da correggere',
+                exercises: [{ exId: 'bench', setsCount }],
+            } as unknown as WorkoutRoutine;
+            expect(() => buildRoutineWorkout({}, routine, undefined, createRuntime()))
+                .toThrow('La scheda contiene troppe serie o segmenti');
+        }
+        const current: WorkoutRoutine = {
+            id: 'valid-count', name: 'Scheda corrente',
+            exercises: [{ exId: 'bench', setsCount: '3' }],
+        };
+        expect(buildRoutineWorkout({}, current, undefined, createRuntime()).exercises[0].sets).toHaveLength(3);
+    });
+
+    it('rejects oversized imported setPlans before cloning them or preparing a session', () => {
+        const oversized: WorkoutRoutine = {
+            id: 'oversized-plans', name: 'Scheda importata',
+            exercises: [{ exId: 'bench', setsCount: 1,
+                setPlans: Array.from({ length: 21 }, () => ({ technique: 'straight' as const })) }],
+        };
+        const snapshot = JSON.stringify(oversized);
+        expect(() => buildRoutineWorkout({}, oversized, undefined, createRuntime()))
+            .toThrow('La scheda contiene troppe serie o segmenti');
+        expect(JSON.stringify(oversized)).toBe(snapshot);
+
+        const supported = {
+            ...oversized, exercises: [{ exId: 'bench', setsCount: 20, setPlans: oversized.exercises[0].setPlans?.slice(0, 20) }],
+        };
+        const result = buildRoutineWorkout({}, supported, undefined, createRuntime());
+        expect(result.exercises[0].sets).toHaveLength(20);
+        expect(result.exercises[0]).toHaveProperty('setPlans', supported.exercises[0].setPlans);
+    });
+
+    it('builds a routine workout with the same cycle and set semantics as the hook', () => {
+        const routine = {
+            id: 'routine-a',
+            name: 'Routine A',
+            exercises: [
+                { exId: 'cardio', setsCount: 4 },
+                { exId: 'bench', setsCount: 2, minReps: 6, maxReps: 8, defaultTechnique: 'dropset' },
+            ],
+        } as WorkoutRoutine;
+        const userData = {
+            activeCycleId: 'cycle-a',
+            trainingCycles: [{
+                id: 'cycle-a',
+                name: 'Cycle A',
+                durationWeeks: 4,
+                strategy: {
+                    intent: 'development',
+                    progressionFocus: 'performance',
+                    primaryMuscles: ['chest'],
+                },
+                routines: [{ routineId: 'routine-a', frequencyPerWeek: 1 }],
+            }],
+            library: [
+                { id: 'cardio', name: 'Bike', trackingType: 'cardio' },
+                { id: 'bench', name: 'Bench', trackingType: 'weight_reps' },
+            ],
+        } as unknown as UserData;
+
+        const workout = buildRoutineWorkout(userData, routine, undefined, createRuntime());
+
+        expect(workout).toMatchObject({
+            routineId: 'routine-a',
+            routineName: 'Routine A',
+            cycleId: 'cycle-a',
+            cycleName: 'Cycle A',
+            cycleStrategy: {
+                intent: 'development',
+                progressionFocus: 'performance',
+                primaryMuscles: ['chest'],
+            },
+            date: '2026-09-16',
+        });
+        expect(workout.exercises[0].sets).toHaveLength(1);
+        expect(workout.exercises[1].sets).toHaveLength(2);
+        expect(workout.exercises[1].sets.every(set => set.technique === 'dropset' && set.segments?.length === 1)).toBe(true);
+        expect(workout.exercises[1]).toMatchObject({ minReps: 6, maxReps: 8 });
+    });
+
+    it('creates current isometry segments for routine sessions without legacy arrays', () => {
+        const routine: WorkoutRoutine = {
+            id: 'isometric-routine',
+            name: 'Isometrie',
+            exercises: [{ exId: 'hold', setsCount: 2, defaultTechnique: 'isometrics' }],
+        };
+        const workout = buildRoutineWorkout({}, routine, undefined, createRuntime());
+        expect(workout.exercises[0].sets).toHaveLength(2);
+        for (const set of workout.exercises[0].sets) {
+            expect(set.segments).toEqual([
+                expect.objectContaining({ id: expect.stringMatching(/^seg_/), kg: '', reps: '', time: '', technique: 'isometry' }),
+            ]);
+            expect(set).not.toHaveProperty('isometrics');
+            expect(set).not.toHaveProperty('dropsets');
+        }
+    });
+
+    it('snapshots cycle strategy so later edits do not rewrite historical session meaning', () => {
+        const routine = { id: 'routine-a', name: 'Routine A', exercises: [] } as WorkoutRoutine;
+        const userData: UserData = {
+            activeCycleId: 'cycle-a',
+            trainingCycles: [{
+                id: 'cycle-a',
+                name: 'Cycle A',
+                durationWeeks: 4,
+                strategy: { intent: 'development', progressionFocus: 'performance' },
+                routines: [{ routineId: 'routine-a', frequencyPerWeek: 1 }],
+            }],
+        };
+
+        const firstSession = buildRoutineWorkout(userData, routine, undefined, createRuntime());
+        userData.trainingCycles![0] = {
+            ...userData.trainingCycles![0],
+            strategy: { intent: 'development', progressionFocus: 'volume' },
+        };
+        const secondSession = buildRoutineWorkout(userData, routine, undefined, createRuntime());
+
+        expect(firstSession.cycleStrategy).toEqual({ intent: 'development', progressionFocus: 'performance' });
+        expect(secondSession.cycleStrategy).toEqual({ intent: 'development', progressionFocus: 'volume' });
+    });
+
+    it('snapshots muscle priorities even when the cycle objective is unspecified', () => {
+        const routine = { id: 'routine-a', name: 'Routine A', exercises: [] } as WorkoutRoutine;
+        const userData: UserData = {
+            activeCycleId: 'cycle-a',
+            trainingCycles: [{
+                id: 'cycle-a',
+                name: 'Cycle A',
+                durationWeeks: 4,
+                strategy: {
+                    primaryMuscles: ['biceps_right'],
+                    secondaryMuscles: ['delts_rear_left'],
+                },
+                routines: [{ routineId: 'routine-a', frequencyPerWeek: 1 }],
+            }],
+        };
+
+        const session = buildRoutineWorkout(userData, routine, undefined, createRuntime());
+
+        expect(session.cycleStrategy).toEqual({
+            primaryMuscles: ['biceps_right'],
+            secondaryMuscles: ['delts_rear_left'],
+        });
+    });
+
+    it('lets explicit cycle info override active-cycle inference and builds free workouts deterministically', () => {
+        const routine = { id: 'routine-a', name: 'Routine A', exercises: [] } as WorkoutRoutine;
+        const workout = buildRoutineWorkout(
+            {},
+            routine,
+            { cycleId: 'manual-cycle', cycleName: 'Manual Cycle' },
+            createRuntime(),
+        );
+        const freeWorkout = buildFreeWorkout(createRuntime());
+
+        expect(workout.cycleId).toBe('manual-cycle');
+        expect(workout.cycleName).toBe('Manual Cycle');
+        expect(freeWorkout).toMatchObject({
+            routineName: 'Allenamento libero',
+            date: '2026-09-16',
+            exercises: [],
+        });
+    });
+
+    it('sanitizes a historical workout for editing without changing its business identity', () => {
+        const historicalWorkout = {
+            id: 'history-1',
+            routineName: 'Storico',
+            globalStartTime: 1_000,
+            globalEndTime: 3_601_000,
+            exercises: [{
+                exId: 'bench',
+                sessionNote: 'nota',
+                sets: [{
+                    kg: 80,
+                    reps: 8,
+                    rir: 0,
+                    time: 12,
+                    segments: [
+                        { technique: 'dropset' as const, id: 'seg-fixture-1', kg: 60, reps: 6 },
+                        { technique: 'isometry' as const, id: 'seg-fixture-2', reps: '', kg: 40, time: 20 }
+                    ],
+                }],
+            }],
+        } as unknown as WorkoutSession;
+
+        const editing = prepareHistoricalWorkoutForEditing(historicalWorkout, createRuntime());
+
+        expect(editing.id).toBe('history-1');
+        expect(editing.originalHistoryId).toBe('history-1');
+        expect(editing.isEditingHistory).toBe(true);
+        expect(editing.manualDurationStr).toBe('01:00:00');
+        expect(editing.exercises[0].id).toBeTruthy();
+        expect(editing.exercises[0].sets[0]).toMatchObject({ kg: '80', reps: '8', rir: 0, time: '12' });
+        expect(editing.exercises[0].sets[0].segments?.filter(segment => segment.technique === 'dropset')?.[0]).toMatchObject({ kg: '60', reps: '6' });
+        expect(editing.exercises[0].sets[0].segments?.filter(segment => segment.technique === 'isometry')?.[0]).toMatchObject({ kg: '40', time: '20' });
+    });
+
+    it('keeps current segment-only sets free of synthetic legacy arrays while editing and completing', () => {
+        const source: WorkoutSession = {
+            id: 'current-history',
+            globalStartTime: 1_000,
+            exercises: [{
+                id: 'exercise-1', exId: 'hold', sessionNote: '',
+                sets: [{
+                    id: 'set-1', kg: '40', reps: '',
+                    segments: [{ id: 'seg-1', kg: '40', reps: '', time: '20', technique: 'isometry' }],
+                }],
+            }],
+        };
+        const snapshot = JSON.stringify(source);
+        const editing = prepareHistoricalWorkoutForEditing(source, createRuntime());
+        const completed = prepareCompletedWorkout(source, 61_000, createRuntime()).finishedWorkout;
+        for (const set of [editing.exercises[0].sets[0], completed.exercises[0].sets[0]]) {
+            expect(set.segments?.[0]).toMatchObject({ id: 'seg-1', kg: '40', technique: 'isometry', time: '20' });
+            expect(set).not.toHaveProperty('dropsets');
+            expect(set).not.toHaveProperty('isometrics');
+        }
+        expect(JSON.stringify(source)).toBe(snapshot);
+    });
+
+    it('prepares a historical save and strips edit-only markers', () => {
+        const currentWorkout = {
+            id: 'editing-copy',
+            originalHistoryId: 'history-1',
+            isEditingHistory: true,
+            routineName: 'Storico',
+            exercises: [{ exId: 'bench', sessionNote: '', sets: [{ id: 's1', kg: '100', reps: '8', rir: 0 }] }],
+            pains: ['chest'],
+            readiness: { capturedAt: 1_700_000_000_000, energy: 3, stress: 4 },
+        } as WorkoutSession;
+
+        const saved = prepareHistoricalWorkoutForSave(
+            currentWorkout,
+            'history-1',
+            { mood: '4', pump: '5', fatigue: '4' },
+            '1,5',
+            '00:45:00',
+            createRuntime(),
+        );
+
+        expect(saved).toMatchObject({
+            id: 'history-1',
+            globalDurationStr: '00:45:00',
+            manualDurationStr: '00:45:00',
+            moodRating: 4,
+            pumpRating: 5,
+            fatigueRating: 4,
+            waterLiters: 1.5,
+            pains: ['chest'],
+            readiness: { capturedAt: 1_700_000_000_000, energy: 3, stress: 4 },
+            date: '2026-09-16',
+        });
+        expect(saved.exercises[0].sets[0].rir).toBe(0);
+        expect(saved.isEditingHistory).toBeUndefined();
+        expect(saved.originalHistoryId).toBeUndefined();
+    });
+
+    it('keeps the post-session draft separate until completion applies it explicitly', () => {
+        const active = {
+            id: 'active-draft',
+            routineName: 'Routine A',
+            ratingScale: 5,
+            globalStartTime: 1_000,
+            exercises: [],
+        } as WorkoutSession;
+
+        const withDraft = applyWorkoutCompletionDraft(active, {
+            mood: '5',
+            pump: '4',
+            fatigue: '3',
+            water: '1,7',
+            pains: ['chest', 'back'],
+        });
+
+        expect(active.moodRating).toBeUndefined();
+        expect(active.waterLiters).toBeUndefined();
+        expect(active.pains).toBeUndefined();
+        expect(withDraft).toMatchObject({
+            moodRating: 5,
+            pumpRating: 4,
+            fatigueRating: 3,
+            waterLiters: 1.7,
+            pains: ['chest', 'back'],
+        });
+
+        const completed = prepareCompletedWorkout(withDraft, 61_000, createRuntime()).finishedWorkout;
+        expect(completed).toMatchObject({
+            moodRating: 5,
+            pumpRating: 4,
+            fatigueRating: 3,
+            waterLiters: 1.7,
+            pains: ['chest', 'back'],
+        });
+    });
+
+    it('prepares workout completion while preserving duration and cleanup semantics', () => {
+        const currentWorkout = {
+            id: 'active-1',
+            routineName: 'Routine A',
+            globalStartTime: 1_000,
+            moodRating: 4,
+            pumpRating: 5,
+            fatigueRating: 5,
+            waterLiters: '1,5',
+            pains: ['back'],
+            readiness: { capturedAt: 900, motivation: 5, muscleRecovery: 2 },
+            isEditingHistory: true,
+            originalHistoryId: 'old-id',
+            exercises: [],
+        } as unknown as WorkoutSession;
+
+        const prepared = prepareCompletedWorkout(currentWorkout, 3_601_000, createRuntime());
+
+        expect(prepared.diff).toBe(3600);
+        expect(prepared.durationStr).toBe('01:00:00');
+        expect(prepared.sessionPains).toEqual(['back']);
+        expect(prepared.finishedWorkout).toMatchObject({
+            id: 'active-1',
+            globalEndTime: 3_601_000,
+            globalDurationStr: '01:00:00',
+            moodRating: 4,
+            pumpRating: 5,
+            fatigueRating: 5,
+            waterLiters: 1.5,
+            pains: ['back'],
+            readiness: { capturedAt: 900, motivation: 5, muscleRecovery: 2 },
+        });
+        expect(prepared.finishedWorkout.isEditingHistory).toBeUndefined();
+        expect(prepared.finishedWorkout.originalHistoryId).toBeUndefined();
+    });
+
+    it('keeps unreported water missing instead of converting it to zero liters', () => {
+        const active = {
+            id: 'active-no-water',
+            routineName: 'Routine A',
+            globalStartTime: 1_000,
+            waterLiters: '' as any,
+            exercises: [],
+        } as WorkoutSession;
+        const completed = prepareCompletedWorkout(active, 61_000, createRuntime()).finishedWorkout;
+        expect(completed.waterLiters).toBeUndefined();
+
+        const editing = {
+            id: 'history-no-water',
+            originalHistoryId: 'history-no-water',
+            isEditingHistory: true,
+            routineName: 'Storico',
+            waterLiters: 2,
+            exercises: [],
+        } as WorkoutSession;
+        const saved = prepareHistoricalWorkoutForSave(
+            editing,
+            'history-no-water',
+            { mood: '', pump: '', fatigue: '' },
+            '',
+            '00:30:00',
+            createRuntime(),
+        );
+        expect(saved.waterLiters).toBeUndefined();
+    });
+
+
+    it.each(['1,5litri', '1.5.2', 'Infinity', '1e309', '-1', 'NaN', '  ', Infinity])(
+        'does not persist malformed, partial or non-finite water values (%s)',
+        invalidWater => {
+            const original = {
+                id: 'water-invalid',
+                date: '2026-09-16',
+                exercises: [],
+                waterLiters: invalidWater,
+            } as unknown as WorkoutSession;
+            const draft = applyWorkoutCompletionDraft(original, {
+                mood: '', pump: '', fatigue: '', water: String(invalidWater), pains: [],
+            });
+            const completed = prepareCompletedWorkout(original, 61_000, createRuntime()).finishedWorkout;
+            const history = prepareHistoricalWorkoutForSave(
+                original, 'water-invalid', { mood: '', pump: '', fatigue: '' },
+                String(invalidWater), '00:30:00', createRuntime(),
+            );
+            for (const result of [draft, completed, history]) {
+                expect(result).not.toHaveProperty('waterLiters');
+            }
+            expect(original.waterLiters).toBe(invalidWater);
+        },
+    );
+
+    it.each([
+        ['0', 0], ['.5', 0.5], ['1,5', 1.5], ['2.25', 2.25],
+    ])('preserves valid decimal water values in all three preparation paths (%s)', (water, expected) => {
+        const original = {
+            id: 'water-valid', date: '2026-09-16', exercises: [], waterLiters: water,
+        } as unknown as WorkoutSession;
+        const draft = applyWorkoutCompletionDraft(original, {
+            mood: '', pump: '', fatigue: '', water, pains: [],
+        });
+        const completed = prepareCompletedWorkout(original, 61_000, createRuntime()).finishedWorkout;
+        const history = prepareHistoricalWorkoutForSave(
+            original, 'water-valid', { mood: '', pump: '', fatigue: '' },
+            water, '00:30:00', createRuntime(),
+        );
+        for (const result of [draft, completed, history]) {
+            expect(result.waterLiters).toBe(expected);
+        }
+    });
+
+    it('uses the current 1–5 scale when a workout lacks a ratingScale marker', () => {
+        const runtime = createRuntime();
+        expect(buildFreeWorkout(runtime).ratingScale).toBe(5);
+
+        const unmarked = {
+            id: 'history-unmarked',
+            date: '2026-09-01',
+            exercises: [],
+            isEditingHistory: true,
+            originalHistoryId: 'history-unmarked',
+            moodRating: 4,
+        } as WorkoutSession;
+
+        const saved = prepareHistoricalWorkoutForSave(
+            unmarked, 'history-unmarked',
+            { mood: '8', pump: '5', fatigue: '5.5' }, '', '00:45:00', runtime,
+        );
+        expect(saved.moodRating).toBeNull();
+        expect(saved.pumpRating).toBe(5);
+        expect(saved.fatigueRating).toBeNull();
+        expect(saved.ratingScale).toBeUndefined();
+
+        const completed = applyWorkoutCompletionDraft(unmarked, {
+            mood: '7.5', pump: '4', fatigue: '3', water: '', pains: [],
+        });
+        expect(completed.moodRating).toBeNull();
+        expect(completed.pumpRating).toBe(4);
+        expect(completed.fatigueRating).toBe(3);
+    });
+
+    it('snapshots technical standards and retained progression metadata so later routine edits do not rewrite history', () => {
+        const routine = {
+            id: 'routine-contract',
+            name: 'Routine contratto',
+            exercises: [{
+                exId: 'bench',
+                setsCount: 1,
+                technicalStandard: 'ROM completo · fermo 1 s',
+                progressionContract: {
+                    role: 'primary' as const,
+                    metric: 'performance' as const,
+                },
+            }],
+        } as WorkoutRoutine;
+        const userData = {
+            library: [{ id: 'bench', name: 'Bench', trackingType: 'weight_reps' }],
+        } as unknown as UserData;
+
+        const first = buildRoutineWorkout(userData, routine, undefined, createRuntime());
+        routine.exercises[0].technicalStandard = 'ROM parziale';
+        routine.exercises[0].progressionContract = { role: 'secondary', metric: 'volume' };
+        const second = buildRoutineWorkout(userData, routine, undefined, createRuntime());
+
+        expect(first.exercises[0].technicalStandard).toBe('ROM completo · fermo 1 s');
+        expect(first.exercises[0].progressionContract).toEqual({ role: 'primary', metric: 'performance' });
+        expect(second.exercises[0].technicalStandard).toBe('ROM parziale');
+        expect(second.exercises[0].progressionContract).toEqual({ role: 'secondary', metric: 'volume' });
+    });
+
+});

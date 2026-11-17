@@ -1,0 +1,79 @@
+# Distributed Property Fuzzing — TheLogBook
+
+**Quando leggere:** test causali distribuiti, seed riproducibili, oracle e convergenza.
+**Non inferire:** uguale stato business finale non implica stato causale equivalente.
+
+**Autorità:** [`AGENTS.md`](../../AGENTS.md). Questo contratto ne specializza gli invarianti; non amplia autorizzazioni o perimetro.
+
+## Scopo
+
+M2 aggiunge property-based / distributed fuzz testing alla pipeline di sincronizzazione causale. Il fuzzing non sostituisce i test deterministici M0/M1: genera molte varianti riproducibili degli stessi invarianti e deve fallire con un seed utilizzabile per una riproduzione esatta.
+
+## Riproducibilità
+
+La suite dedicata è:
+
+```bash
+npm run test:fuzz
+```
+
+Ogni scenario usa un PRNG deterministico interno. In caso di failure il report deve includere il seed. La riproduzione di un singolo caso usa:
+
+```bash
+LOGBOOK_FUZZ_SEED=<seed> npm run test:fuzz
+```
+
+Per cambiare il numero di casi senza cambiare la semantica dei generatori:
+
+```bash
+LOGBOOK_FUZZ_CASES=<n> npm run test:fuzz
+```
+
+**MUST:** nessun test fuzz può dipendere da `Math.random()`, dall'orologio o da ordine non deterministico esterno senza serializzare esplicitamente tale input nel seed/caso riproducibile.
+
+## Invarianti M2
+
+La suite deve esercitare almeno:
+
+1. **Delivery-order convergence** — lo stesso insieme di mutation concorrenti deve produrre lo stesso business state e causal state indipendentemente dall'ordine di consegna.
+2. **Batching convergence** — consegnare contender nello stesso batch o in batch separati deve convergere allo stesso `FieldStamp` oltre che allo stesso valore business.
+3. **Retry idempotence** — la duplicazione/replay di operation già osservate non deve cambiare il risultato.
+4. **Causal dominance** — una mutation causalmente successiva deve restare winner anche quando la rete consegna prima il discendente e poi gli eventi più vecchi.
+5. **Repeated synchronization rounds** — round successivi che partono dal causal context convergente precedente devono restare convergenti sotto nuove modifiche concorrenti.
+6. **Vector-clock algebra** — `mergeVectors` deve essere commutativo, associativo, idempotente e coprire causalmente ogni input.
+7. **Projection round-trip** — per domini generati supportati, `diffDocuments(base, desired)` seguito da `applySemanticOperations(base, ops)` deve ricostruire il business state desiderato.
+
+## Perimetro delle prove
+
+La suite generativa corrente `tests/fuzz/semanticDistributedFuzz.test.ts` esercita direttamente il motore di produzione `applySemanticOperations`, `diffDocuments` e `mergeVectors` con documenti root e campi `profile` generati. Gli attori sintetici utilizzano slot validi del Protocollo 3 (`s00`–`s15`) anziché nomi fittizi non accettati dalle Firestore Rules; ciò non sostituisce la validazione dei metadata né le transazioni reali. Verifica proprietà del merge semantico in memoria: **non** esegue transazioni Firestore, persistenza IndexedDB, checkpoint, autenticazione/consenso o causal GC. Tali boundary richiedono le regressioni deterministiche, emulator, recovery e GC nei rispettivi gate; il solo esito verde del fuzz non certifica la sincronizzazione end-to-end.
+
+**MUST (qualità dell'oracle):** il confronto tra una consegna canonica e consegne riordinate/partizionate è una proprietà *metamorfica*: entrambe le esecuzioni attraversano lo stesso algoritmo e possono concordare su un risultato sbagliato. Affiancare ai confronti di parità assert indipendenti sui casi con esito deducibile dal generatore, per esempio una catena totalmente causale in cui l'ultimo evento determina il valore o la cancellazione e mantiene il proprio `FieldStamp.clock`. Verificare sia business state sia causal state, senza copiare la logica di arbitraggio del runtime dentro il test.
+
+## Causal state, non solo business state
+
+**MUST:** i test di convergenza confrontano sia `documents` sia `syncMetas`. Due repliche con lo stesso valore visibile ma `FieldStamp.clock` differenti non sono considerate convergenti, perché una mutation futura può risolvere diversamente il conflitto.
+
+Quando più operation sullo stesso field vengono risolte nello stesso batch, il winner determina valore/tombstone e conserva il proprio `FieldStamp.clock` immutabile. Tutti i contender avanzano invece `SyncMeta.clock`. Il fuzz deve includere DAG misti, non soltanto antichain completamente concorrenti o catene totalmente causali, per provare l'indipendenza da delivery order e batch partition.
+
+## Gate
+
+Il sottogate storico M2 è:
+
+```bash
+npm run verify:m2
+```
+
+Include, nell'ordine: lint, suite base, isolated, fuzz, stress/challenger, emulator/rules, no-skips e build TypeScript/Vite.
+
+Il gate canonico corrente è `npm run verify:m8` o la CI equivalente exact-SHA in [Verifica CI](ci-verification.md). `verify:m0` e `verify:m2` sono subset/storico e non certificano il candidato attuale.
+
+## Politica sui failure
+
+Un seed che scopre una divergenza non deve essere semplicemente escluso. La classificazione ammessa è:
+
+- production bug;
+- generator bug / scenario impossibile secondo il protocollo;
+- test oracle bug;
+- infrastructure/flaky non deterministico.
+
+Per production bug, aggiungere anche una regressione deterministica minima quando il caso può essere ridotto a una sequenza leggibile. Il seed originale può continuare a essere coperto dalla suite generativa.

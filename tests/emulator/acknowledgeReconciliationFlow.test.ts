@@ -1,0 +1,300 @@
+import { LEGAL_VERSIONS } from '../../src/lib/legalVersions';
+import 'fake-indexeddb/auto';
+import { clear } from 'idb-keyval';
+import { readFileSync } from 'node:fs';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { initializeTestEnvironment, type RulesTestEnvironment } from '@firebase/rules-unit-testing';
+import { doc, getDoc, setDoc, type Firestore } from 'firebase/firestore';
+import type { SyncMeta } from '../../src/lib/sync/semanticProjection';
+
+const catalog = vi.hoisted(() => ({
+    exercises: [],
+    foods: [],
+    manifest: {
+        version: 'reconcile-test',
+        updatedAt: '2026-09-15T00:00:00.000Z',
+        schemaVersion: 1,
+        docRefs: { exercises: 'catalog/exercises', foods: 'catalog/foods' },
+        itemCounts: { exercises: 0, foods: 0 },
+    },
+    cachedAt: 0,
+}));
+const firebaseHarness = vi.hoisted(() => ({
+    auth: { currentUser: { uid: 'a' } as { uid: string } | null },
+    db: undefined as unknown as Firestore,
+}));
+const acknowledgeHarness = vi.hoisted(() => ({
+    before: undefined as ((owner: string, expectedSeq: number) => Promise<void>) | undefined,
+    after: undefined as ((owner: string, expectedSeq: number, syncMeta?: Record<string, SyncMeta>) => Promise<void>) | undefined,
+}));
+
+vi.mock('../../src/lib/firebase', () => ({
+    auth: firebaseHarness.auth,
+    getDb: () => firebaseHarness.db,
+    ensureAppCheck: async () => {},
+    waitForPendingWrites: async () => {},
+}));
+// This suite exercises legacy sync/reconciliation under an already-authorized
+// authenticated account (server revision 1). Consent revocation and epoch
+// enforcement are tested separately with the real policy and emulator Rules.
+vi.mock('../../src/lib/healthConsent', async () => {
+    const actual = await vi.importActual<typeof import('../../src/lib/healthConsent')>('../../src/lib/healthConsent');
+    const writable = (owner: string) => owner === 'user:' + firebaseHarness.auth.currentUser?.uid;
+    return {
+        ...actual,
+        isHealthConsentWritable: writable,
+        isHealthConsentCloudWritable: writable,
+        requireHealthConsentWritable: (owner: string) => {
+            if (!writable(owner)) throw new Error('Utente non autorizzato dal consenso');
+        },
+        getVerifiedHealthConsentRevision: () => 1,
+    };
+});
+vi.mock('../../src/lib/sync/cloudAccountKeyAccess', () => ({
+    requireCloudAccountDataKey: vi.fn(async () => new Uint8Array(32).fill(18)),
+    requireRightsExportAccountDataKey: vi.fn(async () => new Uint8Array(32).fill(18)),
+}));
+vi.mock('../../src/lib/catalog/catalogService', () => ({ getCachedCatalog: async () => catalog }));
+vi.mock('../../src/lib/sync/localRepository', async () => {
+    const actual = await vi.importActual<typeof import('../../src/lib/sync/localRepository')>('../../src/lib/sync/localRepository');
+    return {
+        ...actual,
+        acknowledgeThrough: async (...args: Parameters<typeof actual.acknowledgeThrough>) => {
+            await acknowledgeHarness.before?.(args[0], args[1]);
+            await actual.acknowledgeThrough(...args);
+            await acknowledgeHarness.after?.(args[0], args[1], args[4]);
+        },
+    };
+});
+
+import type { UserData } from '../../src/types';
+import { UserDataSchema } from '../../src/lib/schema';
+import {
+    adoptReplicaCheckpoint,
+    commitLocal,
+    initializeLocal,
+    advanceLocalConsentRevisionIfClean,
+    readLocal,
+    type LocalEnvelope,
+} from '../../src/lib/sync/localRepository';
+import { replicateJournal, waitForJournalIdle } from '../../src/lib/sync/replicateJournal';
+import { invalidateSession } from '../../src/lib/sync/session';
+import { projectDocuments, type DocumentData } from '../../src/lib/sync/documentProjection';
+import { diffDocuments } from '../../src/lib/sync/semanticProjection';
+import { applyDocumentChanges } from '../../src/lib/sync/transactionWriter';
+import { sealCloudDocument, openCloudDocument } from '../../src/lib/sync/cloudDocumentCipher';
+import { seedTrustedConsent, registerReplica, asModularFirestore } from './replicaHarness';
+import { createAndMigrateVault } from '../../src/lib/sync/secureArchiveMigration';
+import { lockAllVaults } from '../../src/lib/sync/secureArchiveSession';
+
+const stubNavigatorWithLocks = (onLine: boolean): void => {
+    vi.stubGlobal('navigator', {
+        onLine,
+        locks: { request: async (_name: string, _options: unknown, run: () => Promise<unknown>) => run() },
+    });
+};
+
+const owner = 'user:a';
+const remoteActor = 's01';
+
+function data(height: number, name?: string): UserData {
+    return UserDataSchema.parse({
+        profile: {
+            height: String(height),
+            ...(name ? { name } : {}),
+        },
+        legalConsent: { hasAcceptedTerms: true, hasAcceptedHealthData: true, acceptedAt: '2026-10-11T10:00:00.000Z', privacyVersion: LEGAL_VERSIONS.privacy, termsVersion: LEGAL_VERSIONS.terms },
+    }) as unknown as UserData;
+}
+
+let env: RulesTestEnvironment;
+
+beforeAll(async () => {
+    if (process.env.FIRESTORE_EMULATOR_HOST !== '127.0.0.1:8080') throw new Error('Only the isolated local emulator is allowed');
+    stubNavigatorWithLocks(true);
+    env = await initializeTestEnvironment({
+        projectId: 'demo-logbook-audit',
+        firestore: { host: '127.0.0.1', port: 8080, rules: readFileSync('firestore.rules', 'utf8') },
+    });
+});
+
+beforeEach(async () => {
+    stubNavigatorWithLocks(true);
+    lockAllVaults();
+    localStorage.clear();
+    await clear();
+    await env.clearFirestore();
+    await seedTrustedConsent(env);
+    invalidateSession();
+    firebaseHarness.auth.currentUser = { uid: 'a' };
+    firebaseHarness.db = asModularFirestore(env.authenticatedContext('a', { email_verified: true }).firestore());
+    acknowledgeHarness.before = undefined;
+    acknowledgeHarness.after = undefined;
+    await createAndMigrateVault(owner);
+    await initializeLocal(owner, data(170));
+    if (!await advanceLocalConsentRevisionIfClean(owner, 1)) throw new Error('Consent fixture is not clean');
+});
+
+afterEach(async () => {
+    await waitForJournalIdle(owner);
+    acknowledgeHarness.before = undefined;
+    acknowledgeHarness.after = undefined;
+    vi.restoreAllMocks();
+});
+
+afterAll(async () => {
+    await env?.cleanup();
+    vi.unstubAllGlobals();
+});
+
+describe('remote commit to local acknowledgement reconciliation', () => {
+    it('preserves a durable offline journal until reconnect, then acknowledges it once', async () => {
+        const db = firebaseHarness.db;
+        const replica = await registerReplica(db, 'a', 's00', 'offline-device');
+        await adoptReplicaCheckpoint(owner, { identity: replica, baseSeq: 0 }, {
+            clock: {}, syncMetaByDocument: {},
+        });
+
+        stubNavigatorWithLocks(false);
+        await commitLocal(owner, data(173), data(170));
+        const staged = await readLocal(owner);
+        expect(staged?.pending.length).toBeGreaterThan(0);
+        expect(staged?.pending.every(op => op.seq === 1)).toBe(true);
+
+        const offline = await replicateJournal(owner);
+        expect(offline).toMatchObject({ ok: false, status: 'local-pending' });
+        expect((await getDoc(doc(db, 'users/a'))).exists()).toBe(false);
+        const stillPending = await readLocal(owner);
+        expect(stillPending?.pending).toEqual(staged?.pending);
+
+        stubNavigatorWithLocks(true);
+        expect(await replicateJournal(owner)).toMatchObject({ ok: true, status: 'synced' });
+        const acknowledged = await readLocal(owner);
+        expect(acknowledged?.pending).toEqual([]);
+        expect(acknowledged?.baseline.profile?.height).toBe('173');
+        const remote = (await getDoc(doc(db, 'users/a'))).data()!;
+        const decoded = openCloudDocument(new Uint8Array(32).fill(18), 'a', '', remote);
+        expect((decoded.business.profile as Record<string, string>).height).toBe('173');
+        expect(decoded.sync.fields['profile/height']).toMatchObject({ actorId: replica.slot, seq: 1 });
+
+        const controlRef = doc(db, 'users/a/sync_control/state');
+        const beforeRepeat = (await getDoc(controlRef)).data()!;
+        expect(await replicateJournal(owner)).toMatchObject({ ok: true, status: 'synced' });
+        expect((await getDoc(controlRef)).data()).toEqual(beforeRepeat);
+    });
+
+
+    it('keeps the remote causal baseline, replays a concurrent local edit, and converges on the next acknowledgement', async () => {
+        const initial = data(170);
+        const remoteDesired = data(170, 'remote-device');
+        const db = firebaseHarness.db;
+        const userRef = doc(db, 'users/a');
+
+        const initialBusiness = projectDocuments(initial, catalog).get('')!;
+        await env.withSecurityRulesDisabled(async context => {
+            await setDoc(doc(asModularFirestore(context.firestore()), 'users/a'),
+                sealCloudDocument(new Uint8Array(32).fill(18), 'a', '', initialBusiness, {
+                    protocolVersion: 3, clock: {}, fields: {},
+                    writer: { slot: 's01', replicaId: 'seed-remote', generation: 1, seq: 0 },
+                }));
+        });
+        const localReplica = await registerReplica(db, 'a', 's00', 'replica-local');
+        await adoptReplicaCheckpoint(owner, { identity: localReplica, baseSeq: 0 }, { clock: {}, syncMetaByDocument: {} });
+        const remoteReplica = await registerReplica(db, 'a', 's01', 'replica-remote');
+        const remoteSeedOps = diffDocuments(
+            projectDocuments(initial, catalog),
+            projectDocuments(remoteDesired, catalog),
+            remoteActor,
+            1,
+            { [remoteActor]: 1 },
+        );
+        const seeded = await applyDocumentChanges(db, 'a', remoteSeedOps, () => true, remoteReplica, new Uint8Array(32).fill(18));
+        expect(seeded.syncMeta[''].fields['profile/name']).toMatchObject({
+            actorId: remoteActor,
+            seq: 1,
+            clock: { [remoteActor]: 1 },
+        });
+
+        await commitLocal(owner, data(171), initial);
+        const seqOneEnvelope = await readLocal(owner);
+        expect(seqOneEnvelope).toBeDefined();
+        expect(seqOneEnvelope?.actorSeq).toBe(1);
+        expect(seqOneEnvelope?.pending.length).toBeGreaterThan(0);
+        expect(seqOneEnvelope?.pending.every(operation => operation.seq === 1)).toBe(true);
+        const localActor = seqOneEnvelope!.actorId;
+
+        let injected = false;
+        let firstAckEnvelope: LocalEnvelope | undefined;
+        let firstAckCloud: DocumentData | undefined;
+        let firstOutcomeSyncMeta: Record<string, SyncMeta> | undefined;
+
+        acknowledgeHarness.before = async (_owner, expectedSeq) => {
+            if (expectedSeq !== 1 || injected) return;
+            injected = true;
+            const current = await readLocal(owner);
+            if (!current) throw new Error('Missing local envelope before acknowledgement');
+            const next = UserDataSchema.parse({
+                ...current.data,
+                profile: { ...(current.data.profile ?? {}), height: '172' },
+            }) as unknown as UserData;
+            await commitLocal(owner, next, current.data);
+        };
+
+        acknowledgeHarness.after = async (_owner, expectedSeq, syncMeta) => {
+            if (expectedSeq !== 1 || firstAckEnvelope) return;
+            const current = await readLocal(owner);
+            if (!current) throw new Error('Missing local envelope after acknowledgement');
+            firstAckEnvelope = structuredClone(current);
+            firstAckCloud = structuredClone((await getDoc(userRef)).data() as DocumentData);
+            firstOutcomeSyncMeta = structuredClone(syncMeta ?? {});
+        };
+
+        const result = await replicateJournal(owner);
+        if (!result.ok) throw result.error;
+        expect(result.status).toBe('synced');
+        expect(injected).toBe(true);
+
+        expect(openCloudDocument(new Uint8Array(32).fill(18), 'a', '', firstAckCloud).business.profile)
+            .toMatchObject({ height: '171', name: 'remote-device' });
+        expect(firstOutcomeSyncMeta?.[''].fields['profile/name']).toMatchObject({ actorId: remoteActor, seq: 1 });
+        expect(firstOutcomeSyncMeta?.[''].fields['profile/height']).toMatchObject({ actorId: localActor, seq: 1 });
+
+        expect(firstAckEnvelope?.baseline.profile).toMatchObject({ height: '171', name: 'remote-device' });
+        expect(firstAckEnvelope?.data.profile).toMatchObject({ height: '172', name: 'remote-device' });
+        expect(firstAckEnvelope?.pending.length).toBeGreaterThan(0);
+        expect(firstAckEnvelope?.pending.every(operation => operation.seq === 2)).toBe(true);
+        expect(firstAckEnvelope?.pending.some(operation => operation.seq === 1)).toBe(false);
+
+        const pendingIdentities = firstAckEnvelope!.pending.map(operation => JSON.stringify([
+            operation.actorId,
+            operation.seq,
+            operation.docPath,
+            operation.path,
+            operation.isDelete,
+        ]));
+        expect(new Set(pendingIdentities).size).toBe(pendingIdentities.length);
+
+        const reconciledMeta = firstAckEnvelope!.syncMetaByDocument[''];
+        // Only seq 1 reached Firestore. Seq 2 must remain exclusively in the
+        // pending journal until the second transaction actually delivers it.
+        expect(reconciledMeta).toEqual(firstOutcomeSyncMeta!['']);
+        expect(reconciledMeta.clock).toMatchObject({ [remoteActor]: 1, [localActor]: 1 });
+        expect(reconciledMeta.fields['profile/name']).toMatchObject({ actorId: remoteActor, seq: 1 });
+        expect(reconciledMeta.fields['profile/height']).toMatchObject({ actorId: localActor, seq: 1 });
+        expect(firstAckEnvelope!.pending.some(op => op.seq === 2
+            && op.clock[localActor] === 2)).toBe(true);
+
+        const finalEnvelope = await readLocal(owner);
+        const finalCloud = (await getDoc(userRef)).data()!;
+
+        expect(finalEnvelope?.pending).toEqual([]);
+        expect(finalEnvelope?.baseline.profile).toMatchObject({ height: '172', name: 'remote-device' });
+        expect(finalEnvelope?.data.profile).toMatchObject({ height: '172', name: 'remote-device' });
+        expect(finalEnvelope?.clock).toMatchObject({ [remoteActor]: 1, [localActor]: 2 });
+        expect(finalEnvelope?.syncMetaByDocument[''].fields['profile/name']).toMatchObject({ actorId: remoteActor, seq: 1 });
+        expect(finalEnvelope?.syncMetaByDocument[''].fields['profile/height']).toMatchObject({ actorId: localActor, seq: 2 });
+        expect(openCloudDocument(new Uint8Array(32).fill(18), 'a', '', finalCloud).business.profile)
+            .toMatchObject({ height: '172', name: 'remote-device' });
+        expect(openCloudDocument(new Uint8Array(32).fill(18), 'a', '', finalCloud).sync).toEqual(finalEnvelope?.syncMetaByDocument['']);
+    });
+});

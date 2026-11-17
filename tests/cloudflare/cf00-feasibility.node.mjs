@@ -1,0 +1,183 @@
+import assert from 'node:assert/strict';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { test } from 'node:test';
+import { DatabaseSync } from 'node:sqlite';
+import { commitSyntheticBatch, prepareFixture, readReceipt, readSyntheticState } from '../../cloudflare/cf00/contract.mjs';
+import worker, { PasswordProbe } from '../../cloudflare/cf00/probe-worker.mjs';
+
+class LocalD1Statement {
+  constructor(db, sql, bindings = []) { this.db = db; this.sql = sql; this.bindings = bindings; }
+  bind(...values) { return new LocalD1Statement(this.db, this.sql, values); }
+  run() { return this.db.prepare(this.sql).run(...this.bindings); }
+  async first() { return this.db.prepare(this.sql).get(...this.bindings) ?? null; }
+  async all() { return { results: this.db.prepare(this.sql).all(...this.bindings) }; }
+}
+
+class LocalD1ContractAdapter {
+  constructor(file) { this.sqlite = new DatabaseSync(file); this.sqlite.exec('PRAGMA busy_timeout=3000;'); }
+  prepare(sql) { return new LocalD1Statement(this.sqlite, sql); }
+  async batch(statements) {
+    this.sqlite.exec('BEGIN IMMEDIATE');
+    try {
+      const outcomes = statements.map(s => s.run());
+      this.sqlite.exec('COMMIT');
+      return outcomes;
+    } catch (error) {
+      this.sqlite.exec('ROLLBACK');
+      throw error;
+    }
+  }
+  close() { this.sqlite.close(); }
+}
+
+function withDb(fn) {
+  const dir = mkdtempSync(join(tmpdir(), 'thelogbook-cf00-'));
+  const file = join(dir, 'only-synthetic.sqlite3');
+  const a = new LocalD1ContractAdapter(file);
+  const b = new LocalD1ContractAdapter(file);
+  return Promise.resolve().then(() => fn(a, b)).finally(() => {
+    a.close(); b.close(); rmSync(dir, { recursive: true, force: true });
+  });
+}
+
+const attempt = (writer, batchId, expectedRev = 0, consentEpoch = 7) => ({
+  writer, batchId, expectedRev, consentEpoch,
+});
+
+void test('two writers using the same snapshot have one commit and one rollback (serial adapter)', () => withDb(async (a, b) => {
+  await prepareFixture(a);
+  const outcomes = await Promise.allSettled([
+    commitSyntheticBatch(a, attempt('writer-a', 'batch000000000001-a')),
+    commitSyntheticBatch(b, attempt('writer-b', 'batch000000000001-b')),
+  ]);
+  assert.deepEqual(outcomes.map(x => x.status).sort(), ['fulfilled', 'rejected']);
+  const state = await readSyntheticState(a);
+  assert.equal(state.control.revision, 1);
+  assert.equal(state.control.consent_epoch, 7);
+  assert.equal(state.docs.length, 1);
+  const winner = outcomes[0].status === 'fulfilled' ? 'a' : 'b';
+  const receipt = await readReceipt(a, `batch000000000001-${winner}`);
+  assert.equal(receipt.committed_rev, 1);
+  assert.equal(await readReceipt(a, `batch000000000001-${winner === 'a' ? 'b' : 'a'}`), null);
+}));
+
+void test('stale consent and failed late statement never persist receipt or document', () => withDb(async (a) => {
+  await prepareFixture(a);
+  await assert.rejects(commitSyntheticBatch(a, attempt('writer-a', 'batch000000000002-a', 0, 6)), /stale/i);
+  assert.equal((await readSyntheticState(a)).control.revision, 0);
+  await assert.rejects(a.batch([
+    a.prepare('INSERT INTO cf00_receipt VALUES (?, ?, ?, ?, ?, ?)').bind('cf00-synthetic-owner', 'batch000000000002-b', 'writer-a', 0, 7, 1),
+    a.prepare('INSERT INTO cf00_document VALUES (?, ?, ?, ?)').bind('cf00-synthetic-owner', 'writer-a', 'synthetic', 1),
+    a.prepare('INSERT INTO cf00_receipt VALUES (?, ?, ?, ?, ?, ?)').bind('cf00-synthetic-owner', 'batch000000000002-b', 'writer-a', 0, 7, 1),
+  ]), /UNIQUE/i);
+  assert.equal((await readSyntheticState(a)).docs.length, 0);
+  assert.equal(await readReceipt(a, 'batch000000000002-b'), null);
+}));
+
+void test('duplicate batch cannot produce a second commit; receipt permits lost-ACK recovery', () => withDb(async (a) => {
+  await prepareFixture(a);
+  const write = attempt('writer-a', 'batch000000000003-a');
+  await commitSyntheticBatch(a, write);
+  await assert.rejects(commitSyntheticBatch(a, write));
+  // Reusing the same batch ID with a different write must not masquerade as its ACK.
+  await assert.rejects(commitSyntheticBatch(a, attempt('writer-b', write.batchId)));
+  const state = await readSyntheticState(a);
+  assert.equal(state.control.revision, 1);
+  assert.deepEqual(state.docs.map(doc => doc.path), ['writer-a']);
+  assert.deepEqual({ ...(await readReceipt(a, write.batchId)) }, {
+    writer: 'writer-a', expected_rev: 0, consent_epoch: 7, committed_rev: 1,
+  });
+}));
+
+void test('SQLite adapter does not claim D1 provider metering', () => withDb(async (db) => {
+  const secret = 'q'.repeat(48);
+  const env = { DB: db, CF00_PROBE_ENABLED: 'true', CF00_PROBE_SECRET: secret };
+  const headers = { 'x-cf00-secret': secret };
+  const init = await worker.fetch(new Request('https://cf00.invalid/__cf00/init', { method: 'POST', headers }), env);
+  assert.equal(init.status, 200);
+  const response = await worker.fetch(new Request('https://cf00.invalid/__cf00/write', {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(attempt('writer-a', 'batch000000000004-a')),
+  }), env);
+  assert.equal(response.status, 200);
+  const payload = await response.json();
+  assert.equal(payload.queryMetrics, null);
+  const health = await worker.fetch(new Request('https://cf00.invalid/__cf00/health', {
+    method: 'POST', headers,
+  }), env);
+  assert.equal(health.status, 200);
+  assert.deepEqual(await health.json(), { ready: true, durableObjectBinding: false, d1Binding: true });
+  const plan = await worker.fetch(new Request('https://cf00.invalid/__cf00/plan', {
+    method: 'POST', headers,
+  }), env);
+  assert.equal(plan.status, 200);
+  const evidence = await plan.json();
+  assert.deepEqual(evidence.plans.map(item => item.name), ['control', 'receipt', 'document']);
+  for (const item of evidence.plans) {
+    assert.ok(item.detail.some(text => /USING (?:COVERING )?INDEX/.test(text)));
+    assert.equal(item.queryMetrics, null);
+  }
+}));
+
+void test('synthetic password credential round-trip rejects wrong, altered and malformed records', async () => {
+  const probe = new PasswordProbe();
+  const response = await probe.fetch(new Request('https://cf00.invalid/?algorithm=scrypt-lifecycle', {
+    method: 'POST',
+  }));
+  assert.equal(response.status, 200);
+  const result = await response.json();
+  assert.deepEqual(result, {
+    algorithm: 'scrypt', N: 16384, r: 8, p: 5, saltBytes: 16, outputBits: 256,
+    matchingPasswordAccepted: true,
+    wrongPasswordRejected: true,
+    tamperedDigestRejected: true,
+    malformedCredentialRejected: true,
+    freshSaltPerCredential: true,
+  });
+  for (const key of ['hash', 'salt', 'stored', 'password', 'credential']) assert.ok(!(key in result));
+});
+
+void test('authorized D1 routes reject a missing binding without touching data', async () => {
+  const secret = 't'.repeat(48);
+  const env = { CF00_PROBE_ENABLED: 'true', CF00_PROBE_SECRET: secret };
+  for (const path of ['/__cf00/init', '/__cf00/write', '/__cf00/state',
+    '/__cf00/receipt', '/__cf00/plan']) {
+    const response = await worker.fetch(new Request('https://cf00.invalid' + path, {
+      method: 'POST', headers: { 'x-cf00-secret': secret },
+    }), env);
+    assert.equal(response.status, 503);
+    assert.deepEqual(await response.json(), { error: 'd1-binding-unavailable' });
+  }
+});
+
+void test('probe defaults to unavailable and requires a secret even when enabled', async () => {
+  const url = 'https://cf00.invalid/__cf00/init';
+  const missing = await worker.fetch(new Request(url, { method: 'POST' }), {});
+  assert.equal(missing.status, 404);
+  const invalid = await worker.fetch(new Request(url, { method: 'POST', headers: { 'x-cf00-secret': 'wrong' } }), {
+    CF00_PROBE_ENABLED: 'true', CF00_PROBE_SECRET: 'a'.repeat(48),
+  });
+  assert.equal(invalid.status, 404);
+});
+
+void test('work factor probes use synthetic data and do not expose hash output', async () => {
+  const probe = new PasswordProbe();
+  const r = await probe.fetch(new Request('https://cf00.invalid/?algorithm=pbkdf2', { method: 'POST' }));
+  const p = await r.json();
+  assert.equal(r.status, 200);
+  assert.equal(p.algorithm, 'pbkdf2-sha256');
+  assert.equal(p.workFactor, 600000);
+  assert.equal(p.outputBits, 256);
+  assert.ok(p.wallMs > 0);
+  assert.ok(!('hash' in p));
+  const q = await probe.fetch(new Request('https://cf00.invalid/?algorithm=scrypt', { method: 'POST' }));
+  const s = await q.json();
+  assert.equal(q.status, 200);
+  assert.equal(s.algorithm, 'scrypt');
+  assert.deepEqual([s.N, s.r, s.p], [16384, 8, 5]);
+  assert.ok(s.wallMs > 0);
+  assert.ok(!('hash' in s));
+});

@@ -1,0 +1,296 @@
+import { LEGAL_VERSIONS } from '../../../src/lib/legalVersions';
+import 'fake-indexeddb/auto';
+import { clear, get } from 'idb-keyval';
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+
+const remote = vi.hoisted(() => ({
+    apply: vi.fn(), check: vi.fn(),
+    auth: { currentUser: { uid: 'a', getIdToken: vi.fn(async () => 'id-token') } },
+}));
+vi.mock('../../../src/lib/firebase', () => ({
+    auth: remote.auth, getDb: () => ({}), ensureAppCheck: async () => {},
+    waitForPendingWrites: async () => {},
+}));
+vi.mock('../../../src/lib/appCheck', () => ({ getLimitedUseAppCheckToken: remote.check }));
+vi.mock('../../../src/lib/healthConsent', async () => {
+    const actual = await vi.importActual<typeof import('../../../src/lib/healthConsent')>('../../../src/lib/healthConsent');
+    const writable = (owner: string) => owner === 'user:' + remote.auth.currentUser.uid;
+    return {
+        ...actual,
+        isHealthConsentWritable: writable, isHealthConsentCloudWritable: writable,
+        requireHealthConsentWritable: (owner: string) => {
+            if (!writable(owner)) throw new Error('Consent unavailable');
+        },
+        getVerifiedHealthConsentRevision: () => 1,
+    };
+});
+vi.mock('../../../src/lib/sync/transactionWriter', () => ({ applyDocumentChanges: remote.apply }));
+
+import { getSeedCatalog } from '../../../src/lib/catalog/catalogService';
+import { projectDocuments } from '../../../src/lib/sync/documentProjection';
+import { applySemanticOperations } from '../../../src/lib/sync/semanticProjection';
+import { replicateJournal } from '../../../src/lib/sync/replicateJournal';
+import { adoptReplicaCheckpoint, initializeLocal, commitLocal, readLocal } from '../../../src/lib/sync/localRepository';
+import { createJournalRetry, type JournalRetryState } from '../../../src/lib/sync/journalRetry';
+import { UserDataSchema } from '../../../src/lib/schema';
+import { invalidateSession } from '../../../src/lib/sync/session';
+import { createAndMigrateVault } from '../../../src/lib/sync/secureArchiveMigration';
+import { lockAllVaults } from '../../../src/lib/sync/secureArchiveSession';
+import type { UserData } from '../../../src/types';
+
+const data = (height: number) => UserDataSchema.parse({
+    profile: { height: String(height) },
+    legalConsent: {
+        hasAcceptedTerms: true, hasAcceptedHealthData: true, acceptedAt: '2026-10-11T10:00:00.000Z',
+        privacyVersion: LEGAL_VERSIONS.privacy, termsVersion: LEGAL_VERSIONS.terms,
+    },
+}) as unknown as UserData;
+const keyPayload = {
+    format: 'thelogbook-account-data-key', version: 1,
+    key: btoa(String.fromCharCode(...new Uint8Array(32).fill(18))),
+};
+
+beforeEach(async () => {
+    lockAllVaults();
+    localStorage.clear();
+    localStorage.setItem('logbook:v2:user:a:health-consent-generation', '1');
+    vi.stubGlobal('navigator', { onLine: true, locks: {
+        request: async (_name: string, _options: unknown, run: () => Promise<unknown>) => run(),
+    } });
+    invalidateSession();
+    await clear();
+    remote.auth.currentUser.uid = 'a';
+    remote.auth.currentUser.getIdToken.mockReset().mockResolvedValue('id-token');
+    remote.apply.mockReset();
+    remote.check.mockReset().mockResolvedValue('one-use-token');
+    await createAndMigrateVault('user:a');
+    await initializeLocal('user:a', data(170));
+    const now = Date.now();
+    await adoptReplicaCheckpoint('user:a', {
+        identity: {
+            slot: 's00', replicaId: 'replica-a', generation: 1,
+            checkpointAtMs: now, leaseUntilMs: now + 360 * 24 * 60 * 60 * 1000,
+        },
+        baseSeq: 0,
+    }, { clock: {}, syncMetaByDocument: {} });
+    await commitLocal('user:a', data(171), data(170));
+});
+afterEach(() => { vi.useRealTimers(); lockAllVaults(); vi.unstubAllGlobals(); });
+
+it.each([false, true])('releases the acquired ADK only after the journal writer settles (failure=%s)', async shouldFail => {
+    const initial = (await readLocal('user:a'))!;
+    vi.stubGlobal('fetch', vi.fn(async () => Response.json(keyPayload)));
+    let writerKey: Uint8Array | undefined;
+    remote.apply.mockImplementationOnce(async (_db, _uid, _batch, _isCurrent, _replica, cloudKey: Uint8Array) => {
+        writerKey = cloudKey;
+        expect(cloudKey).toEqual(new Uint8Array(32).fill(18));
+        if (shouldFail) throw new Error('Injected writer failure');
+        const { documents, syncMetas } = applySemanticOperations(
+            projectDocuments(data(170), getSeedCatalog()), initial.pending,
+        );
+        return { documents, syncMeta: syncMetas };
+    });
+    const result = await replicateJournal('user:a');
+    expect(result.ok).toBe(!shouldFail);
+    expect(writerKey).toEqual(new Uint8Array(32));
+    expect((await readLocal('user:a'))?.pending.length).toBe(shouldFail ? 1 : 0);
+});
+
+it.each(['network', 'timeout', 'limited-use', 'auth-network', 429, 503] as const)(
+    'preserves ciphertext after key-service %s and automatically retries to a real local ACK',
+    async failure => {
+        const before = await readLocal('user:a');
+        expect(before?.pending).toHaveLength(1);
+        const ciphertext = await get('logbook:v2:user:a');
+        expect(ciphertext).toMatch(/^tlb-sealed:v1:/);
+        const fetch = vi.fn()
+            .mockImplementationOnce(async () => {
+                if (failure === 'network') throw new TypeError('Injected network outage');
+                if (failure === 'timeout') throw new DOMException('Injected timeout', 'TimeoutError');
+                return new Response(null, { status: typeof failure === 'number' ? failure : 200 });
+            })
+            .mockResolvedValueOnce(Response.json(keyPayload));
+        const beforeFetchFailure = failure === 'limited-use' || failure === 'auth-network';
+        if (beforeFetchFailure) {
+            fetch.mockReset().mockResolvedValue(Response.json(keyPayload));
+            if (failure === 'limited-use') remote.check.mockRejectedValueOnce(Object.assign(
+                new Error('Token transport unavailable'), { code: 'app-check-limited-use-unavailable', retryable: true },
+            ));
+            else remote.auth.currentUser.getIdToken.mockRejectedValueOnce(Object.assign(
+                new Error('Auth transport unavailable'), { code: 'auth/network-request-failed' },
+            ));
+        }
+        vi.stubGlobal('fetch', fetch);
+        // Auth/consent, App Check and the cloud writer are collaborators.
+        // The key client, replica, retry controller, AEAD, IndexedDB and ACK are real.
+        remote.apply.mockImplementationOnce(async () => {
+            const { documents, syncMetas } = applySemanticOperations(
+                projectDocuments(data(170), getSeedCatalog()), before!.pending,
+            );
+            return { documents, syncMeta: syncMetas };
+        });
+        const first = await replicateJournal('user:a');
+        expect(first.status).toBe('local-pending');
+        expect(remote.apply).not.toHaveBeenCalled();
+        expect(await get('logbook:v2:user:a')).toEqual(ciphertext);
+        expect((await readLocal('user:a'))?.pending).toEqual(before!.pending);
+
+        vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+        let state: JournalRetryState = {
+            syncHealth: first.status, syncing: false, localPersistenceBlocked: false, compatibilityStatus: 'ok',
+        };
+        const retry = createJournalRetry(
+            () => state, () => () => {}, () => true,
+            async () => {
+                state = { ...state, syncing: true };
+                const result = await replicateJournal('user:a');
+                state = { ...state, syncing: false, syncHealth: result.status };
+            },
+        );
+        try {
+            await vi.advanceTimersByTimeAsync(19_999);
+            expect(fetch).toHaveBeenCalledTimes(beforeFetchFailure ? 0 : 1);
+            await vi.advanceTimersByTimeAsync(1);
+            // Real IndexedDB completes outside the fake timer queue.
+            await vi.waitFor(() => expect(state.syncHealth).toBe('synced'));
+            expect(fetch).toHaveBeenCalledTimes(beforeFetchFailure ? 1 : 2);
+            expect(remote.apply).toHaveBeenCalledTimes(1);
+            const recovered = await readLocal('user:a');
+            expect(recovered?.pending).toHaveLength(0);
+            expect(recovered?.data.profile?.height).toBe('171');
+            expect(recovered?.baseline.profile?.height).toBe('171');
+            await vi.advanceTimersByTimeAsync(300_000);
+            expect(fetch).toHaveBeenCalledTimes(beforeFetchFailure ? 1 : 2);
+        } finally { retry.dispose(); }
+    },
+);
+
+function startDurableRetry() {
+    let state: JournalRetryState = {
+        syncHealth: 'local-pending', syncing: false,
+        localPersistenceBlocked: false, compatibilityStatus: 'ok',
+    };
+    const flush = vi.fn(async () => {
+        state = { ...state, syncing: true };
+        const result = await replicateJournal('user:a');
+        state = { ...state, syncing: false, syncHealth: result.status };
+    });
+    const controller = createJournalRetry(
+        () => state, () => () => {}, () => true, flush,
+    );
+    return { controller, flush, health: () => state.syncHealth };
+}
+
+it('replays an ambiguously committed batch without changing its winner or causal metadata', async () => {
+    const before = await readLocal('user:a');
+    const ciphertext = await get('logbook:v2:user:a');
+    const fetch = vi.fn(async () => Response.json(keyPayload));
+    vi.stubGlobal('fetch', fetch);
+    let cloud: ReturnType<typeof applySemanticOperations> | undefined;
+    const initialDocuments = projectDocuments(data(170), getSeedCatalog());
+    remote.apply.mockImplementation(async (_db: unknown, _uid: string, operations: Parameters<typeof applySemanticOperations>[1]) => {
+        cloud = applySemanticOperations(
+            cloud?.documents ?? initialDocuments, operations, cloud?.syncMetas,
+        );
+        if (remote.apply.mock.calls.length === 1) {
+            // The server applied the batch; only its response was lost.
+            throw Object.assign(new Error('Injected lost response'), { code: 'unavailable' });
+        }
+        return { documents: cloud.documents, syncMeta: cloud.syncMetas };
+    });
+
+    const first = await replicateJournal('user:a');
+    expect(first.status).toBe('local-pending');
+    expect(remote.apply).toHaveBeenCalledTimes(1);
+    expect(await get('logbook:v2:user:a')).toEqual(ciphertext);
+    expect((await readLocal('user:a'))?.pending).toEqual(before?.pending);
+    const committedCloud = structuredClone(cloud);
+    expect(committedCloud).toBeDefined();
+
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    const retry = startDurableRetry();
+    try {
+        await vi.advanceTimersByTimeAsync(19_999);
+        expect(remote.apply).toHaveBeenCalledTimes(1);
+        await vi.advanceTimersByTimeAsync(1);
+        await vi.waitFor(() => expect(retry.health()).toBe('synced'));
+
+        expect(retry.flush).toHaveBeenCalledTimes(1);
+        expect(remote.apply.mock.calls.map(args => args[2])).toEqual([before?.pending, before?.pending]);
+        expect(cloud).toEqual(committedCloud);
+        const recovered = await readLocal('user:a');
+        expect(recovered?.pending).toEqual([]);
+        expect(recovered?.data).toEqual(before?.data);
+        expect(recovered?.baseline).toEqual(before?.data);
+        expect(recovered?.actorSeq).toBe(before?.actorSeq);
+        await vi.advanceTimersByTimeAsync(600_000);
+        expect(fetch).toHaveBeenCalledTimes(2);
+        expect(retry.flush).toHaveBeenCalledTimes(1);
+    } finally { retry.controller.dispose(); }
+});
+
+it('stops automatic retries after a permanent remote rejection and preserves the encrypted journal', async () => {
+    const before = await readLocal('user:a');
+    const ciphertext = await get('logbook:v2:user:a');
+    const fetch = vi.fn(async () => Response.json(keyPayload));
+    vi.stubGlobal('fetch', fetch);
+    remote.apply.mockRejectedValue(Object.assign(
+        new Error('Injected server refusal'), { code: 'permission-denied' },
+    ));
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    const retry = startDurableRetry();
+    try {
+        await vi.advanceTimersByTimeAsync(20_000);
+        await vi.waitFor(() => expect(retry.health()).toBe('rejected'));
+        expect(await get('logbook:v2:user:a')).toEqual(ciphertext);
+        expect(await readLocal('user:a')).toEqual(before);
+        await vi.advanceTimersByTimeAsync(600_000);
+        expect(retry.flush).toHaveBeenCalledTimes(1);
+        expect(remote.apply).toHaveBeenCalledTimes(1);
+        expect(fetch).toHaveBeenCalledTimes(1);
+        expect(vi.getTimerCount()).toBe(0);
+    } finally { retry.controller.dispose(); }
+});
+
+it('resumes from the same durable journal after disposal between the timer and its microtask', async () => {
+    const before = await readLocal('user:a');
+    expect(before?.pending).toHaveLength(1);
+    const ciphertext = await get('logbook:v2:user:a');
+    const fetch = vi.fn(async () => Response.json(keyPayload));
+    vi.stubGlobal('fetch', fetch);
+    remote.apply.mockImplementation(async (_db: unknown, _uid: string, operations: Parameters<typeof applySemanticOperations>[1]) => {
+        const applied = applySemanticOperations(projectDocuments(data(170), getSeedCatalog()), operations);
+        return { documents: applied.documents, syncMeta: applied.syncMetas };
+    });
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    const stopped = startDurableRetry();
+    try {
+        vi.advanceTimersByTime(20_000);
+        stopped.controller.dispose();
+        await vi.advanceTimersByTimeAsync(0);
+        expect(stopped.flush).not.toHaveBeenCalled();
+        expect(fetch).not.toHaveBeenCalled();
+        expect(remote.apply).not.toHaveBeenCalled();
+        expect(await get('logbook:v2:user:a')).toEqual(ciphertext);
+        expect(await readLocal('user:a')).toEqual(before);
+    } finally { stopped.controller.dispose(); }
+
+    const resumed = startDurableRetry();
+    try {
+        await vi.advanceTimersByTimeAsync(19_999);
+        expect(fetch).not.toHaveBeenCalled();
+        await vi.advanceTimersByTimeAsync(1);
+        await vi.waitFor(() => expect(resumed.health()).toBe('synced'));
+        expect(resumed.flush).toHaveBeenCalledTimes(1);
+        expect(remote.apply.mock.calls.map(args => args[2])).toEqual([before?.pending]);
+        const recovered = await readLocal('user:a');
+        expect(recovered?.pending).toEqual([]);
+        expect(recovered?.data).toEqual(before?.data);
+        expect(recovered?.baseline).toEqual(before?.data);
+        expect(recovered?.actorSeq).toBe(before?.actorSeq);
+        expect(recovered?.clock).toEqual(before?.clock);
+        await vi.advanceTimersByTimeAsync(600_000);
+        expect(fetch).toHaveBeenCalledTimes(1);
+        expect(resumed.flush).toHaveBeenCalledTimes(1);
+    } finally { resumed.controller.dispose(); }
+});

@@ -1,0 +1,427 @@
+import type {
+    NutritionDay,
+    TrainingCycle,
+    UserData,
+    WorkoutRoutine,
+} from '../../../types';
+import { UserDataSchema } from '../../schema';
+import { CardioSessionSchema } from '../../schemas/schema_nutrition';
+import { TrainingCycleWriteSchema } from '../../schemas/schema_training';
+import { hasValidCycleWriteFrequencies, isBoundedCycleCount, MAX_EDITABLE_CYCLE_WEEKS, MAX_CYCLE_SESSIONS_PER_WEEK } from '../../calc/cycleLimits';
+import { calculateLoggedMealTotals } from '../../nutrition/calculateLoggedMealTotals';
+import { getLocalDateString } from '../../utils/date';
+import type { DomainOperation, DomainOperationBatch } from './contracts';
+import {
+    applyPatch,
+    assertUnique,
+    assertWorkoutSessionIdentities,
+    deleteById,
+    reorderByIds,
+    requireDate,
+    requireId,
+    upsertById,
+    assertNeverDomainOperation,
+} from './validation';
+
+function assertNewCycleRoutineFrequencies(routines: ReadonlyArray<{ frequencyPerWeek?: unknown }>, sessionsPerWeek: unknown): void {
+    if (!hasValidCycleWriteFrequencies(routines, sessionsPerWeek)) {
+        throw new Error('Frequenza routine ciclo non valida');
+    }
+}
+
+function ensureNutritionDay(data: UserData, date: string): NutritionDay {
+    const validDate = requireDate(date);
+    return data.nutrition?.[validDate] ?? {
+        date: validDate,
+        kcal: 0,
+        carbs: 0,
+        pro: 0,
+        fat: 0,
+        meals: [],
+        supplementsIntake: [],
+    };
+}
+
+function withMealTotals(day: NutritionDay): NutritionDay {
+    const totals = calculateLoggedMealTotals(day.meals ?? []);
+    return { ...day, kcal: totals.kcal, carbs: totals.carbs, pro: totals.pro, fat: totals.fat };
+}
+
+function requireSteps(value: number): number {
+    if (!Number.isFinite(value) || !Number.isInteger(value) || value < 0) throw new Error('Passi: valore non valido');
+    return value;
+}
+
+function requireCapturedAt(value: number | undefined): number | undefined {
+    if (value === undefined) return undefined;
+    if (!Number.isFinite(value) || value < 0) throw new Error('Attività: timestamp non valido');
+    return value;
+}
+
+function findRoutine(data: UserData, id: string): { index: number; value: WorkoutRoutine } {
+    const normalized = requireId(id, 'Routine');
+    const routines = data.routines ?? [];
+    assertUnique(routines, routine => requireId(routine.id, 'Routine'), 'Routine');
+    const index = routines.findIndex(routine => routine.id === normalized);
+    if (index < 0) throw new Error(`Routine non trovata: ${normalized}`);
+    return { index, value: routines[index] };
+}
+
+function findCycle(data: UserData, id: string): { index: number; value: TrainingCycle } {
+    const normalized = requireId(id, 'Ciclo');
+    const cycles = data.trainingCycles ?? [];
+    assertUnique(cycles, cycle => requireId(cycle.id, 'Ciclo'), 'Ciclo');
+    const index = cycles.findIndex(cycle => cycle.id === normalized);
+    if (index < 0) throw new Error(`Ciclo non trovato: ${normalized}`);
+    return { index, value: cycles[index] };
+}
+
+function applyOne(data: UserData, operation: DomainOperation): UserData {
+
+    switch (operation.type) {
+        case 'profile.patch':
+            data.profile = applyPatch(data.profile ?? {}, operation.patch);
+            break;
+        case 'nutrition-planning.replace':
+            data.nutritionPlanning = structuredClone(operation.value);
+            if (operation.origin) data.nutritionPlanningOrigin = operation.origin;
+            break;
+        case 'nutrition-day.patch': {
+            const date = requireDate(operation.date);
+            const day = ensureNutritionDay(data, date);
+            const patched = applyPatch<NutritionDay>(day, operation.patch);
+            data.nutrition = { ...(data.nutrition ?? {}), [date]: { ...patched, date } };
+            break;
+        }
+        case 'nutrition-day.delete': {
+            const date = requireDate(operation.date);
+            const nutrition = { ...(data.nutrition ?? {}) };
+            delete nutrition[date];
+            data.nutrition = nutrition;
+            break;
+        }
+        case 'activity-steps.set': {
+            const date = requireDate(operation.date);
+            const day = ensureNutritionDay(data, date);
+            const steps = requireSteps(operation.steps);
+            const capturedAt = requireCapturedAt(operation.capturedAt);
+            const next = { ...day, date, steps, stepsSource: operation.source ?? 'manual' as const };
+            if (capturedAt === undefined) delete next.stepsCapturedAt;
+            else next.stepsCapturedAt = capturedAt;
+            data.nutrition = { ...(data.nutrition ?? {}), [date]: next };
+            break;
+        }
+        case 'activity-steps.clear': {
+            const date = requireDate(operation.date);
+            const day = data.nutrition?.[date];
+            if (!day) break;
+            const next = { ...day };
+            delete next.steps;
+            delete next.stepsSource;
+            delete next.stepsCapturedAt;
+            data.nutrition = { ...(data.nutrition ?? {}), [date]: next };
+            break;
+        }
+        case 'cardio-session.upsert': {
+            const date = requireDate(operation.date);
+            const day = ensureNutritionDay(data, date);
+            const session = CardioSessionSchema.parse(operation.session);
+            const id = requireId(session.id, 'Sessione cardio');
+            const cardioSessions = upsertById(day.cardioSessions, { ...session, id }, item => requireId(item.id, 'Sessione cardio'), 'Sessioni cardio');
+            data.nutrition = { ...(data.nutrition ?? {}), [date]: { ...day, date, cardioSessions } };
+            break;
+        }
+        case 'cardio-session.delete': {
+            const date = requireDate(operation.date);
+            const sessionId = requireId(operation.sessionId, 'Sessione cardio');
+            const day = data.nutrition?.[date];
+            if (!day) break;
+            const cardioSessions = deleteById(day.cardioSessions, sessionId, item => requireId(item.id, 'Sessione cardio'), 'Sessioni cardio');
+            data.nutrition = { ...(data.nutrition ?? {}), [date]: { ...day, date, cardioSessions } };
+            break;
+        }
+        case 'nutrition-meal.upsert': {
+            const date = requireDate(operation.date);
+            const mealId = requireId(operation.meal.id, 'Pasto');
+            const day = ensureNutritionDay(data, date);
+            const meals = upsertById(day.meals, { ...operation.meal, id: mealId }, meal => requireId(meal.id, 'Pasto'), 'Pasti');
+            data.nutrition = { ...(data.nutrition ?? {}), [date]: withMealTotals({ ...day, date, meals }) };
+            break;
+        }
+        case 'nutrition-meal.delete': {
+            const date = requireDate(operation.date);
+            const mealId = requireId(operation.mealId, 'Pasto');
+            const day = ensureNutritionDay(data, date);
+            const meals = deleteById(day.meals, mealId, meal => requireId(meal.id, 'Pasto'), 'Pasti');
+            data.nutrition = { ...(data.nutrition ?? {}), [date]: withMealTotals({ ...day, date, meals }) };
+            break;
+        }
+        case 'supplement-intake.upsert': {
+            const date = requireDate(operation.date);
+            const intakeId = requireId(operation.intake.id, 'Assunzione integratore');
+            requireId(operation.intake.supplementId, 'Integratore');
+            if (!Number.isFinite(operation.intake.amount) || operation.intake.amount <= 0) {
+                throw new Error('La quantità assunta deve essere positiva.');
+            }
+            const day = ensureNutritionDay(data, date);
+            const supplementsIntake = upsertById(
+                day.supplementsIntake,
+                { ...operation.intake, id: intakeId },
+                intake => requireId(intake.id, 'Assunzione integratore'),
+                'Assunzioni integratori',
+            );
+            data.nutrition = { ...(data.nutrition ?? {}), [date]: { ...day, date, supplementsIntake } };
+            break;
+        }
+        case 'supplement-intake.delete': {
+            const date = requireDate(operation.date);
+            const intakeId = requireId(operation.intakeId, 'Assunzione integratore');
+            const day = ensureNutritionDay(data, date);
+            const supplementsIntake = deleteById(
+                day.supplementsIntake,
+                intakeId,
+                intake => requireId(intake.id, 'Assunzione integratore'),
+                'Assunzioni integratori',
+            );
+            data.nutrition = { ...(data.nutrition ?? {}), [date]: { ...day, date, supplementsIntake } };
+            break;
+        }
+        case 'supplement.upsert': {
+            const supplement = { ...operation.supplement, id: requireId(operation.supplement.id, 'Integratore') };
+            if (!supplement.name.trim() || !supplement.unit.trim()) throw new Error('Nome e unità integratore obbligatori.');
+            if ([supplement.target, supplement.portion].some(value => value !== undefined && (!Number.isFinite(value) || value <= 0))) {
+                throw new Error('Le dosi dell’integratore devono essere positive.');
+            }
+            data.supplements = upsertById(data.supplements, supplement, item => requireId(item.id, 'Integratore'), 'Integratori');
+            break;
+        }
+        case 'supplement.delete':
+            data.supplements = deleteById(data.supplements, requireId(operation.id, 'Integratore'), item => requireId(item.id, 'Integratore'), 'Integratori');
+            break;
+        case 'supplement.reorder':
+            data.supplements = reorderByIds(data.supplements, operation.ids, item => requireId(item.id, 'Integratore'), 'Integratori');
+            break;
+        case 'routine.upsert': {
+            const routine = { ...operation.routine, id: requireId(operation.routine.id, 'Routine') };
+            assertUnique(routine.exercises ?? [], item => requireId(item.exId, 'Esercizio routine'), 'Esercizi routine');
+            data.routines = upsertById(data.routines, routine, item => requireId(item.id, 'Routine'), 'Routine');
+            break;
+        }
+        case 'routine.delete':
+            data.routines = deleteById(data.routines, requireId(operation.id, 'Routine'), item => requireId(item.id, 'Routine'), 'Routine');
+            break;
+        case 'routine.reorder':
+            data.routines = reorderByIds(data.routines, operation.ids, item => requireId(item.id, 'Routine'), 'Routine');
+            break;
+        case 'routine-exercise.upsert': {
+            const { index, value } = findRoutine(data, operation.routineId);
+            const exercise = { ...operation.exercise, exId: requireId(operation.exercise.exId, 'Esercizio routine') };
+            const exercises = upsertById(value.exercises, exercise, item => requireId(item.exId, 'Esercizio routine'), 'Esercizi routine');
+            data.routines = [...(data.routines ?? [])];
+            data.routines[index] = { ...value, exercises };
+            break;
+        }
+        case 'routine-exercise.delete': {
+            const { index, value } = findRoutine(data, operation.routineId);
+            const exercises = deleteById(value.exercises, requireId(operation.exId, 'Esercizio routine'), item => requireId(item.exId, 'Esercizio routine'), 'Esercizi routine');
+            data.routines = [...(data.routines ?? [])];
+            data.routines[index] = { ...value, exercises };
+            break;
+        }
+        case 'routine-exercise.reorder': {
+            const { index, value } = findRoutine(data, operation.routineId);
+            const exercises = reorderByIds(value.exercises, operation.exIds, item => requireId(item.exId, 'Esercizio routine'), 'Esercizi routine');
+            data.routines = [...(data.routines ?? [])];
+            data.routines[index] = { ...value, exercises };
+            break;
+        }
+        case 'training-cycle.upsert': {
+            // Tolerant read schemas discard invalid and duplicate routine identities.
+            // A domain write must reject them before parsing, not silently save a truncated cycle.
+            if (!isBoundedCycleCount(operation.cycle.durationWeeks, MAX_EDITABLE_CYCLE_WEEKS)
+                || (operation.cycle.sessionsPerWeek !== undefined
+                    && !isBoundedCycleCount(operation.cycle.sessionsPerWeek, MAX_CYCLE_SESSIONS_PER_WEEK))) {
+                throw new Error('Durata o frequenza del ciclo non valida');
+            }
+            const inputRoutines: unknown = operation.cycle.routines;
+            if (inputRoutines !== undefined) {
+                if (!Array.isArray(inputRoutines)) throw new Error('Routine ciclo: elenco non valido');
+                assertUnique(inputRoutines, (item: unknown) => requireId(
+                    item && typeof item === 'object' && 'routineId' in item ? item.routineId : undefined,
+                    'Routine ciclo',
+                ), 'Routine ciclo');
+                assertNewCycleRoutineFrequencies(inputRoutines, operation.cycle.sessionsPerWeek);
+            }
+            const cycle = TrainingCycleWriteSchema.parse({ ...operation.cycle, id: requireId(operation.cycle.id, 'Ciclo') });
+            if (Array.isArray(inputRoutines) && cycle.routines.length !== inputRoutines.length) {
+                throw new Error('Routine ciclo: impossibile conservare tutte le routine');
+            }
+            data.trainingCycles = upsertById(data.trainingCycles, cycle, item => requireId(item.id, 'Ciclo'), 'Cicli');
+            break;
+        }
+        case 'training-cycle.delete':
+            data.trainingCycles = deleteById(data.trainingCycles, requireId(operation.id, 'Ciclo'), item => requireId(item.id, 'Ciclo'), 'Cicli');
+            break;
+        case 'training-cycle.reorder':
+            data.trainingCycles = reorderByIds(data.trainingCycles, operation.ids, item => requireId(item.id, 'Ciclo'), 'Cicli');
+            break;
+        case 'training-cycle-routine.upsert': {
+            const { index, value } = findCycle(data, operation.cycleId);
+            const routine = { ...operation.routine, routineId: requireId(operation.routine.routineId, 'Routine ciclo') };
+            const routines = upsertById(value.routines, routine, item => requireId(item.routineId, 'Routine ciclo'), 'Routine ciclo');
+            assertNewCycleRoutineFrequencies(routines, value.sessionsPerWeek);
+            data.trainingCycles = [...(data.trainingCycles ?? [])];
+            data.trainingCycles[index] = { ...value, routines };
+            break;
+        }
+        case 'training-cycle-routine.delete': {
+            const { index, value } = findCycle(data, operation.cycleId);
+            const routines = deleteById(value.routines, requireId(operation.routineId, 'Routine ciclo'), item => requireId(item.routineId, 'Routine ciclo'), 'Routine ciclo');
+            data.trainingCycles = [...(data.trainingCycles ?? [])];
+            data.trainingCycles[index] = { ...value, routines };
+            break;
+        }
+        case 'training-cycle-routine.reorder': {
+            const { index, value } = findCycle(data, operation.cycleId);
+            const routines = reorderByIds(value.routines, operation.routineIds, item => requireId(item.routineId, 'Routine ciclo'), 'Routine ciclo');
+            data.trainingCycles = [...(data.trainingCycles ?? [])];
+            data.trainingCycles[index] = { ...value, routines };
+            break;
+        }
+        case 'active-cycle.set':
+            data.activeCycleId = operation.id === null ? null : requireId(operation.id, 'Ciclo attivo');
+            break;
+        case 'history.upsert': {
+            const workout = { ...operation.workout, id: requireId(operation.workout.id, 'Allenamento') };
+            assertWorkoutSessionIdentities(workout, 'Allenamento storico');
+            requireDate(workout.date ?? (workout.globalStartTime ? getLocalDateString(workout.globalStartTime) : ''));
+            const current = data.history ?? [];
+            assertUnique(current, item => requireId(item.id, 'Allenamento'), 'Storico allenamenti');
+            const index = current.findIndex(item => item.id === workout.id);
+            data.history = index < 0
+                ? [workout, ...current]
+                : current.map((item, itemIndex) => itemIndex === index ? workout : item);
+            break;
+        }
+        case 'history.delete':
+            data.history = deleteById(data.history, requireId(operation.id, 'Allenamento'), item => requireId(item.id, 'Allenamento'), 'Storico allenamenti');
+            break;
+        case 'active-workout.set':
+            if (operation.workout) assertWorkoutSessionIdentities(operation.workout, 'Allenamento attivo');
+            data.activeWorkout = operation.workout ? structuredClone(operation.workout) : null;
+            break;
+        case 'workout.complete': {
+            const workout = { ...operation.workout, id: requireId(operation.workout.id, 'Allenamento') };
+            assertWorkoutSessionIdentities(workout, 'Allenamento completato');
+            requireDate(workout.date ?? (workout.globalStartTime ? getLocalDateString(workout.globalStartTime) : ''));
+            const expectedActiveId = requireId(operation.expectedActiveWorkoutId, 'Sessione attesa');
+            if (expectedActiveId !== workout.id) throw new Error('Allenamento completato non corrisponde alla sessione attesa');
+            const activeId = data.activeWorkout ? requireId(data.activeWorkout.id, 'Allenamento attivo corrente') : null;
+            if (activeId !== null && activeId !== expectedActiveId) {
+                throw new Error('Allenamento completato non corrisponde alla sessione attiva');
+            }
+            const current = data.history ?? [];
+            assertUnique(current, item => requireId(item.id, 'Allenamento'), 'Storico allenamenti');
+            data.history = [workout, ...current.filter(item => item.id !== workout.id)];
+            data.activeWorkout = null;
+            data.activePains = [...operation.activePains];
+            break;
+        }
+        case 'active-pains.set':
+            data.activePains = [...operation.pains];
+            break;
+        case 'exercise.upsert': {
+            const exercise = { ...operation.exercise, id: requireId(operation.exercise.id, 'Esercizio') };
+            data.library = upsertById(data.library, exercise, item => requireId(item.id, 'Esercizio'), 'Archivio esercizi')
+                .sort((a, b) => a.name.localeCompare(b.name, 'it'));
+            break;
+        }
+        case 'exercise.delete': {
+            const id = requireId(operation.id, 'Esercizio');
+            data.library = deleteById(data.library, id, item => requireId(item.id, 'Esercizio'), 'Archivio esercizi');
+            data.routines = (data.routines ?? []).map(routine => ({
+                ...routine,
+                exercises: (routine.exercises ?? []).filter(exercise => requireId(exercise.exId, 'Esercizio routine') !== id),
+            }));
+            break;
+        }
+        case 'food.upsert': {
+            requireId(operation.food.id, 'Alimento');
+            const food = { ...operation.food, id: operation.food.id };
+            data.customFoods = upsertById(data.customFoods, food, item => requireId(item.id, 'Alimento'), 'Archivio alimenti');
+            break;
+        }
+        case 'food.delete':
+            data.customFoods = deleteById(data.customFoods, requireId(operation.id, 'Alimento'), item => requireId(item.id, 'Alimento'), 'Archivio alimenti');
+            break;
+        case 'catalog.exercise.patch': {
+            const id = requireId(operation.id, 'Override esercizio');
+            // The current catalog-override record schema drops this key; reject instead of silently losing the write.
+            if (id === '__proto__') throw new Error('Override esercizio: identificativo non rappresentabile');
+            const overrides = data.catalogOverrides ?? {};
+            const exercises = { ...(overrides.exercises ?? {}) };
+            const existing = Object.hasOwn(exercises, id) ? exercises[id] : {};
+            const patched = applyPatch(existing, operation.patch);
+            if (Object.keys(patched).length) {
+                Object.defineProperty(exercises, id, { value: patched, writable: true, enumerable: true, configurable: true });
+            } else if (Object.hasOwn(exercises, id)) {
+                delete exercises[id];
+            }
+            data.catalogOverrides = { ...overrides, exercises };
+            break;
+        }
+        case 'catalog.food.patch': {
+            const id = requireId(operation.id, 'Override alimento');
+            // The current catalog-override record schema drops this key; reject instead of silently losing the write.
+            if (id === '__proto__') throw new Error('Override alimento: identificativo non rappresentabile');
+            const overrides = data.catalogOverrides ?? {};
+            const foods = { ...(overrides.foods ?? {}) };
+            const existing = Object.hasOwn(foods, id) ? foods[id] : {};
+            const patched = applyPatch(existing, operation.patch);
+            if (Object.keys(patched).length) {
+                Object.defineProperty(foods, id, { value: patched, writable: true, enumerable: true, configurable: true });
+            } else if (Object.hasOwn(foods, id)) {
+                delete foods[id];
+            }
+            data.catalogOverrides = { ...overrides, foods };
+            break;
+        }
+        case 'catalog.exercise.visibility': {
+            const id = requireId(operation.id, 'Visibilità esercizio');
+            const overrides = data.catalogOverrides ?? {};
+            const hidden = new Set(overrides.hiddenExerciseIds ?? []);
+            if (operation.hidden) hidden.add(id); else hidden.delete(id);
+            data.catalogOverrides = { ...overrides, hiddenExerciseIds: [...hidden] };
+            break;
+        }
+        case 'catalog.food.visibility': {
+            const id = requireId(operation.id, 'Visibilità alimento');
+            const overrides = data.catalogOverrides ?? {};
+            const hidden = new Set((overrides.hiddenFoodIds ?? []).map(String));
+            if (operation.hidden) hidden.add(id); else hidden.delete(id);
+            data.catalogOverrides = { ...overrides, hiddenFoodIds: [...hidden] };
+            break;
+        }
+        case 'legal-consent.set':
+            data.legalConsent = structuredClone(operation.consent);
+            break;
+        default: return assertNeverDomainOperation(operation);
+    }
+
+    return UserDataSchema.parse(data) as unknown as UserData;
+}
+
+export function normalizeDomainOperationBatch(batch: DomainOperationBatch): DomainOperation[] {
+    const operations = Array.isArray(batch) ? [...batch] : [batch];
+    if (!operations.length) throw new Error('Batch di dominio vuoto');
+    return operations;
+}
+
+export function applyDomainOperations(input: UserData, batch: DomainOperationBatch): UserData {
+    const operations = normalizeDomainOperationBatch(batch);
+    // applyOne replaces root fields and copies nested collections before any write.
+    // The existing per-operation Zod parse still validates and normalizes the result.
+    // Keep this copy-on-write invariant: no nested input branch may be mutated.
+    const draft = { ...input };
+    return operations.reduce((state, operation) => applyOne(state, operation), draft);
+}

@@ -1,0 +1,359 @@
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { invalidateSession } from '../../../src/lib/sync/session';
+import { attachAuthRedirectRecovery } from '../../../src/contexts/auth/attachAuthRedirectRecovery';
+import { AWAITING_REDIRECT_KEY, readAuthRedirectAttempt, tryRemoveAuthRedirectMarker, writeAuthRedirectMarker } from '../../../src/lib/auth/authRedirectMarker';
+
+describe('isolated foreground redirect recovery', () => {
+    const detachAll: Array<() => void> = [];
+    afterEach(() => {
+        for (const detach of detachAll.splice(0)) detach();
+        sessionStorage.clear();
+        localStorage.clear();
+        vi.restoreAllMocks();
+    });
+
+    function setup() {
+        const stored = { current: 'true' };
+        let listener = () => {};
+        const remove = vi.fn(() => { stored.current = ''; return true; });
+        const reload = vi.fn(async (): Promise<void> => {});
+        const setSaveError = vi.fn();
+        const environment = {
+            visibility: () => 'visible' as const,
+            listen: (callback: () => void) => {
+                listener = callback;
+                return () => { listener = () => {}; };
+            },
+            read: () => stored.current || null,
+            remove,
+            reload,
+            getRedirect: () => new Promise<unknown>(() => {}),
+        };
+        const detach = attachAuthRedirectRecovery({
+            awaitingRedirectKey: 'logbook_awaiting_redirect',
+            redirectLaunchFailedRef: { current: false },
+            setSaveError,
+        }, environment);
+        detachAll.push(detach);
+        return { stored, remove, reload, setSaveError, detach, foreground: () => listener() };
+    }
+
+    it('accepts its own confirmed Google redirect even when the Auth callback arrives first', async () => {
+        const { beginGuestMigrationIntent, bindGuestMigrationIntentToUser } =
+            await import('../../../src/lib/auth/guestMigrationIntent');
+        localStorage.clear();
+        sessionStorage.clear();
+        const intent = await beginGuestMigrationIntent('merge', 'google');
+        const user = { uid: 'redirect-account', email: 'redirect@example.test',
+            providerData: [{ providerId: 'google.com' }] } as import('firebase/auth').User;
+        let deliver!: (value: unknown) => void;
+        const result = new Promise<unknown>(resolve => { deliver = resolve; });
+        let marker: string | null = 'true';
+        const setSaveError = vi.fn();
+        const detach = attachAuthRedirectRecovery({
+            awaitingRedirectKey: 'logbook_awaiting_redirect',
+            redirectLaunchFailedRef: { current: false },
+            setSaveError,
+        }, {
+            visibility: () => 'hidden',
+            listen: () => () => {},
+            read: () => marker,
+            remove: () => { marker = null; return true; },
+            reload: async () => {},
+            getRedirect: () => result,
+        });
+        detachAll.push(detach);
+        // Bootstrap observes the authenticated UID before getRedirectResult.
+        const binding = bindGuestMigrationIntentToUser(user);
+        deliver({ user, providerId: 'google.com' });
+        await expect(binding).resolves.toMatchObject({ id: intent.id, boundUid: user.uid });
+        await vi.waitFor(() => expect(marker).toBeNull());
+        expect(setSaveError).not.toHaveBeenCalled();
+    });
+
+    it('keeps guest intact when a null redirect result precedes the Auth callback', async () => {
+        const { beginGuestMigrationIntent, bindGuestMigrationIntentToUser } =
+            await import('../../../src/lib/auth/guestMigrationIntent');
+        localStorage.clear();
+        sessionStorage.clear();
+        const intent = await beginGuestMigrationIntent('skip', 'google');
+        const setSaveError = vi.fn();
+        attachAuthRedirectRecovery({
+            awaitingRedirectKey: 'logbook_awaiting_redirect',
+            redirectLaunchFailedRef: { current: false },
+            setSaveError,
+        }, {
+            visibility: () => 'hidden',
+            listen: () => () => {},
+            read: () => 'true',
+            remove: () => true,
+            reload: async () => {},
+            getRedirect: async () => null,
+        });
+        await vi.waitFor(() => expect(setSaveError).toHaveBeenCalledWith(expect.stringContaining('non confermato')));
+        const user = { uid: 'redirect-account', providerData: [{ providerId: 'google.com' }] } as import('firebase/auth').User;
+        await expect(bindGuestMigrationIntentToUser(user)).rejects.toThrow('Redirect Google non confermato');
+        expect(JSON.parse(localStorage.getItem('guest_migration_intent_v1')!)).toMatchObject({
+            id: intent.id, policy: 'skip',
+        });
+    });
+
+    it('does not reload a guest redirect while its own credential proof is pending', async () => {
+        const { beginGuestMigrationIntent } = await import('../../../src/lib/auth/guestMigrationIntent');
+        localStorage.clear();
+        sessionStorage.clear();
+        await beginGuestMigrationIntent('merge', 'google');
+        let finish!: (result: unknown) => void;
+        const result = new Promise<unknown>(resolve => { finish = resolve; });
+        let marker: string | null = 'true';
+        let foreground = () => {};
+        const remove = vi.fn(() => { marker = null; return true; });
+        const reload = vi.fn(async () => {});
+        const detach = attachAuthRedirectRecovery({
+            awaitingRedirectKey: 'logbook_awaiting_redirect',
+            redirectLaunchFailedRef: { current: false },
+            setSaveError: vi.fn(),
+        }, {
+            visibility: () => 'visible',
+            listen: handler => { foreground = handler; return () => {}; },
+            read: () => marker,
+            remove,
+            reload,
+            getRedirect: () => result,
+        });
+        detachAll.push(detach);
+        foreground();
+        await Promise.resolve();
+        expect(remove).not.toHaveBeenCalled();
+        expect(reload).not.toHaveBeenCalled();
+        finish(null);
+        await vi.waitFor(() => expect(marker).toBeNull());
+        expect(reload).not.toHaveBeenCalled();
+    });
+
+    it('rejects old marker cleanup after a new login attempt has replaced it in the same tab', () => {
+        const oldAttempt = writeAuthRedirectMarker('true');
+        const newAttempt = writeAuthRedirectMarker('true');
+        expect(oldAttempt).not.toBe(newAttempt);
+        expect(readAuthRedirectAttempt()).toBe(newAttempt);
+        expect(tryRemoveAuthRedirectMarker(AWAITING_REDIRECT_KEY, oldAttempt)).toBe(false);
+        expect(sessionStorage.getItem(AWAITING_REDIRECT_KEY)).toBe('true');
+        expect(tryRemoveAuthRedirectMarker(AWAITING_REDIRECT_KEY, newAttempt)).toBe(true);
+        expect(sessionStorage.getItem(AWAITING_REDIRECT_KEY)).toBeNull();
+        expect(readAuthRedirectAttempt()).toBeNull();
+    });
+
+    it.each([
+        { outcome: 'resolved', guest: false }, { outcome: 'rejected', guest: false },
+        { outcome: 'resolved', guest: true }, { outcome: 'rejected', guest: true },
+    ] as const)(
+        'does not consume a newer attempt when an older redirect is $outcome (guest: $guest)',
+        async ({ outcome, guest }) => {
+            if (guest) {
+                const { beginGuestMigrationIntent } = await import('../../../src/lib/auth/guestMigrationIntent');
+                await beginGuestMigrationIntent('merge', 'google');
+            }
+            let resolve!: (value: unknown) => void;
+            let reject!: (reason: unknown) => void;
+            const pending = new Promise<unknown>((yes, no) => { resolve = yes; reject = no; });
+            let marker: string | null = 'true';
+            let attempt: string | null = 'attempt-p0';
+            let foreground = () => {};
+            const remove = vi.fn((_key: string, expected?: string | null) => {
+                if (attempt !== expected) return false;
+                marker = null;
+                return true;
+            });
+            const reload = vi.fn(async () => {});
+            const setSaveError = vi.fn();
+            const getRedirect = vi.fn(() => pending);
+            const detach = attachAuthRedirectRecovery({
+                awaitingRedirectKey: AWAITING_REDIRECT_KEY,
+                redirectLaunchFailedRef: { current: false }, setSaveError,
+            }, {
+                visibility: () => 'visible',
+                listen: handler => { foreground = handler; return () => {}; },
+                read: () => marker,
+                readAttempt: () => attempt,
+                remove, reload, getRedirect,
+            });
+            detachAll.push(detach);
+            expect(getRedirect).toHaveBeenCalledOnce();
+            attempt = 'attempt-p1';
+            marker = 'true';
+            foreground();
+            if (outcome === 'resolved') resolve(null);
+            else reject(new Error('old redirect failed'));
+            await Promise.resolve();
+            await Promise.resolve();
+            await Promise.resolve();
+            expect(remove).not.toHaveBeenCalled();
+            expect(reload).not.toHaveBeenCalled();
+            expect(marker).toBe('true');
+            expect(attempt).toBe('attempt-p1');
+            expect(setSaveError).not.toHaveBeenCalled();
+        },
+    );
+
+    it.each(['resolved', 'rejected'] as const)(
+        'ignores an SDK result %s after its provider has detached',
+        async outcome => {
+            const intentModule = await import('../../../src/lib/auth/guestMigrationIntent');
+            const intent = await intentModule.beginGuestMigrationIntent('merge', 'google');
+            const original = localStorage.getItem('guest_migration_intent_v1');
+            const confirm = vi.spyOn(intentModule, 'confirmGuestMigrationCredential');
+            let resolve!: (value: unknown) => void;
+            let reject!: (reason: unknown) => void;
+            const pending = new Promise<unknown>((yes, no) => { resolve = yes; reject = no; });
+            const remove = vi.fn(() => true);
+            const reload = vi.fn(async () => {});
+            const setSaveError = vi.fn();
+            const detach = attachAuthRedirectRecovery({
+                awaitingRedirectKey: AWAITING_REDIRECT_KEY,
+                redirectLaunchFailedRef: { current: false }, setSaveError,
+            }, {
+                visibility: () => 'visible',
+                listen: () => () => {}, read: () => 'true', readAttempt: () => 'detached-attempt',
+                remove, reload, getRedirect: () => pending,
+            });
+            detach();
+            if (outcome === 'resolved') resolve({
+                user: { uid: 'redirect-account', providerData: [{ providerId: 'google.com' }] },
+                providerId: 'google.com',
+            });
+            else reject(new Error('detached redirect failed'));
+            await pending.catch(() => {});
+            await Promise.resolve();
+            await Promise.resolve();
+            expect(confirm).not.toHaveBeenCalled();
+            expect(remove).not.toHaveBeenCalled();
+            expect(reload).not.toHaveBeenCalled();
+            expect(setSaveError).not.toHaveBeenCalled();
+            expect(localStorage.getItem('guest_migration_intent_v1')).toBe(original);
+            expect(sessionStorage.getItem('logbook:guest-auth-attempt')).toBe(intent.id);
+            confirm.mockRestore();
+        },
+    );
+
+    it.each(['detach', 'Auth epoch'] as const)(
+        'does not publish a delayed reload failure after %s',
+        async boundary => {
+            const { foreground, reload, setSaveError, detach } = setup();
+            let reject!: (reason: unknown) => void;
+            const pending = new Promise<void>((_resolve, no) => { reject = no; });
+            reload.mockReturnValueOnce(pending);
+            foreground();
+            await vi.waitFor(() => expect(reload).toHaveBeenCalledOnce());
+            if (boundary === 'detach') detach();
+            else invalidateSession();
+            reject(new Error('obsolete reload failed'));
+            await pending.catch(() => {});
+            await Promise.resolve();
+            expect(setSaveError).not.toHaveBeenCalled();
+        },
+    );
+
+    it('does not remove a later redirect marker when the startup SDK probe returns null', async () => {
+        let marker: string | null = null;
+        let complete!: (value: unknown) => void;
+        const pending = new Promise<unknown>(resolve => { complete = resolve; });
+        const remove = vi.fn(() => { marker = null; return true; });
+        const detach = attachAuthRedirectRecovery({
+            awaitingRedirectKey: 'logbook_awaiting_redirect',
+            redirectLaunchFailedRef: { current: false },
+            setSaveError: vi.fn(),
+        }, {
+            visibility: () => 'hidden',
+            listen: () => () => {},
+            read: () => marker,
+            remove,
+            reload: async () => {},
+            getRedirect: () => pending,
+        });
+        detachAll.push(detach);
+        // A new login starts after attachAuthRedirectRecovery captured an empty marker.
+        marker = 'true';
+        complete(null);
+        await Promise.resolve();
+        await Promise.resolve();
+        expect(remove).not.toHaveBeenCalled();
+        expect(marker).toBe('true');
+    });
+
+    it.each(['resolved', 'rejected', 'detached'] as const)(
+        'preserves a redirect launched after mount when foreground fires (SDK: %s)',
+        async outcome => {
+            let marker: string | null = null;
+            let attempt: string | null = null;
+            let foreground = () => {};
+            let resolve!: (value: unknown) => void;
+            let reject!: (reason: unknown) => void;
+            const pending = new Promise<unknown>((yes, no) => { resolve = yes; reject = no; });
+            const remove = vi.fn(() => { marker = null; attempt = null; return true; });
+            const reload = vi.fn(async () => {});
+            const setSaveError = vi.fn();
+            const detach = attachAuthRedirectRecovery({
+                awaitingRedirectKey: AWAITING_REDIRECT_KEY,
+                redirectLaunchFailedRef: { current: false },
+                setSaveError,
+            }, {
+                visibility: () => 'visible',
+                listen: handler => { foreground = handler; return () => { foreground = () => {}; }; },
+                read: () => marker,
+                readAttempt: () => attempt,
+                remove, reload,
+                getRedirect: () => pending,
+            });
+            detachAll.push(detach);
+
+            // The listener predates this login; neither foreground nor its old SDK
+            // probe can take ownership of the new attempt's evidence.
+            marker = 'true';
+            attempt = 'new-attempt';
+            foreground();
+            expect(remove).not.toHaveBeenCalled();
+            expect(reload).not.toHaveBeenCalled();
+            if (outcome === 'detached') detach();
+            if (outcome === 'rejected') reject(new Error('old SDK probe rejected'));
+            else resolve(null);
+            await pending.catch(() => {});
+            await Promise.resolve();
+            await Promise.resolve();
+            foreground();
+
+            expect(marker).toBe('true');
+            expect(attempt).toBe('new-attempt');
+            expect(remove).not.toHaveBeenCalled();
+            expect(reload).not.toHaveBeenCalled();
+            expect(setSaveError).not.toHaveBeenCalled();
+        },
+    );
+
+    it('consumes the active marker once and calls the safe reload barrier only once', async () => {
+        const { stored, remove, reload, foreground } = setup();
+        foreground();
+        await vi.waitFor(() => expect(reload).toHaveBeenCalledOnce());
+        expect(stored.current).toBe('');
+        expect(remove).toHaveBeenCalledOnce();
+        foreground();
+        expect(reload).toHaveBeenCalledOnce();
+    });
+
+    it('reports a rejected reload barrier without reactivating the consumed marker', async () => {
+        const { stored, reload, setSaveError, foreground } = setup();
+        reload.mockRejectedValueOnce(new Error('Bozza locale non salvata'));
+        foreground();
+        await vi.waitFor(() => expect(setSaveError).toHaveBeenCalledWith('Bozza locale non salvata'));
+        expect(reload).toHaveBeenCalledOnce();
+        expect(stored.current).toBe('');
+    });
+
+    it('never reloads if the marker cannot be safely removed', async () => {
+        const { stored, remove, reload, setSaveError, foreground } = setup();
+        remove.mockImplementationOnce(() => false);
+        foreground();
+        await vi.waitFor(() => expect(setSaveError).toHaveBeenCalledWith(expect.stringContaining('stato locale del dispositivo')));
+        expect(stored.current).toBe('true');
+        expect(reload).not.toHaveBeenCalled();
+    });
+});

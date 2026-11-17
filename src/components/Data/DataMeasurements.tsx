@@ -1,0 +1,306 @@
+import { useState } from 'react';
+import { Activity, ChevronDown, Pencil, Plus, Ruler, Save, Trash2, UserRound, X } from 'lucide-react';
+import { Logic } from '../../lib/logic';
+import { shiftDateString } from '../../lib/utils/date';
+import type { BodyFatProvenance, UserProfile } from '../../types';
+import DataDateNavigator from './DataDateNavigator';
+
+interface DataMeasurementsProps {
+    profile: Pick<UserProfile, 'gender'> & { height?: string | number };
+    selectedDate?: string;
+    setSelectedDate?: (d: string) => void;
+    targetDateStr?: string;
+    editingDate?: string | null;
+    hasExistingData?: boolean;
+    bfProvenance?: BodyFatProvenance;
+    measureTime: string;
+    setMeasureTime: (val: string) => void;
+    weight: string;
+    setWeight: (val: string) => void;
+    waist: string;
+    setWaist: (val: string) => void;
+    neck: string;
+    setNeck: (val: string) => void;
+    hip: string;
+    setHip: (val: string) => void;
+    chest: string;
+    setChest: (val: string) => void;
+    shoulders: string;
+    setShoulders: (val: string) => void;
+    biceps: string;
+    setBiceps: (val: string) => void;
+    thighs: string;
+    setThighs: (val: string) => void;
+    calves: string;
+    setCalves: (val: string) => void;
+    handleCancelEdit: () => void;
+    onDeleteMeasurement?: (date: string) => void | Promise<void>;
+    calculateAndSave: (e?: { preventDefault(): void }, calculateBf?: boolean) => Promise<unknown>;
+    onOpenBiometry?: () => void;
+}
+
+interface MeasurementFieldProps {
+    id: string;
+    label: string;
+    value: string;
+    unit?: string;
+    onChange: (value: string) => void;
+    full?: boolean;
+}
+
+function MeasurementField({
+    id,
+    label,
+    value,
+    unit = 'cm',
+    onChange,
+    full = false,
+}: MeasurementFieldProps) {
+    return (
+        <label className={`data-field${full ? ' data-field-full' : ''}`} style={{ minWidth: 0 }}>
+            {label}
+            <span className="data-input-with-unit" style={{ minWidth: 0 }}>
+                <input
+                    id={id}
+                    type="number"
+                    inputMode="decimal"
+                    min="0"
+                    step="0.1"
+                    value={value}
+                    placeholder="—"
+                    onChange={event => onChange(event.target.value)}
+                    onFocus={event => event.target.select()}
+                />
+                <span className="data-input-unit">{unit}</span>
+            </span>
+        </label>
+    );
+}
+
+const DataMeasurements: React.FC<DataMeasurementsProps> = ({
+    profile,
+    selectedDate,
+    setSelectedDate,
+    targetDateStr,
+    editingDate,
+    hasExistingData,
+    bfProvenance,
+    measureTime, setMeasureTime,
+    weight, setWeight,
+    waist, setWaist,
+    neck, setNeck,
+    hip, setHip,
+    chest, setChest,
+    shoulders, setShoulders,
+    biceps, setBiceps,
+    thighs, setThighs,
+    calves, setCalves,
+    handleCancelEdit,
+    onDeleteMeasurement,
+    calculateAndSave,
+    onOpenBiometry,
+}) => {
+    const activeDateStr = targetDateStr || selectedDate || editingDate || Logic.getLocalDateString();
+    const todayStr = Logic.getLocalDateString();
+    const isEditing = Boolean(editingDate || hasExistingData);
+    // The optional calculation follows the saved provenance for the selected day.
+    const selectionKey = `${activeDateStr}:${bfProvenance?.method ?? 'none'}`;
+    const savedCalculation = bfProvenance?.method === 'us_navy';
+    const [selection, setSelection] = useState(() => ({ key: selectionKey, enabled: savedCalculation }));
+    const calculateBf = selection.key === selectionKey ? selection.enabled : savedCalculation;
+
+    const isFemale = profile?.gender === 'F';
+    const profileComplete = Boolean((profile?.gender === 'M' || profile?.gender === 'F') && Number(profile?.height) > 0);
+    const estimate = (() => {
+        if (!profileComplete) {
+            return {
+                value: 'Profilo incompleto',
+                detail: 'Completa altezza e sesso nella pagina Biometria.',
+            };
+        }
+        if (!waist || !neck || (isFemale && !hip)) {
+            return {
+                value: 'Inserisci le misure richieste',
+                detail: isFemale ? 'Servono vita, collo e fianchi.' : 'Servono vita e collo.',
+            };
+        }
+        const value = Logic.calculateBodyFatByMethod(isFemale ? 'navy_female' : 'navy_male', {
+            gender: profile.gender,
+            height: Number(profile.height),
+            weight: Number(weight),
+            waist: Number(waist),
+            neck: Number(neck),
+            hip: hip ? Number(hip) : undefined,
+        });
+        return value === null
+            ? { value: 'Controlla le misure', detail: 'I valori non permettono una stima attendibile.' }
+            : { value: `${value.toLocaleString('it-IT', { maximumFractionDigits: 1 })}%`, detail: 'Metodo US Navy · valore indicativo.' };
+    })();
+
+    const handlePrevDay = () => setSelectedDate?.(shiftDateString(activeDateStr, -1));
+    const handleNextDay = () => {
+        if (activeDateStr !== todayStr) setSelectedDate?.(shiftDateString(activeDateStr, 1));
+    };
+
+    const otherFields = [
+        { id: 'measure-chest', label: 'Torace', value: chest, setValue: setChest },
+        { id: 'measure-shoulders', label: 'Spalle', value: shoulders, setValue: setShoulders },
+        { id: 'measure-biceps', label: 'Braccia', value: biceps, setValue: setBiceps },
+        { id: 'measure-thighs', label: 'Cosce', value: thighs, setValue: setThighs },
+        { id: 'measure-calves', label: 'Polpacci', value: calves, setValue: setCalves },
+    ];
+
+    return (
+        <div className="data-page-grid">
+            {setSelectedDate && (
+                <DataDateNavigator
+                    date={activeDateStr}
+                    today={todayStr}
+                    onPrevious={handlePrevDay}
+                    onNext={handleNextDay}
+                    onToday={() => setSelectedDate(todayStr)}
+                    disabled={Boolean(editingDate)}
+                />
+            )}
+
+            <section
+                id="measurement-form-card"
+                className={`section-divider data-panel${isEditing ? ' data-panel-editing' : ''}`}
+                aria-labelledby="measurement-form-title"
+            >
+                <div className="data-panel-head">
+                    <div>
+                        <h2 id="measurement-form-title" className="data-panel-title">
+                            {isEditing ? <Pencil size={20} aria-hidden="true" /> : <Plus size={20} aria-hidden="true" />}
+                            {isEditing ? 'Modifica misurazione' : 'Nuova misurazione'}
+                        </h2>
+                        <p>Registra peso, massa grassa e circonferenze corporee.</p>
+                    </div>
+                    <span className="data-icon-tile" aria-hidden="true"><Ruler size={20} /></span>
+                </div>
+
+                <h3 className="data-section-label">Dati principali</h3>
+                <div className="data-form-grid">
+                    <label className="data-field data-field-full" style={{ minWidth: 0 }}>
+                        Orario rilevazione
+                        <span className="data-clearable-input">
+                            <input
+                                id="measure-time"
+                                type="time"
+                                value={measureTime}
+                                onChange={event => setMeasureTime(event.target.value)}
+                            />
+                            {measureTime && (
+                                <button type="button" onClick={() => setMeasureTime('')} aria-label="Cancella orario">
+                                    <X size={18} aria-hidden="true" />
+                                </button>
+                            )}
+                        </span>
+                    </label>
+                    <MeasurementField
+                        id="measure-weight"
+                        label="Peso"
+                        value={weight}
+                        unit="kg"
+                        onChange={setWeight}
+                        full
+                    />
+                </div>
+
+
+                <fieldset className="data-bf-method">
+                    <legend>Massa grassa (facoltativa)</legend>
+                    <div className="data-method-switch">
+                        <label className={'data-method-option' + (calculateBf ? ' selected' : '')}>
+                            <input type="checkbox" checked={calculateBf}
+                                onChange={event => setSelection({ key: selectionKey, enabled: event.target.checked })} />
+                            <span className="data-method-dot" aria-hidden="true" />
+                            <span>
+                                <strong>Calcola la massa grassa</strong>
+                                <small>Stima opzionale con metodo US Navy</small>
+                            </span>
+                        </label>
+                    </div>
+                </fieldset>
+
+                <div className="data-calculation-flow">
+                    {calculateBf && (
+                        <div className="data-calculation-profile">
+                            <span>
+                                <small>Profilo usato per il calcolo</small>
+                                <strong>
+                                    {profile?.gender === 'F' ? 'Donna' : profile?.gender === 'M' ? 'Uomo' : 'Sesso non specificato'}
+                                    {' · '}
+                                    {Number(profile?.height) > 0 ? `${profile.height} cm` : 'altezza mancante'}
+                                </strong>
+                            </span>
+                            {onOpenBiometry && (
+                                <button type="button" className="btn" onClick={onOpenBiometry}>
+                                    <UserRound size={16} aria-hidden="true" /> Controlla profilo
+                                </button>
+                            )}
+                        </div>
+                    )}
+                    <div className="data-form-grid">
+                        <MeasurementField id="measure-waist" label="Vita" value={waist} onChange={setWaist} />
+                        <MeasurementField id="measure-neck" label="Collo" value={neck} onChange={setNeck} />
+                        {isFemale && <MeasurementField id="measure-hip" label="Fianchi" value={hip} onChange={setHip} full />}
+                    </div>
+                    {calculateBf && (
+                        <output className="data-calculation-preview" aria-live="polite">
+                            <span>BF stimata</span>
+                            <strong>{estimate.value}</strong>
+                            <small>{estimate.detail}</small>
+                        </output>
+                    )}
+                </div>
+
+                <details className="data-disclosure">
+                    <summary className="disclosure-summary data-disclosure-summary">
+                        <span className="data-icon-tile" aria-hidden="true"><Activity size={20} /></span>
+                        <span className="data-disclosure-copy">
+                            <strong>Altre misurazioni</strong>
+                            <small>{otherFields.length} campi opzionali · le misure usate nel calcolo non vengono duplicate</small>
+                        </span>
+                        <ChevronDown className="data-disclosure-chevron" size={20} aria-hidden="true" />
+                    </summary>
+                    <div className="data-disclosure-body">
+                        <div className="data-form-grid">
+                            {otherFields.map(field => (
+                                <MeasurementField
+                                    key={field.id}
+                                    id={field.id}
+                                    label={field.label}
+                                    value={field.value}
+                                    onChange={field.setValue}
+                                />
+                            ))}
+                        </div>
+                    </div>
+                </details>
+
+                <div className="data-action-row">
+                    {editingDate ? (
+                        <button type="button" className="btn" onClick={handleCancelEdit}>
+                            Annulla
+                        </button>
+                    ) : hasExistingData && onDeleteMeasurement ? (
+                        <button type="button" className="btn btn-danger" onClick={() => void onDeleteMeasurement(activeDateStr)}>
+                            <Trash2 size={16} aria-hidden="true" /> Elimina
+                        </button>
+                    ) : null}
+                    <button
+                        type="button"
+                        className="btn btn-primary"
+                        onClick={event => void calculateAndSave(event, calculateBf)}
+                    >
+                        <Save size={16} aria-hidden="true" />
+                        {isEditing ? 'Salva modifiche' : 'Salva misurazione'}
+                    </button>
+                </div>
+            </section>
+        </div>
+    );
+};
+
+export default DataMeasurements;

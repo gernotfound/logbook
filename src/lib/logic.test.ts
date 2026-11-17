@@ -1,0 +1,886 @@
+import { describe, it, expect } from 'vitest';
+import { Logic } from './logic';
+import { createFoodSearcher } from './calc/nutrition';
+
+describe('Logic Library Tests', () => {
+    
+    it('calculateMacrosFromKg does not adopt the retired object signature or return aliases', () => {
+        const oldInput = { weight: 80, carbsPerKg: 3.5, proPerKg: 2, fatPerKg: 1 };
+        expect(Logic.calculateMacrosFromKg(oldInput as unknown as number).totalKcal).toBe(0);
+        const current = Logic.calculateMacrosFromKg('80', '3.5', '2', '1');
+        expect(current).toEqual({ carbsGrams: 280, proGrams: 160, fatGrams: 80,
+            carbsKcal: 1120, proKcal: 640, fatKcal: 720, totalKcal: 2480 });
+        for (const alias of ['carbsG', 'proG', 'fatG', 'fat']) expect(current).not.toHaveProperty(alias);
+    });
+
+    it('calculateMacrosFromKg: calculates correct macros based on body weight', () => {
+        const weight = 80;
+        const carbsPerKg = 3.5;
+        const proPerKg = 2.0;
+        const fatPerKg = 1.0;
+        
+        const macros = Logic.calculateMacrosFromKg(weight, carbsPerKg, proPerKg, fatPerKg);
+        
+        expect(macros.carbsGrams).toBeCloseTo(80 * 3.5); // 280
+        expect(macros.proGrams).toBeCloseTo(80 * 2.0);   // 160
+        expect(macros.fatGrams).toBeCloseTo(80 * 1.0);   // 80
+        
+        // 280*4 + 160*4 + 80*9 = 1120 + 640 + 720 = 2480
+        expect(macros.totalKcal).toBeCloseTo(2480);
+    });
+
+    it('calculateBodyFat: uses US Navy male circumference formula', () => {
+        const weight = 80; // kg
+        const profile = {
+            gender: 'M',
+            height: 180, // cm
+            neck: 38,
+            waist: 85
+        };
+        // Expected BF based on Navy formula
+        const bf = Logic.calculateBodyFat(weight, profile);
+        // US Navy independent reference: 495 / (1.0324 - 0.19077*log10(85-38) + 0.15456*log10(180)) - 450.
+        expect(bf).toBe(16.1);
+    });
+
+    it('calculateBodyFat: uses US Navy female circumference formula', () => {
+        const weight = 65; // kg
+        const profile = {
+            gender: 'F',
+            height: 165, // cm
+            neck: 34,
+            waist: 70,
+            hip: 95
+        };
+        const bf = Logic.calculateBodyFat(weight, profile);
+        // US Navy independent reference: 495 / (1.29579 - 0.35004*log10(70+95-34) + 0.22100*log10(165)) - 450.
+        expect(bf).toBe(23.8);
+    });
+
+    it('calculateTDEE: estimates TDEE correctly from chronoData', () => {
+        // Mock 14 days of data with steady weight and exactly 2500 kcal intake
+        const chronoData = [];
+        for (let i = 0; i < 14; i++) {
+            const date = Logic.getLocalDateString(new Date(2023, 0, i + 1));
+            chronoData.push({
+                date,
+                kcal: 2500,
+                weight: 80 // weight doesn't change
+            });
+        }
+
+        const tdee = Logic.calculateTDEE(chronoData);
+        expect(tdee.error).toBe(false);
+        expect(Number(tdee.tdee)).toBe(2500); // Because weight is steady, TDEE = intake
+        expect(Number(tdee.weightDiff)).toBe(0);
+    });
+
+    it('calculateTDEE: never returns zero or negative daily energy expenditure', () => {
+        const records = Array.from({ length: 7 }, (_, index) => ({
+            date: `2026-10-${String(index + 1).padStart(2, '0')}`,
+            weight: 80 + index / 3,
+            kcal: 2000,
+        }));
+        // A 2 kg gain over 6 days is compatible with substantial water-weight
+        // fluctuation, not with a physiologically meaningful negative TDEE.
+        const estimated = Logic.calculateTDEE(records);
+        expect(estimated.error).toBe(true);
+        expect(estimated.message).toContain('Stima non attendibile');
+        expect(estimated).not.toHaveProperty('tdee');
+
+        const nutrition = Object.fromEntries(records.map(day => [day.date, {
+            weight: day.weight, kcal: day.kcal, meals: [],
+        }]));
+        const summary = Logic.calculateTDEEAndMacros({
+            nutrition,
+            nutritionPlanning: { weight: 80, normocalorica: { kcal: 2400 } },
+        } as any);
+        expect(summary.tdee).toBe(2400);
+    });
+
+    it('calculateTDEE: does not estimate expenditure from seven isolated monthly records', () => {
+        const sparseRecords = Array.from({ length: 7 }, (_, index) => ({
+            date: `2026-${String(index + 1).padStart(2, '0')}-01`,
+            weight: 80 + index * 0.1,
+            kcal: 2500,
+        }));
+        const result = Logic.calculateTDEE(sparseRecords);
+        expect(result.error).toBe(true);
+        expect(result.message).toContain('giornate valide negli ultimi 14 giorni');
+        expect(result).not.toHaveProperty('tdee');
+
+        // A rejected estimate must not overwrite a user-entered normocaloric target.
+        const nutrition = Object.fromEntries(sparseRecords.map(({ date, weight, kcal }) => [
+            date, { date, weight, kcal, meals: [] },
+        ]));
+        const summary = Logic.calculateTDEEAndMacros({
+            nutrition,
+            nutritionPlanning: { weight: 80, normocalorica: { kcal: 2350 } },
+        } as any);
+        expect(summary.tdee).toBe(2350);
+    });
+
+    it('calculateTDEE: uses only recent calendar days, not older caloric records', () => {
+        const oldWeek = Array.from({ length: 7 }, (_, index) => ({
+            date: `2026-01-${String(index + 1).padStart(2, '0')}`,
+            weight: 80, kcal: 4000,
+        }));
+        const recentWeek = Array.from({ length: 7 }, (_, index) => ({
+            date: `2026-04-${String(index + 1).padStart(2, '0')}`,
+            weight: 80, kcal: 2100,
+        }));
+        const result = Logic.calculateTDEE([...recentWeek, ...oldWeek]);
+        expect(result.error).toBe(false);
+        expect(result.tdee).toBe(2100);
+        expect(result.avgKcal).toBe(2100);
+        expect(result.daysTracked).toBe(7);
+        expect(result.timeSpanDays).toBe(6);
+    });
+
+    it('calculateTDEE: estimates TDEE correctly when gaining weight', () => {
+        const chronoData = [];
+        for (let i = 0; i < 14; i++) {
+            const date = Logic.getLocalDateString(new Date(2023, 0, i + 1));
+            chronoData.push({
+                date,
+                kcal: 3000,
+                weight: 80 + (i * (1/13)) // linear increase from 80 to 81
+            });
+        }
+        chronoData[0].weight = 80;
+        chronoData[13].weight = 81;
+
+        const tdee = Logic.calculateTDEE(chronoData);
+        expect(tdee.error).toBe(false);
+        expect(tdee.tdee).toBeGreaterThan(2300);
+        expect(tdee.tdee).toBeLessThan(2700);
+    });
+
+    it('calculateTDEE: produces identical results for pre-sorted, reverse-sorted, and randomly shuffled arrays', () => {
+        const ascendingData = [];
+        for (let i = 0; i < 14; i++) {
+            const date = Logic.getLocalDateString(new Date(2026, 7, i + 1));
+            ascendingData.push({
+                date,
+                kcal: 2800,
+                weight: 75 + (i * 0.1) // 75.0 to 76.3
+            });
+        }
+        ascendingData[0].weight = 75;
+        ascendingData[13].weight = 76;
+
+        const descendingData = [...ascendingData].reverse();
+        // Deterministic odd/even permutation: unlike random sort, this always
+        // exercises non-chronological input without nondeterministic CI outcomes.
+        const shuffledData = [
+            ...ascendingData.filter((_, i) => i % 2 === 1),
+            ...ascendingData.filter((_, i) => i % 2 === 0),
+        ];
+        expect(shuffledData.map(day => day.date)).not.toEqual(ascendingData.map(day => day.date));
+
+        const resAsc = Logic.calculateTDEE(ascendingData);
+        const resDesc = Logic.calculateTDEE(descendingData);
+        const resShuffled = Logic.calculateTDEE(shuffledData);
+
+        expect(resAsc.error).toBe(false);
+        expect(resDesc.error).toBe(false);
+        expect(resShuffled.error).toBe(false);
+
+        expect(resDesc.tdee).toBe(resAsc.tdee);
+        expect(resShuffled.tdee).toBe(resAsc.tdee);
+        expect(resDesc.weightDiff).toBe(resAsc.weightDiff);
+        expect(resShuffled.weightDiff).toBe(resAsc.weightDiff);
+    });
+
+    it('calculateTDEE: handles edge cases gracefully (0, 1, 6 measurements, same day, non-array)', () => {
+        // Non-array
+        expect(Logic.calculateTDEE(null as any)).toEqual({ error: true, message: 'Dati non validi' });
+        expect(Logic.calculateTDEE(undefined as any)).toEqual({ error: true, message: 'Dati non validi' });
+        expect(Logic.calculateTDEE('string' as any)).toEqual({ error: true, message: 'Dati non validi' });
+
+        // 0 measurements
+        expect(Logic.calculateTDEE([])).toEqual({
+            error: true,
+            message: 'Raccolta dati in corso... (0/7 giorni richiesti)'
+        });
+
+        // 1 measurement
+        expect(Logic.calculateTDEE([{ date: '2026-08-01', weight: 80, kcal: 2500 }])).toEqual({
+            error: true,
+            message: 'Raccolta dati in corso... (1/7 giorni richiesti)'
+        });
+
+        // 6 measurements
+        const sixDays = [];
+        for (let i = 0; i < 6; i++) {
+            sixDays.push({ date: `2026-08-0${i + 1}`, weight: 80, kcal: 2500 });
+        }
+        expect(Logic.calculateTDEE(sixDays)).toEqual({
+            error: true,
+            message: 'Raccolta dati in corso... (6/7 giorni richiesti)'
+        });
+
+        // Seven entries for the same day are one calendar-day observation.
+        const sameDay = [];
+        for (let i = 0; i < 7; i++) {
+            sameDay.push({ date: '2026-08-01', weight: 80, kcal: 2500 });
+        }
+        expect(Logic.calculateTDEE(sameDay)).toEqual({
+            error: true,
+            message: 'Raccolta dati in corso... (1/7 giorni richiesti)'
+        });
+    });
+
+    it('calculateTDEE: correctly parses string weights and commas', () => {
+        const stringData = [];
+        for (let i = 0; i < 14; i++) {
+            const date = Logic.getLocalDateString(new Date(2026, 7, i + 1));
+            stringData.push({
+                date,
+                kcal: '2500,0',
+                weight: i === 0 ? '80,0' : (i === 13 ? '81,0' : '80,5')
+            });
+        }
+        const res = Logic.calculateTDEE(stringData);
+        expect(res.error).toBe(false);
+        expect(res.weightDiff).toBe('1.00');
+    });
+
+    it('getLocalDateString: formats local date YYYY-MM-DD correctly', () => {
+        const testDate = new Date(2026, 6, 26); // July 26, 2026
+        const dateStr = Logic.getLocalDateString(testDate);
+        expect(dateStr).toBe('2026-07-26');
+    });
+
+    it('searchFoods: fuzzy search handles typos for food items', () => {
+        const foods = [
+            { id: 'f1', name: 'Petto di pollo', brand: 'Aia', category: 'Carne' },
+            { id: 'f2', name: 'Fiocchi di avena', brand: 'Quaker', category: 'Cereali' },
+            { id: 'f3', name: 'Olio extravergine di oliva', brand: 'Monini', category: 'Grassi' }
+        ];
+
+        const search = createFoodSearcher(foods);
+        // Exact match
+        expect(search('pollo').length).toBe(1);
+
+        // Typo match: "peto di polo" -> "Petto di pollo"
+        const polloTypo = search('peto polo');
+        expect(polloTypo.length).toBeGreaterThan(0);
+        expect(polloTypo[0].id).toBe('f1');
+
+        // Typo match: "avenna" -> "Fiocchi di avena"
+        const avenaTypo = search('avenna');
+        expect(avenaTypo.length).toBeGreaterThan(0);
+        expect(avenaTypo[0].id).toBe('f2');
+    });
+
+    it('getLocalDateString: handles strings, numbers, dates and invalid input', () => {
+        expect(Logic.getLocalDateString('2025-12-31')).toBe('2025-12-31');
+        expect(Logic.getLocalDateString(new Date(2025, 11, 31))).toBe('2025-12-31');
+        const nowStr = Logic.getLocalDateString();
+        expect(nowStr).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    });
+
+    it('getCalendarMonthGrid: creates a valid grid starting from Monday with at least 35 cells', () => {
+        // August 2026 (month 7)
+        const grid = Logic.getCalendarMonthGrid(2026, 7);
+        expect(grid.length).toBeGreaterThanOrEqual(35);
+        expect(grid.length % 7).toBe(0);
+
+        // Ensure days have valid structure
+        const firstCell = grid[0];
+        expect(firstCell).toHaveProperty('dayNum');
+        expect(firstCell).toHaveProperty('dateStr');
+        expect(firstCell).toHaveProperty('isCurrentMonth');
+        expect(firstCell).toHaveProperty('isToday');
+
+        // Check that dates are sequential
+        expect(firstCell.dateStr).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    });
+
+    it('formatItalianDate: formats ISO string or Date to DD/MM/YYYY', () => {
+        expect(Logic.formatItalianDate('2026-08-08')).toBe('08/08/2026');
+        expect(Logic.formatItalianDate('08/08/2026')).toBe('08/08/2026');
+        expect(Logic.formatItalianDate(new Date(2026, 8, 15))).toBe('15/09/2026');
+        expect(Logic.formatItalianDate('')).toBe('');
+        expect(Logic.formatItalianDate(null)).toBe('');
+    });
+
+    it('formatItalianDate: keeps epoch zero and validates calendar-only strings', () => {
+        const epoch = new Date(0);
+        const epochDate = [epoch.getDate(), epoch.getMonth() + 1, epoch.getFullYear()]
+            .map((value, index) => String(value).padStart(index === 2 ? 4 : 2, '0')).join('/');
+        expect(Logic.formatItalianDate(0)).toBe(epochDate);
+        expect(Logic.formatItalianDate('29/02/2024')).toBe('29/02/2024');
+        expect(Logic.formatItalianDate('2024-02-29')).toBe('29/02/2024');
+        for (const value of ['29/02/2026', '31/04/2026', '00/00/2026', '2026-02-31', '2026-04-31']) {
+            expect(Logic.formatItalianDate(value)).toBe('');
+        }
+        expect(Logic.formatItalianDate(new Date(Number.NaN))).toBe('');
+        expect(Logic.formatItalianDate(Number.NaN)).toBe('');
+        expect(Logic.formatItalianDate(undefined)).toBe('');
+    });
+
+    it('parseDateInput: parses various date string formats to YYYY-MM-DD', () => {
+        expect(Logic.parseDateInput('08/08/2026')).toBe('2026-08-08');
+        expect(Logic.parseDateInput('8/8/2026')).toBe('2026-08-08');
+        expect(Logic.parseDateInput('15-09-2026')).toBe('2026-09-15');
+        expect(Logic.parseDateInput('15.09.2026')).toBe('2026-09-15');
+        expect(Logic.parseDateInput('2026-09-15')).toBe('2026-09-15');
+
+        // Invalid dates
+        expect(Logic.parseDateInput('31/02/2026')).toBe(null);
+        expect(Logic.parseDateInput('invalid')).toBe(null);
+        expect(Logic.parseDateInput('')).toBe(null);
+        expect(Logic.parseDateInput(null)).toBe(null);
+    });
+
+    describe('calculateCycleTimeline', () => {
+        it('handles null/undefined or cycles without startDate gracefully', () => {
+            const res = Logic.calculateCycleTimeline(null);
+            expect(res.currentWeek).toBe(1);
+            expect(res.totalWeeks).toBe(4);
+            expect(res.progressPercent).toBe(0);
+
+            const cycleWithoutStart = {
+                id: 'c1',
+                name: 'Test Cycle',
+                durationWeeks: 8,
+                routines: []
+            };
+            const res2 = Logic.calculateCycleTimeline(cycleWithoutStart);
+            expect(res2.currentWeek).toBe(1);
+            expect(res2.totalWeeks).toBe(8);
+            expect(res2.formattedRange).toBe('8 settimane');
+        });
+
+        it('calculates correct timeline for future cycle (not started)', () => {
+            const cycle = {
+                id: 'c2',
+                name: 'Future Cycle',
+                durationWeeks: 4,
+                startDate: '2026-09-01',
+                routines: []
+            };
+            const res = Logic.calculateCycleTimeline(cycle, new Date('2026-08-25'));
+            expect(res.isStarted).toBe(false);
+            expect(res.isEnded).toBe(false);
+            expect(res.daysRemaining).toBe(7);
+            expect(res.statusLabel).toBe('Inizia tra 7 giorni');
+            expect(res.formattedStartDate).toBe('01/09/2026');
+            expect(res.formattedEndDate).toBe('28/09/2026');
+            expect(res.formattedRange).toBe('dal 01/09/2026 al 28/09/2026');
+        });
+
+        it('calculates correct timeline during active cycle', () => {
+            const cycle = {
+                id: 'c3',
+                name: 'Active Cycle',
+                durationWeeks: 6,
+                startDate: '2026-08-01',
+                routines: []
+            };
+            // 15th of August -> day 15 -> week 3
+            const res = Logic.calculateCycleTimeline(cycle, new Date('2026-08-15'));
+            expect(res.isStarted).toBe(true);
+            expect(res.isEnded).toBe(false);
+            expect(res.currentWeek).toBe(3);
+            expect(res.totalWeeks).toBe(6);
+            expect(res.statusLabel).toBe('Settimana 3 di 6');
+            expect(res.progressPercent).toBeGreaterThan(0);
+            expect(res.formattedStartDate).toBe('01/08/2026');
+            expect(res.formattedEndDate).toBe('11/09/2026');
+        });
+
+        it('calculates correct timeline for completed cycle', () => {
+            const cycle = {
+                id: 'c4',
+                name: 'Completed Cycle',
+                durationWeeks: 4,
+                startDate: '2026-06-01',
+                routines: []
+            };
+            const res = Logic.calculateCycleTimeline(cycle, new Date('2026-08-01'));
+            expect(res.isStarted).toBe(true);
+            expect(res.isEnded).toBe(true);
+            expect(res.progressPercent).toBe(100);
+            expect(res.statusLabel).toBe('Ciclo completato');
+        });
+    });
+
+    describe('calculateCycleSchedule & getNextScheduledRoutine (Rolling Rotation)', () => {
+        const mockRoutines = [
+            { id: 'rA', name: 'Scheda A', exercises: [] },
+            { id: 'rB', name: 'Scheda B', exercises: [] },
+            { id: 'rC', name: 'Scheda C', exercises: [] },
+            { id: 'rD', name: 'Scheda D', exercises: [] },
+            { id: 'rE', name: 'Scheda E', exercises: [] },
+            { id: 'rF', name: 'Scheda F', exercises: [] },
+        ];
+
+        it('scenario 1: 6 routines (A-F) with 4 sessions/week for 3 weeks', () => {
+            const cycle = {
+                id: 'cycle-6-4',
+                name: 'Ciclo 6 schede 4x',
+                durationWeeks: 3,
+                sessionsPerWeek: 4,
+                startDate: '2026-08-10',
+                routines: [
+                    { routineId: 'rA', frequencyPerWeek: 1 },
+                    { routineId: 'rB', frequencyPerWeek: 1 },
+                    { routineId: 'rC', frequencyPerWeek: 1 },
+                    { routineId: 'rD', frequencyPerWeek: 1 },
+                    { routineId: 'rE', frequencyPerWeek: 1 },
+                    { routineId: 'rF', frequencyPerWeek: 1 },
+                ]
+            };
+
+            const schedule = Logic.calculateCycleSchedule(cycle, mockRoutines as any);
+            expect(schedule.totalSessions).toBe(12);
+            expect(schedule.weeks.length).toBe(3);
+
+            // Settimana 1: A, B, C, D
+            expect(schedule.weeks[0].sessions.map(s => s.routineName)).toEqual(['Scheda A', 'Scheda B', 'Scheda C', 'Scheda D']);
+            expect(schedule.weeks[0].sessions[0].globalSessionIndex).toBe(1);
+
+            // Settimana 2: E, F, A, B
+            expect(schedule.weeks[1].sessions.map(s => s.routineName)).toEqual(['Scheda E', 'Scheda F', 'Scheda A', 'Scheda B']);
+            expect(schedule.weeks[1].sessions[0].globalSessionIndex).toBe(5);
+
+            // Settimana 3: C, D, E, F
+            expect(schedule.weeks[2].sessions.map(s => s.routineName)).toEqual(['Scheda C', 'Scheda D', 'Scheda E', 'Scheda F']);
+            expect(schedule.weeks[2].sessions[0].globalSessionIndex).toBe(9);
+
+            // Verifica getNextScheduledRoutine
+            // 0 sessioni completate -> Scheda A
+            const next0 = Logic.getNextScheduledRoutine(cycle, mockRoutines as any, []);
+            expect(next0?.nextRoutine?.name).toBe('Scheda A');
+            expect(next0?.nextSessionIndex).toBe(1);
+            expect(next0?.rotationNumber).toBe(1);
+            expect(next0?.positionInRotation).toBe(1);
+
+            // 1 sessione completata -> Scheda B
+            const history1 = [{ id: 'w1', cycleId: 'cycle-6-4', routineId: 'rA', date: '2026-08-10' }];
+            const next1 = Logic.getNextScheduledRoutine(cycle, mockRoutines as any, history1 as any);
+            expect(next1?.nextRoutine?.name).toBe('Scheda B');
+            expect(next1?.nextSessionIndex).toBe(2);
+
+            // 4 sessioni completate (fine settimana 1) -> Scheda E (inizio settimana 2)
+            const history4 = [
+                { id: 'w1', cycleId: 'cycle-6-4', routineId: 'rA', date: '2026-08-10' },
+                { id: 'w2', cycleId: 'cycle-6-4', routineId: 'rB', date: '2026-08-11' },
+                { id: 'w3', cycleId: 'cycle-6-4', routineId: 'rC', date: '2026-08-13' },
+                { id: 'w4', cycleId: 'cycle-6-4', routineId: 'rD', date: '2026-08-14' },
+            ];
+            const next4 = Logic.getNextScheduledRoutine(cycle, mockRoutines as any, history4 as any);
+            expect(next4?.nextRoutine?.name).toBe('Scheda E');
+            expect(next4?.nextSessionIndex).toBe(5);
+            expect(next4?.rotationNumber).toBe(1);
+            expect(next4?.positionInRotation).toBe(5);
+
+            // 6 sessioni completate (terminato il 1° giro di A-F) -> ricomincia con Scheda A (giro 2)
+            const history6 = [
+                ...history4,
+                { id: 'w5', cycleId: 'cycle-6-4', routineId: 'rE', date: '2026-08-17' },
+                { id: 'w6', cycleId: 'cycle-6-4', routineId: 'rF', date: '2026-08-18' },
+            ];
+            const next6 = Logic.getNextScheduledRoutine(cycle, mockRoutines as any, history6 as any);
+            expect(next6?.nextRoutine?.name).toBe('Scheda A');
+            expect(next6?.nextSessionIndex).toBe(7);
+            expect(next6?.rotationNumber).toBe(2);
+            expect(next6?.positionInRotation).toBe(1);
+        });
+
+        it('scenario 2: 4 routines (A-D) with 1 session/week for 4 weeks', () => {
+            const cycle = {
+                id: 'cycle-4-1',
+                name: 'Ciclo 4 schede 1x',
+                durationWeeks: 4,
+                sessionsPerWeek: 1,
+                startDate: '2026-08-10',
+                routines: [
+                    { routineId: 'rA', frequencyPerWeek: 1 },
+                    { routineId: 'rB', frequencyPerWeek: 1 },
+                    { routineId: 'rC', frequencyPerWeek: 1 },
+                    { routineId: 'rD', frequencyPerWeek: 1 },
+                ]
+            };
+
+            const schedule = Logic.calculateCycleSchedule(cycle, mockRoutines as any);
+            expect(schedule.totalSessions).toBe(4);
+            expect(schedule.weeks.length).toBe(4);
+
+            expect(schedule.weeks[0].sessions.map(s => s.routineName)).toEqual(['Scheda A']);
+            expect(schedule.weeks[1].sessions.map(s => s.routineName)).toEqual(['Scheda B']);
+            expect(schedule.weeks[2].sessions.map(s => s.routineName)).toEqual(['Scheda C']);
+            expect(schedule.weeks[3].sessions.map(s => s.routineName)).toEqual(['Scheda D']);
+        });
+
+        it('isolates workouts belonging to other cycles correctly', () => {
+            const cycleA = {
+                id: 'cycleA',
+                name: 'Ciclo A',
+                durationWeeks: 4,
+                sessionsPerWeek: 3,
+                routines: [
+                    { routineId: 'rA', frequencyPerWeek: 1 },
+                    { routineId: 'rB', frequencyPerWeek: 1 },
+                    { routineId: 'rC', frequencyPerWeek: 1 },
+                ]
+            };
+
+            const historyWithOtherCycle = [
+                { id: 'w1', cycleId: 'cycle_OTHER', routineId: 'rA', date: '2026-08-10' },
+                { id: 'w2', cycleId: 'cycle_OTHER', routineId: 'rB', date: '2026-08-11' },
+                { id: 'w3', cycleId: 'cycleA', routineId: 'rA', date: '2026-08-12' },
+            ];
+
+            const next = Logic.getNextScheduledRoutine(cycleA, mockRoutines as any, historyWithOtherCycle as any);
+            // Only w3 belongs to cycleA -> completedCount = 1 -> next is Scheda B
+            expect(next?.completedCount).toBe(1);
+            expect(next?.nextRoutine?.name).toBe('Scheda B');
+            expect(next?.nextSessionIndex).toBe(2);
+        });
+
+        it('supports repeating routines in sequence (e.g., A, B, A, C)', () => {
+            const cycle = {
+                id: 'cycle-repeat',
+                name: 'Ciclo Split ABAC',
+                durationWeeks: 4,
+                sessionsPerWeek: 4,
+                routines: [
+                    { routineId: 'rA', frequencyPerWeek: 1 },
+                    { routineId: 'rB', frequencyPerWeek: 1 },
+                    { routineId: 'rA', frequencyPerWeek: 1 },
+                    { routineId: 'rC', frequencyPerWeek: 1 },
+                ]
+            };
+
+            const schedule = Logic.calculateCycleSchedule(cycle, mockRoutines as any);
+            expect(schedule.weeks[0].sessions.map(s => s.routineName)).toEqual(['Scheda A', 'Scheda B', 'Scheda A', 'Scheda C']);
+
+            const history2 = [
+                { id: 'w1', cycleId: 'cycle-repeat', routineId: 'rA' },
+                { id: 'w2', cycleId: 'cycle-repeat', routineId: 'rB' },
+            ];
+            const next = Logic.getNextScheduledRoutine(cycle, mockRoutines as any, history2 as any);
+            expect(next?.nextRoutine?.name).toBe('Scheda A');
+            expect(next?.positionInRotation).toBe(3);
+        });
+    });
+
+    describe('formatSleepTime, parseSleepInput & isSleepTimeValid', () => {
+        it('formatSleepTime: normalizes and validates HH:MM strings', () => {
+            expect(Logic.formatSleepTime('08:30')).toBe('08:30');
+            expect(Logic.formatSleepTime('8:30')).toBe('08:30');
+            expect(Logic.formatSleepTime('00:00')).toBe('00:00');
+            expect(Logic.formatSleepTime('23:59')).toBe('23:59');
+        });
+
+        it('formatSleepTime: returns empty string for invalid or empty inputs', () => {
+            expect(Logic.formatSleepTime('')).toBe('');
+            expect(Logic.formatSleepTime('   ')).toBe('');
+            expect(Logic.formatSleepTime(null)).toBe('');
+            expect(Logic.formatSleepTime(undefined)).toBe('');
+            expect(Logic.formatSleepTime('invalid')).toBe('');
+            expect(Logic.formatSleepTime('25:00')).toBe('');
+            expect(Logic.formatSleepTime('12:65')).toBe('');
+        });
+
+        it('parseSleepInput: parses and canonicalizes sleep strings', () => {
+            expect(Logic.parseSleepInput('08:30')).toBe('08:30');
+            expect(Logic.parseSleepInput('8:30')).toBe('08:30');
+            expect(Logic.parseSleepInput('')).toBe(null);
+            expect(Logic.parseSleepInput(null)).toBe(null);
+            expect(Logic.parseSleepInput(undefined)).toBe(null);
+            expect(Logic.parseSleepInput('invalid')).toBe(null);
+        });
+
+        it('isSleepTimeValid: validates sleep format correctly', () => {
+            expect(Logic.isSleepTimeValid('08:30')).toBe(true);
+            expect(Logic.isSleepTimeValid('8:30')).toBe(true);
+            expect(Logic.isSleepTimeValid('00:00')).toBe(true);
+            expect(Logic.isSleepTimeValid('23:59')).toBe(true);
+
+            expect(Logic.isSleepTimeValid('')).toBe(false);
+            expect(Logic.isSleepTimeValid('   ')).toBe(false);
+            expect(Logic.isSleepTimeValid(null as any)).toBe(false);
+            expect(Logic.isSleepTimeValid(undefined as any)).toBe(false);
+            expect(Logic.isSleepTimeValid('invalid')).toBe(false);
+            expect(Logic.isSleepTimeValid('25:00')).toBe(false);
+            expect(Logic.isSleepTimeValid('08:60')).toBe(false);
+        });
+    });
+
+    describe('Volume & Weight Calculation Engine (R1)', () => {
+        describe('getLatestUserWeight', () => {
+            it('returns latest weight from chronological nutrition days', () => {
+                const nutrition = {
+                    '2026-08-01': { weight: 82.5 },
+                    '2026-08-15': { weight: 81.0 },
+                    '2026-08-10': { weight: 81.8 },
+                };
+                expect(Logic.getLatestUserWeight(nutrition)).toBe(81.0);
+            });
+
+            it('skips invalid/empty weight entries in nutrition', () => {
+                const nutrition = {
+                    '2026-08-01': { weight: 82.5 },
+                    '2026-08-15': { weight: '' },
+                    '2026-08-20': { weight: null },
+                };
+                expect(Logic.getLatestUserWeight(nutrition)).toBe(82.5);
+            });
+
+            it('falls back to nutritionPlanning weight if no valid nutrition entries', () => {
+                const planning = { weight: 75 };
+                expect(Logic.getLatestUserWeight({}, planning)).toBe(75);
+                expect(Logic.getLatestUserWeight(null, planning)).toBe(75);
+            });
+
+            it('falls back to 80 if both nutrition and nutritionPlanning are missing or empty', () => {
+                expect(Logic.getLatestUserWeight(null, null)).toBe(80);
+                expect(Logic.getLatestUserWeight({}, {})).toBe(80);
+            });
+        });
+
+        describe('calculateEffectiveSetWeight', () => {
+            it('returns baseKg for standard exercise without bodyweight or equipment', () => {
+                expect(Logic.calculateEffectiveSetWeight(50, null, 80)).toBe(50);
+                expect(Logic.calculateEffectiveSetWeight('60', { isBodyweight: false }, 75)).toBe(60);
+            });
+
+            it('adds user weight when isBodyweight is true', () => {
+                // 0 kg + 80 kg user = 80 kg
+                expect(Logic.calculateEffectiveSetWeight(0, { isBodyweight: true }, 80)).toBe(80);
+                expect(Logic.calculateEffectiveSetWeight('0', { isBodyweight: true }, 80)).toBe(80);
+                // +10 kg ballast + 80 kg user = 90 kg
+                expect(Logic.calculateEffectiveSetWeight(10, { isBodyweight: true }, 80)).toBe(90);
+                expect(Logic.calculateEffectiveSetWeight('15.5', { isBodyweight: true }, 70)).toBe(85.5);
+            });
+
+            it('adds equipment weight when equipmentWeight is specified', () => {
+                // 60 kg + 20 kg barbell = 80 kg
+                expect(Logic.calculateEffectiveSetWeight(60, { equipmentWeight: 20 }, 80)).toBe(80);
+                expect(Logic.calculateEffectiveSetWeight(0, { equipmentWeight: 20 }, 80)).toBe(20);
+            });
+
+            it('combines bodyweight and equipment weight when both are present', () => {
+                // 0 kg + 75 kg user + 5 kg weighted vest = 80 kg
+                expect(Logic.calculateEffectiveSetWeight(0, { isBodyweight: true, equipmentWeight: 5 }, 75)).toBe(80);
+                // 10 kg + 75 kg user + 5 kg vest = 90 kg
+                expect(Logic.calculateEffectiveSetWeight(10, { isBodyweight: true, equipmentWeight: 5 }, 75)).toBe(90);
+            });
+
+            it('handles invalid or undefined inputs gracefully', () => {
+                expect(Logic.calculateEffectiveSetWeight('', null, 80)).toBe(0);
+                expect(Logic.calculateEffectiveSetWeight(null, null, 80)).toBe(0);
+                expect(Logic.calculateEffectiveSetWeight('invalid', null, 80)).toBe(0);
+            });
+        });
+
+        describe('calculateSetVolume', () => {
+            it('calculates standard volume as effectiveWeight * reps', () => {
+                const set = { kg: '50', reps: '10' };
+                expect(Logic.calculateSetVolume(set, null, 80)).toBe(500);
+            });
+
+            it('calculates volume for bodyweight exercise with 0 kg correctly (acceptance criterion R1)', () => {
+                const set = { kg: '0', reps: '10' };
+                const bwEx = { isBodyweight: true };
+                // 80 kg * 10 reps = 800
+                expect(Logic.calculateSetVolume(set, bwEx, 80)).toBe(800);
+            });
+
+            it('includes dropsets volume in the total set volume', () => {
+                const set = {
+                    kg: '100',
+                    reps: '8', // 800
+                    segments: [
+                        { technique: 'dropset' as const, id: 'seg-fixture-1', kg: '70', reps: '6' },  // 420
+                        { technique: 'dropset' as const, id: 'seg-fixture-2', kg: '50', reps: '8' }   // 400
+                    ]
+                };
+                expect(Logic.calculateSetVolume(set, null, 80)).toBe(800 + 420 + 400); // 1620
+            });
+
+            it('includes dropsets on bodyweight exercises', () => {
+                const set = {
+                    kg: '20', // +20 ballast on 80kg = 100kg
+                    reps: '5', // 500
+                    segments: [
+                        { technique: 'dropset' as const, id: 'seg-fixture-3', kg: '0', reps: '5' } // 0 ballast on 80kg = 80kg * 5 = 400
+                    ]
+                };
+                const bwEx = { isBodyweight: true };
+                expect(Logic.calculateSetVolume(set, bwEx, 80)).toBe(500 + 400); // 900
+            });
+
+            it('returns 0 for null/undefined or empty sets', () => {
+                expect(Logic.calculateSetVolume(null as any)).toBe(0);
+                expect(Logic.calculateSetVolume({ kg: '50', reps: '0' })).toBe(0);
+            });
+        });
+
+        describe('calculateWorkoutVolume', () => {
+            it('calculates total volume across multiple exercises matching library metadata', () => {
+                const library = [
+                    { id: 'ex-bench', name: 'Panca piana', isBodyweight: false, equipmentWeight: 0 },
+                    { id: 'ex-pullup', name: 'Trazioni', isBodyweight: true, equipmentWeight: 0 },
+                    { id: 'ex-trapbar', name: 'Trap Bar Deadlift', isBodyweight: false, equipmentWeight: 25 },
+                ];
+
+                const session = {
+                    exercises: [
+                        {
+                            exId: 'ex-bench',
+                            sets: [
+                                { kg: '80', reps: '10' }, // 800
+                                { kg: '90', reps: '8' }   // 720
+                            ]
+                        },
+                        {
+                            exId: 'ex-pullup',
+                            sets: [
+                                { kg: '0', reps: '10' }, // (80 + 0) * 10 = 800
+                                { kg: '10', reps: '6' }  // (80 + 10) * 6 = 540
+                            ]
+                        },
+                        {
+                            exId: 'ex-trapbar',
+                            sets: [
+                                { kg: '100', reps: '5' } // (100 + 25) * 5 = 625
+                            ]
+                        }
+                    ]
+                };
+
+                const total = Logic.calculateWorkoutVolume(session, library, 80);
+                expect(total).toBe(800 + 720 + 800 + 540 + 625); // 3485
+            });
+
+            it('returns 0 for empty or invalid sessions', () => {
+                expect(Logic.calculateWorkoutVolume(null as any)).toBe(0);
+                expect(Logic.calculateWorkoutVolume({ exercises: [] })).toBe(0);
+            });
+        });
+
+        describe('DOMS Muscle Pain Tracking & Explicit Persistence (R5 & R6)', () => {
+            it('getMuscleName: returns Italian localized name for valid ID and falls back to ID if not found', () => {
+                expect(Logic.getMuscleName('chest')).toBe('Petto');
+                expect(Logic.getMuscleName('biceps')).toBe('Bicipiti');
+                expect(Logic.getMuscleName('biceps_left')).toBe('Bicipite sinistro');
+                expect(Logic.getMuscleName('unknown_muscle_id')).toBe('unknown_muscle_id');
+                expect(Logic.getMuscleName('')).toBe('');
+            });
+
+            it('searchMuscles: finds muscles with direct, fuzzy, and Italian stemmed queries', () => {
+                const chestMatches = Logic.searchMuscles('pettorali');
+                expect(chestMatches.length).toBeGreaterThan(0);
+                expect(chestMatches.some(m => m.id === 'chest' || m.name.toLowerCase().includes('petto'))).toBe(true);
+
+                const bicepsMatches = Logic.searchMuscles('bicipite');
+                expect(bicepsMatches.length).toBeGreaterThan(0);
+                expect(bicepsMatches.some(m => m.id.includes('biceps'))).toBe(true);
+
+                const emptyMatches = Logic.searchMuscles('');
+                expect(emptyMatches).toEqual([]);
+            });
+
+            it('mergeActivePains: preserves active pains until the user explicitly clears them', () => {
+                const activePains = ['chest', 'quads'];
+                const result = Logic.mergeActivePains(activePains, []);
+                expect(result).toEqual(['chest', 'quads']);
+            });
+
+            it('mergeActivePains: deduplicates pains reported again after a session', () => {
+                const activePains = ['chest', 'quads'];
+                const sessionPains = ['chest'];
+                const result = Logic.mergeActivePains(activePains, sessionPains);
+                expect(result).toEqual(['chest', 'quads']);
+            });
+
+            it('mergeActivePains: does not infer recovery from trained muscles or laterality', () => {
+                const activePains = ['biceps_left'];
+                const result = Logic.mergeActivePains(activePains, []);
+                expect(result).toEqual(['biceps_left']);
+            });
+
+            it('mergeActivePains: appends newly reported post-workout pains', () => {
+                const result = Logic.mergeActivePains(['lats'], ['quads', 'glutes']);
+                expect(result).toEqual(['lats', 'quads', 'glutes']);
+            });
+
+            it('mergeActivePains: safely handles null, duplicates and empty values', () => {
+                expect(Logic.mergeActivePains()).toEqual([]);
+                expect(Logic.mergeActivePains(null as any, null as any)).toEqual([]);
+                expect(Logic.mergeActivePains(['chest', '', 'chest'], ['chest', 'quads'])).toEqual(['chest', 'quads']);
+            });
+        });
+    });
+});
+
+
+
+
+describe('Linear planning history and TDEE feed regressions', () => {
+    it('counts only the chosen cycle and selects the last comparable workout on timestamp ties', () => {
+        const cycle = {
+            id: 'selected', name: 'Ciclo', durationWeeks: 4, sessionsPerWeek: 3,
+            routines: ['first', 'second', 'third'].map(routineId => ({ routineId, frequencyPerWeek: 1 })),
+        };
+        const routines = ['first', 'second', 'third'].map(id => ({ id, name: id, exercises: [] }));
+        const unrelated = Array.from({ length: 512 }, (_, index) => ({
+            id: `other-${index}`, cycleId: 'different', routineId: 'third',
+            date: '2026-10-31', exercises: [],
+        }));
+        const workout = (id: string, routineId: string, timestamp: number) => ({
+            id, cycleId: cycle.id, routineId,
+            date: '2026-08-01', globalStartTime: timestamp, exercises: [],
+        });
+        const history = [
+            workout('early-in-array', 'first', 2_000),
+            ...unrelated,
+            workout('unknown-routine', 'removed', 9_000),
+            workout('later-in-array', 'second', 2_000),
+            { id: 'without-routine', cycleId: cycle.id, date: '2026-08-01', exercises: [] },
+        ];
+        const before = JSON.stringify(history);
+        const result = Logic.getNextScheduledRoutine(cycle, routines, history);
+        expect(result).toMatchObject({
+            completedCount: 3, nextSessionIndex: 4, nextRoutineId: 'third',
+            nextRoutineName: 'third', totalSessions: 12, isCycleCompleted: false,
+        });
+        expect(JSON.stringify(history)).toBe(before);
+
+        const reverseTie = [
+            workout('later-in-array', 'second', 2_000),
+            ...unrelated,
+            workout('early-in-array', 'first', 2_000),
+        ];
+        expect(Logic.getNextScheduledRoutine(cycle, routines, reverseTie)?.nextRoutineId).toBe('second');
+        const noKnownRoutine = [{ id: 'unknown', cycleId: cycle.id, routineId: 'removed', exercises: [] }];
+        expect(Logic.getNextScheduledRoutine(cycle, routines, noKnownRoutine))
+            .toMatchObject({ completedCount: 1, nextRoutineId: 'second' });
+    });
+
+    it('estimates the same nutrition TDEE for reversed days and ignores noncanonical keys', () => {
+        const recentDays = Array.from({ length: 7 }, (_, i) => ({
+            date: `2026-10-${String(i + 1).padStart(2, '0')}`,
+            weight: 80, kcal: 2_200,
+        }));
+        const map = Object.fromEntries([
+            ...recentDays.map(day => [day.date, day]),
+            ['2026-01-01', { date: '2026-01-01', weight: 100, kcal: 9_000 }],
+            ['2026-10-8', { date: '2026-10-8', weight: 100, kcal: 9_000 }],
+        ]);
+        const original = JSON.stringify(map);
+        const plan = { weight: 80, normocalorica: { kcal: 2_400 } };
+        for (const nutrition of [map, Object.fromEntries(Object.entries(map).reverse())]) {
+            const result = Logic.calculateTDEEAndMacros({ nutrition, nutritionPlanning: plan } as any);
+            expect(result.tdee).toBe(2_200);
+            expect(result.carbs).toBe(280);
+        }
+        expect(JSON.stringify(map)).toBe(original);
+    });
+});

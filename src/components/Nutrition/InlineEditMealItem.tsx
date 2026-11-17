@@ -1,0 +1,186 @@
+import { useId, useRef, useState } from 'react';
+import { getLoggedMealPortion } from '../../lib/nutrition/calculateLoggedMealTotals';
+import { Pencil, Trash2, Save } from 'lucide-react';
+import type { LoggedMealItem } from '../../types';
+
+interface EditMealItemModalProps {
+    item: LoggedMealItem;
+    onClose: () => void;
+    onSave: (changes: Pick<LoggedMealItem, 'id' | 'quantity' | 'meal'>) => Promise<boolean>;
+    onDelete: (itemId: string) => Promise<boolean>;
+}
+
+const MEAL_TYPES = ['Colazione', 'Pranzo', 'Cena', 'Spuntini'];
+
+export default function EditMealItemModal({ item, onClose, onSave, onDelete }: EditMealItemModalProps) {
+    const inputId = useId();
+    const [quantity, setQuantity] = useState<number | string>(getLoggedMealPortion(item).quantity);
+    const [meal, setMeal] = useState<string>(item.meal || 'Colazione');
+    const [saving, setSaving] = useState(false);
+    const submitting = useRef(false);
+
+    const parsedQty = Number(quantity);
+    const validQty = quantity !== '' && Number.isFinite(parsedQty) && parsedQty >= 0;
+    const numQty = validQty ? parsedQty : 0;
+    const { ratio } = getLoggedMealPortion({ ...item, quantity: numQty });
+
+    const currentKcal = Math.round((Number(item.kcal) || 0) * ratio);
+    const currentCarbs = Math.round((Number(item.carbs) || 0) * ratio * 10) / 10;
+    const currentPro = Math.round((Number(item.pro) || 0) * ratio * 10) / 10;
+    const currentFat = Math.round((Number(item.fat) || 0) * ratio * 10) / 10;
+
+    const submit = async (operation: () => Promise<boolean>) => {
+        if (submitting.current) return;
+        submitting.current = true;
+        setSaving(true);
+        try {
+            // Keep the editable draft mounted unless the device commit is acknowledged.
+            if (await operation()) onClose();
+        } catch (error) {
+            console.error('Modifica del pasto non completata:', error);
+        } finally {
+            submitting.current = false;
+            setSaving(false);
+        }
+    };
+
+    const handleSave = () => submit(() => onSave({
+        id: item.id,
+        quantity: numQty,
+        meal
+    }));
+
+    const handleDelete = () => submit(() => onDelete(item.id));
+
+    return (
+        <div 
+            className="card"
+            style={{
+                background: 'var(--surface-color)',
+                border: '1px solid var(--primary-color)',
+                borderRadius: '12px',
+                padding: '15px',
+                marginTop: '5px',
+                marginBottom: '15px',
+                animation: 'fadeSlideUp 0.2s ease',
+                boxShadow: '0 4px 12px rgba(0,0,0,0.3)'
+            }}
+            onClick={e => e.stopPropagation()}
+        >
+            <div className="flex-between mb-15 pb-10 border-b">
+                <h2 style={{margin: 0, color: 'var(--text-main)'}}>
+                    <Pencil size={16} aria-hidden="true" style={{marginRight: '6px'}} /> Modifica porzione
+                </h2>
+                <button 
+                    type="button" 
+                    className="btn-icon" 
+                    onClick={onClose}
+                    disabled={saving}
+                    aria-label="Chiudi modifica porzione"
+                    style={{ color: 'var(--text-muted)', fontSize: 'var(--font-size-section)' }}
+                >
+                    ✕
+                </button>
+            </div>
+
+            <div style={{ marginBottom: '15px' }}>
+                <div style={{ fontWeight: 'bold', fontSize: 'var(--font-size-control)', color: 'var(--text-main)', marginBottom: '4px' }}>
+                    {item.name}
+                </div>
+                {item.brand && (
+                    <div style={{ fontSize: 'var(--font-size-meta)', color: 'var(--text-muted)' }}>
+                        {item.brand}
+                    </div>
+                )}
+            </div>
+
+            <div className="mb-15">
+                <label className="text-muted text-xs block mb-4" htmlFor={`${inputId}-meal`}>Pasto</label>
+                <select 
+                    id={`${inputId}-meal`}
+                    value={meal} 
+                    onChange={e => setMeal(e.target.value)}
+                    disabled={saving}
+                    style={{ marginBottom: 0 }}
+                >
+                    {MEAL_TYPES.map(mt => (
+                        <option key={mt} value={mt}>{mt}</option>
+                    ))}
+                    <option value="quick">Aggiunta rapida</option>
+                </select>
+            </div>
+
+            <div className="mb-15">
+                <label className="text-muted text-xs block mb-4" htmlFor={`${inputId}-quantity`}>
+                    Quantità ({item.unit || 'g'})
+                </label>
+                <input 
+                    id={`${inputId}-quantity`}
+                    type="number" 
+                    step="1"
+                    min="0"
+                    value={quantity} 
+                    onChange={e => setQuantity(e.target.value)}
+                    onFocus={e => e.target.select()}
+                    disabled={saving}
+                    aria-invalid={!validQty}
+                    style={{ marginBottom: 0, fontSize: 'var(--font-size-section)', fontWeight: 'bold' }}
+                    autoFocus
+                />
+            </div>
+
+            {/* Macro Summary Preview */}
+            <div 
+                style={{
+                    background: 'var(--surface-light)',
+                    border: '1px solid var(--glass-border)',
+                    borderRadius: '10px',
+                    padding: '12px',
+                    marginBottom: '20px',
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(4, 1fr)',
+                    textAlign: 'center',
+                    gap: '6px'
+                }}
+            >
+                <div>
+                    <div style={{ fontSize: 'var(--font-size-micro)', color: 'var(--text-muted)' }}>KCAL</div>
+                    <div style={{ fontWeight: 'bold', color: 'var(--text-main)', fontSize: 'var(--font-size-body)' }}>{currentKcal}</div>
+                </div>
+                <div>
+                    <div style={{ fontSize: 'var(--font-size-micro)', color: 'var(--text-muted)' }}>PRO</div>
+                    <div style={{ fontWeight: 'bold', color: 'var(--text-main)', fontSize: 'var(--font-size-body)' }}>{currentPro}g</div>
+                </div>
+                <div>
+                    <div style={{ fontSize: 'var(--font-size-micro)', color: 'var(--text-muted)' }}>CARBO</div>
+                    <div style={{ fontWeight: 'bold', color: 'var(--text-main)', fontSize: 'var(--font-size-body)' }}>{currentCarbs}g</div>
+                </div>
+                <div>
+                    <div style={{ fontSize: 'var(--font-size-micro)', color: 'var(--text-muted)' }}>GRASSI</div>
+                    <div style={{ fontWeight: 'bold', color: 'var(--text-main)', fontSize: 'var(--font-size-body)' }}>{currentFat}g</div>
+                </div>
+            </div>
+
+            <div className="flex gap-10">
+                <button 
+                    type="button" 
+                    className="btn" 
+                    style={{ background: 'var(--danger-soft)', color: 'var(--danger-color)', border: '1px solid var(--danger-color)', flex: 1, marginBottom: 0 }}
+                    onClick={() => { void handleDelete(); }}
+                    disabled={saving}
+                >
+                    <Trash2 size={16} aria-hidden="true" style={{marginRight: '6px'}} /> Rimuovi
+                </button>
+                <button 
+                    type="button" 
+                    className="btn btn-primary" 
+                    style={{ flex: 2, marginBottom: 0 }}
+                    onClick={() => { void handleSave(); }}
+                    disabled={saving || !validQty}
+                >
+                    <Save size={16} aria-hidden="true" style={{marginRight: '6px'}} /> Salva
+                </button>
+            </div>
+        </div>
+    );
+}

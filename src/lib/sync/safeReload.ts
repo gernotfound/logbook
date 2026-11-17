@@ -1,0 +1,72 @@
+import { isReloadSessionCurrent, prepareForReload, prepareForRequiredUpdateReload } from './reloadBarrier';
+import { isCurrentSession } from './session';
+import { checkForWaitingServiceWorker } from '../pwaUpdate';
+
+const REQUIRED_UPDATE_SW_TIMEOUT_MS = 3000;
+
+const delay = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms));
+
+async function refreshServiceWorkerForRequiredUpdate(): Promise<void> {
+    if (typeof navigator === 'undefined' || !('serviceWorker' in navigator)) return;
+    try {
+        const registration = await Promise.race([
+            navigator.serviceWorker.getRegistration(),
+            delay(REQUIRED_UPDATE_SW_TIMEOUT_MS).then(() => undefined),
+        ]);
+        if (!registration) return;
+
+        // update() may resolve while the replacement worker is still
+        // installing. Reuse the same settle barrier as the ordinary update
+        // prompt, bounded so a blocked browser cannot trap the reload.
+        await Promise.race([
+            checkForWaitingServiceWorker(registration, REQUIRED_UPDATE_SW_TIMEOUT_MS),
+            delay(REQUIRED_UPDATE_SW_TIMEOUT_MS).then(() => false),
+        ]);
+
+        const waiting = registration.waiting;
+        if (!waiting) return;
+
+        const controllerChanged = navigator.serviceWorker.controller
+            ? new Promise<void>(resolve => {
+                navigator.serviceWorker.addEventListener('controllerchange', () => resolve(), { once: true });
+            })
+            : Promise.resolve();
+
+        waiting.postMessage({ type: 'SKIP_WAITING' });
+        await Promise.race([controllerChanged, delay(REQUIRED_UPDATE_SW_TIMEOUT_MS)]);
+    } catch {
+        // The update check is best-effort. A navigation reload still gives the browser
+        // a chance to refresh the app shell when connectivity is available.
+    }
+}
+
+/**
+ * Performs a hard browser reload only after the current session has been
+ * durably reconciled with the local IndexedDB envelope and synchronous
+ * device-critical state.
+ *
+ * The reload callback is injectable so the safety contract can be tested
+ * without mutating jsdom's Location object.
+ */
+export async function safeHardReload(
+    reload: () => void = () => window.location.reload(),
+    options: { discardUnverifiedInMemoryData?: boolean } = {},
+): Promise<void> {
+    const session = await prepareForReload(options);
+    if (!isReloadSessionCurrent(session)) {
+        throw new Error('Sessione cambiata. Ripeti l’operazione.');
+    }
+    reload();
+}
+
+export async function requiredUpdateHardReload(reload: () => void = () => window.location.reload()): Promise<void> {
+    // A future persisted schema cannot be parsed safely by the normal reload barrier.
+    // Preserve only the owner-scoped device-critical workout snapshot, then attempt to
+    // activate a waiting service worker before reloading into the newer application.
+    const session = prepareForRequiredUpdateReload();
+    await refreshServiceWorkerForRequiredUpdate();
+    if (!isCurrentSession(session)) {
+        throw new Error('Sessione cambiata. Ripeti l’aggiornamento.');
+    }
+    reload();
+}
