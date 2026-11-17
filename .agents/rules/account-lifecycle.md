@@ -5,6 +5,10 @@
 
 **Autorità:** [`AGENTS.md`](../../AGENTS.md). Questo contratto ne specializza gli invarianti; non amplia autorizzazioni o perimetro.
 
+### Fence sincrono azione/foreground Kinde (17/11/2026)
+
+Un evento `focus` o `online` nello stesso turno di un comando Kinde non deve invalidare la generazione del comando prima del commit di `busy` React. Usare un latch sincrono di operazione, rilasciato anche per errori/teardown; un recheck foreground può partire solo senza operazioni in corso. L'osservatore non autorizza fitness, consenso o accesso ad archivi, anche in caso di sessione verified.
+
 ### Riconciliazione sessione Kinde foreground (17/11/2026)
 
 La schermata React Kinde `identityOnly` deve rileggerne lo stato trusted al ritorno dal background o della rete, invalidando i risultati di richieste precedenti e accorpando gli eventi simultanei. Un errore di rete o una sessione non verificata non concede owner, consenso, vault o fitness; la modalità guest già attiva non effettua queste letture. Questo è soltanto un osservatore UI: `AuthProvider`, `storageOwner()` e il ciclo guest→account Firebase restano da convertire. La diagnostica HTML è indipendente e richiede una prova Network sul browser normale prima di attribuirne il blocco a uno specifico componente.

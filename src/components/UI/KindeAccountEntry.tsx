@@ -41,6 +41,8 @@ export function KindeAccountEntry({
 }) {
     const [phase, setPhase] = useState<Phase>(guestArchivePresent ? 'guest-blocked' : 'checking');
     const [busy, setBusy] = useState(false);
+    // A synchronous latch protects a user action before React commits busy state.
+    const busyRef = useRef(false);
     const [over18, setOver18] = useState(false);
     const [terms, setTerms] = useState(false);
     const [health, setHealth] = useState(false);
@@ -113,14 +115,15 @@ export function KindeAccountEntry({
     useEffect(() => {
         if (guestArchivePresent) return;
         let scheduled = false;
+        let active = true;
         const scheduleRecheck = () => {
-            if (scheduled || busy || document.visibilityState === 'hidden') return;
+            if (!active || scheduled || busyRef.current || document.visibilityState === 'hidden') return;
             scheduled = true;
             // Focus and visibilitychange may fire in the same turn. One
             // recheck avoids duplicate requests and stale-status flicker.
             queueMicrotask(() => {
                 scheduled = false;
-                if (!mounted.current || busy || document.visibilityState === 'hidden') return;
+                if (!active || !mounted.current || busyRef.current || document.visibilityState === 'hidden') return;
                 setPhase('checking');
                 void refresh();
             });
@@ -132,17 +135,18 @@ export function KindeAccountEntry({
         window.addEventListener('online', scheduleRecheck);
         document.addEventListener('visibilitychange', onVisible);
         return () => {
+            active = false;
             window.removeEventListener('focus', scheduleRecheck);
             window.removeEventListener('online', scheduleRecheck);
             document.removeEventListener('visibilitychange', onVisible);
         };
-    }, [busy, guestArchivePresent, refresh]);
+    }, [guestArchivePresent, refresh]);
 
     const handleSignIn = () => {
         // A failed status probe is NOT a cloud grant; it must not prevent a
         // fresh, explicit browser login. The trusted Worker performs the
         // independent OAuth state, CSRF and rate-limit checks on POST.
-        if (busy || guestArchivePresent
+        if (busyRef.current || guestArchivePresent
             || (phase !== 'signed-out' && !(identityOnly && phase === 'unavailable'))) return;
         const token = generation.current;
         try {
@@ -154,25 +158,28 @@ export function KindeAccountEntry({
     };
 
     const handleLocalGuest = async () => {
-        if (busy || guestArchivePresent || !['signed-out', 'unavailable'].includes(phase)
+        if (busyRef.current || guestArchivePresent || !['signed-out', 'unavailable'].includes(phase)
             || !onLocalGuest) return;
         const token = generation.current;
         const current = () => mounted.current && generation.current === token && !guestArchivePresent;
+        busyRef.current = true;
         setBusy(true);
         try {
             await onLocalGuest();
         } catch {
             if (current()) setPhase('unavailable');
         } finally {
+            busyRef.current = false;
             if (current()) setBusy(false);
         }
     };
 
     const handleConsent = async () => {
-        if (busy || guestArchivePresent || phase !== 'consent-required'
+        if (busyRef.current || guestArchivePresent || phase !== 'consent-required'
             || !over18 || !terms || !health) return;
         const token = generation.current;
         const current = () => mounted.current && generation.current === token && !guestArchivePresent;
+        busyRef.current = true;
         setBusy(true);
         try {
             await acceptKindeCandidateInitialConsent({
@@ -183,16 +190,18 @@ export function KindeAccountEntry({
         } catch {
             if (current()) setPhase('unavailable');
         } finally {
+            busyRef.current = false;
             if (current()) setBusy(false);
         }
     };
 
     const handleLogout = async () => {
-        if (busy || guestArchivePresent
+        if (busyRef.current || guestArchivePresent
             || !['email-unverified', 'identity-verified', 'consent-required', 'consent-confirmed',
                 'legal-update-required', 'consent-suspended'].includes(phase)) return;
         const token = generation.current;
         const current = () => mounted.current && generation.current === token && !guestArchivePresent;
+        busyRef.current = true;
         setBusy(true);
         try {
             await revokeKindeCandidateSession({ stillCurrent: current });
@@ -200,12 +209,15 @@ export function KindeAccountEntry({
                 setOver18(false);
                 setTerms(false);
                 setHealth(false);
+                setPhase('checking');
+                busyRef.current = false;
                 setBusy(false);
                 await refresh();
             }
         } catch {
             if (current()) setPhase('unavailable');
         } finally {
+            busyRef.current = false;
             if (current()) setBusy(false);
         }
     };
