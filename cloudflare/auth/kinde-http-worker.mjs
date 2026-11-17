@@ -48,10 +48,10 @@ function validateClaims(claims) {
     && typeof claims.sessionHash === 'string' && HASH.test(claims.sessionHash);
 }
 
-// Native empty HTML forms may expose a body stream even when their payload is
-// zero bytes. Drain only this OAuth-start request before creating state; do
-// not accept arbitrary form fields or trust a forged Content-Length: 0.
-async function strictlyEmptyFormPost(request) {
+// Browser POSTs, including zero-byte fetches and native forms, can expose a
+// non-null body stream. Drain it before any Auth operation: Content-Length: 0
+// alone is not proof of emptiness, and a body must never reach the Auth gate.
+async function strictlyEmptyPost(request) {
   const length = request.headers.get('content-length');
   if (length !== null && length !== '0') return false;
   if (!request.body) return true;
@@ -150,16 +150,16 @@ export function createKindeHttpHandler({ fetchImpl = fetch, keySet } = {}) {
     }
     const callback = url.pathname === '/api/auth/kinde/callback';
     if (!callback && (url.search !== ''
-      || (request.body !== null && url.pathname !== '/api/auth/kinde/start')
       || (request.headers.has('content-length')
         && request.headers.get('content-length') !== '0')
       || !sameOrigin(request, env.APP_ORIGIN))) {
       return json('origin-or-input-rejected', 403);
     }
     if (callback && request.body !== null) return json('origin-or-input-rejected', 403);
-    if (url.pathname === '/api/auth/kinde/start' && request.body !== null) {
-      if (!await strictlyEmptyFormPost(request)) return json('origin-or-input-rejected', 403);
-      // The OAuth flow's direct-call boundary accepts no body at all.
+    if (!callback && request.body !== null) {
+      if (!await strictlyEmptyPost(request)) return json('origin-or-input-rejected', 403);
+      // All three POST routes require an actually empty body. Reconstruct the
+      // request so downstream guards do not misread a drained stream as input.
       request = new Request(request.url, { method: 'POST', headers: request.headers });
     }
 

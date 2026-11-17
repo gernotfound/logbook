@@ -354,6 +354,49 @@ void test('native empty form POST can initiate OAuth without allowing a body or 
   } finally { f.close(); }
 });
 
+void test('browser zero-byte POST streams verify sessions and logout without accepting input', async () => {
+  const f = await fixture();
+  try {
+    const through = request => routeCandidateFirstPartyApi(request, {
+      APP_ORIGIN: ORIGIN,
+      KINDE_HTTP: { fetch: request => f.handler(request, f.env) },
+    });
+    // Chromium/Workers may expose an empty stream even for Content-Length: 0.
+    const browserPost = (path, cookie = '', csrf = '', payload = '') =>
+      new Request(ORIGIN + path, {
+        method: 'POST',
+        headers: {
+          origin: ORIGIN, 'sec-fetch-site': 'same-origin',
+          'content-length': '0', cookie, 'x-csrf-token': csrf,
+        },
+        body: new ReadableStream({
+          start(controller) {
+            if (payload) controller.enqueue(new TextEncoder().encode(payload));
+            controller.close();
+          },
+        }),
+        duplex: 'half',
+      });
+
+    const absent = await through(browserPost(SESSION));
+    assert.equal(absent.status, 401);
+    assert.deepEqual(await absent.json(), { error: 'unauthorized' });
+
+    const login = await f.login();
+    const verified = await through(browserPost(SESSION, login.cookie));
+    assert.equal(verified.status, 200);
+    assert.equal((await verified.json()).authenticated, true);
+
+    const forged = await through(browserPost(SESSION, login.cookie, '', 'injected=1'));
+    assert.equal(forged.status, 403);
+    assert.deepEqual(await forged.json(), { error: 'origin-or-input-rejected' });
+
+    const loggedOut = await through(browserPost(LOGOUT, login.cookie, login.csrf));
+    assert.equal(loggedOut.status, 200);
+    assert.equal((await through(browserPost(SESSION, login.cookie))).status, 401);
+  } finally { f.close(); }
+});
+
 void test('missing cookies, wrong origin, URL aliases and forged headers fail closed', async () => {
   const f = await fixture();
   try {
