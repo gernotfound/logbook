@@ -73,4 +73,5 @@ void test('source and CSP enforce explicit manual installation, excluding auth a
   assert.ok(!about.includes('analytics-loader.js'));
   assert.ok(!privacy.includes('analytics-loader.js') && !diagnostic.includes('analytics-loader.js'));
   assert.ok(headers.includes("script-src 'self' https://static.cloudflareinsights.com "));
+  assert.ok(headers.includes("connect-src 'self' https://cloudflareinsights.com "));
 });

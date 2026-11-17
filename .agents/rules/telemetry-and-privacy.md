@@ -26,7 +26,7 @@
 ## Misurazioni autorizzate
 
 - Cloudflare Web Analytics: pageview e Core Web Vitals, non tracciamento individuale, session replay, error monitoring, eventi su azioni, contenuti salute o identificatori.
-- Lo script esterno ammesso dalla CSP Cloudflare è `https://static.cloudflareinsights.com`; il beacon invia a `/cdn-cgi/rum` sullo stesso origin.
+- Lo script esterno ammesso dalla CSP Cloudflare è `https://static.cloudflareinsights.com`; il beacon manuale invia a `https://cloudflareinsights.com/cdn-cgi/rum` (non al percorso first-party dell'iniezione automatica).
 - `auto_install=false`, `rum=manual` e ruleset disabilitato sono misure contro iniezione non revisionata. La raccolta è solo mediante loader esplicito, da verificare sul runtime reale.
 - L'informativa pubblica descrive le misure e la versione `LEGAL_VERSIONS.privacy` deve essere incrementata; la base giuridica e l'effettiva raccolta, anche su Safari, vanno rivalidate prima del GO.
 
