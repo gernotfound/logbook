@@ -1,5 +1,12 @@
 # TheLogBook — migrazione Cloudflare: runbook corrente
 
+## CF-03 · callback Kinde: errore ID-token circoscritto (candidato v2.499.0, 17/11/2026)
+
+Il nuovo collaudo v2.498.0 dell'owner restituisce `503` con `phase=id-token`: exchange OAuth e access-token proof sono stati superati, il JWT ID è stato rifiutato **dentro `jwtVerify`**. Non si presume un errore di audience senza prova: Kinde documenta esempi di `aud` differenti (dominio issuer o identificatore dell'app). Il backend non è autorizzato a fidarsi di un token o di un claim senza verifica crittografica del destinatario.
+
+La patch espone una **sottocategoria temporanea non identificante** (audience, issuer, expiry, key, signature, algorithm; altri restano `id-token`) solo sulla risposta di errore 503 che segue uno state OAuth validato/consumato. Gli errori JOSE sono classificati mediante `code` ed eventualmente il nome fisso del claim `aud`/`iss`; mai messaggi, valori o token. Stessi requisiti RS256, issuer, audience, nonce, azp, emailVerified, sessioni D1 e `no-store`; nessun reset/rimozione di controlli. Test firmati e D1 simulano mismatch audience/issuer/expiry/kid/signature e verificano zero sessioni, replay negato, nulla loggato. **Nessuna conclusione su Auth live** senza un nuovo tentativo browser dopo gate exact-SHA e deploy del Worker Kinde. Togliere l'intera diagnostica prima del GO finale.
+
+
 ## CF-03 · localizzazione del 503 Kinde con diagnostica non identificante (candidato v2.498.0)
 
 Al 17/11/2026, `main` v2.497.0 ha incorporato incrementi CF-05/07/08 indipendenti, ma la sessione Kinde reale fallisce ancora in callback (503). Il readback aggregato del D1 isolato Auth mostra zero owner e zero sessioni, senza provare il punto di fallimento. La configurazione del Worker Kinde non espone un log applicativo che separi il 503 di exchange/provider, JWT o write, e non è autorizzato collezionare token, errori Kinde raw, URL callback, o dati dell'utente.
