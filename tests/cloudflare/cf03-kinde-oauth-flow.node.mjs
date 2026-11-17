@@ -44,6 +44,7 @@ async function fixture() {
   let tokenPayload = null;
   let issuedTokens = 0;
   let accessLifetimeSeconds = 301;
+  let idAudience = issuer;
   const nonceByCode = new Map();
   const fetchImpl = async (url, init) => {
     assert.equal(url, issuer + '/oauth2/token');
@@ -81,7 +82,7 @@ async function fixture() {
         nonce, auth_time: now - 60,
         email: 'test@example.invalid', email_verified: true, at_hash,
       }).setProtectedHeader({ alg: 'RS256', kid: 'synthetic' })
-        .setIssuer(issuer).setAudience(issuer).setIssuedAt(now - 1).setExpirationTime(now + 300)
+        .setIssuer(issuer).setAudience(idAudience).setIssuedAt(now - 1).setExpirationTime(now + 300)
         .sign(privateKey);
       tokens = { access_token: accessToken, id_token: idToken };
     }
@@ -135,6 +136,7 @@ async function fixture() {
     setTransportFailure: value => { transportFails = value; },
     setPayload: value => { tokenPayload = value; },
     setAccessLifetime: value => { accessLifetimeSeconds = value; },
+    setIdAudience: value => { idAudience = value; },
     calls: () => issuedTokens,
     close: () => sqlite.close(),
   };
@@ -197,6 +199,27 @@ void test('real-shaped callback mints one session with provider-default 24h acce
     assert.equal(rejected.status, 503);
     assert.equal(rejected.headers.getSetCookie().length, 0);
     assert.equal(f.sqlite.prepare('SELECT COUNT(*) AS n FROM auth_sessions').get().n, 1);
+  } finally { f.close(); }
+});
+
+void test('signed wrong ID audience stays rejected after D1 state consumption with no login', async () => {
+  const f = await fixture();
+  try {
+    f.setIdAudience('unrelated-application');
+    const a = await f.start();
+    const request = f.callback(a, 'synthetic-code-audience');
+    const response = await f.oauth.complete(f.db, request);
+    assert.equal(response.status, 503);
+    assert.deepEqual(await response.json(), {
+      error: 'authentication-unavailable', phase: 'id-token-audience',
+    });
+    assert.equal(response.headers.get('Cache-Control'), 'no-store');
+    assert.equal(response.headers.has('Set-Cookie'), false);
+    assert.equal(f.calls(), 1);
+    assert.equal(f.sqlite.prepare('SELECT COUNT(*) AS n FROM auth_principals').get().n, 0);
+    assert.equal(f.sqlite.prepare('SELECT COUNT(*) AS n FROM auth_sessions').get().n, 0);
+    assert.equal(f.sqlite.prepare('SELECT COUNT(*) AS n FROM auth_oauth_attempts').get().n, 0);
+    assert.equal((await f.oauth.complete(f.db, request)).status, 400);
   } finally { f.close(); }
 });
 

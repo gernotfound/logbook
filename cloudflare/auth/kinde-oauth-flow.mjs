@@ -29,7 +29,10 @@ function noStoreHeaders() {
 // state has been consumed. No token, user identifier or provider error escapes.
 const CALLBACK_FAILURE_PHASES = new Set([
   'token-transport', 'token-response', 'identity-input', 'access-token',
-  'id-token', 'id-claims', 'token-binding', 'principal-storage', 'session',
+  'id-token', 'id-token-audience', 'id-token-issuer',
+  'id-token-expired', 'id-token-key', 'id-token-signature',
+  'id-token-algorithm', 'id-claims', 'token-binding',
+  'principal-storage', 'session',
 ]);
 
 function denied(status = 400, phase = null) {

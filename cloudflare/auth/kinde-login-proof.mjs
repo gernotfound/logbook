@@ -15,6 +15,29 @@ export class KindeLoginProofError extends Error {
   }
 }
 
+// Only classify jose's own structured error codes. Do not echo .message,
+// payloads, headers, claims or URL details across the public OAuth boundary.
+function idTokenFailurePhase(error) {
+  switch (error?.code) {
+    case 'ERR_JWT_CLAIM_VALIDATION_FAILED':
+      if (error.claim === 'aud') return 'id-token-audience';
+      if (error.claim === 'iss') return 'id-token-issuer';
+      return 'id-token';
+    case 'ERR_JWT_EXPIRED':
+      return 'id-token-expired';
+    case 'ERR_JWKS_NO_MATCHING_KEY':
+    case 'ERR_JWKS_MULTIPLE_MATCHING_KEYS':
+    case 'ERR_JWKS_TIMEOUT':
+      return 'id-token-key';
+    case 'ERR_JWS_SIGNATURE_VERIFICATION_FAILED':
+      return 'id-token-signature';
+    case 'ERR_JOSE_ALG_NOT_ALLOWED':
+      return 'id-token-algorithm';
+    default:
+      return 'id-token';
+  }
+}
+
 async function sha256AtHash(accessToken) {
   const bytes = new TextEncoder().encode(accessToken);
   const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', bytes));
@@ -72,7 +95,7 @@ export function createKindeIdentityProofVerifier(configuration, keySet) {
         issuer, audience: idTokenAudience, algorithms: ['RS256'],
         clockTolerance: CLOCK_TOLERANCE_SECONDS,
       }));
-    } catch { throw new KindeLoginProofError('id-token'); }
+    } catch (error) { throw new KindeLoginProofError(idTokenFailurePhase(error)); }
     try {
       const now = Math.floor(Date.now() / 1000);
       if (payload.azp !== clientId || payload.nonce !== expectedNonce
