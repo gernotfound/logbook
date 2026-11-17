@@ -178,13 +178,13 @@ async function tokenResponse(response) {
 }
 
 /**
- * Not mounted on a public Worker. The eventual HTTP adapter must enforce
- * perimeter limits before calling start, and must never accept user-supplied
- * issuer, redirect URI, owner, nonce or verifier. D1 is the atomic replay
- * authority; the host-only browser cookie binds a valid state to its initiator.
+ * Called through the private Kinde Worker behind the public first-party
+ * OAuth-only gateway. The HTTP adapter enforces perimeter limits and never
+ * accepts caller-supplied issuer, redirect URI, owner, nonce or verifier.
+ * D1 is the atomic replay authority; a host-only browser cookie binds state.
  *
- * rateLimit is mandatory and must use a trusted, server-derived abuse key
- * rather than an arbitrary client header. It is not a global Free-tier quota.
+ * rateLimit uses a server-derived key; it does not provide a global
+ * Free-tier abuse quota or replace edge protections.
  */
 /**
  * @param {{ issuer: string, clientId: string, clientSecret: string, apiAudience: string, idTokenAudience: string, appOrigin: string }} configuration
