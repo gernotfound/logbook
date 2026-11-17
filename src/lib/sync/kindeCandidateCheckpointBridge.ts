@@ -42,7 +42,10 @@ export async function inspectKindeCandidateCloudCheckpoint({
     };
     if (!current()) throw new KindeCandidateBoundaryError();
 
-    const before = await readKindeCandidateAccess({ send, stillCurrent: current });
+    // Both consent checks must see the same browser cookie source as this
+    // checkpoint, including when the caller supplies the session reader.
+    const accessRequest = { send, stillCurrent: current, browserCookies };
+    const before = await readKindeCandidateAccess(accessRequest);
     if (before.kind !== 'consent-confirmed' || !current()) {
         throw new KindeCandidateBoundaryError();
     }
@@ -65,7 +68,7 @@ export async function inspectKindeCandidateCloudCheckpoint({
 
         // A complete AEAD scan alone cannot attest that this is still the
         // same identity and consent. Recheck them after all pages were opened.
-        const after = await readKindeCandidateAccess({ send, stillCurrent: current });
+        const after = await readKindeCandidateAccess(accessRequest);
         if (after.kind !== 'consent-confirmed' || after.principal.uid !== uid
             || after.principal.fenceEpoch !== fenceEpoch
             || after.principal.healthConsentRevision !== healthConsentRevision
