@@ -26,13 +26,13 @@
 </section>
 <section aria-labelledby="controlla">
 <h2 id="controlla">2. Controlla la sessione</h2>
-<p>Dopo il ritorno automatico da Kinde alla homepage, riapri <strong>thelogbook.me/verifica-accesso</strong> nello stesso browser e seleziona il controllo. Non inserire credenziali in questa pagina.</p>
+<p>Dopo il ritorno automatico da Kinde a questa pagina, la sessione viene verificata senza usare Firebase. Puoi ripetere il controllo in qualsiasi momento. Non inserire credenziali in questa pagina.</p>
 <div class="actions"><button type="button" id="check-session">Verifica sessione Kinde</button></div>
-<p id="session-result" role="status" aria-live="polite">Nessuna verifica eseguita.</p>
+<p id="session-result" role="status" aria-live="polite">Verifica della sessione in corso…</p>
 </section>
 <section aria-labelledby="limiti">
 <h2 id="limiti">Limiti del collaudo</h2>
-<p>Una sessione riconosciuta prova soltanto l'accesso applicativo. Il test di registrazione, verifica email, Google e reset password deve essere confermato separatamente. La normale PWA utilizza ancora i percorsi precedenti fino al completamento della migrazione.</p>
+<p>Una sessione riconosciuta prova soltanto l'accesso applicativo. Registrazione, verifica email, Google e reset password richiedono collaudi separati. La normale PWA utilizza ancora Firebase: non aprire i suoi moduli di registrazione durante questo collaudo. Il passaggio completo del frontend a Cloudflare/Kinde non è ancora terminato.</p>
 </section>
 </main><footer class="foot"><span>TheLogBook · Diagnostica temporanea</span><a href="/privacy">Informativa sulla privacy</a></footer>
 </div>

@@ -149,7 +149,7 @@ async function fixture() {
     });
     const completed = await handler(callbackRequest, env);
     assert.equal(completed.status, 303);
-    assert.equal(completed.headers.get('Location'), ORIGIN + '/');
+    assert.equal(completed.headers.get('Location'), ORIGIN + '/verifica-accesso');
     const setCookies = completed.headers.getSetCookie();
     assert.equal(setCookies.length, 2);
     return { callbackRequest, setCookies,
@@ -623,7 +623,7 @@ void test('first-party gateway completes synthetic Kinde → consent → ADK →
       headers: { cookie: browserBinding, 'sec-fetch-site': 'cross-site' },
     }));
     assert.equal(returned.status, 303);
-    assert.equal(returned.headers.get('location'), ORIGIN + '/');
+    assert.equal(returned.headers.get('location'), ORIGIN + '/verifica-accesso');
     const issuedCookies = returned.headers.getSetCookie();
     assert.equal(issuedCookies.length, 2);
     const cookie = issuedCookies.map(value => value.split(';')[0]).join('; ');

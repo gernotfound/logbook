@@ -1,5 +1,14 @@
 # Kinde — configurazione del provider per TheLogBook
 
+## CF-03 · ritorno Kinde isolato da Firebase (17/11/2026, candidato v2.503.0)
+
+**Evidenza browser del proprietario:** dopo la callback Kinde, l'utente raggiunge la homepage, dove il form `Registrati` della vecchia `LoginBox.tsx` chiama ancora `validatePassword` Firebase e riceve HTTP 403 da `identitytoolkit.googleapis.com/v2/passwordPolicy`. Lo stack `background.js` / `runtime.lastError` negli allegati è riconducibile a estensioni browser e non prova una causa Kinde. Il ritorno alla homepage è un `303` voluto, **non** una prova che il frontend sia stato convertito. Il login Kinde va certificato tramite il successivo `/api/auth/session` 200 valido e non con l'URL di destinazione.
+
+**Intervento di perimetro temporaneo:** dopo il code exchange, verifica OIDC, owner D1 e sessione emessa, la callback risponde ora `303 Location: https://thelogbook.me/verifica-accesso` invece di `/`. Il documento pubblico noindex e no-store esistente effettua la lettura `POST /api/auth/session` automaticamente all'arrivo e permette un nuovo controllo manuale. Non chiede, legge o conserva password, auth code, token o dati salute. Il cookie di sessione resta HttpOnly e host-only; la verifica distingue status verificato, 401 signed-out e indisponibilità. Una risposta 200 non avvia consent, dati salute, guest o sync. Test aggiornati al nuovo redirect, replay one-use, HTTP Worker e diagnostica.
+
+**Vincolo ancora aperto (CRITICAL, CF-03/CF-04/CF-05/CF-09):** la root `/`, `AuthContext`, `LoginBox`, Firestore/App Check e diversi consumer di `DB` dipendono ancora da Firebase. La correzione evita di inviare l'utente sulla form Firebase durante il **collaudo**, ma **non chiude Firebase né completa il cutover della PWA**. Il lavoro definitivo deve sostituire il provider React, guest locale, consenso, storage/ADK, replica/ACK, diritti ed erasure tramite adapter Workers/D1 con gate e regressioni prima di rimuovere Firebase. Non disabilitare o cancellare provider esistenti finché non sono censiti e sostituiti i percorsi realmente in uso; nessuna migrazione di account/dati pre-lancio. Rimuovere questa deviazione diagnostica quando la root Cloudflare sarà pronta.
+
+
 ## CF-03 · correzione audience ID token (17/11/2026, candidato v2.502.0)
 
 **Evidenza osservata:** sul callback reale il browser segnala HTTP 503 con fase fissa `id-token-audience`. Questo prova il fallimento del controllo JOSE su `aud`, non fornisce il valore effettivo del claim né autorizza a leggere o registrare token. Il provider Cloudflare ha confermato in sola lettura la presenza dei cinque secret OAuth, senza valori, e un deploy del Worker Kinde privato.
