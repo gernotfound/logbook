@@ -1,5 +1,11 @@
 # Kinde — configurazione del provider per TheLogBook
 
+## CF-03 · blocco guest → Firebase dall'interfaccia (17/11/2026)
+
+Il vecchio login Firebase non deve più ricevere un archivio guest tramite il pulsante «Accedi» della PWA o la scheda Account ospite. Il primo presenta un dialog con focus confinato, Escape e ritorno alla modalità locale; il secondo mostra un avviso, non i form Google/email del provider precedente. Nessuna richiesta login, consenso o sync viene avviata e nessun dato, vault, journal o generazione guest viene attribuito a un UID.
+
+Il trasferimento guest→Kinde è **ancora bloccato**, non implementato: in futuro serviranno una scelta esplicita, owner e sessione Kinde attestati, consenso account separato e verifica durevole di local commit/ADK/ACK/recovery. Il logout guest protetto resta invariato. Firebase AuthProvider e i rimanenti chiamanti autenticati sono ancora nel runtime; questo incremento non è un cutover completo.
+
 ## CF-03 · continuità browser Kinde fissata prima delle richieste (17/11/2026)
 
 L'osservatore di identità, la lettura di consenso e la consultazione dello stato replica candidati catturano un cookie CSRF di sessione prima della prima richiesta HTTP. Lo ricontrollano dopo ogni risposta, anche quando UID, epoca e revisione consenso rimangono invariati in una nuova sessione. Cookie mancanti sono ammessi unicamente per un 401 canonicalmente signed-out; un 200 authenticated senza cookie canonico, cookie duplicati o valori malformati falliscono chiusi. Primo consenso e bridge journal passano esplicitamente la stessa sorgente cookie ai rispettivi controlli annidati. Le richieste HTTP non aumentano.
