@@ -93,7 +93,8 @@ function GuestBanner({ onLogin }: { onLogin: () => void }) {
       <AlertTriangle size={20} aria-hidden="true" />
       <span className="guest-banner-text">Modalità locale · I dati sono solo su questo dispositivo</span>
       <div className="guest-banner-actions">
-        <button type="button" className="btn btn-small" onClick={onLogin}>
+        <button type="button" className="btn btn-small"
+          onClick={event => { event.currentTarget.focus(); onLogin(); }}>
           Accedi
         </button>
         <button
