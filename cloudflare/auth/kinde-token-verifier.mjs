@@ -2,7 +2,6 @@ import { createRemoteJWKSet, jwtVerify } from 'jose';
 
 const MAX_TOKEN_LENGTH = 8192;
 const MAX_ACCESS_TOKEN_SECONDS = 15 * 60;
-const MAX_CODE_EXCHANGE_ACCESS_TOKEN_SECONDS = 24 * 60 * 60;
 const CLOCK_TOLERANCE_SECONDS = 5;
 const COMPACT_JWS = /^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/;
 
@@ -107,7 +106,7 @@ function createVerifiedAccessToken(configuration, keySet, maxLifetimeSeconds) {
     if (payload.exp <= now) {
       throw new KindeAccessTokenError('access-token-expired');
     }
-    if (payload.exp - payload.iat > maxLifetimeSeconds) {
+    if (maxLifetimeSeconds !== null && payload.exp - payload.iat > maxLifetimeSeconds) {
       throw new KindeAccessTokenError('access-token-lifetime');
     }
 
@@ -132,13 +131,14 @@ export function createKindeAccessTokenVerifier(configuration, keySet) {
 }
 
 /**
- * Kinde defaults to 24-hour access tokens. After a one-time, server-side
- * authorization-code+PKCE exchange, the access token is used immediately
- * alongside a separate signed, nonce-bound and email-verified ID token,
- * and is neither returned to the browser nor used as an API credential.
- * Accept the provider's documented maximum only in this login-proof path.
- * The ordinary API verifier stays bounded to 15 minutes.
+ * In the one-use authorization-code+PKCE callback, the access token is proof
+ * bound to a freshly issued, signed ID token with the stored nonce. Its issuer,
+ * audience, signature, client, subject, grant and actual exp/iat remain
+ * mandatory, but its provider-configurable lifetime does not determine how
+ * long TheLogBook authorizes a user. The token is never persisted, returned
+ * to the browser or accepted as a fitness API credential; those credentials
+ * retain their independent 15-minute ceiling and D1 session/revocation gates.
  */
 export function createKindeCodeExchangeAccessTokenVerifier(configuration, keySet) {
-  return createVerifiedAccessToken(configuration, keySet, MAX_CODE_EXCHANGE_ACCESS_TOKEN_SECONDS);
+  return createVerifiedAccessToken(configuration, keySet, null);
 }

@@ -69,21 +69,26 @@ void test('Kinde token rejects expiry, future iat and access-token lifetime over
   }
 });
 
-void test('only trusted code exchange accepts the documented 24h Kinde access TTL', async () => {
+void test('trusted one-use code exchange accepts configurable Kinde TTL but API keeps 15-minute cap', async () => {
   const { verify, verifyCodeExchanged, token } = await fixture();
   const now = Math.floor(Date.now() / 1000);
-  const defaultToken = await token({
-    issuedAt: now - 2, expiresAt: now + 24 * 60 * 60 - 2,
-  });
-  await assert.rejects(verify(defaultToken), /invalid-kinde-token/);
-  assert.equal((await verifyCodeExchanged(defaultToken)).subject, subject);
+  for (const seconds of [24 * 60 * 60, 24 * 60 * 60 + 1, 3 * 24 * 60 * 60]) {
+    const signed = await token({
+      issuedAt: now - 2, expiresAt: now - 2 + seconds,
+    });
+    await assert.rejects(verify(signed), error =>
+      error?.phase === 'access-token-lifetime' && error.message === 'invalid-kinde-token');
+    assert.equal((await verifyCodeExchanged(signed)).subject, subject);
+  }
 
   for (const altered of [
-    { issuedAt: now - 2, expiresAt: now + 24 * 60 * 60 },
+    { issuedAt: now + 120 },
+    { issuedAt: now - 3600, expiresAt: now - 10 },
     { iss: 'https://impostor.invalid' },
     { aud: 'other-api' },
     { azp: 'other-client' },
     { grantType: 'client_credentials' },
+    { grantType: ['client_credentials'] },
   ]) {
     await assert.rejects(verifyCodeExchanged(await token(altered)), /invalid-kinde-token/);
   }
@@ -116,7 +121,6 @@ void test('access JWT rejection returns only a fixed phase, never token or claim
     ['access-token-subject', { sub: '../other-user' }],
     ['access-token-grant', { grantType: ['client_credentials'] }],
     ['access-token-timestamps', { issuedAt: now + 120 }],
-    ['access-token-lifetime', { expiresAt: now + 24 * 60 * 60 + 20 }],
   ];
   for (const [phase, options] of cases) {
     const signed = await token(options);

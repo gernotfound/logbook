@@ -1,5 +1,12 @@
 # Registro dei servizi esterni — stato corrente TheLogBook
 
+## CF-03 · durata access token Kinde vs callback monouso (17/11/2026, v2.501.0 candidata)
+
+**Evidenza browser dopo v2.500.0:** `503 phase=access-token-lifetime`, che nasce da `exp-iat>86400` nella prova access JWT firmata e non da token scaduto. La durata esatta e l'impostazione live *Tokens* nel tenant Kinde non sono state lette: non concludere una TTL specifica. Kinde documenta access JWT predefinito 24h, configurabile, e sconsiglia un valore maggiore. [Fonte ufficiale](https://docs.kinde.com/build/tokens/configure-tokens/).
+
+La patch proposta evita di applicare la policy **API credential** al token ottenuto e scartato durante il code exchange fidato una tantum. Mantiene RS256, audience/issuer/client, nonce, emailVerified, `exp` reale, ID token max1h, D1 session e revoca. **La policy API JWT max15min resta invariata.** Nessun cambiamento provider, Secret, quote, DNS o ambiente; il D1 sanitario rimane privato. Prima del rilascio completo, rileggere il token TTL sul tenant e verificare una durata conforme al rischio dei *veri* token API, senza modificare ora l'identità utente. Collaudo login reale e rimozione diagnostiche restano gate separati.
+
+
 ## CF-03 · readback Kinde e diagnostica access JWT (17/11/2026, candidato v2.500.0)
 
 **Provider Cloudflare prima della modifica:** `thelogbook-cf03-kinde-http-isolated` distribuito al 100% con versione `d90cb9a8-c645-4349-8633-058b897551ca` e binding `APP_ORIGIN`, `DB`, `AUTH_GATE`, `AUTH_RATE_LIMITER`, più cinque Secret OAuth presenti come tipo `secret_text` (nessun valore letto). Il frontend espone esclusivamente `KINDE_HTTP` e static assets, mai `D1_API`. La callback reale dell'owner sulla v2.499.0 mostra `503 phase=access-token`, **non** una sessione confermata. Non sono autorizzati cambi di token, API audience, IAM, DNS, email o billing.

@@ -81,7 +81,6 @@ void test('trusted ID proof keeps access JWT phases finite and refuses Kinde mac
     ['access-token-client', { accessClaims: { azp: 'another-client' } }],
     ['access-token-subject', { accessClaims: { sub: 'not-a-kinde-user' } }],
     ['access-token-grant', { accessClaims: { gty: ['client_credentials'] } }],
-    ['access-token-lifetime', { accessExpiresIn: 24 * 60 * 60 + 100 }],
   ];
   for (const [phase, options] of invalid) {
     const signed = await tokens(options);
@@ -188,7 +187,6 @@ void test('identity-only proof rejects expired, future-issued, overlong and over
     { idExpiresIn: -1 },
     { accessIssuedBefore: -30 },
     { idIssuedBefore: -30 },
-    { accessExpiresIn: 24 * 60 * 60 + 1 },
     { idExpiresIn: 3601 },
   ];
   for (const invalid of rejected) {
@@ -228,18 +226,20 @@ void test('Kinde login proof: strict signed identity, nonce, distinct audiences 
   assert.equal(Object.hasOwn(proof, 'email'), false);
 });
 
-void test('Kinde default 24h access token validates only in nonce-bound login proof', async () => {
+void test('signed, nonce-bound login proof accepts provider TTL variation but not weaker ID claims', async () => {
   const { verify, verifyIdentity, tokens } = await fixture();
-  const signed = await tokens({ accessExpiresIn: 24 * 60 * 60 - 2 });
-  assert.deepEqual(await verify(signed), { issuer, subject: sub, emailVerified: true });
-  assert.equal((await verifyIdentity(signed)).subject, sub);
+  for (const accessExpiresIn of [24 * 60 * 60 - 2, 24 * 60 * 60 + 1, 3 * 24 * 60 * 60]) {
+    const signed = await tokens({ accessExpiresIn });
+    assert.deepEqual(await verify(signed), { issuer, subject: sub, emailVerified: true });
+    assert.equal((await verifyIdentity(signed)).subject, sub);
+  }
 
   for (const bad of [
-    { accessExpiresIn: 24 * 60 * 60 + 1 },
-    { accessAudience: 'unapproved-api', accessExpiresIn: 24 * 60 * 60 - 2 },
-    { idClaims: { email_verified: false }, accessExpiresIn: 24 * 60 * 60 - 2 },
+    { accessAudience: 'unapproved-api', accessExpiresIn: 3 * 24 * 60 * 60 },
+    { idClaims: { email_verified: false }, accessExpiresIn: 3 * 24 * 60 * 60 },
     { idClaims: { nonce: Buffer.alloc(32, 20).toString('base64url') },
-      accessExpiresIn: 24 * 60 * 60 - 2 },
+      accessExpiresIn: 3 * 24 * 60 * 60 },
+    { idExpiresIn: 3601, accessExpiresIn: 3 * 24 * 60 * 60 },
   ]) {
     await assert.rejects(verify(await tokens(bad)), /invalid-kinde-login-proof/);
   }
