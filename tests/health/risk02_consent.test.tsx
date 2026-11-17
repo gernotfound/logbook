@@ -190,10 +190,12 @@ describe('RISK-02: ConsentOverlay UI Behavior', () => {
         expect(screen.getByText(/Nessun altro utente, palestra o allenatore dispone nell'app di un accesso ai dati del tuo account/)).toBeDefined();
     });
 
-    it('descrive la rimozione di GA4 e la data dell’informativa aggiornata', () => {
+    it('documenta il ritiro di GA4 e Cloudflare Web Analytics nella nuova informativa', () => {
         render(<PrivacyPolicy onClose={vi.fn()} />);
-        expect(screen.getByText('Aggiornata al 6 novembre 2026')).toBeDefined();
+        expect(screen.getByText('Aggiornata al 17 novembre 2026')).toBeDefined();
         expect(screen.getByText(/non integra Google Analytics 4/i)).toBeDefined();
+        expect(screen.getByText('Statistiche Cloudflare per migliorare TheLogBook')).toBeDefined();
+        expect(screen.getByText(/Cloudflare Web Analytics non supporta attualmente il tracciamento di azioni applicative personalizzate/)).toBeDefined();
         expect(screen.queryByText(/cookie first-party tecnici\/analitici/i)).toBeNull();
     });
 
