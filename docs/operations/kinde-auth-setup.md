@@ -1,12 +1,17 @@
 # Kinde — configurazione del provider per TheLogBook
 
+## CF-03 · prima schermata account React Kinde senza permessi fitness (17/11/2026, candidato v2.506.0)
+
+La schermata di primo accesso della PWA React usa `KindeAccountEntry identityOnly` per gli utenti senza account Firebase e senza modalità ospite. La sessione Kinde confermata viene visualizzata come **identità verificata**, ma senza accesso a `/v1/consent/status`, consenso 18+, vault, ADK, replica o altri dati. La scelta `Continua senza account` conserva l'attivazione guest isolata anche senza rete o quando Kinde è indisponibile; non trasforma il 503 in una prova di identità né concede il cloud. Per Kinde autenticato non avviene alcuna adozione guest o owner. La UI guest→account precedente rimane provvisoriamente Firebase: non eseguire un trasferimento su Kinde fino al nuovo contratto verificato. `AuthProvider` e `src/lib/sync/session.ts` dipendono ancora da Firebase. Callback OAuth resta nella diagnostica `/verifica-accesso`; ciò consente collaudi isolati ma non equivale a un ingresso applicativo completo. Verificare logout Safari/tab, consenso/chiavi/replica e guest→account prima di ritirare Firebase.
+
+
 ## CF-03 · sessione Kinde reale verificata, logout D1 diagnostico (17/11/2026)
 
 **Prova browser del product owner:** creazione account email/password Kinde, callback verso `/verifica-accesso`, letture ripetute di `POST /api/auth/session` con `authenticated=true`, `emailVerified=true`, `fenceEpoch=1`, `healthConsentRevision=0`. Il precedente 403 sulle POST vuote è stato corretto nella PR #1198. Nessun UID o dato identificativo del soggetto nel repository.
 
 **Nuova verifica logout:** nella pagina diagnostica compare dopo il 200 autenticato il pulsante `Termina sessione TheLogBook`: usa solo il cookie host-only CSRF, chiama `POST /api/auth/logout` same-origin e richiede una successiva risposta 401 canonica prima di confermare la revoca. Un 200 perso, un cookie assente, un 403 o una nuova sessione non sono prove di logout. **Non effettua logout SSO Kinde né purge device/IndexedDB**. Test simulati e CI richiedono conferma con browser reale, comprese corse fra schede.
 
-**Confini aperti:** `src/main.tsx`, `AuthProvider`, `App` e `LoginBox` usano ancora Firebase. `KindeAccountEntry` e il bridge journal/ADK restano candidati non montati perché le API pubbliche di consenso e sync non sono ancora attive per l'app. Prima del cutover serve isolare owner/sessione/guest, dimostrare consenso 18+ e legal, chiavi indipendenti, journal durevole, ACK cloud, offline e diritti. Google e reset email non sono collaudati.
+**Confini aperti:** `src/main.tsx`, `AuthProvider` e il login da ospite in `LoginBox` usano ancora Firebase. La variante `KindeAccountEntry identityOnly` è montata nell'ingresso account React; i percorsi candidato consenso/ADK/journal/replica non sono pubblicamente attivi perché le rotte e il lifecycle account non sono ancora completamente integrati. Prima del cutover serve isolare owner/sessione/guest, dimostrare consenso 18+ e legal, chiavi indipendenti, journal durevole, ACK cloud, offline e diritti. Google e reset email non sono collaudati.
 
 
 ## CF-03 · ritorno Kinde isolato da Firebase (17/11/2026, candidato v2.503.0)
@@ -144,7 +149,7 @@ Il percorso temporaneo `/verifica-accesso` prepara un form HTML `POST /api/auth/
 
 Il modulo `src/lib/auth/kindeCandidateIdentity.ts` legge due volte `POST /api/auth/session` con richiesta first-party no-store, valida rigidamente il principal e separa il caso **email non verificata** dal caso signed-out e dagli errori. Usa il cookie CSRF casuale per rilevare il cambio della sessione anche con UID, epoch e revisione invariati, senza diventare una prova di consenso salute. Il nuovo `src/components/UI/KindeAccountEntry.tsx` usa tale lettura e i boundary già esistenti per login Kinde hosted, primo consenso esplicito con tre scelte, stati di revoca e logout della sola sessione D1. Preserva i dati guest: quando viene segnalata la presenza dell'archivio ospite, non invia richieste account né propone un trasferimento non implementato. In caso di errore o consenso dubbio non concede l'accesso fitness. Anche un consenso verificato mostra il blocco dell'archivio finché non sia effettivo il passaggio del vault/replica/UX.
 
-**È un componente candidato non montato nella PWA corrente**: `src/main.tsx`, `src/App.tsx` e `AuthContext` usano ancora Firebase. La sua sola presenza, con test Vitest di interazione e identity-only readback, non abilita Kinde, non promette email/reset/Google live né consente la pubblicazione delle route. Prima del GO occorre completare la vera adozione dell'identità Kinde e guest→account; verificare separatamente D1/KEK, tenant/15 caratteri, OAuth, consenso, dati, backup/erasure, recovery, multi-tab e Safari.
+**La sola variante `identityOnly` è montata nell'ingresso account di `src/App.tsx`**: `src/main.tsx`, `AuthContext` e il login da ospite restano legati a Firebase. Il percorso candidato consenso/replica resta non montato. La sua sola presenza, con test Vitest di interazione e identity-only readback, non abilita Kinde, non promette email/reset/Google live né consente la pubblicazione delle route. Prima del GO occorre completare la vera adozione dell'identità Kinde e guest→account; verificare separatamente D1/KEK, tenant/15 caratteri, OAuth, consenso, dati, backup/erasure, recovery, multi-tab e Safari.
 
 
 ## Checkpoint storico — ricognizione precedente (v2.474.0, ancora NO-GO)
