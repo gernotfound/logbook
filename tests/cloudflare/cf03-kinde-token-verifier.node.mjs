@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createLocalJWKSet, exportJWK, generateKeyPair, SignJWT } from 'jose';
-import { createKindeAccessTokenVerifier, createKindeCodeExchangeAccessTokenVerifier } from '../../cloudflare/auth/kinde-token-verifier.mjs';
+import { createKindeAccessTokenVerifier, createKindeCodeExchangeAccessTokenVerifier, KindeAccessTokenError } from '../../cloudflare/auth/kinde-token-verifier.mjs';
 
 const issuer = 'https://synthetic-kinde.example';
 const audience = 'thelogbook:isolated-api';
@@ -21,9 +21,9 @@ async function fixture() {
     issuedAt = Math.floor(Date.now() / 1000) - 2,
     grantType,
     expiresAt = Math.floor(Date.now() / 1000) + 300,
-    signingKey = privateKey,
+    signingKey = privateKey, kid = 'synthetic-key',
   } = {}) {
-    return new SignJWT({ azp, sub, ...(grantType ? { gty: grantType } : {}) }).setProtectedHeader({ alg: 'RS256', kid: 'synthetic-key' })
+    return new SignJWT({ azp, sub, ...(grantType ? { gty: grantType } : {}) }).setProtectedHeader({ alg: 'RS256', kid })
       .setIssuer(iss).setAudience(aud).setIssuedAt(issuedAt)
       .setExpirationTime(expiresAt).sign(signingKey);
   }
@@ -50,6 +50,8 @@ void test('Kinde token rejects wrong issuer, audience and client', async () => {
     { sub: '../other-owner' },
     { sub: 'machine-client' },
     { grantType: 'client_credentials' },
+    { grantType: ['client_credentials'] },
+    { grantType: ['authorization_code', 'client_credentials'] },
   ]) {
     await assert.rejects(verify(await token(altered)), /invalid-kinde-token/);
   }
@@ -89,6 +91,48 @@ void test('only trusted code exchange accepts the documented 24h Kinde access TT
   await assert.rejects(
     verifyCodeExchanged(await token({ signingKey: privateKey })), /invalid-kinde-token/,
   );
+});
+
+void test('signed Kinde authorization-code access tokens retain audience and human identity gates', async () => {
+  const { verify, verifyCodeExchanged, token } = await fixture();
+  for (const grantType of [undefined, 'authorization_code', ['authorization_code']]) {
+    const signed = await token({ grantType, aud: [audience, 'some-other-api'] });
+    assert.equal((await verify(signed)).subject, subject);
+    assert.equal((await verifyCodeExchanged(signed)).subject, subject);
+  }
+});
+
+void test('access JWT rejection returns only a fixed phase, never token or claim values', async () => {
+  const { verifyCodeExchanged, token } = await fixture();
+  const now = Math.floor(Date.now() / 1000);
+  const { privateKey: wrongKey } = await generateKeyPair('RS256');
+  const cases = [
+    ['access-token-audience', { aud: 'wrong-api' }],
+    ['access-token-issuer', { iss: 'https://other-kinde.example' }],
+    ['access-token-expired', { expiresAt: now - 100 }],
+    ['access-token-key', { kid: 'missing-key' }],
+    ['access-token-signature', { signingKey: wrongKey }],
+    ['access-token-client', { azp: 'unrelated-client' }],
+    ['access-token-subject', { sub: '../other-user' }],
+    ['access-token-grant', { grantType: ['client_credentials'] }],
+    ['access-token-timestamps', { issuedAt: now + 120 }],
+    ['access-token-lifetime', { expiresAt: now + 24 * 60 * 60 + 20 }],
+  ];
+  for (const [phase, options] of cases) {
+    const signed = await token(options);
+    await assert.rejects(verifyCodeExchanged(signed), error =>
+      error instanceof KindeAccessTokenError
+        && error.message === 'invalid-kinde-token'
+        && error.phase === phase
+        && !JSON.stringify(error).includes(signed)
+        && !JSON.stringify(error).includes('unrelated-client'));
+  }
+  for (const invalid of ['bad.jwt', '', null]) {
+    await assert.rejects(verifyCodeExchanged(invalid), error =>
+      error instanceof KindeAccessTokenError
+        && error.phase === 'access-token-format'
+        && error.message === 'invalid-kinde-token');
+  }
 });
 
 void test('Kinde token rejects signature spoofing and malformed JWT', async () => {
