@@ -1,5 +1,9 @@
 # Kinde — configurazione del provider per TheLogBook
 
+## CF-03 · ritorno alla PWA con verifica della sessione
+
+Nel candidato, dopo la verifica OAuth e l'emissione della sessione D1, il Worker indirizza il browser a `/`. La root React verifica nuovamente la sessione tramite `/api/auth/session` nel ramo Kinde solo-identità. La pagina `/verifica-accesso` rimane disponibile per controlli diretti. La callback autorizzata su Kinde rimane `/api/auth/kinde/callback`: cambia soltanto la destinazione della risposta del Worker. Il guest attivo resta nell'archivio locale. Il provider Firebase ancora montato e il collegamento a consenso, chiavi e replica restano da sostituire prima del collaudo funzionale completo.
+
 ## CF-03 · protezione sincrona delle azioni Kinde da eventi foreground (17/11/2026)
 
 Durante logout, primo consenso candidato o avvio modalità ospite, un evento `focus`/`online` può arrivare prima che React pubblichi lo stato `busy`. La schermata usa perciò un latch sincrono della singola azione: l'osservatore foreground non invalida la relativa generazione nel mezzo dell'operazione. Una risposta già obsoleta continua a non concedere alcun permesso; il latch viene sempre rilasciato anche in caso di errore. I callback registrati da un effetto smontato non possono avviare controlli tardivi. Regressioni riproducono deliberatamente gli eventi nello stesso turno della richiesta.
