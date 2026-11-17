@@ -212,7 +212,8 @@ void test('one-use callback accepts provider-configurable access TTL, preserves 
     }
     assert.equal(f.sqlite.prepare('SELECT COUNT(*) AS n FROM auth_sessions').get().n, 3);
 
-    f.setAccessLifetime(0);
+    // One-second validity: exp is at or before now, yet still greater than iat.
+    f.setAccessLifetime(1);
     const expired = await f.start(attempt.cookie);
     const denied = await f.oauth.complete(f.db, f.callback(expired, 'synthetic-code-expired'));
     assert.equal(denied.status, 503);
