@@ -168,7 +168,7 @@ describe('public Kinde identity-only entry boundary', () => {
     it('allows explicit local guest only when the identity read proves signed-out', async () => {
         const onLocalGuest = vi.fn(async () => {});
         render(<KindeAccountEntry identityOnly onLocalGuest={onLocalGuest} />);
-        const guest = await screen.findByRole('button', { name: 'Continua come ospite' });
+        const guest = await screen.findByRole('button', { name: 'Continua senza account' });
         fireEvent.click(guest);
         await waitFor(() => expect(onLocalGuest).toHaveBeenCalledTimes(1));
         expect(readKindeCandidateAccess).not.toHaveBeenCalled();
@@ -181,16 +181,31 @@ describe('public Kinde identity-only entry boundary', () => {
         const onLocalGuest = vi.fn(async () => {});
         render(<KindeAccountEntry identityOnly onLocalGuest={onLocalGuest} />);
         await screen.findByText(/Sessione Kinde verificata/);
-        expect(screen.queryByRole('button', { name: 'Continua come ospite' })).toBeNull();
+        expect(screen.queryByRole('button', { name: 'Continua senza account' })).toBeNull();
         expect(onLocalGuest).not.toHaveBeenCalled();
     });
 
-    it('stays blocked if Kinde is unavailable without a signed-out proof', async () => {
+    it('allows isolated local guest when Kinde is unavailable, without any account or consent permission', async () => {
         vi.mocked(readKindeCandidateIdentity).mockRejectedValue(new Error('503'));
         const onLocalGuest = vi.fn(async () => {});
         render(<KindeAccountEntry identityOnly onLocalGuest={onLocalGuest} />);
         await screen.findByRole('button', { name: 'Riprova la verifica' });
-        expect(screen.queryByRole('button', { name: 'Continua come ospite' })).toBeNull();
+        const guest = screen.getByRole('button', { name: 'Continua senza account' });
+        expect(readKindeCandidateAccess).not.toHaveBeenCalled();
+        expect(acceptKindeCandidateInitialConsent).not.toHaveBeenCalled();
+        fireEvent.click(guest);
+        await waitFor(() => expect(onLocalGuest).toHaveBeenCalledTimes(1));
+        expect(submitKindeHostedSignIn).not.toHaveBeenCalled();
+    });
+
+    it('never offers a guest transition from an unverified Kinde identity', async () => {
+        vi.mocked(readKindeCandidateIdentity).mockResolvedValue({
+            kind: 'email-unverified', principal: { ...principal, emailVerified: false },
+        });
+        const onLocalGuest = vi.fn(async () => {});
+        render(<KindeAccountEntry identityOnly onLocalGuest={onLocalGuest} />);
+        await screen.findByText(/Verifica il tuo indirizzo email/);
+        expect(screen.queryByRole('button', { name: 'Continua senza account' })).toBeNull();
         expect(onLocalGuest).not.toHaveBeenCalled();
     });
 });

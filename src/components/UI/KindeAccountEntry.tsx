@@ -122,7 +122,8 @@ export function KindeAccountEntry({
     };
 
     const handleLocalGuest = async () => {
-        if (busy || guestArchivePresent || phase !== 'signed-out' || !onLocalGuest) return;
+        if (busy || guestArchivePresent || !['signed-out', 'unavailable'].includes(phase)
+            || !onLocalGuest) return;
         const token = generation.current;
         const current = () => mounted.current && generation.current === token && !guestArchivePresent;
         setBusy(true);
@@ -191,7 +192,7 @@ export function KindeAccountEntry({
                         Accedi o registrati
                     </button>
                     {onLocalGuest && <button type="button" className="btn" disabled={busy}
-                        onClick={() => { void handleLocalGuest(); }}>Continua come ospite</button>}
+                        onClick={() => { void handleLocalGuest(); }}>Continua senza account</button>}
                     {onLocalGuest && <p>I dati dell’ospite rimangono solo su questo dispositivo e non vengono associati all’account Kinde.</p>}
                 </>
             )}
@@ -213,8 +214,17 @@ export function KindeAccountEntry({
             {phase !== 'checking' && phase !== 'signed-out' && phase !== 'consent-required'
                 && phase !== 'guest-blocked' && <p role="status">{copy[phase]}</p>}
             {phase === 'unavailable' && (
-                <button type="button" className="btn" disabled={busy}
-                    onClick={() => { setPhase('checking'); void refresh(); }}>Riprova la verifica</button>
+                <>
+                    <button type="button" className="btn" disabled={busy}
+                        onClick={() => { setPhase('checking'); void refresh(); }}>Riprova la verifica</button>
+                    {onLocalGuest && !guestArchivePresent && (
+                        <>
+                            <button type="button" className="btn" disabled={busy}
+                                onClick={() => { void handleLocalGuest(); }}>Continua senza account</button>
+                            <p>Puoi utilizzare soltanto l'archivio ospite locale, anche offline. La sessione Kinde e i dati cloud non sono disponibili e non vengono associati all'ospite.</p>
+                        </>
+                    )}
+                </>
             )}
             {['email-unverified', 'identity-verified', 'consent-required', 'consent-confirmed',
                 'legal-update-required', 'consent-suspended'].includes(phase) && (
