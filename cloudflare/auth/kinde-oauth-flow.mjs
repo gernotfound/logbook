@@ -25,10 +25,20 @@ function noStoreHeaders() {
   });
 }
 
-function denied(status = 400) {
+// Expose only fixed, non-identifying phases after a valid browser-bound OAuth
+// state has been consumed. No token, user identifier or provider error escapes.
+const CALLBACK_FAILURE_PHASES = new Set([
+  'token-transport', 'token-response', 'identity', 'session',
+]);
+
+function denied(status = 400, phase = null) {
   const headers = noStoreHeaders();
   headers.set('Content-Type', 'application/json; charset=utf-8');
-  return new Response(JSON.stringify({ error: 'authentication-unavailable' }), { status, headers });
+  const payload = { error: 'authentication-unavailable' };
+  if (status === 503 && CALLBACK_FAILURE_PHASES.has(phase)) {
+    payload.phase = phase;
+  }
+  return new Response(JSON.stringify(payload), { status, headers });
 }
 
 function randomSecret() {
@@ -239,6 +249,7 @@ export function createKindeOAuthFlow(configuration, { rateLimit, fetchImpl = fet
     const input = callbackParameters(url);
     const browser = browserCookie(request.headers.get('cookie'));
     if (!input || !browser) return denied(400);
+    let phase = null;
     try {
       // Random-state floods with an existing browser binding must be
       // throttled before they consume D1 queries or remote token requests.
@@ -264,12 +275,16 @@ export function createKindeOAuthFlow(configuration, { rateLimit, fetchImpl = fet
       // requires a fresh login, not a second attempt with the same code.
       // Workers do not support redirect:'error'; manual mode lets tokenResponse
       // reject a 3xx without following a Location with the client secret.
+      phase = 'token-transport';
       const response = await fetchImpl(config.issuer + '/oauth2/token', {
         method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body, redirect: 'manual', signal: AbortSignal.timeout(5000),
       });
+      phase = 'token-response';
       const tokens = await tokenResponse(response);
+      phase = 'identity';
       const principal = await provision(db, tokens, saved.nonce);
+      phase = 'session';
       const issued = await issueVerifiedSession(db, principal.uid);
       if (!issued || !Array.isArray(issued.setCookies) || issued.setCookies.length !== 2) {
         throw new KindeOAuthError();
@@ -279,7 +294,7 @@ export function createKindeOAuthFlow(configuration, { rateLimit, fetchImpl = fet
       for (const cookie of issued.setCookies) headers.append('Set-Cookie', cookie);
       return new Response(null, { status: 303, headers });
     } catch {
-      return denied(503);
+      return denied(503, phase);
     }
   }
 
