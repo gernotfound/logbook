@@ -47,6 +47,10 @@ vi.mock('../../../src/components/UI/ConsentOverlay', () => ({
     ConsentOverlay: () => null,
 }));
 
+vi.mock('../../../src/components/UI/KindeAccountEntry', () => ({
+    KindeAccountEntry: () => <div data-testid="kinde-identity-entry" />,
+}));
+
 vi.mock('../../../src/components/UI/LoginBox', () => ({
     LoginBox: ({ onCancel }: { onCancel?: () => void }) => (
         <div data-testid="guest-login-box">
@@ -102,11 +106,12 @@ describe('guest login overlay presentation only (useAuth mocked; not a Firebase 
         expect(screen.getByTestId('global-dialog')).toBeTruthy();
     });
 
-    it('mounts the shared dialog boundary for the unauthenticated login screen', () => {
+    it('mounts the identity-only Kinde boundary for unauthenticated visitors', () => {
         authState.isGuest = false;
         render(<App />);
         expect(screen.getByTestId('global-dialog')).toBeTruthy();
-        expect(screen.getByTestId('guest-login-box')).toBeTruthy();
+        expect(screen.getByTestId('kinde-identity-entry')).toBeTruthy();
+        expect(screen.queryByTestId('guest-login-box')).toBeNull();
     });
 
     it('blocks bottom navigation, survives account transition, then closes after migration settles', async () => {

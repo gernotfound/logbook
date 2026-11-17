@@ -33,6 +33,7 @@ import { HealthConsentSuspended } from './components/UI/HealthConsentSuspended';
 import { currentHealthConsentStatus, getGuestHealthConsentStatus, getServerConfirmedLegalConsent, refreshHealthConsent, refreshHealthConsentFromStorage, subscribeHealthConsent } from './lib/healthConsent';
 import { needsLegalUpdate } from './lib/legalVersions';
 import { LoginBox } from './components/UI/LoginBox';
+import { KindeAccountEntry } from './components/UI/KindeAccountEntry';
 import { EmailVerificationGate } from './components/UI/EmailVerificationGate';
 import { AlertTriangle, X } from 'lucide-react';
 
@@ -118,7 +119,7 @@ function App() {
 }
 
 function OwnerBoundApp({ startupTab }: { startupTab: string | null }) {
-  const { currentUser, loading, isGuest, guestMigrationStatus, retryGuestMigration, emailVerificationRequired } = useAuth();
+  const { currentUser, loading, isGuest, guestMigrationStatus, retryGuestMigration, emailVerificationRequired, loginAsGuest } = useAuth();
   const healthConsentStatus = useSyncExternalStore(subscribeHealthConsent, () => currentUser ? currentHealthConsentStatus(currentUser.uid) : isGuest ? getGuestHealthConsentStatus() : currentHealthConsentStatus(undefined), () => 'checking' as const);
   useEffect(() => {
     if (!currentUser || isGuest || emailVerificationRequired) return;
@@ -454,7 +455,7 @@ function OwnerBoundApp({ startupTab }: { startupTab: string | null }) {
         <GlobalDialog />
         <div className="auth-entry">
           <h1 className="auth-entry-title">TheLogBook</h1>
-          <LoginBox />
+          <KindeAccountEntry identityOnly onLocalGuest={loginAsGuest} />
         </div>
       </div>
     );

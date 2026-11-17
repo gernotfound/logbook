@@ -11,12 +11,13 @@ import { acceptKindeCandidateInitialConsent } from '../../lib/auth/kindeCandidat
 import { PrivacyPolicy } from '../../pages/PrivacyPolicy';
 import { TermsAndConditions } from '../../pages/TermsAndConditions';
 
-type Phase = 'checking' | 'signed-out' | 'email-unverified' | 'consent-required'
+type Phase = 'checking' | 'signed-out' | 'email-unverified' | 'identity-verified' | 'consent-required'
     | 'consent-confirmed' | 'legal-update-required' | 'consent-suspended'
     | 'guest-blocked' | 'unavailable';
 
 const copy: Record<Exclude<Phase, 'checking' | 'signed-out' | 'consent-required' | 'guest-blocked'>, string> = {
     'email-unverified': 'Verifica il tuo indirizzo email tramite Kinde prima di accedere ai dati.',
+    'identity-verified': 'Sessione Kinde verificata. L’accesso ai dati, il consenso e la sincronizzazione restano disabilitati fino al collaudo completo.',
     'consent-confirmed': 'Identità e consenso verificati. I dati rimangono bloccati finché archivio e sincronizzazione Kinde non saranno attivati e collaudati.',
     'legal-update-required': 'Le versioni dei documenti legali non sono più attuali. Le funzioni fitness restano bloccate.',
     'consent-suspended': 'Il consenso è revocato o la cancellazione è in corso. Le funzioni fitness sono sospese.',
@@ -24,14 +25,19 @@ const copy: Record<Exclude<Phase, 'checking' | 'signed-out' | 'consent-required'
 };
 
 /**
- * Candidate-only isolated account entry. Never supplies Firebase User, vault
- * unlock, owner adoption or fitness permissions. The actual App/AuthProvider
- * remains separate until the production Kinde provider and sync are validated.
+ * Isolated Kinde identity entry. identityOnly is the first publicly mounted
+ * account stage; it never calls consent or fitness APIs, adopts a Firebase User,
+ * unlocks a vault or publishes an authenticated owner to the legacy store.
+ * The full consent candidate remains unmounted until the D1 cutover is proven.
  */
 export function KindeAccountEntry({
     guestArchivePresent = false,
+    identityOnly = false,
+    onLocalGuest,
 }: {
     guestArchivePresent?: boolean;
+    identityOnly?: boolean;
+    onLocalGuest?: () => Promise<void>;
 }) {
     const [phase, setPhase] = useState<Phase>(guestArchivePresent ? 'guest-blocked' : 'checking');
     const [busy, setBusy] = useState(false);
@@ -65,6 +71,12 @@ export function KindeAccountEntry({
                 setPhase('email-unverified');
                 return;
             }
+            if (identityOnly) {
+                // A verified identity does not imply health consent or local
+                // archive ownership. The D1 fitness route is not public yet.
+                setPhase('identity-verified');
+                return;
+            }
             const access = await readKindeCandidateAccess({ stillCurrent: current });
             if (!current()) return;
             if (access.kind === 'signed-out'
@@ -80,7 +92,7 @@ export function KindeAccountEntry({
         } catch {
             if (current()) setPhase('unavailable');
         }
-    }, [guestArchivePresent]);
+    }, [guestArchivePresent, identityOnly]);
 
     useEffect(() => {
         mounted.current = true;
@@ -109,6 +121,20 @@ export function KindeAccountEntry({
         }
     };
 
+    const handleLocalGuest = async () => {
+        if (busy || guestArchivePresent || phase !== 'signed-out' || !onLocalGuest) return;
+        const token = generation.current;
+        const current = () => mounted.current && generation.current === token && !guestArchivePresent;
+        setBusy(true);
+        try {
+            await onLocalGuest();
+        } catch {
+            if (current()) setPhase('unavailable');
+        } finally {
+            if (current()) setBusy(false);
+        }
+    };
+
     const handleConsent = async () => {
         if (busy || guestArchivePresent || phase !== 'consent-required'
             || !over18 || !terms || !health) return;
@@ -130,7 +156,7 @@ export function KindeAccountEntry({
 
     const handleLogout = async () => {
         if (busy || guestArchivePresent
-            || !['email-unverified', 'consent-required', 'consent-confirmed',
+            || !['email-unverified', 'identity-verified', 'consent-required', 'consent-confirmed',
                 'legal-update-required', 'consent-suspended'].includes(phase)) return;
         const token = generation.current;
         const current = () => mounted.current && generation.current === token && !guestArchivePresent;
@@ -164,6 +190,9 @@ export function KindeAccountEntry({
                     <button type="button" className="btn btn-primary" onClick={handleSignIn}>
                         Accedi o registrati
                     </button>
+                    {onLocalGuest && <button type="button" className="btn" disabled={busy}
+                        onClick={() => { void handleLocalGuest(); }}>Continua come ospite</button>}
+                    {onLocalGuest && <p>I dati dell’ospite rimangono solo su questo dispositivo e non vengono associati all’account Kinde.</p>}
                 </>
             )}
             {phase === 'consent-required' && (
@@ -187,7 +216,7 @@ export function KindeAccountEntry({
                 <button type="button" className="btn" disabled={busy}
                     onClick={() => { setPhase('checking'); void refresh(); }}>Riprova la verifica</button>
             )}
-            {['email-unverified', 'consent-required', 'consent-confirmed',
+            {['email-unverified', 'identity-verified', 'consent-required', 'consent-confirmed',
                 'legal-update-required', 'consent-suspended'].includes(phase) && (
                 <button type="button" className="btn" disabled={busy}
                     onClick={() => { void handleLogout(); }}>Termina sessione TheLogBook</button>
