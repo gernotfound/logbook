@@ -168,7 +168,7 @@ describe('public Kinde identity-only entry boundary', () => {
     it('allows explicit local guest only when the identity read proves signed-out', async () => {
         const onLocalGuest = vi.fn(async () => {});
         render(<KindeAccountEntry identityOnly onLocalGuest={onLocalGuest} />);
-        const guest = await screen.findByRole('button', { name: 'Continua senza account' });
+        const guest = await screen.findByRole('button', { name: /Continua senza account/ });
         fireEvent.click(guest);
         await waitFor(() => expect(onLocalGuest).toHaveBeenCalledTimes(1));
         expect(readKindeCandidateAccess).not.toHaveBeenCalled();
@@ -181,7 +181,7 @@ describe('public Kinde identity-only entry boundary', () => {
         const onLocalGuest = vi.fn(async () => {});
         render(<KindeAccountEntry identityOnly onLocalGuest={onLocalGuest} />);
         await screen.findByText(/Sessione Kinde verificata/);
-        expect(screen.queryByRole('button', { name: 'Continua senza account' })).toBeNull();
+        expect(screen.queryByRole('button', { name: /Continua senza account/ })).toBeNull();
         expect(onLocalGuest).not.toHaveBeenCalled();
     });
 
@@ -190,7 +190,7 @@ describe('public Kinde identity-only entry boundary', () => {
         const onLocalGuest = vi.fn(async () => {});
         render(<KindeAccountEntry identityOnly onLocalGuest={onLocalGuest} />);
         await screen.findByRole('button', { name: 'Riprova la verifica' });
-        const guest = screen.getByRole('button', { name: 'Continua senza account' });
+        const guest = screen.getByRole('button', { name: /Continua senza account/ });
         expect(readKindeCandidateAccess).not.toHaveBeenCalled();
         expect(acceptKindeCandidateInitialConsent).not.toHaveBeenCalled();
         fireEvent.click(guest);
@@ -205,7 +205,7 @@ describe('public Kinde identity-only entry boundary', () => {
         const onLocalGuest = vi.fn(async () => {});
         render(<KindeAccountEntry identityOnly onLocalGuest={onLocalGuest} />);
         await screen.findByText(/Verifica il tuo indirizzo email/);
-        expect(screen.queryByRole('button', { name: 'Continua senza account' })).toBeNull();
+        expect(screen.queryByRole('button', { name: /Continua senza account/ })).toBeNull();
         expect(onLocalGuest).not.toHaveBeenCalled();
     });
 });

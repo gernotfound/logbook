@@ -179,8 +179,11 @@ export function KindeAccountEntry({
     };
 
     return (
-        <main className="auth-login-card" aria-labelledby={titleId}>
-            <h1 id={titleId}>TheLogBook · Accesso Kinde</h1>
+        <main id={identityOnly ? 'auth-kinde-entry' : undefined}
+            className="auth-login-card ui-login-box-1" aria-labelledby={titleId}>
+            {identityOnly
+                ? <h2 id={titleId}>Accesso con Kinde</h2>
+                : <h1 id={titleId}>TheLogBook · Accesso Kinde</h1>}
             {phase === 'checking' && <p role="status">Verifica della sessione…</p>}
             {phase === 'guest-blocked' && (
                 <p role="alert">È presente un archivio ospite. Il trasferimento verso Kinde non è ancora abilitato: i tuoi dati locali sono conservati. Resta nella modalità locale.</p>
@@ -191,9 +194,11 @@ export function KindeAccountEntry({
                     <button type="button" className="btn btn-primary" onClick={handleSignIn}>
                         Accedi o registrati
                     </button>
-                    {onLocalGuest && <button type="button" className="btn" disabled={busy}
-                        onClick={() => { void handleLocalGuest(); }}>Continua senza account</button>}
-                    {onLocalGuest && <p>I dati dell’ospite rimangono solo su questo dispositivo e non vengono associati all’account Kinde.</p>}
+                    {onLocalGuest && <button type="button" className="btn auth-guest-action" disabled={busy}
+                        onClick={() => { void handleLocalGuest(); }}>
+                        <span>Continua senza account</span>
+                        <span className="auth-guest-action__detail">I dati saranno salvati solo sul dispositivo.</span>
+                    </button>}
                 </>
             )}
             {phase === 'consent-required' && (
@@ -219,9 +224,12 @@ export function KindeAccountEntry({
                         onClick={() => { setPhase('checking'); void refresh(); }}>Riprova la verifica</button>
                     {onLocalGuest && !guestArchivePresent && (
                         <>
-                            <button type="button" className="btn" disabled={busy}
-                                onClick={() => { void handleLocalGuest(); }}>Continua senza account</button>
-                            <p>Puoi utilizzare soltanto l'archivio ospite locale, anche offline. La sessione Kinde e i dati cloud non sono disponibili e non vengono associati all'ospite.</p>
+                            <button type="button" className="btn auth-guest-action" disabled={busy}
+                                onClick={() => { void handleLocalGuest(); }}>
+                                <span>Continua senza account</span>
+                                <span className="auth-guest-action__detail">I dati saranno salvati solo sul dispositivo.</span>
+                            </button>
+                            <p>Modalità locale anche offline: nessun account Kinde o accesso cloud è stato verificato.</p>
                         </>
                     )}
                 </>
