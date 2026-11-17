@@ -24,7 +24,7 @@ const consent = (uid = UID) => ({ uid, status: 'active', revision: 1, fenceEpoch
     privacyVersion: LEGAL_VERSIONS.privacy, termsVersion: LEGAL_VERSIONS.terms });
 const keyResponse = () => ({
     format: 'thelogbook-account-data-key', version: 1, uid: UID, fenceEpoch: 1,
-    consentRevision: 1, purpose: 'sync', key: Buffer.from(key).toString('base64'),
+    consentRevision: 1, purpose: 'sync', key: btoa(String.fromCharCode(...key)),
 });
 const encrypted = (uid = UID) => sealCloudDocument(key, uid, '', business, meta);
 const scan = (document: unknown = encrypted(), epoch = 1) => ({
