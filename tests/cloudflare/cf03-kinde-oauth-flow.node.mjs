@@ -324,7 +324,7 @@ void test('one-use OAuth failures reveal only a bounded phase after browser-stat
         reset: () => f.setTransportFailure(false) },
       { phase: 'token-response', configure: () => f.setStatus(500),
         reset: () => f.setStatus(200) },
-      { phase: 'identity', configure: () => f.setPayload({
+      { phase: 'access-token', configure: () => f.setPayload({
         access_token: 'synthetic.invalid.jwt', id_token: 'synthetic.invalid.jwt',
       }), reset: () => f.setPayload(null) },
     ];
