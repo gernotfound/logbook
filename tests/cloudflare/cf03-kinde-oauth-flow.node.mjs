@@ -185,7 +185,7 @@ void test('signed and verified callback mints one owner and one session; replay 
   } finally { f.close(); }
 });
 
-void test('real-shaped callback mints one session with provider-default 24h access token but never API access', async () => {
+void test('one-use callback accepts provider-configurable access TTL, preserves D1 replay and expiry gates', async () => {
   const f = await fixture();
   try {
     f.setAccessLifetime(24 * 60 * 60);
@@ -199,12 +199,29 @@ void test('real-shaped callback mints one session with provider-default 24h acce
     assert.equal((await f.oauth.complete(f.db, callback)).status, 400);
     assert.equal(f.calls(), 1);
 
-    f.setAccessLifetime(24 * 60 * 60 + 1);
-    const second = await f.start(attempt.cookie);
-    const rejected = await f.oauth.complete(f.db, f.callback(second, 'synthetic-code-bad-ttl'));
-    assert.equal(rejected.status, 503);
-    assert.equal(rejected.headers.getSetCookie().length, 0);
-    assert.equal(f.sqlite.prepare('SELECT COUNT(*) AS n FROM auth_sessions').get().n, 1);
+    for (const lifetime of [24 * 60 * 60 + 1, 3 * 24 * 60 * 60]) {
+      f.setAccessLifetime(lifetime);
+      const login = await f.start(attempt.cookie);
+      const request = f.callback(login, 'synthetic-code-ttl-' + lifetime);
+      const result = await f.oauth.complete(f.db, request);
+      assert.equal(result.status, 303);
+      assert.equal(result.headers.getSetCookie().length, 2);
+      assert.equal(f.sqlite.prepare('SELECT COUNT(*) AS n FROM auth_principals').get().n, 1);
+      assert.equal(f.sqlite.prepare('SELECT COUNT(*) AS n FROM auth_oauth_attempts').get().n, 0);
+      assert.equal((await f.oauth.complete(f.db, request)).status, 400);
+    }
+    assert.equal(f.sqlite.prepare('SELECT COUNT(*) AS n FROM auth_sessions').get().n, 3);
+
+    f.setAccessLifetime(0);
+    const expired = await f.start(attempt.cookie);
+    const denied = await f.oauth.complete(f.db, f.callback(expired, 'synthetic-code-expired'));
+    assert.equal(denied.status, 503);
+    assert.deepEqual(await denied.json(), {
+      error: 'authentication-unavailable', phase: 'access-token-expired',
+    });
+    assert.equal(denied.headers.getSetCookie().length, 0);
+    assert.equal(f.sqlite.prepare('SELECT COUNT(*) AS n FROM auth_oauth_attempts').get().n, 0);
+    assert.equal(f.sqlite.prepare('SELECT COUNT(*) AS n FROM auth_sessions').get().n, 3);
   } finally { f.close(); }
 });
 
