@@ -73,10 +73,11 @@ Firebase Hosting, Firebase Authentication, Firestore, Firebase Admin e App Check
 - CodeQL fa parte di `Canonical Verification`. Snyk **non è un job attivo nei workflow correnti del repository**; un suo eventuale riutilizzo richiede verifica nel provider e non può sostituire da solo i controlli di sicurezza bloccanti.
 - Ruleset e required check sono stato GitHub esterno: verificarli direttamente prima di cambiare nomi dei check o comportamento di merge.
 
-### Analytics di utilizzo ritirati
+### Analytics: Cloudflare Web Analytics Free autorizzato, altri provider ritirati
 
-- Google Analytics 4/Firebase Analytics, Vercel Analytics e Speed Insights non fanno parte del runtime corrente.
-- **MUST:** non inviare page view, eventi di utilizzo, dati sanitari o report automatici degli errori client a fornitori esterni di analytics o monitoraggio. I log necessari ai servizi Firebase/Vercel costituiscono un trattamento distinto, da verificare nei rispettivi provider.
+- **Decisione di prodotto 17/11/2026:** Cloudflare Web Analytics Free è autorizzato per visite e metriche aggregate di prestazioni, compatibilità e qualità della PWA. Il precedente divieto assoluto di pageview/analytics **non si applica a Cloudflare Web Analytics**, dopo le verifiche previste in [Telemetria e privacy](telemetry-and-privacy.md). Attivazione futura: [issue #1202](https://github.com/gernotfound/logbook/issues/1202); la decisione non costituisce già deploy o raccolta attiva.
+- Google Analytics 4/Firebase Analytics, Vercel Analytics e Speed Insights restano ritirati: non reintrodurli come effetto di questa decisione.
+- **MUST:** escludere dati sanitari, dati di account/sessione, URL sensibili, eventi individuali e report automatici di errori client. Verificare che la soluzione rispetti le quote Cloudflare Free, non introduca costi e conservi i gate privacy/CI. La limitazione dell'iniezione edge non vieta una futura integrazione manuale revisionata; preservare gli smoke byte-esatti.
 - **NOTE:** l'assenza di SDK dal codice non prova l'erasure presso i vecchi provider; non è motivo per riattivare servizi dismessi.
 
 ### Monitoraggio errori esterno
