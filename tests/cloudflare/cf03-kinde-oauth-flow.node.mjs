@@ -40,6 +40,7 @@ async function fixture() {
   });
   let rateAllowed = true;
   let tokenStatus = 200;
+  let transportFails = false;
   let tokenPayload = null;
   let issuedTokens = 0;
   let accessLifetimeSeconds = 301;
@@ -59,6 +60,7 @@ async function fixture() {
     const nonce = nonceByCode.get(code);
     const now = Math.floor(Date.now() / 1000);
     issuedTokens += 1;
+    if (transportFails) throw new Error('synthetic token fetch failure');
     if (tokenStatus !== 200) return new Response('{}', {
       status: tokenStatus,
       headers: {
@@ -130,6 +132,7 @@ async function fixture() {
     sqlite, db, oauth, startRequest, start, callback, config,
     setRate: value => { rateAllowed = value; },
     setStatus: value => { tokenStatus = value; },
+    setTransportFailure: value => { transportFails = value; },
     setPayload: value => { tokenPayload = value; },
     setAccessLifetime: value => { accessLifetimeSeconds = value; },
     calls: () => issuedTokens,
@@ -310,6 +313,79 @@ void test('provider failure or malformed token response consumes state, never re
     assert.equal(f.sqlite.prepare('SELECT COUNT(*) AS n FROM auth_sessions').get().n, 0);
     assert.equal(f.sqlite.prepare('SELECT COUNT(*) AS n FROM auth_principals').get().n, 0);
     assert.equal(f.sqlite.prepare('SELECT COUNT(*) AS n FROM auth_oauth_attempts').get().n, 0);
+  } finally { f.close(); }
+});
+
+void test('one-use OAuth failures reveal only a bounded phase after browser-state consumption', async () => {
+  const f = await fixture();
+  try {
+    const cases = [
+      { phase: 'token-transport', configure: () => f.setTransportFailure(true),
+        reset: () => f.setTransportFailure(false) },
+      { phase: 'token-response', configure: () => f.setStatus(500),
+        reset: () => f.setStatus(200) },
+      { phase: 'identity', configure: () => f.setPayload({
+        access_token: 'synthetic.invalid.jwt', id_token: 'synthetic.invalid.jwt',
+      }), reset: () => f.setPayload(null) },
+    ];
+    for (let i = 0; i < cases.length; i += 1) {
+      const { phase, configure, reset } = cases[i];
+      const attempt = await f.start();
+      configure();
+      const request = f.callback(attempt, 'synthetic-failure-' + i);
+      const response = await f.oauth.complete(f.db, request);
+      reset();
+      assert.equal(response.status, 503, phase);
+      assert.deepEqual(await response.json(), {
+        error: 'authentication-unavailable', phase,
+      });
+      assert.equal(response.headers.get('Cache-Control'), 'no-store');
+      assert.equal(response.headers.getSetCookie().length, 0);
+      assert.equal((await f.oauth.complete(f.db, request)).status, 400);
+    }
+
+    const attempt = await f.start();
+    const originalPrepare = f.db.prepare;
+    f.db.prepare = function prepare(sql) {
+      if (/INSERT INTO auth_sessions/.test(sql)) {
+        return { bind: () => ({ run: async () => { throw Error('synthetic D1 session failure'); } }) };
+      }
+      return originalPrepare.call(this, sql);
+    };
+    const response = await f.oauth.complete(f.db, f.callback(attempt, 'synthetic-session-failure'));
+    assert.equal(response.status, 503);
+    assert.deepEqual(await response.json(), {
+      error: 'authentication-unavailable', phase: 'session',
+    });
+    assert.equal(response.headers.getSetCookie().length, 0);
+    assert.equal(f.sqlite.prepare('SELECT COUNT(*) AS n FROM auth_sessions').get().n, 0);
+    assert.equal(f.sqlite.prepare('SELECT COUNT(*) AS n FROM auth_oauth_attempts').get().n, 0);
+  } finally { f.close(); }
+});
+
+void test('missing or unproven OAuth state never reveals provider or identity diagnostics', async () => {
+  const f = await fixture();
+  try {
+    const attempt = await f.start();
+    const unknown = f.callback(attempt);
+    const denied = await f.oauth.complete(f.db, new Request(
+      unknown.url.replace('state=' + attempt.state, 'state=' + 'A'.repeat(43)),
+      { headers: { cookie: attempt.cookie } },
+    ));
+    assert.equal(denied.status, 400);
+    assert.deepEqual(await denied.json(), { error: 'authentication-unavailable' });
+    assert.equal(f.calls(), 0);
+
+    const unproven = {
+      withSession: () => ({ prepare: () => ({ bind: () => ({
+        first: async () => { throw new Error('synthetic primary read outage'); },
+      }) }) }),
+    };
+    const response = await f.oauth.complete(unproven, f.callback(attempt));
+    assert.equal(response.status, 503);
+    assert.deepEqual(await response.json(), { error: 'authentication-unavailable' });
+    assert.equal(response.headers.getSetCookie().length, 0);
+    assert.equal(f.calls(), 0);
   } finally { f.close(); }
 });
 
