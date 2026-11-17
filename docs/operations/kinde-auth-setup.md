@@ -1,5 +1,18 @@
 # Kinde — configurazione del provider per TheLogBook
 
+## CF-03 · correzione audience ID token (17/11/2026, candidato v2.502.0)
+
+**Evidenza osservata:** sul callback reale il browser segnala HTTP 503 con fase fissa `id-token-audience`. Questo prova il fallimento del controllo JOSE su `aud`, non fornisce il valore effettivo del claim né autorizza a leggere o registrare token. Il provider Cloudflare ha confermato in sola lettura la presenza dei cinque secret OAuth, senza valori, e un deploy del Worker Kinde privato.
+
+**Root cause nel contratto applicativo:** il codice precedente validava l'ID token contro una audience indipendente (`KINDE_ID_TOKEN_AUDIENCE`); nelle fixture questa era l'URL issuer. OpenID Connect Core richiede invece che `aud` contenga il `client_id` dell'applicazione destinataria. La guida Kinde per il test delle proprie API mostra il client ID fra le audience dell'ID token. Lo stesso `client_id` viene già usato per PKCE/token exchange e `azp`: riutilizzarlo per `jwtVerify` elimina la configurazione divergente, **senza** accettare token destinati ad altre applicazioni. La verifica access token mantiene la distinta audience API.
+
+**Cambio mirato:** la callback richiede `aud=KINDE_CLIENT_ID` tramite il verificatore, preservando RS256/JWKS, issuer, nonce, subject, `azp`, scadenze, email verificata, `at_hash`, state monouso, rate limit, D1 e revoca. Test firmati coprono ID token con `aud` client ID, audience non autorizzata e token con solo issuer. Nessuna lettura o modifica dei secret Cloudflare, di Kinde, del database o dei dati utente. **Il precedente secret `KINDE_ID_TOKEN_AUDIENCE` resta ancora presente nella configurazione Cloudflare e nel controllo provider, ma non è più letto dal runtime:** rimuoverlo solo con successivo cambiamento coordinato di script, test e risorse autorizzate, senza inventare valori.
+
+**Prova ancora necessaria:** dopo gate CI exact-SHA, merge e readback del deployment sul vero `main`, un nuovo tentativo di login deve verificare il percorso reale; il successo del codice non è già un login riuscito. Non riutilizzare mai il vecchio URL callback o il code/state. Se il provider reale non emette il client ID in `aud`, l'errore resterà chiuso e occorrerà evidenza affidabile sul contratto Kinde, senza allargare l'allowlist. Le fasi diagnostiche temporanee restano da rimuovere prima del GO finale.
+
+Fonti: https://www.itu.int/rec/dologin_pub.asp?id=T-REC-X.1285-202505-I%21%21PDF-E&lang=e&s=type e https://docs.kinde.com/developer-tools/your-apis/test-your-api-user-token/.
+
+
 ## CF-03 · callback Kinde: differenziare durata JWT e sessione (17/11/2026, candidato v2.501.0)
 
 **Prova browser recente:** la callback hosted sulla v2.500.0 ha risposto `503 {"error":"authentication-unavailable","phase":"access-token-lifetime"}`. Questa fase viene prodotta *solo* quando il JWT access ha superato `jwtVerify` (firma RS256/JWKS, `iss`, audience, expiry), `azp`/subject/grant/iat/exp e poi `exp - iat > 86400`: **non è un token scaduto**, ma una durata del token superiore al tetto arbitrario della nostra callback. Il valore esatto e le impostazioni dell'app Kinde non sono stati letti, né servono dati o JWT reali. Non conservare mai URL completi di callback, code, state o token.

@@ -99,7 +99,7 @@ async function fixture() {
       email: sub === 'kp_synthetic_user_20261114' ? 'verified@example.invalid' : 'other@example.invalid',
       email_verified: true, auth_time: now - 60, at_hash,
     }).setProtectedHeader({ alg: 'RS256', kid: 'synthetic' })
-      .setIssuer(ISSUER).setAudience(ISSUER).setIssuedAt(now - 2)
+      .setIssuer(ISSUER).setAudience(CLIENT).setIssuedAt(now - 2)
       .setExpirationTime(now + 300).sign(privateKey);
     return Response.json({ access_token: accessToken, id_token: idToken });
   };

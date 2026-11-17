@@ -10,7 +10,7 @@ import { createKindePrincipalProvisioner, KindePrincipalProvisionError } from '.
 const issuer = 'https://synthetic-kinde.example';
 const clientId = 'synthetic-client-id-123';
 const apiAudience = 'thelogbook:isolated-api';
-const idTokenAudience = issuer;
+const idTokenAudience = clientId;
 const sub = 'kp_synthetic_user_12345';
 const nonce = Buffer.alloc(32, 13).toString('base64url');
 
@@ -19,7 +19,7 @@ async function fixture() {
   const localKeys = createLocalJWKSet({
     keys: [{ ...await exportJWK(publicKey), kid: 'synthetic', use: 'sig', alg: 'RS256' }],
   });
-  const config = { issuer, clientId, apiAudience, idTokenAudience };
+  const config = { issuer, clientId, apiAudience };
   const verify = createKindeLoginProofVerifier(config, localKeys);
   const verifyIdentity = createKindeIdentityProofVerifier(config, localKeys);
   async function tokens({
@@ -46,7 +46,7 @@ async function fixture() {
     return { accessToken: access, idToken: id, expectedNonce: nonce };
   }
   const rawProvision = createKindePrincipalProvisioner(
-    { issuer, clientId, apiAudience, idTokenAudience }, localKeys,
+    { issuer, clientId, apiAudience }, localKeys,
   );
   // Simulate only a trusted callback: the saved nonce is never read from the token payload.
   const provision = (db, proof) => rawProvision(db, proof, nonce);
@@ -101,6 +101,7 @@ void test('ID token rejection distinguishes signed audience, issuer, expiry, key
   const { privateKey: wrongKey } = await generateKeyPair('RS256');
   const cases = [
     ['id-token-audience', { idAudience: 'unrelated-application' }],
+    ['id-token-audience', { idAudience: issuer }],
     ['id-token-issuer', { idIssuer: 'https://unrelated-kinde.example' }],
     ['id-token-expired', { idExpiresIn: -30 }],
     ['id-token-key', { idKeyId: 'unknown-kid' }],

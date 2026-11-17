@@ -54,19 +54,17 @@ async function sha256AtHash(accessToken) {
  * The code-exchanged access token is only used here, immediately with
  * signed ID-token nonce, email and client proofs. It is never a reusable
  * API authorization credential; the API verifier retains its 15-minute cap.
- * The ID token audience can differ from the API audience in Kinde and
- * therefore is pinned independently. This helper does not create D1 sessions.
+ * OpenID Connect binds an ID token to this application's client_id; it is
+ * never bound to the API audience or an independently configured issuer URL.
+ * This helper does not create D1 sessions.
  *
- * @param {{issuer: string, apiAudience: string, idTokenAudience: string, clientId: string}} configuration
+ * @param {{issuer: string, apiAudience: string, clientId: string}} configuration
  * @param {(header: import('jose').JWSHeaderParameters, token: import('jose').FlattenedJWSInput) => Promise<import('jose').KeyLike | Uint8Array>} [keySet]
  */
 export function createKindeIdentityProofVerifier(configuration, keySet) {
-  const { issuer, apiAudience, idTokenAudience, clientId } = configuration ?? {};
-  if (typeof issuer !== 'string'
-    || typeof idTokenAudience !== 'string'
-    || !idTokenAudience.trim()
-    || idTokenAudience.length > 512
-    || idTokenAudience.trim() !== idTokenAudience) {
+  const { issuer, apiAudience, clientId } = configuration ?? {};
+  if (typeof issuer !== 'string' || typeof clientId !== 'string'
+    || clientId.length < 8 || clientId.length > 256) {
     throw new TypeError('invalid-kinde-login-configuration');
   }
   const jwks = keySet ?? createRemoteJWKSet(new URL(issuer + '/.well-known/jwks'), {
@@ -95,7 +93,7 @@ export function createKindeIdentityProofVerifier(configuration, keySet) {
     let payload;
     try {
       ({ payload } = await jwtVerify(idToken, jwks, {
-        issuer, audience: idTokenAudience, algorithms: ['RS256'],
+        issuer, audience: clientId, algorithms: ['RS256'],
         clockTolerance: CLOCK_TOLERANCE_SECONDS,
       }));
     } catch (error) { throw new KindeLoginProofError(idTokenFailurePhase(error)); }
