@@ -1,5 +1,10 @@
 # TheLogBook — migrazione Cloudflare: runbook corrente
 
+## CF-03 · login reale verificato e logout applicativo isolato (17/11/2026)
+
+Registrazione email/password con Kinde e letture ripetute `POST /api/auth/session` confermate dal proprietario: identità verificata ed epoca 1, consenso sanitario 0. Un nuovo logout D1 diagnostico verifica CSRF e successivo 401 prima di dichiarare la disconnessione; nessun purge, logout SSO o grant fitness. Il frontend React/Firebase non è migrato: consenso, ADK, journal, replica e diritti sono NO-GO per i nuovi account finché non integrati e collaudati.
+
+
 ## CF-03 · JWT code exchange e TTL non persistente (17/11/2026, v2.501.0 candidata)
 
 L'owner ha ottenuto sulla v2.500.0 `503 phase=access-token-lifetime`. Il verifier ha già verificato firma/JWKS, issuer/audience, client, subject e scadenza, poi ha rifiutato perché `exp-iat>86400`; ciò non significa che il JWT fosse scaduto. Kinde [documenta un default di 24h, personalizzabile](https://docs.kinde.com/build/tokens/configure-tokens/). La configurazione reale del tenant non è stata riletta e non va indovinata.
