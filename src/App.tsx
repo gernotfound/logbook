@@ -32,7 +32,6 @@ import { ConsentOverlay } from './components/UI/ConsentOverlay';
 import { HealthConsentSuspended } from './components/UI/HealthConsentSuspended';
 import { currentHealthConsentStatus, getGuestHealthConsentStatus, getServerConfirmedLegalConsent, refreshHealthConsent, refreshHealthConsentFromStorage, subscribeHealthConsent } from './lib/healthConsent';
 import { needsLegalUpdate } from './lib/legalVersions';
-import { LoginBox } from './components/UI/LoginBox';
 import { KindeAccountEntry } from './components/UI/KindeAccountEntry';
 import { EmailVerificationGate } from './components/UI/EmailVerificationGate';
 import { AlertTriangle, X } from 'lucide-react';
@@ -106,6 +105,41 @@ function GuestBanner({ onLogin }: { onLogin: () => void }) {
         </button>
       </div>
     </div>
+  );
+}
+
+// Until Kinde can transfer guest archives with verified ownership, never
+// invoke the old Firebase login from a guest-owned view.
+function GuestKindeTransitionGate({ onClose }: { onClose: () => void }) {
+  const closeButton = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    const previousFocus = document.activeElement instanceof HTMLElement
+      ? document.activeElement : null;
+    closeButton.current?.focus();
+    return () => {
+      if (previousFocus?.isConnected) previousFocus.focus();
+    };
+  }, []);
+  return (
+    <section role="dialog" aria-modal="true" aria-labelledby="guest-kinde-transition-title"
+      className="auth-panel"
+      onKeyDown={event => {
+        if (event.key === 'Escape') {
+          event.preventDefault();
+          onClose();
+        } else if (event.key === 'Tab') {
+          // This overlay has only one actionable control.
+          event.preventDefault();
+          closeButton.current?.focus();
+        }
+      }}>
+      <h2 id="guest-kinde-transition-title">Passaggio a Kinde non disponibile</h2>
+      <p>Il collegamento dell’archivio locale a un account Kinde non è ancora attivo.
+        I tuoi progressi rimangono sul dispositivo. Puoi continuare a utilizzare
+        la modalità locale senza trasferire o cancellare i dati.</p>
+      <button ref={closeButton} type="button" className="btn btn-primary"
+        onClick={onClose}>Torna alla modalità locale</button>
+    </section>
   );
 }
 
@@ -204,7 +238,7 @@ function OwnerBoundApp({ startupTab }: { startupTab: string | null }) {
     });
   }, [persistTrustedLegal, acceptedOnServer, submitLegalConsent, setSaveError]);
   const showConsentOverlay = hasUserData && needsLocalLegalUpdate && !persistTrustedLegal;
-  const guestLoginOverlayVisible = showGuestLogin && (!currentUser || (isGuest && guestMigrationStatus === 'idle'));
+  const guestLoginOverlayVisible = showGuestLogin && isGuest && !currentUser && guestMigrationStatus === 'idle';
   const guestLoginMigrationPending = !!currentUser && guestMigrationStatus === 'pending';
   const guestLoginMigrationFailed = !!currentUser && guestMigrationStatus === 'failed';
   const hideBottomNav = guestLoginOverlayVisible;
@@ -526,7 +560,7 @@ function OwnerBoundApp({ startupTab }: { startupTab: string | null }) {
       {showConsentOverlay && <ConsentOverlay />}
       {guestLoginOverlayVisible && (
         <div id="auth-overlay" style={{ zIndex: 10001 }}>
-          <LoginBox onCancel={closeGuestLogin} />
+          <GuestKindeTransitionGate onClose={closeGuestLogin} />
         </div>
       )}
       {isGuest && <GuestBanner onLogin={openGuestLogin} />}
