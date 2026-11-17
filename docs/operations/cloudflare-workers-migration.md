@@ -1,5 +1,10 @@
 # TheLogBook — migrazione Cloudflare: runbook corrente
 
+## CF-05 · empty-body status boundary Cloudflare (17/11/2026, v2.509.0)
+
+Il Worker candidato `/v1/consent/status` rifiutava qualunque `request.body !== null`, incluso uno stream HTTP realmente vuoto inoltrato dal gateway (pattern analogo al 403 precedentemente corretto in Kinde). L'helper condiviso `cloudflare/http/strict-empty-post.mjs` controlla Content-Length ma drena i byte **effettivamente ricevuti**, entro un limite e un timeout, prima di AuthGate/D1. Falsi `Content-Length: 0`, anche con un singolo byte di spazio o NUL, sono respinti. Il test di regressione usa ReadableStream con `duplex: 'half'` e ripete il controllo sul percorso Kinde. Nessuna API salute è pubblicata da questo incremento; consenso/ADK/sync/erasure e identità del proprietario restano gate per il cutover.
+
+
 ## CF-03 · decoupling controllo identità guest (17/11/2026, candidato v2.508.0)
 
 L'attivazione guest legge l'oggetto di identità dal provider, non più direttamente da `firebase.auth`: il provider legacy passa lo stesso oggetto e mantiene la semantica originale, mentre quello Kinde potrà usare una sessione verificata e una generazione antireplay indipendente. I fence owner/guest/vault e i controlli dopo gli await restano invariati. Non sono ancora implementati il provider Cloudflare pubblico, la sincronizzazione né il porting dell'owner cloud: questo diff non significa sostituzione completa di Firebase.

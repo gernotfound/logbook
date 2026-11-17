@@ -3,6 +3,7 @@
 // full application Auth/consent/sync still require a separate functional GO.
 import { createKindeOAuthFlow } from './kinde-oauth-flow.mjs';
 import logoutWorker from '../api/logout-worker.mjs';
+import { strictlyEmptyPost } from '../http/strict-empty-post.mjs';
 
 const ROUTES = new Map([
   ['/api/auth/kinde/start', 'POST'],
@@ -46,35 +47,6 @@ function validateClaims(claims) {
     && Number.isSafeInteger(claims.healthConsentRevision)
     && claims.healthConsentRevision >= 0
     && typeof claims.sessionHash === 'string' && HASH.test(claims.sessionHash);
-}
-
-// Browser POSTs, including zero-byte fetches and native forms, can expose a
-// non-null body stream. Drain it before any Auth operation: Content-Length: 0
-// alone is not proof of emptiness, and a body must never reach the Auth gate.
-async function strictlyEmptyPost(request) {
-  const length = request.headers.get('content-length');
-  if (length !== null && length !== '0') return false;
-  if (!request.body) return true;
-  const reader = request.body.getReader();
-  let timer;
-  const deadline = new Promise(resolve => {
-    timer = setTimeout(() => resolve(null), 2000);
-  });
-  try {
-    for (let count = 0; count < 4; count += 1) {
-      const chunk = await Promise.race([reader.read(), deadline]);
-      if (chunk === null) return false;
-      if (chunk.done) return true;
-      if (!(chunk.value instanceof Uint8Array) || chunk.value.byteLength > 0) return false;
-    }
-    return false;
-  } catch {
-    return false;
-  } finally {
-    clearTimeout(timer);
-    void reader.cancel().catch(() => {});
-    try { reader.releaseLock(); } catch { /* A timed-out stream may have a pending read. */ }
-  }
 }
 
 async function sessionStatus(request, env) {

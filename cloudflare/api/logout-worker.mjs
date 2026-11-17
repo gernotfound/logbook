@@ -1,4 +1,6 @@
 // Server-side logout of one current session; never erase device data or journal.
+import { strictlyEmptyPost } from '../http/strict-empty-post.mjs';
+
 const INTERNAL = 'https://auth-gate.internal/__internal/authorize';
 const HASH = /^[a-f0-9]{64}$/;
 
@@ -69,8 +71,7 @@ export default {
           && request.headers.get('sec-fetch-site') !== 'same-origin')) {
         return json({ error: 'origin-rejected' }, 403);
       }
-      if (request.body !== null || (request.headers.has('content-length')
-        && request.headers.get('content-length') !== '0')) return json({ error: 'invalid-body' }, 400);
+      if (!await strictlyEmptyPost(request)) return json({ error: 'invalid-body' }, 400);
       if (!env.DB || typeof env.DB.prepare !== 'function'
         || typeof env.DB.withSession !== 'function') return json({ error: 'unavailable' }, 503);
 

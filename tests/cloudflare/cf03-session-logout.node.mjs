@@ -125,6 +125,32 @@ void test('the same API entry serves consent, encrypted sync and session-only lo
     assert.equal((await call(f)).response.status, 401);
   } finally { f.sqlite.close(); }
 });
+void test('zero-byte browser logout stream is allowed but forged empty body cannot revoke', async () => {
+  const f = await fixture();
+  try {
+    const streamed = async chunks => {
+      const body = new ReadableStream({
+        start(controller) {
+          for (const chunk of chunks) controller.enqueue(new Uint8Array(chunk));
+          controller.close();
+        },
+      });
+      const response = await api.fetch(new Request(ORIGIN + '/v1/auth/logout', {
+        method: 'POST',
+        headers: { origin: ORIGIN, cookie: f.cookie, 'x-csrf-token': f.csrf,
+          'content-length': '0' },
+        body, duplex: 'half',
+      }), f.env);
+      return { status: response.status, body: await response.json() };
+    };
+    assert.deepEqual(await streamed([[32]]), { status: 400, body: { error: 'invalid-body' } });
+    assert.equal(active(f.sqlite, 'owner-a'), 2);
+    assert.deepEqual(await streamed([[], []]), { status: 200, body: { status: 'signed-out' } });
+    assert.equal(active(f.sqlite, 'owner-a'), 1);
+    assert.equal(active(f.sqlite, 'owner-b'), 1);
+  } finally { f.close(); }
+});
+
 void test('logout without first consent does not implicitly grant fitness', async () => {
   const f = await fixture();
   try {

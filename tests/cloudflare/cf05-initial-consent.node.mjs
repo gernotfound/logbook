@@ -79,6 +79,46 @@ function count(sqlite, table) {
   return sqlite.prepare('SELECT COUNT(*) AS n FROM ' + table).get().n;
 }
 
+
+void test('consent status accepts a gateway-forwarded empty stream, never forged Content-Length', async () => {
+  const f = await fixture();
+  const oldGate = f.env.AUTH_GATE;
+  let gateCalls = 0;
+  f.env.AUTH_GATE = { fetch: async input => { gateCalls += 1; return oldGate.fetch(input); } };
+  try {
+    const send = async (chunks, claimedLength = '0') => {
+      const body = new ReadableStream({
+        start(controller) {
+          for (const chunk of chunks) controller.enqueue(new Uint8Array(chunk));
+          controller.close();
+        },
+      });
+      const req = new Request(ORIGIN + '/v1/consent/status', {
+        method: 'POST',
+        headers: { origin: ORIGIN, cookie: f.cookie, 'x-csrf-token': f.csrf,
+          'content-length': claimedLength },
+        body, duplex: 'half',
+      });
+      const response = await consent.fetch(req, f.env);
+      return { status: response.status, body: await response.json() };
+    };
+    const valid = await send([[], []]);
+    assert.equal(valid.status, 200);
+    assert.deepEqual(valid.body, { uid: f.uid, status: 'unregistered', revision: 0, fenceEpoch: 1 });
+    assert.equal(gateCalls, 1);
+    for (const [chunks, declared] of [
+      [[[123]], '0'], [[[0]], '0'], [[[], [32]], '0'], [[[]], '1'],
+    ]) {
+      const bad = await send(chunks, declared);
+      assert.equal(bad.status, 400);
+      assert.deepEqual(bad.body, { error: 'invalid-body' });
+      assert.equal(gateCalls, 1);
+    }
+    assert.equal(count(f.sqlite, 'sync_subjects'), 0);
+    assert.equal(count(f.sqlite, 'health_consent_acceptances'), 0);
+  } finally { f.sqlite.close(); }
+});
+
 void test('a verified session without consent may read status but cannot use sync gate', async () => {
   const f = await fixture();
   try {
