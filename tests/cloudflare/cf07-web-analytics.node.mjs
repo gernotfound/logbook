@@ -88,5 +88,8 @@ void test('public and in-app privacy policies accurately disclose the reviewed C
   assert.match(inAppPrivacy, /Do Not Track\/Global Privacy Control/);
   assert.doesNotMatch(inAppPrivacy, /non integra servizi di analytics di utilizzo/);
   assert.match(analyticsRules, /non supporta eventi personalizzati/);
+  assert.match(analyticsRules, /SRI\/version pinning/);
+  assert.match(privacy, /isolata dalle schermate/);
+  assert.match(inAppPrivacy, /codice esterno non rimanga eseguibile/);
   assert.match(externalServicesRules, /Cloudflare Web Analytics Free/);
 });

@@ -36,7 +36,7 @@
 7. Revoca del consenso salute senza reale cessazione del trattamento.
 8. Trasferimenti o subprocessori non documentati.
 9. Perdita o sostituzione della KEK cloud: ciphertext account irrecuperabile senza custodia e ripristino indipendenti; cifratura trusted diversa da E2EE.
-10. Analytics tecnici: rischio di acquisizione accidentale di URL di autenticazione, parametri, identificatori, metadati sanitari o di raccolta fuori dall'ambito dichiarato; valutare anche trasferimenti e criteri di consenso.
+10. Analytics tecnici: rischio di acquisizione accidentale di URL di autenticazione, parametri, identificatori, metadati sanitari o di raccolta fuori dall'ambito dichiarato; valutare anche trasferimenti e criteri di consenso. Il beacon esterno caricato nell'app shell rimane nello stesso contesto JavaScript quando React mostra dati fitness, e la versione dello script manuale non è pin-nabile con SRI: questo è un rischio architetturale da risolvere, non una trasmissione indebita già dimostrata.
 
 ## Misure già presenti da verificare
 
@@ -59,7 +59,7 @@
 - `[ ]` restore/backup policy decisa;
 - `[ ]` ruolo del gestore e garanzie dei fornitori tecnici documentati e validati;
 - `[ ]` vendor/transfer register completato;
-- `[ ]` Web Analytics: verifica che URL/referrer/token non finiscano nel beacon, condizioni normative/consenso, data retention, eventuali esclusioni geografiche e prove su browser reali prima del GO.
+- `[ ]` Web Analytics: verifica che URL/referrer/token e URL risorse non finiscano nel beacon, condizioni normative/consenso, data retention, eventuali esclusioni geografiche, isolamento del JavaScript nelle schermate con dati salute e prove su browser reali prima del GO.
 
 ## Decisione
 
