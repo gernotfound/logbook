@@ -305,7 +305,10 @@ export function createKindeOAuthFlow(configuration, { rateLimit, fetchImpl = fet
         throw new KindeOAuthError();
       }
       const headers = noStoreHeaders();
-      headers.set('Location', config.appOrigin + '/');
+      // Until AuthContext and D1 health routes are cut over, the PWA root
+      // still contains Firebase flows. Return only to the isolated Kinde
+      // diagnostic so a verified identity is not mistaken for fitness access.
+      headers.set('Location', config.appOrigin + '/verifica-accesso');
       for (const cookie of issued.setCookies) headers.append('Set-Cookie', cookie);
       return new Response(null, { status: 303, headers });
     } catch {

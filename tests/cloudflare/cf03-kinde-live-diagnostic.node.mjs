@@ -31,6 +31,10 @@ void test('first-party diagnostic is an inert, noindex, password-free OAuth laun
   assert.match(page, /<script type="module" src="\/verifica-accesso\.js"><\/script>/);
   assert.match(page, /id="check-session"/);
   assert.match(page, /id="session-result" role="status" aria-live="polite"/);
+  assert.match(page, /la sessione viene verificata senza usare Firebase/);
+  assert.match(script, /check\.addEventListener\('click', \(\) => \{ void verify\(\); \}\);/);
+  assert.match(script, /void verify\(\);/);
+  assert.doesNotMatch(script, /identitytoolkit|firebase\/auth|window\.location\s*=/);
   assert.doesNotMatch(page, /<input\b|name="password"|name="email"|autocomplete="current-password"/i);
   assert.doesNotMatch(page, /https?:\/\/(?!thelogbook\.me)|<iframe\b|<script(?! type="module")/i);
   assert.doesNotMatch(script, /localStorage|sessionStorage|document\.cookie|\.innerHTML|eval\s*\(/i);

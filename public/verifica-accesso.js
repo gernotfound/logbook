@@ -53,17 +53,25 @@ if (typeof document !== 'undefined') {
   const check = document.getElementById('check-session');
   const result = document.getElementById('session-result');
   if (check instanceof HTMLButtonElement && result instanceof HTMLElement) {
-    check.addEventListener('click', async () => {
+    const verify = async () => {
+      if (check.disabled) return;
       check.disabled = true;
       result.textContent = 'Verifica della sessione in corso…';
-      const state = await probeKindeSession();
-      const message = {
-        verified: 'Sessione Kinde verificata. La PWA e i dati salute rimangono disabilitati per questo account.',
-        'signed-out': 'Nessuna sessione Kinde attiva in questo browser.',
-        unavailable: 'Impossibile confermare la sessione. Nessun accesso ai dati è stato autorizzato.',
-      };
-      result.textContent = message[state];
-      check.disabled = false;
-    });
+      try {
+        const state = await probeKindeSession();
+        const message = {
+          verified: 'Sessione Kinde verificata. La PWA e i dati salute rimangono disabilitati per questo account.',
+          'signed-out': 'Nessuna sessione Kinde attiva in questo browser.',
+          unavailable: 'Impossibile confermare la sessione. Nessun accesso ai dati è stato autorizzato.',
+        };
+        result.textContent = message[state];
+      } finally {
+        check.disabled = false;
+      }
+    };
+    check.addEventListener('click', () => { void verify(); });
+    // This document is also the OAuth callback's success destination.
+    // A same-origin status read, not a redirect or token in the URL, proves login.
+    void verify();
   }
 }
