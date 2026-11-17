@@ -9,6 +9,9 @@ const about = readFileSync(new URL('../../public/about.html', import.meta.url), 
 const privacy = readFileSync(new URL('../../public/privacy.html', import.meta.url), 'utf8');
 const diagnostic = readFileSync(new URL('../../public/verifica-accesso.html', import.meta.url), 'utf8');
 const headers = readFileSync(new URL('../../cloudflare/_headers', import.meta.url), 'utf8');
+const inAppPrivacy = readFileSync(new URL('../../src/pages/PrivacyPolicy.tsx', import.meta.url), 'utf8');
+const analyticsRules = readFileSync(new URL('../../.agents/rules/telemetry-and-privacy.md', import.meta.url), 'utf8');
+const externalServicesRules = readFileSync(new URL('../../.agents/rules/external-services.md', import.meta.url), 'utf8');
 
 function scriptsFor(url, options = {}) {
   const collected = [];
@@ -74,4 +77,16 @@ void test('source and CSP enforce explicit manual installation, excluding auth a
   assert.ok(!privacy.includes('analytics-loader.js') && !diagnostic.includes('analytics-loader.js'));
   assert.ok(headers.includes("script-src 'self' https://static.cloudflareinsights.com "));
   assert.ok(headers.includes("connect-src 'self' https://cloudflareinsights.com "));
+});
+
+void test('public and in-app privacy policies accurately disclose the reviewed Cloudflare analytics boundary', () => {
+  assert.match(privacy, /Cloudflare Web Analytics/);
+  assert.match(privacy, /privacy/i);
+  assert.match(privacy, /sette giorni/);
+  assert.match(privacy, /sei mesi/);
+  assert.match(inAppPrivacy, /Cloudflare Web Analytics/);
+  assert.match(inAppPrivacy, /Do Not Track\/Global Privacy Control/);
+  assert.doesNotMatch(inAppPrivacy, /non integra servizi di analytics di utilizzo/);
+  assert.match(analyticsRules, /non supporta eventi personalizzati/);
+  assert.match(externalServicesRules, /Cloudflare Web Analytics Free/);
 });

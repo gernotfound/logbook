@@ -36,6 +36,7 @@
 7. Revoca del consenso salute senza reale cessazione del trattamento.
 8. Trasferimenti o subprocessori non documentati.
 9. Perdita o sostituzione della KEK cloud: ciphertext account irrecuperabile senza custodia e ripristino indipendenti; cifratura trusted diversa da E2EE.
+10. Analytics tecnici: rischio di acquisizione accidentale di URL di autenticazione, parametri, identificatori, metadati sanitari o di raccolta fuori dall'ambito dichiarato; valutare anche trasferimenti e criteri di consenso.
 
 ## Misure già presenti da verificare
 
@@ -46,7 +47,7 @@
 - nessun monitoraggio automatico degli errori client; isolamento owner dei marker e controlli di recovery preservati;
 - account deletion server-mediated e tombstone recovery;
 - CI exact-SHA e branch protection workflow;
-- nessuna integrazione di analytics o Error Monitoring nel frontend;
+- Cloudflare Web Analytics Free manuale candidato per visite e prestazioni aggregate della sola pagina pubblica; nessun SDK di Error Monitoring, evento sanitario o session replay; effettiva raccolta, basi giuridiche e rischi da verificare;
 - CSP e security headers;
 - segreti server fuori dal bundle client.
 
@@ -57,7 +58,8 @@
 - `[ ]` stato live di App Check/Rules/API restrictions verificato;
 - `[ ]` restore/backup policy decisa;
 - `[ ]` ruolo del gestore e garanzie dei fornitori tecnici documentati e validati;
-- `[ ]` vendor/transfer register completato.
+- `[ ]` vendor/transfer register completato;
+- `[ ]` Web Analytics: verifica che URL/referrer/token non finiscano nel beacon, condizioni normative/consenso, data retention, eventuali esclusioni geografiche e prove su browser reali prima del GO.
 
 ## Decisione
 

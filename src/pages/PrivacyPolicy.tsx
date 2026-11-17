@@ -48,7 +48,7 @@ export const PrivacyPolicy: React.FC<{ onClose: () => void }> = ({ onClose }) =>
               Informativa sulla privacy
             </h2>
             <p style={{ margin: '4px 0 0', fontSize: 'var(--font-size-meta)', color: 'var(--text-muted)' }}>
-              Aggiornata al 6 novembre 2026
+              Aggiornata al 17 novembre 2026
             </p>
           </div>
           <button
@@ -96,7 +96,7 @@ export const PrivacyPolicy: React.FC<{ onClose: () => void }> = ({ onClose }) =>
               I dati business inseriti nell'app — come allenamenti, nutrizione, misurazioni, routine e pianificazioni — restano nella persistenza locale del dispositivo e non vengono sincronizzati su Firestore finché non colleghi un account.
             </p>
             <p>
-              TheLogBook non integra servizi di analytics di utilizzo e non invia automaticamente report degli errori del browser a fornitori esterni. Gli eventuali messaggi di errore dell'app rimangono sul dispositivo.
+              TheLogBook prevede Cloudflare Web Analytics per statistiche tecniche aggregate della pagina iniziale, senza monitorare le attività fitness o gli errori JavaScript. La raccolta effettiva è subordinata alle verifiche del rilascio. I dati di allenamento e salute della modalità ospite restano sul dispositivo.
             </p>
 
             <h3 style={h3Style}>Modalità cloud (con account)</h3>
@@ -122,7 +122,19 @@ export const PrivacyPolicy: React.FC<{ onClose: () => void }> = ({ onClose }) =>
               TheLogBook gestisce nel browser errori, interruzioni della sincronizzazione e problemi dell'archivio locale per mostrare avvisi e impedire operazioni non sicure. Non utilizza un servizio esterno di Error Monitoring e non crea code di report diagnostici destinate all'invio automatico.
             </p>
             <p>
-              Anche senza un account, il caricamento dell'app e i controlli tecnici possono comportare richieste ai servizi Firebase/Google. Firebase Hosting, Authentication, App Check/reCAPTCHA Enterprise e le API trusted Vercel, quando usati, possono trattare dati tecnici di rete e generare log presso i fornitori. Questi trattamenti sono distinti dai dati fitness, che in modalità ospite non vengono sincronizzati automaticamente. La rimozione del monitoraggio degli errori dal client non elimina i log necessari ai servizi.
+              Anche senza un account, il caricamento dell'app e i controlli tecnici possono comportare richieste a Cloudflare e ai componenti Firebase/Google ancora presenti nel client in migrazione. Cloudflare Workers, Firebase Authentication, App Check e gli eventuali backend tecnici ancora necessari possono trattare dati di rete e generare log presso i rispettivi fornitori. Questi trattamenti sono distinti dai dati fitness, che in modalità ospite non vengono sincronizzati automaticamente. La rimozione del monitoraggio degli errori dal client non elimina i log necessari ai servizi.
+            </p>
+          </Section>
+
+          <Section title="Statistiche Cloudflare per migliorare TheLogBook">
+            <p>
+              Cloudflare Web Analytics è il servizio previsto per misurare in forma aggregata visite e prestazioni della PWA: caricamento, reattività delle interazioni (INP), contenuti principali (LCP), stabilità del layout (CLS) e compatibilità per browser e dispositivo. Serve a individuare problemi di progettazione e migliorare l'esperienza complessiva, non a monitorare gli allenamenti di una persona.
+            </p>
+            <p>
+              Il beacon è consentito solo sulla pagina iniziale (<code>/</code> e <code>/index.html</code>) con URL e provenienza non sensibili e quando le preferenze Do Not Track/Global Privacy Control non lo impediscono. Non viene usato sulle pagine di login o sui dati salute, non legge i tuoi archivi locali, non imposta cookie di analytics e non invia UID, email, token, contenuti dei form, misure corporee o eventi personalizzati. Il prodotto Cloudflare Web Analytics non supporta attualmente il tracciamento di azioni applicative personalizzate.
+            </p>
+            <p>
+              Il destinatario del beacon è Cloudflare, che può trattare metadati di rete per la consegna del servizio. Cloudflare indica dati del beacon non campionati per sette giorni, successivamente aggregati, e consultazione delle statistiche fino a sei mesi; i log tecnici del fornitore possono avere tempi distinti. Il monitoraggio è facoltativo rispetto alla registrazione dei dati fitness e distinto dal consenso esplicito per i dati salute. Prima dell'attivazione pubblica devono essere verificati la base giuridica (eventualmente interesse legittimo per ottimizzazione tecnica), l'applicabilità delle condizioni sugli analytics e la necessità di consenso preventivo.
             </p>
           </Section>
 
@@ -144,7 +156,7 @@ export const PrivacyPolicy: React.FC<{ onClose: () => void }> = ({ onClose }) =>
 
           <Section title="Tecnologie di memorizzazione locale">
             <p>
-              IndexedDB e localStorage sono utilizzati per il funzionamento offline, la persistenza locale, i workout in corso e le preferenze tecniche. TheLogBook non integra Google Analytics 4, Firebase Analytics, Vercel Analytics o Speed Insights e non invia eventi di utilizzo a tali servizi. I servizi necessari di autenticazione e protezione anti-abuso possono utilizzare propri identificatori tecnici secondo le rispettive condizioni.
+              IndexedDB e localStorage sono utilizzati per il funzionamento offline, la persistenza locale, i workout in corso e le preferenze tecniche. TheLogBook non integra Google Analytics 4, Firebase Analytics, Vercel Analytics o Speed Insights e non invia eventi di utilizzo a tali servizi. Cloudflare Web Analytics è distinto e non accede a IndexedDB, localStorage o sessionStorage. I servizi necessari di autenticazione e protezione anti-abuso possono utilizzare propri identificatori tecnici secondo le rispettive condizioni.
             </p>
             <p>
               Gli archivi locali principali dei dati fitness e le bozze del dispositivo sono protetti con cifratura autenticata. Le chiavi sono conservate nello stesso profilo del browser: questa protezione non impedisce l'accesso a chi compromette il profilo o esegue codice malevolo nell'app, e non costituisce cifratura end-to-end. I file JSON e CSV esportati sono invece leggibili in chiaro.
@@ -185,8 +197,10 @@ export const PrivacyPolicy: React.FC<{ onClose: () => void }> = ({ onClose }) =>
           <Section title="Fornitori e trasferimento dei dati">
             <p>I servizi cloud dell'app si appoggiano principalmente ai seguenti fornitori:</p>
             <ul style={ulStyle}>
-              <li><strong style={{ color: 'var(--text-main)' }}>Google / Firebase</strong> — Authentication, Firestore, Firebase Hosting e App Check/reCAPTCHA Enterprise. Firebase Authentication elabora i dati di accesso negli Stati Uniti; gli indirizzi IP registrati per l'autenticazione sono conservati per alcune settimane. Dopo la cancellazione di un account, Google indica un termine massimo di 180 giorni per rimuovere le altre informazioni di autenticazione dai sistemi attivi e di backup. Nessun SDK Google Analytics è integrato nel client corrente.</li>
-              <li><strong style={{ color: 'var(--text-main)' }}>Vercel</strong> — sole funzioni server trusted e manutenzione giornaliera; il frontend/PWA è servito da Firebase Hosting.</li>
+              <li><strong style={{ color: 'var(--text-main)' }}>Google / Firebase</strong> — Authentication, Firestore e App Check/reCAPTCHA Enterprise ancora presenti nel client in migrazione; Firebase Hosting è disabilitato. Firebase Authentication elabora i dati di accesso negli Stati Uniti; gli indirizzi IP registrati per l'autenticazione sono conservati per alcune settimane. Dopo la cancellazione di un account, Google indica un termine massimo di 180 giorni per rimuovere le altre informazioni di autenticazione dai sistemi attivi e di backup. Nessun SDK Google Analytics è integrato nel client corrente.</li>
+              <li><strong style={{ color: 'var(--text-main)' }}>Cloudflare</strong> — frontend Workers Static Assets e, quando abilitato, Web Analytics per misure tecniche aggregate; Worker/API e D1 sono in migrazione e richiedono verifiche indipendenti.</li>
+              <li><strong style={{ color: 'var(--text-main)' }}>Kinde</strong> — autenticazione email/password e Google in corso di integrazione; non equivale alla disponibilità delle funzioni cloud fitness.</li>
+              <li><strong style={{ color: 'var(--text-main)' }}>Vercel</strong> — vecchie funzioni server e cron attualmente sospesi; il frontend pubblico non viene più distribuito tramite Firebase Hosting.</li>
             </ul>
             <p>
               I fornitori possono trattare alcuni dati tecnici o personali anche al di fuori dello Spazio economico europeo. Per conoscere ulteriori dettagli sulle destinazioni dei trasferimenti e sulle garanzie adottate, puoi scrivere al recapito privacy indicato in questa informativa.

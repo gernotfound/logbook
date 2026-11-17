@@ -1,5 +1,14 @@
 # TheLogBook — migrazione Cloudflare: runbook corrente
 
+## CF-07 · Cloudflare Analytics approvato per progettazione e UX (17/11/2026, PR draft #1200)
+
+Il product owner autorizza Web Analytics Free come capacità permanente di misura delle visite e prestazioni per migliorare TheLogBook, sostituendo il divieto generale precedente. È distinto da Error Monitoring, eventi fitness e session replay. Le FAQ Cloudflare indicano che Web Analytics non supporta eventi personalizzati: i Core Web Vitals e le pageview della pagina iniziale non dimostrano l'utilizzo di specifiche schede React. Non attivare altri prodotti a pagamento per simulare tale capacità.
+
+[PR #1200](https://github.com/gernotfound/logbook/pull/1200) allinea loader manuale, CSP, informativa pubblica e in-app, regole operative e dossier privacy. Sul provider Web Analytics resta `rum=manual`, `auto_install=false` e ruleset disabilitato; **nessuna raccolta attiva o pubblicazione del nuovo loader è stata osservata**, e il Worker API live usa ancora il contratto privacy 1.3.9 contro il candidato 1.3.10. Prima del merge coordinare la versione legale nei Worker isolati e l'integrazione Kinde in corso; poi verificare CI exact-SHA, deployment/smoke e browser incluse le esclusioni OAuth/Safari, il dato effettivamente ricevuto e le quote Free. Non modificare DNS, billing, Auth o D1 per il solo aggiornamento Analytics.
+
+Riferimenti: [regola Telemetria](../../.agents/rules/telemetry-and-privacy.md), [registro servizi](external-services-register.md), [issue CF-07 #1061](https://github.com/gernotfound/logbook/issues/1061).
+
+
 ## CF-03 · login reale verificato e logout applicativo isolato (17/11/2026)
 
 Registrazione email/password con Kinde e letture ripetute `POST /api/auth/session` confermate dal proprietario: identità verificata ed epoca 1, consenso sanitario 0. Un nuovo logout D1 diagnostico verifica CSRF e successivo 401 prima di dichiarare la disconnessione; nessun purge, logout SSO o grant fitness. Il frontend React/Firebase non è migrato: consenso, ADK, journal, replica e diritti sono NO-GO per i nuovi account finché non integrati e collaudati.

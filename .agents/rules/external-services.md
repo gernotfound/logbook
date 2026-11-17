@@ -73,10 +73,10 @@ Firebase Hosting, Firebase Authentication, Firestore, Firebase Admin e App Check
 - CodeQL fa parte di `Canonical Verification`. Snyk **non è un job attivo nei workflow correnti del repository**; un suo eventuale riutilizzo richiede verifica nel provider e non può sostituire da solo i controlli di sicurezza bloccanti.
 - Ruleset e required check sono stato GitHub esterno: verificarli direttamente prima di cambiare nomi dei check o comportamento di merge.
 
-### Analytics di utilizzo ritirati
+### Analytics di utilizzo: Cloudflare approvato, precedenti provider ritirati
 
 - Google Analytics 4/Firebase Analytics, Vercel Analytics e Speed Insights non fanno parte del runtime corrente.
-- **MUST:** non inviare page view, eventi di utilizzo, dati sanitari o report automatici degli errori client a fornitori esterni di analytics o monitoraggio. I log necessari ai servizi Firebase/Vercel costituiscono un trattamento distinto, da verificare nei rispettivi provider.
+- **MUST:** utilizzare soltanto Cloudflare Web Analytics Free per le pageview e le metriche tecniche aggregate **nel perimetro approvato e verificato**; il veto precedente a qualsiasi analytics non è più vigente. Nessun SDK GA4/Vercel, tracciamento di eventi personalizzati (non supportati dal prodotto), dato sanitario, identificatore o report automatico di errori client. Provider edge, log tecnici e analytics RUM sono flussi distinti da inventariare e validare singolarmente. L'iniezione automatica sul provider resta vietata perché altera l'HTML verificato.
 - **NOTE:** l'assenza di SDK dal codice non prova l'erasure presso i vecchi provider; non è motivo per riattivare servizi dismessi.
 
 ### Monitoraggio errori esterno

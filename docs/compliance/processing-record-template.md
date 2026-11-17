@@ -75,6 +75,23 @@
 | Retention | `[DEFINE_CASE_FILE_RETENTION]` |
 | Canale | `thelogbook.privacy@gmail.com` (funzionamento dichiarato verificato dal product owner) / `[SUPPORT_EMAIL]` se verrà attivato un supporto separato |
 
+## Attività 6 — Statistiche tecniche Cloudflare Web Analytics (candidato)
+
+| Campo | Contenuto da validare |
+|---|---|
+| Stato | PR #1200 candidata, non attestata come raccolta live |
+| Finalità | Migliorare prestazioni, stabilità visiva, responsività e compatibilità del frontend tramite analisi statistiche aggregate |
+| Dati | Visite e percorso pubblico consentito, Core Web Vitals, categoria browser/dispositivo/sistema operativo, area geografica approssimativa e provenienza se disponibile; il trasporto HTTP espone metadati tecnici al fornitore |
+| Perimetro | `/` e `/index.html` senza query/frammenti o referrer sensibili, DNT/GPC rispettati, nessuna navigazione OAuth o interna alle funzioni salute |
+| Dati esclusi | UID, email, sessioni, token, nome esercizio, misurazioni e dati salute, contenuti o eventi applicativi personalizzati |
+| Fornitore | Cloudflare Web Analytics; trattamento dei metadati HTTP e eventuali trasferimenti da verificare nel registro fornitori |
+| Base Art. 6 / consenso cookie | `[DA VALIDARE]` — interesse legittimo per ottimizzazione tecnica e condizioni Garante per analytics assimilabili a strumenti tecnici da verificare prima del GO |
+| Retention documentata | Cloudflare dichiara sette giorni di dati beacon non campionati e pannello consultabile fino a sei mesi; log di sicurezza e retention ulteriori distinti |
+| Misure | Beacon manuale allowlisted, senza cookies identificativi del servizio, no iniezione edge, CSP limitata, test e informativa pubblica + in-app coerenti |
+| Verifica | `[PENDING]` — provider Free, raccolta RUM effettiva, Chrome/WebKit, privacy, costi e limiti |
+
+Non confondere le metriche Web Analytics con conteggi di uso delle singole funzioni React: Web Analytics non supporta eventi personalizzati e la PWA condivide il percorso iniziale fra più schermate. L'assenza di cookie del beacon non esclude automaticamente ogni trattamento di dati tecnici.
+
 ## Registro modifiche
 
 | Data | Versione | Modifica | Approvata da |

@@ -15,7 +15,7 @@
 | Sync | Local durability prima della replica cloud; recovery lost-ack | Implementato/testato |
 | Validazione | Gateway Zod ai boundary persistiti | Implementato |
 | Errori client | Nessuna raccolta o trasmissione automatica di report diagnostici; percorsi di recovery e marker locali preservati | Dismissione consolidata nelle PR #804, #816 e #817; CI exact-SHA e Hosting Production verificati al 5 novembre 2026; traffico browser reale non collaudato |
-| Analytics di utilizzo | GA4/Firebase Analytics, Vercel Analytics e Speed Insights dismessi; nessun monitoraggio esterno degli errori client | Codice aggiornato; configurazioni provider da verificare |
+| Analytics per progettazione | GA4/Firebase e Vercel Analytics dismessi. Cloudflare Web Analytics Free approvato: solo visite e prestazioni aggregate sulla pagina iniziale, senza identificatori o dati fitness; error monitoring separatamente vietato | PR draft #1200: informativa e loader candidati; CI/rilevazione RUM runtime, liceità e consenso da verificare prima del GO |
 | Account deletion | Workflow server-mediated, idempotente, Auth cancellata per ultima | Implementato/testato |
 | Segreti | Firebase Admin, cron e `CLOUD_ACCOUNT_KEK_V1` server-only, esclusi dal bundle; KEK preservata e ruotata solo con processo versionato di rewrap | Contratto repository |
 | HTTP | CSP, frame denial, referrer/permissions policies e cache policy app-shell/SW | `firebase.json` documenta l'hosting storico disabilitato; `cloudflare/_headers`, `cloudflare/wrangler.jsonc` e smoke statico Workers candidato richiedono nuovo collaudo browser/runtime |
