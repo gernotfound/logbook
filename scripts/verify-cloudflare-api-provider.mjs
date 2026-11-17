@@ -3,6 +3,7 @@ import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 const DB_ID = '9aa51833-8adc-495f-bdfc-93b5542e8023';
+const RECOVERY_DB_ID = '19dad53f-0dda-4503-b161-758ac8cb7b21';
 const GATE_NAME = 'thelogbook-cf03-auth-gate-isolated';
 const DATA_WORKER_NAME = 'thelogbook-api-isolated';
 
@@ -30,6 +31,12 @@ export async function verifyPrivateWorkerBindings({ account, bearer, request = f
       (!binding.database_id || binding.database_id === DB_ID)),
       name + ': D1 UUID binding absent or incorrect');
     if (name === DATA_WORKER_NAME) {
+      const recovery = bindings.filter(binding => binding.name === 'RECOVERY_DB');
+      assert.equal(recovery.length, 1, 'private API must bind exactly one independent recovery D1');
+      assert.ok(recovery[0].type === 'd1' && recovery[0].id === RECOVERY_DB_ID
+        && (!recovery[0].database_id || recovery[0].database_id === RECOVERY_DB_ID)
+        && recovery[0].id !== DB_ID,
+      'private API independent erasure D1 binding absent or incorrect');
       assert.ok(bindings.some(binding => binding.name === 'AUTH_GATE' &&
         binding.type === 'service' && binding.service === GATE_NAME),
         'private API authorization binding absent');

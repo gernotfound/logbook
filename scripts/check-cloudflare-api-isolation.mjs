@@ -5,6 +5,8 @@ import { pathToFileURL } from 'node:url';
 
 const DB_ID = '9aa51833-8adc-495f-bdfc-93b5542e8023';
 const DB_NAME = 'thelogbook-cf02-eu-isolated-20261113';
+const RECOVERY_DB_ID = '19dad53f-0dda-4503-b161-758ac8cb7b21';
+const RECOVERY_DB_NAME = 'thelogbook-cf08-fence-eu-isolated-20261116';
 const GATE = 'thelogbook-cf03-auth-gate-isolated';
 const WORKER_NAME = 'thelogbook-api-isolated';
 const ORIGIN = 'https://thelogbook.me';
@@ -22,9 +24,19 @@ export function validateIsolatedWorkers(api, gate) {
     check(!['route', 'routes', 'assets', 'triggers', 'unsafe'].some(key => Object.hasOwn(cfg, key)),
       label + ': unexpected external surface');
     const db = cfg.d1_databases?.[0];
-    check(cfg.d1_databases?.length === 1 && db?.binding === 'DB' &&
-      db?.database_name === DB_NAME && db?.database_id === DB_ID &&
-      db?.migrations_dir === migrations, label + ': unverified D1 target');
+    check(cfg.d1_databases?.length === (label === 'api' ? 2 : 1)
+      && db?.binding === 'DB' && db?.database_name === DB_NAME
+      && db?.database_id === DB_ID && db?.migrations_dir === migrations,
+    label + ': unverified D1 target');
+    if (label === 'api') {
+      const recovery = cfg.d1_databases?.[1];
+      check(recovery?.binding === 'RECOVERY_DB'
+        && recovery?.database_name === RECOVERY_DB_NAME
+        && recovery?.database_id === RECOVERY_DB_ID
+        && recovery?.migrations_dir === '../recovery/migrations'
+        && recovery.database_id !== db?.database_id,
+      'api: independent recovery D1 binding missing or incorrect');
+    }
     check(cfg.vars?.API_ORIGIN === ORIGIN &&
       cfg.vars?.CONSENT_PRIVACY_VERSION === '1.3.9' &&
       cfg.vars?.CONSENT_TERMS_VERSION === '1.2.5' &&

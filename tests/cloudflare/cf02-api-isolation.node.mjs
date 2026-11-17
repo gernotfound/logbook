@@ -21,6 +21,13 @@ void test('rejects database substitutions and missing private authorization', ()
   assert.notDeepEqual(validate({ ...api, d1_databases: [{ ...api.d1_databases[0], database_id: 'different' }] }, gate), []);
   assert.notDeepEqual(validate({ ...api, services: [] }, gate), []);
   assert.notDeepEqual(validate(api, { ...gate, d1_databases: [] }), []);
+  for (const altered of [
+    api.d1_databases.slice(0, 1),
+    [{ ...api.d1_databases[0] }, { ...api.d1_databases[1], database_id: 'untrusted' }],
+    [{ ...api.d1_databases[0] }, { ...api.d1_databases[1], database_id: api.d1_databases[0].database_id }],
+    [{ ...api.d1_databases[0] }, { ...api.d1_databases[1], binding: 'DB' }],
+  ]) assert.notDeepEqual(validate({ ...api, d1_databases: altered }, gate), []);
+
 });
 void test('rejects missing rate limiter, origin changes and injected vars', () => {
   assert.notDeepEqual(validate(api, { ...gate, ratelimits: [] }), []);

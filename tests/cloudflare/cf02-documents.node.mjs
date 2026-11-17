@@ -16,6 +16,12 @@ const rollback = readFileSync(new URL('../../cloudflare/api/rollback/0001_encryp
 const origin = 'https://candidate.invalid';
 const owner = 'cf02-synthetic-owner';
 const replica = { slot: 's00', replicaId: 'synthetic-replica-0001', generation: 1 };
+const independentDatabases = new WeakMap();
+function applyIndependentSchema(sqlite) {
+  for (const name of ['0001_independent_owner_fences.sql', '0002_block_replace_bypass.sql']) {
+    sqlite.exec(readFileSync(new URL('../../cloudflare/recovery/migrations/' + name, import.meta.url), 'utf8'));
+  }
+}
 
 class Statement {
   constructor(db, sql, args = []) { this.db = db; this.sql = sql; this.args = args; }
@@ -50,7 +56,12 @@ async function withFixture(run) {
   const filename = join(dir, 'synthetic.sqlite');
   const db = new D1SqliteAdapter(filename);
   const second = new D1SqliteAdapter(filename);
+  const fence = new D1SqliteAdapter(join(dir, 'independent.sqlite'));
+  independentDatabases.set(db, fence);
+  independentDatabases.set(second, fence);
   try {
+    applyIndependentSchema(fence.sqlite);
+    fence.sqlite.prepare("UPDATE recovery_control SET mode='open',generation=2 WHERE singleton=1").run();
     applyCurrentD1Schema(db.sqlite);
     const issuedAt = Date.now() - 5000;
     db.sqlite.prepare('INSERT INTO auth_principals (uid,status,verified_at_ms,auth_epoch) VALUES (?,?,?,?)')
@@ -61,6 +72,11 @@ async function withFixture(run) {
     db.sqlite.prepare('INSERT INTO health_consent_acceptances (uid,consent_revision,privacy_version,terms_version,accepted_at_ms,over_18_confirmed) VALUES (?,1,?,?,?,1)')
       .run(owner, '1.3.9', '1.2.5', issuedAt);
     db.sqlite.prepare('INSERT INTO sync_state (uid, revision) VALUES (?, 0)').run(owner);
+    fence.sqlite.prepare(`INSERT INTO recovery_owner_fences
+      (uid,status,consent_revision,fence_epoch,erased_before_revision,change_seq)
+      VALUES (?,'pending',0,5,0,1)`).run(owner);
+    fence.sqlite.prepare(`UPDATE recovery_owner_fences
+      SET status='active',consent_revision=1,change_seq=2 WHERE uid=?`).run(owner);
     const dataKey = await releaseCloudAccountDataKey(db, {
       CLOUD_ACCOUNT_KEK_V1: Buffer.alloc(32, 41).toString('base64'),
       CONSENT_PRIVACY_VERSION: '1.3.9', CONSENT_TERMS_VERSION: '1.2.5',
@@ -73,8 +89,15 @@ async function withFixture(run) {
     const now = Date.now();
     db.sqlite.prepare('INSERT INTO sync_replicas (uid, slot, replica_id, generation, lease_until_ms, checkpoint_at_ms, checkpoint_clock_json, last_seq, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)').run(
       owner, replica.slot, replica.replicaId, 1, now + 86400000, now, '{}', 0, 'active');
-    await run(db, second);
-  } finally { second.close(); db.close(); rmSync(dir, { recursive: true, force: true }); }
+    await run(db, second, fence);
+  } finally {
+    independentDatabases.delete(db);
+    independentDatabases.delete(second);
+    fence.close();
+    second.close();
+    db.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
 }
 
 function envelope(seq = 1) {
@@ -99,7 +122,7 @@ function attempt(batchId = 'batch000000000001', seq = 1, rev = 0, paths = ['']) 
 }
 function makeEnv(db, claims = {}) {
   return {
-    DB: db, API_ORIGIN: origin,
+    DB: db, RECOVERY_DB: independentDatabases.get(db), API_ORIGIN: origin,
     AUTH_GATE: {
       async fetch() {
         return new Response(JSON.stringify({
@@ -1175,4 +1198,57 @@ void test('a consent proof removed between gate and SQL rolls back replica membe
   assert.equal(db.sqlite.prepare('SELECT COUNT(*) AS n FROM sync_replica_mutations').get().n, 0);
   assert.equal(db.sqlite.prepare('SELECT COUNT(*) AS n FROM sync_replicas').get().n, 1);
   assert.equal(db.sqlite.prepare('SELECT revision FROM sync_state').get().revision, 0);
+}));
+
+void test('CF-08 sync rejects absent or sealed independent authority before reading ciphertext', () => withFixture(async (db, _second, fence) => {
+  const success = await call(db, 'control', {});
+  assert.equal(success.status, 200);
+  const missing = makeEnv(db);
+  delete missing.RECOVERY_DB;
+  assert.deepEqual(await call(db, 'control', {}, { env: missing }),
+    { status: 503, body: { error: 'cloud-unavailable' } });
+
+  fence.sqlite.prepare("UPDATE recovery_control SET mode='sealed',generation=3 WHERE singleton=1").run();
+  assert.deepEqual(await call(db, 'control', {}),
+    { status: 503, body: { error: 'cloud-unavailable' } });
+  assert.equal(db.sqlite.prepare('SELECT revision FROM sync_state WHERE uid=?').get(owner).revision, 0);
+}));
+
+void test('CF-08 independent withdrawal blocks stale application consent and sync writes', () => withFixture(async (db, _second, fence) => {
+  const current = await call(db, 'control', {});
+  assert.equal(current.status, 200);
+  fence.sqlite.prepare(`UPDATE recovery_owner_fences
+    SET status='blocked',change_seq=change_seq+1 WHERE uid=?`).run(owner);
+  const rejected = await call(db, 'commit', attempt('batch000000000098'));
+  assert.deepEqual(rejected, { status: 503, body: { error: 'cloud-unavailable' } });
+  assert.equal(db.sqlite.prepare('SELECT COUNT(*) AS n FROM sync_receipts WHERE uid=?').get(owner).n, 0);
+  assert.equal(db.sqlite.prepare('SELECT revision FROM sync_state WHERE uid=?').get(owner).revision, 0);
+}));
+
+void test('CF-08 late independent withdrawal hides a committed sync receipt, never invents ACK', () => withFixture(async (db, _second, fence) => {
+  let changed = false;
+  const intercepted = Object.assign(Object.create(db), {
+    async batch(...args) {
+      const result = await db.batch(...args);
+      if (!changed && args[0]?.some(statement => statement.sql?.includes('INSERT INTO sync_receipts'))) {
+        changed = true;
+        fence.sqlite.prepare(`UPDATE recovery_owner_fences
+          SET status='blocked',change_seq=change_seq+1 WHERE uid=?`).run(owner);
+      }
+      return result;
+    },
+  });
+  independentDatabases.set(intercepted, fence);
+  const rejected = await call(db, 'commit', attempt('batch000000000099'), {
+    env: makeEnv(intercepted),
+  });
+  assert.equal(changed, true);
+  assert.deepEqual(rejected, { status: 503, body: { error: 'cloud-unavailable' } });
+  // The application D1 did commit. The external floor nevertheless prevents
+  // an ACK for the old consent, leaving the local journal to recover safely.
+  assert.equal(db.sqlite.prepare('SELECT revision FROM sync_state WHERE uid=?').get(owner).revision, 1);
+  assert.equal(db.sqlite.prepare('SELECT COUNT(*) AS n FROM sync_receipts WHERE uid=?').get(owner).n, 1);
+  assert.deepEqual(await call(db, 'receipt', { batchId: 'batch000000000099' }),
+    { status: 503, body: { error: 'cloud-unavailable' } });
+  independentDatabases.delete(intercepted);
 }));

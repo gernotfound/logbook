@@ -1,6 +1,9 @@
 // Candidate-only encrypted replica API. There is intentionally no public fixture,
 // secret-header login, test backdoor or fallback identity when AUTH_GATE is absent.
 import { z } from 'zod';
+import {
+  requireCurrentIndependentSyncFence, RuntimeSyncAccessRevokedError,
+} from '../recovery/runtime-sync-fence.mjs';
 import consentWorker from './consent-worker.mjs';
 import logoutWorker from './logout-worker.mjs';
 import cloudKeyWorker from './cloud-key-worker.mjs';
@@ -225,6 +228,13 @@ async function handler(request, env) {
   const uid = claims.uid;
   const consentRevision = claims.healthConsentRevision;
   const fenceEpoch = claims.fenceEpoch;
+  // This private API is not operational without an independent D1. The
+  // AuthGate's main-D1 proof is necessary but cannot survive its own restore.
+  await requireCurrentIndependentSyncFence(env, claims);
+  const guardedReply = async (body, status = 200) => {
+    await requireCurrentIndependentSyncFence(env, claims);
+    return guardedReply(body, status);
+  };
   if (route === '/v1/sync/receipt') {
     const body = await jsonBounded(request, maxBodyBytes);
     const batchId = z.strictObject({ batchId: id }).safeParse(body);
@@ -234,7 +244,7 @@ async function handler(request, env) {
       || state?.fence_epoch !== fenceEpoch
       || state?.revision === undefined) throw new BadInput('access-revoked', 403);
     const receipt = await readReceipt(env.DB, uid, consentRevision, fenceEpoch, batchId.data.batchId, claims.sessionHash);
-    return reply({ receipt: receipt ? { requestHash: receipt.request_hash, revision: receipt.committed_revision,
+    return guardedReply({ receipt: receipt ? { requestHash: receipt.request_hash, revision: receipt.committed_revision,
       lastSeq: receipt.last_seq, consentRevision: receipt.consent_revision,
       replica: { slot: receipt.slot, replicaId: receipt.replica_id, generation: receipt.generation } } : null });
   }
@@ -261,9 +271,9 @@ async function handler(request, env) {
       }
       // Historical commit status is NOT an ACK: the client still needs the
       // exact ciphertext-bound receipt before touching its local journal.
-      return reply({ outcome: 'committed', currentRevision: row.current_revision });
+      return guardedReply({ outcome: 'committed', currentRevision: row.current_revision });
     }
-    return reply({
+    return guardedReply({
       outcome: row.current_revision > input.expectedRevision ? 'not-committed' : 'inconclusive',
       currentRevision: row.current_revision,
     });
@@ -274,7 +284,7 @@ async function handler(request, env) {
     if (!control) throw new BadInput('access-revoked', 403);
     // Account A and B may share epoch and revision during an A→B→A race.
     // Bind the control snapshot to its server-verified session owner.
-    return reply({ uid, ...control });
+    return guardedReply({ uid, ...control });
   }
   if (route === '/v1/sync/replica/status') {
     // The two strict schemas are disjoint: a status lookup proves absence
@@ -296,9 +306,9 @@ async function handler(request, env) {
         || row.existing_expected_revision !== input.expectedRevision) {
         throw new BadInput('mutation-id-conflict', 409);
       }
-      return reply({ outcome: 'committed', currentRevision: row.current_revision });
+      return guardedReply({ outcome: 'committed', currentRevision: row.current_revision });
     }
-    return reply({
+    return guardedReply({
       outcome: row.current_revision > input.expectedRevision ? 'not-committed' : 'inconclusive',
       currentRevision: row.current_revision,
     });
@@ -315,7 +325,7 @@ async function handler(request, env) {
     const existing = await readReplicaMutationReceipt(env.DB, uid, consentRevision, fenceEpoch, input.mutationId, claims.sessionHash);
     if (existing) {
       if (existing.request_hash !== hash) throw new BadInput('mutation-id-conflict', 409);
-      return reply(mutationResponse(input.mutationId, existing, true));
+      return guardedReply(mutationResponse(input.mutationId, existing, true));
     }
     const control = await readReplicaControl(env.DB, uid, consentRevision, fenceEpoch, claims.sessionHash);
     if (!control) throw new BadInput('access-revoked', 403);
@@ -344,12 +354,12 @@ async function handler(request, env) {
     };
     try {
       const stored = await writeReplicaMutation(env.DB, uid, mutation);
-      return reply(mutationResponse(input.mutationId, stored, false));
+      return guardedReply(mutationResponse(input.mutationId, stored, false));
     } catch (error) {
       const saved = await readReplicaMutationReceipt(env.DB, uid, consentRevision, fenceEpoch, input.mutationId, claims.sessionHash);
       if (saved) {
         if (saved.request_hash !== hash) throw new BadInput('mutation-id-conflict', 409);
-        return reply(mutationResponse(input.mutationId, saved, true));
+        return guardedReply(mutationResponse(input.mutationId, saved, true));
       }
       const missingKey = isClaim && String(error?.message).includes('replica-cloud-key-required');
       const state = missingKey
@@ -376,14 +386,14 @@ async function handler(request, env) {
     if (page.kind === 'access-revoked') throw new BadInput('access-revoked', 403);
     if (page.kind === 'snapshot-changed') throw new BadInput('snapshot-changed', 409);
     const { kind: _kind, ...data } = page;
-    return reply(data);
+    return guardedReply(data);
   }
   if (route === '/v1/sync/read') {
     const parsed = readInput.safeParse(raw);
     if (!parsed.success || !uniquePaths(parsed.data.paths)) throw new BadInput('invalid-input', 400);
     const snapshot = await readSnapshot(env.DB, uid, consentRevision, fenceEpoch, parsed.data.paths, claims.sessionHash);
     if (!snapshot) throw new BadInput('access-revoked', 403);
-    return reply(snapshot);
+    return guardedReply(snapshot);
   }
   const parsed = commitInput.safeParse(raw);
   if (!parsed.success) throw new BadInput('invalid-input', 400);
@@ -395,17 +405,17 @@ async function handler(request, env) {
   const existing = await readReceipt(env.DB, uid, consentRevision, fenceEpoch, input.batchId, claims.sessionHash);
   if (existing) {
     if (existing.request_hash !== hash) throw new BadInput('batch-id-conflict', 409);
-    return reply({ batchId: input.batchId, revision: existing.committed_revision, lastSeq: existing.last_seq, replayed: true });
+    return guardedReply({ batchId: input.batchId, revision: existing.committed_revision, lastSeq: existing.last_seq, replayed: true });
   }
   try {
     const result = await commitEncryptedBatch(env.DB, uid, fenceEpoch, input, hash, claims.sessionHash);
-    return reply({ ...result, replayed: false });
+    return guardedReply({ ...result, replayed: false });
   } catch (error) {
     // Lost response is not evidence of no commit. Check the persisted receipt.
     const receipt = await readReceipt(env.DB, uid, consentRevision, fenceEpoch, input.batchId, claims.sessionHash);
     if (receipt) {
       if (receipt.request_hash !== hash) throw new BadInput('batch-id-conflict', 409);
-      return reply({ batchId: input.batchId, revision: receipt.committed_revision, lastSeq: receipt.last_seq, replayed: true });
+      return guardedReply({ batchId: input.batchId, revision: receipt.committed_revision, lastSeq: receipt.last_seq, replayed: true });
     }
     const state = await readAccessState(env.DB, uid, fenceEpoch, claims.sessionHash);
     if (state?.status !== 'active' || state?.consent_revision !== consentRevision
@@ -432,6 +442,7 @@ export default {
     try { return await handler(request, env); }
     catch (error) {
       if (error instanceof BadInput) return reply({ error: error.message }, error.status);
+      if (error instanceof RuntimeSyncAccessRevokedError) return reply({ error: 'access-revoked' }, 403);
       // No exception message, health plaintext, SQL statement or identity in API response.
       return reply({ error: 'cloud-unavailable' }, 503);
     }
