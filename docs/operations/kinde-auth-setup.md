@@ -1,5 +1,11 @@
 # Kinde — configurazione del provider per TheLogBook
 
+## CF-03 · continuità browser Kinde fissata prima delle richieste (17/11/2026)
+
+L'osservatore di identità, la lettura di consenso e la consultazione dello stato replica candidati catturano un cookie CSRF di sessione prima della prima richiesta HTTP. Lo ricontrollano dopo ogni risposta, anche quando UID, epoca e revisione consenso rimangono invariati in una nuova sessione. Cookie mancanti sono ammessi unicamente per un 401 canonicalmente signed-out; un 200 authenticated senza cookie canonico, cookie duplicati o valori malformati falliscono chiusi. Primo consenso e bridge journal passano esplicitamente la stessa sorgente cookie ai rispettivi controlli annidati. Le richieste HTTP non aumentano.
+
+È una garanzia di continuità client, non un'abilitazione del vault, una concessione di consenso o un'approvazione delle API sanitarie. Il provider applicativo Kinde, l'owner locale, guest→account e il cutover Firebase rimangono da integrare e collaudare.
+
 ## CF-03 · protezione sincrona delle azioni Kinde da eventi foreground (17/11/2026)
 
 Durante logout, primo consenso candidato o avvio modalità ospite, un evento `focus`/`online` può arrivare prima che React pubblichi lo stato `busy`. La schermata usa perciò un latch sincrono della singola azione: l'osservatore foreground non invalida la relativa generazione nel mezzo dell'operazione. Una risposta già obsoleta continua a non concedere alcun permesso; il latch viene sempre rilasciato anche in caso di errore. I callback registrati da un effetto smontato non possono avviare controlli tardivi. Regressioni riproducono deliberatamente gli eventi nello stesso turno della richiesta.

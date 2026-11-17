@@ -38,7 +38,7 @@ export async function deliverKindeCandidateJournal({
 
     // A live, signed first-consent check is necessary even when there is
     // already an encrypted local delivery intent.
-    const access = await readKindeCandidateAccess({ send, stillCurrent: current });
+    const access = await readKindeCandidateAccess({ send, stillCurrent: current, browserCookies });
     if (access.kind !== 'consent-confirmed' || !current()) {
         throw new KindeCandidateBoundaryError();
     }

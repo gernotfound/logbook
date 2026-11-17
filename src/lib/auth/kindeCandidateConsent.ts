@@ -50,7 +50,7 @@ export async function acceptKindeCandidateInitialConsent({
 }): Promise<Confirmed> {
     if (!approved(decision)) throw new KindeCandidateBoundaryError();
     const fence = captureKindeCandidateSessionFence({ stillCurrent, browserCookies });
-    const initial = await readKindeCandidateAccess({ send, stillCurrent: fence.stillCurrent });
+    const initial = await readKindeCandidateAccess({ send, stillCurrent: fence.stillCurrent, browserCookies });
     if (initial.kind !== 'consent-required' || initial.principal.healthConsentRevision !== 0
         || !fence.stillCurrent()) throw new KindeCandidateBoundaryError();
 
@@ -88,7 +88,7 @@ export async function acceptKindeCandidateInitialConsent({
         )) throw new KindeCandidateBoundaryError();
     }
 
-    const after = await readKindeCandidateAccess({ send, stillCurrent: fence.stillCurrent });
+    const after = await readKindeCandidateAccess({ send, stillCurrent: fence.stillCurrent, browserCookies });
     if (after.kind !== 'consent-confirmed' || after.principal.uid !== uid
         || after.principal.fenceEpoch !== fenceEpoch
         || after.principal.healthConsentRevision !== 1

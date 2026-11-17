@@ -1,5 +1,5 @@
 import {
-    captureKindeCandidateSessionFence, KindeCandidateBoundaryError,
+    captureKindeCandidatePresenceFence, KindeCandidateBoundaryError,
     readKindeCandidateJson,
 } from './kindeCandidateClient';
 
@@ -72,8 +72,8 @@ async function readStatus(send: typeof fetch, stillCurrent: () => boolean): Prom
 /**
  * Identity-only candidate observer. An unverified Kinde email can still own
  * rights-only routes, but may never grant fitness, cloud ADK or a local vault.
- * The independent CSRF cookie fences same-UID session replacement across the
- * second HTTP read. Consent is always checked separately after verification.
+ * The browser-bound CSRF cookie is pinned before the first HTTP read.
+ * Consent is always checked separately after identity verification.
  */
 export async function readKindeCandidateIdentity({
     send = fetch, stillCurrent, browserCookies = () => document.cookie,
@@ -82,9 +82,10 @@ export async function readKindeCandidateIdentity({
     stillCurrent: () => boolean;
     browserCookies?: () => string;
 }): Promise<KindeCandidateIdentity> {
-    const first = await readStatus(send, stillCurrent);
+    const fence = captureKindeCandidatePresenceFence({ stillCurrent, browserCookies });
+    const first = await readStatus(send, fence.stillCurrent);
     if (first === null) return { kind: 'signed-out' };
-    const fence = captureKindeCandidateSessionFence({ stillCurrent, browserCookies });
+    if (fence.csrfToken === null) throw new KindeCandidateBoundaryError();
     const last = await readStatus(send, fence.stillCurrent);
     if (last === null || last.uid !== first.uid
         || last.fenceEpoch !== first.fenceEpoch

@@ -5,6 +5,10 @@
 
 **Autorità:** [`AGENTS.md`](../../AGENTS.md). Questo contratto ne specializza gli invarianti; non amplia autorizzazioni o perimetro.
 
+### Continuità sessione Kinde per letture multi-step (17/11/2026)
+
+Identità, consenso e replica candidati devono fissare il cookie CSRF di sessione **prima** della prima lettura HTTP, non soltanto fra due letture. UID, `fenceEpoch` e revisione consenso uguali non provano la stessa sessione A→B→A. Il cookie canonico è indispensabile prima di interpretare un `200 authenticated`; la sua assenza è ammessa solo per un `401 unauthorized` canonico. Cambi, duplicati, valori malformati e incoerenza dopo un'attesa falliscono chiusi. La prova CSRF è distinta dall'autorizzazione server e non concede owner, vault, ADK o sync.
+
 ### Fence sincrono azione/foreground Kinde (17/11/2026)
 
 Un evento `focus` o `online` nello stesso turno di un comando Kinde non deve invalidare la generazione del comando prima del commit di `busy` React. Usare un latch sincrono di operazione, rilasciato anche per errori/teardown; un recheck foreground può partire solo senza operazioni in corso. L'osservatore non autorizza fitness, consenso o accesso ad archivi, anche in caso di sessione verified.
