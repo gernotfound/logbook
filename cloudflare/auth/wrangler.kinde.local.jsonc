@@ -32,7 +32,6 @@
     "APP_ORIGIN": "https://candidate.invalid",
     "KINDE_ISSUER": "https://synthetic-kinde.example",
     "KINDE_CLIENT_ID": "synthetic-client-id-placeholder",
-    "KINDE_API_AUDIENCE": "thelogbook:synthetic-api",
-    "KINDE_ID_TOKEN_AUDIENCE": "https://synthetic-kinde.example"
+    "KINDE_API_AUDIENCE": "thelogbook:synthetic-api"
   }
 }

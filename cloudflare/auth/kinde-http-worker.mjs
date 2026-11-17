@@ -177,7 +177,6 @@ export function createKindeHttpHandler({ fetchImpl = fetch, keySet } = {}) {
         issuer: env.KINDE_ISSUER, clientId: env.KINDE_CLIENT_ID,
         clientSecret: env.KINDE_CLIENT_SECRET,
         apiAudience: env.KINDE_API_AUDIENCE,
-        idTokenAudience: env.KINDE_ID_TOKEN_AUDIENCE,
         appOrigin: env.APP_ORIGIN,
       }, {
         fetchImpl, keySet,

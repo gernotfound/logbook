@@ -46,7 +46,7 @@ async function fixture() {
   let accessLifetimeSeconds = 301;
   let accessAudience = apiAudience;
   let accessGrantType = ['authorization_code'];
-  let idAudience = issuer;
+  let idAudience = clientId;
   const nonceByCode = new Map();
   const fetchImpl = async (url, init) => {
     assert.equal(url, issuer + '/oauth2/token');
@@ -94,7 +94,7 @@ async function fixture() {
   };
   const config = {
     issuer, clientId, clientSecret: 'synthetic-server-secret-not-real',
-    apiAudience, idTokenAudience: issuer, appOrigin,
+    apiAudience, appOrigin,
   };
   const oauth = createKindeOAuthFlow(config, {
     rateLimit: async request => {

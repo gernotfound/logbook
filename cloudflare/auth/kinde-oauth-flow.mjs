@@ -79,14 +79,13 @@ function browserCookie(header) {
 }
 
 function requireConfiguration(config) {
-  const { issuer, clientId, clientSecret, apiAudience, idTokenAudience, appOrigin } = config ?? {};
+  const { issuer, clientId, clientSecret, apiAudience, appOrigin } = config ?? {};
   if (typeof issuer !== 'string' || typeof clientId !== 'string'
     || typeof clientSecret !== 'string' || typeof apiAudience !== 'string'
-    || typeof idTokenAudience !== 'string' || typeof appOrigin !== 'string'
+    || typeof appOrigin !== 'string'
     || clientId.length < 8 || clientId.length > 256 || /\s/.test(clientId)
     || clientSecret.length < 12 || clientSecret.length > 1024
-    || !apiAudience || apiAudience.length > 512 || /\s/.test(apiAudience)
-    || !idTokenAudience || idTokenAudience.length > 512 || /\s/.test(idTokenAudience)) {
+    || !apiAudience || apiAudience.length > 512 || /\s/.test(apiAudience)) {
     throw new TypeError('invalid-kinde-oauth-configuration');
   }
   let provider; let application;
@@ -101,8 +100,7 @@ function requireConfiguration(config) {
     throw new TypeError('invalid-kinde-oauth-configuration');
   }
   const redirectUri = appOrigin + CALLBACK_PATH;
-  return { issuer, clientId, clientSecret, apiAudience, idTokenAudience,
-    appOrigin, redirectUri };
+  return { issuer, clientId, clientSecret, apiAudience, appOrigin, redirectUri };
 }
 
 function requestUrl(request, origin, path, method) {
@@ -187,7 +185,7 @@ async function tokenResponse(response) {
  * Free-tier abuse quota or replace edge protections.
  */
 /**
- * @param {{ issuer: string, clientId: string, clientSecret: string, apiAudience: string, idTokenAudience: string, appOrigin: string }} configuration
+ * @param {{ issuer: string, clientId: string, clientSecret: string, apiAudience: string, appOrigin: string }} configuration
  * @param {{ rateLimit?: (request: Request) => Promise<boolean>, fetchImpl?: typeof fetch,
  * keySet?: (header: import('jose').JWSHeaderParameters, token: import('jose').FlattenedJWSInput) => Promise<import('jose').KeyLike | Uint8Array> }} [dependencies]
  */
