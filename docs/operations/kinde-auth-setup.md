@@ -1,5 +1,11 @@
 # Kinde — configurazione del provider per TheLogBook
 
+## CF-03 · verifica della sessione Kinde al ritorno in primo piano (17/11/2026)
+
+La variante React `KindeAccountEntry identityOnly` ricontrolla la sessione applicativa Kinde quando la finestra riprende il focus, torna visibile o recupera la connettività. Eventi di visibilità/focus nello stesso turno vengono accorpati; le risposte vecchie non possono prevalere su una lettura successiva grazie alla generazione dell'osservatore. In caso di errore il pannello resta bloccato, senza autorizzare consenso, chiavi cloud, fitness o replica; un accesso hosted successivo rimane una scelta esplicita. Nessun evento di foreground legge dati guest.
+
+Questo controllo **non risolve né diagnostica** da solo l'anomalia del form HTML nativo su `/verifica-accesso` nel browser normale, né sostituisce l'`AuthProvider` Firebase. Per attribuire la causa al Service Worker, ai cookie o al gateway occorre osservare il POST originale e la risposta/redirect nel browser interessato, senza cancellare lo storage.
+
 ## CF-03 · recupero login quando la verifica sessione non è disponibile (17/11/2026)
 
 **Nuova osservazione del product owner:** il login email/password e il cambio password hosted Kinde sono riusciti in incognito; nel browser normale, dalla pagina diagnostica `/verifica-accesso` il pulsante native POST `Avvia accesso con Kinde` non produce un avanzamento visibile. **Non è dimostrata la causa del secondo comportamento**: possono concorrere stato Firebase persistito, cookie Kinde, Service Worker, estensioni o una risposta HTTP bloccante. Non assumere che il 403 della sessione precedente sia ricomparso senza acquisire Network/response. Il Service Worker corrente esclude esplicitamente dalla navigazione offline `/verifica-accesso` e `/api/auth/*`, ma una installazione/stato preesistente richiede verifica runtime.

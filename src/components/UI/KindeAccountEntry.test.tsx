@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen, waitFor, cleanup } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, cleanup } from '@testing-library/react';
 import { KindeAccountEntry } from './KindeAccountEntry';
 import { readKindeCandidateIdentity } from '../../lib/auth/kindeCandidateIdentity';
 import {
@@ -154,6 +154,64 @@ describe('isolated Kinde account entry candidate', () => {
 });
 
 describe('public Kinde identity-only entry boundary', () => {
+    it('refreshes a stale verified identity on foreground, without enabling consent or fitness', async () => {
+        vi.mocked(readKindeCandidateIdentity).mockResolvedValueOnce(verified)
+            .mockResolvedValue({ kind: 'signed-out' });
+        render(<KindeAccountEntry identityOnly />);
+        await screen.findByText(/Sessione Kinde verificata/);
+        await act(async () => { window.dispatchEvent(new Event('focus')); });
+        await screen.findByRole('button', { name: 'Accedi o registrati' });
+        expect(readKindeCandidateIdentity).toHaveBeenCalledTimes(2);
+        expect(readKindeCandidateAccess).not.toHaveBeenCalled();
+        expect(acceptKindeCandidateInitialConsent).not.toHaveBeenCalled();
+    });
+
+    it('fences a slow old identity response when the session changes again on reconnect', async () => {
+        let releaseOld!: (value: typeof verified) => void;
+        vi.mocked(readKindeCandidateIdentity).mockResolvedValueOnce(verified)
+            .mockImplementationOnce(() => new Promise(resolve => { releaseOld = resolve; }))
+            .mockResolvedValue({ kind: 'signed-out' });
+        render(<KindeAccountEntry identityOnly />);
+        await screen.findByText(/Sessione Kinde verificata/);
+        await act(async () => { window.dispatchEvent(new Event('focus')); });
+        await waitFor(() => expect(readKindeCandidateIdentity).toHaveBeenCalledTimes(2));
+        await act(async () => { window.dispatchEvent(new Event('online')); });
+        await screen.findByRole('button', { name: 'Accedi o registrati' });
+        await act(async () => { releaseOld(verified); });
+        expect(screen.queryByText(/Sessione Kinde verificata/)).toBeNull();
+        expect(readKindeCandidateIdentity).toHaveBeenCalledTimes(3);
+        expect(readKindeCandidateAccess).not.toHaveBeenCalled();
+    });
+
+    it('coalesces focus and visibility events, and never probes a blocked guest archive', async () => {
+        const view = render(<KindeAccountEntry identityOnly />);
+        await screen.findByRole('button', { name: 'Accedi o registrati' });
+        await act(async () => {
+            window.dispatchEvent(new Event('focus'));
+            document.dispatchEvent(new Event('visibilitychange'));
+        });
+        await waitFor(() => expect(readKindeCandidateIdentity).toHaveBeenCalledTimes(2));
+        view.unmount();
+        vi.mocked(readKindeCandidateIdentity).mockClear();
+        render(<KindeAccountEntry identityOnly guestArchivePresent />);
+        await act(async () => {
+            window.dispatchEvent(new Event('focus'));
+            window.dispatchEvent(new Event('online'));
+        });
+        expect(readKindeCandidateIdentity).not.toHaveBeenCalled();
+    });
+
+    it('fails closed after a foreground network error and still permits explicit hosted retry', async () => {
+        vi.mocked(readKindeCandidateIdentity).mockResolvedValueOnce(verified)
+            .mockRejectedValueOnce(new Error('offline'));
+        render(<KindeAccountEntry identityOnly />);
+        await screen.findByText(/Sessione Kinde verificata/);
+        await act(async () => { window.dispatchEvent(new Event('online')); });
+        await screen.findByRole('button', { name: 'Avvia un nuovo accesso con Kinde' });
+        expect(readKindeCandidateAccess).not.toHaveBeenCalled();
+        expect(acceptKindeCandidateInitialConsent).not.toHaveBeenCalled();
+    });
+
     it('reads only the trusted session, never calls consent, cloud key or Firebase login', async () => {
         vi.mocked(readKindeCandidateIdentity).mockResolvedValue(verified);
         render(<KindeAccountEntry identityOnly />);
