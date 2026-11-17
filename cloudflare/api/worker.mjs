@@ -233,7 +233,7 @@ async function handler(request, env) {
   await requireCurrentIndependentSyncFence(env, claims);
   const guardedReply = async (body, status = 200) => {
     await requireCurrentIndependentSyncFence(env, claims);
-    return guardedReply(body, status);
+    return reply(body, status);
   };
   if (route === '/v1/sync/receipt') {
     const body = await jsonBounded(request, maxBodyBytes);
