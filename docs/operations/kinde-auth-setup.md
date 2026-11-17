@@ -1,5 +1,12 @@
 # Kinde — configurazione del provider per TheLogBook
 
+## CF-03 — Lettura completa e autenticata D1 prima del cutover (candidato 17/11/2026)
+
+Il bridge `inspectKindeCandidateCloudCheckpoint` unisce le prove Kinde/consenso, un cookie CSRF fissato prima del primo HTTP, l'ADK cloud a vita di singola operazione, una scansione D1 completa sulla stessa revisione, AEAD per UID/percorso e una rilettura finale di sessione e consenso. L'ADK viene azzerata nel `finally` anche dopo errori di scansione e cambio identità. Una scansione vuota non crea una copia locale.
+
+**Non montato in React, login, IndexedDB né sync.** La lettura restituisce una mera osservazione, non un permesso a idratare, creare owner, adottare una replica, cancellare journal o riconoscere ACK. Prima del collegamento pubblico servono il provider Kinde completo, i gate della sessione/vault locale, riconciliazione del journal, recovery, prova HTTP isolata e un collaudo con nuovo account reale. `D1_API` resta non pubblicato.
+
+
 ## CF-03 · protezione sincrona delle azioni Kinde da eventi foreground (17/11/2026)
 
 Durante logout, primo consenso candidato o avvio modalità ospite, un evento `focus`/`online` può arrivare prima che React pubblichi lo stato `busy`. La schermata usa perciò un latch sincrono della singola azione: l'osservatore foreground non invalida la relativa generazione nel mezzo dell'operazione. Una risposta già obsoleta continua a non concedere alcun permesso; il latch viene sempre rilasciato anche in caso di errore. I callback registrati da un effetto smontato non possono avviare controlli tardivi. Regressioni riproducono deliberatamente gli eventi nello stesso turno della richiesta.

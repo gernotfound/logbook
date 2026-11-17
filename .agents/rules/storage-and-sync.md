@@ -1,5 +1,10 @@
 # Storage e sincronizzazione — TheLogBook
 
+### CF-03 — Osservazione del checkpoint D1 con sessione Kinde (17/11/2026)
+
+Il bridge di sola lettura `inspectKindeCandidateCloudCheckpoint` verifica sessione e consenso, continuità del cookie CSRF e della generazione, ADK monouso, scansione D1 revision-fenced, integrità AEAD owner/path e nuova prova trusted finale. Non è autorizzazione a idratare lo storage, adottare la replica o ACK del journal. Il caller futuro deve verificare separatamente vault locale owner, session incarnation, journal pendenti e recovery dentro la transazione IndexedDB. Lo stesso UID dopo un logout/login non è una prova della stessa sessione.
+
+
 **Quando leggere:** IndexedDB, journal, versioni, hydration, replica, bootstrap e PWA update/reload.
 **Non inferire:** stato memoria, durabilità locale, ACK cloud e recupero completo sono prove distinte.
 
