@@ -14,7 +14,7 @@ const status = (state: string, revision: number, epoch = 1, uid = A) => ({
     uid, status: state, revision, fenceEpoch: epoch,
     ...(state === 'active' ? {
         acceptedAt: '2026-11-14T10:00:00.000Z',
-        privacyVersion: '1.3.9', termsVersion: '1.2.5',
+        privacyVersion: '1.3.10', termsVersion: '1.2.5',
     } : {}),
 });
 const reply = (payload: unknown, statusCode = 200) => new Response(JSON.stringify(payload), {

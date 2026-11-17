@@ -13,7 +13,7 @@ const acceptance = {
   action: 'accept-initial', expectedRevision: 0,
   acceptance: {
     confirmsOver18: true, acceptedHealthData: true,
-    acceptedTerms: true, privacyVersion: '1.3.9', termsVersion: '1.2.5',
+    acceptedTerms: true, privacyVersion: '1.3.10', termsVersion: '1.2.5',
   },
 };
 class Statement {
@@ -53,10 +53,10 @@ async function fixture(uid = 'owner-a') {
   const cookie = issued.setCookies.map(item => item.split(';')[0]).join('; ');
   const csrf = issued.setCookies[1].split(';')[0].split('=')[1];
   const env = {
-    DB: db, API_ORIGIN: ORIGIN, CONSENT_PRIVACY_VERSION: '1.3.9', CONSENT_TERMS_VERSION: '1.2.5',
+    DB: db, API_ORIGIN: ORIGIN, CONSENT_PRIVACY_VERSION: '1.3.10', CONSENT_TERMS_VERSION: '1.2.5',
     AUTH_GATE: {
       fetch: request => sessionGate.fetch(request, {
-        DB: db, API_ORIGIN: ORIGIN, CONSENT_PRIVACY_VERSION: '1.3.9', CONSENT_TERMS_VERSION: '1.2.5', API_RATE_LIMITER: { limit: async () => ({ success: true }) },
+        DB: db, API_ORIGIN: ORIGIN, CONSENT_PRIVACY_VERSION: '1.3.10', CONSENT_TERMS_VERSION: '1.2.5', API_RATE_LIMITER: { limit: async () => ({ success: true }) },
       }),
     },
   };
@@ -91,7 +91,7 @@ void test('a verified session without consent may read status but cannot use syn
         'x-original-method': 'POST', 'x-original-route': '/v1/sync/control',
       },
     }), {
-      DB: f.db, API_ORIGIN: ORIGIN, CONSENT_PRIVACY_VERSION: '1.3.9', CONSENT_TERMS_VERSION: '1.2.5', API_RATE_LIMITER: { limit: async () => ({ success: true }) },
+      DB: f.db, API_ORIGIN: ORIGIN, CONSENT_PRIVACY_VERSION: '1.3.10', CONSENT_TERMS_VERSION: '1.2.5', API_RATE_LIMITER: { limit: async () => ({ success: true }) },
     });
     assert.equal(denied.status, 401);
     assert.equal(count(f.sqlite, 'sync_subjects'), 0);
@@ -114,7 +114,7 @@ void test('consent status returns the exact trusted SQL owner for all five state
     ).get(f.uid).accepted_at_ms;
     const active = { ...expected('active', 1),
       acceptedAt: new Date(acceptedAtMs).toISOString(),
-      privacyVersion: '1.3.9', termsVersion: '1.2.5' };
+      privacyVersion: '1.3.10', termsVersion: '1.2.5' };
     assert.deepEqual(accepted.body, active);
     assert.deepEqual((await call(f, '/v1/consent/status')).body, active);
 
@@ -168,7 +168,7 @@ void test('first explicit acceptance commits consent, sync state and immutable p
     assert.equal(result.body.uid, f.uid);
     assert.equal(result.body.revision, 1);
     assert.equal(result.body.fenceEpoch, 1);
-    assert.equal(result.body.privacyVersion, '1.3.9');
+    assert.equal(result.body.privacyVersion, '1.3.10');
     assert.equal(result.body.termsVersion, '1.2.5');
     assert.ok(Number.isFinite(Date.parse(result.body.acceptedAt)));
     assert.equal(count(f.sqlite, 'sync_subjects'), 1);
@@ -181,7 +181,7 @@ void test('first explicit acceptance commits consent, sync state and immutable p
         'x-original-method': 'POST', 'x-original-route': '/v1/sync/control',
       },
     }), {
-      DB: f.db, API_ORIGIN: ORIGIN, CONSENT_PRIVACY_VERSION: '1.3.9', CONSENT_TERMS_VERSION: '1.2.5', API_RATE_LIMITER: { limit: async () => ({ success: true }) },
+      DB: f.db, API_ORIGIN: ORIGIN, CONSENT_PRIVACY_VERSION: '1.3.10', CONSENT_TERMS_VERSION: '1.2.5', API_RATE_LIMITER: { limit: async () => ({ success: true }) },
     });
     assert.equal(active.status, 200);
     assert.throws(() => f.sqlite.exec("UPDATE health_consent_acceptances SET privacy_version = 'bad'"));
@@ -387,7 +387,7 @@ void test('trusted withdrawal atomically fences sync and queues erasure without 
     const blocked = await sessionGate.fetch(new Request('https://auth-gate.internal/__internal/authorize', {
       method: 'POST', headers: { origin: ORIGIN, cookie: f.cookie,
         'x-original-method': 'POST', 'x-original-route': '/v1/sync/control' },
-    }), { DB: f.db, API_ORIGIN: ORIGIN, CONSENT_PRIVACY_VERSION: '1.3.9',
+    }), { DB: f.db, API_ORIGIN: ORIGIN, CONSENT_PRIVACY_VERSION: '1.3.10',
       CONSENT_TERMS_VERSION: '1.2.5', API_RATE_LIMITER: { limit: async () => ({ success: true }) } });
     assert.equal(blocked.status, 401);
     assert.equal((await call(f, '/v1/consent/status')).body.status, 'withdrawn');
@@ -669,7 +669,7 @@ void test('terminal erasure keeps consent status readable without restoring the 
         'x-original-method': 'POST', 'x-original-route': '/v1/sync/control',
       },
     }), {
-      DB: f.db, API_ORIGIN: ORIGIN, CONSENT_PRIVACY_VERSION: '1.3.9',
+      DB: f.db, API_ORIGIN: ORIGIN, CONSENT_PRIVACY_VERSION: '1.3.10',
       CONSENT_TERMS_VERSION: '1.2.5',
       API_RATE_LIMITER: { limit: async () => ({ success: true }) },
     });

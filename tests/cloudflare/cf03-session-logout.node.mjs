@@ -11,7 +11,7 @@ import { issueVerifiedSession } from '../../cloudflare/auth/session-issuer.mjs';
 const ORIGIN = 'https://candidate.invalid';
 const ACCEPT = { action: 'accept-initial', expectedRevision: 0,
   acceptance: { acceptedHealthData: true, acceptedTerms: true, confirmsOver18: true,
-    privacyVersion: '1.3.9', termsVersion: '1.2.5' } };
+    privacyVersion: '1.3.10', termsVersion: '1.2.5' } };
 
 class Statement {
   constructor(sqlite, sql, args = []) { this.sqlite = sqlite; this.sql = sql; this.args = args; }
@@ -63,10 +63,10 @@ async function fixture() {
   const cookie = a.setCookies.map(item => item.split(';')[0]).join('; ');
   const csrf = a.setCookies[1].split(';')[0].split('=')[1];
   const env = { DB: db, RECOVERY_DB: recoveryDb, API_ORIGIN: ORIGIN,
-    CONSENT_PRIVACY_VERSION: '1.3.9', CONSENT_TERMS_VERSION: '1.2.5',
+    CONSENT_PRIVACY_VERSION: '1.3.10', CONSENT_TERMS_VERSION: '1.2.5',
     AUTH_GATE: { fetch: request => gate.fetch(request, {
       DB: db, API_ORIGIN: ORIGIN,
-      CONSENT_PRIVACY_VERSION: '1.3.9', CONSENT_TERMS_VERSION: '1.2.5',
+      CONSENT_PRIVACY_VERSION: '1.3.10', CONSENT_TERMS_VERSION: '1.2.5',
       API_RATE_LIMITER: { limit: async () => ({ success: true }) },
     }) } };
   return {

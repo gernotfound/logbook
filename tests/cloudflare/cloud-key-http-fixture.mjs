@@ -12,7 +12,7 @@ export const RIGHTS = '/v1/cloud-key/rights-export';
 export const ACCEPT = {
   action: 'accept-initial', expectedRevision: 0,
   acceptance: { acceptedHealthData: true, acceptedTerms: true,
-    confirmsOver18: true, privacyVersion: '1.3.9', termsVersion: '1.2.5' },
+    confirmsOver18: true, privacyVersion: '1.3.10', termsVersion: '1.2.5' },
 };
 const WITHDRAW = {
   action: 'withdraw', expectedRevision: 1, confirmsErasure: true,
@@ -63,7 +63,7 @@ export async function createCloudKeyHttpFixture(owners = ['owner-a', 'owner-b'])
   const db = new D1(sqlite);
   const gateEnv = {
     DB: db, API_ORIGIN: ORIGIN,
-    CONSENT_PRIVACY_VERSION: '1.3.9', CONSENT_TERMS_VERSION: '1.2.5',
+    CONSENT_PRIVACY_VERSION: '1.3.10', CONSENT_TERMS_VERSION: '1.2.5',
     API_RATE_LIMITER: { limit: async () => ({ success: true }) },
   };
   const env = {

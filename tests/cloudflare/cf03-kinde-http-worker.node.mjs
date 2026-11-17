@@ -109,13 +109,13 @@ async function fixture() {
     KINDE_CLIENT_ID: CLIENT, KINDE_CLIENT_SECRET: 'synthetic-private-secret',
     KINDE_API_AUDIENCE: API_AUD, KINDE_ID_TOKEN_AUDIENCE: ISSUER,
     DB: db, RECOVERY_DB: recoveryDb, CLOUD_ACCOUNT_KEK_V1: KEK,
-    CONSENT_PRIVACY_VERSION: '1.3.9', CONSENT_TERMS_VERSION: '1.2.5',
+    CONSENT_PRIVACY_VERSION: '1.3.10', CONSENT_TERMS_VERSION: '1.2.5',
     AUTH_RATE_LIMITER: { limit: async () => ({ success: allowLogin }) },
     AUTH_GATE: {
       fetch(request) {
         return gate.fetch(request, {
           DB: db, API_ORIGIN: ORIGIN,
-          CONSENT_PRIVACY_VERSION: '1.3.9',
+          CONSENT_PRIVACY_VERSION: '1.3.10',
           CONSENT_TERMS_VERSION: '1.2.5',
           API_RATE_LIMITER: { limit: async () => ({ success: true }) },
         });
@@ -493,7 +493,7 @@ const acceptance = {
   action: 'accept-initial', expectedRevision: 0,
   acceptance: {
     confirmsOver18: true, acceptedHealthData: true, acceptedTerms: true,
-    privacyVersion: '1.3.9', termsVersion: '1.2.5',
+    privacyVersion: '1.3.10', termsVersion: '1.2.5',
   },
 };
 
@@ -510,7 +510,7 @@ async function cloudCall(f, route, login, body, csrf = login.csrf) {
     ...(body === undefined ? {} : { body: JSON.stringify(body) }),
   }), {
     ...f.env, API_ORIGIN: ORIGIN,
-    CONSENT_PRIVACY_VERSION: '1.3.9', CONSENT_TERMS_VERSION: '1.2.5',
+    CONSENT_PRIVACY_VERSION: '1.3.10', CONSENT_TERMS_VERSION: '1.2.5',
   });
   return { status: response.status, body: await response.json() };
 }

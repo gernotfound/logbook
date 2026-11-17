@@ -38,7 +38,7 @@ export function validateIsolatedWorkers(api, gate) {
       'api: independent recovery D1 binding missing or incorrect');
     }
     check(cfg.vars?.API_ORIGIN === ORIGIN &&
-      cfg.vars?.CONSENT_PRIVACY_VERSION === '1.3.9' &&
+      cfg.vars?.CONSENT_PRIVACY_VERSION === '1.3.10' &&
       cfg.vars?.CONSENT_TERMS_VERSION === '1.2.5' &&
       Object.keys(cfg.vars ?? {}).sort().join(',') ===
         'API_ORIGIN,CONSENT_PRIVACY_VERSION,CONSENT_TERMS_VERSION',

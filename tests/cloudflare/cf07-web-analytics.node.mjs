@@ -58,10 +58,11 @@ void test('no beacon when a sensitive referrer could be forwarded', () => {
     'https://thelogbook.me/api/auth/kinde/callback?code=secret',
     'https://thelogbook.me/verifica-accesso',
     'https://thelogbook.me/about?token=secret',
+    'https://thelogbook.me/about',
     'https://example.org/sensitive/path',
     'https://example.org/?code=secret',
   ]) assert.equal(scriptsFor('https://thelogbook.me/', { referrer }).length, 0, referrer);
-  assert.equal(scriptsFor('https://thelogbook.me/', { referrer: 'https://thelogbook.me/about' }).length, 1);
+  assert.equal(scriptsFor('https://thelogbook.me/', { referrer: 'https://thelogbook.me/index.html' }).length, 1);
 });
 void test('respects DNT and GPC', () => {
   assert.equal(scriptsFor('https://thelogbook.me/', { dnt: '1' }).length, 0);
