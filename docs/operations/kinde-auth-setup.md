@@ -1,5 +1,10 @@
 # Kinde — configurazione del provider per TheLogBook
 
+## CF-03 · prima schermata account React Kinde senza permessi fitness (17/11/2026, candidato v2.506.0)
+
+La schermata di primo accesso della PWA React usa `KindeAccountEntry identityOnly` per gli utenti senza account Firebase e senza modalità ospite. La sessione Kinde confermata viene visualizzata come **identità verificata**, ma senza accesso a `/v1/consent/status`, consenso 18+, vault, ADK, replica o altri dati. Per account non autenticati, `Continua come ospite` conserva l'attivazione locale esistente; per Kinde autenticato, nessuna adozione guest o owner. La UI guest→account precedente rimane provvisoriamente Firebase: non eseguire un trasferimento su Kinde fino al nuovo contratto verificato. `AuthProvider` e `src/lib/sync/session.ts` dipendono ancora da Firebase. Callback OAuth resta nella diagnostica `/verifica-accesso`; ciò consente collaudi isolati ma non equivale a un ingresso applicativo completo. Verificare logout Safari/tab, consenso/chiavi/replica e guest→account prima di ritirare Firebase.
+
+
 ## CF-03 · sessione Kinde reale verificata, logout D1 diagnostico (17/11/2026)
 
 **Prova browser del product owner:** creazione account email/password Kinde, callback verso `/verifica-accesso`, letture ripetute di `POST /api/auth/session` con `authenticated=true`, `emailVerified=true`, `fenceEpoch=1`, `healthConsentRevision=0`. Il precedente 403 sulle POST vuote è stato corretto nella PR #1198. Nessun UID o dato identificativo del soggetto nel repository.
