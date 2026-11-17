@@ -1,5 +1,7 @@
 // Candidate trusted consent endpoint. No public deployment until real Auth,
 // rights-only export and the durable erasure-job executor are integrated.
+import { strictlyEmptyPost } from '../http/strict-empty-post.mjs';
+
 const INTERNAL = 'https://auth-gate.internal/__internal/authorize';
 const MAX_BODY_BYTES = 2048;
 const HASH = /^[a-f0-9]{64}$/;
@@ -299,7 +301,11 @@ export default {
       }
       // Reject malformed instructions before consuming a trusted rate-limit
       // slot or querying D1. This validation cannot establish identity.
-      if (statusRoute && request.body !== null) return json({ error: 'invalid-body' }, 400);
+      // A gateway-forwarded zero-byte browser POST can expose an empty stream.
+      // Content-Length: 0 is never sufficient: drain actual bytes before Auth.
+      if (statusRoute && !await strictlyEmptyPost(request)) {
+        return json({ error: 'invalid-body' }, 400);
+      }
       let body;
       if (acceptRoute || withdrawRoute) {
         try { body = await boundedJson(request); }

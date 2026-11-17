@@ -1,6 +1,7 @@
 // Candidate CF-05 HTTP boundary: authenticated, CSRF-bound access to a
 // wrapped server ADK. No route is published until Auth/D1/erasure GO.
 import { releaseCloudAccountDataKey } from './cloud-key-store.mjs';
+import { strictlyEmptyPost } from '../http/strict-empty-post.mjs';
 
 const SYNC = '/v1/cloud-key/sync';
 const RIGHTS = '/v1/cloud-key/rights-export';
@@ -29,16 +30,14 @@ function validOrigin(origin) {
   } catch { return false; }
 }
 
-function validRequest(request, env, pathname) {
+async function validRequest(request, env, pathname) {
   const url = new URL(request.url);
-  const length = request.headers.get('content-length');
   return request.method === 'POST' && url.pathname === pathname && !url.search && !url.hash
     && url.origin === env.API_ORIGIN
     && request.headers.get('origin') === env.API_ORIGIN
     && (!request.headers.has('sec-fetch-site')
       || request.headers.get('sec-fetch-site') === 'same-origin')
-    && request.body === null
-    && (length === null || length === '0');
+    && await strictlyEmptyPost(request);
 }
 
 async function authorize(request, env, route) {
@@ -72,7 +71,7 @@ export default {
     try { pathname = new URL(request.url).pathname; } catch { return reply({ error: 'not-found' }, 404); }
     if (pathname !== SYNC && pathname !== RIGHTS) return reply({ error: 'not-found' }, 404);
     if (request.method !== 'POST') return reply({ error: 'method-not-allowed' }, 405);
-    if (!validOrigin(env?.API_ORIGIN) || !validRequest(request, env, pathname)) {
+    if (!validOrigin(env?.API_ORIGIN) || !await validRequest(request, env, pathname)) {
       return reply({ error: 'origin-or-input-rejected' }, 403);
     }
     // Private bindings must be present before a token or key operation. Never

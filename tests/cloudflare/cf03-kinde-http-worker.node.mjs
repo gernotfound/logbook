@@ -688,10 +688,30 @@ void test('first-party gateway completes synthetic Kinde → consent → ADK →
       }));
       return { status: response.status, body: await response.json() };
     };
+    const streamed = async (route, chunks) => {
+      const request = new Request(ORIGIN + route, {
+        method: 'POST',
+        headers: { origin: ORIGIN, 'sec-fetch-site': 'same-origin',
+          cookie, 'x-csrf-token': csrf, 'content-length': '0' },
+        body: new ReadableStream({
+          start(controller) {
+            for (const chunk of chunks) controller.enqueue(new Uint8Array(chunk));
+            controller.close();
+          },
+        }),
+        duplex: 'half',
+      });
+      const response = await through(request);
+      return { status: response.status, body: await response.json() };
+    };
 
     assert.deepEqual(await api('/v1/consent/status'), {
       status: 200, body: { uid: principal.uid, status: 'unregistered', revision: 0, fenceEpoch: 1 },
     });
+    assert.deepEqual(await streamed('/v1/consent/status', [[], []]), {
+      status: 200, body: { uid: principal.uid, status: 'unregistered', revision: 0, fenceEpoch: 1 },
+    });
+    assert.equal((await streamed('/v1/consent/status', [[32]])).status, 400);
     assert.equal((await api('/v1/sync/control', {})).status, 401);
     assert.equal((await api('/v1/consent/initial', acceptance, 'invalid-csrf')).status, 403);
     assert.equal(f.sqlite.prepare('SELECT COUNT(*) AS n FROM health_consent_acceptances').get().n, 0);
@@ -710,8 +730,14 @@ void test('first-party gateway completes synthetic Kinde → consent → ADK →
     assert.deepEqual(await api('/v1/sync/replica/claim', claim),
       { status: 428, body: { error: 'cloud-key-required' } });
     assert.equal(f.sqlite.prepare('SELECT COUNT(*) AS n FROM sync_replicas').get().n, 0);
-    const key = await api('/v1/cloud-key/sync');
+    // A forged empty Content-Length cannot release or provision an ADK.
+    assert.equal((await streamed('/v1/cloud-key/sync', [[0]])).status, 403);
+    assert.equal(f.sqlite.prepare('SELECT COUNT(*) AS n FROM cloud_account_keys').get().n, 0);
+    const key = await streamed('/v1/cloud-key/sync', [[], []]);
     assert.equal(key.status, 200);
+    const repeatedKey = await api('/v1/cloud-key/sync');
+    assert.equal(repeatedKey.status, 200);
+    assert.equal(repeatedKey.body.key, key.body.key);
     assert.equal(Buffer.from(key.body.key, 'base64').length, 32);
     assert.equal(f.sqlite.prepare('SELECT COUNT(*) AS n FROM cloud_account_keys').get().n, 1);
     assert.equal((await api('/v1/sync/replica/claim', claim)).status, 200);
