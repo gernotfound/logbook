@@ -1,5 +1,5 @@
 import { createRemoteJWKSet, jwtVerify } from 'jose';
-import { createKindeCodeExchangeAccessTokenVerifier } from './kinde-token-verifier.mjs';
+import { createKindeCodeExchangeAccessTokenVerifier, KindeAccessTokenError } from './kinde-token-verifier.mjs';
 
 const MAX_ID_TOKEN_BYTES = 8192;
 const MAX_ID_TOKEN_AGE_SECONDS = 3600;
@@ -88,7 +88,10 @@ export function createKindeIdentityProofVerifier(configuration, keySet) {
     }
     let access;
     try { access = await verifyAccessToken(accessToken); }
-    catch { throw new KindeLoginProofError('access-token'); }
+    catch (error) {
+      throw new KindeLoginProofError(error instanceof KindeAccessTokenError
+        ? error.phase : 'access-token');
+    }
     let payload;
     try {
       ({ payload } = await jwtVerify(idToken, jwks, {
