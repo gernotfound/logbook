@@ -53,6 +53,25 @@ async function fixture() {
 }
 
 
+void test('trusted login proof failure phases never include JWT contents or user claims', async () => {
+  const { verify, tokens } = await fixture();
+  const valid = await tokens();
+  const rejected = [
+    ['identity-input', { ...valid, idToken: 'not-a-jwt' }],
+    ['access-token', { ...valid, accessToken: valid.idToken }],
+    ['id-token', { ...valid, idToken: valid.accessToken }],
+    ['id-claims', await tokens({ idClaims: { email_verified: false } })],
+    ['id-claims', await tokens({ idClaims: { nonce: null } })],
+    ['token-binding', await tokens({ idClaims: { at_hash: 'bad-binding' } })],
+  ];
+  for (const [phase, pair] of rejected) {
+    await assert.rejects(verify(pair), error =>
+      error?.message === 'invalid-kinde-login-proof'
+        && error?.phase === phase
+        && !JSON.stringify(error).includes('sample@example.invalid'));
+  }
+});
+
 void test('identity-only proof returns only signed issuer, subject and explicit email boolean', async () => {
   const { verify, verifyIdentity, tokens } = await fixture();
   for (const emailVerified of [true, false]) {
@@ -319,6 +338,24 @@ void test('Kinde owner: nonce/email/subject/machine-proof failures cause no D1 p
       await assert.rejects(provision(db, proof), KindePrincipalProvisionError);
     }
     assert.equal(sqlite.prepare('SELECT COUNT(*) AS count FROM auth_principals').get().count, 0);
+  } finally { sqlite.close(); }
+});
+
+void test('principal failure exposes only a storage checkpoint, never owner or tokens', async () => {
+  const { provision, tokens } = await fixture();
+  const proof = await tokens();
+  await assert.rejects(provision(null, proof), error =>
+    error instanceof KindePrincipalProvisionError
+      && error.phase === 'principal-storage'
+      && error.message === 'kinde-principal-unavailable');
+  const { db, sqlite } = principalDb();
+  try {
+    await assert.rejects(provision(db, await tokens({
+      idClaims: { email_verified: false },
+    })), error =>
+      error instanceof KindePrincipalProvisionError
+        && error.phase === 'id-claims');
+    assert.equal(sqlite.prepare('SELECT COUNT(*) AS n FROM auth_principals').get().n, 0);
   } finally { sqlite.close(); }
 });
 

@@ -1,5 +1,14 @@
 # TheLogBook — migrazione Cloudflare: runbook corrente
 
+## CF-03 · localizzazione del 503 Kinde con diagnostica non identificante (candidato v2.498.0)
+
+Al 17/11/2026, `main` v2.497.0 ha incorporato incrementi CF-05/07/08 indipendenti, ma la sessione Kinde reale fallisce ancora in callback (503). Il readback aggregato del D1 isolato Auth mostra zero owner e zero sessioni, senza provare il punto di fallimento. La configurazione del Worker Kinde non espone un log applicativo che separi il 503 di exchange/provider, JWT o write, e non è autorizzato collezionare token, errori Kinde raw, URL callback, o dati dell'utente.
+
+Si introduce quindi un campo diagnostico **temporaneo** `phase` solo sulle risposte 503 dopo il consumo monouso di stato browser validato. I valori sono un insieme statico non identificante: `token-transport`, `token-response`, `identity-input`, `access-token`, `id-token`, `id-claims`, `token-binding`, `principal-storage`, `session`. Tutte le altre risposte, la validazione CSRF/PKCE, i token, le sessioni, il consenso e il funzionamento dell'API sanitaria sono invariati. Senza stato OAuth provato non viene fornita diagnosi; nessun evento è scritto in Cloudflare logs/D1 o al client per monitoraggio remoto.
+
+Una singola prova manuale hosted su un **nuovo tentativo** dopo il deployment del Worker privato identifica il confine del guasto e consente una correzione fondata; i test di token sintetici, CI o smoke HTTP non sostituiscono il login reale. La rimozione della diagnostica è un gate per il rilascio funzionale finale.
+
+
 ## CF-08 — candidatura gate di sync a prova di Time Travel (v2.497.0, 17/11/2026)
 
 **Incremento CRITICAL sul Worker API isolato, non sul frontend Kinde.** Il database D1 indipendente già inizializzato (0001/0002) viene configurato come secondo binding `RECOVERY_DB` **solo** per `thelogbook-api-isolated`, distinto da `DB` e dal Worker AuthGate. Il manifest non aggiunge route, URL workers.dev/preview né bind al frontend. I validatori GitHub e di readback Cloudflare devono verificare esattamente l'UUID della seconda D1.

@@ -1,11 +1,12 @@
-import { createKindeLoginProofVerifier } from './kinde-login-proof.mjs';
+import { createKindeLoginProofVerifier, KindeLoginProofError } from './kinde-login-proof.mjs';
 
 const UID_CONTEXT = 'thelogbook:kinde-owner:v1\0';
 
 export class KindePrincipalProvisionError extends Error {
-  constructor() {
+  constructor(phase = 'principal-storage') {
     super('kinde-principal-unavailable');
     this.name = 'KindePrincipalProvisionError';
+    this.phase = phase;
   }
 }
 
@@ -24,14 +25,25 @@ export class KindePrincipalProvisionError extends Error {
 export function createKindePrincipalProvisioner(configuration, keySet) {
   const verifyLoginProof = createKindeLoginProofVerifier(configuration, keySet);
   return async function provisionVerifiedPrincipal(db, oauthTokens, trustedNonce) {
+    if (!db || typeof db.withSession !== 'function') {
+      throw new KindePrincipalProvisionError();
+    }
+    let identity;
     try {
-      if (!db || typeof db.withSession !== 'function') throw new Error('missing-db');
-      const identity = await verifyLoginProof({
+      identity = await verifyLoginProof({
         accessToken: oauthTokens?.accessToken,
         idToken: oauthTokens?.idToken,
         expectedNonce: trustedNonce,
       });
-      if (identity.emailVerified !== true) throw new Error('unverified-identity');
+      if (identity.emailVerified !== true) {
+        throw new KindeLoginProofError('id-claims');
+      }
+    } catch (error) {
+      throw new KindePrincipalProvisionError(
+        error instanceof KindeLoginProofError ? error.phase : 'identity-input',
+      );
+    }
+    try {
       const bytes = new TextEncoder().encode(
         UID_CONTEXT + identity.issuer + '\0' + identity.subject,
       );

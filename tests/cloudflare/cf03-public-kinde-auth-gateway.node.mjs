@@ -138,6 +138,23 @@ void test('backend error or missing no-store cannot be promoted to frontend succ
   assert.equal((await frontend.fetch(post(paths[0]), unavailable.env)).status, 503);
 });
 
+void test('frontend preserves only non-sensitive callback phase after a private verified-state failure', async () => {
+  const { env } = harness(async () => Response.json({
+    error: 'authentication-unavailable', phase: 'id-claims',
+  }, { status: 503, headers: { 'Cache-Control': 'no-store' } }));
+  const response = await frontend.fetch(get(paths[1] +
+    '?code=synthetic-opaque-code&scope=openid%20email%20profile&state=' + 'A'.repeat(43), {
+    Cookie: '__Host-logbook_oauth=synthetic-browser',
+    'Sec-Fetch-Site': 'cross-site',
+  }), env);
+  assert.equal(response.status, 503);
+  assert.deepEqual(await response.json(), {
+    error: 'authentication-unavailable', phase: 'id-claims',
+  });
+  assert.equal(response.headers.get('cache-control'), 'no-store');
+  assert.equal(response.headers.has('set-cookie'), false);
+});
+
 void test('OAuth publication is gated by complete private Worker readback before edge deployment', () => {
   const workflow = readFileSync(
     new URL('../../.github/workflows/cloudflare-candidate.yml', import.meta.url),

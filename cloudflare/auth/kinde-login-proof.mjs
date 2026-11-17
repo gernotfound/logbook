@@ -7,6 +7,14 @@ const CLOCK_TOLERANCE_SECONDS = 5;
 const COMPACT_JWS = /^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/;
 const OAUTH_NONCE = /^[A-Za-z0-9_-]{43}$/;
 
+export class KindeLoginProofError extends Error {
+  constructor(phase) {
+    super('invalid-kinde-login-proof');
+    this.name = 'KindeLoginProofError';
+    this.phase = phase;
+  }
+}
+
 async function sha256AtHash(accessToken) {
   const bytes = new TextEncoder().encode(accessToken);
   const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', bytes));
@@ -53,14 +61,19 @@ export function createKindeIdentityProofVerifier(configuration, keySet) {
       || typeof idToken !== 'string'
       || idToken.length > MAX_ID_TOKEN_BYTES
       || !COMPACT_JWS.test(idToken)) {
-      throw new Error('invalid-kinde-login-proof');
+      throw new KindeLoginProofError('identity-input');
     }
+    let access;
+    try { access = await verifyAccessToken(accessToken); }
+    catch { throw new KindeLoginProofError('access-token'); }
+    let payload;
     try {
-      const access = await verifyAccessToken(accessToken);
-      const { payload } = await jwtVerify(idToken, jwks, {
+      ({ payload } = await jwtVerify(idToken, jwks, {
         issuer, audience: idTokenAudience, algorithms: ['RS256'],
         clockTolerance: CLOCK_TOLERANCE_SECONDS,
-      });
+      }));
+    } catch { throw new KindeLoginProofError('id-token'); }
+    try {
       const now = Math.floor(Date.now() / 1000);
       if (payload.azp !== clientId || payload.nonce !== expectedNonce
         || payload.sub !== access.subject || typeof payload.email_verified !== 'boolean'
@@ -85,13 +98,14 @@ export function createKindeIdentityProofVerifier(configuration, keySet) {
       if (payload.at_hash !== undefined
         && (typeof payload.at_hash !== 'string'
           || payload.at_hash !== await sha256AtHash(accessToken))) {
-        throw new Error('invalid-kinde-token-binding');
+        throw new KindeLoginProofError('token-binding');
       }
       return Object.freeze({
         issuer: access.issuer, subject: access.subject, emailVerified: payload.email_verified,
       });
-    } catch {
-      throw new Error('invalid-kinde-login-proof');
+    } catch (error) {
+      if (error instanceof KindeLoginProofError) throw error;
+      throw new KindeLoginProofError('id-claims');
     }
   };
 }
@@ -105,7 +119,7 @@ export function createKindeLoginProofVerifier(configuration, keySet) {
   const verifyIdentity = createKindeIdentityProofVerifier(configuration, keySet);
   return async function verifyKindeLoginProof(proof) {
     const identity = await verifyIdentity(proof);
-    if (identity.emailVerified !== true) throw new Error('invalid-kinde-login-proof');
+    if (identity.emailVerified !== true) throw new KindeLoginProofError('id-claims');
     return identity;
   };
 }
