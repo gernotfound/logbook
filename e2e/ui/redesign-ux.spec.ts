@@ -2,105 +2,88 @@ import { expect, test, type Page } from '../fixtures';
 
 test.use({ viewport: { width: 320, height: 850 } });
 
-test('welcome heading stays above the login card on narrow screens in both themes', async ({ page }) => {
+// A canonical 401 models the real, unauthenticated D1 route in the local
+// preview. Do not grant an owner or make calls to external Kinde/Firebase.
+async function signedOutKinde(page: Page) {
+  await page.route('**/api/auth/session', route => route.fulfill({
+    status: 401,
+    headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' },
+    body: JSON.stringify({ error: 'unauthorized' }),
+  }));
+}
+
+test('application brand is the only H1 above the Kinde account card in both themes', async ({ page }) => {
+  await signedOutKinde(page);
   for (const theme of ['light', 'dark'] as const) {
     await page.emulateMedia({ colorScheme: theme });
     await page.goto('/');
-    const title = page.getByRole('heading', { name: 'TheLogBook', level: 1 });
-    const card = page.locator('#auth-login-box');
+    const title = page.getByRole('heading', { name: 'TheLogBook', exact: true, level: 1 });
+    const card = page.locator('#auth-kinde-entry');
     await expect(title).toBeVisible();
     await expect(card).toBeVisible();
-    await expect(card.getByRole('heading', { name: 'TheLogBook' })).toHaveCount(0);
-    const titleBounds = await title.boundingBox();
-    const cardBounds = await card.boundingBox();
-    expect(titleBounds).not.toBeNull();
-    expect(cardBounds).not.toBeNull();
-    expect(titleBounds!.y + titleBounds!.height).toBeLessThan(cardBounds!.y);
-    const titleSize = await title.evaluate(element => Number.parseFloat(getComputedStyle(element).fontSize));
-    expect(titleSize).toBeGreaterThan(22);
+    await expect(card.getByRole('heading', { name: 'Accesso con Kinde', level: 2 })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1 })).toHaveCount(1);
+    const brandBox = await title.boundingBox();
+    const cardBox = await card.boundingBox();
+    expect(brandBox).not.toBeNull();
+    expect(cardBox).not.toBeNull();
+    expect(brandBox!.y + brandBox!.height).toBeLessThan(cardBox!.y);
     expect(await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth)).toBe(false);
-
     await page.setViewportSize({ width: 320, height: 568 });
-    await expect(title).toBeVisible();
     await expect(card).toBeVisible();
     await page.setViewportSize({ width: 320, height: 850 });
   }
 });
 
-
-test('brand stays aligned across login and registration and guest guidance is inside its button', async ({ page }) => {
+test('hosted sign-in and guest action retain safe responsive hierarchy', async ({ page }) => {
+  await signedOutKinde(page);
   for (const theme of ['light', 'dark'] as const) {
     await page.emulateMedia({ colorScheme: theme });
     for (const viewport of [{ width: 390, height: 844 }, { width: 320, height: 568 }]) {
       await page.setViewportSize(viewport);
       await page.goto('/');
       const overlay = page.locator('#auth-overlay.auth-entry-overlay');
-      const title = overlay.getByRole('heading', { name: 'TheLogBook' });
-      const card = page.locator('#auth-login-box');
-      const modes = page.getByRole('group', { name: 'Modalità di accesso' });
-      const beforeTitle = await title.boundingBox();
-      const beforeCard = await card.boundingBox();
-      expect(beforeTitle).not.toBeNull();
-      expect(beforeCard).not.toBeNull();
-      await modes.getByRole('button', { name: 'Registrati' }).click();
-      const registrationTitle = await title.boundingBox();
-      const registrationCard = await card.boundingBox();
-      expect(registrationTitle).not.toBeNull();
-      expect(registrationCard).not.toBeNull();
-      expect(Math.abs(registrationTitle!.y - beforeTitle!.y)).toBeLessThanOrEqual(1);
-      expect(Math.abs(registrationCard!.y - beforeCard!.y)).toBeLessThanOrEqual(1);
-      await modes.getByRole('button', { name: 'Accedi' }).click();
-      const backTitle = await title.boundingBox();
-      expect(backTitle).not.toBeNull();
-      expect(Math.abs(backTitle!.y - beforeTitle!.y)).toBeLessThanOrEqual(1);
-      const guestAction = page.getByRole('button', { name: 'Continua senza account' });
+      const title = overlay.getByRole('heading', { name: 'TheLogBook', exact: true });
+      const card = page.locator('#auth-kinde-entry');
+      const guestAction = card.getByRole('button', { name: /Continua senza account/ });
+      await expect(card.getByRole('button', { name: 'Accedi o registrati' })).toBeVisible();
+      await expect(guestAction).toBeVisible();
+      const brandBox = await title.boundingBox();
+      const cardBox = await card.boundingBox();
+      expect(brandBox).not.toBeNull();
+      expect(cardBox).not.toBeNull();
+      expect(brandBox!.y + brandBox!.height).toBeLessThan(cardBox!.y);
       const guidance = guestAction.getByText('I dati saranno salvati solo sul dispositivo.');
-      await expect(guidance).toBeAttached();
-      await expect(guestAction).toHaveAccessibleName(/Continua senza account\s+I dati saranno salvati solo sul dispositivo\./i);
-      await guestAction.scrollIntoViewIfNeeded();
       await expect(guidance).toBeVisible();
+      await expect(guestAction).toHaveAccessibleName(/Continua senza account\s+I dati saranno salvati solo sul dispositivo\./);
       expect(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)).toBe(false);
     }
   }
 });
 
-test('access layout retains one scroll area and clear action hierarchy on small screens', async ({ page }) => {
+test('Kinde entry scrolls without leaking local registration inputs or overflowing small screens', async ({ page }) => {
+  await signedOutKinde(page);
   for (const theme of ['light', 'dark'] as const) {
     await page.emulateMedia({ colorScheme: theme });
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto('/');
-    const card = page.locator('#auth-login-box');
+    const card = page.locator('#auth-kinde-entry');
     const overlay = page.locator('#auth-overlay');
-    const switcher = page.getByRole('group', { name: 'Modalità di accesso' });
-    const loginMode = switcher.getByRole('button', { name: 'Accedi' });
-    const registerMode = switcher.getByRole('button', { name: 'Registrati' });
-    await expect(loginMode).toHaveAttribute('aria-pressed', 'true');
-    await expect(registerMode).toHaveAttribute('aria-pressed', 'false');
-    await expect(page.getByText('Email', { exact: true })).toBeVisible();
-    await expect(page.getByText('Password', { exact: true }).first()).toBeVisible();
+    await expect(card).toBeVisible();
+    await expect(card.getByRole('button', { name: 'Accedi o registrati' })).toBeVisible();
+    await expect(card.getByRole('button', { name: /Continua senza account/ })).toBeVisible();
+    await expect(page.locator('#auth-login-box')).toHaveCount(0);
+    await expect(card.locator('input')).toHaveCount(0);
     expect(await card.evaluate(el => getComputedStyle(el).overflowY)).toBe('visible');
     expect(await overlay.evaluate(el => getComputedStyle(el).overflowY)).toBe('auto');
-    expect((await card.boundingBox())!.width).toBeGreaterThan(350);
-    const activeBg = await loginMode.evaluate(el => getComputedStyle(el).backgroundColor);
-    const submitBg = await card.getByRole('button', { name: 'Accedi' }).last().evaluate(el => getComputedStyle(el).backgroundColor);
-    expect(activeBg).not.toBe(submitBg);
+    expect((await card.boundingBox())!.width).toBeGreaterThan(240);
 
     await page.setViewportSize({ width: 320, height: 568 });
-    await registerMode.click();
-    await expect(registerMode).toHaveAttribute('aria-pressed', 'true');
-    await expect(loginMode).toHaveAttribute('aria-pressed', 'false');
-    const confirm = page.getByLabel('Conferma password');
-    await confirm.scrollIntoViewIfNeeded();
-    await expect(confirm).toBeVisible();
-    const title = page.getByRole('heading', { name: 'TheLogBook' });
+    await card.getByRole('button', { name: /Continua senza account/ }).scrollIntoViewIfNeeded();
+    await expect(card.getByText('I dati saranno salvati solo sul dispositivo.')).toBeVisible();
     await overlay.evaluate(el => { el.scrollTop = 0; });
-    expect((await title.boundingBox())!.y).toBeGreaterThanOrEqual(-1);
-    await page.getByLabel('Email').focus();
-    await expect(page.getByLabel('Email')).toBeFocused();
+    expect((await page.getByRole('heading', { name: 'TheLogBook', exact: true }).boundingBox())!.y).toBeGreaterThanOrEqual(-1);
     expect(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)).toBe(false);
-    await loginMode.click();
-    await page.getByRole('button', { name: 'Continua senza account' }).scrollIntoViewIfNeeded();
-    await expect(page.getByText('I dati saranno salvati solo sul dispositivo.')).toBeVisible();
     await page.setViewportSize({ width: 320, height: 850 });
   }
 });
@@ -114,26 +97,17 @@ async function continueAsGuest(page: Page) {
   await page.getByRole('button', { name: 'Allenamento', exact: true }).waitFor();
 }
 
-test('registration password rules and visibility control stay aligned on mobile in both themes', async ({ page }) => {
+test('hosted Kinde password handling never appears inside the PWA', async ({ page }) => {
+  await signedOutKinde(page);
   for (const theme of ['light', 'dark'] as const) {
     await page.emulateMedia({ colorScheme: theme });
     await page.goto('/');
-    await page.getByRole('button', { name: 'Registrati' }).first().click();
-    const password = page.locator('input.ui-login-box-9');
-    await password.fill('caccapuou');
-    await expect(password).toHaveAttribute('aria-invalid', 'true');
-    await expect(page.getByRole('list', { name: 'Requisiti della password' }).locator('li').first()).toHaveAttribute('data-status', 'missing');
-
-    const inputBox = await password.boundingBox();
-    const eye = await page.getByRole('button', { name: 'Mostra password' }).boundingBox();
-    expect(inputBox).not.toBeNull();
-    expect(eye).not.toBeNull();
-    expect(eye!.width).toBeGreaterThanOrEqual(44);
-    expect(eye!.height).toBeGreaterThanOrEqual(44);
-    expect(Math.abs((eye!.y + eye!.height / 2) - (inputBox!.y + inputBox!.height / 2))).toBeLessThanOrEqual(1);
-
-    await page.getByRole('button', { name: 'Mostra password' }).click();
-    await expect(password).toHaveAttribute('type', 'text');
+    const card = page.locator('#auth-kinde-entry');
+    await expect(card.getByRole('button', { name: 'Accedi o registrati' })).toBeVisible();
+    await expect(card.getByRole('button', { name: /Continua senza account/ })).toBeVisible();
+    await expect(card.locator('input[type="password"]')).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Mostra password' })).toHaveCount(0);
+    await expect(page.getByRole('group', { name: 'Modalità di accesso' })).toHaveCount(0);
     expect(await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth)).toBe(false);
   }
 });
