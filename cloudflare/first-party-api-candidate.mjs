@@ -50,7 +50,8 @@ function permittedRoute(path) {
 /**
  * Candidate service-binding gateway; it does not create identity, grant consent,
  * decrypt an ADK or acknowledge a journal. Private Workers independently check
- * AuthGate, CSRF, owner, consent and D1. Neither binding is in the live frontend.
+ * AuthGate, CSRF, owner, consent and D1. Only KINDE_HTTP is publicly
+ * bound for OAuth/session; the D1_API fitness binding remains absent.
  *
  * OAuth callback is the only GET and may arrive from a cross-site Kinde 303.
  * Every POST requires a same-origin Origin and browser fetch-site boundary.
