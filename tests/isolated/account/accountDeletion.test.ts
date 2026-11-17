@@ -1,6 +1,7 @@
 import 'fake-indexeddb/auto';
 import { clear, get, set } from 'idb-keyval';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+import { authenticatedIdentitySource } from '../../../src/lib/sync/authenticatedIdentitySource';
 
 const boundary = vi.hoisted(() => ({
     auth: { currentUser: null as any, signOut: vi.fn() },
@@ -72,6 +73,7 @@ function installSuccessfulServerFlow(onRequest?: (receiptToken: string) => void)
     });
 }
 
+beforeEach(() => authenticatedIdentitySource.install(() => boundary.auth.currentUser));
 beforeEach(async () => {
     vi.resetAllMocks();
     await clear();
