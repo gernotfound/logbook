@@ -5,6 +5,10 @@
 
 **Autorità:** [`AGENTS.md`](../../AGENTS.md). Questo contratto ne specializza gli invarianti; non amplia autorizzazioni o perimetro.
 
+### Riavvio OAuth senza sessione attestata (17/11/2026)
+
+Nell'ingresso React `identityOnly`, un errore di lettura dell'identità non deve bloccare un nuovo accesso esplicito attraverso il Worker Kinde: il POST same-origin di avvio ha propri gate CSRF/state/rate-limit. **Non** trasformare questo errore in un login autenticato, consenso o permesso cloud. La pagina diagnostica `/verifica-accesso` usa un form HTML nativo separato; il mancato avanzamento nel browser normale non è ancora causalmente dimostrato e va distinto dal blocco della vecchia sessione Firebase sul frontend.
+
 ### Sessione Kinde reale e logout applicativo diagnostico (17/11/2026)
 
 Il proprietario ha registrato un account email/password di prova su Kinde e ha confermato il login con due letture `/api/auth/session` dal browser, email verificata, epoca 1 e consenso sanitario a revisione 0. Non è un'abilitazione dell'archivio locale o delle API fitness. La pagina `/verifica-accesso` può ora verificare la revoca della **sola sessione applicativa** tramite CSRF host-only e successivo status 401; non è logout SSO Kinde né purge e resta da collaudare in browser reale.

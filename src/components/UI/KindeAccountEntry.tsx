@@ -111,7 +111,11 @@ export function KindeAccountEntry({
     }, [refresh]);
 
     const handleSignIn = () => {
-        if (busy || guestArchivePresent || phase !== 'signed-out') return;
+        // A failed status probe is NOT a cloud grant; it must not prevent a
+        // fresh, explicit browser login. The trusted Worker performs the
+        // independent OAuth state, CSRF and rate-limit checks on POST.
+        if (busy || guestArchivePresent
+            || (phase !== 'signed-out' && !(identityOnly && phase === 'unavailable'))) return;
         const token = generation.current;
         try {
             submitKindeHostedSignIn(document, () =>
@@ -222,6 +226,8 @@ export function KindeAccountEntry({
                 <>
                     <button type="button" className="btn" disabled={busy}
                         onClick={() => { setPhase('checking'); void refresh(); }}>Riprova la verifica</button>
+                    {identityOnly && <button type="button" className="btn btn-primary" disabled={busy}
+                        onClick={handleSignIn}>Avvia un nuovo accesso con Kinde</button>}
                     {onLocalGuest && !guestArchivePresent && (
                         <>
                             <button type="button" className="btn auth-guest-action" disabled={busy}

@@ -196,6 +196,10 @@ describe('public Kinde identity-only entry boundary', () => {
         fireEvent.click(guest);
         await waitFor(() => expect(onLocalGuest).toHaveBeenCalledTimes(1));
         expect(submitKindeHostedSignIn).not.toHaveBeenCalled();
+        fireEvent.click(screen.getByRole('button', { name: 'Avvia un nuovo accesso con Kinde' }));
+        expect(submitKindeHostedSignIn).toHaveBeenCalledTimes(1);
+        expect(readKindeCandidateAccess).not.toHaveBeenCalled();
+        expect(acceptKindeCandidateInitialConsent).not.toHaveBeenCalled();
     });
 
     it('never offers a guest transition from an unverified Kinde identity', async () => {
@@ -207,5 +211,6 @@ describe('public Kinde identity-only entry boundary', () => {
         await screen.findByText(/Verifica il tuo indirizzo email/);
         expect(screen.queryByRole('button', { name: /Continua senza account/ })).toBeNull();
         expect(onLocalGuest).not.toHaveBeenCalled();
+        expect(screen.queryByRole('button', { name: 'Avvia un nuovo accesso con Kinde' })).toBeNull();
     });
 });
