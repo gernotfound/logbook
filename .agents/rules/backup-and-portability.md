@@ -13,6 +13,16 @@ Applicare il fresh start e la protezione dei dati correnti di AGENTS. Fonti: `sr
 
 ## CF-08 — D1 Time Travel e prova di cancellazione indipendente (16/11/2026)
 
+L'incremento v2.497.0 collega il candidato `cloudflare/recovery/runtime-sync-fence.mjs`
+alle route `/v1/sync/*` del Worker API privato: readback sessione/consenso
+sulla D1 primaria e controllo esterno su `RECOVERY_DB` prima dell'operazione
+e prima di un ACK positivo. Questo non protegge ancora le rotte indipendenti
+di consenso, chiavi e cancellazione: lasciare il registro `sealed` e le
+API dati non pubbliche fino al loro collegamento e collaudo. Il backend deve
+mantenere il journal locale ritentabile quando una scrittura è stata committata
+ma la prova esterna non è più disponibile al momento della risposta.
+
+
 Il registro candidato `cloudflare/recovery/independent-owner-fence.mjs` e la sua
 migration in `cloudflare/recovery/migrations/` sono **isolati, non collegati
 ai gate live**. La D1 EU separata esiste ma non dimostra ancora sicurezza

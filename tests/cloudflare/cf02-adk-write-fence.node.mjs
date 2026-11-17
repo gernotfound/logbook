@@ -9,6 +9,7 @@ import { runOneHealthErasureStep } from '../../cloudflare/jobs/health-erasure-wo
 const ORIGIN = 'https://b01-synthetic.invalid';
 const SESSION_HASH = 'a'.repeat(64);
 const KEK = Buffer.alloc(32, 77).toString('base64');
+const INDEPENDENT_MIGRATIONS = ['0001_independent_owner_fences.sql', '0002_block_replace_bypass.sql'];
 const MIGRATIONS = readdirSync(new URL('../../cloudflare/api/migrations/', import.meta.url))
   .filter(name => /^[0-9]{4}_[a-z0-9_]+\.sql$/.test(name)).sort();
 assert.ok(MIGRATIONS.length >= 10, 'full erasure schema required');
@@ -54,8 +55,14 @@ function makeFixture({ legacy = false } = {}) {
   sqlite.exec('PRAGMA foreign_keys=ON');
   apply(sqlite, 0, legacy ? 8 : MIGRATIONS.length);
   const db = new SqliteD1(sqlite);
+  const ledger = new DatabaseSync(':memory:');
+  for (const name of INDEPENDENT_MIGRATIONS) {
+    ledger.exec(readFileSync(new URL('../../cloudflare/recovery/migrations/' + name, import.meta.url), 'utf8'));
+  }
+  ledger.prepare("UPDATE recovery_control SET mode='open',generation=2 WHERE singleton=1").run();
   const env = {
-    DB: db, API_ORIGIN: ORIGIN, CLOUD_ACCOUNT_KEK_V1: KEK,
+    DB: db, RECOVERY_DB: new SqliteD1(ledger),
+    API_ORIGIN: ORIGIN, CLOUD_ACCOUNT_KEK_V1: KEK,
     CONSENT_PRIVACY_VERSION: '1.3.9', CONSENT_TERMS_VERSION: '1.2.5',
     AUTH_GATE: { async fetch() {
       return new Response(JSON.stringify({
@@ -77,9 +84,14 @@ function makeFixture({ legacy = false } = {}) {
       (token_hash,uid,auth_epoch,csrf_hash,issued_at_ms,idle_expires_at_ms,absolute_expires_at_ms)
       VALUES (?,?,1,?,?,?,?)`).run(uid === 'owner-a' ? SESSION_HASH : 'b'.repeat(64),
       uid, 'c'.repeat(64), issued, issued + 86400000, issued + 172800000);
+    ledger.prepare(`INSERT INTO recovery_owner_fences
+      (uid,status,consent_revision,fence_epoch,erased_before_revision,change_seq)
+      VALUES (?,'pending',0,1,0,1)`).run(uid);
+    ledger.prepare(`UPDATE recovery_owner_fences
+      SET status='active',consent_revision=1,change_seq=2 WHERE uid=?`).run(uid);
   }
   owner('owner-a');
-  return { sqlite, db, env, owner, close: () => sqlite.close() };
+  return { sqlite, ledger, db, env, owner, close: () => { ledger.close(); sqlite.close(); } };
 }
 function count(f, table, uid = 'owner-a') {
   return f.sqlite.prepare(`SELECT COUNT(*) AS n FROM ${table} WHERE uid=?`).get(uid).n;
