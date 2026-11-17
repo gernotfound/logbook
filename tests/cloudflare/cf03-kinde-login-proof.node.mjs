@@ -59,7 +59,7 @@ void test('trusted login proof failure phases never include JWT contents or user
   const valid = await tokens();
   const rejected = [
     ['identity-input', { ...valid, idToken: 'not-a-jwt' }],
-    ['access-token', { ...valid, accessToken: valid.idToken }],
+    ['access-token-audience', { ...valid, accessToken: valid.idToken }],
     ['id-token-audience', { ...valid, idToken: valid.accessToken }],
     ['id-claims', await tokens({ idClaims: { email_verified: false } })],
     ['id-claims', await tokens({ idClaims: { nonce: null } })],
@@ -71,6 +71,30 @@ void test('trusted login proof failure phases never include JWT contents or user
         && error?.phase === phase
         && !JSON.stringify(error).includes('sample@example.invalid'));
   }
+});
+
+void test('trusted ID proof keeps access JWT phases finite and refuses Kinde machine grants', async () => {
+  const { verify, tokens } = await fixture();
+  const invalid = [
+    ['access-token-audience', { accessAudience: 'another-api' }],
+    ['access-token-issuer', { accessIssuer: 'https://other-kinde.example' }],
+    ['access-token-client', { accessClaims: { azp: 'another-client' } }],
+    ['access-token-subject', { accessClaims: { sub: 'not-a-kinde-user' } }],
+    ['access-token-grant', { accessClaims: { gty: ['client_credentials'] } }],
+    ['access-token-lifetime', { accessExpiresIn: 24 * 60 * 60 + 100 }],
+  ];
+  for (const [phase, options] of invalid) {
+    const signed = await tokens(options);
+    await assert.rejects(verify(signed), error =>
+      error?.name === 'KindeLoginProofError'
+        && error.message === 'invalid-kinde-login-proof'
+        && error.phase === phase
+        && !JSON.stringify(error).includes(signed.accessToken)
+        && !JSON.stringify(error).includes('sample@example.invalid'));
+  }
+  assert.equal((await verify(await tokens({
+    accessClaims: { gty: ['authorization_code'] },
+  }))).emailVerified, true);
 });
 
 void test('ID token rejection distinguishes signed audience, issuer, expiry, key and signature', async () => {

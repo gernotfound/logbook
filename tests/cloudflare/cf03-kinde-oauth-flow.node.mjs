@@ -44,6 +44,8 @@ async function fixture() {
   let tokenPayload = null;
   let issuedTokens = 0;
   let accessLifetimeSeconds = 301;
+  let accessAudience = apiAudience;
+  let accessGrantType = ['authorization_code'];
   let idAudience = issuer;
   const nonceByCode = new Map();
   const fetchImpl = async (url, init) => {
@@ -72,9 +74,11 @@ async function fixture() {
     let tokens;
     if (tokenPayload) tokens = tokenPayload;
     else {
-      const accessToken = await new SignJWT({ azp: clientId, sub: 'kp_verified_test_12345' })
+      const accessToken = await new SignJWT({
+        azp: clientId, sub: 'kp_verified_test_12345', gty: accessGrantType,
+      })
         .setProtectedHeader({ alg: 'RS256', kid: 'synthetic' })
-        .setIssuer(issuer).setAudience(apiAudience).setIssuedAt(now - 1).setExpirationTime(now - 1 + accessLifetimeSeconds)
+        .setIssuer(issuer).setAudience(accessAudience).setIssuedAt(now - 1).setExpirationTime(now - 1 + accessLifetimeSeconds)
         .sign(privateKey);
       const at_hash = createHash('sha256').update(accessToken).digest().subarray(0, 16).toString('base64url');
       const idToken = await new SignJWT({
@@ -136,6 +140,8 @@ async function fixture() {
     setTransportFailure: value => { transportFails = value; },
     setPayload: value => { tokenPayload = value; },
     setAccessLifetime: value => { accessLifetimeSeconds = value; },
+    setAccessAudience: value => { accessAudience = value; },
+    setAccessGrantType: value => { accessGrantType = value; },
     setIdAudience: value => { idAudience = value; },
     calls: () => issuedTokens,
     close: () => sqlite.close(),
@@ -199,6 +205,50 @@ void test('real-shaped callback mints one session with provider-default 24h acce
     assert.equal(rejected.status, 503);
     assert.equal(rejected.headers.getSetCookie().length, 0);
     assert.equal(f.sqlite.prepare('SELECT COUNT(*) AS n FROM auth_sessions').get().n, 1);
+  } finally { f.close(); }
+});
+
+void test('real-shaped wrong API audience rejects login after one-use PKCE state, without cookies or principal', async () => {
+  const f = await fixture();
+  try {
+    f.setAccessAudience(['another-authorized-api']);
+    const a = await f.start();
+    const request = f.callback(a, 'wrong-api-audience');
+    const denied = await f.oauth.complete(f.db, request);
+    assert.equal(denied.status, 503);
+    assert.deepEqual(await denied.json(), {
+      error: 'authentication-unavailable', phase: 'access-token-audience',
+    });
+    assert.equal(denied.headers.get('Cache-Control'), 'no-store');
+    assert.equal(denied.headers.has('Set-Cookie'), false);
+    assert.equal(f.sqlite.prepare('SELECT COUNT(*) AS n FROM auth_principals').get().n, 0);
+    assert.equal(f.sqlite.prepare('SELECT COUNT(*) AS n FROM auth_sessions').get().n, 0);
+    assert.equal(f.sqlite.prepare('SELECT COUNT(*) AS n FROM auth_oauth_attempts').get().n, 0);
+    assert.equal((await f.oauth.complete(f.db, request)).status, 400);
+
+    f.setAccessAudience([apiAudience, 'another-api']);
+    const b = await f.start(a.cookie);
+    const result = await f.oauth.complete(f.db, f.callback(b, 'multi-audience-valid'));
+    assert.equal(result.status, 303);
+    assert.equal(result.headers.getSetCookie().length, 2);
+    assert.equal(f.sqlite.prepare('SELECT COUNT(*) AS n FROM auth_sessions').get().n, 1);
+  } finally { f.close(); }
+});
+
+void test('Kinde machine grant array cannot mint a user session even when JWT is correctly signed', async () => {
+  const f = await fixture();
+  try {
+    f.setAccessGrantType(['client_credentials']);
+    const a = await f.start();
+    const denied = await f.oauth.complete(f.db, f.callback(a, 'm2m-denied'));
+    assert.equal(denied.status, 503);
+    assert.deepEqual(await denied.json(), {
+      error: 'authentication-unavailable', phase: 'access-token-grant',
+    });
+    assert.equal(denied.headers.has('Set-Cookie'), false);
+    assert.equal(f.sqlite.prepare('SELECT COUNT(*) AS n FROM auth_principals').get().n, 0);
+    assert.equal(f.sqlite.prepare('SELECT COUNT(*) AS n FROM auth_sessions').get().n, 0);
+    assert.equal(f.sqlite.prepare('SELECT COUNT(*) AS n FROM auth_oauth_attempts').get().n, 0);
   } finally { f.close(); }
 });
 

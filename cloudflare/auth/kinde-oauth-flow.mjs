@@ -29,6 +29,10 @@ function noStoreHeaders() {
 // state has been consumed. No token, user identifier or provider error escapes.
 const CALLBACK_FAILURE_PHASES = new Set([
   'token-transport', 'token-response', 'identity-input', 'access-token',
+  'access-token-format', 'access-token-audience', 'access-token-issuer',
+  'access-token-expired', 'access-token-key', 'access-token-signature',
+  'access-token-algorithm', 'access-token-client', 'access-token-subject',
+  'access-token-grant', 'access-token-timestamps', 'access-token-lifetime',
   'id-token', 'id-token-audience', 'id-token-issuer',
   'id-token-expired', 'id-token-key', 'id-token-signature',
   'id-token-algorithm', 'id-claims', 'token-binding',
@@ -174,13 +178,13 @@ async function tokenResponse(response) {
 }
 
 /**
- * Not mounted on a public Worker. The eventual HTTP adapter must enforce
- * perimeter limits before calling start, and must never accept user-supplied
- * issuer, redirect URI, owner, nonce or verifier. D1 is the atomic replay
- * authority; the host-only browser cookie binds a valid state to its initiator.
+ * Called through the private Kinde Worker behind the public first-party
+ * OAuth-only gateway. The HTTP adapter enforces perimeter limits and never
+ * accepts caller-supplied issuer, redirect URI, owner, nonce or verifier.
+ * D1 is the atomic replay authority; a host-only browser cookie binds state.
  *
- * rateLimit is mandatory and must use a trusted, server-derived abuse key
- * rather than an arbitrary client header. It is not a global Free-tier quota.
+ * rateLimit uses a server-derived key; it does not provide a global
+ * Free-tier abuse quota or replace edge protections.
  */
 /**
  * @param {{ issuer: string, clientId: string, clientSecret: string, apiAudience: string, idTokenAudience: string, appOrigin: string }} configuration
