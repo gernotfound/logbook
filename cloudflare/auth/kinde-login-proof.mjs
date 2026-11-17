@@ -64,7 +64,7 @@ async function sha256AtHash(accessToken) {
 export function createKindeIdentityProofVerifier(configuration, keySet) {
   const { issuer, apiAudience, clientId } = configuration ?? {};
   if (typeof issuer !== 'string' || typeof clientId !== 'string'
-    || clientId.length < 8 || clientId.length > 256) {
+    || clientId.length < 8 || clientId.length > 256 || /\s/.test(clientId)) {
     throw new TypeError('invalid-kinde-login-configuration');
   }
   const jwks = keySet ?? createRemoteJWKSet(new URL(issuer + '/.well-known/jwks'), {

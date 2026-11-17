@@ -285,11 +285,13 @@ void test('Code-flow ID token may omit at_hash; valid nonce and both signatures 
   assert.equal((await verify(pair)).subject, sub);
 });
 
-void test('Kinde ID proof rejects misconfigured audience and invalid nonce origin', async () => {
+void test('Kinde ID proof rejects invalid OAuth client ID and nonce origin', async () => {
   const { verify, tokens } = await fixture();
   for (const input of [
-    { issuer, clientId, apiAudience, idTokenAudience: '' },
-    { issuer, clientId, apiAudience, idTokenAudience: ' https://invalid.example ' },
+    { issuer, clientId: '', apiAudience },
+    { issuer, clientId: 'short', apiAudience },
+    { issuer, clientId: ' invalid client ', apiAudience },
+    { issuer, clientId: 'a'.repeat(257), apiAudience },
   ]) {
     assert.throws(() => createKindeLoginProofVerifier(input), TypeError);
   }
