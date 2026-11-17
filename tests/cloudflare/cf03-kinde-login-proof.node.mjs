@@ -102,6 +102,7 @@ void test('ID token rejection distinguishes signed audience, issuer, expiry, key
   const cases = [
     ['id-token-audience', { idAudience: 'unrelated-application' }],
     ['id-token-audience', { idAudience: issuer }],
+    ['id-token-audience', { idAudience: [clientId, 'untrusted-audience'] }],
     ['id-token-issuer', { idIssuer: 'https://unrelated-kinde.example' }],
     ['id-token-expired', { idExpiresIn: -30 }],
     ['id-token-key', { idKeyId: 'unknown-kid' }],
@@ -116,7 +117,9 @@ void test('ID token rejection distinguishes signed audience, issuer, expiry, key
         && !JSON.stringify(error).includes(proof.idToken)
         && !JSON.stringify(error).includes('sample@example.invalid'));
   }
-  // None of these diagnostics authorize an alternative audience or signature.
+  // Kinde can issue an audience array containing both the app and issuer.
+  assert.equal((await verify(await tokens({ idAudience: [clientId, issuer] }))).emailVerified, true);
+  // None of these diagnostics authorize another app's audience or signature.
   assert.equal((await verify(await tokens())).emailVerified, true);
 });
 

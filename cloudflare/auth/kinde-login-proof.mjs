@@ -97,6 +97,12 @@ export function createKindeIdentityProofVerifier(configuration, keySet) {
         clockTolerance: CLOCK_TOLERANCE_SECONDS,
       }));
     } catch (error) { throw new KindeLoginProofError(idTokenFailurePhase(error)); }
+    // Kinde may list both the OAuth client and its issuer. OIDC requires
+    // rejecting any additional audience not explicitly trusted by this RP.
+    const audiences = Array.isArray(payload.aud) ? payload.aud : [payload.aud];
+    if (audiences.some(audience => audience !== clientId && audience !== issuer)) {
+      throw new KindeLoginProofError('id-token-audience');
+    }
     try {
       const now = Math.floor(Date.now() / 1000);
       if (payload.azp !== clientId || payload.nonce !== expectedNonce
