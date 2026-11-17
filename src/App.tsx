@@ -3,6 +3,7 @@ import { useAuth } from './hooks/useAuth';
 import { useAppStore } from './store/useAppStore';
 import { useLocalStorage } from './hooks/useLocalStorage';
 import { useModalFocusTrap } from './hooks/useModalFocusTrap';
+import { useDialogStore } from './store/useDialogStore';
 import { ownerUiPreferenceKey } from './lib/uiPreferenceKeys';
 import {
   LOCAL_STORAGE_ACTIVE_TAB,
@@ -115,7 +116,11 @@ function GuestBanner({ onLogin }: { onLogin: () => void }) {
 function GuestKindeTransitionGate({ onClose }: { onClose: () => void }) {
   const dialogRef = useRef<HTMLElement>(null);
   const closeButton = useRef<HTMLButtonElement>(null);
-  useModalFocusTrap({ containerRef: dialogRef, initialFocusRef: closeButton, onEscape: onClose });
+  const globalDialogOpen = useDialogStore(state => state.isOpen);
+  useModalFocusTrap({
+    containerRef: dialogRef, initialFocusRef: closeButton,
+    active: !globalDialogOpen, onEscape: onClose,
+  });
   return (
     <section ref={dialogRef} role="dialog" aria-modal="true" tabIndex={-1}
       aria-labelledby="guest-kinde-transition-title"
