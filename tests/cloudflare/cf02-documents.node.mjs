@@ -123,6 +123,7 @@ function attempt(batchId = 'batch000000000001', seq = 1, rev = 0, paths = ['']) 
 function makeEnv(db, claims = {}) {
   return {
     DB: db, RECOVERY_DB: independentDatabases.get(db), API_ORIGIN: origin,
+    CONSENT_PRIVACY_VERSION: '1.3.9', CONSENT_TERMS_VERSION: '1.2.5',
     AUTH_GATE: {
       async fetch() {
         return new Response(JSON.stringify({
