@@ -1,5 +1,14 @@
 # Kinde — configurazione del provider per TheLogBook
 
+## CF-03 · sessione Kinde reale verificata, logout D1 diagnostico (17/11/2026)
+
+**Prova browser del product owner:** creazione account email/password Kinde, callback verso `/verifica-accesso`, letture ripetute di `POST /api/auth/session` con `authenticated=true`, `emailVerified=true`, `fenceEpoch=1`, `healthConsentRevision=0`. Il precedente 403 sulle POST vuote è stato corretto nella PR #1198. Nessun UID o dato identificativo del soggetto nel repository.
+
+**Nuova verifica logout:** nella pagina diagnostica compare dopo il 200 autenticato il pulsante `Termina sessione TheLogBook`: usa solo il cookie host-only CSRF, chiama `POST /api/auth/logout` same-origin e richiede una successiva risposta 401 canonica prima di confermare la revoca. Un 200 perso, un cookie assente, un 403 o una nuova sessione non sono prove di logout. **Non effettua logout SSO Kinde né purge device/IndexedDB**. Test simulati e CI richiedono conferma con browser reale, comprese corse fra schede.
+
+**Confini aperti:** `src/main.tsx`, `AuthProvider`, `App` e `LoginBox` usano ancora Firebase. `KindeAccountEntry` e il bridge journal/ADK restano candidati non montati perché le API pubbliche di consenso e sync non sono ancora attive per l'app. Prima del cutover serve isolare owner/sessione/guest, dimostrare consenso 18+ e legal, chiavi indipendenti, journal durevole, ACK cloud, offline e diritti. Google e reset email non sono collaudati.
+
+
 ## CF-03 · ritorno Kinde isolato da Firebase (17/11/2026, candidato v2.503.0)
 
 **Evidenza browser del proprietario:** dopo la callback Kinde, l'utente raggiunge la homepage, dove il form `Registrati` della vecchia `LoginBox.tsx` chiama ancora `validatePassword` Firebase e riceve HTTP 403 da `identitytoolkit.googleapis.com/v2/passwordPolicy`. Lo stack `background.js` / `runtime.lastError` negli allegati è riconducibile a estensioni browser e non prova una causa Kinde. Il ritorno alla homepage è un `303` voluto, **non** una prova che il frontend sia stato convertito. Il login Kinde va certificato tramite il successivo `/api/auth/session` 200 valido e non con l'URL di destinazione.
