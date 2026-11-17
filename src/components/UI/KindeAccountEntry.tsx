@@ -110,6 +110,34 @@ export function KindeAccountEntry({
         };
     }, [refresh]);
 
+    useEffect(() => {
+        if (guestArchivePresent) return;
+        let scheduled = false;
+        const scheduleRecheck = () => {
+            if (scheduled || busy || document.visibilityState === 'hidden') return;
+            scheduled = true;
+            // Focus and visibilitychange may fire in the same turn. One
+            // recheck avoids duplicate requests and stale-status flicker.
+            queueMicrotask(() => {
+                scheduled = false;
+                if (!mounted.current || busy || document.visibilityState === 'hidden') return;
+                setPhase('checking');
+                void refresh();
+            });
+        };
+        const onVisible = () => {
+            if (document.visibilityState === 'visible') scheduleRecheck();
+        };
+        window.addEventListener('focus', scheduleRecheck);
+        window.addEventListener('online', scheduleRecheck);
+        document.addEventListener('visibilitychange', onVisible);
+        return () => {
+            window.removeEventListener('focus', scheduleRecheck);
+            window.removeEventListener('online', scheduleRecheck);
+            document.removeEventListener('visibilitychange', onVisible);
+        };
+    }, [busy, guestArchivePresent, refresh]);
+
     const handleSignIn = () => {
         // A failed status probe is NOT a cloud grant; it must not prevent a
         // fresh, explicit browser login. The trusted Worker performs the

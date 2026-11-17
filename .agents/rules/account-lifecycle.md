@@ -5,6 +5,10 @@
 
 **Autorità:** [`AGENTS.md`](../../AGENTS.md). Questo contratto ne specializza gli invarianti; non amplia autorizzazioni o perimetro.
 
+### Riconciliazione sessione Kinde foreground (17/11/2026)
+
+La schermata React Kinde `identityOnly` deve rileggerne lo stato trusted al ritorno dal background o della rete, invalidando i risultati di richieste precedenti e accorpando gli eventi simultanei. Un errore di rete o una sessione non verificata non concede owner, consenso, vault o fitness; la modalità guest già attiva non effettua queste letture. Questo è soltanto un osservatore UI: `AuthProvider`, `storageOwner()` e il ciclo guest→account Firebase restano da convertire. La diagnostica HTML è indipendente e richiede una prova Network sul browser normale prima di attribuirne il blocco a uno specifico componente.
+
 ### Confine identità per l'avvio guest (17/11/2026)
 
 `useGuestLogin` non legge più direttamente `firebase.auth.currentUser`: il provider fornisce `readAuthIdentity(): unknown`, oggetto opaco che deve conservare identità stabile soltanto durante la stessa sessione, e un `authRunRef` monotono. La vecchia implementazione Firebase passa esattamente il suo oggetto `auth.currentUser`, preservando il comportamento corrente; il nuovo provider Cloudflare dovrà passare un token di sessione stabile, **non** solo UID, e incrementare la generazione a ogni cambio/riaccesso A→B→A. Dopo ogni await il guest lock continua a verificare generazione, owner, sessione e vault prima di pubblicare dati. Questo è un refactoring preparatorio, **non** l'adozione della sessione Kinde o il cutover dell'AuthProvider.
