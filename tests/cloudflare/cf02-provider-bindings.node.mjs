@@ -54,7 +54,7 @@ void test('rejects absent D1 binding, authorization service or limiter', async (
     const path = '/client/v4/accounts/0123456789abcdef0123456789abcdef/workers/scripts/' + name + '/settings';
     const bindings = settings[name].bindings.filter(item => item.name !== bindingName);
     const mock = cloudflareMock({ [path]: { success: true, result: { bindings } } });
-    await assert.rejects(verifyPrivateWorkerBindings(args(mock)), /absent|incorrect/);
+    await assert.rejects(verifyPrivateWorkerBindings(args(mock)), /absent|incorrect|independent recovery D1/);
   }
 });
 
@@ -91,6 +91,6 @@ void test('rejects substituted or main-DB alias recovery bindings', async () => 
     const mock = cloudflareMock({ [prefix + dataWorker + '/settings']: {
       success: true, result: { bindings: broken },
     } });
-    await assert.rejects(verifyPrivateWorkerBindings(args(mock)), /recovery D1/);
+    await assert.rejects(verifyPrivateWorkerBindings(args(mock)), /independent erasure D1/);
   }
 });
