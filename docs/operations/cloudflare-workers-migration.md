@@ -1,5 +1,12 @@
 # TheLogBook — migrazione Cloudflare: runbook corrente
 
+## CF-03 · delimitazione 503 `access-token` senza workaround (17/11/2026, candidato v2.500.0)
+
+Un nuovo tentativo di login hosted Kinde sulla v2.499.0 è arrivato alla verifica dell'access token con `503 phase=access-token`, dopo lo state monouso e la token response. I percorsi `/__ /auth` Firebase, App Check e Vercel non sono chiamati da quella verifica e restano un problema separato di migrazione dell'AuthContext. La richiesta Kinde include già esplicitamente `audience` e `scope=openid email profile`. Non si può dedurre la causa del 503 dai test JWT sintetici né dal precedente `id-token` visto in un diverso tentativo.
+
+Nel solo percorso di diagnostica autorizzato la verifica access JWT distingue fasi JOSE fisse (aud/iss, chiave, firma, expiry, alg) e fasi claim (client, subject, grant, timestamp, lifetime), senza divulgare valori o accettare nuovi token. Hardening: i token M2M con `gty: ["client_credentials"]`, formato documentato Kinde, devono essere rifiutati senza principal D1. Il service binding Kinde rimane l'unica API pubblica di login; `D1_API` health resta assente. Dopo le prove esatte del deploy, la singola prova browser deve restituire un codice `phase` oppure una sessione verificata: **NO-GO applicativo** fino al percorso completo. Eliminare le fasi temporanee dopo la correzione.
+
+
 ## CF-03 · callback Kinde: errore ID-token circoscritto (candidato v2.499.0, 17/11/2026)
 
 Il nuovo collaudo v2.498.0 dell'owner restituisce `503` con `phase=id-token`: exchange OAuth e access-token proof sono stati superati, il JWT ID è stato rifiutato **dentro `jwtVerify`**. Non si presume un errore di audience senza prova: Kinde documenta esempi di `aud` differenti (dominio issuer o identificatore dell'app). Il backend non è autorizzato a fidarsi di un token o di un claim senza verifica crittografica del destinatario.
