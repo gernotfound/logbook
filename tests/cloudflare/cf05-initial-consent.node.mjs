@@ -289,7 +289,7 @@ void test('accepted consent from superseded legal versions cannot authorize sync
         'x-original-method': 'POST', 'x-original-route': '/v1/sync/control',
       },
     }), {
-      DB: f.db, API_ORIGIN: ORIGIN, CONSENT_PRIVACY_VERSION: '1.3.10',
+      DB: f.db, API_ORIGIN: ORIGIN, CONSENT_PRIVACY_VERSION: '1.3.11',
       CONSENT_TERMS_VERSION: '1.2.5',
       API_RATE_LIMITER: { limit: async () => ({ success: true }) },
     });
