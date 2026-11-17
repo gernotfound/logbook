@@ -26,6 +26,7 @@ async function fixture() {
     accessClaims = {}, idClaims = {}, signingKey = privateKey,
     accessIssuer = issuer, idIssuer = issuer,
     accessAudience = apiAudience, idAudience = idTokenAudience,
+    idKeyId = 'synthetic',
     accessIssuedBefore = 2, idIssuedBefore = 2,
     accessExpiresIn = 300, idExpiresIn = 300,
   } = {}) {
@@ -41,7 +42,7 @@ async function fixture() {
       auth_time: now - 60, at_hash, ...idClaims,
     }).setIssuer(idIssuer).setAudience(idAudience)
       .setIssuedAt(now - idIssuedBefore).setExpirationTime(now + idExpiresIn)
-      .setProtectedHeader({ alg: 'RS256', kid: 'synthetic' }).sign(signingKey);
+      .setProtectedHeader({ alg: 'RS256', kid: idKeyId }).sign(signingKey);
     return { accessToken: access, idToken: id, expectedNonce: nonce };
   }
   const rawProvision = createKindePrincipalProvisioner(
@@ -59,7 +60,7 @@ void test('trusted login proof failure phases never include JWT contents or user
   const rejected = [
     ['identity-input', { ...valid, idToken: 'not-a-jwt' }],
     ['access-token', { ...valid, accessToken: valid.idToken }],
-    ['id-token', { ...valid, idToken: valid.accessToken }],
+    ['id-token-audience', { ...valid, idToken: valid.accessToken }],
     ['id-claims', await tokens({ idClaims: { email_verified: false } })],
     ['id-claims', await tokens({ idClaims: { nonce: null } })],
     ['token-binding', await tokens({ idClaims: { at_hash: 'bad-binding' } })],
@@ -70,6 +71,29 @@ void test('trusted login proof failure phases never include JWT contents or user
         && error?.phase === phase
         && !JSON.stringify(error).includes('sample@example.invalid'));
   }
+});
+
+void test('ID token rejection distinguishes signed audience, issuer, expiry, key and signature', async () => {
+  const { verify, tokens } = await fixture();
+  const { privateKey: wrongKey } = await generateKeyPair('RS256');
+  const cases = [
+    ['id-token-audience', { idAudience: 'unrelated-application' }],
+    ['id-token-issuer', { idIssuer: 'https://unrelated-kinde.example' }],
+    ['id-token-expired', { idExpiresIn: -30 }],
+    ['id-token-key', { idKeyId: 'unknown-kid' }],
+    ['id-token-signature', { signingKey: wrongKey }],
+  ];
+  for (const [phase, options] of cases) {
+    const proof = await tokens(options);
+    await assert.rejects(verify(proof), error =>
+      error?.name === 'KindeLoginProofError'
+        && error?.message === 'invalid-kinde-login-proof'
+        && error?.phase === phase
+        && !JSON.stringify(error).includes(proof.idToken)
+        && !JSON.stringify(error).includes('sample@example.invalid'));
+  }
+  // None of these diagnostics authorize an alternative audience or signature.
+  assert.equal((await verify(await tokens())).emailVerified, true);
 });
 
 void test('identity-only proof returns only signed issuer, subject and explicit email boolean', async () => {
