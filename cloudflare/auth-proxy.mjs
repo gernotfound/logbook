@@ -1,8 +1,9 @@
 import { routeCandidateFirstPartyApi } from './first-party-api-candidate.mjs';
 
 // OAuth/session Kinde routes terminate at the private Kinde HTTP Worker.
-// Separately, legacy Firebase Auth helpers retain a fixed first-party proxy
-// while the Firebase-based application AuthContext has not been retired.
+// Legacy Firebase Auth helpers retain a fixed first-party proxy until AuthContext
+// is replaced. Their firebaseapp.com upstream remains subject to Firebase
+// Hosting availability and transfer quotas, independently of Kinde.
 const AUTH_UPSTREAM = 'https://logbook-db-98cc4.firebaseapp.com';
 const AUTH_PREFIX = '/__/auth/';
 const MAX_AUTH_BODY = 65536;
