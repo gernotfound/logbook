@@ -2,6 +2,7 @@ import { useState, useEffect, useEffectEvent, useRef, useSyncExternalStore, Susp
 import { useAuth } from './hooks/useAuth';
 import { useAppStore } from './store/useAppStore';
 import { useLocalStorage } from './hooks/useLocalStorage';
+import { useModalFocusTrap } from './hooks/useModalFocusTrap';
 import { ownerUiPreferenceKey } from './lib/uiPreferenceKeys';
 import {
   LOCAL_STORAGE_ACTIVE_TAB,
@@ -112,28 +113,13 @@ function GuestBanner({ onLogin }: { onLogin: () => void }) {
 // Until Kinde can transfer guest archives with verified ownership, never
 // invoke the old Firebase login from a guest-owned view.
 function GuestKindeTransitionGate({ onClose }: { onClose: () => void }) {
+  const dialogRef = useRef<HTMLElement>(null);
   const closeButton = useRef<HTMLButtonElement>(null);
-  useEffect(() => {
-    const previousFocus = document.activeElement instanceof HTMLElement
-      ? document.activeElement : null;
-    closeButton.current?.focus();
-    return () => {
-      if (previousFocus?.isConnected) previousFocus.focus();
-    };
-  }, []);
+  useModalFocusTrap({ containerRef: dialogRef, initialFocusRef: closeButton, onEscape: onClose });
   return (
-    <section role="dialog" aria-modal="true" aria-labelledby="guest-kinde-transition-title"
-      className="auth-panel"
-      onKeyDown={event => {
-        if (event.key === 'Escape') {
-          event.preventDefault();
-          onClose();
-        } else if (event.key === 'Tab') {
-          // This overlay has only one actionable control.
-          event.preventDefault();
-          closeButton.current?.focus();
-        }
-      }}>
+    <section ref={dialogRef} role="dialog" aria-modal="true" tabIndex={-1}
+      aria-labelledby="guest-kinde-transition-title"
+      className="auth-panel">
       <h2 id="guest-kinde-transition-title">Passaggio a Kinde non disponibile</h2>
       <p>Il collegamento dell’archivio locale a un account Kinde non è ancora attivo.
         I tuoi progressi rimangono sul dispositivo. Puoi continuare a utilizzare
