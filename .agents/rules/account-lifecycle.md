@@ -312,3 +312,16 @@ key e la semantica fail-closed dell'archivio. Nessun vecchio
 account, cookie Kinde, UID o consenso account puo' autorizzare
 la cancellazione guest. Una nuova generazione nel frattempo
 annulla l'operazione precedente senza eliminare dati.
+
+### Protezione cancellazione locale indipendente da Firebase (18/11/2026)
+
+Il guard di purge `src/lib/db/ownerPurgeIdentityFence.ts` legge la
+sorgente di identita' autenticata condivisa dal runtime, non
+`firebase.auth.currentUser`. Nel vecchio provider la sorgente e'
+gia' registrata da Firebase; un futuro provider Kinde vi potra'
+subentrare soltanto dopo aver rimosso quello precedente ed aver
+verificato la sessione. Un owner hint conserva il proprio ruolo
+di **fence conservativo**, mai di prova Auth. Ogni cancellazione
+rilegge UID e storage sotto il lock: una identita' concorrente,
+storage non leggibile o provider corrotto interrompono il purge.
+Il gate non cambia l'ordine ciphertext → device key.
