@@ -5,8 +5,8 @@ import {
   getCachedCatalog,
   getSeedCatalog,
   saveCatalogToCache,
-  syncGlobalCatalog,
 } from '../../src/lib/catalog/catalogService';
+import { syncGlobalCatalog } from '../../src/lib/catalog/firestoreCatalogAdapter';
 
 describe('Global catalog hydration timeout', () => {
   beforeEach(async () => {

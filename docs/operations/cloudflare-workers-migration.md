@@ -725,3 +725,16 @@ a essere richiesta dai gate esistenti su ogni operazione.
 L'AuthProvider e il writer Firestore non sono ancora sostituiti:
 questo è un disaccoppiamento dell'owner locale, non l'attivazione
 delle repliche Kinde né un ACK cloud.
+
+### CF-03 — catalogo locale senza import Firebase (18/11/2026)
+
+Il modulo `catalogService.ts` risolve memoria, IndexedDB, validazione e
+seed locali senza importare `firebase/firestore`. Il vecchio
+`syncGlobalCatalog()` Firestore vive ora in
+`firestoreCatalogAdapter.ts` ed e' richiamato soltanto dal loader cloud
+legacy e dai test dedicati. I metodi, il timeout, la validazione dei
+macronutrienti e la cache rimangono invariati. Il percorso guest/offline
+non importa Firestore per leggere alimenti ed esercizi attraverso il
+catalogo. Per la sostituzione completa del provider cloud occorre ancora
+sostituire il loader, i writer e l'AuthProvider Firebase; l'adapter
+legacy sara' eliminato insieme a quel percorso verificato, non prima.
