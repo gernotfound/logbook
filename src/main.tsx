@@ -7,6 +7,7 @@ import { captureSession, GUEST_REVOCATION_KEY } from './lib/sync/session'
 import { readAuthenticatedOwnerHint } from './lib/sync/authOwnerHint'
 import App from './App'
 import { GuestOnlyAuthProvider } from './contexts/GuestOnlyAuthProvider'
+import { KindeAccountSessionProvider } from './contexts/auth/KindeAccountSessionProvider'
 import ErrorBoundary from './components/UI/ErrorBoundary'
 import { useAppStore } from './store/useAppStore'
 import { parseInitialUserData } from './store/slices/createDataSlice'
@@ -98,9 +99,9 @@ export const initApp = async () => {
   let readError: unknown = null;
 
   try {
-    // A persisted account hint is NOT an authenticated identity. Never demand
-    // the old account's vault secret or hydrate its medical data before
-    // Firebase establishes the active UID. AuthProvider owns that unlock/read.
+    // A persisted owner hint is not a Kinde session or a fitness grant.
+    // Only an explicit future account lifecycle may unlock its owner vault;
+    // this cold boot remains guest-only and never adopts a stale account.
     if (!isGuest) readAuthenticatedOwnerHint(); // strict validation only
     bootstrapOwner = isGuest ? 'guest' : null;
   } catch (error) {
@@ -186,8 +187,10 @@ export const initApp = async () => {
       <StrictMode>
         <ErrorBoundary>
           <GuestOnlyAuthProvider>
-            <ReloadPrompt />
-            <App />
+            <KindeAccountSessionProvider>
+              <ReloadPrompt />
+              <App />
+            </KindeAccountSessionProvider>
           </GuestOnlyAuthProvider>
         </ErrorBoundary>
       </StrictMode>,

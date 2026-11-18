@@ -1,0 +1,114 @@
+import { act, fireEvent, render, screen, waitFor, cleanup } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { ReactNode } from 'react';
+
+vi.mock('../../../src/lib/db/guestLocalPurge', () => ({ purgeGuestLocalData: vi.fn(async () => {}) }));
+vi.mock('../../../src/lib/auth/kindeCandidateIdentity', () => ({
+    readKindeCandidateIdentity: vi.fn(),
+}));
+vi.mock('../../../src/lib/auth/kindeCandidateClient', async importOriginal => ({
+    ...await importOriginal<typeof import('../../../src/lib/auth/kindeCandidateClient')>(),
+    readKindeCandidateAccess: vi.fn(),
+    revokeKindeCandidateSession: vi.fn(async () => {}),
+    submitKindeHostedSignIn: vi.fn(),
+}));
+
+import { GuestOnlyAuthProvider } from '../../../src/contexts/GuestOnlyAuthProvider';
+import { KindeAccountSessionProvider, useSharedKindeAccountSession } from '../../../src/contexts/auth/KindeAccountSessionProvider';
+import { KindeAccountEntry } from '../../../src/components/UI/KindeAccountEntry';
+import { readKindeCandidateIdentity } from '../../../src/lib/auth/kindeCandidateIdentity';
+import { readKindeCandidateAccess, revokeKindeCandidateSession, submitKindeHostedSignIn } from '../../../src/lib/auth/kindeCandidateClient';
+import { authenticatedIdentitySource } from '../../../src/lib/sync/authenticatedIdentitySource';
+import { activateGuestSession, GUEST_SESSION_KEY } from '../../../src/lib/sync/session';
+import { useAuth } from '../../../src/hooks/useAuth';
+import { releaseLegacyTestIdentityReader } from '../../setup';
+
+const uid = 'k_' + 'A'.repeat(43);
+const verified = {
+    kind: 'email-verified' as const,
+    principal: { uid, fenceEpoch: 1, healthConsentRevision: 0, emailVerified: true },
+};
+let csrf = 'A'.repeat(43);
+const host = ({ children }: { children: ReactNode }) => (
+    <GuestOnlyAuthProvider>
+        <KindeAccountSessionProvider>{children}</KindeAccountSessionProvider>
+    </GuestOnlyAuthProvider>
+);
+
+function Observer() {
+    const session = useSharedKindeAccountSession();
+    const { currentUser, isGuest } = useAuth();
+    return <output data-testid="kinde-presence">{[
+        session?.view.phase ?? 'missing', currentUser ? 'fitness-account' : 'fitness-blocked',
+        isGuest ? 'local-guest' : 'not-guest',
+    ].join('|')}</output>;
+}
+
+beforeEach(() => {
+    releaseLegacyTestIdentityReader();
+    localStorage.clear();
+    csrf = 'A'.repeat(43);
+    vi.spyOn(document, 'cookie', 'get').mockImplementation(() => '__Host-logbook_csrf=' + csrf);
+    vi.mocked(readKindeCandidateIdentity).mockResolvedValue({ kind: 'signed-out' });
+    vi.mocked(readKindeCandidateAccess).mockReset();
+    vi.mocked(revokeKindeCandidateSession).mockResolvedValue();
+});
+afterEach(() => {
+    cleanup();
+    vi.restoreAllMocks();
+    vi.resetAllMocks();
+});
+
+describe('React Kinde session boundary never promotes identity into fitness', () => {
+    it('reuses one live session observation between the runtime and the account entry', async () => {
+        vi.mocked(readKindeCandidateIdentity).mockResolvedValue(verified);
+        render(<><Observer /><KindeAccountEntry identityOnly /></>, { wrapper: host });
+        await screen.findByText(/Sessione Kinde verificata/);
+        expect(screen.getByTestId('kinde-presence').textContent)
+            .toBe('identity-verified|fitness-blocked|not-guest');
+        expect(readKindeCandidateIdentity).toHaveBeenCalledTimes(1);
+        expect(readKindeCandidateAccess).not.toHaveBeenCalled();
+        expect(authenticatedIdentitySource.hasReader()).toBe(false);
+        expect(authenticatedIdentitySource.readUid()).toBeNull();
+        expect(submitKindeHostedSignIn).not.toHaveBeenCalled();
+    });
+
+    it('invalidates the shared identity on a replacement cookie without installing an account owner', async () => {
+        vi.mocked(readKindeCandidateIdentity).mockResolvedValueOnce(verified)
+            .mockResolvedValue({ kind: 'signed-out' });
+        render(<><Observer /><KindeAccountEntry identityOnly /></>, { wrapper: host });
+        await screen.findByText(/Sessione Kinde verificata/);
+        csrf = 'B'.repeat(43);
+        await act(async () => { window.dispatchEvent(new Event('focus')); });
+        await screen.findByRole('button', { name: 'Accedi o registrati' });
+        expect(screen.getByTestId('kinde-presence').textContent)
+            .toBe('signed-out|fitness-blocked|not-guest');
+        expect(readKindeCandidateIdentity).toHaveBeenCalledTimes(2);
+        expect(authenticatedIdentitySource.readUid()).toBeNull();
+    });
+
+    it('keeps the guest archive local and performs no Kinde request while the guest is active', async () => {
+        localStorage.setItem('logbook_is_guest', 'true');
+        localStorage.setItem(GUEST_SESSION_KEY, 'guest-runtime-session');
+        activateGuestSession('guest-runtime-session');
+        render(<Observer />, { wrapper: host });
+        await waitFor(() => expect(screen.getByTestId('kinde-presence').textContent)
+            .toBe('guest-blocked|fitness-blocked|local-guest'));
+        expect(readKindeCandidateIdentity).not.toHaveBeenCalled();
+        expect(readKindeCandidateAccess).not.toHaveBeenCalled();
+        expect(authenticatedIdentitySource.readUid()).toBeNull();
+    });
+
+    it('uses one session revocation and then publishes only signed-out, never a fitness user', async () => {
+        vi.mocked(readKindeCandidateIdentity).mockResolvedValueOnce(verified)
+            .mockResolvedValue({ kind: 'signed-out' });
+        render(<><Observer /><KindeAccountEntry identityOnly /></>, { wrapper: host });
+        await screen.findByText(/Sessione Kinde verificata/);
+        fireEvent.click(screen.getByRole('button', { name: 'Termina sessione TheLogBook' }));
+        await screen.findByRole('button', { name: 'Accedi o registrati' });
+        expect(revokeKindeCandidateSession).toHaveBeenCalledTimes(1);
+        expect(readKindeCandidateIdentity).toHaveBeenCalledTimes(2);
+        expect(screen.getByTestId('kinde-presence').textContent)
+            .toBe('signed-out|fitness-blocked|not-guest');
+    });
+});

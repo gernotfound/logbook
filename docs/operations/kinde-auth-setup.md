@@ -1,5 +1,8 @@
 # Kinde — configurazione del provider per TheLogBook
 
+> **18/11/2026 · Preparazione runtime Kinde, non GO fitness.** Da v2.530.0 la lettura di sessione Kinde è condivisa dal provider React e dalla schermata di ingresso senza una seconda lettura indipendente. Il provider pubblica soltanto una presenza osservata: `GuestOnlyAuthProvider.currentUser` resta nullo, `identityOnly` resta attivo e non esiste un owner fitness/grant né una chiamata ADK/consenso dal percorso pubblico. I bridge candidati per consenso, vault e D1 devono essere completati e verificati, quindi integrati con una nuova authorization indipendente prima di abilitare schede fitness. Nessuna configurazione OAuth, cookie, secret o binding cambia con questa release.
+
+
 ## CF-03 · disaccoppiamento fonte owner Firebase (18/11/2026, v2.525.0)
 
 La `GuestOnlyAuthProvider` è l'autorità UI corrente e non rappresenta account autenticati. Nel precedente codice, il semplice import di `src/lib/firebase.ts` registrava globalmente il suo `auth.currentUser` nel lettore owner, pur senza montare il vecchio `AuthProvider`. Questo consentiva a una sessione Firebase persistita di influenzare `storageOwner()` e i blocchi di purge durante il bootstrap Kinde-first.
