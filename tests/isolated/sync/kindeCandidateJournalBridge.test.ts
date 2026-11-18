@@ -2,12 +2,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { LEGAL_VERSIONS } from '../../../src/lib/legalVersions';
 import { KindeCandidateBoundaryError } from '../../../src/lib/auth/kindeCandidateClient';
 import { deliverKindeCandidateJournal } from '../../../src/lib/sync/kindeCandidateJournalBridge';
-import { readLocal } from '../../../src/lib/sync/localRepository';
+import { readLocal } from '../../../src/lib/sync/localArchiveBootstrap';
 import { acquireCloudflareAccountKeyCandidate } from '../../../src/lib/sync/cloudflareAccountKeyCandidate';
 import { deliverCloudflareJournalCandidate } from '../../../src/lib/sync/cloudflareJournalCandidate';
 import type { LocalEnvelope } from '../../../src/lib/sync/localRepository';
 
-vi.mock('../../../src/lib/sync/localRepository', () => ({ readLocal: vi.fn() }));
+vi.mock('../../../src/lib/sync/localArchiveBootstrap', () => ({ readLocal: vi.fn() }));
 vi.mock('../../../src/lib/sync/cloudflareAccountKeyCandidate',
     () => ({ acquireCloudflareAccountKeyCandidate: vi.fn() }));
 vi.mock('../../../src/lib/sync/cloudflareJournalCandidate',

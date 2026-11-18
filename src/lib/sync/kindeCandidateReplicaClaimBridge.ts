@@ -8,7 +8,7 @@ import { acquireCloudflareAccountKeyCandidate } from './cloudflareAccountKeyCand
 import { readAuthenticatedCloudflareCheckpoint } from './cloudReplicaCheckpoint';
 import { stageCloudflareReplicaClaim, resumeCloudflareReplicaClaim } from './cloudReplicaClaimRecovery';
 import { createCloudflareReplicaTransport, type CloudReplicaControlSnapshot } from './cloudReplicaTransport';
-import { readLocal } from './localRepository';
+import { readLocal } from './localArchiveBootstrap';
 import { userOwner } from './owner';
 import { requireUnlockedLocalKey } from './secureArchiveSession';
 

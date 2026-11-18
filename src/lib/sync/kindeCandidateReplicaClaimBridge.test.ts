@@ -15,7 +15,7 @@ const adapters = vi.hoisted(() => ({
 vi.mock('../firebase', () => {
     throw Error('A Kinde candidate claim must never initialize Firebase');
 });
-vi.mock('./localRepository', () => ({ readLocal: adapters.readLocal }));
+vi.mock('./localArchiveBootstrap', () => ({ readLocal: adapters.readLocal }));
 vi.mock('./secureArchiveSession', () => ({ requireUnlockedLocalKey: adapters.unlocked }));
 vi.mock('./cloudflareAccountKeyCandidate', () =>
     ({ acquireCloudflareAccountKeyCandidate: adapters.cloudKey }));

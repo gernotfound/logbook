@@ -8,7 +8,8 @@ import type {
     CloudReplicaControlSnapshot, CloudReplicaSnapshot, createCloudflareReplicaTransport,
 } from './cloudReplicaTransport';
 import { parseCloudflareDeliveryIntent, type CloudflareDeliveryIntent } from './cloudReplicaDeliveryRecord';
-import { readLocal, acknowledgeThrough } from './localRepository';
+import { readLocal } from './localArchiveBootstrap';
+import { acknowledgeThrough } from './localJournalAcknowledgement';
 import { normalizeStorageOwner } from './owner';
 import type { ReplicaIdentity } from './replicaProtocol';
 import { updateArchiveRecord } from './secureArchiveRepository';

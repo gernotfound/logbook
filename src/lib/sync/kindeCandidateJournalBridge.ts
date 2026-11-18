@@ -2,7 +2,7 @@ import { captureKindeCandidateSessionFence, KindeCandidateBoundaryError,
     readKindeCandidateAccess } from '../auth/kindeCandidateClient';
 import { isKindeAccountLocalFitnessClear } from './kindeOwnerLocalFitnessFence';
 import { readBrowserValueStrict } from './browserStorage';
-import { readLocal } from './localRepository';
+import { readLocal } from './localArchiveBootstrap';
 import { userOwner } from './owner';
 import { acquireCloudflareAccountKeyCandidate } from './cloudflareAccountKeyCandidate';
 import { deliverCloudflareJournalCandidate } from './cloudflareJournalCandidate';

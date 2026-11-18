@@ -5,7 +5,7 @@ import { parseCloudflareDeliveryIntent, type CloudflareDeliveryIntent } from './
 import type {
     CloudReplicaCompleteScan, createCloudflareReplicaTransport,
 } from './cloudReplicaTransport';
-import { readLocal } from './localRepository';
+import { readLocal } from './localArchiveBootstrap';
 import { normalizeStorageOwner } from './owner';
 import { updateArchiveRecord } from './secureArchiveRepository';
 import { validateLocalEnvelope } from './localEnvelopeValidation';

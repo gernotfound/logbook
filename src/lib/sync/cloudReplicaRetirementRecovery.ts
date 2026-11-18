@@ -6,7 +6,7 @@ import {
 import {
     parseCloudflareReplicaRetirementIntent, type CloudflareReplicaRetirementIntent,
 } from './cloudReplicaRetirementRecord';
-import { readLocal } from './localRepository';
+import { readLocal } from './localArchiveBootstrap';
 import { normalizeStorageOwner } from './owner';
 import type { ReplicaIdentity } from './replicaProtocol';
 import { updateArchiveRecord } from './secureArchiveRepository';
