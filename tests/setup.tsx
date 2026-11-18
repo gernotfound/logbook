@@ -149,7 +149,7 @@ const storageMocks = vi.hoisted(() => {
 export const localStorageMock = storageMocks.localStorageMock;
 export const sessionStorageMock = storageMocks.sessionStorageMock;
 
-import { storageOwner } from '../src/lib/sync/session';
+import { isActiveGuestSession, storageOwner } from '../src/lib/sync/session';
 import React from 'react';
 import { render, act } from '@testing-library/react';
 import { AuthProvider } from '../src/contexts/AuthContext';
@@ -648,6 +648,8 @@ export interface RenderOptions {
 // AuthProvider. That setup needs the explicitly selected synthetic UID;
 // production must never obtain it from a Firebase module-level side effect.
 function authenticatedFixtureOwner(): string {
+  // A verified guest generation outranks any stale account fixture.
+  if (isActiveGuestSession()) return 'guest';
   return auth.currentUser ? 'user:' + auth.currentUser.uid : storageOwner();
 }
 
