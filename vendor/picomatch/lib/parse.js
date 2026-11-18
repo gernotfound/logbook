@@ -30,7 +30,7 @@ const expandRange = (args, options) => {
   try {
     /* eslint-disable-next-line no-new */
     new RegExp(value);
-  } catch (ex) {
+  } catch {
     return args.map(v => utils.escapeRegex(v)).join('..');
   }
 
