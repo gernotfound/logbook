@@ -368,3 +368,18 @@ non autorizzano il replay. Il controllo UID è solo un prerequisito:
 mantenere fence Auth, consenso, generazione, journal durevole e ACK
 verificabile nelle transazioni effettive. Non reintrodurre dipendenze
 Firebase nell'owner-neutral store.
+
+## Nessun successo cloud senza identità e prova di journal (18/11/2026)
+
+`DB.saveUserData()` non deve dichiarare `synced` soltanto perché
+`firebase.auth.currentUser` è `null`. Anche senza sessione del vecchio
+provider, l'owner potrebbe avere un journal IndexedDB durevole da consegnare.
+Il risultato passa sempre attraverso `replicateJournal()`, che verifica
+owner, sessione, consenso, archivio locale, commit remoto e ACK prima di
+consentire lo stato `synced`. Per il guest genuino vale il successo solo
+locale verificato dal medesimo boundary; per un account non autorizzato
+il journal rimane invariato e il cloud non viene attestato.
+
+**MUST:** quando Auth verrà sostituito con Kinde, utilizzare un writer
+Workers/D1 verificato prima di ammettere `synced` per quell'owner;
+assenza di Firebase non autorizza un ACK né un fallback implicito.
