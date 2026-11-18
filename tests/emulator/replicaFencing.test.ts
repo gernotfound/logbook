@@ -11,7 +11,7 @@ vi.mock('../../src/lib/healthConsent', async () => ({
     ...(await vi.importActual<typeof import('../../src/lib/healthConsent')>('../../src/lib/healthConsent')),
     getVerifiedHealthConsentRevision: () => 1,
 }));
-import { claimReplicaCheckpoint, retireExpiredReplicas } from '../../src/lib/sync/replicaProtocol';
+import { claimReplicaCheckpoint, retireExpiredReplicas } from '../../src/lib/sync/firebaseReplicaProtocol';
 import { sealCloudDocument, openCloudDocument } from '../../src/lib/sync/cloudDocumentCipher';
 import { seedTrustedConsent, asModularFirestore } from './replicaHarness';
 

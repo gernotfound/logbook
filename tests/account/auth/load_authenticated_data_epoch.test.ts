@@ -518,6 +518,7 @@ describe('authenticated hydration session fencing', () => {
         const { loadAuthenticatedData, initializeLocal, commitDomainOperations, readLocal, invalidateSession } = await loadModules();
         const repository = await import('../../../src/lib/sync/localRepository');
         const protocol = await import('../../../src/lib/sync/replicaProtocol');
+        const firebaseProtocol = await import('../../../src/lib/sync/firebaseReplicaProtocol');
         const catalogModule = await import('../../../src/lib/catalog/catalogService');
         const healthConsent = await import('../../../src/lib/healthConsent');
         const { captureSession, isCurrentSession } = await import('../../../src/lib/sync/session');
@@ -561,11 +562,11 @@ describe('authenticated hydration session fencing', () => {
         const cloudGate = vi.mocked(healthConsent.isHealthConsentCloudWritable);
         cloudGate.mockImplementation(() => cloudAllowed);
         vi.mocked(protocol.needsReplicaCheckpoint).mockReturnValue(true);
-        const retire = vi.spyOn(protocol, 'retireExpiredReplicas').mockResolvedValue(undefined);
+        const retire = vi.spyOn(firebaseProtocol, 'retireExpiredReplicas').mockResolvedValue(undefined);
         const catalogRead = vi.spyOn(catalogModule, 'getCachedCatalog');
         const originalUpdate = vi.mocked(update).getMockImplementation();
         if (!originalUpdate) throw new Error('Missing transactional IndexedDB adapter');
-        const claimCheckpoint = vi.spyOn(protocol, 'claimReplicaCheckpoint').mockImplementationOnce(async () => {
+        const claimCheckpoint = vi.spyOn(firebaseProtocol, 'claimReplicaCheckpoint').mockImplementationOnce(async () => {
             beforeAdoption = await readLocal('user:user-a');
             ciphertext = await get('logbook:v2:user:user-a');
             if (boundary === 'catalog') {

@@ -1,5 +1,10 @@
 # Ciclo account, Auth e guest — TheLogBook
 
+### Preparazione account Kinde non montata (18/11/2026)
+
+Il candidato `prepareKindeCandidateOwner()` compone verifica fidata email/consenso, recovery del vault device Kinde (senza Firebase), hydration cifrata e claim D1 recuperabile. La generazione della sessione del chiamante e il CSRF host-only restano fissati attraverso ogni await; non installa `currentUser`, non trasferisce guest né abilita direttamente le funzioni fitness. `isKindeAccountLocalFitnessClear()` rifiuta guest attivo, revoca salute locale (anche pending), cancellazione account e generazione locale divergente; tale verifica è ripetuta in hydration, claim e journal. Restano obbligatori il runtime Auth/consenso/diritti, API/provider Production e test multi-device/Safari prima del cutover.
+
+
 ### Confine lettore di identità autenticata indipendente dal provider (17/11/2026, candidato)
 
 `src/lib/sync/session.ts` non importa più Firebase direttamente. Il lettore sincrono di identità è registrato dal **solo provider attivo** e restituisce `null` se non è autenticato; un secondo provider concorrente, un UID malformato o un errore della sorgente falliscono chiusi. La registrazione legacy esiste soltanto mentre il vecchio `AuthProvider` è montato: l'import di `src/lib/firebase.ts` non registra più alcun UID. Il consumer Kinde-first non installa ancora un owner autenticato. Per il passaggio a Kinde sarà obbligatorio rimuovere il vecchio provider e registrare la sorgente soltanto dopo la verifica della sessione Kinde, con fencing delle sue generazioni. La sola presenza di un UID non sblocca vault, consenso o operazioni D1.

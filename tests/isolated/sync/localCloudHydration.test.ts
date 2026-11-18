@@ -195,6 +195,27 @@ describe('Kinde checkpoint to a device-owned archive', () => {
         expect(await get(storageKey)).toBeUndefined();
     });
 
+    it('never fetches cloud ciphertext when local account consent withdrawal is pending', async () => {
+        await createAndMigrateVault(kindeOwner);
+        localStorage.setItem(storageKey + ':health-consent-withdrawal', 'pending:1');
+        const send = server();
+        await expect(hydrateKindeCandidateArchive({
+            expected: principal, browserCookies, stillCurrent: () => true, send,
+        })).rejects.toThrow();
+        expect(vi.mocked(send)).not.toHaveBeenCalled();
+        expect(await get(storageKey)).toBeUndefined();
+    });
+
+    it('refuses a withdrawal that appears during the encrypted cloud scan', async () => {
+        await createAndMigrateVault(kindeOwner);
+        const send = server(async () => {
+            localStorage.setItem(storageKey + ':health-consent-withdrawal', 'pending:1');
+        });
+        await expect(hydrateKindeCandidateArchive({
+            expected: principal, browserCookies, stillCurrent: () => true, send,
+        })).rejects.toThrow();
+        expect(await get(storageKey)).toBeUndefined();
+    });
     it('preserves a competing tab’s newly created archive if the revision changed during the scan', async () => {
         await createAndMigrateVault(kindeOwner);
         let competingCiphertext: unknown;

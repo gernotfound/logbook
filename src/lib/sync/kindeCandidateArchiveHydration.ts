@@ -2,7 +2,7 @@ import { captureKindeCandidateSessionFence, KindeCandidateBoundaryError } from '
 import { getCachedCatalog } from '../catalog/catalogService';
 import { UserDataSchema } from '../schema';
 import type { UserData } from '../../types';
-import { readBrowserValueStrict } from './browserStorage';
+import { isKindeAccountLocalFitnessClear } from './kindeOwnerLocalFitnessFence';
 import { applyRemoteDocuments, type DocumentData } from './documentProjection';
 import { inspectKindeCandidateCloudCheckpoint, type KindeCandidateCheckpointObservation } from './kindeCandidateCheckpointBridge';
 import { readLocal } from './localArchiveBootstrap';
@@ -31,8 +31,7 @@ export async function hydrateKindeCandidateArchive({
     const current = () => {
         try {
             if (!fence.stillCurrent() || requireUnlockedLocalKey(owner) !== deviceKey) return false;
-            const guest = readBrowserValueStrict('logbook_is_guest');
-            return guest === null || guest === 'false';
+            return isKindeAccountLocalFitnessClear(owner, principal.healthConsentRevision);
         } catch { return false; }
     };
     if (!current()) throw new KindeCandidateBoundaryError();

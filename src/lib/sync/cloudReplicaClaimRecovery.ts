@@ -6,7 +6,7 @@ import {
     type CloudReplicaControlSnapshot, type CloudReplicaMutationResult, type createCloudflareReplicaTransport,
 } from './cloudReplicaTransport';
 import { parseCloudflareReplicaClaimIntent, type CloudflareReplicaClaimIntent } from './cloudReplicaClaimRecord';
-import { readLocal } from './localRepository';
+import { readLocal } from './localArchiveBootstrap';
 import { adoptReplicaCheckpoint } from './localReplicaCheckpoint';
 import { normalizeStorageOwner } from './owner';
 import { checkpointFromCloudDocuments, type ReplicaIdentity } from './replicaProtocol';

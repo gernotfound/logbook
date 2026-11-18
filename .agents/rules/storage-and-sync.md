@@ -1,5 +1,10 @@
 # Storage e sincronizzazione — TheLogBook
 
+### CF-03/04 — Bootstrap device Kinde e fence contro revoca locale (18/11/2026)
+
+La composizione candidata `prepareKindeCandidateOwner()` prima riusa/crea il vault device owner-scoped solo dopo consent trusted attivo, poi verifica due volte la sessione, esegue hydration AEAD e infine la replica claim con intento cifrato. `isKindeAccountLocalFitnessClear()` è un gate fitness locale aggiuntivo, distinto dal controllo D1: i marker owner-scoped di revoca/cancellazione e una generazione consenso divergente bloccano letture/scritture anche se una risposta remota ancora riporta active. Hydration, claim e journal lo ricontrollano nei guard asincroni/IndexedDB; revoca non è un diritto all'ACK o all'azzeramento del journal. I test usano IndexedDB effettivo in memoria con controllo dell'envelope cifrato; niente grant runtime su `main` senza API/D1 e lifecycle Kinde verificati.
+
+
 ### CF-03 — Osservazione del checkpoint D1 con sessione Kinde (17/11/2026)
 
 Il bridge di sola lettura `inspectKindeCandidateCloudCheckpoint` verifica sessione e consenso, continuità del cookie CSRF e della generazione, ADK monouso, scansione D1 revision-fenced, integrità AEAD owner/path e nuova prova trusted finale. `hydrateKindeCandidateArchive` richiede inoltre un vault già autorizzato per l'owner atteso. Nella transazione IndexedDB ricontrolla la stessa apertura del vault, il cookie, il guard del chiamante, la revisione locale pre-scansione e la generazione del consenso. Una modifica concorrente o una transizione di consegna, claim o retirement pendente sospende la hydration. La copia locale conserva il journal. L'adozione della replica e gli ACK richiedono prove separate. Il bridge resta isolato dal runtime pubblico.

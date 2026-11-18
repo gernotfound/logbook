@@ -1,7 +1,8 @@
 import { resumeCloudflareDelivery, stageCloudflareDelivery } from './cloudReplicaDurableDelivery';
 import { CloudReplicaTransportError, type createCloudflareReplicaTransport } from './cloudReplicaTransport';
 import { restageUncommittedCloudflareDelivery } from './cloudReplicaDeliveryRecovery';
-import { ensureBoundedPendingSequences, readLocal } from './localRepository';
+import { ensureBoundedPendingSequences } from './localPendingSequences';
+import { readLocal } from './localArchiveBootstrap';
 import { normalizeStorageOwner } from './owner';
 import { boundedPendingTransactionBatch } from './syncBatching';
 

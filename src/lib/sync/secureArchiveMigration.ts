@@ -1,7 +1,7 @@
 import { get } from 'idb-keyval';
 import { readBrowserValueStrict } from './browserStorage';
 import { normalizeStorageOwner } from './owner';
-import { deviceKey, protectedDeviceKey } from './deviceStorage';
+import { deviceKey, protectedDeviceKey } from './deviceStorageKeys';
 import { openLocalJson, openLocalText, SEALED_LOCAL_PREFIX, LocalCiphertextError } from './secureArchiveCipher';
 import { createLocalKeyVault, unlockLocalKeyVault } from './secureArchiveKeys';
 import { publishVaultControl, reconcileVaultControl } from './secureArchiveControlRecovery';

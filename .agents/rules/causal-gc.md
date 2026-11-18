@@ -5,6 +5,10 @@
 
 **Autorità:** [`AGENTS.md`](../../AGENTS.md). Questo contratto ne specializza gli invarianti; non amplia autorizzazioni o perimetro.
 
+### Separazione della replica pura dal trasporto Firestore (18/11/2026)
+
+`src/lib/sync/replicaProtocol.ts` definisce identità, registro, clock e controlli di causalità senza inizializzare Firebase né leggere il consenso da Firebase. Le operazioni **solo legacy Firestore** `claimReplicaCheckpoint()` e `retireExpiredReplicas()` vivono in `src/lib/sync/firebaseReplicaProtocol.ts` e conservano il controllo della sessione/consenso nel callback transazionale e le Security Rules indipendenti. I chiamanti Firebase usano esplicitamente l'adapter; i bridge Kinde/D1 devono dipendere esclusivamente dal protocollo puro. Questa separazione non installa una replica D1, non trasferisce dati e non è un'autorizzazione al cutover.
+
 ## Obiettivo
 
 M4 riduce la crescita dei metadati `_sync` senza indebolire le garanzie causali stabilite da M2/M3. La compaction deve essere semantics-preserving per business state e causal state osservabile dopo ricompattazione.
