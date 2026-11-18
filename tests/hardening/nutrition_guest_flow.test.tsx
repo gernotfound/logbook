@@ -9,7 +9,6 @@ import { activateGuestSession, captureSession, GUEST_SESSION_KEY, invalidateSess
 import { initializeLocal, readLocal } from '../../src/lib/sync/localRepository';
 import { prepareUnlockedTestArchive } from '../secureVaultFixture';
 import { lockAllVaults } from '../../src/lib/sync/secureArchiveSession';
-import { authenticatedIdentitySource } from '../../src/lib/sync/authenticatedIdentitySource';
 import { useNutritionMeals } from '../../src/hooks/useNutritionMeals';
 import { useDialogStore } from '../../src/store/useDialogStore';
 import { useAppStore } from '../../src/store/useAppStore';
@@ -19,8 +18,6 @@ const DATE = '2026-09-14';
 // This Firebase Auth test double supports a writable currentUser seam;
 // its complete production User interface is not represented by the fixture.
 const authFixture = auth as unknown as { currentUser: { uid: string } | null };
-const readFixtureIdentity = () => authFixture.currentUser;
-let releaseFixtureIdentity: (() => void) | null = null;
 const parse = (value: unknown) => UserDataSchema.parse(value) as unknown as UserData;
 
 function fixture(): UserData {
@@ -48,7 +45,6 @@ async function runMutation(action: () => Promise<unknown>) {
 }
 
 beforeEach(async () => {
-    releaseFixtureIdentity = authenticatedIdentitySource.install(readFixtureIdentity);
     useAppStore.getState().resetStore();
     vi.clearAllMocks();
     authFixture.currentUser = { uid: 'nutrition-hardening-user' };
@@ -67,11 +63,7 @@ beforeEach(async () => {
     await prepareUnlockedTestArchive(owner);
     await initializeLocal(owner, useAppStore.getState().userData!);
 });
-afterEach(() => {
-    lockAllVaults();
-    releaseFixtureIdentity?.();
-    releaseFixtureIdentity = null;
-});
+afterEach(() => lockAllVaults());
 
 describe('M5 nutrition account flow through useNutritionMeals', () => {
     it('writes current nutrition only to the active guest archive, not the previous account owner', async () => {
