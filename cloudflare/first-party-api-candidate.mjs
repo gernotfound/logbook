@@ -103,5 +103,11 @@ export async function routeCandidateFirstPartyApi(request, env) {
   // pass through intact; never buffer, parse or cache a sensitive body.
   const directives = response.headers.get('cache-control')?.toLowerCase().split(',') ?? [];
   if (!directives.some(value => value.trim() === 'no-store')) return denied(502);
+  // The fitness Worker may return data or an error, never control browser
+  // authentication state or navigation. Kinde alone owns those responses.
+  if (route.binding === 'D1_API' && (response.headers.has('set-cookie')
+    || response.headers.has('location') || (response.status >= 300 && response.status < 400))) {
+    return denied(502);
+  }
   return response;
 }
