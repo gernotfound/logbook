@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 import { test } from 'node:test';
+import { selectPublishedFix, isOfficialPublishedFix, issueAlreadyExists } from '../../scripts/check-picomatch-upstream.mjs';
 
 const require = createRequire(import.meta.url);
 const picomatch = require('picomatch');
@@ -68,4 +69,47 @@ void test('unmatched brackets and backslashes have linear-sized output', () => {
   assert.equal(removeBackslashes(openBrackets), openBrackets);
   assert.equal(removeBackslashes(openBrackets + '\\a'), openBrackets + 'a');
   assert.equal(removeBackslashes(openBrackets + ']'), openBrackets + ']');
+});
+
+
+void test('monitor fails closed for withdrawn, missing and inconsistent security advisories', () => {
+  const sample = { ghsa_id: 'GHSA-fc5q-39xc-vjpf', vulnerabilities: [{
+    package: { ecosystem: 'npm', name: 'picomatch' }, first_patched_version: null,
+  }] };
+  assert.equal(selectPublishedFix(sample), null);
+  assert.equal(selectPublishedFix({ ...sample, withdrawn_at: '2026-11-18T00:00:00Z' }), null);
+  assert.equal(selectPublishedFix({ ...sample, ghsa_id: 'GHSA-wrong' }), null);
+  assert.equal(selectPublishedFix({ ...sample, vulnerabilities: [{
+    package: { ecosystem: 'npm', name: 'other' },
+    first_patched_version: { identifier: '4.0.8' },
+  }] }), null);
+  assert.throws(() => selectPublishedFix({ ghsa_id: sample.ghsa_id }), /Incomplete/);
+});
+
+void test('monitor requires official stable patched version published with valid npm metadata', () => {
+  const vuln = { package: { ecosystem: 'npm', name: 'picomatch' },
+    first_patched_version: { identifier: '4.0.8' } };
+  const advisory = { ghsa_id: 'GHSA-fc5q-39xc-vjpf', vulnerabilities: [vuln] };
+  assert.equal(selectPublishedFix(advisory), '4.0.8');
+  assert.equal(selectPublishedFix({ ...advisory, vulnerabilities: [{
+    ...vuln, first_patched_version: { identifier: '4.0.8-rc.1' },
+  }] }), null);
+  assert.equal(selectPublishedFix({ ...advisory, vulnerabilities: [{
+    ...vuln, first_patched_version: { identifier: '4.0.7' },
+  }] }), null);
+  const release = { name: 'picomatch', version: '4.0.8', dist: {
+    integrity: 'sha512-aGVsbG8=', tarball: 'https://registry.npmjs.org/picomatch/-/picomatch-4.0.8.tgz',
+  } };
+  assert.equal(isOfficialPublishedFix(release, '4.0.8'), true);
+  assert.equal(isOfficialPublishedFix({ ...release, version: '4.0.7' }, '4.0.8'), false);
+  assert.equal(isOfficialPublishedFix({ ...release, dist: {
+    ...release.dist, tarball: 'https://example.com/not-official.tgz',
+  } }, '4.0.8'), false);
+});
+
+void test('monitor does not create another issue when an open or closed match exists', () => {
+  const title = '[Security] picomatch: replace local GHSA-fc5q-39xc-vjpf backport';
+  assert.equal(issueAlreadyExists([{ title, state: 'closed' }]), true);
+  assert.equal(issueAlreadyExists([{ title, state: 'open', pull_request: {} }]), false);
+  assert.equal(issueAlreadyExists([{ title: 'unrelated', state: 'open' }]), false);
 });

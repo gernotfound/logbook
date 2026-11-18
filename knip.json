@@ -11,6 +11,7 @@
     "vitest.mutation.config.mjs",
     "tests/cloudflare/*.node.mjs",
     "vendor/picomatch/posix.js",
-    "vendor/picomatch/lib/utils.js"
+    "vendor/picomatch/lib/utils.js",
+    "scripts/check-picomatch-upstream.mjs"
   ]
 }
