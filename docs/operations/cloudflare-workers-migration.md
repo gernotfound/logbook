@@ -1,5 +1,10 @@
 # TheLogBook — migrazione Cloudflare: runbook corrente
 
+## CF-03/04 — risposte API sanitarie senza controllo della sessione (18/11/2026, candidato v2.522.0)
+
+Il gateway first-party Cloudflare ora rifiuta con 502 una risposta del servizio privato `D1_API` che imposti `Set-Cookie`, `Location` o uno stato HTTP 3xx. Il servizio Kinde rimane l'unico responsabile di cookie e redirect OAuth. Il gateway continua a richiedere `Cache-Control: no-store`, a distinguere un errore HTTP da un ACK e a non esporre dati salute in caso di risposta anomala. Regressioni Node usano il boundary di produzione e verificano rifiuto, nessun cookie/redirect verso il browser e comportamento Kinde invariato. **Nessuna route D1 pubblicata, schema modificato, dato migrato o GO funzionale** da questo intervento.
+
+
 ## CF-05 · empty-body status boundary Cloudflare (17/11/2026, v2.509.0)
 
 Il Worker candidato `/v1/consent/status` rifiutava qualunque `request.body !== null`, incluso uno stream HTTP realmente vuoto inoltrato dal gateway (pattern analogo al 403 precedentemente corretto in Kinde). L'helper condiviso `cloudflare/http/strict-empty-post.mjs` controlla Content-Length ma drena i byte **effettivamente ricevuti**, entro un limite e un timeout, prima di AuthGate/D1. Falsi `Content-Length: 0`, anche con un singolo byte di spazio o NUL, sono respinti. Il test di regressione usa ReadableStream con `duplex: 'half'` e ripete il controllo sul percorso Kinde. Nessuna API salute è pubblicata da questo incremento; consenso/ADK/sync/erasure e identità del proprietario restano gate per il cutover.
