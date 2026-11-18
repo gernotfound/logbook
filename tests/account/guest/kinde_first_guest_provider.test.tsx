@@ -6,6 +6,7 @@ import { useAuth } from '../../../src/hooks/useAuth';
 import { useAppStore } from '../../../src/store/useAppStore';
 import { DB } from '../../../src/lib/db';
 import { auth, onAuthStateChanged } from '../../../src/lib/firebase';
+import { releaseLegacyTestIdentityReader } from '../../setup';
 import { authenticatedIdentitySource } from '../../../src/lib/sync/authenticatedIdentitySource';
 import { activateGuestSession, captureSession, GUEST_REVOCATION_KEY, GUEST_SESSION_KEY, storageOwner } from '../../../src/lib/sync/session';
 
@@ -21,6 +22,7 @@ const wrapper = ({ children }: { children: React.ReactNode }) =>
 
 describe('Kinde-first guest provider: no legacy account activation', () => {
     beforeEach(() => {
+        releaseLegacyTestIdentityReader();
         localStorage.clear();
         useAppStore.getState().resetStore({ force: true });
         vi.clearAllMocks();
