@@ -13,8 +13,9 @@ import { readBrowserValueStrict, removeBrowserValue, writeBrowserValue } from '.
 import { clearAuthenticatedOwnerHint } from '../../lib/sync/authOwnerHint';
 import { ensureLocalVaultReady } from '../../lib/sync/secureArchiveUnlockFlow';
 import { isVaultUnlocked } from '../../lib/sync/secureArchiveSession';
+import { GUEST_KEY } from '../../lib/sync/sessionKeys';
 
-export const GUEST_KEY = 'logbook_is_guest';
+export { GUEST_KEY } from '../../lib/sync/sessionKeys';
 
 /** The same guard used at both asynchronous guest bootstrap boundaries. */
 export function isGuestVaultReadinessCurrent(
