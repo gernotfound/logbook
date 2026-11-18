@@ -31,7 +31,12 @@ import { watchAuthenticatedAccountActivity } from '../lib/accountActivity';
 import { clearAuthenticatedOwnerHint } from '../lib/sync/authOwnerHint';
 import { cancelLocalVaultReadiness } from '../lib/sync/secureArchiveUnlockFlow';
 import { lockVault } from '../lib/sync/secureArchiveSession';
+import { authenticatedIdentitySource } from '../lib/sync/authenticatedIdentitySource';
 import { readGuestMigrationSyncRecovery, markGuestMigrationSyncRecovery, clearGuestMigrationSyncRecovery } from '../lib/auth/guestMigrationSyncRecovery';
+
+// The legacy provider is test-only in the Kinde-first application. Importing
+// Firebase from a guest component must never install a Firebase UID as owner.
+const readLegacyAuthenticatedIdentity = () => auth.currentUser;
 
 function isStoredGuest(): boolean {
     return readBrowserValueStrict(GUEST_KEY) === 'true' && readBrowserValueStrict(GUEST_REVOCATION_KEY) === null && isActiveGuestSession();
@@ -61,6 +66,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const setUserData = useAppStore(state => state.setUserData);
     const setSyncing = useAppStore(state => state.setSyncing);
     const setSaveError = useAppStore(state => state.setSaveError);
+
+    useEffect(() => authenticatedIdentitySource.install(readLegacyAuthenticatedIdentity), []);
 
     useEffect(() => {
         const reconcileGuestSession = () => {
