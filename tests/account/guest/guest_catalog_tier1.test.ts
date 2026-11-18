@@ -9,10 +9,10 @@ import {
     getSeedCatalog,
     saveCatalogToCache,
     clearCatalogCache,
-    syncGlobalCatalog,
     getInMemoryCatalog,
     CATALOG_CACHE_KEY
 } from '../../../src/lib/catalog/catalogService';
+import { syncGlobalCatalog } from '../../../src/lib/catalog/firestoreCatalogAdapter';
 import {
     resolveEffectiveExercises,
     resolveEffectiveFoods

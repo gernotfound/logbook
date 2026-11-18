@@ -266,3 +266,14 @@ Questi record non autorizzano un reset ne' una riqualificazione come
 sintetici senza inventario. Il workflow operativo recovery D1 manual-only
 prepara la verifica e migrazione 0003-0004 in via indipendente e chiusa;
 non attiva automaticamente trattamenti dati o nuovi endpoint.
+
+## CF-03 — confine runtime catalogo (18/11/2026, codice v2.517.0 candidato)
+
+Lettura catalogo per guest/offline disaccoppiata da Firestore:
+`catalogService.ts` usa seed, memoria e IndexedDB e non importa SDK
+Firebase. Il refresh remoto legacy è confinato in
+`firestoreCatalogAdapter.ts`, ancora raggiunto dal loader
+Firestore account; questo **non dismette Firebase**, non modifica
+alcun provider, dato live, catalogo pubblicato o permesso Google.
+Il ritiro effettivo del provider resta VERIFY-LIVE dopo sostituzione
+dei writer, AuthProvider e collaudo Kinde/D1.

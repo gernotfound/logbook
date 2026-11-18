@@ -6,8 +6,10 @@ import { firestoreMockStore } from '../setup';
 vi.unmock('../../src/lib/db');
 vi.mock('../../src/lib/catalog/catalogService', async importOriginal => ({
     ...await importOriginal<typeof import('../../src/lib/catalog/catalogService')>(),
-    syncGlobalCatalog: vi.fn(async () => ({ catalog: { exercises: [], foods: [] }, updated: false })),
     getCachedCatalog: vi.fn(async () => ({ exercises: [], foods: [] })),
+}));
+vi.mock('../../src/lib/catalog/firestoreCatalogAdapter', () => ({
+    syncGlobalCatalog: vi.fn(async () => ({ catalog: { exercises: [], foods: [] }, updated: false })),
 }));
 import { mergeUserData, hasUserData } from '../../src/lib/merge';
 import { createDefaultNutritionPlanning } from '../../src/lib/nutritionDefaults';

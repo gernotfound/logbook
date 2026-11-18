@@ -38,7 +38,8 @@ vi.mock('idb-keyval', async (importOriginal) => {
 import { beforeEach, expect, it, vi } from 'vitest';
 const remote = vi.hoisted(() => ({ get: vi.fn() }));
 vi.mock('firebase/firestore', () => ({ doc: (_db: unknown, collection: string, id: string) => collection + '/' + id, getDoc: remote.get }));
-import { clearCatalogCache, getSeedCatalog, saveCatalogToCache, syncGlobalCatalog, getCachedCatalog } from '../../../src/lib/catalog/catalogService';
+import { clearCatalogCache, getSeedCatalog, saveCatalogToCache, getCachedCatalog } from '../../../src/lib/catalog/catalogService';
+import { syncGlobalCatalog } from '../../../src/lib/catalog/firestoreCatalogAdapter';
 import { resolveEffectiveExercises, resolveEffectiveFoods } from '../../../src/lib/catalog/deltaResolver';
 import { filterCustomExercises, filterCustomFoods } from '../../../src/lib/merge';
 const snap = (data: unknown) => ({ exists: () => data !== undefined, data: () => data });
