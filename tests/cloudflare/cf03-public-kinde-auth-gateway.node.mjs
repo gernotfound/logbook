@@ -43,7 +43,7 @@ void test('frontend mounts only four exact Kinde routes, never a wildcard or D1 
     new URL('../../cloudflare/wrangler.jsonc', import.meta.url), 'utf8',
   ));
   assert.deepEqual(config.assets.run_worker_first, [
-    '/__/auth', '/__/auth/*', ...paths,
+    ...paths,
   ]);
   assert.deepEqual(config.services, [{
     binding: 'KINDE_HTTP', service: 'thelogbook-cf03-kinde-http-isolated',

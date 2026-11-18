@@ -31,7 +31,7 @@ void test('public documents are static, correctly labeled and linked for Google 
 void test('public pages bypass Workers API and unknown paths remain 404', () => {
   assert.equal(config.assets.not_found_handling, '404-page');
   assert.equal(config.assets.html_handling ?? 'auto-trailing-slash', 'auto-trailing-slash');
-  assert.deepEqual(config.assets.run_worker_first, ['/__/auth', '/__/auth/*', '/api/auth/kinde/start', '/api/auth/kinde/callback', '/api/auth/session', '/api/auth/logout']);
+  assert.deepEqual(config.assets.run_worker_first, ['/api/auth/kinde/start', '/api/auth/kinde/callback', '/api/auth/session', '/api/auth/logout']);
   assert.equal(config.workers_dev, false);
   assert.equal(config.preview_urls, false);
 });

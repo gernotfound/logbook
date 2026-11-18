@@ -22,8 +22,8 @@ self.addEventListener('message', (event) => {
 precacheAndRoute(self.__WB_MANIFEST, { ignoreURLParametersMatching: [/^v$/] });
 
 // Treat same-origin document navigations as SPA app-shell requests so manifest
-// shortcuts such as /?tab=training keep working offline. Firebase reserves /__/
-// for Auth/Hosting helpers. Public legal pages are standalone static documents:
+// shortcuts such as /?tab=training keep working offline. The reserved /__/
+// namespace must never receive an app shell (including retired provider helpers). Public legal pages are standalone static documents:
 // never return an authenticated app shell for standalone public or diagnostic pages.
 // OAuth callbacks and API navigations must bypass the offline shell too.
 registerRoute(new NavigationRoute(

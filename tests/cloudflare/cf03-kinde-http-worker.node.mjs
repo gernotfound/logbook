@@ -765,7 +765,7 @@ void test('private Kinde Worker remains unrouted while frontend exposes only fou
   assert.equal(candidate.d1_databases[0].database_name, gate.d1_databases[0].database_name);
   assert.equal(candidate.services[0].service, gate.name);
   assert.equal(candidate.ratelimits[0].name, 'AUTH_RATE_LIMITER');
-  assert.deepEqual(publicFrontend.assets.run_worker_first, ['/__/auth', '/__/auth/*', '/api/auth/kinde/start', '/api/auth/kinde/callback', '/api/auth/session', '/api/auth/logout']);
+  assert.deepEqual(publicFrontend.assets.run_worker_first, ['/api/auth/kinde/start', '/api/auth/kinde/callback', '/api/auth/session', '/api/auth/logout']);
   assert.equal(publicFrontend.main, './auth-proxy.mjs');
 });
 
