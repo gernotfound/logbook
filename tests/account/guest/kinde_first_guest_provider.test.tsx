@@ -42,7 +42,9 @@ describe('Kinde-first guest provider: no legacy account activation', () => {
             const { result } = renderHook(() => useAuth(), { wrapper });
             expect(result.current.currentUser).toBeNull();
             expect(authenticatedIdentitySource.readUid()).toBeNull();
+            localStorage.setItem('logbook_authenticated_owner', 'user:retired-firebase-uid');
             expect(storageOwner()).toBe('guest');
+            expect(localStorage.getItem('logbook_authenticated_owner')).toBe('user:retired-firebase-uid');
             expect(captureSession().owner).toBe('guest');
             expect(onAuthStateChanged).not.toHaveBeenCalled();
         } finally {
