@@ -211,6 +211,27 @@ void test('propagates private 401/409/429 and refuses non-cache-safe or unavaila
   })).status, 503);
 });
 
+void test('fitness responses cannot set identity cookies or redirect the browser', async () => {
+  const { env, calls } = environment();
+  const forbidden = [
+    reply('{}', 200, { 'Set-Cookie': '__Host-logbook_session=forged; Secure; Path=/' }),
+    reply('{}', 200, { Location: 'https://attacker.invalid' }),
+    new Response(null, { status: 303, headers: {
+      Location: 'https://attacker.invalid', 'Cache-Control': 'no-store',
+    } }),
+  ];
+  for (const response of forbidden) {
+    const result = await routeCandidateFirstPartyApi(request(CONTROL), {
+      ...env, D1_API: { fetch: async req => { calls.data.push(req); return response; } },
+    });
+    assert.equal(result.status, 502);
+    assert.equal(result.headers.get('cache-control'), 'no-store');
+    assert.equal(result.headers.has('set-cookie'), false);
+    assert.equal(result.headers.has('location'), false);
+  }
+  assert.equal(calls.data.length, forbidden.length);
+});
+
 void test('missing or invalid runtime bindings fail closed even with a matching URL', async () => {
   const { env } = environment();
   for (const binding of [undefined, {}, { fetch: 'not-a-function' }]) {
