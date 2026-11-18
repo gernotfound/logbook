@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
 import { test } from 'node:test';
 import { DatabaseSync } from 'node:sqlite';
+import { applyCurrentD1RecoverySchema } from './current-d1-schema.mjs';
 import worker from '../../cloudflare/api/worker.mjs';
 import { releaseCloudAccountDataKey } from '../../cloudflare/api/cloud-key-store.mjs';
 import { runOneHealthErasureStep } from '../../cloudflare/jobs/health-erasure-worker.mjs';
@@ -12,7 +13,6 @@ import {
 const ORIGIN = 'https://b01-synthetic.invalid';
 const SESSION_HASH = 'a'.repeat(64);
 const KEK = Buffer.alloc(32, 77).toString('base64');
-const INDEPENDENT_MIGRATIONS = ['0001_independent_owner_fences.sql', '0002_block_replace_bypass.sql'];
 const MIGRATIONS = readdirSync(new URL('../../cloudflare/api/migrations/', import.meta.url))
   .filter(name => /^[0-9]{4}_[a-z0-9_]+\.sql$/.test(name)).sort();
 assert.ok(MIGRATIONS.length >= 10, 'full erasure schema required');
@@ -59,9 +59,7 @@ function makeFixture({ legacy = false } = {}) {
   apply(sqlite, 0, legacy ? 8 : MIGRATIONS.length);
   const db = new SqliteD1(sqlite);
   const ledger = new DatabaseSync(':memory:');
-  for (const name of INDEPENDENT_MIGRATIONS) {
-    ledger.exec(readFileSync(new URL('../../cloudflare/recovery/migrations/' + name, import.meta.url), 'utf8'));
-  }
+  applyCurrentD1RecoverySchema(ledger);
   ledger.prepare("UPDATE recovery_control SET mode='open',generation=2 WHERE singleton=1").run();
   const env = {
     DB: db, RECOVERY_DB: new SqliteD1(ledger),

@@ -4,7 +4,7 @@ import { test } from 'node:test';
 import { DatabaseSync } from 'node:sqlite';
 import consent from '../../cloudflare/api/consent-worker.mjs';
 import apiWorker from '../../cloudflare/api/worker.mjs';
-import { runOneHealthErasureStep } from '../../cloudflare/jobs/health-erasure-worker.mjs';
+import erasureWorker, { runOneHealthErasureStep } from '../../cloudflare/jobs/health-erasure-worker.mjs';
 import sessionGate, { hashSessionSecret } from '../../cloudflare/auth/session-gate.mjs';
 import { issueVerifiedSession } from '../../cloudflare/auth/session-issuer.mjs';
 
@@ -755,13 +755,13 @@ void test('terminal erasure keeps consent status readable without restoring the 
   try {
     assert.equal((await call(f, '/v1/consent/initial', { body: acceptance })).status, 200);
     assert.equal((await call(f, '/v1/consent/withdraw', { body: withdrawal })).status, 200);
-    assert.equal((await runOneHealthErasureStep(f.db)).outcome, 'awaiting-keys');
+    assert.equal((await erasureWorker.scheduled({}, f.env)).outcome, 'awaiting-keys');
     // Advance the synthetic lease clock; the genuine bounded finalizer
     // must produce the immutable SQL proof and advance only the subject.
     f.sqlite.prepare(
       "UPDATE health_erasure_jobs SET lease_until_ms=? WHERE uid=? AND status='processing'"
     ).run(Date.now() - 1000, f.uid);
-    assert.deepEqual(await runOneHealthErasureStep(f.db),
+    assert.deepEqual(await erasureWorker.scheduled({}, f.env),
       { outcome: 'complete', keyDisposition: 'never-issued' });
 
     const state = f.sqlite.prepare([

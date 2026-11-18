@@ -2,8 +2,12 @@ import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
 import { test } from 'node:test';
 import { DatabaseSync } from 'node:sqlite';
+import { applyCurrentD1RecoverySchema } from './current-d1-schema.mjs';
 import erasureWorker, { acquireOneHealthErasureKeyPhaseLease, runOneHealthErasureStep } from '../../cloudflare/jobs/health-erasure-worker.mjs';
 import { wrapCloudAccountDataKey } from '../../cloudflare/api/cloud-key-crypto.mjs';
+import {
+  armIndependentHealthWithdrawal, enrollIndependentOwner, recordVerifiedInitialConsent,
+} from '../../cloudflare/recovery/independent-owner-fence.mjs';
 
 const SQL_FILES = readdirSync(new URL('../../cloudflare/api/migrations/', import.meta.url))
   .filter(name => /^[0-9]{4}_[a-z0-9_]+\.sql$/.test(name))
@@ -496,12 +500,24 @@ void test('keyless never-issued and missing-issued-key jobs remain incomplete, d
 void test('scheduler has no public fetch endpoint and handles only one bounded step per tick', async () => {
   assert.equal(typeof erasureWorker.fetch, 'undefined');
   const f = fixture();
+  const registry = new DatabaseSync(':memory:');
   try {
     await ownerWithWrappedKey(f, 'owner-a');
     insertDocuments(f, 'owner-a', 6);
+    applyCurrentD1RecoverySchema(registry);
+    registry.exec("UPDATE recovery_control SET mode='open', generation=2 WHERE singleton=1");
+    const recovery = new D1Sqlite(registry);
+    await enrollIndependentOwner(recovery, 'owner-a');
+    await armIndependentHealthWithdrawal(recovery,
+      await recordVerifiedInitialConsent(f.db, recovery, 'owner-a'));
     withdraw(f, 'owner-a');
-    await erasureWorker.scheduled({}, { DB: f.db });
+    for (const RECOVERY_DB of [undefined, f.db]) {
+      await assert.rejects(erasureWorker.scheduled({}, { DB: f.db, RECOVERY_DB }),
+        /independent-recovery-fence-unavailable/);
+      assert.equal(count(f, 'sync_documents', 'owner-a'), 6);
+    }
+    await erasureWorker.scheduled({}, { DB: f.db, RECOVERY_DB: recovery });
     assert.equal(count(f, 'sync_documents', 'owner-a'), 2);
     assert.equal(job(f, 'owner-a').phase, 'data');
-  } finally { f.sqlite.close(); }
+  } finally { registry.close(); f.sqlite.close(); }
 });

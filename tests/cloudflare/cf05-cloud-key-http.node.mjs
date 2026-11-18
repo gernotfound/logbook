@@ -1,7 +1,13 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { backup, DatabaseSync } from 'node:sqlite';
 import { test } from 'node:test';
 import api from '../../cloudflare/api/worker.mjs';
+import gate from '../../cloudflare/auth/session-gate.mjs';
+import erasureWorker from '../../cloudflare/jobs/health-erasure-worker.mjs';
+import { inspectRestoredD1Census } from '../../cloudflare/recovery/restore-census.mjs';
 import { ORIGIN, SYNC, RIGHTS, ACCEPT, createCloudKeyHttpFixture as fixture,
   renewSessionWithoutEmail } from './cloud-key-http-fixture.mjs';
 
@@ -209,6 +215,94 @@ void test('rights export rechecks the independent withdrawal after opening the k
     assert.equal(result.response.status, 503);
     assert.deepEqual(result.body, { error: 'unavailable' });
   } finally { f.close(); }
+});
+
+void test('terminal runner requires a durable independent cutoff before destroying the application key', async () => {
+  const f = await fixture();
+  try {
+    await f.consent('owner-a');
+    assert.equal((await f.call('owner-a', SYNC)).response.status, 200);
+    await f.withdraw('owner-a');
+    assert.equal((await erasureWorker.scheduled({}, f.env)).outcome, 'awaiting-keys');
+    assert.throws(() => f.registry.exec(`
+      INSERT INTO recovery_erasure_cutoffs(uid, consent_revision, fence_epoch)
+      VALUES ('owner-a', 1, 2)
+    `), /cutoff-fenced/);
+    const expire = () => f.sqlite.prepare('UPDATE health_erasure_jobs SET lease_until_ms = ? WHERE uid = ?')
+      .run(Date.now() - 1000, 'owner-a');
+    expire();
+    f.registry.exec(`CREATE TRIGGER deny_cutoff BEFORE INSERT ON recovery_erasure_cutoffs
+      BEGIN SELECT RAISE(ABORT, 'synthetic-insert-unavailable'); END`);
+    await assert.rejects(erasureWorker.scheduled({}, f.env), /independent-recovery-fence-unavailable/);
+    assert.equal(f.count('health_erasure_finalizations', 'owner-a'), 0);
+    assert.equal(f.count('cloud_account_keys', 'owner-a'), 1);
+    assert.equal((await f.call('owner-a', RIGHTS)).response.status, 200);
+    f.registry.exec('DROP TRIGGER deny_cutoff');
+    expire();
+    const paused = { withSession(mode) {
+      const primary = f.db.withSession(mode);
+      return { prepare(sql) {
+        const stmt = primary.prepare(sql);
+        if (!sql.includes('INSERT INTO health_erasure_finalizations')) return stmt;
+        return { bind(...args) { return { async first() {
+          assert.equal(f.count('cloud_account_keys', 'owner-a'), 1);
+          assert.deepEqual((await f.call('owner-a', RIGHTS)).body, { error: 'unavailable' });
+          assert.equal(f.registry.prepare('SELECT finalized FROM recovery_erasure_cutoffs').get().finalized, 0);
+          return stmt.bind(...args).first();
+        } }; } };
+      } };
+    } };
+    assert.deepEqual(await erasureWorker.scheduled({}, { ...f.env, DB: paused }),
+      { outcome: 'complete', keyDisposition: 'destroyed' });
+    assert.equal(f.count('cloud_account_keys', 'owner-a'), 0);
+    assert.equal(f.registry.prepare('SELECT finalized FROM recovery_erasure_cutoffs').get().finalized, 1);
+    assert.throws(() => f.registry.exec('DELETE FROM recovery_erasure_cutoffs'), /cutoff-immutable/);
+    assert.throws(() => f.registry.exec(`
+      INSERT OR REPLACE INTO recovery_erasure_cutoffs(uid, consent_revision, fence_epoch)
+      VALUES ('owner-a', 1, 1)
+    `), /cutoff-fenced/);
+  } finally { f.close(); }
+});
+
+void test('a lost terminal registry update blocks a physical application restore and is retried by the next tick', async () => {
+  const f = await fixture(['owner-a']);
+  const dir = mkdtempSync(join(tmpdir(), 'logbook-terminal-restore-'));
+  let snapshot;
+  try {
+    await f.consent('owner-a');
+    assert.equal((await f.call('owner-a', SYNC)).response.status, 200);
+    await f.withdraw('owner-a');
+    assert.equal((await erasureWorker.scheduled({}, f.env)).outcome, 'awaiting-keys');
+    const snapshotPath = join(dir, 'before-finalization.sqlite');
+    await backup(f.sqlite, snapshotPath);
+    snapshot = new DatabaseSync(snapshotPath);
+    const restoredDb = new f.db.constructor(snapshot);
+    const restoredEnv = { ...f.env, DB: restoredDb,
+      AUTH_GATE: { fetch: request => gate.fetch(request, { ...f.gateEnv, DB: restoredDb }) } };
+    assert.equal((await f.call('owner-a', RIGHTS, { env: restoredEnv })).response.status, 200);
+    f.sqlite.prepare('UPDATE health_erasure_jobs SET lease_until_ms = ?').run(Date.now() - 1000);
+    f.registry.exec(`CREATE TRIGGER terminal_unavailable BEFORE UPDATE ON recovery_owner_fences
+      WHEN NEW.erased_before_revision > 0 BEGIN SELECT RAISE(ABORT, 'synthetic-terminal-outage'); END`);
+    await assert.rejects(erasureWorker.scheduled({}, f.env), /independent-recovery-fence-unavailable/);
+    assert.equal(f.count('health_erasure_finalizations', 'owner-a'), 1);
+    assert.equal(f.count('cloud_account_keys', 'owner-a'), 0);
+    assert.deepEqual((await f.call('owner-a', RIGHTS, { env: restoredEnv })).body, { error: 'unavailable' });
+    assert.equal((await f.call('owner-a', '/v1/consent/status')).response.status, 503);
+    f.registry.exec("UPDATE recovery_control SET mode='sealed', generation=3 WHERE singleton=1");
+    assert.deepEqual(await inspectRestoredD1Census(restoredDb, f.recoveryDb),
+      { outcome: 'blocked', reason: 'terminal-erasure-cutoff-pending' });
+    f.registry.exec("UPDATE recovery_control SET mode='open', generation=4 WHERE singleton=1");
+    f.registry.exec('DROP TRIGGER terminal_unavailable');
+    assert.equal((await erasureWorker.scheduled({}, f.env)).outcome, 'idle');
+    assert.equal(f.registry.prepare('SELECT finalized FROM recovery_erasure_cutoffs').get().finalized, 1);
+    assert.deepEqual((await f.call('owner-a', '/v1/consent/status')).body,
+      { uid: 'owner-a', status: 'withdrawn', revision: 2, fenceEpoch: 2 });
+    assert.equal((await f.call('owner-a', RIGHTS, { env: restoredEnv })).response.status, 503);
+  } finally {
+    snapshot?.close();
+    f.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 void test('origin, CSRF, method, query and request body are denied before any key write', async () => {

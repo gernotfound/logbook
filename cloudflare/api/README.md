@@ -549,6 +549,18 @@ The `0010`-backed finalizer then performs one atomic terminal INSERT and
 verifies the durable primary proof before reporting `complete`; see the
 SQL contract above. Selection does not bypass the per-job lease CAS.
 
+The candidate scheduled entry point requires separate `DB` and `RECOVERY_DB`
+bindings and recovery migration `0004_health_erasure_cutoffs.sql`. It
+checks the exact withdrawn generation before any deletion and persists
+an independent export cutoff before the atomic terminal INSERT. The
+cutoff survives an application D1 restore. Only primary terminal evidence
+can advance the independent floor and finish the cutoff's retry record.
+Each tick also reserves at most one due reconciliation. If the primary
+proof is missing or publication fails, the cutoff still blocks rights
+release and a later tick can retry. An unresolved cutoff blocks the
+operator restore census and the API requires both databases before
+returning the newer terminal consent generation.
+
 Reissuing `POST /v1/consent/withdraw` while a job is processing returns
 only an owner/session-verified `deletionStatus: "processing"` (rather
 than a false `pending`). A lost response to a DELETE is reconciled by

@@ -21,6 +21,6 @@ assert.deepEqual(recoveryMigrations.map(name => name.slice(0, 4)),
   Array.from({ length: recoveryMigrations.length }, (_, index) => String(index + 1).padStart(4, '0')));
 
 export function applyCurrentD1RecoverySchema(sqlite) {
-  assert.ok(recoveryMigrations.length >= 3, 'consent requires the full independent recovery schema');
+  assert.ok(recoveryMigrations.length >= 4, 'runtime fixtures require the full independent recovery schema');
   for (const name of recoveryMigrations) sqlite.exec(readFileSync(new URL(name, recoveryDirectory), 'utf8'));
 }

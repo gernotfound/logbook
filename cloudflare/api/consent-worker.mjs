@@ -84,6 +84,8 @@ async function readConsent(db, claims, { forWithdrawal = false } = {}) {
   if (!['active', 'withdrawn', 'deleting', 'deleted'].includes(row.status)
     || !Number.isSafeInteger(row.consent_revision) || row.consent_revision < 1
     || !Number.isSafeInteger(row.fence_epoch) || row.fence_epoch < 1
+    || (row.status === 'withdrawn' && row.consent_revision > 1
+      && (row.erased_before_revision !== row.consent_revision || row.erasure_proven !== 1))
     || (row.fence_epoch > claims.fenceEpoch && !(
       // Terminal erasure advances the subject, not the Auth principal.
       // Permit a rights/status read one epoch ahead only with the immutable
@@ -370,6 +372,15 @@ export default {
       if (claims.errorStatus) return json({ error: 'unauthorized' }, claims.errorStatus);
       if (statusRoute) {
         const result = await readConsent(env.DB, claims);
+        if (result.status === 'withdrawn' && result.revision > 1) {
+          await requireIndependentOwnerFence(independentDb(env), {
+            uid: result.uid, status: result.status, consentRevision: result.revision,
+            fenceEpoch: result.fenceEpoch, erasedBeforeRevision: result.revision,
+          }, 'terminal');
+          const current = await readConsent(env.DB, claims);
+          if (current.status !== result.status || current.revision !== result.revision
+            || current.fenceEpoch !== result.fenceEpoch) throw new Error('unproven-terminal-status');
+        }
         return json(result.status === 'active' ? await confirmActiveConsent(env, claims, result) : result);
       }
       if (!withdrawRoute && !claims.emailVerified) return json({ error: 'unauthorized' }, 403);

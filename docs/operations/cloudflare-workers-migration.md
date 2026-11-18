@@ -74,6 +74,14 @@ La D1 isolata `thelogbook-cf08-fence-eu-isolated-20261116` è stata creata e ril
 
 La migration candidata `0003_withdraw_pending_health_consent.sql` riguarda solo il D1 indipendente. Conserva le barriere precedenti e permette al Worker di bloccare direttamente una prima accettazione quando la D1 applicativa ha committato e il registro è ancora `pending`. Prima di aggiornare il Worker, verificare l'ordine e il ledger delle migrazioni in un ambiente isolato. Il test Node/SQLite non prova l'applicazione sul provider.
 
+La migration candidata recovery `0004_health_erasure_cutoffs.sql` aggiunge
+la barriera di export prima della finalizzazione nella D1 applicativa.
+Il runner richiede entrambi i binding privati e riconcilia al massimo un
+tentativo scaduto a ogni invocazione. Il census di ripristino si ferma
+finché il registro ha una finalizzazione da riconciliare. Prima di una
+prova provider applicare e verificare la migration sulla sola D1
+indipendente autorizzata e mantenere isolati il runner e la chiave cloud.
+
 `cloudflare/recovery/independent-owner-fence.mjs` è un adapter **non montato**: enrollment dopo verifica identità, attestazione del primo consenso dopo readback D1 primario, **deny esterno durevole PRIMA della revoca** sulla D1 applicativa, verifica della revoca con job, verifica terminale con prova SQL 0010 e floor esterno, più lettura per-request dall'autorità primaria separata. Errori, assenza del binding, stato `sealed` e mismatch negano l'accesso. Il codice deve essere integrato nei chiamanti veri di Auth, consenso, chiavi, sync, diritti ed erasure prima del GO; il solo helper non protegge il runtime. Il test normativo usa lo schema D1 applicativo completo, il vero runner di erasure, una seconda SQLite e il rollback fisico della prima: una vecchia sessione/consenso non basta a superare il floor esterno.
 
 **Correzione necessaria dopo bootstrap 0001 (versione v2.495.0):** SQLite con `recursive_triggers=OFF` può eseguire `INSERT OR REPLACE` cancellando una riga in conflitto senza attivare il trigger `BEFORE DELETE`. La migration additiva `0002_block_replace_bypass.sql` blocca il tentativo con due trigger `BEFORE INSERT` su controllo globale e floor owner. Il codice di enrollment legge prima il registro e recupera l'esito di insert concorrenti solo tramite readback primario, senza più usare `ON CONFLICT DO NOTHING`. **La D1 isolata del provider, al checkpoint 0001, non ha ancora 0002: mantenerla `sealed` e senza owner fino all'applicazione/verifica separata.** Test SQLite includono `REPLACE` con recursive triggers disabilitati. La nuova migration non è un'autorizzazione a riaprire il gate.

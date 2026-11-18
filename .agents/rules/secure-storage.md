@@ -88,6 +88,10 @@ L'identità arriva **esclusivamente** dal token Firebase; le chiavi sono server-
 **MUST (rights-only e revoca):** la lettura `rights-export` dopo `withdrawn` usa esclusivamente ADK esistente e sessione ancora valida, con job di erasure per la generazione corrente. Non crea chiavi; nessun recupero ADK per principal disabilitato, sessione revocata o identità cancellata. La chiave è immutabile nella baseline e la sua cancellazione SQL è consentita soltanto con lease valido di erasure nello stato `awaiting-keys`; il registro issuance non viene cancellato. Rewrap/versione successiva, finalizzazione di CF-06, backup/restore anti-resurrection, nuova accettazione del consenso e integrazione UI richiedono gate separati: non trattare `awaiting-keys` come `complete`.
 
 Il Worker candidato verifica anche il registro D1 indipendente aperto prima e dopo l'apertura della chiave. Il registro deve provare la revoca della stessa generazione sanitaria, anche quando l'epoch della sessione Auth è avanzata. Un blocco provvisorio o un floor più recente sospende il rilascio. In caso di revoca committata solo sul D1 applicativo, il retry autorizzato della revoca riconcilia il registro prima dell'export.
+La barriera di erasure nel registro indipendente chiude il rilascio per
+quella generazione prima della finalizzazione della chiave. Resta efficace
+anche se si ripristina una D1 applicativa che conteneva ancora l'ADK e se
+la pubblicazione della generazione terminale è in ritardo.
 
 **CF-05 — HTTP candidato non distribuito (14/11/2026):** l'entrypoint
 `cloudflare/api/worker.mjs` inoltra `POST /v1/cloud-key/sync`

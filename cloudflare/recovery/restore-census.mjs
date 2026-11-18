@@ -40,6 +40,10 @@ async function metadata(restored, independent) {
   requireEvidence(control && control.singleton === 1 && control.mode === 'sealed'
     && Number.isSafeInteger(control.generation) && control.generation >= 1,
   'independent-authority-not-sealed');
+  const cutoff = await independent.prepare(
+    'SELECT uid FROM recovery_erasure_cutoffs WHERE finalized = 0 LIMIT 1',
+  ).first();
+  requireEvidence(cutoff === null, 'terminal-erasure-cutoff-pending');
   const restoredCount = count(await restored.prepare(COUNTS.restored).first());
   const independentCount = count(await independent.prepare(COUNTS.independent).first());
   requireEvidence(restoredCount > 0 && independentCount > 0,

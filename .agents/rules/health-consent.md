@@ -24,6 +24,9 @@ prova terminale immutabile, il job `complete`, il floor di cancellazione
 e l'incremento esatto di una epoch. Il lettore candidato accetta quel
 risultato esclusivamente come `consent-suspended`; non come
 `consent-confirmed`, nuovo consenso, sync, export o ACK.
+Il Worker candidato restituisce la generazione terminale solo dopo verifica
+della stessa generazione nel registro D1 indipendente e nuova verifica della
+sessione nella primaria applicativa.
 
 Una subject epoch successiva senza prova terminale, un owner/sessione
 variato o uno stato `active` con epoch diversa continuano a fallire chiusi.
@@ -166,6 +169,16 @@ Il recupero esplicito di un vecchio journal richiede una seconda verifica truste
 ### Contratto candidato Workers/D1 dopo la migration `0010` (15/11/2026)
 
 **MUST:** `cloudflare/api/migrations/0010_atomic_health_erasure_finalization.sql` e `cloudflare/jobs/health-erasure-worker.mjs` autorizzano `awaiting-keys → complete` esclusivamente tramite SQL atomica `INSERT ... SELECT ... RETURNING` che verifica UID, consenso, epoch, lease, assenza di documenti/ricevute/mutazioni/repliche e ADK. Il runner effettua readback primario della prova durevole anche dopo ACK perso; non dichiara `complete` da una chiave mancante o da `RETURNING` vuoto. Il consenso server ora restituisce UID trusted; il client candidato lo verifica anche negli scambi identità A→B→A. La lettura ADK rights-only non abilita fitness e richiede sessione valida e job di erasure coerente.
+
+Il candidato `scheduled` richiede due binding distinti. Verifica la generazione
+revocata nel registro indipendente prima delle scritture applicative. Durante
+la fase chiave registra il blocco irreversibile dell'export con la migration
+recovery `0004` prima della cancellazione ADK. La sola barriera non attesta
+erasure. Pubblica la generazione terminale dopo la prova primaria di `0010`.
+Ogni invocazione può riservare un solo tentativo di riconciliazione scaduto,
+oltre a un solo passo applicativo bounded. Un tentativo ambiguo conserva il
+blocco e differisce il proprio retry; la pubblicazione del floor chiude la
+riconciliazione in una singola transazione del registro.
 
 **MUST (ordine dei job):** il runner ordinario seleziona la richiesta eleggibile più vecchia fra `data` e `awaiting-keys`, senza priorità fissa alla fase dati. Nuove richieste non possono rimandare indefinitamente una finalizzazione precedente. La selezione non attribuisce il lease: il CAS successivo ricontrolla fase, owner, generazione ed epoch; un lease non scaduto resta escluso. Il helper dedicato alle sole chiavi conserva il filtro esplicito.
 
