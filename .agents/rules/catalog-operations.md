@@ -66,3 +66,22 @@ Il numero del catalogo/manifest è indipendente dalla release PWA e non va incre
 Durante `DB.loadCloudPayload()`, la verifica remota del catalogo e la lettura del documento root Firestore vengono avviate in parallelo. Prima di risolvere la libreria e pubblicare lo stato idratato, il caricamento attende l'esito del catalogo: quando sono arrivati nuovi esercizi/alimenti li usa immediatamente, evitando uno stato UI costruito da una cache precedente.
 Offline, in caso di timeout o errore remoto, usa il catalogo locale/seed; non scrive alcuna modifica di catalogo nel journal dell'utente. La modalità guest continua a utilizzare la cache locale senza avviare da sola letture Firestore, come previsto dalla policy di accesso ospite. I client già aperti verificano la freschezza durante le normali hydration (incluso il ritorno in foreground), senza listener realtime.
 `persisted: false` indica che l'aggiornamento remoto è disponibile in memoria ma il salvataggio IndexedDB è fallito; `updated: true` da solo non attesta durata dopo il riavvio. Gli omonimi con ID distinti restano visibili; su collisione di ID il custom locale ha precedenza. I test `guest_bootstrap_lifecycle` e `training_exercises_library_ui` verificano i percorsi guest e di ripristino esercizi con una cache persistita e memoria inizialmente vuota; non certificano invece il comportamento su dispositivi reali o tutte le gare multi-scheda.
+
+## Boundary catalogo locale e adapter remoto (18/11/2026)
+
+`src/lib/catalog/catalogService.ts` gestisce soltanto cache IndexedDB,
+memoria, seed bundled e validazione degli oggetti del catalogo, senza import
+Firebase né richieste HTTP. Le letture Firestore di manifest e documenti
+versionati restano temporaneamente isolate in
+`src/lib/catalog/firestoreCatalogAdapter.ts` e sono richiamate dal
+loader cloud legacy `src/lib/db.ts`. L'adapter mantiene timeout totale,
+coalescing, controllo degli ID e dei macronutrienti e pubblicazione
+di cache soltanto dopo la validazione; il fallback locale non inventa
+esercizi o alimenti se i seed bundled sono vuoti.
+
+**MUST:** i test che verificano il loader cloud devono intercettare
+l'adapter remoto direttamente, senza fingere che il servizio cache
+esporti ancora `syncGlobalCatalog`; i test del guest e dell'offline
+non richiedono Firebase per la sola lettura del catalogo. Sostituire
+l'adapter con un'origine non-Firebase soltanto dopo aver verificato
+integrità e pubblicazione del catalogo nella nuova architettura.
