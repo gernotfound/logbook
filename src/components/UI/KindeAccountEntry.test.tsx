@@ -188,6 +188,33 @@ describe('isolated Kinde account entry candidate', () => {
 });
 
 describe('public Kinde identity-only entry boundary', () => {
+    it('revalidates a changed session cookie while the tab stays visible', async () => {
+        vi.useFakeTimers();
+        try {
+            vi.mocked(readKindeCandidateIdentity).mockResolvedValueOnce(verified)
+                .mockResolvedValue({ kind: 'signed-out' });
+            await act(async () => { render(<KindeAccountEntry identityOnly />); });
+            expect(screen.getByText(/Sessione Kinde verificata/)).toBeDefined();
+            await act(async () => { await vi.advanceTimersByTimeAsync(1000); });
+            expect(readKindeCandidateIdentity).toHaveBeenCalledTimes(1);
+            browserCsrf = REPLACEMENT_CSRF;
+            await act(async () => { await vi.advanceTimersByTimeAsync(1000); });
+            expect(screen.getByRole('button', { name: 'Accedi o registrati' })).toBeDefined();
+            expect(readKindeCandidateIdentity).toHaveBeenCalledTimes(2);
+            expect(readKindeCandidateAccess).not.toHaveBeenCalled();
+        } finally { vi.useRealTimers(); }
+    });
+
+    it('rejects a guest action from the previous signed-out browser session', async () => {
+        const onLocalGuest = vi.fn(async () => {});
+        render(<KindeAccountEntry identityOnly onLocalGuest={onLocalGuest} />);
+        const guest = await screen.findByRole('button', { name: /Continua senza account/ });
+        browserCsrf = REPLACEMENT_CSRF;
+        fireEvent.click(guest);
+        await screen.findByRole('button', { name: 'Riprova la verifica' });
+        expect(onLocalGuest).not.toHaveBeenCalled();
+    });
+
     it('does not let an old logout button revoke a replacement session', async () => {
         vi.mocked(readKindeCandidateIdentity).mockResolvedValue(verified);
         render(<KindeAccountEntry identityOnly />);
@@ -337,6 +364,7 @@ describe('public Kinde identity-only entry boundary', () => {
     });
 
     it('allows isolated local guest when Kinde is unavailable, without any account or consent permission', async () => {
+        vi.spyOn(document, 'cookie', 'get').mockReturnValue('');
         vi.mocked(readKindeCandidateIdentity).mockRejectedValue(new Error('503'));
         const onLocalGuest = vi.fn(async () => {});
         render(<KindeAccountEntry identityOnly onLocalGuest={onLocalGuest} />);
@@ -351,6 +379,13 @@ describe('public Kinde identity-only entry boundary', () => {
         expect(submitKindeHostedSignIn).toHaveBeenCalledTimes(1);
         expect(readKindeCandidateAccess).not.toHaveBeenCalled();
         expect(acceptKindeCandidateInitialConsent).not.toHaveBeenCalled();
+    });
+
+    it('does not offer guest mode if an unavailable identity check still has a session witness', async () => {
+        vi.mocked(readKindeCandidateIdentity).mockRejectedValue(new Error('503'));
+        render(<KindeAccountEntry identityOnly onLocalGuest={vi.fn()} />);
+        await screen.findByRole('button', { name: 'Riprova la verifica' });
+        expect(screen.queryByRole('button', { name: /Continua senza account/ })).toBeNull();
     });
 
     it('never offers a guest transition from an unverified Kinde identity', async () => {

@@ -14,7 +14,7 @@ export interface AuthContextType {
     guestMigrationStatus: GuestMigrationStatus;
     emailVerificationRequired: boolean;
     login: (guestPolicy?: GuestMigrationPolicy) => Promise<void>;
-    loginAsGuest: () => Promise<void>;
+    loginAsGuest: (stillCurrent?: () => boolean) => Promise<void>;
     linkGoogleAccount: (guestPolicy?: GuestMigrationPolicy) => Promise<void>;
     retryGuestMigration: (policy?: GuestMigrationPolicy) => Promise<void>;
     logout: (options?: LogoutOptions) => Promise<void>;

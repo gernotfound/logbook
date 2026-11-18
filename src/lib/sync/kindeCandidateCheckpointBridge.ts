@@ -26,9 +26,10 @@ export type KindeCandidateCheckpointObservation = {
  * vault, session incarnation, journal and recovery fences before any commit.
  */
 export async function inspectKindeCandidateCloudCheckpoint({
-    stillCurrent, send = fetch, browserCookies = () => document.cookie,
+    stillCurrent, expected, send = fetch, browserCookies = () => document.cookie,
 }: {
     stillCurrent: () => boolean;
+    expected?: Readonly<Principal>;
     send?: typeof fetch;
     browserCookies?: () => string;
 }): Promise<KindeCandidateCheckpointObservation> {
@@ -50,6 +51,10 @@ export async function inspectKindeCandidateCloudCheckpoint({
         throw new KindeCandidateBoundaryError();
     }
     const { uid, fenceEpoch, healthConsentRevision } = before.principal;
+    if (expected && (uid !== expected.uid || fenceEpoch !== expected.fenceEpoch
+        || healthConsentRevision !== expected.healthConsentRevision)) {
+        throw new KindeCandidateBoundaryError();
+    }
     const accountKey = await acquireCloudflareAccountKeyCandidate({
         expected: { uid, fenceEpoch, consentRevision: healthConsentRevision },
         purpose: 'sync', stillCurrent: current,

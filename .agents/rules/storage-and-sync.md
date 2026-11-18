@@ -2,7 +2,7 @@
 
 ### CF-03 — Osservazione del checkpoint D1 con sessione Kinde (17/11/2026)
 
-Il bridge di sola lettura `inspectKindeCandidateCloudCheckpoint` verifica sessione e consenso, continuità del cookie CSRF e della generazione, ADK monouso, scansione D1 revision-fenced, integrità AEAD owner/path e nuova prova trusted finale. Non è autorizzazione a idratare lo storage, adottare la replica o ACK del journal. Il caller futuro deve verificare separatamente vault locale owner, session incarnation, journal pendenti e recovery dentro la transazione IndexedDB. Lo stesso UID dopo un logout/login non è una prova della stessa sessione.
+Il bridge di sola lettura `inspectKindeCandidateCloudCheckpoint` verifica sessione e consenso, continuità del cookie CSRF e della generazione, ADK monouso, scansione D1 revision-fenced, integrità AEAD owner/path e nuova prova trusted finale. `hydrateKindeCandidateArchive` richiede inoltre un vault già autorizzato per l'owner atteso. Nella transazione IndexedDB ricontrolla la stessa apertura del vault, il cookie, il guard del chiamante, la revisione locale pre-scansione e la generazione del consenso. Una modifica concorrente o una transizione di consegna, claim o retirement pendente sospende la hydration. La copia locale conserva il journal. L'adozione della replica e gli ACK richiedono prove separate. Il bridge resta isolato dal runtime pubblico.
 
 
 **Quando leggere:** IndexedDB, journal, versioni, hydration, replica, bootstrap e PWA update/reload.

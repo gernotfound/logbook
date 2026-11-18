@@ -43,13 +43,14 @@ export function useGuestLogin({
     authRunRef, isGuestRef, setIsGuest, setGuestMigrationStatus, setUserData, setSaveError,
     readAuthIdentity,
 }: GuestLoginDependencies) {
-    const loginAsGuest = useCallback(async () => {
+    const loginAsGuest = useCallback(async (stillCurrent: () => boolean = () => true) => {
         const originalUser = readAuthIdentity();
         const authRun = authRunRef.current;
         // Guest cleanup cancels store syncs and advances their epoch. That
         // expected reset must not invalidate a queued guest login, whereas
         // any Auth generation change (including null -> account -> null) must.
-        const isOriginalAttemptCurrent = () => readAuthIdentity() === originalUser && authRunRef.current === authRun;
+        const isOriginalAttemptCurrent = () => stillCurrent()
+            && readAuthIdentity() === originalUser && authRunRef.current === authRun;
         const activation: { session: SessionSnapshot | null } = { session: null };
         try {
             // Serialize the entire cleanup-to-activation transition across tabs.

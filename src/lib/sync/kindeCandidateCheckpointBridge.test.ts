@@ -54,6 +54,15 @@ beforeEach(() => localStorage.clear());
 afterEach(() => vi.restoreAllMocks());
 
 describe('Kinde and encrypted D1 complete checkpoint observation', () => {
+    it('stops before key issuance if the trusted account differs from the caller scope', async () => {
+        const send = configured();
+        await expect(inspectKindeCandidateCloudCheckpoint({
+            expected: { uid: OTHER, fenceEpoch: 1, healthConsentRevision: 1 },
+            send, browserCookies: browser, stillCurrent: () => true,
+        })).rejects.toBeInstanceOf(KindeCandidateBoundaryError);
+        expect(send).toHaveBeenCalledTimes(3);
+    });
+
     it('opens only owner-scoped authenticated ciphertext after Kinde consent, then rechecks session', async () => {
         const send = configured();
         const observation = await inspect(send);
