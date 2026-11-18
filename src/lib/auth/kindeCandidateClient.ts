@@ -48,7 +48,10 @@ function assertCurrent(stillCurrent: () => boolean): void {
     }
 }
 
-export async function readKindeCandidateJson(response: Response): Promise<unknown> {
+export async function readKindeCandidateJson(
+    response: Response,
+    signal: AbortSignal = AbortSignal.timeout(5000),
+): Promise<unknown> {
     const declared = response.headers.get('content-length');
     if (!/^application\/json(?:\s*;|$)/i.test(response.headers.get('content-type') ?? '')
         || !/\bno-store\b/i.test(response.headers.get('cache-control') ?? '')
@@ -59,9 +62,15 @@ export async function readKindeCandidateJson(response: Response): Promise<unknow
     const reader = response.body.getReader();
     let size = 0;
     const chunks: Uint8Array[] = [];
+    let rejectAborted: (reason: unknown) => void = () => {};
+    const aborted = new Promise<never>((_, reject) => { rejectAborted = reject; });
+    const onAbort = () => rejectAborted(signal.reason);
+    signal.addEventListener('abort', onAbort, { once: true });
     try {
+        signal.throwIfAborted();
         for (let index = 0; index < 16; index += 1) {
-            const { value, done } = await reader.read();
+            const { value, done } = await Promise.race([reader.read(), aborted]);
+            signal.throwIfAborted();
             if (done) {
                 const bytes = new Uint8Array(size);
                 let offset = 0;
@@ -84,8 +93,9 @@ export async function readKindeCandidateJson(response: Response): Promise<unknow
     } catch {
         throw new KindeCandidateBoundaryError();
     } finally {
+        signal.removeEventListener('abort', onAbort);
         void reader.cancel().catch(() => {});
-        try { reader.releaseLock(); } catch { /* A transport read can still be pending. */ }
+        try { reader.releaseLock(); } catch { /* A timed-out transport read can still be pending. */ }
     }
 }
 

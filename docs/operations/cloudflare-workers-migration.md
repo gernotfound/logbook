@@ -749,3 +749,12 @@ locale e Firebase già disconnesso conserva le operazioni e non
 mostra un cloud ACK inventato. L'account Kinde non diventa
 automaticamente sincronizzato: il nuovo writer D1 dovrà essere
 collegato e verificato prima del GO.
+
+### CF-03 — parsing Kinde bounded anche dopo gli header (18/11/2026)
+
+Il parser dei payload Kinde verifica `no-store`, JSON e limiti di
+dimensione, e ora possiede un deadline autonomo anche durante il
+consumo dello stream. Una risposta frammentata ma completa resta
+accettata; una sospesa viene rifiutata senza attribuire identita'
+o autorizzazioni. Non cambia il modello D1, l'AuthProvider legacy
+o il GO delle API sanitarie.
