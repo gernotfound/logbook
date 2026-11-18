@@ -9,7 +9,6 @@ const sw = readFileSync('src/sw.ts', 'utf8');
 const productionWorkflow = readFileSync('.github/workflows/cloudflare-candidate.yml', 'utf8');
 
 const authorizedWorkerFirst = [
-  '/__/auth', '/__/auth/*',
   '/api/auth/kinde/start', '/api/auth/kinde/callback',
   '/api/auth/session', '/api/auth/logout',
 ];

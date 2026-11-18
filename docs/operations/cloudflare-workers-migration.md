@@ -673,3 +673,19 @@ Firebase nel frontend completo, Auth/D1 Workers reali, binding/cron
 Production, diritto all'erasure, Safari o sync multi-device. I test di
 fixture e CI sono prove distinte dai provider; nessuna risorsa reale è
 stata modificata in questa attività.
+
+### CF-03 — ritiro del proxy Firebase Hosting dal dominio pubblico (18/11/2026)
+
+Il Worker Static Assets non inoltra più richieste /__/auth/* all'origin
+firebaseapp.com. Il router applicativo espone esclusivamente le quattro route
+Kinde già sottoposte al controllo del Worker privato; ogni percorso storico
+del helper Firebase risponde 404 no-store. Le regressioni esercitano metodi,
+binding mancanti, header non fidati, fallimenti 401 e l'assenza di richieste
+esterne; il controllo di configurazione rifiuta il ripristino del namespace.
+Il Service Worker continua a negare le navigazioni /__/ in modo conservativo.
+
+**Confine della prova:** si tratta del solo ritiro del collegamento proxy
+Firebase sul bordo pubblico, non della rimozione dell'SDK Firebase dal bundle
+o dall'AuthProvider, né della sostituzione del journal Firestore. Fino alla
+sostituzione verificata, l'app account e i suoi servizi cloud restano NO-GO
+e non vengono riparati con un fallback al vecchio provider.

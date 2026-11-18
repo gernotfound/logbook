@@ -1,74 +1,86 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import handler from '../../cloudflare/auth-proxy.mjs';
 
-const app = 'https://thelogbook.example.workers.dev';
-const req = (path, init) => new Request(app + path, init);
-async function mockedFetch(fn, run) {
-  const saved = globalThis.fetch;
-  globalThis.fetch = fn;
-  try { await run(); } finally { globalThis.fetch = saved; }
-}
-void test('non-Auth paths and unsupported methods never reach Firebase', async () => {
-  await mockedFetch(() => { throw Error('no upstream permitted'); }, async () => {
-    assert.equal((await handler.fetch(req('/assets/missing.js'))).status, 404);
-    assert.equal((await handler.fetch(req('/__/unrelated/'))).status, 404);
-    assert.equal((await handler.fetch(req('/__/authx/iframe'))).status, 404);
-    assert.equal((await handler.fetch(req('/__/auth/iframe', { method: 'PUT' }))).status, 405);
-  });
-});
-void test('the same-origin helper proxies only the fixed firebaseapp.com host', async () => {
-  await mockedFetch(async (url, options) => {
-    assert.equal(url, 'https://logbook-db-98cc4.firebaseapp.com/__/auth/iframe?apiKey=synthetic');
-    assert.equal(options.method, 'GET');
-    assert.equal(options.redirect, 'manual');
-    assert.equal(options.headers.get('authorization'), null);
-    return new Response('helper', { headers: { 'Content-Type': 'text/html' } });
-  }, async () => {
-    const response = await handler.fetch(req('/__/auth/iframe?apiKey=synthetic', {
-      headers: { Authorization: 'not-forwarded' },
-    }));
-    assert.equal(response.status, 200);
-    assert.equal(response.headers.get('X-Frame-Options'), null);
-    assert.equal(response.headers.get('Cache-Control'), 'no-store');
-    assert.equal(await response.text(), 'helper');
-  });
-});
-void test('first-party redirects are rebased but external insecure redirects fail closed', async () => {
-  await mockedFetch(async () => new Response(null, { status: 302, headers: { Location: '/__/auth/handler?code=test' } }), async () => {
-    assert.equal((await handler.fetch(req('/__/auth/handler'))).headers.get('location'), app + '/__/auth/handler?code=test');
-  });
-  await mockedFetch(async () => new Response(null, { status: 302, headers: { Location: 'http://evil.example/' } }), async () => {
-    assert.equal((await handler.fetch(req('/__/auth/handler'))).status, 502);
-  });
-});
-void test('POST size is bounded and only reviewed headers reach upstream', async () => {
-  await mockedFetch(async (_url, options) => {
-    assert.equal(options.headers.get('x-admin-key'), null);
-    assert.equal(options.headers.get('origin'), app);
-    assert.equal(new TextDecoder().decode(options.body), 'synthetic');
-    return new Response('ok');
-  }, async () => {
-    assert.equal((await handler.fetch(req('/__/auth/handler', {
-      method: 'POST', body: 'synthetic',
-      headers: { Origin: app, 'X-Admin-Key': 'forbidden' },
-    }))).status, 200);
-  });
-  await mockedFetch(() => { throw Error('not reached'); }, async () => {
-    assert.equal((await handler.fetch(req('/__/auth/handler', { method: 'POST', body: 'x'.repeat(70000) }))).status, 413);
-  });
+const ORIGIN = 'https://thelogbook.me';
+const req = (path, init) => new Request(ORIGIN + path, init);
+
+void test('retired Firebase Hosting helpers and all other unsupported URLs never reach an upstream', async () => {
+  const savedFetch = globalThis.fetch;
+  globalThis.fetch = () => { throw Error('external Firebase network fetch attempted'); };
+  const calls = [];
+  const env = { APP_ORIGIN: ORIGIN, KINDE_HTTP: { async fetch(request) {
+    calls.push(request);
+    throw Error('Kinde service must not see Firebase helpers');
+  } } };
+  try {
+    for (const path of [
+      '/__/auth', '/__/auth/', '/__/auth/iframe', '/__/auth/handler?code=synthetic',
+      '/__/authx/iframe', '/__/unrelated', '/v1/sync/control',
+      '/v1/cloud-key/sync', '/api/auth/kinde/unknown', '/api/auth/session/extra',
+      '/assets/missing.js',
+    ]) {
+      const response = await handler.fetch(req(path), env);
+      assert.equal(response.status, 404, path);
+      assert.equal(response.headers.get('cache-control'), 'no-store');
+    }
+    assert.equal(calls.length, 0);
+  } finally {
+    globalThis.fetch = savedFetch;
+  }
 });
 
-void test('upstream Firebase quota or Hosting failures remain failures and are never cached as successful helpers', async () => {
-  for (const status of [429, 509]) {
-    await mockedFetch(async () => new Response('upstream unavailable', {
-      status,
-      headers: { 'Content-Type': 'text/plain', 'Cache-Control': 'public, max-age=600' },
-    }), async () => {
-      const response = await handler.fetch(req('/__/auth/iframe'));
-      assert.equal(response.status, status);
-      assert.equal(response.headers.get('Cache-Control'), 'no-store');
-      assert.equal(await response.text(), 'upstream unavailable');
-    });
-  }
+void test('public Worker code and routing configuration contain no retired Firebase helper proxy', () => {
+  const source = readFileSync(new URL('../../cloudflare/auth-proxy.mjs', import.meta.url), 'utf8');
+  assert.doesNotMatch(source, /firebaseapp\.com|AUTH_UPSTREAM|fetch\(\s*AUTH_UPSTREAM/);
+  const config = JSON.parse(readFileSync(new URL('../../cloudflare/wrangler.jsonc', import.meta.url), 'utf8'));
+  assert.ok(config.assets.run_worker_first.every(route => !route.startsWith('/__/')));
+  assert.deepEqual(config.assets.run_worker_first, [
+    '/api/auth/kinde/start', '/api/auth/kinde/callback',
+    '/api/auth/session', '/api/auth/logout',
+  ]);
+});
+
+void test('Kinde OAuth is still forwarded solely over private binding with no external fetch', async () => {
+  let count = 0;
+  const env = { APP_ORIGIN: ORIGIN, KINDE_HTTP: {
+    async fetch(request) {
+      count++;
+      assert.equal(request.url, ORIGIN + '/api/auth/kinde/start');
+      assert.equal(request.method, 'POST');
+      assert.equal(request.headers.get('authorization'), null);
+      assert.equal(request.headers.get('x-original-route'), null);
+      return new Response(null, {
+        status: 303, headers: {
+          'Location': 'https://thelogbook.kinde.com/oauth2/auth',
+          'Cache-Control': 'no-store',
+        },
+      });
+    },
+  } };
+  const response = await handler.fetch(req('/api/auth/kinde/start', {
+    method: 'POST', headers: {
+      Origin: ORIGIN, 'Sec-Fetch-Site': 'same-origin',
+      Authorization: 'Bearer attacker', 'X-Original-Route': '/v1/consent/status',
+    },
+  }), env);
+  assert.equal(response.status, 303);
+  assert.equal(response.headers.get('location'), 'https://thelogbook.kinde.com/oauth2/auth');
+  assert.equal(count, 1);
+  assert.equal((await handler.fetch(req('/api/auth/kinde/start'), env)).status, 405);
+  assert.equal((await handler.fetch(req('/api/auth/kinde/start', {
+    method: 'POST', headers: { Origin: ORIGIN, 'Sec-Fetch-Site': 'same-origin' },
+  }), { APP_ORIGIN: ORIGIN })).status, 503);
+});
+
+void test('session failures propagate without fallback to a third-party provider', async () => {
+  const env = { APP_ORIGIN: ORIGIN, KINDE_HTTP: { fetch: async () => Response.json({
+    error: 'not-signed-in',
+  }, { status: 401, headers: { 'Cache-Control': 'no-store' } }) } };
+  const response = await handler.fetch(req('/api/auth/session', {
+    method: 'POST', headers: { Origin: ORIGIN, 'Sec-Fetch-Site': 'same-origin' },
+  }), env);
+  assert.equal(response.status, 401);
+  assert.equal(response.headers.get('cache-control'), 'no-store');
 });

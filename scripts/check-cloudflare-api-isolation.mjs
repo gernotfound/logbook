@@ -96,7 +96,7 @@ export function validateIsolatedKindeCandidate(kinde, gate, frontend) {
   check(frontend?.name === 'thelogbook-frontend'
     && frontend?.main === './auth-proxy.mjs'
     && frontend?.assets?.run_worker_first?.join(',') ===
-      '/__/auth,/__/auth/*,/api/auth/kinde/start,/api/auth/kinde/callback,/api/auth/session,/api/auth/logout'
+      '/api/auth/kinde/start,/api/auth/kinde/callback,/api/auth/session,/api/auth/logout'
     && frontend?.services?.length === 1
     && frontend.services[0]?.binding === 'KINDE_HTTP'
     && frontend.services[0]?.service === 'thelogbook-cf03-kinde-http-isolated'

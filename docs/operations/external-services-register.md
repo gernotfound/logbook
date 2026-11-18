@@ -243,3 +243,16 @@ Nessuna operazione su DNS/dati live/KEK o attivazione OAuth.
 Correzione CI: verificare con lo stesso token meno privilegiato solo
 le settings dei Worker; ledger D1 e `eu` restano attestazioni
 Cloudflare indipendenti. Ciò non prova l'esecuzione delle API.
+
+## Ritiro incrementale dei collegamenti di rete Firebase (18/11/2026)
+
+Il frontend Cloudflare smette di inoltrare /__/auth/* a Firebase Hosting:
+il proxy pubblico mantiene solo le quattro route Auth/session Kinde, senza
+D1 fitness esposta e senza fallback esterno. Questo **non dismette il
+progetto Firebase o i suoi dati/provider**; tali operazioni sono irreversibili
+e richiedono inventario live e autorizzazione separata. AuthProvider,
+Firestore, App Check e backend Vercel legacy restano nel codice; la loro
+sostituzione è ancora parte delle issue CF-03/04/05/06/09. I workflow
+Firestore non vanno disabilitati finché i dati e le responsabilità live non
+sono stati verificati. Non utilizzare questo incremento come prova del GO
+funzionale o della revoca delle autorizzazioni del provider.
