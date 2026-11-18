@@ -1,7 +1,7 @@
 import type { Dispatch, RefObject, SetStateAction } from 'react';
 import { useAppStore } from '../../store/useAppStore';
 import { useDialogStore } from '../../store/useDialogStore';
-import { GUEST_KEY } from './useGuestLogin';
+import { GUEST_KEY } from '../../lib/sync/sessionKeys';
 import {
     captureSession, GUEST_SESSION_KEY, isActiveGuestSession,
     isCurrentSession, revokeGuestSession,
