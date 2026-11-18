@@ -84,7 +84,7 @@ describe('Kinde-only device vault provisioning and authenticated baseline', () =
     it('creates only owner-scoped ciphertext after trusted consent, then invokes the durable claim bridge', async () => {
         const send = server();
         const result = await start(send);
-        expect(result).toEqual({ kind: 'candidate-prepared', checkpointRevision: 0,
+        expect(result).toEqual({ kind: 'candidate-observed', checkpointRevision: 0,
             replicaOutcome: 'reconciliation-required' });
         expect(claimSource.claim).toHaveBeenCalledWith({
             expected: principal, stillCurrent: expect.any(Function),
@@ -138,7 +138,7 @@ describe('Kinde-only device vault provisioning and authenticated baseline', () =
         expect(previous?.phase).toBe('active');
         expect(await get('logbook:v2:' + owner)).toBeUndefined();
         expect(claimSource.claim).not.toHaveBeenCalled();
-        await expect(start(server())).resolves.toMatchObject({ kind: 'candidate-prepared' });
+        await expect(start(server())).resolves.toMatchObject({ kind: 'candidate-observed' });
         expect(readVaultControl(owner)).toEqual(previous);
         expect(await readLocal(owner)).toMatchObject({ owner, consentRevision: 1 });
     });

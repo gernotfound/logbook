@@ -36,7 +36,7 @@ export async function prepareKindeCandidateOwner({
     stillCurrent: () => boolean;
     send?: typeof fetch;
     browserCookies?: () => string;
-}): Promise<{ kind: 'candidate-prepared'; checkpointRevision: number; replicaOutcome: Awaited<ReturnType<typeof claimKindeCandidateReplica>> }> {
+}): Promise<{ kind: 'candidate-observed'; checkpointRevision: number; replicaOutcome: Awaited<ReturnType<typeof claimKindeCandidateReplica>> }> {
     const principal = { ...expected };
     const owner = userOwner(principal.uid);
     const fence = captureKindeCandidateSessionFence({ stillCurrent, browserCookies });
@@ -79,5 +79,5 @@ export async function prepareKindeCandidateOwner({
     const final = await readKindeCandidateAccess(pinnedRequest);
     verifyAccess(final, principal, first.legalConsent);
     if (!scoped()) throw new KindeCandidateBoundaryError();
-    return { kind: 'candidate-prepared', checkpointRevision: hydrated.checkpointRevision, replicaOutcome };
+    return { kind: 'candidate-observed', checkpointRevision: hydrated.checkpointRevision, replicaOutcome };
 }
