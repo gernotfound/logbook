@@ -336,16 +336,18 @@ export function captureKindeCandidateSessionFence({
  * status after the server's conditional session revocation.
  */
 export async function revokeKindeCandidateSession({
-    send = fetch, stillCurrent, browserCookies = () => document.cookie,
+    send = fetch, stillCurrent, expectedCsrfToken, browserCookies = () => document.cookie,
 }: {
     send?: typeof fetch;
     stillCurrent: () => boolean;
+    expectedCsrfToken: string;
     browserCookies?: () => string;
 }): Promise<void> {
     assertCurrent(stillCurrent);
     let csrf: string;
     try { csrf = sessionCsrf(browserCookies()); }
     catch { throw new KindeCandidateBoundaryError(); }
+    if (csrf !== expectedCsrfToken) throw new KindeCandidateBoundaryError();
     assertCurrent(stillCurrent);
 
     let response: Response;

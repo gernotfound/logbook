@@ -21,6 +21,14 @@ Identità, consenso e replica candidati devono fissare il cookie CSRF di session
 
 Un evento `focus` o `online` nello stesso turno di un comando Kinde non deve invalidare la generazione del comando prima del commit di `busy` React. Usare un latch sincrono di operazione, rilasciato anche per errori/teardown; un recheck foreground può partire solo senza operazioni in corso. L'osservatore non autorizza fitness, consenso o accesso ad archivi, anche in caso di sessione verified.
 
+### Azione Kinde legata alla sessione visualizzata
+
+L'ingresso React conserva in memoria la prova del cookie per la sessione
+che ha mostrato il tasto di disconnessione. Il client ricontrolla quel token
+prima di inviare il logout. Una scheda con una schermata obsoleta non può
+revocare la sessione sostitutiva. Il riscontro resta un 401 attendibile,
+perché il Worker rimuove il cookie della sessione appena terminata.
+
 ### Riconciliazione sessione Kinde foreground (17/11/2026)
 
 La schermata React Kinde `identityOnly` deve rileggerne lo stato trusted al ritorno dal background o della rete, invalidando i risultati di richieste precedenti e accorpando gli eventi simultanei. Un errore di rete o una sessione non verificata non concede owner, consenso, vault o fitness; la modalità guest già attiva non effettua queste letture. Questo è soltanto un osservatore UI: `AuthProvider`, `storageOwner()` e il ciclo guest→account Firebase restano da convertire. La diagnostica HTML è indipendente e richiede una prova Network sul browser normale prima di attribuirne il blocco a uno specifico componente.

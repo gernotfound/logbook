@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import {
-    KindeCandidateBoundaryError, readKindeCandidateAccess,
+    captureKindeCandidatePresenceFence, KindeCandidateBoundaryError, readKindeCandidateAccess,
     revokeKindeCandidateSession, submitKindeHostedSignIn,
 } from '../../lib/auth/kindeCandidateClient';
 import {
@@ -47,6 +47,8 @@ export function KindeAccountEntry({
     const [terms, setTerms] = useState(false);
     const [health, setHealth] = useState(false);
     const generation = useRef(0);
+    const observedSession = useRef<ReturnType<typeof captureKindeCandidatePresenceFence> | null>(null);
+    const consentOwner = useRef<{ uid: string; fenceEpoch: number } | null>(null);
     const mounted = useRef(false);
     const titleId = useId();
     const privacyDetails = useRef<HTMLDetailsElement>(null);
@@ -54,6 +56,11 @@ export function KindeAccountEntry({
 
     const refresh = useCallback(async () => {
         const token = ++generation.current;
+        observedSession.current = null;
+        consentOwner.current = null;
+        setOver18(false);
+        setTerms(false);
+        setHealth(false);
         const current = () => mounted.current && generation.current === token && !guestArchivePresent;
         if (guestArchivePresent) {
             await Promise.resolve();
@@ -61,32 +68,41 @@ export function KindeAccountEntry({
             return;
         }
         try {
+            // Use one browser incarnation across identity, consent and the
+            // action offered by this screen, including re-login as the same UID.
+            const session = captureKindeCandidatePresenceFence({ stillCurrent: current });
             const identity: KindeCandidateIdentity = await readKindeCandidateIdentity({
-                stillCurrent: current,
+                stillCurrent: session.stillCurrent,
             });
             if (!current()) return;
+            if (!session.stillCurrent()) throw new KindeCandidateBoundaryError();
             if (identity.kind === 'signed-out') {
                 setPhase('signed-out');
                 return;
             }
+            if (session.csrfToken === null) throw new KindeCandidateBoundaryError();
             if (identity.kind === 'email-unverified') {
+                observedSession.current = session;
                 setPhase('email-unverified');
                 return;
             }
             if (identityOnly) {
                 // A verified identity does not imply health consent or local
                 // archive ownership. The D1 fitness route is not public yet.
+                observedSession.current = session;
                 setPhase('identity-verified');
                 return;
             }
-            const access = await readKindeCandidateAccess({ stillCurrent: current });
+            const access = await readKindeCandidateAccess({ stillCurrent: session.stillCurrent });
             if (!current()) return;
-            if (access.kind === 'signed-out'
+            if (!session.stillCurrent() || access.kind === 'signed-out'
                 || access.principal.uid !== identity.principal.uid
                 || access.principal.fenceEpoch !== identity.principal.fenceEpoch
                 || access.principal.healthConsentRevision !== identity.principal.healthConsentRevision) {
                 throw new KindeCandidateBoundaryError();
             }
+            observedSession.current = session;
+            if (access.kind === 'consent-required') consentOwner.current = access.principal;
             setPhase(access.kind === 'consent-required' ? 'consent-required'
                 : access.kind === 'consent-confirmed' ? 'consent-confirmed'
                     : access.kind === 'legal-update-required' ? 'legal-update-required'
@@ -175,18 +191,22 @@ export function KindeAccountEntry({
     };
 
     const handleConsent = async () => {
-        if (busyRef.current || guestArchivePresent || phase !== 'consent-required'
+        if (busyRef.current || guestArchivePresent || identityOnly || phase !== 'consent-required'
             || !over18 || !terms || !health) return;
         const token = generation.current;
         const current = () => mounted.current && generation.current === token && !guestArchivePresent;
         busyRef.current = true;
         setBusy(true);
         try {
+            const session = observedSession.current;
+            const expectedOwner = consentOwner.current;
+            if (!session?.stillCurrent() || !expectedOwner) throw new KindeCandidateBoundaryError();
             await acceptKindeCandidateInitialConsent({
+                expectedOwner,
                 decision: { confirmsOver18: over18, acceptedTerms: terms, acceptedHealthData: health },
-                stillCurrent: current,
+                stillCurrent: () => current() && session.stillCurrent(),
             });
-            if (current()) setPhase('consent-confirmed');
+            if (current()) setPhase(session.stillCurrent() ? 'consent-confirmed' : 'unavailable');
         } catch {
             if (current()) setPhase('unavailable');
         } finally {
@@ -204,11 +224,12 @@ export function KindeAccountEntry({
         busyRef.current = true;
         setBusy(true);
         try {
-            await revokeKindeCandidateSession({ stillCurrent: current });
+            const session = observedSession.current;
+            if (!session?.csrfToken || !session.stillCurrent()) throw new KindeCandidateBoundaryError();
+            await revokeKindeCandidateSession({
+                stillCurrent: current, expectedCsrfToken: session.csrfToken,
+            });
             if (current()) {
-                setOver18(false);
-                setTerms(false);
-                setHealth(false);
                 setPhase('checking');
                 busyRef.current = false;
                 setBusy(false);

@@ -34,16 +34,18 @@ function confirmation(value: unknown, uid: string, epoch: number): boolean {
 
 /**
  * First-consent candidate only. The UI must capture three separate explicit
- * decisions; neither a session cookie nor an existing guest approval is consent.
+ * decisions and bind them to the principal that was shown the form. Neither
+ * a session cookie nor an existing guest approval is consent.
  *
  * The server's active/UID/epoch/legal readback is authoritative. A 200, 409,
  * 503 or lost response alone is never an acceptance ACK, and a failed initial
  * POST is never automatically replayed with fabricated consent.
  */
 export async function acceptKindeCandidateInitialConsent({
-    decision, stillCurrent, send = fetch, browserCookies = () => document.cookie,
+    decision, expectedOwner, stillCurrent, send = fetch, browserCookies = () => document.cookie,
 }: {
     decision: InitialDecision;
+    expectedOwner: { uid: string; fenceEpoch: number };
     stillCurrent: () => boolean;
     send?: typeof fetch;
     browserCookies?: () => string;
@@ -52,6 +54,8 @@ export async function acceptKindeCandidateInitialConsent({
     const fence = captureKindeCandidateSessionFence({ stillCurrent, browserCookies });
     const initial = await readKindeCandidateAccess({ send, stillCurrent: fence.stillCurrent, browserCookies });
     if (initial.kind !== 'consent-required' || initial.principal.healthConsentRevision !== 0
+        || initial.principal.uid !== expectedOwner?.uid
+        || initial.principal.fenceEpoch !== expectedOwner.fenceEpoch
         || !fence.stillCurrent()) throw new KindeCandidateBoundaryError();
 
     const { uid, fenceEpoch } = initial.principal;

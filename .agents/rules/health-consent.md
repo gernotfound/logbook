@@ -41,6 +41,11 @@ Termini e trattamento dati salute. Una sessione Kinde verificata senza riga
 consenso non autorizza altro. Il chiamante richiede CSRF per-sessione,
 rifiuta switch identità/epoch e accetta successo solo dopo una nuova lettura
 del consenso `active` sulla stessa identità con versioni legali attuali.
+La schermata fissa il cookie prima della lettura dell'identità e lega il
+modulo alla stessa sessione, UID ed epoch. Se cambia il cookie, anche per un
+nuovo accesso con lo stesso UID, il modulo non invia il consenso. Una nuova
+verifica azzera le tre scelte. Il preflight prima della scrittura confronta
+l'owner restituito con quello del modulo e rifiuta ogni differenza.
 Una risposta SQL persa/409/503 si riconcilia tramite la prova remota, **non**
 con replay del POST o ottimismo UI. Il guest può esprimere il primo consenso
 account prima del trasferimento: nessuna eredità del consenso locale guest,

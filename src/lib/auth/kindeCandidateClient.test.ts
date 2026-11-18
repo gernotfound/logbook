@@ -337,11 +337,20 @@ describe('candidate first-party Kinde client boundary', () => {
             .toEqual(['/api/auth/session', '/v1/consent/status', '/api/auth/session', '/v1/sync/control']);
     });
 
+    it('rejects a replacement logout cookie before sending any request', async () => {
+        const send = responses();
+        await expect(revokeKindeCandidateSession({
+            expectedCsrfToken: 'A'.repeat(43), send, stillCurrent: () => true,
+            browserCookies: () => '__Host-logbook_csrf=' + 'B'.repeat(42) + 'A',
+        })).rejects.toBeInstanceOf(KindeCandidateBoundaryError);
+        expect(send).not.toHaveBeenCalled();
+    });
+
     it('requires CSRF-bound server logout and a fresh session 401 before reporting revocation', async () => {
         const csrf = 'A'.repeat(43);
         const send = responses(reply({ status: 'signed-out' }), reply({ error: 'unauthorized' }, 401));
         await expect(revokeKindeCandidateSession({
-            send, stillCurrent: () => true,
+            expectedCsrfToken: 'A'.repeat(43), send, stillCurrent: () => true,
             browserCookies: () => '__Host-logbook_csrf=' + csrf + '; unrelated=1',
         })).resolves.toBeUndefined();
         expect(send.mock.calls.map(([path]) => path))
@@ -364,7 +373,7 @@ describe('candidate first-party Kinde client boundary', () => {
         ]) {
             const send = responses();
             await expect(revokeKindeCandidateSession({
-                send, stillCurrent: () => true, browserCookies: () => cookies,
+                expectedCsrfToken: 'A'.repeat(43), send, stillCurrent: () => true, browserCookies: () => cookies,
             })).rejects.toBeInstanceOf(KindeCandidateBoundaryError);
             expect(send).not.toHaveBeenCalled();
         }
@@ -383,12 +392,12 @@ describe('candidate first-party Kinde client boundary', () => {
         ]) {
             const send = responses(...responsesAfterLogout);
             await expect(revokeKindeCandidateSession({
-                send, stillCurrent: () => true, browserCookies: cookies,
+                expectedCsrfToken: 'A'.repeat(43), send, stillCurrent: () => true, browserCookies: cookies,
             })).rejects.toBeInstanceOf(KindeCandidateBoundaryError);
         }
         const lostAck = responses();
         await expect(revokeKindeCandidateSession({
-            send: lostAck, stillCurrent: () => true, browserCookies: cookies,
+            expectedCsrfToken: 'A'.repeat(43), send: lostAck, stillCurrent: () => true, browserCookies: cookies,
         })).rejects.toBeInstanceOf(KindeCandidateBoundaryError);
         // The caller must preserve the vault until the server state is proven.
     });
@@ -400,7 +409,7 @@ describe('candidate first-party Kinde client boundary', () => {
             return reply({ status: 'signed-out' });
         });
         await expect(revokeKindeCandidateSession({
-            send, stillCurrent: () => current,
+            expectedCsrfToken: 'A'.repeat(43), send, stillCurrent: () => current,
             browserCookies: () => '__Host-logbook_csrf=' + 'A'.repeat(43),
         })).rejects.toBeInstanceOf(KindeCandidateBoundaryError);
         expect(send).toHaveBeenCalledTimes(1);

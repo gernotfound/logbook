@@ -10,11 +10,11 @@ import { acceptKindeCandidateInitialConsent } from '../../lib/auth/kindeCandidat
 vi.mock('../../lib/auth/kindeCandidateIdentity', () => ({
     readKindeCandidateIdentity: vi.fn(),
 }));
-vi.mock('../../lib/auth/kindeCandidateClient', () => ({
+vi.mock(import('../../lib/auth/kindeCandidateClient'), async importOriginal => ({
+    ...await importOriginal(),
     readKindeCandidateAccess: vi.fn(),
     revokeKindeCandidateSession: vi.fn(),
     submitKindeHostedSignIn: vi.fn(),
-    KindeCandidateBoundaryError: class extends Error {},
 }));
 vi.mock('../../lib/auth/kindeCandidateConsent', () => ({
     acceptKindeCandidateInitialConsent: vi.fn(),
@@ -28,6 +28,9 @@ vi.mock('../../pages/TermsAndConditions', () => ({
 
 const A = 'k_' + 'A'.repeat(43);
 const B = 'k_' + 'B'.repeat(43);
+const FIRST_CSRF = 'A'.repeat(43);
+const REPLACEMENT_CSRF = 'B'.repeat(42) + 'A';
+let browserCsrf: string;
 const principal = { uid: A, fenceEpoch: 1, healthConsentRevision: 0, emailVerified: true };
 const verified = { kind: 'email-verified' as const, principal };
 const required = { kind: 'consent-required' as const, principal };
@@ -37,6 +40,8 @@ const confirmed = {
 };
 
 beforeEach(() => {
+    browserCsrf = FIRST_CSRF;
+    vi.spyOn(document, 'cookie', 'get').mockImplementation(() => '__Host-logbook_csrf=' + browserCsrf);
     vi.mocked(readKindeCandidateIdentity).mockResolvedValue({ kind: 'signed-out' });
     vi.mocked(readKindeCandidateAccess).mockResolvedValue(required);
     vi.mocked(acceptKindeCandidateInitialConsent).mockResolvedValue(confirmed);
@@ -44,6 +49,7 @@ beforeEach(() => {
 });
 afterEach(() => {
     cleanup();
+    vi.restoreAllMocks();
     vi.resetAllMocks();
 });
 
@@ -98,6 +104,7 @@ describe('isolated Kinde account entry candidate', () => {
         fireEvent.click(accept);
         await waitFor(() => expect(acceptKindeCandidateInitialConsent).toHaveBeenCalledWith(
             expect.objectContaining({
+                expectedOwner: expect.objectContaining({ uid: A, fenceEpoch: 1 }),
                 decision: {
                     confirmsOver18: true, acceptedTerms: true, acceptedHealthData: true,
                 },
@@ -106,6 +113,33 @@ describe('isolated Kinde account entry candidate', () => {
         ));
         await screen.findByText(/Identità e consenso verificati/);
         expect(submitKindeHostedSignIn).not.toHaveBeenCalled();
+    });
+
+    it('discards consent checked before a replacement cookie even for the same account', async () => {
+        vi.mocked(readKindeCandidateIdentity).mockResolvedValue(verified);
+        render(<KindeAccountEntry />);
+        const accept = await screen.findByRole('button', { name: 'Conferma consenso' });
+        for (const checkbox of screen.getAllByRole('checkbox')) fireEvent.click(checkbox);
+
+        browserCsrf = REPLACEMENT_CSRF;
+        fireEvent.click(accept);
+        const retry = await screen.findByRole('button', { name: 'Riprova la verifica' });
+        expect(acceptKindeCandidateInitialConsent).not.toHaveBeenCalled();
+
+        fireEvent.click(retry);
+        expect(await screen.findByRole('button', { name: 'Conferma consenso' })).toHaveProperty('disabled', true);
+        for (const checkbox of screen.getAllByRole('checkbox')) expect(checkbox).toHaveProperty('checked', false);
+    });
+
+    it('rejects a cookie change between the identity and consent readbacks', async () => {
+        vi.mocked(readKindeCandidateIdentity).mockResolvedValue(verified);
+        vi.mocked(readKindeCandidateAccess).mockImplementationOnce(async () => {
+            browserCsrf = REPLACEMENT_CSRF;
+            return required;
+        });
+        render(<KindeAccountEntry />);
+        await screen.findByRole('button', { name: 'Riprova la verifica' });
+        expect(screen.queryByRole('button', { name: 'Conferma consenso' })).toBeNull();
     });
 
     it('a contradictory identity/consent owner blocks the UI without publishing fitness', async () => {
@@ -154,6 +188,16 @@ describe('isolated Kinde account entry candidate', () => {
 });
 
 describe('public Kinde identity-only entry boundary', () => {
+    it('does not let an old logout button revoke a replacement session', async () => {
+        vi.mocked(readKindeCandidateIdentity).mockResolvedValue(verified);
+        render(<KindeAccountEntry identityOnly />);
+        const logout = await screen.findByRole('button', { name: 'Termina sessione TheLogBook' });
+        browserCsrf = REPLACEMENT_CSRF;
+        fireEvent.click(logout);
+        await screen.findByRole('button', { name: 'Riprova la verifica' });
+        expect(revokeKindeCandidateSession).not.toHaveBeenCalled();
+    });
+
     it('does not let an immediate foreground event supersede a pending logout operation', async () => {
         let finishLogout!: () => void;
         vi.mocked(readKindeCandidateIdentity).mockResolvedValueOnce(verified)
