@@ -41,7 +41,11 @@ export function createAuthenticatedIdentitySource() {
         return identity.uid;
     };
 
-    return { install, readUid };
+    // A persisted owner hint is not a session: the caller may consider it
+    // only when an explicit provider has accepted responsibility for Auth.
+    const hasReader = (): boolean => reader !== null;
+
+    return { install, readUid, hasReader };
 }
 
 export const authenticatedIdentitySource = createAuthenticatedIdentitySource();
