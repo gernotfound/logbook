@@ -5,14 +5,17 @@ describe('provider-neutral authenticated identity source', () => {
     it('is signed-out until an explicit provider reader is registered', () => {
         const source = createAuthenticatedIdentitySource();
         expect(source.readUid()).toBeNull();
+        expect(source.hasReader()).toBe(false);
         const state: { uid: string } = { uid: 'k_' + 'A'.repeat(43) };
         const read = vi.fn(() => state);
         const dispose = source.install(read);
+        expect(source.hasReader()).toBe(true);
         expect(source.readUid()).toBe(state.uid);
         state.uid = 'k_' + 'B'.repeat(43);
         expect(source.readUid()).toBe(state.uid);
         expect(read).toHaveBeenCalledTimes(2);
         dispose();
+        expect(source.hasReader()).toBe(false);
         expect(source.readUid()).toBeNull();
     });
 
