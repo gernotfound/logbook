@@ -152,11 +152,26 @@ export const sessionStorageMock = storageMocks.sessionStorageMock;
 import { storageOwner } from '../src/lib/sync/session';
 import React from 'react';
 import { render, act } from '@testing-library/react';
-import { AuthProvider } from '../src/contexts/AuthContext';
+import { AuthProvider, readLegacyAuthenticatedIdentity } from '../src/contexts/AuthContext';
 import { AuthContext, defaultAuthContext } from '../src/contexts/AuthContextDef';
 import { auth } from '../src/lib/firebase';
+import { authenticatedIdentitySource } from '../src/lib/sync/authenticatedIdentitySource';
 import { useAppStore } from '../src/store/useAppStore';
 import type { UserData } from '../src/types';
+
+// The generic jsdom suites model an explicitly mounted legacy account.
+// Production Firebase imports never install a reader. Tests that exercise
+// Kinde-first with NO legacy provider explicitly opt out of this fixture.
+let releaseLegacyFixture: (() => void) | null = null;
+export function releaseLegacyTestIdentityReader(): void {
+  releaseLegacyFixture?.();
+  releaseLegacyFixture = null;
+}
+beforeEach(() => {
+  releaseLegacyTestIdentityReader();
+  releaseLegacyFixture = authenticatedIdentitySource.install(readLegacyAuthenticatedIdentity);
+});
+afterEach(() => releaseLegacyTestIdentityReader());
 
 Object.defineProperty(window, 'matchMedia', {
   writable: true,
