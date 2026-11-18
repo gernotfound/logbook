@@ -4,6 +4,7 @@ import { storageOwner } from '../../../src/lib/sync/session';
 import { normalizeStorageOwner, userOwner } from '../../../src/lib/sync/owner';
 import { assertNoLocalPurge } from '../../../src/lib/sync/localPurgeFence';
 import { auth } from '../../../src/lib/firebase';
+import { authenticatedIdentitySource } from '../../../src/lib/sync/authenticatedIdentitySource';
 
 describe('Authenticated owner identity and local purge fencing', () => {
     beforeEach(() => {
@@ -79,8 +80,9 @@ describe('Authenticated owner identity and local purge fencing', () => {
         expect(readAuthenticatedOwnerHint()).toBeNull();
     });
 
-    it('keeps the hinted authenticated owner authoritative while Firebase Auth is still unresolved', () => {
+    it('keeps the hint only while a legacy provider is mounted but has not resolved Auth', () => {
         const previous = (auth as any).currentUser;
+        const release = authenticatedIdentitySource.install(() => auth.currentUser);
         try {
             (auth as any).currentUser = null;
             rememberAuthenticatedOwner('offline-user');
@@ -88,6 +90,7 @@ describe('Authenticated owner identity and local purge fencing', () => {
         } finally {
             (auth as any).currentUser = previous;
             clearAuthenticatedOwnerHint();
+            release();
         }
     });
 });
