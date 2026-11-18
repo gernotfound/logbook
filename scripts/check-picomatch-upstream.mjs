@@ -24,7 +24,7 @@ export function selectPublishedFix(advisory) {
   if (!Array.isArray(advisory.vulnerabilities)) throw Error('Incomplete advisory response');
   const patched = advisory.vulnerabilities
     .filter(item => item?.package?.ecosystem === 'npm' && item.package.name === 'picomatch')
-    .map(item => item.first_patched_version?.identifier)
+    .map(item => item.first_patched_version)
     .filter(version => parseStableVersion(version)
       && compareVersions(parseStableVersion(version), [4, 0, 7]) > 0)
     .sort((a, b) => compareVersions(parseStableVersion(a), parseStableVersion(b)));
