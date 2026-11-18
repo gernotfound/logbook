@@ -1,10 +1,16 @@
 # Kinde — configurazione del provider per TheLogBook
 
+## CF-03 · ingresso Kinde e lifecycle guest separati dal provider account Firebase (18/11/2026, v2.524.0 candidata)
+
+Il bootstrap della PWA monta `GuestOnlyAuthProvider`, che espone soltanto il guest locale protetto e nessun `currentUser` account. La UI Kinde rimane `identityOnly`, separata dai dati fitness; i metodi autenticati Firebase sono rifiutati. `AccountDeletionRecovery` relativo ai vecchi account non è più montato. Le regressioni controllano inizializzazione anonima, rifiuto comandi Firebase, revoca guest cross-tab e logout locale.
+
+Non confondere questo cambio con la rimozione degli SDK Firebase dal bundle: `db.ts`, `healthConsent.ts` e componenti di impostazioni importano ancora il provider; il lettore globale UID Firebase vive ancora nel modulo legacy. Finché questi percorsi non sono convertiti, non promettere nessuna richiesta Firebase per il guest. Kinde non ha ancora il lifecycle owner/vault/consenso/ADK/sync/rights/erasure collegato, il D1 sanitario non è pubblico e un account creato ora non può ancora usare le funzioni fitness. Questa fase non attiva la salute o modifica i provider live.
+
 ## CF-03 · ritiro della schermata Firebase non montata (18/11/2026, candidato v2.523.0)
 
 L'ingresso account della PWA usa già `KindeAccountEntry identityOnly` e non monta più il form `LoginBox`. La vecchia implementazione Firebase email/password/Google, senza chiamanti nel codice UI, è rimossa insieme ai test dedicati al suo comportamento pre-lancio. I controlli di branding e tipografia ora puntano alla schermata effettivamente mostrata; le suite Kinde esistenti conservano i test dell'ingresso hosted, cookie/CSRF, errori, guest e conferma identità.
 
-**Limite imprescindibile:** `src/main.tsx` monta ancora `AuthProvider` Firebase, e vari consumer di archivio/consenso/replica usano Firestore. Questo incremento non configura il tenant, non abilita l'accesso fitness D1, non trasferisce archivi guest e non rende utilizzabile un nuovo account nelle funzioni salute. Per riuscirci servono un provider Kinde unico, local vault e session fencing, consenso/ADK, journal/ACK, diritti, erasure e prove runtime. Nessuna API sanitaria o dato reale viene attivato.
+**Limite della fase UI precedente:** l'AuthProvider Firebase era ancora montato in v2.523.0; da v2.524.0 il bootstrap usa il guest-only provider, ma vari consumer di archivio/consenso/replica usano ancora Firestore. Questo incremento non configura il tenant, non abilita l'accesso fitness D1, non trasferisce archivi guest e non rende utilizzabile un nuovo account nelle funzioni salute. Per riuscirci servono un provider Kinde unico, local vault e session fencing, consenso/ADK, journal/ACK, diritti, erasure e prove runtime. Nessuna API sanitaria o dato reale viene attivato.
 
 
 ## CF-03 · blocco guest → Firebase dall'interfaccia (17/11/2026)
