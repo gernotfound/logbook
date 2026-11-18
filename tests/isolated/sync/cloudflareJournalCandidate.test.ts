@@ -135,6 +135,30 @@ function changedRemote(setup: Awaited<ReturnType<typeof seed>>) {
 }
 
 describe('isolated CF-04 journal orchestrator', () => {
+    it('keeps a staged ciphertext from another fenced epoch and skips receipt, commit and ACK', async () => {
+        const setup = await savedDelivery();
+        const api = transport(setup.control, setup.snapshot);
+        const before = await readLocal(owner);
+        expect(before?.cloudflareDelivery).toBeDefined();
+        await expect(deliverCloudflareJournalCandidate(owner, adk, api, 'csrf-session', () => true, {
+            consentRevision: 1, fenceEpoch: setup.control.fenceEpoch + 1,
+        })).rejects.toThrow('Intento D1 di un’altra epoca');
+        expect(api.receipt).not.toHaveBeenCalled();
+        expect(api.commit).not.toHaveBeenCalled();
+        expect(await readLocal(owner)).toEqual(before);
+    });
+
+    it('blocks a new batch when D1 reports a different epoch from the session proof', async () => {
+        const setup = await seed();
+        const api = transport(setup.control, setup.snapshot);
+        await expect(deliverCloudflareJournalCandidate(owner, adk, api, 'csrf-session', () => true, {
+            consentRevision: 1, fenceEpoch: setup.control.fenceEpoch + 1,
+        })).rejects.toThrow('Epoca cloud D1 differente');
+        expect(api.read).not.toHaveBeenCalled();
+        expect(api.commit).not.toHaveBeenCalled();
+        expect(await readLocal(owner)).toEqual(setup.local);
+    });
+
     it('stages an encrypted causal prefix then requires a matching receipt for the local ACK', async () => {
         const { control, snapshot } = await seed();
         const remote = transport(control, snapshot);

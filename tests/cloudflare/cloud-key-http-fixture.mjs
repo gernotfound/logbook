@@ -1,3 +1,4 @@
+import { applyCurrentD1RecoverySchema } from './current-d1-schema.mjs';
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
@@ -61,13 +62,17 @@ export async function createCloudKeyHttpFixture(owners = ['owner-a', 'owner-b'])
     sqlite.exec(readFileSync(new URL('../../cloudflare/api/migrations/' + file, import.meta.url), 'utf8'));
   }
   const db = new D1(sqlite);
+  const registry = new DatabaseSync(':memory:');
+  applyCurrentD1RecoverySchema(registry);
+  registry.exec("UPDATE recovery_control SET mode='open', generation=2 WHERE singleton=1");
+  const recoveryDb = new D1(registry);
   const gateEnv = {
     DB: db, API_ORIGIN: ORIGIN,
     CONSENT_PRIVACY_VERSION: '1.3.9', CONSENT_TERMS_VERSION: '1.2.5',
     API_RATE_LIMITER: { limit: async () => ({ success: true }) },
   };
   const env = {
-    ...gateEnv, CLOUD_ACCOUNT_KEK_V1: KEK,
+    ...gateEnv, RECOVERY_DB: recoveryDb, CLOUD_ACCOUNT_KEK_V1: KEK,
     AUTH_GATE: { fetch: request => gate.fetch(request, gateEnv) },
   };
   const sessions = new Map();
@@ -99,8 +104,8 @@ export async function createCloudKeyHttpFixture(owners = ['owner-a', 'owner-b'])
   }
   for (const uid of owners) await createOwner(uid);
   return {
-    sqlite, db, env, gateEnv, call, sessions,
-    close() { sqlite.close(); },
+    sqlite, db, registry, recoveryDb, env, gateEnv, call, sessions,
+    close() { registry.close(); sqlite.close(); },
     count(table, uid) {
       return sqlite.prepare('SELECT COUNT(*) AS n FROM ' + table + ' WHERE uid=?').get(uid).n;
     },

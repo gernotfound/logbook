@@ -38,14 +38,14 @@ export async function deliverKindeCandidateJournal({
 
     // A live, signed first-consent check is necessary even when there is
     // already an encrypted local delivery intent.
-    const access = await readKindeCandidateAccess({ send, stillCurrent: current });
+    const access = await readKindeCandidateAccess({ send, stillCurrent: current, browserCookies });
     if (access.kind !== 'consent-confirmed' || !current()) {
         throw new KindeCandidateBoundaryError();
     }
     const { uid, fenceEpoch, healthConsentRevision } = access.principal;
     const owner = userOwner(uid);
     const local = await readLocal(owner);
-    if (!current() || !local || local.cloudIntegrityFence
+    if (!current() || !local || local.consentRevision !== healthConsentRevision || local.cloudIntegrityFence
         || local.cloudflareReplicaClaim || local.cloudflareReplicaRetirement) {
         throw new KindeCandidateBoundaryError();
     }
@@ -61,6 +61,7 @@ export async function deliverKindeCandidateJournal({
         if (!current()) throw new KindeCandidateBoundaryError();
         const result = await deliverCloudflareJournalCandidate(
             owner, key, createCloudflareReplicaTransport(send), fence.csrfToken, current,
+            { consentRevision: healthConsentRevision, fenceEpoch },
         );
         if (!current()) throw new KindeCandidateBoundaryError();
         return result;

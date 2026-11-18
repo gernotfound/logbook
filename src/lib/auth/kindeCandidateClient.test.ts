@@ -27,7 +27,9 @@ const responses = (...items: Response[]) => vi.fn<typeof fetch>()
         if (!result) throw new Error('unexpected HTTP call');
         return result;
     });
-const read = (send: typeof fetch, stillCurrent = () => true) => readKindeCandidateAccess({ send, stillCurrent });
+const cookie = () => '__Host-logbook_csrf=' + 'A'.repeat(43);
+const read = (send: typeof fetch, stillCurrent = () => true) =>
+    readKindeCandidateAccess({ send, stillCurrent, browserCookies: cookie });
 
 afterEach(() => {
     document.querySelectorAll('form[action$="/api/auth/kinde/start"]').forEach(form => form.remove());
@@ -45,11 +47,13 @@ describe('candidate first-party Kinde client boundary', () => {
         expect(send.mock.calls.map(([path]) => path)).toEqual([
             '/api/auth/session', '/v1/consent/status', '/api/auth/session',
         ]);
-        for (const [, init] of send.mock.calls) {
+        for (const [path, init] of send.mock.calls) {
             expect(init).toEqual(expect.objectContaining({
                 method: 'POST', mode: 'same-origin', credentials: 'same-origin',
                 cache: 'no-store', redirect: 'error',
-                headers: { Accept: 'application/json' },
+                headers: path === '/v1/consent/status'
+                    ? { Accept: 'application/json', 'X-CSRF-Token': 'A'.repeat(43) }
+                    : { Accept: 'application/json' },
             }));
             expect(init).not.toHaveProperty('body');
             expect(init).not.toHaveProperty('Authorization');
@@ -212,7 +216,7 @@ describe('candidate first-party Kinde client boundary', () => {
             reply(control),
             reply(session(A, 1, 1)), reply(status('active', 1)), reply(session(A, 1, 1)),
         );
-        await expect(inspectKindeCandidateReplicaControl({ send, stillCurrent: () => true }))
+        await expect(inspectKindeCandidateReplicaControl({ send, stillCurrent: () => true, browserCookies: cookie }))
             .resolves.toEqual({ kind: 'replica-control-observed',
                 principal: { uid: A, fenceEpoch: 1, healthConsentRevision: 1 }, control });
         expect(send.mock.calls.map(([path]) => path)).toEqual([
@@ -220,7 +224,7 @@ describe('candidate first-party Kinde client boundary', () => {
             '/api/auth/session', '/v1/consent/status', '/api/auth/session',
         ]);
         const noConsent = responses(reply(session()), reply(status('unregistered', 0)), reply(session()));
-        await expect(inspectKindeCandidateReplicaControl({ send: noConsent, stillCurrent: () => true }))
+        await expect(inspectKindeCandidateReplicaControl({ send: noConsent, stillCurrent: () => true, browserCookies: cookie }))
             .resolves.toMatchObject({ kind: 'consent-required' });
         expect(noConsent).toHaveBeenCalledTimes(3);
     });
@@ -230,17 +234,17 @@ describe('candidate first-party Kinde client boundary', () => {
         for (const changed of [session(B, 1, 1), session(A, 2, 1), session(A, 1, 0)]) {
             const send = responses(reply(session(A, 1, 1)), reply(status('active', 1)),
                 reply(session(A, 1, 1)), reply(control), reply(changed));
-            await expect(inspectKindeCandidateReplicaControl({ send, stillCurrent: () => true }))
+            await expect(inspectKindeCandidateReplicaControl({ send, stillCurrent: () => true, browserCookies: cookie }))
                 .rejects.toBeInstanceOf(KindeCandidateBoundaryError);
         }
         const stale = responses(reply(session(A, 1, 1)), reply(status('active', 1)),
             reply(session(A, 1, 1)), reply({ ...control, fenceEpoch: 2 }),
             reply(session(A, 1, 1)), reply(status('active', 1)), reply(session(A, 1, 1)));
-        await expect(inspectKindeCandidateReplicaControl({ send: stale, stillCurrent: () => true }))
+        await expect(inspectKindeCandidateReplicaControl({ send: stale, stillCurrent: () => true, browserCookies: cookie }))
             .rejects.toBeInstanceOf(KindeCandidateBoundaryError);
         const outage = responses(reply(session(A, 1, 1)), reply(status('active', 1)),
             reply(session(A, 1, 1)), reply({ error: 'unavailable' }, 503));
-        await expect(inspectKindeCandidateReplicaControl({ send: outage, stillCurrent: () => true }))
+        await expect(inspectKindeCandidateReplicaControl({ send: outage, stillCurrent: () => true, browserCookies: cookie }))
             .rejects.toMatchObject({ status: 503 });
         // A→B→A can preserve the same consent/revision and epoch. Only
         // the UID from the middle authenticated control read exposes B.
@@ -253,17 +257,102 @@ describe('candidate first-party Kinde client boundary', () => {
                 reply(middleControl),
                 reply(session(A, 1, 1)), reply(status('active', 1)), reply(session(A, 1, 1)),
             );
-            await expect(inspectKindeCandidateReplicaControl({ send: mixed, stillCurrent: () => true }))
+            await expect(inspectKindeCandidateReplicaControl({ send: mixed, stillCurrent: () => true, browserCookies: cookie }))
                 .rejects.toBeInstanceOf(KindeCandidateBoundaryError);
             expect(mixed).toHaveBeenCalledTimes(7);
         }
+    });
+
+    it('requires a browser-bound cookie for authentication but accepts a canonical signed-out 401', async () => {
+        const authorized = responses(reply(session()));
+        await expect(readKindeCandidateAccess({
+            send: authorized, stillCurrent: () => true, browserCookies: () => '',
+        })).rejects.toBeInstanceOf(KindeCandidateBoundaryError);
+        expect(authorized).toHaveBeenCalledTimes(1);
+        const signedOut = responses(reply({ error: 'unauthorized' }, 401));
+        await expect(readKindeCandidateAccess({
+            send: signedOut, stillCurrent: () => true, browserCookies: () => '',
+        })).resolves.toEqual({ kind: 'signed-out' });
+    });
+
+    it('rejects malformed, duplicated or ambiguous cookies before network', async () => {
+        for (const value of [
+            '__Host-logbook_csrf=bad',
+            cookie() + '; __Host-logbook_csrf=' + 'B'.repeat(43),
+            '__Host-logbook_csrf_extra=malformed',
+            'x'.repeat(4097),
+        ]) {
+            const send = responses(reply(session()));
+            await expect(readKindeCandidateAccess({
+                send, stillCurrent: () => true, browserCookies: () => value,
+            })).rejects.toBeInstanceOf(KindeCandidateBoundaryError);
+            expect(send).not.toHaveBeenCalled();
+        }
+    });
+
+    it('rejects equal claims from a new session rotated on the first status read', async () => {
+        let browser = cookie();
+        const send = vi.fn<typeof fetch>().mockImplementation(async path => {
+            if (path === '/api/auth/session') {
+                browser = '__Host-logbook_csrf=' + 'B'.repeat(43);
+                return reply(session(A, 1, 1));
+            }
+            return reply(status('active', 1));
+        });
+        await expect(readKindeCandidateAccess({
+            send, stillCurrent: () => true, browserCookies: () => browser,
+        })).rejects.toBeInstanceOf(KindeCandidateBoundaryError);
+        expect(send).toHaveBeenCalledTimes(1);
+    });
+
+    it('rejects equal claims after a cookie rotation on consent before final status', async () => {
+        let browser = cookie();
+        const send = vi.fn<typeof fetch>().mockImplementation(async path => {
+            if (path === '/v1/consent/status') {
+                browser = '__Host-logbook_csrf=' + 'B'.repeat(43);
+                return reply(status('active', 1));
+            }
+            return reply(session(A, 1, 1));
+        });
+        await expect(readKindeCandidateAccess({
+            send, stillCurrent: () => true, browserCookies: () => browser,
+        })).rejects.toBeInstanceOf(KindeCandidateBoundaryError);
+        expect(send.mock.calls.map(([path]) => path))
+            .toEqual(['/api/auth/session', '/v1/consent/status']);
+    });
+
+    it('rejects a new browser incarnation between replica-control and equal status readbacks', async () => {
+        let browser = cookie();
+        const control = { uid: A, revision: 0, fenceEpoch: 1, consentRevision: 1, replicas: {} };
+        const send = vi.fn<typeof fetch>().mockImplementation(async path => {
+            if (path === '/v1/sync/control') {
+                browser = '__Host-logbook_csrf=' + 'B'.repeat(43);
+                return reply(control);
+            }
+            if (path === '/v1/consent/status') return reply(status('active', 1));
+            return reply(session(A, 1, 1));
+        });
+        await expect(inspectKindeCandidateReplicaControl({
+            send, stillCurrent: () => true, browserCookies: () => browser,
+        })).rejects.toBeInstanceOf(KindeCandidateBoundaryError);
+        expect(send.mock.calls.map(([path]) => path))
+            .toEqual(['/api/auth/session', '/v1/consent/status', '/api/auth/session', '/v1/sync/control']);
+    });
+
+    it('rejects a replacement logout cookie before sending any request', async () => {
+        const send = responses();
+        await expect(revokeKindeCandidateSession({
+            expectedCsrfToken: 'A'.repeat(43), send, stillCurrent: () => true,
+            browserCookies: () => '__Host-logbook_csrf=' + 'B'.repeat(42) + 'A',
+        })).rejects.toBeInstanceOf(KindeCandidateBoundaryError);
+        expect(send).not.toHaveBeenCalled();
     });
 
     it('requires CSRF-bound server logout and a fresh session 401 before reporting revocation', async () => {
         const csrf = 'A'.repeat(43);
         const send = responses(reply({ status: 'signed-out' }), reply({ error: 'unauthorized' }, 401));
         await expect(revokeKindeCandidateSession({
-            send, stillCurrent: () => true,
+            expectedCsrfToken: 'A'.repeat(43), send, stillCurrent: () => true,
             browserCookies: () => '__Host-logbook_csrf=' + csrf + '; unrelated=1',
         })).resolves.toBeUndefined();
         expect(send.mock.calls.map(([path]) => path))
@@ -286,7 +375,7 @@ describe('candidate first-party Kinde client boundary', () => {
         ]) {
             const send = responses();
             await expect(revokeKindeCandidateSession({
-                send, stillCurrent: () => true, browserCookies: () => cookies,
+                expectedCsrfToken: 'A'.repeat(43), send, stillCurrent: () => true, browserCookies: () => cookies,
             })).rejects.toBeInstanceOf(KindeCandidateBoundaryError);
             expect(send).not.toHaveBeenCalled();
         }
@@ -305,12 +394,12 @@ describe('candidate first-party Kinde client boundary', () => {
         ]) {
             const send = responses(...responsesAfterLogout);
             await expect(revokeKindeCandidateSession({
-                send, stillCurrent: () => true, browserCookies: cookies,
+                expectedCsrfToken: 'A'.repeat(43), send, stillCurrent: () => true, browserCookies: cookies,
             })).rejects.toBeInstanceOf(KindeCandidateBoundaryError);
         }
         const lostAck = responses();
         await expect(revokeKindeCandidateSession({
-            send: lostAck, stillCurrent: () => true, browserCookies: cookies,
+            expectedCsrfToken: 'A'.repeat(43), send: lostAck, stillCurrent: () => true, browserCookies: cookies,
         })).rejects.toBeInstanceOf(KindeCandidateBoundaryError);
         // The caller must preserve the vault until the server state is proven.
     });
@@ -322,7 +411,7 @@ describe('candidate first-party Kinde client boundary', () => {
             return reply({ status: 'signed-out' });
         });
         await expect(revokeKindeCandidateSession({
-            send, stillCurrent: () => current,
+            expectedCsrfToken: 'A'.repeat(43), send, stillCurrent: () => current,
             browserCookies: () => '__Host-logbook_csrf=' + 'A'.repeat(43),
         })).rejects.toBeInstanceOf(KindeCandidateBoundaryError);
         expect(send).toHaveBeenCalledTimes(1);

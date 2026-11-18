@@ -80,7 +80,7 @@ void test('direct dependencies require explicit review before a new runtime or b
     '@playwright/test', '@stryker-mutator/core', '@stryker-mutator/vitest-runner', '@testing-library/dom', '@testing-library/react',
     '@types/react', '@types/react-dom', '@unplugin-pwa/core', '@unplugin-pwa/vite', '@vite-pwa/workbox-swkit', '@vitejs/plugin-react',
     '@vitest/coverage-v8', '@vitest/ui', 'fake-indexeddb', 'jsdom',
-    'knip', 'oxlint', 'oxlint-tsgolint', 'rollup-plugin-visualizer',
+    'knip', 'oxlint', 'oxlint-tsgolint', 'picomatch', 'rollup-plugin-visualizer',
     'sharp', 'typescript', 'vite', 'vitest',
   ]);
   for (const [group, approved] of [

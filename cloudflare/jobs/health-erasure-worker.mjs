@@ -1,4 +1,10 @@
 import { D1_NOW_MS } from '../sql/d1-time.mjs';
+import {
+  recordVerifiedTerminalErasure, requireIndependentOwnerFence,
+} from '../recovery/independent-owner-fence.mjs';
+import {
+  armIndependentErasureCutoff, reconcileNextIndependentErasure,
+} from '../recovery/terminal-erasure-cutoff.mjs';
 
 // Candidate-only D1 erasure worker. No public fetch, route or cron binding.
 // Terminal key erasure requires migration 0010: a single SQL INSERT atomically
@@ -204,6 +210,31 @@ async function finalizeHealthErasureLease(db, lease) {
   return verified;
 }
 
+async function finalizeWithIndependentFence(db, recoveryDb, lease) {
+  const { candidate, primary, scope } = lease;
+  // The app's key phase is necessary to close export early. A stale
+  // restored job or an expired lease cannot arm the independent cutoff.
+  const current = await primary.prepare(`
+    SELECT j.uid FROM health_erasure_jobs j
+    JOIN sync_subjects s ON s.uid = j.uid
+    WHERE j.uid = ? AND j.consent_revision = ? AND j.fence_epoch = ?
+      AND j.lease_epoch = ? AND j.lease_token = ?
+      AND j.lease_until_ms > ${SERVER_NOW}
+      AND j.status = 'processing' AND j.phase = 'awaiting-keys'
+      AND s.status = 'withdrawn' AND s.consent_revision = j.consent_revision
+      AND s.fence_epoch = j.fence_epoch
+      ${TABLES.map(({ name }) => `AND NOT EXISTS (SELECT 1 FROM ${name} WHERE uid = j.uid)`).join('\n')}
+  `).bind(...scope).first();
+  if (current?.uid !== candidate.uid) return { outcome: 'contended' };
+
+  await armIndependentErasureCutoff(recoveryDb, scope);
+  const result = await finalizeHealthErasureLease(db, lease);
+  if (result.outcome === 'complete') {
+    await recordVerifiedTerminalErasure(db, recoveryDb, candidate.uid, candidate);
+  }
+  return result;
+}
+
 const AWAIT_KEYS = [
   "UPDATE health_erasure_jobs SET phase = 'awaiting-keys'",
   'WHERE uid = ? AND consent_revision = ? AND fence_epoch = ?',
@@ -276,16 +307,25 @@ export async function acquireOneHealthErasureKeyPhaseLease(db) {
   };
 }
 
-/**
- * One bounded data step OR one atomic terminal INSERT per invocation.
- * The 0010 SQL trigger is the only authority for completion. This module is
- * still private and cannot schedule itself or expose a public endpoint.
- */
-export async function runOneHealthErasureStep(db) {
+async function runApplicationHealthErasureStep(db, recoveryDb = null) {
   const lease = await claimOneHealthErasureLease(db);
   if (lease.outcome) return { outcome: lease.outcome };
-  if (lease.candidate.phase === 'awaiting-keys') return finalizeHealthErasureLease(db, lease);
   const { primary, candidate, scope } = lease;
+  if (recoveryDb) {
+    const subject = await primary.prepare(`
+      SELECT erased_before_revision FROM sync_subjects
+      WHERE uid = ? AND status = 'withdrawn' AND consent_revision = ? AND fence_epoch = ?
+    `).bind(candidate.uid, candidate.consent_revision, candidate.fence_epoch).first();
+    if (!subject) return { outcome: 'contended' };
+    await requireIndependentOwnerFence(recoveryDb, {
+      uid: candidate.uid, status: 'withdrawn', consentRevision: candidate.consent_revision,
+      fenceEpoch: candidate.fence_epoch, erasedBeforeRevision: subject.erased_before_revision,
+    }, 'erasure');
+  }
+  if (candidate.phase === 'awaiting-keys') {
+    return recoveryDb ? finalizeWithIndependentFence(db, recoveryDb, lease)
+      : finalizeHealthErasureLease(db, lease);
+  }
   for (const table of TABLES) {
     const result = await primary.prepare(deleteBoundedSql(table))
       .bind(candidate.uid, candidate.uid, ...scope).run();
@@ -302,8 +342,18 @@ export async function runOneHealthErasureStep(db) {
     : { outcome: 'contended' };
 }
 
+/**
+ * Application-only SQL step used by the synthetic schema tests. The
+ * scheduled entry point always requires the independent cutoff.
+ */
+export function runOneHealthErasureStep(db) {
+  return runApplicationHealthErasureStep(db);
+}
+
 export default {
   async scheduled(_event, env) {
-    await runOneHealthErasureStep(env.DB);
+    const { DB, RECOVERY_DB } = env;
+    await reconcileNextIndependentErasure(DB, RECOVERY_DB);
+    return await runApplicationHealthErasureStep(DB, RECOVERY_DB);
   },
 };

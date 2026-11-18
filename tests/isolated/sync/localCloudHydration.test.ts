@@ -6,9 +6,10 @@ const catalogSource = vi.hoisted(() => ({ read: vi.fn() }));
 vi.mock('../../../src/lib/catalog/catalogService', () => ({ getCachedCatalog: catalogSource.read }));
 
 import { UserDataSchema } from '../../../src/lib/schema';
+import { LEGAL_VERSIONS } from '../../../src/lib/legalVersions';
 import { CURRENT_DATA_SCHEMA, CURRENT_LOCAL_ENVELOPE, CURRENT_SYNC_PROTOCOL } from '../../../src/lib/schemaEvolution';
 import {
-    adoptReplicaCheckpoint, commitLocal, hydrateLocal, IncompleteCloudSnapshotError, readLocal,
+    adoptReplicaCheckpoint, commitLocal, hydrateLocal, IncompleteCloudSnapshotError, initializeLocal, readLocal,
 } from '../../../src/lib/sync/localRepository';
 import type { LocalEnvelope } from '../../../src/lib/sync/localRepository';
 import { applyRemoteDocuments, projectDocuments, type DocumentData } from '../../../src/lib/sync/documentProjection';
@@ -16,7 +17,9 @@ import { parseSyncMeta, type SyncMeta, type VectorClock } from '../../../src/lib
 import { sealCloudDocument } from '../../../src/lib/sync/cloudDocumentCipher';
 import { readAccountCloudDocument } from '../../../src/lib/sync/cloudDocumentRead';
 import { createAndMigrateVault } from '../../../src/lib/sync/secureArchiveMigration';
+import { SEALED_LOCAL_PREFIX } from '../../../src/lib/sync/secureArchiveCipher';
 import { lockAllVaults } from '../../../src/lib/sync/secureArchiveSession';
+import { hydrateKindeCandidateArchive } from '../../../src/lib/sync/kindeCandidateArchiveHydration';
 import type { CachedGlobalCatalog, UserData, WorkoutSession } from '../../../src/types';
 
 const owner = 'user:a';
@@ -114,6 +117,79 @@ function expectFencedArchive(after: LocalEnvelope, before: LocalEnvelope) {
         replica: { ...before.replica, checkpointAtMs: 1, leaseUntilMs: 1 },
     });
 }
+
+describe('Kinde checkpoint to a device-owned archive', () => {
+    const uid = 'k_' + 'A'.repeat(43);
+    const kindeOwner = 'user:' + uid;
+    const storageKey = 'logbook:v2:' + kindeOwner;
+    const principal = { uid, fenceEpoch: 1, healthConsentRevision: 1 };
+    const browserCookies = () => '__Host-logbook_csrf=' + 'A'.repeat(43);
+
+    function server(beforeScan?: () => Promise<void>): typeof fetch {
+        const meta: SyncMeta = { protocolVersion: CURRENT_SYNC_PROTOCOL, clock: { s01: 1 }, fields: {},
+            writer: { slot: 's01', replicaId: 'synthetic-kinde-device', generation: 1, seq: 1, consentRevision: 1 } };
+        const snapshot = state('190', {}, [workout('cloud-history', '2026-01-01')]);
+        const documents = [...projectDocuments(snapshot, catalog)].map(([path, doc]) => ({
+            path, revision: 1, document: sealCloudDocument(accountKey, uid, path, doc, meta),
+        }));
+        return vi.fn<typeof fetch>().mockImplementation(async input => {
+            const json = (body: unknown) => Response.json(body, { headers: { 'Cache-Control': 'no-store' } });
+            switch (input) {
+                case '/api/auth/session': return json({ ...principal, authenticated: true, emailVerified: true });
+                case '/v1/consent/status': return json({ uid, status: 'active', revision: 1, fenceEpoch: 1,
+                    acceptedAt: '2026-11-16T00:00:00.000Z', privacyVersion: LEGAL_VERSIONS.privacy,
+                    termsVersion: LEGAL_VERSIONS.terms });
+                case '/v1/cloud-key/sync': return json({ format: 'thelogbook-account-data-key', version: 1,
+                    uid, fenceEpoch: 1, consentRevision: 1, purpose: 'sync', key: btoa(String.fromCharCode(...accountKey)) });
+                case '/v1/sync/scan':
+                    await beforeScan?.();
+                    return json({ revision: 1, fenceEpoch: 1, consentRevision: 1, complete: true,
+                        nextAfter: null, documents });
+                default: throw Error('Unexpected request');
+            }
+        });
+    }
+
+    it('stores an AEAD cloud baseline as ciphertext under the device vault and creates no receipt or replica', async () => {
+        await createAndMigrateVault(kindeOwner);
+        const result = await hydrateKindeCandidateArchive({ expected: principal, browserCookies,
+            stillCurrent: () => true, send: server() });
+        expect(result.checkpointRevision).toBe(1);
+        expect(result.envelope).toMatchObject({ owner: kindeOwner, consentRevision: 1, replica: null,
+            pending: [], completeMonths: ['2026-01'], data: { profile: { height: '190' }, history: [{ id: 'cloud-history' }] } });
+        expect(result.envelope.cloudflareDelivery).toBeUndefined();
+        expect(await readLocal(kindeOwner)).toEqual(result.envelope);
+        const cipher = await get<string>(storageKey);
+        expect(cipher?.startsWith(SEALED_LOCAL_PREFIX)).toBe(true);
+        expect(cipher).not.toContain('cloud-history');
+        expect(localStorage.getItem(storageKey + ':health-consent-generation')).toBeNull();
+    });
+
+    it('preserves a competing tab’s newly created archive if the revision changed during the scan', async () => {
+        await createAndMigrateVault(kindeOwner);
+        let competingCiphertext: unknown;
+        const send = server(async () => {
+            await initializeLocal(kindeOwner, state('180'));
+            competingCiphertext = await get(storageKey);
+        });
+        await expect(hydrateKindeCandidateArchive({ expected: principal, browserCookies,
+            stillCurrent: () => true, send })).rejects.toThrow(/Checkpoint locale modificato/);
+        expect(competingCiphertext).toBeDefined();
+        expect(await get(storageKey)).toBe(competingCiphertext);
+    });
+
+    it('invalidates hydration if the same vault is locked and unlocked again before commit', async () => {
+        await createAndMigrateVault(kindeOwner);
+        catalogSource.read.mockResolvedValueOnce(catalog).mockImplementationOnce(async () => {
+            lockAllVaults();
+            await createAndMigrateVault(kindeOwner);
+            return catalog;
+        });
+        await expect(hydrateKindeCandidateArchive({ expected: principal, browserCookies,
+            stillCurrent: () => true, send: server() })).rejects.toThrow(/Hydration locale invalidata/);
+        expect(await get(storageKey)).toBeUndefined();
+    });
+});
 
 describe('diagnostic cloud hydration through the encrypted local archive', () => {
     it('creates the first envelope with current versions, consent and the joined server frontier', async () => {

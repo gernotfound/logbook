@@ -9,6 +9,9 @@
     "vitest.emulator.config.ts",
     "src/sw.ts",
     "vitest.mutation.config.mjs",
-    "tests/cloudflare/*.node.mjs"
+    "tests/cloudflare/*.node.mjs",
+    "vendor/picomatch/posix.js",
+    "vendor/picomatch/lib/utils.js",
+    "scripts/check-picomatch-upstream.mjs"
   ]
 }

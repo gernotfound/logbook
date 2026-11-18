@@ -13,3 +13,14 @@ assert.deepEqual(migrations.map(name => name.slice(0, 4)),
 export function applyCurrentD1Schema(sqlite) {
   for (const name of migrations) sqlite.exec(readFileSync(new URL(name, directory), 'utf8'));
 }
+
+const recoveryDirectory = new URL('../../cloudflare/recovery/migrations/', import.meta.url);
+const recoveryMigrations = readdirSync(recoveryDirectory)
+  .filter(name => /^[0-9]{4}_[a-z0-9_]+\.sql$/.test(name)).sort();
+assert.deepEqual(recoveryMigrations.map(name => name.slice(0, 4)),
+  Array.from({ length: recoveryMigrations.length }, (_, index) => String(index + 1).padStart(4, '0')));
+
+export function applyCurrentD1RecoverySchema(sqlite) {
+  assert.ok(recoveryMigrations.length >= 4, 'runtime fixtures require the full independent recovery schema');
+  for (const name of recoveryMigrations) sqlite.exec(readFileSync(new URL(name, recoveryDirectory), 'utf8'));
+}

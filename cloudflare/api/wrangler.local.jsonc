@@ -15,6 +15,12 @@
       "database_name": "cf02-disposable-local-only",
       "database_id": "00000000-0000-4000-8000-000000000002",
       "migrations_dir": "./migrations"
+    },
+    {
+      "binding": "RECOVERY_DB",
+      "database_name": "cf08-disposable-local-only",
+      "database_id": "00000000-0000-4000-8000-000000000008",
+      "migrations_dir": "../recovery/migrations"
     }
   ],
   "services": [

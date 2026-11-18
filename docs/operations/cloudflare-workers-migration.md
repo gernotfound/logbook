@@ -52,6 +52,10 @@ Si introduce quindi un campo diagnostico **temporaneo** `phase` solo sulle rispo
 Una singola prova manuale hosted su un **nuovo tentativo** dopo il deployment del Worker privato identifica il confine del guasto e consente una correzione fondata; i test di token sintetici, CI o smoke HTTP non sostituiscono il login reale. La rimozione della diagnostica è un gate per il rilascio funzionale finale.
 
 
+## CF-05/08 — chiave fitness e autorità indipendente
+
+Il candidato verifica il registro D1 indipendente prima del provisioning e dopo l'apertura della chiave richiesta da /v1/cloud-key/sync. In caso di revoca concorrente o registro chiuso, la risposta non contiene la chiave. L'eventuale chiave già emessa resta cifrata e riutilizzabile soltanto con una nuova autorizzazione. Restano aperti i collegamenti del consenso, della revoca, del percorso diritti e della finalizzazione al registro, oltre al collaudo su Cloudflare.
+
 ## CF-08 — candidatura gate di sync a prova di Time Travel (v2.497.0, 17/11/2026)
 
 **Incremento CRITICAL sul Worker API isolato, non sul frontend Kinde.** Il database D1 indipendente già inizializzato (0001/0002) viene configurato come secondo binding `RECOVERY_DB` **solo** per `thelogbook-api-isolated`, distinto da `DB` e dal Worker AuthGate. Il manifest non aggiunge route, URL workers.dev/preview né bind al frontend. I validatori GitHub e di readback Cloudflare devono verificare esattamente l'UUID della seconda D1.
@@ -67,6 +71,16 @@ Tutte le route `/v1/sync/*` passano ora per `requireCurrentIndependentSyncFence`
 La D1 isolata `thelogbook-cf08-fence-eu-isolated-20261116` è stata creata e riletta direttamente sul provider come **seconda** risorsa con `jurisdiction=eu`, senza read replication e senza collegamenti ai Worker o al sito pubblico. Creazione consentita nei limiti ufficiali del piano Free (https://developers.cloudflare.com/d1/platform/limits/ e https://developers.cloudflare.com/d1/platform/pricing/). **Nessun dato reale, fatturazione, DNS o binding Production modificato.** **Schema D1 applicato e verificato il 16/11/2026 dopo merge main v2.494.0 SHA `55676b255260b6d7fa5967941389883ad129f850`.** Sul target nuovo e isolato, dopo controllo dell'inventario e dell'unica tabella tecnica preesistente `_cf_KV`, è stata applicata tramite API Cloudflare la migration esatta `0001_independent_owner_fences.sql` e registrata in `d1_migrations` (nessun dato utente). Il readback provider ha attestato tabelle `recovery_control`, `recovery_owner_fences`, `d1_migrations` e cinque trigger; `mode=sealed`, `generation=1`, zero owner. Due tentativi di modifica non autorizzata (apertura senza progressione della generazione e inserimento diretto `active`) sono stati rifiutati HTTP 400; un nuovo readback ha confermato lo stato invariato. **È un bootstrap tramite API REST, non un'esecuzione di Wrangler né una prova di rollback o di migrazioni successive con Wrangler.** Prima della prossima migration verificare che Wrangler riconosca correttamente il ledger; preferire la procedura Wrangler con backup automatico. Il manifest `cloudflare/recovery/wrangler.isolated.jsonc` riguarda esclusivamente il database indipendente e non definisce alcun Worker o route pubblica.
 
 `cloudflare/recovery/migrations/0001_independent_owner_fences.sql` è una migration **per il secondo database soltanto**, non per il D1 applicativo, con gate globale inizialmente `sealed`, enrollment `pending`, sequenza crescente, floor non regressivo e divieto SQL di resuscitare un owner `blocked/withdrawn/deleted` come `active`. La riaccettazione di consenso **non è ancora implementata**: introdurre una nuova generazione autorizzata richiederà un protocollo distinto. Non aprire il gate globale per usare questa prima migration in Production.
+
+La migration candidata `0003_withdraw_pending_health_consent.sql` riguarda solo il D1 indipendente. Conserva le barriere precedenti e permette al Worker di bloccare direttamente una prima accettazione quando la D1 applicativa ha committato e il registro è ancora `pending`. Prima di aggiornare il Worker, verificare l'ordine e il ledger delle migrazioni in un ambiente isolato. Il test Node/SQLite non prova l'applicazione sul provider.
+
+La migration candidata recovery `0004_health_erasure_cutoffs.sql` aggiunge
+la barriera di export prima della finalizzazione nella D1 applicativa.
+Il runner richiede entrambi i binding privati e riconcilia al massimo un
+tentativo scaduto a ogni invocazione. Il census di ripristino si ferma
+finché il registro ha una finalizzazione da riconciliare. Prima di una
+prova provider applicare e verificare la migration sulla sola D1
+indipendente autorizzata e mantenere isolati il runner e la chiave cloud.
 
 `cloudflare/recovery/independent-owner-fence.mjs` è un adapter **non montato**: enrollment dopo verifica identità, attestazione del primo consenso dopo readback D1 primario, **deny esterno durevole PRIMA della revoca** sulla D1 applicativa, verifica della revoca con job, verifica terminale con prova SQL 0010 e floor esterno, più lettura per-request dall'autorità primaria separata. Errori, assenza del binding, stato `sealed` e mismatch negano l'accesso. Il codice deve essere integrato nei chiamanti veri di Auth, consenso, chiavi, sync, diritti ed erasure prima del GO; il solo helper non protegge il runtime. Il test normativo usa lo schema D1 applicativo completo, il vero runner di erasure, una seconda SQLite e il rollback fisico della prima: una vecchia sessione/consenso non basta a superare il floor esterno.
 
@@ -637,3 +651,25 @@ L'avvio OAuth è predisposto come navigazione HTML `POST /api/auth/kinde/start` 
 ### CF-03/04 — precondizione ADK e revoca concorrente
 
 Il claim distingue `428 cloud-key-required` dalla custodia incoerente o dal guasto D1 (`503`), dalla revoca (`403`) e dal conflitto CAS (`409`). Dopo un fallimento SQL per ADK assente, sessione, consenso, revisione e assenza di dati/chiavi sono letti **nella stessa SELECT primaria**: una revoca o un claim concorrente intervenuti prima di quella lettura non possono diventare una nuova autorizzazione al provisioning. Il client conserva intent e journal; la precondizione non è un ACK né una concessione della chiave. La suite ADK usa tutte le migrazioni canoniche e il finalizzatore atomico effettivo, con regressioni su sessione/revoca intercalate, claim vincente concorrente e guasto della lettura primaria. Sono prove sintetiche, non login Kinde, custodia KEK o sync live.
+
+### CF-03 — consolidamento PR #1209 e controllo dipendenze (18/11/2026, candidato)
+
+Il branch `fix/cf03-kinde-cookie-continuity-20261117` riunisce le modifiche
+CF-03/04/05/06/08 preesistenti (sessione e guest Kinde, consenso, chiavi,
+journal/replica e registro D1 indipendente per revoca/erasure). La mitigazione
+del blocco `npm audit` GHSA-fc5q-39xc-vjpf deriva dalla PR #1214:
+fork locale `picomatch@4.0.8-logbook.0` con regressioni ReDoS e correzione
+separata di Code scanning #29 (eliminazione regex polinomiale).
+
+Il monitor `.github/workflows/picomatch-upstream-watch.yml` interroga ogni
+giorno l'advisory e la pubblicazione della versione stabile ufficiale su npm.
+Apre una sola issue di sostituzione del fork, senza aggiornare pacchetti,
+fare merge o deploy. Un errore dell'API non crea false notifiche.
+`npm audit` non analizza la sorgente `file:` come una versione del registry:
+il fork resta temporaneo e non può essere dichiarato ufficialmente sicuro.
+
+La PR non certifica il runtime Kinde, Google, email/reset, l'assenza di
+Firebase nel frontend completo, Auth/D1 Workers reali, binding/cron
+Production, diritto all'erasure, Safari o sync multi-device. I test di
+fixture e CI sono prove distinte dai provider; nessuna risorsa reale è
+stata modificata in questa attività.

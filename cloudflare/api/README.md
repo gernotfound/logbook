@@ -419,7 +419,7 @@ synthetic and cannot validate provider CPU, OAuth or email delivery.
 `POST /v1/consent/status`, `POST /v1/consent/initial` and
 `POST /v1/consent/withdraw`.
 These are candidate HTTP routes not bound to the public frontend or domain.
-The private `AUTH_GATE` accepts the two routes only with a valid, non-revoked
+The private `AUTH_GATE` accepts these routes only with a valid, non-revoked
 host-only session. The first-accept mutation additionally requires session
 CSRF, verified email, exact legal versions and three explicit booleans
 (`acceptedHealthData`, `acceptedTerms`, `confirmsOver18`). The first two
@@ -444,6 +444,12 @@ flow is implemented. Both status reads and writes recheck that the original hash
 is still active in D1, including expiry and revocation after the private
 gate has returned. The status read also denies an active revision other than
 1; the immutable first receipt cannot be relabelled as a later consent.
+The independent `RECOVERY_DB` must be open before pending enrollment and
+must prove the same active generation before the API reports `active`.
+If the application batch committed but the registry transition failed, a
+CSRF-verified status request from a verified session with current legal documents
+may promote the existing pending floor from primary proof. A missing floor
+cannot be enrolled from a restored application snapshot.
 Future reacceptance (revisions 2+) needs separate proofs and an
 explicit gate extension; it cannot reuse revision-1 consent as authorization.
 
@@ -457,14 +463,19 @@ Migration `0005_health_withdrawal_queue.sql` introduces a durable, owner-
 and revision-scoped `health_erasure_jobs` record. The strictly validated
 withdrawal intent `{ action: "withdraw", expectedRevision: 1,
 confirmsErasure: true }` requires the private current Auth session and
-CSRF but does not require the email to remain verified. A single conditional
+CSRF but does not require the email to remain verified. The independent D1
+first persists a deny for the exact subject generation. Its migration
+`0003_withdraw_pending_health_consent.sql` allows a stranded pending floor
+to move directly to blocked. A single conditional
 SQL INSERT rechecks the current session, account status and immutable first
 consent proof. Its AFTER INSERT trigger flips `sync_subjects.status`
 to `withdrawn` in the same statement, rejecting a mismatched generation
 rather than retaining a job with a writable subject. A replay or lost ACK
 returns `{ status: "withdrawn", revision: 1, fenceEpoch, deletionStatus:
 "pending" }` only when primary D1 confirms the user's still-valid session,
-withdrawn grant and pending job. Auth epoch advances may not hide the
+withdrawn grant and pending job, and the independent registry confirms the
+withdrawal. An application write failure leaves the independent deny in
+place for retries. Auth epoch advances may not hide the
 right to withdraw; the old consent fence is preserved as job metadata.
 No request may claim erasure `complete`: the runner, rights-only export,
 ADK retirement and final receipt **are not implemented**. Missing migration,
@@ -538,6 +549,18 @@ The `0010`-backed finalizer then performs one atomic terminal INSERT and
 verifies the durable primary proof before reporting `complete`; see the
 SQL contract above. Selection does not bypass the per-job lease CAS.
 
+The candidate scheduled entry point requires separate `DB` and `RECOVERY_DB`
+bindings and recovery migration `0004_health_erasure_cutoffs.sql`. It
+checks the exact withdrawn generation before any deletion and persists
+an independent export cutoff before the atomic terminal INSERT. The
+cutoff survives an application D1 restore. Only primary terminal evidence
+can advance the independent floor and finish the cutoff's retry record.
+Each tick also reserves at most one due reconciliation. If the primary
+proof is missing or publication fails, the cutoff still blocks rights
+release and a later tick can retry. An unresolved cutoff blocks the
+operator restore census and the API requires both databases before
+returning the newer terminal consent generation.
+
 Reissuing `POST /v1/consent/withdraw` while a job is processing returns
 only an owner/session-verified `deletionStatus: "processing"` (rather
 than a false `pending`). A lost response to a DELETE is reconciled by
@@ -556,6 +579,11 @@ rights-only export, account deletion, retention and reacceptance still need
 their separate verification and integration. In particular,
 `awaiting-keys` means *the known replica tables were drained*, **not**
 that the owner's health data, keys or backups have been fully deleted.
+Rights-only key release also requires a matching `withdrawn` generation in
+the open independent registry, before and after unwrapping. An older
+application snapshot cannot release the key once that registry has advanced.
+The subject fence can predate a valid renewed Auth session and stays distinct
+from the Auth epoch echoed to the caller.
 Never expose this worker through a route or schedule it on a real database
 until those steps and their recovery tests are complete.
 

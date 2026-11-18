@@ -51,14 +51,6 @@ vi.mock('../../../src/components/UI/KindeAccountEntry', () => ({
     KindeAccountEntry: () => <div data-testid="kinde-identity-entry" />,
 }));
 
-vi.mock('../../../src/components/UI/LoginBox', () => ({
-    LoginBox: ({ onCancel }: { onCancel?: () => void }) => (
-        <div data-testid="guest-login-box">
-            <button type="button" onClick={onCancel}>Torna alla modalità locale</button>
-        </div>
-    ),
-}));
-
 vi.mock('../../../src/components/Home/HomeView', () => ({
     default: () => <div>Home view</div>,
 }));
@@ -111,7 +103,7 @@ describe('guest login overlay presentation only (useAuth mocked; not a Firebase 
         render(<App />);
         expect(screen.getByTestId('global-dialog')).toBeTruthy();
         expect(screen.getByTestId('kinde-identity-entry')).toBeTruthy();
-        expect(screen.queryByTestId('guest-login-box')).toBeNull();
+        expect(screen.queryByRole('dialog', { name: 'Passaggio a Kinde non disponibile' })).toBeNull();
     });
 
     it('blocks bottom navigation, survives account transition, then closes after migration settles', async () => {
@@ -120,7 +112,7 @@ describe('guest login overlay presentation only (useAuth mocked; not a Firebase 
         expect(screen.getByTestId('bottom-nav')).toBeTruthy();
         fireEvent.click(screen.getByRole('button', { name: 'Accedi' }));
 
-        expect(screen.getByTestId('guest-login-box')).toBeTruthy();
+        expect(screen.getByRole('dialog', { name: 'Passaggio a Kinde non disponibile' })).toBeTruthy();
         expect(screen.queryByTestId('bottom-nav')).toBeNull();
         expect(sessionStorage.getItem(OVERLAY_SESSION_KEY)).toBe('true');
 
@@ -131,7 +123,7 @@ describe('guest login overlay presentation only (useAuth mocked; not a Firebase 
             useAppStore.getState().setSyncing(true);
         });
 
-        expect(screen.queryByTestId('guest-login-box')).toBeNull();
+        expect(screen.queryByRole('dialog', { name: 'Passaggio a Kinde non disponibile' })).toBeNull();
         expect(screen.getByRole('status', { name: 'Preparazione account in corso' })).toBeTruthy();
         expect(screen.queryByTestId('bottom-nav')).toBeNull();
 
@@ -144,8 +136,24 @@ describe('guest login overlay presentation only (useAuth mocked; not a Firebase 
         await waitFor(() => {
             expect(sessionStorage.getItem(OVERLAY_SESSION_KEY)).toBeNull();
         });
-        expect(screen.queryByTestId('guest-login-box')).toBeNull();
+        expect(screen.queryByRole('dialog', { name: 'Passaggio a Kinde non disponibile' })).toBeNull();
         expect(screen.getByTestId('bottom-nav')).toBeTruthy();
+    });
+
+    it('traps focus and restores the guest entry after Escape without invoking sign-in', () => {
+        render(<App />);
+        const open = screen.getByRole('button', { name: 'Accedi' });
+        fireEvent.click(open);
+        const dialog = screen.getByRole('dialog', { name: 'Passaggio a Kinde non disponibile' });
+        const close = screen.getByRole('button', { name: 'Torna alla modalità locale' });
+        expect(document.activeElement).toBe(close);
+        fireEvent.keyDown(dialog, { key: 'Tab' });
+        expect(document.activeElement).toBe(close);
+        fireEvent.keyDown(dialog, { key: 'Escape' });
+        expect(sessionStorage.getItem(OVERLAY_SESSION_KEY)).toBeNull();
+        expect(document.activeElement).toBe(open);
+        expect(screen.getByTestId('bottom-nav')).toBeTruthy();
+        expect(authState.logout).not.toHaveBeenCalled();
     });
 
     it('shows an exit action next to login and delegates to the guarded guest logout flow', async () => {
@@ -163,13 +171,13 @@ describe('guest login overlay presentation only (useAuth mocked; not a Firebase 
         sessionStorage.setItem(OVERLAY_SESSION_KEY, 'true');
 
         const firstRender = render(<App />);
-        expect(screen.getByTestId('guest-login-box')).toBeTruthy();
+        expect(screen.getByRole('dialog', { name: 'Passaggio a Kinde non disponibile' })).toBeTruthy();
         expect(screen.queryByTestId('bottom-nav')).toBeNull();
 
         firstRender.unmount();
         render(<App />);
 
-        expect(screen.getByTestId('guest-login-box')).toBeTruthy();
+        expect(screen.getByRole('dialog', { name: 'Passaggio a Kinde non disponibile' })).toBeTruthy();
         expect(screen.queryByTestId('bottom-nav')).toBeNull();
         expect(sessionStorage.getItem(OVERLAY_SESSION_KEY)).toBe('true');
     });

@@ -1,5 +1,29 @@
 # Kinde — configurazione del provider per TheLogBook
 
+## CF-03 · blocco guest → Firebase dall'interfaccia (17/11/2026)
+
+Il vecchio login Firebase non deve più ricevere un archivio guest tramite il pulsante «Accedi» della PWA o la scheda Account ospite. Il primo presenta un dialog con focus confinato, Escape e ritorno alla modalità locale; il secondo mostra un avviso, non i form Google/email del provider precedente. Nessuna richiesta login, consenso o sync viene avviata e nessun dato, vault, journal o generazione guest viene attribuito a un UID.
+
+Il trasferimento guest→Kinde è **ancora bloccato**, non implementato: in futuro serviranno una scelta esplicita, owner e sessione Kinde attestati, consenso account separato e verifica durevole di local commit/ADK/ACK/recovery. Il logout guest protetto resta invariato. Firebase AuthProvider e i rimanenti chiamanti autenticati sono ancora nel runtime; questo incremento non è un cutover completo.
+
+## CF-03 · continuità browser Kinde fissata prima delle richieste (17/11/2026)
+
+L'osservatore di identità, la lettura di consenso e la consultazione dello stato replica candidati catturano un cookie CSRF di sessione prima della prima richiesta HTTP. Lo ricontrollano dopo ogni risposta, anche quando UID, epoca e revisione consenso rimangono invariati in una nuova sessione. Cookie mancanti sono ammessi unicamente per un 401 canonicalmente signed-out; un 200 authenticated senza cookie canonico, cookie duplicati o valori malformati falliscono chiusi. Primo consenso e bridge journal passano esplicitamente la stessa sorgente cookie ai rispettivi controlli annidati. Le richieste HTTP non aumentano.
+
+È una garanzia di continuità client, non un'abilitazione del vault, una concessione di consenso o un'approvazione delle API sanitarie. Il provider applicativo Kinde, l'owner locale, guest→account e il cutover Firebase rimangono da integrare e collaudare.
+## CF-03 · disaccoppiamento sorgente UID da Firebase (17/11/2026)
+
+Il core `session.ts` usa un lettore di identità autenticata fornito dal provider attivo, invece di importare Firebase. Il provider legacy resta temporaneamente registrato in `src/lib/firebase.ts`, senza modificare il flusso runtime del vecchio account. Il lettore non assegna permessi, vault né consenso: per adottare Kinde occorrerà rimuovere il provider Firebase, gestire generazioni e cookie di sessione, e collaudare il trasferimento dell'owner e i journal D1. Questo passaggio non abilita la registrazione fitness dei nuovi account.
+## CF-03 — Lettura completa e autenticata D1 prima del cutover (candidato 17/11/2026)
+
+Il bridge `inspectKindeCandidateCloudCheckpoint` unisce le prove Kinde/consenso, un cookie CSRF fissato prima del primo HTTP, l'ADK cloud a vita di singola operazione, una scansione D1 completa sulla stessa revisione, AEAD per UID/percorso e una rilettura finale di sessione e consenso. L'ADK viene azzerata nel `finally` anche dopo errori di scansione e cambio identità. Una scansione vuota non crea una copia locale.
+
+**Non montato in React, login, IndexedDB né sync.** La lettura restituisce una mera osservazione, non un permesso a idratare, creare owner, adottare una replica, cancellare journal o riconoscere ACK. Prima del collegamento pubblico servono il provider Kinde completo, i gate della sessione/vault locale, riconciliazione del journal, recovery, prova HTTP isolata e un collaudo con nuovo account reale. `D1_API` resta non pubblicato.
+
+## CF-03 · ritorno alla PWA con verifica della sessione
+
+Nel candidato, dopo la verifica OAuth e l'emissione della sessione D1, il Worker indirizza il browser a `/`. La root React verifica nuovamente la sessione tramite `/api/auth/session` nel ramo Kinde solo-identità. La pagina `/verifica-accesso` rimane disponibile per controlli diretti. La callback autorizzata su Kinde rimane `/api/auth/kinde/callback`: cambia soltanto la destinazione della risposta del Worker. Il guest attivo resta nell'archivio locale. Il provider Firebase ancora montato e il collegamento a consenso, chiavi e replica restano da sostituire prima del collaudo funzionale completo.
+
 ## CF-03 · protezione sincrona delle azioni Kinde da eventi foreground (17/11/2026)
 
 Durante logout, primo consenso candidato o avvio modalità ospite, un evento `focus`/`online` può arrivare prima che React pubblichi lo stato `busy`. La schermata usa perciò un latch sincrono della singola azione: l'osservatore foreground non invalida la relativa generazione nel mezzo dell'operazione. Una risposta già obsoleta continua a non concedere alcun permesso; il latch viene sempre rilasciato anche in caso di errore. I callback registrati da un effetto smontato non possono avviare controlli tardivi. Regressioni riproducono deliberatamente gli eventi nello stesso turno della richiesta.
@@ -338,3 +362,17 @@ Il candidato `cloudflare/auth/kinde-http-worker.mjs` non è collegato a un'origi
 ### CF-03 — ingresso browser e sessione client candidati
 
 È predisposto `src/lib/auth/kindeCandidateClient.ts` per il successivo cambio di provider: navigazione nativa `POST /api/auth/kinde/start` senza password nel frontend, lettura read-only di cookie sessione D1 tramite `/api/auth/session` e di consenso tramite `/v1/consent/status`, con controllo di owner/epoch/revisione e divieto di trasformare il fallback in guest o in ACK cloud. `cloudflare/auth/kinde-http-worker.mjs` rifiuta form non vuoti ma gestisce anche empty POST con body stream del browser. Sono testate soltanto fixture sintetiche, non URL/callback reali del tenant. Nessuna route o UI Kinde è stata resa pubblica, nessuna credenziale configurata, e il frontend effettivo continua a usare Firebase finché non esiste il percorso completo e collaudato.
+
+### CF-03 — ripresa della PR integrata #1209 (18/11/2026)
+
+La PR #1209 riprende il branch Kinde bloccato sul gate delle dipendenze
+`picomatch@4.0.7`. Il backport della PR #1214 è stato consolidato nello
+stesso candidato con il monitor ufficiale per la sua futura rimozione.
+Non è un cambio di identità, provider o configurazione OAuth.
+
+I controlli GitHub sullo SHA candidato (registrati nella PR e in #1057)
+non equivalgono a prove di callback reali, Google, verifica/reset email,
+consenso live, chiavi o replica. Nessun redirect/callback Kinde Production,
+DNS, credenziale o binding Cloudflare viene cambiato da questa PR.
+La rimozione completa degli SDK e dei percorsi Firebase rimane un lavoro
+esplicito e separato, da completare quando il sostituto è verificato.

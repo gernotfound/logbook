@@ -171,7 +171,10 @@ void test('signed and verified callback mints one owner and one session; replay 
     const request = f.callback(a);
     const response = await f.oauth.complete(f.db, request);
     assert.equal(response.status, 303);
-    assert.equal(response.headers.get('Location'), appOrigin + '/verifica-accesso');
+    assert.equal(response.headers.get('Location'), appOrigin + '/');
+    assert.equal(response.headers.get('Referrer-Policy'), 'no-referrer');
+    assert.equal(response.headers.get('Cache-Control'), 'no-store');
+    assert.equal(response.body, null);
     const cookies = response.headers.getSetCookie();
     assert.equal(cookies.length, 2);
     assert.match(cookies[0], /^__Host-logbook_session=[A-Za-z0-9_-]{43}; Path=\/; Secure; HttpOnly; SameSite=Lax/);

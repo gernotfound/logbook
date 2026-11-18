@@ -2,6 +2,7 @@ import { LEGAL_VERSIONS } from '../../../src/lib/legalVersions';
 import 'fake-indexeddb/auto';
 import { clear, get } from 'idb-keyval';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+import { authenticatedIdentitySource } from '../../../src/lib/sync/authenticatedIdentitySource';
 
 const remote = vi.hoisted(() => ({
     apply: vi.fn(), check: vi.fn(),
@@ -50,6 +51,7 @@ const keyPayload = {
     key: btoa(String.fromCharCode(...new Uint8Array(32).fill(18))),
 };
 
+beforeEach(() => authenticatedIdentitySource.install(() => remote.auth.currentUser));
 beforeEach(async () => {
     lockAllVaults();
     localStorage.clear();

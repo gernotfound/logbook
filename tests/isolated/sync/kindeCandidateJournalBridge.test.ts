@@ -40,7 +40,7 @@ function acceptedSession(uid = UID): typeof fetch {
 }
 function mockLocal(pending: unknown[] = [], extra: Record<string, unknown> = {}): void {
     vi.mocked(readLocal).mockResolvedValue({
-        pending, ...extra,
+        pending, consentRevision: 1, ...extra,
     } as unknown as LocalEnvelope);
 }
 function cookie(value = CSRF_A) { return '__Host-logbook_csrf=' + value; }
@@ -71,12 +71,13 @@ describe('Kinde candidate trusted D1 journal bridge (no Firebase or production b
         mockLocal([{ seq: 1 }]);
         const key = new Uint8Array(32).fill(41);
         vi.mocked(acquireCloudflareAccountKeyCandidate).mockResolvedValue(key);
-        vi.mocked(deliverCloudflareJournalCandidate).mockImplementation(async (owner, adk, transport, csrf, guard) => {
+        vi.mocked(deliverCloudflareJournalCandidate).mockImplementation(async (owner, adk, transport, csrf, guard, expected) => {
             expect(owner).toBe('user:' + UID);
             expect(adk).toBe(key);
             expect(typeof transport.control).toBe('function');
             expect(csrf).toBe(CSRF_A);
             expect(guard()).toBe(true);
+            expect(expected).toEqual({ consentRevision: 1, fenceEpoch: 1 });
             return 'acknowledged';
         });
         const send = vi.fn(acceptedSession());
@@ -104,6 +105,15 @@ describe('Kinde candidate trusted D1 journal bridge (no Firebase or production b
         }
         expect(readLocal).not.toHaveBeenCalled();
         expect(acquireCloudflareAccountKeyCandidate).not.toHaveBeenCalled();
+    });
+
+    it('keeps a different consent generation in recovery before requesting any cloud key', async () => {
+        mockLocal([{ seq: 1 }], { consentRevision: 2 });
+        await expect(deliverKindeCandidateJournal({
+            send: acceptedSession(), stillCurrent: () => true, browserCookies: () => cookie(),
+        })).rejects.toBeInstanceOf(KindeCandidateBoundaryError);
+        expect(acquireCloudflareAccountKeyCandidate).not.toHaveBeenCalled();
+        expect(deliverCloudflareJournalCandidate).not.toHaveBeenCalled();
     });
 
     it('refuses an active or malformed guest ownership flag before network access', async () => {

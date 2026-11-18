@@ -26,6 +26,12 @@ function user(uid = 'user-a') {
 
 async function loadSubject() {
   vi.resetModules();
+  // This suite replaces firebase.ts with a plain fixture. Install that
+  // provider's live identity in the same newly reset module graph as the
+  // production recovery/session code; never bypass the owner/session guard.
+  const { authenticatedIdentitySource } =
+    await import('../../../src/lib/sync/authenticatedIdentitySource');
+  authenticatedIdentitySource.install(() => firebase.auth.currentUser);
   // The shared UI harness suppresses incidental registration; this dedicated
   // suite must exercise the real device-recovery code instead.
   vi.doUnmock('../../../src/lib/deletionDeviceRecovery');

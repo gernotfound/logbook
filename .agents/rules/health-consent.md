@@ -24,6 +24,9 @@ prova terminale immutabile, il job `complete`, il floor di cancellazione
 e l'incremento esatto di una epoch. Il lettore candidato accetta quel
 risultato esclusivamente come `consent-suspended`; non come
 `consent-confirmed`, nuovo consenso, sync, export o ACK.
+Il Worker candidato restituisce la generazione terminale solo dopo verifica
+della stessa generazione nel registro D1 indipendente e nuova verifica della
+sessione nella primaria applicativa.
 
 Una subject epoch successiva senza prova terminale, un owner/sessione
 variato o uno stato `active` con epoch diversa continuano a fallire chiusi.
@@ -41,8 +44,19 @@ Termini e trattamento dati salute. Una sessione Kinde verificata senza riga
 consenso non autorizza altro. Il chiamante richiede CSRF per-sessione,
 rifiuta switch identità/epoch e accetta successo solo dopo una nuova lettura
 del consenso `active` sulla stessa identità con versioni legali attuali.
+La schermata fissa il cookie prima della lettura dell'identità e lega il
+modulo alla stessa sessione, UID ed epoch. Se cambia il cookie, anche per un
+nuovo accesso con lo stesso UID, il modulo non invia il consenso. Una nuova
+verifica azzera le tre scelte. Il preflight prima della scrittura confronta
+l'owner restituito con quello del modulo e rifiuta ogni differenza.
 Una risposta SQL persa/409/503 si riconcilia tramite la prova remota, **non**
-con replay del POST o ottimismo UI. Il guest può esprimere il primo consenso
+con replay del POST o ottimismo UI. Il Worker candidato registra prima il floor
+indipendente `pending`, poi l'accettazione immutabile nel D1 applicativo.
+Prima di restituire `active` conferma entrambe le primarie con la stessa
+generazione. Se la promozione del floor rimane indietro, la lettura autenticata
+del consenso può riconciliare la prova già scritta solo con CSRF, email verificata,
+versioni legali correnti e floor `pending` esistente. Una copia ripristinata
+senza floor non può registrarsi da sola. Il guest può esprimere il primo consenso
 account prima del trasferimento: nessuna eredità del consenso locale guest,
 nessun trasferimento o purge implicito. Non collegato alla UX corrente;
 email, policy password e provider runtime restano gate autonomi.
@@ -55,6 +69,13 @@ distribuiti né erasure completa. Il backend accetta soltanto l'intenzione
 esplicita `action: withdraw`, `expectedRevision: 1`,
 `confirmsErasure: true` con sessione corrente e CSRF; riattesta il
 principal e la prova del consenso nella stessa SQL di INSERT del job.
+Prima dell'INSERT, il registro indipendente deve attestare il deny per
+l'esatta generazione sanitaria. La migration recovery `0003` consente
+`pending → blocked` se la prima accettazione ha già committato sulla primaria,
+evitando di renderla attiva per poterla revocare. Se la scrittura del job
+fallisce, il deny rimane e una richiesta autorizzata può riconciliare la
+revoca. La risposta richiede il job primario e la revoca registrata anche
+nel D1 indipendente.
 Un trigger esegue atomicamente `sync_subjects.status = withdrawn`,
 impedendo nuove operazioni replica anche se la risposta viene persa.
 D1 primaria deve attestare sessione, revoca e job prima della risposta
@@ -148,6 +169,16 @@ Il recupero esplicito di un vecchio journal richiede una seconda verifica truste
 ### Contratto candidato Workers/D1 dopo la migration `0010` (15/11/2026)
 
 **MUST:** `cloudflare/api/migrations/0010_atomic_health_erasure_finalization.sql` e `cloudflare/jobs/health-erasure-worker.mjs` autorizzano `awaiting-keys → complete` esclusivamente tramite SQL atomica `INSERT ... SELECT ... RETURNING` che verifica UID, consenso, epoch, lease, assenza di documenti/ricevute/mutazioni/repliche e ADK. Il runner effettua readback primario della prova durevole anche dopo ACK perso; non dichiara `complete` da una chiave mancante o da `RETURNING` vuoto. Il consenso server ora restituisce UID trusted; il client candidato lo verifica anche negli scambi identità A→B→A. La lettura ADK rights-only non abilita fitness e richiede sessione valida e job di erasure coerente.
+
+Il candidato `scheduled` richiede due binding distinti. Verifica la generazione
+revocata nel registro indipendente prima delle scritture applicative. Durante
+la fase chiave registra il blocco irreversibile dell'export con la migration
+recovery `0004` prima della cancellazione ADK. La sola barriera non attesta
+erasure. Pubblica la generazione terminale dopo la prova primaria di `0010`.
+Ogni invocazione può riservare un solo tentativo di riconciliazione scaduto,
+oltre a un solo passo applicativo bounded. Un tentativo ambiguo conserva il
+blocco e differisce il proprio retry; la pubblicazione del floor chiude la
+riconciliazione in una singola transazione del registro.
 
 **MUST (ordine dei job):** il runner ordinario seleziona la richiesta eleggibile più vecchia fra `data` e `awaiting-keys`, senza priorità fissa alla fase dati. Nuove richieste non possono rimandare indefinitamente una finalizzazione precedente. La selezione non attribuisce il lease: il CAS successivo ricontrolla fase, owner, generazione ed epoch; un lease non scaduto resta escluso. Il helper dedicato alle sole chiavi conserva il filtro esplicito.
 

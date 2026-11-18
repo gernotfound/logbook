@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef, useEffect } from 'react';
+import { useState, useMemo } from 'react';
 import { useAuth } from '../../hooks/useAuth';
 import { useSettings } from '../../hooks/useSettings';
 import { useDialogStore } from '../../store/useDialogStore';
@@ -10,24 +10,20 @@ import { Eye, EyeOff } from 'lucide-react';
 import { validatePasswordAgainstPolicy } from '../../lib/auth/passwordPolicy';
 import { describeEmailAuthError } from '../../lib/auth/emailAuthError';
 import { linkEmailPasswordWithEnumerationProtection, requestVerifiedEmailChange } from '../../lib/auth/accountEmail';
-import { captureAuthAttemptGuard } from '../../lib/auth/authAttemptGuard';
 import { classifyGooglePopupFailure } from '../../contexts/auth/googlePopup';
 
 export const AccountCard = () => {
-    const { currentUser, isGuest, emailVerificationRequired, resendEmailVerification, refreshEmailVerification, linkGoogleAccount, registerWithEmail } = useAuth();
+    const { currentUser, isGuest, emailVerificationRequired, resendEmailVerification, refreshEmailVerification } = useAuth();
     const { handleLogout, handleLogoutEverywhere, revokingSessions } = useSettings();
     const { showAlert } = useDialogStore();
 
     const [loadingAction, setLoadingAction] = useState<string | null>(null);
-    const [showReauthModal, setShowReauthModal] = useState<'email' | 'password' | 'linkEmail' | 'guestRegister' | null>(null);
+    const [showReauthModal, setShowReauthModal] = useState<'email' | 'password' | 'linkEmail' | null>(null);
     const [currentPasswordInput, setCurrentPasswordInput] = useState('');
     const [newEmailInput, setNewEmailInput] = useState('');
     const [newPasswordInput, setNewPasswordInput] = useState('');
     const [showCurrentPassword, setShowCurrentPassword] = useState(false);
     const [showNewPassword, setShowNewPassword] = useState(false);
-    const guestRegistrationGeneration = useRef(0);
-    useEffect(() => () => { guestRegistrationGeneration.current += 1; }, []);
-
     const [passwordLinkedFor, setPasswordLinkedFor] = useState<string | null>(null);
 
     const providers = useMemo(() => {
@@ -197,90 +193,18 @@ export const AccountCard = () => {
         }
     };
 
-    const onGuestGoogle = async () => {
-        let stillOriginalAttempt = () => true;
-        setLoadingAction('guestGoogle');
-        try {
-            stillOriginalAttempt = captureAuthAttemptGuard(true);
-            await linkGoogleAccount('merge');
-        } catch {
-            if (!stillOriginalAttempt()) return;
-            // Coordination can reject before AuthContext maps provider errors.
-            await showAlert('Impossibile avviare l’accesso Google. Completa eventuali tentativi già aperti e riprova. I dati locali sono conservati.');
-        } finally {
-            setLoadingAction(null);
-        }
-    };
-
-    const onGuestRegister = async () => {
-        let stillOriginalAttempt = () => true;
-        const generation = guestRegistrationGeneration.current;
-        const stillRequested = () => stillOriginalAttempt() && guestRegistrationGeneration.current === generation;
-        try {
-            stillOriginalAttempt = captureAuthAttemptGuard(true);
-            if (!newEmailInput || !newEmailInput.includes('@')) {
-                await showAlert("Email non valida.");
-                return;
-            }
-            setLoadingAction('guestRegister');
-            await registerWithEmail(newEmailInput, newPasswordInput, 'merge', stillRequested);
-            // AuthProvider owns verification and the later guest handoff.
-        } catch (error) {
-            if (!stillRequested()) return;
-            const code = (error as { code?: unknown } | null)?.code;
-            await showAlert(code === 'auth/weak-password' || code === 'auth/password-policy-unavailable'
-                ? describeEmailAuthError(error)
-                : 'Impossibile completare la registrazione. Completa eventuali tentativi già aperti e riprova. I dati locali sono conservati.');
-        } finally {
-            setLoadingAction(null);
-        }
-    };
-
     if (isGuest) {
         return (
             <div className="card">
-                <h2 className="ui-account-card-1" style={{ marginTop: 0 }}><span aria-hidden="true">⚠️</span> Modalità locale</h2>
-                <p className="ui-account-card-2" style={{ marginBottom: "0.9375rem" }}>
-                    Stai usando TheLogBook senza un account. I tuoi dati sono salvati solo su questo dispositivo.
+                <h2 className="ui-account-card-1" style={{ marginTop: 0 }}>Modalità locale</h2>
+                <p className="ui-account-card-2">
+                    I tuoi dati restano salvati su questo dispositivo.
+                    Il passaggio a un account Kinde sarà disponibile solo dopo
+                    il collaudo del trasferimento sicuro: nessun dato viene inviato
+                    o collegato automaticamente a un account.
                 </p>
-                <div style={{ display: "flex", flexDirection: "column", gap: "0.625rem" }}>
-                    <button className="btn btn-primary" onClick={onGuestGoogle} disabled={loadingAction === 'guestGoogle'}>
-                        Crea account con Google
-                    </button>
-                    <button className="btn ui-account-card-3"  onClick={() => setShowReauthModal('guestRegister')}>
-                        Crea account con Email e Password
-                    </button>
-                    <hr className="ui-account-card-4" style={{ margin: "0.625rem 0" }} />
-                    <button className="btn ui-account-card-5"  onClick={handleLogout}>Esci dalla modalità locale</button>
-                </div>
-
-                {showReauthModal === 'guestRegister' && (
-                    <div className="ui-account-card-6" style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, zIndex: 10001, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                        <div className="ui-account-card-7" style={{ padding: "1.25rem", width: "90%", maxWidth: "21.875rem" }}>
-                            <h3 style={{ marginTop: 0 }}>Crea Account</h3>
-                            <p className="ui-account-card-8" >I tuoi dati locali verranno salvati sul cloud.</p>
-
-                            <div style={{ display: "flex", flexDirection: "column", gap: "0.625rem", marginTop: "0.9375rem" }}>
-                                <input type="email" placeholder="La tua Email" value={newEmailInput} onChange={e => setNewEmailInput(e.target.value)} autoComplete="email" className="ui-account-card-9" style={{ padding: "0.625rem" }} />
-
-                                <div style={{ position: "relative" }}>
-                                    <input type={showNewPassword ? "text" : "password"} placeholder="Nuova Password" value={newPasswordInput} onChange={e => setNewPasswordInput(e.target.value)} autoComplete="new-password" className="ui-account-card-10" style={{ padding: "0.625rem", paddingRight: "2.5rem", width: "100%", boxSizing: "border-box" }} />
-                                    <button type="button" aria-label={showNewPassword ? "Nascondi nuova password" : "Mostra nuova password"} onClick={() => setShowNewPassword(!showNewPassword)} className="ui-account-card-11" style={{ position: "absolute", right: "0.625rem", top: "50%", transform: "translateY(-50%)", cursor: "pointer", display: "flex", alignItems: "center" }}>
-                                        {showNewPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-                                    </button>
-                                </div>
-
-                                <p className="text-muted">La nuova password deve avere almeno 15 caratteri. Puoi usare una passphrase con spazi oppure un gestore di password; Firebase può richiedere ancora altri requisiti.</p>
-                                <div style={{ display: "flex", gap: "0.625rem", marginTop: "0.625rem" }}>
-                                    <button className="btn ui-account-card-12" style={{ flex: 1 }} onClick={() => { guestRegistrationGeneration.current += 1; setShowReauthModal(null); setNewEmailInput(''); setNewPasswordInput(''); }}>Annulla</button>
-                                    <button className="btn btn-primary" style={{ flex: 1 }} onClick={onGuestRegister} disabled={loadingAction === 'guestRegister'}>
-                                        {loadingAction === 'guestRegister' ? 'Attendere...' : 'Registrati'}
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                )}
+                <button type="button" className="btn ui-account-card-5"
+                    onClick={handleLogout}>Esci dalla modalità locale</button>
             </div>
         );
     }

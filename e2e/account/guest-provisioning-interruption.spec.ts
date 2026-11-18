@@ -145,7 +145,7 @@ for (const phase of ['migrating', 'active'] as const) {
   });
 }
 
-test('a queued Google guest action reports an interrupted published reservation without replacing it or changing guest data', async ({ page, context }) => {
+test('two guest tabs cannot start Firebase signup or create a migration intent while Kinde transfer is blocked', async ({ page, context }) => {
   await page.goto('/');
   await page.getByRole('button', { name: 'Continua senza account' }).click();
   await expect(page.getByText('Aggiornamento Termini e Privacy')).toBeVisible();
@@ -159,78 +159,67 @@ test('a queued Google guest action reports an interrupted published reservation 
   await expect.poll(async () => (await readVaultState(page)).envelope).not.toBe(initialCiphertext);
 
   const next = await context.newPage();
-  for (const tab of [page, next]) {
-    await tab.goto('/?tab=settings');
-    await expect(tab.getByRole('heading', { name: 'Impostazioni', exact: true })).toBeVisible();
-    await tab.locator('.settings-menu').getByRole('button', { name: /Account e accesso/ }).click();
-    await expect(tab.getByRole('button', { name: 'Crea account con Google', exact: true })).toBeVisible();
-  }
   const observer = await context.newPage();
   await openObserver(observer, page.url());
   const before = await readVaultState(observer);
   expect(before.envelope).toMatch(/^tlb-sealed:v1:/);
+  expect(String(before.envelope)).not.toContain('"height":"183"');
   const generation = await observer.evaluate(() => localStorage.getItem('logbook_guest_session_id_v1'));
+  expect(generation).toMatch(/^[a-f0-9]{32}$/);
   const intentKey = 'guest_migration_intent_v1';
   expect(await observer.evaluate(key => localStorage.getItem(key), intentKey)).toBeNull();
 
   const pageErrors: string[] = [];
-  next.on('pageerror', error => { pageErrors.push(error.message); });
   let popups = 0;
-  page.on('popup', () => { popups++; });
-  next.on('popup', () => { popups++; });
-  const firstBarrier = await pauseStorageWrite(page, intentKey);
-  const starting = Promise.allSettled([
-    page.getByRole('button', { name: 'Crea account con Google', exact: true }).click(),
-  ]);
-  try {
-    const first = await firstBarrier.wait();
-    const abandoned = JSON.parse(first.value) as { id: string; method: string; policy: string };
-    expect(abandoned).toMatchObject({ method: 'google', policy: 'merge' });
-    expect(abandoned.id).toBeTruthy();
-    expect(first.previous).toBeNull();
-    await firstBarrier.publishAndPause();
-    expect(await observer.evaluate(key => localStorage.getItem(key), intentKey)).toBe(first.value);
-    await next.getByRole('button', { name: 'Crea account con Google', exact: true }).click();
-    await expect.poll(() => observer.evaluate(async () => {
-      const { held = [], pending = [] } = await navigator.locks.query();
-      const lifecycle = held.filter(lock => lock.name === 'thelogbook:guest-lifecycle');
-      const intent = held.filter(lock => lock.name === 'thelogbook:guest-auth-intent');
-      const queued = pending.filter(lock => lock.name === 'thelogbook:guest-lifecycle');
-      return {
-        lifecycle: lifecycle.length, intent: intent.length, queued: queued.length,
-        sameHolder: lifecycle.length === 1 && intent.length === 1
-          && lifecycle[0].clientId === intent[0].clientId,
-        separateContender: queued.length === 1 && queued[0].clientId !== lifecycle[0]?.clientId,
-      };
-    })).toEqual({ lifecycle: 1, intent: 1, queued: 1, sameHolder: true, separateContender: true });
-
-    await page.close();
-    await expect(next.getByRole('alertdialog')).toContainText('Impossibile avviare l’accesso Google');
-    expect(pageErrors).toEqual([]);
-    expect(await observer.evaluate(key => localStorage.getItem(key), intentKey)).toBe(first.value);
-    expect(await next.evaluate(() => sessionStorage.getItem('logbook:guest-auth-attempt'))).toBeNull();
-    expect(await readVaultState(observer)).toEqual(before);
-    await next.getByRole('alertdialog').getByRole('button', { name: 'OK', exact: true }).click();
-    await expect(next.getByRole('button', { name: 'Crea account con Google', exact: true })).toBeEnabled();
-    // An interrupted reservation is evidence, never permission for the other
-    // tab to replace it or start a provider login with the old tab's choice.
-    expect(JSON.parse((await observer.evaluate(key => localStorage.getItem(key), intentKey))!)).toEqual(abandoned);
-  } finally {
-    // The original action remains paused before Auth handoff. The contender
-    // is rejected by the real reservation guard; neither starts a popup.
-    if (!page.isClosed()) await page.close();
-    if (!next.isClosed()) await next.close();
-    await starting;
+  const authRequests: string[] = [];
+  for (const tab of [page, next]) {
+    await tab.goto('/?tab=settings');
+    await expect(tab.getByRole('heading', { name: 'Impostazioni', exact: true })).toBeVisible();
+    await tab.locator('.settings-menu').getByRole('button', { name: /Account e accesso/ }).click();
+    await expect(tab.getByRole('heading', { name: 'Modalità locale' })).toBeVisible();
+    await expect(tab.getByText(/Il passaggio a un account Kinde/)).toBeVisible();
+    await expect(tab.getByRole('button', { name: 'Crea account con Google' })).toHaveCount(0);
+    await expect(tab.getByRole('button', { name: 'Crea account con Email e Password' })).toHaveCount(0);
+    await expect(tab.getByRole('button', { name: 'Esci dalla modalità locale' })).toBeVisible();
+    tab.on('popup', () => { popups++; });
+    tab.on('pageerror', error => { pageErrors.push(error.message); });
+    tab.on('request', request => {
+      const url = new URL(request.url());
+      if (url.pathname === '/api/auth/kinde/start'
+        || url.pathname.startsWith('/__/auth/')
+        || url.hostname === 'identitytoolkit.googleapis.com') {
+        authRequests.push(url.pathname);
+      }
+    });
   }
+
+  // Both public guest entry points are now inert with respect to Auth.
+  // They cannot reserve or adopt a guest journal while Kinde migration lacks
+  // a validated owner, independent of the order of actions across tabs.
+  for (const tab of [page, next]) {
+    const guestEntry = tab.locator('.guest-banner').getByRole('button', { name: 'Accedi' });
+    await guestEntry.click();
+    const dialog = tab.getByRole('dialog', { name: 'Passaggio a Kinde non disponibile' });
+    await expect(dialog).toBeVisible();
+    await expect(dialog).toContainText('progressi rimangono sul dispositivo');
+    await dialog.getByRole('button', { name: 'Torna alla modalità locale' }).click();
+    await expect(dialog).toHaveCount(0);
+    await expect(tab.locator('.guest-banner')).toBeVisible();
+    expect(await observer.evaluate(key => localStorage.getItem(key), intentKey)).toBeNull();
+    expect(await observer.evaluate(() => localStorage.getItem('logbook_guest_session_id_v1'))).toBe(generation);
+    expect(await readVaultState(observer)).toEqual(before);
+  }
+
   expect(popups).toBe(0);
-  expect(await observer.evaluate(key => localStorage.getItem(key), intentKey)).not.toBeNull();
-  expect(await observer.evaluate(() => localStorage.getItem('logbook_guest_session_id_v1'))).toBe(generation);
+  expect(pageErrors).toEqual([]);
+  expect(authRequests).toEqual([]);
 
   const fresh = await context.newPage();
   await fresh.goto('/?tab=data');
   await fresh.getByRole('tab', { name: 'Biometria', exact: true }).click();
   await expect(fresh.locator('#biometry-height')).toHaveValue('183');
   expect(await readVaultState(fresh)).toEqual(before);
+  expect(await fresh.evaluate(() => localStorage.getItem('logbook_guest_session_id_v1'))).toBe(generation);
   await expect.poll(() => observer.evaluate(async () => {
     const { held = [], pending = [] } = await navigator.locks.query();
     return [...held, ...pending].filter(lock =>

@@ -7,6 +7,7 @@ const A = 'k_' + 'A'.repeat(43);
 const B = 'k_' + 'B'.repeat(43);
 const CSRF = 'A'.repeat(43);
 const OTHER_CSRF = 'B'.repeat(42) + 'A';
+const expectedOwner = { uid: A, fenceEpoch: 1 };
 const decision = { acceptedHealthData: true, acceptedTerms: true, confirmsOver18: true };
 
 function session(uid = A, revision = 0) {
@@ -44,17 +45,28 @@ describe('Kinde D1 first health-consent candidate (no UI/production calls)', () 
         ]) {
             const send = replies(...preflight());
             await expect(acceptKindeCandidateInitialConsent({
-                decision: value as typeof decision, send, stillCurrent: () => true,
+                expectedOwner, decision: value as typeof decision, send, stillCurrent: () => true,
                 browserCookies: cookie,
             })).rejects.toBeInstanceOf(KindeCandidateBoundaryError);
             expect(send).not.toHaveBeenCalled();
         }
     });
 
+    it('rejects a valid preflight for a principal other than the one offered the consent form', async () => {
+        for (const displayed of [{ ...expectedOwner, uid: B }, { ...expectedOwner, fenceEpoch: 2 }]) {
+            const send = replies(...preflight());
+            await expect(acceptKindeCandidateInitialConsent({
+                decision, expectedOwner: displayed, send, stillCurrent: () => true, browserCookies: cookie,
+            })).rejects.toBeInstanceOf(KindeCandidateBoundaryError);
+            expect(send.mock.calls.map(([url]) => url))
+                .toEqual(['/api/auth/session', '/v1/consent/status', '/api/auth/session']);
+        }
+    });
+
     it('sends only fixed legal versions and requires a trusted active readback', async () => {
         const send = replies(...preflight(), reply(accepted()), ...readback());
         await expect(acceptKindeCandidateInitialConsent({
-            decision, send, stillCurrent: () => true, browserCookies: cookie,
+            expectedOwner, decision, send, stillCurrent: () => true, browserCookies: cookie,
         })).resolves.toEqual({
             kind: 'consent-confirmed', principal: {
                 uid: A, fenceEpoch: 1, healthConsentRevision: 1,
@@ -80,7 +92,7 @@ describe('Kinde D1 first health-consent candidate (no UI/production calls)', () 
         for (const uncertain of [new Error('connection lost'), reply({ error: 'unavailable' }, 503)]) {
             const send = replies(...preflight(), uncertain, ...readback());
             await expect(acceptKindeCandidateInitialConsent({
-                decision, send, stillCurrent: () => true, browserCookies: cookie,
+                expectedOwner, decision, send, stillCurrent: () => true, browserCookies: cookie,
             })).resolves.toMatchObject({ kind: 'consent-confirmed', principal: { uid: A } });
             expect(send.mock.calls.filter(([url]) => url === '/v1/consent/initial')).toHaveLength(1);
         }
@@ -94,7 +106,7 @@ describe('Kinde D1 first health-consent candidate (no UI/production calls)', () 
             const send = replies(...preflight(), uncertain,
                 reply(session()), reply(unregistered()), reply(session()));
             await expect(acceptKindeCandidateInitialConsent({
-                decision, send, stillCurrent: () => true, browserCookies: cookie,
+                expectedOwner, decision, send, stillCurrent: () => true, browserCookies: cookie,
             })).rejects.toBeInstanceOf(KindeCandidateBoundaryError);
         }
     });
@@ -109,13 +121,13 @@ describe('Kinde D1 first health-consent candidate (no UI/production calls)', () 
         ]) {
             const send = replies(...preflight(), reply(invalid));
             await expect(acceptKindeCandidateInitialConsent({
-                decision, send, stillCurrent: () => true, browserCookies: cookie,
+                expectedOwner, decision, send, stillCurrent: () => true, browserCookies: cookie,
             })).rejects.toBeInstanceOf(KindeCandidateBoundaryError);
             expect(send).toHaveBeenCalledTimes(4);
         }
         const badCsrf = replies(...preflight());
         await expect(acceptKindeCandidateInitialConsent({
-            decision, send: badCsrf, stillCurrent: () => true, browserCookies: () => '',
+            expectedOwner, decision, send: badCsrf, stillCurrent: () => true, browserCookies: () => '',
         })).rejects.toBeInstanceOf(KindeCandidateBoundaryError);
         expect(badCsrf).not.toHaveBeenCalled();
 
@@ -125,7 +137,7 @@ describe('Kinde D1 first health-consent candidate (no UI/production calls)', () 
         ]) {
             const send = replies(...pre);
             await expect(acceptKindeCandidateInitialConsent({
-                decision, send, stillCurrent: () => true, browserCookies: cookie,
+                expectedOwner, decision, send, stillCurrent: () => true, browserCookies: cookie,
             })).rejects.toBeInstanceOf(KindeCandidateBoundaryError);
             expect(send.mock.calls.some(([url]) => url === '/v1/consent/initial')).toBe(false);
         }
@@ -140,18 +152,18 @@ describe('Kinde D1 first health-consent candidate (no UI/production calls)', () 
             return result;
         });
         await expect(acceptKindeCandidateInitialConsent({
-            decision, send: rotating, stillCurrent: () => true,
+            expectedOwner, decision, send: rotating, stillCurrent: () => true,
             browserCookies: () => cookieAfter.value,
         })).rejects.toBeInstanceOf(KindeCandidateBoundaryError);
         expect(rotating).toHaveBeenCalledTimes(4);
 
         const mixed = replies(...preflight(), reply(accepted()), ...readback(B));
         await expect(acceptKindeCandidateInitialConsent({
-            decision, send: mixed, stillCurrent: () => true, browserCookies: cookie,
+            expectedOwner, decision, send: mixed, stillCurrent: () => true, browserCookies: cookie,
         })).rejects.toBeInstanceOf(KindeCandidateBoundaryError);
         const unverified = replies(reply({ ...session(), emailVerified: false }));
         await expect(acceptKindeCandidateInitialConsent({
-            decision, send: unverified, stillCurrent: () => true, browserCookies: cookie,
+            expectedOwner, decision, send: unverified, stillCurrent: () => true, browserCookies: cookie,
         })).rejects.toBeInstanceOf(KindeCandidateBoundaryError);
     });
 
@@ -162,7 +174,7 @@ describe('Kinde D1 first health-consent candidate (no UI/production calls)', () 
         try {
             const send = replies(...preflight(), reply(accepted()), ...readback());
             await expect(acceptKindeCandidateInitialConsent({
-                decision, send, stillCurrent: () => true, browserCookies: cookie,
+                expectedOwner, decision, send, stillCurrent: () => true, browserCookies: cookie,
             })).resolves.toMatchObject({ kind: 'consent-confirmed' });
             expect(localStorage.getItem('logbook_is_guest')).toBe('true');
         } finally { localStorage.removeItem('logbook_is_guest'); }

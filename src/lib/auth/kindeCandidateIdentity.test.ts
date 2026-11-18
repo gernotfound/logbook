@@ -66,6 +66,29 @@ describe('Kinde identity-only session observer', () => {
         }
     });
 
+    it('pins the browser cookie before its first HTTP read, not after it', async () => {
+        let browser = cookie();
+        const send = vi.fn<typeof fetch>().mockImplementation(async () => {
+            browser = '__Host-logbook_csrf=' + OTHER_CSRF;
+            return reply(identity());
+        });
+        await expect(readKindeCandidateIdentity({
+            send, stillCurrent: () => true, browserCookies: () => browser,
+        })).rejects.toBeInstanceOf(KindeCandidateBoundaryError);
+        expect(send).toHaveBeenCalledTimes(1);
+    });
+
+    it('rejects a 401 if another tab logged in while it was pending', async () => {
+        let browser = '';
+        const send = vi.fn<typeof fetch>().mockImplementation(async () => {
+            browser = cookie();
+            return reply({ error: 'unauthorized' }, 401);
+        });
+        await expect(readKindeCandidateIdentity({
+            send, stillCurrent: () => true, browserCookies: () => browser,
+        })).rejects.toBeInstanceOf(KindeCandidateBoundaryError);
+    });
+
     it('rejects a session replacement with identical claims when CSRF changes', async () => {
         let cookies = cookie();
         const send = vi.fn<typeof fetch>().mockImplementation(async () => {

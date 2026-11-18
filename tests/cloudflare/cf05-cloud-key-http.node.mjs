@@ -1,7 +1,13 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { backup, DatabaseSync } from 'node:sqlite';
 import { test } from 'node:test';
 import api from '../../cloudflare/api/worker.mjs';
+import gate from '../../cloudflare/auth/session-gate.mjs';
+import erasureWorker from '../../cloudflare/jobs/health-erasure-worker.mjs';
+import { inspectRestoredD1Census } from '../../cloudflare/recovery/restore-census.mjs';
 import { ORIGIN, SYNC, RIGHTS, ACCEPT, createCloudKeyHttpFixture as fixture,
   renewSessionWithoutEmail } from './cloud-key-http-fixture.mjs';
 
@@ -164,6 +170,141 @@ void test('rights-only denies stale session on the post-decrypt primary read', a
   } finally { f.close(); }
 });
 
+void test('rights export requires the exact independent withdrawal even if the application D1 still has a key', async () => {
+  const f = await fixture();
+  try {
+    await f.consent('owner-a');
+    await f.consent('owner-b');
+    assert.equal((await f.call('owner-a', SYNC)).response.status, 200);
+    assert.equal((await f.call('owner-b', SYNC)).response.status, 200);
+    await f.withdraw('owner-a');
+    for (const RECOVERY_DB of [undefined, f.db, { withSession() { throw Error('registry outage'); } }]) {
+      const result = await f.call('owner-a', RIGHTS, { env: { ...f.env, RECOVERY_DB } });
+      assert.equal(result.response.status, 503);
+      assert.deepEqual(result.body, { error: 'unavailable' });
+    }
+    await f.withdraw('owner-b');
+    assert.equal((await f.call('owner-a', RIGHTS)).response.status, 200);
+    f.registry.exec(`UPDATE recovery_owner_fences SET consent_revision=2, fence_epoch=2,
+      erased_before_revision=2, change_seq=change_seq+1 WHERE uid='owner-a'`);
+    const stale = await f.call('owner-a', RIGHTS);
+    assert.equal(stale.response.status, 503);
+    assert.deepEqual(stale.body, { error: 'unavailable' });
+    assert.equal(f.count('cloud_account_keys', 'owner-a'), 1);
+    assert.equal((await f.call('owner-b', RIGHTS)).response.status, 200);
+  } finally { f.close(); }
+});
+
+void test('rights export rechecks the independent withdrawal after opening the key', async () => {
+  const f = await fixture();
+  try {
+    await f.consent('owner-a');
+    assert.equal((await f.call('owner-a', SYNC)).response.status, 200);
+    await f.withdraw('owner-a');
+    let reads = 0;
+    const recovery = {
+      withSession(mode) {
+        if (++reads === 2) {
+          f.registry.exec("UPDATE recovery_control SET mode='sealed',generation=3 WHERE singleton=1");
+        }
+        return f.recoveryDb.withSession(mode);
+      },
+    };
+    const result = await f.call('owner-a', RIGHTS, { env: { ...f.env, RECOVERY_DB: recovery } });
+    assert.equal(reads, 2);
+    assert.equal(result.response.status, 503);
+    assert.deepEqual(result.body, { error: 'unavailable' });
+  } finally { f.close(); }
+});
+
+void test('terminal runner requires a durable independent cutoff before destroying the application key', async () => {
+  const f = await fixture();
+  try {
+    await f.consent('owner-a');
+    assert.equal((await f.call('owner-a', SYNC)).response.status, 200);
+    await f.withdraw('owner-a');
+    assert.equal((await erasureWorker.scheduled({}, f.env)).outcome, 'awaiting-keys');
+    assert.throws(() => f.registry.exec(`
+      INSERT INTO recovery_erasure_cutoffs(uid, consent_revision, fence_epoch)
+      VALUES ('owner-a', 1, 2)
+    `), /cutoff-fenced/);
+    const expire = () => f.sqlite.prepare('UPDATE health_erasure_jobs SET lease_until_ms = ? WHERE uid = ?')
+      .run(Date.now() - 1000, 'owner-a');
+    expire();
+    f.registry.exec(`CREATE TRIGGER deny_cutoff BEFORE INSERT ON recovery_erasure_cutoffs
+      BEGIN SELECT RAISE(ABORT, 'synthetic-insert-unavailable'); END`);
+    await assert.rejects(erasureWorker.scheduled({}, f.env), /independent-recovery-fence-unavailable/);
+    assert.equal(f.count('health_erasure_finalizations', 'owner-a'), 0);
+    assert.equal(f.count('cloud_account_keys', 'owner-a'), 1);
+    assert.equal((await f.call('owner-a', RIGHTS)).response.status, 200);
+    f.registry.exec('DROP TRIGGER deny_cutoff');
+    expire();
+    const paused = { withSession(mode) {
+      const primary = f.db.withSession(mode);
+      return { prepare(sql) {
+        const stmt = primary.prepare(sql);
+        if (!sql.includes('INSERT INTO health_erasure_finalizations')) return stmt;
+        return { bind(...args) { return { async first() {
+          assert.equal(f.count('cloud_account_keys', 'owner-a'), 1);
+          assert.deepEqual((await f.call('owner-a', RIGHTS)).body, { error: 'unavailable' });
+          assert.equal(f.registry.prepare('SELECT finalized FROM recovery_erasure_cutoffs').get().finalized, 0);
+          return stmt.bind(...args).first();
+        } }; } };
+      } };
+    } };
+    assert.deepEqual(await erasureWorker.scheduled({}, { ...f.env, DB: paused }),
+      { outcome: 'complete', keyDisposition: 'destroyed' });
+    assert.equal(f.count('cloud_account_keys', 'owner-a'), 0);
+    assert.equal(f.registry.prepare('SELECT finalized FROM recovery_erasure_cutoffs').get().finalized, 1);
+    assert.throws(() => f.registry.exec('DELETE FROM recovery_erasure_cutoffs'), /cutoff-immutable/);
+    assert.throws(() => f.registry.exec(`
+      INSERT OR REPLACE INTO recovery_erasure_cutoffs(uid, consent_revision, fence_epoch)
+      VALUES ('owner-a', 1, 1)
+    `), /cutoff-fenced/);
+  } finally { f.close(); }
+});
+
+void test('a lost terminal registry update blocks a physical application restore and is retried by the next tick', async () => {
+  const f = await fixture(['owner-a']);
+  const dir = mkdtempSync(join(tmpdir(), 'logbook-terminal-restore-'));
+  let snapshot;
+  try {
+    await f.consent('owner-a');
+    assert.equal((await f.call('owner-a', SYNC)).response.status, 200);
+    await f.withdraw('owner-a');
+    assert.equal((await erasureWorker.scheduled({}, f.env)).outcome, 'awaiting-keys');
+    const snapshotPath = join(dir, 'before-finalization.sqlite');
+    await backup(f.sqlite, snapshotPath);
+    snapshot = new DatabaseSync(snapshotPath);
+    const restoredDb = new f.db.constructor(snapshot);
+    const restoredEnv = { ...f.env, DB: restoredDb,
+      AUTH_GATE: { fetch: request => gate.fetch(request, { ...f.gateEnv, DB: restoredDb }) } };
+    assert.equal((await f.call('owner-a', RIGHTS, { env: restoredEnv })).response.status, 200);
+    f.sqlite.prepare('UPDATE health_erasure_jobs SET lease_until_ms = ?').run(Date.now() - 1000);
+    f.registry.exec(`CREATE TRIGGER terminal_unavailable BEFORE UPDATE ON recovery_owner_fences
+      WHEN NEW.erased_before_revision > 0 BEGIN SELECT RAISE(ABORT, 'synthetic-terminal-outage'); END`);
+    await assert.rejects(erasureWorker.scheduled({}, f.env), /independent-recovery-fence-unavailable/);
+    assert.equal(f.count('health_erasure_finalizations', 'owner-a'), 1);
+    assert.equal(f.count('cloud_account_keys', 'owner-a'), 0);
+    assert.deepEqual((await f.call('owner-a', RIGHTS, { env: restoredEnv })).body, { error: 'unavailable' });
+    assert.equal((await f.call('owner-a', '/v1/consent/status')).response.status, 503);
+    f.registry.exec("UPDATE recovery_control SET mode='sealed', generation=3 WHERE singleton=1");
+    assert.deepEqual(await inspectRestoredD1Census(restoredDb, f.recoveryDb),
+      { outcome: 'blocked', reason: 'terminal-erasure-cutoff-pending' });
+    f.registry.exec("UPDATE recovery_control SET mode='open', generation=4 WHERE singleton=1");
+    f.registry.exec('DROP TRIGGER terminal_unavailable');
+    assert.equal((await erasureWorker.scheduled({}, f.env)).outcome, 'idle');
+    assert.equal(f.registry.prepare('SELECT finalized FROM recovery_erasure_cutoffs').get().finalized, 1);
+    assert.deepEqual((await f.call('owner-a', '/v1/consent/status')).body,
+      { uid: 'owner-a', status: 'withdrawn', revision: 2, fenceEpoch: 2 });
+    assert.equal((await f.call('owner-a', RIGHTS, { env: restoredEnv })).response.status, 503);
+  } finally {
+    snapshot?.close();
+    f.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 void test('origin, CSRF, method, query and request body are denied before any key write', async () => {
   const f = await fixture();
   try {
@@ -231,6 +372,68 @@ void test('missing dependencies, invalid KEK, private gate failure and quotas fa
     assert.equal(f.count('cloud_account_keys', 'owner-a'), 1);
     assert.equal(f.count('cloud_key_issuance', 'owner-a'), 1);
     assert.equal((await f.call('owner-a', SYNC)).body.key, valid.body.key);
+  } finally { f.close(); }
+});
+
+void test('fitness key provisioning requires an independent active owner and open registry', async () => {
+  const f = await fixture();
+  try {
+    // Simulate a restored application snapshot whose independent floor is absent.
+    f.sqlite.exec(`
+      INSERT INTO sync_subjects (uid,status,consent_revision,fence_epoch) VALUES ('owner-a','active',1,1);
+      INSERT INTO sync_state (uid,revision) VALUES ('owner-a',0);
+    `);
+    f.sqlite.prepare(`INSERT INTO health_consent_acceptances
+      (uid,consent_revision,privacy_version,terms_version,accepted_at_ms,over_18_confirmed)
+      VALUES ('owner-a',1,'1.3.9','1.2.5',?,1)`).run(Date.now());
+    await f.consent('owner-b');
+    assert.equal((await f.call('owner-a', '/v1/consent/status')).response.status, 503);
+    assert.equal(f.registry.prepare("SELECT uid FROM recovery_owner_fences WHERE uid='owner-a'").get(), undefined);
+    const unregistered = await f.call('owner-a', SYNC);
+    assert.equal(unregistered.response.status, 503);
+    assert.deepEqual(unregistered.body, { error: 'unavailable' });
+
+    for (const RECOVERY_DB of [undefined, f.db]) {
+      const unreadable = await f.call('owner-b', SYNC, { env: { ...f.env, RECOVERY_DB } });
+      assert.equal(unreadable.response.status, 503);
+      assert.deepEqual(unreadable.body, { error: 'unavailable' });
+    }
+    f.registry.exec("UPDATE recovery_control SET mode='sealed', generation=3 WHERE singleton=1");
+    const sealed = await f.call('owner-b', SYNC);
+    assert.equal(sealed.response.status, 503);
+    assert.deepEqual(sealed.body, { error: 'unavailable' });
+    assert.equal(f.count('cloud_key_issuance', 'owner-a'), 0);
+    assert.equal(f.count('cloud_key_issuance', 'owner-b'), 0);
+  } finally { f.close(); }
+});
+
+void test('fitness key is withheld when independent withdrawal is armed during issuance', async () => {
+  const f = await fixture();
+  try {
+    await f.consent('owner-a');
+    let registryReads = 0;
+    const racingRegistry = {
+      withSession(mode) {
+        if (++registryReads === 2) {
+          f.registry.exec(`UPDATE recovery_owner_fences SET status='blocked',
+            change_seq=change_seq+1 WHERE uid='owner-a'`);
+        }
+        return f.recoveryDb.withSession(mode);
+      },
+    };
+    const refused = await f.call('owner-a', SYNC, {
+      env: { ...f.env, RECOVERY_DB: racingRegistry },
+    });
+    assert.equal(refused.response.status, 503);
+    assert.deepEqual(refused.body, { error: 'unavailable' });
+    assert.equal(refused.response.headers.get('Cache-Control'), 'no-store');
+    assert.equal(registryReads, 2);
+    assert.equal(f.count('cloud_account_keys', 'owner-a'), 1);
+    assert.equal(f.count('cloud_key_issuance', 'owner-a'), 1);
+    assert.equal(f.sqlite.prepare("SELECT status FROM sync_subjects WHERE uid='owner-a'").get().status, 'active');
+    assert.equal((await f.call('owner-a', SYNC)).response.status, 503);
+    await f.consent('owner-b');
+    assert.equal((await f.call('owner-b', SYNC)).response.status, 200);
   } finally { f.close(); }
 });
 

@@ -5,6 +5,11 @@ import { DatabaseSync } from 'node:sqlite';
 import { runOneHealthErasureStep } from '../../cloudflare/jobs/health-erasure-worker.mjs';
 import { wrapCloudAccountDataKey } from '../../cloudflare/api/cloud-key-crypto.mjs';
 import { releaseCloudAccountDataKey } from '../../cloudflare/api/cloud-key-store.mjs';
+import { applyCurrentD1RecoverySchema } from './current-d1-schema.mjs';
+import {
+  armIndependentHealthWithdrawal, enrollIndependentOwner, recordVerifiedHealthWithdrawal,
+  recordVerifiedInitialConsent,
+} from '../../cloudflare/recovery/independent-owner-fence.mjs';
 
 const files = readdirSync(new URL('../../cloudflare/api/migrations/', import.meta.url))
   .filter(name => /^[0-9]{4}_[a-z0-9_]+\.sql$/.test(name)).sort();
@@ -293,9 +298,19 @@ void test('D runner preserves ADK and retries after quota exhaustion or lease ex
 });
 void test('D-01 rights-only ADK read delayed through finalization is rejected', async () => {
   const f = fixture();
+  const registry = new DatabaseSync(':memory:');
   try {
+    applyCurrentD1RecoverySchema(registry);
+    registry.exec("UPDATE recovery_control SET mode='open',generation=2 WHERE singleton=1");
+    const recovery = new DB(registry);
     const hash = owner(f);
-    await provision(f); withdraw(f); await awaitKeys(f); expire(f);
+    await enrollIndependentOwner(recovery, 'owner-a');
+    await armIndependentHealthWithdrawal(recovery,
+      await recordVerifiedInitialConsent(f.db, recovery, 'owner-a'));
+    await provision(f);
+    withdraw(f);
+    await recordVerifiedHealthWithdrawal(f.db, recovery, 'owner-a');
+    await awaitKeys(f); expire(f);
     let reads = 0;
     const intercepted = { withSession(mode) {
       const real = f.db.withSession(mode);
@@ -310,7 +325,7 @@ void test('D-01 rights-only ADK read delayed through finalization is rejected', 
       } };
     } };
     await assert.rejects(releaseCloudAccountDataKey(intercepted,
-      { CLOUD_ACCOUNT_KEK_V1: KEK, CONSENT_PRIVACY_VERSION: '1.3.9',
+      { DB: f.db, RECOVERY_DB: recovery, CLOUD_ACCOUNT_KEK_V1: KEK, CONSENT_PRIVACY_VERSION: '1.3.9',
         CONSENT_TERMS_VERSION: '1.2.5' },
       { uid: 'owner-a', authenticated: true, emailVerified: true,
         rateGatePassed: true, csrfVerified: true, fenceEpoch: 1,
@@ -318,5 +333,5 @@ void test('D-01 rights-only ADK read delayed through finalization is rejected', 
     /cloud-account-key-unavailable/);
     assert.equal(reads, 2);
     verify(f, 'destroyed');
-  } finally { f.sqlite.close(); }
+  } finally { registry.close(); f.sqlite.close(); }
 });

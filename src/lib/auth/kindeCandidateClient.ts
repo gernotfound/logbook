@@ -93,6 +93,7 @@ async function post(
     route: '/api/auth/session' | '/v1/consent/status',
     send: typeof fetch,
     stillCurrent: () => boolean,
+    csrfToken?: string,
 ): Promise<{ unauthorized: true } | { unauthorized: false; body: unknown }> {
     assertCurrent(stillCurrent);
     let response: Response;
@@ -100,7 +101,7 @@ async function post(
         response = await send(route, {
             method: 'POST', credentials: 'same-origin', mode: 'same-origin',
             cache: 'no-store', redirect: 'error',
-            headers: { Accept: 'application/json' },
+            headers: { Accept: 'application/json', ...(csrfToken ? { 'X-CSRF-Token': csrfToken } : {}) },
             signal: AbortSignal.timeout(5000),
         });
     } catch {
@@ -183,21 +184,28 @@ function consentState(value: unknown, owner: CandidatePrincipal): KindeCandidate
 }
 
 /**
- * Candidate read-only browser adapter, not wired to Firebase AuthContext or
- * cloud hydration. Two separate Worker reads can straddle a session switch;
- * the final session read, trusted consent UID and caller's generation
- * guard reject mixed-owner hints, including A→B→A with equal epochs. Even 'consent-confirmed' is NOT an ACK, vault unlock,
- * session continuity proof, or permission to synchronize.
+ * Candidate browser status adapter, not wired to React AuthContext or
+ * cloud hydration. CSRF permits the server to reconcile already committed
+ * consent. Two separate Worker reads can straddle a session switch;
+ * the preflight cookie fence, final session read, trusted consent UID and
+ * caller generation reject mixed-owner hints, including A→B→A with equal
+ * epochs. 'Consent-confirmed' is not an ACK, vault unlock or sync grant.
  */
 export async function readKindeCandidateAccess({
-    send = fetch, stillCurrent,
-}: { send?: typeof fetch; stillCurrent: () => boolean }): Promise<KindeCandidateAccess> {
-    const first = await post('/api/auth/session', send, stillCurrent);
+    send = fetch, stillCurrent, browserCookies = () => document.cookie,
+}: {
+    send?: typeof fetch; stillCurrent: () => boolean; browserCookies?: () => string;
+}): Promise<KindeCandidateAccess> {
+    // Pin the browser incarnation before any network read. Equal UID and
+    // D1 epochs are not proof that two HTTP responses share one session.
+    const fence = captureKindeCandidatePresenceFence({ stillCurrent, browserCookies });
+    const first = await post('/api/auth/session', send, fence.stillCurrent);
     if (first.unauthorized) return { kind: 'signed-out' };
+    if (fence.csrfToken === null) throw new KindeCandidateBoundaryError();
     const owner = principal(first.body);
-    const consent = await post('/v1/consent/status', send, stillCurrent);
+    const consent = await post('/v1/consent/status', send, fence.stillCurrent, fence.csrfToken);
     if (consent.unauthorized) throw new KindeCandidateBoundaryError(401);
-    const last = await post('/api/auth/session', send, stillCurrent);
+    const last = await post('/api/auth/session', send, fence.stillCurrent);
     if (last.unauthorized) throw new KindeCandidateBoundaryError(401);
     const verified = principal(last.body);
     if (verified.uid !== owner.uid || verified.fenceEpoch !== owner.fenceEpoch
@@ -205,7 +213,7 @@ export async function readKindeCandidateAccess({
         throw new KindeCandidateBoundaryError();
     }
     const status = consentState(consent.body, verified);
-    assertCurrent(stillCurrent);
+    assertCurrent(fence.stillCurrent);
     return status;
 }
 
@@ -219,17 +227,24 @@ export type KindeCandidateReplicaObservation =
  * claim a replica, touch the vault or acknowledge the journal from this hint.
  */
 export async function inspectKindeCandidateReplicaControl({
-    send = fetch, stillCurrent,
-}: { send?: typeof fetch; stillCurrent: () => boolean }): Promise<KindeCandidateReplicaObservation> {
-    const first = await readKindeCandidateAccess({ send, stillCurrent });
+    send = fetch, stillCurrent, browserCookies = () => document.cookie,
+}: {
+    send?: typeof fetch; stillCurrent: () => boolean; browserCookies?: () => string;
+}): Promise<KindeCandidateReplicaObservation> {
+    const fence = captureKindeCandidatePresenceFence({ stillCurrent, browserCookies });
+    const first = await readKindeCandidateAccess({
+        send, stillCurrent: fence.stillCurrent, browserCookies,
+    });
     if (first.kind !== 'consent-confirmed') return first;
     let control: CloudReplicaControlSnapshot;
     try { control = await createCloudflareReplicaTransport(send).control(); }
     catch (error) {
         throw new KindeCandidateBoundaryError(error instanceof CloudReplicaTransportError ? error.status : 0);
     }
-    assertCurrent(stillCurrent);
-    const last = await readKindeCandidateAccess({ send, stillCurrent });
+    assertCurrent(fence.stillCurrent);
+    const last = await readKindeCandidateAccess({
+        send, stillCurrent: fence.stillCurrent, browserCookies,
+    });
     if (last.kind !== 'consent-confirmed' || last.principal.uid !== first.principal.uid
         || last.principal.fenceEpoch !== first.principal.fenceEpoch
         || last.principal.healthConsentRevision !== first.principal.healthConsentRevision
@@ -239,7 +254,7 @@ export async function inspectKindeCandidateReplicaControl({
         || control.consentRevision !== first.principal.healthConsentRevision) {
         throw new KindeCandidateBoundaryError();
     }
-    assertCurrent(stillCurrent);
+    assertCurrent(fence.stillCurrent);
     return { kind: 'replica-control-observed', principal: last.principal, control };
 }
 
@@ -255,16 +270,48 @@ function canonicalCsrf(token: string): boolean {
     } catch { return false; }
 }
 
-function sessionCsrf(cookies: string): string {
+function optionalSessionCsrf(cookies: string): string | null {
     if (typeof cookies !== 'string' || cookies.length > 4096) {
         throw new KindeCandidateBoundaryError();
     }
     const matches = cookies.split(';').map(part => part.trim())
-        .filter(part => part.startsWith(CSRF_COOKIE + '='));
-    if (matches.length !== 1) throw new KindeCandidateBoundaryError();
+        .filter(part => part.startsWith(CSRF_COOKIE));
+    if (matches.length === 0) return null;
+    if (matches.length !== 1 || !matches[0].startsWith(CSRF_COOKIE + '=')) {
+        throw new KindeCandidateBoundaryError();
+    }
     const token = matches[0].slice(CSRF_COOKIE.length + 1);
     if (!canonicalCsrf(token)) throw new KindeCandidateBoundaryError();
     return token;
+}
+
+function sessionCsrf(cookies: string): string {
+    const value = optionalSessionCsrf(cookies);
+    if (value === null) throw new KindeCandidateBoundaryError();
+    return value;
+}
+
+/**
+ * Signed-out status can be checked without a CSRF cookie. Authenticated
+ * status cannot: preserve the original browser incarnation throughout
+ * session/consent/replica reads, including A→B→A with equal server claims.
+ * This is a continuity fence, not a grant to an account archive or vault.
+ */
+export function captureKindeCandidatePresenceFence({
+    stillCurrent, browserCookies = () => document.cookie,
+}: {
+    stillCurrent: () => boolean; browserCookies?: () => string;
+}): { csrfToken: string | null; stillCurrent: () => boolean } {
+    if (typeof stillCurrent !== 'function') throw new KindeCandidateBoundaryError();
+    let token: string | null;
+    try { token = optionalSessionCsrf(browserCookies()); }
+    catch { throw new KindeCandidateBoundaryError(); }
+    const current = () => {
+        try { return stillCurrent() === true && optionalSessionCsrf(browserCookies()) === token; }
+        catch { return false; }
+    };
+    assertCurrent(current);
+    return { csrfToken: token, stillCurrent: current };
 }
 
 /**
@@ -279,16 +326,9 @@ export function captureKindeCandidateSessionFence({
     stillCurrent: () => boolean;
     browserCookies?: () => string;
 }): { csrfToken: string; stillCurrent: () => boolean } {
-    if (typeof stillCurrent !== 'function') throw new KindeCandidateBoundaryError();
-    let csrfToken: string;
-    try { csrfToken = sessionCsrf(browserCookies()); }
-    catch { throw new KindeCandidateBoundaryError(); }
-    const current = () => {
-        try { return stillCurrent() === true && sessionCsrf(browserCookies()) === csrfToken; }
-        catch { return false; }
-    };
-    assertCurrent(current);
-    return { csrfToken, stillCurrent: current };
+    const fence = captureKindeCandidatePresenceFence({ stillCurrent, browserCookies });
+    if (fence.csrfToken === null) throw new KindeCandidateBoundaryError();
+    return { csrfToken: fence.csrfToken, stillCurrent: fence.stillCurrent };
 }
 
 /**
@@ -298,16 +338,18 @@ export function captureKindeCandidateSessionFence({
  * status after the server's conditional session revocation.
  */
 export async function revokeKindeCandidateSession({
-    send = fetch, stillCurrent, browserCookies = () => document.cookie,
+    send = fetch, stillCurrent, expectedCsrfToken, browserCookies = () => document.cookie,
 }: {
     send?: typeof fetch;
     stillCurrent: () => boolean;
+    expectedCsrfToken: string;
     browserCookies?: () => string;
 }): Promise<void> {
     assertCurrent(stillCurrent);
     let csrf: string;
     try { csrf = sessionCsrf(browserCookies()); }
     catch { throw new KindeCandidateBoundaryError(); }
+    if (csrf !== expectedCsrfToken) throw new KindeCandidateBoundaryError();
     assertCurrent(stillCurrent);
 
     let response: Response;

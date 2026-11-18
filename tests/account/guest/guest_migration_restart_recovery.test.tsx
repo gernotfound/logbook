@@ -9,7 +9,6 @@ vi.mock('../../../src/components/UI/BottomNav', () => ({ default: () => <nav dat
 vi.mock('../../../src/components/UI/GlobalDialog', () => ({ GlobalDialog: () => null }));
 vi.mock('../../../src/components/UI/ReloadPrompt', () => ({ default: () => null }));
 vi.mock('../../../src/components/UI/ConsentOverlay', () => ({ ConsentOverlay: () => null }));
-vi.mock('../../../src/components/UI/LoginBox', () => ({ LoginBox: () => <div data-testid="guest-login-box" /> }));
 vi.mock('../../../src/components/Home/HomeView', () => ({ default: () => <div>Home view</div> }));
 vi.mock('../../../src/components/Training/TrainingView', () => ({ default: () => <div>Training view</div> }));
 vi.mock('../../../src/components/Nutrition/NutritionView', () => ({ default: () => <div>Nutrition view</div> }));
@@ -108,7 +107,7 @@ describe('guest migration restart recovery', () => {
         await waitFor(() => expect(screen.getByRole('status', { name: 'Preparazione account in corso' })).toBeTruthy());
         expect(sessionStorage.getItem(OVERLAY_SESSION_KEY)).toBeNull();
         expect(screen.queryByTestId('bottom-nav')).toBeNull();
-        expect(screen.queryByTestId('guest-login-box')).toBeNull();
+        expect(screen.queryByRole('dialog', { name: 'Passaggio a Kinde non disponibile' })).toBeNull();
         expect(screen.queryByText('Home view')).toBeNull();
         expect(document.getElementById('app-container')).toBeNull();
         resolveCloud({ data: cloud, completeMonths: [], cloudDocuments: new Map() });

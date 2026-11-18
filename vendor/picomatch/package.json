@@ -1,0 +1,17 @@
+{
+  "name": "picomatch",
+  "version": "4.0.8-logbook.0",
+  "description": "TheLogBook temporary security backport of picomatch 4.0.7 for CVE-2026-112366",
+  "private": true,
+  "license": "MIT",
+  "main": "index.js",
+  "files": [
+    "index.js",
+    "posix.js",
+    "lib"
+  ],
+  "sideEffects": false,
+  "engines": {
+    "node": ">=12"
+  }
+}

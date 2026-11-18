@@ -2,6 +2,8 @@ import { useState, useEffect, useEffectEvent, useRef, useSyncExternalStore, Susp
 import { useAuth } from './hooks/useAuth';
 import { useAppStore } from './store/useAppStore';
 import { useLocalStorage } from './hooks/useLocalStorage';
+import { useModalFocusTrap } from './hooks/useModalFocusTrap';
+import { useDialogStore } from './store/useDialogStore';
 import { ownerUiPreferenceKey } from './lib/uiPreferenceKeys';
 import {
   LOCAL_STORAGE_ACTIVE_TAB,
@@ -32,7 +34,6 @@ import { ConsentOverlay } from './components/UI/ConsentOverlay';
 import { HealthConsentSuspended } from './components/UI/HealthConsentSuspended';
 import { currentHealthConsentStatus, getGuestHealthConsentStatus, getServerConfirmedLegalConsent, refreshHealthConsent, refreshHealthConsentFromStorage, subscribeHealthConsent } from './lib/healthConsent';
 import { needsLegalUpdate } from './lib/legalVersions';
-import { LoginBox } from './components/UI/LoginBox';
 import { KindeAccountEntry } from './components/UI/KindeAccountEntry';
 import { EmailVerificationGate } from './components/UI/EmailVerificationGate';
 import { AlertTriangle, X } from 'lucide-react';
@@ -94,7 +95,8 @@ function GuestBanner({ onLogin }: { onLogin: () => void }) {
       <AlertTriangle size={20} aria-hidden="true" />
       <span className="guest-banner-text">Modalità locale · I dati sono solo su questo dispositivo</span>
       <div className="guest-banner-actions">
-        <button type="button" className="btn btn-small" onClick={onLogin}>
+        <button type="button" className="btn btn-small"
+          onClick={event => { event.currentTarget.focus(); onLogin(); }}>
           Accedi
         </button>
         <button
@@ -106,6 +108,30 @@ function GuestBanner({ onLogin }: { onLogin: () => void }) {
         </button>
       </div>
     </div>
+  );
+}
+
+// Until Kinde can transfer guest archives with verified ownership, never
+// invoke the old Firebase login from a guest-owned view.
+function GuestKindeTransitionGate({ onClose }: { onClose: () => void }) {
+  const dialogRef = useRef<HTMLElement>(null);
+  const closeButton = useRef<HTMLButtonElement>(null);
+  const globalDialogOpen = useDialogStore(state => state.isOpen);
+  useModalFocusTrap({
+    containerRef: dialogRef, initialFocusRef: closeButton,
+    active: !globalDialogOpen, onEscape: onClose,
+  });
+  return (
+    <section ref={dialogRef} role="dialog" aria-modal="true" tabIndex={-1}
+      aria-labelledby="guest-kinde-transition-title"
+      className="auth-panel">
+      <h2 id="guest-kinde-transition-title">Passaggio a Kinde non disponibile</h2>
+      <p>Il collegamento dell’archivio locale a un account Kinde non è ancora attivo.
+        I tuoi progressi rimangono sul dispositivo. Puoi continuare a utilizzare
+        la modalità locale senza trasferire o cancellare i dati.</p>
+      <button ref={closeButton} type="button" className="btn btn-primary"
+        onClick={onClose}>Torna alla modalità locale</button>
+    </section>
   );
 }
 
@@ -204,7 +230,7 @@ function OwnerBoundApp({ startupTab }: { startupTab: string | null }) {
     });
   }, [persistTrustedLegal, acceptedOnServer, submitLegalConsent, setSaveError]);
   const showConsentOverlay = hasUserData && needsLocalLegalUpdate && !persistTrustedLegal;
-  const guestLoginOverlayVisible = showGuestLogin && (!currentUser || (isGuest && guestMigrationStatus === 'idle'));
+  const guestLoginOverlayVisible = showGuestLogin && isGuest && !currentUser && guestMigrationStatus === 'idle';
   const guestLoginMigrationPending = !!currentUser && guestMigrationStatus === 'pending';
   const guestLoginMigrationFailed = !!currentUser && guestMigrationStatus === 'failed';
   const hideBottomNav = guestLoginOverlayVisible;
@@ -526,7 +552,7 @@ function OwnerBoundApp({ startupTab }: { startupTab: string | null }) {
       {showConsentOverlay && <ConsentOverlay />}
       {guestLoginOverlayVisible && (
         <div id="auth-overlay" style={{ zIndex: 10001 }}>
-          <LoginBox onCancel={closeGuestLogin} />
+          <GuestKindeTransitionGate onClose={closeGuestLogin} />
         </div>
       )}
       {isGuest && <GuestBanner onLogin={openGuestLogin} />}

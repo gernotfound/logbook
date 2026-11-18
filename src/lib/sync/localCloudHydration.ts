@@ -16,6 +16,7 @@ import { type SyncMeta, applySemanticOperations, coversVectorClock, parseSyncMet
 
 export type CloudCoverageMode = 'window' | 'all';
 type LocalWriteGuard = () => boolean;
+type CheckpointCommitScope = { consentRevision: number; localRevision: number | null };
 // The archive's JSON omits undefined object fields. Use that same representation
 // before comparing snapshots, so optional keys do not invent a new local revision.
 const parse = (value: unknown) => removeUndefinedValuesForFirestore(UserDataSchema.parse(value) as unknown as UserData);
@@ -60,7 +61,7 @@ function parseCloudSyncMeta(documentPath: string, raw: unknown): SyncMeta {
     }
 }
 
-export async function hydrateLocal(owner: string, cloudData: UserData, months: string[], cloudDocuments?: Map<string, DocumentData>, coverageMode: CloudCoverageMode = 'window', guard?: LocalWriteGuard): Promise<LocalEnvelope> {
+export async function hydrateLocal(owner: string, cloudData: UserData, months: string[], cloudDocuments?: Map<string, DocumentData>, coverageMode: CloudCoverageMode = 'window', guard?: LocalWriteGuard, checkpoint?: CheckpointCommitScope): Promise<LocalEnvelope> {
     owner = normalizeStorageOwner(owner);
     // UserDataSchema has a catch-all fallback: never treat a non-object
     // cloud transport payload as a confirmed empty account snapshot.
@@ -74,6 +75,14 @@ export async function hydrateLocal(owner: string, cloudData: UserData, months: s
     await updateArchiveRecord<any>(owner, raw => {
         if (guard && !guard()) throw new Error('Hydration locale invalidata dal cambio sessione; journal preservato.');
         const current = validateLocalEnvelope(raw, owner);
+        if (checkpoint && (coverageMode !== 'all' || !cloudDocuments || !guard || !owner.startsWith('user:')
+            || !Number.isSafeInteger(checkpoint.consentRevision) || checkpoint.consentRevision < 1
+            || (current?.revision ?? null) !== checkpoint.localRevision
+            || (current && (current.consentRevision !== checkpoint.consentRevision
+                || current.cloudIntegrityFence || current.cloudflareDelivery
+                || current.cloudflareReplicaClaim || current.cloudflareReplicaRetirement)))) {
+            throw new Error('Checkpoint locale modificato o transizione incompleta; archivio preservato.');
+        }
         if (!current) {
             const syncMetaByDocument: Record<string, SyncMeta> = {};
             const clock: Record<string, number> = {};
@@ -82,7 +91,8 @@ export async function hydrateLocal(owner: string, cloudData: UserData, months: s
                 syncMetaByDocument[path] = meta;
                 for (const [actor, seq] of Object.entries(meta.clock)) clock[actor] = Math.max(clock[actor] || 0, seq);
             }
-            saved = { ...currentEnvelopeVersions(), ...ownerConsentRevision(owner), owner, actorId: generateId('actor'), actorSeq: 0, clock, data: cloud, baseline: cloud, completeMonths: months, pending: [], syncMetaByDocument, replica: null, revision: 0 };
+            const consent = checkpoint ? { consentRevision: checkpoint.consentRevision } : ownerConsentRevision(owner);
+            saved = { ...currentEnvelopeVersions(), ...consent, owner, actorId: generateId('actor'), actorSeq: 0, clock, data: cloud, baseline: cloud, completeMonths: months, pending: [], syncMetaByDocument, replica: null, revision: 0 };
         } else {
             // In the supported release, only server-confirmed documents may
             // enter the durable acknowledgement map. Even an empty, writerless

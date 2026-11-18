@@ -3,6 +3,7 @@ import {
 } from './cloud-key-crypto.mjs';
 
 import { D1_NOW_MS } from '../sql/d1-time.mjs';
+import { requireIndependentOwnerFence } from '../recovery/independent-owner-fence.mjs';
 
 const HASH = /^[a-f0-9]{64}$/;
 const LEGAL = /^[A-Za-z0-9._-]{1,32}$/;
@@ -67,10 +68,9 @@ function trustedClaims(claims, env, purpose) {
   return [claims.uid, claims.fenceEpoch, claims.sessionHash, claims.healthConsentRevision,
     ...(purpose === 'sync' ? [env.CONSENT_PRIVACY_VERSION, env.CONSENT_TERMS_VERSION] : [])];
 }
-const READ_SQL = `SELECT k.uid AS key_uid, k.consent_revision AS key_consent_revision,
+const KEY_COLUMNS = `SELECT k.uid AS key_uid, k.consent_revision AS key_consent_revision,
   k.format, k.version, k.key_version, k.iv, k.ciphertext, k.tag, k.issued_at_ms,
-  i.issued_at_ms AS issuance_at_ms
-  ${IDENTITY_SQL}`;
+  i.issued_at_ms AS issuance_at_ms`;
 function keyEnvelope(row, uid, revision) {
   if (!row?.key_uid) return null;
   if (row.key_uid !== uid || row.key_consent_revision !== revision
@@ -86,11 +86,24 @@ function keyEnvelope(row, uid, revision) {
 function sameKey(left, right) {
   return !!left && !!right && Object.keys(left).every(key => left[key] === right[key]);
 }
-async function readAuthorized(primary, args, purpose) {
-  const sql = READ_SQL + (purpose === 'sync' ? ACTIVE_SQL : RIGHTS_SQL);
+async function readAuthorized(primary, args, purpose, recoveryDb) {
+  if (!primary || typeof primary.prepare !== 'function') throw new CloudKeyUnavailableError();
+  const sql = purpose === 'sync' ? KEY_COLUMNS + IDENTITY_SQL + ACTIVE_SQL
+    : KEY_COLUMNS + ', s.uid, s.status, s.consent_revision, s.fence_epoch, s.erased_before_revision'
+      + IDENTITY_SQL + RIGHTS_SQL;
   const row = await primary.prepare(sql).bind(...args).first();
   if (!row) throw new CloudKeyUnavailableError();
-  return keyEnvelope(row, args[0], args[3]);
+  const wrapped = keyEnvelope(row, args[0], args[3]);
+  if (wrapped && purpose === 'rights-export') {
+    // The healthcare subject epoch may predate a renewed Auth session.
+    // Compare the independently recorded withdrawal to the SQL subject,
+    // not to the Auth epoch echoed in the response.
+    await requireIndependentOwnerFence(recoveryDb, {
+      uid: row.uid, status: row.status, consentRevision: row.consent_revision,
+      fenceEpoch: row.fence_epoch, erasedBeforeRevision: row.erased_before_revision,
+    }, 'rights');
+  }
+  return wrapped;
 }
 
 // No caller-supplied ADK, username or journal bytes are accepted. Every
@@ -135,18 +148,21 @@ const PROVISION_SQL = `
 /**
  * Candidate trusted-server boundary, NOT a public HTTP endpoint.
  * "rights-export" never provisions a missing ADK; a revoked consent can
- * authorize a still-existing key only while a live erasure job is pending.
- * Every successful result is checked AGAIN after asynchronous AES-GCM open.
+ * authorize an existing key only with primary erasure-job proof and a
+ * matching independent withdrawal. Recheck after asynchronous AES-GCM open.
  */
 export async function releaseCloudAccountDataKey(db, env, claims, purpose = 'sync') {
   let candidate;
   try {
     const args = trustedClaims(claims, env, purpose);
     if (!db || typeof db.withSession !== 'function') throw new CloudKeyUnavailableError();
+    const recovery = env.RECOVERY_DB;
+    if (purpose === 'rights-export' && (!recovery || recovery === db || recovery === env.DB)) {
+      throw new CloudKeyUnavailableError();
+    }
     const primary = db.withSession('first-primary');
-    if (!primary || typeof primary.prepare !== 'function') throw new CloudKeyUnavailableError();
 
-    let wrapped = await readAuthorized(primary, args, purpose);
+    let wrapped = await readAuthorized(primary, args, purpose, recovery);
     if (!wrapped && purpose === 'sync') {
       candidate = crypto.getRandomValues(new Uint8Array(32));
       const envelope = await wrapCloudAccountDataKey(claims.uid, candidate, env.CLOUD_ACCOUNT_KEK_V1);
@@ -164,13 +180,13 @@ export async function releaseCloudAccountDataKey(db, env, claims, purpose = 'syn
       } catch {
         // The primary readback below may reconcile a committed insert.
       }
-      wrapped = await readAuthorized(primary, args, purpose);
+      wrapped = await readAuthorized(primary, args, purpose, recovery);
     }
     if (!wrapped) throw new CloudKeyUnavailableError();
 
     const adk = await unwrapCloudAccountDataKey(claims.uid, wrapped, env.CLOUD_ACCOUNT_KEK_V1);
     try {
-      const latest = await readAuthorized(db.withSession('first-primary'), args, purpose);
+      const latest = await readAuthorized(db.withSession('first-primary'), args, purpose, recovery);
       if (!sameKey(wrapped, latest)) throw new CloudKeyUnavailableError();
       return adk;
     } catch {

@@ -1,10 +1,10 @@
 import assert from 'node:assert/strict';
-import { applyCurrentD1Schema } from './current-d1-schema.mjs';
+import { applyCurrentD1RecoverySchema, applyCurrentD1Schema } from './current-d1-schema.mjs';
 import { test } from 'node:test';
 import { DatabaseSync } from 'node:sqlite';
 import consent from '../../cloudflare/api/consent-worker.mjs';
 import apiWorker from '../../cloudflare/api/worker.mjs';
-import { runOneHealthErasureStep } from '../../cloudflare/jobs/health-erasure-worker.mjs';
+import erasureWorker, { runOneHealthErasureStep } from '../../cloudflare/jobs/health-erasure-worker.mjs';
 import sessionGate, { hashSessionSecret } from '../../cloudflare/auth/session-gate.mjs';
 import { issueVerifiedSession } from '../../cloudflare/auth/session-issuer.mjs';
 
@@ -47,20 +47,26 @@ async function fixture(uid = 'owner-a') {
   sqlite.exec('PRAGMA foreign_keys=ON');
   applyCurrentD1Schema(sqlite);
   const db = new D1SqliteAdapter(sqlite);
+  const registry = new DatabaseSync(':memory:');
+  applyCurrentD1RecoverySchema(registry);
+  registry.exec("UPDATE recovery_control SET mode='open',generation=2 WHERE singleton=1");
+  const recoveryDb = new D1SqliteAdapter(registry);
   sqlite.prepare('INSERT INTO auth_principals(uid,status,verified_at_ms,auth_epoch) VALUES (?, ?, ?, ?)')
     .run(uid, 'active', Date.now() - 60000, 1);
   const issued = await issueVerifiedSession(db, uid);
   const cookie = issued.setCookies.map(item => item.split(';')[0]).join('; ');
   const csrf = issued.setCookies[1].split(';')[0].split('=')[1];
   const env = {
-    DB: db, API_ORIGIN: ORIGIN, CONSENT_PRIVACY_VERSION: '1.3.9', CONSENT_TERMS_VERSION: '1.2.5',
+    DB: db, RECOVERY_DB: recoveryDb, API_ORIGIN: ORIGIN,
+    CONSENT_PRIVACY_VERSION: '1.3.9', CONSENT_TERMS_VERSION: '1.2.5',
     AUTH_GATE: {
       fetch: request => sessionGate.fetch(request, {
         DB: db, API_ORIGIN: ORIGIN, CONSENT_PRIVACY_VERSION: '1.3.9', CONSENT_TERMS_VERSION: '1.2.5', API_RATE_LIMITER: { limit: async () => ({ success: true }) },
       }),
     },
   };
-  return { db, sqlite, env, cookie, csrf, uid };
+  return { db, sqlite, recoveryDb, registry, env, cookie, csrf, uid,
+    close() { registry.close(); sqlite.close(); } };
 }
 function request(route, f, { body = null, csrf = f.csrf, origin = ORIGIN,
   contentType = 'application/json', cookie = f.cookie } = {}) {
@@ -116,7 +122,7 @@ void test('consent status accepts a gateway-forwarded empty stream, never forged
     }
     assert.equal(count(f.sqlite, 'sync_subjects'), 0);
     assert.equal(count(f.sqlite, 'health_consent_acceptances'), 0);
-  } finally { f.sqlite.close(); }
+  } finally { f.close(); }
 });
 
 void test('a verified session without consent may read status but cannot use sync gate', async () => {
@@ -135,7 +141,7 @@ void test('a verified session without consent may read status but cannot use syn
     });
     assert.equal(denied.status, 401);
     assert.equal(count(f.sqlite, 'sync_subjects'), 0);
-  } finally { f.sqlite.close(); }
+  } finally { f.close(); }
 });
 
 
@@ -170,7 +176,7 @@ void test('consent status returns the exact trusted SQL owner for all five state
       assert.deepEqual((await call(f, '/v1/consent/status')).body, expected(state, 1));
     }
     assert.equal(count(f.sqlite, 'health_consent_acceptances'), 1);
-  } finally { f.sqlite.close(); }
+  } finally { f.close(); }
 });
 
 void test('consent status cannot substitute a forged owner or stale trusted gate session', async () => {
@@ -196,7 +202,7 @@ void test('consent status cannot substitute a forged owner or stale trusted gate
     const mismatch = await call(f, '/v1/consent/status');
     assert.equal(mismatch.status, 503);
     assert.equal('uid' in mismatch.body, false);
-  } finally { f.sqlite.close(); }
+  } finally { f.close(); }
 });
 
 void test('first explicit acceptance commits consent, sync state and immutable proof atomically', async () => {
@@ -214,6 +220,9 @@ void test('first explicit acceptance commits consent, sync state and immutable p
     assert.equal(count(f.sqlite, 'sync_subjects'), 1);
     assert.equal(count(f.sqlite, 'sync_state'), 1);
     assert.equal(count(f.sqlite, 'health_consent_acceptances'), 1);
+    assert.deepEqual({ ...f.registry.prepare(
+      'SELECT status,consent_revision,change_seq FROM recovery_owner_fences WHERE uid=?',
+    ).get(f.uid) }, { status: 'active', consent_revision: 1, change_seq: 2 });
     assert.equal((await call(f, '/v1/consent/status')).body.status, 'active');
     const active = await sessionGate.fetch(new Request('https://auth-gate.internal/__internal/authorize', {
       method: 'POST', headers: {
@@ -228,7 +237,7 @@ void test('first explicit acceptance commits consent, sync state and immutable p
     const repeated = await call(f, '/v1/consent/initial', { body: acceptance });
     assert.equal(repeated.status, 409);
     assert.equal(count(f.sqlite, 'health_consent_acceptances'), 1);
-  } finally { f.sqlite.close(); }
+  } finally { f.close(); }
 });
 
 void test('invalid intent, missing age/legal check or mismatched versions never create state', async () => {
@@ -255,7 +264,7 @@ void test('invalid intent, missing age/legal check or mismatched versions never 
       body: acceptance, origin: 'https://other.invalid',
     })).status, 403);
     assert.equal(count(f.sqlite, 'sync_subjects'), 0);
-  } finally { f.sqlite.close(); }
+  } finally { f.close(); }
 });
 
 void test('session revoked after gate result cannot publish a consent row', async () => {
@@ -273,7 +282,7 @@ void test('session revoked after gate result cannot publish a consent row', asyn
     assert.equal(result.status, 503);
     assert.equal(count(f.sqlite, 'sync_subjects'), 0);
     assert.equal(count(f.sqlite, 'health_consent_acceptances'), 0);
-  } finally { f.sqlite.close(); }
+  } finally { f.close(); }
 });
 
 void test('a late SQL failure rolls back both initial grant and sync state', async () => {
@@ -285,7 +294,7 @@ void test('a late SQL failure rolls back both initial grant and sync state', asy
     assert.equal(count(f.sqlite, 'sync_subjects'), 0);
     assert.equal(count(f.sqlite, 'sync_state'), 0);
     assert.equal(count(f.sqlite, 'health_consent_acceptances'), 0);
-  } finally { f.sqlite.close(); }
+  } finally { f.close(); }
 });
 
 void test('an active subject without its immutable acceptance cannot be reported as trusted', async () => {
@@ -296,7 +305,7 @@ void test('an active subject without its immutable acceptance cannot be reported
     f.sqlite.prepare('INSERT INTO sync_state(uid,revision) VALUES (?,0)').run(f.uid);
     const status = await call(f, '/v1/consent/status');
     assert.equal(status.status, 503);
-  } finally { f.sqlite.close(); }
+  } finally { f.close(); }
 });
 
 void test('separate identities never adopt another account consent', async () => {
@@ -315,7 +324,7 @@ void test('separate identities never adopt another account consent', async () =>
     assert.deepEqual((await call(b, '/v1/consent/status')).body,
       { uid: other, status: 'unregistered', revision: 0, fenceEpoch: 1 });
     assert.equal(count(f.sqlite, 'sync_subjects'), 1);
-  } finally { f.sqlite.close(); }
+  } finally { f.close(); }
 });
 
 
@@ -337,7 +346,7 @@ void test('accepted consent from superseded legal versions cannot authorize sync
     // Status remains visible so the account can be directed to the
     // explicit legal-update flow; a read does not grant cloud writes.
     assert.equal((await call(f, '/v1/consent/status')).body.status, 'active');
-  } finally { f.sqlite.close(); }
+  } finally { f.close(); }
 });
 
 void test('a consent fence newer than the Auth principal cannot be presented as current', async () => {
@@ -348,7 +357,7 @@ void test('a consent fence newer than the Auth principal cannot be presented as 
     const response = await call(f, '/v1/consent/status');
     assert.equal(response.status, 503);
     assert.equal('acceptedAt' in response.body, false);
-  } finally { f.sqlite.close(); }
+  } finally { f.close(); }
 });
 
 
@@ -373,7 +382,7 @@ void test('invalid consent instructions consume neither Auth rate gate nor D1 co
     assert.equal(count(f.sqlite, 'health_consent_acceptances'), 0);
     assert.equal((await call(f, '/v1/consent/initial', { body: acceptance })).status, 503);
     assert.equal(attempts, 1);
-  } finally { f.sqlite.close(); }
+  } finally { f.close(); }
 });
 
 
@@ -392,7 +401,7 @@ void test('a revocation between the identity gate and status read returns no con
     const status = await call(f, '/v1/consent/status');
     assert.equal(status.status, 503);
     assert.equal('acceptedAt' in status.body, false);
-  } finally { f.sqlite.close(); }
+  } finally { f.close(); }
 });
 
 void test('revision greater than one cannot reuse the first acceptance as an active grant', async () => {
@@ -403,10 +412,75 @@ void test('revision greater than one cannot reuse the first acceptance as an act
     const status = await call(f, '/v1/consent/status');
     assert.equal(status.status, 503);
     assert.equal('acceptedAt' in status.body, false);
-  } finally { f.sqlite.close(); }
+  } finally { f.close(); }
 });
 
 const withdrawal = { action: 'withdraw', expectedRevision: 1, confirmsErasure: true };
+
+void test('unbound, aliased or sealed independent consent registry cannot start first consent', async () => {
+  const f = await fixture();
+  try {
+    for (const RECOVERY_DB of [undefined, f.db]) {
+      f.env.RECOVERY_DB = RECOVERY_DB;
+      assert.equal((await call(f, '/v1/consent/initial', { body: acceptance })).status, 503);
+    }
+    f.env.RECOVERY_DB = f.recoveryDb;
+    f.registry.exec("UPDATE recovery_control SET mode='sealed',generation=3 WHERE singleton=1");
+    assert.equal((await call(f, '/v1/consent/initial', { body: acceptance })).status, 503);
+    assert.equal(count(f.registry, 'recovery_owner_fences'), 0);
+    assert.equal(count(f.sqlite, 'health_consent_acceptances'), 0);
+  } finally { f.close(); }
+});
+
+void test('lost first-consent batch response can be confirmed from both committed stores', async () => {
+  const f = await fixture();
+  try {
+    const batch = f.db.batch.bind(f.db);
+    f.db.batch = async statements => {
+      await batch(statements);
+      throw new Error('synthetic lost response after SQL commit');
+    };
+    const accepted = await call(f, '/v1/consent/initial', { body: acceptance });
+    assert.equal(accepted.status, 200);
+    assert.equal(count(f.sqlite, 'health_consent_acceptances'), 1);
+    assert.equal(f.registry.prepare('SELECT status FROM recovery_owner_fences').get().status, 'active');
+  } finally { f.close(); }
+});
+
+void test('status reconciles a stranded first consent only with verified session CSRF', async () => {
+  const f = await fixture();
+  try {
+    f.registry.exec(`CREATE TRIGGER synthetic_no_promote BEFORE UPDATE ON recovery_owner_fences
+      WHEN NEW.status='active' BEGIN SELECT RAISE(ABORT, 'unavailable'); END`);
+    assert.equal((await call(f, '/v1/consent/initial', { body: acceptance })).status, 503);
+    assert.equal(count(f.sqlite, 'health_consent_acceptances'), 1);
+    assert.equal(f.registry.prepare('SELECT status FROM recovery_owner_fences').get().status, 'pending');
+    assert.equal((await apiWorker.fetch(request('/v1/sync/control', f, { body: {} }), f.env)).status, 503);
+    f.registry.exec('DROP TRIGGER synthetic_no_promote');
+    assert.equal((await call(f, '/v1/consent/status', { csrf: '' })).status, 503);
+    assert.equal(f.registry.prepare('SELECT status FROM recovery_owner_fences').get().status, 'pending');
+    assert.equal((await call(f, '/v1/consent/status')).body.status, 'active');
+    assert.equal((await call(f, '/v1/consent/status')).body.status, 'active');
+    assert.equal(f.registry.prepare('SELECT change_seq FROM recovery_owner_fences').get().change_seq, 2);
+    assert.equal(count(f.sqlite, 'health_consent_acceptances'), 1);
+  } finally { f.close(); }
+});
+
+void test('withdrawal denies a stranded first consent without ever promoting it to active', async () => {
+  const f = await fixture();
+  try {
+    f.registry.exec(`CREATE TRIGGER synthetic_no_promote BEFORE UPDATE ON recovery_owner_fences
+      WHEN NEW.status='active' BEGIN SELECT RAISE(ABORT, 'unavailable'); END`);
+    assert.equal((await call(f, '/v1/consent/initial', { body: acceptance })).status, 503);
+    assert.equal((await call(f, '/v1/consent/withdraw', { body: withdrawal })).status, 200);
+    assert.deepEqual({ ...f.registry.prepare(
+      'SELECT status,consent_revision,change_seq FROM recovery_owner_fences WHERE uid=?',
+    ).get(f.uid) }, { status: 'withdrawn', consent_revision: 1, change_seq: 3 });
+    f.registry.exec('DROP TRIGGER synthetic_no_promote');
+    assert.equal((await call(f, '/v1/consent/status')).body.status, 'withdrawn');
+    assert.equal((await call(f, '/v1/consent/initial', { body: acceptance })).status, 409);
+  } finally { f.close(); }
+});
 
 void test('trusted withdrawal atomically fences sync and queues erasure without claiming completion', async () => {
   const f = await fixture();
@@ -434,7 +508,7 @@ void test('trusted withdrawal atomically fences sync and queues erasure without 
     assert.equal((await call(f, '/v1/consent/withdraw', { body: withdrawal })).status, 200);
     assert.equal(count(f.sqlite, 'health_erasure_jobs'), 1);
     assert.equal((await call(f, '/v1/consent/initial', { body: acceptance })).status, 409);
-  } finally { f.sqlite.close(); }
+  } finally { f.close(); }
 });
 
 void test('withdrawal requires explicit intent, valid CSRF and a pre-existing consent', async () => {
@@ -457,7 +531,7 @@ void test('withdrawal requires explicit intent, valid CSRF and a pre-existing co
     assert.equal((await call(f, '/v1/consent/withdraw', { body: withdrawal, origin: 'https://evil.invalid' })).status, 403);
     assert.equal(count(f.sqlite, 'health_erasure_jobs'), 0);
     assert.equal(f.sqlite.prepare('SELECT status FROM sync_subjects').get().status, 'active');
-  } finally { f.sqlite.close(); }
+  } finally { f.close(); }
 });
 
 void test('revocation between private AuthGate and D1 cannot enqueue or withdraw consent', async () => {
@@ -474,7 +548,7 @@ void test('revocation between private AuthGate and D1 cannot enqueue or withdraw
     assert.equal(result.status, 503);
     assert.equal(count(f.sqlite, 'health_erasure_jobs'), 0);
     assert.equal(f.sqlite.prepare('SELECT status FROM sync_subjects').get().status, 'active');
-  } finally { f.sqlite.close(); }
+  } finally { f.close(); }
 });
 
 void test('a failed trigger cannot leave a pending job without a withdrawn subject', async () => {
@@ -487,7 +561,13 @@ void test('a failed trigger cannot leave a pending job without a withdrawn subje
     assert.equal(result.status, 503);
     assert.equal(count(f.sqlite, 'health_erasure_jobs'), 0);
     assert.equal(f.sqlite.prepare('SELECT status FROM sync_subjects').get().status, 'active');
-  } finally { f.sqlite.close(); }
+    assert.equal(f.registry.prepare('SELECT status FROM recovery_owner_fences').get().status, 'blocked');
+    assert.equal((await call(f, '/v1/consent/status')).status, 503);
+    assert.equal((await apiWorker.fetch(request('/v1/sync/control', f, { body: {} }), f.env)).status, 503);
+    f.sqlite.exec('DROP TRIGGER synthetic_no_withdraw');
+    assert.equal((await call(f, '/v1/consent/withdraw', { body: withdrawal })).status, 200);
+    assert.equal(f.registry.prepare('SELECT status FROM recovery_owner_fences').get().status, 'withdrawn');
+  } finally { f.close(); }
 });
 
 void test('lost write acknowledgement is accepted only with a matching primary job and current session', async () => {
@@ -513,7 +593,7 @@ void test('lost write acknowledgement is accepted only with a matching primary j
     assert.equal(result.status, 200);
     assert.equal(result.body.deletionStatus, 'pending');
     assert.equal(count(f.sqlite, 'health_erasure_jobs'), 1);
-  } finally { f.sqlite.close(); }
+  } finally { f.close(); }
 });
 
 void test('no fabricated withdrawal acknowledgement after commit if session was revoked', async () => {
@@ -540,7 +620,7 @@ void test('no fabricated withdrawal acknowledgement after commit if session was 
     assert.equal(result.status, 503);
     assert.equal(count(f.sqlite, 'health_erasure_jobs'), 1);
     assert.equal(f.sqlite.prepare('SELECT status FROM sync_subjects').get().status, 'withdrawn');
-  } finally { f.sqlite.close(); }
+  } finally { f.close(); }
 });
 
 void test('withdrawal is owner-scoped and never affects another principal', async () => {
@@ -558,7 +638,7 @@ void test('withdrawal is owner-scoped and never affects another principal', asyn
     assert.equal((await call(f, '/v1/consent/withdraw', { body: withdrawal })).status, 200);
     assert.equal(f.sqlite.prepare("SELECT COUNT(*) AS n FROM health_erasure_jobs WHERE uid='owner-b'").get().n, 0);
     assert.equal(f.sqlite.prepare("SELECT status FROM sync_subjects WHERE uid='owner-a'").get().status, 'withdrawn');
-  } finally { f.sqlite.close(); }
+  } finally { f.close(); }
 });
 
 void test('withdrawal remains possible after email verification is lost and Auth epoch advances', async () => {
@@ -585,7 +665,7 @@ void test('withdrawal remains possible after email verification is lost and Auth
     assert.equal(f.sqlite.prepare('SELECT fence_epoch,status FROM sync_subjects').get().status, 'withdrawn');
     assert.equal(f.sqlite.prepare('SELECT fence_epoch FROM health_erasure_jobs').get().fence_epoch, 1);
     assert.equal((await call(f, '/v1/consent/status')).body.status, 'withdrawn');
-  } finally { f.sqlite.close(); }
+  } finally { f.close(); }
 });
 
 void test('removing the original consent proof after AuthGate prevents withdrawal job creation', async () => {
@@ -602,7 +682,7 @@ void test('removing the original consent proof after AuthGate prevents withdrawa
     assert.equal(response.status, 503);
     assert.equal(count(f.sqlite, 'health_erasure_jobs'), 0);
     assert.equal(f.sqlite.prepare('SELECT status FROM sync_subjects').get().status, 'active');
-  } finally { f.sqlite.close(); }
+  } finally { f.close(); }
 });
 
 void test('the unified API dispatches withdrawal without granting sync or deleting data', async () => {
@@ -614,7 +694,7 @@ void test('the unified API dispatches withdrawal without granting sync or deleti
     assert.equal((await response.json()).deletionStatus, 'pending');
     assert.equal(count(f.sqlite, 'health_erasure_jobs'), 1);
     assert.equal(count(f.sqlite, 'health_consent_acceptances'), 1);
-  } finally { f.sqlite.close(); }
+  } finally { f.close(); }
 });
 
 void test('revocation can be requested even if current legal-version configuration is unavailable', async () => {
@@ -627,7 +707,7 @@ void test('revocation can be requested even if current legal-version configurati
     assert.equal(response.status, 200);
     assert.equal(response.body.deletionStatus, 'pending');
     assert.equal(f.sqlite.prepare('SELECT status FROM sync_subjects').get().status, 'withdrawn');
-  } finally { f.sqlite.close(); }
+  } finally { f.close(); }
 });
 
 void test('missing withdrawal schema fails closed without changing consent state', async () => {
@@ -638,7 +718,7 @@ void test('missing withdrawal schema fails closed without changing consent state
     const response = await call(f, '/v1/consent/withdraw', { body: withdrawal });
     assert.equal(response.status, 503);
     assert.equal(f.sqlite.prepare('SELECT status FROM sync_subjects').get().status, 'active');
-  } finally { f.sqlite.close(); }
+  } finally { f.close(); }
 });
 
 void test('a job insert for a mismatched generation aborts and cannot revoke a different subject', async () => {
@@ -652,7 +732,7 @@ void test('a job insert for a mismatched generation aborts and cannot revoke a d
     `).run(f.uid, Date.now()), /withdrawal-fenced/);
     assert.equal(count(f.sqlite, 'health_erasure_jobs'), 0);
     assert.equal(f.sqlite.prepare('SELECT status FROM sync_subjects').get().status, 'active');
-  } finally { f.sqlite.close(); }
+  } finally { f.close(); }
 });
 
 void test('withdrawal replay stays acknowledged as processing while erasure is incomplete', async () => {
@@ -667,7 +747,7 @@ void test('withdrawal replay stays acknowledged as processing while erasure is i
     assert.equal(repeated.body.deletionStatus, 'processing');
     assert.equal((await call(f, '/v1/consent/status')).body.status, 'withdrawn');
     assert.equal(f.sqlite.prepare('SELECT status,phase FROM health_erasure_jobs').get().phase, 'awaiting-keys');
-  } finally { f.sqlite.close(); }
+  } finally { f.close(); }
 });
 
 void test('terminal erasure keeps consent status readable without restoring the fitness grant', async () => {
@@ -675,13 +755,13 @@ void test('terminal erasure keeps consent status readable without restoring the 
   try {
     assert.equal((await call(f, '/v1/consent/initial', { body: acceptance })).status, 200);
     assert.equal((await call(f, '/v1/consent/withdraw', { body: withdrawal })).status, 200);
-    assert.equal((await runOneHealthErasureStep(f.db)).outcome, 'awaiting-keys');
+    assert.equal((await erasureWorker.scheduled({}, f.env)).outcome, 'awaiting-keys');
     // Advance the synthetic lease clock; the genuine bounded finalizer
     // must produce the immutable SQL proof and advance only the subject.
     f.sqlite.prepare(
       "UPDATE health_erasure_jobs SET lease_until_ms=? WHERE uid=? AND status='processing'"
     ).run(Date.now() - 1000, f.uid);
-    assert.deepEqual(await runOneHealthErasureStep(f.db),
+    assert.deepEqual(await erasureWorker.scheduled({}, f.env),
       { outcome: 'complete', keyDisposition: 'never-issued' });
 
     const state = f.sqlite.prepare([
@@ -716,7 +796,7 @@ void test('terminal erasure keeps consent status readable without restoring the 
     assert.equal(denied.status, 401);
     assert.equal(count(f.sqlite, 'cloud_account_keys'), 0);
     assert.equal(count(f.sqlite, 'sync_documents'), 0);
-  } finally { f.sqlite.close(); }
+  } finally { f.close(); }
 });
 
 void test('a forged future withdrawn epoch without an immutable erasure proof is never readable', async () => {
@@ -732,5 +812,5 @@ void test('a forged future withdrawn epoch without an immutable erasure proof is
     assert.equal('status' in result.body, false);
     assert.equal(count(f.sqlite, 'health_erasure_finalizations'), 0);
     assert.equal(f.sqlite.prepare('SELECT status FROM health_erasure_jobs').get().status, 'pending');
-  } finally { f.sqlite.close(); }
+  } finally { f.close(); }
 });
