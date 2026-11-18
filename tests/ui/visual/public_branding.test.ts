@@ -10,7 +10,7 @@ describe('public TheLogBook branding', () => {
     const app = readFileSync('src/App.tsx', 'utf8');
     const brandLoadingScreen = readFileSync('src/components/UI/BrandLoadingScreen.tsx', 'utf8');
     const homeHeader = readFileSync('src/components/Home/widgets/HeaderDashboard.tsx', 'utf8');
-    const loginBox = readFileSync('src/components/UI/LoginBox.tsx', 'utf8');
+    const kindeEntry = readFileSync('src/components/UI/KindeAccountEntry.tsx', 'utf8');
 
     expect(viteConfig).toContain("name: 'TheLogBook'");
     expect(viteConfig).toContain("short_name: 'TheLogBook'");
@@ -64,6 +64,7 @@ describe('public TheLogBook branding', () => {
     expect(appearanceCss.slice(appearanceCss.indexOf('.brand-loading-screen {'))).not.toContain('#00e5ff;');
     expect(homeHeader).toContain('<h1>TheLogBook</h1>');
     expect(app).toContain('<h1 className="auth-entry-title">TheLogBook</h1>');
-    expect(loginBox).toContain('>TheLogBook</h1>');
+    expect(kindeEntry).toContain('TheLogBook · Accesso Kinde');
+    expect(app).toContain('<KindeAccountEntry identityOnly onLocalGuest={loginAsGuest} />');
   });
 });

@@ -37,10 +37,10 @@ describe('scala tipografica canonica', () => {
     expect(prepaintTokens).toMatch(/--font-size-brand-title:\s*2\.25rem/);
     const uiSurfaces = fs.readFileSync(path.join(ROOT, 'src/styles/ui-surfaces.css'), 'utf8');
     expect(uiSurfaces).toMatch(/\.auth-entry-title\s*\{[^}]*font-size:\s*var\(--font-size-brand-title\);\s*font-weight:\s*800/);
-    expect(uiSurfaces).toMatch(/#auth-login-box \.auth-entry-title\s*\{[^}]*font-size:\s*min\(var\(--font-size-brand-title\),\s*9vw\)/);
-    const loginBox = fs.readFileSync(path.join(ROOT, 'src/components/UI/LoginBox.tsx'), 'utf8');
-    expect(loginBox).toContain('className="ui-login-box-2 auth-entry-title"');
-    expect(loginBox).toContain('>TheLogBook</h1>');
+    const app = fs.readFileSync(path.join(ROOT, 'src/App.tsx'), 'utf8');
+    const kindeEntry = fs.readFileSync(path.join(ROOT, 'src/components/UI/KindeAccountEntry.tsx'), 'utf8');
+    expect(app).toContain('className="auth-entry-title">TheLogBook</h1>');
+    expect(kindeEntry).toContain('className="auth-login-card ui-login-box-1"');
   });
 
   it('non introduce dimensioni CSS arbitrarie nel codice applicativo', () => {

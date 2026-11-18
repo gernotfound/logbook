@@ -9,6 +9,10 @@
 
 **Autorità:** [`AGENTS.md`](../../AGENTS.md). Questo contratto ne specializza gli invarianti; non amplia autorizzazioni o perimetro.
 
+### Ritiro schermata login Firebase (18/11/2026, v2.523.0 candidata)
+
+Il componente non montato `LoginBox` e i relativi test esclusivamente legacy sono stati eliminati. L'ingresso account in `App.tsx` continua a montare `KindeAccountEntry identityOnly` e la scelta guest rimane limitata allo stesso owner/vault, senza adozione cloud. Il ritiro della UI **non** ritira `AuthProvider` né gli SDK ancora importati dal lifecycle guest/account, storage e consenso: non presentarli come rimossi finché i chiamanti e i trasporti Workers/D1 non sono convertiti e verificati. Regressioni di branding, tema e ingresso Kinde sostituiscono gli assert del vecchio form.
+
 ### Ingresso guest: non invocare la registrazione Firebase (17/11/2026)
 
 Senza un trasferimento guest→Kinde collaudato, l'overlay guest non può montare `LoginBox` e la scheda Account ospite non deve offrire registrazione Firebase Google/email. Un dialog non distruttivo e con focus confinato spiega la sospensione e permette di ritornare ai dati locali; resta invariato il logout guest protetto. L'apertura/chiusura non modifica owner, generazione, vault o journal, né interroga Kinde. Non confondere il blocco UI con l'effettiva rimozione del vecchio `AuthProvider` o con la realizzazione del trasferimento a Kinde.
