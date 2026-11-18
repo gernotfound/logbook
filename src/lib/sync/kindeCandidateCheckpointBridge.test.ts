@@ -74,6 +74,11 @@ describe('Kinde and encrypted D1 complete checkpoint observation', () => {
             revision: 1, fenceEpoch: 1, consentRevision: 1,
         });
         expect(observation.checkpoint.documents.get('')?.business).toEqual(business);
+        expect(observation.legalConsent).toEqual({
+            hasAcceptedTerms: true, hasAcceptedHealthData: true,
+            acceptedAt: '2026-11-16T00:00:00.000Z',
+            privacyVersion: LEGAL_VERSIONS.privacy, termsVersion: LEGAL_VERSIONS.terms,
+        });
         expect(vi.mocked(send).mock.calls.map(call => call[0])).toEqual([
             '/api/auth/session', '/v1/consent/status', '/api/auth/session',
             '/v1/cloud-key/sync', '/v1/sync/scan',
@@ -174,6 +179,18 @@ describe('Kinde and encrypted D1 complete checkpoint observation', () => {
             await expect(inspect(send)).rejects.toBeInstanceOf(KindeCandidateBoundaryError);
             expect(vi.mocked(send).mock.calls.filter(call => call[0] === '/v1/sync/scan')).toHaveLength(1);
         }
+    });
+
+    it('rejects a changed trusted legal receipt during a complete scan even when UID and revision match', async () => {
+        const altered = { ...consent(), acceptedAt: '2026-11-15T00:00:00.000Z' };
+        const send = responses(...authorized(), json(keyResponse()), json(scan()),
+            json(session()), json(altered), json(session()));
+        await expect(inspect(send)).rejects.toBeInstanceOf(KindeCandidateBoundaryError);
+        expect(vi.mocked(send).mock.calls.map(([path]) => path)).toEqual([
+            '/api/auth/session', '/v1/consent/status', '/api/auth/session',
+            '/v1/cloud-key/sync', '/v1/sync/scan',
+            '/api/auth/session', '/v1/consent/status', '/api/auth/session',
+        ]);
     });
 
     it('does not substitute an empty checkpoint for failed scan or unavailable cloud ADK', async () => {

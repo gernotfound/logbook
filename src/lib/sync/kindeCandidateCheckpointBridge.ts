@@ -15,6 +15,7 @@ export type KindeCandidateCheckpointObservation = {
     kind: 'checkpoint-observed';
     principal: Principal;
     checkpoint: AuthenticatedCloudflareCheckpoint;
+    legalConsent: Extract<KindeCandidateAccess, { kind: 'consent-confirmed' }>['legalConsent'];
 };
 
 /**
@@ -77,10 +78,16 @@ export async function inspectKindeCandidateCloudCheckpoint({
         if (after.kind !== 'consent-confirmed' || after.principal.uid !== uid
             || after.principal.fenceEpoch !== fenceEpoch
             || after.principal.healthConsentRevision !== healthConsentRevision
+            // A revised legal receipt at unchanged UID/epoch/revision must
+            // not be installed from a mixed two-read server observation.
+            || after.legalConsent.acceptedAt !== before.legalConsent.acceptedAt
+            || after.legalConsent.privacyVersion !== before.legalConsent.privacyVersion
+            || after.legalConsent.termsVersion !== before.legalConsent.termsVersion
             || !current()) {
             throw new KindeCandidateBoundaryError();
         }
-        return { kind: 'checkpoint-observed', principal: after.principal, checkpoint };
+        return { kind: 'checkpoint-observed', principal: after.principal,
+            checkpoint, legalConsent: { ...after.legalConsent } };
     } finally {
         // A cloud key is a capability for this operation only.
         accountKey.fill(0);

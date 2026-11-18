@@ -1,4 +1,5 @@
 import { LEGAL_VERSIONS } from '../legalVersions';
+import type { LegalConsent } from '../../types';
 import {
     CloudReplicaTransportError, createCloudflareReplicaTransport,
     type CloudReplicaControlSnapshot,
@@ -25,7 +26,7 @@ export type KindeCandidateAccess =
     | { kind: 'signed-out' }
     | { kind: 'consent-required'; principal: CandidatePrincipal }
     | { kind: 'legal-update-required'; principal: CandidatePrincipal }
-    | { kind: 'consent-confirmed'; principal: CandidatePrincipal }
+    | { kind: 'consent-confirmed'; principal: CandidatePrincipal; legalConsent: LegalConsent }
     | { kind: 'consent-suspended'; principal: CandidatePrincipal; status: 'withdrawn' | 'deleting' | 'deleted' };
 
 function record(value: unknown): value is Record<string, unknown> {
@@ -182,7 +183,24 @@ function consentState(value: unknown, owner: CandidatePrincipal): KindeCandidate
             || value.termsVersion !== LEGAL_VERSIONS.terms) {
             return { kind: 'legal-update-required', principal: owner };
         }
-        return { kind: 'consent-confirmed', principal: owner };
+        // D1 emits an ISO UTC timestamp from the primary consent record.
+        // Do not turn an unparseable, ambiguous or future date into a
+        // device-local legal acceptance.
+        const acceptedAt = value.acceptedAt;
+        const acceptedMs = Date.parse(acceptedAt);
+        if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(acceptedAt)
+            || !Number.isFinite(acceptedMs) || acceptedMs <= 0
+            || acceptedMs > Date.now() || new Date(acceptedMs).toISOString() !== acceptedAt) {
+            throw new KindeCandidateBoundaryError();
+        }
+        return {
+            kind: 'consent-confirmed', principal: owner,
+            legalConsent: {
+                hasAcceptedTerms: true, hasAcceptedHealthData: true,
+                acceptedAt, privacyVersion: value.privacyVersion,
+                termsVersion: value.termsVersion,
+            },
+        };
     }
     if (value.status === 'withdrawn' || value.status === 'deleting' || value.status === 'deleted') {
         if (!exactKeys(value, ['uid', 'status', 'revision', 'fenceEpoch']) || value.revision < 1) {
