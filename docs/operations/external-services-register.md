@@ -256,3 +256,13 @@ sostituzione è ancora parte delle issue CF-03/04/05/06/09. I workflow
 Firestore non vanno disabilitati finché i dati e le responsabilità live non
 sono stati verificati. Non utilizzare questo incremento come prova del GO
 funzionale o della revoca delle autorizzazioni del provider.
+
+## CF-08 recovery schema — verifiche provider 18/11/2026 (VERIFY-LIVE)
+
+D1 recovery EU: migrations 0001-0002, stato sealed, generation 1, owner 0,
+Time Travel bookmark presente. D1 applicativa EU: migrations 0001-0010,
+2 identities e 24 sessions, ma zero chiavi dati cloud e zero erasure jobs.
+Questi record non autorizzano un reset ne' una riqualificazione come
+sintetici senza inventario. Il workflow operativo recovery D1 manual-only
+prepara la verifica e migrazione 0003-0004 in via indipendente e chiusa;
+non attiva automaticamente trattamenti dati o nuovi endpoint.
