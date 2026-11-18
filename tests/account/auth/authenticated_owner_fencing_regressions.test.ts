@@ -79,7 +79,7 @@ describe('Authenticated owner identity and local purge fencing', () => {
         expect(readAuthenticatedOwnerHint()).toBeNull();
     });
 
-    it('keeps the hinted authenticated owner authoritative while Firebase Auth is still unresolved', () => {
+    it('keeps the hint only while a legacy provider is mounted but has not resolved Auth', () => {
         const previous = (auth as any).currentUser;
         try {
             (auth as any).currentUser = null;

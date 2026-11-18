@@ -19,9 +19,12 @@ import { updateArchiveRecord } from '../../../src/lib/sync/secureArchiveReposito
 import { createAndMigrateVault } from '../../../src/lib/sync/secureArchiveMigration';
 import { lockAllVaults } from '../../../src/lib/sync/secureArchiveSession';
 import { rememberAuthenticatedOwner } from '../../../src/lib/sync/authOwnerHint';
+import { authenticatedIdentitySource } from '../../../src/lib/sync/authenticatedIdentitySource';
 import { captureSessionForOwner, invalidateSession, isCurrentSession } from '../../../src/lib/sync/session';
 
 const owner = 'user:consent-reconciliation';
+const readSyntheticOwner = () => ({ uid: owner.slice(5) });
+let releaseSyntheticOwner: (() => void) | null = null;
 const key = 'logbook:v2:' + owner;
 const generationKey = key + ':health-consent-generation';
 const catalog: CachedGlobalCatalog = {
@@ -41,6 +44,7 @@ const previousConsent = legal('2026-11-01T10:00:00.000Z');
 const rejectedConsent = legal('2026-11-09T10:00:00.000Z');
 
 beforeEach(async () => {
+    releaseSyntheticOwner = authenticatedIdentitySource.install(readSyntheticOwner);
     await clear();
     lockAllVaults();
     localStorage.clear();
@@ -51,6 +55,8 @@ beforeEach(async () => {
     await createAndMigrateVault(owner);
 });
 afterEach(() => {
+    releaseSyntheticOwner?.();
+    releaseSyntheticOwner = null;
     lockAllVaults();
     vi.unstubAllGlobals();
     vi.restoreAllMocks();

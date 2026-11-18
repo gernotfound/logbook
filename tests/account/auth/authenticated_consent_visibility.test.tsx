@@ -25,7 +25,7 @@ it('removes an authenticated fitness view on another tab withdrawal before the t
     { default: App }, { AuthContext, defaultAuthContext }, { DB },
     { loadAuthenticatedData }, { auth }, { LEGAL_VERSIONS }, { UserDataSchema },
     { useAppStore }, { initializeLocal, commitLocal, readLocal },
-    { prepareUnlockedTestArchive }, policy,
+    { prepareUnlockedTestArchive }, policy, { authenticatedIdentitySource },
   ] = await Promise.all([
     import('../../../src/App'), import('../../../src/contexts/AuthContextDef'),
     import('../../../src/lib/db'), import('../../../src/contexts/auth/loadAuthenticatedData'),
@@ -33,6 +33,7 @@ it('removes an authenticated fitness view on another tab withdrawal before the t
     import('../../../src/lib/schema'), import('../../../src/store/useAppStore'),
     import('../../../src/lib/sync/localRepository'), import('../../secureVaultFixture'),
     import('../../../src/lib/healthConsent'),
+    import('../../../src/lib/sync/authenticatedIdentitySource'),
   ]);
   const {
     beginHealthConsentVerification, refreshHealthConsent,
@@ -41,6 +42,8 @@ it('removes an authenticated fitness view on another tab withdrawal before the t
   expect(vi.isMockFunction(policy.requireHealthConsentWritable)).toBe(false);
   useAppStore.getState().resetStore({ force: true });
   const actor = auth.currentUser!;
+  // resetModules creates a fresh source with no active provider.
+  const releaseIdentity = authenticatedIdentitySource.install(() => auth.currentUser);
   const owner = 'user:' + actor.uid;
   await prepareUnlockedTestArchive(owner);
   const base = UserDataSchema.parse({
@@ -125,4 +128,5 @@ it('removes an authenticated fitness view on another tab withdrawal before the t
   expect(await get('logbook:v2:' + owner)).toBe(ciphertext);
   expect(await readLocal(owner)).toEqual(original);
   view.unmount();
+  releaseIdentity();
 });

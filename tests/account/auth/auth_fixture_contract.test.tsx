@@ -4,8 +4,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createUserWithEmailAndPassword, getAuth, initializeAuth, onAuthStateChanged, signInWithEmailAndPassword, signInWithPopup, signOut } from 'firebase/auth';
 import { auth } from '../../../src/lib/firebase';
 import { watchDeletionRecoveryDeviceRegistration } from '../../../src/lib/deletionDeviceRecovery';
-import { mockFirebaseAuth, renderWithProviders } from '../../setup';
+import { mockFirebaseAuth, renderWithProviders, releaseLegacyTestIdentityReader } from '../../setup';
 import { createAndMigrateVault } from '../../../src/lib/sync/secureArchiveMigration';
+import { authenticatedIdentitySource } from '../../../src/lib/sync/authenticatedIdentitySource';
 
 describe('shared Firebase Auth UI fixture contract', () => {
   beforeEach(() => {
@@ -86,6 +87,15 @@ describe('shared Firebase Auth UI fixture contract', () => {
     expect(credential.user.emailVerified).toBe(true);
     expect(observer).toHaveBeenLastCalledWith(credential.user);
     expect(observer).toHaveBeenCalledTimes(2);
+  });
+
+  it('binds the legacy Firebase identity only during an actual AuthProvider mount', () => {
+    releaseLegacyTestIdentityReader();
+    expect(authenticatedIdentitySource.readUid()).toBeNull();
+    const { unmount } = renderWithProviders(<div>Test lifecycle reader</div>);
+    expect(authenticatedIdentitySource.readUid()).toBe(auth.currentUser?.uid);
+    unmount();
+    expect(authenticatedIdentitySource.readUid()).toBeNull();
   });
 
   it('does not trigger device-recovery HTTP calls when a UI test mounts AuthProvider', async () => {

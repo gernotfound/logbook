@@ -5,8 +5,10 @@ import { GuestOnlyAuthProvider } from '../../../src/contexts/GuestOnlyAuthProvid
 import { useAuth } from '../../../src/hooks/useAuth';
 import { useAppStore } from '../../../src/store/useAppStore';
 import { DB } from '../../../src/lib/db';
-import { onAuthStateChanged } from '../../../src/lib/firebase';
-import { activateGuestSession, GUEST_REVOCATION_KEY, GUEST_SESSION_KEY } from '../../../src/lib/sync/session';
+import { auth, onAuthStateChanged } from '../../../src/lib/firebase';
+import { releaseLegacyTestIdentityReader } from '../../setup';
+import { authenticatedIdentitySource } from '../../../src/lib/sync/authenticatedIdentitySource';
+import { activateGuestSession, captureSession, GUEST_REVOCATION_KEY, GUEST_SESSION_KEY, storageOwner } from '../../../src/lib/sync/session';
 
 function restoreGuest(id: string) {
     localStorage.setItem('logbook_is_guest', 'true');
@@ -20,6 +22,7 @@ const wrapper = ({ children }: { children: React.ReactNode }) =>
 
 describe('Kinde-first guest provider: no legacy account activation', () => {
     beforeEach(() => {
+        releaseLegacyTestIdentityReader();
         localStorage.clear();
         useAppStore.getState().resetStore({ force: true });
         vi.clearAllMocks();
@@ -32,6 +35,31 @@ describe('Kinde-first guest provider: no legacy account activation', () => {
         expect(result.current.isGuest).toBe(false);
         expect(result.current.loading).toBe(false);
         expect(onAuthStateChanged).not.toHaveBeenCalled();
+    });
+
+    it('does not adopt a persisted Firebase user as the owner of a Kinde-first session', () => {
+        const previousUser = auth.currentUser;
+        (auth as { currentUser: unknown }).currentUser = { uid: 'retired-firebase-uid' };
+        try {
+            const { result } = renderHook(() => useAuth(), { wrapper });
+            expect(result.current.currentUser).toBeNull();
+            expect(authenticatedIdentitySource.readUid()).toBeNull();
+            localStorage.setItem('logbook_authenticated_owner', 'user:retired-firebase-uid');
+            expect(storageOwner()).toBe('guest');
+            expect(localStorage.getItem('logbook_authenticated_owner')).toBe('user:retired-firebase-uid');
+            expect(captureSession().owner).toBe('guest');
+            expect(onAuthStateChanged).not.toHaveBeenCalled();
+        } finally {
+            (auth as { currentUser: unknown }).currentUser = previousUser;
+        }
+    });
+
+    it('does not treat a corrupt historical owner hint as safe guest absence', () => {
+        renderHook(() => useAuth(), { wrapper });
+        localStorage.setItem('logbook_authenticated_owner', 'user:invalid/owner');
+        expect(() => storageOwner()).toThrow('Owner autenticato locale non valido');
+        expect(localStorage.getItem('logbook_authenticated_owner')).toBe('user:invalid/owner');
+        expect(authenticatedIdentitySource.hasReader()).toBe(false);
     });
 
     it('rejects legacy sign-in and registration rather than silently treating them as Kinde credentials', async () => {

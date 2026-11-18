@@ -5,14 +5,17 @@ describe('provider-neutral authenticated identity source', () => {
     it('is signed-out until an explicit provider reader is registered', () => {
         const source = createAuthenticatedIdentitySource();
         expect(source.readUid()).toBeNull();
+        expect(source.hasReader()).toBe(false);
         const state: { uid: string } = { uid: 'k_' + 'A'.repeat(43) };
         const read = vi.fn(() => state);
         const dispose = source.install(read);
+        expect(source.hasReader()).toBe(true);
         expect(source.readUid()).toBe(state.uid);
         state.uid = 'k_' + 'B'.repeat(43);
         expect(source.readUid()).toBe(state.uid);
         expect(read).toHaveBeenCalledTimes(2);
         dispose();
+        expect(source.hasReader()).toBe(false);
         expect(source.readUid()).toBeNull();
     });
 
@@ -26,6 +29,24 @@ describe('provider-neutral authenticated identity source', () => {
         source.install(() => ({ uid: 'account-b' }));
         release();
         expect(source.readUid()).toBe('account-b');
+    });
+
+    it('keeps a shared provider installed until the final mount releases its lease', () => {
+        const source = createAuthenticatedIdentitySource();
+        const read = () => ({ uid: 'provider-a' });
+        const first = source.install(read);
+        const second = source.install(read);
+        expect(source.readUid()).toBe('provider-a');
+        first();
+        expect(source.readUid()).toBe('provider-a');
+        expect(() => source.install(() => ({ uid: 'provider-b' }))).toThrow();
+        second();
+        expect(source.readUid()).toBeNull();
+        const third = source.install(() => ({ uid: 'provider-b' }));
+        first();
+        expect(source.readUid()).toBe('provider-b');
+        third();
+        expect(source.readUid()).toBeNull();
     });
 
     it('fails closed on malformed identity and reader errors rather than falling back to an old UID', () => {

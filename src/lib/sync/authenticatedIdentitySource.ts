@@ -9,16 +9,24 @@ export type AuthenticatedIdentityReader = () => { readonly uid: unknown } | null
 
 export function createAuthenticatedIdentitySource() {
     let reader: AuthenticatedIdentityReader | null = null;
+    let leases = 0;
 
     const install = (next: AuthenticatedIdentityReader): (() => void) => {
         if (typeof next !== 'function' || (reader !== null && reader !== next)) {
             throw new Error('Provider di identità già associato alla sessione corrente');
         }
         reader = next;
-        // The disposer is used only at a full provider teardown. It cannot
-        // remove a newer source and thereby resurrect an older owner.
+        leases += 1;
+        let disposed = false;
         return () => {
-            if (reader === next) reader = null;
+            if (disposed) return;
+            disposed = true;
+            // Two mounts of the same provider may coexist during React
+            // transitions. One cleanup must not revoke the other mount's
+            // active reader; a stale disposer cannot remove a replacement.
+            if (reader !== next) return;
+            leases -= 1;
+            if (leases === 0) reader = null;
         };
     };
 
@@ -33,7 +41,11 @@ export function createAuthenticatedIdentitySource() {
         return identity.uid;
     };
 
-    return { install, readUid };
+    // A persisted owner hint is not a session: the caller may consider it
+    // only when an explicit provider has accepted responsibility for Auth.
+    const hasReader = (): boolean => reader !== null;
+
+    return { install, readUid, hasReader };
 }
 
 export const authenticatedIdentitySource = createAuthenticatedIdentitySource();
