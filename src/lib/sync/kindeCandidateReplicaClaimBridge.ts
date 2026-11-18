@@ -135,7 +135,7 @@ export async function claimKindeCandidateReplica({
             assertAccess(afterScan, principal, first.legalConsent);
             requireCurrent();
             await stageCloudflareReplicaClaim(
-                owner, checkpoint, control, crypto.randomUUID(), current,
+                owner, checkpoint, control, crypto.randomUUID(), current, local.revision,
             );
         }
 

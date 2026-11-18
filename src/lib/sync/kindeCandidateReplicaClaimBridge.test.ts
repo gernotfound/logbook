@@ -98,7 +98,7 @@ describe('Kinde candidate membership orchestration (not mounted in the PWA)', ()
         expect(adapters.control).toHaveBeenCalledTimes(2);
         expect(adapters.verifyCheckpoint).toHaveBeenCalledOnce();
         expect(adapters.stage).toHaveBeenCalledWith(
-            'user:' + UID, checkpoint, control, expect.any(String), expect.any(Function),
+            'user:' + UID, checkpoint, control, expect.any(String), expect.any(Function), 1,
         );
         expect(adapters.stage.mock.calls[0][3]).toMatch(/^[0-9a-f-]{36}$/);
         expect(adapters.resume).toHaveBeenCalledWith(
