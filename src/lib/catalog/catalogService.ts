@@ -14,6 +14,7 @@
 
 import { get as idbGet, set as idbSet, del as idbDel } from 'idb-keyval';
 import {
+    type CatalogManifest,
     type CatalogFood,
     type CachedGlobalCatalog
 } from '../../types';
