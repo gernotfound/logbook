@@ -2,12 +2,18 @@
 
 ### Confine lettore di identità autenticata indipendente dal provider (17/11/2026, candidato)
 
-`src/lib/sync/session.ts` non importa più Firebase direttamente. Il lettore sincrono di identità è registrato dal **solo provider attivo** e restituisce `null` se non è autenticato; un secondo provider concorrente, un UID malformato o un errore della sorgente falliscono chiusi. La registrazione legacy corrente vive temporaneamente in `src/lib/firebase.ts`. Per il passaggio a Kinde sarà obbligatorio rimuovere il vecchio provider e registrare la sorgente soltanto dopo la verifica della sessione Kinde, con fencing delle sue generazioni. La sola presenza di un UID non sblocca vault, consenso o operazioni D1.
+`src/lib/sync/session.ts` non importa più Firebase direttamente. Il lettore sincrono di identità è registrato dal **solo provider attivo** e restituisce `null` se non è autenticato; un secondo provider concorrente, un UID malformato o un errore della sorgente falliscono chiusi. La registrazione legacy esiste soltanto mentre il vecchio `AuthProvider` è montato: l'import di `src/lib/firebase.ts` non registra più alcun UID. Il consumer Kinde-first non installa ancora un owner autenticato. Per il passaggio a Kinde sarà obbligatorio rimuovere il vecchio provider e registrare la sorgente soltanto dopo la verifica della sessione Kinde, con fencing delle sue generazioni. La sola presenza di un UID non sblocca vault, consenso o operazioni D1.
 
 **Quando leggere:** email verificata, accesso guest→account, sessioni, account deletion, logout e purge.
 **Non inferire:** Auth assente, timeout o tombstone scaduto non provano cancellazione completa né autorizzano purge locale.
 
 **Autorità:** [`AGENTS.md`](../../AGENTS.md). Questo contratto ne specializza gli invarianti; non amplia autorizzazioni o perimetro.
+
+### Isolamento del lettore UID Firebase non montato (18/11/2026, v2.525.0)
+
+Il modulo `src/lib/firebase.ts` può ancora essere importato per i servizi legacy, ma **non registra più automaticamente `auth.currentUser`** come fonte di owner locale. Il vecchio `src/contexts/AuthContext.tsx` installa il reader soltanto durante il montaggio di quel provider e lo rilascia allo smontaggio. `authenticatedIdentitySource.install` conserva il reader quando esistono più mount dello **stesso** provider e rifiuta un provider concorrente diverso. Un disposer tardivo è innocuo. In produzione Kinde-first, dove è montato solo `GuestOnlyAuthProvider`, un UID Firebase persistito non può essere letto da `storageOwner()` come utente attivo né autorizzare il purge come identità corrente. I marker owner-scoped corrotti o non verificati restano fence separati e non vanno eliminati per comodità.
+
+Non è il ritiro del client Firebase: `initializeAuth`, App Check e i chiamanti legacy sono ancora importabili/caricabili e alcuni possono eseguire I/O; l'account Kinde verificato non sblocca vault/consenso/journal. Niente GO API/fitness.
 
 ### Bootstrap Kinde-first senza AuthProvider Firebase (18/11/2026, v2.524.0 candidato)
 
