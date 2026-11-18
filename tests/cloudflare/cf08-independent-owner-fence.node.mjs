@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { test } from 'node:test';
+import { RECOVERY_MIGRATIONS, verifyLocalRecoveryTarget, verifyRecoveryLedger, verifyRecoverySnapshot } from '../../scripts/verify-cloudflare-recovery-d1-schema.mjs';
 import { applyCurrentD1RecoverySchema, applyCurrentD1Schema } from './current-d1-schema.mjs';
 import { runOneHealthErasureStep } from '../../cloudflare/jobs/health-erasure-worker.mjs';
 import { inspectRestoredD1Census } from '../../cloudflare/recovery/restore-census.mjs';
@@ -392,4 +393,45 @@ void test('operator census rejects owner counts beyond its bounded D1 read budge
     app.close();
     ledger.close();
   }
+});
+
+
+void test('recovery operator pins isolation and additive migration set', () => {
+  const config = JSON.parse(readFileSync(
+    new URL('../../cloudflare/api/wrangler.isolated.jsonc', import.meta.url), 'utf8'));
+  assert.doesNotThrow(() => verifyLocalRecoveryTarget(config, RECOVERY_MIGRATIONS));
+  assert.throws(() => verifyLocalRecoveryTarget(config, [...RECOVERY_MIGRATIONS, '0005_unknown.sql']));
+  assert.throws(() => verifyLocalRecoveryTarget({
+    ...config, d1_databases: [{ ...config.d1_databases[0] }, {
+      ...config.d1_databases[1], database_id: config.d1_databases[0].database_id,
+    }],
+  }, RECOVERY_MIGRATIONS));
+});
+
+void test('recovery operator accepts only contiguous known migrations', () => {
+  const rows = RECOVERY_MIGRATIONS.map((name, i) => ({ id: i + 1, name }));
+  assert.equal(verifyRecoveryLedger(rows.slice(0, 2), 'before'), 2);
+  assert.equal(verifyRecoveryLedger(rows.slice(0, 3), 'before'), 3);
+  assert.equal(verifyRecoveryLedger(rows, 'after'), 4);
+  assert.throws(() => verifyRecoveryLedger(rows.slice(0, 2), 'after'));
+  assert.throws(() => verifyRecoveryLedger([{ ...rows[0], name: 'bad.sql' }, rows[1]], 'before'));
+  assert.throws(() => verifyRecoveryLedger([rows[0], rows[2]], 'before'));
+});
+
+void test('recovery operator fails closed for opened, populated or wrong-jurisdiction D1', () => {
+  const metadata = { uuid: '19dad53f-0dda-4503-b161-758ac8cb7b21',
+    name: 'thelogbook-cf08-fence-eu-isolated-20261116',
+    jurisdiction: 'eu', read_replication: { mode: 'disabled' } };
+  const ledger = RECOVERY_MIGRATIONS.slice(0, 2).map((name, i) => ({ id: i + 1, name }));
+  const control = [{ mode: 'sealed', generation: 1, owners: 0, cutoffs: 0 }];
+  const original = { metadata, bookmark: 'synthetic-checkpoint', ledger, control, phase: 'before' };
+  assert.equal(verifyRecoverySnapshot(original).applied, 2);
+  for (const change of [
+    { control: [{ ...control[0], mode: 'open' }] },
+    { control: [{ ...control[0], owners: 1 }] },
+    { metadata: { ...metadata, jurisdiction: 'apac' } },
+    { metadata: { ...metadata, uuid: 'unexpected' } },
+    { bookmark: '' },
+  ]) assert.throws(() => verifyRecoverySnapshot({ ...original, ...change }));
+  assert.throws(() => verifyRecoverySnapshot({ ...original, phase: 'after' }));
 });

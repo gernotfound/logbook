@@ -689,3 +689,23 @@ Firebase sul bordo pubblico, non della rimozione dell'SDK Firebase dal bundle
 o dall'AuthProvider, né della sostituzione del journal Firestore. Fino alla
 sostituzione verificata, l'app account e i suoi servizi cloud restano NO-GO
 e non vengono riparati con un fallback al vecchio provider.
+
+### CF-08 — operatore per migrazioni del registro indipendente (18/11/2026)
+
+Il D1 applicativo e' gia' a migration 0010, mentre il registro recovery
+indipendente risulta a 0002. Il nuovo workflow Cloudflare recovery D1
+e' manual-only, main-only: applica via Wrangler soltanto 0003
+(pending to blocked) e 0004 (cutoff erasure), senza aprire la modalita'
+sealed, creare account, esporre route o cambiare i dati applicativi.
+
+Prima della scrittura controlla SHA di main e relativo release gate,
+target D1 esatto, ledger continuo, giurisdizione EU, repliche disabilitate,
+bookmark Time Travel, modalita' sealed e zero proprietari. Dopo l'operazione
+controlla le 4 migrazioni, trigger, tabella, coda cutoff vuota e stato sealed.
+Non usa il workflow precedente del D1 app, che legittimamente si ferma
+sulla presenza di identita': lettura live 18/11, 2 principals, 24 sessions,
+zero ADK e zero erasure jobs. Non dichiarare tali record eliminabili.
+
+Questo percorso non e' ancora una migrazione applicata: occorre la
+esecuzione manuale dell'Action e il relativo readback per certificare il
+provider. Non apre il gate di consenso, sync, chiavi o cancellazione.
