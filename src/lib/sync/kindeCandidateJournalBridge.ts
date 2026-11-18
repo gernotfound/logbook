@@ -45,7 +45,7 @@ export async function deliverKindeCandidateJournal({
     const { uid, fenceEpoch, healthConsentRevision } = access.principal;
     const owner = userOwner(uid);
     const local = await readLocal(owner);
-    if (!current() || !local || local.cloudIntegrityFence
+    if (!current() || !local || local.consentRevision !== healthConsentRevision || local.cloudIntegrityFence
         || local.cloudflareReplicaClaim || local.cloudflareReplicaRetirement) {
         throw new KindeCandidateBoundaryError();
     }
@@ -61,6 +61,7 @@ export async function deliverKindeCandidateJournal({
         if (!current()) throw new KindeCandidateBoundaryError();
         const result = await deliverCloudflareJournalCandidate(
             owner, key, createCloudflareReplicaTransport(send), fence.csrfToken, current,
+            { consentRevision: healthConsentRevision, fenceEpoch },
         );
         if (!current()) throw new KindeCandidateBoundaryError();
         return result;

@@ -10,6 +10,7 @@ type CandidateTransport = Pick<
     'control' | 'read' | 'commit' | 'receipt' | 'commitOutcome' | 'scanAll'
 >;
 type SessionGuard = () => boolean;
+type JournalAccessScope = Readonly<{ consentRevision: number; fenceEpoch: number }>;
 
 async function resumeOrRestage(
     owner: string,
@@ -45,6 +46,7 @@ export async function deliverCloudflareJournalCandidate(
     transport: CandidateTransport,
     csrfToken: string,
     guard: SessionGuard,
+    expected?: JournalAccessScope,
 ): Promise<'idle' | 'acknowledged' | 'retry-staged' | 'reconciliation-required'> {
     const owner = normalizeStorageOwner(ownerInput);
     if (!owner.startsWith('user:') || !(accountKey instanceof Uint8Array)
@@ -55,6 +57,12 @@ export async function deliverCloudflareJournalCandidate(
     const local = await readLocal(owner);
     requireCurrent(guard);
     if (!local) throw new Error('Archivio locale assente: nessuna consegna D1 autorizzata.');
+    if (expected && local.consentRevision !== expected.consentRevision) {
+        throw new Error('Consenso locale D1 differente: journal preservato.');
+    }
+    if (expected && local.cloudflareDelivery && local.cloudflareDelivery.batch.expectedFenceEpoch !== expected.fenceEpoch) {
+        throw new Error('Intento D1 di un’altra epoca: journal preservato per il recupero.');
+    }
     if (local.cloudIntegrityFence || local.cloudflareReplicaClaim || local.cloudflareReplicaRetirement) {
         throw new Error('Replica D1 non pronta: journal locale preservato.');
     }
@@ -94,6 +102,9 @@ export async function deliverCloudflareJournalCandidate(
     requireCurrent(guard);
     if (control.consentRevision !== prepared.consentRevision) {
         throw new Error('Consenso cloud D1 differente: journal preservato.');
+    }
+    if (expected && control.fenceEpoch !== expected.fenceEpoch) {
+        throw new Error('Epoca cloud D1 differente: journal preservato.');
     }
     const snapshot = await transport.read(paths);
     requireCurrent(guard);
