@@ -32,11 +32,11 @@ import { clearAuthenticatedOwnerHint } from '../lib/sync/authOwnerHint';
 import { cancelLocalVaultReadiness } from '../lib/sync/secureArchiveUnlockFlow';
 import { lockVault } from '../lib/sync/secureArchiveSession';
 import { authenticatedIdentitySource } from '../lib/sync/authenticatedIdentitySource';
+import { readLegacyAuthenticatedIdentity } from './auth/legacyIdentityReader';
 import { readGuestMigrationSyncRecovery, markGuestMigrationSyncRecovery, clearGuestMigrationSyncRecovery } from '../lib/auth/guestMigrationSyncRecovery';
 
 // The legacy provider is test-only in the Kinde-first application. Importing
 // Firebase from a guest component must never install a Firebase UID as owner.
-export const readLegacyAuthenticatedIdentity = () => auth.currentUser;
 
 function isStoredGuest(): boolean {
     return readBrowserValueStrict(GUEST_KEY) === 'true' && readBrowserValueStrict(GUEST_REVOCATION_KEY) === null && isActiveGuestSession();
