@@ -36,7 +36,7 @@ import { readGuestMigrationSyncRecovery, markGuestMigrationSyncRecovery, clearGu
 
 // The legacy provider is test-only in the Kinde-first application. Importing
 // Firebase from a guest component must never install a Firebase UID as owner.
-const readLegacyAuthenticatedIdentity = () => auth.currentUser;
+export const readLegacyAuthenticatedIdentity = () => auth.currentUser;
 
 function isStoredGuest(): boolean {
     return readBrowserValueStrict(GUEST_KEY) === 'true' && readBrowserValueStrict(GUEST_REVOCATION_KEY) === null && isActiveGuestSession();
