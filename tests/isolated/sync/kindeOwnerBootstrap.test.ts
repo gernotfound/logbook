@@ -14,7 +14,7 @@ vi.mock('../../../src/lib/sync/kindeCandidateReplicaClaimBridge',
 import { LEGAL_VERSIONS } from '../../../src/lib/legalVersions';
 import { prepareKindeCandidateOwner } from '../../../src/lib/sync/kindeCandidateOwnerBootstrap';
 import { KindeCandidateBoundaryError } from '../../../src/lib/auth/kindeCandidateClient';
-import { readLocal } from '../../../src/lib/sync/localRepository';
+import { readLocal } from '../../../src/lib/sync/localArchiveBootstrap';
 import { lockAllVaults, readVaultControl, vaultControlKey } from '../../../src/lib/sync/secureArchiveSession';
 
 const uid = 'k_' + 'A'.repeat(43);
