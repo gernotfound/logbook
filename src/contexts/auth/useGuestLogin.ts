@@ -1,5 +1,4 @@
 import { useCallback, type Dispatch, type RefObject, type SetStateAction } from 'react';
-import { DB } from '../../lib/db';
 import { useAppStore } from '../../store/useAppStore';
 import { useDialogStore } from '../../store/useDialogStore';
 import { UserDataSchema } from '../../lib/schema';
@@ -30,6 +29,7 @@ type GuestLoginDependencies = {
     // The host provider supplies its opaque session object (never just a UID).
     // Equality after async locks rejects an account swap, including A→B→A.
     readAuthIdentity: () => unknown;
+    purgeGuest: () => Promise<unknown>;
     authRunRef: RefObject<number>;
     isGuestRef: RefObject<boolean>;
     setIsGuest: Dispatch<SetStateAction<boolean>>;
@@ -42,7 +42,7 @@ type GuestLoginDependencies = {
 // archive cleanup and vault readiness before publishing guest data.
 export function useGuestLogin({
     authRunRef, isGuestRef, setIsGuest, setGuestMigrationStatus, setUserData, setSaveError,
-    readAuthIdentity,
+    readAuthIdentity, purgeGuest,
 }: GuestLoginDependencies) {
     const loginAsGuest = useCallback(async (stillCurrent: () => boolean = () => true) => {
         const originalUser = readAuthIdentity();
@@ -60,7 +60,7 @@ export function useGuestLogin({
                 if (!isOriginalAttemptCurrent()) return;
                 clearAuthenticatedOwnerHint();
                 if (readBrowserValueStrict(GUEST_REVOCATION_KEY) !== null) {
-                    await DB.purgeAllLocalUserData('guest');
+                    await purgeGuest();
                     if (!isOriginalAttemptCurrent()) return;
                     // This realm might still hold the revoked guest's snapshot.
                     // Do not seed the new generation with data from that session.
@@ -126,7 +126,7 @@ export function useGuestLogin({
         setIsGuest(true);
         setGuestMigrationStatus('idle');
         if (nextData) setUserData(nextData);
-    }, [authRunRef, isGuestRef, setIsGuest, setGuestMigrationStatus, setSaveError, setUserData, readAuthIdentity]);
+    }, [authRunRef, isGuestRef, setIsGuest, setGuestMigrationStatus, setSaveError, setUserData, readAuthIdentity, purgeGuest]);
 
     return loginAsGuest;
 }

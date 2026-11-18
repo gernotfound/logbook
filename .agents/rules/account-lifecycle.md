@@ -15,6 +15,10 @@ Il modulo `src/lib/firebase.ts` può ancora essere importato per i servizi legac
 
 Non è il ritiro del client Firebase: `initializeAuth`, App Check e i chiamanti legacy sono ancora importabili/caricabili e alcuni possono eseguire I/O; l'account Kinde verificato non sblocca vault/consenso/journal. Niente GO API/fitness.
 
+### Purge guest disaccoppiato da Firebase (18/11/2026, v2.526.0 candidato)
+
+Il percorso guest Kinde-first usa `guestLocalPurge.ts`: riprende i fence owner, consenso, recupero cancellazione account e Web Lock/IndexedDB senza importare `DB` o Firebase. `useGuestLogin` riceve la callback di purge dal provider attivo: il provider legacy mantiene il proprio adattatore, mentre `GuestOnlyAuthProvider` usa il percorso locale. Il comportamento di revoca e cancellazione fisica rimane fail-closed, inclusi i purges interrotti; questa separazione **non** sblocca account Kinde o fitness e non prova la rimozione delle altre dipendenze Firebase nel runtime.
+
 ### Bootstrap Kinde-first senza AuthProvider Firebase (18/11/2026, v2.524.0 candidato)
 
 `src/main.tsx` monta `GuestOnlyAuthProvider` anziché il vecchio `AuthProvider` e non monta più il recupero di cancellazione Firebase pre-lancio. Il provider corrente non sottoscrive `onAuthStateChanged`, non fabbrica `User` Firebase, non adotta identità Kinde né owner account, e rifiuta esplicitamente i vecchi comandi email/Google. Usa `useGuestLogin` e `logoutActiveGuestSession` per lock, revoca durevole, controllo tra schede e purge guest. Il vecchio provider rimane nel codice per test e come riferimento temporaneo ai chiamanti da convertire, **non** è l'autorità runtime della nuova baseline.

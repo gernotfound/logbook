@@ -291,9 +291,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     });
 
     const readLegacyAuthIdentity = useCallback(() => auth.currentUser, []);
+    const purgeLegacyGuest = useCallback(() => DB.purgeAllLocalUserData('guest'), []);
     const loginAsGuest = useGuestLogin({
         authRunRef, isGuestRef, setIsGuest, setGuestMigrationStatus, setUserData, setSaveError,
         readAuthIdentity: readLegacyAuthIdentity,
+        purgeGuest: purgeLegacyGuest,
     });
 
     const continueUnverifiedLocally = useUnverifiedLocalContinuation({
