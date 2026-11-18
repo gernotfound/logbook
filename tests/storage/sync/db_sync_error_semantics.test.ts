@@ -7,6 +7,9 @@ import { DB as RealDB } from '../../../src/lib/db';
 import { readLocal } from '../../../src/lib/sync/localRepository';
 import { prepareUnlockedTestArchive } from '../../secureVaultFixture';
 import { lockAllVaults } from '../../../src/lib/sync/secureArchiveSession';
+import { mockFirebaseAuth } from '../../setup';
+import { rememberAuthenticatedOwner, clearAuthenticatedOwnerHint } from '../../../src/lib/sync/authOwnerHint';
+import { storageOwner } from '../../../src/lib/sync/session';
 
 const OWNER = 'user:test-user-id';
 const state = {
@@ -46,6 +49,35 @@ describe('DB.saveUserData cloud transaction failure semantics', () => {
     it('classifies permission-denied as rejected while preserving the local journal', async () => {
         const result = await saveWithTransactionFailure({ code: 'permission-denied' });
         expect(result).toMatchObject({ ok: false, status: 'rejected' });
+    });
+
+
+    it('never reports a cloud ACK when Firebase is signed out but the account journal remains durable', async () => {
+        // The local journal was committed under the account before Auth was lost.
+        const failed = await saveWithTransactionFailure({ code: 'unavailable' });
+        expect(failed).toMatchObject({ ok: false, status: 'local-pending' });
+        const original = await readLocal(OWNER);
+        expect(original?.pending.length).toBeGreaterThan(0);
+
+        const signedIn = mockFirebaseAuth.currentUser;
+        rememberAuthenticatedOwner('test-user-id');
+        try {
+            mockFirebaseAuth.currentUser = null;
+            expect(storageOwner()).toBe(OWNER);
+
+            // A verified Kinde session may exist separately, but the legacy
+            // Firestore writer must not fake completion without its provider.
+            const replay = await RealDB.saveUserData(state);
+            expect(replay).toMatchObject({ ok: false });
+            expect(replay.status).not.toBe('synced');
+            expect(runTransaction).toHaveBeenCalledTimes(1);
+            const retained = await readLocal(OWNER);
+            expect(retained?.pending).toEqual(original?.pending);
+            expect(retained?.actorSeq).toBe(original?.actorSeq);
+        } finally {
+            mockFirebaseAuth.currentUser = signedIn;
+            clearAuthenticatedOwnerHint(OWNER);
+        }
     });
 
     it('keeps a known transport failure retryable and replays the durable journal', async () => {

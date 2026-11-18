@@ -9,9 +9,9 @@ import { removeDeletionRecoveryCredential } from './deletionDeviceRecovery';
 
 export const DB = {
     async saveUserData(_state: Record<string, any>, _revision?: any): Promise<SyncResult> {
-        const user = auth.currentUser;
-        if (!user) return { ok: true, status: 'synced' };
         try {
+            // A missing Auth user is not evidence that the journal was acknowledged.
+            // The replica boundary also verifies guest ownership and local durability.
             const result = await replicateJournal();
             return result;
         } catch (error) {

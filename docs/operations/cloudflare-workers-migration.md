@@ -738,3 +738,14 @@ non importa Firestore per leggere alimenti ed esercizi attraverso il
 catalogo. Per la sostituzione completa del provider cloud occorre ancora
 sostituire il loader, i writer e l'AuthProvider Firebase; l'adapter
 legacy sara' eliminato insieme a quel percorso verificato, non prima.
+
+### CF-04 — rifiuto del falso successo in assenza di Auth Firebase (18/11/2026)
+
+Rimosso da `DB.saveUserData()` il ritorno immediato
+`{ok:true,status:'synced'}` in assenza di `auth.currentUser`.
+Il metodo delega sempre al boundary di replica già protetto da
+journal durevole, owner/epoch e consenso. Un account con pending
+locale e Firebase già disconnesso conserva le operazioni e non
+mostra un cloud ACK inventato. L'account Kinde non diventa
+automaticamente sincronizzato: il nuovo writer D1 dovrà essere
+collegato e verificato prima del GO.
