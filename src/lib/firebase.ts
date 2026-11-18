@@ -32,7 +32,6 @@ import {
     waitForPendingWrites
 } from "firebase/firestore";
 import { ensureAppCheckProvider, initAppCheck, type AppCheckResult } from './appCheck';
-import { authenticatedIdentitySource } from './sync/authenticatedIdentitySource';
 
 const envVars: Record<string, string | undefined> = {
     'VITE_FIREBASE_API_KEY': import.meta.env.VITE_FIREBASE_API_KEY,
@@ -131,10 +130,6 @@ const auth = initializeAuth(firebaseApp, {
     ...(typeof window !== 'undefined' ? { popupRedirectResolver: browserPopupRedirectResolver } : {}),
 });
 auth.languageCode = 'it';
-// Temporary adapter: only the legacy provider can supply a persisted account
-// owner until the Kinde runtime replaces it. The neutral storage module must
-// not pull in Firebase just to resolve guest/session ownership.
-authenticatedIdentitySource.install(() => auth.currentUser);
 const provider = new GoogleAuthProvider();
 provider.setCustomParameters({ prompt: 'select_account' });
 
