@@ -14,7 +14,8 @@ vi.mock('../../../src/lib/auth/kindeCandidateClient', async importOriginal => ({
 }));
 
 import { GuestOnlyAuthProvider } from '../../../src/contexts/GuestOnlyAuthProvider';
-import { KindeAccountSessionProvider, useSharedKindeAccountSession } from '../../../src/contexts/auth/KindeAccountSessionProvider';
+import { KindeAccountSessionProvider } from '../../../src/contexts/auth/KindeAccountSessionProvider';
+import { useSharedKindeAccountSession } from '../../../src/contexts/auth/kindeAccountSessionContext';
 import { KindeAccountEntry } from '../../../src/components/UI/KindeAccountEntry';
 import { readKindeCandidateIdentity } from '../../../src/lib/auth/kindeCandidateIdentity';
 import { readKindeCandidateAccess, revokeKindeCandidateSession, submitKindeHostedSignIn } from '../../../src/lib/auth/kindeCandidateClient';

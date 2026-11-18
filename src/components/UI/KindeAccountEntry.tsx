@@ -1,5 +1,5 @@
 import { useId, useRef, useState } from 'react';
-import { useSharedKindeAccountSession } from '../../contexts/auth/KindeAccountSessionProvider';
+import { useSharedKindeAccountSession } from '../../contexts/auth/kindeAccountSessionContext';
 import { useKindeAccountSession } from '../../contexts/auth/useKindeAccountSession';
 import { PrivacyPolicy } from '../../pages/PrivacyPolicy';
 import { TermsAndConditions } from '../../pages/TermsAndConditions';
