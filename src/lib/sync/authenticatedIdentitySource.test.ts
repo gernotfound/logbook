@@ -28,6 +28,24 @@ describe('provider-neutral authenticated identity source', () => {
         expect(source.readUid()).toBe('account-b');
     });
 
+    it('keeps a shared provider installed until the final mount releases its lease', () => {
+        const source = createAuthenticatedIdentitySource();
+        const read = () => ({ uid: 'provider-a' });
+        const first = source.install(read);
+        const second = source.install(read);
+        expect(source.readUid()).toBe('provider-a');
+        first();
+        expect(source.readUid()).toBe('provider-a');
+        expect(() => source.install(() => ({ uid: 'provider-b' }))).toThrow();
+        second();
+        expect(source.readUid()).toBeNull();
+        const third = source.install(() => ({ uid: 'provider-b' }));
+        first();
+        expect(source.readUid()).toBe('provider-b');
+        third();
+        expect(source.readUid()).toBeNull();
+    });
+
     it('fails closed on malformed identity and reader errors rather than falling back to an old UID', () => {
         for (const identity of [
             undefined, false, {}, { uid: '' }, { uid: 'other/owner' },
