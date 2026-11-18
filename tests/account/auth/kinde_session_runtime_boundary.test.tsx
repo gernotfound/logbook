@@ -79,7 +79,7 @@ describe('React Kinde session boundary never promotes identity into fitness', ()
             .mockResolvedValue({ kind: 'signed-out' });
         render(<><Observer /><KindeAccountEntry identityOnly /></>, { wrapper: host });
         await screen.findByText(/Sessione Kinde verificata/);
-        csrf = 'B'.repeat(43);
+        csrf = 'B'.repeat(42) + 'A';
         await act(async () => { window.dispatchEvent(new Event('focus')); });
         await screen.findByRole('button', { name: 'Accedi o registrati' });
         expect(screen.getByTestId('kinde-presence').textContent)
