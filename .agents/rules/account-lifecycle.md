@@ -4,6 +4,10 @@
 
 `src/lib/sync/session.ts` non importa più Firebase direttamente. Il lettore sincrono di identità è registrato dal **solo provider attivo** e restituisce `null` se non è autenticato; un secondo provider concorrente, un UID malformato o un errore della sorgente falliscono chiusi. La registrazione legacy esiste soltanto mentre il vecchio `AuthProvider` è montato: l'import di `src/lib/firebase.ts` non registra più alcun UID. Il consumer Kinde-first non installa ancora un owner autenticato. Per il passaggio a Kinde sarà obbligatorio rimuovere il vecchio provider e registrare la sorgente soltanto dopo la verifica della sessione Kinde, con fencing delle sue generazioni. La sola presenza di un UID non sblocca vault, consenso o operazioni D1.
 
+### Bridge claim Kinde candidato (18/11/2026)
+
+La nuova `claimKindeCandidateReplica()` presuppone sessione e consenso attivi, vault device già creato e sbloccato per lo stesso UID, baseline legale server-derived e generazione sincrona del chiamante; non installa il reader Auth e non concede un account fitness. Blocca mutazioni se l'owner del controllo D1, il cookie CSRF, il consenso, il vault o la replica non coincidono, e conserva gli intent cifrati recuperabili dopo risposta remota ambigua. Serve ancora la composizione runtime di identità, lifecycle consenso/diritti/erasure, replica/journal e verifica API/provider prima di eliminare il blocco `identityOnly`.
+
 **Quando leggere:** email verificata, accesso guest→account, sessioni, account deletion, logout e purge.
 **Non inferire:** Auth assente, timeout o tombstone scaduto non provano cancellazione completa né autorizzano purge locale.
 
