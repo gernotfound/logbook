@@ -54,6 +54,14 @@ describe('Kinde-first guest provider: no legacy account activation', () => {
         }
     });
 
+    it('does not treat a corrupt historical owner hint as safe guest absence', () => {
+        renderHook(() => useAuth(), { wrapper });
+        localStorage.setItem('logbook_authenticated_owner', 'user:invalid/owner');
+        expect(() => storageOwner()).toThrow('Owner autenticato locale non valido');
+        expect(localStorage.getItem('logbook_authenticated_owner')).toBe('user:invalid/owner');
+        expect(authenticatedIdentitySource.hasReader()).toBe(false);
+    });
+
     it('rejects legacy sign-in and registration rather than silently treating them as Kinde credentials', async () => {
         const { result } = renderHook(() => useAuth(), { wrapper });
         await expect(result.current.loginWithEmail('tester@example.invalid', 'not-a-password'))
