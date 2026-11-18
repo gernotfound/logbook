@@ -24,34 +24,8 @@ void test('single-branch wildcard repetition collapses safely, without nested re
 });
 
 void test('complex repeated extglobs are literalized instead of compiling unsafe regexes', () => {
-  assert.equal(picomatch.makeRe('+(a|*a)').source, String.raw`^(?:\+\(a\|\*a\))import assert from 'node:assert/strict';
-import { createRequire } from 'node:module';
-import { test } from 'node:test';
-
-const require = createRequire(import.meta.url);
-const picomatch = require('picomatch');
-const installed = require('picomatch/package.json');
-
-void test('CI resolves the reviewed local picomatch backport', () => {
-  assert.equal(installed.version, '4.0.8-logbook.0');
-  assert.equal(typeof picomatch.makeRe, 'function');
-});
-
-);
-  assert.equal(picomatch.makeRe('+(*(ab)c)').source, String.raw`^(?:\+\(\*\(ab\)c\))import assert from 'node:assert/strict';
-import { createRequire } from 'node:module';
-import { test } from 'node:test';
-
-const require = createRequire(import.meta.url);
-const picomatch = require('picomatch');
-const installed = require('picomatch/package.json');
-
-void test('CI resolves the reviewed local picomatch backport', () => {
-  assert.equal(installed.version, '4.0.8-logbook.0');
-  assert.equal(typeof picomatch.makeRe, 'function');
-});
-
-);
+  assert.equal(picomatch.makeRe('+(a|*a)').source, String.raw`^(?:\+\(a\|\*a\))$`);
+  assert.equal(picomatch.makeRe('+(*(ab)c)').source, String.raw`^(?:\+\(\*\(ab\)c\))$`);
   assert.equal(picomatch.isMatch('aaa', '+(a|*a)'), false);
   assert.equal(picomatch.isMatch('abccc', '+(*(ab)c)'), false);
 });
