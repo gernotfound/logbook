@@ -10,7 +10,6 @@ import { lockAllVaults } from '../../../src/lib/sync/secureArchiveSession';
 import { mockFirebaseAuth } from '../../setup';
 import { rememberAuthenticatedOwner, clearAuthenticatedOwnerHint } from '../../../src/lib/sync/authOwnerHint';
 import { storageOwner } from '../../../src/lib/sync/session';
-import { authenticatedIdentitySource } from '../../../src/lib/sync/authenticatedIdentitySource';
 
 const OWNER = 'user:test-user-id';
 const state = {
@@ -25,21 +24,13 @@ const state = {
     activePains: [],
 };
 
-const readLegacyTransportFixtureIdentity = () => mockFirebaseAuth.currentUser;
-let releaseLegacyTransportFixture: (() => void) | null = null;
-
 describe('DB.saveUserData cloud transaction failure semantics', () => {
     beforeEach(async () => {
-        releaseLegacyTransportFixture = authenticatedIdentitySource.install(readLegacyTransportFixtureIdentity);
         vi.clearAllMocks();
         await prepareUnlockedTestArchive(OWNER);
         DB.resetCache();
     });
-    afterEach(() => {
-        lockAllVaults();
-        releaseLegacyTransportFixture?.();
-        releaseLegacyTransportFixture = null;
-    });
+    afterEach(() => lockAllVaults());
 
     async function saveWithTransactionFailure(error: unknown) {
         // Production writes use runTransaction. Inject at that exact transport
