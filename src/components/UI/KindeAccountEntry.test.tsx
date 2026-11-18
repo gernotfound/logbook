@@ -37,6 +37,11 @@ const required = { kind: 'consent-required' as const, principal };
 const confirmed = {
     kind: 'consent-confirmed' as const,
     principal: { uid: A, fenceEpoch: 1, healthConsentRevision: 1 },
+    legalConsent: {
+        hasAcceptedTerms: true, hasAcceptedHealthData: true,
+        acceptedAt: '2026-11-15T10:00:00.000Z',
+        privacyVersion: '1.3.9', termsVersion: '1.2.5',
+    },
 };
 
 beforeEach(() => {

@@ -36,6 +36,19 @@ backup resta necessario il guard esterno anti-resurrection CF-08.
 Questi percorsi restano candidati finché Auth/consenso/chiavi e revoca
 sono collaudati sul runtime pubblico previsto.
 
+## Prova legale trusted per il bootstrap Kinde cifrato (18/11/2026, candidato)
+
+Il lettore `readKindeCandidateAccess()` conserva i campi `acceptedAt`, versione
+Privacy e versione Termini soltanto dallo stato `consent-confirmed` della D1 primaria,
+dopo due prove della stessa sessione, UID, epoca e revisione. L'istante deve
+essere UTC ISO canonico, nel passato e senza normalizzazioni. Il checkpoint
+completo confronta anche la prova legale prima e dopo la scansione AEAD.
+
+`hydrateKindeCandidateArchive()` installa questa prova nel baseline cifrato
+device anche quando non esiste un root business. Non crea pending/ACK,
+non registra replica né trasferisce il consenso guest. Gli edit locali
+journalizzati restano preservati. La prova locale **non autorizza fitness o
+sync D1**: sessione, revoca, vault, replica e runtime restano gate distinti.
 ## Primo consenso Kinde → D1: chiamante browser candidato (15/11/2026)
 
 Il client `src/lib/auth/kindeCandidateConsent.ts` genera il corpo esatto

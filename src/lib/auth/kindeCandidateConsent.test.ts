@@ -71,6 +71,11 @@ describe('Kinde D1 first health-consent candidate (no UI/production calls)', () 
             kind: 'consent-confirmed', principal: {
                 uid: A, fenceEpoch: 1, healthConsentRevision: 1,
             },
+            legalConsent: {
+                hasAcceptedTerms: true, hasAcceptedHealthData: true,
+                acceptedAt: '2026-11-15T10:00:00.000Z',
+                privacyVersion: LEGAL_VERSIONS.privacy, termsVersion: LEGAL_VERSIONS.terms,
+            },
         });
         expect(send).toHaveBeenCalledTimes(7);
         const [route, init] = send.mock.calls[3];

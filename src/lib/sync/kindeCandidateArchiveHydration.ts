@@ -37,7 +37,7 @@ export async function hydrateKindeCandidateArchive({
     };
     if (!current()) throw new KindeCandidateBoundaryError();
     const local = await readLocal(owner);
-    const { checkpoint } = await inspectKindeCandidateCloudCheckpoint({
+    const { checkpoint, legalConsent } = await inspectKindeCandidateCloudCheckpoint({
         expected: principal, stillCurrent: current, send, browserCookies,
     });
     const catalog = await getCachedCatalog();
@@ -50,7 +50,13 @@ export async function hydrateKindeCandidateArchive({
         evidence.set(path, { _sync: document.sync });
         if (path !== '') months.add(path.split('/')[1]);
     }
-    const data = applyRemoteDocuments(UserDataSchema.parse({}) as unknown as UserData, business, catalog);
+    // The signed consent row is authoritative for the account's legal choice;
+    // an empty or stale encrypted root is not evidence of a new acceptance.
+    // Install it in the hydrated baseline, never as a fabricated journal ACK.
+    const data = {
+        ...applyRemoteDocuments(UserDataSchema.parse({}) as unknown as UserData, business, catalog),
+        legalConsent,
+    };
     const envelope = await hydrateLocal(owner, data, [...months], evidence, 'all', current, {
         consentRevision: checkpoint.consentRevision, localRevision: local?.revision ?? null,
     });

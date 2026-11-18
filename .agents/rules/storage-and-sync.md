@@ -18,6 +18,15 @@ Il bridge di sola lettura `inspectKindeCandidateCloudCheckpoint` verifica sessio
 - [Portabilità](backup-and-portability.md): backup/import/export; [Privacy tecnica](telemetry-and-privacy.md): nessun invio automatico di errori.
 - [Crash consistency](crash-consistency.md), [Causal GC](causal-gc.md), [Domain Operations](domain-operations.md): specifiche di commit/ACK e protocollo.
 
+## Checkpoint Kinde e consenso legale nel baseline (18/11/2026)
+
+Il checkpoint D1 completo e AEAD può alimentare il baseline locale solo dopo
+fence del vault e della sessione Kinde. `legalConsent` proviene dallo stato
+`active` trusted con versioni correnti e timestamp canonico stabile prima
+e dopo la scansione, non da un root cloud assente o obsoleto. Il commit
+`hydrateLocal` è vincolato alla revisione locale osservata e preserva
+pending e recovery; non crea lease replica, ricevute cloud o ACK.
+Il percorso resta candidato finché Auth/consenso/replica non sono attivi.
 ## Collegamento candidato sessione Kinde → journal D1 (CF-03/04)
 
 `src/lib/sync/kindeCandidateJournalBridge.ts` mette in sequenza il boundary

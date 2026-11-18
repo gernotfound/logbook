@@ -158,11 +158,41 @@ describe('Kinde checkpoint to a device-owned archive', () => {
         expect(result.envelope).toMatchObject({ owner: kindeOwner, consentRevision: 1, replica: null,
             pending: [], completeMonths: ['2026-01'], data: { profile: { height: '190' }, history: [{ id: 'cloud-history' }] } });
         expect(result.envelope.cloudflareDelivery).toBeUndefined();
+        const trustedLegal = {
+            hasAcceptedHealthData: true, hasAcceptedTerms: true,
+            acceptedAt: '2026-11-16T00:00:00.000Z',
+            privacyVersion: LEGAL_VERSIONS.privacy, termsVersion: LEGAL_VERSIONS.terms,
+        };
+        // D1 may be empty or carry an obsolete encrypted root, but the
+        // trusted consent row must seed the device-encrypted baseline.
+        expect(result.envelope.data.legalConsent).toEqual(trustedLegal);
+        expect(result.envelope.baseline.legalConsent).toEqual(trustedLegal);
+        expect(result.envelope.pending).toEqual([]);
         expect(await readLocal(kindeOwner)).toEqual(result.envelope);
         const cipher = await get<string>(storageKey);
         expect(cipher?.startsWith(SEALED_LOCAL_PREFIX)).toBe(true);
         expect(cipher).not.toContain('cloud-history');
+        expect(cipher).not.toContain('2026-11-16T00:00:00.000Z');
         expect(localStorage.getItem(storageKey + ':health-consent-generation')).toBeNull();
+    });
+
+    it('does not create a local archive from an outdated trusted legal receipt', async () => {
+        await createAndMigrateVault(kindeOwner);
+        const original = server();
+        const send = vi.fn<typeof fetch>().mockImplementation(async (...args) => {
+            const response = await original(...args);
+            if (args[0] !== '/v1/consent/status') return response;
+            return Response.json({
+                uid, status: 'active', revision: 1, fenceEpoch: 1,
+                acceptedAt: '2026-11-16T00:00:00.000Z',
+                privacyVersion: 'outdated', termsVersion: LEGAL_VERSIONS.terms,
+            }, { headers: { 'Cache-Control': 'no-store' } });
+        });
+        await expect(hydrateKindeCandidateArchive({
+            expected: principal, browserCookies, stillCurrent: () => true, send,
+        })).rejects.toBeInstanceOf(Error);
+        expect(vi.mocked(send).mock.calls.some(([route]) => route === '/v1/cloud-key/sync')).toBe(false);
+        expect(await get(storageKey)).toBeUndefined();
     });
 
     it('preserves a competing tab’s newly created archive if the revision changed during the scan', async () => {

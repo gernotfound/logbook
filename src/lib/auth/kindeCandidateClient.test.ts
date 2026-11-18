@@ -65,6 +65,11 @@ describe('candidate first-party Kinde client boundary', () => {
         const send = responses(reply(session(A, 1, 1)), reply(status('active', 1)), reply(session(A, 1, 1)));
         await expect(read(send)).resolves.toEqual({
             kind: 'consent-confirmed', principal: { uid: A, fenceEpoch: 1, healthConsentRevision: 1 },
+            legalConsent: {
+                hasAcceptedTerms: true, hasAcceptedHealthData: true,
+                acceptedAt: '2026-11-14T10:00:00.000Z',
+                privacyVersion: '1.3.9', termsVersion: '1.2.5',
+            },
         });
         const oldLegal = responses(reply(session(A, 1, 1)), reply({
             ...status('active', 1), privacyVersion: '1.3.8',
@@ -108,6 +113,20 @@ describe('candidate first-party Kinde client boundary', () => {
             reply(session(A, 1, 3)), reply(status('withdrawn', 3, 2)),
             reply(session(A, 1, 3)),
         ))).rejects.toBeInstanceOf(KindeCandidateBoundaryError);
+    });
+
+    it('rejects forged, noncanonical and future acceptance dates before publishing a legal proof', async () => {
+        for (const acceptedAt of [
+            new Date(Date.now() + 60_000).toISOString(),
+            '2026-11-14T10:00:00Z',
+            '2026-11-14T10:00:00.000+00:00',
+            '2026-02-30T10:00:00.000Z',
+        ]) {
+            const send = responses(reply(session(A, 1, 1)), reply({
+                ...status('active', 1), acceptedAt,
+            }), reply(session(A, 1, 1)));
+            await expect(read(send)).rejects.toBeInstanceOf(KindeCandidateBoundaryError);
+        }
     });
 
     it('rejects cross-account and epoch changes between consent and session reads', async () => {
