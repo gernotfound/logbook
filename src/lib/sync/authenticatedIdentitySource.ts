@@ -37,3 +37,17 @@ export function createAuthenticatedIdentitySource() {
 }
 
 export const authenticatedIdentitySource = createAuthenticatedIdentitySource();
+
+/**
+ * Checks only whether a registered provider still names the same storage owner.
+ * This is NOT a session grant or permission to ACK: callers must also fence the
+ * captured session, consent revision and cloud operation separately.
+ */
+export function matchesAuthenticatedOwner(
+    owner: string,
+    readUid: () => string | null = authenticatedIdentitySource.readUid,
+): boolean {
+    if (!owner.startsWith('user:') || owner.length === 5) return false;
+    try { return readUid() === owner.slice(5); }
+    catch { return false; }
+}

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createAuthenticatedIdentitySource } from './authenticatedIdentitySource';
+import { createAuthenticatedIdentitySource, matchesAuthenticatedOwner } from './authenticatedIdentitySource';
 
 describe('provider-neutral authenticated identity source', () => {
     it('is signed-out until an explicit provider reader is registered', () => {
@@ -49,5 +49,31 @@ describe('provider-neutral authenticated identity source', () => {
         expect(source.readUid()).toBe('account-a');
         identity = null;
         expect(source.readUid()).toBeNull();
+    });
+});
+
+describe('account journal resume owner fence', () => {
+    it('supports a Kinde UID through a provider-neutral reader, without guest fallback', () => {
+        const source = createAuthenticatedIdentitySource();
+        const state: { uid: string } = { uid: 'k_' + 'A'.repeat(43) };
+        const dispose = source.install(() => state);
+        const same = () => source.readUid();
+        expect(matchesAuthenticatedOwner('user:' + state.uid, same)).toBe(true);
+        expect(matchesAuthenticatedOwner('guest', same)).toBe(false);
+        expect(matchesAuthenticatedOwner('user:', same)).toBe(false);
+        expect(matchesAuthenticatedOwner('user:k_' + 'B'.repeat(43), same)).toBe(false);
+        state.uid = 'k_' + 'B'.repeat(43);
+        expect(matchesAuthenticatedOwner('user:k_' + 'A'.repeat(43), same)).toBe(false);
+        expect(matchesAuthenticatedOwner('user:' + state.uid, same)).toBe(true);
+        dispose();
+        expect(matchesAuthenticatedOwner('user:' + state.uid, same)).toBe(false);
+    });
+    it('refuses absent, malformed and throwing identity readers', () => {
+        for (const reader of [
+            () => null,
+            () => { throw new Error('provider-unavailable'); },
+            () => { throw new Error('storage-unreadable'); },
+        ]) expect(matchesAuthenticatedOwner('user:owner-a', reader)).toBe(false);
+        expect(matchesAuthenticatedOwner('user:owner-a', () => 'owner-b')).toBe(false);
     });
 });

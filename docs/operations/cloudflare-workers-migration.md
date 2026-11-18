@@ -709,3 +709,19 @@ zero ADK e zero erasure jobs. Non dichiarare tali record eliminabili.
 Questo percorso non e' ancora una migrazione applicata: occorre la
 esecuzione manuale dell'Action e il relativo readback per certificare il
 provider. Non apre il gate di consenso, sync, chiavi o cancellazione.
+
+### CF-03 — owner neutrale per la ripresa del journal (18/11/2026)
+
+La ripresa in foreground del journal di `src/store/useAppStore.ts`
+non legge più direttamente `auth.currentUser` dall'SDK Firebase: confronta
+l'owner con la sorgente di identità già presente
+`authenticatedIdentitySource`, che nel codice legacy è ancora
+registrata da Firebase e nel futuro percorso Kinde sarà registrata
+esclusivamente dal nuovo provider. Identità assente, differente o
+illeggibile bloccano la ripresa senza svuotare il journal. Il controllo
+non costituisce da solo prova di sessione/consenso, che continua
+a essere richiesta dai gate esistenti su ogni operazione.
+
+L'AuthProvider e il writer Firestore non sono ancora sostituiti:
+questo è un disaccoppiamento dell'owner locale, non l'attivazione
+delle repliche Kinde né un ACK cloud.
