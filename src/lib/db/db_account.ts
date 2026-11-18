@@ -1,6 +1,7 @@
 import { isLocalPurgeIncomplete, isLocalPurgePending } from '../sync/localPurgeFence';
 import { purgeOwnerLocalData } from './ownerLocalPurge';
 import { assertPurgeIdentitySafe } from './ownerPurgeIdentityFence';
+import { purgeGuestLocalData } from './guestLocalPurge';
 import {
     ACCOUNT_DELETION_HTTP_TIMEOUT_MS, AccountDeletionRequestTimeoutError,
     appCheckToken, requestServerDeletion, fetchAccountDeletionStatus,
@@ -19,7 +20,6 @@ import { readBrowserValueStrict } from '../sync/browserStorage';
 import { storageOwner, captureSession, isCurrentSession, isActiveGuestSession } from '../sync/session';
 import {
     clearAccountDeletion,
-    findPendingAccountDeletion,
     isAccountDeletionPending,
     listPendingAccountDeletions,
     markAccountDeletion,
@@ -56,15 +56,8 @@ function assertOrdinaryPurgeAllowed(owner: string): void {
     if (consent !== null && consent !== 'withdrawn') {
         throw new HealthConsentTransitionPendingError();
     }
-    if (owner.startsWith('user:')) {
-        if (isAccountDeletionPending(owner)) {
-            throw new Error('Cancellazione account in sospeso: i dati locali devono restare disponibili per il recupero.');
-        }
-    } else if (owner === 'guest' && readBrowserValueStrict('logbook_is_guest') !== 'true') {
-        // An auth-less recovery must not purge shared drafts via a guest fallback.
-        if (findPendingAccountDeletion()) {
-            throw new Error('Recupero cancellazione account in sospeso: impossibile azzerare i dati locali.');
-        }
+    if (owner.startsWith('user:') && isAccountDeletionPending(owner)) {
+        throw new Error('Cancellazione account in sospeso: i dati locali devono restare disponibili per il recupero.');
     }
 }
 
@@ -86,6 +79,7 @@ async function assertNoOutdatedConsentJournal(owner: string): Promise<void> {
 }
 
 export async function purgeAllLocalUserData(owner = storageOwner()) {
+    if (owner === 'guest') return purgeGuestLocalData();
     // Recovery of a previously started purge must never require an archive
     // that may already be partially deleted.
     if (isLocalPurgePending(owner)) {

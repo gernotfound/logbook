@@ -4,8 +4,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { GuestOnlyAuthProvider } from '../../../src/contexts/GuestOnlyAuthProvider';
 import { useAuth } from '../../../src/hooks/useAuth';
 import { useAppStore } from '../../../src/store/useAppStore';
-import { DB } from '../../../src/lib/db';
+import { purgeGuestLocalData } from '../../../src/lib/db/guestLocalPurge';
 import { auth, onAuthStateChanged } from '../../../src/lib/firebase';
+
+vi.mock('../../../src/lib/db/guestLocalPurge', () => ({ purgeGuestLocalData: vi.fn(async () => {}) }));
 import { releaseLegacyTestIdentityReader } from '../../setup';
 import { authenticatedIdentitySource } from '../../../src/lib/sync/authenticatedIdentitySource';
 import { activateGuestSession, captureSession, GUEST_REVOCATION_KEY, GUEST_SESSION_KEY, storageOwner } from '../../../src/lib/sync/session';
@@ -98,7 +100,7 @@ describe('Kinde-first guest provider: no legacy account activation', () => {
 
     it('revokes before purging a confirmed local guest and never signs out Firebase', async () => {
         restoreGuest('guest-kinde-first-logout');
-        const purge = vi.spyOn(DB, 'purgeAllLocalUserData').mockResolvedValue(undefined);
+        const purge = vi.mocked(purgeGuestLocalData);
         const { result } = renderHook(() => useAuth(), { wrapper });
         expect(result.current.isGuest).toBe(true);
         await act(async () => { await result.current.logout({ mode: 'normal', skipConfirm: true }); });
@@ -106,7 +108,7 @@ describe('Kinde-first guest provider: no legacy account activation', () => {
         expect(localStorage.getItem(GUEST_REVOCATION_KEY)).not.toBeNull();
         expect(localStorage.getItem('logbook_is_guest')).toBeNull();
         expect(purge).toHaveBeenCalledOnce();
-        expect(purge).toHaveBeenCalledWith('guest');
+        expect(purge).toHaveBeenCalledWith();
         expect(onAuthStateChanged).not.toHaveBeenCalled();
     });
 });

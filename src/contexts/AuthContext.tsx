@@ -294,6 +294,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const loginAsGuest = useGuestLogin({
         authRunRef, isGuestRef, setIsGuest, setGuestMigrationStatus, setUserData, setSaveError,
         readAuthIdentity: readLegacyAuthIdentity,
+        purgeGuest: () => DB.purgeAllLocalUserData('guest'),
     });
 
     const continueUnverifiedLocally = useUnverifiedLocalContinuation({

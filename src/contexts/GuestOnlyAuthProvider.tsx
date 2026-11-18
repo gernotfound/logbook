@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import { AuthContext, defaultAuthContext, type AuthContextType } from './AuthContextDef';
 import { GUEST_KEY, useGuestLogin } from './auth/useGuestLogin';
 import { logoutActiveGuestSession } from './auth/logoutActiveGuestSession';
-import { DB } from '../lib/db';
+import { purgeGuestLocalData } from '../lib/db/guestLocalPurge';
 import { useAppStore } from '../store/useAppStore';
 import { useDialogStore } from '../store/useDialogStore';
 import {
@@ -74,6 +74,7 @@ export function GuestOnlyAuthProvider({ children }: { children: ReactNode }) {
     const loginAsGuest = useGuestLogin({
         authRunRef, isGuestRef, setIsGuest, setGuestMigrationStatus,
         setUserData, setSaveError, readAuthIdentity: readNoAuthenticatedIdentity,
+        purgeGuest: purgeGuestLocalData,
     });
 
     const logout = useCallback(async (options?: { mode: 'normal' | 'force'; skipConfirm?: boolean }) => {
@@ -97,7 +98,7 @@ export function GuestOnlyAuthProvider({ children }: { children: ReactNode }) {
             await logoutActiveGuestSession({
                 skipConfirm: options?.skipConfirm,
                 isGuestRef, setIsGuest, setGuestMigrationStatus,
-                purgeGuest: () => DB.purgeAllLocalUserData('guest'),
+                purgeGuest: purgeGuestLocalData,
             });
         } finally {
             logoutBusy.current = false;
