@@ -768,3 +768,13 @@ purge/cancellazione soltanto dell'owner guest. La funzione
 richiede al provider soltanto un'operazione di purge autenticata
 dal lifecycle locale; non trasferisce dati a Kinde e non abilita
 account o replica Cloudflare prima del GO.
+
+### CF-03 — identita' del purge locale provider-neutral (18/11/2026)
+
+Il preflight, il lock e il controllo successivo alla pulizia
+dell'owner locale non consultano piu' direttamente Firebase:
+usano `authenticatedIdentitySource.readUid()` e il separato
+owner hint conservativo. Il guard e' il medesimo, con rigetto
+in caso di nuova identita' o sessione guest. Il provider Kinde
+non viene registrato in parallelo a Firebase, ne' i record D1
+attuali vengono adottati o cancellati.

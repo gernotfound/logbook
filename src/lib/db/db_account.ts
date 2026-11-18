@@ -1,5 +1,6 @@
 import { isLocalPurgeIncomplete, isLocalPurgePending } from '../sync/localPurgeFence';
 import { purgeOwnerLocalData } from './ownerLocalPurge';
+import { assertPurgeIdentitySafe } from './ownerPurgeIdentityFence';
 import {
     ACCOUNT_DELETION_HTTP_TIMEOUT_MS, AccountDeletionRequestTimeoutError,
     appCheckToken, requestServerDeletion, fetchAccountDeletionStatus,
@@ -15,8 +16,7 @@ import { auth, getDb, waitForPendingWrites, signOut } from '../firebase';
 import { withTimeout } from './db_core';
 import { assertDeletionDeadlineActive, withDeletionDeadline } from '../deletionDeadline';
 import { readBrowserValueStrict } from '../sync/browserStorage';
-import { storageOwner, captureSession, isCurrentSession, isActiveGuestSession, GUEST_REVOCATION_KEY } from '../sync/session';
-import { readAuthenticatedOwnerHint } from '../sync/authOwnerHint';
+import { storageOwner, captureSession, isCurrentSession, isActiveGuestSession } from '../sync/session';
 import {
     clearAccountDeletion,
     findPendingAccountDeletion,
@@ -46,21 +46,6 @@ class HealthConsentTransitionPendingError extends Error {
     constructor() {
         super('La revoca o la nuova accettazione dei dati salute non è ancora riconciliata. Per non perdere la richiesta, completa la verifica prima di uscire.');
         this.name = 'HealthConsentTransitionPendingError';
-    }
-}
-
-/** A suspended owner must never purge unscoped device records belonging to the next identity. */
-function assertPurgeIdentitySafe(owner: string, resuming: boolean): void {
-    const guestActive = readBrowserValueStrict('logbook_is_guest') === 'true';
-    const activeUid = auth.currentUser?.uid;
-    const ownerHint = readAuthenticatedOwnerHint();
-    const competingIdentity = owner === 'guest'
-        ? Boolean(activeUid || ownerHint || (resuming && guestActive
-            && readBrowserValueStrict(GUEST_REVOCATION_KEY) === null))
-        : guestActive || Boolean((activeUid && owner !== 'user:' + activeUid)
-            || (ownerHint && ownerHint !== owner));
-    if (competingIdentity) {
-        throw new Error('Un altro account o una sessione ospite è diventata attiva. La pulizia locale resta sospesa.');
     }
 }
 
