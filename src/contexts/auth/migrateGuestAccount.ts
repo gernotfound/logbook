@@ -13,11 +13,8 @@ import { requireCloudAccountDataKey } from '../../lib/sync/cloudAccountKeyAccess
 import { captureSession, isCurrentSession, userOwner } from '../../lib/sync/session';
 import { markTabSnapshotClean } from '../../lib/sync/tabSnapshotCausality';
 import { getResolvedDefaultUserData } from './defaultUserData';
-import {
-    checkpointFromCloudDocuments,
-    claimReplicaCheckpoint,
-    retireExpiredReplicas,
-} from '../../lib/sync/replicaProtocol';
+import { checkpointFromCloudDocuments } from '../../lib/sync/replicaProtocol';
+import { claimReplicaCheckpoint, retireExpiredReplicas } from '../../lib/sync/firebaseReplicaProtocol';
 import { IncompleteCloudSnapshotError, type LocalEnvelope } from '../../lib/sync/localRepository';
 
 class StaleGuestMigrationError extends Error {

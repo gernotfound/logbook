@@ -15,7 +15,7 @@ import { lockAllVaults, LocalVaultLockedError } from '../../../src/lib/sync/secu
 import { activateGuestSession, GUEST_SESSION_KEY } from '../../../src/lib/sync/session';
 import { migrateGuestAccount } from '../../../src/contexts/auth/migrateGuestAccount';
 import { isHealthConsentCloudWritable } from '../../../src/lib/healthConsent';
-import * as replicaProtocol from '../../../src/lib/sync/replicaProtocol';
+import * as replicaProtocol from '../../../src/lib/sync/firebaseReplicaProtocol';
 import * as replicateModule from '../../../src/lib/sync/replicateJournal';
 import { getSeedCatalog } from '../../../src/lib/catalog/catalogService';
 import { projectDocuments } from '../../../src/lib/sync/documentProjection';

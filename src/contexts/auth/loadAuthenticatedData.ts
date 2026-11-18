@@ -6,12 +6,8 @@ import { captureSession, isCurrentSession, userOwner } from '../../lib/sync/sess
 import { requireCloudAccountDataKey } from '../../lib/sync/cloudAccountKeyAccess';
 import { useAppStore } from '../../store/useAppStore';
 import { adoptReplicaCheckpoint, readLocal, hydrateLocal, markCloudIntegrityBlocked, completeCloudIntegrityRecovery, IncompleteCloudSnapshotError, markReplicaCheckpointRequired } from '../../lib/sync/localRepository';
-import {
-    checkpointFromCloudDocuments,
-    claimReplicaCheckpoint,
-    needsReplicaCheckpoint,
-    retireExpiredReplicas,
-} from '../../lib/sync/replicaProtocol';
+import { checkpointFromCloudDocuments, needsReplicaCheckpoint } from '../../lib/sync/replicaProtocol';
+import { claimReplicaCheckpoint, retireExpiredReplicas } from '../../lib/sync/firebaseReplicaProtocol';
 import { getInitialLocalWorkout } from '../../store/slices/createWorkoutSlice';
 import { markTabSnapshotClean } from '../../lib/sync/tabSnapshotCausality';
 import { recoverWorkoutDeviceIntent } from '../../lib/sync/workoutDeviceIntent';
