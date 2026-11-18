@@ -289,3 +289,12 @@ giornaliero produce solo una issue al rilascio ufficiale verificato;
 non autorizza upgrade automatici, cambi OAuth, deploy o rimozione
 delle protezioni sui dati. La CI verde sulle dipendenze non costituisce
 GO funzionale Kinde/Workers né prova la completa rimozione Firebase.
+
+### Deadline del body delle risposte Kinde (18/11/2026)
+
+La verifica della sessione Kinde limita separatamente il tempo di
+consumo del body JSON, oltre ai byte e al numero di chunk. Un HTTP
+200 che invia solo una risposta incompleta e poi si blocca non puo'
+impedire indefinitamente il controllo dell'identita': la lettura
+termina in errore fail-closed, non crea alcun owner o consenso.
+Il controllo non allarga le route pubbliche e non emette ACK cloud.

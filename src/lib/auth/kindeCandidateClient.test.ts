@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
     KindeCandidateBoundaryError, inspectKindeCandidateReplicaControl, readKindeCandidateAccess,
+    readKindeCandidateJson,
     revokeKindeCandidateSession, submitKindeHostedSignIn,
 } from './kindeCandidateClient';
 
@@ -431,5 +432,42 @@ describe('candidate first-party Kinde client boundary', () => {
         const ownFormCount = document.querySelectorAll('form[action$="/api/auth/kinde/start"]').length;
         expect(() => submitKindeHostedSignIn(document, () => false)).toThrow(KindeCandidateBoundaryError);
         expect(document.querySelectorAll('form[action$="/api/auth/kinde/start"]').length).toBe(ownFormCount);
+    });
+});
+
+describe('Kinde bounded status-response reader', () => {
+    it('rejects a valid HTTP response with a stalled body after cancellation', async () => {
+        const deadline = new AbortController();
+        let cancelled = false;
+        const response = new Response(new ReadableStream<Uint8Array>({
+            start(stream) { stream.enqueue(new TextEncoder().encode('{"authenticated":')); },
+            cancel() { cancelled = true; },
+        }), { headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' } });
+        const pending = readKindeCandidateJson(response, deadline.signal);
+        deadline.abort(new DOMException('body deadline', 'TimeoutError'));
+        await expect(pending).rejects.toBeInstanceOf(KindeCandidateBoundaryError);
+        expect(cancelled).toBe(true);
+    });
+
+    it('rejects already-aborted responses even with complete JSON', async () => {
+        const deadline = new AbortController();
+        deadline.abort();
+        await expect(readKindeCandidateJson(reply(session()), deadline.signal))
+            .rejects.toBeInstanceOf(KindeCandidateBoundaryError);
+    });
+
+    it('reads a complete fragmented JSON response without relaxing body validation', async () => {
+        const body = new TextEncoder().encode(JSON.stringify(session()));
+        const response = new Response(new ReadableStream<Uint8Array>({
+            start(stream) {
+                stream.enqueue(body.slice(0, 20));
+                stream.enqueue(body.slice(20));
+                stream.close();
+            },
+        }), { headers: {
+            'Content-Type': 'application/json; charset=utf-8',
+            'Cache-Control': 'private, no-store',
+        } });
+        await expect(readKindeCandidateJson(response)).resolves.toEqual(session());
     });
 });
