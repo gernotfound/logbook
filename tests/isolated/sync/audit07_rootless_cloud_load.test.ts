@@ -20,6 +20,8 @@ vi.mock('../../../src/lib/firebase', () => ({
 }));
 vi.mock('../../../src/lib/catalog/catalogService', () => ({
     getCachedCatalog: async () => ({ exercises: [], foods: [] }),
+}));
+vi.mock('../../../src/lib/catalog/firestoreCatalogAdapter', () => ({
     syncGlobalCatalog: harness.catalogSync,
 }));
 vi.mock('../../../src/lib/db/db_training', () => ({ loadHistoryMonths: harness.historyWindow }));
