@@ -4,14 +4,8 @@ import { LocalCiphertextError, openLocalText, sealLocalText } from './secureArch
 import { LocalVaultLockedError, readVaultControl, requireUnlockedLocalKey } from './secureArchiveSession';
 import { isActiveGuestSession, storageOwner } from './session';
 import { assertNoLocalPurge } from './localPurgeFence';
-
-export const deviceKey = (name: string, owner = storageOwner()) => `logbook:v2:${owner}:${name}`;
-
-/** Protected keys never alias the legacy plaintext namespace of suspended PWA tabs. */
-export const protectedDeviceKey = (name: string, owner = storageOwner()) => {
-    if (!name || name.startsWith('sealed:')) throw new Error('Chiave dispositivo protetta non valida.');
-    return deviceKey('sealed:' + name, owner);
-};
+import { deviceKey, protectedDeviceKey } from './deviceStorageKeys';
+export { deviceKey, protectedDeviceKey } from './deviceStorageKeys';
 
 export function readDeviceValueStrict(name: string, owner?: string): string | null {
     const resolvedOwner = owner ?? storageOwner();

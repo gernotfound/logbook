@@ -107,6 +107,15 @@ describe('Kinde candidate trusted D1 journal bridge (no Firebase or production b
         expect(acquireCloudflareAccountKeyCandidate).not.toHaveBeenCalled();
     });
 
+    it('rejects pending account withdrawal before decrypting the owner journal', async () => {
+        mockLocal([{ seq: 1 }]);
+        localStorage.setItem(`logbook:v2:user:${UID}:health-consent-withdrawal`, 'pending:1');
+        await expect(deliverKindeCandidateJournal({
+            send: acceptedSession(), stillCurrent: () => true, browserCookies: () => cookie(),
+        })).rejects.toBeInstanceOf(KindeCandidateBoundaryError);
+        expect(readLocal).not.toHaveBeenCalled();
+        expect(acquireCloudflareAccountKeyCandidate).not.toHaveBeenCalled();
+    });
     it('keeps a different consent generation in recovery before requesting any cloud key', async () => {
         mockLocal([{ seq: 1 }], { consentRevision: 2 });
         await expect(deliverKindeCandidateJournal({

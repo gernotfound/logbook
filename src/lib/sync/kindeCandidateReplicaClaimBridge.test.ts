@@ -142,6 +142,14 @@ describe('Kinde candidate membership orchestration (not mounted in the PWA)', ()
         expect(adapters.stage).not.toHaveBeenCalled();
     });
 
+    it('rejects a local withdrawal before network, even with a trusted remote consent fixture', async () => {
+        localStorage.setItem(`logbook:v2:user:${UID}:health-consent-withdrawal`, 'pending:1');
+        const send = server();
+        await expect(claim(send)).rejects.toBeInstanceOf(KindeCandidateBoundaryError);
+        expect(send).not.toHaveBeenCalled();
+        expect(adapters.stage).not.toHaveBeenCalled();
+        expect(adapters.resume).not.toHaveBeenCalled();
+    });
     it('refuses ownerless, wrong-owner, wrong-epoch and wrong-consent controls before ADK or mutation', async () => {
         for (const bad of [
             { ...control, uid: undefined }, { ...control, uid: OTHER },

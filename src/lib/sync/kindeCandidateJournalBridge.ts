@@ -1,5 +1,6 @@
 import { captureKindeCandidateSessionFence, KindeCandidateBoundaryError,
     readKindeCandidateAccess } from '../auth/kindeCandidateClient';
+import { isKindeAccountLocalFitnessClear } from './kindeOwnerLocalFitnessFence';
 import { readBrowserValueStrict } from './browserStorage';
 import { readLocal } from './localRepository';
 import { userOwner } from './owner';
@@ -44,8 +45,9 @@ export async function deliverKindeCandidateJournal({
     }
     const { uid, fenceEpoch, healthConsentRevision } = access.principal;
     const owner = userOwner(uid);
+    if (!isKindeAccountLocalFitnessClear(owner, healthConsentRevision)) throw new KindeCandidateBoundaryError();
     const local = await readLocal(owner);
-    if (!current() || !local || local.consentRevision !== healthConsentRevision || local.cloudIntegrityFence
+    if (!isKindeAccountLocalFitnessClear(owner, healthConsentRevision) || !current() || !local || local.consentRevision !== healthConsentRevision || local.cloudIntegrityFence
         || local.cloudflareReplicaClaim || local.cloudflareReplicaRetirement) {
         throw new KindeCandidateBoundaryError();
     }
@@ -58,12 +60,13 @@ export async function deliverKindeCandidateJournal({
         purpose: 'sync', stillCurrent: current, csrfToken: () => fence.csrfToken, send,
     });
     try {
-        if (!current()) throw new KindeCandidateBoundaryError();
+        if (!current() || !isKindeAccountLocalFitnessClear(owner, healthConsentRevision)) throw new KindeCandidateBoundaryError();
         const result = await deliverCloudflareJournalCandidate(
-            owner, key, createCloudflareReplicaTransport(send), fence.csrfToken, current,
+            owner, key, createCloudflareReplicaTransport(send), fence.csrfToken,
+            () => current() && isKindeAccountLocalFitnessClear(owner, healthConsentRevision),
             { consentRevision: healthConsentRevision, fenceEpoch },
         );
-        if (!current()) throw new KindeCandidateBoundaryError();
+        if (!current() || !isKindeAccountLocalFitnessClear(owner, healthConsentRevision)) throw new KindeCandidateBoundaryError();
         return result;
     } finally {
         // The ADK is an operation-scoped capability; never retain it in

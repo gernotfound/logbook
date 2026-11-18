@@ -3,7 +3,7 @@ import {
     captureKindeCandidateSessionFence, KindeCandidateBoundaryError,
     readKindeCandidateAccess, type KindeCandidateAccess,
 } from '../auth/kindeCandidateClient';
-import { readBrowserValueStrict } from './browserStorage';
+import { isKindeAccountLocalFitnessClear } from './kindeOwnerLocalFitnessFence';
 import { acquireCloudflareAccountKeyCandidate } from './cloudflareAccountKeyCandidate';
 import { readAuthenticatedCloudflareCheckpoint } from './cloudReplicaCheckpoint';
 import { stageCloudflareReplicaClaim, resumeCloudflareReplicaClaim } from './cloudReplicaClaimRecovery';
@@ -61,8 +61,7 @@ export async function claimKindeCandidateReplica({
     const current = () => {
         try {
             if (!fence.stillCurrent() || requireUnlockedLocalKey(owner) !== deviceKey) return false;
-            const guest = readBrowserValueStrict('logbook_is_guest');
-            return guest === null || guest === 'false';
+            return isKindeAccountLocalFitnessClear(owner, principal.healthConsentRevision);
         } catch { return false; }
     };
     const requireCurrent = () => {
