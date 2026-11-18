@@ -6,9 +6,8 @@ import { readBrowserValueStrict } from './lib/sync/browserStorage'
 import { captureSession, GUEST_REVOCATION_KEY } from './lib/sync/session'
 import { readAuthenticatedOwnerHint } from './lib/sync/authOwnerHint'
 import App from './App'
-import { AuthProvider } from './contexts/AuthContext'
+import { GuestOnlyAuthProvider } from './contexts/GuestOnlyAuthProvider'
 import ErrorBoundary from './components/UI/ErrorBoundary'
-import { AccountDeletionRecovery } from './components/AccountDeletionRecovery'
 import { useAppStore } from './store/useAppStore'
 import { parseInitialUserData } from './store/slices/createDataSlice'
 import './styles/global.css'
@@ -186,11 +185,10 @@ export const initApp = async () => {
     createRoot(rootElement).render(
       <StrictMode>
         <ErrorBoundary>
-          <AuthProvider>
-            <AccountDeletionRecovery />
+          <GuestOnlyAuthProvider>
             <ReloadPrompt />
             <App />
-          </AuthProvider>
+          </GuestOnlyAuthProvider>
         </ErrorBoundary>
       </StrictMode>,
     );
