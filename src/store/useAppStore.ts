@@ -3,7 +3,7 @@ import { createDataSlice, type DataSlice } from './slices/createDataSlice';
 import { createWorkoutSlice, type WorkoutSlice } from './slices/createWorkoutSlice';
 import { createSyncSlice, type SyncSlice } from './slices/createSyncSlice';
 import { captureSession, isActiveGuestSession } from '../lib/sync/session';
-import { auth } from '../lib/firebase';
+import { matchesAuthenticatedOwner } from '../lib/sync/authenticatedIdentitySource';
 import { persistOwnerBoundWorkoutSnapshot } from '../lib/sync/deviceCriticalState';
 import { draftRegistry } from '../lib/utils/draftRegistry';
 import { UPDATE_REQUIRED_EVENT } from '../lib/schemaEvolution';
@@ -93,7 +93,7 @@ if (typeof window !== 'undefined') {
             // even after logout has retired that archive. Only live sessions replay.
             const ownerActive = session.owner === 'guest'
                 ? isActiveGuestSession()
-                : session.owner.startsWith('user:') && auth.currentUser?.uid === session.owner.slice(5);
+                : matchesAuthenticatedOwner(session.owner);
             if (!ownerActive) {
                 journalRetry?.refresh();
                 return;

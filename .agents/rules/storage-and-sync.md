@@ -358,3 +358,13 @@ npm run verify:m8
 - [Protezione automatica dell'archivio locale](../../docs/architecture/secure-local-archive-design.md): specifica approvata e modello di minaccia; verificare sempre il codice corrente.
 - [Debug ripresa sincronizzazione](../../docs/BACKGROUND_SYNC_DEBUG.md): procedura diagnostica per replay journal su ritorno online/foreground, non prova di funzionamento Production.
 - [Indice documentazione](../../docs/README.md): ulteriori riferimenti con stato distinto dai presenti contratti normativi.
+
+### Ripresa owner-neutral del journal (18/11/2026)
+
+L'owner che consente il replay foreground deve coincidere esattamente
+con l'UID del provider registrato in `authenticatedIdentitySource`.
+Un hint IndexedDB/localStorage, un owner guest o una sessione precedente
+non autorizzano il replay. Il controllo UID è solo un prerequisito:
+mantenere fence Auth, consenso, generazione, journal durevole e ACK
+verificabile nelle transazioni effettive. Non reintrodurre dipendenze
+Firebase nell'owner-neutral store.
