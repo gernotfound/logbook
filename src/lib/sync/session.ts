@@ -55,7 +55,8 @@ export function storageOwner(): string {
     // During authenticated cold boot the active provider may still be refreshing over the
     // network. Keep the same locally fenced owner used by main.tsx so early offline
     // mutations cannot fall through into the guest envelope.
-    return readAuthenticatedOwnerHint() ?? 'guest';
+    const hint = readAuthenticatedOwnerHint(); // Validate even if no provider is mounted.
+    return authenticatedIdentitySource.hasReader() ? hint ?? 'guest' : 'guest';
 }
 const consentMarkerKey = (owner: string) => `logbook:v2:${owner}:health-consent-withdrawal`;
 const consentGenerationKey = (owner: string) => `logbook:v2:${owner}:health-consent-generation`;
