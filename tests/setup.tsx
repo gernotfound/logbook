@@ -628,6 +628,13 @@ export interface RenderOptions {
   dataOwner?: string;
 }
 
+// A test fixture may construct the user's Zustand snapshot before it mounts
+// AuthProvider. That setup needs the explicitly selected synthetic UID;
+// production must never obtain it from a Firebase module-level side effect.
+function authenticatedFixtureOwner(): string {
+  return auth.currentUser ? 'user:' + auth.currentUser.uid : storageOwner();
+}
+
 /**
  * Nominal authenticated UI suites mount components after the account is ready,
  * as production App does. Unlike AuthProvider integration tests, these tests
@@ -636,7 +643,7 @@ export interface RenderOptions {
 export function renderWithAuthenticatedTestOwner(ui: React.ReactElement, options: RenderOptions = {}) {
   const initialUserData = options.userData !== undefined ? options.userData : defaultMockUserData;
   const initialLocalWorkout = options.localWorkout !== undefined ? options.localWorkout : null;
-  setOwnerBoundUserData(initialUserData, options.dataOwner ?? storageOwner());
+  setOwnerBoundUserData(initialUserData, options.dataOwner ?? authenticatedFixtureOwner());
   useAppStore.setState({
     localWorkout: initialLocalWorkout,
     syncing: false,
@@ -659,7 +666,7 @@ export function renderWithAuthenticatedTestOwner(ui: React.ReactElement, options
 export function renderWithProviders(ui: React.ReactElement, options: RenderOptions = {}) {
   const initialUserData = options.userData !== undefined ? options.userData : defaultMockUserData;
   const initialLocalWorkout = options.localWorkout !== undefined ? options.localWorkout : null;
-  setOwnerBoundUserData(initialUserData, options.dataOwner ?? storageOwner());
+  setOwnerBoundUserData(initialUserData, options.dataOwner ?? authenticatedFixtureOwner());
 
   useAppStore.setState({
     localWorkout: initialLocalWorkout,
