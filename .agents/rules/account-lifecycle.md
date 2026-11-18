@@ -9,6 +9,12 @@
 
 **Autorità:** [`AGENTS.md`](../../AGENTS.md). Questo contratto ne specializza gli invarianti; non amplia autorizzazioni o perimetro.
 
+### Bootstrap Kinde-first senza AuthProvider Firebase (18/11/2026, v2.524.0 candidato)
+
+`src/main.tsx` monta `GuestOnlyAuthProvider` anziché il vecchio `AuthProvider` e non monta più il recupero di cancellazione Firebase pre-lancio. Il provider corrente non sottoscrive `onAuthStateChanged`, non fabbrica `User` Firebase, non adotta identità Kinde né owner account, e rifiuta esplicitamente i vecchi comandi email/Google. Usa `useGuestLogin` e `logoutActiveGuestSession` per lock, revoca durevole, controllo tra schede e purge guest. Il vecchio provider rimane nel codice per test e come riferimento temporaneo ai chiamanti da convertire, **non** è l'autorità runtime della nuova baseline.
+
+**Residuo e rischio:** altre importazioni statiche (`db.ts`, `healthConsent.ts`, componenti e impostazioni) caricano ancora il modulo Firebase; la sua inizializzazione e il lettore UID legacy non sono stati rimossi. Un utente Kinde verificato vede solo identità, non può usare ancora le funzioni fitness account e non deve essere rappresentato da un `User` simulato. Il ritiro vero di Firebase richiede convertire storage/consenso/replica/impostazioni e verificare che il guest non usi più Firebase sulla rete.
+
 ### Ritiro schermata login Firebase (18/11/2026, v2.523.0 candidata)
 
 Il componente non montato `LoginBox` e i relativi test esclusivamente legacy sono stati eliminati. L'ingresso account in `App.tsx` continua a montare `KindeAccountEntry identityOnly` e la scelta guest rimane limitata allo stesso owner/vault, senza adozione cloud. Il ritiro della UI **non** ritira `AuthProvider` né gli SDK ancora importati dal lifecycle guest/account, storage e consenso: non presentarli come rimossi finché i chiamanti e i trasporti Workers/D1 non sono convertiti e verificati. Regressioni di branding, tema e ingresso Kinde sostituiscono gli assert del vecchio form.
