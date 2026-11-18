@@ -3,7 +3,6 @@
 
 const {
   REGEX_BACKSLASH,
-  REGEX_REMOVE_BACKSLASH,
   REGEX_SPECIAL_CHARS,
   REGEX_SPECIAL_CHARS_GLOBAL
 } = require('./constants');
@@ -27,10 +26,50 @@ exports.isWindows = () => {
   return false;
 };
 
+const isLineBreak = char =>
+  char === '\n' || char === '\r' || char === '\u2028' || char === '\u2029';
+
 exports.removeBackslashes = str => {
-  return str.replace(REGEX_REMOVE_BACKSLASH, match => {
-    return match === '\\' ? '' : match;
-  });
+  const length = str.length;
+  const nextClosingBracket = new Int32Array(length + 2);
+  const nextLineBreak = new Int32Array(length + 2);
+  let closing = length;
+  let lineBreak = length;
+
+  // The old regex searched forward for every '[', causing quadratic work on
+  // unmatched brackets. Precompute the nearest viable closing bracket and
+  // line terminator so every input character is inspected a bounded number
+  // of times. A line terminator directly before ']' is valid in the old regex.
+  for (let i = length - 1; i >= 0; i--) {
+    if (str[i] === ']' && i > 0 && str[i - 1] !== '\\') {
+      closing = i;
+    }
+    if (isLineBreak(str[i])) {
+      lineBreak = i;
+    }
+    nextClosingBracket[i] = closing;
+    nextLineBreak[i] = lineBreak;
+  }
+
+  let result = '';
+  let segmentStart = 0;
+  for (let i = 0; i < length; i++) {
+    if (str[i] === '[' && i + 2 < length) {
+      const end = nextClosingBracket[i + 2];
+      if (end < length && nextLineBreak[i + 1] >= end - 1) {
+        // A complete bracket class is kept verbatim, including its escapes.
+        i = end;
+        continue;
+      }
+    }
+
+    if (str[i] === '\\' && i + 1 < length && !isLineBreak(str[i + 1])) {
+      result += str.slice(segmentStart, i);
+      segmentStart = i + 1;
+    }
+  }
+
+  return result + str.slice(segmentStart);
 };
 
 exports.escapeLast = (input, char, lastIdx) => {
