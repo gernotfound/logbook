@@ -1,3 +1,4 @@
+import { applyCurrentD1RecoverySchema } from './current-d1-schema.mjs';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { readFileSync, readdirSync } from 'node:fs';
@@ -8,7 +9,6 @@ import kindeHttpWorker, { createKindeHttpHandler } from '../../cloudflare/auth/k
 import gate from '../../cloudflare/auth/session-gate.mjs';
 import { issueVerifiedSession } from '../../cloudflare/auth/session-issuer.mjs';
 import apiWorker from '../../cloudflare/api/worker.mjs';
-import { enrollIndependentOwner, recordVerifiedInitialConsent } from '../../cloudflare/recovery/independent-owner-fence.mjs';
 import { routeCandidateFirstPartyApi } from '../../cloudflare/first-party-api-candidate.mjs';
 
 const ORIGIN = 'https://candidate.invalid';
@@ -68,9 +68,7 @@ async function fixture() {
   // A wholly separate SQLite D1 models the CF-08 registry, not a copy of
   // identity or health data. Production consent integration remains pending.
   const registry = new DatabaseSync(':memory:');
-  for (const name of ['0001_independent_owner_fences.sql', '0002_block_replace_bypass.sql']) {
-    registry.exec(readFileSync(new URL('../../cloudflare/recovery/migrations/' + name, import.meta.url), 'utf8'));
-  }
+  applyCurrentD1RecoverySchema(registry);
   registry.prepare("UPDATE recovery_control SET mode='open',generation=2 WHERE singleton=1").run();
   const recoveryDb = new DB(registry);
   const { publicKey, privateKey } = await generateKeyPair('RS256');
@@ -159,10 +157,6 @@ async function fixture() {
   }
   return {
     sqlite, db, env, handler, post, login,
-    async recordIndependentInitialConsent(uid) {
-      await enrollIndependentOwner(recoveryDb, uid);
-      await recordVerifiedInitialConsent(db, recoveryDb, uid);
-    },
     calls: () => callCount,
     setNonce: value => { nonce = value; },
     setRate: value => { allowLogin = value; },
@@ -530,7 +524,6 @@ void test('Kinde callback crosses consent and D1 replica gates only after explic
 
     const accepted = await cloudCall(f, '/v1/consent/initial', login, acceptance);
     assert.equal(accepted.status, 200);
-    await f.recordIndependentInitialConsent(accepted.body.uid);
     assert.deepEqual({
       uid: accepted.body.uid, status: accepted.body.status, revision: accepted.body.revision,
       fenceEpoch: accepted.body.fenceEpoch,
@@ -603,7 +596,6 @@ void test('Kinde signed subjects retain separate D1 consent and replica register
     const a = await f.login();
     const principalA = await (await f.handler(f.post(SESSION, a.cookie), f.env)).json();
     assert.equal((await cloudCall(f, '/v1/consent/initial', a, acceptance)).status, 200);
-    await f.recordIndependentInitialConsent(principalA.uid);
     const claim = {
       mutationId: 'kinde-synthetic-claim-owner-a', expectedRevision: 0,
       expectedFenceEpoch: 1, consentRevision: 1,
@@ -623,7 +615,6 @@ void test('Kinde signed subjects retain separate D1 consent and replica register
     assert.deepEqual((await cloudCall(f, '/v1/consent/status', b)).body,
       { uid: principalB.uid, status: 'unregistered', revision: 0, fenceEpoch: 1 });
     assert.equal((await cloudCall(f, '/v1/consent/initial', b, acceptance)).status, 200);
-    await f.recordIndependentInitialConsent(principalB.uid);
     assert.deepEqual((await cloudCall(f, '/v1/sync/control', b, {})).body.replicas, {});
     const claimB = {
       ...claim, mutationId: 'kinde-synthetic-claim-owner-b',
@@ -718,7 +709,6 @@ void test('first-party gateway completes synthetic Kinde → consent → ADK →
 
     const consent = await api('/v1/consent/initial', acceptance);
     assert.equal(consent.status, 200);
-    await f.recordIndependentInitialConsent(consent.body.uid);
     assert.equal(consent.body.uid, principal.uid);
     assert.equal((await (await through(f.post(SESSION, cookie))).json()).healthConsentRevision, 1);
     const claim = {

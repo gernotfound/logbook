@@ -1,12 +1,10 @@
+import { applyCurrentD1RecoverySchema } from './current-d1-schema.mjs';
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
 import api from '../../cloudflare/api/worker.mjs';
 import gate, { hashSessionSecret } from '../../cloudflare/auth/session-gate.mjs';
 import { issueVerifiedSession } from '../../cloudflare/auth/session-issuer.mjs';
-import {
-  enrollIndependentOwner, recordVerifiedInitialConsent,
-} from '../../cloudflare/recovery/independent-owner-fence.mjs';
 
 export const ORIGIN = 'https://cf05-key-http.example.invalid';
 const KEK = Buffer.alloc(32, 91).toString('base64');
@@ -65,10 +63,7 @@ export async function createCloudKeyHttpFixture(owners = ['owner-a', 'owner-b'])
   }
   const db = new D1(sqlite);
   const registry = new DatabaseSync(':memory:');
-  const registryMigrations = new URL('../../cloudflare/recovery/migrations/', import.meta.url);
-  for (const file of readdirSync(registryMigrations).filter(name => name.endsWith('.sql')).sort()) {
-    registry.exec(readFileSync(new URL(file, registryMigrations), 'utf8'));
-  }
+  applyCurrentD1RecoverySchema(registry);
   registry.exec("UPDATE recovery_control SET mode='open', generation=2 WHERE singleton=1");
   const recoveryDb = new D1(registry);
   const gateEnv = {
@@ -114,12 +109,10 @@ export async function createCloudKeyHttpFixture(owners = ['owner-a', 'owner-b'])
     count(table, uid) {
       return sqlite.prepare('SELECT COUNT(*) AS n FROM ' + table + ' WHERE uid=?').get(uid).n;
     },
-    async consent(uid, { register = true } = {}) {
-      if (register) await enrollIndependentOwner(recoveryDb, uid);
+    async consent(uid) {
       const x = await call(uid, '/v1/consent/initial', { body: ACCEPT });
       assert.equal(x.response.status, 200);
       assert.equal(x.body.status, 'active');
-      if (register) await recordVerifiedInitialConsent(db, recoveryDb, uid);
     },
     async withdraw(uid) {
       const x = await call(uid, '/v1/consent/withdraw', { body: WITHDRAW });

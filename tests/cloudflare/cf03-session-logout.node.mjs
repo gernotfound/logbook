@@ -1,9 +1,7 @@
 import assert from 'node:assert/strict';
-import { applyCurrentD1Schema } from './current-d1-schema.mjs';
+import { applyCurrentD1RecoverySchema, applyCurrentD1Schema } from './current-d1-schema.mjs';
 import { test } from 'node:test';
 import { DatabaseSync } from 'node:sqlite';
-import { readFileSync } from 'node:fs';
-import { enrollIndependentOwner, recordVerifiedInitialConsent } from '../../cloudflare/recovery/independent-owner-fence.mjs';
 import api from '../../cloudflare/api/worker.mjs';
 import gate, { hashSessionSecret } from '../../cloudflare/auth/session-gate.mjs';
 import { issueVerifiedSession } from '../../cloudflare/auth/session-issuer.mjs';
@@ -48,9 +46,7 @@ async function fixture() {
   applyCurrentD1Schema(sqlite);
   const db = new D1Adapter(sqlite);
   const registry = new DatabaseSync(':memory:');
-  for (const name of ['0001_independent_owner_fences.sql', '0002_block_replace_bypass.sql']) {
-    registry.exec(readFileSync(new URL('../../cloudflare/recovery/migrations/' + name, import.meta.url), 'utf8'));
-  }
+  applyCurrentD1RecoverySchema(registry);
   registry.prepare("UPDATE recovery_control SET mode='open',generation=2 WHERE singleton=1").run();
   const recoveryDb = new D1Adapter(registry);
   for (const uid of ['owner-a', 'owner-b']) {
@@ -71,10 +67,6 @@ async function fixture() {
     }) } };
   return {
     sqlite, registry, db, env, cookie, csrf, a, another, b,
-    async recordIndependentInitialConsent(uid) {
-      await enrollIndependentOwner(recoveryDb, uid);
-      await recordVerifiedInitialConsent(db, recoveryDb, uid);
-    },
     close() { registry.close(); sqlite.close(); },
   };
 }
@@ -112,7 +104,6 @@ void test('the same API entry serves consent, encrypted sync and session-only lo
   try {
     assert.equal((await call(f, '/v1/consent/status')).body.status, 'unregistered');
     assert.equal((await call(f, '/v1/consent/initial', { body: ACCEPT })).response.status, 200);
-    await f.recordIndependentInitialConsent('owner-a');
     assert.equal((await call(f, '/v1/sync/control', { body: {} })).response.status, 200);
     const result = await call(f);
     assert.equal(result.response.status, 200);
@@ -123,7 +114,7 @@ void test('the same API entry serves consent, encrypted sync and session-only lo
     assert.equal((await call(f, '/v1/consent/status')).response.status, 401);
     assert.equal((await call(f, '/v1/sync/control', { body: {} })).response.status, 401);
     assert.equal((await call(f)).response.status, 401);
-  } finally { f.sqlite.close(); }
+  } finally { f.close(); }
 });
 void test('zero-byte browser logout stream is allowed but forged empty body cannot revoke', async () => {
   const f = await fixture();
@@ -157,7 +148,7 @@ void test('logout without first consent does not implicitly grant fitness', asyn
     assert.equal((await call(f, '/v1/sync/control', { body: {} })).response.status, 401);
     assert.equal((await call(f)).response.status, 200);
     assert.equal(f.sqlite.prepare('SELECT count(*) AS n FROM sync_subjects').get().n, 0);
-  } finally { f.sqlite.close(); }
+  } finally { f.close(); }
 });
 void test('unverified session can leave without gaining consent or sync', async () => {
   const f = await fixture();
@@ -175,7 +166,7 @@ void test('unverified session can leave without gaining consent or sync', async 
     assert.equal(result.response.status, 200);
     assert.equal(active(f.sqlite, 'pending-owner'), 0);
     clearCookies(result.response);
-  } finally { f.sqlite.close(); }
+  } finally { f.close(); }
 });
 void test('origin, CSRF, method, body, query and owner identity are required', async () => {
   const f = await fixture();
@@ -194,7 +185,7 @@ void test('origin, CSRF, method, body, query and owner identity are required', a
     assert.equal(active(f.sqlite, 'owner-a'), 2);
     assert.equal(active(f.sqlite, 'owner-b'), 1);
     assert.equal((await call(f, '/v1/auth/unknown')).response.status, 404);
-  } finally { f.sqlite.close(); }
+  } finally { f.close(); }
 });
 void test('a lost D1 write response is reconciled only from primary proof', async () => {
   const f = await fixture();
@@ -213,7 +204,7 @@ void test('a lost D1 write response is reconciled only from primary proof', asyn
     assert.equal(result.response.status, 200);
     clearCookies(result.response);
     assert.equal(active(f.sqlite, 'owner-a'), 1);
-  } finally { f.sqlite.close(); }
+  } finally { f.close(); }
 });
 void test('failed D1 write, stale epoch or unreadable proof never clear a cookie', async () => {
   for (const fault of ['write', 'epoch', 'read']) {
@@ -239,7 +230,7 @@ void test('failed D1 write, stale epoch or unreadable proof never clear a cookie
       assert.equal(result.response.status, 503, fault);
       assert.equal(result.response.headers.getSetCookie().length, 0);
       assert.equal(active(f.sqlite, 'owner-a'), 2);
-    } finally { f.sqlite.close(); }
+    } finally { f.close(); }
   }
 });
 void test('rate-limited or malformed internal claims cannot revoke any session', async () => {
@@ -257,5 +248,5 @@ void test('rate-limited or malformed internal claims cannot revoke any session',
     } });
     assert.equal(malformed.response.status, 503);
     assert.equal(active(f.sqlite, 'owner-a'), 2);
-  } finally { f.sqlite.close(); }
+  } finally { f.close(); }
 });

@@ -237,8 +237,17 @@ void test('missing dependencies, invalid KEK, private gate failure and quotas fa
 void test('fitness key provisioning requires an independent active owner and open registry', async () => {
   const f = await fixture();
   try {
-    await f.consent('owner-a', { register: false });
+    // Simulate a restored application snapshot whose independent floor is absent.
+    f.sqlite.exec(`
+      INSERT INTO sync_subjects (uid,status,consent_revision,fence_epoch) VALUES ('owner-a','active',1,1);
+      INSERT INTO sync_state (uid,revision) VALUES ('owner-a',0);
+    `);
+    f.sqlite.prepare(`INSERT INTO health_consent_acceptances
+      (uid,consent_revision,privacy_version,terms_version,accepted_at_ms,over_18_confirmed)
+      VALUES ('owner-a',1,'1.3.9','1.2.5',?,1)`).run(Date.now());
     await f.consent('owner-b');
+    assert.equal((await f.call('owner-a', '/v1/consent/status')).response.status, 503);
+    assert.equal(f.registry.prepare("SELECT uid FROM recovery_owner_fences WHERE uid='owner-a'").get(), undefined);
     const unregistered = await f.call('owner-a', SYNC);
     assert.equal(unregistered.response.status, 503);
     assert.deepEqual(unregistered.body, { error: 'unavailable' });

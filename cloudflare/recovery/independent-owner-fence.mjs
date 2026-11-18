@@ -1,4 +1,4 @@
-// CF-08 candidate, NOT mounted. The separate registry is an independent,
+// The separate registry is an independent,
 // rollback-resistant floor only if its own IAM/restore lifecycle stays separate.
 // Both databases must be read from first-primary; there is no cross-D1 transaction.
 const STATUSES = new Set(['pending', 'active', 'blocked', 'withdrawn', 'deleted']);
@@ -99,10 +99,10 @@ function matches(row, expected) {
     && row.erasedBeforeRevision === expected.erasedBeforeRevision;
 }
 
-// Called ONLY after verified provider authentication, BEFORE provisioning the
-// corresponding application owner. An ambiguous write is reconciled by primary
+// Called only after verified provider authentication, before provisioning the
+// application health subject. An ambiguous write is reconciled by primary
 // readback; it never creates an active/consented owner.
-export async function enrollIndependentOwner(fenceDb, uid, epoch = 1) {
+export async function enrollIndependentOwner(fenceDb, uid, epoch = 1, { requireOpen = false } = {}) {
   try {
     if (!validUid(uid) || epoch !== 1) {
       throw new IndependentFenceUnavailableError();
@@ -111,7 +111,8 @@ export async function enrollIndependentOwner(fenceDb, uid, epoch = 1) {
       uid, status: 'pending', consentRevision: 0, fenceEpoch: epoch, erasedBeforeRevision: 0,
     };
     const existing = await readRegistry(fenceDb, uid);
-    if (!existing || !['sealed', 'open'].includes(existing.mode)) {
+    if (!existing || !['sealed', 'open'].includes(existing.mode)
+      || (requireOpen && existing.mode !== 'open')) {
       throw new IndependentFenceUnavailableError();
     }
     if (existing.owner && !matches(existing.owner, expected)) {
@@ -128,7 +129,9 @@ export async function enrollIndependentOwner(fenceDb, uid, epoch = 1) {
       }
     }
     const readback = await readRegistry(fenceDb, uid);
-    if (!matches(readback?.owner, expected)) throw new IndependentFenceUnavailableError();
+    if (!matches(readback?.owner, expected) || (requireOpen && readback.mode !== 'open')) {
+      throw new IndependentFenceUnavailableError();
+    }
     return expected;
   } catch {
     throw new IndependentFenceUnavailableError();
@@ -137,7 +140,7 @@ export async function enrollIndependentOwner(fenceDb, uid, epoch = 1) {
 
 // Call ONLY after an authoritative primary SQL read of first accepted consent.
 // A D1 commit can precede this registry advancement; that gap is denied access.
-export async function recordVerifiedInitialConsent(appDb, fenceDb, uid) {
+export async function recordVerifiedInitialConsent(appDb, fenceDb, uid, { requireOpen = false } = {}) {
   try {
     if (!validUid(uid)) throw new IndependentFenceUnavailableError();
     const verified = await primary(appDb).prepare(`SELECT s.uid, s.status,
@@ -152,7 +155,9 @@ export async function recordVerifiedInitialConsent(appDb, fenceDb, uid) {
     if (!verified) throw new IndependentFenceUnavailableError();
     const next = shape(verified);
     const previous = { ...next, status: 'pending', consentRevision: 0 };
-    const existing = (await readRegistry(fenceDb, uid))?.owner;
+    const registry = await readRegistry(fenceDb, uid);
+    if (requireOpen && registry?.mode !== 'open') throw new IndependentFenceUnavailableError();
+    const existing = registry?.owner;
     if (!matches(existing, next)) {
       if (!matches(existing, previous)) throw new IndependentFenceUnavailableError();
       try { await applyTransition(fenceDb, previous, next); }
@@ -176,17 +181,22 @@ export async function armIndependentHealthWithdrawal(fenceDb, activeSubject) {
     if (!validFence(activeSubject) || activeSubject.status !== 'active'
       || activeSubject.consentRevision < 1) throw new IndependentFenceUnavailableError();
     const next = { ...activeSubject, status: 'blocked' };
-    const current = (await readRegistry(fenceDb, activeSubject.uid))?.owner;
-    if (!matches(current, next)) {
-      if (!matches(current, activeSubject)) throw new IndependentFenceUnavailableError();
-      try { await applyTransition(fenceDb, activeSubject, next); }
-      catch {
-        if (!matches((await readRegistry(fenceDb, activeSubject.uid))?.owner, next)) {
-          throw new IndependentFenceUnavailableError();
-        }
+    const pending = { ...activeSubject, status: 'pending', consentRevision: 0 };
+    // If first consent committed only in the application D1, let withdrawal
+    // win without briefly promoting the pending floor to active.
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      const current = (await readRegistry(fenceDb, activeSubject.uid))?.owner;
+      if (matches(current, next)) return next;
+      if (!matches(current, activeSubject) && !matches(current, pending)) {
+        throw new IndependentFenceUnavailableError();
       }
+      try {
+        await applyTransition(fenceDb, current, next);
+        return next;
+      } catch { /* Re-read after an ambiguous write or concurrent promotion. */ }
     }
-    return next;
+    if (matches((await readRegistry(fenceDb, activeSubject.uid))?.owner, next)) return next;
+    throw new IndependentFenceUnavailableError();
   } catch {
     throw new IndependentFenceUnavailableError();
   }

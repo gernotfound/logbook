@@ -1,6 +1,10 @@
 // Candidate trusted consent endpoint. No public deployment until real Auth,
 // rights-only export and the durable erasure-job executor are integrated.
 import { strictlyEmptyPost } from '../http/strict-empty-post.mjs';
+import {
+  armIndependentHealthWithdrawal, enrollIndependentOwner,
+  recordVerifiedHealthWithdrawal, recordVerifiedInitialConsent, requireIndependentOwnerFence,
+} from '../recovery/independent-owner-fence.mjs';
 
 const INTERNAL = 'https://auth-gate.internal/__internal/authorize';
 const MAX_BODY_BYTES = 2048;
@@ -37,7 +41,7 @@ async function trustedClaims(request, env, route) {
   return claims;
 }
 
-async function readConsent(db, claims) {
+async function readConsent(db, claims, { forWithdrawal = false } = {}) {
   if (typeof db.withSession !== 'function') throw new Error('missing-primary-session');
   // The identity read must also be session-current after the private gate:
   // revocation can happen between the two Workers' D1 reads.
@@ -89,10 +93,10 @@ async function readConsent(db, claims) {
       && row.erased_before_revision === row.consent_revision
       && row.erasure_proven === 1
     ))
-    || (row.status === 'active' && row.fence_epoch !== claims.fenceEpoch)) {
+    || (row.status === 'active' && !forWithdrawal && row.fence_epoch !== claims.fenceEpoch)) {
     throw new Error('invalid-consent-state');
   }
-  if (row.status === 'active' && (row.consent_revision !== 1
+  if (row.status === 'active' && (row.consent_revision !== 1 || row.erased_before_revision !== 0
     || !Number.isSafeInteger(row.sync_revision)
     || row.sync_revision < 0 || row.privacy_version === null
     || !VERSION.test(row.privacy_version) || !VERSION.test(row.terms_version)
@@ -111,6 +115,47 @@ async function readConsent(db, claims) {
       termsVersion: row.terms_version,
     } : {}),
   };
+}
+
+function independentDb(env) {
+  if (!env.RECOVERY_DB || env.RECOVERY_DB === env.DB
+    || typeof env.RECOVERY_DB.withSession !== 'function') {
+    throw new Error('missing-independent-registry');
+  }
+  return env.RECOVERY_DB;
+}
+
+function sameLegalVersions(result, env) {
+  return result.privacyVersion === env.CONSENT_PRIVACY_VERSION
+    && result.termsVersion === env.CONSENT_TERMS_VERSION;
+}
+
+function activeSubject(result) {
+  return {
+    uid: result.uid, status: 'active', consentRevision: result.revision,
+    fenceEpoch: result.fenceEpoch, erasedBeforeRevision: 0,
+  };
+}
+
+async function confirmActiveConsent(env, claims, result) {
+  const recovery = independentDb(env);
+  const subject = activeSubject(result);
+  try {
+    await requireIndependentOwnerFence(recovery, subject, 'fitness');
+  } catch (error) {
+    // Only a current, verified request with CSRF can reconcile the existing
+    // acceptance. Never enroll a missing floor from an application snapshot.
+    if (!claims.emailVerified || !claims.csrfVerified || !sameLegalVersions(result, env)) throw error;
+    await recordVerifiedInitialConsent(env.DB, recovery, result.uid, { requireOpen: true });
+  }
+  const readback = await readConsent(env.DB, claims);
+  if (readback.status !== 'active' || readback.revision !== result.revision
+    || readback.fenceEpoch !== result.fenceEpoch || readback.acceptedAt !== result.acceptedAt
+    || readback.privacyVersion !== result.privacyVersion || readback.termsVersion !== result.termsVersion) {
+    throw new Error('ambiguous-consent');
+  }
+  await requireIndependentOwnerFence(recovery, subject, 'fitness');
+  return readback;
 }
 
 async function boundedJson(request) {
@@ -186,7 +231,7 @@ async function pendingWithdrawal(db, claims) {
   return row?.status === 'pending' || row?.status === 'processing' ? row.status : null;
 }
 
-async function withdrawConsent(db, claims) {
+async function withdrawConsent(db, claims, subjectFenceEpoch) {
   const now = Date.now();
   try {
     // The trusted session, principal, age/consent proof and active generation
@@ -203,7 +248,7 @@ async function withdrawConsent(db, claims) {
       JOIN auth_sessions t ON t.uid = p.uid
       JOIN health_consent_acceptances c ON c.uid = s.uid
       WHERE s.uid = ? AND s.status = 'active'
-        AND s.consent_revision = ? AND s.fence_epoch <= ?
+        AND s.consent_revision = ? AND s.fence_epoch = ? AND s.erased_before_revision = 0
         AND c.consent_revision = s.consent_revision
         AND c.over_18_confirmed = 1
         AND c.accepted_at_ms > 0 AND c.accepted_at_ms <= ?
@@ -213,14 +258,13 @@ async function withdrawConsent(db, claims) {
         AND t.issued_at_ms <= ? AND t.idle_expires_at_ms > ?
         AND t.absolute_expires_at_ms > ?
     `).bind(
-      now, claims.uid, claims.healthConsentRevision, claims.fenceEpoch,
+      now, claims.uid, claims.healthConsentRevision, subjectFenceEpoch,
       now, claims.fenceEpoch, claims.sessionHash, now, now, now,
     ).run();
   } catch {
     // A timeout can occur AFTER the atomic insert/trigger committed. Only
     // the primary readback below can prove pending versus unknown.
   }
-  return await pendingWithdrawal(db, claims);
 }
 
 function validAcceptance(body, env) {
@@ -241,39 +285,43 @@ function validAcceptance(body, env) {
   return true;
 }
 
-async function acceptInitial(db, claims, body, env) {
+async function acceptInitial(db, claims, env) {
   const now = Date.now();
   // The first INSERT is conditional on the still-active hashed session and
   // principal epoch, so a revocation between AuthGate and SQL cannot grant
   // first consent. Later statements fail if this INSERT inserted zero rows:
   // D1.batch rolls back all statements rather than accepting a phantom ACK.
-  await db.batch([
-    db.prepare(`
-      INSERT INTO sync_subjects (uid,status,consent_revision,fence_epoch)
-      SELECT p.uid,'active',1,p.auth_epoch
-      FROM auth_principals p JOIN auth_sessions t ON t.uid = p.uid
-      WHERE p.uid = ? AND p.status = 'active'
-        AND p.verified_at_ms IS NOT NULL AND p.verified_at_ms <= ?
-        AND p.auth_epoch = ? AND t.auth_epoch = p.auth_epoch
-        AND t.token_hash = ? AND t.revoked_at_ms IS NULL
-        AND t.issued_at_ms <= ? AND t.idle_expires_at_ms > ?
-        AND t.absolute_expires_at_ms > ?
-    `).bind(claims.uid, now, claims.fenceEpoch, claims.sessionHash, now, now, now),
-    db.prepare('INSERT INTO sync_state (uid,revision) VALUES (?,0)').bind(claims.uid),
-    db.prepare(`
-      INSERT INTO health_consent_acceptances
-        (uid,consent_revision,privacy_version,terms_version,accepted_at_ms,over_18_confirmed)
-      VALUES (?,1,?,?,?,1)
-    `).bind(claims.uid, env.CONSENT_PRIVACY_VERSION, env.CONSENT_TERMS_VERSION, now),
-  ]);
+  try {
+    await db.batch([
+      db.prepare(`
+        INSERT INTO sync_subjects (uid,status,consent_revision,fence_epoch)
+        SELECT p.uid,'active',1,p.auth_epoch
+        FROM auth_principals p JOIN auth_sessions t ON t.uid = p.uid
+        WHERE p.uid = ? AND p.status = 'active'
+          AND p.verified_at_ms > 0 AND p.verified_at_ms <= ?
+          AND p.auth_epoch = ? AND t.auth_epoch = p.auth_epoch
+          AND t.token_hash = ? AND t.revoked_at_ms IS NULL
+          AND t.issued_at_ms <= ? AND t.idle_expires_at_ms > ?
+          AND t.absolute_expires_at_ms > ?
+      `).bind(claims.uid, now, claims.fenceEpoch, claims.sessionHash, now, now, now),
+      db.prepare('INSERT INTO sync_state (uid,revision) VALUES (?,0)').bind(claims.uid),
+      db.prepare(`
+        INSERT INTO health_consent_acceptances
+          (uid,consent_revision,privacy_version,terms_version,accepted_at_ms,over_18_confirmed)
+        VALUES (?,1,?,?,?,1)
+      `).bind(claims.uid, env.CONSENT_PRIVACY_VERSION, env.CONSENT_TERMS_VERSION, now),
+    ]);
+  } catch {
+    // A transaction with a lost write response may already be committed.
+    // Reconcile only the immutable proof for this still-current session.
+  }
   const result = await readConsent(db, claims);
   if (result.status !== 'active' || result.revision !== 1
     || result.fenceEpoch !== claims.fenceEpoch
-    || result.privacyVersion !== env.CONSENT_PRIVACY_VERSION
-    || result.termsVersion !== env.CONSENT_TERMS_VERSION) {
+    || !sameLegalVersions(result, env)) {
     throw new Error('ambiguous-consent');
   }
-  return result;
+  return await confirmActiveConsent(env, claims, result);
 }
 
 export default {
@@ -320,29 +368,34 @@ export default {
       const claims = await trustedClaims(request, env, url.pathname);
       if (!claims) return json({ error: 'unavailable' }, 503);
       if (claims.errorStatus) return json({ error: 'unauthorized' }, claims.errorStatus);
-      if (statusRoute) return json(await readConsent(env.DB, claims));
+      if (statusRoute) {
+        const result = await readConsent(env.DB, claims);
+        return json(result.status === 'active' ? await confirmActiveConsent(env, claims, result) : result);
+      }
       if (!withdrawRoute && !claims.emailVerified) return json({ error: 'unauthorized' }, 403);
       if (!claims.csrfVerified) return json({ error: 'csrf-required' }, 403);
       if (withdrawRoute) {
         if (claims.healthConsentRevision !== 1) {
           return json({ error: 'consent-conflict' }, 409);
         }
-        const deletionStatus = await withdrawConsent(env.DB, claims);
-        if (!deletionStatus) {
-          // Unregistered accounts have nothing to revoke. Every other
-          // unproven outcome remains unavailable rather than an ACK.
-          const state = await readConsent(env.DB, claims);
-          if (state.status === 'unregistered') {
-            return json({ error: 'consent-conflict' }, 409);
-          }
-          throw new Error('unproven-withdrawal');
+        const state = await readConsent(env.DB, claims, { forWithdrawal: true });
+        if (state.status === 'unregistered') return json({ error: 'consent-conflict' }, 409);
+        const recovery = independentDb(env);
+        if (state.status === 'active') {
+          await armIndependentHealthWithdrawal(recovery, activeSubject(state));
+          await withdrawConsent(env.DB, claims, state.fenceEpoch);
         }
+        if (!await pendingWithdrawal(env.DB, claims)) throw new Error('unproven-withdrawal');
+        await recordVerifiedHealthWithdrawal(env.DB, recovery, claims.uid);
+        const deletionStatus = await pendingWithdrawal(env.DB, claims);
+        if (!deletionStatus) throw new Error('unproven-withdrawal');
         return json({ status: 'withdrawn', revision: 1,
           fenceEpoch: claims.fenceEpoch, deletionStatus });
       }
       const current = await readConsent(env.DB, claims);
       if (current.status !== 'unregistered') return json({ error: 'consent-conflict' }, 409);
-      const result = await acceptInitial(env.DB, claims, body, env);
+      await enrollIndependentOwner(independentDb(env), claims.uid, claims.fenceEpoch, { requireOpen: true });
+      const result = await acceptInitial(env.DB, claims, env);
       return json(result);
     } catch {
       return json({ error: 'unavailable-or-conflict' }, 503);

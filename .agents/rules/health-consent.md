@@ -47,7 +47,13 @@ nuovo accesso con lo stesso UID, il modulo non invia il consenso. Una nuova
 verifica azzera le tre scelte. Il preflight prima della scrittura confronta
 l'owner restituito con quello del modulo e rifiuta ogni differenza.
 Una risposta SQL persa/409/503 si riconcilia tramite la prova remota, **non**
-con replay del POST o ottimismo UI. Il guest può esprimere il primo consenso
+con replay del POST o ottimismo UI. Il Worker candidato registra prima il floor
+indipendente `pending`, poi l'accettazione immutabile nel D1 applicativo.
+Prima di restituire `active` conferma entrambe le primarie con la stessa
+generazione. Se la promozione del floor rimane indietro, la lettura autenticata
+del consenso può riconciliare la prova già scritta solo con CSRF, email verificata,
+versioni legali correnti e floor `pending` esistente. Una copia ripristinata
+senza floor non può registrarsi da sola. Il guest può esprimere il primo consenso
 account prima del trasferimento: nessuna eredità del consenso locale guest,
 nessun trasferimento o purge implicito. Non collegato alla UX corrente;
 email, policy password e provider runtime restano gate autonomi.
@@ -60,6 +66,13 @@ distribuiti né erasure completa. Il backend accetta soltanto l'intenzione
 esplicita `action: withdraw`, `expectedRevision: 1`,
 `confirmsErasure: true` con sessione corrente e CSRF; riattesta il
 principal e la prova del consenso nella stessa SQL di INSERT del job.
+Prima dell'INSERT, il registro indipendente deve attestare il deny per
+l'esatta generazione sanitaria. La migration recovery `0003` consente
+`pending → blocked` se la prima accettazione ha già committato sulla primaria,
+evitando di renderla attiva per poterla revocare. Se la scrittura del job
+fallisce, il deny rimane e una richiesta autorizzata può riconciliare la
+revoca. La risposta richiede il job primario e la revoca registrata anche
+nel D1 indipendente.
 Un trigger esegue atomicamente `sync_subjects.status = withdrawn`,
 impedendo nuove operazioni replica anche se la risposta viene persa.
 D1 primaria deve attestare sessione, revoca e job prima della risposta

@@ -1,10 +1,10 @@
 import assert from 'node:assert/strict';
-import { copyFileSync, mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs';
+import { copyFileSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { test } from 'node:test';
-import { applyCurrentD1Schema } from './current-d1-schema.mjs';
+import { applyCurrentD1RecoverySchema, applyCurrentD1Schema } from './current-d1-schema.mjs';
 import { runOneHealthErasureStep } from '../../cloudflare/jobs/health-erasure-worker.mjs';
 import { inspectRestoredD1Census } from '../../cloudflare/recovery/restore-census.mjs';
 import {
@@ -14,17 +14,6 @@ import {
   requireIndependentOwnerFence,
 } from '../../cloudflare/recovery/independent-owner-fence.mjs';
 
-const FENCE_MIGRATION_DIR = new URL('../../cloudflare/recovery/migrations/', import.meta.url);
-const FENCE_MIGRATIONS = readdirSync(FENCE_MIGRATION_DIR)
-  .filter(name => /^[0-9]{4}_[a-z0-9_]+\.sql$/.test(name)).sort();
-assert.deepEqual(FENCE_MIGRATIONS.map(name => name.slice(0, 4)),
-  Array.from({ length: FENCE_MIGRATIONS.length }, (_, i) => String(i + 1).padStart(4, '0')));
-assert.equal(FENCE_MIGRATIONS.length, 2);
-function applyFenceSchema(sqlite) {
-  for (const name of FENCE_MIGRATIONS) {
-    sqlite.exec(readFileSync(new URL(name, FENCE_MIGRATION_DIR), 'utf8'));
-  }
-}
 class Statement {
   constructor(sqlite, sql, args = []) { this.sqlite = sqlite; this.sql = sql; this.args = args; }
   bind(...args) { return new Statement(this.sqlite, this.sql, args); }
@@ -79,7 +68,7 @@ void test('independent monotone fence blocks old consent after a physical applic
     app.exec('PRAGMA foreign_keys=ON');
     applyCurrentD1Schema(app);
     ledger = new DatabaseSync(fenceFile);
-    applyFenceSchema(ledger);
+    applyCurrentD1RecoverySchema(ledger);
     const appDb = new D1Sqlite(app);
     const fenceDb = new D1Sqlite(ledger);
     addOwner(app, 'owner-a');
@@ -147,7 +136,7 @@ void test('independent monotone fence blocks old consent after a physical applic
 void test('missing, unavailable or altered external proof and duplicate enrollment fail closed', async () => {
   const ledger = new DatabaseSync(':memory:');
   try {
-    applyFenceSchema(ledger);
+    applyCurrentD1RecoverySchema(ledger);
     const db = new D1Sqlite(ledger);
     const subjectA = {
       uid: 'owner-a', status: 'active', consentRevision: 1,
@@ -163,7 +152,8 @@ void test('missing, unavailable or altered external proof and duplicate enrollme
     await rejected(enrollIndependentOwner(db, 'owner-a', 2));
     await rejected(enrollIndependentOwner(db, 'new-owner', 2));
     assert.equal(fence(ledger, 'new-owner'), undefined);
-    await rejected(armIndependentHealthWithdrawal(db, subjectA));
+    await rejected(armIndependentHealthWithdrawal(db, { ...subjectA, uid: 'unenrolled' }));
+    await rejected(armIndependentHealthWithdrawal(db, { ...subjectA, fenceEpoch: 2 }));
     const original = fence(ledger, 'owner-a');
     assert.equal(original.status, 'pending');
     assert.throws(() => ledger.prepare(
@@ -195,7 +185,7 @@ void test('missing, unavailable or altered external proof and duplicate enrollme
 void test('duplicate or late write does not undo a durable independent deny', async () => {
   const ledger = new DatabaseSync(':memory:');
   try {
-    applyFenceSchema(ledger);
+    applyCurrentD1RecoverySchema(ledger);
     const fenceDb = new D1Sqlite(ledger);
     const a = {
       uid: 'owner-a', status: 'active', consentRevision: 1,
@@ -243,7 +233,7 @@ void test('operator census scans both full D1 tables while sealed, not caller-se
   try {
     app.exec('PRAGMA foreign_keys=ON');
     applyCurrentD1Schema(app);
-    applyFenceSchema(ledger);
+    applyCurrentD1RecoverySchema(ledger);
     const appDb = new D1Sqlite(app);
     const fenceDb = new D1Sqlite(ledger);
     assert.deepEqual(await inspectRestoredD1Census(appDb, fenceDb), {
@@ -285,7 +275,7 @@ void test('operator census detects a registry write racing two primary reads', a
   try {
     app.exec('PRAGMA foreign_keys=ON');
     applyCurrentD1Schema(app);
-    applyFenceSchema(ledger);
+    applyCurrentD1RecoverySchema(ledger);
     const appDb = new D1Sqlite(app);
     const fenceDb = new D1Sqlite(ledger);
     addOwner(app, 'owner-a');
@@ -333,7 +323,7 @@ void test('operator census rejects failed D1 reads and malformed independent row
   try {
     app.exec('PRAGMA foreign_keys=ON');
     applyCurrentD1Schema(app);
-    applyFenceSchema(ledger);
+    applyCurrentD1RecoverySchema(ledger);
     const appDb = new D1Sqlite(app);
     addOwner(app, 'owner-a');
     const fenceDb = new D1Sqlite(ledger);
@@ -382,7 +372,7 @@ void test('operator census rejects owner counts beyond its bounded D1 read budge
   try {
     app.exec('PRAGMA foreign_keys=ON');
     applyCurrentD1Schema(app);
-    applyFenceSchema(ledger);
+    applyCurrentD1RecoverySchema(ledger);
     for (let i = 0; i < 513; i++) {
       const uid = 'owner-' + String(i).padStart(4, '0');
       addOwner(app, uid);

@@ -47,11 +47,13 @@ describe('candidate first-party Kinde client boundary', () => {
         expect(send.mock.calls.map(([path]) => path)).toEqual([
             '/api/auth/session', '/v1/consent/status', '/api/auth/session',
         ]);
-        for (const [, init] of send.mock.calls) {
+        for (const [path, init] of send.mock.calls) {
             expect(init).toEqual(expect.objectContaining({
                 method: 'POST', mode: 'same-origin', credentials: 'same-origin',
                 cache: 'no-store', redirect: 'error',
-                headers: { Accept: 'application/json' },
+                headers: path === '/v1/consent/status'
+                    ? { Accept: 'application/json', 'X-CSRF-Token': 'A'.repeat(43) }
+                    : { Accept: 'application/json' },
             }));
             expect(init).not.toHaveProperty('body');
             expect(init).not.toHaveProperty('Authorization');

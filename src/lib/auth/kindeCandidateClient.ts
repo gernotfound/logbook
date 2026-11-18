@@ -93,6 +93,7 @@ async function post(
     route: '/api/auth/session' | '/v1/consent/status',
     send: typeof fetch,
     stillCurrent: () => boolean,
+    csrfToken?: string,
 ): Promise<{ unauthorized: true } | { unauthorized: false; body: unknown }> {
     assertCurrent(stillCurrent);
     let response: Response;
@@ -100,7 +101,7 @@ async function post(
         response = await send(route, {
             method: 'POST', credentials: 'same-origin', mode: 'same-origin',
             cache: 'no-store', redirect: 'error',
-            headers: { Accept: 'application/json' },
+            headers: { Accept: 'application/json', ...(csrfToken ? { 'X-CSRF-Token': csrfToken } : {}) },
             signal: AbortSignal.timeout(5000),
         });
     } catch {
@@ -183,8 +184,9 @@ function consentState(value: unknown, owner: CandidatePrincipal): KindeCandidate
 }
 
 /**
- * Candidate read-only browser adapter, not wired to Firebase AuthContext or
- * cloud hydration. Two separate Worker reads can straddle a session switch;
+ * Candidate browser status adapter, not wired to React AuthContext or
+ * cloud hydration. CSRF permits the server to reconcile already committed
+ * consent. Two separate Worker reads can straddle a session switch;
  * the preflight cookie fence, final session read, trusted consent UID and
  * caller generation reject mixed-owner hints, including A→B→A with equal
  * epochs. 'Consent-confirmed' is not an ACK, vault unlock or sync grant.
@@ -201,7 +203,7 @@ export async function readKindeCandidateAccess({
     if (first.unauthorized) return { kind: 'signed-out' };
     if (fence.csrfToken === null) throw new KindeCandidateBoundaryError();
     const owner = principal(first.body);
-    const consent = await post('/v1/consent/status', send, fence.stillCurrent);
+    const consent = await post('/v1/consent/status', send, fence.stillCurrent, fence.csrfToken);
     if (consent.unauthorized) throw new KindeCandidateBoundaryError(401);
     const last = await post('/api/auth/session', send, fence.stillCurrent);
     if (last.unauthorized) throw new KindeCandidateBoundaryError(401);
