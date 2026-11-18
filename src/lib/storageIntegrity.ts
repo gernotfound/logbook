@@ -1,5 +1,5 @@
 import { UserDataSchema } from './schema';
-import { deviceKey } from './sync/deviceStorage';
+import { deviceKey } from './sync/deviceStorageKeys';
 import { storageOwner } from './sync/session';
 
 export type StorageReadStatus =
