@@ -362,3 +362,17 @@ Il candidato `cloudflare/auth/kinde-http-worker.mjs` non è collegato a un'origi
 ### CF-03 — ingresso browser e sessione client candidati
 
 È predisposto `src/lib/auth/kindeCandidateClient.ts` per il successivo cambio di provider: navigazione nativa `POST /api/auth/kinde/start` senza password nel frontend, lettura read-only di cookie sessione D1 tramite `/api/auth/session` e di consenso tramite `/v1/consent/status`, con controllo di owner/epoch/revisione e divieto di trasformare il fallback in guest o in ACK cloud. `cloudflare/auth/kinde-http-worker.mjs` rifiuta form non vuoti ma gestisce anche empty POST con body stream del browser. Sono testate soltanto fixture sintetiche, non URL/callback reali del tenant. Nessuna route o UI Kinde è stata resa pubblica, nessuna credenziale configurata, e il frontend effettivo continua a usare Firebase finché non esiste il percorso completo e collaudato.
+
+### CF-03 — ripresa della PR integrata #1209 (18/11/2026)
+
+La PR #1209 riprende il branch Kinde bloccato sul gate delle dipendenze
+`picomatch@4.0.7`. Il backport della PR #1214 è stato consolidato nello
+stesso candidato con il monitor ufficiale per la sua futura rimozione.
+Non è un cambio di identità, provider o configurazione OAuth.
+
+I controlli GitHub sullo SHA candidato (registrati nella PR e in #1057)
+non equivalgono a prove di callback reali, Google, verifica/reset email,
+consenso live, chiavi o replica. Nessun redirect/callback Kinde Production,
+DNS, credenziale o binding Cloudflare viene cambiato da questa PR.
+La rimozione completa degli SDK e dei percorsi Firebase rimane un lavoro
+esplicito e separato, da completare quando il sostituto è verificato.

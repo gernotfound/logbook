@@ -280,3 +280,12 @@ I test devono attraversare questi boundary secondo [Verification hardening](veri
 Il candidato `src/lib/auth/kindeCandidateClient.ts` fornisce un lettore **solo consultivo** di sessione e consenso Workers/D1, senza importare Firebase, modificare storage o abilitare la sincronizzazione. La lettura segue `POST /api/auth/session` → `POST /v1/consent/status` → nuovo controllo `POST /api/auth/session`, sempre con cookie host-only e policy HTTP same-origin/no-store; dati, revisioni ed epoch incongruenti sono errore, **non** logout/guest implicito. Il chiamante deve fornire un guard per la generazione corrente e non può usare un risultato `consent-confirmed` come prova di disponibilità ADK, vault, sync o ACK. Il consenso guest non si eredita dall'account.
 
 Per avviare Authorization Code + PKCE è predisposta una navigazione HTML nativa `POST /api/auth/kinde/start` senza campi, segreti né parametri client; il Worker candidato accetta soltanto un body effettivamente vuoto (anche se rappresentato da stream), non campi aggiunti o Content-Length ingannevole. Il redirect 303 cross-origin **non** va recuperato via fetch. Il modulo non viene richiamato dall'attuale `AuthProvider` Firebase o dal login UI: mancano ancora onboarding Kinde live, guest→account fencing, chiavi/consenso client e gate di attivazione sicuri. Nessuna route pubblica è stata abilitata. Dettagli nel [runbook Cloudflare](../../docs/operations/cloudflare-workers-migration.md).
+
+### Dipendenza di sicurezza temporanea del candidato Kinde (18/11/2026)
+
+Il backport `picomatch` della PR #1209 è limitato al tooling e non
+modifica il contratto Auth, consenso, chiavi o erasure. Il monitor
+giornaliero produce solo una issue al rilascio ufficiale verificato;
+non autorizza upgrade automatici, cambi OAuth, deploy o rimozione
+delle protezioni sui dati. La CI verde sulle dipendenze non costituisce
+GO funzionale Kinde/Workers né prova la completa rimozione Firebase.

@@ -14,3 +14,13 @@ Knip tracks this copied CommonJS module as a separate package: `posix.js` is a s
 `4.0.8-logbook.0` is **not** an official picomatch release. Its version distinguishes the internal fork from the vulnerable registry version; it must not be used as proof of upstream remediation. Installation is forced through the root npm override and checked with `tests/security/picomatch-backport.node.mjs`. `npm audit` does not audit the code of local `file:` dependencies like a registry-published package: a green audit is necessary but **not sufficient** to establish this fork's security.
 
 **Replacement plan:** when upstream publishes a verified safe release, remove this entire directory, the override, direct dev dependency, and dedicated backport tests; regenerate the npm lockfile and re-run exact-SHA CI, including `npm audit --audit-level=high`. Until then the fork is locally maintained and requires independent code review.
+
+
+## Automated upstream replacement notification
+
+The scheduled `.github/workflows/picomatch-upstream-watch.yml` checks the
+official GitHub advisory daily and confirms the first stable patched
+version is actually published with package metadata in the npm registry.
+It searches existing open/closed issues and creates a single tracking issue
+for human review. It never changes code or merges or deploys. Upstream API
+failures stop without reporting an unverified fix.

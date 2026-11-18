@@ -651,3 +651,25 @@ L'avvio OAuth è predisposto come navigazione HTML `POST /api/auth/kinde/start` 
 ### CF-03/04 — precondizione ADK e revoca concorrente
 
 Il claim distingue `428 cloud-key-required` dalla custodia incoerente o dal guasto D1 (`503`), dalla revoca (`403`) e dal conflitto CAS (`409`). Dopo un fallimento SQL per ADK assente, sessione, consenso, revisione e assenza di dati/chiavi sono letti **nella stessa SELECT primaria**: una revoca o un claim concorrente intervenuti prima di quella lettura non possono diventare una nuova autorizzazione al provisioning. Il client conserva intent e journal; la precondizione non è un ACK né una concessione della chiave. La suite ADK usa tutte le migrazioni canoniche e il finalizzatore atomico effettivo, con regressioni su sessione/revoca intercalate, claim vincente concorrente e guasto della lettura primaria. Sono prove sintetiche, non login Kinde, custodia KEK o sync live.
+
+### CF-03 — consolidamento PR #1209 e controllo dipendenze (18/11/2026, candidato)
+
+Il branch `fix/cf03-kinde-cookie-continuity-20261117` riunisce le modifiche
+CF-03/04/05/06/08 preesistenti (sessione e guest Kinde, consenso, chiavi,
+journal/replica e registro D1 indipendente per revoca/erasure). La mitigazione
+del blocco `npm audit` GHSA-fc5q-39xc-vjpf deriva dalla PR #1214:
+fork locale `picomatch@4.0.8-logbook.0` con regressioni ReDoS e correzione
+separata di Code scanning #29 (eliminazione regex polinomiale).
+
+Il monitor `.github/workflows/picomatch-upstream-watch.yml` interroga ogni
+giorno l'advisory e la pubblicazione della versione stabile ufficiale su npm.
+Apre una sola issue di sostituzione del fork, senza aggiornare pacchetti,
+fare merge o deploy. Un errore dell'API non crea false notifiche.
+`npm audit` non analizza la sorgente `file:` come una versione del registry:
+il fork resta temporaneo e non può essere dichiarato ufficialmente sicuro.
+
+La PR non certifica il runtime Kinde, Google, email/reset, l'assenza di
+Firebase nel frontend completo, Auth/D1 Workers reali, binding/cron
+Production, diritto all'erasure, Safari o sync multi-device. I test di
+fixture e CI sono prove distinte dai provider; nessuna risorsa reale è
+stata modificata in questa attività.
