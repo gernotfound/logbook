@@ -4,7 +4,7 @@
  * The target PWA will use the bundled catalog with a reviewed static update path.
  */
 import { doc, getDoc, type Firestore } from 'firebase/firestore';
-import { type CatalogManifest, type CatalogFood, type CachedGlobalCatalog } from '../../types';
+import { type CatalogManifest, type CachedGlobalCatalog } from '../../types';
 import { CatalogManifestSchema, CatalogExerciseSchema, CatalogFoodSchema } from '../schema';
 import {
     getCachedCatalog, saveCatalogToCache, validManifest, validItems, validFoodItems,
