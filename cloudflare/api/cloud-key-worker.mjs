@@ -91,8 +91,8 @@ export default {
       // An application D1 restore can resurrect an old consent. Require the
       // independent fitness fence before provisioning and again before release.
       if (fitness) await requireCurrentIndependentSyncFence(env, granted.claims);
-      // The store uses PRIMARY reads before AND after crypto and a conditional
-      // SQL provision. Rights export must not create a key after withdrawal.
+      // The store checks current SQL on either side of crypto and checks
+      // the independent withdrawal before unwrapping a rights-only key.
       adk = await releaseCloudAccountDataKey(env.DB, env, granted.claims,
         fitness ? 'sync' : 'rights-export');
       if (!(adk instanceof Uint8Array) || adk.length !== 32) {

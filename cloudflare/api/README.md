@@ -567,6 +567,11 @@ rights-only export, account deletion, retention and reacceptance still need
 their separate verification and integration. In particular,
 `awaiting-keys` means *the known replica tables were drained*, **not**
 that the owner's health data, keys or backups have been fully deleted.
+Rights-only key release also requires a matching `withdrawn` generation in
+the open independent registry, before and after unwrapping. An older
+application snapshot cannot release the key once that registry has advanced.
+The subject fence can predate a valid renewed Auth session and stays distinct
+from the Auth epoch echoed to the caller.
 Never expose this worker through a route or schedule it on a real database
 until those steps and their recovery tests are complete.
 

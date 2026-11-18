@@ -164,6 +164,53 @@ void test('rights-only denies stale session on the post-decrypt primary read', a
   } finally { f.close(); }
 });
 
+void test('rights export requires the exact independent withdrawal even if the application D1 still has a key', async () => {
+  const f = await fixture();
+  try {
+    await f.consent('owner-a');
+    await f.consent('owner-b');
+    assert.equal((await f.call('owner-a', SYNC)).response.status, 200);
+    assert.equal((await f.call('owner-b', SYNC)).response.status, 200);
+    await f.withdraw('owner-a');
+    for (const RECOVERY_DB of [undefined, f.db, { withSession() { throw Error('registry outage'); } }]) {
+      const result = await f.call('owner-a', RIGHTS, { env: { ...f.env, RECOVERY_DB } });
+      assert.equal(result.response.status, 503);
+      assert.deepEqual(result.body, { error: 'unavailable' });
+    }
+    await f.withdraw('owner-b');
+    assert.equal((await f.call('owner-a', RIGHTS)).response.status, 200);
+    f.registry.exec(`UPDATE recovery_owner_fences SET consent_revision=2, fence_epoch=2,
+      erased_before_revision=2, change_seq=change_seq+1 WHERE uid='owner-a'`);
+    const stale = await f.call('owner-a', RIGHTS);
+    assert.equal(stale.response.status, 503);
+    assert.deepEqual(stale.body, { error: 'unavailable' });
+    assert.equal(f.count('cloud_account_keys', 'owner-a'), 1);
+    assert.equal((await f.call('owner-b', RIGHTS)).response.status, 200);
+  } finally { f.close(); }
+});
+
+void test('rights export rechecks the independent withdrawal after opening the key', async () => {
+  const f = await fixture();
+  try {
+    await f.consent('owner-a');
+    assert.equal((await f.call('owner-a', SYNC)).response.status, 200);
+    await f.withdraw('owner-a');
+    let reads = 0;
+    const recovery = {
+      withSession(mode) {
+        if (++reads === 2) {
+          f.registry.exec("UPDATE recovery_control SET mode='sealed',generation=3 WHERE singleton=1");
+        }
+        return f.recoveryDb.withSession(mode);
+      },
+    };
+    const result = await f.call('owner-a', RIGHTS, { env: { ...f.env, RECOVERY_DB: recovery } });
+    assert.equal(reads, 2);
+    assert.equal(result.response.status, 503);
+    assert.deepEqual(result.body, { error: 'unavailable' });
+  } finally { f.close(); }
+});
+
 void test('origin, CSRF, method, query and request body are denied before any key write', async () => {
   const f = await fixture();
   try {

@@ -5,6 +5,9 @@ import { DatabaseSync } from 'node:sqlite';
 import worker from '../../cloudflare/api/worker.mjs';
 import { releaseCloudAccountDataKey } from '../../cloudflare/api/cloud-key-store.mjs';
 import { runOneHealthErasureStep } from '../../cloudflare/jobs/health-erasure-worker.mjs';
+import {
+  armIndependentHealthWithdrawal, recordVerifiedHealthWithdrawal,
+} from '../../cloudflare/recovery/independent-owner-fence.mjs';
 
 const ORIGIN = 'https://b01-synthetic.invalid';
 const SESSION_HASH = 'a'.repeat(64);
@@ -442,8 +445,12 @@ void test('withdrawal preserves rights-only release, then bounded erasure and ke
     const enrolled = await http(f, 'replica/claim', claim());
     assert.equal(enrolled.status, 200, JSON.stringify(enrolled.body));
     assert.equal((await http(f, 'commit', commit(enrolled.body.replica))).status, 200);
+    await armIndependentHealthWithdrawal(f.env.RECOVERY_DB, {
+      uid: 'owner-a', status: 'active', consentRevision: 1, fenceEpoch: 1, erasedBeforeRevision: 0,
+    });
     f.sqlite.prepare('INSERT INTO health_erasure_jobs(uid,consent_revision,fence_epoch,requested_at_ms) VALUES (?,1,1,?)')
       .run('owner-a', Date.now());
+    await recordVerifiedHealthWithdrawal(f.db, f.env.RECOVERY_DB, 'owner-a');
     const rights = await releaseCloudAccountDataKey(f.db, f.env, {
       uid: 'owner-a', authenticated: true, emailVerified: true,
       csrfVerified: true, rateGatePassed: true, sessionHash: SESSION_HASH,

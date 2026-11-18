@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { applyCurrentD1Schema } from './current-d1-schema.mjs';
+import { applyCurrentD1RecoverySchema, applyCurrentD1Schema } from './current-d1-schema.mjs';
 import { test } from 'node:test';
 import { DatabaseSync } from 'node:sqlite';
 import gate from '../../cloudflare/auth/session-gate.mjs';
@@ -9,6 +9,10 @@ import {
 } from '../../cloudflare/api/cloud-key-crypto.mjs';
 import { releaseCloudAccountDataKey } from '../../cloudflare/api/cloud-key-store.mjs';
 import { runOneHealthErasureStep } from '../../cloudflare/jobs/health-erasure-worker.mjs';
+import {
+  armIndependentHealthWithdrawal, enrollIndependentOwner, recordVerifiedHealthWithdrawal,
+  recordVerifiedInitialConsent,
+} from '../../cloudflare/recovery/independent-owner-fence.mjs';
 
 const ORIGIN = 'https://cf05-synthetic.invalid';
 const KEK = Buffer.alloc(32, 42).toString('base64');
@@ -36,8 +40,12 @@ async function fixture() {
   sqlite.exec('PRAGMA foreign_keys=ON');
   applyCurrentD1Schema(sqlite);
   const db = new D1Sqlite(sqlite);
+  const registry = new DatabaseSync(':memory:');
+  applyCurrentD1RecoverySchema(registry);
+  registry.exec("UPDATE recovery_control SET mode='open',generation=2 WHERE singleton=1");
+  const recoveryDb = new D1Sqlite(registry);
   const env = {
-    DB: db, CLOUD_ACCOUNT_KEK_V1: KEK, API_ORIGIN: ORIGIN,
+    DB: db, RECOVERY_DB: recoveryDb, CLOUD_ACCOUNT_KEK_V1: KEK, API_ORIGIN: ORIGIN,
     CONSENT_PRIVACY_VERSION: VERSION, CONSENT_TERMS_VERSION: TERMS,
     API_RATE_LIMITER: { limit: async () => ({ success: true }) },
   };
@@ -69,7 +77,19 @@ async function fixture() {
     return { status: response.status, payload: await response.json() };
   }
   await createOwner('owner-a');
-  return { sqlite, db, env, createOwner, claims };
+  return { sqlite, db, env, createOwner, claims,
+    close() { registry.close(); sqlite.close(); },
+    async publishWithdrawal(uid) {
+      // This store-level fixture seeds an application job directly. Replicate
+      // the independent state sequence using the same trusted store methods.
+      await recordVerifiedHealthWithdrawal(db, recoveryDb, uid);
+    },
+    async armWithdrawal(uid) {
+      await enrollIndependentOwner(recoveryDb, uid);
+      const active = await recordVerifiedInitialConsent(db, recoveryDb, uid);
+      await armIndependentHealthWithdrawal(recoveryDb, active);
+    },
+  };
 }
 
 void test('WebCrypto ADK envelope: strict AES-256-GCM owner/AAD, nonce and version binding', async () => {
@@ -126,7 +146,7 @@ void test('trusted live gate + D1 primary provisions exactly one ADK, without pl
     assert.throws(() => f.sqlite.exec('DELETE FROM cloud_account_keys'));
     assert.throws(() => f.sqlite.exec('DELETE FROM cloud_key_issuance'));
     assert.throws(() => f.sqlite.exec('UPDATE cloud_key_issuance SET issued_at_ms=1'));
-  } finally { f.sqlite.close(); }
+  } finally { f.close(); }
 });
 
 void test('concurrent key requests converge to the one SQL winner, never overwrite', async () => {
@@ -138,7 +158,7 @@ void test('concurrent key requests converge to the one SQL winner, never overwri
     for (const key of keys) assert.deepEqual(key, keys[0]);
     assert.equal(sqlCount(f, 'cloud_account_keys', 'owner-a'), 1);
     assert.equal(sqlCount(f, 'cloud_key_issuance', 'owner-a'), 1);
-  } finally { f.sqlite.close(); }
+  } finally { f.close(); }
 });
 
 void test('lost DB reply reconciles ONLY the persisted wrapped winner', async () => {
@@ -166,7 +186,7 @@ void test('lost DB reply reconciles ONLY the persisted wrapped winner', async ()
     const first = await releaseCloudAccountDataKey(wrappedDb, f.env, payload);
     assert.deepEqual(await releaseCloudAccountDataKey(f.db, f.env, payload), first);
     assert.equal(sqlCount(f, 'cloud_key_issuance', 'owner-a'), 1);
-  } finally { f.sqlite.close(); }
+  } finally { f.close(); }
 });
 
 void test('rights-only after withdrawal returns an existing ADK but cannot provision missing keys', async () => {
@@ -177,9 +197,11 @@ void test('rights-only after withdrawal returns an existing ADK but cannot provi
     const key = await releaseCloudAccountDataKey(f.db, f.env, active);
     // B has no ADK when health consent is revoked.
     for (const uid of ['owner-a', 'owner-b']) {
+      await f.armWithdrawal(uid);
       f.sqlite.prepare(`INSERT INTO health_erasure_jobs
         (uid, consent_revision, fence_epoch, requested_at_ms)
         VALUES (?, 1, 1, ?)`).run(uid, Date.now() - 1000);
+      await f.publishWithdrawal(uid);
     }
     const rightsA = await f.claims('owner-a', '/v1/consent/status');
     const rightsB = await f.claims('owner-b', '/v1/consent/status');
@@ -192,7 +214,7 @@ void test('rights-only after withdrawal returns an existing ADK but cannot provi
     await assert.rejects(releaseCloudAccountDataKey(f.db, f.env, active, 'sync'),
       CloudKeyUnavailableError);
     assert.equal(sqlCount(f, 'cloud_key_issuance', 'owner-b'), 0);
-  } finally { f.sqlite.close(); }
+  } finally { f.close(); }
 });
 
 void test('revoked/expired/changed session or consent blocks release even with cached AuthGate claims', async () => {
@@ -215,7 +237,7 @@ void test('revoked/expired/changed session or consent blocks release even with c
       await assert.rejects(releaseCloudAccountDataKey(f.db, f.env, payload),
         CloudKeyUnavailableError);
       assert.equal(sqlCount(f, 'cloud_account_keys', 'owner-a'), 1);
-    } finally { f.sqlite.close(); }
+    } finally { f.close(); }
   }
 });
 
@@ -250,7 +272,7 @@ void test('post-decrypt recheck blocks a revocation racing asynchronous crypto',
     await assert.rejects(releaseCloudAccountDataKey(intercept, f.env, payload),
       CloudKeyUnavailableError);
     assert.equal(reads, 2);
-  } finally { f.sqlite.close(); }
+  } finally { f.close(); }
 });
 
 void test('missing master KEK, corrupted key and owner swapping fail closed without rekey', async () => {
@@ -282,7 +304,7 @@ void test('missing master KEK, corrupted key and owner swapping fail closed with
     f.sqlite.prepare('UPDATE cloud_account_keys SET ciphertext=?, iv=?, tag=? WHERE uid=?')
       .run(rowA.ciphertext, rowA.iv, rowA.tag, 'owner-b');
     await assert.rejects(releaseCloudAccountDataKey(f.db, f.env, b), CloudKeyUnavailableError);
-  } finally { f.sqlite.close(); }
+  } finally { f.close(); }
 });
 
 void test('lost ADK never silently regenerates for the same consent generation', async () => {
@@ -298,7 +320,7 @@ void test('lost ADK never silently regenerates for the same consent generation',
       CloudKeyUnavailableError);
     assert.equal(sqlCount(f, 'cloud_account_keys', 'owner-a'), 0);
     assert.equal(sqlCount(f, 'cloud_key_issuance', 'owner-a'), 1);
-  } finally { f.sqlite.close(); }
+  } finally { f.close(); }
 });
 
 void test('key deletion requires atomic finalization, not only an awaiting-keys lease', async () => {
@@ -339,7 +361,7 @@ void test('key deletion requires atomic finalization, not only an awaiting-keys 
     assert.equal(rights.status, 200);
     await assert.rejects(releaseCloudAccountDataKey(f.db, f.env, rights.payload, 'rights-export'),
       CloudKeyUnavailableError);
-  } finally { f.sqlite.close(); }
+  } finally { f.close(); }
 });
 
 void test('unverified gate, missing database and quota/SQL failures cannot release a key', async () => {
@@ -364,5 +386,5 @@ void test('unverified gate, missing database and quota/SQL failures cannot relea
       CloudKeyUnavailableError);
     assert.equal(sqlCount(f, 'cloud_account_keys', 'owner-a'), 0);
     assert.equal(sqlCount(f, 'cloud_key_issuance', 'owner-a'), 0);
-  } finally { f.sqlite.close(); }
+  } finally { f.close(); }
 });

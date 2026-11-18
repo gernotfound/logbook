@@ -69,7 +69,7 @@ export async function requireIndependentOwnerFence(fenceDb, subject, purpose = '
       || floor.erasedBeforeRevision !== subject.erasedBeforeRevision
       || !(purpose === 'fitness'
         ? floor.status === 'active' && subject.status === 'active'
-        : subject.status === 'withdrawn' && ['blocked', 'withdrawn'].includes(floor.status))) {
+        : subject.status === 'withdrawn' && floor.status === 'withdrawn')) {
       throw new IndependentFenceUnavailableError();
     }
     return true;

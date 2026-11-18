@@ -98,6 +98,7 @@ void test('independent monotone fence blocks old consent after a physical applic
       (uid,consent_revision,fence_epoch,requested_at_ms) VALUES (?,1,1,?)`)
       .run('owner-a', Date.now());
     assert.equal(subject(app, 'owner-a').status, 'withdrawn');
+    await rejected(requireIndependentOwnerFence(fenceDb, subject(app, 'owner-a'), 'rights'));
     assert.equal((await recordVerifiedHealthWithdrawal(currentApp, fenceDb, 'owner-a')).status, 'withdrawn');
     assert.equal(await requireIndependentOwnerFence(fenceDb, subject(app, 'owner-a'), 'rights'), true);
     assert.equal((await runOneHealthErasureStep(currentApp)).outcome, 'awaiting-keys');
