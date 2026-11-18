@@ -2,6 +2,7 @@
 // wrapped server ADK. No route is published until Auth/D1/erasure GO.
 import { releaseCloudAccountDataKey } from './cloud-key-store.mjs';
 import { strictlyEmptyPost } from '../http/strict-empty-post.mjs';
+import { requireCurrentIndependentSyncFence } from '../recovery/runtime-sync-fence.mjs';
 
 const SYNC = '/v1/cloud-key/sync';
 const RIGHTS = '/v1/cloud-key/rights-export';
@@ -84,22 +85,27 @@ export default {
     const granted = await authorize(request, env, pathname);
     if (granted.status) return reply({ error: 'unauthorized-or-unavailable' }, granted.status);
 
+    const fitness = pathname === SYNC;
     let adk;
     try {
+      // An application D1 restore can resurrect an old consent. Require the
+      // independent fitness fence before provisioning and again before release.
+      if (fitness) await requireCurrentIndependentSyncFence(env, granted.claims);
       // The store uses PRIMARY reads before AND after crypto and a conditional
       // SQL provision. Rights export must not create a key after withdrawal.
       adk = await releaseCloudAccountDataKey(env.DB, env, granted.claims,
-        pathname === RIGHTS ? 'rights-export' : 'sync');
+        fitness ? 'sync' : 'rights-export');
       if (!(adk instanceof Uint8Array) || adk.length !== 32) {
         return reply({ error: 'unavailable' }, 503);
       }
+      if (fitness) await requireCurrentIndependentSyncFence(env, granted.claims);
       const key = btoa(String.fromCharCode(...adk));
       return reply({
         format: 'thelogbook-account-data-key', version: 1, key,
         uid: granted.claims.uid,
         fenceEpoch: granted.claims.fenceEpoch,
         consentRevision: granted.claims.healthConsentRevision,
-        purpose: pathname === RIGHTS ? 'rights-export' : 'sync',
+        purpose: fitness ? 'sync' : 'rights-export',
       }, 200);
     } catch {
       return reply({ error: 'unavailable' }, 503);

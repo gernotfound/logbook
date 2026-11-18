@@ -1,6 +1,7 @@
 import 'fake-indexeddb/auto';
 import { clear, get } from 'idb-keyval';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+import { authenticatedIdentitySource } from '../../../src/lib/sync/authenticatedIdentitySource';
 const sdk = vi.hoisted(() => ({ auth: { currentUser: { uid: 'a' } }, root: vi.fn(), control: vi.fn(), page: vi.fn() }));
 vi.mock('../../../src/lib/firebase', () => ({ auth: sdk.auth, getDb: () => ({}), ensureAppCheck: async () => {} }));
 vi.mock('../../../src/lib/catalog/catalogService', () => ({ getCachedCatalog: async () => ({ exercises: [], foods: [] }) }));
@@ -82,6 +83,7 @@ function stubConcurrentStorage(values: Map<string, string>, overrides: Partial<P
     });
 }
 
+beforeEach(() => authenticatedIdentitySource.install(() => sdk.auth.currentUser));
 beforeEach(async () => {
     lockAllVaults();
     issuedCloudKeys.length = 0;

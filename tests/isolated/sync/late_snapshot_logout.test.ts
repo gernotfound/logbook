@@ -1,6 +1,7 @@
 import 'fake-indexeddb/auto';
 import { clear, get } from 'idb-keyval';
 import { beforeEach, afterEach, expect, it, vi } from 'vitest';
+import { authenticatedIdentitySource } from '../../../src/lib/sync/authenticatedIdentitySource';
 
 const sdk = vi.hoisted(() => ({
     auth: { currentUser: null as { uid: string } | null },
@@ -17,6 +18,7 @@ import type { UserData } from '../../../src/types';
 
 const data = (height: number) => UserDataSchema.parse({ profile: { height: String(height) } }) as unknown as UserData;
 
+beforeEach(() => authenticatedIdentitySource.install(() => sdk.auth.currentUser));
 beforeEach(async () => {
     lockAllVaults();
     const disk = new Map<string, string>();

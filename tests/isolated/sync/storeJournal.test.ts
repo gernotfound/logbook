@@ -2,6 +2,7 @@ import 'fake-indexeddb/auto';
 import { clear, del, get } from 'idb-keyval';
 import { create } from 'zustand';
 import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
+import { authenticatedIdentitySource } from '../../../src/lib/sync/authenticatedIdentitySource';
 const sdk = vi.hoisted(() => ({ auth: { currentUser: { uid: 'A' } as { uid: string } | null }, save: vi.fn() }));
 vi.mock('../../../src/lib/firebase', () => ({ auth: sdk.auth }));
 vi.mock('../../../src/lib/db', () => ({ DB: { saveUserData: sdk.save } }));
@@ -35,6 +36,7 @@ import { lockAllVaults } from '../../../src/lib/sync/secureArchiveSession';
 const data = (height: number) => UserDataSchema.parse({ profile: { height } }) as unknown as UserData;
 const store = create<AppState>()((...args) => ({ ...createDataSlice(...args), ...createWorkoutSlice(...args), ...createSyncSlice(...args) }));
 const deferred = <T>() => { let resolve!: (value: T) => void; const promise = new Promise<T>(done => { resolve = done; }); return { promise, resolve }; };
+beforeEach(() => authenticatedIdentitySource.install(() => sdk.auth.currentUser));
 beforeEach(async () => {
     lockAllVaults();
     localStorage.clear();

@@ -52,6 +52,10 @@ Si introduce quindi un campo diagnostico **temporaneo** `phase` solo sulle rispo
 Una singola prova manuale hosted su un **nuovo tentativo** dopo il deployment del Worker privato identifica il confine del guasto e consente una correzione fondata; i test di token sintetici, CI o smoke HTTP non sostituiscono il login reale. La rimozione della diagnostica è un gate per il rilascio funzionale finale.
 
 
+## CF-05/08 — chiave fitness e autorità indipendente
+
+Il candidato verifica il registro D1 indipendente prima del provisioning e dopo l'apertura della chiave richiesta da /v1/cloud-key/sync. In caso di revoca concorrente o registro chiuso, la risposta non contiene la chiave. L'eventuale chiave già emessa resta cifrata e riutilizzabile soltanto con una nuova autorizzazione. Restano aperti i collegamenti del consenso, della revoca, del percorso diritti e della finalizzazione al registro, oltre al collaudo su Cloudflare.
+
 ## CF-08 — candidatura gate di sync a prova di Time Travel (v2.497.0, 17/11/2026)
 
 **Incremento CRITICAL sul Worker API isolato, non sul frontend Kinde.** Il database D1 indipendente già inizializzato (0001/0002) viene configurato come secondo binding `RECOVERY_DB` **solo** per `thelogbook-api-isolated`, distinto da `DB` e dal Worker AuthGate. Il manifest non aggiunge route, URL workers.dev/preview né bind al frontend. I validatori GitHub e di readback Cloudflare devono verificare esattamente l'UUID della seconda D1.

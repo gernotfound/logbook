@@ -79,6 +79,7 @@ import {
 } from '../../src/lib/sync/localRepository';
 import { replicateJournal, waitForJournalIdle } from '../../src/lib/sync/replicateJournal';
 import { invalidateSession } from '../../src/lib/sync/session';
+import { authenticatedIdentitySource } from '../../src/lib/sync/authenticatedIdentitySource';
 import { projectDocuments, type DocumentData } from '../../src/lib/sync/documentProjection';
 import { diffDocuments } from '../../src/lib/sync/semanticProjection';
 import { applyDocumentChanges } from '../../src/lib/sync/transactionWriter';
@@ -109,7 +110,9 @@ function data(height: number, name?: string): UserData {
 
 let env: RulesTestEnvironment;
 
+let releaseAuthSource: (() => void) | undefined;
 beforeAll(async () => {
+    releaseAuthSource = authenticatedIdentitySource.install(() => firebaseHarness.auth.currentUser);
     if (process.env.FIRESTORE_EMULATOR_HOST !== '127.0.0.1:8080') throw new Error('Only the isolated local emulator is allowed');
     stubNavigatorWithLocks(true);
     env = await initializeTestEnvironment({
@@ -143,6 +146,7 @@ afterEach(async () => {
 });
 
 afterAll(async () => {
+    releaseAuthSource?.();
     await env?.cleanup();
     vi.unstubAllGlobals();
 });

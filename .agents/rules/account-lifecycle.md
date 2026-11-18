@@ -1,5 +1,9 @@
 # Ciclo account, Auth e guest — TheLogBook
 
+### Confine lettore di identità autenticata indipendente dal provider (17/11/2026, candidato)
+
+`src/lib/sync/session.ts` non importa più Firebase direttamente. Il lettore sincrono di identità è registrato dal **solo provider attivo** e restituisce `null` se non è autenticato; un secondo provider concorrente, un UID malformato o un errore della sorgente falliscono chiusi. La registrazione legacy corrente vive temporaneamente in `src/lib/firebase.ts`. Per il passaggio a Kinde sarà obbligatorio rimuovere il vecchio provider e registrare la sorgente soltanto dopo la verifica della sessione Kinde, con fencing delle sue generazioni. La sola presenza di un UID non sblocca vault, consenso o operazioni D1.
+
 **Quando leggere:** email verificata, accesso guest→account, sessioni, account deletion, logout e purge.
 **Non inferire:** Auth assente, timeout o tombstone scaduto non provano cancellazione completa né autorizzano purge locale.
 
@@ -40,6 +44,10 @@ Il proprietario ha registrato un account email/password di prova su Kinde e ha c
 ### Ingresso Kinde nella PWA — solo identità (17/11/2026, candidato v2.506.0)
 
 La schermata account **senza Firebase User** in `src/App.tsx` monta ora `KindeAccountEntry identityOnly` solo quando `AuthProvider` segnala nessun account Firebase e nessuna sessione guest. Lo stato viene letto esclusivamente dal servizio `/api/auth/session` con conferma dell'email e cookie CSRF; in questa fase non viene chiamato `/v1/consent/status`, non viene prodotto alcun `User` Firebase, non viene adottato un owner Kinde e non si sblocca il vault né la sincronizzazione. La modalità guest locale resta accessibile per scelta esplicita dopo 401 oppure quando Kinde è indisponibile, senza mai concedere permessi cloud o adottare un owner remoto. Una sessione Kinde verificata (anche con email non verificata) non offre un ingresso guest implicito. La schermata guest già avviata presenta ora un blocco informativo senza chiamare Firebase: **il trasferimento guest→Kinde non è ancora supportato** e i dati locali restano preservati. L'app continua a montare `AuthProvider` Firebase e gli altri consumer legacy; **non è il cutover completo**.
+
+### Destinazione dopo il callback Kinde
+
+Dopo l'emissione della sessione D1, il Worker risponde con un redirect 303 a `/` sullo stesso origin. La destinazione è fissa, senza parametri OAuth o dell'utente. All'arrivo la schermata account React verifica la sessione tramite `POST /api/auth/session`; il redirect da solo non concede accesso al vault o ai dati. La pagina `/verifica-accesso` resta consultabile direttamente per la diagnostica.
 
 ## Target Kinde selezionato — 14/11/2026 (sessione diagnostica parzialmente attiva)
 

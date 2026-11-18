@@ -4,6 +4,9 @@ import { DatabaseSync } from 'node:sqlite';
 import api from '../../cloudflare/api/worker.mjs';
 import gate, { hashSessionSecret } from '../../cloudflare/auth/session-gate.mjs';
 import { issueVerifiedSession } from '../../cloudflare/auth/session-issuer.mjs';
+import {
+  enrollIndependentOwner, recordVerifiedInitialConsent,
+} from '../../cloudflare/recovery/independent-owner-fence.mjs';
 
 export const ORIGIN = 'https://cf05-key-http.example.invalid';
 const KEK = Buffer.alloc(32, 91).toString('base64');
@@ -61,13 +64,20 @@ export async function createCloudKeyHttpFixture(owners = ['owner-a', 'owner-b'])
     sqlite.exec(readFileSync(new URL('../../cloudflare/api/migrations/' + file, import.meta.url), 'utf8'));
   }
   const db = new D1(sqlite);
+  const registry = new DatabaseSync(':memory:');
+  const registryMigrations = new URL('../../cloudflare/recovery/migrations/', import.meta.url);
+  for (const file of readdirSync(registryMigrations).filter(name => name.endsWith('.sql')).sort()) {
+    registry.exec(readFileSync(new URL(file, registryMigrations), 'utf8'));
+  }
+  registry.exec("UPDATE recovery_control SET mode='open', generation=2 WHERE singleton=1");
+  const recoveryDb = new D1(registry);
   const gateEnv = {
     DB: db, API_ORIGIN: ORIGIN,
     CONSENT_PRIVACY_VERSION: '1.3.9', CONSENT_TERMS_VERSION: '1.2.5',
     API_RATE_LIMITER: { limit: async () => ({ success: true }) },
   };
   const env = {
-    ...gateEnv, CLOUD_ACCOUNT_KEK_V1: KEK,
+    ...gateEnv, RECOVERY_DB: recoveryDb, CLOUD_ACCOUNT_KEK_V1: KEK,
     AUTH_GATE: { fetch: request => gate.fetch(request, gateEnv) },
   };
   const sessions = new Map();
@@ -99,15 +109,17 @@ export async function createCloudKeyHttpFixture(owners = ['owner-a', 'owner-b'])
   }
   for (const uid of owners) await createOwner(uid);
   return {
-    sqlite, db, env, gateEnv, call, sessions,
-    close() { sqlite.close(); },
+    sqlite, db, registry, recoveryDb, env, gateEnv, call, sessions,
+    close() { registry.close(); sqlite.close(); },
     count(table, uid) {
       return sqlite.prepare('SELECT COUNT(*) AS n FROM ' + table + ' WHERE uid=?').get(uid).n;
     },
-    async consent(uid) {
+    async consent(uid, { register = true } = {}) {
+      if (register) await enrollIndependentOwner(recoveryDb, uid);
       const x = await call(uid, '/v1/consent/initial', { body: ACCEPT });
       assert.equal(x.response.status, 200);
       assert.equal(x.body.status, 'active');
+      if (register) await recordVerifiedInitialConsent(db, recoveryDb, uid);
     },
     async withdraw(uid) {
       const x = await call(uid, '/v1/consent/withdraw', { body: WITHDRAW });

@@ -1,6 +1,7 @@
 import 'fake-indexeddb/auto';
 import { clear, get, set } from 'idb-keyval';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+import { authenticatedIdentitySource } from '../../../src/lib/sync/authenticatedIdentitySource';
 const app = vi.hoisted(() => ({ state: { userData: null as any, localWorkout: null as any, dataOwner: 'user:a' as string | null }, flush: vi.fn(), auth: { currentUser: { uid: 'a' } }, suspendedConsent: null as null | 'erasure-required' }));
 vi.mock('../../../src/store/useAppStore', () => ({ useAppStore: {
     getState: () => ({ ...app.state, flushPendingSyncs: app.flush }),
@@ -40,6 +41,7 @@ import { LocalCiphertextError, openLocalJson, sealLocalJson } from '../../../src
 import type { UserData } from '../../../src/types';
 const parse = (height: number) => UserDataSchema.parse({ profile: { height } }) as unknown as UserData;
 let disk: Map<string, string>;
+beforeEach(() => authenticatedIdentitySource.install(() => app.auth.currentUser));
 beforeEach(async () => {
     lockAllVaults();
     await clear(); invalidateSession(); vi.resetAllMocks(); app.auth.currentUser = { uid: 'a' }; app.suspendedConsent = null;

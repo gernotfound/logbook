@@ -28,6 +28,7 @@ vi.mock('../../src/lib/sync/cloudAccountKeyAccess', () => ({
     requireRightsExportAccountDataKey: vi.fn(async () => new Uint8Array(32).fill(18)),
 }));
 import { DB as RealDB } from '../../src/lib/db';
+import { authenticatedIdentitySource } from '../../src/lib/sync/authenticatedIdentitySource';
 import { adoptReplicaCheckpoint, advanceLocalConsentRevisionIfClean, readLocal, initializeLocal, commitLocal } from '../../src/lib/sync/localRepository';
 import { seedTrustedConsent, registerReplica } from './replicaHarness';
 import { createAndMigrateVault } from '../../src/lib/sync/secureArchiveMigration';
@@ -43,13 +44,17 @@ import type { UserData, CachedGlobalCatalog } from '../../src/types';
 const catalog = { exercises: [], foods: [] } as unknown as CachedGlobalCatalog;
 const data = (input: Partial<UserData> = {}) => UserDataSchema.parse({ legalConsent: { hasAcceptedTerms: true, hasAcceptedHealthData: true, acceptedAt: '2026-10-11T10:00:00.000Z', privacyVersion: LEGAL_VERSIONS.privacy, termsVersion: LEGAL_VERSIONS.terms }, ...input }) as unknown as UserData;
 let env: RulesTestEnvironment;
+let releaseAuthSource: (() => void) | undefined;
 beforeAll(async () => {
+    // The mocked Firebase module is not executed, so the test must install
+    // its opaque auth reader just as production does before journal operations.
+    releaseAuthSource = authenticatedIdentitySource.install(() => sdk.auth.currentUser);
     if (process.env.FIRESTORE_EMULATOR_HOST !== '127.0.0.1:8080') throw new Error('Only the local emulator is allowed');
     vi.stubGlobal('navigator', { onLine: true, locks: { request: async (_name: string, _options: unknown, run: () => Promise<unknown>) => run() } });
     env = await initializeTestEnvironment({ projectId: 'demo-logbook-audit', firestore: { host: '127.0.0.1', port: 8080, rules: readFileSync('firestore.rules', 'utf8') } });
 });
 beforeEach(async () => { await env.clearFirestore(); await seedTrustedConsent(env); lockAllVaults(); localStorage.clear(); await clear(); sdk.db = env.authenticatedContext('a', { email_verified: true }).firestore(); sdk.auth.currentUser = { uid: 'a' }; await createAndMigrateVault('user:a'); });
-afterAll(async () => { await env?.cleanup(); vi.unstubAllGlobals(); });
+afterAll(async () => { releaseAuthSource?.(); await env?.cleanup(); vi.unstubAllGlobals(); });
 async function prepareReplica() {
     if (!await advanceLocalConsentRevisionIfClean('user:a', 1)) throw new Error('Consent fixture is not clean');
     const replica = await registerReplica(sdk.db, 'a');

@@ -11,6 +11,18 @@ Il trasferimento guest→Kinde è **ancora bloccato**, non implementato: in futu
 L'osservatore di identità, la lettura di consenso e la consultazione dello stato replica candidati catturano un cookie CSRF di sessione prima della prima richiesta HTTP. Lo ricontrollano dopo ogni risposta, anche quando UID, epoca e revisione consenso rimangono invariati in una nuova sessione. Cookie mancanti sono ammessi unicamente per un 401 canonicalmente signed-out; un 200 authenticated senza cookie canonico, cookie duplicati o valori malformati falliscono chiusi. Primo consenso e bridge journal passano esplicitamente la stessa sorgente cookie ai rispettivi controlli annidati. Le richieste HTTP non aumentano.
 
 È una garanzia di continuità client, non un'abilitazione del vault, una concessione di consenso o un'approvazione delle API sanitarie. Il provider applicativo Kinde, l'owner locale, guest→account e il cutover Firebase rimangono da integrare e collaudare.
+## CF-03 · disaccoppiamento sorgente UID da Firebase (17/11/2026)
+
+Il core `session.ts` usa un lettore di identità autenticata fornito dal provider attivo, invece di importare Firebase. Il provider legacy resta temporaneamente registrato in `src/lib/firebase.ts`, senza modificare il flusso runtime del vecchio account. Il lettore non assegna permessi, vault né consenso: per adottare Kinde occorrerà rimuovere il provider Firebase, gestire generazioni e cookie di sessione, e collaudare il trasferimento dell'owner e i journal D1. Questo passaggio non abilita la registrazione fitness dei nuovi account.
+## CF-03 — Lettura completa e autenticata D1 prima del cutover (candidato 17/11/2026)
+
+Il bridge `inspectKindeCandidateCloudCheckpoint` unisce le prove Kinde/consenso, un cookie CSRF fissato prima del primo HTTP, l'ADK cloud a vita di singola operazione, una scansione D1 completa sulla stessa revisione, AEAD per UID/percorso e una rilettura finale di sessione e consenso. L'ADK viene azzerata nel `finally` anche dopo errori di scansione e cambio identità. Una scansione vuota non crea una copia locale.
+
+**Non montato in React, login, IndexedDB né sync.** La lettura restituisce una mera osservazione, non un permesso a idratare, creare owner, adottare una replica, cancellare journal o riconoscere ACK. Prima del collegamento pubblico servono il provider Kinde completo, i gate della sessione/vault locale, riconciliazione del journal, recovery, prova HTTP isolata e un collaudo con nuovo account reale. `D1_API` resta non pubblicato.
+
+## CF-03 · ritorno alla PWA con verifica della sessione
+
+Nel candidato, dopo la verifica OAuth e l'emissione della sessione D1, il Worker indirizza il browser a `/`. La root React verifica nuovamente la sessione tramite `/api/auth/session` nel ramo Kinde solo-identità. La pagina `/verifica-accesso` rimane disponibile per controlli diretti. La callback autorizzata su Kinde rimane `/api/auth/kinde/callback`: cambia soltanto la destinazione della risposta del Worker. Il guest attivo resta nell'archivio locale. Il provider Firebase ancora montato e il collegamento a consenso, chiavi e replica restano da sostituire prima del collaudo funzionale completo.
 
 ## CF-03 · protezione sincrona delle azioni Kinde da eventi foreground (17/11/2026)
 

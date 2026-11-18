@@ -155,7 +155,7 @@ if (typeof document !== 'undefined') {
     };
     check.addEventListener('click', () => { void verify(); });
     logout.addEventListener('click', () => { void end(); });
-    // The OAuth callback returns here; the server status, not the redirect, proves login.
+    // The diagnostic reads server status when opened directly.
     void verify();
   }
 }
