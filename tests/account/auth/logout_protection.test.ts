@@ -121,6 +121,31 @@ describe('M5 logout protection through AuthProvider', () => {
         expect(result.current.isGuest).toBe(false);
     });
 
+    it('refuses to purge a newly activated guest generation after the old confirmation awaited', async () => {
+        localStorage.setItem('logbook_is_guest', 'true');
+        localStorage.setItem(GUEST_SESSION_KEY, 'old-guest-generation');
+        activateGuestSession('old-guest-generation');
+        (auth as any).currentUser = null;
+        vi.mocked(onAuthStateChanged).mockImplementation((_auth, callback: any) => {
+            callback(null);
+            return () => {};
+        });
+        useAppStore.setState({ dataOwner: 'guest' });
+        dialogs.showConfirm.mockImplementationOnce(async () => {
+            // A second tab could replace the guest generation while the
+            // confirmation dialog remains open. Old logout cannot touch it.
+            localStorage.setItem(GUEST_SESSION_KEY, 'new-guest-generation');
+            activateGuestSession('new-guest-generation');
+            return true;
+        });
+        const { result } = renderAuth();
+        await waitFor(() => expect(result.current.isGuest).toBe(true));
+        await act(async () => { await result.current.logout({ mode: 'normal' }); });
+        expect(DB.purgeAllLocalUserData).not.toHaveBeenCalled();
+        expect(localStorage.getItem(GUEST_SESSION_KEY)).toBe('new-guest-generation');
+        expect(localStorage.getItem('logbook_is_guest')).toBe('true');
+    });
+
     it('keeps the guest archive when Web Locks are unavailable instead of purging without coordination', async () => {
         localStorage.setItem('logbook_is_guest', 'true');
         localStorage.setItem(GUEST_SESSION_KEY, 'guest-no-locks');

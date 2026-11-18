@@ -11,14 +11,13 @@ import { useEmailAuthActions } from './auth/useEmailAuthActions';
 import { useGoogleAuthActions } from './auth/useGoogleAuthActions';
 import { useGuestMigrationRetry } from './auth/useGuestMigrationRetry';
 import { GUEST_KEY, useGuestLogin } from './auth/useGuestLogin';
+import { logoutActiveGuestSession } from './auth/logoutActiveGuestSession';
 import { createAuthConsentLifecycleHandlers } from './auth/consentLifecycle';
 import { loadAndDrainAuthenticatedData } from './auth/loadAndDrainAuthenticatedData';
-import { captureSession, GUEST_REVOCATION_KEY, GUEST_SESSION_KEY, invalidateSession, isActiveGuestSession, isCurrentSession, revokeGuestSession, userOwner } from '../lib/sync/session';
-import { withGuestLifecycleLock } from '../lib/sync/guestLifecycleLock';
+import { captureSession, GUEST_REVOCATION_KEY, GUEST_SESSION_KEY, invalidateSession, isActiveGuestSession, isCurrentSession, userOwner } from '../lib/sync/session';
 import {
     BrowserStorageError,
     readBrowserValueStrict,
-    removeBrowserValue,
 } from '../lib/sync/browserStorage';
 import { attachAuthRedirectRecovery } from './auth/attachAuthRedirectRecovery';
 import { AWAITING_REDIRECT_KEY } from '../lib/auth/authRedirectMarker';
@@ -333,50 +332,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             }
 
             if (isGuestActiveStrict()) {
-                const requestedSession = captureSession();
-                if (!skipConfirm) {
-                    const confirmed = await useDialogStore.getState().showConfirm(
-                        "Sei in modalità locale. Se esci, i tuoi dati su questo dispositivo andranno persi definitivamente e non potranno essere recuperati.\n\nSei sicuro di voler continuare?"
-                    );
-                    if (!confirmed) return;
-                }
-
-                const purgeOutcome = await Promise.resolve().then(() => withGuestLifecycleLock(async () => {
-                        // Confirmation and lock acquisition are both asynchronous.
-                        // A different tab may have replaced or revoked this generation.
-                        if (!isCurrentSession(requestedSession)) return { purgeError: undefined };
-                        revokeGuestSession();
-                        useDialogStore.getState().cancelAll();
-                        useAppStore.getState().cancelPendingSyncs();
-                        let purgeError: unknown;
-                        try {
-                            await DB.purgeAllLocalUserData('guest');
-                            // Keep the public logout postcondition explicit.
-                            removeBrowserValue(GUEST_KEY);
-                            removeBrowserValue(GUEST_SESSION_KEY);
-                        } catch (error) {
-                            purgeError = error;
-                        }
-                        isGuestRef.current = false;
-                        setIsGuest(false);
-                        setGuestMigrationStatus('idle');
-                        useAppStore.getState().resetStore({ force: true });
-                        return { purgeError };
-                    })).then(
-                        result => ({ ok: true as const, result }),
-                        () => ({ ok: false as const }),
-                    );
-                if (!purgeOutcome.ok) {
-                    await useDialogStore.getState().showAlert(
-                        'Impossibile coordinare la chiusura della modalità locale. Nessuna nuova cancellazione viene avviata senza la protezione tra schede.'
-                    );
-                    return;
-                }
-                if (purgeOutcome.result.purgeError) {
-                    await useDialogStore.getState().showAlert(
-                        'Uscita dalla modalità locale, ma pulizia del dispositivo incompleta. I dati rimasti non sono accessibili dalla vecchia sessione; riprova dopo aver riaperto LogBook.'
-                    );
-                }
+                await logoutActiveGuestSession({
+                    skipConfirm, isGuestRef, setIsGuest, setGuestMigrationStatus,
+                    purgeGuest: () => DB.purgeAllLocalUserData('guest'),
+                });
                 return;
             }
 

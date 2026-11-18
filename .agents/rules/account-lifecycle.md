@@ -298,3 +298,17 @@ consumo del body JSON, oltre ai byte e al numero di chunk. Un HTTP
 impedire indefinitamente il controllo dell'identita': la lettura
 termina in errore fail-closed, non crea alcun owner o consenso.
 Il controllo non allarga le route pubbliche e non emette ACK cloud.
+
+### Logout guest indipendente dal provider (18/11/2026)
+
+La chiusura della modalita' locale e' nel modulo
+`src/contexts/auth/logoutActiveGuestSession.ts`, richiamato
+dall'AuthProvider attuale. La procedura non importa Firebase:
+l'identita' guest resta provata dalla generazione corrente,
+si richiede conferma di cancellazione e il Web Lock protegge
+revoca, pulizia e reset. Il chiamante fornisce soltanto
+`purgeGuest`, che deve conservare l'ordinamento ciphertext →
+key e la semantica fail-closed dell'archivio. Nessun vecchio
+account, cookie Kinde, UID o consenso account puo' autorizzare
+la cancellazione guest. Una nuova generazione nel frattempo
+annulla l'operazione precedente senza eliminare dati.

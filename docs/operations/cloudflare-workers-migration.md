@@ -758,3 +758,13 @@ consumo dello stream. Una risposta frammentata ma completa resta
 accettata; una sospesa viene rifiutata senza attribuire identita'
 o autorizzazioni. Non cambia il modello D1, l'AuthProvider legacy
 o il GO delle API sanitarie.
+
+### CF-03 — logout guest separato da Firebase (18/11/2026)
+
+Il logout della modalita' ospite e' ora una funzione riutilizzabile
+senza dipendenze di login Firebase. Mantiene conferma esplicita,
+testimone della generazione, Web Lock, revoca durevole e
+purge/cancellazione soltanto dell'owner guest. La funzione
+richiede al provider soltanto un'operazione di purge autenticata
+dal lifecycle locale; non trasferisce dati a Kinde e non abilita
+account o replica Cloudflare prima del GO.
