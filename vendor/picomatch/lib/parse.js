@@ -280,6 +280,41 @@ const hasUnsafeLeadingQuantifier = branch => {
   return i > 0 && i < branch.length;
 };
 
+// Collapse a repeated single branch containing a bare '*' instead of emitting
+// nested repetition. Keeps ordinary glob semantics for +(*) and +(*a).
+// Adapted from micromatch/picomatch#237; compound branches still fail closed.
+const isSelfRepeatingStarBranch = branch => {
+  let escaped = false;
+  let bracket = false;
+  let star = false;
+
+  for (let i = 0; i < branch.length; i++) {
+    const ch = branch[i];
+    if (escaped) {
+      escaped = false;
+      continue;
+    }
+    if (ch === '\\') {
+      escaped = true;
+      continue;
+    }
+    if (bracket) {
+      if (ch === ']') bracket = false;
+      continue;
+    }
+    if (ch === '[') {
+      bracket = true;
+      continue;
+    }
+    if (/[/(){}|!+@]/.test(ch)) return false;
+    if (ch === '*') {
+      if (branch[i + 1] === '*') return false;
+      star = true;
+    }
+  }
+  return star && !escaped && !bracket;
+};
+
 const repeatedExtglobRecursion = pattern => {
   let depth = 0;
   let value = pattern.trim();
@@ -312,6 +347,19 @@ const analyzeRepeatedExtglob = (body, options) => {
       branches.some(branch => /^[*?]+$/.test(branch)) ||
       hasRepeatedCharPrefixOverlap(branches)
     ) {
+      return { risky: true };
+    }
+  }
+
+  if (branches.length === 1 && isSelfRepeatingStarBranch(branches[0])) {
+    return { risky: false, collapse: true };
+  }
+
+  // A partially closed nested repetition with a suffix may also generate
+  // backtracking (e.g. +(*(ab)c)); literalize instead of relying on a full-body check.
+  for (const branch of branches) {
+    const prefix = parseRepeatedExtglob(branch, false);
+    if (prefix && prefix.end < branch.length - 1) {
       return { risky: true };
     }
   }
@@ -577,6 +625,10 @@ const parse = (input, options) => {
       push({ type: 'paren', extglob: true, value, output: '' });
       decrement('parens');
       return;
+    }
+
+    if (analysis.collapse === true && (token.type === 'plus' || token.type === 'star')) {
+      token.close = token.type === 'plus' ? ')' : ')?';
     }
 
     let output = token.close + (opts.capture ? ')' : '');
