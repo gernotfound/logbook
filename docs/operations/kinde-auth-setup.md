@@ -1,5 +1,12 @@
 # Kinde — configurazione del provider per TheLogBook
 
+## CF-03 · ritiro della schermata Firebase non montata (18/11/2026, candidato v2.523.0)
+
+L'ingresso account della PWA usa già `KindeAccountEntry identityOnly` e non monta più il form `LoginBox`. La vecchia implementazione Firebase email/password/Google, senza chiamanti nel codice UI, è rimossa insieme ai test dedicati al suo comportamento pre-lancio. I controlli di branding e tipografia ora puntano alla schermata effettivamente mostrata; le suite Kinde esistenti conservano i test dell'ingresso hosted, cookie/CSRF, errori, guest e conferma identità.
+
+**Limite imprescindibile:** `src/main.tsx` monta ancora `AuthProvider` Firebase, e vari consumer di archivio/consenso/replica usano Firestore. Questo incremento non configura il tenant, non abilita l'accesso fitness D1, non trasferisce archivi guest e non rende utilizzabile un nuovo account nelle funzioni salute. Per riuscirci servono un provider Kinde unico, local vault e session fencing, consenso/ADK, journal/ACK, diritti, erasure e prove runtime. Nessuna API sanitaria o dato reale viene attivato.
+
+
 ## CF-03 · blocco guest → Firebase dall'interfaccia (17/11/2026)
 
 Il vecchio login Firebase non deve più ricevere un archivio guest tramite il pulsante «Accedi» della PWA o la scheda Account ospite. Il primo presenta un dialog con focus confinato, Escape e ritorno alla modalità locale; il secondo mostra un avviso, non i form Google/email del provider precedente. Nessuna richiesta login, consenso o sync viene avviata e nessun dato, vault, journal o generazione guest viene attribuito a un UID.
