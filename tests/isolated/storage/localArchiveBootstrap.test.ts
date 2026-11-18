@@ -17,9 +17,12 @@ import { updateStorageMarker, getStorageMarker } from '../../../src/lib/storageI
 import { updateArchiveRecord } from '../../../src/lib/sync/secureArchiveRepository';
 import { beginLocalPurge, cancelUnstartedLocalPurge, LocalPurgePendingError } from '../../../src/lib/sync/localPurgeFence';
 import { rememberAuthenticatedOwner } from '../../../src/lib/sync/authOwnerHint';
+import { authenticatedIdentitySource } from '../../../src/lib/sync/authenticatedIdentitySource';
 import { activateGuestSession, captureSessionForOwner, GUEST_SESSION_KEY, invalidateSession, isCurrentSession } from '../../../src/lib/sync/session';
 
 const owner = 'user:archive-bootstrap';
+const readSyntheticOwner = () => ({ uid: owner.slice(5) });
+let releaseSyntheticOwner: (() => void) | null = null;
 const key = 'logbook:v2:' + owner;
 const state = (height: string): UserData => UserDataSchema.parse({
     profile: { height },
@@ -37,6 +40,7 @@ const catalog: CachedGlobalCatalog = {
 };
 
 beforeEach(async () => {
+    releaseSyntheticOwner = authenticatedIdentitySource.install(readSyntheticOwner);
     lockAllVaults();
     localStorage.clear();
     await clear();
@@ -47,6 +51,8 @@ beforeEach(async () => {
     await createAndMigrateVault(owner);
 });
 afterEach(() => {
+    releaseSyntheticOwner?.();
+    releaseSyntheticOwner = null;
     lockAllVaults();
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
