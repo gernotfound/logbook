@@ -1,4 +1,5 @@
 import { useId, useRef, useState } from 'react';
+import { useSharedKindeAccountSession } from '../../contexts/auth/kindeAccountSessionContext';
 import { useKindeAccountSession } from '../../contexts/auth/useKindeAccountSession';
 import { PrivacyPolicy } from '../../pages/PrivacyPolicy';
 import { TermsAndConditions } from '../../pages/TermsAndConditions';
@@ -45,17 +46,18 @@ function KindeInitialConsentForm({ busy, onAccept }: { busy: boolean; onAccept: 
  * The public, identity-only entry doesn't contact consent or fitness APIs.
  * The full candidate entry can collect consent without opening a data vault.
  */
-export function KindeAccountEntry({
-    guestArchivePresent = false,
-    identityOnly = false,
-    onLocalGuest,
-}: {
+type EntryProps = {
     guestArchivePresent?: boolean;
     identityOnly?: boolean;
     onLocalGuest?: (stillCurrent: () => boolean) => Promise<void>;
-}) {
-    const { view, busy, retry, signIn, enterGuest, acceptConsent, logout } =
-        useKindeAccountSession({ guestArchivePresent, identityOnly });
+};
+type Session = ReturnType<typeof useKindeAccountSession>;
+
+/** Identity-only runtime and the isolated candidate share the same presentation. */
+function KindeAccountEntryView({
+    identityOnly = false, onLocalGuest, session,
+}: Pick<EntryProps, 'identityOnly' | 'onLocalGuest'> & { session: Session }) {
+    const { view, busy, retry, signIn, enterGuest, acceptConsent, logout } = session;
     const { phase } = view;
     const titleId = useId();
 
@@ -111,4 +113,24 @@ export function KindeAccountEntry({
             )}
         </main>
     );
+}
+
+function StandaloneKindeAccountEntry({
+    guestArchivePresent = false, identityOnly = false, onLocalGuest,
+}: EntryProps) {
+    const session = useKindeAccountSession({ guestArchivePresent, identityOnly });
+    return <KindeAccountEntryView session={session} identityOnly={identityOnly} onLocalGuest={onLocalGuest} />;
+}
+
+/**
+ * The public application shares one session observer with its React runtime.
+ * An isolated entry is still available for consent testing, but the live
+ * identity-only path never starts a second probe or imports Firebase Auth.
+ */
+export function KindeAccountEntry(props: EntryProps) {
+    const shared = useSharedKindeAccountSession();
+    if (shared && props.identityOnly && !props.guestArchivePresent) {
+        return <KindeAccountEntryView session={shared} identityOnly onLocalGuest={props.onLocalGuest} />;
+    }
+    return <StandaloneKindeAccountEntry {...props} />;
 }

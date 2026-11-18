@@ -1,5 +1,10 @@
 # Ciclo account, Auth e guest — TheLogBook
 
+### React Kinde presence boundary (18/11/2026, v2.530.0)
+
+Il runtime pubblico monta un unico `KindeAccountSessionProvider` **dentro** il `GuestOnlyAuthProvider`: la verifica della sessione browser Kinde è riusata dalla schermata di ingresso anziché avviare due probe concorrenti. Un cambiamento cookie CSRF, reconnect/focus o guest generation riconcilia lo stesso stato condiviso, con generazione e annullamento dei risultati obsoleti. Lo stato `identity-verified` è **solo presenza**; non installa `authenticatedIdentitySource`, non crea `currentUser` Firebase, non sblocca vault né abilita fitness/consenso/ADK/ACK. Il ramo pubblico continua `identityOnly`, il guest conserva il suo namespace e non è associato automaticamente a Kinde. Un futuro grant fitness richiede uno specifico adapter Kinde con consenso/D1/chiavi/sync e diritti verificati; **non** interpretare il contesto presenza come authorization.
+
+
 ### Preparazione account Kinde non montata (18/11/2026)
 
 Il candidato `prepareKindeCandidateOwner()` compone verifica fidata email/consenso, recovery del vault device Kinde (senza Firebase), hydration cifrata e claim D1 recuperabile. La generazione della sessione del chiamante e il CSRF host-only restano fissati attraverso ogni await; non installa `currentUser`, non trasferisce guest né abilita direttamente le funzioni fitness. `isKindeAccountLocalFitnessClear()` rifiuta guest attivo, revoca salute locale (anche pending), cancellazione account e generazione locale divergente; tale verifica è ripetuta in hydration, claim e journal. Restano obbligatori il runtime Auth/consenso/diritti, API/provider Production e test multi-device/Safari prima del cutover.
