@@ -5,6 +5,7 @@ import { test } from 'node:test';
 const require = createRequire(import.meta.url);
 const picomatch = require('picomatch');
 const installed = require('picomatch/package.json');
+const { removeBackslashes } = require('../../vendor/picomatch/lib/utils.js');
 
 void test('CI resolves the reviewed local picomatch backport', () => {
   assert.equal(installed.version, '4.0.8-logbook.0');
@@ -37,4 +38,34 @@ void test('ordinary glob patterns retain their documented matching behavior', ()
   assert.equal(picomatch.isMatch('aaa', '+(a*)'), true);
   assert.equal(picomatch.isMatch('other', 'other'), true);
   assert.equal(picomatch.isMatch('other', 'another'), false);
+});
+
+
+void test('linear backslash removal retains bracket class and escape semantics', () => {
+  const cases = [
+    ['plain', 'plain'],
+    ['a\\b', 'ab'],
+    ['a\\\\b', 'ab'],
+    ['abc\\', 'abc\\'],
+    ['[abc]', '[abc]'],
+    ['[a\\b]', '[a\\b]'],
+    ['[a\\]b]', '[a\\]b]'],
+    ['[a\\]', '[a]'],
+    ['[[]', '[[]'],
+    ['[[a]]', '[[a]]'],
+    ['[a\n]', '[a\n]'],
+    ['[a\nb]\\x', '[a\nb]x'],
+    ['\\\n', '\\\n'],
+    ['[a\\]b]x\\y', '[a\\]b]xy'],
+  ];
+  for (const [input, expected] of cases) {
+    assert.equal(removeBackslashes(input), expected, JSON.stringify(input));
+  }
+});
+
+void test('unmatched brackets and backslashes have linear-sized output', () => {
+  const openBrackets = '['.repeat(50_000);
+  assert.equal(removeBackslashes(openBrackets), openBrackets);
+  assert.equal(removeBackslashes(openBrackets + '\\a'), openBrackets + 'a');
+  assert.equal(removeBackslashes(openBrackets + ']'), openBrackets + ']');
 });
