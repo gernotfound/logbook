@@ -49,6 +49,7 @@ export async function stageCloudflareReplicaClaim(
     control: CloudReplicaControlSnapshot,
     candidateReplicaId: string,
     guard: Guard,
+    expectedLocalRevision?: number,
 ): Promise<CloudflareReplicaClaimIntent> {
     const { owner } = account(ownerInput);
     current(guard);
@@ -63,7 +64,8 @@ export async function stageCloudflareReplicaClaim(
         current(guard);
         const local = validateLocalEnvelope(raw, owner);
         if (!local || local.cloudIntegrityFence || local.cloudflareDelivery || local.cloudflareReplicaClaim
-            || local.cloudflareReplicaRetirement || local.consentRevision !== control.consentRevision) {
+            || local.cloudflareReplicaRetirement || local.consentRevision !== control.consentRevision
+            || (expectedLocalRevision !== undefined && local.revision !== expectedLocalRevision)) {
             throw new Error('Claim D1 non installabile: archivio, consenso o sync non coerenti.');
         }
         const input = parseCloudflareReplicaClaimIntent({

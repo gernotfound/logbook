@@ -5,6 +5,10 @@
 Il bridge di sola lettura `inspectKindeCandidateCloudCheckpoint` verifica sessione e consenso, continuità del cookie CSRF e della generazione, ADK monouso, scansione D1 revision-fenced, integrità AEAD owner/path e nuova prova trusted finale. `hydrateKindeCandidateArchive` richiede inoltre un vault già autorizzato per l'owner atteso. Nella transazione IndexedDB ricontrolla la stessa apertura del vault, il cookie, il guard del chiamante, la revisione locale pre-scansione e la generazione del consenso. Una modifica concorrente o una transizione di consegna, claim o retirement pendente sospende la hydration. La copia locale conserva il journal. L'adozione della replica e gli ACK richiedono prove separate. Il bridge resta isolato dal runtime pubblico.
 
 
+### CF-04 — Claim replica con prova Kinde e recupero locale (18/11/2026, candidato)
+
+`claimKindeCandidateReplica()` collega sessione e consenso trusted, vault device già aperto, owner D1 nel controllo remoto, verifica AEAD completa del checkpoint e doppio controllo stabile prima dello staging. La prova legale locale deve corrispondere alla ricevuta server e viene verificata nuovamente prima e dopo il replay. Il request di claim viene prima registrato nell'envelope cifrato owner-scoped; un claim preesistente viene ripreso con la mutationId invariata, senza rigenerare una richiesta. Un lost ACK, controllo instabile, guest, cambio CSRF/generazione/vault o replica locale scaduta impediscono nuove attribuzioni; la ADK temporanea viene azzerata sempre. La funzione rimane candidata non montata nel provider o nella UI, e i risultati `adopted`/`already-active` **non** autorizzano da soli fitness, ACK del journal, diritti o cutover Production. La replica già presente si accetta come `already-active` soltanto con incarico e lease coincidenti nel controllo owner-bound.
+
 **Quando leggere:** IndexedDB, journal, versioni, hydration, replica, bootstrap e PWA update/reload.
 **Non inferire:** stato memoria, durabilità locale, ACK cloud e recupero completo sono prove distinte.
 

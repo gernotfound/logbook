@@ -127,6 +127,24 @@ describe('candidate encrypted D1 claim intent', () => {
             .toBe('idle');
     });
 
+    it('does not seal a new claim after another tab changed the encrypted local revision', async () => {
+        const before = await readLocal(owner);
+        const verified = await readAuthenticatedCloudflareCheckpoint(
+            async () => ({ revision: 0, fenceEpoch: 5, consentRevision: 1, documents: [] }),
+            uid, key, 1, () => true,
+        );
+        await commitLocal(owner, data(171), data(170));
+        const sealed = await get(storage);
+        await expect(stageCloudflareReplicaClaim(
+            owner, verified,
+            { revision: 0, fenceEpoch: 5, consentRevision: 1, replicas: {} },
+            'new-synthetic-device', () => true, before!.revision,
+        )).rejects.toThrow('Claim D1 non installabile');
+        expect(await get(storage)).toBe(sealed);
+        expect((await readLocal(owner))?.cloudflareReplicaClaim).toBeUndefined();
+        expect((await readLocal(owner))?.pending.length).toBeGreaterThan(0);
+    });
+
     it('keeps the same mutation ID and all journal edits after a network timeout, then recovers', async () => {
         const { staged, snapshot } = await prepare();
         await commitLocal(owner, data(171), data(170));
