@@ -5,8 +5,9 @@ import { GuestOnlyAuthProvider } from '../../../src/contexts/GuestOnlyAuthProvid
 import { useAuth } from '../../../src/hooks/useAuth';
 import { useAppStore } from '../../../src/store/useAppStore';
 import { DB } from '../../../src/lib/db';
-import { onAuthStateChanged } from '../../../src/lib/firebase';
-import { activateGuestSession, GUEST_REVOCATION_KEY, GUEST_SESSION_KEY } from '../../../src/lib/sync/session';
+import { auth, onAuthStateChanged } from '../../../src/lib/firebase';
+import { authenticatedIdentitySource } from '../../../src/lib/sync/authenticatedIdentitySource';
+import { activateGuestSession, captureSession, GUEST_REVOCATION_KEY, GUEST_SESSION_KEY, storageOwner } from '../../../src/lib/sync/session';
 
 function restoreGuest(id: string) {
     localStorage.setItem('logbook_is_guest', 'true');
@@ -32,6 +33,21 @@ describe('Kinde-first guest provider: no legacy account activation', () => {
         expect(result.current.isGuest).toBe(false);
         expect(result.current.loading).toBe(false);
         expect(onAuthStateChanged).not.toHaveBeenCalled();
+    });
+
+    it('does not adopt a persisted Firebase user as the owner of a Kinde-first session', () => {
+        const previousUser = auth.currentUser;
+        (auth as { currentUser: unknown }).currentUser = { uid: 'retired-firebase-uid' };
+        try {
+            const { result } = renderHook(() => useAuth(), { wrapper });
+            expect(result.current.currentUser).toBeNull();
+            expect(authenticatedIdentitySource.readUid()).toBeNull();
+            expect(storageOwner()).toBe('guest');
+            expect(captureSession().owner).toBe('guest');
+            expect(onAuthStateChanged).not.toHaveBeenCalled();
+        } finally {
+            (auth as { currentUser: unknown }).currentUser = previousUser;
+        }
     });
 
     it('rejects legacy sign-in and registration rather than silently treating them as Kinde credentials', async () => {
