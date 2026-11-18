@@ -57,10 +57,11 @@ const firebaseConfig = {
 
 export const firebaseApp = initializeApp(firebaseConfig);
 
-// App Check provider bootstrap is synchronous so protected Firebase services can
-// never be initialized before the provider. Token acquisition remains async and
-// is exposed separately through ensureAppCheck().
-ensureAppCheckProvider(firebaseApp);
+// Do not initialize reCAPTCHA on module import. The Kinde-first guest
+// runtime still imports legacy account modules but must not invoke external
+// identity providers. getDb() initializes App Check before any Firestore
+// client, while ensureAppCheck() initializes it before credential acquisition.
+// Both protected cloud operations fail closed when App Check cannot initialize.
 
 export class AppCheckUnavailableError extends Error {
     readonly code = 'app-check-unavailable';
