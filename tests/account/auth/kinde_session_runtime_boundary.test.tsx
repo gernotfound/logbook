@@ -90,14 +90,13 @@ describe('React Kinde session boundary never promotes identity into fitness', ()
         vi.mocked(readKindeCandidateIdentity).mockResolvedValue({
             kind: 'email-verified', principal: readyPrincipal,
         });
-        const send = vi.fn<typeof fetch>();
         const { result } = renderHook(() => useKindeAccountSession({
             guestArchivePresent: false, identityOnly: true, candidatePreparationEnabled: true,
         }));
         await waitFor(() => expect(result.current.view.phase).toBe('identity-verified'));
         await act(async () => {
             await expect(result.current.prepareCandidateArchive({
-                send, drainPendingJournal: true,
+                drainPendingJournal: true,
             })).resolves.toMatchObject({
                 kind: 'candidate-observed', replicaOutcome: 'already-active',
             });
@@ -106,7 +105,7 @@ describe('React Kinde session boundary never promotes identity into fitness', ()
         const args = vi.mocked(prepareKindeCandidateOwner).mock.calls[0][0];
         expect(args).toMatchObject({
             expected: { uid, fenceEpoch: 1, healthConsentRevision: 1 },
-            send, drainPendingJournal: true, retainDeviceVault: false,
+            drainPendingJournal: true, retainDeviceVault: false,
         });
         expect(args.stillCurrent()).toBe(true);
         expect(readKindeCandidateAccess).not.toHaveBeenCalled();
