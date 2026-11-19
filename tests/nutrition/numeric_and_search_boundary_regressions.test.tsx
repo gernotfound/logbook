@@ -1,5 +1,5 @@
 import React from 'react';
-import { describe, test, expect, beforeEach } from 'vitest';
+import { describe, test, expect } from 'vitest';
 import { screen, fireEvent } from '@testing-library/react';
 import { renderWithProviders, emptyUserData } from '../setup';
 import { prepareUnlockedTestArchive } from '../secureVaultFixture';
@@ -10,7 +10,6 @@ import type { Food } from '../../src/types';
 import NutritionMeals from '../../src/components/Nutrition/NutritionMeals';
 
 describe('Nutrition numeric and hostile search inputs', () => {
-  beforeEach(async () => { await prepareUnlockedTestArchive(); });
 
     test('Logic.calculateMacrosFromKg handles zero weight or zero macro ratios', () => {
       const zeroWeight = Logic.calculateMacrosFromKg(0, 3.5, 2.0, 1.0);
@@ -173,7 +172,8 @@ describe('Nutrition numeric and hostile search inputs', () => {
       expect(calculateLoggedMealTotals([{ ...logged, quantity: 2 }]).kcal).toBe(145);
     });
 
-    test('NutritionMeals handles literal regex metacharacters and still finds a known food', () => {
+    test('NutritionMeals handles literal regex metacharacters and still finds a known food', async () => {
+      await prepareUnlockedTestArchive();
       renderWithProviders(<NutritionMeals />, { userData: {
         ...emptyUserData,
         customFoods: [{ id: 'food-pollo', name: 'Pollo Test', kcal: 105, pro: 23, carbs: 0, fat: 1 }],
