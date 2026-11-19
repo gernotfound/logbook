@@ -1,6 +1,13 @@
 // Diagnostic mutation testing only. The normal M8 gate and production remain unchanged.
 // This selection is deliberately bounded: Stryker's Vitest runner cannot run Playwright
 // browser tests or the dedicated Firestore Emulator suite.
+const localRepositorySuites = [
+  "tests/isolated/storage/localRepository.test.ts",
+  "tests/isolated/storage/localRepository.hydration.test.ts",
+  "tests/isolated/storage/localRepository.acknowledgement.test.ts",
+  "tests/isolated/storage/localRepository.commits.test.ts",
+];
+
 export const trialCases = {
   "secure-control-recovery": {
     "mutate": ["src/lib/sync/secureArchiveControlRecovery.ts"],
@@ -19,12 +26,12 @@ export const trialCases = {
   },
   "archive-bootstrap": {
     "mutate": ["src/lib/sync/localArchiveBootstrap.ts"],
-    "testFiles": ["tests/isolated/storage/localRepository.test.ts", "tests/isolated/storage/localArchiveBootstrap.test.ts"],
+    "testFiles": [...localRepositorySuites, "tests/isolated/storage/localArchiveBootstrap.test.ts"],
     "runner": "isolated"
   },
   "consent-reconciliation": {
     "mutate": ["src/lib/sync/localConsentReconciliation.ts"],
-    "testFiles": ["tests/isolated/storage/localRepository.test.ts", "tests/isolated/health/audit_03_rejected_consent.test.ts", "tests/isolated/health/localConsentReconciliation.test.ts"],
+    "testFiles": [...localRepositorySuites, "tests/isolated/health/audit_03_rejected_consent.test.ts", "tests/isolated/health/localConsentReconciliation.test.ts"],
     "runner": "isolated"
   },
   "csv": {
@@ -108,12 +115,12 @@ export const trialCases = {
   },
   "cloud-hydration": {
     "mutate": ["src/lib/sync/localCloudHydration.ts"],
-    "testFiles": ["tests/isolated/storage/localRepository.test.ts", "tests/isolated/health/consentEpochRecovery.test.ts", "tests/isolated/sync/localCloudHydration.test.ts"],
+    "testFiles": [...localRepositorySuites, "tests/isolated/health/consentEpochRecovery.test.ts", "tests/isolated/sync/localCloudHydration.test.ts"],
     "runner": "isolated"
   },
   "journal-acknowledgement": {
     "mutate": ["src/lib/sync/localJournalAcknowledgement.ts"],
-    "testFiles": ["tests/isolated/storage/localRepository.test.ts", "tests/isolated/sync/lateCommit.test.ts", "tests/isolated/sync/storeJournal.test.ts", "tests/isolated/sync/localJournalAcknowledgement.test.ts"],
+    "testFiles": [...localRepositorySuites, "tests/isolated/sync/lateCommit.test.ts", "tests/isolated/sync/storeJournal.test.ts", "tests/isolated/sync/localJournalAcknowledgement.test.ts"],
     "runner": "isolated"
   },
   "consent-journal-recovery": {

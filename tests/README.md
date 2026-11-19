@@ -40,6 +40,8 @@ La radice di `tests/` contiene soltanto fixture e setup condivisi: **nessun file
 - Le vecchie raccolte per milestone (`R1–R6`, `M1–M4`, `Worker`) sono state ricollocate per funzionalità, mantenendo i nomi dei singoli casi per la tracciabilità. Non ricreare nuovi raggruppamenti storici.
 - `e2e/`: `account/`, `health/`, `storage/`, `pwa/` e `ui/`. `fixtures.ts`, `pwa-upgrade-fixtures.ts` e `storage-write-barrier.ts` restano condivisi nella radice di `e2e/`.
 
+Le suite native Cloudflare `cf02-documents*.node.mjs` separano replica, commit/documenti, validazione HTTP/SQL e confini di autorizzazione. La fixture `cf02-documents-fixture.mjs` applica **tutte le migrazioni correnti** di D1 applicativa e del registro indipendente a database sintetici; una regressione verifica anche i trigger di revoca preliminare (`0003`) e cutoff di cancellazione (`0004`): non va sostituita con uno schema ridotto. Ogni file `.node.mjs` deve comparire in `test:pwa:m7`, così `test:discovery` ne verifica l'assegnazione e nessun gruppo viene omesso dal runner.
+
 `test:discovery` verifica le assegnazioni ai runner, il posizionamento delle suite numerose e i percorsi reali delle 25 diagnostiche Stryker. `test:ci` esegue la suite Vitest generale una sola volta; non sostituisce né il gate `verify:m8` né le suite dedicate.
 
 ## Invarianti degli spostamenti
