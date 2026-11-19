@@ -4,7 +4,7 @@ const vault = vi.hoisted(() => {
     // The shared jsdom setup can import the readiness module before file mocks.
     // Reload its module graph so this suite controls the actual dependencies.
     vi.resetModules();
-    return { unlocked: false };
+    return { unlocked: false, grant: 0 };
 });
 vi.mock('../../../src/lib/sync/secureArchiveSession', () => ({
     isVaultUnlocked: () => vault.unlocked,
@@ -26,9 +26,10 @@ let attempts: ControlledAttempt[];
 
 beforeEach(() => {
     vault.unlocked = false;
+    vault.grant = 0;
     attempts = [];
     vi.mocked(createAndMigrateVault).mockReset().mockImplementation((_owner, isCurrent) =>
-        new Promise<void>((resolve, reject) => {
+        new Promise<Awaited<ReturnType<typeof createAndMigrateVault>>>((resolve, reject) => {
             attempts.push({
                 finish: () => {
                     // Model the production unlock boundary: a cancelled request
@@ -38,7 +39,12 @@ beforeEach(() => {
                         return;
                     }
                     vault.unlocked = true;
-                    resolve();
+                    const grant = ++vault.grant;
+                    const isGrantCurrent = () => vault.unlocked && vault.grant === grant;
+                    resolve({
+                        isCurrent: isGrantCurrent,
+                        release: () => { if (isGrantCurrent()) vault.unlocked = false; },
+                    });
                 },
                 fail: () => reject(new Error('storage unavailable')),
             });
