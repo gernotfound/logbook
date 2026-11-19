@@ -69,12 +69,17 @@ function KindeCandidatePreparation({ session }: { session: Session }) {
         if (running.current || session.busy || state === 'observed') return;
         running.current = true;
         setState('working');
-        void session.prepareCandidateArchive().then(result => {
+        void session.prepareCandidateArchive({ drainPendingJournal: true }).then(result => {
             if (!mounted.current) return;
+            // A checkpoint and replica alone do not acknowledge pending edits.
+            // The candidate needs either the exact journal receipt or proof
+            // that no pending delivery remains before reporting completion.
             const complete = result.kind === 'candidate-observed'
                 && result.checkpointRevision !== null
                 && (result.replicaOutcome === 'adopted'
-                    || result.replicaOutcome === 'already-active');
+                    || result.replicaOutcome === 'already-active')
+                && (result.journalOutcome === 'idle'
+                    || result.journalOutcome === 'acknowledged');
             setState(complete ? 'observed' : 'pending');
         }).catch(() => {
             if (mounted.current) setState('error');
