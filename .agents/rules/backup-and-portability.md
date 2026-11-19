@@ -154,3 +154,35 @@ Il percorso resta **candidato non montato nel frontend pubblico**: prima di
 offrirlo in Impostazioni bisogna comporre i dati locali e la UX di consenso,
 proporre un backup facoltativo prima della revoca e verificare con browser
 e provider isolati. Non modificare `D1_API` pubblico per questo incremento.
+
+## CF-05 — evidenze distinte prima della revoca Kinde (candidato 19/11/2026)
+
+`src/lib/auth/kindeCandidatePreWithdrawalExport.ts` offre una preparazione
+**esplicita e in sola lettura** quando il consenso Kinde/D1 e' ancora
+`active`. Richiede il vault device corrente **gia' sbloccato**, senza
+crearlo, inizializzare un envelope, modificare dati o inviare journal.
+`inspectKindeCandidateCloudCheckpoint` verifica sessione, CSRF,
+consenso e scansione cloud completa alla revisione osservata, con apertura
+AEAD di ogni documento. Il nuovo `backupDeviceSnapshot.ts` riusa la
+lettura rigorosa dei record device dell'export Firebase, senza importare
+Firebase: l'envelope IndexedDB validato comprende business, baseline,
+journal in attesa e intenti D1, mentre localStorage conserva workout,
+timer, bozze e testimonianze tecniche raw ancora riconoscibili.
+
+La composizione ripete lettura IndexedDB e inventario/valori di recupero
+prima di produrre il JSON: cambi rilevabili, corruzione, owner/consenso
+incoerente o vault sostituito falliscono senza download. Questo **non**
+crea uno snapshot atomico fra D1, IndexedDB e schede. L'export
+`thelogbook-prewithdrawal-evidence` versione 1 mantiene sezioni cloud
+e device separate, con provenienza e intestazione `restorableBackup:false`.
+**Non e' un Backup Schema 3** e non deve essere passato all'importer come
+dataset ricostruito; non inventare merge, ACK o ripristino automatico.
+La copia può includere dati salute in chiaro nel file scaricato e
+va custodita privatamente. La dimensione massima del JSON candidato
+in memoria e' 64 MiB; il click di download non prova il salvataggio.
+
+Questa e' una fase preparatoria, **non collegata alla PWA pubblica**.
+Prima di offrire una funzione di backup/ripristino completo occorrono
+composizione causale lossless, gestione di copie orfane/bozze e UI
+esplicita prima della revoca, con test isolati browser/provider. Non
+abilitare il binding pubblico `D1_API` in base al solo test candidato.

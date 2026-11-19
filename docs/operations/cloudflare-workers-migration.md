@@ -876,3 +876,31 @@ integrazione UX, unione affidabile delle copie device e cloud,
 esportazione facoltativa prima della revoca e collaudo browser/provider
 su risorse isolate; KEK reale, cancellazione ed erasure restano gate
 separati.
+
+### CF-05 — raccolta di prove cloud + dispositivo prima della revoca (19/11/2026)
+
+Il candidato `kindeCandidatePreWithdrawalExport.ts` prepara un unico
+JSON `thelogbook-prewithdrawal-evidence` con **due archivi separati**:
+checkpoint cloud D1 aperto con ADK effimera e revision-pinned, e
+envelope IndexedDB cifrato letto/validato in memoria con il journal
+locale non consegnato e le copie device recuperabili (workout, timer,
+draft e testimonianze). La scansione device rigorosa e' stata estratta
+dal backup Firebase in `backupDeviceSnapshot.ts` e condivisa con il
+percorso Kinde, senza aggiungere dipendenze Firebase.
+
+Sessione Kinde, consenso attivo, CSRF, vault owner-scoped e generazione
+sono verificati anche dopo le attese; la rilettura dell'envelope e
+delle copie device rifiuta cambi concorrenti osservabili senza
+nasconderli. Non esiste transazione cross-resource e il file non
+fonde semanticamente i due dataset, non prova ACK o recuperabilita'
+di qualunque cosa non consegnata, e **non e' importabile come backup
+Schema 3**. Nessuna mutazione di storage o provider, attivazione UI,
+grant fitness o binding D1 pubblico. Il download su richiesta non prova
+il salvataggio del browser.
+
+Attivazione differita: definire il backup business portabile realmente
+ricostruito dai dati causali, verificare copie e proposte di recupero
+local-only, aggiungere UI informata *prima* della revoca ed eseguire
+prove di Browser/WebKit e provider isolate. Il frontend corrente
+resta `identityOnly`, `candidatePreparationEnabled:false`;
+nessun GO sanitario.

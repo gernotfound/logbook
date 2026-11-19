@@ -23,11 +23,14 @@ import { acceptKindeCandidateInitialConsent } from '../../../src/lib/auth/kindeC
 import { deliverKindeCandidateJournal } from '../../../src/lib/sync/kindeCandidateJournalBridge';
 import { withKindeCandidateRightsCheckpoint } from '../../../src/lib/auth/kindeCandidateRightsCheckpoint';
 import { prepareKindeCandidateRightsJson, requestKindeCandidateRightsJsonDownload } from '../../../src/lib/auth/kindeCandidateRightsExport';
+import { prepareKindeCandidatePreWithdrawalJson, requestKindeCandidatePreWithdrawalJsonDownload } from '../../../src/lib/auth/kindeCandidatePreWithdrawalExport';
+import { protectedDeviceKey } from '../../../src/lib/sync/deviceStorageKeys';
+import { sealLocalText } from '../../../src/lib/sync/secureArchiveCipher';
 import type { CloudReplicaClaimRequest } from '../../../src/lib/sync/cloudReplicaTransport';
 import { readLocal } from '../../../src/lib/sync/localArchiveBootstrap';
 import { commitDomainOperations } from '../../../src/lib/sync/localDomainCommit';
 import {
-    isVaultUnlocked, lockAllVaults, readVaultControl, unlockVaultForOwner, vaultControlKey,
+    isVaultUnlocked, lockAllVaults, readVaultControl, requireUnlockedLocalKey, unlockVaultForOwner, vaultControlKey,
 } from '../../../src/lib/sync/secureArchiveSession';
 
 const uid = 'k_' + 'A'.repeat(43);
@@ -579,6 +582,113 @@ describe('Kinde-only device vault provisioning and authenticated baseline', () =
             expect(fixture.count('health_erasure_jobs', uid)).toBe(1);
             await expect(prepareKindeCandidateOwner({ ...session, expected: principal }))
                 .rejects.toThrow();
+        } finally { fixture.close(); }
+    });
+
+    it('exports separately verified cloud and durable device evidence before Kinde withdrawal', async () => {
+        const actualClaim = await vi.importActual<typeof import('../../../src/lib/sync/kindeCandidateReplicaClaimBridge')>(
+            '../../../src/lib/sync/kindeCandidateReplicaClaimBridge',
+        );
+        claimSource.claim.mockImplementation(actualClaim.claimKindeCandidateReplica);
+        const fixture = await createCloudKeyHttpFixture([uid]);
+        try {
+            await fixture.consent(uid);
+            const paths: string[] = [];
+            const session = firstPartySession(fixture, (path, _init, response) => {
+                paths.push(path);
+                return response;
+            });
+            await expect(prepareKindeCandidateOwner({ ...session, expected: principal }))
+                .resolves.toMatchObject({ replicaOutcome: 'adopted' });
+            expect(isVaultUnlocked(owner)).toBe(true);
+            const initial = (await readLocal(owner))!.data;
+            await commitDomainOperations(owner, {
+                type: 'profile.patch', patch: { height: '182' },
+            }, initial);
+            await expect(deliverKindeCandidateJournal(session)).resolves.toBe('acknowledged');
+            const committed = (await readLocal(owner))!.data;
+            await commitDomainOperations(owner, {
+                type: 'profile.patch', patch: { height: '193' },
+            }, committed);
+            const exportPathStart = paths.length;
+            const draftKey = protectedDeviceKey('draft:measurement:2026-11-19', owner);
+            const draftValue = '{"weight":"79"}';
+            localStorage.setItem(draftKey, sealLocalText(
+                requireUnlockedLocalKey(owner), owner, draftKey, draftValue,
+            ));
+
+            const result = await prepareKindeCandidatePreWithdrawalJson({ ...session, expected: principal });
+            expect(result.cloudDocumentCount).toBe(1);
+            expect(result.deviceWitnessCount).toBe(1);
+            expect(result.pendingOperationCount).toBe(1);
+            const decoded = JSON.parse(result.json) as {
+                format: string; owner: string;
+                coverage: { atomicAcrossSources: boolean; restorableBackup: boolean; containsPendingJournal: boolean };
+                cloud: { revision: number; documents: Array<{path: string; business: { profile: { height: string } } }> };
+                device: { envelope: { data: { profile: { height: string } }; pending: unknown[] };
+                    recovery: Record<string, string> };
+            };
+            expect(decoded).toMatchObject({
+                format: 'thelogbook-prewithdrawal-evidence', owner,
+                coverage: { atomicAcrossSources: false, restorableBackup: false, containsPendingJournal: true },
+                cloud: { documents: [{ path: '', business: { profile: { height: '182' } } }] },
+            });
+            expect(decoded.device.envelope.data.profile.height).toBe('193');
+            expect(decoded.device.envelope.pending).toHaveLength(1);
+            expect(decoded.device.recovery['draft:measurement:2026-11-19']).toBe(draftValue);
+            expect(result.json).not.toContain('tlb-sealed:v1:');
+            expect(paths.slice(exportPathStart)).not.toContain('/v1/rights/scan');
+            expect(paths.slice(exportPathStart)).not.toContain('/v1/sync/commit');
+
+            // A local edit between the initial IDB read and the cloud page
+            // must invalidate the whole export, not silently omit that edit.
+            const racingSession = firstPartySession(fixture, async (path, _init, response) => {
+                if (path === '/v1/sync/scan') {
+                    const baseline = (await readLocal(owner))!.data;
+                    await commitDomainOperations(owner, {
+                        type: 'profile.patch', patch: { height: '194' },
+                    }, baseline);
+                }
+                return response;
+            });
+            await expect(prepareKindeCandidatePreWithdrawalJson({
+                ...racingSession, expected: principal,
+            })).rejects.toThrow();
+            expect((await readLocal(owner))?.data.profile?.height).toBe('194');
+            const racingWitness = firstPartySession(fixture, (path, _init, response) => {
+                if (path === '/v1/sync/scan') {
+                    localStorage.setItem(draftKey, sealLocalText(
+                        requireUnlockedLocalKey(owner), owner, draftKey, '{"weight":"80"}',
+                    ));
+                }
+                return response;
+            });
+            await expect(prepareKindeCandidatePreWithdrawalJson({
+                ...racingWitness, expected: principal,
+            })).rejects.toThrow();
+            expect((await readLocal(owner))?.pending).toHaveLength(2);
+
+            const clicked = vi.fn();
+            const link = { href: '', download: '', style: { visibility: '' },
+                click: clicked, remove: vi.fn() };
+            vi.stubGlobal('document', {
+                createElement: vi.fn(() => link),
+                body: { appendChild: vi.fn() },
+            });
+            const url = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:prewithdrawal-test');
+            vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
+            await requestKindeCandidatePreWithdrawalJsonDownload({ ...session, expected: principal });
+            expect(clicked).toHaveBeenCalledOnce();
+            expect(url).toHaveBeenCalledOnce();
+
+            await fixture.withdraw(uid);
+            await expect(prepareKindeCandidatePreWithdrawalJson({
+                ...session, expected: principal,
+            })).rejects.toThrow();
+            lockAllVaults();
+            await expect(prepareKindeCandidatePreWithdrawalJson({
+                ...session, expected: principal,
+            })).rejects.toThrow();
         } finally { fixture.close(); }
     });
 
