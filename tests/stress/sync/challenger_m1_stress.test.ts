@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { removeUndefinedValuesForFirestore, isPlainObject } from '../../../src/lib/utils/object';
+import { removeUndefinedValuesForFirestore } from '../../../src/lib/utils/object';
 import { projectDocuments } from '../../../src/lib/sync/documentProjection';
 import { getSeedCatalog } from '../../../src/lib/catalog/catalogService';
 
@@ -25,7 +25,10 @@ function assertNoUndefined(value: unknown, path = 'root'): void {
         }
         return;
     }
-    if (isPlainObject(value)) {
+    // The serialization oracle must not call the production isPlainObject
+    // predicate: a regression there could otherwise hide leaked undefined.
+    const prototype = Object.getPrototypeOf(value);
+    if (prototype === Object.prototype || prototype === null) {
         for (const key of Object.keys(value)) {
             const val = (value as Record<string, any>)[key];
             if (val === undefined) {
@@ -37,6 +40,14 @@ function assertNoUndefined(value: unknown, path = 'root'): void {
 }
 
 describe('Empirical Challenger: removeUndefinedValuesForFirestore & Firestore Serialization Adversarial Stress Suite', () => {
+
+    it('independent serialization oracle detects nested undefined values even in null-prototype dictionaries', () => {
+        expect(() => assertNoUndefined({ nested: [{ missing: undefined }] }))
+            .toThrow('[FIRESTORE VIOLATION] Encountered \'undefined\' in object at path: root.nested[0].missing');
+        const dictionary = Object.assign(Object.create(null), { child: { missing: undefined } });
+        expect(() => assertNoUndefined(dictionary))
+            .toThrow('[FIRESTORE VIOLATION] Encountered \'undefined\' in object at path: root.child.missing');
+    });
 
     // =========================================================================
     // 1. Extreme Deep Nesting Stress (50+ and 100+ levels)
