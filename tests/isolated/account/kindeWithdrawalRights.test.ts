@@ -81,7 +81,7 @@ describe('Kinde withdrawal and rights-only client against first-party Workers an
             let borrowed: Uint8Array | undefined;
             const used = await withKindeCandidateRightsKey({
                 ...client, expected,
-                useKey: async (adk, current) => {
+                consumeKey: async (adk, current) => {
                     expect(current()).toBe(true);
                     borrowed = adk;
                     return adk.slice();
@@ -120,7 +120,7 @@ describe('Kinde withdrawal and rights-only client against first-party Workers an
             })).rejects.toBeInstanceOf(KindeCandidateBoundaryError);
             expect(withdrawCalls).toBe(1);
             await expect(withKindeCandidateRightsKey({
-                ...client, expected, useKey: async key => key.slice(),
+                ...client, expected, consumeKey: async key => key.slice(),
             })).resolves.toHaveLength(32);
             expect(localStorage.getItem(marker)).toBe('pending:1');
             expect(fixture.count('health_erasure_jobs', uid)).toBe(1);
@@ -199,12 +199,12 @@ describe('Kinde withdrawal and rights-only client against first-party Workers an
             const client = browser(fixture);
             let keyCalls = 0;
             await expect(withKindeCandidateRightsKey({
-                ...client, expected, useKey: async () => { keyCalls += 1; },
+                ...client, expected, consumeKey: async () => { keyCalls += 1; },
             })).rejects.toThrow();
             expect(keyCalls).toBe(0);
             await fixture.withdraw(uid);
             await expect(withKindeCandidateRightsKey({
-                ...client, expected, useKey: async () => { keyCalls += 1; },
+                ...client, expected, consumeKey: async () => { keyCalls += 1; },
             })).rejects.toThrow();
             expect(keyCalls).toBe(0);
             expect(fixture.count('cloud_account_keys', uid)).toBe(0);
@@ -222,7 +222,7 @@ describe('Kinde withdrawal and rights-only client against first-party Workers an
             const client = browser(fixture);
             let borrowed: Uint8Array | undefined;
             await expect(withKindeCandidateRightsKey({
-                ...client, expected, useKey: async key => {
+                ...client, expected, consumeKey: async key => {
                     borrowed = key;
                     client.replaceCookie('__Host-logbook_csrf=' + 'B'.repeat(43));
                 },
