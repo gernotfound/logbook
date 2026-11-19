@@ -2,6 +2,13 @@ import { act, fireEvent, render, renderHook, screen, waitFor, cleanup } from '@t
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ReactNode } from 'react';
 
+vi.mock('../../../src/hooks/usePWAInstall', () => ({
+    usePWAInstall: vi.fn(() => ({
+        isInstallable: false, isIOSInstallable: false, isStandalone: false,
+        promptInstall: vi.fn(async () => {}),
+    })),
+}));
+
 vi.mock('../../../src/lib/db/guestLocalPurge', () => ({ purgeGuestLocalData: vi.fn(async () => {}) }));
 vi.mock('../../../src/lib/sync/kindeCandidateOwnerBootstrap', () => ({
     prepareKindeCandidateOwner: vi.fn(),
@@ -27,6 +34,7 @@ import { prepareKindeCandidateOwner } from '../../../src/lib/sync/kindeCandidate
 import { authenticatedIdentitySource } from '../../../src/lib/sync/authenticatedIdentitySource';
 import { activateGuestSession, GUEST_SESSION_KEY } from '../../../src/lib/sync/session';
 import { useAuth } from '../../../src/hooks/useAuth';
+import { usePWAInstall } from '../../../src/hooks/usePWAInstall';
 import { releaseLegacyTestIdentityReader } from '../../setup';
 
 const uid = 'k_' + 'A'.repeat(43);
@@ -57,6 +65,10 @@ beforeEach(() => {
     csrf = 'A'.repeat(43);
     vi.spyOn(document, 'cookie', 'get').mockImplementation(() => '__Host-logbook_csrf=' + csrf);
     vi.mocked(readKindeCandidateIdentity).mockResolvedValue({ kind: 'signed-out' });
+    vi.mocked(usePWAInstall).mockReturnValue({
+        isInstallable: false, isIOSInstallable: false, isStandalone: false,
+        promptInstall: vi.fn(async () => {}),
+    });
     vi.mocked(readKindeCandidateAccess).mockReset();
     vi.mocked(revokeKindeCandidateSession).mockResolvedValue();
     vi.mocked(prepareKindeCandidateOwner).mockReset();
@@ -71,6 +83,28 @@ afterEach(() => {
 });
 
 describe('React Kinde session boundary never promotes identity into fitness', () => {
+    it('offers a deferred PWA install gesture on the signed-out entry without granting fitness', async () => {
+        const promptInstall = vi.fn(async () => {});
+        vi.mocked(usePWAInstall).mockReturnValue({
+            isInstallable: true, isIOSInstallable: false, isStandalone: false, promptInstall,
+        });
+        render(<KindeAccountEntry identityOnly />, { wrapper: host });
+        fireEvent.click(await screen.findByRole('button', { name: 'Installa TheLogBook' }));
+        expect(promptInstall).toHaveBeenCalledTimes(1);
+        expect(readKindeCandidateIdentity).toHaveBeenCalledTimes(1);
+        expect(authenticatedIdentitySource.readUid()).toBeNull();
+    });
+
+    it('shows the iOS installation instruction without a fake browser prompt', async () => {
+        vi.mocked(usePWAInstall).mockReturnValue({
+            isInstallable: false, isIOSInstallable: true, isStandalone: false,
+            promptInstall: vi.fn(async () => {}),
+        });
+        render(<KindeAccountEntry identityOnly />, { wrapper: host });
+        expect(await screen.findByText(/Aggiungi alla schermata Home/)).toBeTruthy();
+        expect(screen.queryByRole('button', { name: 'Installa TheLogBook' })).toBeNull();
+    });
+
     it('does not start candidate preparation from the mounted public provider', async () => {
         vi.mocked(readKindeCandidateIdentity).mockResolvedValue({
             kind: 'email-verified', principal: readyPrincipal,
