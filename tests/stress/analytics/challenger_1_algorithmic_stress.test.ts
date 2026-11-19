@@ -77,7 +77,27 @@ describe('Challenger 1: Algorithmic & Mathematical Stress Test Suite', () => {
             expect(corrPoints).toHaveLength(52);
             expect(volStats.hasData).toBe(true);
             expect(corrStats.hasData).toBe(true);
-            expect(volStats.totalVolumeKg).toBeGreaterThan(0);
+
+            // Independently calculate the fixed fixture: two bench exercises,
+            // two 20-kg-tare squats, five main sets and two drops per set.
+            const bench = [480, 585, 700, 825, 960].reduce((a, b) => a + b, 0) + 5 * (40 * 6 + 30 * 6);
+            const squat = [640, 765, 900, 1045, 1200].reduce((a, b) => a + b, 0) + 5 * (60 * 6 + 50 * 6);
+            const workoutKg = 2 * (bench + squat);
+            expect(workoutKg).toBe(27000);
+            // 52 Monday-based weeks begin 2025-09-08; no session later
+            // than the requested 2026-09-01 reference day may be included.
+            const included = history.filter(w =>
+                typeof w.date === 'string' && w.date >= '2025-09-08' && w.date <= '2026-09-01');
+            expect(included).toHaveLength(359);
+            expect(volStats.totalWorkouts).toBe(359);
+            expect(volStats.totalVolumeKg).toBe(359 * workoutKg);
+            expect(volStats.totalVolumeKg).toBe(9693000);
+            expect(volPoints[0]).toMatchObject({ weekStart: '2025-09-08', workoutCount: 7, volumeKg: 189000 });
+            expect(volPoints[51]).toMatchObject({ weekStart: '2026-08-31', workoutCount: 2, volumeKg: 54000 });
+            expect(volStats.currentWeekVolumeKg).toBe(54000);
+            expect(corrPoints.map(p => [p.weekStart, p.workoutCount, p.volumeKg]))
+                .toEqual(volPoints.map(p => [p.weekStart, p.workoutCount, p.volumeKg]));
+            expect(corrStats.validDataPointsCount).toBe(52);
         });
 
         it('handles sparse data distribution (1 workout every 6 weeks) cleanly', () => {
