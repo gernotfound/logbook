@@ -63,8 +63,11 @@ async function readWithdrawalState(
     }
     const state = data as Record<string, unknown>;
     const keys = Object.keys(state).sort().join(',');
-    if (state.uid !== expected.uid || !Number.isSafeInteger(state.revision)
-        || !Number.isSafeInteger(state.fenceEpoch)) throw new KindeCandidateBoundaryError();
+    if (state.uid !== expected.uid
+        || typeof state.revision !== 'number' || !Number.isSafeInteger(state.revision)
+        || typeof state.fenceEpoch !== 'number' || !Number.isSafeInteger(state.fenceEpoch)) {
+        throw new KindeCandidateBoundaryError();
+    }
     let result: 'active' | 'withdrawn';
     if (state.status === 'active') {
         if (keys !== 'acceptedAt,fenceEpoch,privacyVersion,revision,status,termsVersion,uid'
