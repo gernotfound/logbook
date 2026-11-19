@@ -650,7 +650,13 @@ describe('Kinde-only device vault provisioning and authenticated baseline', () =
             })).rejects.toThrow();
             expect((await readLocal(owner))?.data.profile?.height).toBe('194');
 
-            const clicked = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+            const clicked = vi.fn();
+            const link = { href: '', download: '', style: { visibility: '' },
+                click: clicked, remove: vi.fn() };
+            vi.stubGlobal('document', {
+                createElement: vi.fn(() => link),
+                body: { appendChild: vi.fn() },
+            });
             const url = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:prewithdrawal-test');
             vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
             await requestKindeCandidatePreWithdrawalJsonDownload({ ...session, expected: principal });
