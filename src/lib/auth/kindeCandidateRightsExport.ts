@@ -1,10 +1,10 @@
-import { CURRENT_DATA_SCHEMA } from '../schemaEvolution';
-import { captureKindeCandidateSessionFence, KindeCandidateBoundaryError } from './kindeCandidateClient';
+import { KindeCandidateBoundaryError } from './kindeCandidateClient';
+import { formatKindeCandidateExportDocuments } from './kindeCandidateExportDocuments';
+import { requestKindeCandidateJsonDownload } from './kindeCandidateJsonDownload';
 import { withKindeCandidateRightsCheckpoint } from './kindeCandidateRightsCheckpoint';
 
 type Options = Omit<Parameters<typeof withKindeCandidateRightsCheckpoint>[0], 'consumeCheckpoint'>;
 
-const DOCUMENT_PATH = /^(?:(?:history_months|nutrition_months)\/\d{4}-(?:0[1-9]|1[0-2]))?$/;
 const MAX_JSON_BYTES = 64 * 1024 * 1024;
 
 interface KindeCandidateRightsJson {
@@ -29,15 +29,7 @@ export async function prepareKindeCandidateRightsJson({
         expected, stillCurrent, send, browserCookies,
         consumeCheckpoint: async (snapshot, current) => {
             if (!current()) throw new KindeCandidateBoundaryError();
-            const documents = [...snapshot.documents.entries()]
-                .sort(([left], [right]) => left.localeCompare(right))
-                .map(([path, record]) => {
-                    if (!DOCUMENT_PATH.test(path) || record.dataSchemaVersion !== CURRENT_DATA_SCHEMA) {
-                        throw new KindeCandidateBoundaryError();
-                    }
-                    return { path, dataSchemaVersion: record.dataSchemaVersion,
-                        business: record.business, sync: record.sync };
-                });
+            const documents = formatKindeCandidateExportDocuments(snapshot);
             const exportedAt = new Date().toISOString();
             const payload = {
                 format: 'thelogbook-cloud-rights-export',
@@ -80,31 +72,10 @@ export async function prepareKindeCandidateRightsJson({
  */
 export async function requestKindeCandidateRightsJsonDownload(options: Options): Promise<void> {
     const browserCookies = options.browserCookies ?? (() => document.cookie);
-    const fence = captureKindeCandidateSessionFence({
-        stillCurrent: options.stillCurrent, browserCookies,
+    return requestKindeCandidateJsonDownload({
+        browserCookies, stillCurrent: options.stillCurrent,
+        prepare: current => prepareKindeCandidateRightsJson({
+            ...options, browserCookies, stillCurrent: current,
+        }),
     });
-    const result = await prepareKindeCandidateRightsJson({
-        ...options, stillCurrent: fence.stillCurrent, browserCookies,
-    });
-    if (!fence.stillCurrent()) throw new KindeCandidateBoundaryError();
-    const blob = new Blob([result.json], { type: 'application/json;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    try {
-        if (!fence.stillCurrent()) throw new KindeCandidateBoundaryError();
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = result.filename;
-        link.style.visibility = 'hidden';
-        document.body.appendChild(link);
-        try {
-            if (!fence.stillCurrent()) throw new KindeCandidateBoundaryError();
-            link.click();
-        } finally {
-            link.remove();
-        }
-    } catch (error) {
-        URL.revokeObjectURL(url);
-        throw error;
-    }
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
