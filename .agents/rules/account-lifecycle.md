@@ -1,5 +1,9 @@
 # Ciclo account, Auth e guest — TheLogBook
 
+### Identità nel controllo di aggiornamento PWA
+
+Il ramo di aggiornamento dalla schermata di accesso legge la sorgente di identità registrata dal provider montato. Un client Firebase importato può ancora conservare un utente e non decide l'owner di questa schermata. Il reload rapido resta possibile solo con memoria senza dati, nessun guest attivo o revocato e sessione locale invariata. Se la sorgente non è leggibile, i controlli di sessione continuano a bloccare il reload.
+
 ### Regressione E2E guest senza rete Auth (18/11/2026, v2.531.0)
 
 Il test browser `e2e/account/guest-network-isolation.spec.ts` verifica, **dopo l'attivazione guest**, che modifica salute locale cifrata, apertura seconda scheda, ricaricamento e ripresa offline non originino richieste verso Kinde, Firebase Auth/Firestore/App Check, API Auth o API sanitarie Workers. Le destinazioni sono anche bloccate durante la prova; si controllano il dato reale riletto e il ciphertext owner-scoped IndexedDB. Il primo test del gate ha individuato chiamate reali a `www.google.com/recaptcha/enterprise.js` dopo il reload guest: la causa era `ensureAppCheckProvider(firebaseApp)` invocato durante **l'import** di `src/lib/firebase.ts`. Il bootstrap App Check è stato reso on-demand: `getDb()` lo inizializza sincronicamente prima di Firestore; `ensureAppCheck()` prima dell'acquisizione di credenziali, senza fallback per autorizzare il cloud. Una regressione unitaria blocca il ritorno dell'effetto di import. Questo è un gate comportamentale dell'ospite; non prova l'eliminazione degli SDK Firebase dal bundle né l'accesso Kinde fitness. Il primo ingresso non autenticato può verificare la sessione Kinde prima che l'utente scelga esplicitamente ospite. I gate WebKit/Safari reali e il ritiro degli import restano distinti.

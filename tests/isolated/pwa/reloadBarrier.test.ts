@@ -41,7 +41,8 @@ import { LocalCiphertextError, openLocalJson, sealLocalJson } from '../../../src
 import type { UserData } from '../../../src/types';
 const parse = (height: number) => UserDataSchema.parse({ profile: { height } }) as unknown as UserData;
 let disk: Map<string, string>;
-beforeEach(() => authenticatedIdentitySource.install(() => app.auth.currentUser));
+let releaseIdentity = () => {};
+beforeEach(() => { releaseIdentity = authenticatedIdentitySource.install(() => app.auth.currentUser); });
 beforeEach(async () => {
     lockAllVaults();
     await clear(); invalidateSession(); vi.resetAllMocks(); app.auth.currentUser = { uid: 'a' }; app.suspendedConsent = null;
@@ -55,7 +56,7 @@ beforeEach(async () => {
     await initializeLocal('user:a', app.state.userData);
     markTabSnapshotClean(captureSession(), app.state.userData);
 });
-afterEach(() => { lockAllVaults(); vi.unstubAllGlobals(); });
+afterEach(() => { releaseIdentity(); lockAllVaults(); vi.unstubAllGlobals(); });
 it('allows offline update only with the durable copy and synchronous active workout snapshot', async () => {
     app.flush.mockRejectedValue(new Error('offline'));
     await prepareForReload();
@@ -247,6 +248,19 @@ it('updates from the login screen without an active guest session or deleting an
     expect(app.flush).not.toHaveBeenCalled();
     expect(await get('logbook:v2:user:a')).toEqual(existing);
     expect(disk.has('logbook_is_guest')).toBe(false);
+});
+it('allows a signed-out update when an unmounted Firebase client retains an old identity', async () => {
+    const existing = await get('logbook:v2:user:a');
+    releaseIdentity();
+    app.state = { userData: null, localWorkout: null, dataOwner: null };
+    const reload = vi.fn();
+
+    await safeHardReload(reload);
+
+    expect(app.auth.currentUser?.uid).toBe('a');
+    expect(reload).toHaveBeenCalledOnce();
+    expect(app.flush).not.toHaveBeenCalled();
+    expect(await get('logbook:v2:user:a')).toBe(existing);
 });
 it('keeps the reload blocked if the login screen still holds unowned business data', async () => {
     app.auth.currentUser = null as any;

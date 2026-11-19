@@ -4,7 +4,7 @@ import { useAppStore } from '../../store/useAppStore';
 import { draftRegistry } from '../utils/draftRegistry';
 import { commitLocal, readLocal } from './localRepository';
 import { captureSession, isActiveGuestSession, isCurrentSession } from './session';
-import { auth } from '../firebase';
+import { authenticatedIdentitySource } from './authenticatedIdentitySource';
 import { currentHealthConsentStatus, getGuestHealthConsentStatus } from '../healthConsent';
 import { readBrowserValueStrict } from './browserStorage';
 import { persistOwnerBoundWorkoutSnapshot } from './deviceCriticalState';
@@ -21,7 +21,7 @@ function isUnauthenticatedReloadSession(session: ReturnType<typeof captureSessio
         const state = useAppStore.getState();
         // The login screen has no active guest generation. No in-memory business
         // state can be attributed to it, so a reload leaves stored archives intact.
-        if (auth.currentUser !== null || readBrowserValueStrict('logbook_is_guest') === 'true'
+        if (authenticatedIdentitySource.readUid() !== null || readBrowserValueStrict('logbook_is_guest') === 'true'
             || isActiveGuestSession() || state.userData != null || state.localWorkout != null
             || state.dataOwner != null || state.syncing || state.localPersistenceBlocked) return false;
         return equal(captureSession(), session);
