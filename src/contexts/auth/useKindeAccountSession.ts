@@ -32,7 +32,7 @@ export function useKindeAccountSession({
 }: {
     guestArchivePresent: boolean; identityOnly: boolean;
     candidatePreparationEnabled?: boolean; candidateLifecycleEnabled?: boolean;
-} {
+}) {
     const [view, setView] = useState<View>({
         phase: guestArchivePresent ? 'guest-blocked' : 'checking', generation: 0,
     });
