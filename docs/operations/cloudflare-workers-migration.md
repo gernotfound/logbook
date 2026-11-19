@@ -856,3 +856,23 @@ owner hint conservativo. Il guard e' il medesimo, con rigetto
 in caso di nuova identita' o sessione guest. Il provider Kinde
 non viene registrato in parallelo a Firebase, ne' i record D1
 attuali vengono adottati o cancellati.
+
+### CF-05 — prova JSON diritti cloud dopo revoca (19/11/2026)
+
+Il candidato `src/lib/auth/kindeCandidateRightsExport.ts` trasforma il
+checkpoint cifrato `/v1/rights/scan`, interamente verificato AEAD con
+ADK effimera e sessione Kinde fissata, in JSON leggibile esportabile su
+richiesta. Etichetta espressamente i documenti **rimasti leggibili**;
+non promette uno snapshot completo dell'archivio iniziale se il job
+`health_erasure_jobs` è già in `processing`. Non comprende envelope
+IndexedDB, journal pendente, workout/timer o bozze del dispositivo, e non
+usa il formato importabile `logbook-backup`. Il limite di generazione
+JSON in memoria è 64 MiB; l'errore non produce un file parziale.
+La richiesta di download non equivale a conferma di un file salvato.
+
+La funzione non è richiamata dal frontend pubblico: `identityOnly`
+e assenza di binding `D1_API` restano invariati. Prima del GO:
+integrazione UX, unione affidabile delle copie device e cloud,
+esportazione facoltativa prima della revoca e collaudo browser/provider
+su risorse isolate; KEK reale, cancellazione ed erasure restano gate
+separati.
