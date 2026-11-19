@@ -904,3 +904,27 @@ local-only, aggiungere UI informata *prima* della revoca ed eseguire
 prove di Browser/WebKit e provider isolate. Il frontend corrente
 resta `identityOnly`, `candidatePreparationEnabled:false`;
 nessun GO sanitario.
+
+### CF-05 — candidato portabile Schema 3 con replay causale senza side effect (19/11/2026)
+
+Il modulo `kindeCandidatePortableBackup.ts` crea un backup business
+`logbook-backup` Schema 3 sotto consenso D1 attivo, sessione Kinde,
+CSRF e vault già sbloccato. La lettura dei documenti AEAD Cloudflare
+e la doppia prova delle copie IndexedDB/localStorage provengono
+dall'ingresso candidato pre-revoca. Root/shard, causal frontier
+e normalizzazione lossless sono verificati prima del merge; le
+modifiche non consegnate sono composte tramite `applySemanticOperations`
+usato anche dalla replica, senza inviare commit o ACK. L'output
+contiene anche documenti cloud raw, envelope con journal e
+testimonianze device per recovery esplicito.
+
+È intenzionalmente conservativo: differenze non risolvibili,
+operazioni in volo, archivio sospeso o prova locale perduta
+rifiutano il formato restorable e lasciano disponibile il precedente
+JSON di evidenze separate. Il parser di Backup Schema 3 è stato
+separato dal writer di ripristino bozze per evitare Firebase nel
+percorso Kinde. Nessuna API o binding `D1_API` pubblico,
+nessuna schermata di revoca Kinde attiva e nessuna mutazione
+provider. Prima dell'attivazione completare UI accessibile
+di esportazione volontaria e revoca, test Safari/WebKit/browser
+reale e collaudo KEK/diritti/cancellazione/restore su provider isolato.
