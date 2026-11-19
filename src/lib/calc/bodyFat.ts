@@ -1,61 +1,63 @@
-function calculateUsNavyBodyFat({ gender, height, waist, neck, hip }: { gender?: string; height: any; waist: any; neck: any; hip?: any }): number | null {
-    const h = parseFloat(height);
-    const w = parseFloat(waist);
-    const n = parseFloat(neck);
-    const hp = parseFloat(hip);
-    const g = (gender || 'M').toUpperCase();
-    if (![h, w, n].every(Number.isFinite) || h < 50 || h > 250 || w <= 0 || n <= 0) return null;
-    if (g === 'M') {
-        if (w <= n) return null;
-        const logWaistNeck = Math.log10(w - n);
-        const logHeight = Math.log10(h);
-        const denom = 1.0324 - (0.19077 * logWaistNeck) + (0.15456 * logHeight);
-        if (!Number.isFinite(denom) || denom <= 0) return null;
-        const bf = (495 / denom) - 450;
-        return Math.max(2, Math.min(60, Math.round(bf * 10) / 10));
-    } else if (g === 'F') {
-        if (!Number.isFinite(hp) || hp <= 0 || (w + hp) <= n) return null;
-        const logWaistHipNeck = Math.log10(w + hp - n);
-        const logHeight = Math.log10(h);
-        const denom = 1.29579 - (0.35004 * logWaistHipNeck) + (0.22100 * logHeight);
-        if (!Number.isFinite(denom) || denom <= 0) return null;
-        const bf = (495 / denom) - 450;
-        return Math.max(2, Math.min(60, Math.round(bf * 10) / 10));
-    }
-    return null;
+interface NavyMeasurements {
+    gender: 'M' | 'F';
+    height: number;
+    waist: number;
+    neck: number;
+    hip?: number;
 }
 
-export function calculateBodyFatByMethod(method: any, params: any): number | null {
-    if (!method || !params || typeof params !== 'object') return null;
-    const m = (method || '').toString().toLowerCase().trim();
-    if (m === 'navy_male') {
-        const height = parseFloat(params.height);
-        const waist = parseFloat(params.waist);
-        const neck = parseFloat(params.neck);
-        return calculateUsNavyBodyFat({ gender: 'M', height, waist, neck, hip: 0 });
-    }
-    if (m === 'navy_female') {
-        const height = parseFloat(params.height);
-        const waist = parseFloat(params.waist);
-        const neck = parseFloat(params.neck);
-        const hip = parseFloat(params.hip);
-        return calculateUsNavyBodyFat({ gender: 'F', height, waist, neck, hip });
-    }
-    return null;
+/** A measurement must be a complete, finite decimal value, not a numeric prefix. */
+function parseMeasurement(value: unknown): number | null {
+    if (typeof value === 'number') return Number.isFinite(value) ? value : null;
+    if (typeof value !== 'string') return null;
+    const normalized = value.trim();
+    if (!/^\d+(?:[.,]\d+)?$/.test(normalized)) return null;
+    const parsed = Number(normalized.replace(',', '.'));
+    return Number.isFinite(parsed) ? parsed : null;
 }
 
-export function calculateBodyFat(weight: any, profile: any): number | null {
-    if (!profile || !profile.height || !weight) return null;
-    const wKg = parseFloat(weight);
-    const hCm = parseFloat(profile.height);
-    if (!Number.isFinite(hCm) || !Number.isFinite(wKg) || hCm <= 0 || wKg <= 0) return null;
-    
-    if (profile.gender === 'M' && profile.neck && profile.waist) {
-        return calculateUsNavyBodyFat({ gender: 'M', height: hCm, neck: parseFloat(profile.neck), waist: parseFloat(profile.waist), hip: 0 });
+function calculateUsNavyBodyFat({ gender, height, waist, neck, hip }: NavyMeasurements): number | null {
+    if (![height, waist, neck].every(Number.isFinite) || height < 50 || height > 250 || waist <= 0 || neck <= 0) {
+        return null;
     }
-    const hipVal = profile.hip;
-    if (profile.gender === 'F' && profile.neck && profile.waist && hipVal) {
-        return calculateUsNavyBodyFat({ gender: 'F', height: hCm, neck: parseFloat(profile.neck), waist: parseFloat(profile.waist), hip: parseFloat(hipVal) });
+    let denominator: number;
+    if (gender === 'M') {
+        if (waist <= neck) return null;
+        denominator = 1.0324 - 0.19077 * Math.log10(waist - neck) + 0.15456 * Math.log10(height);
+    } else {
+        if (hip === undefined || !Number.isFinite(hip) || hip <= 0 || waist + hip <= neck) return null;
+        denominator = 1.29579 - 0.35004 * Math.log10(waist + hip - neck) + 0.22100 * Math.log10(height);
     }
-    return null;
+    if (!Number.isFinite(denominator) || denominator <= 0) return null;
+    const bf = 495 / denominator - 450;
+    return Math.max(2, Math.min(60, Math.round(bf * 10) / 10));
+}
+
+function calculateFromMeasurements(gender: 'M' | 'F', inputs: Record<string, unknown>): number | null {
+    const height = parseMeasurement(inputs.height);
+    const waist = parseMeasurement(inputs.waist);
+    const neck = parseMeasurement(inputs.neck);
+    if (height === null || waist === null || neck === null) return null;
+    if (gender === 'F') {
+        const hip = parseMeasurement(inputs.hip);
+        return hip === null ? null : calculateUsNavyBodyFat({ gender, height, waist, neck, hip });
+    }
+    return calculateUsNavyBodyFat({ gender, height, waist, neck });
+}
+
+export function calculateBodyFatByMethod(method: unknown, params: unknown): number | null {
+    if (typeof method !== 'string' || !params || typeof params !== 'object' || Array.isArray(params)) return null;
+    const normalized = method.trim().toLowerCase();
+    if (normalized !== 'navy_male' && normalized !== 'navy_female') return null;
+    return calculateFromMeasurements(normalized === 'navy_male' ? 'M' : 'F', params as Record<string, unknown>);
+}
+
+export function calculateBodyFat(weight: unknown, profile: unknown): number | null {
+    const parsedWeight = parseMeasurement(weight);
+    if (parsedWeight === null || parsedWeight <= 0 || !profile || typeof profile !== 'object' || Array.isArray(profile)) {
+        return null;
+    }
+    const inputs = profile as Record<string, unknown>;
+    if (inputs.gender !== 'M' && inputs.gender !== 'F') return null;
+    return calculateFromMeasurements(inputs.gender, inputs);
 }
