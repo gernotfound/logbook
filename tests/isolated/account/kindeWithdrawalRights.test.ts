@@ -192,13 +192,21 @@ describe('Kinde withdrawal and rights-only client against first-party Workers an
         }
     });
 
-    it('preserves revocation and rights after email verification is lost, without fitness authorization', async () => {
+    it('keeps revocation and rights open when the browser sees unverified email, without fitness access', async () => {
         const fixture = await createCloudKeyHttpFixture([uid]);
         try {
             await fixture.consent(uid);
             const originalKey = await provisionKey(fixture);
-            fixture.sqlite.prepare('UPDATE auth_principals SET verified_at_ms=NULL WHERE uid=?').run(uid);
-            const client = browser(fixture);
+            // The canonical D1 schema forbids regressing a verified
+            // principal. Model a stale/unverified browser identity response
+            // without mutating the server's verified-account history.
+            const client = browser(fixture, async (path, response) => {
+                if (path !== '/api/auth/session') return response;
+                const identity = await response.json() as Record<string, unknown>;
+                return Response.json({ ...identity, emailVerified: false }, {
+                    status: response.status, headers: { 'Cache-Control': 'no-store' },
+                });
+            });
             await expect(readKindeCandidateAccess(client)).rejects.toBeInstanceOf(KindeCandidateBoundaryError);
             await expect(withdrawKindeCandidateHealthConsent({
                 ...client, expected, confirmsErasure: true,
