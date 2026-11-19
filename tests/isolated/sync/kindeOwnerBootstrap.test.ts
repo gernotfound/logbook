@@ -503,7 +503,7 @@ describe('Kinde-only device vault provisioning and authenticated baseline', () =
                     return checkpoint.documents.get('')?.business;
                 },
             });
-            expect(retrieved?.profile?.height).toBe('194');
+            expect(retrieved).toMatchObject({ profile: { height: '194' } });
             expect(isVaultUnlocked(owner)).toBe(false);
             expect(observed.slice(before).filter(path => path === '/v1/rights/scan')).toHaveLength(1);
             expect(observed.slice(before)).not.toContain('/v1/sync/scan');
