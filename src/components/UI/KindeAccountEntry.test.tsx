@@ -57,6 +57,7 @@ beforeEach(() => {
     vi.mocked(revokeKindeCandidateSession).mockResolvedValue();
     vi.mocked(prepareKindeCandidateOwner).mockResolvedValue({
         kind: 'candidate-observed', checkpointRevision: 1, replicaOutcome: 'already-active',
+        journalOutcome: 'idle',
     });
 });
 afterEach(() => {
@@ -140,10 +141,49 @@ describe('isolated Kinde account entry candidate', () => {
         await waitFor(() => expect(prepareKindeCandidateOwner).toHaveBeenCalledTimes(1));
         expect(vi.mocked(prepareKindeCandidateOwner).mock.calls[0][0]).toMatchObject({
             expected: { uid: A, fenceEpoch: 1, healthConsentRevision: 1 },
-            drainPendingJournal: false, retainDeviceVault: false,
+            drainPendingJournal: true, retainDeviceVault: false,
         });
         await screen.findByText(/Archivio cifrato verificato nel percorso candidato/);
         expect(screen.getByText(/funzioni fitness restano disabilitate/)).toBeDefined();
+    });
+
+    it('requires a verified journal outcome before publishing candidate readiness', async () => {
+        vi.mocked(readKindeCandidateIdentity).mockResolvedValue({
+            kind: 'email-verified', principal: { ...principal, healthConsentRevision: 1 },
+        });
+        vi.mocked(readKindeCandidateAccess).mockResolvedValue(confirmed);
+        vi.mocked(prepareKindeCandidateOwner).mockResolvedValueOnce({
+            kind: 'candidate-observed', checkpointRevision: 1, replicaOutcome: 'already-active',
+        }).mockResolvedValueOnce({
+            kind: 'candidate-observed', checkpointRevision: 1,
+            replicaOutcome: 'already-active', journalOutcome: 'acknowledged',
+        });
+        render(<KindeAccountEntry candidatePreparationEnabled />);
+        const continueButton = await screen.findByRole('button', { name: 'Continua' });
+        fireEvent.click(continueButton);
+        await screen.findByText(/Preparazione non ancora confermata/);
+        expect(screen.queryByText(/Archivio cifrato verificato nel percorso candidato/)).toBeNull();
+        fireEvent.click(continueButton);
+        await screen.findByText(/Archivio cifrato verificato nel percorso candidato/);
+        expect(prepareKindeCandidateOwner).toHaveBeenCalledTimes(2);
+        expect(vi.mocked(prepareKindeCandidateOwner).mock.calls.every(
+            ([args]) => args.drainPendingJournal === true && args.retainDeviceVault === false,
+        )).toBe(true);
+    });
+
+    it('does not report journal success when replica ownership is not confirmed', async () => {
+        vi.mocked(readKindeCandidateIdentity).mockResolvedValue({
+            kind: 'email-verified', principal: { ...principal, healthConsentRevision: 1 },
+        });
+        vi.mocked(readKindeCandidateAccess).mockResolvedValue(confirmed);
+        vi.mocked(prepareKindeCandidateOwner).mockResolvedValue({
+            kind: 'candidate-observed', checkpointRevision: 1,
+            replicaOutcome: 'reconciliation-required',
+        });
+        render(<KindeAccountEntry candidatePreparationEnabled />);
+        fireEvent.click(await screen.findByRole('button', { name: 'Continua' }));
+        await screen.findByText(/Preparazione non ancora confermata/);
+        expect(screen.queryByText(/Archivio cifrato verificato nel percorso candidato/)).toBeNull();
     });
 
     it('never starts vault preparation for public identity-only, missing consent or guest sessions', async () => {
