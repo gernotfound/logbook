@@ -25,6 +25,8 @@ const adaptiveSurfaceFiles = [
   'src/components/Training/planning/CycleEditor.tsx',
   'src/components/Training/planning/TrainingPlanning.tsx',
   'src/components/Training/routines/RoutineExerciseItem.tsx',
+  'src/components/Training/routines/RoutineExerciseTargets.tsx',
+  'src/components/Training/routines/RoutineExerciseTechnique.tsx',
   'src/components/Training/session/SessionExerciseCard.tsx',
   'src/components/Training/session/SessionRatings.tsx',
   'src/components/Training/WorkoutReportModal.tsx',
@@ -131,10 +133,14 @@ describe('post-redesign UI hardening', () => {
   });
 
   it('keeps compact interactive controls at the 44px minimum target', () => {
-    const routineItem = read('src/components/Training/routines/RoutineExerciseItem.tsx');
+    const routineSurfaces = [
+      'src/components/Training/routines/RoutineExerciseItem.tsx',
+      'src/components/Training/routines/RoutineExerciseTargets.tsx',
+      'src/components/Training/routines/RoutineExerciseTechnique.tsx',
+    ].map(read).join('\n');
     const training = read('src/components/Training/training.css');
-    expect(routineItem).not.toContain("height: '42px'");
-    expect(routineItem).not.toContain("minHeight: '42px'");
+    expect(routineSurfaces).not.toContain("height: '42px'");
+    expect(routineSurfaces).not.toContain("minHeight: '42px'");
     expect(training).toMatch(/\.exercise-muscle-tag\s*\{[^}]*min-height:\s*2\.75rem/);
   });
 
@@ -174,25 +180,28 @@ describe('post-redesign UI hardening', () => {
 
   it('keeps routine editor fields explicitly named and theme-adaptive', () => {
     const routineItem = read('src/components/Training/routines/RoutineExerciseItem.tsx');
-    expect(routineItem).toContain('htmlFor={setsId}');
-    expect(routineItem).toContain('aria-label="Ripetizioni minime"');
-    expect(routineItem).toContain('aria-label="Ripetizioni massime"');
-    expect(routineItem).not.toMatch(/rgba\(255\s*,\s*255\s*,\s*255/);
-    expect(routineItem).not.toContain('#00e5ff');
-    expect(routineItem).toContain("background: 'var(--primary-soft)'");
-    expect(routineItem).toContain('CircleHelp');
-    expect(routineItem).toContain('Spiega:');
-    expect(routineItem).not.toContain("helpButton('setTechnique')");
-    expect(routineItem).not.toContain('Queste impostazioni valgono solo per questo utilizzo dell’esercizio in questa scheda.');
-    expect(routineItem).toContain("fieldHeader('Esecuzione da mantenere', 'technicalStandard'");
-    expect(routineItem).toContain("fieldHeader('Ruolo nella scheda', 'role'");
-    expect(routineItem).toContain("fieldHeader('Cosa vuoi migliorare', 'metric'");
-    expect(routineItem).not.toContain('Tecnica per serie:');
-    expect(routineItem).toContain('disclosure-summary technique-summary');
-    expect(routineItem).not.toContain('Riferimento storico (avanzato)');
-    expect(routineItem).not.toContain('Regola di successo');
-    expect(routineItem).not.toContain('Regola di cambio');
-    expect(routineItem).not.toContain('Prossima azione');
+    const targets = read('src/components/Training/routines/RoutineExerciseTargets.tsx');
+    const technique = read('src/components/Training/routines/RoutineExerciseTechnique.tsx');
+    const surfaces = [routineItem, targets, technique].join('\n');
+    expect(targets).toContain('htmlFor={setsId}');
+    expect(targets).toContain('aria-label="Ripetizioni minime"');
+    expect(targets).toContain('aria-label="Ripetizioni massime"');
+    expect(targets).toContain("background: 'var(--primary-soft)'");
+    expect(technique).toContain('CircleHelp');
+    expect(technique).toContain('Spiega:');
+    expect(technique).toContain("fieldHeader('Esecuzione da mantenere', 'technicalStandard'");
+    expect(technique).toContain("fieldHeader('Ruolo nella scheda', 'role'");
+    expect(technique).toContain("fieldHeader('Cosa vuoi migliorare', 'metric'");
+    expect(technique).toContain('disclosure-summary technique-summary');
+    expect(surfaces).not.toMatch(/rgba\(255\s*,\s*255\s*,\s*255/);
+    expect(surfaces).not.toContain('#00e5ff');
+    expect(surfaces).not.toContain("helpButton('setTechnique')");
+    expect(surfaces).not.toContain('Queste impostazioni valgono solo per questo utilizzo dell’esercizio in questa scheda.');
+    expect(surfaces).not.toContain('Tecnica per serie:');
+    expect(surfaces).not.toContain('Riferimento storico (avanzato)');
+    expect(surfaces).not.toContain('Regola di successo');
+    expect(surfaces).not.toContain('Regola di cambio');
+    expect(surfaces).not.toContain('Prossima azione');
   });
 
   it('gives every native disclosure an explicit button affordance', () => {

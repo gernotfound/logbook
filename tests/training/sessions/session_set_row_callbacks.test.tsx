@@ -30,6 +30,28 @@ describe('live workout callback freshness with memoized set rows', () => {
         expect(oldRemove).not.toHaveBeenCalled();
     });
 
+    it('uses fresh RIR callbacks while its selector remains open after a memoized parent update', () => {
+        const originalUpdate = vi.fn();
+        const currentUpdate = vi.fn();
+        const originalToggle = vi.fn();
+        const currentToggle = vi.fn();
+        const props = {
+            set: { id: 'set-rir', kg: '35', reps: '8' },
+            sIndex: 1, exIndex: 2, trackingType: 'weight_reps', isOpenMenu: true,
+            onToggleMenu: originalToggle, onRemoveSet: vi.fn(), onUpdateSet: originalUpdate,
+            onAddSpecialSet: vi.fn(), onUpdateSpecialSet: vi.fn(),
+            onRemoveSpecialSet: vi.fn(), onUpdateSetTarget: vi.fn(),
+        };
+        const { rerender } = render(<SessionSetRow {...props} />);
+        fireEvent.click(screen.getByRole('button', { name: 'Imposta RIR serie 2: non registrato' }));
+        expect(screen.getAllByRole('menuitemradio')).toHaveLength(11);
+        rerender(<SessionSetRow {...props} onUpdateSet={currentUpdate} onToggleMenu={currentToggle} />);
+        fireEvent.click(screen.getByRole('menuitemradio', { name: '0' }));
+        expect(currentUpdate).toHaveBeenCalledWith(2, 'set-rir', 'rir', 0);
+        expect(currentToggle).toHaveBeenCalledWith('set-rir');
+        expect(originalUpdate).not.toHaveBeenCalled();
+        expect(originalToggle).not.toHaveBeenCalled();
+    });
     it('keeps the exercise index when adding an advanced technique', () => {
         const addSpecial = vi.fn();
         render(<SessionSetRow

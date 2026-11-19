@@ -1,156 +1,17 @@
-import { useEffect, useId, useMemo, useRef, useState } from 'react';
-import { useModalFocusTrap } from '../../hooks/useModalFocusTrap';
-import { useScrollLock } from '../../hooks/useScrollLock';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useLocalToday } from '../../hooks/useLocalToday';
-import {
-    CalendarRange,
-    ChevronLeft,
-    ChevronRight,
-    Pencil,
-    Ruler,
-    Trash2,
-    X,
-} from 'lucide-react';
+import { CalendarRange, ChevronLeft, ChevronRight, Pencil, Ruler, Trash2 } from 'lucide-react';
 import { Logic } from '../../lib/logic';
 import { ContextMenu } from '../UI/ContextMenu';
 import type { MeasurementHistoryDay } from '../../types';
+import DataHistoryDetail from './DataHistoryDetail';
+import { MONTH_NAMES, pad, monthLabel, dayLabel, hasMeasurementData, finiteAverage, formatDecimal, recordSummary } from './dataHistoryFormatting';
 
 interface DataHistoryProps {
     measurementsHistory: MeasurementHistoryDay[];
     editingDate: string | null;
     onSelectEdit: (day: MeasurementHistoryDay) => void;
     onDeleteMeasurement?: (date: string) => void;
-}
-
-const MONTH_NAMES = ['Gen', 'Feb', 'Mar', 'Apr', 'Mag', 'Giu', 'Lug', 'Ago', 'Set', 'Ott', 'Nov', 'Dic'];
-const MONTH_FORMATTER = new Intl.DateTimeFormat('it-IT', { month: 'long', year: 'numeric' });
-const DAY_FORMATTER = new Intl.DateTimeFormat('it-IT', {
-    weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
-});
-
-
-function pad(value: number): string {
-    return String(value).padStart(2, '0');
-}
-
-function dateFromKey(key: string): Date {
-    const [year, month, day] = key.split('-').map(Number);
-    return new Date(year, month - 1, day, 12, 0, 0);
-}
-
-function monthLabel(key: string): string {
-    const [year, month] = key.split('-').map(Number);
-    const label = MONTH_FORMATTER.format(new Date(year, month - 1, 1, 12, 0, 0));
-    return label.charAt(0).toUpperCase() + label.slice(1);
-}
-
-function dayLabel(key: string): string {
-    const label = DAY_FORMATTER.format(dateFromKey(key));
-    return label.charAt(0).toUpperCase() + label.slice(1);
-}
-
-const MEASUREMENT_FIELDS = ['weight', 'bf', 'waist', 'neck', 'hip', 'chest', 'shoulders', 'biceps', 'thighs', 'calves'] as const satisfies readonly (keyof MeasurementHistoryDay)[];
-
-function hasMeasurementData(day: MeasurementHistoryDay): boolean {
-    return MEASUREMENT_FIELDS.some(key => day?.[key] !== undefined && day?.[key] !== null && day?.[key] !== '');
-}
-
-function hasFiniteValue(value: unknown): boolean {
-    return value !== undefined && value !== null && value !== '' && Number.isFinite(Number(value));
-}
-
-function finiteAverage(days: MeasurementHistoryDay[], key: 'weight' | 'bf'): number | null {
-    const values = days
-        .filter(day => hasFiniteValue(day?.[key]))
-        .map(day => Number(day[key]));
-    if (values.length === 0) return null;
-    return values.reduce((sum, value) => sum + value, 0) / values.length;
-}
-
-const DECIMAL_FORMATTER = new Intl.NumberFormat('it-IT', { maximumFractionDigits: 1 });
-
-function formatDecimal(value: number): string {
-    return DECIMAL_FORMATTER.format(value);
-}
-
-function recordSummary(day: MeasurementHistoryDay): string {
-    const parts: string[] = [];
-    if (hasFiniteValue(day?.weight)) parts.push(`${formatDecimal(Number(day.weight))} kg`);
-    if (hasFiniteValue(day?.bf)) parts.push(`BF ${formatDecimal(Number(day.bf))}%`);
-    if (hasFiniteValue(day?.waist)) parts.push(`Vita ${formatDecimal(Number(day.waist))} cm`);
-    if (day?.sleepHours) parts.push(`Sonno ${Logic.formatSleepTime(day.sleepHours)}`);
-    return parts.join(' · ') || 'Dati registrati';
-}
-
-interface DataHistoryDetailProps {
-    day: MeasurementHistoryDay;
-    onClose: () => void;
-    onSelectEdit: (day: MeasurementHistoryDay) => void;
-}
-
-// Mount the modal lifecycle only while open so focus returns to its actual trigger.
-function DataHistoryDetail({ day, onClose, onSelectEdit }: DataHistoryDetailProps) {
-    const titleId = useId();
-    const dialogRef = useRef<HTMLElement>(null);
-    const closeButtonRef = useRef<HTMLButtonElement>(null);
-    useScrollLock();
-    useModalFocusTrap({ containerRef: dialogRef, initialFocusRef: closeButtonRef, onEscape: onClose });
-
-    return (
-        <div className="data-detail-layer">
-            <button
-                className="data-detail-backdrop"
-                tabIndex={-1}
-                type="button"
-                onClick={onClose}
-                aria-label="Chiudi dettaglio"
-            />
-            <section ref={dialogRef} className="data-detail-sheet" role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1}>
-                <div className="data-detail-head">
-                    <div>
-                        <h2 id={titleId}>Dettaglio dati</h2>
-                        <p>
-                            {dayLabel(day.date)}
-                            {day.measurementTime ? ` · ${day.measurementTime}` : ''}
-                        </p>
-                    </div>
-                    <button ref={closeButtonRef} type="button" className="data-icon-button" onClick={onClose} aria-label="Chiudi dettaglio">
-                        <X size={20} aria-hidden="true" />
-                    </button>
-                </div>
-                <div className="data-detail-scroll">
-                    <div className="data-detail-grid">
-                    {hasFiniteValue(day.weight) && <div><strong>{formatDecimal(Number(day.weight))} kg</strong><span>Peso</span></div>}
-                    {hasFiniteValue(day.bf) && <div><strong>{formatDecimal(Number(day.bf))}%</strong><span>BF · {day.bfProvenance?.method === 'us_navy' ? 'US Navy' : 'origine n.d.'}</span></div>}
-                    {hasFiniteValue(day.waist) && <div><strong>{formatDecimal(Number(day.waist))} cm</strong><span>Vita</span></div>}
-                    {hasFiniteValue(day.neck) && <div><strong>{formatDecimal(Number(day.neck))} cm</strong><span>Collo</span></div>}
-                    {hasFiniteValue(day.hip) && <div><strong>{formatDecimal(Number(day.hip))} cm</strong><span>Fianchi</span></div>}
-                    {hasFiniteValue(day.chest) && <div><strong>{formatDecimal(Number(day.chest))} cm</strong><span>Torace</span></div>}
-                    {hasFiniteValue(day.shoulders) && <div><strong>{formatDecimal(Number(day.shoulders))} cm</strong><span>Spalle</span></div>}
-                    {hasFiniteValue(day.biceps) && <div><strong>{formatDecimal(Number(day.biceps))} cm</strong><span>Braccia</span></div>}
-                    {hasFiniteValue(day.thighs) && <div><strong>{formatDecimal(Number(day.thighs))} cm</strong><span>Cosce</span></div>}
-                    {hasFiniteValue(day.calves) && <div><strong>{formatDecimal(Number(day.calves))} cm</strong><span>Polpacci</span></div>}
-                    {day.sleepHours && <div><strong>{Logic.formatSleepTime(day.sleepHours)}</strong><span>Sonno</span></div>}
-                    </div>
-                </div>
-                <div className="data-action-row">
-                    <button type="button" className="btn" onClick={onClose}>Chiudi</button>
-                    {hasMeasurementData(day) && (
-                        <button
-                            type="button"
-                            className="btn btn-primary"
-                            onClick={() => {
-                                onClose();
-                                onSelectEdit(day);
-                            }}
-                        >
-                            <Pencil size={16} aria-hidden="true" /> Modifica
-                        </button>
-                    )}
-                </div>
-            </section>
-        </div>
-    );
 }
 
 const DataHistory: React.FC<DataHistoryProps> = ({
