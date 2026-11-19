@@ -1,8 +1,13 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
+import { readFileSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
 import worker from '../../cloudflare/api/worker.mjs';
-import { migration, identityMigration, rollback, origin,  withFixture, attempt, makeEnv, call, claim, retire } from './cf02-documents-fixture.mjs';
+import { origin, withFixture, attempt, makeEnv, call, claim, retire } from './cf02-documents-fixture.mjs';
+
+const migration = readFileSync(new URL('../../cloudflare/api/migrations/0001_encrypted_replica.sql', import.meta.url), 'utf8');
+const identityMigration = readFileSync(new URL('../../cloudflare/api/migrations/0002_reject_reused_replica_ids.sql', import.meta.url), 'utf8');
+const rollback = readFileSync(new URL('../../cloudflare/api/rollback/0001_encrypted_replica_down.sql', import.meta.url), 'utf8');
 
 void test('simultaneous stale revisions have one winner and no phantom receipt', () => withFixture(async (db, other) => {
   const [a, b] = await Promise.all([

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { syntheticSessionHash, owner,  independentDatabases, withFixture, attempt, makeEnv, call, claim } from './cf02-documents-fixture.mjs';
+import { syntheticSessionHash, owner, independentDatabases, withFixture, attempt, makeEnv, call, claim } from './cf02-documents-fixture.mjs';
 
 void test('a logout racing after AuthGate cannot commit ciphertext or its receipt', () => withFixture(async db => {
   const intercepted = Object.create(db);
@@ -252,3 +252,32 @@ void test('CF-08 late independent withdrawal hides a committed sync receipt, nev
   independentDatabases.delete(intercepted);
 }));
 
+void test('current independent registry enforces pending withdrawal and erasure cutoff transitions', () => withFixture(async (_db, _other, registry) => {
+  const pendingUid = 'cf02-pending-withdrawal';
+  const sqlite = registry.sqlite;
+  // An active consent cannot enqueue erasure before independent revocation.
+  assert.throws(() => sqlite.prepare(
+    'INSERT INTO recovery_erasure_cutoffs (uid,consent_revision,fence_epoch) VALUES (?,?,?)',
+  ).run(owner, 1, 5), /recovery-erasure-cutoff-fenced/);
+
+  sqlite.prepare(`INSERT INTO recovery_owner_fences
+    (uid,status,consent_revision,fence_epoch,erased_before_revision,change_seq)
+    VALUES (?,'pending',0,5,0,1)`).run(pendingUid);
+  // Migration 0003 permits withdrawing an initial consent before activation.
+  sqlite.prepare(`UPDATE recovery_owner_fences
+    SET status='blocked',consent_revision=1,change_seq=2 WHERE uid=?`).run(pendingUid);
+  assert.deepEqual(sqlite.prepare(
+    'SELECT status,consent_revision,fence_epoch,change_seq FROM recovery_owner_fences WHERE uid=?',
+  ).get(pendingUid), { status: 'blocked', consent_revision: 1, fence_epoch: 5, change_seq: 2 });
+
+  // Migration 0004 guards a persistent queue item against deletion.
+  sqlite.prepare(
+    'INSERT INTO recovery_erasure_cutoffs (uid,consent_revision,fence_epoch) VALUES (?,?,?)',
+  ).run(pendingUid, 1, 5);
+  assert.deepEqual(sqlite.prepare(
+    'SELECT next_check_ms,finalized FROM recovery_erasure_cutoffs WHERE uid=? AND consent_revision=1 AND fence_epoch=5',
+  ).get(pendingUid), { next_check_ms: 0, finalized: 0 });
+  assert.throws(() => sqlite.prepare('DELETE FROM recovery_erasure_cutoffs WHERE uid=?').run(pendingUid),
+    /recovery-erasure-cutoff-immutable/);
+  assert.equal(sqlite.prepare('SELECT COUNT(*) AS n FROM recovery_erasure_cutoffs WHERE uid=?').get(pendingUid).n, 1);
+}));

@@ -208,7 +208,18 @@ in `recovery` i documenti cloud originali decifrati, il LocalEnvelope
 con journal e intenti e le testimonianze device. L'import business
 passa da `decodeImport` e mantiene l'owner; i testimoni tecnici e il
 journal grezzo non sono automaticamente trapiantati come ACK o riprodotti
-sull'account di destinazione. Le operazioni device e cloud non hanno
+sull'account di destinazione.
+
+Prima di pubblicare un file definito importabile, il candidato esegue
+anche `prepareImport(..., 'restore')` **sullo stesso dataset** usando
+un account inizialmente vuoto con il consenso corrente indipendente.
+L'intero stato `UserData` risultante deve coincidere con i dati del
+backup, non soltanto superare la lettura Schema 3: altrimenti si blocca
+l'export senza generare un file dichiarato completo. La simulazione è
+in memoria, non esegue commit locale, ripristino di bozze o sync D1.
+È necessaria una successiva integrazione dell'importatore Kinde con
+journal durevole e conferme corrette, seguita da test restore su dispositivo
+pulito: il solo controllo non prova un recupero fisico o cloud. Le operazioni device e cloud non hanno
 un'unica transazione: la doppia lettura iniziale di IndexedDB/localStorage,
 seguita da un'ulteriore verifica dopo il caricamento asincrono del catalogo
 e la composizione del JSON, rileva corse osservabili senza promettere

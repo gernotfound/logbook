@@ -1,25 +1,17 @@
 import assert from 'node:assert/strict';
-import { readFileSync, mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import worker from '../../cloudflare/api/worker.mjs';
 import { releaseCloudAccountDataKey } from '../../cloudflare/api/cloud-key-store.mjs';
-import { applyCurrentD1Schema } from './current-d1-schema.mjs';
+import { applyCurrentD1RecoverySchema, applyCurrentD1Schema } from './current-d1-schema.mjs';
 
-export const migration = readFileSync(new URL('../../cloudflare/api/migrations/0001_encrypted_replica.sql', import.meta.url), 'utf8');
-export const identityMigration = readFileSync(new URL('../../cloudflare/api/migrations/0002_reject_reused_replica_ids.sql', import.meta.url), 'utf8');
 export const syntheticSessionHash = 'b'.repeat(64);
-export const rollback = readFileSync(new URL('../../cloudflare/api/rollback/0001_encrypted_replica_down.sql', import.meta.url), 'utf8');
 export const origin = 'https://candidate.invalid';
 export const owner = 'cf02-synthetic-owner';
 export const replica = { slot: 's00', replicaId: 'synthetic-replica-0001', generation: 1 };
 export const independentDatabases = new WeakMap();
-function applyIndependentSchema(sqlite) {
-  for (const name of ['0001_independent_owner_fences.sql', '0002_block_replace_bypass.sql']) {
-    sqlite.exec(readFileSync(new URL('../../cloudflare/recovery/migrations/' + name, import.meta.url), 'utf8'));
-  }
-}
 
 class Statement {
   constructor(db, sql, args = []) { this.db = db; this.sql = sql; this.args = args; }
@@ -58,7 +50,7 @@ export async function withFixture(run) {
   independentDatabases.set(db, fence);
   independentDatabases.set(second, fence);
   try {
-    applyIndependentSchema(fence.sqlite);
+    applyCurrentD1RecoverySchema(fence.sqlite);
     fence.sqlite.prepare("UPDATE recovery_control SET mode='open',generation=2 WHERE singleton=1").run();
     applyCurrentD1Schema(db.sqlite);
     const issuedAt = Date.now() - 5000;
