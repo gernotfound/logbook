@@ -176,10 +176,10 @@ describe('Kinde withdrawal and rights-only client against first-party Workers an
             expect(sent).toHaveLength(0);
             localStorage.removeItem('logbook_is_guest');
 
-            const original = Storage.prototype.setItem;
-            const rejectWrite = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(function(key, value) {
+            const original = localStorage.setItem.bind(localStorage);
+            const rejectWrite = vi.spyOn(localStorage, 'setItem').mockImplementation((key, value) => {
                 if (key === marker) throw new Error('localStorage quota exceeded');
-                return original.call(this, key, value);
+                return original(key, value);
             });
             await expect(withdrawKindeCandidateHealthConsent({
                 ...client, expected, confirmsErasure: true,
