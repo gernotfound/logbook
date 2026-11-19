@@ -20,9 +20,9 @@ M8 non annulla questi criteri di qualità: aggiorna però il production mutation
 - Le fixture SQLite che esercitano i boundary Workers/D1 correnti MUST applicare tutte le migrazioni canoniche, inclusi i trigger di autorizzazione e custodia delle chiavi. `tests/cloudflare/current-d1-schema.mjs` carica lo schema corrente per le suite che lo usano; i test specifici di migrazione/rollback possono applicare un prefisso esplicito. Una fixture positiva deve rispettare le precondizioni correnti (consenso, ADK prima della replica), senza disabilitare trigger per ottenere il successo. La rimozione di un guard è ammessa soltanto come fault injection esplicita, separata dal percorso valido e con verifica del rifiuto/conservazione attesi.
 - Un test normativo MUST avere almeno un'asserzione osservabile sul risultato, sullo stato persistito o su una collaborazione production significativa.
 - Sono vietati `it.skip`, `test.skip`, `describe.skip`, `.todo`, `.only` e assertion tautologiche nei file normativi M5.
-- I test guest login/logout MUST attraversare `AuthProvider` / `useAuth`.
+- I test guest login/logout del runtime Kinde-first MUST attraversare `GuestOnlyAuthProvider` / `useAuth`; dove si osserva la sessione Kinde devono montare anche `KindeAccountSessionProvider`. I test che montano il vecchio `AuthProvider` Firebase verificano soltanto il boundary legacy e non certificano il percorso pubblico corrente.
 - La migrazione guest → account MUST osservare il local journal reale al boundary testato; il successo non può essere dedotto soltanto dallo stato Zustand.
-- I test normativi della ricerca alimenti MUST attraversare il percorso UI reale: `useNutritionMeals` e il suo indice `createFoodSearcher`. `Logic.searchFoods` delega allo stesso algoritmo e può essere testato separatamente, ma confrontarlo con l'hook non costituisce un oracle indipendente; i test devono anche verificare identificativi e ordinamento attesi su fixture controllate.
+- I test normativi della ricerca alimenti MUST attraversare il percorso UI reale: `useNutritionMeals` e il suo indice `createFoodSearcher` da `src/lib/calc/foodSearch.ts`. Il test del motore standalone è supplementare, non un oracle indipendente del risultato UI; verificare anche identificativi e ordinamento espliciti su fixture controllate.
 - Le mutazioni meal MUST attraversare `useNutritionMeals` e il production mutation boundary corrente (`dispatchDomainOperation()` / domain commit). Una rejection del boundary di persistenza a valle non può essere trasformata in successo silenzioso. I test possono osservare/mockare `DB` come collaborazione esterna senza prescrivere un direct snapshot-save dal consumer UI/hook.
 - Il typecheck M5 MUST compilare i test normativi selezionati insieme ai tipi production importati.
 - Una suite jsdom/Vitest non va chiamata Playwright E2E.
@@ -30,7 +30,7 @@ M8 non annulla questi criteri di qualità: aggiorna però il production mutation
 
 ## Oracle indipendenti
 
-Per la ricerca alimenti, confrontare gli identificativi e l'ordine effettivi prodotti dall'hook con aspettative esplicite sulle fixture, anche dopo il cambio di query. Il semplice confronto con `Logic.searchFoods` non prova la correttezza del risultato perché le due API condividono il motore `createFoodSearcher`.
+Per la ricerca alimenti, confrontare gli identificativi e l'ordine effettivi prodotti dall'hook con aspettative esplicite sulle fixture, anche dopo il cambio di query. Il semplice confronto tra l'hook e una chiamata standalone a `createFoodSearcher` non prova la correttezza del risultato perché entrambi usano lo stesso motore.
 
 Per i totali meal, la suite M5 confronta lo stato prodotto dall'hook con `calculateLoggedMealTotals` e con valori numerici attesi espliciti. Il test non copia inline la formula di `useNutritionMeals`.
 
