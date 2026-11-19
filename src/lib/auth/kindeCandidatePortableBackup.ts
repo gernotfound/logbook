@@ -104,8 +104,9 @@ function composeKindeCandidatePortableBackup(sources: Sources, catalog: CachedGl
         // backup. Different fields on the same document may legitimately have
         // moved on another device: conservatively fall back to raw evidence.
         const localDocuments = projectDocuments(envelope.data, catalog);
+        const mergedDocuments = projectDocuments(data, catalog);
         for (const path of new Set(envelope.pending.map(operation => operation.docPath))) {
-            if (!equal(localDocuments.get(path) ?? {}, projectDocuments(data, catalog).get(path) ?? {})) {
+            if (!equal(localDocuments.get(path) ?? {}, mergedDocuments.get(path) ?? {})) {
                 throw new KindeCandidateBoundaryError();
             }
         }
