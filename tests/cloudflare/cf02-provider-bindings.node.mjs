@@ -15,6 +15,7 @@ const settings = {
     { type: 'd1', name: 'DB', id: db, database_id: db },
     { type: 'd1', name: 'RECOVERY_DB', id: registry, database_id: registry },
     { type: 'service', name: 'AUTH_GATE', service: gate },
+    { type: 'secret_text', name: 'CLOUD_ACCOUNT_KEK_V1' },
   ] },
 };
 
@@ -81,6 +82,47 @@ void test('rejects HTTP 401 and provider-level failures (never treats absent pro
     success: false, result: null,
   } });
   await assert.rejects(verifyPrivateWorkerBindings(args(providerError)), /readback failed/);
+});
+
+void test('fails closed when KEK is missing, plaintext, duplicated or provider proof is absent', async () => {
+  const prefix = '/client/v4/accounts/0123456789abcdef0123456789abcdef/workers/scripts/';
+  const path = prefix + dataWorker + '/settings';
+  const present = settings[dataWorker].bindings;
+  const candidates = [
+    present.filter(binding => binding.name !== 'CLOUD_ACCOUNT_KEK_V1'),
+    present.map(binding => binding.name === 'CLOUD_ACCOUNT_KEK_V1'
+      ? { name: binding.name, type: 'plain_text' } : binding),
+    [...present, { name: 'CLOUD_ACCOUNT_KEK_V1', type: 'secret_text' }],
+    present.map(binding => binding.name === 'CLOUD_ACCOUNT_KEK_V1'
+      ? { name: binding.name } : binding),
+  ];
+  for (const bindings of candidates) {
+    const mock = cloudflareMock({ [path]: { success: true, result: { bindings } } });
+    await assert.rejects(verifyPrivateWorkerBindings(args(mock)), /KEK/);
+  }
+  for (const failed of [
+    { success: false, result: null },
+    { success: false, httpStatus: 403, result: null },
+    { success: true, result: {} },
+  ]) {
+    const mock = cloudflareMock({ [path]: failed });
+    await assert.rejects(verifyPrivateWorkerBindings(args(mock)));
+  }
+});
+
+void test('private Worker deployment preflights and rechecks the KEK after exact-main gate', () => {
+  const yml = readFileSync(new URL('../../.github/workflows/cloudflare-api-isolated.yml', import.meta.url), 'utf8');
+  const verify = 'run: node scripts/verify-cloudflare-api-provider.mjs';
+  const preflight = yml.indexOf(verify);
+  const mainLease = yml.indexOf('name: Verify main lease again immediately before provider writes');
+  const deployAuth = yml.indexOf('name: Deploy private auth gate');
+  const deployApi = yml.indexOf('name: Deploy private API service binding');
+  const postDeploy = yml.lastIndexOf(verify);
+  assert.equal(yml.split(verify).length - 1, 2);
+  assert.ok(preflight > yml.indexOf('Wait for verified release gate')
+    && preflight < mainLease && mainLease < deployAuth
+    && deployAuth < deployApi && deployApi < postDeploy);
+  assert.doesNotMatch(yml, /secret put|CLOUD_ACCOUNT_KEK_V1\s*:/);
 });
 
 void test('rejects substituted or main-DB alias recovery bindings', async () => {
