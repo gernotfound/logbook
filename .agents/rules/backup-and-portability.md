@@ -186,3 +186,39 @@ Prima di offrire una funzione di backup/ripristino completo occorrono
 composizione causale lossless, gestione di copie orfane/bozze e UI
 esplicita prima della revoca, con test isolati browser/provider. Non
 abilitare il binding pubblico `D1_API` in base al solo test candidato.
+
+## CF-05 — preparazione di un Backup Schema 3 Kinde prima della revoca (candidato 19/11/2026)
+
+Il candidato `src/lib/auth/kindeCandidatePortableBackup.ts` riusa la
+raccolta read-only `captureKindeCandidatePreWithdrawalSources()` e il
+motore causale di sincronizzazione `applySemanticOperations()`, anziché
+creare un secondo algoritmo di merge. Dopo una scansione D1 completa e
+AEAD autenticata, valida senza perdita root e shard mensili, metadati
+causali e frontiera cloud rispetto agli ACK locali. Include il journal
+pendente soltanto quando il risultato conserva integralmente i dati
+locali e i documenti coinvolti corrispondono alla proiezione locale.
+Una copia mancante, uno shard corrotto, un frontier arretrato, una
+transizione `cloudflareDelivery`/`claim`/`retirement` ancora
+irrisolta, un fence di integrità o un conflitto impediscono il backup
+completo: l'esportazione `thelogbook-prewithdrawal-evidence` resta
+separatamente disponibile senza fusione né falso successo.
+
+Il JSON importabile usa l'attuale `logbook-backup` Schema 3; conserva
+in `recovery` i documenti cloud originali decifrati, il LocalEnvelope
+con journal e intenti e le testimonianze device. L'import business
+passa da `decodeImport` e mantiene l'owner; i testimoni tecnici e il
+journal grezzo non sono automaticamente trapiantati come ACK o riprodotti
+sull'account di destinazione. Le operazioni device e cloud non hanno
+un'unica transazione: doppia lettura di IndexedDB/localStorage rileva
+corse osservabili, senza promettere atomicità cross-tab o recupero di
+scritture mai registrate su dispositivo. Il controllo prima di costruire
+il file è in sola lettura e non sincronizza né revoca dati.
+
+La separazione di `backupDeviceDraftSelection.ts` ha eliminato la
+dipendenza transitiva da `deviceStorage` e Firebase nel parser
+`backup.ts`; il writer di restore conserva i suoi guard. La
+preparazione resta **non montata nell'interfaccia pubblica**, che rimane
+identity-only. Non pubblicare D1 API o promettere GO da questa prova.
+Un file JSON contiene dati sanitari leggibili: il salvataggio resta
+volontario e sotto custodia esplicita dell'utente; la preparazione non
+garantisce il click o la disponibilità della copia indipendente.
