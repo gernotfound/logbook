@@ -5,6 +5,7 @@ import {
 } from '../../lib/auth/kindeCandidateClient';
 import { readKindeCandidateIdentity } from '../../lib/auth/kindeCandidateIdentity';
 import { acceptKindeCandidateInitialConsent } from '../../lib/auth/kindeCandidateConsent';
+import type { prepareKindeCandidateOwner } from '../../lib/sync/kindeCandidateOwnerBootstrap';
 
 type Status = 'checking' | 'signed-out' | 'guest-blocked';
 type AccountStatus = 'email-unverified' | 'identity-verified' | 'consent-required'
@@ -16,14 +17,15 @@ type View = { phase: Status; generation: number }
     | { phase: AccountStatus; generation: number; principal: Principal };
 type Decision = Parameters<typeof acceptKindeCandidateInitialConsent>[0]['decision'];
 type PresenceFence = ReturnType<typeof captureKindeCandidatePresenceFence>;
+type CandidatePreparationResult = Awaited<ReturnType<typeof prepareKindeCandidateOwner>>;
 
 // Read only the local CSRF-cookie witness. Network refresh is triggered only
 // on a change or a foreground event, including browsers without CookieStore.
 const COOKIE_CHECK_MS = 1000;
 
 export function useKindeAccountSession({
-    guestArchivePresent, identityOnly,
-}: { guestArchivePresent: boolean; identityOnly: boolean }) {
+    guestArchivePresent, identityOnly, candidatePreparationEnabled = false,
+}: { guestArchivePresent: boolean; identityOnly: boolean; candidatePreparationEnabled?: boolean }) {
     const [view, setView] = useState<View>({
         phase: guestArchivePresent ? 'guest-blocked' : 'checking', generation: 0,
     });
@@ -198,6 +200,51 @@ export function useKindeAccountSession({
         });
     };
 
+    /**
+     * Explicit candidate-only handoff from the observed Kinde session to the
+     * existing D1 bootstrap. The live provider leaves this capability disabled;
+     * no readiness result installs an authenticated fitness owner or grant.
+     */
+    const prepareCandidateArchive = async ({
+        send = fetch, browserCookies = () => document.cookie, drainPendingJournal = false,
+    }: {
+        send?: typeof fetch;
+        browserCookies?: () => string;
+        drainPendingJournal?: boolean;
+    } = {}): Promise<CandidatePreparationResult> => {
+        if (!candidatePreparationEnabled || !canAct()
+            || (view.phase !== 'identity-verified' && view.phase !== 'consent-confirmed')
+            || view.principal.emailVerified !== true
+            || view.principal.healthConsentRevision < 1) {
+            throw new KindeCandidateBoundaryError();
+        }
+        const session = observed.current;
+        if (!session?.csrfToken || !session.stillCurrent()) throw new KindeCandidateBoundaryError();
+        const current = () => viewIsCurrent() && session.stillCurrent();
+        const expected = {
+            uid: view.principal.uid,
+            fenceEpoch: view.principal.fenceEpoch,
+            healthConsentRevision: view.principal.healthConsentRevision,
+        };
+        busyRef.current = true;
+        setBusy(true);
+        try {
+            // The candidate D1/storage modules stay out of the initial guest
+            // and identity-only runtime module graph.
+            const { prepareKindeCandidateOwner } = await import('../../lib/sync/kindeCandidateOwnerBootstrap');
+            if (!current()) throw new KindeCandidateBoundaryError();
+            const result = await prepareKindeCandidateOwner({
+                expected, stillCurrent: current, send, browserCookies,
+                drainPendingJournal, retainDeviceVault: false,
+            });
+            if (!current()) throw new KindeCandidateBoundaryError();
+            return result;
+        } finally {
+            busyRef.current = false;
+            if (mounted.current) setBusy(false);
+        }
+    };
+
     const logout = async () => {
         if (!('principal' in view)) return;
         const completed = await runAction(async () => {
@@ -211,7 +258,7 @@ export function useKindeAccountSession({
     };
 
     return {
-        view, busy, signIn, enterGuest, acceptConsent, logout,
+        view, busy, signIn, enterGuest, acceptConsent, logout, prepareCandidateArchive,
         retry: async () => { if (canAct()) await refresh(); },
     };
 }
