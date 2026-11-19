@@ -67,7 +67,7 @@ export function RoutineExerciseTargets({ exercise, index, trackingType, fieldId,
                     </div>
 
                     {/* Riga 2: Rep min e Rep max */}
-                    {libDef?.trackingType !== 'time' ? (
+                    {trackingType !== 'time' ? (
                         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', width: '100%' }}>
                             <span id={`${fieldId}-reps-label`} style={{ fontSize: 'var(--font-size-meta)', color: 'var(--text-muted)', fontWeight: 600, width: '75px', flexShrink: 0 }}>
                                 Ripetizioni:
