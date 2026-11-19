@@ -739,6 +739,23 @@ describe('Kinde-only device vault provisioning and authenticated baseline', () =
             const baseline = UserDataSchema.parse({});
             const merged = prepareImport(baseline, decoded.data, 'restore', decoded.coverage);
             expect(merged.data.profile?.height).toBe('193');
+            // Decode success alone is insufficient: the production restore
+            // projection must reconstruct the entire archived business state.
+            const cleanOwner = UserDataSchema.parse({
+                legalConsent: backup.userData.legalConsent,
+            });
+            const restored = prepareImport(cleanOwner, decoded.data, 'restore', decoded.coverage);
+            expect(restored.data).toEqual(backup.userData);
+            // The account's CURRENT legal acceptance cannot be imported from
+            // an old file, even when its owner and business are authentic.
+            const renewedConsent = { ...backup.userData.legalConsent,
+                acceptedAt: '2026-11-20T00:00:00.000Z' };
+            const newOwnerState = UserDataSchema.parse({ legalConsent: renewedConsent });
+            const withNewConsent = prepareImport(newOwnerState, decoded.data, 'restore', decoded.coverage);
+            expect(withNewConsent.data.legalConsent).toEqual(renewedConsent);
+            expect(withNewConsent.data.profile).toEqual(backup.userData.profile);
+            expect(() => decodeImport(JSON.parse(prepared.json), 'user:' + 'k_' + 'B'.repeat(43)))
+                .toThrow();
             expect(seen.slice(start)).toContain('/v1/sync/scan');
             expect(seen.slice(start)).not.toContain('/v1/sync/commit');
             expect(seen.slice(start)).not.toContain('/v1/rights/scan');
