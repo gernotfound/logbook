@@ -1117,7 +1117,7 @@ describe('contextual progression engine', () => {
     });
 
     it('does not interpret empty colon components as zero-duration measurements', () => {
-        for (const time of [':', '1:', ':30', '1::20', '::', '0:']) {
+        for (const time of [':', '1:', ':30', '1::20', '::', '0:', '0x10:30', '1e2:30', '1:+30']) {
             const current = workout({
                 id: 'invalid-time-component',
                 date: '2026-09-08',

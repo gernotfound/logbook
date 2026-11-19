@@ -34,8 +34,9 @@ function parseTimeSeconds(value: unknown): number | undefined {
     if (/^\d+(?:[.,]\d+)?s$/.test(raw)) return numberValue(raw.slice(0, -1));
     if (/^\d+(?:[.,]\d+)?$/.test(raw)) return numberValue(raw);
     const components = raw.split(':');
-    // Number('') is zero, but a missing minutes/seconds field is not a duration.
-    if (components.some(component => component === '')) return undefined;
+    // Number() also accepts empty fields and hexadecimal/exponent syntax,
+    // neither of which is a valid colon-separated duration component.
+    if (components.some(component => !/^(?:\d+(?:\.\d*)?|\.\d+)$/.test(component))) return undefined;
     const parts = components.map(Number);
     if (parts.some(part => !Number.isFinite(part) || part < 0)) return undefined;
     const seconds = parts.length === 2
