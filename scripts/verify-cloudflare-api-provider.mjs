@@ -40,6 +40,12 @@ export async function verifyPrivateWorkerBindings({ account, bearer, request = f
       assert.ok(bindings.some(binding => binding.name === 'AUTH_GATE' &&
         binding.type === 'service' && binding.service === GATE_NAME),
         'private API authorization binding absent');
+      // A successful Wrangler deploy is not sufficient if a manual KEK
+      // binding was lost or replaced by a plaintext variable. Read metadata
+      // only: the value must never enter CI, logs or repository fixtures.
+      const kek = bindings.filter(binding => binding.name === 'CLOUD_ACCOUNT_KEK_V1');
+      assert.equal(kek.length, 1, 'private API KEK binding missing or duplicated');
+      assert.equal(kek[0].type, 'secret_text', 'private API KEK must remain a secret');
     } else {
       assert.ok(bindings.some(binding => binding.name === 'API_RATE_LIMITER' &&
         (binding.type === 'ratelimit' || binding.type === 'rate_limit') &&
