@@ -1,5 +1,27 @@
 # CF-01/02 — isolated encrypted D1 replica candidate
 
+## CF-05 rights-only encrypted document read (candidate, not publicly deployed)
+
+`POST /v1/rights/scan` is deliberately separate from the active-fitness
+`/v1/sync/scan` endpoint. After the original consent is withdrawn, an
+authenticated current Kinde session may retrieve **ciphertext only** while the
+original health-erasure job remains pending/processing and the independent
+`RECOVERY_DB` still authorizes rights without an erasure cutoff. The private
+AuthGate checks CSRF, owner and session even when email was subsequently marked
+unverified. The D1 document adapter checks primary SQL consent/job/session
+inside each bounded eight-document page transaction and the worker rechecks
+both primary and independent registry before returning it. A finalizer or
+restored old app snapshot must fail closed, never resurrect data.
+
+The client `withKindeCandidateRightsCheckpoint` obtains an operation-scoped
+existing ADK with purpose `rights-export`, reads every revision-pinned page,
+authenticates every document with owner/path-bound AEAD, and delivers only a
+complete checkpoint to an explicit consumer before zeroing ADK bytes. It does
+not authorize sync, mutate IndexedDB, create or adopt an owner, install a
+fitness vault or implement a downloadable rights JSON yet. Missing device-only
+edits and drafts cannot be recovered from the cloud. Public `D1_API` remains
+unbound; E2E/provider/browser release gates still apply.
+
 ## Candidate CF-03/04: cloud-key precondition and Kinde read boundary
 
 An ADK-free replica claim now returns `428 {"error":"cloud-key-required"}`
