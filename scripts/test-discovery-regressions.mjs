@@ -102,7 +102,10 @@ await test('critical coverage selection is invariant under functional test folde
     'm7_account_deletion_api.test.ts',
     'guest_bootstrap_lifecycle.test.tsx',
     'guest_account_migration_v3.test.tsx',
-    'health_consent_client.test.ts',
+    'health_consent_client_verification.test.ts',
+    'health_consent_client_withdrawal.test.ts',
+    'health_consent_client_offline.test.ts',
+    'health_consent_client_owner-epochs.test.ts',
     'db_sync_error_semantics.test.ts',
     'storage_bootstrap_integrity.test.ts',
   ]) {
