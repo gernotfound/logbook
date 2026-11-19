@@ -18,19 +18,19 @@ type Expected = { uid: string; fenceEpoch: number; healthConsentRevision: 1 };
  * rights delivery and erasure-status recovery require separate boundaries.
  */
 export async function withKindeCandidateRightsKey<T>({
-    expected, stillCurrent, useKey, send = fetch,
+    expected, stillCurrent, consumeKey, send = fetch,
     browserCookies = () => document.cookie,
 }: {
     expected: Readonly<Expected>;
     stillCurrent: () => boolean;
-    useKey: (key: Uint8Array, stillCurrent: () => boolean) => Promise<T>;
+    consumeKey: (key: Uint8Array, stillCurrent: () => boolean) => Promise<T>;
     send?: typeof fetch;
     browserCookies?: () => string;
 }): Promise<T> {
     if (expected?.healthConsentRevision !== 1
         || typeof expected.uid !== 'string' || !/^k_[A-Za-z0-9_-]{43}$/.test(expected.uid)
         || !Number.isSafeInteger(expected.fenceEpoch) || expected.fenceEpoch < 1
-        || typeof useKey !== 'function') throw new KindeCandidateBoundaryError();
+        || typeof consumeKey !== 'function') throw new KindeCandidateBoundaryError();
     const fence = captureKindeCandidateSessionFence({ stillCurrent, browserCookies });
     const current = () => {
         try {
@@ -64,7 +64,7 @@ export async function withKindeCandidateRightsKey<T>({
         // Re-reading the session after the key request prevents a result
         // from a replaced login from being used to decrypt an archive.
         await checkPrincipal();
-        const result = await useKey(key, current);
+        const result = await consumeKey(key, current);
         assertCurrent();
         await checkPrincipal();
         return result;
