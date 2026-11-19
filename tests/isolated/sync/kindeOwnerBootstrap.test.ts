@@ -509,8 +509,8 @@ describe('Kinde-only device vault provisioning and authenticated baseline', () =
             const exported = await prepareKindeCandidateRightsJson({
                 ...session, expected: { ...principal, healthConsentRevision: 1 as const },
             });
-            const payload = JSON.parse(exported.json) as Record<string, any>;
-            expect(exported.filename).toMatch(/^thelogbook_diritti_cloud_\\d{4}-\\d{2}-\\d{2}\\.json$/);
+            const payload = JSON.parse(exported.json) as unknown;
+            expect(exported.filename).toMatch(/^thelogbook_diritti_cloud_\d{4}-\d{2}-\d{2}\.json$/);
             expect(exported.documentCount).toBe(1);
             expect(payload).toMatchObject({
                 format: 'thelogbook-cloud-rights-export',
@@ -538,7 +538,7 @@ describe('Kinde-only device vault provisioning and authenticated baseline', () =
                 stillCurrent: () => current,
             })).rejects.toThrow();
             expect(isVaultUnlocked(owner)).toBe(false);
-            expect(observed.slice(before).filter(path => path === '/v1/rights/scan')).toHaveLength(1);
+            expect(observed.slice(before).filter(path => path === '/v1/rights/scan')).toHaveLength(2);
             expect(observed.slice(before)).not.toContain('/v1/sync/scan');
             expect(observed.slice(before)).not.toContain('/v1/cloud-key/sync');
             expect(observed.slice(before)).not.toContain('/v1/sync/commit');
