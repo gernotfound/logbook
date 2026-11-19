@@ -430,6 +430,30 @@ describe('isolated Kinde account entry candidate', () => {
         expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:kinde-candidate-export');
     });
 
+    it('reconciles a local lost withdrawal ACK even when the next trusted SQL view is already suspended', async () => {
+        localStorage.setItem('logbook:v2:user:' + A + ':health-consent-withdrawal', 'pending:1');
+        vi.mocked(readKindeCandidateIdentity).mockResolvedValue({
+            kind: 'email-verified', principal: { ...principal, healthConsentRevision: 1 },
+        });
+        vi.mocked(readKindeCandidateAccess).mockResolvedValue({
+            kind: 'consent-suspended', principal: confirmed.principal, status: 'withdrawn',
+        });
+        vi.mocked(reconcileKindeCandidateWithdrawal).mockImplementationOnce(async () => {
+            localStorage.setItem('logbook:v2:user:' + A + ':health-consent-withdrawal', 'withdrawn');
+            return { kind: 'withdrawal-proven' };
+        });
+        render(<KindeAccountEntry candidatePreparationEnabled candidateLifecycleEnabled />);
+        const readback = await screen.findByRole('button', { name: 'Verifica stato della revoca' });
+        expect(screen.getByRole('button', { name: 'Verifica dati cloud ancora disponibili' })).toBeDefined();
+        expect(screen.queryByRole('button', { name: 'Revoca consenso e avvia cancellazione' })).toBeNull();
+        expect(screen.queryByRole('button', { name: 'Prepara backup JSON' })).toBeNull();
+        fireEvent.click(readback);
+        await waitFor(() => expect(reconcileKindeCandidateWithdrawal).toHaveBeenCalledOnce());
+        expect(withdrawKindeCandidateHealthConsent).not.toHaveBeenCalled();
+        expect(localStorage.getItem('logbook:v2:user:' + A + ':health-consent-withdrawal')).toBe('withdrawn');
+        expect(unlockVaultForOwner).not.toHaveBeenCalled();
+    });
+
     it('permits explicit withdrawal even after email verification is lost, without granting a backup vault', async () => {
         vi.mocked(readKindeCandidateIdentity).mockResolvedValue({
             kind: 'email-unverified', principal: { ...principal, healthConsentRevision: 1, emailVerified: false },
