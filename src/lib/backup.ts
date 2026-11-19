@@ -5,7 +5,7 @@ import { getLocalDateString } from './utils/date';
 import { normalizeBusinessId } from './businessIdentity';
 import { requireCanonicalWorkoutDate } from './sync/monthlyIntegrity';
 import { assertWorkoutSessionIdentities } from './sync/domainOperations/validation';
-import { selectBackupDeviceDrafts } from './backupDeviceRecovery';
+import { selectBackupDeviceDrafts } from './backupDeviceDraftSelection';
 import { calculateLoggedMealTotals } from './nutrition/calculateLoggedMealTotals';
 import { findLossyNormalization } from './sync/businessNormalizationIntegrity';
 import {
