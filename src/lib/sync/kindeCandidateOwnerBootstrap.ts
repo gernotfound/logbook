@@ -36,13 +36,14 @@ function verifyAccess(access: KindeCandidateAccess, expected: Principal, legal?:
  */
 export async function prepareKindeCandidateOwner({
     expected, stillCurrent, send = fetch, browserCookies = () => document.cookie,
-    drainPendingJournal = false,
+    drainPendingJournal = false, retainDeviceVault = true,
 }: {
     expected: Readonly<Principal>;
     stillCurrent: () => boolean;
     send?: typeof fetch;
     browserCookies?: () => string;
     drainPendingJournal?: boolean;
+    retainDeviceVault?: boolean;
 }): Promise<BootstrapResult> {
     const principal = { ...expected };
     const owner = userOwner(principal.uid);
@@ -122,7 +123,8 @@ export async function prepareKindeCandidateOwner({
         return { kind: 'candidate-observed', checkpointRevision, replicaOutcome };
     } finally {
         // Persisted ciphertext and staged intents survive a failed attempt.
-        // Only a completed baseline and replica may retain this tab's grant.
-        if (!ready) unlock.release();
+        // A pre-activation React probe must not leave a device key unlocked,
+        // even after a complete checkpoint. Release only this attempt's grant.
+        if (!ready || !retainDeviceVault) unlock.release();
     }
 }
