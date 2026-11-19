@@ -1,5 +1,5 @@
 import equal from 'fast-deep-equal';
-import type { UserData } from '../../types';
+import type { LegalConsent, UserData } from '../../types';
 import { UserDataSchema } from '../schema';
 import { getCachedCatalog } from '../catalog/catalogService';
 import { normalizeStorageOwner } from './owner';
@@ -22,7 +22,8 @@ export async function acknowledgeThrough(
     remote: UserData,
     months: string[],
     syncMeta: Record<string, SyncMeta> | undefined,
-    delivery: { operations: SemanticOperation[]; replica: ReplicaIdentity; cloudflareBatchId?: string },
+    delivery: { operations: SemanticOperation[]; replica: ReplicaIdentity; cloudflareBatchId?: string;
+        trustedLegalConsent?: LegalConsent },
     guard?: () => boolean,
 ): Promise<void> {
     owner = normalizeStorageOwner(owner);
@@ -43,6 +44,12 @@ export async function acknowledgeThrough(
         if (guard && !guard()) throw new Error('Acknowledgement invalidato dal cambio sessione; journal preservato.');
         const current = validateLocalEnvelope(raw, owner);
         if (!current) throw new Error('Archivio locale non trovato');
+        // The Kinde D1 consent row, not the encrypted fitness root, is the
+        // legal authority. A late ACK must never replace or manufacture it.
+        if (delivery.trustedLegalConsent && (!delivery.cloudflareBatchId
+            || !equal(current.data.legalConsent, delivery.trustedLegalConsent))) {
+            throw new Error('Consenso D1 modificato durante ACK: journal preservato.');
+        }
         const replica = current.replica;
         const sameReplica = replica !== null
             && replica.slot === delivery.replica.slot
@@ -79,7 +86,8 @@ export async function acknowledgeThrough(
         const newSyncMeta = { ...current.syncMetaByDocument, ...(syncMeta || {}) };
         // The confirmed transaction touched only the delivered document paths.
         // Preserve unrelated months/root hydrated by another tab while it was in flight.
-        const projectedRemote = projectDocuments(parsed, catalog);
+        const projectedRemote = projectDocuments(delivery.trustedLegalConsent
+            ? { ...parsed, legalConsent: delivery.trustedLegalConsent } : parsed, catalog);
         const deliveredDocs = new Map<string, DocumentData>(
             [...new Set(delivery.operations.map(op => op.docPath))]
                 .map(path => [path, projectedRemote.get(path) ?? {}]),
@@ -93,6 +101,10 @@ export async function acknowledgeThrough(
         const reconciled = applyRemoteDocuments(current.data, mergedDocs, catalog);
         reconciled.pendingConflicts = current.data.pendingConflicts;
         const data = parse(reconciled);
+        if (delivery.trustedLegalConsent && (!equal(acknowledgedBaseline.legalConsent, delivery.trustedLegalConsent)
+            || !equal(data.legalConsent, delivery.trustedLegalConsent))) {
+            throw new Error('Consenso D1 incompatibile con la riconciliazione: journal preservato.');
+        }
         // Persist only server-confirmed metadata; replayed pending operations are
         // speculative and must never become evidence that a cloud document exists.
         const next = { ...current, clock: newClock, baseline: acknowledgedBaseline, data, pending, completeMonths: [...new Set([...current.completeMonths, ...months])], syncMetaByDocument: newSyncMeta };

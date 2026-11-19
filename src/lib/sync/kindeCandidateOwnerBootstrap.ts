@@ -16,7 +16,10 @@ type Principal = Confirmed['principal'];
 type BootstrapResult =
     | { kind: 'candidate-observed'; checkpointRevision: number | null;
         replicaOutcome: Awaited<ReturnType<typeof claimKindeCandidateReplica>>;
-        journalOutcome?: 'idle' | 'acknowledged' }
+        journalOutcome?: 'idle' | 'acknowledged'; journalDrained?: true }
+    | { kind: 'journal-pending'; checkpointRevision: number;
+        replicaOutcome: 'adopted' | 'already-active';
+        journalOutcome: 'idle' | 'acknowledged'; pendingCount: number }
     | { kind: 'delivery-pending'; deliveryOutcome: 'retry-staged' | 'reconciliation-required' };
 
 function verifyAccess(access: KindeCandidateAccess, expected: Principal, legal?: Confirmed['legalConsent']): asserts access is Confirmed {
@@ -116,8 +119,28 @@ export async function prepareKindeCandidateOwner({
             if (journalOutcome === 'retry-staged' || journalOutcome === 'reconciliation-required') {
                 return { kind: 'delivery-pending', deliveryOutcome: journalOutcome };
             }
+            // An ACK covers only the submitted causal batch, not edits that
+            // arrived while the response was in flight. Read IndexedDB again
+            // under the same vault/session grant before reporting completion.
+            const afterDelivery = await readLocal(owner);
+            if (!scoped() || !afterDelivery
+                || afterDelivery.consentRevision !== principal.healthConsentRevision
+                || !equal(afterDelivery.data.legalConsent, first.legalConsent)
+                || afterDelivery.cloudIntegrityFence || afterDelivery.cloudflareReplicaClaim
+                || afterDelivery.cloudflareReplicaRetirement) {
+                throw new KindeCandidateBoundaryError();
+            }
+            if (afterDelivery.cloudflareDelivery || afterDelivery.pending.length > 0) {
+                return {
+                    kind: 'journal-pending', checkpointRevision, replicaOutcome,
+                    journalOutcome, pendingCount: afterDelivery.pending.length,
+                };
+            }
             ready = true;
-            return { kind: 'candidate-observed', checkpointRevision, replicaOutcome, journalOutcome };
+            return {
+                kind: 'candidate-observed', checkpointRevision, replicaOutcome,
+                journalOutcome, journalDrained: true,
+            };
         }
         ready = replicaReady;
         return { kind: 'candidate-observed', checkpointRevision, replicaOutcome };

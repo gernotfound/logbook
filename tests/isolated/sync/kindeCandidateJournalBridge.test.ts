@@ -81,7 +81,15 @@ describe('Kinde candidate trusted D1 journal bridge (no Firebase or production b
             expect(typeof transport.control).toBe('function');
             expect(csrf).toBe(CSRF_A);
             expect(guard()).toBe(true);
-            expect(expected).toEqual({ consentRevision: 1, fenceEpoch: 1 });
+            expect(expected).toEqual({
+                consentRevision: 1, fenceEpoch: 1,
+                trustedLegalConsent: {
+                    hasAcceptedTerms: true, hasAcceptedHealthData: true,
+                    acceptedAt: accepted().acceptedAt,
+                    privacyVersion: LEGAL_VERSIONS.privacy,
+                    termsVersion: LEGAL_VERSIONS.terms,
+                },
+            });
             return 'acknowledged';
         });
         const send = vi.fn(acceptedSession());

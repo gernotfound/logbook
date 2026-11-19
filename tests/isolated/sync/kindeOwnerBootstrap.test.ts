@@ -447,6 +447,8 @@ describe('Kinde-only device vault provisioning and authenticated baseline', () =
             expect(fixture.count('sync_receipts', uid)).toBe(1);
             expect((await readLocal(owner))?.pending).toEqual([]);
             expect((await readLocal(owner))?.baseline.profile?.height).toBe('184');
+            expect((await readLocal(owner))?.data.legalConsent).toEqual(baseline.legalConsent);
+            expect((await readLocal(owner))?.baseline.legalConsent).toEqual(baseline.legalConsent);
             const ciphertext = await get<string>('logbook:v2:' + owner);
             expect(ciphertext).toMatch(/^tlb-sealed:v1:/);
             expect(ciphertext).not.toContain('"height":"184"');
@@ -460,6 +462,74 @@ describe('Kinde-only device vault provisioning and authenticated baseline', () =
             });
             expect(commits).toBe(1);
             expect(fixture.count('sync_receipts', uid)).toBe(1);
+        } finally {
+            fixture.close();
+        }
+    });
+
+    it('does not claim complete journal delivery when a second edit arrives after remote commit', async () => {
+        const realClaim = await vi.importActual<typeof import('../../../src/lib/sync/kindeCandidateReplicaClaimBridge')>(
+            '../../../src/lib/sync/kindeCandidateReplicaClaimBridge',
+        );
+        claimSource.claim.mockImplementation(realClaim.claimKindeCandidateReplica);
+        const fixture = await createCloudKeyHttpFixture([uid]);
+        try {
+            await fixture.consent(uid);
+            let commits = 0;
+            let later: Awaited<ReturnType<typeof commitDomainOperations>> | undefined;
+            const session = firstPartySession(fixture, async (path, _init, response) => {
+                if (path === '/v1/sync/commit') {
+                    expect(response.status).toBe(200);
+                    commits += 1;
+                    if (commits === 1) {
+                        const current = (await readLocal(owner))!.data;
+                        later = await commitDomainOperations(
+                            owner, { type: 'profile.patch', patch: { height: '187' } }, current,
+                        );
+                    }
+                }
+                return response;
+            });
+            await expect(prepareKindeCandidateOwner({ ...session, expected: principal }))
+                .resolves.toMatchObject({ replicaOutcome: 'adopted' });
+            const baseline = (await readLocal(owner))!.data;
+            await commitDomainOperations(
+                owner, { type: 'profile.patch', patch: { height: '186' } }, baseline,
+            );
+            lockAllVaults();
+
+            await expect(prepareKindeCandidateOwner({
+                ...session, expected: principal, drainPendingJournal: true,
+                retainDeviceVault: false,
+            })).resolves.toMatchObject({
+                kind: 'journal-pending', journalOutcome: 'acknowledged', pendingCount: 1,
+            });
+            expect(isVaultUnlocked(owner)).toBe(false);
+            expect(commits).toBe(1);
+            expect(fixture.count('sync_receipts', uid)).toBe(1);
+            await unlockVaultForOwner(owner);
+            const remaining = await readLocal(owner);
+            expect(remaining?.pending).toEqual(later?.operations);
+            expect(remaining?.baseline.profile?.height).toBe('186');
+            expect(remaining?.data.profile?.height).toBe('187');
+            expect(remaining?.data.legalConsent).toEqual(baseline.legalConsent);
+            expect(remaining?.baseline.legalConsent).toEqual(baseline.legalConsent);
+            lockAllVaults();
+
+            await expect(prepareKindeCandidateOwner({
+                ...session, expected: principal, drainPendingJournal: true,
+                retainDeviceVault: false,
+            })).resolves.toMatchObject({
+                kind: 'candidate-observed', journalOutcome: 'acknowledged',
+                journalDrained: true,
+            });
+            expect(isVaultUnlocked(owner)).toBe(false);
+            expect(commits).toBe(2);
+            expect(fixture.count('sync_receipts', uid)).toBe(2);
+            await unlockVaultForOwner(owner);
+            const complete = await readLocal(owner);
+            expect(complete?.pending).toEqual([]);
+            expect(complete?.baseline.profile?.height).toBe('187');
         } finally {
             fixture.close();
         }

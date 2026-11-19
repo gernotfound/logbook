@@ -80,7 +80,11 @@ export async function deliverKindeCandidateJournal({
         if (!scoped()) throw new KindeCandidateBoundaryError();
         const result = await deliverCloudflareJournalCandidate(
             owner, key, createCloudflareReplicaTransport(send), fence.csrfToken, scoped,
-            { consentRevision: healthConsentRevision, fenceEpoch, ...(stagedOnly ? { stagedOnly } : {}) },
+            {
+                consentRevision: healthConsentRevision, fenceEpoch,
+                trustedLegalConsent: access.legalConsent,
+                ...(stagedOnly ? { stagedOnly } : {}),
+            },
         );
         if (!scoped()) throw new KindeCandidateBoundaryError();
         return result;

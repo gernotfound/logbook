@@ -1,6 +1,6 @@
 import equal from 'fast-deep-equal';
 import { getCachedCatalog } from '../catalog/catalogService';
-import type { UserData } from '../../types';
+import type { LegalConsent, UserData } from '../../types';
 import { applyRemoteDocuments, type DocumentData } from './documentProjection';
 import { readAccountCloudDocument } from './cloudDocumentRead';
 import { prepareCloudflareCommit } from './cloudReplicaCommit';
@@ -90,6 +90,7 @@ export async function resumeCloudflareDelivery(
     transport: DeliveryTransport,
     csrfToken: string,
     guard: SessionGuard,
+    trustedLegalConsent?: LegalConsent,
 ): Promise<'idle' | 'acknowledged'> {
     const { owner, uid } = checkedOwner(ownerInput);
     current(guard);
@@ -149,6 +150,7 @@ export async function resumeCloudflareDelivery(
     await acknowledgeThrough(owner, lastSeq, remote, months, syncMeta, {
         operations: delivered, replica: intent.replica,
         cloudflareBatchId: intent.batch.batchId,
+        ...(trustedLegalConsent ? { trustedLegalConsent } : {}),
     }, guard);
     return 'acknowledged';
 }

@@ -5,13 +5,17 @@ import { ensureBoundedPendingSequences } from './localPendingSequences';
 import { readLocal } from './localArchiveBootstrap';
 import { normalizeStorageOwner } from './owner';
 import { boundedPendingTransactionBatch } from './syncBatching';
+import type { LegalConsent } from '../../types';
 
 type CandidateTransport = Pick<
     ReturnType<typeof createCloudflareReplicaTransport>,
     'control' | 'read' | 'commit' | 'receipt' | 'commitOutcome' | 'scanAll'
 >;
 type SessionGuard = () => boolean;
-type JournalAccessScope = Readonly<{ consentRevision: number; fenceEpoch: number; stagedOnly?: boolean }>;
+type JournalAccessScope = Readonly<{
+    consentRevision: number; fenceEpoch: number; stagedOnly?: boolean;
+    trustedLegalConsent?: LegalConsent;
+}>;
 
 async function resumeOrRestage(
     owner: string,
@@ -19,9 +23,10 @@ async function resumeOrRestage(
     transport: CandidateTransport,
     csrfToken: string,
     guard: SessionGuard,
+    trustedLegalConsent?: LegalConsent,
 ): Promise<'idle' | 'acknowledged' | 'retry-staged' | 'reconciliation-required'> {
     try {
-        return await resumeCloudflareDelivery(owner, accountKey, transport, csrfToken, guard);
+        return await resumeCloudflareDelivery(owner, accountKey, transport, csrfToken, guard, trustedLegalConsent);
     } catch (error) {
         if (!(error instanceof CloudReplicaTransportError) || error.status !== 409) throw error;
         requireCurrent(guard);
@@ -71,7 +76,7 @@ export async function deliverCloudflareJournalCandidate(
     // Always recover the original encrypted intent before considering a new
     // batch. A new nonce or batch ID after a lost response would break replay.
     if (local.cloudflareDelivery) {
-        return resumeOrRestage(owner, accountKey, transport, csrfToken, guard);
+        return resumeOrRestage(owner, accountKey, transport, csrfToken, guard, expected?.trustedLegalConsent);
     }
     if (expected?.stagedOnly || !local.pending.length) return 'idle';
     if (!local.replica || local.actorId !== local.replica.slot
@@ -118,5 +123,5 @@ export async function deliverCloudflareJournalCandidate(
         owner, operations, snapshot, control, prepared.replica, batchId, accountKey, guard,
     );
     requireCurrent(guard);
-    return resumeOrRestage(owner, accountKey, transport, csrfToken, guard);
+    return resumeOrRestage(owner, accountKey, transport, csrfToken, guard, expected?.trustedLegalConsent);
 }
