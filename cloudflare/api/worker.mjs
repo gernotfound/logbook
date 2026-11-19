@@ -89,7 +89,7 @@ const commitStatusInput = z.strictObject({
 const authClaims = z.strictObject({
   uid: z.string().min(1).max(128).refine(s => !s.includes('/') && s.trim() === s),
   authenticated: z.literal(true),
-  emailVerified: z.literal(true),
+  emailVerified: z.boolean(),
   healthConsentRevision: safeInt.min(1),
   fenceEpoch: safeInt.min(1),
   csrfVerified: z.boolean(),
@@ -179,6 +179,9 @@ async function authorize(request, env, route, isMutation) {
   let claims;
   try { claims = authClaims.parse(await response.json()); }
   catch { throw new BadInput('auth-unavailable', 503); }
+  // Rights-only remains possible after losing email verification, but no
+  // active-fitness route may inherit that weaker scope from the AuthGate.
+  if (!claims.emailVerified && route !== '/v1/rights/scan') throw new BadInput('unauthorized', 403);
   if (isMutation && !claims.csrfVerified) throw new BadInput('csrf-required', 403);
   return claims;
 }
