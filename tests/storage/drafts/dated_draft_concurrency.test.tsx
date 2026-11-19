@@ -10,7 +10,7 @@ import { createDatedWriterIntentName, inspectDatedRecoveryEvidence, readDatedWri
 import { mockFirebaseAuth } from '../../setup';
 import { draftRegistry } from '../../../src/lib/utils/draftRegistry';
 import type { SyncResult } from '../../../src/types';
-import { installDatedDraftFixtures } from './datedDraftFixtures';
+import { installDatedDraftFixtures, storeItem } from './datedDraftFixtures';
 
 installDatedDraftFixtures();
 
