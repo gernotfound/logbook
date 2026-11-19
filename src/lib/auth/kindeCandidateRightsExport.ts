@@ -8,7 +8,7 @@ type Options = Omit<Parameters<typeof withKindeCandidateRightsCheckpoint>[0], 'c
 const DOCUMENT_PATH = /^(?:(?:history_months|nutrition_months)\/\d{4}-(?:0[1-9]|1[0-2]))?$/;
 const MAX_JSON_BYTES = 64 * 1024 * 1024;
 
-export interface KindeCandidateRightsJson {
+interface KindeCandidateRightsJson {
     filename: string;
     json: string;
     documentCount: number;
