@@ -257,15 +257,16 @@ Firestore non vanno disabilitati finché i dati e le responsabilità live non
 sono stati verificati. Non utilizzare questo incremento come prova del GO
 funzionale o della revoca delle autorizzazioni del provider.
 
-## CF-08 recovery schema — verifiche provider 18/11/2026 (VERIFY-LIVE)
+## CF-08 recovery schema — verifiche provider 19/11/2026 (VERIFY-LIVE)
 
-D1 recovery EU: migrations 0001-0002, stato sealed, generation 1, owner 0,
-Time Travel bookmark presente. D1 applicativa EU: migrations 0001-0010,
-2 identities e 24 sessions, ma zero chiavi dati cloud e zero erasure jobs.
-Questi record non autorizzano un reset ne' una riqualificazione come
-sintetici senza inventario. Il workflow operativo recovery D1 manual-only
-prepara la verifica e migrazione 0003-0004 in via indipendente e chiusa;
-non attiva automaticamente trattamenti dati o nuovi endpoint.
+Il registro D1 EU di recupero ha il ledger da `0001` a `0004`. Le ultime
+due migrazioni sono state applicate con la Query API D1 e verificate sul
+provider. Stato `sealed`, generazione 1, zero owner, zero cutoff, repliche
+di lettura disabilitate e bookmark Time Travel presente prima della
+scrittura. Il D1 applicativo EU rimane a `0010`. L'API privata mantiene il
+binding `RECOVERY_DB`. `CLOUD_ACCOUNT_KEK_V1` manca nell'API e `D1_API`
+manca nel frontend. Il [runbook](cloudflare-workers-migration.md) riporta
+le prove e il perimetro dell'operazione.
 
 ## CF-03 — confine runtime catalogo (18/11/2026, codice v2.517.0 candidato)
 

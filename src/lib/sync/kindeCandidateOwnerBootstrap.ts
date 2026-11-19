@@ -4,6 +4,7 @@ import {
     readKindeCandidateAccess, type KindeCandidateAccess,
 } from '../auth/kindeCandidateClient';
 import { hydrateKindeCandidateArchive } from './kindeCandidateArchiveHydration';
+import { deliverKindeCandidateJournal } from './kindeCandidateJournalBridge';
 import { claimKindeCandidateReplica } from './kindeCandidateReplicaClaimBridge';
 import { isKindeAccountLocalFitnessClear } from './kindeOwnerLocalFitnessFence';
 import { readLocal } from './localArchiveBootstrap';
@@ -13,6 +14,9 @@ import { requireUnlockedLocalKey } from './secureArchiveSession';
 
 type Confirmed = Extract<KindeCandidateAccess, { kind: 'consent-confirmed' }>;
 type Principal = Confirmed['principal'];
+type BootstrapResult =
+    | { kind: 'candidate-observed'; checkpointRevision: number | null; replicaOutcome: Awaited<ReturnType<typeof claimKindeCandidateReplica>> }
+    | { kind: 'delivery-pending'; deliveryOutcome: 'retry-staged' | 'reconciliation-required' };
 
 function verifyAccess(access: KindeCandidateAccess, expected: Principal, legal?: Confirmed['legalConsent']): asserts access is Confirmed {
     if (access.kind !== 'consent-confirmed'
@@ -36,7 +40,7 @@ export async function prepareKindeCandidateOwner({
     stillCurrent: () => boolean;
     send?: typeof fetch;
     browserCookies?: () => string;
-}): Promise<{ kind: 'candidate-observed'; checkpointRevision: number | null; replicaOutcome: Awaited<ReturnType<typeof claimKindeCandidateReplica>> }> {
+}): Promise<BootstrapResult> {
     const principal = { ...expected };
     const owner = userOwner(principal.uid);
     const fence = captureKindeCandidateSessionFence({ stillCurrent, browserCookies });
@@ -69,6 +73,18 @@ export async function prepareKindeCandidateOwner({
     });
     const previous = await readLocal(owner);
     if (!scoped()) throw new KindeCandidateBoundaryError();
+    if (previous?.cloudflareDelivery) {
+        if (previous.consentRevision !== principal.healthConsentRevision
+            || !equal(previous.data.legalConsent, first.legalConsent)) throw new KindeCandidateBoundaryError();
+        // The checkpoint cannot replace a baseline while a delivery might
+        // already have committed. Reconcile its receipt before scanning and
+        // leave any later journal entries for the normal sync path.
+        const deliveryOutcome = await deliverKindeCandidateJournal({ ...pinnedRequest, recoverStagedFor: principal });
+        if (!scoped()) throw new KindeCandidateBoundaryError();
+        if (deliveryOutcome === 'retry-staged' || deliveryOutcome === 'reconciliation-required') {
+            return { kind: 'delivery-pending', deliveryOutcome };
+        }
+    }
     // Hydration correctly refuses to overwrite a baseline while a claim is
     // staged. Recover that exact request before attempting another scan.
     const recovering = Boolean(previous?.cloudflareReplicaClaim);

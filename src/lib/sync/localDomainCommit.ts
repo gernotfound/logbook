@@ -8,7 +8,7 @@ import { generateId } from '../utils/date';
 import { type SemanticOperation } from './semanticProjection';
 import { getCachedCatalog } from '../catalog/catalogService';
 import { normalizeStorageOwner } from './owner';
-import { readDeviceValueStrict } from './deviceStorage';
+import { readDeviceValueStrict } from './deviceStorageRead';
 import { requireBusinessId } from '../businessIdentity';
 import {
     applyDomainOperations,
