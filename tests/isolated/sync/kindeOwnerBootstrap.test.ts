@@ -557,7 +557,7 @@ describe('Kinde-only device vault provisioning and authenticated baseline', () =
                 stillCurrent: () => current,
             })).rejects.toThrow();
             expect(isVaultUnlocked(owner)).toBe(false);
-            expect(observed.slice(before).filter(path => path === '/v1/rights/scan')).toHaveLength(2);
+            expect(observed.slice(before).filter(path => path === '/v1/rights/scan')).toHaveLength(3);
             expect(observed.slice(before)).not.toContain('/v1/sync/scan');
             expect(observed.slice(before)).not.toContain('/v1/cloud-key/sync');
             expect(observed.slice(before)).not.toContain('/v1/sync/commit');
