@@ -1,5 +1,6 @@
 import React from 'react';
 import { describe, test, expect, beforeEach } from 'vitest';
+import { screen } from '@testing-library/react';
 import { renderWithAuthenticatedTestOwner, renderWithProviders, emptyUserData } from '../../setup';
 import { prepareUnlockedTestArchive } from '../../secureVaultFixture';
 import HomeView from '../../../src/components/Home/HomeView';
@@ -13,25 +14,61 @@ import SettingsView from '../../../src/components/SettingsView';
 describe('Cross-module minimal data UI fail-safe', () => {
   beforeEach(async () => { await prepareUnlockedTestArchive(); });
 
-    test('Components render gracefully when userData has minimal/empty structures', () => {
+    const emptyViews = [
+      {
+        name: 'Home',
+        render: () => renderWithProviders(<HomeView onNavigate={() => {}} />, { userData: emptyUserData }),
+        assertVisible: () => expect(document.querySelector('#view-home')).not.toBeNull(),
+      },
+      {
+        name: 'Impostazioni',
+        render: () => renderWithProviders(<SettingsView />, { userData: emptyUserData }),
+        assertVisible: () => expect(document.querySelector('#view-settings')).not.toBeNull(),
+      },
+      {
+        name: 'Pianificazione nutrizionale',
+        render: () => renderWithProviders(<NutritionPlanning />, { userData: emptyUserData }),
+        assertVisible: () => expect(screen.getByRole('button', { name: 'Salva pianificazione' })).not.toBeNull(),
+      },
+      {
+        name: 'Sessione allenamento',
+        render: () => renderWithAuthenticatedTestOwner(<TrainingSession />, { userData: emptyUserData }),
+        assertVisible: () => expect(screen.getByRole('button', { name: 'Allenamento libero' })).not.toBeNull(),
+      },
+      {
+        name: 'Schede allenamento',
+        render: () => renderWithProviders(<TrainingRoutines />, { userData: emptyUserData }),
+        assertVisible: () => expect(screen.getByText('Nessuna scheda creata.')).not.toBeNull(),
+      },
+      {
+        name: 'Storico allenamenti',
+        render: () => renderWithProviders(<TrainingHistory />, { userData: emptyUserData }),
+        assertVisible: () => expect(screen.getByRole('heading', { name: 'Storico allenamenti' })).not.toBeNull(),
+      },
+      {
+        name: 'Libreria esercizi',
+        render: () => renderWithProviders(<TrainingExercises />, { userData: emptyUserData }),
+        assertVisible: () => expect(screen.getByRole('heading', { name: 'Esercizi' })).not.toBeNull(),
+      },
+    ];
 
-
-      expect(() => renderWithProviders(<HomeView onNavigate={() => {}} />, { userData: emptyUserData })).not.toThrow();
-      expect(() => renderWithProviders(<SettingsView />, { userData: emptyUserData })).not.toThrow();
-      expect(() => renderWithProviders(<NutritionPlanning />, { userData: emptyUserData })).not.toThrow();
-      expect(() => renderWithAuthenticatedTestOwner(<TrainingSession />, { userData: emptyUserData })).not.toThrow();
-      expect(() => renderWithProviders(<TrainingRoutines />, { userData: emptyUserData })).not.toThrow();
-      expect(() => renderWithProviders(<TrainingHistory />, { userData: emptyUserData })).not.toThrow();
-      expect(() => renderWithProviders(<TrainingExercises />, { userData: emptyUserData })).not.toThrow();
+    test.each(emptyViews)('$name mostra un contenuto osservabile con dati vuoti', ({ render, assertVisible }) => {
+      const view = render();
+      expect(view.container.firstChild).not.toBeNull();
+      assertVisible();
     });
 
-    test('NutritionPlanning without normocalorica object in nutritionPlanning renders without TypeError (Vulnerability check)', () => {
+    test('pianificazione senza normocalorica mantiene i controlli per il TDEE', () => {
       const incompleteUserData = {
+        ...emptyUserData,
         nutritionPlanning: {
-          weight: 80, avgMacros: { carbsPerKg: 3.5, proPerKg: 2.0, fatPerKg: 1.0 }
-          // normocalorica missing!
-        } as any
+          weight: 80,
+          avgMacros: { carbsPerKg: 3.5, proPerKg: 2.0, fatPerKg: 1.0 },
+        },
       };
-      expect(() => renderWithProviders(<NutritionPlanning />, { userData: incompleteUserData })).not.toThrow();
+      renderWithProviders(<NutritionPlanning />, { userData: incompleteUserData });
+      expect(screen.getByRole('heading', { name: /TDEE \(normocalorica\)/ })).toBeDefined();
+      expect(screen.getByRole('button', { name: 'Salva pianificazione' })).toBeDefined();
     });
+
 });
