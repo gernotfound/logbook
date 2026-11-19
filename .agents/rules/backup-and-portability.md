@@ -209,9 +209,10 @@ con journal e intenti e le testimonianze device. L'import business
 passa da `decodeImport` e mantiene l'owner; i testimoni tecnici e il
 journal grezzo non sono automaticamente trapiantati come ACK o riprodotti
 sull'account di destinazione. Le operazioni device e cloud non hanno
-un'unica transazione: doppia lettura di IndexedDB/localStorage rileva
-corse osservabili, senza promettere atomicità cross-tab o recupero di
-scritture mai registrate su dispositivo. Il controllo prima di costruire
+un'unica transazione: la doppia lettura iniziale di IndexedDB/localStorage,
+seguita da un'ulteriore verifica dopo il caricamento asincrono del catalogo
+e la composizione del JSON, rileva corse osservabili senza promettere
+atomicità cross-tab o recupero di scritture mai registrate su dispositivo. Il controllo prima di costruire
 il file è in sola lettura e non sincronizza né revoca dati.
 
 La separazione di `backupDeviceDraftSelection.ts` ha eliminato la
