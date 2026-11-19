@@ -2,6 +2,8 @@ import { beforeEach, afterEach, describe, test, expect, vi } from 'vitest';
 import { screen, fireEvent, act } from '@testing-library/react';
 import { useAppStore } from '../../src/store/useAppStore';
 import { DB } from '../../src/lib/db';
+import { readLocal } from '../../src/lib/sync/localRepository';
+import { captureSession } from '../../src/lib/sync/session';
 import { renderSettledApp, querySyncIndicator, setupSyncUiTest, teardownSyncUiTest } from './syncIndicatorUiFixture';
 
 // Each spec hoists its own external-boundary mocks before fixture module initialization.
@@ -116,28 +118,39 @@ describe('Sync UI — workloads', () => {
       expect(screen.getByText('Chiave cloud ancora non disponibile')).toBeDefined();
     });
 
-    test('T4.2_workload: Rapid nutrition multi-item logging with debounced batch sync', async () => {
+    test('T4.2_workload: Three valid meal edits coalesce into the final durable nutrition day', async () => {
       const saveSpy = vi.mocked(DB.saveUserData).mockResolvedValue({ ok: true, status: 'synced' });
       const { container } = await renderSettledApp();
 
-      let p1: any, p2: any, p3: any;
-      // Rapidly log 3 meals in succession within 300ms
+      const breakfast = {
+        id: 'meal-breakfast-20260822', name: 'Colazione', meal: 'colazione',
+        quantity: 1, baseQty: 1, kcal: 500, pro: 30, carbs: 60, fat: 15,
+      };
+      const lunch = {
+        id: 'meal-lunch-20260822', name: 'Pranzo', meal: 'pranzo',
+        quantity: 1, baseQty: 1, kcal: 600, pro: 40, carbs: 60, fat: 20,
+      };
+      const dinner = {
+        id: 'meal-dinner-20260822', name: 'Cena', meal: 'cena',
+        quantity: 1, baseQty: 1, kcal: 700, pro: 50, carbs: 80, fat: 20,
+      };
+      const day = (meals: typeof breakfast[]) => ({
+        date: '2026-08-22', weight: 75, meals,
+      });
+
+      let p1: Promise<unknown>, p2: Promise<unknown>, p3: Promise<unknown>;
+      // Actual meal entries, not manually invented aggregate macros: domain projection derives totals.
       await act(async () => {
-        p1 = useAppStore.getState().saveUserData((prev) => ({
-          ...prev!,
-          nutrition: { '2026-08-22': { date: '2026-08-22', weight: 75, kcal: 500, pro: 30, carbs: 60, fat: 15 } }
+        p1 = useAppStore.getState().saveUserData(prev => ({
+          ...prev!, nutrition: { '2026-08-22': day([breakfast]) },
         }));
         await vi.advanceTimersByTimeAsync(100);
-
-        p2 = useAppStore.getState().saveUserData((prev) => ({
-          ...prev!,
-          nutrition: { '2026-08-22': { date: '2026-08-22', weight: 75, kcal: 1100, pro: 70, carbs: 120, fat: 35 } }
+        p2 = useAppStore.getState().saveUserData(prev => ({
+          ...prev!, nutrition: { '2026-08-22': day([breakfast, lunch]) },
         }));
         await vi.advanceTimersByTimeAsync(100);
-
-        p3 = useAppStore.getState().saveUserData((prev) => ({
-          ...prev!,
-          nutrition: { '2026-08-22': { date: '2026-08-22', weight: 75, kcal: 1800, pro: 120, carbs: 200, fat: 55 } }
+        p3 = useAppStore.getState().saveUserData(prev => ({
+          ...prev!, nutrition: { '2026-08-22': day([breakfast, lunch, dinner]) },
         }));
       });
 
@@ -152,11 +165,19 @@ describe('Sync UI — workloads', () => {
 
       await Promise.all([p1, p2, p3]);
 
-      // The debounce must deliver the final edit, not an earlier meal snapshot.
+      // The one remote attempt must contain the final locally committed meal set.
+      const expectedTotals = { kcal: 1800, pro: 120, carbs: 200, fat: 55 };
+      const expectedMealIds = [breakfast.id, lunch.id, dinner.id];
       expect(saveSpy).toHaveBeenCalledTimes(1);
-      expect(saveSpy.mock.calls[0]?.[0]?.nutrition?.['2026-08-22']).toMatchObject({
-        date: '2026-08-22', weight: 75, kcal: 1800, pro: 120, carbs: 200, fat: 55,
-      });
+      const submittedDay = saveSpy.mock.calls[0]?.[0]?.nutrition?.['2026-08-22'];
+      expect(submittedDay).toMatchObject({ date: '2026-08-22', weight: 75, ...expectedTotals });
+      expect(submittedDay?.meals?.map(item => item.id)).toEqual(expectedMealIds);
+
+      // DB is mocked here: independently verify that the real IndexedDB envelope survived batching.
+      const durable = await readLocal(captureSession().owner);
+      const durableDay = durable?.data.nutrition?.['2026-08-22'];
+      expect(durableDay).toMatchObject({ date: '2026-08-22', ...expectedTotals });
+      expect(durableDay?.meals?.map(item => item.id)).toEqual(expectedMealIds);
       expect(useAppStore.getState().syncing).toBe(false);
       expect(screen.queryByText(/Salvataggio in corso/i)).toBeNull();
     });
