@@ -32,14 +32,14 @@ const catalog = {
     exercises: [], foods: [], cachedAt: 0,
 };
 const parse = (raw: unknown) => UserDataSchema.parse(raw);
-const backup = (height = '188') => createBackup(parse({
+const backup = (height = '188') => JSON.parse(JSON.stringify(createBackup(parse({
     profile: { height },
     legalConsent: {
         hasAcceptedTerms: true, hasAcceptedHealthData: true,
         acceptedAt: '2026-11-01T00:00:00.000Z',
         termsVersion: 'previous', privacyVersion: 'previous',
     },
-}), owner, { scope: 'cloud-and-device', months: [] });
+}), owner, { scope: 'cloud-and-device', months: [] })));
 
 type Fixture = Awaited<ReturnType<typeof createCloudKeyHttpFixture>>;
 function session(fixture: Fixture, observe: (path: string, response: Response) => Response | Promise<Response> =
@@ -86,8 +86,18 @@ describe('CF-05 Kinde Schema 3 restore to encrypted IndexedDB and D1', () => {
         try {
             await fixture.consent(uid);
             const observed: string[] = [];
-            const request = session(fixture, (path, response) => {
+            const request = session(fixture, async (path, response) => {
                 observed.push(path);
+                if (path === '/v1/sync/commit') {
+                    expect(response.status).toBe(200);
+                    // The HTTP handler has committed, but no receipt has
+                    // returned to the browser: the local journal must exist.
+                    const staged = await readLocal(owner);
+                    expect(staged?.data.profile?.height).toBe('188');
+                    expect(staged?.pending.length).toBeGreaterThan(0);
+                    expect(staged?.cloudflareDelivery).toBeDefined();
+                    expect(await get<string>('logbook:v2:' + owner)).toMatch(/^tlb-sealed:v1:/);
+                }
                 return response;
             });
             const result = await restoreKindeCandidateBackup({
