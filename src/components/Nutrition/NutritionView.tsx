@@ -10,7 +10,7 @@ import { getNutritionConflictFingerprint } from '../../lib/utils/object';
 import { useAppStore } from '../../store/useAppStore';
 import { useAuth } from '../../hooks/useAuth';
 import { useDialogStore } from '../../store/useDialogStore';
-import type { NutritionSubTab } from '../../types';
+import type { Food, NutritionSubTab } from '../../types';
 import './TrackingViews.css';
 import SubNav from '../UI/SubNav';
 
@@ -79,7 +79,7 @@ const NutritionView = ({ subTab = 'meals', setSubTab }: NutritionViewProps) => {
         }
     };
 
-    const handleEditFoodFromArchive = (food: any) => {
+    const handleEditFoodFromArchive = (food: Food) => {
         mealsHook.startEditCustomFood(food);
         if (setSubTab) {
             setSubTab('meals');
@@ -113,13 +113,13 @@ const NutritionView = ({ subTab = 'meals', setSubTab }: NutritionViewProps) => {
                         mealsHook={{
                             ...mealsHook,
                             saveCustomFood: async () => {
-                                const wasEditing = !!mealsHook.editingFoodId;
+                                const wasEditing = mealsHook.editingFoodId !== null;
                                 const saved = await mealsHook.saveCustomFood();
                                 if (wasEditing && saved && setSubTab) setSubTab('archive');
                                 return saved;
                             },
                             cancelCustomFood: () => {
-                                const wasEditing = !!mealsHook.editingFoodId;
+                                const wasEditing = mealsHook.editingFoodId !== null;
                                 mealsHook.cancelCustomFood();
                                 if (wasEditing && setSubTab) setSubTab('archive');
                             }

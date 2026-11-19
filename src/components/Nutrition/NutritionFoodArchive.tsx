@@ -9,14 +9,16 @@ import { createFoodSearcher } from '../../lib/calc/foodSearch';
 import CustomFoodForm from './CustomFoodForm';
 import { FoodArchiveSearch } from './archive/FoodArchiveSearch';
 import { createLoggedMealItem } from '../../lib/nutrition/createLoggedMealItem';
+import { customFoodDraftFrom, customFoodValidationInput, emptyCustomFoodDraft } from '../../lib/nutrition/customFoodDraft';
+import type { Food } from '../../types';
 import { FoodItemRow } from './archive/FoodItemRow';
 
 const MEAL_TYPES = ['Colazione', 'Pranzo', 'Cena', 'Spuntini'];
-const EMPTY_FOODS: any[] = [];
+const EMPTY_FOODS: Food[] = [];
 const ARCHIVE_PAGE_SIZE = 50;
 
 interface NutritionFoodArchiveProps {
-    onEditFood?: (food: any) => void;
+    onEditFood?: (food: Food) => void;
 }
 
 export default function NutritionFoodArchive({ onEditFood }: NutritionFoodArchiveProps) {
@@ -35,10 +37,7 @@ export default function NutritionFoodArchive({ onEditFood }: NutritionFoodArchiv
     // Modal states (used if onEditFood not provided)
     const [showModal, setShowModal] = useState(false);
     const [editingFoodId, setEditingFoodId] = useState<string | number | null>(null);
-    const [cfData, setCfData] = useState({
-        name: '', brand: '', unit: 'g', pieceWeight: '',
-        kcal: '', carbs: '', pro: '', fat: ''
-    });
+    const [cfData, setCfData] = useState(emptyCustomFoodDraft);
 
     const searchFoods = useMemo(() => createFoodSearcher(customFoods), [customFoods]);
     const filteredFoods = useMemo(() => searchFoods(searchQuery), [searchFoods, searchQuery]);
@@ -47,40 +46,22 @@ export default function NutritionFoodArchive({ onEditFood }: NutritionFoodArchiv
 
     const openCreateModal = () => {
         setEditingFoodId(null);
-        setCfData({
-            name: '', brand: '', unit: 'g', pieceWeight: '',
-            kcal: '', carbs: '', pro: '', fat: ''
-        });
+        setCfData(emptyCustomFoodDraft());
         setShowModal(true);
     };
 
-    const openEditModal = (food: any) => {
+    const openEditModal = (food: Food) => {
         if (onEditFood) {
             onEditFood(food);
             return;
         }
-        setEditingFoodId(food.id);
-        setCfData({
-            name: food.name || '',
-            brand: food.brand || '',
-            unit: food.unit || 'g',
-            pieceWeight: food.servingWeight ?? '',
-            kcal: food.kcal !== undefined ? food.kcal.toString() : '',
-            carbs: food.carbs !== undefined ? food.carbs.toString() : '',
-            pro: food.pro !== undefined ? food.pro.toString() : '',
-            fat: food.fat !== undefined ? food.fat.toString() : ''
-        });
+        setEditingFoodId(food.id ?? null);
+        setCfData(customFoodDraftFrom(food));
         setShowModal(true);
     };
 
     const handleSaveFood = async () => {
-        const foodData = {
-            ...cfData,
-            baseQty: 100,
-            servingWeight: cfData.unit === 'pezzo' ? cfData.pieceWeight : null
-        };
-
-        const validation = Logic.validateCustomFood(foodData);
+        const validation = Logic.validateCustomFood(customFoodValidationInput(cfData));
         if (!validation.isValid) {
             await showAlert("Attenzione: errori nei dati dell'alimento:\n" + Object.values(validation.errors).join('\n'));
             return;
@@ -90,18 +71,23 @@ export default function NutritionFoodArchive({ onEditFood }: NutritionFoodArchiv
 
         const currentEditingId = editingFoodId;
         const cleanData = validation.cleanData;
+        let session: ReturnType<typeof captureSession>;
+        try { session = captureSession(); } catch { return; }
 
         try {
             const id = currentEditingId ?? Logic.generateId('food');
-            await dispatchDurableOperation(dispatchDomainOperation, { type: 'food.upsert', food: { ...cleanData, id } as any });
+            await dispatchDurableOperation(dispatchDomainOperation, { type: 'food.upsert', food: { ...cleanData, id } });
+            if (!isCurrentSession(session)) return;
             setShowModal(false);
             setEditingFoodId(null);
         } catch {
-            await showAlert("Errore durante il salvataggio dell'alimento.");
+            if (isCurrentSession(session)) await showAlert("Errore durante il salvataggio dell'alimento.");
         }
     };
 
-    const handleDuplicateFood = async (food: any) => {
+    const handleDuplicateFood = async (food: Food) => {
+        let session: ReturnType<typeof captureSession>;
+        try { session = captureSession(); } catch { return; }
         const newName = Logic.generateUniqueName(food.name, customFoods.map(f => f.name));
         const duplicated = {
             ...food,
@@ -111,11 +97,17 @@ export default function NutritionFoodArchive({ onEditFood }: NutritionFoodArchiv
         try {
             await dispatchDurableOperation(dispatchDomainOperation, { type: 'food.upsert', food: duplicated });
         } catch {
-            await showAlert('Errore durante la duplicazione.');
+            if (isCurrentSession(session)) await showAlert('Errore durante la duplicazione.');
         }
     };
 
-    const handleDeleteFood = async (food: any) => {
+    const handleDeleteFood = async (food: Food) => {
+        const foodId = food.id;
+        if (foodId === undefined || (typeof foodId === 'string' && !foodId.trim())
+            || (typeof foodId === 'number' && !Number.isFinite(foodId))) {
+            await showAlert('Impossibile eliminare un alimento senza identificativo valido.');
+            return;
+        }
         // The confirmation belongs to the session that opened it, not to any
         // new owner or consent generation that may become active meanwhile.
         let session: ReturnType<typeof captureSession>;
@@ -128,20 +120,22 @@ export default function NutritionFoodArchive({ onEditFood }: NutritionFoodArchiv
         if (!confirmed || !isCurrentSession(session)) return;
 
         try {
-            await dispatchDurableOperation(dispatchDomainOperation, { type: 'food.delete', id: food.id });
+            await dispatchDurableOperation(dispatchDomainOperation, { type: 'food.delete', id: foodId });
         } catch {
             if (isCurrentSession(session)) await showAlert("Errore durante l'eliminazione dell'alimento.");
         }
     };
 
-    const handleQuickAddToMeal = async (food: any, mealType: string) => {
+    const handleQuickAddToMeal = async (food: Food, mealType: string) => {
+        let session: ReturnType<typeof captureSession>;
+        try { session = captureSession(); } catch { return; }
         const todayDateStr = Logic.getLocalDateString();
 
         try {
             const addedItem = createLoggedMealItem(food, mealType, Logic.generateId('meal'), Date.now());
             await dispatchDurableOperation(dispatchDomainOperation, { type: 'nutrition-meal.upsert', date: todayDateStr, meal: addedItem });
         } catch {
-            await showAlert("Errore durante l'aggiunta dell'alimento.");
+            if (isCurrentSession(session)) await showAlert("Errore durante l'aggiunta dell'alimento.");
         }
     };
 
@@ -175,7 +169,7 @@ export default function NutritionFoodArchive({ onEditFood }: NutritionFoodArchiv
                     saveCustomFood={handleSaveFood}
                     showCustomModal={showModal}
                     setShowCustomModal={setShowModal}
-                    isEditing={!!editingFoodId}
+                    isEditing={editingFoodId !== null}
                     onCancel={() => {
                         setShowModal(false);
                         setEditingFoodId(null);
@@ -212,7 +206,7 @@ export default function NutritionFoodArchive({ onEditFood }: NutritionFoodArchiv
                     </div>
                 ) : (
                     <>
-                    {visibleFoods.map((f: any, idx: number) => (
+                    {visibleFoods.map((f, idx) => (
                         <FoodItemRow
                             key={f.id || idx}
                             food={f}

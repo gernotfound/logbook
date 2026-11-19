@@ -1,15 +1,16 @@
 import React from 'react';
 import { Pencil, Copy, Trash2 } from 'lucide-react';
 import { ContextMenu } from '../../UI/ContextMenu';
+import type { Food } from '../../../types';
 
 interface FoodItemRowProps {
-    food: any;
+    food: Food;
     isLast: boolean;
     mealTypes: string[];
-    onEdit: (food: any) => void;
-    onDelete: (food: any) => void;
-    onDuplicate: (food: any) => void;
-    onQuickAddToMeal: (food: any, mealType: string) => void;
+    onEdit: (food: Food) => void;
+    onDelete: (food: Food) => void;
+    onDuplicate: (food: Food) => void;
+    onQuickAddToMeal: (food: Food, mealType: string) => void;
 }
 
 export const FoodItemRow: React.FC<FoodItemRowProps> = ({

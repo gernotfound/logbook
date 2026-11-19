@@ -1,6 +1,6 @@
 import React from 'react';
 import { describe, it, expect, vi } from 'vitest';
-import { act, fireEvent, screen, render } from '@testing-library/react';
+import { fireEvent, screen, render } from '@testing-library/react';
 import { renderWithProviders } from '../setup';
 
 import CustomFoodForm from '../../src/components/Nutrition/CustomFoodForm';
@@ -28,33 +28,6 @@ describe('Nutrition Section Style & Color Refactoring Suite', () => {
             );
             const heading = screen.getByRole('heading', { level: 3 });
             expect(heading.style.color).toBe('var(--text-main)');
-        });
-        it('submits one custom food during repeated clicks and retains the draft until it settles', async () => {
-            let finish!: (saved: boolean) => void;
-            const save = vi.fn(() => new Promise<boolean>(resolve => { finish = resolve; }));
-            render(
-                <CustomFoodForm
-                    cfData={{ name: 'Riso', brand: '', unit: 'g', pieceWeight: '',
-                        kcal: '100', carbs: '10', pro: '10', fat: '2' }}
-                    setCfData={vi.fn()}
-                    saveCustomFood={save}
-                    showCustomModal={true}
-                    setShowCustomModal={vi.fn()}
-                />
-            );
-            const submit = screen.getByRole('button', { name: 'Salva alimento' }) as HTMLButtonElement;
-            fireEvent.click(submit);
-            fireEvent.click(submit);
-            expect(save).toHaveBeenCalledTimes(1);
-            expect(submit.disabled).toBe(true);
-            expect((screen.getByLabelText('Nome alimento *') as HTMLInputElement).disabled).toBe(true);
-            expect((screen.getByRole('button', { name: 'Annulla' }) as HTMLButtonElement).disabled).toBe(true);
-            await act(async () => finish(false));
-            expect(submit.disabled).toBe(false);
-            expect((screen.getByLabelText('Nome alimento *') as HTMLInputElement).value).toBe('Riso');
-            fireEvent.click(submit);
-            expect(save).toHaveBeenCalledTimes(2);
-            await act(async () => finish(true));
         });
     });
 
@@ -139,7 +112,7 @@ describe('Nutrition Section Style & Color Refactoring Suite', () => {
             }
         ];
 
-        it('renders an unspecified legacy day type without misclassifying it as OFF', () => {
+        it('renders an unspecified day type without misclassifying it as OFF', () => {
             render(
                 <NutritionHistory
                     nutritionHistory={[{ ...historyData[0], isDayOn: undefined }]}

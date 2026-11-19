@@ -1,10 +1,11 @@
 import { useRef, useState } from 'react';
 import { Pencil, Plus, Save } from 'lucide-react';
 import { calculateCustomFoodKcal } from '../../lib/nutrition/calculateCustomFoodKcal';
+import type { CustomFoodDraft } from '../../lib/nutrition/customFoodDraft';
 
 interface CustomFoodFormProps {
-    cfData: any;
-    setCfData: (data: any) => void;
+    cfData: CustomFoodDraft;
+    setCfData: (data: CustomFoodDraft) => void;
     saveCustomFood: () => Promise<void | boolean>;
     showCustomModal: boolean;
     setShowCustomModal: (show: boolean) => void;

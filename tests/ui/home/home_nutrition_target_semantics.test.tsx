@@ -41,4 +41,22 @@ describe('Home nutrition target semantics', () => {
         });
         expect(screen.getByTestId('calorie-goal').textContent).toBe('2300');
     });
+
+    it('does not present invalid manual calorie goals as a trustworthy target', () => {
+        function Target() {
+            const state = useHomeView(false);
+            return <output data-testid="calorie-goal">{state.loading ? 'loading' : state.kcalTarget}</output>;
+        }
+        for (const kcal of [Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY, Number.NaN, -200]) {
+            const view = renderWithProviders(<Target />, {
+                userData: {
+                    ...emptyUserData,
+                    nutritionPlanning: { ...emptyUserData.nutritionPlanning!, normocalorica: { kcal } },
+                },
+            });
+            expect(screen.getByTestId('calorie-goal').textContent).toBe('0');
+            view.unmount();
+        }
+    });
+
 });

@@ -1,61 +1,36 @@
 import { useState, useMemo, useCallback, useEffect } from 'react';
-import { subDays, format } from 'date-fns';
+import type { Exercise, NutritionDay, WorkoutSession } from '../types';
+import { calculateHomeWeightSeries, selectLatestHomeMeasurements, summarizeHomeNutrition, type HomeWeightPeriod, type HomeWeightStats } from '../lib/calc/homeHealthMetrics';
 import { useAppStore } from '../store/useAppStore';
-import { Logic } from '../lib/logic';
-import { computeWeeklyWeightSeries } from '../lib/calc/analytics';
-import { parseDateInput } from '../lib/utils/date';
-import { parsePositiveWeight } from '../lib/calc/workout';
+import { GROUP_MAP } from '../lib/constants/muscles';
+import { getLocalDateString } from '../lib/utils/date';
+import { buildHomeMuscleExposureIndex, calculateHomeWorkoutStreak, getHomeWorkoutDate, getRecentHomeMuscles } from '../lib/calc/homeTrainingMetrics';
 
 const HOME_CLOCK_REFRESH_MS = 60 * 1000;
 
-function getWorkoutTimestamp(w: any): number | null {
-    if (!w) return null;
-    if (typeof w.globalStartTime === 'number' && !isNaN(w.globalStartTime)) return w.globalStartTime;
-    if (typeof w.globalEndTime === 'number' && !isNaN(w.globalEndTime)) return w.globalEndTime;
-    if (w.date) {
-        const parsed = new Date(w.date.includes('T') ? w.date : `${w.date}T12:00:00`).getTime();
-        if (!isNaN(parsed)) return parsed;
-    }
-    return null;
-}
-
-function getWorkoutDateStr(w: any): string | null {
-    if (!w) return null;
-    if (w.date) return w.date;
-    const ts = getWorkoutTimestamp(w);
-    return ts ? Logic.getLocalDateString(ts) : null;
-}
-
-function calcStreak(history: any[], nowMs: number): number {
-    if (!history || history.length === 0) return 0;
-    const workoutDates = new Set<string>(
-        history
-            .map((w: any) => getWorkoutDateStr(w))
-            .filter((d): d is string => Boolean(d))
-    );
-
-    let streak = 0;
-    const today = new Date(nowMs);
-    const todayStr = format(today, 'yyyy-MM-dd');
-    const yesterdayStr = format(subDays(today, 1), 'yyyy-MM-dd');
-    
-    // Check if worked out today or yesterday to begin streak count
-    let cur = workoutDates.has(todayStr) 
-        ? today 
-        : (workoutDates.has(yesterdayStr) ? subDays(today, 1) : null);
-    
-    if (!cur) return 0;
-    
-    while (true) {
-        const dateStr = format(cur, 'yyyy-MM-dd');
-        if (workoutDates.has(dateStr)) {
-            streak++;
-            cur = subDays(cur, 1);
-        } else {
-            break;
-        }
-    }
-    return streak;
+function buildHomeWeightChart(series: ReturnType<typeof calculateHomeWeightSeries>) {
+    const numDays = series.points.length;
+    return {
+        labels: series.dates.map(date => {
+            const parts = date.split('-');
+            return numDays <= 180
+                ? `${parts[2]}/${parts[1]}`
+                : `${parts[2]}/${parts[1]}/${parts[0].slice(2)}`;
+        }),
+        datasets: [{
+            label: 'Peso corporeo (kg)',
+            data: series.points,
+            tension: 0.35,
+            borderWidth: 2.5,
+            pointRadius: numDays <= 7 ? 5 : (numDays <= 30 ? 4 : (numDays <= 180 ? 3 : 2)),
+            pointHoverRadius: 7,
+            pointBorderWidth: 2,
+            pointHoverBackgroundColor: '#ffffff',
+            pointHoverBorderColor: '#38bdf8',
+            pointHoverBorderWidth: 3,
+            spanGaps: true,
+        }],
+    };
 }
 
 export type HomeViewState = 
@@ -63,7 +38,7 @@ export type HomeViewState =
     | {
         loading: false;
         isRestDay: boolean;
-        todaysWorkout: any;
+        todaysWorkout: WorkoutSession | undefined;
         kcalEaten: number;
         carbs: number;
         pro: number;
@@ -73,24 +48,24 @@ export type HomeViewState =
         bfSource: string | null;
         streak: number;
         totalWorkouts: number;
-        chartData: any;
-        weightPeriod: string;
-        setWeightPeriod: (p: any) => void;
-        weightStats: any;
+        chartData: ReturnType<typeof buildHomeWeightChart>;
+        weightPeriod: HomeWeightPeriod;
+        setWeightPeriod: (p: HomeWeightPeriod) => void;
+        weightStats: HomeWeightStats;
         lastRecordedWeight: number | null;
-        muscleColors: any;
+        muscleColors: Record<string, string>;
         activePains: string[];
         painColors: Record<string, string>;
         toggleActivePain: (muscleId: string) => void;
-        history: any[];
-        nutrition: Record<string, any>;
-        library: any[];
+        history: WorkoutSession[];
+        nutrition: Record<string, NutritionDay>;
+        library: Exercise[];
         userWeight: number;
     };
 
-const EMPTY_HISTORY: any[] = [];
-const EMPTY_NUTRITION: Record<string, any> = {};
-const EMPTY_LIBRARY: any[] = [];
+const EMPTY_HISTORY: WorkoutSession[] = [];
+const EMPTY_NUTRITION: Record<string, NutritionDay> = {};
+const EMPTY_LIBRARY: Exercise[] = [];
 const EMPTY_PAINS: string[] = [];
 
 export function useHomeView(isActive = true): HomeViewState {
@@ -102,7 +77,7 @@ export function useHomeView(isActive = true): HomeViewState {
     const dispatchDomainOperation = useAppStore(state => state.dispatchDomainOperation);
     const nutritionPlanning = useAppStore(state => state.userData?.nutritionPlanning);
     const [homeClockNow, setHomeClockNow] = useState(() => Date.now());
-    const homeDay = Logic.getLocalDateString(homeClockNow);
+    const homeDay = getLocalDateString(homeClockNow);
 
     useEffect(() => {
         if (!isActive) return;
@@ -150,7 +125,7 @@ export function useHomeView(isActive = true): HomeViewState {
         (activePains || []).forEach(mId => {
             if (!mId || typeof mId !== 'string') return;
             colors[mId] = DANGER_COLOR;
-            const atomicPaths = (Logic.GROUP_MAP as any)[mId];
+            const atomicPaths = GROUP_MAP[mId];
             if (Array.isArray(atomicPaths)) {
                 atomicPaths.forEach((path: string) => {
                     colors[path] = DANGER_COLOR;
@@ -172,180 +147,36 @@ export function useHomeView(isActive = true): HomeViewState {
     }, [activePains, dispatchDomainOperation]);
 
     // useMemo hooks MUST be called unconditionally (before any conditional return)
-    const streak = useMemo(() => calcStreak(history, new Date(`${homeDay}T12:00:00`).getTime()), [history, homeDay]);
+    const streak = useMemo(() => calculateHomeWorkoutStreak(history, new Date(`${homeDay}T12:00:00`).getTime()), [history, homeDay]);
     const totalWorkouts = history.length;
 
     // Pre-calcola una Map per cercare gli esercizi in O(1) invece di O(n) ad ogni iterazione dello storico
-    const libraryMap = useMemo(() => new Map(library.map((l: any) => [l.id, l])), [library]);
+    const libraryMap = useMemo(() => new Map(library.map((l): [string, Exercise] => [l.id, l])), [library]);
 
-    // Build the factual muscle-exposure index only when training data changes.
-    // A clock tick must not repeatedly inspect every historical exercise and set.
-    const exposureIndex = useMemo(() => {
-        const entries: { time: number; muscles: string[] }[] = [];
-        for (const workout of history) {
-            const time = getWorkoutTimestamp(workout);
-            if (!time) continue;
-            const muscles = new Set<string>();
-            for (const exercise of workout.exercises || []) {
-                const libraryExercise = libraryMap.get(exercise.exId);
-                if (!libraryExercise) continue;
-                const hasWorkSet = (exercise.sets || []).some((set: any) => {
-                    const hasValues = (set.kg !== undefined && set.kg !== '') || (set.reps !== undefined && set.reps !== '') || (set.time !== undefined && set.time !== '');
-                    return set.done === true || hasValues || set.done === undefined;
-                });
-                if (!hasWorkSet) continue;
-                for (const muscleId of [...(libraryExercise.muscles || []), ...(libraryExercise.secondaryMuscles || [])]) {
-                    if (!muscleId || typeof muscleId !== 'string') continue;
-                    const atomicPaths = (Logic.GROUP_MAP as any)[muscleId] || [muscleId];
-                    for (const path of atomicPaths) muscles.add(path);
-                    muscles.add(muscleId);
-                }
-            }
-            if (muscles.size) entries.push({ time, muscles: [...muscles] });
-        }
-        return entries.sort((a, b) => a.time - b.time);
-    }, [history, libraryMap]);
-
-    // The 72-hour window is inclusive, and future-dated sessions must not
-    // count until the clock reaches them. Weekly chart volume is separate.
+    const exposureIndex = useMemo(
+        () => buildHomeMuscleExposureIndex(history, libraryMap),
+        [history, libraryMap],
+    );
     const muscleColors = useMemo(() => {
         const colors: Record<string, string> = {};
-        const earliest = homeClockNow - 72 * 60 * 60 * 1000;
-        let low = 0;
-        let high = exposureIndex.length;
-        while (low < high) {
-            const mid = Math.floor((low + high) / 2);
-            if (exposureIndex[mid].time <= homeClockNow) low = mid + 1;
-            else high = mid;
-        }
-        for (let index = low - 1; index >= 0 && exposureIndex[index].time >= earliest; index--) {
-            for (const muscleId of exposureIndex[index].muscles) {
-                colors[muscleId] = 'var(--muscle-recent)';
-            }
+        for (const id of getRecentHomeMuscles(exposureIndex, homeClockNow)) {
+            colors[id] = 'var(--muscle-recent)';
         }
         return colors;
     }, [exposureIndex, homeClockNow]);
 
-    // Persisted nutrition keys use the same canonical local dates as monthly shards.
-    const { recentWeight, recentNutritionWithBf } = useMemo(() => {
-        let weight: number | undefined;
-        let bfDay: (typeof nutrition)[string] | undefined;
-        let weightDate = '';
-        let bfDate = '';
-        for (const [date, day] of Object.entries(nutrition)) {
-            if (parseDateInput(date) !== date) continue;
-            if (date > weightDate && day?.weight !== undefined && day?.weight !== null && day?.weight !== '') {
-                const candidate = parsePositiveWeight(day.weight);
-                if (candidate !== null) {
-                    weight = candidate;
-                    weightDate = date;
-                }
-            }
-            if (date > bfDate && day?.bf !== undefined && day?.bf !== null && day?.bf !== '') {
-                bfDay = day;
-                bfDate = date;
-            }
-        }
-        return { recentWeight: weight, recentNutritionWithBf: bfDay };
-    }, [nutrition]);
+    const latestMeasurements = useMemo(() => selectLatestHomeMeasurements(nutrition), [nutrition]);
 
     // Chart Logic (Configured period: 7d, 30d, 180d, 365d)
-    const [weightPeriod, setWeightPeriod] = useState<'7d' | '30d' | '180d' | '365d'>('7d');
+    const [weightPeriod, setWeightPeriod] = useState<HomeWeightPeriod>('7d');
 
     const { chartData, weightStats } = useMemo(() => {
-        const daysMap: Record<string, number> = {
-            '7d': 7,
-            '30d': 30,
-            '180d': 180,
-            '365d': 365
-        };
-        const numDays = daysMap[weightPeriod] || 7;
-        const today = new Date(`${homeDay}T12:00:00`);
-
-        const dateRange: string[] = [];
-        for (let i = numDays - 1; i >= 0; i--) {
-            dateRange.push(format(subDays(today, i), 'yyyy-MM-dd'));
-        }
-
-        const points: (number | null)[] = [];
-        const validWeights: number[] = [];
-
-        dateRange.forEach(d => {
-            const w = nutrition[d]?.weight;
-            const parsedWeight = parsePositiveWeight(w);
-            if (parsedWeight !== null) {
-                points.push(parsedWeight);
-                validWeights.push(parsedWeight);
-            } else {
-                points.push(null);
-            }
-        });
-
-        const hasDataInPeriod = validWeights.length > 0;
-        const latestWeight = hasDataInPeriod ? validWeights[validWeights.length - 1] : null;
-        const firstWeight = hasDataInPeriod ? validWeights[0] : null;
-        const weightDelta = (hasDataInPeriod && validWeights.length >= 2 && latestWeight !== null && firstWeight !== null)
-            ? (latestWeight - firstWeight)
-            : null;
-        const minWeight = hasDataInPeriod ? Math.min(...validWeights) : null;
-        const maxWeight = hasDataInPeriod ? Math.max(...validWeights) : null;
-        const weeksMap: Record<string, number> = { '7d': 1, '30d': 5, '180d': 26, '365d': 52 };
-        const weeklyWeight = computeWeeklyWeightSeries(nutrition, weeksMap[weightPeriod] || 1, today);
-        const latestWeeklyAverage = weeklyWeight.stats.latestAverageWeightKg;
-        const latestWeeklyCoverage = {
-            recordedDays: weeklyWeight.stats.latestRecordedDaysCount,
-            daysConsidered: weeklyWeight.stats.latestDaysConsidered,
-        };
-        const recentWeeklyAverages = weeklyWeight.points
-            .filter(point => point.averageWeightKg !== null)
-            .slice(-4);
-
-        const labels = dateRange.map(d => {
-            const parts = d.split('-');
-            if (numDays <= 180) {
-                return `${parts[2]}/${parts[1]}`;
-            } else {
-                return `${parts[2]}/${parts[1]}/${parts[0].slice(2)}`;
-            }
-        });
-
-        const cData = {
-            labels,
-            datasets: [
-                {
-                    label: 'Peso corporeo (kg)',
-                    data: points,
-                    tension: 0.35,
-                    borderWidth: 2.5,
-                    pointRadius: numDays <= 7 ? 5 : (numDays <= 30 ? 4 : (numDays <= 180 ? 3 : 2)),
-                    pointHoverRadius: 7,
-                    pointBorderWidth: 2,
-                    pointHoverBackgroundColor: '#ffffff',
-                    pointHoverBorderColor: '#38bdf8',
-                    pointHoverBorderWidth: 3,
-                    spanGaps: true
-                }
-            ]
-        };
-
-        return {
-            chartData: cData,
-            weightStats: {
-                hasDataInPeriod,
-                latestWeight,
-                firstWeight,
-                weightDelta,
-                minWeight,
-                maxWeight,
-                latestWeeklyAverage,
-                latestWeeklyCoverage,
-                recentWeeklyAverages
-            }
-        };
+        const series = calculateHomeWeightSeries(nutrition, weightPeriod, homeDay);
+        return { chartData: buildHomeWeightChart(series), weightStats: series.stats };
     }, [nutrition, weightPeriod, homeDay]);
 
     const todaysWorkout = useMemo(
-        () => history.find((s: any) => getWorkoutDateStr(s) === homeDay),
+        () => history.find(s => getHomeWorkoutDate(s) === homeDay),
         [history, homeDay]
     );
 
@@ -354,58 +185,9 @@ export function useHomeView(isActive = true): HomeViewState {
         return { loading: true };
     }
 
-    const todayStr = homeDay;
     const isRestDay = !todaysWorkout;
-
-    // Calculate today's nutrition
-    const todayNutrition = nutrition[todayStr] || { kcal: 0, carbs: 0, pro: 0, fat: 0 };
-    const kcalEaten = todayNutrition.kcal || 0;
-    const carbs = todayNutrition.carbs || 0;
-    const pro = todayNutrition.pro || 0;
-    const fat = todayNutrition.fat || 0;
-
-    // Get Targets from planning
-    let kcalTarget = nutritionPlanning?.normocalorica?.kcal || 0;
-    
-    if (nutritionPlanning) {
-        const isDayOn = todayNutrition.isDayOn;
-        
-        const latestWeight = parseFloat(String(recentWeight)) || 80;
-        const w = nutritionPlanning.weight || latestWeight;
-        const targetMacros = isDayOn === true
-            ? nutritionPlanning.onMacros
-            : isDayOn === false
-                ? nutritionPlanning.offMacros
-                : undefined;
-        
-        if (targetMacros) {
-            const calc = Logic.calculateMacrosFromKg(w, targetMacros.carbsPerKg, targetMacros.proPerKg, targetMacros.fatPerKg);
-            kcalTarget = Math.round(calc.totalKcal);
-        }
-    }
-    
-    // Get BF % — use today's or most recent measurement
-    const currentWeight = todayNutrition.weight || 
-                          recentWeight || 
-                          nutritionPlanning?.weight || 80;
-    const resolvedUserWeight = typeof currentWeight === 'number' ? currentWeight : (parseFloat(String(currentWeight)) || 80);
-    
-    let bf = "--";
-    let bfSource: string | null = null;
-    const selectedBfDay = (todayNutrition.bf !== undefined && todayNutrition.bf !== null && todayNutrition.bf !== '')
-        ? todayNutrition
-        : recentNutritionWithBf;
-    const directBf = selectedBfDay?.bf;
-
-    if (directBf !== undefined && directBf !== null && directBf !== '') {
-        const num = parseFloat(String(directBf));
-        if (!isNaN(num)) {
-            bf = num.toFixed(1);
-            bfSource = selectedBfDay?.bfProvenance?.method === 'us_navy'
-                ? 'US Navy'
-                : 'Origine non disponibile';
-        }
-    }
+    const { kcalEaten, carbs, pro, fat, kcalTarget, bf, bfSource, userWeight } =
+        summarizeHomeNutrition(nutrition[homeDay], nutritionPlanning, latestMeasurements);
 
     return {
         loading: false,
@@ -414,10 +196,10 @@ export function useHomeView(isActive = true): HomeViewState {
         bf, bfSource, streak, totalWorkouts,
         chartData,
         weightPeriod, setWeightPeriod, weightStats,
-        lastRecordedWeight: recentWeight ?? null,
+        lastRecordedWeight: latestMeasurements.recentWeight ?? null,
         muscleColors,
         activePains, painColors, toggleActivePain,
         history, nutrition, library,
-        userWeight: resolvedUserWeight
+        userWeight
     };
 }

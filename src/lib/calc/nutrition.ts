@@ -1,5 +1,6 @@
 import { calculateBodyFat } from './bodyFat';
-import type { UserData } from '../../types';
+import type { NutritionPlanning, UserData } from '../../types';
+import { parsePositiveWeight } from './workout';
 import { parseDateInput } from '../utils/date';
 
 // Require complete numeric input: parseFloat incorrectly accepts strings with
@@ -116,11 +117,32 @@ export function calculateMacrosFromKg(
     };
 }
 
+/** A single ON/OFF target policy shared by Home and the meal journal. */
+export function calculateDailyMacroTarget(
+    planning: NutritionPlanning | null | undefined,
+    isDayOn: boolean | undefined,
+    observedWeight: number,
+): { kcal: number; carbs: number; pro: number; fat: number } | null {
+    const ratios = isDayOn === true
+        ? planning?.onMacros
+        : isDayOn === false ? planning?.offMacros : undefined;
+    if (!ratios) return null;
+    const weight = parsePositiveWeight(planning?.weight) ?? parsePositiveWeight(observedWeight) ?? 80;
+    const totals = calculateMacrosFromKg(weight, ratios.carbsPerKg, ratios.proPerKg, ratios.fatPerKg);
+    return {
+        kcal: totals.totalKcal,
+        carbs: Math.round(totals.carbsGrams),
+        pro: Math.round(totals.proGrams),
+        fat: Math.round(totals.fatGrams),
+    };
+}
+
 export function calculateTDEEAndMacros(state: Partial<UserData> | null) {
     if (!state) return { tdee: 2500, bf: null, carbs: 300, pro: 160, fat: 70, totalKcal: 2500 };
     let tdeeVal = 2500;
-    if (state.nutritionPlanning && state.nutritionPlanning.normocalorica && state.nutritionPlanning.normocalorica.kcal) {
-        tdeeVal = state.nutritionPlanning.normocalorica.kcal;
+    const manualKcal = state.nutritionPlanning?.normocalorica?.kcal;
+    if (typeof manualKcal === 'number' && Number.isFinite(manualKcal) && manualKcal > 0) {
+        tdeeVal = manualKcal;
     }
     const nutrition = state.nutrition;
     if (nutrition && typeof nutrition === 'object') {
