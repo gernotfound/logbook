@@ -22,6 +22,12 @@ function validReceipt(value: unknown, expected: Principal): value is {
 
 const VERSION = /^[A-Za-z0-9._-]{1,32}$/;
 
+function originalConsentingPrincipal(expected: Readonly<Principal>): boolean {
+    return expected?.healthConsentRevision === 1
+        && typeof expected.uid === 'string' && /^k_[A-Za-z0-9_-]{43}$/.test(expected.uid)
+        && Number.isSafeInteger(expected.fenceEpoch) && expected.fenceEpoch >= 1;
+}
+
 /**
  * Rights and revocation remain available if email verification was lost AFTER
  * the original acceptance. The fitness reader intentionally rejects that
@@ -115,9 +121,7 @@ export async function withdrawKindeCandidateHealthConsent({
     send?: typeof fetch;
     browserCookies?: () => string;
 }): Promise<WithdrawalProof> {
-    if (confirmsErasure !== true || expected?.healthConsentRevision !== 1
-        || typeof expected.uid !== 'string' || !/^k_[A-Za-z0-9_-]{43}$/.test(expected.uid)
-        || !Number.isSafeInteger(expected.fenceEpoch) || expected.fenceEpoch < 1) {
+    if (confirmsErasure !== true || !originalConsentingPrincipal(expected)) {
         throw new KindeCandidateBoundaryError();
     }
     const owner = userOwner(expected.uid);
@@ -187,4 +191,62 @@ export async function withdrawKindeCandidateHealthConsent({
     check();
     if (readBrowserValueStrict(marker) !== 'withdrawn') throw new KindeCandidateBoundaryError();
     return { kind: 'withdrawal-recorded', deletionStatus: receipt.deletionStatus };
+}
+
+
+/**
+ * Read-only recovery for a lost withdrawal response. A pending local marker
+ * cannot prove whether the destructive POST committed, and even a trusted
+ * ACTIVE status must never silently undo the user's withdrawal decision.
+ * Only a revalidated SQL withdrawn state may advance the durable local fence.
+ */
+export async function reconcileKindeCandidateWithdrawal({
+    expected, stillCurrent, send = fetch, browserCookies = () => document.cookie,
+}: {
+    expected: Readonly<Principal>;
+    stillCurrent: () => boolean;
+    send?: typeof fetch;
+    browserCookies?: () => string;
+}): Promise<{ kind: 'withdrawal-proven' } | { kind: 'still-unconfirmed' }> {
+    if (!originalConsentingPrincipal(expected)) throw new KindeCandidateBoundaryError();
+    const owner = userOwner(expected.uid);
+    const marker = `logbook:v2:${owner}:health-consent-withdrawal`;
+    const fence = captureKindeCandidateSessionFence({ stillCurrent, browserCookies });
+    const current = () => {
+        try {
+            return fence.stillCurrent()
+                && (readBrowserValueStrict('logbook_is_guest') ?? 'false') === 'false';
+        } catch { return false; }
+    };
+    const check = () => { if (!current()) throw new KindeCandidateBoundaryError(); };
+    check();
+    const before = readBrowserValueStrict(marker);
+    if (before !== 'pending:1' && before !== 'withdrawn') {
+        throw new KindeCandidateBoundaryError();
+    }
+
+    // The server's status endpoint authenticates UID, session, consent epoch
+    // and primary D1 evidence. Recovery never sends a second withdrawal POST.
+    const status = await readWithdrawalState(
+        expected, send, current, browserCookies, fence.csrfToken,
+    );
+    check();
+    const after = readBrowserValueStrict(marker);
+    if (after !== before && !(before === 'pending:1' && after === 'withdrawn')) {
+        throw new KindeCandidateBoundaryError();
+    }
+    if (status === 'active') {
+        // A request may still be in flight; preserving the local denial is
+        // safer than turning a stale ACTIVE read into permission to sync.
+        if (after !== 'pending:1') throw new KindeCandidateBoundaryError();
+        return { kind: 'still-unconfirmed' };
+    }
+    if (after === 'pending:1') {
+        writeBrowserValue(marker, 'withdrawn');
+        check();
+        if (readBrowserValueStrict(marker) !== 'withdrawn') {
+            throw new KindeCandidateBoundaryError();
+        }
+    }
+    return { kind: 'withdrawal-proven' };
 }
