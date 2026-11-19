@@ -165,6 +165,14 @@ function KindeAccountEntryView({
                     </div>
                 )}
             {!identityOnly && candidatePreparationEnabled && candidateLifecycleEnabled
+                && phase === 'email-unverified' && 'principal' in view
+                && view.principal.healthConsentRevision === 1 && (
+                    <Suspense fallback={<p role="status">Caricamento gestione del consenso…</p>}>
+                        <KindeCandidateWithdrawalPanel key={String(view.generation) + ':' + view.principal.uid
+                            + ':' + String(view.principal.fenceEpoch)} session={session} allowBackup={false} />
+                    </Suspense>
+                )}
+            {!identityOnly && candidatePreparationEnabled && candidateLifecycleEnabled
                 && 'principal' in view && view.principal.healthConsentRevision === 1
                 && (phase === 'consent-suspended' || phase === 'email-unverified') && (
                     <Suspense fallback={<p role="status">Caricamento accesso ai dati…</p>}>
