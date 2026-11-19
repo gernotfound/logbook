@@ -30,6 +30,26 @@ L'ingresso di test `KindeAccountEntry`, con attivazione esplicita `candidatePrep
 
 **NO-GO pubblico invariato:** il provider montato `KindeAccountSessionProvider` resta `identityOnly: true`, `candidatePreparationEnabled: false`, la schermata in `App.tsx` usa ancora `KindeAccountEntry identityOnly` e il frontend Cloudflare non possiede `D1_API` nel readback del 19/11. Questo lavoro collega il passo UX **nella composizione candidata**, non abilita consenso/dati cloud per gli utenti del sito. Servono grant fitness legato al lifecycle, owner/sync con revoca, right/export, cancellazione e collaudi browser/API live isolati prima del GO.
 
+## CF-05 — rehearsal import business del backup Kinde (candidato 19/11/2026)
+
+Il backup completo pre-revoca `kindeCandidatePortableBackup.ts`
+non si ferma alla sola validazione `decodeImport`: verifica il ripristino
+con `prepareImport(..., 'restore')` su uno stato account vuoto,
+riutilizzando l'importer di produzione e un consenso corrente
+separato dal JSON. Rifiuta il file se il risultato perde o cambia
+un qualsiasi valore dello stato `UserData`. La regressione sul
+Worker/D1 sintetico usa un documento cloud sincronizzato, un journal
+device non ancora inviato e una bozza, controllando equivalenza completa
+del business, isolamento owner e consenso non importato.
+
+**Confine:** questa è una verifica *in memoria* della proiezione di
+restore, non un'operazione di import persistita nel vault di un altro
+dispositivo. Mancano il commit Kinde in Domain Operations con journal
+durevole, la verifica di un ACK cloud e il test del restore effettivo
+multi-dispositivo; nessuna API fitness pubblica viene attivata.
+La verifica reale della copia KEK continua a richiedere autorizzazione
+e un ambiente isolato: non inserire segreti in log, CI o repository.
+
 ## CF-05 — Ripristino cold-start di D1 e registro indipendente (candidato 19/11/2026)
 
 La suite `tests/cloudflare/cf05-cloud-key-http.node.mjs` estende

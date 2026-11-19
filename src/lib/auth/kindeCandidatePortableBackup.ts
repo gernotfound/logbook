@@ -1,5 +1,5 @@
 import equal from 'fast-deep-equal';
-import { createBackup, decodeImport, type BackupPayload } from '../backup';
+import { createBackup, decodeImport, prepareImport, type BackupPayload } from '../backup';
 import { getCachedCatalog } from '../catalog/catalogService';
 import type { CachedGlobalCatalog, UserData } from '../../types';
 import { UserDataSchema } from '../schema';
@@ -135,9 +135,15 @@ function composeKindeCandidatePortableBackup(sources: Sources, catalog: CachedGl
         cloudCheckpoint: { revision: checkpoint.revision,
             fenceEpoch: checkpoint.fenceEpoch, consentRevision: checkpoint.consentRevision },
     });
-    // Exercise the production importer contract on the exact object that
-    // will be serialized, not just a second internal schema projection.
-    decodeImport(backup, owner);
+    // A valid decoder result is not yet proof that "restore" preserves the
+    // owner's complete business state. Rehearse the actual production import
+    // projection against a clean account whose current consent is independent
+    // of the JSON. This is read-only: it does NOT install data or issue a
+    // durable journal commit, and cannot prove the eventual cloud ACK.
+    const decoded = decodeImport(backup, owner);
+    const clean = UserDataSchema.parse({ legalConsent }) as unknown as UserData;
+    const rehearsal = prepareImport(clean, decoded.data, 'restore', decoded.coverage);
+    if (!equal(rehearsal.data, validated)) throw new KindeCandidateBoundaryError();
     if (!sources.isCurrent()) throw new KindeCandidateBoundaryError();
     return backup;
 }
