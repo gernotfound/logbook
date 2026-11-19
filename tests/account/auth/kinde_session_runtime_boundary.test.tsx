@@ -108,6 +108,8 @@ describe('React Kinde session boundary never promotes identity into fitness', ()
             drainPendingJournal: true, retainDeviceVault: false,
         });
         expect(args.stillCurrent()).toBe(true);
+        expect(args).not.toHaveProperty('send');
+        expect(args).not.toHaveProperty('browserCookies');
         expect(readKindeCandidateAccess).not.toHaveBeenCalled();
         expect(authenticatedIdentitySource.hasReader()).toBe(false);
     });
@@ -131,6 +133,22 @@ describe('React Kinde session boundary never promotes identity into fitness', ()
             });
             unmount();
         }
+        expect(prepareKindeCandidateOwner).not.toHaveBeenCalled();
+    });
+
+    it('does not attempt candidate preparation while a local guest is active', async () => {
+        localStorage.setItem('logbook_is_guest', 'true');
+        localStorage.setItem(GUEST_SESSION_KEY, 'guest-candidate-blocked');
+        activateGuestSession('guest-candidate-blocked');
+        const { result } = renderHook(() => useKindeAccountSession({
+            guestArchivePresent: true, identityOnly: true, candidatePreparationEnabled: true,
+        }));
+        await waitFor(() => expect(result.current.view.phase).toBe('guest-blocked'));
+        await act(async () => {
+            await expect(result.current.prepareCandidateArchive())
+                .rejects.toBeInstanceOf(KindeCandidateBoundaryError);
+        });
+        expect(readKindeCandidateIdentity).not.toHaveBeenCalled();
         expect(prepareKindeCandidateOwner).not.toHaveBeenCalled();
     });
 
