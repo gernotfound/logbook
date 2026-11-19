@@ -1,7 +1,7 @@
 import React from 'react';
 import { MoreHorizontal, Trash2 } from 'lucide-react';
 import { SessionSetRirPicker } from './SessionSetRirPicker';
-import type { SessionSetRowProps } from './SessionSetRow';
+import type { SessionSetRowProps } from './sessionSetRowTypes';
 
 interface SessionSetOptionsMenuProps extends Pick<SessionSetRowProps,
     'set' | 'sIndex' | 'exIndex' | 'trackingType' | 'isOpenMenu' | 'onToggleMenu' | 'onUpdateSet' | 'onAddSpecialSet'> {
