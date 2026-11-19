@@ -6,6 +6,7 @@ import {
     readKindeCandidateAccess, revokeKindeCandidateSession, submitKindeHostedSignIn,
 } from '../../lib/auth/kindeCandidateClient';
 import { acceptKindeCandidateInitialConsent } from '../../lib/auth/kindeCandidateConsent';
+import { prepareKindeCandidateOwner } from '../../lib/sync/kindeCandidateOwnerBootstrap';
 
 vi.mock('../../lib/auth/kindeCandidateIdentity', () => ({
     readKindeCandidateIdentity: vi.fn(),
@@ -18,6 +19,9 @@ vi.mock(import('../../lib/auth/kindeCandidateClient'), async importOriginal => (
 }));
 vi.mock('../../lib/auth/kindeCandidateConsent', () => ({
     acceptKindeCandidateInitialConsent: vi.fn(),
+}));
+vi.mock('../../lib/sync/kindeCandidateOwnerBootstrap', () => ({
+    prepareKindeCandidateOwner: vi.fn(),
 }));
 vi.mock('../../pages/PrivacyPolicy', () => ({
     PrivacyPolicy: () => <p>Informativa privacy di prova</p>,
@@ -51,6 +55,9 @@ beforeEach(() => {
     vi.mocked(readKindeCandidateAccess).mockResolvedValue(required);
     vi.mocked(acceptKindeCandidateInitialConsent).mockResolvedValue(confirmed);
     vi.mocked(revokeKindeCandidateSession).mockResolvedValue();
+    vi.mocked(prepareKindeCandidateOwner).mockResolvedValue({
+        kind: 'candidate-observed', checkpointRevision: 1, replicaOutcome: 'already-active',
+    });
 });
 afterEach(() => {
     cleanup();
@@ -118,6 +125,86 @@ describe('isolated Kinde account entry candidate', () => {
         ));
         await screen.findByText(/Identità e consenso verificati/);
         expect(submitKindeHostedSignIn).not.toHaveBeenCalled();
+    });
+
+    it('connects accepted Kinde consent to an explicit, fenced candidate vault preparation without granting fitness', async () => {
+        vi.mocked(readKindeCandidateIdentity).mockResolvedValue(verified);
+        render(<KindeAccountEntry candidatePreparationEnabled />);
+        expect(screen.queryByRole('button', { name: 'Continua' })).toBeNull();
+        const consent = await screen.findByRole('button', { name: 'Conferma consenso' });
+        for (const box of screen.getAllByRole('checkbox')) fireEvent.click(box);
+        fireEvent.click(consent);
+        await screen.findByRole('button', { name: 'Continua' });
+        expect(prepareKindeCandidateOwner).not.toHaveBeenCalled();
+        fireEvent.click(screen.getByRole('button', { name: 'Continua' }));
+        await waitFor(() => expect(prepareKindeCandidateOwner).toHaveBeenCalledTimes(1));
+        expect(vi.mocked(prepareKindeCandidateOwner).mock.calls[0][0]).toMatchObject({
+            expected: { uid: A, fenceEpoch: 1, healthConsentRevision: 1 },
+            drainPendingJournal: false, retainDeviceVault: false,
+        });
+        await screen.findByText(/Archivio cifrato verificato nel percorso candidato/);
+        expect(screen.getByText(/funzioni fitness restano disabilitate/)).toBeDefined();
+    });
+
+    it('never starts vault preparation for public identity-only, missing consent or guest sessions', async () => {
+        vi.mocked(readKindeCandidateIdentity).mockResolvedValue(verified);
+        const publicEntry = render(<KindeAccountEntry identityOnly candidatePreparationEnabled />);
+        await screen.findByText(/Sessione Kinde verificata/);
+        expect(screen.queryByRole('button', { name: 'Continua' })).toBeNull();
+        publicEntry.unmount();
+        const candidate = render(<KindeAccountEntry />);
+        await screen.findByRole('button', { name: 'Conferma consenso' });
+        expect(screen.queryByRole('button', { name: 'Continua' })).toBeNull();
+        candidate.unmount();
+        render(<KindeAccountEntry guestArchivePresent candidatePreparationEnabled />);
+        await screen.findByText(/archivio ospite/);
+        expect(prepareKindeCandidateOwner).not.toHaveBeenCalled();
+    });
+
+    it('reports pending or failed candidate setup without a false ready or fitness grant', async () => {
+        vi.mocked(readKindeCandidateIdentity).mockResolvedValue({
+            kind: 'email-verified',
+            principal: { ...principal, healthConsentRevision: 1 },
+        });
+        vi.mocked(readKindeCandidateAccess).mockResolvedValue(confirmed);
+        vi.mocked(prepareKindeCandidateOwner).mockResolvedValueOnce({
+            kind: 'delivery-pending', deliveryOutcome: 'reconciliation-required',
+        }).mockRejectedValueOnce(new Error('D1 unavailable'));
+        render(<KindeAccountEntry candidatePreparationEnabled />);
+        const continueButton = await screen.findByRole('button', { name: 'Continua' });
+        fireEvent.click(continueButton);
+        await screen.findByText(/Preparazione non ancora confermata/);
+        expect(screen.queryByText(/Archivio cifrato verificato nel percorso candidato/)).toBeNull();
+        fireEvent.click(continueButton);
+        await screen.findByRole('alert');
+        expect(screen.queryByText(/Archivio cifrato verificato nel percorso candidato/)).toBeNull();
+        expect(prepareKindeCandidateOwner).toHaveBeenCalledTimes(2);
+    });
+
+    it('discards a pending candidate vault result when the browser session changes', async () => {
+        vi.mocked(readKindeCandidateIdentity)
+            .mockResolvedValueOnce({ kind: 'email-verified',
+                principal: { ...principal, healthConsentRevision: 1 } })
+            .mockResolvedValue({ kind: 'signed-out' });
+        vi.mocked(readKindeCandidateAccess).mockResolvedValue(confirmed);
+        let finish!: (value: {
+            kind: 'candidate-observed'; checkpointRevision: number;
+            replicaOutcome: 'already-active';
+        }) => void;
+        vi.mocked(prepareKindeCandidateOwner).mockImplementationOnce(() =>
+            new Promise(resolve => { finish = resolve; }));
+        render(<KindeAccountEntry candidatePreparationEnabled />);
+        const next = await screen.findByRole('button', { name: 'Continua' });
+        fireEvent.click(next);
+        await waitFor(() => expect(prepareKindeCandidateOwner).toHaveBeenCalledTimes(1));
+        browserCsrf = REPLACEMENT_CSRF;
+        await act(async () => { window.dispatchEvent(new Event('focus')); });
+        await screen.findByRole('button', { name: 'Accedi o registrati' });
+        await act(async () => {
+            finish({ kind: 'candidate-observed', checkpointRevision: 1,
+                replicaOutcome: 'already-active' });
+        });
+        expect(screen.queryByText(/Archivio cifrato verificato nel percorso candidato/)).toBeNull();
     });
 
     it('discards consent checked before a replacement cookie even for the same account', async () => {
