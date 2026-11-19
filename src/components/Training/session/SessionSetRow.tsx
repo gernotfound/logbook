@@ -45,7 +45,6 @@ const SessionSetRowInner: React.FC<SessionSetRowProps> = ({
     const recoveryPrefix = exerciseInstanceId ? `${exerciseInstanceId}-` : '';
     const workoutId = React.useContext(BufferedWorkoutScope);
 
-
     const handleRemoveSetSafely = async () => {
         if (sessionSetHasMeaningfulData(s)) {
             const session = captureSession();
@@ -57,8 +56,6 @@ const SessionSetRowInner: React.FC<SessionSetRowProps> = ({
         onRemoveSet(exIndex, sIndex, s.id, exerciseInstanceId, workoutId, s);
         if (isOpenMenu) onToggleMenu(s.id);
     };
-
-
 
     const advancedSegments = Array.isArray(s.segments) ? s.segments : [];
 

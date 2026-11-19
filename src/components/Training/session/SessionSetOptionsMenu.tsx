@@ -39,107 +39,107 @@ export function SessionSetOptionsMenu({ set: s, sIndex, exIndex, trackingType, i
 
     return (
         <>
-                    <button
-                        ref={menuTriggerRef}
-                        type="button"
-                        className="btn-icon"
-                        style={{
-                            width: '44px',
-                            minWidth: '44px',
-                            height: '44px',
-                            minHeight: '44px',
-                            border: '1px solid var(--glass-border)',
-                            borderRadius: '12px',
-                            background: isOpenMenu ? 'var(--surface-light)' : 'transparent',
-                            color: isOpenMenu ? 'var(--primary-color)' : 'var(--text-muted)',
-                            flexShrink: 0,
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            padding: 0,
-                            margin: 0,
-                            lineHeight: 1,
-                            alignSelf: 'center'
-                        }}
-                        onClick={toggleSetMenu}
-                        aria-label={`Opzioni serie ${sIndex + 1}`}
-                        aria-expanded={isOpenMenu}
-                        aria-haspopup="menu"
-                    >
-                        <MoreHorizontal size={22} aria-hidden="true" />
-                    </button>
+            <button
+                ref={menuTriggerRef}
+                type="button"
+                className="btn-icon"
+                style={{
+                    width: '44px',
+                    minWidth: '44px',
+                    height: '44px',
+                    minHeight: '44px',
+                    border: '1px solid var(--glass-border)',
+                    borderRadius: '12px',
+                    background: isOpenMenu ? 'var(--surface-light)' : 'transparent',
+                    color: isOpenMenu ? 'var(--primary-color)' : 'var(--text-muted)',
+                    flexShrink: 0,
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    padding: 0,
+                    margin: 0,
+                    lineHeight: 1,
+                    alignSelf: 'center'
+                }}
+                onClick={toggleSetMenu}
+                aria-label={`Opzioni serie ${sIndex + 1}`}
+                aria-expanded={isOpenMenu}
+                aria-haspopup="menu"
+            >
+                <MoreHorizontal size={22} aria-hidden="true" />
+            </button>
 
-                    {isOpenMenu && (
-                        <>
-                            <div
-                                style={{ position: 'fixed', inset: 0, zIndex: 45 }}
-                                onClick={toggleSetMenu}
-                            />
-                            <div
-                                className="special-menu"
-                                style={{
-                                    position: 'absolute',
-                                    right: 0,
-                                    top: '48px',
-                                    background: 'var(--surface-color)',
-                                    padding: '10px',
-                                    borderRadius: '10px',
-                                    zIndex: 50,
-                                    width: 'min(220px, calc(100vw - 32px))',
-                                    boxShadow: '0 8px 24px rgba(0,0,0,0.8)',
-                                    border: '1px solid var(--glass-border)'
-                                }}
-                            >
-                                {trackingType !== 'time' && (
-                                    <>
-                                        <button
-                                            ref={rirTriggerRef}
-                                            type="button"
-                                            className="btn btn-small"
-                                            style={{
-                                                display: 'flex',
-                                                alignItems: 'center',
-                                                justifyContent: 'space-between',
-                                                width: '100%',
-                                                minHeight: '44px',
-                                                marginBottom: '6px'
-                                            }}
-                                            onClick={() => setIsRirOpen(open => !open)}
-                                            aria-label={`Imposta RIR serie ${sIndex + 1}: ${hasRir ? s.rir : 'non registrato'}`}
-                                            aria-expanded={isRirOpen}
-                                            aria-haspopup="menu"
-                                        >
-                                            <span>RIR</span>
-                                            <strong>{hasRir ? s.rir : '—'}</strong>
-                                        </button>
-                                        {isRirOpen && (
-                                            <SessionSetRirPicker set={s} sIndex={sIndex} firstOptionRef={firstRirOptionRef}
-                                                onEscape={() => closeRirMenu(true)} onSelect={selectRir} />
-                                        )}
-                                    </>
-                                )}
-                                {[
-                                    ['dropset', 'Dropset'],
-                                    ['rest_pause', 'Rest-pause'],
-                                    ['cluster', 'Cluster'],
-                                    ['rep_match', 'Rep-match'],
-                                    ['diminishing', 'Diminishing set'],
-                                ].map(([value, label]) => (
-                                    <button key={value} className="btn btn-small" style={{ display: 'block', width: '100%', marginBottom: '6px' }} onClick={() => onAddSpecialSet(exIndex, value, s.id)}>+ {label}</button>
-                                ))}
-                                <button className="btn btn-small" style={{ display: 'block', width: '100%', marginBottom: '6px' }} onClick={() => onAddSpecialSet(exIndex, 'isometry', s.id)}>+ Isometria</button>
+            {isOpenMenu && (
+                <>
+                    <div
+                        style={{ position: 'fixed', inset: 0, zIndex: 45 }}
+                        onClick={toggleSetMenu}
+                    />
+                    <div
+                        className="special-menu"
+                        style={{
+                            position: 'absolute',
+                            right: 0,
+                            top: '48px',
+                            background: 'var(--surface-color)',
+                            padding: '10px',
+                            borderRadius: '10px',
+                            zIndex: 50,
+                            width: 'min(220px, calc(100vw - 32px))',
+                            boxShadow: '0 8px 24px rgba(0,0,0,0.8)',
+                            border: '1px solid var(--glass-border)'
+                        }}
+                    >
+                        {trackingType !== 'time' && (
+                            <>
                                 <button
+                                    ref={rirTriggerRef}
                                     type="button"
-                                    className="btn btn-small session-set-remove-action"
-                                    style={{ display: 'flex', width: '100%', alignItems: 'center', justifyContent: 'space-between' }}
-                                    onClick={() => void onRemoveRequested()}
+                                    className="btn btn-small"
+                                    style={{
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'space-between',
+                                        width: '100%',
+                                        minHeight: '44px',
+                                        marginBottom: '6px'
+                                    }}
+                                    onClick={() => setIsRirOpen(open => !open)}
+                                    aria-label={`Imposta RIR serie ${sIndex + 1}: ${hasRir ? s.rir : 'non registrato'}`}
+                                    aria-expanded={isRirOpen}
+                                    aria-haspopup="menu"
                                 >
-                                    <span>Rimuovi questa serie</span>
-                                    <Trash2 size={18} aria-hidden="true" />
+                                    <span>RIR</span>
+                                    <strong>{hasRir ? s.rir : '—'}</strong>
                                 </button>
-                            </div>
-                        </>
-                    )}
+                                {isRirOpen && (
+                                    <SessionSetRirPicker set={s} sIndex={sIndex} firstOptionRef={firstRirOptionRef}
+                                        onEscape={() => closeRirMenu(true)} onSelect={selectRir} />
+                                )}
+                            </>
+                        )}
+                        {[
+                            ['dropset', 'Dropset'],
+                            ['rest_pause', 'Rest-pause'],
+                            ['cluster', 'Cluster'],
+                            ['rep_match', 'Rep-match'],
+                            ['diminishing', 'Diminishing set'],
+                        ].map(([value, label]) => (
+                            <button key={value} className="btn btn-small" style={{ display: 'block', width: '100%', marginBottom: '6px' }} onClick={() => onAddSpecialSet(exIndex, value, s.id)}>+ {label}</button>
+                        ))}
+                        <button className="btn btn-small" style={{ display: 'block', width: '100%', marginBottom: '6px' }} onClick={() => onAddSpecialSet(exIndex, 'isometry', s.id)}>+ Isometria</button>
+                        <button
+                            type="button"
+                            className="btn btn-small session-set-remove-action"
+                            style={{ display: 'flex', width: '100%', alignItems: 'center', justifyContent: 'space-between' }}
+                            onClick={() => void onRemoveRequested()}
+                        >
+                            <span>Rimuovi questa serie</span>
+                            <Trash2 size={18} aria-hidden="true" />
+                        </button>
+                    </div>
+                </>
+            )}
         </>
     );
 }
