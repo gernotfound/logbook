@@ -547,6 +547,22 @@ describe('Kinde-only device vault provisioning and authenticated baseline', () =
             expect(clicked).toHaveBeenCalledTimes(1);
             expect(removed).toHaveBeenCalledTimes(1);
             expect(link.download).toMatch(/^thelogbook_diritti_cloud_\d{4}-\d{2}-\d{2}\.json$/);
+            const corrupted = firstPartySession(fixture, async (path, _init, response) => {
+                if (path !== '/v1/rights/scan') return response;
+                const page = await response.json() as {
+                    documents: Array<{ document: { _sealed: { ciphertext: string } } }>;
+                };
+                const sealed = page.documents[0]?.document._sealed;
+                if (!sealed) throw Error('Synthetic rights document is missing');
+                sealed.ciphertext = (sealed.ciphertext[0] === 'A' ? 'B' : 'A')
+                    + sealed.ciphertext.slice(1);
+                return Response.json(page, { headers: { 'Cache-Control': 'no-store' } });
+            });
+            await expect(requestKindeCandidateRightsJsonDownload({
+                ...corrupted, expected: { ...principal, healthConsentRevision: 1 as const },
+            })).rejects.toThrow();
+            expect(objectUrl).toHaveBeenCalledTimes(1);
+            expect(clicked).toHaveBeenCalledTimes(1);
             let current = true;
             const replaced = firstPartySession(fixture, (path, _init, response) => {
                 if (path === '/v1/rights/scan') current = false;
