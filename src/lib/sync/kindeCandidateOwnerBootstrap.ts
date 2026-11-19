@@ -10,7 +10,6 @@ import { isKindeAccountLocalFitnessClear } from './kindeOwnerLocalFitnessFence';
 import { readLocal } from './localArchiveBootstrap';
 import { userOwner } from './owner';
 import { createAndMigrateVault } from './secureArchiveMigration';
-import { requireUnlockedLocalKey } from './secureArchiveSession';
 
 type Confirmed = Extract<KindeCandidateAccess, { kind: 'consent-confirmed' }>;
 type Principal = Confirmed['principal'];
@@ -56,52 +55,56 @@ export async function prepareKindeCandidateOwner({
     // Provision only after a trusted first consent. A crash may leave a
     // migrating control; the owner-scoped Web Lock and mirror recover the
     // same non-extractable device key instead of replacing its ciphertext.
-    await createAndMigrateVault(owner, current);
-    requireCurrent();
-    const deviceKey = requireUnlockedLocalKey(owner);
-    const scoped = () => {
-        try { return current() && requireUnlockedLocalKey(owner) === deviceKey; }
-        catch { return false; }
-    };
-    if (!scoped()) throw new KindeCandidateBoundaryError();
-    const pinnedRequest = { send, stillCurrent: scoped, browserCookies };
-    const afterProvision = await readKindeCandidateAccess(pinnedRequest);
-    verifyAccess(afterProvision, principal, first.legalConsent);
-
-    const hydrate = () => hydrateKindeCandidateArchive({
-        expected: principal, stillCurrent: scoped, send, browserCookies,
-    });
-    const previous = await readLocal(owner);
-    if (!scoped()) throw new KindeCandidateBoundaryError();
-    if (previous?.cloudflareDelivery) {
-        if (previous.consentRevision !== principal.healthConsentRevision
-            || !equal(previous.data.legalConsent, first.legalConsent)) throw new KindeCandidateBoundaryError();
-        // The checkpoint cannot replace a baseline while a delivery might
-        // already have committed. Reconcile its receipt before scanning and
-        // leave any later journal entries for the normal sync path.
-        const deliveryOutcome = await deliverKindeCandidateJournal({ ...pinnedRequest, recoverStagedFor: principal });
+    const unlock = await createAndMigrateVault(owner, current);
+    const scoped = () => current() && unlock.isCurrent();
+    let ready = false;
+    try {
         if (!scoped()) throw new KindeCandidateBoundaryError();
-        if (deliveryOutcome === 'retry-staged' || deliveryOutcome === 'reconciliation-required') {
-            return { kind: 'delivery-pending', deliveryOutcome };
-        }
-    }
-    // Hydration correctly refuses to overwrite a baseline while a claim is
-    // staged. Recover that exact request before attempting another scan.
-    const recovering = Boolean(previous?.cloudflareReplicaClaim);
-    let hydrated = recovering ? null : await hydrate();
-    const local = hydrated?.envelope ?? previous;
-    if (!scoped() || !local || local.consentRevision !== principal.healthConsentRevision
-        || !equal(local.data.legalConsent, first.legalConsent)) throw new KindeCandidateBoundaryError();
+        const pinnedRequest = { send, stillCurrent: scoped, browserCookies };
+        const afterProvision = await readKindeCandidateAccess(pinnedRequest);
+        verifyAccess(afterProvision, principal, first.legalConsent);
 
-    const replicaOutcome = await claimKindeCandidateReplica({
-        expected: principal, stillCurrent: scoped, send, browserCookies,
-    });
-    if (!scoped()) throw new KindeCandidateBoundaryError();
-    if (recovering && (replicaOutcome === 'adopted' || replicaOutcome === 'already-active')) {
-        hydrated = await hydrate();
+        const hydrate = () => hydrateKindeCandidateArchive({
+            expected: principal, stillCurrent: scoped, send, browserCookies,
+        });
+        const previous = await readLocal(owner);
+        if (!scoped()) throw new KindeCandidateBoundaryError();
+        if (previous?.cloudflareDelivery) {
+            if (previous.consentRevision !== principal.healthConsentRevision
+                || !equal(previous.data.legalConsent, first.legalConsent)) throw new KindeCandidateBoundaryError();
+            // The checkpoint cannot replace a baseline while a delivery might
+            // already have committed. Reconcile its receipt before scanning and
+            // leave any later journal entries for the normal sync path.
+            const deliveryOutcome = await deliverKindeCandidateJournal({ ...pinnedRequest, recoverStagedFor: principal });
+            if (!scoped()) throw new KindeCandidateBoundaryError();
+            if (deliveryOutcome === 'retry-staged' || deliveryOutcome === 'reconciliation-required') {
+                return { kind: 'delivery-pending', deliveryOutcome };
+            }
+        }
+        // Hydration correctly refuses to overwrite a baseline while a claim is
+        // staged. Recover that exact request before attempting another scan.
+        const recovering = Boolean(previous?.cloudflareReplicaClaim);
+        let hydrated = recovering ? null : await hydrate();
+        const local = hydrated?.envelope ?? previous;
+        if (!scoped() || !local || local.consentRevision !== principal.healthConsentRevision
+            || !equal(local.data.legalConsent, first.legalConsent)) throw new KindeCandidateBoundaryError();
+
+        const replicaOutcome = await claimKindeCandidateReplica({
+            expected: principal, stillCurrent: scoped, send, browserCookies,
+        });
+        if (!scoped()) throw new KindeCandidateBoundaryError();
+        if (recovering && (replicaOutcome === 'adopted' || replicaOutcome === 'already-active')) {
+            hydrated = await hydrate();
+        }
+        const final = await readKindeCandidateAccess(pinnedRequest);
+        verifyAccess(final, principal, first.legalConsent);
+        if (!scoped()) throw new KindeCandidateBoundaryError();
+        const checkpointRevision = hydrated?.checkpointRevision ?? null;
+        ready = checkpointRevision !== null && (replicaOutcome === 'adopted' || replicaOutcome === 'already-active');
+        return { kind: 'candidate-observed', checkpointRevision, replicaOutcome };
+    } finally {
+        // Persisted ciphertext and staged intents survive a failed attempt.
+        // Only a completed baseline and replica may retain this tab's grant.
+        if (!ready) unlock.release();
     }
-    const final = await readKindeCandidateAccess(pinnedRequest);
-    verifyAccess(final, principal, first.legalConsent);
-    if (!scoped()) throw new KindeCandidateBoundaryError();
-    return { kind: 'candidate-observed', checkpointRevision: hydrated?.checkpointRevision ?? null, replicaOutcome };
 }

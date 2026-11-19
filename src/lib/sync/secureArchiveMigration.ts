@@ -116,7 +116,7 @@ function withSecureMigrationLock<T>(owner: string, operation: () => Promise<T>):
  * A failed step leaves existing ciphertext untouched and a durable MIGRATING
  * marker; the next start resumes with the same non-extractable device key.
  */
-export async function createAndMigrateVault(requestedOwner: string, isCurrent: () => boolean = () => true): Promise<void> {
+export async function createAndMigrateVault(requestedOwner: string, isCurrent: () => boolean = () => true) {
     const owner = normalizeStorageOwner(requestedOwner);
     return withSecureMigrationLock(owner, async () => {
         // Another tab may have provisioned this owner after the caller checked
@@ -148,8 +148,7 @@ export async function createAndMigrateVault(requestedOwner: string, isCurrent: (
             assertKnownDeviceNames(owner);
         }
         if (existing?.phase === 'active') {
-            await unlockVaultForOwner(owner, isCurrent);
-            return;
+            return unlockVaultForOwner(owner, isCurrent);
         }
         if (existing?.phase === 'migrating') {
             // Crash between publishing the replacement control and releasing
@@ -158,9 +157,8 @@ export async function createAndMigrateVault(requestedOwner: string, isCurrent: (
             const dataKey = await unlockLocalKeyVault(existing.wrappedKey, owner);
             try {
                 await migrateAndFinalize(owner, existing, dataKey);
-                await unlockVaultForOwner(owner, isCurrent);
+                return await unlockVaultForOwner(owner, isCurrent);
             } finally { dataKey.fill(0); }
-            return;
         }
         const { vault, dataKey } = await createLocalKeyVault(owner);
         const epoch = Array.from(crypto.getRandomValues(new Uint8Array(16)), b => b.toString(16).padStart(2, '0')).join('');
@@ -176,7 +174,7 @@ export async function createAndMigrateVault(requestedOwner: string, isCurrent: (
             // control can exclude concurrent writers during the handover.
             if (finishingPriorPurge) releaseLocalPurgeFence(owner);
             await migrateAndFinalize(owner, control, dataKey);
-            await unlockVaultForOwner(owner, isCurrent);
+            return await unlockVaultForOwner(owner, isCurrent);
         } finally { dataKey.fill(0); }
     });
 }
