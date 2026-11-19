@@ -1,5 +1,5 @@
 import React from 'react';
-import { describe, test, expect, beforeEach } from 'vitest';
+import { describe, test, expect } from 'vitest';
 import { screen, fireEvent } from '@testing-library/react';
 import { renderWithProviders, emptyUserData } from '../setup';
 import { prepareUnlockedTestArchive } from '../secureVaultFixture';
@@ -10,7 +10,6 @@ import type { Food } from '../../src/types';
 import NutritionMeals from '../../src/components/Nutrition/NutritionMeals';
 
 describe('Nutrition numeric and hostile search inputs', () => {
-  beforeEach(async () => { await prepareUnlockedTestArchive(); });
 
     test('Logic.calculateMacrosFromKg handles zero weight or zero macro ratios', () => {
       const zeroWeight = Logic.calculateMacrosFromKg(0, 3.5, 2.0, 1.0);
@@ -30,6 +29,33 @@ describe('Nutrition numeric and hostile search inputs', () => {
       expect(Logic.calculateMacrosFromKg(80, Number.POSITIVE_INFINITY, 2, 1).totalKcal).toBe(0);
       expect(Logic.calculateMacrosFromKg(Number.POSITIVE_INFINITY, 3.5, 2, 1).totalKcal).toBe(0);
       expect(Logic.calculateMacrosFromKg(1e308, 1e308, 1, 1).totalKcal).toBe(0);
+    });
+
+    test('macro targets reject partial numeric values and interpret decimal commas consistently', () => {
+      const comma = Logic.calculateMacrosFromKg('80,5', '3,5', '2', '1');
+      expect(comma).toMatchObject({
+        carbsGrams: 281.8,
+        proGrams: 161,
+        fatGrams: 80.5,
+        totalKcal: 2496,
+      });
+
+      const missingRatio = Logic.calculateMacrosFromKg('80', null, '', undefined);
+      expect(missingRatio.totalKcal).toBe(0);
+      expect(missingRatio.carbsGrams).toBe(0);
+
+      const standard = Logic.calculateMacrosFromKg(80, 3.5, 2, 1);
+      const zeroed = Logic.calculateMacrosFromKg(0, 3.5, 2, 1);
+      expect(standard.totalKcal).toBe(2480);
+
+      for (const invalid of ['80kg', '80abc', '80,5kg', '1e309', '']) {
+        expect(Logic.calculateMacrosFromKg(invalid, 3.5, 2, 1)).toEqual(zeroed);
+      }
+      for (const invalid of ['3,5g', '3.5x', '1e309', 'abc']) {
+        expect(Logic.calculateMacrosFromKg(80, invalid, 2, 1)).toEqual(zeroed);
+        expect(Logic.calculateMacrosFromKg(80, 3.5, invalid, 1)).toEqual(zeroed);
+        expect(Logic.calculateMacrosFromKg(80, 3.5, 2, invalid)).toEqual(zeroed);
+      }
     });
 
     test('Logic.calculateBodyFat handles 0 weight and edge inputs safely', () => {
@@ -146,7 +172,8 @@ describe('Nutrition numeric and hostile search inputs', () => {
       expect(calculateLoggedMealTotals([{ ...logged, quantity: 2 }]).kcal).toBe(145);
     });
 
-    test('NutritionMeals handles literal regex metacharacters and still finds a known food', () => {
+    test('NutritionMeals handles literal regex metacharacters and still finds a known food', async () => {
+      await prepareUnlockedTestArchive();
       renderWithProviders(<NutritionMeals />, { userData: {
         ...emptyUserData,
         customFoods: [{ id: 'food-pollo', name: 'Pollo Test', kcal: 105, pro: 23, carbs: 0, fat: 1 }],

@@ -190,7 +190,7 @@ const WorkoutReportModal: React.FC<WorkoutReportModalProps> = ({ workout, histor
                         </div>
                         {!report.totalVolumeIsComplete && (
                             <p style={{ margin: 0, fontSize: 'var(--font-size-meta)', color: 'var(--text-muted)' }}>
-                                Il tonnellaggio totale non viene stimato quando manca il peso corporeo storico necessario per esercizi bodyweight.
+                                Il tonnellaggio totale non è disponibile quando mancano misurazioni necessarie oppure la somma supera i limiti numerici.
                             </p>
                         )}
                     </section>

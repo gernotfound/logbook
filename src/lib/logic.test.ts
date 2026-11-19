@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { Logic } from './logic';
-import { createFoodSearcher } from './calc/nutrition';
+import { createFoodSearcher } from './calc/foodSearch';
 
 describe('Logic Library Tests', () => {
     

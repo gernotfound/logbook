@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createFoodSearcher } from './nutrition';
+import { createFoodSearcher } from './foodSearch';
 import { createExerciseLibrarySearcher } from './workout';
 
 describe('catalog search index equivalence', () => {

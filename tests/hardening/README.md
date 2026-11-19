@@ -15,10 +15,10 @@ Questa directory e `vitest.hardening.config.ts` definiscono il gate normativo M5
 
 I test M5 devono attraversare il boundary production che dichiarano di verificare. In particolare:
 
-- logout guest/autenticato: `AuthProvider` + `useAuth`;
-- migrazione guest → account: `AuthProvider` + `localRepository`/journal al boundary testato;
+- guest login/logout della PWA Kinde-first: `GuestOnlyAuthProvider` + `useAuth`; sessione Kinde: `KindeAccountSessionProvider` (in modalità pubblica solo identità); i test del vecchio `AuthProvider` Firebase coprono solo il boundary legacy, non il runtime corrente;
+- trasferimento guest → account Kinde: non ancora abilitato nella PWA; quando sarà attivato, i test dovranno attraversare il nuovo lifecycle e osservare il journal locale reale, senza dedurre il successo soltanto dallo stato Zustand;
 - catalogo: `catalogService` e `deltaResolver` reali;
-- nutrizione: `useNutritionMeals` e il suo indice `createFoodSearcher` reali, con risultati attesi espliciti; `DB` resta il boundary esterno mocked nella suite jsdom. `Logic.searchFoods` usa lo stesso algoritmo e non è un oracle indipendente;
+- nutrizione: `useNutritionMeals` e il suo indice `createFoodSearcher` da `src/lib/calc/foodSearch.ts`, con identificativi e ordinamento attesi espliciti; il confronto con il motore standalone non è un oracle indipendente. Le suite jsdom possono simulare il boundary esterno `DB` senza sostituire il percorso di mutazione effettivo;
 - totali meal: confronto con `calculateLoggedMealTotals` e valori attesi espliciti.
 
 Le suite stress `tests/stress/catalog/tier5_adversarial_guest_catalog_*.test.ts`, ora suddivise per scenario, forniscono copertura supplementare ma non sostituiscono questi acceptance oracle.

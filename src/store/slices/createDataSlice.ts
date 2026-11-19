@@ -22,11 +22,7 @@ export interface DataSlice {
 export const parseInitialUserData = (data: unknown): UserData | null => {
     try {
         if (!data || typeof data !== 'object' || Array.isArray(data)) return null;
-        const start = performance.now();
-        const validated = UserDataSchema.parse(data) as UserData;
-        const end = performance.now();
-        console.log(`[BOOT] Parsing Zod completato in ${(end - start).toFixed(2)}ms`);
-        return validated;
+        return UserDataSchema.parse(data) as UserData;
     } catch (err) {
         console.warn('[BOOT] Errore parsing Zod:', err);
         return null;

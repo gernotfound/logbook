@@ -250,4 +250,53 @@ describe('R2: Workout Report Volume & PR Calculation (FNC-REPORT-01)', () => {
         expect(computeWorkoutReport(workout, [], libraryMap, userWeight).durationSeconds).toBe(2700);
     });
 
+
+    it('does not mark overflowing totals across individually complete exercises as reliable', () => {
+        const workout: WorkoutSession = {
+            id: 'overflow-aggregate', date: '2026-09-08', exercises: [
+                { exId: 'ex-bench', sessionNote: '', sets: [{ id: 'a', kg: '1e308', reps: '1' }] },
+                { exId: 'ex-squat', sessionNote: '', sets: [{ id: 'b', kg: '1e308', reps: '1' }] },
+            ],
+        };
+        const report = computeWorkoutReport(workout, [], libraryMap);
+        expect(report.exerciseComparisons.every(item => item.progression.current.tonnageComplete)).toBe(true);
+        expect(report.totalVolumeIsComplete).toBe(false);
+        expect(Number.isFinite(report.totalVolume)).toBe(true);
+        expect(report.volumeDeltaPercent).toBeUndefined();
+    });
+
+    it('keeps the mean observed load finite even when adding valid loads would overflow', () => {
+        const workout: WorkoutSession = {
+            id: 'overflow-mean', date: '2026-09-08', exercises: [{
+                exId: 'ex-bench', sessionNote: '', sets: [
+                    { id: 'a', kg: '1e308', reps: '1' },
+                    { id: 'b', kg: '1e308', reps: '1' },
+                ],
+            }],
+        };
+        const report = computeWorkoutReport(workout, [], libraryMap);
+        expect(report.exerciseComparisons[0].currentAvgWeight).toBe(1e308);
+        expect(report.exerciseComparisons[0].weightDelta).toBe(1e308);
+        expect(report.totalVolumeIsComplete).toBe(false);
+        expect(Number.isFinite(report.exerciseComparisons[0].currentAvgWeight)).toBe(true);
+    });
+
+    it('omits unrepresentable percentage changes rather than reporting Infinity', () => {
+        const previous: WorkoutSession = {
+            id: 'percent-prev', date: '2026-09-01', exercises: [
+                { exId: 'ex-bench', sessionNote: '', sets: [{ id: 'a', kg: '1', reps: '1', rir: 2 }] },
+            ],
+        };
+        const workout: WorkoutSession = {
+            id: 'percent-now', date: '2026-09-08', exercises: [
+                { exId: 'ex-bench', sessionNote: '', sets: [{ id: 'b', kg: '1e308', reps: '1', rir: 2 }] },
+            ],
+        };
+        const report = computeWorkoutReport(workout, [previous], libraryMap);
+        expect(report.totalVolumeIsComplete).toBe(true);
+        expect(report.previousVolumeIsComplete).toBe(true);
+        expect(report.exerciseComparisons[0].volumeDeltaPercent).toBeNull();
+        expect(report.volumeDeltaPercent).toBeUndefined();
+    });
+
 });
