@@ -90,7 +90,7 @@ export function composeKindeCandidatePortableBackup(sources: Sources, catalog: C
     const cloud = applyRemoteDocuments(empty, businessDocs, catalog);
     const base = { ...cloud, legalConsent };
     const cloudDocuments = projectDocuments(base, catalog);
-    let data = base;
+    let data: UserData = base;
     if (envelope?.pending.length) {
         const { documents } = applySemanticOperations(cloudDocuments, envelope.pending, remoteMeta);
         data = applyRemoteDocuments(base, documents, catalog);
