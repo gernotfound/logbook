@@ -6,7 +6,10 @@
 `candidateLifecycleEnabled` per presentare la revoca candidata
 ed il diritto di lettura post-revoca. Non è montato nel
 `KindeAccountSessionProvider` pubblico. Il componente
-`KindeCandidateWithdrawalPanel` contiene l'offerta volontaria
+`KindeCandidateWithdrawalPanel` nella vista `consent-suspended` è solo
+riconciliazione read-only quando esiste un marker pendente, anche dopo
+reload: non mostra una seconda azione distruttiva. Nel consenso attivo
+contiene l'offerta volontaria
 di backup seguita da conferma esplicita della cancellazione; un
 cambio marker anche da un'altra scheda sopprime il backup e la
 richiesta distruttiva. Lo stato `pending:1` non viene cancellato
