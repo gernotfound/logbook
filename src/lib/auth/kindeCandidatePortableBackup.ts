@@ -40,7 +40,7 @@ function requireNoUnresolvedTransition(sources: Sources): void {
  * The local envelope, staged operation witnesses and raw device drafts remain
  * recovery evidence, not installed sync ACKs or automatically replayed drafts.
  */
-export function composeKindeCandidatePortableBackup(sources: Sources, catalog: CachedGlobalCatalog): BackupPayload {
+function composeKindeCandidatePortableBackup(sources: Sources, catalog: CachedGlobalCatalog): BackupPayload {
     if (!sources.isCurrent()) throw new KindeCandidateBoundaryError();
     requireNoUnresolvedTransition(sources);
     const { owner, envelope, witnesses, observed } = sources;
