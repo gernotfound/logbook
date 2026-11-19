@@ -17,6 +17,13 @@ import { prepareKindeCandidateRightsJson } from '../../lib/auth/kindeCandidateRi
 import { createBackup } from '../../lib/backup';
 import { UserDataSchema } from '../../lib/schema';
 
+vi.mock('../../hooks/usePWAInstall', () => ({
+    usePWAInstall: vi.fn(() => ({
+        isInstallable: false, isIOSInstallable: false, isStandalone: false,
+        promptInstall: vi.fn(async () => {}),
+    })),
+}));
+
 vi.mock('../../lib/auth/kindeCandidateIdentity', () => ({
     readKindeCandidateIdentity: vi.fn(),
 }));
