@@ -22,7 +22,7 @@ import { KindeCandidateBoundaryError } from '../../../src/lib/auth/kindeCandidat
 import { acceptKindeCandidateInitialConsent } from '../../../src/lib/auth/kindeCandidateConsent';
 import { deliverKindeCandidateJournal } from '../../../src/lib/sync/kindeCandidateJournalBridge';
 import { withKindeCandidateRightsCheckpoint } from '../../../src/lib/auth/kindeCandidateRightsCheckpoint';
-import { prepareKindeCandidateRightsJson } from '../../../src/lib/auth/kindeCandidateRightsExport';
+import { prepareKindeCandidateRightsJson, requestKindeCandidateRightsJsonDownload } from '../../../src/lib/auth/kindeCandidateRightsExport';
 import { decodeImport } from '../../../src/lib/backup';
 import type { CloudReplicaClaimRequest } from '../../../src/lib/sync/cloudReplicaTransport';
 import { readLocal } from '../../../src/lib/sync/localArchiveBootstrap';
@@ -528,6 +528,25 @@ describe('Kinde-only device vault provisioning and authenticated baseline', () =
                     business: { profile: { height: '194' } } }],
             });
             expect(() => decodeImport(payload, owner)).toThrow();
+            const clicked = vi.fn();
+            const removed = vi.fn();
+            const appended = vi.fn();
+            const link = { href: '', download: '', style: { visibility: '' },
+                click: clicked, remove: removed };
+            vi.stubGlobal('document', {
+                createElement: vi.fn(() => link),
+                body: { appendChild: appended },
+            });
+            const objectUrl = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:rights-synthetic');
+            vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
+            await requestKindeCandidateRightsJsonDownload({
+                ...session, expected: { ...principal, healthConsentRevision: 1 as const },
+            });
+            expect(objectUrl).toHaveBeenCalledTimes(1);
+            expect(appended).toHaveBeenCalledWith(link);
+            expect(clicked).toHaveBeenCalledTimes(1);
+            expect(removed).toHaveBeenCalledTimes(1);
+            expect(link.download).toMatch(/^thelogbook_diritti_cloud_\d{4}-\d{2}-\d{2}\.json$/);
             let current = true;
             const replaced = firstPartySession(fixture, (path, _init, response) => {
                 if (path === '/v1/rights/scan') current = false;
