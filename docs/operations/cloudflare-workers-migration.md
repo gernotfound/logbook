@@ -1017,3 +1017,23 @@ fitness, revoca, diritti e D1 API pubblici. Non sono stati eseguiti
 interventi sui dati o sulla configurazione dei provider; test con
 fixture Worker/D1 sono differenti dai collaudi KEK, Safari,
 account reali e recovery/erasure del provider.
+
+
+### CF-05 — ripristino Schema 3 su dispositivo Kinde candidato (19/11/2026)
+
+L'ingresso non pubblico `restoreKindeCandidateBackup` integra il
+percorso import `decodeImport` → `prepareImport('restore')` con il
+bootstrap Kinde/D1, un refresh autenticato del cloud, il commit business
+e journal cifrati nello stesso update IndexedDB e la consegna tramite
+l'adapter D1 con receipt verificata. Rifiuta backup parziali o di altro
+owner e transizioni locali non riconciliate. Un conflitto, una risposta
+persa o un cambio sessione conserva il batch e il file originale;
+`local-pending` e `cloud-acknowledged` non sono sinonimi.
+
+Il percorso è solo candidato: nessun collegamento alla UI pubblica,
+nessuna modifica di provider o secret, nessun trapianto automatico di
+bozze device, journal, repliche o consenso. Le regressioni isolate
+`kindeCandidateRestore.test.ts` esercitano Worker/API D1 sintetici e
+IndexedDB; il loro esito non prova KEK reale, provider Production,
+Safari/iOS o recupero dopo perdita effettiva del dispositivo. Il
+fitness rimane NO-GO fino ai collaudi completi.
