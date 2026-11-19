@@ -556,8 +556,13 @@ void test('independent cutoff blocks rights ciphertext even while restored appli
     f.registry.exec("UPDATE recovery_control SET mode='sealed', generation=3 WHERE singleton=1");
     assert.notEqual((await f.call('owner-a', '/v1/rights/scan', { body })).response.status, 200);
     f.registry.exec("UPDATE recovery_control SET mode='open', generation=4 WHERE singleton=1");
-    f.registry.exec("UPDATE recovery_owner_fences SET status='blocked', change_seq=change_seq+1 WHERE uid='owner-a'");
-    assert.notEqual((await f.call('owner-a', '/v1/rights/scan', { body })).response.status, 200);
+    assert.equal((await f.call('owner-a', '/v1/rights/scan', { body })).response.status, 200);
+    // A revoked owner cannot be rolled backwards in the independent registry,
+    // even by direct SQL: the store's monotone trigger rejects that mutation.
+    assert.throws(() => f.registry.exec(
+      "UPDATE recovery_owner_fences SET status='active', change_seq=change_seq+1 WHERE uid='owner-a'"
+    ));
+    assert.equal((await f.call('owner-a', '/v1/rights/scan', { body })).response.status, 200);
     assert.equal(f.count('health_erasure_jobs', 'owner-a'), 1);
   } finally { f.close(); }
 });
