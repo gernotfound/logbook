@@ -234,3 +234,31 @@ identity-only. Non pubblicare D1 API o promettere GO da questa prova.
 Un file JSON contiene dati sanitari leggibili: il salvataggio resta
 volontario e sotto custodia esplicita dell'utente; la preparazione non
 garantisce il click o la disponibilità della copia indipendente.
+
+
+## CF-05 — restore Kinde business candidato con commit locale (19/11/2026)
+
+`src/lib/auth/kindeCandidateRestore.ts` accetta esclusivamente un
+`logbook-backup` Schema 3 completo (`cloud-and-device`), attribuito
+all'owner Kinde atteso; non accetta share, copie device-only, owner
+sconosciuti o backup di altri account. Il parser e `prepareImport('restore')`
+restano gli stessi dell'importatore corrente: **il consenso del file non
+sostituisce quello autorevole dell'account destinatario**.
+
+Prima di una mutazione, l'ingresso candidato richiede il bootstrap trusted,
+recupera eventuali consegne D1 precedenti e verifica replica, vault,
+consenso, journal vuoto e scansione cloud cifrata completa. Un preflight
+riproduce la proiezione semantica del bulk restore: un campo business
+non rappresentabile nel journal rifiuta il commit. Il commit reale usa
+`commitLocal` con revisione catturata, guard di sessione e update
+IndexedDB atomico per business e journal. L'eventuale consegna usa
+`deliverKindeCandidateJournal`: solo una ricevuta D1 verificata e la
+successiva lettura del journal vuoto consentono `cloud-acknowledged`.
+Un errore o ACK perso **non** elimina l'intento cifrato e non è successo
+cloud. Il riavvio recupera prima il batch originario.
+
+Il ripristino installa soltanto i campi business validati: le bozze
+device-only, i witness di recupero, le vecchie chiavi, le replica identity
+e i journal sorgente non vengono copiati nel nuovo dispositivo. Il restore
+non monta UI pubblica, non abilita fitness, non prova salvataggio fisico
+del file, browser Safari reale, KEK indipendente o runtime D1 Production.
