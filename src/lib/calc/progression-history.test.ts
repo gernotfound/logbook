@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { compareExposureCompatibility, computeProgressionEngine, normalizeExerciseExposure } from './progression';
-import { bench, pullup, library, set, workout } from './progressionTestFixtures';
+import { bench, library, set, workout } from './progressionTestFixtures';
 
 describe('contextual progression engine: historical comparability and reference selection', () => {
     it('orders cycle primary muscles before secondary muscles without changing numeric results', () => {

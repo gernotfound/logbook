@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { computeProgressionEngine, progressionTrendLabel } from './progression';
-import { plank, library, set, timedSet, workout } from './progressionTestFixtures';
+import { library, timedSet, workout } from './progressionTestFixtures';
 
 describe('contextual progression engine: timed measurements and trends', () => {
     it.each([

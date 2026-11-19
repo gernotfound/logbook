@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { computeProgressionEngine } from './progression';
-import { pullup, library, set, workout, advancedSet } from './progressionTestFixtures';
+import { library, set, workout, advancedSet } from './progressionTestFixtures';
 
 describe('contextual progression engine: advanced techniques and execution context', () => {
     it('does not compare a straight set directly with a rest-pause set', () => {
