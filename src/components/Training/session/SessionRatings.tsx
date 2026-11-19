@@ -2,6 +2,7 @@ import React, { useState, useMemo, useCallback } from 'react';
 import { Zap, X, Check, Plus, ChevronUp, ChevronDown, Droplets } from 'lucide-react';
 import MuscleModel from '../MuscleModel';
 import { Logic } from '../../../lib/logic';
+import { getPainMuscleColors } from '../../../lib/calc/muscleMapPresentation';
 import { BufferedInput } from '../../UI/BufferedInput';
 
 interface SessionRatingsProps {
@@ -41,21 +42,7 @@ export const SessionRatings: React.FC<SessionRatingsProps> = ({
 
     const activePainsSet = useMemo(() => new Set(pains), [pains]);
 
-    const painColors = useMemo(() => {
-        const colors: Record<string, string> = {};
-        const DANGER_COLOR = 'var(--muscle-pain)';
-        (pains || []).forEach(mId => {
-            if (!mId || typeof mId !== 'string') return;
-            colors[mId] = DANGER_COLOR;
-            const atomicPaths = (Logic.GROUP_MAP as any)[mId];
-            if (Array.isArray(atomicPaths)) {
-                atomicPaths.forEach((path: string) => {
-                    colors[path] = DANGER_COLOR;
-                });
-            }
-        });
-        return colors;
-    }, [pains]);
+    const painColors = useMemo(() => getPainMuscleColors(pains), [pains]);
 
     const handleToggleMuscle = useCallback((muscleId: string) => {
         if (!muscleId || typeof muscleId !== 'string') return;
