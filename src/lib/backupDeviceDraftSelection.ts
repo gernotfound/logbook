@@ -2,7 +2,7 @@ const MAX_DEVICE_RECOVERY_DRAFTS = 1024;
 // The backup also contains raw, owner/epoch-bound recovery witnesses. Those
 // remain exportable evidence, not portable drafts: never install them into a
 // new device/session merely because their names begin with "draft:".
-const draftKey = (name: string): boolean => {
+export const isPortableDeviceDraftKey = (name: string): boolean => {
     if (name === 'draft_exercise' || name === 'draft_routine') return true;
     const match = /^draft:([a-z0-9-]+):([a-zA-Z0-9_.:-]{1,128})$/.exec(name);
     if (!match) return false;
@@ -33,7 +33,7 @@ export function selectBackupDeviceDrafts(recovery: unknown): BackupDeviceDraft[]
     if (!isRecord(recovery)) throw new Error('Backup: sezione recupero non valida.');
     if (!Object.hasOwn(recovery, 'device')) return [];
     if (!isRecord(recovery.device)) throw new Error('Backup: sezione bozze di recupero non valida.');
-    const entries = Object.entries(recovery.device).filter(([name]) => draftKey(name));
+    const entries = Object.entries(recovery.device).filter(([name]) => isPortableDeviceDraftKey(name));
     if (entries.length > MAX_DEVICE_RECOVERY_DRAFTS) throw new Error('Backup: troppe bozze di recupero.');
     let total = 0;
     return entries.map(([name, value]) => {
