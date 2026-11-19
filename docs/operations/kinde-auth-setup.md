@@ -1,5 +1,9 @@
 # Kinde — configurazione del provider per TheLogBook
 
+
+> **19/11/2026 · Bridge React candidato, nessun GO fitness.** `useKindeAccountSession` dispone di un ingresso esplicito per il bootstrap cifrato Kinde→D1, vincolato a sessione e consenso: il provider pubblico lo lascia disabilitato (`candidatePreparationEnabled: false`) e non effettua nuove chiamate API al login. Quando invocato nelle fixture isolate, scarica dinamicamente il bootstrap, rifiuta generation/cookie obsoleti e chiude il vault al termine dell'osservazione, anche se D1 ha restituito un checkpoint valido. Restano invariati `currentUser: null`, l'assenza del reader account e il blocco delle schede fitness. Il frontend reale non ha ancora `D1_API` e il Worker D1 non espone ancora la KEK cloud; nessun binding o secret è stato modificato.
+
+
 > **18/11/2026 · Preparazione runtime Kinde, non GO fitness.** Da v2.530.0 la lettura di sessione Kinde è condivisa dal provider React e dalla schermata di ingresso senza una seconda lettura indipendente. Il provider pubblica soltanto una presenza osservata: `GuestOnlyAuthProvider.currentUser` resta nullo, `identityOnly` resta attivo e non esiste un owner fitness/grant né una chiamata ADK/consenso dal percorso pubblico. I bridge candidati per consenso, vault e D1 devono essere completati e verificati, quindi integrati con una nuova authorization indipendente prima di abilitare schede fitness. Nessuna configurazione OAuth, cookie, secret o binding cambia con questa release.
 
 

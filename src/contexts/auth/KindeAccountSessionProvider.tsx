@@ -12,6 +12,7 @@ export function KindeAccountSessionProvider({ children }: { children: ReactNode 
     const session = useKindeAccountSession({
         guestArchivePresent: isGuest,
         identityOnly: true,
+        candidatePreparationEnabled: false,
     });
     return (
         <KindeAccountSessionContext.Provider value={session}>
