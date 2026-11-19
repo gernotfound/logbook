@@ -218,6 +218,60 @@ function parseMutationResponse(
     return value as unknown as CloudReplicaMutationResult;
 }
 
+// A complete read is only authoritative with bounded, monotonic, revision-
+// pinned pages. Active sync and withdrawn rights share this validator but use
+// distinct authenticated server routes and permissions.
+async function collectCompleteScan(
+    fetchPage: (after: string | null, revision: number | null) => Promise<unknown>,
+): Promise<CloudReplicaCompleteScan> {
+            let after: string | null = null;
+            let expectedRevision: number | null = null;
+            let fenceEpoch: number | null = null;
+            let consentRevision: number | null = null;
+            const documents: CloudReplicaCompleteScan['documents'] = [];
+            for (let index = 0; index < MAX_SCAN_PAGES; index += 1) {
+                const value = await fetchPage(after, expectedRevision);
+                if (!isRecord(value) || !safeRevision(value.revision)
+                    || !safeRevision(value.fenceEpoch)
+                    || !safeRevision(value.consentRevision) || value.consentRevision < 1
+                    || !Array.isArray(value.documents)
+                    || value.documents.length > SCAN_PAGE_SIZE
+                    || typeof value.complete !== 'boolean'
+                    || (value.nextAfter !== null && typeof value.nextAfter !== 'string')
+                    || (expectedRevision !== null && value.revision !== expectedRevision)
+                    || (fenceEpoch !== null && value.fenceEpoch !== fenceEpoch)
+                    || (consentRevision !== null && value.consentRevision !== consentRevision)) {
+                    throw new CloudReplicaTransportError(0);
+                }
+                const page: CloudReplicaCompleteScan['documents'] = [];
+                let previous = after;
+                for (const item of value.documents) {
+                    if (!isRecord(item) || typeof item.path !== 'string'
+                        || !DOCUMENT_PATH.test(item.path)
+                        || (previous !== null && item.path <= previous)
+                        || !safeRevision(item.revision) || item.revision < 1
+                        || item.revision > value.revision || !isRecord(item.document)) {
+                        throw new CloudReplicaTransportError(0);
+                    }
+                    page.push({ path: item.path, revision: item.revision, document: item.document });
+                    previous = item.path;
+                }
+                if (value.complete !== (value.nextAfter === null)
+                    || (!value.complete && (page.length !== SCAN_PAGE_SIZE || value.nextAfter !== previous))) {
+                    throw new CloudReplicaTransportError(0);
+                }
+                documents.push(...page);
+                expectedRevision = value.revision as number;
+                fenceEpoch = value.fenceEpoch as number;
+                consentRevision = value.consentRevision as number;
+                if (value.complete) {
+                    return { revision: expectedRevision, fenceEpoch, consentRevision, documents };
+                }
+                after = value.nextAfter as string;
+            }
+            throw new CloudReplicaTransportError(0);
+}
+
 /**
  * Candidate only. Same-origin /v1 routes are not wired into production sync.
  * The browser sends the HttpOnly session cookie; the server's trusted AUTH_GATE
@@ -424,52 +478,9 @@ export function createCloudflareReplicaTransport(send: typeof fetch = fetch) {
         // A concurrent write forces a 409 (and a fresh scan), never a silent
         // merge against an inconsistent collection of monthly documents.
         async scanAll(): Promise<CloudReplicaCompleteScan> {
-            let after: string | null = null;
-            let expectedRevision: number | null = null;
-            let fenceEpoch: number | null = null;
-            let consentRevision: number | null = null;
-            const documents: CloudReplicaCompleteScan['documents'] = [];
-            for (let index = 0; index < MAX_SCAN_PAGES; index += 1) {
-                const value = await post('scan', { after, expectedRevision });
-                if (!isRecord(value) || !safeRevision(value.revision)
-                    || !safeRevision(value.fenceEpoch)
-                    || !safeRevision(value.consentRevision) || value.consentRevision < 1
-                    || !Array.isArray(value.documents)
-                    || value.documents.length > SCAN_PAGE_SIZE
-                    || typeof value.complete !== 'boolean'
-                    || (value.nextAfter !== null && typeof value.nextAfter !== 'string')
-                    || (expectedRevision !== null && value.revision !== expectedRevision)
-                    || (fenceEpoch !== null && value.fenceEpoch !== fenceEpoch)
-                    || (consentRevision !== null && value.consentRevision !== consentRevision)) {
-                    throw new CloudReplicaTransportError(0);
-                }
-                const page: CloudReplicaCompleteScan['documents'] = [];
-                let previous = after;
-                for (const item of value.documents) {
-                    if (!isRecord(item) || typeof item.path !== 'string'
-                        || !DOCUMENT_PATH.test(item.path)
-                        || (previous !== null && item.path <= previous)
-                        || !safeRevision(item.revision) || item.revision < 1
-                        || item.revision > value.revision || !isRecord(item.document)) {
-                        throw new CloudReplicaTransportError(0);
-                    }
-                    page.push({ path: item.path, revision: item.revision, document: item.document });
-                    previous = item.path;
-                }
-                if (value.complete !== (value.nextAfter === null)
-                    || (!value.complete && (page.length !== SCAN_PAGE_SIZE || value.nextAfter !== previous))) {
-                    throw new CloudReplicaTransportError(0);
-                }
-                documents.push(...page);
-                expectedRevision = value.revision as number;
-                fenceEpoch = value.fenceEpoch as number;
-                consentRevision = value.consentRevision as number;
-                if (value.complete) {
-                    return { revision: expectedRevision, fenceEpoch, consentRevision, documents };
-                }
-                after = value.nextAfter as string;
-            }
-            throw new CloudReplicaTransportError(0);
+            return collectCompleteScan((after, expectedRevision) =>
+                post('scan', { after, expectedRevision }));
+
         },
 
         async read(paths: string[]): Promise<CloudReplicaSnapshot> {
@@ -536,6 +547,44 @@ export function createCloudflareReplicaTransport(send: typeof fetch = fetch) {
             }
             return { revision: value.receipt.revision, lastSeq: value.receipt.lastSeq };
 
+        },
+    };
+}
+
+/**
+ * Rights-only candidate. This deliberately exposes ONLY a complete,
+ * revision-pinned read: no active-fitness transport, commit or ACK method.
+ * The private Worker checks the original withdrawal and independent cutoff.
+ */
+export function createCloudflareRightsScanTransport(send: typeof fetch = fetch) {
+    return {
+        async scanAll(csrfToken: string): Promise<CloudReplicaCompleteScan> {
+            if (typeof csrfToken !== 'string' || !csrfToken) {
+                throw new CloudReplicaTransportError(0);
+            }
+            return collectCompleteScan(async (after, expectedRevision) => {
+                let response: Response;
+                try {
+                    response = await send('/v1/rights/scan', {
+                        method: 'POST', mode: 'same-origin', credentials: 'include',
+                        cache: 'no-store', redirect: 'error',
+                        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+                        body: JSON.stringify({ after, expectedRevision }),
+                        signal: AbortSignal.timeout(CLOUD_REQUEST_TIMEOUT_MS),
+                    });
+                } catch {
+                    throw new CloudReplicaTransportError(0);
+                }
+                if (!response.ok) throw new CloudReplicaTransportError(response.status);
+                const noStore = response.headers.get('cache-control')?.toLowerCase()
+                    .split(',').some(item => item.trim() === 'no-store') ?? false;
+                const type = response.headers.get('content-type')?.toLowerCase() ?? '';
+                if (!noStore || (type !== 'application/json' && !type.startsWith('application/json;'))
+                    || response.redirected) {
+                    throw new CloudReplicaTransportError(0);
+                }
+                return readBoundedResponse(response, MAX_DOCUMENT_RESPONSE_BYTES);
+            });
         },
     };
 }
