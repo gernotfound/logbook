@@ -7,7 +7,7 @@ import { persistPlainWorkoutSnapshot, readWorkoutDeviceIntent, recoverWorkoutDev
 import { getInitialLocalWorkout } from '../../../src/store/slices/createWorkoutSlice';
 import { persistOwnerBoundWorkoutSnapshot } from '../../../src/lib/sync/deviceCriticalState';
 import { assertHistoryEditorContextEpoch, HISTORY_EDITOR_CONTEXT } from '../../../src/hooks/workout/historyEditorContext';
-import { workout, data, owner, prepareAccountWorkoutArchive } from './workoutDeviceIntentFixture';
+import { workout, data, prepareAccountWorkoutArchive } from './workoutDeviceIntentFixture';
 
 describe('authenticated device-intent replay into semantic journal', () => {
     beforeEach(() => { vi.clearAllMocks(); });
