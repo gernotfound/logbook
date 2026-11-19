@@ -492,13 +492,16 @@ describe('Kinde-only device vault provisioning and authenticated baseline', () =
             await fixture.consent(uid);
             let commits = 0;
             let loseResponse = true;
-            let receiptUnavailable = true;
+            let receiptUnavailable = false;
             const session = firstPartySession(fixture, (path, _init, response) => {
                 if (path === '/v1/sync/commit') {
                     expect(response.status).toBe(200);
                     commits += 1;
                     if (loseResponse) {
                         loseResponse = false;
+                        // The initial receipt lookup must reach D1 before
+                        // failure injection: only the post-commit reply is lost.
+                        receiptUnavailable = true;
                         throw new TypeError('D1 committed; HTTP response lost');
                     }
                 }
