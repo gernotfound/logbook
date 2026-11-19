@@ -30,6 +30,27 @@ L'ingresso di test `KindeAccountEntry`, con attivazione esplicita `candidatePrep
 
 **NO-GO pubblico invariato:** il provider montato `KindeAccountSessionProvider` resta `identityOnly: true`, `candidatePreparationEnabled: false`, la schermata in `App.tsx` usa ancora `KindeAccountEntry identityOnly` e il frontend Cloudflare non possiede `D1_API` nel readback del 19/11. Questo lavoro collega il passo UX **nella composizione candidata**, non abilita consenso/dati cloud per gli utenti del sito. Servono grant fitness legato al lifecycle, owner/sync con revoca, right/export, cancellazione e collaudi browser/API live isolati prima del GO.
 
+## CF-05 — Ripristino cold-start di D1 e registro indipendente (candidato 19/11/2026)
+
+La suite `tests/cloudflare/cf05-cloud-key-http.node.mjs` estende
+il test precedente: crea due account sintetici, emette due ADK
+diverse, salva **due snapshot SQLite autonomi su disco temporaneo**
+(D1 applicativa e registro indipendente), chiude le connessioni
+originali e riavvia Worker e AuthGate con nuove connessioni.
+Per ogni account verifica che KEK assente o diversa (pur essendo
+Base64 valida) restituisca errore senza modificare gli envelope
+persistiti né i marker di issuance. Solo la KEK sintetica conservata
+separatamente nel test può riaprire esattamente entrambe le ADK.
+La revoca successiva continua a bloccare fitness ma conserva
+l'accesso rights-only finché il job consente la lettura.
+
+Questa prova usa i boundary software correnti, non ripristina né
+legge la KEK reale su Cloudflare e **non** dimostra che la copia privata
+custodita dal proprietario corrisponda al secret del Worker. Il
+restore reale richiede una procedura isolata autorizzata: mai
+sostituire il binding Production, esporre la KEK in CI/log, creare
+nuove chiavi o agire su account/dati reali per completare il test.
+
 ## CF-05 — Ripristino con la stessa KEK sintetica dopo perdita del binding (candidato v2.541.0, 19/11/2026)
 
 La regressione `tests/cloudflare/cf05-cloud-key-http.node.mjs` attraversa gli handler di produzione AuthGate → Worker API → database SQLite con l'intero schema D1 corrente. Dopo il primo consenso e la creazione di una ADK cifrata, simula due nuovi ambienti Worker: KEK assente e KEK valida nel formato ma differente. Entrambi devono restituire errore, senza modificare il ciphertext della ADK o il marker anti-rigenerazione. Un terzo ambiente, che utilizza **la medesima KEK sintetica conservata separatamente nel test**, deve leggere esattamente l'ADK originale, senza creare nuove chiavi. Dopo revoca, il medesimo materiale rimane recuperabile esclusivamente via `rights-export`, mentre il percorso fitness è negato.
