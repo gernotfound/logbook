@@ -23,6 +23,7 @@ import { unlockVaultForOwner, requireUnlockedLocalKey } from '../sync/secureArch
 type Principal = Extract<KindeCandidateAccess, { kind: 'consent-confirmed' }>['principal'];
 type RestoreOutcome =
     | { kind: 'already-current' }
+    | { kind: 'local-metadata-restored' }
     | { kind: 'local-pending'; pendingCount: number }
     | { kind: 'cloud-acknowledged' };
 type RestoreOptions = {
@@ -158,7 +159,13 @@ export async function restoreKindeCandidateBackup({
             || (operations.length > 0 && committed.pending.length === 0)) {
             throw new Error('Ripristino locale non verificato: conservare il backup e il journal.');
         }
-        if (!operations.length) return { kind: 'already-current' };
+        if (!operations.length) {
+            // pendingConflicts is deliberately device-local. A metadata-only
+            // restoration writes an encrypted revision without any cloud dot.
+            return sameBusiness(before.data, restored)
+                ? { kind: 'already-current' }
+                : { kind: 'local-metadata-restored' };
+        }
 
         const delivery = await deliverKindeCandidateJournal({
             stillCurrent: scoped, send, browserCookies,
