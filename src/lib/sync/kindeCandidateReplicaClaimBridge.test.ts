@@ -120,7 +120,7 @@ describe('Kinde candidate membership orchestration (not mounted in the PWA)', ()
 
     it('recovers an already sealed claim without minting a new mutation or scanning', async () => {
         adapters.readLocal.mockResolvedValue({
-            ...baseline(), cloudflareReplicaClaim: { mutationId: 'immutable-lost-response' },
+            ...baseline(), cloudflareReplicaClaim: { mutationId: 'immutable-lost-response', expectedFenceEpoch: 1 },
         });
         adapters.resume.mockResolvedValue('retry-staged');
         await expect(claim(server())).resolves.toBe('retry-staged');
@@ -132,7 +132,7 @@ describe('Kinde candidate membership orchestration (not mounted in the PWA)', ()
 
     it('wipes the one-operation ADK after a network failure without staging another request', async () => {
         adapters.readLocal.mockResolvedValue({
-            ...baseline(), cloudflareReplicaClaim: { mutationId: 'lost-ack' },
+            ...baseline(), cloudflareReplicaClaim: { mutationId: 'lost-ack', expectedFenceEpoch: 1 },
         });
         adapters.resume.mockRejectedValue(new Error('ambiguous claim response'));
         const key = new Uint8Array(32).fill(17);
@@ -171,6 +171,7 @@ describe('Kinde candidate membership orchestration (not mounted in the PWA)', ()
             { ...baseline(), cloudIntegrityFence: 'unverified' },
             { ...baseline(), cloudflareDelivery: { mutationId: 'pending' } },
             { ...baseline(), cloudflareReplicaRetirement: { mutationId: 'pending' } },
+            { ...baseline(), cloudflareReplicaClaim: { mutationId: 'old-epoch', expectedFenceEpoch: 2 } },
         ]) {
             adapters.readLocal.mockResolvedValueOnce(local);
             await expect(claim(server())).rejects.toBeInstanceOf(KindeCandidateBoundaryError);

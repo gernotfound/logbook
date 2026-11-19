@@ -24,7 +24,7 @@ function verifyAccess(access: KindeCandidateAccess, expected: Principal, legal?:
 
 /**
  * Candidate-only owner bootstrap: trusted consent -> recoverable device vault
- * -> authenticated AEAD hydration -> durable D1 replica claim. A later
+ * -> authenticated AEAD hydration and durable D1 replica claim. A later
  * account runtime must independently gate fitness and owner installation;
  * no result here authorizes business writes, journal ACKs or rights erasure.
  * No guest archive is adopted, modified or cleared.
@@ -36,7 +36,7 @@ export async function prepareKindeCandidateOwner({
     stillCurrent: () => boolean;
     send?: typeof fetch;
     browserCookies?: () => string;
-}): Promise<{ kind: 'candidate-observed'; checkpointRevision: number; replicaOutcome: Awaited<ReturnType<typeof claimKindeCandidateReplica>> }> {
+}): Promise<{ kind: 'candidate-observed'; checkpointRevision: number | null; replicaOutcome: Awaited<ReturnType<typeof claimKindeCandidateReplica>> }> {
     const principal = { ...expected };
     const owner = userOwner(principal.uid);
     const fence = captureKindeCandidateSessionFence({ stillCurrent, browserCookies });
@@ -64,11 +64,16 @@ export async function prepareKindeCandidateOwner({
     const afterProvision = await readKindeCandidateAccess(pinnedRequest);
     verifyAccess(afterProvision, principal, first.legalConsent);
 
-    const hydrated = await hydrateKindeCandidateArchive({
+    const hydrate = () => hydrateKindeCandidateArchive({
         expected: principal, stillCurrent: scoped, send, browserCookies,
     });
+    const previous = await readLocal(owner);
     if (!scoped()) throw new KindeCandidateBoundaryError();
-    const local = await readLocal(owner);
+    // Hydration correctly refuses to overwrite a baseline while a claim is
+    // staged. Recover that exact request before attempting another scan.
+    const recovering = Boolean(previous?.cloudflareReplicaClaim);
+    let hydrated = recovering ? null : await hydrate();
+    const local = hydrated?.envelope ?? previous;
     if (!scoped() || !local || local.consentRevision !== principal.healthConsentRevision
         || !equal(local.data.legalConsent, first.legalConsent)) throw new KindeCandidateBoundaryError();
 
@@ -76,8 +81,11 @@ export async function prepareKindeCandidateOwner({
         expected: principal, stillCurrent: scoped, send, browserCookies,
     });
     if (!scoped()) throw new KindeCandidateBoundaryError();
+    if (recovering && (replicaOutcome === 'adopted' || replicaOutcome === 'already-active')) {
+        hydrated = await hydrate();
+    }
     const final = await readKindeCandidateAccess(pinnedRequest);
     verifyAccess(final, principal, first.legalConsent);
     if (!scoped()) throw new KindeCandidateBoundaryError();
-    return { kind: 'candidate-observed', checkpointRevision: hydrated.checkpointRevision, replicaOutcome };
+    return { kind: 'candidate-observed', checkpointRevision: hydrated?.checkpointRevision ?? null, replicaOutcome };
 }

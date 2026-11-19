@@ -12,8 +12,13 @@ vi.mock('../../../src/lib/sync/kindeCandidateReplicaClaimBridge',
     () => ({ claimKindeCandidateReplica: claimSource.claim }));
 
 import { LEGAL_VERSIONS } from '../../../src/lib/legalVersions';
+import api from '../../../cloudflare/api/worker.mjs';
+import kinde from '../../../cloudflare/auth/kinde-http-worker.mjs';
+import { routeCandidateFirstPartyApi } from '../../../cloudflare/first-party-api-candidate.mjs';
+import { createCloudKeyHttpFixture, ORIGIN } from '../../cloudflare/cloud-key-http-fixture.mjs';
 import { prepareKindeCandidateOwner } from '../../../src/lib/sync/kindeCandidateOwnerBootstrap';
 import { KindeCandidateBoundaryError } from '../../../src/lib/auth/kindeCandidateClient';
+import type { CloudReplicaClaimRequest } from '../../../src/lib/sync/cloudReplicaTransport';
 import { readLocal } from '../../../src/lib/sync/localArchiveBootstrap';
 import { lockAllVaults, readVaultControl, vaultControlKey } from '../../../src/lib/sync/secureArchiveSession';
 
@@ -141,6 +146,77 @@ describe('Kinde-only device vault provisioning and authenticated baseline', () =
         await expect(start(server())).resolves.toMatchObject({ kind: 'candidate-observed' });
         expect(readVaultControl(owner)).toEqual(previous);
         expect(await readLocal(owner)).toMatchObject({ owner, consentRevision: 1 });
+    });
+
+    it('resumes the exact encrypted replica claim after a committed response is lost and the vault is reopened', async () => {
+        const realClaim = await vi.importActual<typeof import('../../../src/lib/sync/kindeCandidateReplicaClaimBridge')>(
+            '../../../src/lib/sync/kindeCandidateReplicaClaimBridge',
+        );
+        claimSource.claim.mockImplementation(realClaim.claimKindeCandidateReplica);
+        const fixture = await createCloudKeyHttpFixture([uid]);
+        try {
+            await fixture.consent(uid);
+            const env = { ...fixture.env, APP_ORIGIN: ORIGIN };
+            const session = fixture.sessions.get(uid);
+            const browserCookies = () => '__Host-logbook_csrf=' + session.csrf;
+            const requests: CloudReplicaClaimRequest[] = [];
+            let scanCount = 0;
+            const send: typeof fetch = async (path, init) => {
+                const headers = new Headers(init?.headers);
+                headers.set('origin', ORIGIN);
+                headers.set('sec-fetch-site', 'same-origin');
+                headers.set('cookie', session.cookies);
+                const response = await routeCandidateFirstPartyApi(new Request(ORIGIN + String(path), {
+                    ...init, headers,
+                }), {
+                    APP_ORIGIN: ORIGIN,
+                    KINDE_HTTP: { fetch: (request: Request) => kinde.fetch(request, env) },
+                    D1_API: { fetch: (request: Request) => api.fetch(request, env) },
+                });
+                if (path === '/v1/sync/replica/claim') {
+                    expect(response.status).toBe(200);
+                    const claimed = JSON.parse(String(init?.body)) as CloudReplicaClaimRequest;
+                    expect((await readLocal(owner))?.cloudflareReplicaClaim).toEqual(claimed);
+                    requests.push(claimed);
+                    if (requests.length === 1) throw new TypeError('HTTP response lost after D1 commit');
+                    // An ambiguous conflict must not overwrite the staged request.
+                    if (requests.length === 2) return Response.json({ error: 'conflict' }, { status: 409 });
+                }
+                if (path === '/v1/sync/scan') scanCount += 1;
+                return response;
+            };
+
+            await expect(start(send, browserCookies)).rejects.toThrow();
+            expect(requests).toHaveLength(1);
+            expect(fixture.count('sync_replicas', uid)).toBe(1);
+            const staged = requests[0];
+            const controlBefore = readVaultControl(owner);
+            expect(await readLocal(owner)).toMatchObject({ cloudflareReplicaClaim: staged, pending: [], replica: null });
+            const sealed = await get<string>('logbook:v2:' + owner);
+            expect(sealed).toMatch(/^tlb-sealed:v1:/);
+            expect(sealed).not.toContain(staged.mutationId);
+
+            lockAllVaults();
+            const scansBeforeRetry = scanCount;
+            await expect(start(send, browserCookies)).resolves.toEqual({
+                kind: 'candidate-observed', checkpointRevision: null, replicaOutcome: 'reconciliation-required',
+            });
+            expect(scanCount).toBe(scansBeforeRetry);
+            expect(await get('logbook:v2:' + owner)).toBe(sealed);
+            await expect(start(send, browserCookies)).resolves.toEqual({
+                kind: 'candidate-observed', checkpointRevision: 1, replicaOutcome: 'adopted',
+            });
+            expect(requests).toEqual([staged, staged, staged]);
+            expect(fixture.count('sync_replicas', uid)).toBe(1);
+            expect(readVaultControl(owner)).toEqual(controlBefore);
+            const recovered = await readLocal(owner);
+            expect(recovered?.cloudflareReplicaClaim).toBeUndefined();
+            expect(recovered?.replica?.replicaId).toBe(staged.candidateReplicaId);
+            expect(recovered?.pending).toEqual([]);
+            expect(recovered?.data.legalConsent?.acceptedAt).toBeTruthy();
+        } finally {
+            fixture.close();
+        }
     });
 
     it('does not hydrate if a new session replaces the CSRF cookie during vault recovery', async () => {

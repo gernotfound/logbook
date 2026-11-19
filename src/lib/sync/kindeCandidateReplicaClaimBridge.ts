@@ -78,7 +78,9 @@ export async function claimKindeCandidateReplica({
     requireCurrent();
     if (!local || local.consentRevision !== principal.healthConsentRevision
         || !equal(local.data.legalConsent, first.legalConsent)
-        || local.cloudIntegrityFence || local.cloudflareDelivery || local.cloudflareReplicaRetirement) {
+        || local.cloudIntegrityFence || local.cloudflareDelivery || local.cloudflareReplicaRetirement
+        || (local.cloudflareReplicaClaim
+            && local.cloudflareReplicaClaim.expectedFenceEpoch !== principal.fenceEpoch)) {
         throw new KindeCandidateBoundaryError();
     }
 

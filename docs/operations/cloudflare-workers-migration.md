@@ -1,5 +1,11 @@
 # TheLogBook — migrazione Cloudflare: runbook corrente
 
+## CF-04 — Ripresa della registrazione replica dopo una risposta persa
+
+Il bootstrap candidato Kinde riprende una registrazione replica già salvata nel vault prima di installare un nuovo checkpoint. In precedenza iniziava dalla lettura del checkpoint, che interrompe correttamente l'aggiornamento mentre una richiesta di registrazione è pendente. Il recupero salva la stessa identità replica anche quando D1 ha completato la scrittura e l'app non ha ricevuto la risposta. Se il risultato resta ambiguo, l'archivio cifrato rimane intatto e il bootstrap non pubblica una revisione di checkpoint per quel tentativo.
+
+La regressione attraversa il gateway e i Worker applicativi con uno schema D1 completo in SQLite e IndexedDB in memoria. Simula la perdita della risposta dopo il commit, la riapertura del vault e un conflitto intermedio. È una prova locale isolata. Il collegamento D1 della PWA pubblica e il collaudo browser con Kinde rimangono in [CF-04 #1058](https://github.com/gernotfound/logbook/issues/1058) e [CF-09 #1063](https://github.com/gernotfound/logbook/issues/1063).
+
 ## CF-03/04 — risposte API sanitarie senza controllo della sessione (18/11/2026, candidato v2.522.0)
 
 Il gateway first-party Cloudflare ora rifiuta con 502 una risposta del servizio privato `D1_API` che imposti `Set-Cookie`, `Location` o uno stato HTTP 3xx. Il servizio Kinde rimane l'unico responsabile di cookie e redirect OAuth. Il gateway continua a richiedere `Cache-Control: no-store`, a distinguere un errore HTTP da un ACK e a non esporre dati salute in caso di risposta anomala. Regressioni Node usano il boundary di produzione e verificano rifiuto, nessun cookie/redirect verso il browser e comportamento Kinde invariato. **Nessuna route D1 pubblicata, schema modificato, dato migrato o GO funzionale** da questo intervento.
