@@ -50,6 +50,7 @@ export async function captureKindeCandidatePreWithdrawalSources({
     const check = () => { if (!current()) throw new KindeCandidateBoundaryError(); };
     check();
 
+    const readStartedAt = new Date().toISOString();
     const before = await readLocal(owner);
     check();
     const witnesses = readStableDeviceRecovery(owner);
@@ -72,7 +73,9 @@ export async function captureKindeCandidatePreWithdrawalSources({
     }
     check();
 
-    return { owner, envelope: before, witnesses, observed, isCurrent: current };
+    const readCompletedAt = new Date().toISOString();
+    return { owner, envelope: before, witnesses, observed, isCurrent: current,
+        readStartedAt, readCompletedAt };
 }
 
 /** Existing evidence-only export retains cloud and device provenance unchanged. */
