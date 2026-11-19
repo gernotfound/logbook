@@ -25,7 +25,7 @@ export function describe(
     const previousRef = formatProgressionReference(previous);
     switch (classification) {
         case 'performance_record':
-            return { headline: 'Record nelle condizioni confrontabili confrontabile', detail: `${previousRef} → ${currentRef}, migliore delle esposizioni storiche direttamente confrontabili.` };
+            return { headline: 'Record nelle condizioni confrontabili', detail: `${previousRef} → ${currentRef}, migliore delle esposizioni storiche direttamente confrontabili.` };
         case 'output_up_effort_up':
             return { headline: 'Output aumentato con effort maggiore', detail: `${previousRef} → ${currentRef}. L'output è salito insieme all'effort dichiarato.` };
         case 'progression':

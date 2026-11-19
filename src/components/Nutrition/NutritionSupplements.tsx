@@ -108,7 +108,7 @@ export default function NutritionSupplements({ selectedDate, setSelectedDate }: 
         }
     };
 
-    const handleEditSupplement = (supp: any) => {
+    const handleEditSupplement = (supp: Supplement) => {
         setEditingSuppId(supp.id);
         setSuppForm({
             name: supp.name,
@@ -119,7 +119,7 @@ export default function NutritionSupplements({ selectedDate, setSelectedDate }: 
         setShowSuppModal(true);
     };
 
-    const handleDuplicateSupplement = async (supp: any) => {
+    const handleDuplicateSupplement = async (supp: Supplement) => {
         const session = captureSession();
         const newName = Logic.generateUniqueName(supp.name, supplementsLibrary.map(s => s.name));
         const duplicated = {
