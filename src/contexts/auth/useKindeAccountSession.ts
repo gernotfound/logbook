@@ -321,8 +321,7 @@ export function useKindeAccountSession({
         Promise<Awaited<ReturnType<typeof withdrawKindeCandidateHealthConsent>>> => {
         if (!confirmsErasure || identityOnly || !candidatePreparationEnabled
             || !candidateLifecycleEnabled || !canAct()
-            || view.phase !== 'consent-confirmed'
-            || view.principal.emailVerified !== true
+            || (view.phase !== 'consent-confirmed' && view.phase !== 'email-unverified')
             || view.principal.healthConsentRevision !== 1) {
             throw new KindeCandidateBoundaryError();
         }
