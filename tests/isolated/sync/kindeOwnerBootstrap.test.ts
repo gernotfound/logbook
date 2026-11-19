@@ -734,7 +734,7 @@ describe('Kinde-only device vault provisioning and authenticated baseline', () =
                 cloudDocuments: { '': { profile: { height: '182' } } },
             });
             const decoded = decodeImport(JSON.parse(prepared.json), owner);
-            expect(decoded.data.profile?.height).toBe('193');
+            expect(decoded.data).toMatchObject({ profile: { height: '193' } });
             expect(decoded.deviceDrafts).toEqual([{ name: 'draft:measurement:2026-11-19', value: '{"weight":"79"}' }]);
             const baseline = UserDataSchema.parse({});
             const merged = prepareImport(baseline, decoded.data, 'restore', decoded.coverage);
