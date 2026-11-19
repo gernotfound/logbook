@@ -10,11 +10,15 @@ vi.mock('../../../src/lib/catalog/catalogService', () => ({ getCachedCatalog: ca
 
 import api from '../../../cloudflare/api/worker.mjs';
 import kinde from '../../../cloudflare/auth/kinde-http-worker.mjs';
+import { issueVerifiedSession } from '../../../cloudflare/auth/session-issuer.mjs';
 import { routeCandidateFirstPartyApi } from '../../../cloudflare/first-party-api-candidate.mjs';
 import { createCloudKeyHttpFixture, ORIGIN } from '../../cloudflare/cloud-key-http-fixture.mjs';
 import { createBackup } from '../../../src/lib/backup';
+import { prepareKindeCandidatePortableBackupJson } from '../../../src/lib/auth/kindeCandidatePortableBackup';
 import { restoreKindeCandidateBackup } from '../../../src/lib/auth/kindeCandidateRestore';
 import { prepareKindeCandidateOwner } from '../../../src/lib/sync/kindeCandidateOwnerBootstrap';
+import { commitDomainOperations } from '../../../src/lib/sync/localDomainCommit';
+import { deliverKindeCandidateJournal } from '../../../src/lib/sync/kindeCandidateJournalBridge';
 import { UserDataSchema } from '../../../src/lib/schema';
 import { createDefaultNutritionPlanning } from '../../../src/lib/nutritionDefaults';
 import { readLocal } from '../../../src/lib/sync/localArchiveBootstrap';
@@ -126,6 +130,59 @@ describe('CF-05 Kinde Schema 3 restore to encrypted IndexedDB and D1', () => {
             });
             expect(repeated).toEqual({ kind: 'already-current' });
             expect(fixture.count('sync_receipts', uid)).toBe(1);
+        } finally { fixture.close(); }
+    });
+
+    it('restores a real Kinde-exported JSON onto an independent device vault and new authenticated session', async () => {
+        const fixture = await createCloudKeyHttpFixture([uid]);
+        try {
+            await fixture.consent(uid);
+            const first = session(fixture);
+            await expect(prepareKindeCandidateOwner({
+                ...first, expected: principal,
+            })).resolves.toMatchObject({ replicaOutcome: 'adopted' });
+            const source = await readLocal(owner);
+            const firstControl = readVaultControl(owner);
+            const firstReplica = source?.replica;
+            await commitDomainOperations(owner, {
+                type: 'profile.patch', patch: { height: '180' },
+            }, source!.data);
+            await expect(deliverKindeCandidateJournal(first)).resolves.toBe('acknowledged');
+            const delivered = await readLocal(owner);
+            await commitDomainOperations(owner, {
+                type: 'profile.patch', patch: { height: '193' },
+            }, delivered!.data);
+            const file = await prepareKindeCandidatePortableBackupJson({
+                ...first, expected: principal,
+            });
+            expect(file.backup.userData.profile?.height).toBe('193');
+            expect(fixture.count('sync_receipts', uid)).toBe(1);
+
+            // Destroy all device-local state. A new identity session receives
+            // only the exported JSON; the old DEK, journal and replica do not
+            // cross into the next browser profile.
+            lockAllVaults();
+            localStorage.clear();
+            await clear();
+            const issued = await issueVerifiedSession(fixture.db, uid);
+            const cookies = issued.setCookies.map((value: string) => value.split(';')[0]).join('; ');
+            const csrf = issued.setCookies[1].split(';')[0].split('=')[1];
+            fixture.sessions.set(uid, { cookies, csrf });
+            const second = session(fixture);
+
+            await expect(restoreKindeCandidateBackup({
+                ...second, expected: principal, backup: JSON.parse(file.json),
+            })).resolves.toEqual({ kind: 'cloud-acknowledged' });
+            expect(fixture.count('sync_receipts', uid)).toBe(2);
+            expect(fixture.count('sync_documents', uid)).toBe(1);
+            await unlockVaultForOwner(owner);
+            const restored = await readLocal(owner);
+            expect(restored?.data.profile?.height).toBe('193');
+            expect(restored?.baseline.profile?.height).toBe('193');
+            expect(restored?.pending).toEqual([]);
+            expect(restored?.replica?.replicaId).not.toBe(firstReplica?.replicaId);
+            expect(readVaultControl(owner)?.wrappedKey).not.toEqual(firstControl?.wrappedKey);
+            expect(await get<string>('logbook:v2:' + owner)).toMatch(/^tlb-sealed:v1:/);
         } finally { fixture.close(); }
     });
 
