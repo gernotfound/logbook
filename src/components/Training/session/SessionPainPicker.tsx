@@ -36,185 +36,180 @@ export function SessionPainPicker({ pains, onTogglePain, onSetPains }: SessionPa
     }, [onTogglePain, onSetPains, activePainsSet, pains]);
 
     return (
-            {/* DOMS Muscle Pain Tracking Accordion */}
-            <div style={{ margin: '20px 0', background: 'var(--surface-light)', borderRadius: '12px', border: '1px solid var(--glass-border)', overflow: 'hidden' }}>
-                <button
-                    type="button"
-                    onClick={() => setIsDomsOpen(prev => !prev)}
-                    className={`accordion-btn ${isDomsOpen ? 'expanded' : ''}`}
-                    aria-expanded={isDomsOpen}
-                    aria-controls="post-session-doms-panel"
-                >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <Zap size={18} aria-hidden="true" style={{ color: 'var(--warning-color)' }} />
-                        <span>Dolori muscolari</span>
-                        <span 
+        <div style={{ margin: '20px 0', background: 'var(--surface-light)', borderRadius: '12px', border: '1px solid var(--glass-border)', overflow: 'hidden' }}>
+            <button
+                type="button"
+                onClick={() => setIsDomsOpen(prev => !prev)}
+                className={`accordion-btn ${isDomsOpen ? 'expanded' : ''}`}
+                aria-expanded={isDomsOpen}
+                aria-controls="post-session-doms-panel"
+            >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <Zap size={18} aria-hidden="true" style={{ color: 'var(--warning-color)' }} />
+                    <span>Dolori muscolari</span>
+                    <span 
+                        style={{
+                            fontSize: 'var(--font-size-micro)',
+                            padding: '2px 8px',
+                            borderRadius: '6px',
+                            background: pains.length > 0 ? 'var(--danger-soft)' : 'var(--surface-color)',
+                            color: pains.length > 0 ? 'var(--danger-color)' : 'var(--text-muted)',
+                            border: pains.length > 0 ? '1px solid var(--danger-color)' : 'none'
+                        }}
+                    >
+                        {pains.length > 0 ? `${pains.length} selezionati` : 'Opzionale'}
+                    </span>
+                </div>
+                <span style={{ color: 'var(--text-muted)', display: 'flex', alignItems: 'center' }}>
+                    {isDomsOpen ? <ChevronUp size={18} aria-hidden="true" /> : <ChevronDown size={18} aria-hidden="true" />}
+                </span>
+            </button>
+
+            {isDomsOpen && (
+                <div id="post-session-doms-panel" style={{ padding: '16px', borderTop: '1px solid var(--glass-border)' }}>
+                    <p style={{ margin: '0 0 12px 0', fontSize: 'var(--font-size-body)', color: 'var(--text-muted)' }}>
+                        Seleziona i muscoli doloranti dopo l&apos;allenamento. I dolori già attivi restano tali finché non li rimuovi esplicitamente dalla schermata Recupero.
+                    </p>
+
+                    <div style={{ position: 'relative', marginBottom: '12px' }}>
+                        <input
+                            type="text"
+                            placeholder="🔍 Cerca muscolo dolorante..."
+                            value={searchQuery}
+                            onChange={e => setSearchQuery(e.target.value)}
                             style={{
-                                fontSize: 'var(--font-size-micro)',
-                                padding: '2px 8px',
-                                borderRadius: '6px',
-                                background: pains.length > 0 ? 'var(--danger-soft)' : 'var(--surface-color)',
-                                color: pains.length > 0 ? 'var(--danger-color)' : 'var(--text-muted)',
-                                border: pains.length > 0 ? '1px solid var(--danger-color)' : 'none'
+                                width: '100%',
+                                margin: 0,
+                                paddingRight: searchQuery ? '36px' : '14px',
+                                fontSize: '16px',
+                                boxSizing: 'border-box'
+                            }}
+                        />
+                        {searchQuery && (
+                            <button
+                                type="button"
+                                onClick={() => setSearchQuery('')}
+                                className="btn-link"
+                                style={{
+                                    position: 'absolute',
+                                    right: '8px',
+                                    top: '50%',
+                                    transform: 'translateY(-50%)',
+                                    color: 'var(--text-muted)',
+                                    padding: '4px',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center'
+                                }}
+                                aria-label="Cancella ricerca"
+                            >
+                                <X size={16} aria-hidden="true" />
+                            </button>
+                        )}
+                    </div>
+
+                    {searchQuery.trim() && (
+                        <div 
+                            style={{ 
+                                background: 'var(--surface-light)',
+                                border: '1px solid var(--glass-border)',
+                                borderRadius: '8px',
+                                padding: '6px',
+                                marginBottom: '14px',
+                                maxHeight: '180px',
+                                overflowY: 'auto',
+                                display: 'flex',
+                                flexDirection: 'column',
+                                gap: '6px'
                             }}
                         >
-                            {pains.length > 0 ? `${pains.length} selezionati` : 'Opzionale'}
-                        </span>
-                    </div>
-                    <span style={{ color: 'var(--text-muted)', display: 'flex', alignItems: 'center' }}>
-                        {isDomsOpen ? <ChevronUp size={18} aria-hidden="true" /> : <ChevronDown size={18} aria-hidden="true" />}
-                    </span>
-                </button>
-
-                {isDomsOpen && (
-                    <div id="post-session-doms-panel" style={{ padding: '16px', borderTop: '1px solid var(--glass-border)' }}>
-                        <p style={{ margin: '0 0 12px 0', fontSize: 'var(--font-size-body)', color: 'var(--text-muted)' }}>
-                            Seleziona i muscoli doloranti dopo l&apos;allenamento. I dolori già attivi restano tali finché non li rimuovi esplicitamente dalla schermata Recupero.
-                        </p>
-
-                        {/* Search Input */}
-                        <div style={{ position: 'relative', marginBottom: '12px' }}>
-                            <input
-                                type="text"
-                                placeholder="🔍 Cerca muscolo dolorante..."
-                                value={searchQuery}
-                                onChange={e => setSearchQuery(e.target.value)}
-                                style={{
-                                    width: '100%',
-                                    margin: 0,
-                                    paddingRight: searchQuery ? '36px' : '14px',
-                                    fontSize: '16px',
-                                    boxSizing: 'border-box'
-                                }}
-                            />
-                            {searchQuery && (
-                                <button
-                                    type="button"
-                                    onClick={() => setSearchQuery('')}
-                                    className="btn-link"
-                                    style={{
-                                        position: 'absolute',
-                                        right: '8px',
-                                        top: '50%',
-                                        transform: 'translateY(-50%)',
-                                        color: 'var(--text-muted)',
-                                        padding: '4px',
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        justifyContent: 'center'
-                                    }}
-                                    aria-label="Cancella ricerca"
-                                >
-                                    <X size={16} aria-hidden="true" />
-                                </button>
+                            {searchResults.length === 0 ? (
+                                <div style={{ color: 'var(--text-muted)', fontSize: 'var(--font-size-meta)', padding: '10px', textAlign: 'center' }}>
+                                    Nessun muscolo trovato
+                                </div>
+                            ) : (
+                                searchResults.map(m => {
+                                    const isPain = activePainsSet.has(m.id);
+                                    return (
+                                        <button
+                                            key={m.id}
+                                            type="button"
+                                            onClick={() => handleToggleMuscle(m.id)}
+                                            style={{
+                                                display: 'flex',
+                                                justifyContent: 'space-between',
+                                                alignItems: 'center',
+                                                width: '100%',
+                                                padding: '8px 12px',
+                                                borderRadius: '6px',
+                                                fontSize: 'var(--font-size-meta)',
+                                                cursor: 'pointer',
+                                                textAlign: 'left',
+                                                background: isPain ? 'var(--danger-soft)' : 'var(--surface-light)',
+                                                color: isPain ? 'var(--danger-color)' : 'var(--text-main)',
+                                                border: isPain ? '1px solid var(--danger-color)' : '1px solid var(--glass-border)',
+                                                transition: 'all 0.2s ease'
+                                            }}
+                                        >
+                                            <span style={{ fontWeight: 600 }}>{m.name}</span>
+                                            <span style={{ fontSize: 'var(--font-size-micro)', fontWeight: 600, color: isPain ? 'var(--danger-color)' : 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                {isPain ? <><Check size={14} aria-hidden="true" /> Dolorante</> : <><Plus size={14} aria-hidden="true" /> Aggiungi</>}
+                                            </span>
+                                        </button>
+                                    );
+                                })
                             )}
                         </div>
+                    )}
 
-                        {/* Search Suggestions */}
-                        {searchQuery.trim() && (
-                            <div 
-                                style={{ 
-                                    background: 'var(--surface-light)',
-                                    border: '1px solid var(--glass-border)',
-                                    borderRadius: '8px',
-                                    padding: '6px',
-                                    marginBottom: '14px',
-                                    maxHeight: '180px',
-                                    overflowY: 'auto',
-                                    display: 'flex',
-                                    flexDirection: 'column',
-                                    gap: '6px'
-                                }}
-                            >
-                                {searchResults.length === 0 ? (
-                                    <div style={{ color: 'var(--text-muted)', fontSize: 'var(--font-size-meta)', padding: '10px', textAlign: 'center' }}>
-                                        Nessun muscolo trovato
-                                    </div>
-                                ) : (
-                                    searchResults.map(m => {
-                                        const isPain = activePainsSet.has(m.id);
-                                        return (
-                                            <button
-                                                key={m.id}
-                                                type="button"
-                                                onClick={() => handleToggleMuscle(m.id)}
-                                                style={{
-                                                    display: 'flex',
-                                                    justifyContent: 'space-between',
-                                                    alignItems: 'center',
-                                                    width: '100%',
-                                                    padding: '8px 12px',
-                                                    borderRadius: '6px',
-                                                    fontSize: 'var(--font-size-meta)',
-                                                    cursor: 'pointer',
-                                                    textAlign: 'left',
-                                                    background: isPain ? 'var(--danger-soft)' : 'var(--surface-light)',
-                                                    color: isPain ? 'var(--danger-color)' : 'var(--text-main)',
-                                                    border: isPain ? '1px solid var(--danger-color)' : '1px solid var(--glass-border)',
-                                                    transition: 'all 0.2s ease'
-                                                }}
-                                            >
-                                                <span style={{ fontWeight: 600 }}>{m.name}</span>
-                                                <span style={{ fontSize: 'var(--font-size-micro)', fontWeight: 600, color: isPain ? 'var(--danger-color)' : 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                                    {isPain ? <><Check size={14} aria-hidden="true" /> Dolorante</> : <><Plus size={14} aria-hidden="true" /> Aggiungi</>}
-                                                </span>
-                                            </button>
-                                        );
-                                    })
-                                )}
-                            </div>
-                        )}
-
-                        {/* Selected Pain Badges */}
-                        {pains.length > 0 && (
-                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '14px' }}>
-                                {pains.map(mId => (
-                                    <span 
-                                        key={mId} 
+                    {pains.length > 0 && (
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '14px' }}>
+                            {pains.map(mId => (
+                                <span 
+                                    key={mId} 
+                                    style={{
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: '6px',
+                                        background: 'var(--danger-soft)',
+                                        border: '1px solid var(--danger-color)',
+                                        color: 'var(--danger-color)',
+                                        padding: '4px 10px',
+                                        borderRadius: '8px',
+                                        fontSize: 'var(--font-size-meta)',
+                                        fontWeight: 600
+                                    }}
+                                >
+                                    {Logic.getMuscleName(mId)}
+                                    <button
+                                        type="button"
+                                        onClick={() => handleToggleMuscle(mId)}
+                                        className="btn-link"
                                         style={{
+                                            color: 'var(--danger-color)',
+                                            padding: '0 2px',
                                             display: 'inline-flex',
                                             alignItems: 'center',
-                                            gap: '6px',
-                                            background: 'var(--danger-soft)',
-                                            border: '1px solid var(--danger-color)',
-                                            color: 'var(--danger-color)',
-                                            padding: '4px 10px',
-                                            borderRadius: '8px',
-                                            fontSize: 'var(--font-size-meta)',
-                                            fontWeight: 600
+                                            lineHeight: 1
                                         }}
+                                        aria-label={`Rimuovi dolore ${Logic.getMuscleName(mId)}`}
                                     >
-                                        {Logic.getMuscleName(mId)}
-                                        <button
-                                            type="button"
-                                            onClick={() => handleToggleMuscle(mId)}
-                                            className="btn-link"
-                                            style={{
-                                                color: 'var(--danger-color)',
-                                                padding: '0 2px',
-                                                display: 'inline-flex',
-                                                alignItems: 'center',
-                                                lineHeight: 1
-                                            }}
-                                            aria-label={`Rimuovi dolore ${Logic.getMuscleName(mId)}`}
-                                        >
-                                            <X size={14} aria-hidden="true" />
-                                        </button>
-                                    </span>
-                                ))}
-                            </div>
-                        )}
-
-                        {/* Interactive SVG Mannequin */}
-                        <div style={{ maxWidth: '280px', margin: '0 auto' }}>
-                            <MuscleModel 
-                                muscleColors={painColors} 
-                                interactive={true} 
-                                onToggleMuscle={handleToggleMuscle} 
-                            />
+                                        <X size={14} aria-hidden="true" />
+                                    </button>
+                                </span>
+                            ))}
                         </div>
+                    )}
+
+                    <div style={{ maxWidth: '280px', margin: '0 auto' }}>
+                        <MuscleModel 
+                            muscleColors={painColors} 
+                            interactive={true} 
+                            onToggleMuscle={handleToggleMuscle} 
+                        />
                     </div>
-                )}
-            </div>
+                </div>
+            )}
+        </div>
     );
 }
