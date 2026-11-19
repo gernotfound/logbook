@@ -1,5 +1,6 @@
 import React from 'react';
-import { MoreHorizontal, Trash2 } from 'lucide-react';
+import { Trash2 } from 'lucide-react';
+import { SessionSetOptionsMenu } from './SessionSetOptionsMenu';
 import { SessionSetPrimaryFields } from './SessionSetPrimaryFields';
 import { SessionSetAdvancedSegments } from './SessionSetAdvancedSegments';
 import { BufferedWorkoutScope } from '../../UI/bufferedWorkoutScope';
@@ -43,11 +44,7 @@ const SessionSetRowInner: React.FC<SessionSetRowProps> = ({
     // Keep isolated component fixtures without an instance ID compatible.
     const recoveryPrefix = exerciseInstanceId ? `${exerciseInstanceId}-` : '';
     const workoutId = React.useContext(BufferedWorkoutScope);
-    const [isRirOpen, setIsRirOpen] = React.useState(false);
-    const menuTriggerRef = React.useRef<HTMLButtonElement>(null);
-    const rirTriggerRef = React.useRef<HTMLButtonElement>(null);
-    const firstRirOptionRef = React.useRef<HTMLButtonElement>(null);
-    const hasRir = typeof s.rir === 'number' && Number.isInteger(s.rir) && s.rir >= 0 && s.rir <= 10;
+
 
     const handleRemoveSetSafely = async () => {
         if (sessionSetHasMeaningfulData(s)) {
@@ -61,26 +58,7 @@ const SessionSetRowInner: React.FC<SessionSetRowProps> = ({
         if (isOpenMenu) onToggleMenu(s.id);
     };
 
-    React.useEffect(() => {
-        if (isRirOpen) firstRirOptionRef.current?.focus();
-    }, [isRirOpen]);
 
-    const closeRirMenu = (restoreFocus = false) => {
-        setIsRirOpen(false);
-        if (restoreFocus) rirTriggerRef.current?.focus();
-    };
-
-    const selectRir = (rir: number | undefined) => {
-        onUpdateSet(exIndex, s.id, 'rir', rir);
-        setIsRirOpen(false);
-        onToggleMenu(s.id);
-        queueMicrotask(() => menuTriggerRef.current?.focus());
-    };
-
-    const toggleSetMenu = () => {
-        setIsRirOpen(false);
-        onToggleMenu(s.id);
-    };
 
     const advancedSegments = Array.isArray(s.segments) ? s.segments : [];
 
@@ -102,158 +80,10 @@ const SessionSetRowInner: React.FC<SessionSetRowProps> = ({
                 <div style={{ display: 'flex', alignItems: 'center', gap: '5px', flex: 1, position: 'relative', minWidth: 0 }}>
                     <SessionSetPrimaryFields set={s} exIndex={exIndex} trackingType={trackingType}
                         onUpdateSet={onUpdateSet} recoveryPrefix={recoveryPrefix} />
-                    <button
-                        ref={menuTriggerRef}
-                        type="button"
-                        className="btn-icon"
-                        style={{
-                            width: '44px',
-                            minWidth: '44px',
-                            height: '44px',
-                            minHeight: '44px',
-                            border: '1px solid var(--glass-border)',
-                            borderRadius: '12px',
-                            background: isOpenMenu ? 'var(--surface-light)' : 'transparent',
-                            color: isOpenMenu ? 'var(--primary-color)' : 'var(--text-muted)',
-                            flexShrink: 0,
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            padding: 0,
-                            margin: 0,
-                            lineHeight: 1,
-                            alignSelf: 'center'
-                        }}
-                        onClick={toggleSetMenu}
-                        aria-label={`Opzioni serie ${sIndex + 1}`}
-                        aria-expanded={isOpenMenu}
-                        aria-haspopup="menu"
-                    >
-                        <MoreHorizontal size={22} aria-hidden="true" />
-                    </button>
-
-                    {isOpenMenu && (
-                        <>
-                            <div
-                                style={{ position: 'fixed', inset: 0, zIndex: 45 }}
-                                onClick={toggleSetMenu}
-                            />
-                            <div
-                                className="special-menu"
-                                style={{
-                                    position: 'absolute',
-                                    right: 0,
-                                    top: '48px',
-                                    background: 'var(--surface-color)',
-                                    padding: '10px',
-                                    borderRadius: '10px',
-                                    zIndex: 50,
-                                    width: 'min(220px, calc(100vw - 32px))',
-                                    boxShadow: '0 8px 24px rgba(0,0,0,0.8)',
-                                    border: '1px solid var(--glass-border)'
-                                }}
-                            >
-                                {trackingType !== 'time' && (
-                                    <>
-                                        <button
-                                            ref={rirTriggerRef}
-                                            type="button"
-                                            className="btn btn-small"
-                                            style={{
-                                                display: 'flex',
-                                                alignItems: 'center',
-                                                justifyContent: 'space-between',
-                                                width: '100%',
-                                                minHeight: '44px',
-                                                marginBottom: '6px'
-                                            }}
-                                            onClick={() => setIsRirOpen(open => !open)}
-                                            aria-label={`Imposta RIR serie ${sIndex + 1}: ${hasRir ? s.rir : 'non registrato'}`}
-                                            aria-expanded={isRirOpen}
-                                            aria-haspopup="menu"
-                                        >
-                                            <span>RIR</span>
-                                            <strong>{hasRir ? s.rir : '—'}</strong>
-                                        </button>
-                                        {isRirOpen && (
-                                            <div
-                                                role="menu"
-                                                aria-label={`Seleziona RIR serie ${sIndex + 1}`}
-                                                onKeyDown={(event) => {
-                                                    if (event.key === 'Escape') {
-                                                        event.preventDefault();
-                                                        closeRirMenu(true);
-                                                    }
-                                                }}
-                                                style={{
-                                                    width: '100%',
-                                                    marginBottom: '8px',
-                                                    padding: '8px',
-                                                    display: 'grid',
-                                                    gridTemplateColumns: 'repeat(4, minmax(44px, 1fr))',
-                                                    gap: '6px',
-                                                    background: 'var(--surface-light)',
-                                                    border: '1px solid var(--glass-border)',
-                                                    borderRadius: '10px',
-                                                    boxSizing: 'border-box'
-                                                }}
-                                            >
-                                                {Array.from({ length: 11 }, (_, rir) => (
-                                                    <button
-                                                        key={rir}
-                                                        ref={rir === 0 ? firstRirOptionRef : undefined}
-                                                        type="button"
-                                                        role="menuitemradio"
-                                                        aria-checked={s.rir === rir}
-                                                        className="btn-icon"
-                                                        style={{
-                                                            minWidth: '44px',
-                                                            minHeight: '44px',
-                                                            padding: 0,
-                                                            background: s.rir === rir ? 'var(--primary-color)' : 'var(--surface-color)',
-                                                            color: s.rir === rir ? 'var(--on-primary)' : 'var(--text-main)',
-                                                            fontWeight: 700
-                                                        }}
-                                                        onClick={() => selectRir(rir)}
-                                                    >
-                                                        {rir}
-                                                    </button>
-                                                ))}
-                                                <button
-                                                    type="button"
-                                                    role="menuitem"
-                                                    className="btn btn-small"
-                                                    style={{ gridColumn: '1 / -1', minHeight: '44px', margin: 0 }}
-                                                    onClick={() => selectRir(undefined)}
-                                                >
-                                                    Non registrato
-                                                </button>
-                                            </div>
-                                        )}
-                                    </>
-                                )}
-                                {[
-                                    ['dropset', 'Dropset'],
-                                    ['rest_pause', 'Rest-pause'],
-                                    ['cluster', 'Cluster'],
-                                    ['rep_match', 'Rep-match'],
-                                    ['diminishing', 'Diminishing set'],
-                                ].map(([value, label]) => (
-                                    <button key={value} className="btn btn-small" style={{ display: 'block', width: '100%', marginBottom: '6px' }} onClick={() => onAddSpecialSet(exIndex, value, s.id)}>+ {label}</button>
-                                ))}
-                                <button className="btn btn-small" style={{ display: 'block', width: '100%', marginBottom: '6px' }} onClick={() => onAddSpecialSet(exIndex, 'isometry', s.id)}>+ Isometria</button>
-                                <button
-                                    type="button"
-                                    className="btn btn-small session-set-remove-action"
-                                    style={{ display: 'flex', width: '100%', alignItems: 'center', justifyContent: 'space-between' }}
-                                    onClick={() => void handleRemoveSetSafely()}
-                                >
-                                    <span>Rimuovi questa serie</span>
-                                    <Trash2 size={18} aria-hidden="true" />
-                                </button>
-                            </div>
-                        </>
-                    )}
+                    <SessionSetOptionsMenu set={s} sIndex={sIndex} exIndex={exIndex}
+                        trackingType={trackingType} isOpenMenu={isOpenMenu} onToggleMenu={onToggleMenu}
+                        onUpdateSet={onUpdateSet} onAddSpecialSet={onAddSpecialSet}
+                        onRemoveRequested={handleRemoveSetSafely} />
                 </div>
             </div>
 
