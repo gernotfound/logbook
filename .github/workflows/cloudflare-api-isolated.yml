@@ -74,6 +74,11 @@ jobs:
           npx --yes wrangler@4.159.0 deploy --dry-run --config cloudflare/api/wrangler.isolated.jsonc
           # Candidate Kinde HTTP is compile-only: never deploy or publish it at this gate.
           npx --yes wrangler@4.159.0 deploy --dry-run --config cloudflare/auth/wrangler.kinde.isolated.jsonc
+      - name: Preflight private API KEK and existing Worker isolation before any provider write
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+        run: node scripts/verify-cloudflare-api-provider.mjs
       - name: Verify main lease again immediately before provider writes
         shell: bash
         run: |
