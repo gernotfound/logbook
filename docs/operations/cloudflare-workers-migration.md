@@ -1,5 +1,11 @@
 # TheLogBook — migrazione Cloudflare: runbook corrente
 
+## CF-03/04 — Journal account dopo preparazione Kinde nel candidato React (v2.543.0 proposta, 19/11/2026)
+
+L'azione esplicita `Continua` del percorso **candidato non pubblico** chiama ora il bootstrap con `drainPendingJournal: true`: dopo la conferma trusted di Kinde/consenso, la hydration AEAD e la replica-claim, il bridge consegna o riconcilia le modifiche **già durevoli** nel journal cifrato. Solo `checkpointRevision` valido, `replicaOutcome: adopted | already-active` e `journalOutcome: idle | acknowledged` consentono all'interfaccia di mostrare la preparazione completata. Un eventuale checkpoint valido senza ricevuta del journal resta **non confermato** e consente il retry; nessun ACK viene inventato. Le regressioni React coprono i due esiti journal, il claim non risolto, la sessione sostituita, il guest e il provider pubblico escluso. I test isolati esistenti attraversano il vero client Workers/D1 sintetico e il recupero dopo risposta perduta; **non** rappresentano un collaudo live.
+
+Confine invariato: `App.tsx` e `KindeAccountSessionProvider` mantengono l'ingresso identity-only; il frontend Cloudflare non pubblica `D1_API` nell'ultimo readback. Nessun dato utente, KEK o binding provider modificato. Restano **NO-GO** l'installazione owner fitness nel runtime, il ciclo revoca/diritti con UX di export, la prova sul tenant Kinde e i test D1/browser/Safari live. Vedi [CF-03](https://github.com/gernotfound/logbook/issues/1057), [CF-04](https://github.com/gernotfound/logbook/issues/1058) e [CF-05](https://github.com/gernotfound/logbook/issues/1059).
+
 ## CF-03/04/05 — Proseguimento React candidato dopo il consenso (v2.542.0 proposta, 19/11/2026)
 
 L'ingresso di test `KindeAccountEntry`, con attivazione esplicita `candidatePreparationEnabled`, offre un solo pulsante `Continua` dopo il **consenso server verificato**: richiama il bootstrap Kinde owner-scoped già presente, con verifica sessione/CSRF/consenso, apertura temporanea del vault, hydration AEAD e replica-claim. Non anticipa l'operazione a una mera presenza Kinde. Il risultato di prova distingue osservazione di checkpoint+replica, consegna non confermata ed errore; una sessione sostituita scarta i risultati tardivi. Il dispositivo non riceve né conserva la KEK.
