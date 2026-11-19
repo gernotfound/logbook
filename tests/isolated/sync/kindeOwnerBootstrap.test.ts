@@ -23,7 +23,9 @@ import { deliverKindeCandidateJournal } from '../../../src/lib/sync/kindeCandida
 import type { CloudReplicaClaimRequest } from '../../../src/lib/sync/cloudReplicaTransport';
 import { readLocal } from '../../../src/lib/sync/localArchiveBootstrap';
 import { commitDomainOperations } from '../../../src/lib/sync/localDomainCommit';
-import { lockAllVaults, readVaultControl, vaultControlKey } from '../../../src/lib/sync/secureArchiveSession';
+import {
+    isVaultUnlocked, lockAllVaults, readVaultControl, unlockVaultForOwner, vaultControlKey,
+} from '../../../src/lib/sync/secureArchiveSession';
 
 const uid = 'k_' + 'A'.repeat(43);
 const owner = 'user:' + uid;
@@ -122,6 +124,8 @@ describe('Kinde-only device vault provisioning and authenticated baseline', () =
             expected: principal, stillCurrent: expect.any(Function),
             send, browserCookies: cookie,
         });
+        expect(isVaultUnlocked(owner)).toBe(false);
+        await unlockVaultForOwner(owner);
         const data = await readLocal(owner);
         expect(data?.owner).toBe(owner);
         expect(data?.consentRevision).toBe(1);
@@ -168,10 +172,13 @@ describe('Kinde-only device vault provisioning and authenticated baseline', () =
         await expect(start(server('scan-error'))).rejects.toThrow();
         const previous = readVaultControl(owner);
         expect(previous?.phase).toBe('active');
+        expect(isVaultUnlocked(owner)).toBe(false);
         expect(await get('logbook:v2:' + owner)).toBeUndefined();
         expect(claimSource.claim).not.toHaveBeenCalled();
         await expect(start(server())).resolves.toMatchObject({ kind: 'candidate-observed' });
         expect(readVaultControl(owner)).toEqual(previous);
+        expect(isVaultUnlocked(owner)).toBe(false);
+        await unlockVaultForOwner(owner);
         expect(await readLocal(owner)).toMatchObject({ owner, consentRevision: 1 });
     });
 
@@ -204,6 +211,8 @@ describe('Kinde-only device vault provisioning and authenticated baseline', () =
             expect(fixture.count('sync_replicas', uid)).toBe(1);
             const staged = requests[0];
             const controlBefore = readVaultControl(owner);
+            expect(isVaultUnlocked(owner)).toBe(false);
+            await unlockVaultForOwner(owner);
             expect(await readLocal(owner)).toMatchObject({ cloudflareReplicaClaim: staged, pending: [], replica: null });
             const sealed = await get<string>('logbook:v2:' + owner);
             expect(sealed).toMatch(/^tlb-sealed:v1:/);
@@ -214,6 +223,7 @@ describe('Kinde-only device vault provisioning and authenticated baseline', () =
             await expect(start(send, browserCookies)).resolves.toEqual({
                 kind: 'candidate-observed', checkpointRevision: null, replicaOutcome: 'reconciliation-required',
             });
+            expect(isVaultUnlocked(owner)).toBe(false);
             expect(scanCount).toBe(scansBeforeRetry);
             expect(await get('logbook:v2:' + owner)).toBe(sealed);
             await expect(start(send, browserCookies)).resolves.toEqual({
@@ -223,6 +233,7 @@ describe('Kinde-only device vault provisioning and authenticated baseline', () =
             expect(fixture.count('sync_replicas', uid)).toBe(1);
             expect(readVaultControl(owner)).toEqual(controlBefore);
             const recovered = await readLocal(owner);
+            expect(isVaultUnlocked(owner)).toBe(true);
             expect(recovered?.cloudflareReplicaClaim).toBeUndefined();
             expect(recovered?.replica?.replicaId).toBe(staged.candidateReplicaId);
             expect(recovered?.pending).toEqual([]);
@@ -263,6 +274,7 @@ describe('Kinde-only device vault provisioning and authenticated baseline', () =
             const wrappingKey = fixture.env.CLOUD_ACCOUNT_KEK_V1;
             fixture.env.CLOUD_ACCOUNT_KEK_V1 = '';
             await expect(prepareKindeCandidateOwner({ ...session, expected: principal })).rejects.toThrow();
+            expect(isVaultUnlocked(owner)).toBe(false);
             expect(fixture.count('cloud_account_keys', uid)).toBe(0);
             expect(fixture.count('sync_replicas', uid)).toBe(0);
             fixture.env.CLOUD_ACCOUNT_KEK_V1 = wrappingKey;
@@ -285,6 +297,8 @@ describe('Kinde-only device vault provisioning and authenticated baseline', () =
             await expect(prepareKindeCandidateOwner({ ...session, expected: principal })).rejects.toThrow();
             expect(scans).toBe(scansBeforeRestart);
             expect(await get('logbook:v2:' + owner)).toBe(ciphertext);
+            expect(isVaultUnlocked(owner)).toBe(false);
+            await unlockVaultForOwner(owner);
             expect((await readLocal(owner))?.cloudflareDelivery).toEqual(originalIntent);
             receiptUnavailable = false;
 
@@ -314,7 +328,35 @@ describe('Kinde-only device vault provisioning and authenticated baseline', () =
         } });
         await expect(start(server(), () => liveCookie))
             .rejects.toBeInstanceOf(KindeCandidateBoundaryError);
+        expect(isVaultUnlocked(owner)).toBe(false);
         expect(await get('logbook:v2:' + owner)).toBeUndefined();
         expect(claimSource.claim).not.toHaveBeenCalled();
+    });
+
+    it('a delayed scan from a replaced session cannot lock a newer grant for the same owner', async () => {
+        let liveCookie = cookie();
+        let finishScan!: () => void;
+        const paused = new Promise<void>(resolve => { finishScan = resolve; });
+        const respond = server();
+        const send = vi.fn<typeof fetch>(async (path, init) => {
+            if (path === '/v1/sync/scan') await paused;
+            return respond(path, init);
+        });
+        const obsolete = start(send, () => liveCookie);
+        const rejected = expect(obsolete).rejects.toThrow();
+        try {
+            await vi.waitFor(() => expect(send).toHaveBeenCalledWith('/v1/sync/scan', expect.anything()));
+            expect(isVaultUnlocked(owner)).toBe(true);
+            liveCookie = '__Host-logbook_csrf=' + 'B'.repeat(42) + 'A';
+            const newer = await unlockVaultForOwner(owner);
+            finishScan();
+            await rejected;
+            expect(newer.isCurrent()).toBe(true);
+            expect(await get('logbook:v2:' + owner)).toBeUndefined();
+            expect(claimSource.claim).not.toHaveBeenCalled();
+        } finally {
+            finishScan();
+            await obsolete.catch(() => {});
+        }
     });
 });

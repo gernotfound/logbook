@@ -93,8 +93,13 @@ export function isVaultUnlocked(owner: string): boolean {
     try { requireUnlockedLocalKey(owner); return true; } catch { return false; }
 }
 
+type LocalVaultUnlock = {
+    isCurrent: () => boolean;
+    release: () => void;
+};
+
 /** Automatic same-device unlock after the caller verifies current owner identity. */
-export async function unlockVaultForOwner(owner: string, isCurrent: () => boolean = () => true): Promise<void> {
+export async function unlockVaultForOwner(owner: string, isCurrent: () => boolean = () => true): Promise<LocalVaultUnlock> {
     const normalized = normalizeStorageOwner(owner);
     assertNoLocalPurge(normalized);
     const control = readVaultControl(normalized);
@@ -119,10 +124,23 @@ export async function unlockVaultForOwner(owner: string, isCurrent: () => boolea
             throw new LocalVaultLockedError();
         }
         lockVault(normalized);
-        capabilities.set(normalized, { key: unwrapped, epoch: control.epoch,
+        const capability = { key: unwrapped, epoch: control.epoch,
             wrappedKeyIdentity: wrappedKeyIdentity(control),
             ...(normalized === 'guest' ? { guestSessionId } : {}),
-        });
+        };
+        capabilities.set(normalized, capability);
+        return {
+            isCurrent: () => {
+                if (capabilities.get(normalized) !== capability) return false;
+                try { return requireUnlockedLocalKey(normalized) === unwrapped; }
+                catch { return false; }
+            },
+            // A stale attempt may finish after a replacement unlock of the
+            // same owner. Only the grant issued to this attempt may be revoked.
+            release: () => {
+                if (capabilities.get(normalized) === capability) lockVault(normalized);
+            },
+        };
     } catch (error) {
         // Never retain decrypted key material after a failed post-await check.
         unwrapped.fill(0);
