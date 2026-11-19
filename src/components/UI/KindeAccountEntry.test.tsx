@@ -430,6 +430,31 @@ describe('isolated Kinde account entry candidate', () => {
         expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:kinde-candidate-export');
     });
 
+    it('permits explicit withdrawal even after email verification is lost, without granting a backup vault', async () => {
+        vi.mocked(readKindeCandidateIdentity).mockResolvedValue({
+            kind: 'email-unverified', principal: { ...principal, healthConsentRevision: 1, emailVerified: false },
+        });
+        vi.mocked(withdrawKindeCandidateHealthConsent).mockImplementationOnce(async () => {
+            localStorage.setItem('logbook:v2:user:' + A + ':health-consent-withdrawal', 'withdrawn');
+            return { kind: 'withdrawal-recorded', deletionStatus: 'processing' };
+        });
+        render(<KindeAccountEntry candidatePreparationEnabled candidateLifecycleEnabled />);
+        expect(await screen.findByRole('button', {
+            name: 'Revoca consenso e avvia cancellazione',
+        })).toHaveProperty('disabled', true);
+        expect(screen.queryByRole('button', { name: 'Prepara backup JSON' })).toBeNull();
+        expect(unlockVaultForOwner).not.toHaveBeenCalled();
+        fireEvent.click(screen.getByRole('checkbox', { name: /Confermo di voler revocare/ }));
+        fireEvent.click(screen.getByRole('button', { name: 'Revoca consenso e avvia cancellazione' }));
+        await waitFor(() => expect(withdrawKindeCandidateHealthConsent).toHaveBeenCalledWith({
+            confirmsErasure: true,
+            expected: { uid: A, fenceEpoch: 1, healthConsentRevision: 1 },
+            stillCurrent: expect.any(Function),
+        }));
+        expect(readKindeCandidateAccess).not.toHaveBeenCalled();
+        expect(unlockVaultForOwner).not.toHaveBeenCalled();
+    });
+
     it('permits the rights-only request after email verification is lost, never enabling fitness or vault', async () => {
         vi.mocked(readKindeCandidateIdentity).mockResolvedValue({
             kind: 'email-unverified', principal: { ...principal, healthConsentRevision: 1, emailVerified: false },
