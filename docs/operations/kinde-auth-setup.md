@@ -1,5 +1,8 @@
 # Kinde — configurazione del provider per TheLogBook
 
+> **19/11/2026 · Revoca/diritti Kinde (CF-05, candidato isolato).** Il browser dispone dei boundary `withdrawKindeCandidateHealthConsent` (preflight sessione/consenso e marker `pending:1` durevole prima di ogni POST) e `withKindeCandidateRightsKey` (solo custodia della chiave cloud preesistente dopo revoca, sessione pin-nata e zeroizzazione). Non sono collegati alla UI pubblica: la revoca effettiva è irreversibile e deve essere preceduta da una scelta esplicita con possibilità di esportare. I test usano primo accesso sintetico, Worker e SQL D1 isolati, simulano risposta POST perduta e fallimento storage. Mancano endpoint e recupero completo per esportazione dei documenti cifrati e conferma del job dopo un ACK perso: non equiparare `withdrawn` alla cancellazione terminata o al soddisfacimento dei diritti.
+
+
 
 > **19/11/2026 · Bridge React candidato, nessun GO fitness.** `useKindeAccountSession` dispone di un ingresso esplicito per il bootstrap cifrato Kinde→D1, vincolato a sessione e consenso: il provider pubblico lo lascia disabilitato (`candidatePreparationEnabled: false`) e non effettua nuove chiamate API al login. Quando invocato nelle fixture isolate, scarica dinamicamente il bootstrap, rifiuta generation/cookie obsoleti e chiude il vault al termine dell'osservazione, anche se D1 ha restituito un checkpoint valido. Restano invariati `currentUser: null`, l'assenza del reader account e il blocco delle schede fitness. Il frontend reale non ha ancora `D1_API` e il Worker D1 non espone ancora la KEK cloud; nessun binding o secret è stato modificato.
 

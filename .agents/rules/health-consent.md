@@ -1,5 +1,12 @@
 # Consenso salute, diritti e cancellazione dei dati — TheLogBook
 
+## Revoca Kinde e custodia rights-only — client candidato (19/11/2026)
+
+`withdrawKindeCandidateHealthConsent()` è un ingresso browser **non montato** nel provider React: richiede decisione esplicita di cancellazione (con offerta preventiva di export a carico della futura UI), sessione Kinde e consenso D1 `active` dello stesso UID/epoch/revisione 1. Prima del POST scrive il marker durevole owner-scoped `pending:1`, che blocca fitness e journal cross-tab anche su errore di rete. L'assenza di storage impedisce il POST. Il payload è esattamente `withdraw`/`expectedRevision: 1`/`confirmsErasure: true`; non effettua replay dopo un ACK perduto. Solo una ricevuta `deletionStatus: pending|processing` del Worker più rilettura trusted `withdrawn` consentono il marker `withdrawn`: **mai** erasure `complete`, purge o riaccettazione implicita. Un pending ambiguo resta da riconciliare tramite prova server indipendente, non basta il marker locale.
+
+`withKindeCandidateRightsKey()` è il candidato separato per un'ADK **già esistente**, purpose `rights-export`; revalida la sessione Kinde prima/dopo l'acquisizione e l'uso, accetta anche l'email successivamente non verificata, e azzera i byte dopo il callback anche in caso di errore. Non chiama `sync`, non apre vault, non installa owner, non crea chiavi, non effettua export documenti o cleanup. Il Worker resta l'autorità SQL sullo stato `withdrawn` e sulla prova di consenso originale: l'ADK da sola non equivale all'esportazione dei dati. Nessun GO finché un trasporto rights-only per ciphertext, job readback dopo lost ACK, lifecycle React/UI, dati reali e worker/KEK non sono verificati.
+
+
 **Quando leggere:** primo consenso trusted, revoca/riaccettazione, generazioni offline, export diritti e health-data erasure.
 **Non inferire:** cache locale, consenso guest o sola uguaglianza UID non attestano un'autorizzazione cloud corrente.
 
