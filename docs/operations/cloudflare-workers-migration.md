@@ -963,7 +963,9 @@ con email non più verificata la revoca rimane possibile, ma
 il percorso di backup completo che richiede il vault fitness resta
 negato. `KindeCandidateRightsPanel` prepara un file **separato e non
 ripristinabile** con i soli documenti cloud ancora leggibili mentre
-il job è in corso; se l'erasure è già avanzata, il server rifiuta.
+il job è in corso; un job già in elaborazione può aver eliminato parte
+dei documenti senza mutare la revisione, e il server rifiuta quando
+il cutoff impedisce ulteriori letture.
 
 `KindeCandidateJsonPanel` gestisce download browser con URL
 temporanei, verifiche di sessione e cleanup senza prova fittizia
