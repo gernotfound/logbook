@@ -118,7 +118,13 @@ test.describe('Offline scenarios & Background suspension', () => {
     // underlying files. Verify that the installed worker resolves both offline.
     const cachedAssets = await page.evaluate(async () => {
       const response = await fetch('/manifest.webmanifest');
-      const manifest = await response.json() as { icons: Array<{ src: string }> };
+      const manifest = await response.json() as {
+        id: string;
+        start_url: string;
+        scope: string;
+        shortcuts: Array<{ url: string }>;
+        icons: Array<{ src: string }>;
+      };
       const icons = await Promise.all(manifest.icons.map(async icon => {
         const image = await fetch(icon.src);
         return {
@@ -127,9 +133,20 @@ test.describe('Offline scenarios & Background suspension', () => {
           bytes: (await image.arrayBuffer()).byteLength,
         };
       }));
-      return { manifestStatus: response.status, icons };
+      return {
+        manifestStatus: response.status,
+        id: manifest.id,
+        startUrl: manifest.start_url,
+        scope: manifest.scope,
+        shortcuts: manifest.shortcuts.map(shortcut => shortcut.url),
+        icons,
+      };
     });
     expect(cachedAssets.manifestStatus).toBe(200);
+    expect(cachedAssets.id).toBe('/');
+    expect(cachedAssets.startUrl).toBe('/');
+    expect(cachedAssets.scope).toBe('/');
+    expect(cachedAssets.shortcuts).toEqual(['/?tab=training', '/?tab=nutrition']);
     expect(cachedAssets.icons).toHaveLength(4);
     for (const icon of cachedAssets.icons) {
       expect(icon.status).toBe(200);
