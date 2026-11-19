@@ -4,6 +4,8 @@
 
 La composizione candidata `prepareKindeCandidateOwner()` prima riusa/crea il vault device owner-scoped solo dopo consent trusted attivo, poi verifica due volte la sessione, esegue hydration AEAD e infine la replica claim con intento cifrato. `isKindeAccountLocalFitnessClear()` è un gate fitness locale aggiuntivo, distinto dal controllo D1: i marker owner-scoped di revoca/cancellazione e una generazione consenso divergente bloccano letture/scritture anche se una risposta remota ancora riporta active. Hydration, claim e journal lo ricontrollano nei guard asincroni/IndexedDB; revoca non è un diritto all'ACK o all'azzeramento del journal. I test usano IndexedDB effettivo in memoria con controllo dell'envelope cifrato; niente grant runtime su `main` senza API/D1 e lifecycle Kinde verificati.
 
+Se il vault contiene già un claim cifrato, il bootstrap riprende la stessa richiesta prima della hydration. La hydration resta bloccata mentre l'intento attende riconciliazione. In questo caso il bootstrap restituisce `checkpointRevision: null` perché durante quel tentativo non ha installato un nuovo checkpoint. Una richiesta di claim di un'altra epoca Auth resta nel vault e non viene inviata.
+
 
 ### CF-03 — Osservazione del checkpoint D1 con sessione Kinde (17/11/2026)
 
