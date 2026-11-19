@@ -1,5 +1,6 @@
 import type { Exercise } from '../../types';
-import type { NormalizedSet, NormalizedExposure, ExposureComparison, OutputChange, ProgressionQuality } from './progression';
+import type { NormalizedSet, NormalizedExposure, ExposureComparison, ProgressionQuality } from './progression';
+import type { OutputChange } from './progressionInternalTypes';
 
 export interface HistoricalExposureComparison {
     exposure: NormalizedExposure;

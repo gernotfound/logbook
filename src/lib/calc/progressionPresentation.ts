@@ -1,5 +1,6 @@
 import type { TrainingCycleIntent } from '../../types';
-import type { ProgressionClassification, NormalizedExposure, ProgressionQuality, ExerciseProgressionAnalysis } from './progression';
+import type { NormalizedExposure, ProgressionQuality, ExerciseProgressionAnalysis } from './progression';
+import type { ProgressionClassification } from './progressionInternalTypes';
 
 export function formatProgressionReference(exposure?: NormalizedExposure): string {
     const set = exposure?.referenceSet;
