@@ -12,7 +12,7 @@ import { readBufferedDraftSnapshot } from '../../../src/lib/sync/bufferedDraftEp
 import { captureSession } from '../../../src/lib/sync/session';
 import { useAppStore } from '../../../src/store/useAppStore';
 import { localStorageMock } from '../../setup';
-import { field, editor, initialGetItem, initialSetItem } from './bufferedRecoveryFixtures';
+import { initialGetItem, initialSetItem } from './bufferedRecoveryFixtures';
 
 describe('advanced workout segment identity across removal and draft recovery', () => {
     const workoutId = 'w-segment-identity';
