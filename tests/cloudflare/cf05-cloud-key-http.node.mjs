@@ -530,7 +530,7 @@ void test('rights scan accepts an unverified renewed session but rejects stale c
       { body: { after: 'history_months/2026-01', expectedRevision: null } },
       { body: { after: null, expectedRevision: 1 } },
       { body: { after: null, expectedRevision: null, uid: 'owner-b' } },
-      { body: { after: null, expectedRevision: null }, method: 'GET' },
+      { method: 'GET' },
       { body, origin: 'https://foreign.invalid' },
       { body, env: { ...f.env, RECOVERY_DB: undefined } },
       { body, env: { ...f.env, RECOVERY_DB: f.db } },
