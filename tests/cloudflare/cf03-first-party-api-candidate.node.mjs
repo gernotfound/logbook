@@ -66,7 +66,7 @@ void test('routes only explicitly named POST endpoints to private service bindin
   assert.equal(calls.data.length, 1);
   for (const path of [
     '/v1/consent/status', '/v1/consent/initial', '/v1/consent/withdraw',
-    '/v1/cloud-key/sync', '/v1/cloud-key/rights-export',
+    '/v1/cloud-key/sync', '/v1/cloud-key/rights-export', '/v1/rights/scan',
     '/v1/sync/read', '/v1/sync/scan', '/v1/sync/receipt',
     '/v1/sync/commit', '/v1/sync/commit/status', '/v1/sync/replica/claim',
     '/v1/sync/replica/retire', '/v1/sync/replica/status',
@@ -74,7 +74,7 @@ void test('routes only explicitly named POST endpoints to private service bindin
     const response = await routeCandidateFirstPartyApi(request(path), env);
     assert.equal(response.status, 200, path);
   }
-  assert.equal(calls.data.length, 14);
+  assert.equal(calls.data.length, 15);
 });
 
 void test('rejects wrong methods, queries and missing bindings before private I/O', async () => {
