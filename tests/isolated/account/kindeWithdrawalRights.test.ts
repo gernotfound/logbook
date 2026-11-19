@@ -192,6 +192,29 @@ describe('Kinde withdrawal and rights-only client against first-party Workers an
         }
     });
 
+    it('preserves revocation and rights after email verification is lost, without fitness authorization', async () => {
+        const fixture = await createCloudKeyHttpFixture([uid]);
+        try {
+            await fixture.consent(uid);
+            const originalKey = await provisionKey(fixture);
+            fixture.sqlite.prepare('UPDATE auth_principals SET verified_at_ms=NULL WHERE uid=?').run(uid);
+            const client = browser(fixture);
+            await expect(readKindeCandidateAccess(client)).rejects.toBeInstanceOf(KindeCandidateBoundaryError);
+            await expect(withdrawKindeCandidateHealthConsent({
+                ...client, expected, confirmsErasure: true,
+            })).resolves.toEqual({ kind: 'withdrawal-recorded', deletionStatus: 'pending' });
+            expect(localStorage.getItem(marker)).toBe('withdrawn');
+            const key = await withKindeCandidateRightsKey({
+                ...client, expected, consumeKey: async adk => adk.slice(),
+            });
+            expect(key).toEqual(originalKey);
+            expect(fixture.count('health_erasure_jobs', uid)).toBe(1);
+            expect((await fixture.call(uid, '/v1/cloud-key/sync')).response.status).not.toBe(200);
+        } finally {
+            fixture.close();
+        }
+    });
+
     it('rights-only cannot provision a new ADK after withdrawal or grant rights while consent is active', async () => {
         const fixture = await createCloudKeyHttpFixture([uid]);
         try {
