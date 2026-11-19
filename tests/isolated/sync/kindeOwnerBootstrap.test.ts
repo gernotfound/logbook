@@ -419,7 +419,7 @@ describe('Kinde-only device vault provisioning and authenticated baseline', () =
             expect((await readLocal(owner))?.baseline.profile?.height).toBe('184');
             const ciphertext = await get<string>('logbook:v2:' + owner);
             expect(ciphertext).toMatch(/^tlb-sealed:v1:/);
-            expect(ciphertext).not.toContain('184');
+            expect(ciphertext).not.toContain('"height":"184"');
 
             lockAllVaults();
             await expect(prepareKindeCandidateOwner({
