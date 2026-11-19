@@ -86,7 +86,8 @@ describe('Challenger 1: Algorithmic & Mathematical Stress Test Suite', () => {
             expect(workoutKg).toBe(27000);
             // 52 Monday-based weeks begin 2025-09-08; no session later
             // than the requested 2026-09-01 reference day may be included.
-            const included = history.filter(w => w.date >= '2025-09-08' && w.date <= '2026-09-01');
+            const included = history.filter(w =>
+                typeof w.date === 'string' && w.date >= '2025-09-08' && w.date <= '2026-09-01');
             expect(included).toHaveLength(359);
             expect(volStats.totalWorkouts).toBe(359);
             expect(volStats.totalVolumeKg).toBe(359 * workoutKg);
