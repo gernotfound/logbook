@@ -205,7 +205,9 @@ describe('CF-05 synthetic Kinde consent, ciphertext, second device and portable 
             const cloud = fixture.sqlite.prepare(
                 'SELECT envelope_json FROM sync_documents WHERE uid=? AND path=?',
             ).get(uid, '');
-            expect(cloud?.envelope_json).toBeTypeOf('string');
+            if (!cloud || typeof cloud.envelope_json !== 'string') {
+                throw Error('No persisted encrypted D1 envelope');
+            }
             expect(cloud.envelope_json).not.toContain('"height"');
             expect(cloud.envelope_json).not.toContain('"profile"');
 
