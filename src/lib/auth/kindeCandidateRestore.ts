@@ -3,6 +3,7 @@ import { decodeImport, prepareImport } from '../backup';
 import { getCachedCatalog } from '../catalog/catalogService';
 import type { UserData } from '../../types';
 import { UserDataSchema } from '../schema';
+import { removeUndefinedValuesForFirestore } from '../utils/object';
 import { findLossyNormalization } from '../sync/businessNormalizationIntegrity';
 import { captureKindeCandidateSessionFence, KindeCandidateBoundaryError,
     type KindeCandidateAccess } from './kindeCandidateClient';
@@ -37,6 +38,9 @@ function requireCurrent(guard: () => boolean): void {
 }
 
 const parse = (value: unknown) => UserDataSchema.parse(value) as unknown as UserData;
+// IndexedDB seals the JSON form: undefined object properties do not survive encryption.
+const canonicalBusiness = (value: UserData) => removeUndefinedValuesForFirestore(parse(value));
+const sameBusiness = (left: UserData, right: UserData) => equal(canonicalBusiness(left), canonicalBusiness(right));
 
 /**
  * A bulk restore must be representable by the SAME semantic journal as the
@@ -59,16 +63,15 @@ async function assertDurableProjection(current: UserData, desired: UserData,
     const { documents } = applySemanticOperations(baseDocuments, sequenced.operations);
     const replayed = applyRemoteDocuments(current, documents, catalog);
     replayed.pendingConflicts = desired.pendingConflicts;
-    const normalizedReplay = parse(replayed);
-    if (!equal(normalizedReplay, desired)) {
-        // Only the path is emitted: business values can contain sensitive data.
-        const missing = findLossyNormalization(desired, normalizedReplay);
-        const unexpected = findLossyNormalization(normalizedReplay, desired);
+    const normalizedReplay = canonicalBusiness(replayed);
+    const normalizedDesired = canonicalBusiness(desired);
+    if (!equal(normalizedReplay, normalizedDesired)) {
+        // Emit a property path, never the health value. An extra *defined*
+        // field still fails; only JSON-elided undefined values are equivalent.
+        const missing = findLossyNormalization(normalizedDesired, normalizedReplay);
+        const unexpected = findLossyNormalization(normalizedReplay, normalizedDesired);
         const path = (missing ?? unexpected ?? []).join('.') || '<root>';
-        // Distinguish a missing imported field from an unexpected default
-        // without emitting any business values to shared CI logs.
-        const direction = missing ? 'missing' : unexpected ? 'unexpected' : 'representation';
-        throw new Error(`Backup non rappresentabile dal journal corrente (${direction}: ${path}; origin-presence: ${Object.hasOwn(desired, 'nutritionPlanningOrigin')}/${Object.hasOwn(normalizedReplay, 'nutritionPlanningOrigin')}): ripristino annullato.`);
+        throw new Error(`Backup non rappresentabile dal journal corrente (${path}): ripristino annullato.`);
     }
 }
 
@@ -137,13 +140,13 @@ export async function restoreKindeCandidateBackup({
         if (!before.replica || before.replica.leaseUntilMs <= Date.now()
             || before.actorId !== before.replica.slot
             || before.consentRevision !== principal.healthConsentRevision
-            || before.pending.length !== 0 || !equal(before.data, before.baseline)
+            || before.pending.length !== 0 || !sameBusiness(before.data, before.baseline)
             || before.cloudIntegrityFence || before.cloudflareDelivery
             || before.cloudflareReplicaClaim || before.cloudflareReplicaRetirement
             || (before.archivedConsentJournals?.length ?? 0) !== 0) {
             throw new Error('Archivio Kinde non pulito: ripristino sospeso senza sostituzioni.');
         }
-        const restored = prepareImport(before.data, decoded.data, 'restore', decoded.coverage).data;
+        const restored = canonicalBusiness(prepareImport(before.data, decoded.data, 'restore', decoded.coverage).data);
         await assertDurableProjection(before.data, restored,
             before.actorId, before.actorSeq, before.clock);
         requireCurrent(scoped);
@@ -151,7 +154,7 @@ export async function restoreKindeCandidateBackup({
             before.revision, { pendingConflicts: restored.pendingConflicts });
         requireCurrent(scoped);
         const committed = await readLocal(owner);
-        if (!scoped() || !committed || !equal(committed.data, restored)
+        if (!scoped() || !committed || !sameBusiness(committed.data, restored)
             || (operations.length > 0 && committed.pending.length === 0)) {
             throw new Error('Ripristino locale non verificato: conservare il backup e il journal.');
         }
@@ -163,13 +166,13 @@ export async function restoreKindeCandidateBackup({
         requireCurrent(scoped);
         const after = await readLocal(owner);
         requireCurrent(scoped);
-        if (!after || !equal(after.data, restored)) {
+        if (!after || !sameBusiness(after.data, restored)) {
             // A newer edit is not part of this import's receipt. The original
             // backup remains available for an explicit subsequent decision.
             return { kind: 'local-pending', pendingCount: after?.pending.length ?? 0 };
         }
         if (delivery === 'acknowledged' && !after.pending.length
-            && !after.cloudflareDelivery && equal(after.baseline, restored)) {
+            && !after.cloudflareDelivery && sameBusiness(after.baseline, restored)) {
             return { kind: 'cloud-acknowledged' };
         }
         return { kind: 'local-pending', pendingCount: after.pending.length };
