@@ -67,6 +67,55 @@ void test('top-level API: initial consent, authenticated key provision, repeat a
   } finally { f.close(); }
 });
 
+void test('a restored identical KEK reopens the persisted ADK after a lost or substituted Worker secret', async () => {
+  const f = await fixture(['owner-a']);
+  try {
+    await f.consent('owner-a');
+    const issued = await f.call('owner-a', SYNC);
+    assert.equal(issued.response.status, 200);
+    const originalKey = issued.body.key;
+    const recoverableSecretCopy = f.env.CLOUD_ACCOUNT_KEK_V1;
+    const initialRecord = f.sqlite.prepare('SELECT * FROM cloud_account_keys WHERE uid=?')
+      .get('owner-a');
+    const noSecret = { ...f.env };
+    delete noSecret.CLOUD_ACCOUNT_KEK_V1;
+    const substitutedSecret = {
+      ...f.env, CLOUD_ACCOUNT_KEK_V1: Buffer.alloc(32, 19).toString('base64'),
+    };
+
+    // A process/deployment replacement receives fresh bindings and must use
+    // the immutable SQL winner, never mint a replacement ADK on key failure.
+    for (const env of [noSecret, substitutedSecret]) {
+      const unavailable = await f.call('owner-a', SYNC, { env });
+      assert.equal(unavailable.response.status, 503);
+      assert.deepEqual(unavailable.body, { error: 'unavailable' });
+      assert.deepEqual(f.sqlite.prepare('SELECT * FROM cloud_account_keys WHERE uid=?')
+        .get('owner-a'), initialRecord);
+      assert.equal(f.count('cloud_key_issuance', 'owner-a'), 1);
+      assert.equal(f.count('cloud_account_keys', 'owner-a'), 1);
+    }
+
+    const restoredEnvironment = {
+      ...f.env, CLOUD_ACCOUNT_KEK_V1: recoverableSecretCopy,
+    };
+    const recovered = await f.call('owner-a', SYNC, { env: restoredEnvironment });
+    assert.equal(recovered.response.status, 200);
+    assert.equal(recovered.body.key, originalKey);
+    assert.deepEqual(f.sqlite.prepare('SELECT * FROM cloud_account_keys WHERE uid=?')
+      .get('owner-a'), initialRecord);
+    assert.equal(f.count('cloud_key_issuance', 'owner-a'), 1);
+
+    await f.withdraw('owner-a');
+    assert.equal((await f.call('owner-a', SYNC, { env: restoredEnvironment }))
+      .response.status, 401);
+    const rights = await f.call('owner-a', RIGHTS, { env: restoredEnvironment });
+    assert.equal(rights.response.status, 200);
+    assert.equal(rights.body.key, originalKey);
+    assert.equal(rights.body.purpose, 'rights-export');
+    assert.equal(f.count('cloud_account_keys', 'owner-a'), 1);
+  } finally { f.close(); }
+});
+
 void test('withdrawal stops sync; rights-only returns existing key without reprovisioning', async () => {
   const f = await fixture();
   try {
