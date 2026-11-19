@@ -57,7 +57,7 @@ beforeEach(() => {
     vi.mocked(revokeKindeCandidateSession).mockResolvedValue();
     vi.mocked(prepareKindeCandidateOwner).mockResolvedValue({
         kind: 'candidate-observed', checkpointRevision: 1, replicaOutcome: 'already-active',
-        journalOutcome: 'idle',
+        journalOutcome: 'idle', journalDrained: true,
     });
 });
 afterEach(() => {
@@ -157,6 +157,7 @@ describe('isolated Kinde account entry candidate', () => {
         }).mockResolvedValueOnce({
             kind: 'candidate-observed', checkpointRevision: 1,
             replicaOutcome: 'already-active', journalOutcome: 'acknowledged',
+            journalDrained: true,
         });
         render(<KindeAccountEntry candidatePreparationEnabled />);
         const continueButton = await screen.findByRole('button', { name: 'Continua' });
@@ -169,6 +170,22 @@ describe('isolated Kinde account entry candidate', () => {
         expect(vi.mocked(prepareKindeCandidateOwner).mock.calls.every(
             ([args]) => args.drainPendingJournal === true && args.retainDeviceVault === false,
         )).toBe(true);
+    });
+
+    it('keeps the candidate pending after an acknowledged partial batch', async () => {
+        vi.mocked(readKindeCandidateIdentity).mockResolvedValue({
+            kind: 'email-verified', principal: { ...principal, healthConsentRevision: 1 },
+        });
+        vi.mocked(readKindeCandidateAccess).mockResolvedValue(confirmed);
+        vi.mocked(prepareKindeCandidateOwner).mockResolvedValue({
+            kind: 'journal-pending', checkpointRevision: 2, replicaOutcome: 'already-active',
+            journalOutcome: 'acknowledged', pendingCount: 1,
+        });
+        render(<KindeAccountEntry candidatePreparationEnabled />);
+        fireEvent.click(await screen.findByRole('button', { name: 'Continua' }));
+        await screen.findByText(/Preparazione non ancora confermata/);
+        expect(screen.queryByText(/Archivio cifrato verificato nel percorso candidato/)).toBeNull();
+        expect(prepareKindeCandidateOwner).toHaveBeenCalledTimes(1);
     });
 
     it('does not report journal success when replica ownership is not confirmed', async () => {
