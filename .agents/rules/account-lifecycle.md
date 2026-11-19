@@ -1,3 +1,5 @@
+# Ciclo account, Auth e guest — TheLogBook
+
 ## CF-05 — Revoca Kinde candidata e stato UI (19/11/2026)
 
 `KindeAccountEntry` richiede un **secondo** opt-in
@@ -22,7 +24,6 @@ riattiva account. Il test di integrazione React conserva il blocco
 identity-only/guest e le prove SQL Worker/D1 originali restano
 autorità dei contratti di revoca.
 
-# Ciclo account, Auth e guest — TheLogBook
 
 ### Consenso D1 autorevole durante ACK cifrato (19/11/2026)
 
