@@ -116,6 +116,95 @@ void test('a restored identical KEK reopens the persisted ADK after a lost or su
   } finally { f.close(); }
 });
 
+void test('cold D1 and independent registry restore recovers the same two ADKs with only the original synthetic KEK', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'logbook-cloud-kek-cold-'));
+  const original = await fixture(['owner-a', 'owner-b']);
+  let originalClosed = false;
+  let copiedApplication;
+  let copiedRegistry;
+  try {
+    for (const uid of ['owner-a', 'owner-b']) await original.consent(uid);
+    const firstA = await original.call('owner-a', SYNC);
+    const firstB = await original.call('owner-b', SYNC);
+    assert.equal(firstA.response.status, 200);
+    assert.equal(firstB.response.status, 200);
+    assert.notEqual(firstA.body.key, firstB.body.key);
+    const savedKek = original.env.CLOUD_ACCOUNT_KEK_V1;
+    const initialRows = original.sqlite.prepare(
+      'SELECT * FROM cloud_account_keys ORDER BY uid').all();
+    const originalIssuance = original.sqlite.prepare(
+      'SELECT * FROM cloud_key_issuance ORDER BY uid').all();
+    assert.equal(initialRows.length, 2);
+    assert.equal(originalIssuance.length, 2);
+
+    const appFile = join(dir, 'application.sqlite');
+    const registryFile = join(dir, 'independent-registry.sqlite');
+    await backup(original.sqlite, appFile);
+    await backup(original.registry, registryFile);
+    original.close();
+    originalClosed = true;
+
+    // New D1 handles, AuthGate and recovery registry read independently
+    // persisted SQLite copies. The source DB and Worker bindings are gone.
+    copiedApplication = new DatabaseSync(appFile);
+    copiedRegistry = new DatabaseSync(registryFile);
+    const db = new original.db.constructor(copiedApplication);
+    const recoveryDb = new original.recoveryDb.constructor(copiedRegistry);
+    const restored = {
+      ...original.env, DB: db, RECOVERY_DB: recoveryDb,
+      AUTH_GATE: { fetch: request => gate.fetch(request, { ...original.gateEnv, DB: db }) },
+    };
+    const missing = { ...restored };
+    delete missing.CLOUD_ACCOUNT_KEK_V1;
+    const changed = { ...restored, CLOUD_ACCOUNT_KEK_V1: Buffer.alloc(32, 23).toString('base64') };
+    const current = { ...restored, CLOUD_ACCOUNT_KEK_V1: savedKek };
+
+    // Neither a missing nor a syntactically valid but wrong secret may
+    // turn issued data into a new account key after a physical DB restart.
+    for (const environment of [missing, changed]) {
+      for (const uid of ['owner-a', 'owner-b']) {
+        const denied = await original.call(uid, SYNC, { env: environment });
+        assert.equal(denied.response.status, 503);
+        assert.deepEqual(denied.body, { error: 'unavailable' });
+      }
+      assert.deepEqual(copiedApplication.prepare(
+        'SELECT * FROM cloud_account_keys ORDER BY uid').all(), initialRows);
+      assert.deepEqual(copiedApplication.prepare(
+        'SELECT * FROM cloud_key_issuance ORDER BY uid').all(), originalIssuance);
+    }
+
+    const restoredA = await original.call('owner-a', SYNC, { env: current });
+    const restoredB = await original.call('owner-b', SYNC, { env: current });
+    assert.equal(restoredA.response.status, 200);
+    assert.equal(restoredB.response.status, 200);
+    assert.equal(restoredA.body.key, firstA.body.key);
+    assert.equal(restoredB.body.key, firstB.body.key);
+    assert.deepEqual(copiedApplication.prepare(
+      'SELECT * FROM cloud_account_keys ORDER BY uid').all(), initialRows);
+    assert.deepEqual(copiedApplication.prepare(
+      'SELECT * FROM cloud_key_issuance ORDER BY uid').all(), originalIssuance);
+
+    // Restored key custody does not override a later consent withdrawal.
+    const withdrawal = await original.call('owner-a', '/v1/consent/withdraw', {
+      env: current, body: { action: 'withdraw', expectedRevision: 1, confirmsErasure: true },
+    });
+    assert.equal(withdrawal.response.status, 200);
+    assert.equal((await original.call('owner-a', SYNC, { env: current })).response.status, 401);
+    const rights = await original.call('owner-a', RIGHTS, { env: current });
+    assert.equal(rights.response.status, 200);
+    assert.equal(rights.body.key, firstA.body.key);
+    assert.equal(rights.body.purpose, 'rights-export');
+    assert.equal((await original.call('owner-b', SYNC, { env: current })).body.key, firstB.body.key);
+    assert.equal(copiedApplication.prepare(
+      'SELECT COUNT(*) AS n FROM cloud_account_keys').get().n, 2);
+  } finally {
+    if (!originalClosed) original.close();
+    copiedRegistry?.close();
+    copiedApplication?.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 void test('withdrawal stops sync; rights-only returns existing key without reprovisioning', async () => {
   const f = await fixture();
   try {
