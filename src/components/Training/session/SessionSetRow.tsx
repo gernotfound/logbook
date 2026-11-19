@@ -7,7 +7,6 @@ import { BufferedWorkoutScope } from '../../UI/bufferedWorkoutScope';
 import { useDialogStore } from '../../../store/useDialogStore';
 import { sessionSetHasMeaningfulData } from '../../../lib/workoutSetData';
 import { captureSession, isCurrentSession } from '../../../lib/sync/session';
-import type { SessionExerciseSet } from '../../../types';
 import type { SessionSetRowProps } from './sessionSetRowTypes';
 export type { SessionSetRowProps } from './sessionSetRowTypes';
 
