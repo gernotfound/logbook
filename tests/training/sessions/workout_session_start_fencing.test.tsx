@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { act, renderHook, waitFor } from '@testing-library/react';
+import { act, renderHook } from '@testing-library/react';
 import { useAppStore } from '../../../src/store/useAppStore';
 import { useDialogStore } from '../../../src/store/useDialogStore';
 import type { WorkoutSession } from '../../../src/types';
@@ -12,7 +12,6 @@ import { useWorkoutSession } from '../../../src/hooks/useWorkoutSession';
 import { initializeLocal, readLocal } from '../../../src/lib/sync/localRepository';
 import { localStorageMock } from '../../setup';
 import { prepareUnlockedTestArchive } from '../../secureVaultFixture';
-import { auth } from '../../../src/lib/firebase';
 import { installWorkoutLifecycleFixture, owner, workout, userData, seedCurrentDeviceWorkout } from './workoutLifecycleFixture';
 
 describe('Workout lifecycle durable recovery regressions', () => {

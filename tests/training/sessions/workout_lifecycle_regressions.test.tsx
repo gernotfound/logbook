@@ -9,7 +9,7 @@ import { captureSession } from '../../../src/lib/sync/session';
 import { draftRegistry } from '../../../src/lib/utils/draftRegistry';
 import { readWorkoutRecoveryDraft, writeWorkoutRecoveryDraft } from '../../../src/lib/sync/workoutRecoveryDraft';
 import PreSessionCheckIn from '../../../src/components/Training/PreSessionCheckIn';
-import TrainingSession from '../../../src/components/Training/TrainingSession';
+
 import WorkoutTimer from '../../../src/components/Training/WorkoutTimer';
 import { useWorkoutSession } from '../../../src/hooks/useWorkoutSession';
 import { initializeLocal, readLocal } from '../../../src/lib/sync/localRepository';
