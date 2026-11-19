@@ -1,5 +1,12 @@
 # Registro dei servizi esterni — stato corrente TheLogBook
 
+## Cloudflare CF-05 — KEK privata provisionata (readback 19/11/2026)
+
+**Worker API privato `thelogbook-api-isolated`, ACTIVE-ISOLATED:** il secret binding `CLOUD_ACCOUNT_KEK_V1` è presente con tipo Cloudflare `secret_text` ed è confermato anche dall'endpoint di elenco dei secret; nessun valore è stato richiesto o esposto. Binding del Worker letti direttamente: `API_ORIGIN`, `AUTH_GATE`, `CLOUD_ACCOUNT_KEK_V1`, `CONSENT_PRIVACY_VERSION`, `CONSENT_TERMS_VERSION`, `DB` e `RECOVERY_DB`. Il frontend `thelogbook-frontend` mostra soltanto `APP_ORIGIN`, `ASSETS`, `KINDE_HTTP` e **non** `D1_API`. Nessun cambiamento al provider effettuato durante questa ricognizione.
+
+**Custodia:** il product owner ha attestato di aver generato una nuova chiave casuale e salvato una copia riservata fuori dal Worker; il luogo di conservazione e il contenuto non sono noti a questo registro. Non sono verificati identità della copia e del secret, formato crittografico effettivo, test di restore o integrazione end-to-end. **Stato KEK: PROVISIONED / RESTORE-NON-VERIFICATO. Stato fitness cloud: NO-GO.** Conservare il secret esistente senza sostituzione o rotazione arbitraria; eventuale prova di recupero usa soltanto materiale sintetico in un ambiente isolato, nel rispetto del vincolo di non esporre il valore. Vedere [runbook Cloudflare](cloudflare-workers-migration.md) e [CF-05 #1059](https://github.com/gernotfound/logbook/issues/1059).
+
+
 ## CF-03 · durata access token Kinde vs callback monouso (17/11/2026, v2.501.0 candidata)
 
 **Evidenza browser dopo v2.500.0:** `503 phase=access-token-lifetime`, che nasce da `exp-iat>86400` nella prova access JWT firmata e non da token scaduto. La durata esatta e l'impostazione live *Tokens* nel tenant Kinde non sono state lette: non concludere una TTL specifica. Kinde documenta access JWT predefinito 24h, configurabile, e sconsiglia un valore maggiore. [Fonte ufficiale](https://docs.kinde.com/build/tokens/configure-tokens/).

@@ -1,5 +1,14 @@
 # TheLogBook — migrazione Cloudflare: runbook corrente
 
+## CF-05 — KEK Worker installata, restore ancora da attestare (19/11/2026)
+
+**Classificazione CRITICAL; evidenza Cloudflare diretta in sola lettura.** Sul Worker privato `thelogbook-api-isolated` il binding `CLOUD_ACCOUNT_KEK_V1` risulta presente come `secret_text`, anche nella lista separata dei secret. Il Worker conserva `AUTH_GATE`, `DB` e `RECOVERY_DB`. Il frontend `thelogbook-frontend` espone `ASSETS` e `KINDE_HTTP`, **non** `D1_API`: il collegamento del fitness cloud pubblico resta disabilitato.
+
+Il product owner ha dichiarato di aver generato una nuova chiave sul proprio dispositivo e di averne salvato una copia in un luogo riservato, distinto dal Worker. **Non sono stati letti il valore del secret, la copia, né il luogo di custodia; non è stata verificata la corrispondenza fra i valori, la correttezza del formato Base64 né l'effettiva recuperabilità.** La presenza del binding chiude esclusivamente il blocco di configurazione "secret assente"; non prova il ripristino della stessa KEK, il recupero ADK, la cifratura live, il consenso o la replica.
+
+**Gate ancora aperto:** collaudare su ambiente *isolato e dati sintetici* un ciclo di wrapping, riapertura e recupero usando la medesima KEK custodita, senza trasmettere il valore a repository, CI, chat, log o browser e senza sovrascrivere il secret presente. Non eseguire restore D1, modifiche alla KEK in uso o attivazione di `D1_API` per dimostrare questo gate. Le prove software con KEK sintetica documentate nei test esistenti non attestano la copia reale. Vedere [CF-05 #1059](https://github.com/gernotfound/logbook/issues/1059) e [CF-09 #1063](https://github.com/gernotfound/logbook/issues/1063).
+
+
 ## CF-04 — Chiusura del vault dopo una preparazione incompleta
 
 Se la preparazione Kinde perde la sessione, fallisce o lascia una replica o una consegna da riconciliare, revoca la chiave in memoria del tentativo. Il controllo del vault, il ciphertext e gli intenti persistiti restano disponibili al successivo tentativo autorizzato. Una risposta tardiva può revocare solo la propria apertura del vault, anche quando la nuova sessione appartiene allo stesso account. Solo la conferma del checkpoint e della replica permette al candidato di mantenere l'apertura locale. Questo percorso rimane isolato dalla PWA pubblica.
