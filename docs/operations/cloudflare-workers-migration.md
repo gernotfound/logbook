@@ -1,5 +1,13 @@
 # TheLogBook — migrazione Cloudflare: runbook corrente
 
+## CF-05 — Recovery sola lettura della revoca Kinde (candidato v2.545.0, 19/11/2026)
+
+Il percorso candidato `src/lib/auth/kindeCandidateWithdrawal.ts` comprende una riconciliazione read-only dei marker `pending:1` lasciati dopo una risposta perduta di `POST /v1/consent/withdraw`. Un controllo su sessione Kinde originale e `/v1/consent/status` D1 primario può confermare `withdrawn` e avanzare soltanto il marker negativo `withdrawn`, **senza mai ritentare la richiesta distruttiva**, cancellare il marker in caso di `active`, riattivare fitness o inventare l'esito `complete`. Una risposta remota `active` produce `still-unconfirmed`: conserva il blocco e richiede un successivo processo di prodotto esplicito. Una risposta negativa, una sessione cambiata o storage fallito mantiene il blocco locale. Fixture con gli handler reali Workers/AuthGate e schema D1 attuale verificano entrambi i casi di perdita risposta, l'assenza di replay, i marker invalidi e i fallimenti.
+
+**NO-GO invariato:** questa funzione non è montata nella PWA pubblica; il frontend Cloudflare rimane identity-only senza `D1_API`. Non equivale a workflow export dei dati, erasure completa, revoca live collaudata, riaccettazione, eliminazione dell'account o GO Kinde. Non sono stati modificati provider o dati reali. Riferimento [CF-05 #1059](https://github.com/gernotfound/logbook/issues/1059).
+
+
+
 ### CF-04 — Riparazione dopo prima CI: consenso server vs documento fitness
 
 La prima CI del candidato v2.543.0, `Milestone Verification #44515827099`, ha rilevato due fallimenti sulla verifica post-ACK. L'ACK del root cifrato poteva rimettere `legalConsent` vuoto nel vault, pur avendo già verificato il consenso tramite il registro trusted D1. La root cause è distinta dalla consegna a lotti: il root business non è autorità legale. Il bridge D1 propaga ora la prova legale verificata sullo stesso owner/sessione, e l'ACK IndexedDB, all'interno della stessa transazione, conserva quella scelta o fallisce chiuso se la copia locale diverge. Test integrati controllano la preservazione di `legalConsent` dopo primo e secondo lotto, oltre a conservare tutte le modifiche pendenti. I test e i gate devono essere riverificati sul nuovo SHA; il primo candidato CI rosso non costituisce verifica della correzione.

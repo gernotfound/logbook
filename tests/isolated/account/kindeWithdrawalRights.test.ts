@@ -10,7 +10,7 @@ import kinde from '../../../cloudflare/auth/kinde-http-worker.mjs';
 import { routeCandidateFirstPartyApi } from '../../../cloudflare/first-party-api-candidate.mjs';
 import { createCloudKeyHttpFixture, ORIGIN } from '../../cloudflare/cloud-key-http-fixture.mjs';
 import { KindeCandidateBoundaryError, readKindeCandidateAccess } from '../../../src/lib/auth/kindeCandidateClient';
-import { withdrawKindeCandidateHealthConsent } from '../../../src/lib/auth/kindeCandidateWithdrawal';
+import { reconcileKindeCandidateWithdrawal, withdrawKindeCandidateHealthConsent } from '../../../src/lib/auth/kindeCandidateWithdrawal';
 import { withKindeCandidateRightsKey } from '../../../src/lib/auth/kindeCandidateRightsKey';
 import { isKindeAccountLocalFitnessClear } from '../../../src/lib/sync/kindeOwnerLocalFitnessFence';
 
@@ -126,6 +126,137 @@ describe('Kinde withdrawal and rights-only client against first-party Workers an
             expect(fixture.count('health_erasure_jobs', uid)).toBe(1);
         } finally {
             fixture.close();
+        }
+    });
+
+
+    it('reconciles a lost withdrawal reply from the trusted primary without another destructive POST', async () => {
+        const fixture = await createCloudKeyHttpFixture([uid]);
+        try {
+            await fixture.consent(uid);
+            await provisionKey(fixture);
+            let withdrawCalls = 0;
+            const sent: string[] = [];
+            const client = browser(fixture, (path, response) => {
+                sent.push(path);
+                if (path === '/v1/consent/withdraw') {
+                    withdrawCalls += 1;
+                    throw new TypeError('Reply lost after server committed withdrawal');
+                }
+                return response;
+            });
+            await expect(withdrawKindeCandidateHealthConsent({
+                ...client, expected, confirmsErasure: true,
+            })).rejects.toBeInstanceOf(KindeCandidateBoundaryError);
+            expect(localStorage.getItem(marker)).toBe('pending:1');
+            const afterInitial = sent.length;
+            await expect(reconcileKindeCandidateWithdrawal({ ...client, expected }))
+                .resolves.toEqual({ kind: 'withdrawal-proven' });
+            expect(sent.slice(afterInitial)).not.toContain('/v1/consent/withdraw');
+            expect(localStorage.getItem(marker)).toBe('withdrawn');
+            expect(isKindeAccountLocalFitnessClear(owner, 1)).toBe(false);
+            await expect(reconcileKindeCandidateWithdrawal({ ...client, expected }))
+                .resolves.toEqual({ kind: 'withdrawal-proven' });
+            expect(withdrawCalls).toBe(1);
+            expect(fixture.count('health_erasure_jobs', uid)).toBe(1);
+            expect((await fixture.call(uid, '/v1/cloud-key/sync')).response.status).not.toBe(200);
+        } finally {
+            fixture.close();
+        }
+    });
+
+    it('does not clear a pending user decision when the primary still reports active', async () => {
+        const fixture = await createCloudKeyHttpFixture([uid]);
+        try {
+            await fixture.consent(uid);
+            const client = browser(fixture);
+            let attempts = 0;
+            const send: typeof fetch = async (input, init) => {
+                if (String(input) === '/v1/consent/withdraw') {
+                    attempts += 1;
+                    throw new TypeError('Offline before request reached Worker');
+                }
+                return client.send(input, init);
+            };
+            await expect(withdrawKindeCandidateHealthConsent({
+                ...client, send, expected, confirmsErasure: true,
+            })).rejects.toBeInstanceOf(KindeCandidateBoundaryError);
+            expect(localStorage.getItem(marker)).toBe('pending:1');
+            expect(fixture.count('health_erasure_jobs', uid)).toBe(0);
+            await expect(reconcileKindeCandidateWithdrawal({ ...client, send, expected }))
+                .resolves.toEqual({ kind: 'still-unconfirmed' });
+            expect(localStorage.getItem(marker)).toBe('pending:1');
+            expect(isKindeAccountLocalFitnessClear(owner, 1)).toBe(false);
+            expect(attempts).toBe(1);
+            expect(fixture.count('health_erasure_jobs', uid)).toBe(0);
+        } finally {
+            fixture.close();
+        }
+    });
+
+    it('refuses missing, malformed and cross-owner pending markers before network access', async () => {
+        const fixture = await createCloudKeyHttpFixture([uid]);
+        try {
+            await fixture.consent(uid);
+            const observed: string[] = [];
+            const client = browser(fixture, (path, response) => {
+                observed.push(path); return response;
+            });
+            for (const value of [null, 'pending:2', 'unexpected']) {
+                if (value === null) localStorage.removeItem(marker);
+                else localStorage.setItem(marker, value);
+                await expect(reconcileKindeCandidateWithdrawal({ ...client, expected }))
+                    .rejects.toBeInstanceOf(KindeCandidateBoundaryError);
+            }
+            expect(observed).toEqual([]);
+            localStorage.setItem(marker, 'pending:1');
+            localStorage.setItem('logbook_is_guest', 'true');
+            await expect(reconcileKindeCandidateWithdrawal({ ...client, expected }))
+                .rejects.toBeInstanceOf(KindeCandidateBoundaryError);
+            localStorage.removeItem('logbook_is_guest');
+            await expect(reconcileKindeCandidateWithdrawal({
+                ...client, expected: { ...expected, uid: 'k_' + 'B'.repeat(43) },
+            })).rejects.toBeInstanceOf(KindeCandidateBoundaryError);
+            expect(observed).toEqual([]);
+            expect(localStorage.getItem(marker)).toBe('pending:1');
+        } finally {
+            fixture.close();
+        }
+    });
+
+    it('rejects a replaced session or failed marker write without clearing the denial', async () => {
+        for (const mode of ['session', 'storage'] as const) {
+            localStorage.clear();
+            const fixture = await createCloudKeyHttpFixture([uid]);
+            try {
+                await fixture.consent(uid);
+                await fixture.withdraw(uid);
+                localStorage.setItem(marker, 'pending:1');
+                let client: ReturnType<typeof browser>;
+                client = browser(fixture, (path, response) => {
+                    if (mode === 'session' && path === '/v1/consent/status') {
+                        client.replaceCookie('__Host-logbook_csrf=' + 'B'.repeat(43));
+                    }
+                    return response;
+                });
+                if (mode === 'storage') {
+                    const original = localStorage.setItem.bind(localStorage);
+                    const failedWrite = vi.spyOn(localStorage, 'setItem').mockImplementation((key, value) => {
+                        if (key === marker && value === 'withdrawn') throw new Error('Storage unavailable');
+                        return original(key, value);
+                    });
+                    await expect(reconcileKindeCandidateWithdrawal({ ...client, expected }))
+                        .rejects.toThrow();
+                    failedWrite.mockRestore();
+                } else {
+                    await expect(reconcileKindeCandidateWithdrawal({ ...client, expected }))
+                        .rejects.toBeInstanceOf(KindeCandidateBoundaryError);
+                }
+                expect(localStorage.getItem(marker)).toBe('pending:1');
+                expect(fixture.count('health_erasure_jobs', uid)).toBe(1);
+            } finally {
+                fixture.close();
+            }
         }
     });
 
