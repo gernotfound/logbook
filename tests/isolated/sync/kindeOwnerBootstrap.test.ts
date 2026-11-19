@@ -770,6 +770,30 @@ describe('Kinde-only device vault provisioning and authenticated baseline', () =
             })).rejects.toThrow();
             expect((await readLocal(owner))?.data.profile?.height).toBe('193');
 
+            // A new local commit during the asynchronous catalog load cannot
+            // slip past the earlier two-store snapshot and into a stale file.
+            catalogSource.read.mockImplementationOnce(async () => {
+                const current = (await readLocal(owner))!.data;
+                await commitDomainOperations(owner, {
+                    type: 'profile.patch', patch: { height: '194' },
+                }, current);
+                return catalog;
+            });
+            await expect(prepareKindeCandidatePortableBackupJson({
+                ...session, expected: principal,
+            })).rejects.toThrow();
+            expect((await readLocal(owner))?.data.profile?.height).toBe('194');
+
+            catalogSource.read.mockImplementationOnce(async () => {
+                localStorage.setItem(witnessKey, sealLocalText(
+                    requireUnlockedLocalKey(owner), owner, witnessKey, '{"weight":"80"}',
+                ));
+                return catalog;
+            });
+            await expect(prepareKindeCandidatePortableBackupJson({
+                ...session, expected: principal,
+            })).rejects.toThrow();
+
             // A held persistence fence must never become a full restorable
             // backup; the previous independent evidence remains exportable.
             await updateArchiveRecord<any>(owner, raw => ({
