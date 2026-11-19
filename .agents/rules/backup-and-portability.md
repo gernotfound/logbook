@@ -262,3 +262,11 @@ device-only, i witness di recupero, le vecchie chiavi, le replica identity
 e i journal sorgente non vengono copiati nel nuovo dispositivo. Il restore
 non monta UI pubblica, non abilita fitness, non prova salvataggio fisico
 del file, browser Safari reale, KEK indipendente o runtime D1 Production.
+
+Un ripristino che cambia soltanto `pendingConflicts` restituisce
+`local-metadata-restored`: la revisione cifrata locale avanza, ma non
+esiste alcuna operazione business D1 da inviare e nessuna ricevuta cloud.
+`already-current` rimane riservato all'assenza di modifiche reali.
+Il confronto confronta la forma JSON canonica, ignorando soltanto
+proprietà `undefined` che la serializzazione IndexedDB elimina;
+un campo definito diverso continua a essere una violazione.
