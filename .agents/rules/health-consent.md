@@ -1,3 +1,5 @@
+# Consenso salute, diritti e cancellazione dei dati — TheLogBook
+
 ## CF-05 — Ingresso React candidato: revoca e diritti senza GO fitness (19/11/2026)
 
 Il solo ingresso Kinde **candidato** può esporre revoca e diritti quando
@@ -38,7 +40,6 @@ La logica condivisa del Blob URL vive in
 La sola presenza dell'ingresso candidato non configura un ambiente
 sanitario reale, una prova di KEK recovery o un GO.
 
-# Consenso salute, diritti e cancellazione dei dati — TheLogBook
 
 ## CF-05 — Checkpoint di esportazione rights-only Kinde (candidato 19/11/2026)
 
