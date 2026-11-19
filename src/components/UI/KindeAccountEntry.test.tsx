@@ -465,7 +465,8 @@ describe('isolated Kinde account entry candidate', () => {
         expect(readKindeCandidateAccess).not.toHaveBeenCalled();
         expect(unlockVaultForOwner).not.toHaveBeenCalled();
         expect(withdrawKindeCandidateHealthConsent).not.toHaveBeenCalled();
-        expect(screen.queryByRole('button', { name: 'Revoca consenso e avvia cancellazione' })).toBeNull();
+        expect(screen.getByRole('button', { name: 'Revoca consenso e avvia cancellazione' }))
+            .toHaveProperty('disabled', true);
     });
 
     it('never starts vault preparation for public identity-only, missing consent or guest sessions', async () => {
