@@ -664,6 +664,39 @@ describe('Empirical Challenger: Deterministic Guest Merge (R5) Stress & Adversar
             expect(Object.keys(merged.nutrition ?? {}).every(date => /^\d{4}-\d{2}-\d{2}$/.test(date))).toBe(true);
             expect(merged.nutrition?.['2026-01-01']).toBeDefined();
             expect(merged.nutrition?.['2026-08-01']).toBeDefined();
+            // A length-only check could miss a wrong collision winner or
+            // another entry silently replacing a required distinct identity.
+            const collections = [
+                { names: new Map(merged.library?.map(item => [item.id, item.name] as const)), prefix: 'ex', label: 'Exercise' },
+                { names: new Map(merged.routines?.map(item => [item.id, item.name] as const)), prefix: 'rt', label: 'Routine' },
+                { names: new Map(merged.customFoods?.map(item => [item.id, item.name] as const)), prefix: 'food', label: 'Food' },
+                { names: new Map(merged.trainingCycles?.map(item => [item.id, item.name] as const)), prefix: 'cyc', label: 'Cycle' },
+                { names: new Map(merged.history?.map(item => [item.id, item.routineName] as const)), prefix: 'hist', label: 'Session' },
+                { names: new Map(merged.supplements?.map(item => [item.id, item.name] as const)), prefix: 'supp', label: 'Supplement' },
+            ];
+            for (const { names, prefix, label } of collections) {
+                expect(names.size).toBe(90);
+                for (let i = 0; i < ITEM_COUNT; i++) {
+                    expect(names.get(`${prefix}_${i}`)).toBe(`${i < 30 ? 'Guest' : 'Cloud'} ${label} ${i}`);
+                    if (i >= 30) {
+                        expect(names.get(`${prefix}_guest_${i}`)).toBe(`Guest ${label} ${i}`);
+                    }
+                }
+            }
+            for (let i = 0; i < 30; i++) {
+                const date = new Date(Date.UTC(2026, 0, i + 1)).toISOString().slice(0, 10);
+                expect(merged.nutrition?.[date]?.meals?.map(meal => meal.id).sort())
+                    .toEqual([`meal_c_${i}`, `meal_g_${i}`]);
+            }
+            for (let i = 30; i < ITEM_COUNT; i++) {
+                const cloudDate = new Date(Date.UTC(2026, 0, i + 1)).toISOString().slice(0, 10);
+                const guestDate = new Date(Date.UTC(2026, 6, i + 1)).toISOString().slice(0, 10);
+                expect(merged.nutrition?.[cloudDate]?.meals?.map(meal => meal.id))
+                    .toEqual([`meal_c_${i}`]);
+                expect(merged.nutrition?.[guestDate]?.meals?.map(meal => meal.id))
+                    .toEqual([`meal_g_${i}`]);
+            }
+
             expect(merged.activeWorkout?.id).toBe('w_active_large');
             expect(merged.profile?.height).toBe('182');
             expect(merged.profile?.waist).toBe('82');
