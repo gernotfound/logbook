@@ -1,6 +1,13 @@
 # Ciclo account, Auth e guest — TheLogBook
 
 ### Identità nel controllo di aggiornamento PWA
+### Collegamento React Kinde → bootstrap D1 candidato (19/11/2026)
+
+L'osservatore condiviso `useKindeAccountSession` espone `prepareCandidateArchive()` soltanto per prove di integrazione con attivazione **esplicita**: nel provider pubblico `candidatePreparationEnabled: false` e `identityOnly: true`. Il metodo può partire soltanto da una sessione email verificata e revisione consenso account positiva, con generazione React corrente e lo stesso cookie CSRF; rifiuta guest, sessioni sostituite, doppio avvio, completamenti tardivi e teardown. La lettura Kinde continua a essere unica per la UI e nessun percorso esegue automaticamente il bootstrap al mount, al ritorno in foreground o al login.
+
+Il bootstrap candidato si carica dinamicamente solo dopo questo gate e usa `retainDeviceVault: false`: **anche un checkpoint/claim D1 riuscito rilascia la chiave del vault dell'esatto tentativo**, senza revocare una nuova apertura concorrente. L'esito osservato non installa `authenticatedIdentitySource`, `currentUser`, owner fitness, sessione applicativa o diritti. Una futura abilitazione richiede comunque lifecycle consenso/revoca/rights/erasure, riapertura e fencing del vault, binding D1/KEK e collaudi veri; impostare il flag non rappresenta un GO funzionale.
+
+
 
 Il ramo di aggiornamento dalla schermata di accesso legge la sorgente di identità registrata dal provider montato. Un client Firebase importato può ancora conservare un utente e non decide l'owner di questa schermata. Il reload rapido resta possibile solo con memoria senza dati, nessun guest attivo o revocato e sessione locale invariata. Se la sorgente non è leggibile, i controlli di sessione continuano a bloccare il reload.
 
