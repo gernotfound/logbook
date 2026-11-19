@@ -13,7 +13,9 @@ type Phase = 'idle' | 'working' | 'pending' | 'confirmed' | 'error';
  * Once the owner-scoped marker appears, an ambiguous HTTP result can ONLY
  * be reconciled by read-only server evidence; this UI never retries withdraw.
  */
-export function KindeCandidateWithdrawalPanel({ session }: { session: Session }) {
+export function KindeCandidateWithdrawalPanel({ session, allowBackup = true }: {
+    session: Session; allowBackup?: boolean;
+}) {
     const uid = 'principal' in session.view ? session.view.principal.uid : '';
     const [marker, setMarker] = useState<KindeCandidateWithdrawalMarker>(
         () => readKindeCandidateWithdrawalMarker(uid),
@@ -68,12 +70,17 @@ export function KindeCandidateWithdrawalPanel({ session }: { session: Session })
         }).finally(() => { busy.current = false; });
     };
 
-    const canOfferBackup = marker === 'none' && phase !== 'working'
+    const canOfferBackup = allowBackup && marker === 'none' && phase !== 'working'
         && phase !== 'pending' && phase !== 'confirmed';
     const inFlight = phase === 'working' || session.busy;
     return (
         <section aria-label="Gestione del consenso sanitario">
             {canOfferBackup && <KindeCandidateBackupPanel session={session} />}
+            {!allowBackup && marker === 'none' && (
+                <p role="status">Non è possibile preparare il backup completo
+                    senza una email verificata. Puoi comunque revocare il
+                    consenso; non è necessario verificare nuovamente l’email.</p>
+            )}
             <section aria-label="Revoca del consenso sanitario">
                 <h2>Revoca del consenso sanitario</h2>
                 <p>La revoca sospende le funzioni fitness e avvia la cancellazione
