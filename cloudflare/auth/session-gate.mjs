@@ -14,7 +14,7 @@ const MUTATION_ROUTES = new Set([
 ]);
 const IDENTITY_READ_ROUTES = new Set(['/v1/consent/status']);
 const IDENTITY_MUTATION_ROUTES = new Set(['/v1/consent/initial', '/v1/consent/withdraw', '/v1/auth/logout',
-  '/v1/cloud-key/rights-export']);
+  '/v1/cloud-key/rights-export', '/v1/rights/scan']);
 
 function json(payload, status) {
   return new Response(JSON.stringify(payload), {
