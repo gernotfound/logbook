@@ -14,7 +14,9 @@ import { createAndMigrateVault } from './secureArchiveMigration';
 type Confirmed = Extract<KindeCandidateAccess, { kind: 'consent-confirmed' }>;
 type Principal = Confirmed['principal'];
 type BootstrapResult =
-    | { kind: 'candidate-observed'; checkpointRevision: number | null; replicaOutcome: Awaited<ReturnType<typeof claimKindeCandidateReplica>> }
+    | { kind: 'candidate-observed'; checkpointRevision: number | null;
+        replicaOutcome: Awaited<ReturnType<typeof claimKindeCandidateReplica>>;
+        journalOutcome?: 'idle' | 'acknowledged' }
     | { kind: 'delivery-pending'; deliveryOutcome: 'retry-staged' | 'reconciliation-required' };
 
 function verifyAccess(access: KindeCandidateAccess, expected: Principal, legal?: Confirmed['legalConsent']): asserts access is Confirmed {
@@ -34,11 +36,13 @@ function verifyAccess(access: KindeCandidateAccess, expected: Principal, legal?:
  */
 export async function prepareKindeCandidateOwner({
     expected, stillCurrent, send = fetch, browserCookies = () => document.cookie,
+    drainPendingJournal = false,
 }: {
     expected: Readonly<Principal>;
     stillCurrent: () => boolean;
     send?: typeof fetch;
     browserCookies?: () => string;
+    drainPendingJournal?: boolean;
 }): Promise<BootstrapResult> {
     const principal = { ...expected };
     const owner = userOwner(principal.uid);
@@ -100,7 +104,21 @@ export async function prepareKindeCandidateOwner({
         verifyAccess(final, principal, first.legalConsent);
         if (!scoped()) throw new KindeCandidateBoundaryError();
         const checkpointRevision = hydrated?.checkpointRevision ?? null;
-        ready = checkpointRevision !== null && (replicaOutcome === 'adopted' || replicaOutcome === 'already-active');
+        const replicaReady = checkpointRevision !== null
+            && (replicaOutcome === 'adopted' || replicaOutcome === 'already-active');
+        if (drainPendingJournal && replicaReady) {
+            // Only a verified checkpoint and active replica may drain a local
+            // edit. Keep this bootstrap's vault grant until the same session
+            // has reconciled the receipt and returned from the journal bridge.
+            const journalOutcome = await deliverKindeCandidateJournal(pinnedRequest);
+            if (!scoped()) throw new KindeCandidateBoundaryError();
+            if (journalOutcome === 'retry-staged' || journalOutcome === 'reconciliation-required') {
+                return { kind: 'delivery-pending', deliveryOutcome: journalOutcome };
+            }
+            ready = true;
+            return { kind: 'candidate-observed', checkpointRevision, replicaOutcome, journalOutcome };
+        }
+        ready = replicaReady;
         return { kind: 'candidate-observed', checkpointRevision, replicaOutcome };
     } finally {
         // Persisted ciphertext and staged intents survive a failed attempt.
