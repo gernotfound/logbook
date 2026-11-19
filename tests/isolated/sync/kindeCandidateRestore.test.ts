@@ -16,6 +16,7 @@ import { createBackup } from '../../../src/lib/backup';
 import { restoreKindeCandidateBackup } from '../../../src/lib/auth/kindeCandidateRestore';
 import { prepareKindeCandidateOwner } from '../../../src/lib/sync/kindeCandidateOwnerBootstrap';
 import { UserDataSchema } from '../../../src/lib/schema';
+import { createDefaultNutritionPlanning } from '../../../src/lib/nutritionDefaults';
 import { readLocal } from '../../../src/lib/sync/localArchiveBootstrap';
 import {
     lockAllVaults, readVaultControl, unlockVaultForOwner,
@@ -179,6 +180,39 @@ describe('CF-05 Kinde Schema 3 restore to encrypted IndexedDB and D1', () => {
             expect(complete?.pending).toEqual([]);
             expect(complete?.baseline.profile?.height).toBe('191');
             expect(staged?.batchId).toBeDefined();
+        } finally { fixture.close(); }
+    });
+
+    it('reports a metadata-only local restore without inventing a D1 operation or receipt', async () => {
+        const fixture = await createCloudKeyHttpFixture([uid]);
+        try {
+            await fixture.consent(uid);
+            const request = session(fixture);
+            await expect(prepareKindeCandidateOwner({
+                ...request, expected: principal, drainPendingJournal: true,
+                retainDeviceVault: false,
+            })).resolves.toMatchObject({ journalDrained: true });
+            await unlockVaultForOwner(owner);
+            const before = await readLocal(owner);
+            expect(before?.pending).toEqual([]);
+            expect(before?.data.pendingConflicts).toBeUndefined();
+            const conflict = createDefaultNutritionPlanning();
+            const input = JSON.parse(JSON.stringify(createBackup(parse({
+                ...before!.data, pendingConflicts: { nutritionPlanning: conflict },
+            }), owner, { scope: 'cloud-and-device', months: [] })));
+            lockAllVaults();
+
+            await expect(restoreKindeCandidateBackup({
+                ...request, expected: principal, backup: input,
+            })).resolves.toEqual({ kind: 'local-metadata-restored' });
+            expect(fixture.count('sync_receipts', uid)).toBe(0);
+            expect(fixture.count('sync_documents', uid)).toBe(0);
+            await unlockVaultForOwner(owner);
+            const after = await readLocal(owner);
+            expect(after?.data.pendingConflicts?.nutritionPlanning).toEqual(conflict);
+            expect(after?.pending).toEqual([]);
+            expect(after?.revision).toBeGreaterThan(before!.revision);
+            expect(await get<string>('logbook:v2:' + owner)).toMatch(/^tlb-sealed:v1:/);
         } finally { fixture.close(); }
     });
 
