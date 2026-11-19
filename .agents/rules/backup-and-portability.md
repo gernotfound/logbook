@@ -270,3 +270,17 @@ esiste alcuna operazione business D1 da inviare e nessuna ricevuta cloud.
 Il confronto confronta la forma JSON canonica, ignorando soltanto
 proprietà `undefined` che la serializzazione IndexedDB elimina;
 un campo definito diverso continua a essere una violazione.
+
+
+### CF-05 — UI candidata di ripristino Kinde (19/11/2026)
+
+La vista `KindeCandidateRestorePanel` è disponibile soltanto nel percorso
+esplicitamente abilitato `candidatePreparationEnabled` e `identityOnly:false`,
+dopo consenso Kinde verificato. La selezione del file e la conferma informata
+sono azioni separate. Il file JSON resta nel browser, con parser incrementale
+sopra 64 MiB; il backend riceve soltanto i documenti cifrati attraverso il
+journal, mai il file plaintext. L'adapter rifiuta owner diversi, backup
+parziali, consenso non corrente, vault/replica incoerenti e sessioni stale.
+La UI distingue ACK cloud verificato, sola variazione locale e journal pending.
+Un errore dopo commit locale non autorizza a dichiarare i dati immutati.
+La PWA pubblica non monta questa vista e non espone D1_API.

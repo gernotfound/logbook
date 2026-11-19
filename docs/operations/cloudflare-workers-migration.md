@@ -1037,3 +1037,15 @@ bozze device, journal, repliche o consenso. Le regressioni isolate
 IndexedDB; il loro esito non prova KEK reale, provider Production,
 Safari/iOS o recupero dopo perdita effettiva del dispositivo. Il
 fitness rimane NO-GO fino ai collaudi completi.
+
+
+### CF-05 — ingresso ripristino e installazione pre-login (19/11/2026)
+
+Il frontend identity-only offre l'azione PWA solo quando Chromium fornisce
+un evento `beforeinstallprompt` differito; Safari/iOS mostra l'istruzione
+manuale, senza simulare un popup. Le due richieste 401 dopo logout sono
+intenzionali: revoca verificata dal server e riconciliazione UI. Il candidato
+non pubblico Kinde aggiunge scelta e conferma esplicita del JSON Schema 3
+prima di invocare il restore owner-scoped; esiti `local-pending` e
+`cloud-acknowledged` sono distinti. Nessuna nuova rotta D1 pubblica,
+nessun consenso automatico, nessuna attivazione account fitness.

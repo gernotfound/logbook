@@ -4,8 +4,11 @@ import { useKindeAccountSession } from '../../contexts/auth/useKindeAccountSessi
 import { PrivacyPolicy } from '../../pages/PrivacyPolicy';
 import { TermsAndConditions } from '../../pages/TermsAndConditions';
 import { KindeCandidateBackupPanel } from './KindeCandidateBackupPanel';
+import { usePWAInstall } from '../../hooks/usePWAInstall';
 const KindeCandidateWithdrawalPanel = lazy(async () =>
     ({ default: (await import('./KindeCandidateWithdrawalPanel')).KindeCandidateWithdrawalPanel }));
+const KindeCandidateRestorePanel = lazy(async () =>
+    ({ default: (await import('./KindeCandidateRestorePanel')).KindeCandidateRestorePanel }));
 const KindeCandidateRightsPanel = lazy(async () =>
     ({ default: (await import('./KindeCandidateRightsPanel')).KindeCandidateRightsPanel }));
 
@@ -115,6 +118,27 @@ function KindeCandidatePreparation({ session }: { session: Session }) {
     );
 }
 
+
+/** The signed-out view must not swallow the browser's install offer. */
+function KindeInstallEntry() {
+    const { isInstallable, isIOSInstallable, isStandalone, promptInstall } = usePWAInstall();
+    if (isStandalone || (!isInstallable && !isIOSInstallable)) return null;
+    return (
+        <section aria-label="Installazione TheLogBook">
+            {isInstallable && (
+                <button type="button" className="btn"
+                    onClick={() => { void promptInstall(); }}>
+                    Installa TheLogBook
+                </button>
+            )}
+            {isIOSInstallable && (
+                <p>Per installare su iPhone o iPad: in Safari tocca Condividi,
+                    poi “Aggiungi alla schermata Home”.</p>
+            )}
+        </section>
+    );
+}
+
 /** Identity-only runtime and the isolated candidate share the same presentation. */
 function KindeAccountEntryView({
     identityOnly = false, candidatePreparationEnabled = false,
@@ -145,6 +169,7 @@ function KindeAccountEntryView({
                         <span>Continua senza account</span>
                         <span className="auth-guest-action__detail">I dati saranno salvati solo sul dispositivo.</span>
                     </button>}
+                    <KindeInstallEntry />
                 </>
             )}
             {phase === 'consent-required' && (
@@ -162,6 +187,10 @@ function KindeAccountEntryView({
                                 <KindeCandidateWithdrawalPanel session={session} />
                             </Suspense>
                             : <KindeCandidateBackupPanel session={session} />}
+
+                        <Suspense fallback={<p role="status">Caricamento ripristino backup…</p>}>
+                            <KindeCandidateRestorePanel session={session} />
+                        </Suspense>
                     </div>
                 )}
             {!identityOnly && candidatePreparationEnabled && candidateLifecycleEnabled
