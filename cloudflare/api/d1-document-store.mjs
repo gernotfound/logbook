@@ -1,4 +1,5 @@
 import { activeSessionArgs, activeSessionPredicateSql, sessionFencedRequestHashSql, sessionFencedHashArgs } from '../auth/session-write-fence.mjs';
+import { D1_NOW_MS } from '../sql/d1-time.mjs';
 
 // D1 transport adapter: SQL has no access to the account data key or business plaintext.
 // All queries bind values; writes require a trigger-guarded atomic D1 batch.
@@ -91,6 +92,75 @@ export async function readDocumentPage(db, uid, consentRevision, fenceEpoch, aft
   return {
     kind: 'page', revision: control.revision, fenceEpoch: control.fence_epoch,
     consentRevision: control.consent_revision, documents: items, nextAfter: hasMore ? items.at(-1).path : null, complete: !hasMore,
+  };
+}
+
+// Rights-only scans must NOT use activeSessionPredicateSql: a revoked owner
+// cannot sync, yet may recover still-encrypted documents while the original
+// erasure job remains pending. No consent or session data comes from the body.
+const RIGHTS_HEAD_SQL = `
+  SELECT a.uid, a.status, a.consent_revision, a.fence_epoch,
+    a.erased_before_revision, s.revision
+  FROM sync_subjects a
+  JOIN sync_state s ON s.uid = a.uid
+  JOIN auth_principals p ON p.uid = a.uid
+  JOIN auth_sessions t ON t.uid = p.uid
+  JOIN health_consent_acceptances c ON c.uid = a.uid
+  JOIN health_erasure_jobs j ON j.uid = a.uid
+    AND j.consent_revision = a.consent_revision
+    AND j.fence_epoch = a.fence_epoch
+  WHERE a.uid = ? AND a.status = 'withdrawn'
+    AND a.consent_revision = ? AND a.erased_before_revision = 0
+    AND a.fence_epoch <= p.auth_epoch
+    AND p.status = 'active' AND p.auth_epoch = ?
+    AND t.token_hash = ? AND t.auth_epoch = p.auth_epoch
+    AND t.revoked_at_ms IS NULL
+    AND t.issued_at_ms <= ${D1_NOW_MS}
+    AND t.idle_expires_at_ms > ${D1_NOW_MS}
+    AND t.absolute_expires_at_ms > ${D1_NOW_MS}
+    AND c.consent_revision = a.consent_revision
+    AND c.over_18_confirmed = 1
+    AND c.accepted_at_ms > 0 AND c.accepted_at_ms <= ${D1_NOW_MS}
+    AND j.status IN ('pending', 'processing')
+`;
+
+export async function readRightsAccessState(db, uid, consentRevision, authEpoch, sessionHash) {
+  if (typeof db?.withSession !== 'function') throw new Error('missing-primary-session');
+  return db.withSession('first-primary').prepare(RIGHTS_HEAD_SQL)
+    .bind(uid, consentRevision, authEpoch, sessionHash).first();
+}
+
+// In the same primary D1 transaction, check the live rights-only session and
+// collect a bounded page. Every page and the final response are revalidated
+// against the independent cutoff outside this adapter.
+export async function readRightsDocumentPage(db, uid, consentRevision, authEpoch, afterPath, expectedRevision, sessionHash) {
+  if (typeof db?.withSession !== 'function') throw new Error('missing-primary-session');
+  const primary = db.withSession('first-primary');
+  const sql = afterPath === null
+    ? 'SELECT path, envelope_json, revision FROM sync_documents WHERE uid = ? ORDER BY path LIMIT 9'
+    : 'SELECT path, envelope_json, revision FROM sync_documents WHERE uid = ? AND path > ? ORDER BY path LIMIT 9';
+  const [head, page] = await primary.batch([
+    primary.prepare(RIGHTS_HEAD_SQL).bind(uid, consentRevision, authEpoch, sessionHash),
+    primary.prepare(sql).bind(...(afterPath === null ? [uid] : [uid, afterPath])),
+  ]);
+  const rights = head?.results?.[0];
+  if (!rights) return { kind: 'access-revoked' };
+  if (expectedRevision !== null && rights.revision !== expectedRevision) {
+    return { kind: 'snapshot-changed' };
+  }
+  if (!page || !Array.isArray(page.results) || page.results.length > 9) {
+    throw new Error('invalid-rights-page');
+  }
+  const items = page.results.slice(0, 8).map(row => ({
+    path: row.path, revision: row.revision, document: JSON.parse(row.envelope_json),
+  }));
+  const hasMore = page.results.length > 8;
+  return {
+    kind: 'page', subject: rights,
+    revision: rights.revision, fenceEpoch: rights.fence_epoch,
+    consentRevision: rights.consent_revision,
+    documents: items, nextAfter: hasMore ? items.at(-1).path : null,
+    complete: !hasMore,
   };
 }
 

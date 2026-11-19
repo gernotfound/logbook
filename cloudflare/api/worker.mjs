@@ -7,7 +7,8 @@ import {
 import consentWorker from './consent-worker.mjs';
 import logoutWorker from './logout-worker.mjs';
 import cloudKeyWorker from './cloud-key-worker.mjs';
-import { commitEncryptedBatch, readAccessState, readCloudKeyPrecondition, readCommitOutcome, readDocumentPage, readReceipt, readReplicaControl, readSnapshot } from './d1-document-store.mjs';
+import { commitEncryptedBatch, readAccessState, readCloudKeyPrecondition, readCommitOutcome, readDocumentPage, readReceipt, readReplicaControl, readRightsAccessState, readRightsDocumentPage, readSnapshot } from './d1-document-store.mjs';
+import { requireIndependentOwnerFence } from '../recovery/independent-owner-fence.mjs';
 import {
   mutationResponse, prepareReplicaClaim, prepareReplicaRetirement, readPublicCheckpointClock,
   readReplicaMutationReceipt, readReplicaMutationOutcome, writeReplicaMutation,
@@ -24,6 +25,7 @@ const BODY_LIMIT_BYTES = new Map([
   ['/v1/sync/control', 128],
   ['/v1/sync/read', 512],
   ['/v1/sync/scan', 256],
+  ['/v1/rights/scan', 256],
   ['/v1/sync/receipt', 256],
   ['/v1/sync/replica/claim', 4096],
   ['/v1/sync/replica/retire', 4096],
@@ -87,7 +89,7 @@ const commitStatusInput = z.strictObject({
 const authClaims = z.strictObject({
   uid: z.string().min(1).max(128).refine(s => !s.includes('/') && s.trim() === s),
   authenticated: z.literal(true),
-  emailVerified: z.literal(true),
+  emailVerified: z.boolean(),
   healthConsentRevision: safeInt.min(1),
   fenceEpoch: safeInt.min(1),
   csrfVerified: z.boolean(),
@@ -177,6 +179,9 @@ async function authorize(request, env, route, isMutation) {
   let claims;
   try { claims = authClaims.parse(await response.json()); }
   catch { throw new BadInput('auth-unavailable', 503); }
+  // Rights-only remains possible after losing email verification, but no
+  // active-fitness route may inherit that weaker scope from the AuthGate.
+  if (!claims.emailVerified && route !== '/v1/rights/scan') throw new BadInput('unauthorized', 403);
   if (isMutation && !claims.csrfVerified) throw new BadInput('csrf-required', 403);
   return claims;
 }
@@ -224,13 +229,14 @@ async function handler(request, env) {
   // Streaming size checks still run after Auth on untrusted/chunked bodies.
   checkJsonRequestHeaders(request, maxBodyBytes);
   const claims = await authorize(request, env, route,
-    route === '/v1/sync/commit' || route === '/v1/sync/commit/status' || route === '/v1/sync/replica/claim' || route === '/v1/sync/replica/retire' || route === '/v1/sync/replica/status');
+    route === '/v1/sync/commit' || route === '/v1/sync/commit/status' || route === '/v1/sync/replica/claim' || route === '/v1/sync/replica/retire' || route === '/v1/sync/replica/status'
+    || route === '/v1/rights/scan');
   const uid = claims.uid;
   const consentRevision = claims.healthConsentRevision;
   const fenceEpoch = claims.fenceEpoch;
   // This private API is not operational without an independent D1. The
   // AuthGate's main-D1 proof is necessary but cannot survive its own restore.
-  await requireCurrentIndependentSyncFence(env, claims);
+  if (route !== '/v1/rights/scan') await requireCurrentIndependentSyncFence(env, claims);
   const guardedReply = async (body, status = 200) => {
     await requireCurrentIndependentSyncFence(env, claims);
     return reply(body, status);
@@ -249,6 +255,38 @@ async function handler(request, env) {
       replica: { slot: receipt.slot, replicaId: receipt.replica_id, generation: receipt.generation } } : null });
   }
   const raw = await jsonBounded(request, maxBodyBytes);
+  if (route === '/v1/rights/scan') {
+    // A withdrawn account has NO fitness scope: only a still-pending erasure
+    // job and the independent, open rights registry may release ciphertext.
+    const parsed = pageInput.safeParse(raw);
+    if (!parsed.success || !env.RECOVERY_DB || env.RECOVERY_DB === env.DB) {
+      throw new BadInput('rights-unavailable', parsed.success ? 503 : 400);
+    }
+    const page = await readRightsDocumentPage(env.DB, uid, consentRevision, fenceEpoch,
+      parsed.data.after, parsed.data.expectedRevision, claims.sessionHash);
+    if (page.kind === 'access-revoked') throw new BadInput('access-revoked', 403);
+    if (page.kind === 'snapshot-changed') throw new BadInput('snapshot-changed', 409);
+    const prove = async subject => requireIndependentOwnerFence(env.RECOVERY_DB, {
+      uid: subject.uid, status: subject.status,
+      consentRevision: subject.consent_revision,
+      fenceEpoch: subject.fence_epoch,
+      erasedBeforeRevision: subject.erased_before_revision,
+    }, 'rights');
+    await prove(page.subject);
+    // A finalizer or logout can win after the SQL page was collected. The
+    // same original session, still-pending job and external cutoff must
+    // remain readable just before replying; no stale page is success.
+    const current = await readRightsAccessState(env.DB, uid, consentRevision,
+      fenceEpoch, claims.sessionHash);
+    if (!current || current.revision !== page.revision
+      || current.fence_epoch !== page.fenceEpoch
+      || current.consent_revision !== page.consentRevision) {
+      throw new BadInput('access-revoked', 403);
+    }
+    await prove(current);
+    const { kind: _kind, subject: _subject, ...data } = page;
+    return reply(data);
+  }
   if (route === '/v1/sync/commit/status') {
     // A conflict/timeout is ambiguous. The original CAS is impossible only
     // when one PRIMARY SQL snapshot sees an advanced revision and no receipt.

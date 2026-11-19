@@ -164,6 +164,10 @@ void test('rights-only AuthGate accepts a renewed unverified session, never sync
     assert.equal(body.fenceEpoch, 2);
     assert.equal(body.emailVerified, false);
     assert.equal(body.csrfVerified, true);
+    const rightsRead = await status(env, { route: '/v1/rights/scan',
+      cookie: newToken, csrfValue: newCsrf });
+    assert.equal(rightsRead.status, 200);
+    assert.equal((await status(env, { route: '/v1/rights/scan', cookie: newToken })).status, 403);
     assert.equal((await status(env, { route: '/v1/cloud-key/rights-export',
       cookie: newToken })).status, 403);
     assert.equal((await status(env, { route: '/v1/cloud-key/rights-export',

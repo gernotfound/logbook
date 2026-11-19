@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { describe, expect, it, vi } from 'vitest';
-import { CloudReplicaCloudKeyRequiredError, CloudReplicaMutationReconciliationRequiredError, CloudReplicaTransportError, createCloudflareReplicaTransport } from '../../../src/lib/sync/cloudReplicaTransport';
+import { CloudReplicaCloudKeyRequiredError, CloudReplicaMutationReconciliationRequiredError, CloudReplicaTransportError, createCloudflareReplicaTransport, createCloudflareRightsScanTransport } from '../../../src/lib/sync/cloudReplicaTransport';
 import { readAuthenticatedCloudflareCheckpoint } from '../../../src/lib/sync/cloudReplicaCheckpoint';
 import { CloudCiphertextError, sealCloudDocument } from '../../../src/lib/sync/cloudDocumentCipher';
 import type { SyncMeta } from '../../../src/lib/sync/semanticProjection/contracts';
@@ -448,6 +448,65 @@ describe('isolated Cloudflare document transport', () => {
             .toEqual({ after: null, expectedRevision: null });
         expect(JSON.parse((fetcher.mock.calls[1] as unknown as [string, RequestInit])[1].body as string))
             .toEqual({ after: paths[7], expectedRevision: 2 });
+    });
+
+
+    it('rights-only transport validates all pages without ever calling a fitness endpoint', async () => {
+        const paths = ['', ...Array.from({ length: 8 }, (_, i) =>
+            `nutrition_months/2026-${String(i + 1).padStart(2, '0')}`)];
+        const page = (selected: string[], complete: boolean) => ({
+            revision: 2, fenceEpoch: 1, consentRevision: 1, complete,
+            nextAfter: complete ? null : selected.at(-1),
+            documents: selected.map(path => ({ path, revision: 2, document: { _sealed: {} } })),
+        });
+        const pages = [page(paths.slice(0, 8), false), page(paths.slice(8), true)];
+        let index = 0;
+        const fetcher = vi.fn(async () => Response.json(pages[index++], {
+            headers: { 'Cache-Control': 'no-store' },
+        }));
+        const rights = createCloudflareRightsScanTransport(fetcher as typeof fetch);
+        await expect(rights.scanAll('test-csrf')).resolves.toEqual({
+            revision: 2, fenceEpoch: 1, consentRevision: 1,
+            documents: pages.flatMap(p => p.documents),
+        });
+        expect(fetcher).toHaveBeenCalledTimes(2);
+        for (const [url, init] of fetcher.mock.calls as unknown as Array<[string, RequestInit]>) {
+            expect(url).toBe('/v1/rights/scan');
+            expect(init).toMatchObject({
+                method: 'POST', credentials: 'include', mode: 'same-origin',
+                cache: 'no-store', redirect: 'error',
+            });
+            expect(new Headers(init.headers).get('X-CSRF-Token')).toBe('test-csrf');
+        }
+        expect(JSON.parse((fetcher.mock.calls[1] as unknown as [string, RequestInit])[1].body as string))
+            .toEqual({ after: paths[7], expectedRevision: 2 });
+    });
+
+    it('rights-only scan fails closed on missing CSRF, stale page, unsafe cache and oversized response', async () => {
+        const valid = { revision: 1, fenceEpoch: 1, consentRevision: 1,
+            complete: true, nextAfter: null, documents: [] };
+        const send = vi.fn(async () => Response.json(valid, {
+            headers: { 'Cache-Control': 'no-store' },
+        }));
+        await expect(createCloudflareRightsScanTransport(send as typeof fetch).scanAll(''))
+            .rejects.toBeInstanceOf(CloudReplicaTransportError);
+        expect(send).not.toHaveBeenCalled();
+        for (const response of [
+            Response.json(valid),
+            new Response('external', { status: 200, headers: { 'Cache-Control': 'no-store' } }),
+            Response.json({ ...valid, complete: false, nextAfter: '', documents: [] },
+                { headers: { 'Cache-Control': 'no-store' } }),
+            new Response('{}', { headers: {
+                'Content-Type': 'application/json', 'Cache-Control': 'no-store',
+                'Content-Length': String(8 * 950_000 + 16_385),
+            } }),
+        ]) {
+            const transport = createCloudflareRightsScanTransport(
+                vi.fn(async () => response) as typeof fetch,
+            );
+            await expect(transport.scanAll('test-csrf'))
+                .rejects.toBeInstanceOf(CloudReplicaTransportError);
+        }
     });
 
     it('rejects incomplete, stale, non-monotone and malformed paginated snapshots', async () => {
