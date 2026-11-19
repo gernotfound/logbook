@@ -1,7 +1,6 @@
 import { beforeEach, afterEach, describe, test, expect, vi } from 'vitest';
 import { prepareUnlockedTestArchive } from '../secureVaultFixture';
 import { useAppStore } from '../../src/store/useAppStore';
-import { DB } from '../../src/lib/db';
 import type { UserData } from '../../src/types';
 import { setupPwaIndexeddbTest, teardownPwaIndexeddbTest, makeUserData } from './pwaIndexeddbTestFixture';
 
