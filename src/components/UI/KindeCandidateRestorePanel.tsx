@@ -71,7 +71,7 @@ export function KindeCandidateRestorePanel({ session }: { session: Session }) {
         }).finally(() => { running.current = false; });
     };
 
-    const blocked = running.current || session.busy;
+    const blocked = phase === 'working' || session.busy;
     return (
         <section aria-label="Ripristino backup account Kinde">
             <h2>Ripristina backup account</h2>
