@@ -106,7 +106,7 @@ export interface WeekInterval {
     label: string;
 }
 
-export { getWorkoutDateString, computeWeeklyVolumeSeries, computeWeeklyTrainingActivityContext } from './analyticsWeeklyVolume';
+export { getWorkoutDateString, computeWeeklyVolumeSeries, computeWeeklyVolumeSeriesCooperative, computeWeeklyTrainingActivityContext } from './analyticsWeeklyVolume';
 export interface WeeklyTrainingActivityPoint extends WeeklyActivityPoint {
     workoutCount: number;
     volumeKg: number;
@@ -126,4 +126,4 @@ export interface ReadinessTrendStats {
     muscleRecovery: ReadinessTrendDimension;
     sessionsWithReadiness: number;
 }
-export { calculatePearsonCorrelation, computeVolumeCaloriesCorrelationFromVolume, computeVolumeCaloriesCorrelation } from './analyticsCorrelation';
+export { calculatePearsonCorrelation, computeVolumeCaloriesCorrelationFromVolume, computeVolumeCaloriesCorrelation, computeVolumeCaloriesCorrelationCooperative } from './analyticsCorrelation';
