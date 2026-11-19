@@ -198,13 +198,16 @@ describe('isolated Kinde account entry candidate', () => {
         fireEvent.click(next);
         await waitFor(() => expect(prepareKindeCandidateOwner).toHaveBeenCalledTimes(1));
         browserCsrf = REPLACEMENT_CSRF;
-        await act(async () => { window.dispatchEvent(new Event('focus')); });
-        await screen.findByRole('button', { name: 'Accedi o registrati' });
+        // The in-flight action suppresses a foreground refresh, but its own
+        // pinned cookie check must reject the late result before any success.
         await act(async () => {
             finish({ kind: 'candidate-observed', checkpointRevision: 1,
                 replicaOutcome: 'already-active' });
         });
+        await screen.findByRole('alert');
         expect(screen.queryByText(/Archivio cifrato verificato nel percorso candidato/)).toBeNull();
+        await act(async () => { window.dispatchEvent(new Event('focus')); });
+        await screen.findByRole('button', { name: 'Accedi o registrati' });
     });
 
     it('discards consent checked before a replacement cookie even for the same account', async () => {
