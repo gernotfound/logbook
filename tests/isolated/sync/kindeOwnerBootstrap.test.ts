@@ -14,6 +14,7 @@ vi.mock('../../../src/lib/sync/kindeCandidateReplicaClaimBridge',
 import { LEGAL_VERSIONS } from '../../../src/lib/legalVersions';
 import api from '../../../cloudflare/api/worker.mjs';
 import kinde from '../../../cloudflare/auth/kinde-http-worker.mjs';
+import { issueVerifiedSession } from '../../../cloudflare/auth/session-issuer.mjs';
 import { routeCandidateFirstPartyApi } from '../../../cloudflare/first-party-api-candidate.mjs';
 import { createCloudKeyHttpFixture, ORIGIN } from '../../cloudflare/cloud-key-http-fixture.mjs';
 import { prepareKindeCandidateOwner } from '../../../src/lib/sync/kindeCandidateOwnerBootstrap';
@@ -429,6 +430,52 @@ describe('Kinde-only device vault provisioning and authenticated baseline', () =
                 journalOutcome: 'idle',
             });
             expect(commits).toBe(1);
+            expect(fixture.count('sync_receipts', uid)).toBe(1);
+        } finally {
+            fixture.close();
+        }
+    });
+
+    it('opens a remote encrypted first save on another independent device vault and session', async () => {
+        const realClaim = await vi.importActual<typeof import('../../../src/lib/sync/kindeCandidateReplicaClaimBridge')>(
+            '../../../src/lib/sync/kindeCandidateReplicaClaimBridge',
+        );
+        claimSource.claim.mockImplementation(realClaim.claimKindeCandidateReplica);
+        const fixture = await createCloudKeyHttpFixture([uid]);
+        try {
+            await fixture.consent(uid);
+            const firstSession = firstPartySession(fixture, (_path, _init, response) => response);
+            await expect(prepareKindeCandidateOwner({ ...firstSession, expected: principal }))
+                .resolves.toMatchObject({ replicaOutcome: 'adopted' });
+            const source = await readLocal(owner);
+            const firstReplica = source?.replica;
+            const firstVault = readVaultControl(owner);
+            await commitDomainOperations(owner, {
+                type: 'profile.patch', patch: { height: '186' },
+            }, source!.data);
+            await expect(deliverKindeCandidateJournal(firstSession)).resolves.toBe('acknowledged');
+            expect(fixture.count('sync_documents', uid)).toBe(1);
+            expect(fixture.count('sync_receipts', uid)).toBe(1);
+
+            // Independent browser profile: no local key, envelope, identity
+            // hint or pending operation survives, while the D1 cloud remains.
+            lockAllVaults();
+            localStorage.clear();
+            await clear();
+            const issued = await issueVerifiedSession(fixture.db, uid);
+            const cookies = issued.setCookies.map(value => value.split(';')[0]).join('; ');
+            const csrf = issued.setCookies[1].split(';')[0].split('=')[1];
+            fixture.sessions.set(uid, { cookies, csrf });
+            const secondSession = firstPartySession(fixture, (_path, _init, response) => response);
+            await expect(prepareKindeCandidateOwner({ ...secondSession, expected: principal }))
+                .resolves.toMatchObject({ replicaOutcome: 'adopted' });
+            const downloaded = await readLocal(owner);
+            expect(downloaded?.data.profile?.height).toBe('186');
+            expect(downloaded?.baseline.profile?.height).toBe('186');
+            expect(downloaded?.pending).toEqual([]);
+            expect(downloaded?.replica?.replicaId).not.toBe(firstReplica?.replicaId);
+            expect(readVaultControl(owner)?.wrappedKey).not.toEqual(firstVault?.wrappedKey);
+            expect(fixture.count('sync_documents', uid)).toBe(1);
             expect(fixture.count('sync_receipts', uid)).toBe(1);
         } finally {
             fixture.close();
