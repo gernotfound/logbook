@@ -27,6 +27,24 @@ describe('JSON Export/Import Logic', () => {
         }, rights.owner)).toThrow();
     });
 
+    it('does not reinterpret pre-withdrawal separate evidence as a restorable backup', () => {
+        const evidence = {
+            format: 'thelogbook-prewithdrawal-evidence', version: 1,
+            type: 'pre-withdrawal', owner: 'user:k_' + 'A'.repeat(43),
+            exportedAt: '2026-11-19T00:00:00.000Z',
+            cloud: { revision: 4, consentRevision: 1, fenceEpoch: 1,
+                documents: [{ path: '', business: { profile: { height: '182' } } }] },
+            device: { envelope: { pending: [{ seq: 2 }], data: { profile: { height: '193' } } },
+                recovery: { 'draft:measurement:2026-11-19': '{"weight":"79"}' } },
+        };
+        expect(() => decodeImport(evidence, evidence.owner)).toThrow();
+        expect(() => decodeImport({
+            ...evidence, version: CURRENT_BACKUP_SCHEMA,
+            dataSchemaVersion: CURRENT_DATA_SCHEMA,
+            syncProtocolVersion: CURRENT_SYNC_PROTOCOL,
+        }, evidence.owner)).toThrow();
+    });
+
     it('keeps the native download blob URL alive past the anchor click', async () => {
         vi.useFakeTimers();
         try {
