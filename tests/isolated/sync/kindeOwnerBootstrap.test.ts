@@ -743,6 +743,19 @@ describe('Kinde-only device vault provisioning and authenticated baseline', () =
             expect(seen.slice(start)).not.toContain('/v1/sync/commit');
             expect(seen.slice(start)).not.toContain('/v1/rights/scan');
 
+            const incompleteCloud = firstPartySession(fixture, async (path, _init, response) => {
+                if (path !== '/v1/sync/scan') return response;
+                const page = await response.clone().json() as Record<string, unknown>;
+                return Response.json({ ...page, documents: [] }, {
+                    status: response.status,
+                    headers: { 'Cache-Control': 'no-store' },
+                });
+            });
+            await expect(prepareKindeCandidatePortableBackupJson({
+                ...incompleteCloud, expected: principal,
+            })).rejects.toThrow();
+            expect((await readLocal(owner))?.data.profile?.height).toBe('193');
+
             // A held persistence fence must never become a full restorable
             // backup; the previous independent evidence remains exportable.
             await updateArchiveRecord<any>(owner, raw => ({
