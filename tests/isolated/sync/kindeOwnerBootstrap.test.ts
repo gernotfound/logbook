@@ -22,6 +22,8 @@ import { KindeCandidateBoundaryError } from '../../../src/lib/auth/kindeCandidat
 import { acceptKindeCandidateInitialConsent } from '../../../src/lib/auth/kindeCandidateConsent';
 import { deliverKindeCandidateJournal } from '../../../src/lib/sync/kindeCandidateJournalBridge';
 import { withKindeCandidateRightsCheckpoint } from '../../../src/lib/auth/kindeCandidateRightsCheckpoint';
+import { prepareKindeCandidateRightsJson } from '../../../src/lib/auth/kindeCandidateRightsExport';
+import { decodeImport } from '../../../src/lib/backup';
 import type { CloudReplicaClaimRequest } from '../../../src/lib/sync/cloudReplicaTransport';
 import { readLocal } from '../../../src/lib/sync/localArchiveBootstrap';
 import { commitDomainOperations } from '../../../src/lib/sync/localDomainCommit';
@@ -504,6 +506,37 @@ describe('Kinde-only device vault provisioning and authenticated baseline', () =
                 },
             });
             expect(retrieved).toMatchObject({ profile: { height: '194' } });
+            const exported = await prepareKindeCandidateRightsJson({
+                ...session, expected: { ...principal, healthConsentRevision: 1 as const },
+            });
+            const payload = JSON.parse(exported.json) as Record<string, any>;
+            expect(exported.filename).toMatch(/^thelogbook_diritti_cloud_\\d{4}-\\d{2}-\\d{2}\\.json$/);
+            expect(exported.documentCount).toBe(1);
+            expect(payload).toMatchObject({
+                format: 'thelogbook-cloud-rights-export',
+                version: 1, type: 'rights-only', owner,
+                cloud: { consentRevision: 1, fenceEpoch: 1 },
+                coverage: {
+                    scope: 'cloud-documents-still-readable',
+                    completeness: 'not-proven-after-withdrawal',
+                    includesDeviceData: false,
+                    includesPendingJournal: false,
+                    includesDeviceDrafts: false,
+                    restorableBackup: false,
+                },
+                documents: [{ path: '', dataSchemaVersion: 1,
+                    business: { profile: { height: '194' } } }],
+            });
+            expect(() => decodeImport(payload, owner)).toThrow();
+            let current = true;
+            const replaced = firstPartySession(fixture, (path, _init, response) => {
+                if (path === '/v1/rights/scan') current = false;
+                return response;
+            });
+            await expect(prepareKindeCandidateRightsJson({
+                ...replaced, expected: { ...principal, healthConsentRevision: 1 as const },
+                stillCurrent: () => current,
+            })).rejects.toThrow();
             expect(isVaultUnlocked(owner)).toBe(false);
             expect(observed.slice(before).filter(path => path === '/v1/rights/scan')).toHaveLength(1);
             expect(observed.slice(before)).not.toContain('/v1/sync/scan');
