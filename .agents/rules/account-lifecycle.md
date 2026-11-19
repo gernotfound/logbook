@@ -1,5 +1,11 @@
 # Ciclo account, Auth e guest — TheLogBook
 
+### Continuità Kinde → consegna journal nel candidato React (19/11/2026)
+
+Il pulsante esplicito `Continua` del solo ingresso candidato Kinde invoca `prepareCandidateArchive({ drainPendingJournal: true })`. Il bridge già esistente verifica nuovamente UID/sessione/CSRF, consenso D1 e owner, riapre il vault device, confronta checkpoint e replica, quindi riconcilia il journal cifrato con un ACK verificato o accerta che non vi siano operazioni in attesa. **Il solo checkpoint o la replica attiva NON sono successo di consegna**: l'interfaccia candidata considera conclusa la preparazione soltanto se il risultato porta `journalOutcome: 'idle' | 'acknowledged'` insieme a checkpoint e replica confermati. Risposte perse, journal non confermato, claim in riconciliazione ed errori rimangono `pending`/errore, con retry non distruttivo.
+
+Il `KindeAccountSessionProvider` pubblico mantiene `identityOnly: true`, `candidatePreparationEnabled: false`; nessun account fitness, `authenticatedIdentitySource`, owner globale o API sanitaria pubblica è autorizzato da questo passaggio. La chiave device del tentativo candidato viene sempre rilasciata (`retainDeviceVault: false`), la KEK resta solo lato Worker. L'eventuale revoca/erasure conserva precedenza sui risultati di richieste tardive: `isKindeAccountLocalFitnessClear` e i fence Auth/consenso sono ricontrollati nei bridge; per l'attivazione reale servirà un lifecycle Kinde completo e verificato anche in browser/provider.
+
 ### Continuità consenso Kinde → preparazione vault in React (candidato 19/11/2026)
 
 L'ingresso `KindeAccountEntry` può collegare, **solo con prop esplicita** `candidatePreparationEnabled`, la conferma autorevole del primo consenso a un pulsante ordinario `Continua` che richiama `useKindeAccountSession.prepareCandidateArchive()`. Non genera/mostra chiavi, non installa un owner fitness, non chiama direttamente D1 ed è disponibile soltanto dopo `consent-confirmed`; l'azione non parte automaticamente al mount o al login. Un risultato con checkpoint e replica verificati rimane soltanto una osservazione candidata; la consegna ambigua o fallita è mostrata come in attesa/errore e non diventa successo. Lo stato del componente è scoped alla generazione UID/epoch/revisione, quindi la sessione sostituita non può pubblicare il risultato precedente.
