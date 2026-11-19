@@ -78,6 +78,7 @@ function KindeCandidatePreparation({ session }: { session: Session }) {
                 && result.checkpointRevision !== null
                 && (result.replicaOutcome === 'adopted'
                     || result.replicaOutcome === 'already-active')
+                && result.journalDrained === true
                 && (result.journalOutcome === 'idle'
                     || result.journalOutcome === 'acknowledged');
             setState(complete ? 'observed' : 'pending');
