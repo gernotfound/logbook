@@ -174,7 +174,7 @@ describe('Sync UI — workloads', () => {
       expect(saveSpy).toHaveBeenCalledTimes(1);
       const submittedDay = saveSpy.mock.calls[0]?.[0]?.nutrition?.['2026-08-22'];
       expect(submittedDay).toMatchObject({ date: '2026-08-22', weight: 75, ...expectedTotals });
-      expect(submittedDay?.meals?.map(item => item.id)).toEqual(expectedMealIds);
+      expect(submittedDay?.meals?.map((item: { id: string }) => item.id)).toEqual(expectedMealIds);
 
       // DB is mocked here: independently verify that the real IndexedDB envelope survived batching.
       const durable = await readLocal(captureSession().owner);
