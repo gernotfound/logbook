@@ -65,7 +65,10 @@ async function assertDurableProjection(current: UserData, desired: UserData,
         const missing = findLossyNormalization(desired, normalizedReplay);
         const unexpected = findLossyNormalization(normalizedReplay, desired);
         const path = (missing ?? unexpected ?? []).join('.') || '<root>';
-        throw new Error(`Backup non rappresentabile dal journal corrente (${path}): ripristino annullato.`);
+        // Distinguish a missing imported field from an unexpected default
+        // without emitting any business values to shared CI logs.
+        const direction = missing ? 'missing' : unexpected ? 'unexpected' : 'representation';
+        throw new Error(`Backup non rappresentabile dal journal corrente (${direction}: ${path}; origin-presence: ${Object.hasOwn(desired, 'nutritionPlanningOrigin')}/${Object.hasOwn(normalizedReplay, 'nutritionPlanningOrigin')}): ripristino annullato.`);
     }
 }
 
