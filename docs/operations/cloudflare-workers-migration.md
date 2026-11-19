@@ -911,7 +911,9 @@ Il modulo `kindeCandidatePortableBackup.ts` crea un backup business
 `logbook-backup` Schema 3 sotto consenso D1 attivo, sessione Kinde,
 CSRF e vault già sbloccato. La lettura dei documenti AEAD Cloudflare
 e la doppia prova delle copie IndexedDB/localStorage provengono
-dall'ingresso candidato pre-revoca. Root/shard, causal frontier
+dall'ingresso candidato pre-revoca; una prova finale dopo ogni attesa
+asincrona della composizione impedisce di pubblicare copie locali cambiate
+nel frattempo. Root/shard, causal frontier
 e normalizzazione lossless sono verificati prima del merge; le
 modifiche non consegnate sono composte tramite `applySemanticOperations`
 usato anche dalla replica, senza inviare commit o ACK. L'output
