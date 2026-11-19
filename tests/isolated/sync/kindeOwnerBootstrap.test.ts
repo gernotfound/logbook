@@ -380,6 +380,127 @@ describe('Kinde-only device vault provisioning and authenticated baseline', () =
         }
     });
 
+    it('drains a persisted first edit after checking the replica and leaves an empty journal idle', async () => {
+        const realClaim = await vi.importActual<typeof import('../../../src/lib/sync/kindeCandidateReplicaClaimBridge')>(
+            '../../../src/lib/sync/kindeCandidateReplicaClaimBridge',
+        );
+        claimSource.claim.mockImplementation(realClaim.claimKindeCandidateReplica);
+        const fixture = await createCloudKeyHttpFixture([uid]);
+        try {
+            await fixture.consent(uid);
+            let commits = 0;
+            const session = firstPartySession(fixture, (path, _init, response) => {
+                if (path === '/v1/sync/commit') {
+                    expect(response.status).toBe(200);
+                    commits += 1;
+                }
+                return response;
+            });
+            await expect(prepareKindeCandidateOwner({ ...session, expected: principal }))
+                .resolves.toMatchObject({ replicaOutcome: 'adopted' });
+            const baseline = (await readLocal(owner))!.data;
+            const edit = await commitDomainOperations(
+                owner, { type: 'profile.patch', patch: { height: '184' } }, baseline,
+            );
+            expect((await readLocal(owner))?.pending).toEqual(edit.operations);
+            expect(fixture.count('sync_receipts', uid)).toBe(0);
+
+            lockAllVaults();
+            await expect(prepareKindeCandidateOwner({
+                ...session, expected: principal, drainPendingJournal: true,
+            })).resolves.toMatchObject({
+                kind: 'candidate-observed', replicaOutcome: 'already-active',
+                journalOutcome: 'acknowledged',
+            });
+            expect(isVaultUnlocked(owner)).toBe(true);
+            expect(commits).toBe(1);
+            expect(fixture.count('sync_receipts', uid)).toBe(1);
+            expect((await readLocal(owner))?.pending).toEqual([]);
+            expect((await readLocal(owner))?.baseline.profile?.height).toBe('184');
+            const ciphertext = await get<string>('logbook:v2:' + owner);
+            expect(ciphertext).toMatch(/^tlb-sealed:v1:/);
+            expect(ciphertext).not.toContain('184');
+
+            lockAllVaults();
+            await expect(prepareKindeCandidateOwner({
+                ...session, expected: principal, drainPendingJournal: true,
+            })).resolves.toMatchObject({
+                kind: 'candidate-observed', replicaOutcome: 'already-active',
+                journalOutcome: 'idle',
+            });
+            expect(commits).toBe(1);
+            expect(fixture.count('sync_receipts', uid)).toBe(1);
+        } finally {
+            fixture.close();
+        }
+    });
+
+    it('closes its vault after a lost first-save response and reconciles without a second commit', async () => {
+        const realClaim = await vi.importActual<typeof import('../../../src/lib/sync/kindeCandidateReplicaClaimBridge')>(
+            '../../../src/lib/sync/kindeCandidateReplicaClaimBridge',
+        );
+        claimSource.claim.mockImplementation(realClaim.claimKindeCandidateReplica);
+        const fixture = await createCloudKeyHttpFixture([uid]);
+        try {
+            await fixture.consent(uid);
+            let commits = 0;
+            let loseResponse = true;
+            let receiptUnavailable = true;
+            const session = firstPartySession(fixture, (path, _init, response) => {
+                if (path === '/v1/sync/commit') {
+                    expect(response.status).toBe(200);
+                    commits += 1;
+                    if (loseResponse) {
+                        loseResponse = false;
+                        throw new TypeError('D1 committed; HTTP response lost');
+                    }
+                }
+                if (path === '/v1/sync/receipt' && receiptUnavailable) {
+                    return Response.json({ error: 'unavailable' }, {
+                        status: 503, headers: { 'Cache-Control': 'no-store' },
+                    });
+                }
+                return response;
+            });
+            await expect(prepareKindeCandidateOwner({ ...session, expected: principal }))
+                .resolves.toMatchObject({ replicaOutcome: 'adopted' });
+            const baseline = (await readLocal(owner))!.data;
+            const edit = await commitDomainOperations(
+                owner, { type: 'profile.patch', patch: { height: '185' } }, baseline,
+            );
+
+            lockAllVaults();
+            await expect(prepareKindeCandidateOwner({
+                ...session, expected: principal, drainPendingJournal: true,
+            })).rejects.toThrow();
+            expect(isVaultUnlocked(owner)).toBe(false);
+            expect(commits).toBe(1);
+            expect(fixture.count('sync_receipts', uid)).toBe(1);
+            await unlockVaultForOwner(owner);
+            const preserved = await readLocal(owner);
+            expect(preserved?.cloudflareDelivery).toBeDefined();
+            expect(preserved?.pending).toEqual(edit.operations);
+            const ciphertext = await get<string>('logbook:v2:' + owner);
+            expect(ciphertext).toMatch(/^tlb-sealed:v1:/);
+            lockAllVaults();
+
+            receiptUnavailable = false;
+            await expect(prepareKindeCandidateOwner({
+                ...session, expected: principal, drainPendingJournal: true,
+            })).resolves.toMatchObject({
+                kind: 'candidate-observed', replicaOutcome: 'already-active',
+                journalOutcome: 'idle',
+            });
+            expect(commits).toBe(1);
+            expect(fixture.count('sync_receipts', uid)).toBe(1);
+            expect((await readLocal(owner))?.cloudflareDelivery).toBeUndefined();
+            expect((await readLocal(owner))?.pending).toEqual([]);
+            expect((await readLocal(owner))?.baseline.profile?.height).toBe('185');
+        } finally {
+            fixture.close();
+        }
+    });
+
     it('a delayed scan from a replaced session cannot lock a newer grant for the same owner', async () => {
         let liveCookie = cookie();
         let finishScan!: () => void;
