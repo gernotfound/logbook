@@ -3,6 +3,7 @@ import { useSharedKindeAccountSession } from '../../contexts/auth/kindeAccountSe
 import { useKindeAccountSession } from '../../contexts/auth/useKindeAccountSession';
 import { PrivacyPolicy } from '../../pages/PrivacyPolicy';
 import { TermsAndConditions } from '../../pages/TermsAndConditions';
+import { KindeCandidateBackupPanel } from './KindeCandidateBackupPanel';
 
 type Phase = ReturnType<typeof useKindeAccountSession>['view']['phase'];
 type AcceptConsent = ReturnType<typeof useKindeAccountSession>['acceptConsent'];
@@ -146,11 +147,11 @@ function KindeAccountEntryView({
                 && phase !== 'guest-blocked' && <p role="status">{copy[phase]}</p>}
             {!identityOnly && candidatePreparationEnabled && phase === 'consent-confirmed'
                 && 'principal' in view && (
-                    <KindeCandidatePreparation
-                        key={String(view.generation) + ':' + view.principal.uid + ':'
-                            + String(view.principal.fenceEpoch) + ':' + String(view.principal.healthConsentRevision)}
-                        session={session}
-                    />
+                    <div key={String(view.generation) + ':' + view.principal.uid + ':'
+                        + String(view.principal.fenceEpoch) + ':' + String(view.principal.healthConsentRevision)}>
+                        <KindeCandidatePreparation session={session} />
+                        <KindeCandidateBackupPanel session={session} />
+                    </div>
                 )}
             {phase === 'unavailable' && (
                 <>
