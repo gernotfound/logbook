@@ -603,8 +603,14 @@ describe('Kinde-only device vault provisioning and authenticated baseline', () =
             expect(isVaultUnlocked(owner)).toBe(true);
             const initial = (await readLocal(owner))!.data;
             await commitDomainOperations(owner, {
-                type: 'profile.patch', patch: { height: '193' },
+                type: 'profile.patch', patch: { height: '182' },
             }, initial);
+            await expect(deliverKindeCandidateJournal(session)).resolves.toBe('acknowledged');
+            const committed = (await readLocal(owner))!.data;
+            await commitDomainOperations(owner, {
+                type: 'profile.patch', patch: { height: '193' },
+            }, committed);
+            const exportPathStart = paths.length;
             const draftKey = protectedDeviceKey('draft:measurement:2026-11-19', owner);
             const draftValue = '{"weight":"79"}';
             localStorage.setItem(draftKey, sealLocalText(
@@ -612,27 +618,27 @@ describe('Kinde-only device vault provisioning and authenticated baseline', () =
             ));
 
             const result = await prepareKindeCandidatePreWithdrawalJson({ ...session, expected: principal });
-            expect(result.cloudDocumentCount).toBe(0);
+            expect(result.cloudDocumentCount).toBe(1);
             expect(result.deviceWitnessCount).toBe(1);
             expect(result.pendingOperationCount).toBe(1);
             const decoded = JSON.parse(result.json) as {
                 format: string; owner: string;
                 coverage: { atomicAcrossSources: boolean; restorableBackup: boolean; containsPendingJournal: boolean };
-                cloud: { revision: number; documents: unknown[] };
+                cloud: { revision: number; documents: Array<{path: string; business: { profile: { height: string } } }> };
                 device: { envelope: { data: { profile: { height: string } }; pending: unknown[] };
                     recovery: Record<string, string> };
             };
             expect(decoded).toMatchObject({
                 format: 'thelogbook-prewithdrawal-evidence', owner,
                 coverage: { atomicAcrossSources: false, restorableBackup: false, containsPendingJournal: true },
-                cloud: { documents: [] },
+                cloud: { documents: [{ path: '', business: { profile: { height: '182' } } }] },
             });
             expect(decoded.device.envelope.data.profile.height).toBe('193');
             expect(decoded.device.envelope.pending).toHaveLength(1);
             expect(decoded.device.recovery['draft:measurement:2026-11-19']).toBe(draftValue);
             expect(result.json).not.toContain('tlb-sealed:v1:');
-            expect(paths).not.toContain('/v1/rights/scan');
-            expect(paths).not.toContain('/v1/sync/commit');
+            expect(paths.slice(exportPathStart)).not.toContain('/v1/rights/scan');
+            expect(paths.slice(exportPathStart)).not.toContain('/v1/sync/commit');
 
             // A local edit between the initial IDB read and the cloud page
             // must invalidate the whole export, not silently omit that edit.
