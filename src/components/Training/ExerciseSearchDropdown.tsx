@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useMemo, useCallback, useId } from 'react';
-import { X, Plus, Search, Activity, Timer } from 'lucide-react';
-import { ExerciseLibraryItem } from '../../types';
-import { getDetailedMuscleCategory } from '../../lib/logic';
+import { X, Search } from 'lucide-react';
+import type { ExerciseLibraryItem } from '../../types';
+import { ExerciseSearchOption } from './ExerciseSearchOption';
 import { createExerciseLibrarySearcher } from '../../lib/calc/workout';
 
 export interface ExerciseSearchDropdownProps {
@@ -129,58 +129,6 @@ export const ExerciseSearchDropdown: React.FC<ExerciseSearchDropdownProps> = ({
         inputRef.current?.focus();
     };
 
-    const renderBadges = (ex: ExerciseLibraryItem) => {
-        const primaryMuscleId = ex.muscles && ex.muscles.length > 0 ? ex.muscles[0] : null;
-        const muscleCategory = primaryMuscleId ? getDetailedMuscleCategory(primaryMuscleId).label : null;
-
-        return (
-            <div style={{ display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap', marginTop: '3px' }}>
-                {muscleCategory && (
-                    <span 
-                        style={{ 
-                            fontSize: 'var(--font-size-micro)', 
-                            padding: '2px 6px', 
-                            borderRadius: '4px', 
-                            background: 'var(--primary-soft)', 
-                            color: 'var(--primary-color)',
-                            fontWeight: 500
-                        }}
-                    >
-                        {muscleCategory}
-                    </span>
-                )}
-                {ex.trackingType === 'cardio' && (
-                    <span 
-                        style={{ 
-                            fontSize: 'var(--font-size-micro)', 
-                            padding: '2px 6px', 
-                            borderRadius: '4px', 
-                            background: 'var(--success-soft)', 
-                            color: 'var(--success-color)',
-                            fontWeight: 500
-                        }}
-                    >
-                        <Activity size={12} aria-hidden="true" style={{ marginRight: '2px', display: 'inline-block', verticalAlign: 'middle' }} /> Cardio
-                    </span>
-                )}
-                {ex.trackingType === 'time' && (
-                    <span 
-                        style={{ 
-                            fontSize: 'var(--font-size-micro)', 
-                            padding: '2px 6px', 
-                            borderRadius: '4px', 
-                            background: 'var(--warning-soft)', 
-                            color: 'var(--warning-color)',
-                            fontWeight: 500
-                        }}
-                    >
-                        <Timer size={12} aria-hidden="true" style={{ marginRight: '2px', display: 'inline-block', verticalAlign: 'middle' }} /> Tempo
-                    </span>
-                )}
-            </div>
-        );
-    };
-
     return (
         <div 
             ref={containerRef}
@@ -306,63 +254,17 @@ export const ExerciseSearchDropdown: React.FC<ExerciseSearchDropdownProps> = ({
                             Nessun esercizio trovato
                         </div>
                     ) : (
-                        visibleExercises.map((ex, idx) => {
-                            const isHighlighted = highlightedIndex === idx;
-                            return (
-                                <div
-                                    key={ex.id || idx}
-                                    role="option"
-                                    id={`${listboxId}-option-${idx}`}
-                                    aria-selected={isHighlighted}
-                                    aria-posinset={idx + 1}
-                                    aria-setsize={filteredExercises.length}
-                                    className="exercise-dropdown-item"
-                                    onClick={() => handleSelect(ex.id)}
-                                    onMouseEnter={() => setHighlightedIndex(idx)}
-                                    style={{
-                                        padding: '10px 14px',
-                                        borderBottom: '1px solid var(--glass-border)',
-                                        cursor: 'pointer',
-                                        display: 'flex',
-                                        justifyContent: 'space-between',
-                                        alignItems: 'center',
-                                        background: isHighlighted ? 'var(--primary-soft)' : 'transparent',
-                                        borderLeft: isHighlighted ? '3px solid var(--primary-color)' : '3px solid transparent',
-                                        transition: 'background 0.15s ease, border-left 0.15s ease'
-                                    }}
-                                >
-                                    <div style={{ flex: 1, minWidth: 0, paddingRight: '10px' }}>
-                                        <div 
-                                            style={{ 
-                                                fontWeight: 600, 
-                                                color: 'var(--text-main)', 
-                                                fontSize: 'var(--font-size-body)',
-                                                overflow: 'hidden',
-                                                textOverflow: 'ellipsis',
-                                                whiteSpace: 'nowrap'
-                                            }}
-                                        >
-                                            {ex.name}
-                                        </div>
-                                        {renderBadges(ex)}
-                                    </div>
-                                    <div 
-                                        style={{ 
-                                            display: 'flex', 
-                                            alignItems: 'center', 
-                                            justifyContent: 'center',
-                                            width: '28px',
-                                            height: '28px',
-                                            borderRadius: '6px',
-                                            background: isHighlighted ? 'var(--primary-color)' : 'var(--surface-light)',
-                                            color: isHighlighted ? 'var(--on-primary)' : 'var(--text-main)',
-                                            flexShrink: 0
-                                        }}
-                                    >
-                                        <Plus size={16} />
-                                    </div>
-                                </div>
-                            );
+                        visibleExercises.map((ex, idx) => (
+                            <ExerciseSearchOption
+                                key={ex.id || idx}
+                                exercise={ex}
+                                index={idx}
+                                listboxId={listboxId}
+                                resultCount={filteredExercises.length}
+                                highlighted={highlightedIndex === idx}
+                                onSelect={() => handleSelect(ex.id)}
+                                onHover={() => setHighlightedIndex(idx)}
+                            />
                         })
                     )}
                 </div>
