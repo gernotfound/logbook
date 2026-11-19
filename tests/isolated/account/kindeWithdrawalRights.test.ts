@@ -10,7 +10,9 @@ import kinde from '../../../cloudflare/auth/kinde-http-worker.mjs';
 import { routeCandidateFirstPartyApi } from '../../../cloudflare/first-party-api-candidate.mjs';
 import { createCloudKeyHttpFixture, ORIGIN } from '../../cloudflare/cloud-key-http-fixture.mjs';
 import { KindeCandidateBoundaryError, readKindeCandidateAccess } from '../../../src/lib/auth/kindeCandidateClient';
-import { reconcileKindeCandidateWithdrawal, withdrawKindeCandidateHealthConsent } from '../../../src/lib/auth/kindeCandidateWithdrawal';
+import {
+    readKindeCandidateWithdrawalMarker, reconcileKindeCandidateWithdrawal, withdrawKindeCandidateHealthConsent,
+} from '../../../src/lib/auth/kindeCandidateWithdrawal';
 import { withKindeCandidateRightsKey } from '../../../src/lib/auth/kindeCandidateRightsKey';
 import { isKindeAccountLocalFitnessClear } from '../../../src/lib/sync/kindeOwnerLocalFitnessFence';
 
@@ -54,6 +56,24 @@ afterEach(() => {
 });
 
 describe('Kinde withdrawal and rights-only client against first-party Workers and D1 SQL', () => {
+    it('reads an owner-scoped withdrawal marker without treating corrupt storage as permission', () => {
+        expect(readKindeCandidateWithdrawalMarker(uid)).toBe('none');
+        localStorage.setItem(marker, 'pending:1');
+        expect(readKindeCandidateWithdrawalMarker(uid)).toBe('pending');
+        localStorage.setItem(marker, 'withdrawn');
+        expect(readKindeCandidateWithdrawalMarker(uid)).toBe('withdrawn');
+        localStorage.setItem(marker, 'unexpected');
+        expect(readKindeCandidateWithdrawalMarker(uid)).toBe('invalid');
+        expect(readKindeCandidateWithdrawalMarker('k_' + 'B'.repeat(43))).toBe('none');
+        expect(readKindeCandidateWithdrawalMarker('not-an-account')).toBe('invalid');
+        const read = vi.spyOn(localStorage, 'getItem').mockImplementation(() => {
+            throw new Error('storage blocked');
+        });
+        expect(readKindeCandidateWithdrawalMarker(uid)).toBe('invalid');
+        read.mockRestore();
+    });
+
+
     it('fences the owner before withdrawal, proves a queued job, preserves rights key and never reopens fitness', async () => {
         const fixture = await createCloudKeyHttpFixture([uid]);
         try {
