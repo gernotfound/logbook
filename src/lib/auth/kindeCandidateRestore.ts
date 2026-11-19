@@ -3,6 +3,7 @@ import { decodeImport, prepareImport } from '../backup';
 import { getCachedCatalog } from '../catalog/catalogService';
 import type { UserData } from '../../types';
 import { UserDataSchema } from '../schema';
+import { findLossyNormalization } from '../sync/businessNormalizationIntegrity';
 import { captureKindeCandidateSessionFence, KindeCandidateBoundaryError,
     type KindeCandidateAccess } from './kindeCandidateClient';
 import { isKindeAccountLocalFitnessClear } from '../sync/kindeOwnerLocalFitnessFence';
@@ -58,8 +59,13 @@ async function assertDurableProjection(current: UserData, desired: UserData,
     const { documents } = applySemanticOperations(baseDocuments, sequenced.operations);
     const replayed = applyRemoteDocuments(current, documents, catalog);
     replayed.pendingConflicts = desired.pendingConflicts;
-    if (!equal(parse(replayed), desired)) {
-        throw new Error('Backup non rappresentabile dal journal corrente: ripristino annullato.');
+    const normalizedReplay = parse(replayed);
+    if (!equal(normalizedReplay, desired)) {
+        // Only the path is emitted: business values can contain sensitive data.
+        const missing = findLossyNormalization(desired, normalizedReplay);
+        const unexpected = findLossyNormalization(normalizedReplay, desired);
+        const path = (missing ?? unexpected ?? []).join('.') || '<root>';
+        throw new Error(`Backup non rappresentabile dal journal corrente (${path}): ripristino annullato.`);
     }
 }
 
