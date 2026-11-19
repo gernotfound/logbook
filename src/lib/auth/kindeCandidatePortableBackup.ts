@@ -4,7 +4,10 @@ import { getCachedCatalog } from '../catalog/catalogService';
 import type { CachedGlobalCatalog, UserData } from '../../types';
 import { UserDataSchema } from '../schema';
 import { CURRENT_DATA_SCHEMA } from '../schemaEvolution';
-import { captureKindeCandidatePreWithdrawalSources } from './kindeCandidatePreWithdrawalExport';
+import {
+    captureKindeCandidatePreWithdrawalSources,
+    assertKindeCandidatePreWithdrawalSourcesStable,
+} from './kindeCandidatePreWithdrawalExport';
 import { requestKindeCandidateJsonDownload } from './kindeCandidateJsonDownload';
 import { KindeCandidateBoundaryError } from './kindeCandidateClient';
 import { assertCloudBusinessPreserved } from '../sync/cloudBusinessIntegrity';
@@ -149,6 +152,7 @@ export async function prepareKindeCandidatePortableBackupJson(options: Options):
     const json = JSON.stringify(backup, null, 2);
     if (typeof json !== 'string' || new TextEncoder().encode(json).byteLength > MAX_JSON_BYTES
         || !sources.isCurrent()) throw new KindeCandidateBoundaryError();
+    await assertKindeCandidatePreWithdrawalSourcesStable(sources);
     // The stored format is the same validated object; truncation never creates
     // a file that can be mislabeled as complete.
     return {
