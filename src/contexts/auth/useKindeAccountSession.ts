@@ -241,6 +241,81 @@ export function useKindeAccountSession({
         }
     };
 
+    /**
+     * Candidate-only explicit export. Unlock an already provisioned device
+     * vault for this operation, then release the exact grant even on failure.
+     * Prepare a blob URL without a synthetic browser-save acknowledgement:
+     * the UI must offer a separate, synchronous download gesture.
+     */
+    const prepareCandidateBackup = async (): Promise<{
+        url: string; filename: string; isCurrent: () => boolean; dispose: () => void;
+    }> => {
+        if (identityOnly || !candidatePreparationEnabled || !canAct()
+            || view.phase !== 'consent-confirmed'
+            || !view.principal.emailVerified || view.principal.healthConsentRevision < 1) {
+            throw new KindeCandidateBoundaryError();
+        }
+        const session = observed.current;
+        if (!session?.csrfToken || !session.stillCurrent()) throw new KindeCandidateBoundaryError();
+        const expected = {
+            uid: view.principal.uid,
+            fenceEpoch: view.principal.fenceEpoch,
+            healthConsentRevision: view.principal.healthConsentRevision,
+        };
+        const owner = 'user:' + expected.uid;
+        const current = () => viewIsCurrent() && session.stillCurrent();
+        busyRef.current = true;
+        setBusy(true);
+        try {
+            // Neither import nor read is performed in the public identity-only
+            // module graph. A missing vault is NOT permission to provision one.
+            const [{ unlockVaultForOwner }, { isKindeAccountLocalFitnessClear }] = await Promise.all([
+                import('../../lib/sync/secureArchiveSession'),
+                import('../../lib/sync/kindeOwnerLocalFitnessFence'),
+            ]);
+            const allowed = () => current()
+                && isKindeAccountLocalFitnessClear(owner, expected.healthConsentRevision);
+            if (!allowed()) throw new KindeCandidateBoundaryError();
+            const grant = await unlockVaultForOwner(owner, allowed);
+            let json: string;
+            let filename: string;
+            try {
+                if (!grant.isCurrent() || !allowed()) throw new KindeCandidateBoundaryError();
+                const { prepareKindeCandidatePortableBackupJson } =
+                    await import('../../lib/auth/kindeCandidatePortableBackup');
+                if (!grant.isCurrent() || !allowed()) throw new KindeCandidateBoundaryError();
+                const result = await prepareKindeCandidatePortableBackupJson({
+                    expected, stillCurrent: () => allowed() && grant.isCurrent(),
+                });
+                if (!grant.isCurrent() || !allowed()) throw new KindeCandidateBoundaryError();
+                json = result.json;
+                filename = result.filename;
+            } finally {
+                grant.release();
+            }
+            if (!allowed()) throw new KindeCandidateBoundaryError();
+            const url = URL.createObjectURL(new Blob([json], {
+                type: 'application/json;charset=utf-8',
+            }));
+            if (!allowed()) {
+                URL.revokeObjectURL(url);
+                throw new KindeCandidateBoundaryError();
+            }
+            let disposed = false;
+            return {
+                url, filename, isCurrent: allowed,
+                dispose: () => {
+                    if (disposed) return;
+                    disposed = true;
+                    URL.revokeObjectURL(url);
+                },
+            };
+        } finally {
+            busyRef.current = false;
+            if (mounted.current) setBusy(false);
+        }
+    };
+
     const logout = async () => {
         if (!('principal' in view)) return;
         const completed = await runAction(async () => {
@@ -254,7 +329,7 @@ export function useKindeAccountSession({
     };
 
     return {
-        view, busy, signIn, enterGuest, acceptConsent, logout, prepareCandidateArchive,
+        view, busy, signIn, enterGuest, acceptConsent, logout, prepareCandidateArchive, prepareCandidateBackup,
         retry: async () => { if (canAct()) await refresh(); },
     };
 }

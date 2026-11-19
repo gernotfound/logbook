@@ -390,3 +390,32 @@ di **fence conservativo**, mai di prova Auth. Ogni cancellazione
 rilegge UID e storage sotto il lock: una identita' concorrente,
 storage non leggibile o provider corrotto interrompono il purge.
 Il gate non cambia l'ordine ciphertext → device key.
+
+## CF-05 — UI candidata per la copia prima della revoca (19/11/2026)
+
+`KindeCandidateBackupPanel` e
+`useKindeAccountSession.prepareCandidateBackup()` sono disponibili
+soltanto nell'entrypoint Kinde **candidato esplicitamente abilitato**
+(`identityOnly:false`, `candidatePreparationEnabled:true`), dopo
+identità email verificata e consenso `consent-confirmed`. Il provider
+montato da `main.tsx` mantiene `identityOnly:true` e
+`candidatePreparationEnabled:false`: la UI non viene esposta agli
+account pubblici e non attiva il fitness.
+
+L'azione non crea né migra un vault: richiede l'archivio device
+già `active` e lo apre con un grant temporaneo owner-scoped, che
+viene rilasciato in `finally` senza interferire con aperture
+successive. Sessione, cookie CSRF, UID/epoch/consenso e marker locali
+negativi restano controllati lungo la scansione Kinde/D1. Il file
+`logbook-backup` Schema 3 è disponibile come link di download
+**solo dopo** verifica completa e creazione esplicita del Blob URL,
+separata dal click sincrono del browser (Safari incluso). Cambio
+sessione, revoca/erasure locale o smontaggio della UI causano rifiuto
+del click o rilascio dell'URL, non un successo implicito.
+
+La UI spiega che il JSON contiene dati sanitari leggibili, permette
+di scartare il file temporaneo e non interpreta il click come copia
+effettivamente salvata. La revoca del consenso e il percorso rights-only
+post-revoca NON sono montati in questo incremento. L'eventuale
+attivazione runtime richiede verifica del lifecycle completo,
+consenso, rights/erasure, browser/provider e KEK indipendente.

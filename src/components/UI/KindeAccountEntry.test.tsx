@@ -7,6 +7,11 @@ import {
 } from '../../lib/auth/kindeCandidateClient';
 import { acceptKindeCandidateInitialConsent } from '../../lib/auth/kindeCandidateConsent';
 import { prepareKindeCandidateOwner } from '../../lib/sync/kindeCandidateOwnerBootstrap';
+import { unlockVaultForOwner } from '../../lib/sync/secureArchiveSession';
+import { isKindeAccountLocalFitnessClear } from '../../lib/sync/kindeOwnerLocalFitnessFence';
+import { prepareKindeCandidatePortableBackupJson } from '../../lib/auth/kindeCandidatePortableBackup';
+import { createBackup } from '../../lib/backup';
+import { UserDataSchema } from '../../lib/schema';
 
 vi.mock('../../lib/auth/kindeCandidateIdentity', () => ({
     readKindeCandidateIdentity: vi.fn(),
@@ -22,6 +27,15 @@ vi.mock('../../lib/auth/kindeCandidateConsent', () => ({
 }));
 vi.mock('../../lib/sync/kindeCandidateOwnerBootstrap', () => ({
     prepareKindeCandidateOwner: vi.fn(),
+}));
+vi.mock('../../lib/sync/secureArchiveSession', () => ({
+    unlockVaultForOwner: vi.fn(),
+}));
+vi.mock('../../lib/sync/kindeOwnerLocalFitnessFence', () => ({
+    isKindeAccountLocalFitnessClear: vi.fn(),
+}));
+vi.mock('../../lib/auth/kindeCandidatePortableBackup', () => ({
+    prepareKindeCandidatePortableBackupJson: vi.fn(),
 }));
 vi.mock('../../pages/PrivacyPolicy', () => ({
     PrivacyPolicy: () => <p>Informativa privacy di prova</p>,
@@ -59,9 +73,27 @@ beforeEach(() => {
         kind: 'candidate-observed', checkpointRevision: 1, replicaOutcome: 'already-active',
         journalOutcome: 'idle', journalDrained: true,
     });
+    vi.mocked(isKindeAccountLocalFitnessClear).mockReturnValue(true);
+    vi.mocked(unlockVaultForOwner).mockResolvedValue({
+        isCurrent: () => true, release: vi.fn(),
+    });
+    const backup = createBackup(UserDataSchema.parse({ profile: { height: '182' } }),
+        'user:' + A, { scope: 'cloud-and-device', months: [] });
+    vi.mocked(prepareKindeCandidatePortableBackupJson).mockResolvedValue({
+        filename: 'thelogbook_backup_prima_revoca_2026-11-19.json',
+        json: JSON.stringify(backup), backup,
+    });
+    const OriginalURL = URL;
+    const objectURL = vi.fn(() => 'blob:kinde-candidate-export');
+    const revokeURL = vi.fn();
+    vi.stubGlobal('URL', class extends OriginalURL {
+        static createObjectURL = objectURL;
+        static revokeObjectURL = revokeURL;
+    });
 });
 afterEach(() => {
     cleanup();
+    vi.unstubAllGlobals();
     vi.restoreAllMocks();
     vi.resetAllMocks();
 });
@@ -201,6 +233,70 @@ describe('isolated Kinde account entry candidate', () => {
         fireEvent.click(await screen.findByRole('button', { name: 'Continua' }));
         await screen.findByText(/Preparazione non ancora confermata/);
         expect(screen.queryByText(/Archivio cifrato verificato nel percorso candidato/)).toBeNull();
+    });
+
+    it('prepares a voluntary Schema 3 download using only an existing vault in the isolated candidate', async () => {
+        vi.mocked(readKindeCandidateIdentity).mockResolvedValue({
+            kind: 'email-verified', principal: { ...principal, healthConsentRevision: 1 },
+        });
+        vi.mocked(readKindeCandidateAccess).mockResolvedValue(confirmed);
+        const release = vi.fn();
+        vi.mocked(unlockVaultForOwner).mockResolvedValue({
+            isCurrent: () => true, release,
+        });
+        render(<KindeAccountEntry candidatePreparationEnabled />);
+        const prepare = await screen.findByRole('button', { name: 'Prepara backup JSON' });
+        expect(prepareKindeCandidatePortableBackupJson).not.toHaveBeenCalled();
+        fireEvent.click(prepare);
+        const download = await screen.findByRole('link', { name: 'Scarica backup JSON' });
+        expect(download.getAttribute('href')).toBe('blob:kinde-candidate-export');
+        expect(download.getAttribute('download')).toMatch(/^thelogbook_backup_prima_revoca_/);
+        expect(unlockVaultForOwner).toHaveBeenCalledWith('user:' + A, expect.any(Function));
+        expect(prepareKindeCandidatePortableBackupJson).toHaveBeenCalledWith({
+            expected: { uid: A, fenceEpoch: 1, healthConsentRevision: 1 },
+            stillCurrent: expect.any(Function),
+        });
+        expect(release).toHaveBeenCalledOnce();
+        expect(screen.getByText(/File preparato/)).toBeDefined();
+        expect(screen.queryByText(/Backup salvato/)).toBeNull();
+
+        fireEvent.click(screen.getByRole('button', { name: 'Scarta il file temporaneo' }));
+        expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:kinde-candidate-export');
+        expect(screen.queryByRole('link', { name: 'Scarica backup JSON' })).toBeNull();
+    });
+
+    it('rejects a stale cookie at download time and releases the temporary file', async () => {
+        vi.mocked(readKindeCandidateIdentity).mockResolvedValue({
+            kind: 'email-verified', principal: { ...principal, healthConsentRevision: 1 },
+        });
+        vi.mocked(readKindeCandidateAccess).mockResolvedValue(confirmed);
+        render(<KindeAccountEntry candidatePreparationEnabled />);
+        fireEvent.click(await screen.findByRole('button', { name: 'Prepara backup JSON' }));
+        const download = await screen.findByRole('link', { name: 'Scarica backup JSON' });
+        browserCsrf = REPLACEMENT_CSRF;
+        fireEvent.click(download);
+        expect(screen.queryByRole('link', { name: 'Scarica backup JSON' })).toBeNull();
+        expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:kinde-candidate-export');
+        expect(await screen.findByRole('alert')).toHaveProperty('textContent',
+            expect.stringContaining('sessione cambiata'));
+    });
+
+    it('does not publish a file when a device vault is unavailable or consent is locally fenced', async () => {
+        vi.mocked(readKindeCandidateIdentity).mockResolvedValue({
+            kind: 'email-verified', principal: { ...principal, healthConsentRevision: 1 },
+        });
+        vi.mocked(readKindeCandidateAccess).mockResolvedValue(confirmed);
+        vi.mocked(unlockVaultForOwner).mockRejectedValueOnce(new Error('vault locked'));
+        render(<KindeAccountEntry candidatePreparationEnabled />);
+        const button = await screen.findByRole('button', { name: 'Prepara backup JSON' });
+        fireEvent.click(button);
+        await screen.findByRole('alert');
+        expect(prepareKindeCandidatePortableBackupJson).not.toHaveBeenCalled();
+        expect(screen.queryByRole('link', { name: 'Scarica backup JSON' })).toBeNull();
+        vi.mocked(isKindeAccountLocalFitnessClear).mockReturnValue(false);
+        fireEvent.click(button);
+        await screen.findByRole('alert');
+        expect(prepareKindeCandidatePortableBackupJson).not.toHaveBeenCalled();
     });
 
     it('never starts vault preparation for public identity-only, missing consent or guest sessions', async () => {
