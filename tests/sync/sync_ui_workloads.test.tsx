@@ -135,10 +135,13 @@ describe('Sync UI — workloads', () => {
         quantity: 1, baseQty: 1, kcal: 700, pro: 50, carbs: 80, fat: 20,
       };
       const day = (meals: typeof breakfast[]) => ({
-        date: '2026-08-22', weight: 75, meals,
+        date: '2026-08-22', weight: 75,
+        kcal: 0, pro: 0, carbs: 0, fat: 0, meals,
       });
 
-      let p1: Promise<unknown>, p2: Promise<unknown>, p3: Promise<unknown>;
+      let p1!: Promise<unknown>;
+      let p2!: Promise<unknown>;
+      let p3!: Promise<unknown>;
       // Actual meal entries, not manually invented aggregate macros: domain projection derives totals.
       await act(async () => {
         p1 = useAppStore.getState().saveUserData(prev => ({
