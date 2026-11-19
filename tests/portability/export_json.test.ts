@@ -1,12 +1,32 @@
 import { afterEach, describe, it, expect, vi } from 'vitest';
 import { Exporter, MAX_JSON_IMPORT_BYTES } from '../../src/lib/export';
-import { createBackup } from '../../src/lib/backup';
+import { createBackup, decodeImport } from '../../src/lib/backup';
 import { useDialogStore } from '../../src/store/useDialogStore';
 import { CURRENT_BACKUP_SCHEMA, CURRENT_DATA_SCHEMA, CURRENT_SYNC_PROTOCOL } from '../../src/lib/schemaEvolution';
 
 afterEach(() => vi.restoreAllMocks());
 
 describe('JSON Export/Import Logic', () => {
+    it('refuses the rights-only cloud access JSON as a restorable Backup Schema 3', () => {
+        const rights = {
+            format: 'thelogbook-cloud-rights-export', version: 1,
+            type: 'rights-only', owner: 'user:k_' + 'A'.repeat(43),
+            exportedAt: '2026-11-19T00:00:00.000Z',
+            coverage: { scope: 'cloud-documents-still-readable', restorableBackup: false },
+            cloud: { revision: 5, fenceEpoch: 1, consentRevision: 1 },
+            documents: [{ path: '', dataSchemaVersion: CURRENT_DATA_SCHEMA,
+                business: { profile: { height: '194' } }, sync: {} }],
+        };
+        expect(() => decodeImport(rights, rights.owner)).toThrow();
+        // Even a forged current backup version must not turn rights-only
+        // evidence into a regular restorable userData backup.
+        expect(() => decodeImport({
+            ...rights, version: CURRENT_BACKUP_SCHEMA,
+            dataSchemaVersion: CURRENT_DATA_SCHEMA,
+            syncProtocolVersion: CURRENT_SYNC_PROTOCOL,
+        }, rights.owner)).toThrow();
+    });
+
     it('keeps the native download blob URL alive past the anchor click', async () => {
         vi.useFakeTimers();
         try {
