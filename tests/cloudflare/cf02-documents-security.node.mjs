@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { syntheticSessionHash, owner, replica, independentDatabases, withFixture, attempt, makeEnv, call, claim } from './cf02-documents-fixture.mjs';
+import { syntheticSessionHash, owner,  independentDatabases, withFixture, attempt, makeEnv, call, claim } from './cf02-documents-fixture.mjs';
 
 void test('a logout racing after AuthGate cannot commit ciphertext or its receipt', () => withFixture(async db => {
   const intercepted = Object.create(db);

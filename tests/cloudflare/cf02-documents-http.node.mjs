@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { DatabaseSync } from 'node:sqlite';
 import worker from '../../cloudflare/api/worker.mjs';
-import { migration, identityMigration, rollback, origin, replica, withFixture, attempt, makeEnv, call, claim, retire } from './cf02-documents-fixture.mjs';
+import { migration, identityMigration, rollback, origin,  withFixture, attempt, makeEnv, call, claim, retire } from './cf02-documents-fixture.mjs';
 
 void test('simultaneous stale revisions have one winner and no phantom receipt', () => withFixture(async (db, other) => {
   const [a, b] = await Promise.all([
