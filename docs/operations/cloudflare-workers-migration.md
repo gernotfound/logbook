@@ -950,3 +950,29 @@ Il pannello non esegue revoca, non importa dati né attiva fitness,
 non aggiunge binding `D1_API`, Worker API o deploy sanitario.
 Servono collaudi browser/provider reali e integrazione esplicita
 della revoca con offerta facoltativa di backup prima di un GO.
+
+### CF-05 — workflow React candidato revoca → diritti (19/11/2026)
+
+La UI isolata `KindeCandidateWithdrawalPanel` unisce l'offerta
+volontaria del backup pre-revoca Schema 3, una conferma separata
+dell'avvio della cancellazione sanitaria, l'invio condizionale tramite
+`withdrawKindeCandidateHealthConsent()` e la riconciliazione
+read-only del marker `pending:1` dopo un possibile ACK perso.
+Non viene ripetuto alcun POST dopo una risposta ambigua. Anche
+con email non più verificata la revoca rimane possibile, ma
+il percorso di backup completo che richiede il vault fitness resta
+negato. `KindeCandidateRightsPanel` prepara un file **separato e non
+ripristinabile** con i soli documenti cloud ancora leggibili mentre
+il job è in corso; un job già in elaborazione può aver eliminato parte
+dei documenti senza mutare la revisione, e il server rifiuta quando
+il cutoff impedisce ulteriori letture.
+
+`KindeCandidateJsonPanel` gestisce download browser con URL
+temporanei, verifiche di sessione e cleanup senza prova fittizia
+di file realmente salvato. Le nuove funzioni sono richiamabili
+soltanto con `identityOnly:false` e **due** flag candidati espliciti;
+`App.tsx` e `KindeAccountSessionProvider` continuano a negare
+fitness, revoca, diritti e D1 API pubblici. Non sono stati eseguiti
+interventi sui dati o sulla configurazione dei provider; test con
+fixture Worker/D1 sono differenti dai collaudi KEK, Safari,
+account reali e recovery/erasure del provider.

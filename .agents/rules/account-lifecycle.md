@@ -1,5 +1,33 @@
 # Ciclo account, Auth e guest — TheLogBook
 
+## CF-05 — Revoca Kinde candidata e stato UI (19/11/2026)
+
+`KindeAccountEntry` richiede un **secondo** opt-in
+`candidateLifecycleEnabled` per presentare la revoca candidata
+ed il diritto di lettura post-revoca. Non è montato nel
+`KindeAccountSessionProvider` pubblico. Il componente
+`KindeCandidateWithdrawalPanel` nella vista `consent-suspended` è solo
+riconciliazione read-only quando esiste un marker pendente, anche dopo
+reload: non mostra una seconda azione distruttiva. Nel consenso attivo
+contiene l'offerta volontaria
+di backup seguita da conferma esplicita della cancellazione; un
+cambio marker anche da un'altra scheda sopprime il backup e la
+richiesta distruttiva. Lo stato `pending:1` non viene cancellato
+né convertito in successo dal solo client.
+
+`useKindeAccountSession.withdrawCandidateConsent` esegue solo il
+boundary trusted Kinde e aggiorna la vista dopo la conferma server;
+`reconcileCandidateWithdrawal` usa esclusivamente le letture
+trusted per recuperare l'esito incerto senza **ripetere** il POST.
+Il percorso `prepareCandidateRightsJson` resta separato, disponibile
+anche all'email non più verificata con generazione di consenso 1,
+e richiama il solo export di documenti ancora presenti. La vista
+non conferma erasure completa, non crea vault/owner fitness e non
+riattiva account. Il test di integrazione React conserva il blocco
+identity-only/guest e le prove SQL Worker/D1 originali restano
+autorità dei contratti di revoca.
+
+
 ### Consenso D1 autorevole durante ACK cifrato (19/11/2026)
 
 La CI del primo candidato ha trovato un difetto concreto: il root business cifrato D1, che non è autorità per la prima accettazione, poteva contenere `legalConsent: null`; il normale `acknowledgeThrough()` lo rigiocava dopo una ricevuta remota e perdeva la scelta legale già verificata. Il bridge Kinde ora trasmette il `legalConsent` ricevuto da `readKindeCandidateAccess()` insieme al gate sessione/consenso fino alla consegna cifrata. Solo per il batch D1, il boundary atomico IndexedDB verifica che la prova corrisponda al consenso locale e impedisce che il business root sovrascriva la scelta legale durante l'ACK; se i valori divergono rifiuta l'ACK e conserva l'intento originale. Il percorso Firebase generico resta invariato. Una ricevuta D1 non è mai un nuovo consenso, né prova che il journal completo sia stato drenato.

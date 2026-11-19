@@ -1,9 +1,13 @@
-import { useEffect, useId, useRef, useState } from 'react';
+import { lazy, Suspense, useEffect, useId, useRef, useState } from 'react';
 import { useSharedKindeAccountSession } from '../../contexts/auth/kindeAccountSessionContext';
 import { useKindeAccountSession } from '../../contexts/auth/useKindeAccountSession';
 import { PrivacyPolicy } from '../../pages/PrivacyPolicy';
 import { TermsAndConditions } from '../../pages/TermsAndConditions';
 import { KindeCandidateBackupPanel } from './KindeCandidateBackupPanel';
+const KindeCandidateWithdrawalPanel = lazy(async () =>
+    ({ default: (await import('./KindeCandidateWithdrawalPanel')).KindeCandidateWithdrawalPanel }));
+const KindeCandidateRightsPanel = lazy(async () =>
+    ({ default: (await import('./KindeCandidateRightsPanel')).KindeCandidateRightsPanel }));
 
 type Phase = ReturnType<typeof useKindeAccountSession>['view']['phase'];
 type AcceptConsent = ReturnType<typeof useKindeAccountSession>['acceptConsent'];
@@ -53,6 +57,8 @@ type EntryProps = {
     // Only isolated candidate entry points may enable this; the public provider
     // continues observing Kinde identity without enabling fitness or D1.
     candidatePreparationEnabled?: boolean;
+    // A second opt-in isolates destructive withdrawal and post-revocation rights.
+    candidateLifecycleEnabled?: boolean;
     onLocalGuest?: (stillCurrent: () => boolean) => Promise<void>;
 };
 type Session = ReturnType<typeof useKindeAccountSession>;
@@ -111,8 +117,9 @@ function KindeCandidatePreparation({ session }: { session: Session }) {
 
 /** Identity-only runtime and the isolated candidate share the same presentation. */
 function KindeAccountEntryView({
-    identityOnly = false, candidatePreparationEnabled = false, onLocalGuest, session,
-}: Pick<EntryProps, 'identityOnly' | 'candidatePreparationEnabled' | 'onLocalGuest'> & { session: Session }) {
+    identityOnly = false, candidatePreparationEnabled = false,
+    candidateLifecycleEnabled = false, onLocalGuest, session,
+}: Pick<EntryProps, 'identityOnly' | 'candidatePreparationEnabled' | 'candidateLifecycleEnabled' | 'onLocalGuest'> & { session: Session }) {
     const { view, busy, retry, signIn, enterGuest, acceptConsent, logout } = session;
     const { phase } = view;
     const titleId = useId();
@@ -150,8 +157,37 @@ function KindeAccountEntryView({
                     <div key={String(view.generation) + ':' + view.principal.uid + ':'
                         + String(view.principal.fenceEpoch) + ':' + String(view.principal.healthConsentRevision)}>
                         <KindeCandidatePreparation session={session} />
-                        <KindeCandidateBackupPanel session={session} />
+                        {candidateLifecycleEnabled
+                            ? <Suspense fallback={<p role="status">Caricamento dei diritti account…</p>}>
+                                <KindeCandidateWithdrawalPanel session={session} />
+                            </Suspense>
+                            : <KindeCandidateBackupPanel session={session} />}
                     </div>
+                )}
+            {!identityOnly && candidatePreparationEnabled && candidateLifecycleEnabled
+                && phase === 'email-unverified' && 'principal' in view
+                && view.principal.healthConsentRevision === 1 && (
+                    <Suspense fallback={<p role="status">Caricamento gestione del consenso…</p>}>
+                        <KindeCandidateWithdrawalPanel key={String(view.generation) + ':' + view.principal.uid
+                            + ':' + String(view.principal.fenceEpoch)} session={session} allowBackup={false} />
+                    </Suspense>
+                )}
+            {!identityOnly && candidatePreparationEnabled && candidateLifecycleEnabled
+                && phase === 'consent-suspended' && 'principal' in view
+                && view.principal.healthConsentRevision === 1 && (
+                    <Suspense fallback={<p role="status">Caricamento stato della revoca…</p>}>
+                        <KindeCandidateWithdrawalPanel key={String(view.generation) + ':' + view.principal.uid
+                            + ':' + String(view.principal.fenceEpoch)} session={session}
+                            allowBackup={false} allowWithdrawal={false} />
+                    </Suspense>
+                )}
+            {!identityOnly && candidatePreparationEnabled && candidateLifecycleEnabled
+                && 'principal' in view && view.principal.healthConsentRevision === 1
+                && (phase === 'consent-suspended' || phase === 'email-unverified') && (
+                    <Suspense fallback={<p role="status">Caricamento accesso ai dati…</p>}>
+                        <KindeCandidateRightsPanel key={String(view.generation) + ':' + view.principal.uid
+                            + ':' + String(view.principal.fenceEpoch)} session={session} />
+                    </Suspense>
                 )}
             {phase === 'unavailable' && (
                 <>
@@ -180,13 +216,15 @@ function KindeAccountEntryView({
 }
 
 function StandaloneKindeAccountEntry({
-    guestArchivePresent = false, identityOnly = false, candidatePreparationEnabled = false, onLocalGuest,
+    guestArchivePresent = false, identityOnly = false, candidatePreparationEnabled = false,
+    candidateLifecycleEnabled = false, onLocalGuest,
 }: EntryProps) {
     const session = useKindeAccountSession({
-        guestArchivePresent, identityOnly, candidatePreparationEnabled,
+        guestArchivePresent, identityOnly, candidatePreparationEnabled, candidateLifecycleEnabled,
     });
     return <KindeAccountEntryView session={session} identityOnly={identityOnly}
-        candidatePreparationEnabled={candidatePreparationEnabled} onLocalGuest={onLocalGuest} />;
+        candidatePreparationEnabled={candidatePreparationEnabled}
+        candidateLifecycleEnabled={candidateLifecycleEnabled} onLocalGuest={onLocalGuest} />;
 }
 
 /**

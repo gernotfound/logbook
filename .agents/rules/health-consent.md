@@ -1,5 +1,46 @@
 # Consenso salute, diritti e cancellazione dei dati — TheLogBook
 
+## CF-05 — Ingresso React candidato: revoca e diritti senza GO fitness (19/11/2026)
+
+Il solo ingresso Kinde **candidato** può esporre revoca e diritti quando
+entrambi i flag espliciti `candidatePreparationEnabled:true` e
+`candidateLifecycleEnabled:true` sono attivi e `identityOnly:false`.
+Il pubblico continua `identityOnly:true`,
+`candidatePreparationEnabled:false`; la nuova impostazione non è un
+permesso per pubblicare la D1 API o attivare account fitness.
+
+La UI deve proporre il backup JSON **facoltativo e pre-revoca** prima
+della decisione distruttiva, senza richiederne il salvataggio. Una
+checkbox separata deve confermare sia la revoca sia l'avvio della
+cancellazione sanitaria: il click di download non ne attesta il
+salvataggio. L'azione Kinde riceve solo UID/epoch/revisione dalla
+sessione corrente; il trusted `withdrawKindeCandidateHealthConsent`
+conferma lo stato server e persiste il marker owner-scoped
+`pending:1` **prima** del POST. Perdita della risposta, rete offline,
+stato locale non leggibile o sessione diversa non autorizzano retry
+automatico né pulizia del marker: l'unico recupero è la riconciliazione
+read-only. Il marker locale non attesta mai erasure completata.
+
+La revoca rimane disponibile anche se l'email Kinde non è più
+verificata, purché la sessione abbia il consenso originario verificato
+dal Worker. In quel caso **non** si consente il backup completo che
+richiede il gate fitness; il diritto di revoca non dipende dall'export.
+Il percorso rights-only offre un JSON distinto di documenti cloud
+ancora leggibili, solo dopo la prova server di revoca e job pendente;
+non apre il vault device, non esegue sync e non diventa Schema 3.
+La UI espone i limiti di copertura, la potenziale cancellazione già
+iniziata, la custodia del plaintext e la possibilità di fallimento
+legittimo durante l'erasure. Il download è un secondo gesto sincrono
+del browser, con URL temporaneo distrutto su unmount, cambio sessione,
+scarto o disabilitazione; non è una ricevuta di salvataggio.
+
+La logica condivisa del Blob URL vive in
+`kindeCandidatePreparedJson.ts`; la vista riutilizzabile è
+`KindeCandidateJsonPanel` e non contiene autorizzazioni fitness.
+La sola presenza dell'ingresso candidato non configura un ambiente
+sanitario reale, una prova di KEK recovery o un GO.
+
+
 ## CF-05 — Checkpoint di esportazione rights-only Kinde (candidato 19/11/2026)
 
 Il solo percorso candidato `withKindeCandidateRightsCheckpoint()` può recuperare documenti **ancora cifrati** di un account che ha revocato il consenso ma ha un job sanitario `pending|processing`. Il suo trasporto usa esclusivamente `POST /v1/rights/scan`, mai `/v1/sync/*`, senza commit, ACK, riapertura del vault locale o installazione di un owner fitness. Il Worker richiede sessione Auth D1 attuale, cookie CSRF valido, owner derivato dalla sessione (mai dal body), consenso originale, revoca SQL e job non completato, oltre al registro `RECOVERY_DB` indipendente ancora aperto e senza cutoff; ricontrolla lo stato e il registro dopo la pagina prima di rispondere. Le pagine sono bounded (otto documenti), coerenti con una sola revisione e non possono diventare checkpoint incompleti o mescolati.
