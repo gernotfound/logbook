@@ -1,5 +1,12 @@
 # TheLogBook — migrazione Cloudflare: runbook corrente
 
+## CF-05 — Ripristino con la stessa KEK sintetica dopo perdita del binding (candidato v2.541.0, 19/11/2026)
+
+La regressione `tests/cloudflare/cf05-cloud-key-http.node.mjs` attraversa gli handler di produzione AuthGate → Worker API → database SQLite con l'intero schema D1 corrente. Dopo il primo consenso e la creazione di una ADK cifrata, simula due nuovi ambienti Worker: KEK assente e KEK valida nel formato ma differente. Entrambi devono restituire errore, senza modificare il ciphertext della ADK o il marker anti-rigenerazione. Un terzo ambiente, che utilizza **la medesima KEK sintetica conservata separatamente nel test**, deve leggere esattamente l'ADK originale, senza creare nuove chiavi. Dopo revoca, il medesimo materiale rimane recuperabile esclusivamente via `rights-export`, mentre il percorso fitness è negato.
+
+**Limite fondamentale:** test sintetico in process su SQLite con gateway/Worker reali; non è un ripristino di segreti Cloudflare, non usa né verifica la copia privata del proprietario, non riapre un backup D1 provider e non certifica un recovery live né l'integrazione PWA/Safari. La KEK reale deve restare fuori da CI/repository/chat; eventuale procedura reale richiede isolare le risorse, proteggere i dati e non sostituire la KEK del Worker esistente. La modalità fitness pubblica rimane NO-GO in [CF-05 #1059](https://github.com/gernotfound/logbook/issues/1059).
+
+
 ## CF-05 — Guardrail deploy KEK del Worker privato (candidato v2.540.0, 19/11/2026)
 
 Il workflow `.github/workflows/cloudflare-api-isolated.yml` ora prevede un **preflight read-only Cloudflare** prima di qualunque deploy Worker, dopo la verifica del gate exact-main. `scripts/verify-cloudflare-api-provider.mjs` richiede esattamente un binding `CLOUD_ACCOUNT_KEK_V1` di tipo `secret_text`, oltre a D1, `RECOVERY_DB`, AuthGate e isolamento URL già richiesti. Dopo i deploy ripete la medesima verifica: una KEK accidentalmente persa, cancellata o trasformata in variabile plaintext non può produrre un deploy classificato come riuscito. Le regressioni simulate rifiutano KEK assente, duplicata, non secret e risposte provider errate. **Il preflight non blocca i cambi manuali esterni e non garantisce il valore/backup della KEK**: il restore della stessa chiave resta obbligatorio prima del GO. Nessuna API sanitaria pubblicata, nessun dato o secret modificato da questo incremento.
