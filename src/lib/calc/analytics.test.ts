@@ -42,14 +42,15 @@ describe('Analytics Engine 4-Tier Test Suite (src/lib/calc/analytics.ts)', () =>
 
             it('T1.4_generate_weeks: formats labels in Italian for <=12 weeks', () => {
                 const intervals = generateWeekIntervals(8, '2026-08-22');
-                expect(intervals[intervals.length - 1].label).toBeDefined();
-                expect(typeof intervals[intervals.length - 1].label).toBe('string');
+                expect(intervals[0]).toMatchObject({ weekStart: '2026-06-29', label: '29 giu' });
+                expect(intervals[intervals.length - 1]).toMatchObject({ weekStart: '2026-08-17', label: '17 ago' });
             });
 
             it('T1.5_generate_weeks: formats labels as dd/MM for >12 weeks', () => {
                 const intervals = generateWeekIntervals(24, '2026-08-22');
                 expect(intervals).toHaveLength(24);
-                expect(intervals[0].label).toMatch(/^\d{2}\/\d{2}$/);
+                expect(intervals[0].label).toBe('09/03');
+                expect(intervals[intervals.length - 1].label).toBe('17/08');
             });
         });
 
