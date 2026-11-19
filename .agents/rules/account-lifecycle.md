@@ -1,5 +1,11 @@
 # Ciclo account, Auth e guest — TheLogBook
 
+### Continuità consenso Kinde → preparazione vault in React (candidato 19/11/2026)
+
+L'ingresso `KindeAccountEntry` può collegare, **solo con prop esplicita** `candidatePreparationEnabled`, la conferma autorevole del primo consenso a un pulsante ordinario `Continua` che richiama `useKindeAccountSession.prepareCandidateArchive()`. Non genera/mostra chiavi, non installa un owner fitness, non chiama direttamente D1 ed è disponibile soltanto dopo `consent-confirmed`; l'azione non parte automaticamente al mount o al login. Un risultato con checkpoint e replica verificati rimane soltanto una osservazione candidata; la consegna ambigua o fallita è mostrata come in attesa/errore e non diventa successo. Lo stato del componente è scoped alla generazione UID/epoch/revisione, quindi la sessione sostituita non può pubblicare il risultato precedente.
+
+**MUST (confine pubblico):** `src/main.tsx` monta `KindeAccountSessionProvider` con `identityOnly: true`, `candidatePreparationEnabled: false`; `App.tsx` monta `KindeAccountEntry identityOnly`. Il pulsante candidato non è visibile né eseguibile nella PWA pubblica. Restano obbligatori consenso/revoca/diritti, owner install, Vault lifecycle, integrazione gateway D1 e prove provider/browser prima di attivare un account fitness.
+
 ### Collegamento React Kinde → bootstrap D1 candidato (19/11/2026)
 
 L'osservatore condiviso `useKindeAccountSession` espone `prepareCandidateArchive()` soltanto per prove di integrazione con attivazione **esplicita**: nel provider pubblico `candidatePreparationEnabled: false` e `identityOnly: true`. Il metodo può partire soltanto da una sessione email verificata e revisione consenso account positiva, con generazione React corrente e lo stesso cookie CSRF; rifiuta guest, sessioni sostituite, doppio avvio, completamenti tardivi e teardown. La lettura Kinde continua a essere unica per la UI e nessun percorso esegue automaticamente il bootstrap al mount, al ritorno in foreground o al login.

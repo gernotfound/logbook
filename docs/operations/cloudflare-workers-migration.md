@@ -1,5 +1,11 @@
 # TheLogBook — migrazione Cloudflare: runbook corrente
 
+## CF-03/04/05 — Proseguimento React candidato dopo il consenso (v2.542.0 proposta, 19/11/2026)
+
+L'ingresso di test `KindeAccountEntry`, con attivazione esplicita `candidatePreparationEnabled`, offre un solo pulsante `Continua` dopo il **consenso server verificato**: richiama il bootstrap Kinde owner-scoped già presente, con verifica sessione/CSRF/consenso, apertura temporanea del vault, hydration AEAD e replica-claim. Non anticipa l'operazione a una mera presenza Kinde. Il risultato di prova distingue osservazione di checkpoint+replica, consegna non confermata ed errore; una sessione sostituita scarta i risultati tardivi. Il dispositivo non riceve né conserva la KEK.
+
+**NO-GO pubblico invariato:** il provider montato `KindeAccountSessionProvider` resta `identityOnly: true`, `candidatePreparationEnabled: false`, la schermata in `App.tsx` usa ancora `KindeAccountEntry identityOnly` e il frontend Cloudflare non possiede `D1_API` nel readback del 19/11. Questo lavoro collega il passo UX **nella composizione candidata**, non abilita consenso/dati cloud per gli utenti del sito. Servono grant fitness legato al lifecycle, owner/sync con revoca, right/export, cancellazione e collaudi browser/API live isolati prima del GO.
+
 ## CF-05 — Ripristino con la stessa KEK sintetica dopo perdita del binding (candidato v2.541.0, 19/11/2026)
 
 La regressione `tests/cloudflare/cf05-cloud-key-http.node.mjs` attraversa gli handler di produzione AuthGate → Worker API → database SQLite con l'intero schema D1 corrente. Dopo il primo consenso e la creazione di una ADK cifrata, simula due nuovi ambienti Worker: KEK assente e KEK valida nel formato ma differente. Entrambi devono restituire errore, senza modificare il ciphertext della ADK o il marker anti-rigenerazione. Un terzo ambiente, che utilizza **la medesima KEK sintetica conservata separatamente nel test**, deve leggere esattamente l'ADK originale, senza creare nuove chiavi. Dopo revoca, il medesimo materiale rimane recuperabile esclusivamente via `rights-export`, mentre il percorso fitness è negato.

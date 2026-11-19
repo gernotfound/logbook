@@ -1,4 +1,4 @@
-import { useId, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { useSharedKindeAccountSession } from '../../contexts/auth/kindeAccountSessionContext';
 import { useKindeAccountSession } from '../../contexts/auth/useKindeAccountSession';
 import { PrivacyPolicy } from '../../pages/PrivacyPolicy';
@@ -49,14 +49,63 @@ function KindeInitialConsentForm({ busy, onAccept }: { busy: boolean; onAccept: 
 type EntryProps = {
     guestArchivePresent?: boolean;
     identityOnly?: boolean;
+    // Only isolated candidate entry points may enable this; the public provider
+    // continues observing Kinde identity without enabling fitness or D1.
+    candidatePreparationEnabled?: boolean;
     onLocalGuest?: (stillCurrent: () => boolean) => Promise<void>;
 };
 type Session = ReturnType<typeof useKindeAccountSession>;
 
+function KindeCandidatePreparation({ session }: { session: Session }) {
+    const [state, setState] = useState<'idle' | 'working' | 'observed' | 'pending' | 'error'>('idle');
+    const mounted = useRef(true);
+    const running = useRef(false);
+    useEffect(() => {
+        mounted.current = true;
+        return () => { mounted.current = false; };
+    }, []);
+
+    const continueSetup = () => {
+        if (running.current || session.busy || state === 'observed') return;
+        running.current = true;
+        setState('working');
+        void session.prepareCandidateArchive().then(result => {
+            if (!mounted.current) return;
+            const complete = result.kind === 'candidate-observed'
+                && result.checkpointRevision !== null
+                && (result.replicaOutcome === 'adopted'
+                    || result.replicaOutcome === 'already-active');
+            setState(complete ? 'observed' : 'pending');
+        }).catch(() => {
+            if (mounted.current) setState('error');
+        }).finally(() => { running.current = false; });
+    };
+
+    return (
+        <section aria-label="Preparazione account cifrato">
+            <p>Il consenso è stato verificato. Continua per controllare l’archivio cifrato dell’account.</p>
+            <button type="button" className="btn btn-primary"
+                disabled={session.busy || state === 'working' || state === 'observed'}
+                onClick={continueSetup}>
+                {state === 'working' ? 'Preparazione in corso…' : 'Continua'}
+            </button>
+            {state === 'observed' && (
+                <p role="status">Archivio cifrato verificato nel percorso candidato. Le funzioni fitness restano disabilitate.</p>
+            )}
+            {state === 'pending' && (
+                <p role="status">Preparazione non ancora confermata. I dati cifrati e le operazioni in attesa sono conservati: puoi riprovare.</p>
+            )}
+            {state === 'error' && (
+                <p role="alert">Impossibile completare la preparazione. I dati esistenti restano protetti; riprova dopo la verifica della sessione.</p>
+            )}
+        </section>
+    );
+}
+
 /** Identity-only runtime and the isolated candidate share the same presentation. */
 function KindeAccountEntryView({
-    identityOnly = false, onLocalGuest, session,
-}: Pick<EntryProps, 'identityOnly' | 'onLocalGuest'> & { session: Session }) {
+    identityOnly = false, candidatePreparationEnabled = false, onLocalGuest, session,
+}: Pick<EntryProps, 'identityOnly' | 'candidatePreparationEnabled' | 'onLocalGuest'> & { session: Session }) {
     const { view, busy, retry, signIn, enterGuest, acceptConsent, logout } = session;
     const { phase } = view;
     const titleId = useId();
@@ -89,6 +138,14 @@ function KindeAccountEntryView({
             )}
             {phase !== 'checking' && phase !== 'signed-out' && phase !== 'consent-required'
                 && phase !== 'guest-blocked' && <p role="status">{copy[phase]}</p>}
+            {!identityOnly && candidatePreparationEnabled && phase === 'consent-confirmed'
+                && 'principal' in view && (
+                    <KindeCandidatePreparation
+                        key={String(view.generation) + ':' + view.principal.uid + ':'
+                            + String(view.principal.fenceEpoch) + ':' + String(view.principal.healthConsentRevision)}
+                        session={session}
+                    />
+                )}
             {phase === 'unavailable' && (
                 <>
                     <button type="button" className="btn" disabled={busy}
@@ -116,10 +173,13 @@ function KindeAccountEntryView({
 }
 
 function StandaloneKindeAccountEntry({
-    guestArchivePresent = false, identityOnly = false, onLocalGuest,
+    guestArchivePresent = false, identityOnly = false, candidatePreparationEnabled = false, onLocalGuest,
 }: EntryProps) {
-    const session = useKindeAccountSession({ guestArchivePresent, identityOnly });
-    return <KindeAccountEntryView session={session} identityOnly={identityOnly} onLocalGuest={onLocalGuest} />;
+    const session = useKindeAccountSession({
+        guestArchivePresent, identityOnly, candidatePreparationEnabled,
+    });
+    return <KindeAccountEntryView session={session} identityOnly={identityOnly}
+        candidatePreparationEnabled={candidatePreparationEnabled} onLocalGuest={onLocalGuest} />;
 }
 
 /**
