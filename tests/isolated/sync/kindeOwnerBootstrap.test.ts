@@ -655,6 +655,18 @@ describe('Kinde-only device vault provisioning and authenticated baseline', () =
                 ...racingSession, expected: principal,
             })).rejects.toThrow();
             expect((await readLocal(owner))?.data.profile?.height).toBe('194');
+            const racingWitness = firstPartySession(fixture, (path, _init, response) => {
+                if (path === '/v1/sync/scan') {
+                    localStorage.setItem(draftKey, sealLocalText(
+                        requireUnlockedLocalKey(owner), owner, draftKey, '{"weight":"80"}',
+                    ));
+                }
+                return response;
+            });
+            await expect(prepareKindeCandidatePreWithdrawalJson({
+                ...racingWitness, expected: principal,
+            })).rejects.toThrow();
+            expect((await readLocal(owner))?.pending).toHaveLength(2);
 
             const clicked = vi.fn();
             const link = { href: '', download: '', style: { visibility: '' },
@@ -669,6 +681,10 @@ describe('Kinde-only device vault provisioning and authenticated baseline', () =
             expect(clicked).toHaveBeenCalledOnce();
             expect(url).toHaveBeenCalledOnce();
 
+            await fixture.withdraw(uid);
+            await expect(prepareKindeCandidatePreWithdrawalJson({
+                ...session, expected: principal,
+            })).rejects.toThrow();
             lockAllVaults();
             await expect(prepareKindeCandidatePreWithdrawalJson({
                 ...session, expected: principal,
