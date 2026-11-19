@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { verifyPrivateWorkerBindings } from '../../scripts/verify-cloudflare-api-provider.mjs';
 
 const db = '9aa51833-8adc-495f-bdfc-93b5542e8023';
