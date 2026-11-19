@@ -490,7 +490,7 @@ is modified by the candidate. The fixture tests run Node SQLite and fake
 service binding; they do not prove D1 runtime behavior.
 
 
-## CF-05 — candidate ADK/KEK custody in Workers/D1 (not deployed)
+## CF-05 — candidate ADK/KEK custody in Workers/D1 (historical implementation baseline)
 
 - `migrations/0007_cloud_key_custody.sql` adds `cloud_account_keys` and a
   **per-owner, per-consent** immutable issuance record. The issuance trigger
@@ -498,9 +498,12 @@ service binding; they do not prove D1 runtime behavior.
   bytes after issuance can never be silently re-provisioned for that generation.
 - `cloud-key-crypto.mjs` uses Workers WebCrypto AES-256-GCM to wrap only a
   **random 32-byte account ADK**, with a random 12-byte IV, owner/version AAD,
-  canonical base64 fields and authenticated 16-byte tag. The KEK binding is
-  `CLOUD_ACCOUNT_KEK_V1`, a separate Workers secret that has NOT been created.
-  The old Vercel secret value is not imported into Cloudflare.
+  canonical base64 fields and authenticated 16-byte tag. The separate Workers
+  secret is named `CLOUD_ACCOUNT_KEK_V1`. On 19 November 2026, Cloudflare
+  readback confirms this `secret_text` binding on the private
+  `thelogbook-api-isolated` Worker; its value, matching external copy and
+  ability to restore have **not** been verified. The old Vercel secret
+  value is not imported into Cloudflare.
 - `cloud-key-store.mjs` is an internal boundary, **not a user-facing key API**.
   Its caller must obtain trusted claims from private AuthGate with verified
   email, CSRF and rate admission. A D1 primary SQL statement rechecks current
@@ -517,8 +520,9 @@ service binding; they do not prove D1 runtime behavior.
 - `tests/cloudflare/cf05-cloud-key-custody.node.mjs` exercises the actual
   WebCrypto codec, D1/SQLite triggers, private AuthGate, lost response,
   concurrent issuance, wrong KEK/AAD, missing key, revocation and rights-only.
-  None of these tests proves real Worker binding, Kinde login or KEK recovery.
-  This increment does NOT deploy an API Worker or initialize a live KEK.
+  These synthetic tests do not prove Kinde login or recovery of the actual
+  stored KEK. A later Cloudflare readback confirms only that the private API
+  Worker and its secret binding exist, **not** functional fitness cloud access.
 
 ## CF-06 — bounded erasure progress candidate (not deployed)
 
@@ -770,12 +774,14 @@ SQLite fixture shared with the Node HTTP suite: wrapped winner, lost response,
 owner isolation, AEAD and unverified rights-only recovery are synthetic proofs,
 not live Kinde, durable journal ACK, restore or public activation.
 
-**NO-GO:** these routes are not mounted on the live Static Assets Worker,
-and no KEK secret or D1 binding has been created there. The local Wrangler config remains synthetic; the isolated D1 now has
-schema 0001–0010, but the private API bindings and real HTTP runtime remain
-unverified until the post-main Cloudflare deployment and provider readback. Do not expose or deploy this key endpoint before complete
-Kinde/consent/device journal/rights+erasure, secret custody/recovery,
-quota/WAF and Safari verification.
+**NO-GO (Cloudflare readback 19/11/2026):** the live Static Assets Worker
+`thelogbook-frontend` has neither `D1_API` nor a KEK secret; the separate
+private `thelogbook-api-isolated` Worker does have `CLOUD_ACCOUNT_KEK_V1`
+as `secret_text`, plus `DB`, `RECOVERY_DB` and `AUTH_GATE`. The local Wrangler
+configuration remains synthetic. The presence of private bindings does not
+prove the live Kinde/consent, ADK, journal or restore flow. Do not expose the
+key endpoint until the complete Kinde/consent/device journal/rights+erasure,
+secret custody/recovery, quota/WAF and Safari gates are verified.
 
 ## Private Cloudflare provider wiring, 14 November 2026
 
