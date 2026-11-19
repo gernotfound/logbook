@@ -34,10 +34,9 @@ const MAX_JSON_BYTES = 64 * 1024 * 1024;
  * snapshot of localStorage, IndexedDB and D1. A missing or locked vault is
  * not permission to create a new one or pretend the device is empty.
  */
-export async function prepareKindeCandidatePreWithdrawalJson({
+export async function captureKindeCandidatePreWithdrawalSources({
     expected, stillCurrent, send = fetch, browserCookies = () => document.cookie,
-}: Options): Promise<{ filename: string; json: string; cloudDocumentCount: number;
-    deviceWitnessCount: number; pendingOperationCount: number }> {
+}: Options) {
     const owner = userOwner(expected.uid);
     const fence = captureKindeCandidateSessionFence({ stillCurrent, browserCookies });
     const deviceKey = requireUnlockedLocalKey(owner);
@@ -73,6 +72,16 @@ export async function prepareKindeCandidatePreWithdrawalJson({
     }
     check();
 
+    return { owner, envelope: before, witnesses, observed, isCurrent: current };
+}
+
+/** Existing evidence-only export retains cloud and device provenance unchanged. */
+export async function prepareKindeCandidatePreWithdrawalJson(options: Options): Promise<{
+    filename: string; json: string; cloudDocumentCount: number;
+    deviceWitnessCount: number; pendingOperationCount: number;
+}> {
+    const { owner, envelope: before, witnesses, observed, isCurrent } =
+        await captureKindeCandidatePreWithdrawalSources(options);
     const exportedAt = new Date().toISOString();
     const cloudDocuments = formatKindeCandidateExportDocuments(observed.checkpoint);
     const payload = {
@@ -102,7 +111,7 @@ export async function prepareKindeCandidatePreWithdrawalJson({
     const json = JSON.stringify(payload, null, 2);
     if (typeof json !== 'string'
         || new TextEncoder().encode(json).byteLength > MAX_JSON_BYTES
-        || !current()) throw new KindeCandidateBoundaryError();
+        || !isCurrent()) throw new KindeCandidateBoundaryError();
     return {
         filename: 'thelogbook_prima_della_revoca_' + exportedAt.slice(0, 10) + '.json',
         json, cloudDocumentCount: cloudDocuments.length,
