@@ -27,9 +27,9 @@ describe('CF-05 candidate-only restore entry', () => {
         const restore = vi.fn<Session['restoreCandidateBackup']>()
             .mockResolvedValue({ kind: 'cloud-acknowledged' });
         const ui = mount(restore);
-        expect(ui.start).toBeDisabled();
+        expect((ui.start as HTMLButtonElement).disabled).toBe(true);
         fireEvent.change(ui.file, { target: { files: [selected('{"type":"backup"}')] } });
-        expect(ui.start).toBeDisabled();
+        expect((ui.start as HTMLButtonElement).disabled).toBe(true);
         fireEvent.click(ui.confirm);
         fireEvent.click(ui.start);
         await screen.findByText(/Ripristino confermato dal server/);
@@ -44,7 +44,7 @@ describe('CF-05 candidate-only restore entry', () => {
         fireEvent.change(ui.file, { target: { files: [selected('{}')] } });
         fireEvent.click(ui.confirm);
         fireEvent.click(ui.start);
-        expect(await screen.findByText(/conferma cloud ancora in attesa/)).toHaveTextContent('2 operazioni');
+        expect((await screen.findByText(/conferma cloud ancora in attesa/)).textContent).toContain('2 operazioni');
         expect(screen.queryByText(/Ripristino confermato dal server/)).toBeNull();
     });
 
