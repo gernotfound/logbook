@@ -120,10 +120,9 @@ export function composeKindeCandidatePortableBackup(sources: Sources, catalog: C
     data.legalConsent = legalConsent;
     const validated = UserDataSchema.parse(data) as unknown as UserData;
     if (findLossyNormalization(data, validated)) throw new KindeCandidateBoundaryError();
-    const now = new Date().toISOString();
     const coverage = {
         scope: 'cloud-and-device' as const, months: [...months].sort(),
-        readStartedAt: now, readCompletedAt: now,
+        readStartedAt: sources.readStartedAt, readCompletedAt: sources.readCompletedAt,
     };
     const backup = createBackup(validated, owner, coverage, {
         envelope, device: witnesses, cloudDocuments: rawDocs,
