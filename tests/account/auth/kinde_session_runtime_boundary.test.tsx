@@ -101,7 +101,7 @@ describe('React Kinde session boundary never promotes identity into fitness', ()
             promptInstall: vi.fn(async () => {}),
         });
         render(<KindeAccountEntry identityOnly />, { wrapper: host });
-        expect(await screen.findByText(/Aggiungi alla schermata Home/)).toBeInTheDocument();
+        expect(await screen.findByText(/Aggiungi alla schermata Home/)).toBeTruthy();
         expect(screen.queryByRole('button', { name: 'Installa TheLogBook' })).toBeNull();
     });
 
