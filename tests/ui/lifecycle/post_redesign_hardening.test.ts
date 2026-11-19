@@ -31,6 +31,7 @@ const adaptiveSurfaceFiles = [
   'src/components/Training/routines/RoutineExerciseTechnique.tsx',
   'src/components/Training/session/SessionExerciseCard.tsx',
   'src/components/Training/session/SessionRatings.tsx',
+  'src/components/Training/session/SessionPainPicker.tsx',
   'src/components/Training/WorkoutReportModal.tsx',
 ];
 
@@ -107,7 +108,9 @@ describe('post-redesign UI hardening', () => {
       expect(read(path), path).not.toMatch(/#(?:ff4d6d|ff6b81|ef4444|f97316)\b/i);
     }
     expect(read('src/hooks/useHomeView.ts')).toContain('var(--muscle-recent)');
-    expect(read('src/hooks/useHomeView.ts')).toContain('var(--muscle-pain)');
+    expect(read('src/hooks/useHomeView.ts')).toContain('getPainMuscleColors(activePains)');
+    expect(read('src/components/Training/session/SessionPainPicker.tsx')).toContain('getPainMuscleColors(pains)');
+    expect(read('src/lib/calc/muscleMapPresentation.ts')).toContain('var(--muscle-pain)');
   });
   it('keeps the cycle duration compact and muscle search results in document flow', () => {
     const components = read('src/styles/components.css');
@@ -150,7 +153,7 @@ describe('post-redesign UI hardening', () => {
     const search = read('src/components/Training/ExerciseSearchDropdown.tsx');
     const option = read('src/components/Training/ExerciseSearchOption.tsx');
     const setCard = read('src/components/Training/session/SessionExerciseCard.tsx');
-    const ratings = read('src/components/Training/session/SessionRatings.tsx');
+    const ratings = read('src/components/Training/session/SessionPainPicker.tsx');
     expect(option).toContain("color: highlighted ? 'var(--on-primary)' : 'var(--text-main)'");
     expect(search).not.toMatch(/rgba\((?:255\s*,\s*255\s*,\s*255|46\s*,\s*204\s*,\s*113|255\s*,\s*183\s*,\s*3|0\s*,\s*229\s*,\s*255)/);
     expect(search).not.toContain('#000000');
@@ -172,6 +175,7 @@ describe('post-redesign UI hardening', () => {
       'src/components/Training/planning/CycleSchedulePreview.tsx',
       'src/components/Training/session/SessionExerciseCard.tsx',
       'src/components/Training/session/SessionRatings.tsx',
+      'src/components/Training/session/SessionPainPicker.tsx',
       'src/pages/TermsAndConditions.tsx',
     ];
     for (const path of paths) {
