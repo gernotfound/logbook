@@ -21,6 +21,7 @@ import { prepareKindeCandidateOwner } from '../../../src/lib/sync/kindeCandidate
 import { KindeCandidateBoundaryError } from '../../../src/lib/auth/kindeCandidateClient';
 import { acceptKindeCandidateInitialConsent } from '../../../src/lib/auth/kindeCandidateConsent';
 import { deliverKindeCandidateJournal } from '../../../src/lib/sync/kindeCandidateJournalBridge';
+import { withKindeCandidateRightsCheckpoint } from '../../../src/lib/auth/kindeCandidateRightsCheckpoint';
 import type { CloudReplicaClaimRequest } from '../../../src/lib/sync/cloudReplicaTransport';
 import { readLocal } from '../../../src/lib/sync/localArchiveBootstrap';
 import { commitDomainOperations } from '../../../src/lib/sync/localDomainCommit';
@@ -465,6 +466,54 @@ describe('Kinde-only device vault provisioning and authenticated baseline', () =
         } finally {
             fixture.close();
         }
+    });
+
+
+    it('reads and AEAD-authenticates revoked ciphertext without reopening the fitness vault or replaying sync', async () => {
+        const realClaim = await vi.importActual<typeof import('../../../src/lib/sync/kindeCandidateReplicaClaimBridge')>(
+            '../../../src/lib/sync/kindeCandidateReplicaClaimBridge',
+        );
+        claimSource.claim.mockImplementation(realClaim.claimKindeCandidateReplica);
+        const fixture = await createCloudKeyHttpFixture([uid]);
+        try {
+            await fixture.consent(uid);
+            const observed: string[] = [];
+            const session = firstPartySession(fixture, (path, _init, response) => {
+                observed.push(path); return response;
+            });
+            await expect(prepareKindeCandidateOwner({
+                ...session, expected: principal, retainDeviceVault: false,
+            })).resolves.toMatchObject({ replicaOutcome: 'adopted' });
+            expect(isVaultUnlocked(owner)).toBe(false);
+            await unlockVaultForOwner(owner);
+            const baseline = (await readLocal(owner))!.data;
+            await commitDomainOperations(owner, { type: 'profile.patch', patch: { height: '194' } }, baseline);
+            await expect(deliverKindeCandidateJournal(session)).resolves.toBe('acknowledged');
+            expect(fixture.count('sync_documents', uid)).toBe(1);
+            lockAllVaults();
+            expect(isVaultUnlocked(owner)).toBe(false);
+            await fixture.withdraw(uid);
+            const before = observed.length;
+            const retrieved = await withKindeCandidateRightsCheckpoint({
+                ...session, expected: { ...principal, healthConsentRevision: 1 as const },
+                consumeCheckpoint: async (checkpoint, current) => {
+                    expect(current()).toBe(true);
+                    expect(checkpoint.consentRevision).toBe(1);
+                    expect(checkpoint.documents.size).toBe(1);
+                    return checkpoint.documents.get('')?.business;
+                },
+            });
+            expect(retrieved?.profile?.height).toBe('194');
+            expect(isVaultUnlocked(owner)).toBe(false);
+            expect(observed.slice(before).filter(path => path === '/v1/rights/scan')).toHaveLength(1);
+            expect(observed.slice(before)).not.toContain('/v1/sync/scan');
+            expect(observed.slice(before)).not.toContain('/v1/cloud-key/sync');
+            expect(observed.slice(before)).not.toContain('/v1/sync/commit');
+            expect(fixture.count('sync_receipts', uid)).toBe(1);
+            expect(fixture.count('health_erasure_jobs', uid)).toBe(1);
+            await expect(prepareKindeCandidateOwner({ ...session, expected: principal }))
+                .rejects.toThrow();
+        } finally { fixture.close(); }
     });
 
     it('does not claim complete journal delivery when a second edit arrives after remote commit', async () => {
