@@ -4,6 +4,8 @@
 
 Se la preparazione Kinde perde la sessione, fallisce o lascia una replica o una consegna da riconciliare, revoca la chiave in memoria del tentativo. Il controllo del vault, il ciphertext e gli intenti persistiti restano disponibili al successivo tentativo autorizzato. Una risposta tardiva può revocare solo la propria apertura del vault, anche quando la nuova sessione appartiene allo stesso account. Solo la conferma del checkpoint e della replica permette al candidato di mantenere l'apertura locale. Questo percorso rimane isolato dalla PWA pubblica.
 
+La consegna del journal verifica la stessa apertura del vault fino all'ACK locale. Una riapertura durante la richiesta della ricevuta D1 interrompe la consegna precedente e conserva l'intero batch sigillato. La consegna successiva recupera la ricevuta esatta senza ripetere il commit.
+
 ## CF-04/05 — Ripresa del primo salvataggio account
 
 Il bootstrap Kinde recupera la consegna cifrata già preparata prima di installare un nuovo checkpoint. Dopo un commit con risposta persa, la ricevuta del batch esatto conferma solo le operazioni inviate. Le modifiche successive restano nel journal fino alla rispettiva consegna. Se la ricevuta è indisponibile, il vault resta intatto. Il test di integrazione usa il primo consenso esplicito, la KEK sintetica, il gateway e i Worker applicativi con le due basi SQLite e IndexedDB in memoria. Verifica il blocco in assenza di KEK, la replica e il primo salvataggio. Il collaudo è isolato dal sito pubblico.

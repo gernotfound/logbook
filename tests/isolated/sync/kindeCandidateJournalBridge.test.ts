@@ -6,12 +6,15 @@ import { readLocal } from '../../../src/lib/sync/localArchiveBootstrap';
 import { acquireCloudflareAccountKeyCandidate } from '../../../src/lib/sync/cloudflareAccountKeyCandidate';
 import { deliverCloudflareJournalCandidate } from '../../../src/lib/sync/cloudflareJournalCandidate';
 import type { LocalEnvelope } from '../../../src/lib/sync/localRepository';
+import { requireUnlockedLocalKey } from '../../../src/lib/sync/secureArchiveSession';
 
 vi.mock('../../../src/lib/sync/localArchiveBootstrap', () => ({ readLocal: vi.fn() }));
 vi.mock('../../../src/lib/sync/cloudflareAccountKeyCandidate',
     () => ({ acquireCloudflareAccountKeyCandidate: vi.fn() }));
 vi.mock('../../../src/lib/sync/cloudflareJournalCandidate',
     () => ({ deliverCloudflareJournalCandidate: vi.fn() }));
+
+vi.mock('../../../src/lib/sync/secureArchiveSession', () => ({ requireUnlockedLocalKey: vi.fn() }));
 
 const UID = 'k_' + 'A'.repeat(43);
 const OTHER = 'k_' + 'B'.repeat(43);
@@ -48,6 +51,7 @@ function cookie(value = CSRF_A) { return '__Host-logbook_csrf=' + value; }
 beforeEach(() => {
     localStorage.clear();
     vi.resetAllMocks();
+    vi.mocked(requireUnlockedLocalKey).mockReturnValue(new Uint8Array(32).fill(47));
 });
 afterEach(() => {
     vi.restoreAllMocks();

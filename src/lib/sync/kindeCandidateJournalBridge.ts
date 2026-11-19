@@ -7,6 +7,7 @@ import { userOwner } from './owner';
 import { acquireCloudflareAccountKeyCandidate } from './cloudflareAccountKeyCandidate';
 import { deliverCloudflareJournalCandidate } from './cloudflareJournalCandidate';
 import { createCloudflareReplicaTransport } from './cloudReplicaTransport';
+import { requireUnlockedLocalKey } from './secureArchiveSession';
 
 type JournalOutcome = Awaited<ReturnType<typeof deliverCloudflareJournalCandidate>>;
 type ConsentingPrincipal = Extract<KindeCandidateAccess, { kind: 'consent-confirmed' }>['principal'];
@@ -53,9 +54,17 @@ export async function deliverKindeCandidateJournal({
         throw new KindeCandidateBoundaryError();
     }
     const owner = userOwner(uid);
-    if (!isKindeAccountLocalFitnessClear(owner, healthConsentRevision)) throw new KindeCandidateBoundaryError();
+    const fitnessCurrent = () => current() && isKindeAccountLocalFitnessClear(owner, healthConsentRevision);
+    if (!fitnessCurrent()) throw new KindeCandidateBoundaryError();
+    const deviceKey = requireUnlockedLocalKey(owner);
+    // A genuine D1 receipt can arrive after the vault has been reopened
+    // without a cookie change. Only a fresh delivery may use that receipt.
+    const scoped = () => {
+        try { return fitnessCurrent() && requireUnlockedLocalKey(owner) === deviceKey; }
+        catch { return false; }
+    };
     const local = await readLocal(owner);
-    if (!isKindeAccountLocalFitnessClear(owner, healthConsentRevision) || !current() || !local || local.consentRevision !== healthConsentRevision || local.cloudIntegrityFence
+    if (!scoped() || !local || local.consentRevision !== healthConsentRevision || local.cloudIntegrityFence
         || local.cloudflareReplicaClaim || local.cloudflareReplicaRetirement) {
         throw new KindeCandidateBoundaryError();
     }
@@ -65,16 +74,15 @@ export async function deliverKindeCandidateJournal({
 
     const key = await acquireCloudflareAccountKeyCandidate({
         expected: { uid, fenceEpoch, consentRevision: healthConsentRevision },
-        purpose: 'sync', stillCurrent: current, csrfToken: () => fence.csrfToken, send,
+        purpose: 'sync', stillCurrent: scoped, csrfToken: () => fence.csrfToken, send,
     });
     try {
-        if (!current() || !isKindeAccountLocalFitnessClear(owner, healthConsentRevision)) throw new KindeCandidateBoundaryError();
+        if (!scoped()) throw new KindeCandidateBoundaryError();
         const result = await deliverCloudflareJournalCandidate(
-            owner, key, createCloudflareReplicaTransport(send), fence.csrfToken,
-            () => current() && isKindeAccountLocalFitnessClear(owner, healthConsentRevision),
+            owner, key, createCloudflareReplicaTransport(send), fence.csrfToken, scoped,
             { consentRevision: healthConsentRevision, fenceEpoch, ...(stagedOnly ? { stagedOnly } : {}) },
         );
-        if (!current() || !isKindeAccountLocalFitnessClear(owner, healthConsentRevision)) throw new KindeCandidateBoundaryError();
+        if (!scoped()) throw new KindeCandidateBoundaryError();
         return result;
     } finally {
         // The ADK is an operation-scoped capability; never retain it in

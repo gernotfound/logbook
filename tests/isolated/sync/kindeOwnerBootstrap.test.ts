@@ -333,6 +333,53 @@ describe('Kinde-only device vault provisioning and authenticated baseline', () =
         expect(claimSource.claim).not.toHaveBeenCalled();
     });
 
+    it('keeps the exact durable batch if the vault is reopened before applying the D1 receipt', async () => {
+        const realClaim = await vi.importActual<typeof import('../../../src/lib/sync/kindeCandidateReplicaClaimBridge')>(
+            '../../../src/lib/sync/kindeCandidateReplicaClaimBridge',
+        );
+        claimSource.claim.mockImplementation(realClaim.claimKindeCandidateReplica);
+        const fixture = await createCloudKeyHttpFixture([uid]);
+        try {
+            await fixture.consent(uid);
+            let commits = 0;
+            let interrupted = false;
+            let staged: Awaited<ReturnType<typeof readLocal>>;
+            const session = firstPartySession(fixture, async (path, _init, response) => {
+                if (path === '/v1/sync/commit') {
+                    expect(response.status).toBe(200);
+                    commits += 1;
+                }
+                if (path === '/v1/sync/receipt' && commits === 1 && !interrupted) {
+                    expect(response.status).toBe(200);
+                    staged = await readLocal(owner);
+                    expect(staged?.cloudflareDelivery).toBeDefined();
+                    await unlockVaultForOwner(owner);
+                    interrupted = true;
+                }
+                return response;
+            });
+            await expect(prepareKindeCandidateOwner({ ...session, expected: principal }))
+                .resolves.toMatchObject({ replicaOutcome: 'adopted' });
+            const baseline = (await readLocal(owner))!.data;
+            const edit = await commitDomainOperations(owner, { type: 'profile.patch', patch: { height: '183' } }, baseline);
+
+            await expect(deliverKindeCandidateJournal(session)).rejects.toThrow();
+            expect(interrupted).toBe(true);
+            expect(isVaultUnlocked(owner)).toBe(true);
+            expect(await readLocal(owner)).toEqual(staged);
+            expect((await readLocal(owner))?.pending).toEqual(edit.operations);
+            expect(fixture.count('sync_receipts', uid)).toBe(1);
+
+            await expect(deliverKindeCandidateJournal(session)).resolves.toBe('acknowledged');
+            expect(commits).toBe(1);
+            expect((await readLocal(owner))?.cloudflareDelivery).toBeUndefined();
+            expect((await readLocal(owner))?.pending).toEqual([]);
+            expect((await readLocal(owner))?.baseline.profile?.height).toBe('183');
+        } finally {
+            fixture.close();
+        }
+    });
+
     it('a delayed scan from a replaced session cannot lock a newer grant for the same owner', async () => {
         let liveCookie = cookie();
         let finishScan!: () => void;
