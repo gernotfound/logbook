@@ -84,7 +84,8 @@ export async function prepareKindeCandidatePreWithdrawalJson({
             deviceReadsStableAtObservation: true,
             atomicAcrossSources: false,
             restorableBackup: false,
-            containsDeviceOnlyDrafts: Object.keys(witnesses).some(name => name.startsWith('draft:')),
+            containsDeviceOnlyDrafts: Object.keys(witnesses).some(name => name.startsWith('draft:')
+                || name === 'draft_exercise' || name === 'draft_routine'),
             containsPendingJournal: Boolean(before?.pending.length),
         },
         cloud: {
