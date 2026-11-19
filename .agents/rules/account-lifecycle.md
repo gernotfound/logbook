@@ -1,3 +1,27 @@
+## CF-05 — Revoca Kinde candidata e stato UI (19/11/2026)
+
+`KindeAccountEntry` richiede un **secondo** opt-in
+`candidateLifecycleEnabled` per presentare la revoca candidata
+ed il diritto di lettura post-revoca. Non è montato nel
+`KindeAccountSessionProvider` pubblico. Il componente
+`KindeCandidateWithdrawalPanel` contiene l'offerta volontaria
+di backup seguita da conferma esplicita della cancellazione; un
+cambio marker anche da un'altra scheda sopprime il backup e la
+richiesta distruttiva. Lo stato `pending:1` non viene cancellato
+né convertito in successo dal solo client.
+
+`useKindeAccountSession.withdrawCandidateConsent` esegue solo il
+boundary trusted Kinde e aggiorna la vista dopo la conferma server;
+`reconcileCandidateWithdrawal` usa esclusivamente le letture
+trusted per recuperare l'esito incerto senza **ripetere** il POST.
+Il percorso `prepareCandidateRightsJson` resta separato, disponibile
+anche all'email non più verificata con generazione di consenso 1,
+e richiama il solo export di documenti ancora presenti. La vista
+non conferma erasure completa, non crea vault/owner fitness e non
+riattiva account. Il test di integrazione React conserva il blocco
+identity-only/guest e le prove SQL Worker/D1 originali restano
+autorità dei contratti di revoca.
+
 # Ciclo account, Auth e guest — TheLogBook
 
 ### Consenso D1 autorevole durante ACK cifrato (19/11/2026)
