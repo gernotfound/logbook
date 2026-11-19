@@ -21,6 +21,7 @@ type View = { phase: Status; generation: number }
 type Decision = Parameters<typeof acceptKindeCandidateInitialConsent>[0]['decision'];
 type PresenceFence = ReturnType<typeof captureKindeCandidatePresenceFence>;
 type CandidatePreparationResult = Awaited<ReturnType<typeof prepareKindeCandidateOwner>>;
+type CandidateRestoreResult = Awaited<ReturnType<typeof import('../../lib/auth/kindeCandidateRestore').restoreKindeCandidateBackup>>;
 
 // Read only the local CSRF-cookie witness. Network refresh is triggered only
 // on a change or a foreground event, including browsers without CookieStore.
@@ -422,6 +423,41 @@ export function useKindeAccountSession({
         }
     };
 
+
+    /**
+     * Candidate-only explicit restore. The import file is parsed before this
+     * entrypoint; its schema/owner/coverage is checked before provisioning.
+     * Neither a local commit nor an ambiguous D1 response is a cloud ACK.
+     */
+    const restoreCandidateBackup = async (backup: unknown): Promise<CandidateRestoreResult> => {
+        if (identityOnly || !candidatePreparationEnabled || !canAct()
+            || view.phase !== 'consent-confirmed' || !view.principal.emailVerified
+            || view.principal.healthConsentRevision < 1) {
+            throw new KindeCandidateBoundaryError();
+        }
+        const session = observed.current;
+        if (!session?.csrfToken || !session.stillCurrent()) throw new KindeCandidateBoundaryError();
+        const expected = {
+            uid: view.principal.uid, fenceEpoch: view.principal.fenceEpoch,
+            healthConsentRevision: view.principal.healthConsentRevision,
+        };
+        const current = () => viewIsCurrent() && session.stillCurrent();
+        busyRef.current = true;
+        setBusy(true);
+        try {
+            const { restoreKindeCandidateBackup } = await import('../../lib/auth/kindeCandidateRestore');
+            if (!current()) throw new KindeCandidateBoundaryError();
+            const result = await restoreKindeCandidateBackup({
+                backup, expected, stillCurrent: current,
+            });
+            if (!current()) throw new KindeCandidateBoundaryError();
+            return result;
+        } finally {
+            busyRef.current = false;
+            if (mounted.current) setBusy(false);
+        }
+    };
+
     const logout = async () => {
         if (!('principal' in view)) return;
         const completed = await runAction(async () => {
@@ -436,6 +472,7 @@ export function useKindeAccountSession({
 
     return {
         view, busy, signIn, enterGuest, acceptConsent, logout, prepareCandidateArchive, prepareCandidateBackup,
+        restoreCandidateBackup,
         withdrawCandidateConsent, reconcileCandidateWithdrawal, prepareCandidateRightsJson,
         retry: async () => { if (canAct()) await refresh(); },
     };
