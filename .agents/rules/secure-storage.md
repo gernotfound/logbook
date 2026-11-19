@@ -34,6 +34,20 @@ I moduli client della tabella sono in `src/lib/sync/`. Nessuna passphrase, PIN o
 
 La tabella non dimostra che esistano una copia indipendente della KEK o collaudi di ripristino realmente riusciti.
 
+**Verifica sintetica cold-restore CF-05 (19/11/2026):** una regressione
+con il Worker/AuthGate e lo schema D1 corrente copia separatamente su
+file SQLite temporanei il database applicativo e il registro di sicurezza.
+Dopo aver chiuso le connessioni originali, nuove istanze recuperano le
+stesse ADK account soltanto con la KEK sintetica originaria; secret
+assente o diverso negano la risposta senza riscrivere gli envelope
+o l'issuance. La revoca successiva conserva il diniego fitness e
+il solo accesso rights consentito. È una prova di ripristino **software**
+con dati sintetici, non della copia segreta Cloudflare del proprietario
+né della corrispondenza con il secret live. La copia operativa della KEK
+non può essere certificata leggendo il nome del binding e non deve
+comparire in CI, GitHub, chat o output diagnostici.
+
+
 ## Vault locale e provisioning
 
 **MUST:** il vault `logbook:v2:${owner}:secure-vault-control` esiste in tre stati distinti: assente, `migrating`, `active`. Controlli corrotti/versioni future, una chiave IndexedDB persa o un record non autenticato **non sono** assenza dati. Nessun nuovo provisioning sopra ciphertext preesistente.
