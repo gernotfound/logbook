@@ -461,8 +461,8 @@ describe('Session set actions and accessibility', () => {
 
             it('T2.4.6: SessionSetRow handles empty string kg and reps without throwing', () => {
                 const set = { id: 's1', kg: '', reps: '' };
-                expect(() => render(
-                    <SessionSetRow 
+                const { container } = render(
+                    <SessionSetRow
                         set={set}
                         sIndex={0}
                         exIndex={0}
@@ -473,9 +473,12 @@ describe('Session set actions and accessibility', () => {
                         onAddSpecialSet={vi.fn()}
                         onUpdateSpecialSet={vi.fn()}
                         onRemoveSpecialSet={vi.fn()}
-                    onUpdateSetTarget={vi.fn()}
+                        onUpdateSetTarget={vi.fn()}
                     />
-                )).not.toThrow();
+                );
+                expect(container.querySelector<HTMLInputElement>('#kg-s1')?.value).toBe('');
+                expect(container.querySelector<HTMLInputElement>('#reps-s1')?.value).toBe('');
+                expect(screen.getByRole('button', { name: 'Opzioni serie 1' })).toBeDefined();
             });
 
             it('T2.4.7: delete set button aria-label includes set number for accessibility', () => {
