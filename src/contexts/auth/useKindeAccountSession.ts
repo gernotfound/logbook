@@ -205,11 +205,7 @@ export function useKindeAccountSession({
      * existing D1 bootstrap. The live provider leaves this capability disabled;
      * no readiness result installs an authenticated fitness owner or grant.
      */
-    const prepareCandidateArchive = async ({
-        send = fetch, browserCookies = () => document.cookie, drainPendingJournal = false,
-    }: {
-        send?: typeof fetch;
-        browserCookies?: () => string;
+    const prepareCandidateArchive = async ({ drainPendingJournal = false }: {
         drainPendingJournal?: boolean;
     } = {}): Promise<CandidatePreparationResult> => {
         if (!candidatePreparationEnabled || !canAct()
@@ -234,7 +230,7 @@ export function useKindeAccountSession({
             const { prepareKindeCandidateOwner } = await import('../../lib/sync/kindeCandidateOwnerBootstrap');
             if (!current()) throw new KindeCandidateBoundaryError();
             const result = await prepareKindeCandidateOwner({
-                expected, stillCurrent: current, send, browserCookies,
+                expected, stillCurrent: current,
                 drainPendingJournal, retainDeviceVault: false,
             });
             if (!current()) throw new KindeCandidateBoundaryError();
