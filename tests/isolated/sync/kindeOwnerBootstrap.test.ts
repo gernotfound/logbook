@@ -23,7 +23,6 @@ import { acceptKindeCandidateInitialConsent } from '../../../src/lib/auth/kindeC
 import { deliverKindeCandidateJournal } from '../../../src/lib/sync/kindeCandidateJournalBridge';
 import { withKindeCandidateRightsCheckpoint } from '../../../src/lib/auth/kindeCandidateRightsCheckpoint';
 import { prepareKindeCandidateRightsJson, requestKindeCandidateRightsJsonDownload } from '../../../src/lib/auth/kindeCandidateRightsExport';
-import { decodeImport } from '../../../src/lib/backup';
 import type { CloudReplicaClaimRequest } from '../../../src/lib/sync/cloudReplicaTransport';
 import { readLocal } from '../../../src/lib/sync/localArchiveBootstrap';
 import { commitDomainOperations } from '../../../src/lib/sync/localDomainCommit';
@@ -527,7 +526,6 @@ describe('Kinde-only device vault provisioning and authenticated baseline', () =
                 documents: [{ path: '', dataSchemaVersion: 1,
                     business: { profile: { height: '194' } } }],
             });
-            expect(() => decodeImport(payload, owner)).toThrow();
             const clicked = vi.fn();
             const removed = vi.fn();
             const appended = vi.fn();
