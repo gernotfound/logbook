@@ -4,7 +4,8 @@ import { useModalFocusTrap } from '../../hooks/useModalFocusTrap';
 import { useScrollLock } from '../../hooks/useScrollLock';
 import { formatSleepTime } from '../../lib/utils/date';
 import type { MeasurementHistoryDay } from '../../types';
-import { dayLabel, formatDecimal, hasFiniteValue, hasMeasurementData } from './dataHistoryFormatting';
+import { dayLabel } from '../../lib/utils/historyCalendar';
+import { formatDecimal, hasFiniteValue, hasMeasurementData } from './dataHistoryFormatting';
 
 interface DataHistoryDetailProps {
     day: MeasurementHistoryDay;
