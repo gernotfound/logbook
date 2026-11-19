@@ -447,6 +447,8 @@ describe('Kinde-only device vault provisioning and authenticated baseline', () =
             expect(fixture.count('sync_receipts', uid)).toBe(1);
             expect((await readLocal(owner))?.pending).toEqual([]);
             expect((await readLocal(owner))?.baseline.profile?.height).toBe('184');
+            expect((await readLocal(owner))?.data.legalConsent).toEqual(legal);
+            expect((await readLocal(owner))?.baseline.legalConsent).toEqual(legal);
             const ciphertext = await get<string>('logbook:v2:' + owner);
             expect(ciphertext).toMatch(/^tlb-sealed:v1:/);
             expect(ciphertext).not.toContain('"height":"184"');
@@ -510,6 +512,8 @@ describe('Kinde-only device vault provisioning and authenticated baseline', () =
             expect(remaining?.pending).toEqual(later?.operations);
             expect(remaining?.baseline.profile?.height).toBe('186');
             expect(remaining?.data.profile?.height).toBe('187');
+            expect(remaining?.data.legalConsent).toEqual(legal);
+            expect(remaining?.baseline.legalConsent).toEqual(legal);
             lockAllVaults();
 
             await expect(prepareKindeCandidateOwner({
