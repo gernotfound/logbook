@@ -32,6 +32,33 @@ describe('Nutrition numeric and hostile search inputs', () => {
       expect(Logic.calculateMacrosFromKg(1e308, 1e308, 1, 1).totalKcal).toBe(0);
     });
 
+    test('macro targets reject partial numeric values and interpret decimal commas consistently', () => {
+      const comma = Logic.calculateMacrosFromKg('80,5', '3,5', '2', '1');
+      expect(comma).toMatchObject({
+        carbsGrams: 281.8,
+        proGrams: 161,
+        fatGrams: 80.5,
+        totalKcal: 2496,
+      });
+
+      const missingRatio = Logic.calculateMacrosFromKg('80', null, '', undefined);
+      expect(missingRatio.totalKcal).toBe(0);
+      expect(missingRatio.carbsGrams).toBe(0);
+
+      const standard = Logic.calculateMacrosFromKg(80, 3.5, 2, 1);
+      const zeroed = Logic.calculateMacrosFromKg(0, 3.5, 2, 1);
+      expect(standard.totalKcal).toBe(2480);
+
+      for (const invalid of ['80kg', '80abc', '80,5kg', '1e309', '']) {
+        expect(Logic.calculateMacrosFromKg(invalid, 3.5, 2, 1)).toEqual(zeroed);
+      }
+      for (const invalid of ['3,5g', '3.5x', '1e309', 'abc']) {
+        expect(Logic.calculateMacrosFromKg(80, invalid, 2, 1)).toEqual(zeroed);
+        expect(Logic.calculateMacrosFromKg(80, 3.5, invalid, 1)).toEqual(zeroed);
+        expect(Logic.calculateMacrosFromKg(80, 3.5, 2, invalid)).toEqual(zeroed);
+      }
+    });
+
     test('Logic.calculateBodyFat handles 0 weight and edge inputs safely', () => {
       const profile = { gender: 'M', height: '180', dob: '1995-01-01' };
       expect(Logic.calculateBodyFat(0, profile)).toBeNull();

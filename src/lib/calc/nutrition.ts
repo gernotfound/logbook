@@ -1,4 +1,3 @@
-import Fuse from 'fuse.js';
 import { calculateBodyFat } from './bodyFat';
 import type { UserData } from '../../types';
 import { parseDateInput } from '../utils/date';
@@ -86,12 +85,19 @@ export function calculateMacrosFromKg(
     proPerKg?: number | string | null,
     fatPerKg?: number | string | null,
 ) {
-    const w = parseFloat(String(weight)) || 0;
-    const c = parseFloat(String(carbsPerKg)) || 0;
-    const p = parseFloat(String(proPerKg)) || 0;
-    const f = parseFloat(String(fatPerKg)) || 0;
     const zeroed = { carbsGrams: 0, proGrams: 0, fatGrams: 0, carbsKcal: 0, proKcal: 0, fatKcal: 0, totalKcal: 0 };
-    if (![w, c, p, f].every(Number.isFinite) || w <= 0 || c < 0 || p < 0 || f < 0) {
+    const ratio = (input: number | string | null | undefined): number | null =>
+        input === null || input === undefined || (typeof input === 'string' && input.trim() === '')
+            ? 0
+            : parseFiniteNumericInput(input);
+    // Keep the same complete-input parsing contract as TDEE and custom foods:
+    // a malformed, partially numeric ratio must not become a valid macro target.
+    const w = parseFiniteNumericInput(weight);
+    const c = ratio(carbsPerKg);
+    const p = ratio(proPerKg);
+    const f = ratio(fatPerKg);
+    if (w === null || c === null || p === null || f === null
+        || w <= 0 || c < 0 || p < 0 || f < 0) {
         return zeroed;
     }
     const carbsGrams = Math.round(w * c * 10) / 10;
@@ -148,131 +154,6 @@ export function calculateTDEEAndMacros(state: Partial<UserData> | null) {
     };
 }
 
-
-const normalizeFoodStr = (str: unknown): string => String(str || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
-
-const FUSE_FOOD_OPTIONS = {
-    keys: [
-        { name: 'name', weight: 0.6 },
-        { name: 'brand', weight: 0.25 },
-        { name: 'category', weight: 0.15 }
-    ],
-    threshold: 0.38,
-    ignoreLocation: true,
-    minMatchCharLength: 2
-};
-
-/** Keep all food metadata and caller-specific fields intact through filtering. */
-interface SearchableFood {
-    id?: string | number;
-    name: string;
-    brand?: string;
-    category?: string;
-    servingUnit?: string;
-    unit?: string;
-}
-
-export function createFoodSearcher<T extends SearchableFood>(foodsList: T[], categoryFilter?: string): (query: string, maxResults?: number) => T[] {
-    if (!Array.isArray(foodsList) || foodsList.length === 0) return () => [];
-    let results = foodsList;
-    if (categoryFilter && categoryFilter !== 'all') {
-        results = results.filter(item => item && item.category === categoryFilter);
-    }
-    type PreparedFood = { item: T; name: string; category: string; servingUnit: string; brand: string } | null;
-    let prepared: PreparedFood[] | undefined;
-    const normalizedNames = new Map<T, string>();
-    let fuse: Fuse<T> | undefined;
-    const nameOf = (item: T) => normalizedNames.get(item) ?? normalizeFoodStr(item.name);
-    const sortMatches = (items: T[], q: string, maxResults?: number): T[] => {
-        const compare = (a: T, b: T): number => {
-            const aName = nameOf(a);
-            const bName = nameOf(b);
-            const aStarts = aName.startsWith(q);
-            const bStarts = bName.startsWith(q);
-            if (aStarts && !bStarts) return -1;
-            if (!aStarts && bStarts) return 1;
-            return aName.localeCompare(bName, 'it');
-        };
-        if (!maxResults || !Number.isSafeInteger(maxResults) || maxResults < 1 || items.length <= maxResults) {
-            return items.sort(compare);
-        }
-        // Insertion after equal-ranked entries retains the same stable order as a full sort.
-        const top: T[] = [];
-        for (const item of items) {
-            let low = 0;
-            let high = top.length;
-            while (low < high) {
-                const mid = Math.floor((low + high) / 2);
-                if (compare(item, top[mid]) < 0) high = mid;
-                else low = mid + 1;
-            }
-            if (low >= maxResults) continue;
-            top.splice(low, 0, item);
-            if (top.length > maxResults) top.pop();
-        }
-        return top;
-    };
-    return (query: string, maxResults?: number): T[] => {
-        if (!query || typeof query !== 'string' || !query.trim()) {
-            return maxResults ? results.slice(0, maxResults) : results;
-        }
-        const q = normalizeFoodStr(query);
-        if (!q) return maxResults ? results.slice(0, maxResults) : results;
-
-        if (!prepared) {
-            prepared = results.map(item => item ? {
-                item,
-                name: normalizeFoodStr(item.name),
-                category: normalizeFoodStr(item.category),
-                servingUnit: normalizeFoodStr(item.servingUnit || item.unit),
-                brand: normalizeFoodStr(item.brand)
-            } : null);
-            for (const entry of prepared) {
-                if (entry) normalizedNames.set(entry.item, entry.name);
-            }
-        }
-
-        // Direct substring matches
-        const directMatched: T[] = [];
-        for (const entry of prepared) {
-            if (entry && (entry.name.includes(q) || entry.category.includes(q)
-                || entry.servingUnit.includes(q) || entry.brand.includes(q))) {
-                directMatched.push(entry.item);
-            }
-        }
-
-        if (q.length < 2) {
-            return sortMatches(directMatched, q, maxResults);
-        }
-
-        // Build Fuse only if the query actually needs fuzzy matching.
-        const currentFuse = fuse ?? (fuse = new Fuse(results, FUSE_FOOD_OPTIONS));
-
-        const tokens = query.trim().split(/\s+/).filter(t => t.length >= 2);
-        let fuzzyMatched: T[] = [];
-        if (tokens.length > 1) {
-            // Find items that match all tokens
-            const tokenMatches = tokens.map(tok => new Set(currentFuse.search(tok).map(r => r.item)));
-            const allMatch = results.filter(item => tokenMatches.every(set => set.has(item)));
-            const singleMatches = currentFuse.search(query.trim()).map(res => res.item);
-            fuzzyMatched = [...allMatch, ...singleMatches];
-        } else {
-            fuzzyMatched = currentFuse.search(query.trim()).map(res => res.item);
-        }
-
-        const seen = new Set<string | number>();
-        const merged: T[] = [];
-        for (const f of [...directMatched, ...fuzzyMatched]) {
-            const key = f.id ?? f.name;
-            if (!seen.has(key)) {
-                seen.add(key);
-                merged.push(f);
-            }
-        }
-
-        return sortMatches(merged, q, maxResults);
-    };
-}
 
 export function validateCustomFood(foodData: any) {
     const errors: Record<string, string> = {};

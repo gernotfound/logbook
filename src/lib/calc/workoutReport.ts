@@ -1,5 +1,6 @@
 import type { NutritionDay, WorkoutSession } from '../../types';
 import { getWorkoutDurationSeconds } from './workoutDuration';
+import { finiteSum, roundFinite } from './finiteAnalyticsMath';
 import {
     computeProgressionEngine,
     type DensityProgressionAnalysis,
@@ -23,14 +24,14 @@ interface ExerciseComparison {
     exName: string;
     currentVolume: number;
     previousVolume: number;
-    volumeDelta: number;
-    volumeDeltaPercent: number;
+    volumeDelta: number | null;
+    volumeDeltaPercent: number | null;
     currentReps: number;
     previousReps: number;
-    repsDelta: number;
+    repsDelta: number | null;
     currentAvgWeight: number;
     previousAvgWeight: number;
-    weightDelta: number;
+    weightDelta: number | null;
     setEffortComparisons: SetEffortComparison[];
     isPR: boolean;
     progression: ExerciseProgressionAnalysis;
@@ -57,15 +58,39 @@ export interface WorkoutReportContext extends ProgressionBodyweightContext {
 }
 
 function averageObservedWeight(exposure: ExerciseProgressionAnalysis['current']): number {
-    const weights: number[] = [];
+    let count = 0;
+    let average = 0;
+    const includeObserved = (weight: number | undefined, reps: number | undefined): void => {
+        if (weight === undefined || !reps) return;
+        count++;
+        // A rolling weighted mean avoids overflowing the sum of finite loads.
+        average = average * ((count - 1) / count) + weight / count;
+    };
     for (const set of exposure.sets) {
-        if (set.effectiveKg !== undefined && set.reps) weights.push(set.effectiveKg);
-        for (const segment of set.segments) {
-            if (segment.effectiveKg !== undefined && segment.reps) weights.push(segment.effectiveKg);
-        }
+        includeObserved(set.effectiveKg, set.reps);
+        for (const segment of set.segments) includeObserved(segment.effectiveKg, segment.reps);
     }
-    if (!weights.length) return 0;
-    return Math.round((weights.reduce((sum, value) => sum + value, 0) / weights.length) * 10) / 10;
+    return count > 0 ? roundFinite(average, 10) : 0;
+}
+
+function sumExerciseVolumes(
+    exposures: ExerciseProgressionAnalysis['current'][],
+): { total: number; complete: boolean } {
+    let total = 0;
+    let complete = true;
+    for (const exposure of exposures) {
+        if (!exposure.tonnageComplete || exposure.tonnageKg === undefined) {
+            complete = false;
+            continue;
+        }
+        const next = finiteSum(total, exposure.tonnageKg);
+        if (next === null) {
+            complete = false;
+            continue;
+        }
+        total = next;
+    }
+    return { total, complete };
 }
 
 function stringifyMetric(value: number | undefined): string {
@@ -116,18 +141,26 @@ export function computeWorkoutReport(
     const exerciseComparisons: ExerciseComparison[] = engine.exercises.map(progression => {
         const currentVolume = progression.current.tonnageKg ?? 0;
         const previousVolume = progression.previousComparable?.tonnageKg ?? 0;
-        const volumeDelta = currentVolume - previousVolume;
-        const volumeDeltaPercent = previousVolume > 0
-            ? (volumeDelta / previousVolume) * 100
-            : currentVolume > 0 && progression.previousComparable
-                ? 100
-                : 0;
+        const volumeIsComparable = progression.current.tonnageComplete
+            && (!progression.previousComparable || progression.previousComparable.tonnageComplete);
+        const volumeDelta = volumeIsComparable ? finiteSum(currentVolume, -previousVolume) : null;
+        const rawVolumeDeltaPercent = volumeDelta === null
+            ? null
+            : previousVolume > 0
+                ? (volumeDelta / previousVolume) * 100
+                : currentVolume > 0 && progression.previousComparable
+                    ? 100
+                    : 0;
+        const volumeDeltaPercent = rawVolumeDeltaPercent !== null && Number.isFinite(rawVolumeDeltaPercent)
+            ? rawVolumeDeltaPercent
+            : null;
         const currentReps = progression.current.totalReps;
         const previousReps = progression.previousComparable?.totalReps ?? 0;
         const currentAvgWeight = averageObservedWeight(progression.current);
         const previousAvgWeight = progression.previousComparable
             ? averageObservedWeight(progression.previousComparable)
             : 0;
+        const rawWeightDelta = finiteSum(currentAvgWeight, -previousAvgWeight);
 
         return {
             exId: progression.exId,
@@ -138,24 +171,25 @@ export function computeWorkoutReport(
             volumeDeltaPercent,
             currentReps,
             previousReps,
-            repsDelta: currentReps - previousReps,
+            repsDelta: finiteSum(currentReps, -previousReps),
             currentAvgWeight,
             previousAvgWeight,
-            weightDelta: Math.round((currentAvgWeight - previousAvgWeight) * 10) / 10,
+            weightDelta: rawWeightDelta === null ? null : roundFinite(rawWeightDelta, 10),
             setEffortComparisons: buildSetEffortComparisons(progression),
             isPR: progression.isRecord,
             progression,
         };
     });
 
-    const totalVolume = exerciseComparisons.reduce((sum, comparison) => sum + comparison.currentVolume, 0);
-    const totalVolumeIsComplete = engine.exercises.every(progression => progression.current.tonnageComplete);
+    const { total: totalVolume, complete: totalVolumeIsComplete } = sumExerciseVolumes(
+        engine.exercises.map(progression => progression.current),
+    );
     const comparisonsWithPrevious = exerciseComparisons.filter(comparison => comparison.progression.previousComparable);
-    const previousTotalVolume = comparisonsWithPrevious.reduce((sum, comparison) => sum + comparison.previousVolume, 0);
-    const comparableCurrentVolume = comparisonsWithPrevious.reduce((sum, comparison) => sum + comparison.currentVolume, 0);
-    const comparableCurrentVolumeIsComplete = comparisonsWithPrevious.every(comparison => comparison.progression.current.tonnageComplete);
-    const previousVolumeIsComplete = comparisonsWithPrevious.every(
-        comparison => comparison.progression.previousComparable?.tonnageComplete,
+    const { total: previousTotalVolume, complete: previousVolumeIsComplete } = sumExerciseVolumes(
+        comparisonsWithPrevious.map(comparison => comparison.progression.previousComparable!),
+    );
+    const { total: comparableCurrentVolume, complete: comparableCurrentVolumeIsComplete } = sumExerciseVolumes(
+        comparisonsWithPrevious.map(comparison => comparison.progression.current),
     );
 
     const report: WorkoutReport = {
@@ -175,7 +209,9 @@ export function computeWorkoutReport(
         report.previousTotalVolume = previousTotalVolume;
         report.previousVolumeIsComplete = previousVolumeIsComplete;
         if (comparableCurrentVolumeIsComplete && previousVolumeIsComplete && previousTotalVolume > 0) {
-            report.volumeDeltaPercent = ((comparableCurrentVolume - previousTotalVolume) / previousTotalVolume) * 100;
+            const delta = finiteSum(comparableCurrentVolume, -previousTotalVolume);
+            const percent = delta === null ? NaN : (delta / previousTotalVolume) * 100;
+            if (Number.isFinite(percent)) report.volumeDeltaPercent = percent;
         }
     }
 

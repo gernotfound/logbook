@@ -13,7 +13,7 @@ import {
 import { resolveEffectiveExercises, resolveEffectiveFoods } from '../../../src/lib/catalog/deltaResolver';
 import { mergeNutrition } from '../../../src/lib/merge';
 import { applyDomainOperations } from '../../../src/lib/sync/domainOperations';
-import { createFoodSearcher } from '../../../src/lib/calc/nutrition';
+import { createFoodSearcher } from '../../../src/lib/calc/foodSearch';
 import { useAppStore } from '../../../src/store/useAppStore';
 import { clearSyncTimers } from '../../../src/store/slices/createSyncSlice';
 import type { UserData, NutritionDay } from '../../../src/types';

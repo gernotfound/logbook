@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { captureSession, isCurrentSession } from '../lib/sync/session';
-import { createFoodSearcher } from '../lib/calc/nutrition';
+import { createFoodSearcher } from '../lib/calc/foodSearch';
 import { useAppStore } from '../store/useAppStore';
 import { useDialogStore } from '../store/useDialogStore';
 import { Logic } from '../lib/logic';

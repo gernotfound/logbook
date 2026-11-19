@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createFoodSearcher } from './nutrition';
+import { createFoodSearcher } from './foodSearch';
 import type { Food } from '../../types';
 
 describe('typed food search', () => {
@@ -12,7 +12,7 @@ describe('typed food search', () => {
         expect(matches).toHaveLength(1);
         expect(matches[0].pro).toBe(22);
     });
-    it('reuses normalized data while preserving fuzzy ranking and owner isolation', () => {
+    it('reuses normalized data while preserving fuzzy ranking and independent catalog indexes', () => {
         const catalog = [
             { ...foods[0], brand: 'Marca', category: 'carne' },
             { ...foods[1], brand: 'Extra', category: 'olio' },
@@ -26,6 +26,24 @@ describe('typed food search', () => {
         const anotherOwner = createFoodSearcher([{ ...catalog[1], id: 'private' }]);
         expect(anotherOwner('pollo')).toEqual([]);
         expect(search('pollo')).toHaveLength(2);
+    });
+
+    it('treats invalid result limits consistently across empty, direct and fuzzy searches', () => {
+        const catalog = [
+            { id: 'a', name: 'Petto di pollo' },
+            { id: 'b', name: 'Pollo arrosto' },
+            { id: 'c', name: 'Pollo al forno' },
+        ];
+        const search = createFoodSearcher(catalog);
+        for (const limit of [-1, -3, 0, 1.5, Number.NaN, Number.POSITIVE_INFINITY]) {
+            expect(search('', limit).map(item => item.id)).toEqual(search('').map(item => item.id));
+            expect(search(' ', limit).map(item => item.id)).toEqual(search('').map(item => item.id));
+            expect(search('p', limit).map(item => item.id)).toEqual(search('p').map(item => item.id));
+            expect(search('pollo', limit).map(item => item.id)).toEqual(search('pollo').map(item => item.id));
+            expect(search('polo', limit).map(item => item.id)).toEqual(search('polo').map(item => item.id));
+        }
+        expect(search('', 1).map(item => item.id)).toEqual(['a']);
+        expect(search('pollo', 1).map(item => item.id)).toEqual(search('pollo').slice(0, 1).map(item => item.id));
     });
 
     it('preserves the category filter, case folding and empty-query contract', () => {

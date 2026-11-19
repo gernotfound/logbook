@@ -1011,4 +1011,145 @@ describe('contextual progression engine', () => {
         expect(analysis.previousComparable?.referenceSet?.effectiveKg).toBe(85);
     });
 
+
+    it('uses the same measured-metric parsing for a parent set and its advanced segment', () => {
+        const current = workout({
+            id: 'shared-measures',
+            date: '2026-09-08',
+            sets: [{
+                id: 'parent',
+                kg: '20,5',
+                reps: '4',
+                rir: 2,
+                time: '1:30',
+                segments: [{
+                    id: 'continuation',
+                    technique: 'isometry',
+                    kg: '10,5',
+                    reps: '2',
+                    time: '30s',
+                }],
+            }],
+        });
+        const exposure = normalizeExerciseExposure(current, current.exercises[0], bench);
+
+        expect(exposure.sets[0]).toMatchObject({
+            kg: 20.5,
+            effectiveKg: 20.5,
+            reps: 4,
+            rir: 2,
+            timeSeconds: 90,
+            segments: [{
+                technique: 'isometry',
+                kg: 10.5,
+                effectiveKg: 10.5,
+                reps: 2,
+                timeSeconds: 30,
+            }],
+        });
+        expect(exposure.workSets).toBe(1);
+        expect(exposure.totalReps).toBe(6);
+        expect(exposure.tonnageKg).toBe(103);
+    });
+
+    it('omits invalid measurements in both parent sets and continuations', () => {
+        const current = workout({
+            id: 'invalid-shared-measures',
+            date: '2026-09-08',
+            sets: [{
+                id: 'parent',
+                kg: '',
+                reps: '1.5',
+                time: 'invalid',
+                segments: [{
+                    id: 'continuation',
+                    kg: '',
+                    reps: '-1',
+                    time: 'invalid',
+                }],
+            }],
+        });
+        const exposure = normalizeExerciseExposure(current, current.exercises[0], bench);
+        const [parent] = exposure.sets;
+        const [continuation] = parent.segments;
+
+        for (const metric of ['kg', 'effectiveKg', 'reps', 'timeSeconds'] as const) {
+            expect(parent).not.toHaveProperty(metric);
+            expect(continuation).not.toHaveProperty(metric);
+        }
+        expect(exposure.workSets).toBe(0);
+        expect(exposure.referenceSet).toBeUndefined();
+    });
+
+
+    it('does not publish infinite tonnage from individually finite measured weights', () => {
+        const current = workout({
+            id: 'overflow-tonnage',
+            date: '2026-09-08',
+            sets: [set('1e308', '3', 2)],
+        });
+        const exposure = normalizeExerciseExposure(current, current.exercises[0], bench);
+
+        expect(exposure.referenceSet?.effectiveKg).toBe(1e308);
+        expect(exposure.totalReps).toBe(3);
+        expect(exposure.tonnageComplete).toBe(false);
+        expect(exposure).not.toHaveProperty('tonnageKg');
+    });
+
+    it('does not create a performance load when bodyweight plus equipment overflows', () => {
+        const current = workout({
+            id: 'overflow-bodyweight',
+            date: '2026-09-08',
+            exId: 'pullup',
+            sets: [set('1e308', '3', 2)],
+        });
+        const exposure = normalizeExerciseExposure(current, current.exercises[0], pullup, {
+            explicitBodyweightKg: 1e308,
+        });
+
+        expect(exposure.referenceSet?.kg).toBe(1e308);
+        expect(exposure.referenceSet?.effectiveKg).toBeUndefined();
+        expect(exposure.tonnageComplete).toBe(false);
+        expect(exposure).not.toHaveProperty('tonnageKg');
+        expect(computeProgressionEngine(current, [], library, {
+            explicitBodyweightKg: 1e308,
+        }).exercises[0].isRecord).toBe(false);
+    });
+
+    it('does not interpret empty colon components as zero-duration measurements', () => {
+        for (const time of [':', '1:', ':30', '1::20', '::', '0:']) {
+            const current = workout({
+                id: 'invalid-time-component',
+                date: '2026-09-08',
+                exId: 'plank',
+                sets: [timedSet(time)],
+            });
+            const exposure = normalizeExerciseExposure(current, current.exercises[0], plank);
+            expect(exposure.sets[0].timeSeconds).toBeUndefined();
+            expect(exposure.workSets).toBe(0);
+            expect(exposure.referenceSet).toBeUndefined();
+        }
+
+        const valid = workout({
+            id: 'valid-time-components', date: '2026-09-08', exId: 'plank',
+            sets: [timedSet('1:30')],
+        });
+        const exposure = normalizeExerciseExposure(valid, valid.exercises[0], plank);
+        expect(exposure.sets[0].timeSeconds).toBe(90);
+        expect(exposure.workSets).toBe(1);
+    });
+
+    it('rejects colon durations whose intermediate finite values overflow to infinity', () => {
+        const current = workout({
+            id: 'overflow-duration',
+            date: '2026-09-08',
+            exId: 'plank',
+            sets: [timedSet('1e308:30')],
+        });
+        const exposure = normalizeExerciseExposure(current, current.exercises[0], plank);
+        expect(exposure.sets[0].timeSeconds).toBeUndefined();
+        expect(exposure.workSets).toBe(0);
+        expect(exposure.referenceSet).toBeUndefined();
+    });
+
 });

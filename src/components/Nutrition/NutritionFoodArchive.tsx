@@ -5,7 +5,7 @@ import { Plus, Search, Utensils } from 'lucide-react';
 import { useAppStore } from '../../store/useAppStore';
 import { useDialogStore } from '../../store/useDialogStore';
 import { Logic } from '../../lib/logic';
-import { createFoodSearcher } from '../../lib/calc/nutrition';
+import { createFoodSearcher } from '../../lib/calc/foodSearch';
 import CustomFoodForm from './CustomFoodForm';
 import { FoodArchiveSearch } from './archive/FoodArchiveSearch';
 import { createLoggedMealItem } from '../../lib/nutrition/createLoggedMealItem';
