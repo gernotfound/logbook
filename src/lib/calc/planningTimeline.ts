@@ -1,21 +1,7 @@
 import { format, isValid, parseISO, addDays, startOfDay, differenceInCalendarDays } from 'date-fns';
 import { isBoundedCycleCount, MAX_CALCULATED_CYCLE_WEEKS } from './cycleLimits';
 import type { TrainingCycle } from '../../types';
-
-export interface CycleTimelineInfo {
-    startDate?: string;
-    endDate?: string;
-    formattedStartDate: string;
-    formattedEndDate: string;
-    formattedRange: string;
-    currentWeek: number;
-    totalWeeks: number;
-    isStarted: boolean;
-    isEnded: boolean;
-    progressPercent: number;
-    statusLabel: string;
-    daysRemaining?: number;
-}
+import type { CycleTimelineInfo } from './planning';
 
 function invalidCycleTimeline(formattedRange: string): CycleTimelineInfo {
     return {

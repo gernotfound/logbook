@@ -2,6 +2,7 @@ import { format, isValid, parseISO, addDays } from 'date-fns';
 import { getCycleVolumeFrequencies, isBoundedCycleCount, MAX_CALCULATED_CYCLE_WEEKS, MAX_CYCLE_SESSIONS_PER_WEEK } from './cycleLimits';
 import { calculateCycleTimeline } from './planningTimeline';
 import type { TrainingCycle, WorkoutRoutine, WorkoutSession } from '../../types';
+import type { NextScheduledRoutineResult } from './planning';
 
 interface ScheduledCycleSession {
     globalSessionIndex: number; // 1, 2, 3...
@@ -153,19 +154,6 @@ export function calculateCycleSchedule(
         remainderSessions,
         summaryText
     };
-}
-
-export interface NextScheduledRoutineResult {
-    nextRoutine: WorkoutRoutine | undefined;
-    nextRoutineId: string | undefined;
-    nextRoutineName: string;
-    nextSessionIndex: number; // 1-based (es. 1, 2, 3...)
-    completedCount: number;
-    totalSessions: number;
-    rotationNumber: number; // 1-based (es. Giro 1, Giro 2...)
-    positionInRotation: number; // 1-based (es. Scheda 3 di 6)
-    totalRoutinesInCycle: number;
-    isCycleCompleted: boolean;
 }
 
 export function getNextScheduledRoutine(

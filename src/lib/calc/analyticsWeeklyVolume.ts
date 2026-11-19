@@ -2,7 +2,7 @@ import { parseISO, isValid } from 'date-fns';
 import { calculateWorkoutVolume } from './workout';
 import { getLocalDateString } from '../utils/date';
 import type { WorkoutSession, Exercise, NutritionDay } from '../../types';
-import type { WeeklyVolumePoint, WeeklyVolumeStats, WeeklyActivityPoint } from './analytics';
+import type { WeeklyVolumePoint, WeeklyVolumeStats, WeeklyTrainingActivityPoint } from './analytics';
 import { addFiniteVolume } from './finiteAnalyticsMath';
 import { generateWeekIntervals, referenceDayFor } from './weekIntervals';
 import { computeWeeklyActivitySeries } from './weeklyHealthMetrics';
@@ -160,11 +160,6 @@ export async function computeWeeklyVolumeSeriesCooperative(
     }
     if (signal?.aborted) throw new Error('Calcolo annullato: vista chiusa');
     return step.value;
-}
-
-export interface WeeklyTrainingActivityPoint extends WeeklyActivityPoint {
-    workoutCount: number;
-    volumeKg: number;
 }
 
 export function computeWeeklyTrainingActivityContext(

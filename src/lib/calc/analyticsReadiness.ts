@@ -1,21 +1,6 @@
 import type { WorkoutSession } from '../../types';
+import type { ReadinessTrendStats } from './analytics';
 import { getWorkoutDateString } from './analyticsWeeklyVolume';
-
-interface ReadinessTrendDimension {
-    average: number | null;
-    latest: number | null;
-    previous: number | null;
-    deltaFromPrevious: number | null;
-    count: number;
-}
-
-export interface ReadinessTrendStats {
-    energy: ReadinessTrendDimension;
-    stress: ReadinessTrendDimension;
-    motivation: ReadinessTrendDimension;
-    muscleRecovery: ReadinessTrendDimension;
-    sessionsWithReadiness: number;
-}
 
 /** Uses the recorded check-in time when an imported session lacks workout timestamps. */
 function readinessChronologyTimestamp(session: WorkoutSession): number {
@@ -38,7 +23,7 @@ export function computeReadinessTrends(
         .slice(0, Math.max(1, maxSessions))
         .map(({ session }) => session);
 
-    const dimension = (key: 'energy' | 'stress' | 'motivation' | 'muscleRecovery'): ReadinessTrendDimension => {
+    const dimension = (key: 'energy' | 'stress' | 'motivation' | 'muscleRecovery'): ReadinessTrendStats['energy'] => {
         const values = sessions
             .map(session => session.readiness?.[key])
             .filter((value): value is number => typeof value === 'number' && Number.isFinite(value) && value >= 1 && value <= 5);

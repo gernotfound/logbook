@@ -2,21 +2,7 @@ import { GROUP_MAP } from '../constants/muscles';
 import { roundToTenth } from '../utils/rounding';
 import { getCycleVolumeFrequencies, isRepresentableCycleVolume } from './cycleLimits';
 import type { TrainingCycle, WorkoutRoutine, Exercise } from '../../types';
-
-interface MuscleVolumeDetail {
-    key: string;
-    label: string;
-    sets: number;
-    percentage: number;
-}
-
-export interface CycleVolumeResult {
-    totalWorkoutsPerWeek: number;
-    totalSetsPerWeek: number;
-    muscleVolumes: MuscleVolumeDetail[];
-    muscleColors: Record<string, string>;
-    highlightedMuscles: string[];
-}
+import type { CycleVolumeResult } from './planning';
 
 export function getDetailedMuscleCategory(mId: string): { key: string; label: string } {
     if (!mId) return { key: 'other', label: 'Altro' };
@@ -150,7 +136,7 @@ export function calculateCycleVolume(
         return { totalWorkoutsPerWeek: 0, totalSetsPerWeek: 0, muscleVolumes: [], muscleColors: {}, highlightedMuscles: [] };
     }
 
-    const muscleVolumes: MuscleVolumeDetail[] = Array.from(volumeMap.entries())
+    const muscleVolumes: CycleVolumeResult['muscleVolumes'] = Array.from(volumeMap.entries())
         .map(([key, data]) => ({
             key,
             label: data.label,
