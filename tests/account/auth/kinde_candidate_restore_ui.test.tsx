@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { useKindeAccountSession } from '../../../src/contexts/auth/useKindeAccountSession';
 import { KindeCandidateRestorePanel } from '../../../src/components/UI/KindeCandidateRestorePanel';
@@ -6,7 +6,7 @@ import { KindeCandidateRestorePanel } from '../../../src/components/UI/KindeCand
 type Session = ReturnType<typeof useKindeAccountSession>;
 const selected = (contents: string) => {
     const file = new File([contents], 'backup.json', { type: 'application/json' });
-    Object.defineProperty(file, 'text', { value: async () => contents });
+    Object.defineProperty(file, 'text', { value: async () => contents, configurable: true });
     return file;
 };
 function mount(restore: Session['restoreCandidateBackup']) {
@@ -68,7 +68,7 @@ describe('CF-05 candidate-only restore entry', () => {
         fireEvent.click(second.confirm);
         fireEvent.click(second.start);
         second.unmount();
-        release('{}');
-        await waitFor(() => expect(restore).not.toHaveBeenCalled());
+        await act(async () => { release('{}'); await pending; });
+        expect(restore).not.toHaveBeenCalled();
     });
 });
