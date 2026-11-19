@@ -1049,3 +1049,23 @@ non pubblico Kinde aggiunge scelta e conferma esplicita del JSON Schema 3
 prima di invocare il restore owner-scoped; esiti `local-pending` e
 `cloud-acknowledged` sono distinti. Nessuna nuova rotta D1 pubblica,
 nessun consenso automatico, nessuna attivazione account fitness.
+
+
+### CF-05 — prova integrata end-to-end candidata con D1 sintetico (19/11/2026)
+
+La suite tests/isolated/sync/kindeCandidateLifecycleJourney.test.ts percorre
+nello stesso scenario sessione Auth verificata, consenso esplicito via Worker,
+creazione vault, primo journal cifrato + receipt D1, edit rimasto offline,
+backup Schema 3 completo, secondo profilo vuoto/sessione diversa, hydration
+autenticata dal cloud e restore esplicito della modifica fino a seconda receipt.
+Verifica inoltre chiavi device e replica distinte, isolamento altro UID,
+assenza di plaintext nel documento SQL e rifiuto del bootstrap post-revoca,
+senza cancellare il journal locale o inventare erasure completata.
+
+Le route, AuthGate, Workers, migrazioni e adapter client sono quelli reali
+del repository; D1 e KEK sono sintetiche (SQLite in memoria) e la sessione
+verificata viene creata dal trusted issuer della fixture, non tramite OAuth
+Kinde esterno. Il secondo dispositivo è una simulazione con nuovo profilo
+IndexedDB/localStorage, non Safari/iPhone fisico. La suite NON prova
+deployment runtime, quote o recovery della KEK indipendente e NON autorizza
+l'attivazione pubblica fitness; il frontend conserva il boundary identity-only.
