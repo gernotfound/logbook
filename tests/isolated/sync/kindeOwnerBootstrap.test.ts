@@ -24,7 +24,7 @@ import { deliverKindeCandidateJournal } from '../../../src/lib/sync/kindeCandida
 import { withKindeCandidateRightsCheckpoint } from '../../../src/lib/auth/kindeCandidateRightsCheckpoint';
 import { prepareKindeCandidateRightsJson, requestKindeCandidateRightsJsonDownload } from '../../../src/lib/auth/kindeCandidateRightsExport';
 import { prepareKindeCandidatePreWithdrawalJson, requestKindeCandidatePreWithdrawalJsonDownload } from '../../../src/lib/auth/kindeCandidatePreWithdrawalExport';
-import { prepareKindeCandidatePortableBackupJson } from '../../../src/lib/auth/kindeCandidatePortableBackup';
+import { prepareKindeCandidatePortableBackupJson, requestKindeCandidatePortableBackupDownload } from '../../../src/lib/auth/kindeCandidatePortableBackup';
 import { decodeImport, prepareImport } from '../../../src/lib/backup';
 import { UserDataSchema } from '../../../src/lib/schema';
 import { updateArchiveRecord } from '../../../src/lib/sync/secureArchiveRepository';
@@ -742,6 +742,20 @@ describe('Kinde-only device vault provisioning and authenticated baseline', () =
             expect(seen.slice(start)).toContain('/v1/sync/scan');
             expect(seen.slice(start)).not.toContain('/v1/sync/commit');
             expect(seen.slice(start)).not.toContain('/v1/rights/scan');
+
+            const clicked = vi.fn();
+            const link = { href: '', download: '', style: { visibility: '' },
+                click: clicked, remove: vi.fn() };
+            vi.stubGlobal('document', {
+                createElement: vi.fn(() => link),
+                body: { appendChild: vi.fn() },
+            });
+            const downloadUrl = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:kinde-portable');
+            vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
+            await requestKindeCandidatePortableBackupDownload({ ...session, expected: principal });
+            expect(clicked).toHaveBeenCalledOnce();
+            expect(link.download).toMatch(/^thelogbook_backup_prima_revoca_/);
+            expect(downloadUrl).toHaveBeenCalledOnce();
 
             const incompleteCloud = firstPartySession(fixture, async (path, _init, response) => {
                 if (path !== '/v1/sync/scan') return response;
