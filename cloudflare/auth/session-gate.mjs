@@ -155,7 +155,7 @@ async function authorize(request, env) {
   // A session may be closed before verification or first health consent.
   if ((!identityOnly || (IDENTITY_MUTATION_ROUTES.has(route)
     && !['/v1/auth/logout', '/v1/consent/withdraw',
-      '/v1/cloud-key/rights-export'].includes(route))) && !emailVerified) {
+      '/v1/cloud-key/rights-export', '/v1/rights/scan'].includes(route))) && !emailVerified) {
     return json({ error: 'unauthorized' }, 401);
   }
   const suppliedCsrf = request.headers.get('x-csrf-token');
