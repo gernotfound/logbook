@@ -1,6 +1,6 @@
 import { Activity } from 'lucide-react';
-import { formatProgressionReference, progressionQualityLabel, progressionTrendLabel } from '../../lib/calc/progression';
-import type { WorkoutReport } from '../../lib/calc/workoutReport';
+import { formatProgressionReference, progressionQualityLabel, progressionTrendLabel } from '../../../lib/calc/progression';
+import type { WorkoutReport } from '../../../lib/calc/workoutReport';
 
 interface WorkoutExerciseComparisonsProps {
     comparisons: WorkoutReport['exerciseComparisons'];
