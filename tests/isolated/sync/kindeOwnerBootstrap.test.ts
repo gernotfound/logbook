@@ -463,7 +463,7 @@ describe('Kinde-only device vault provisioning and authenticated baseline', () =
             localStorage.clear();
             await clear();
             const issued = await issueVerifiedSession(fixture.db, uid);
-            const cookies = issued.setCookies.map(value => value.split(';')[0]).join('; ');
+            const cookies = issued.setCookies.map((value: string) => value.split(';')[0]).join('; ');
             const csrf = issued.setCookies[1].split(';')[0].split('=')[1];
             fixture.sessions.set(uid, { cookies, csrf });
             const secondSession = firstPartySession(fixture, (_path, _init, response) => response);
