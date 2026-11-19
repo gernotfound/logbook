@@ -28,7 +28,13 @@ const CHART_LOADING = (
     </div>
 );
 
-const HomeView = ({ onNavigate, onOpenSettings, isActive = true }: any) => {
+interface HomeViewProps {
+  onNavigate: (view: string) => void;
+  onOpenSettings?: () => void;
+  isActive?: boolean;
+}
+
+const HomeView = ({ onNavigate, onOpenSettings, isActive = true }: HomeViewProps) => {
   const homeState = useHomeView(isActive);
   const activeWorkout = useAppStore(state => state.localWorkout);
   

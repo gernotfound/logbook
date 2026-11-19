@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { screen } from '@testing-library/react';
 import { useHomeView } from '../../../src/hooks/useHomeView';
 import { Logic } from '../../../src/lib/logic';
+import { shiftDateString } from '../../../src/lib/utils/date';
 import { emptyUserData, renderWithProviders } from '../../setup';
 import type { NutritionDay } from '../../../src/types';
 
@@ -94,6 +95,28 @@ describe('Home nutrition summary efficiency', () => {
             },
         } });
         expect(screen.getByTestId('unordered-weight-bf').textContent).toBe('83|17.5|US Navy');
+    });
+
+
+    it('ignores partial readings on a newer day and preserves the latest valid BF and weight', () => {
+        function HomeSummary() {
+            const home = useHomeView(false);
+            if (home.loading) return <output>Caricamento</output>;
+            return <output data-testid="strict-home-summary">{[
+                home.userWeight, home.lastRecordedWeight, home.bf, home.bfSource,
+            ].join('|')}</output>;
+        }
+        const today = Logic.getLocalDateString();
+        const older = shiftDateString(today, -1);
+        const nutrition: Record<string, NutritionDay> = {
+            [older]: { date: older, kcal: 0, carbs: 0, pro: 0, fat: 0, weight: '79,5', bf: '18,5', bfProvenance: { method: 'us_navy' } },
+            [today]: { date: today, kcal: 0, carbs: 0, pro: 0, fat: 0, weight: '81kg', bf: '19%', bfProvenance: { method: 'us_navy' } },
+        };
+        const view = renderWithProviders(<HomeSummary />, {
+            userData: { ...emptyUserData, nutrition },
+        });
+        expect(screen.getByTestId('strict-home-summary').textContent).toBe('79.5|79.5|18.5|US Navy');
+        view.unmount();
     });
 
 });

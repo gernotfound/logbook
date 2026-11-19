@@ -4,12 +4,25 @@ import { screen, fireEvent } from '@testing-library/react';
 import { renderWithProviders, emptyUserData } from '../setup';
 import { prepareUnlockedTestArchive } from '../secureVaultFixture';
 import { Logic } from '../../src/lib/logic';
+import { FoodSchema } from '../../src/lib/schema';
 import { createLoggedMealItem } from '../../src/lib/nutrition/createLoggedMealItem';
 import { calculateLoggedMealTotals } from '../../src/lib/nutrition/calculateLoggedMealTotals';
 import type { Food } from '../../src/types';
 import NutritionMeals from '../../src/components/Nutrition/NutritionMeals';
 
 describe('Nutrition numeric and hostile search inputs', () => {
+
+    test('FoodSchema keeps validated nutrient labels without silently recalculating them', () => {
+      const oats = FoodSchema.parse({
+        name: 'Avena integrale', carbs: 66, pro: 14, fat: 7, kcal: 383, isCustom: true,
+      });
+      expect(oats).toMatchObject({ kcal: 383, carbs: 66, pro: 14, fat: 7 });
+      const peanutButter = FoodSchema.parse({
+        name: 'Burro di arachidi', carbs: 20, pro: 25, fat: 50, kcal: 630, isCustom: true,
+      });
+      expect(peanutButter).toMatchObject({ kcal: 630, fat: 50 });
+    });
+
 
     test('Logic.calculateMacrosFromKg handles zero weight or zero macro ratios', () => {
       const zeroWeight = Logic.calculateMacrosFromKg(0, 3.5, 2.0, 1.0);
@@ -58,8 +71,9 @@ describe('Nutrition numeric and hostile search inputs', () => {
       }
     });
 
-    test('Logic.calculateBodyFat handles 0 weight and edge inputs safely', () => {
-      const profile = { gender: 'M', height: '180', dob: '1995-01-01' };
+    test('Logic.calculateBodyFat rejects invalid weight even with complete valid Navy measurements', () => {
+      const profile = { gender: 'M', height: '180', neck: '38', waist: '85' };
+      expect(Logic.calculateBodyFat(75, profile)).not.toBeNull();
       expect(Logic.calculateBodyFat(0, profile)).toBeNull();
       expect(Logic.calculateBodyFat('0', profile)).toBeNull();
       expect(Logic.calculateBodyFat(-70, profile)).toBeNull();
@@ -74,10 +88,12 @@ describe('Nutrition numeric and hostile search inputs', () => {
       expect(Logic.calculateBodyFat(75, { height: '0', dob: '1995-01-01' })).toBeNull();
     });
 
-    test('Logic.calculateBodyFat behavior on invalid DOB string (Vulnerability check)', () => {
-      const res = Logic.calculateBodyFat(75, { height: '175', dob: 'invalid-date', gender: 'M' });
-      // Empirical Finding: Invalid date returns null because dobDate.getTime() is NaN
-      expect(res).toBeNull();
+    test('US Navy body-fat calculation does not depend on date of birth', () => {
+      const profile = { height: '175', waist: '85', neck: '38', gender: 'M' };
+      const reference = Logic.calculateBodyFat(75, profile);
+      expect(reference).not.toBeNull();
+      expect(Logic.calculateBodyFat(75, { ...profile, dob: 'invalid-date' })).toBe(reference);
+      expect(Logic.calculateBodyFat(75, { ...profile, dob: '1995-01-01' })).toBe(reference);
     });
 
     test('Logic.calculateTDEEAndMacros handles missing profile and state defaults gracefully', () => {
@@ -89,6 +105,19 @@ describe('Nutrition numeric and hostile search inputs', () => {
       const res = Logic.calculateTDEEAndMacros(emptyState);
       expect(res.tdee).toBe(2500);
       expect(res.bf).toBeNull();
+    });
+
+    test('derived TDEE never propagates non-finite or negative manual calorie targets', () => {
+      for (const kcal of [Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY, Number.NaN, -100, 0]) {
+        const summary = Logic.calculateTDEEAndMacros({
+          nutritionPlanning: { weight: 80, normocalorica: { kcal } },
+        });
+        expect(summary.tdee).toBe(2500);
+        expect(Number.isFinite(summary.tdee)).toBe(true);
+      }
+      expect(Logic.calculateTDEEAndMacros({
+        nutritionPlanning: { weight: 80, normocalorica: { kcal: 2450 } },
+      }).tdee).toBe(2450);
     });
 
     test('Logic.calculateTDEEAndMacros uses current nested ratios and defaults for absent targets', () => {

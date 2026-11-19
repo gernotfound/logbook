@@ -61,7 +61,7 @@ export function NutritionFoodSearch({
 
             {searchResults.length > 0 && (
                 <div className="tracking-search-results" aria-label="Alimenti trovati">
-                    {searchResults.map((food: any, idx: number) => (
+                    {searchResults.map((food, idx) => (
                         <div key={food.id || idx} className="tracking-food-result">
                             <div className="tracking-row tracking-row--wrap">
                                 <div>
@@ -119,7 +119,7 @@ export function NutritionFoodSearch({
                 saveCustomFood={saveCustomFood}
                 showCustomModal={showCustomModal}
                 setShowCustomModal={setShowCustomModal}
-                isEditing={!!editingFoodId}
+                isEditing={editingFoodId !== null}
                 onCancel={cancelCustomFood}
             />
         </section>

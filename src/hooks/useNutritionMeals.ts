@@ -1,13 +1,17 @@
 import { useMemo, useState } from 'react';
 import { captureSession, isCurrentSession } from '../lib/sync/session';
 import { createFoodSearcher } from '../lib/calc/foodSearch';
+import { calculateDailyMacroTarget } from '../lib/calc/nutrition';
+import { dispatchDurableOperation } from '../lib/sync/dispatchDurableOperation';
+import { customFoodDraftFrom, customFoodValidationInput, emptyCustomFoodDraft } from '../lib/nutrition/customFoodDraft';
 import { useAppStore } from '../store/useAppStore';
 import { useDialogStore } from '../store/useDialogStore';
 import { Logic } from '../lib/logic';
-import type { LoggedMealItem } from '../types';
+import type { Food, LoggedMealItem } from '../types';
 import { createLoggedMealItem } from '../lib/nutrition/createLoggedMealItem';
 
-const EMPTY_FOODS: any[] = [];
+const EMPTY_FOODS: Food[] = [];
+const EMPTY_DAILY_TARGET = { kcal: 0, carbs: 0, pro: 0, fat: 0 };
 const DEFAULT_NUTRITION = { kcal: 0, carbs: 0, pro: 0, fat: 0, meals: [] };
 
 export function useNutritionMeals(dateStr?: string) {
@@ -17,12 +21,8 @@ export function useNutritionMeals(dateStr?: string) {
     const customFoods = useAppStore(state => state.userData?.customFoods || EMPTY_FOODS);
     const dispatchDomainOperation = useAppStore(state => state.dispatchDomainOperation);
     const showAlert = useDialogStore(state => state.showAlert);
-    const persistNutrition = async (operation: Parameters<typeof dispatchDomainOperation>[0]) => {
-        const result = await dispatchDomainOperation(operation);
-        if (!result.ok && result.status !== 'local-pending') {
-            throw result.error instanceof Error ? result.error : new Error('Operazione di nutrizione non completata');
-        }
-    };
+    const persistNutrition = (operation: Parameters<typeof dispatchDomainOperation>[0]) =>
+        dispatchDurableOperation(dispatchDomainOperation, operation);
 
     const [searchQuery, setSearchQuery] = useState('');
     const searchFoods = useMemo(() => createFoodSearcher(customFoods), [customFoods]);
@@ -33,10 +33,7 @@ export function useNutritionMeals(dateStr?: string) {
 
     const [showCustomModal, setShowCustomModal] = useState(false);
     const [editingFoodId, setEditingFoodId] = useState<string | number | null>(null);
-    const [cfData, setCfData] = useState({
-        name: '', brand: '', unit: 'g', pieceWeight: '',
-        kcal: '', carbs: '', pro: '', fat: ''
-    });
+    const [cfData, setCfData] = useState(emptyCustomFoodDraft);
 
     const planning = useAppStore(state => state.userData?.nutritionPlanning);
     const nutritionMap = useAppStore(state => state.userData?.nutrition);
@@ -49,20 +46,7 @@ export function useNutritionMeals(dateStr?: string) {
     // Use the shared parser to handle decimal commas and invalid measurements.
     const latestWeight = useMemo(() => Logic.getLatestUserWeight(nutritionMap), [nutritionMap]);
 
-    let dailyTarget = { kcal: 0, carbs: 0, pro: 0, fat: 0 };
-    if (planning) {
-        const w = planning.weight || latestWeight;
-        const targetMacros = isDayOn === true ? planning.onMacros : isDayOn === false ? planning.offMacros : undefined;
-        if (targetMacros) {
-            const calc = Logic.calculateMacrosFromKg(w, targetMacros.carbsPerKg, targetMacros.proPerKg, targetMacros.fatPerKg);
-            dailyTarget = {
-                kcal: Math.round(calc.totalKcal),
-                carbs: Math.round(calc.carbsGrams),
-                pro: Math.round(calc.proGrams),
-                fat: Math.round(calc.fatGrams)
-            };
-        }
-    }
+    const dailyTarget = calculateDailyMacroTarget(planning, isDayOn, latestWeight) ?? EMPTY_DAILY_TARGET;
 
     const persistDayType = async (value: boolean | undefined) => {
         await persistNutrition({ type: 'nutrition-day.patch', date: targetDateStr, patch: { isDayOn: value } });
@@ -77,34 +61,25 @@ export function useNutritionMeals(dateStr?: string) {
 
     const toggleDayType = async () => setDayType(isDayOn === true ? false : true);
 
-    const meals = (todayNutrition.meals || []) as LoggedMealItem[];
+    const meals: LoggedMealItem[] = todayNutrition.meals || [];
 
-    const startEditCustomFood = (food: any) => {
-        setEditingFoodId(food.id);
-        setCfData({
-            name: food.name || '',
-            brand: food.brand || '',
-            unit: food.unit || 'g',
-            pieceWeight: food.servingWeight ?? '',
-            kcal: food.kcal !== undefined ? food.kcal.toString() : '',
-            carbs: food.carbs !== undefined ? food.carbs.toString() : '',
-            pro: food.pro !== undefined ? food.pro.toString() : '',
-            fat: food.fat !== undefined ? food.fat.toString() : ''
-        });
+    const startEditCustomFood = (food: Food) => {
+        setEditingFoodId(food.id ?? null);
+        setCfData(customFoodDraftFrom(food));
         setShowCustomModal(true);
     };
 
     const cancelCustomFood = () => {
         setShowCustomModal(false);
         setEditingFoodId(null);
-        setCfData({ name: '', brand: '', unit: 'g', pieceWeight: '', kcal: '', carbs: '', pro: '', fat: '' });
+        setCfData(emptyCustomFoodDraft());
     };
 
     const saveMeal = async (meal: LoggedMealItem) => {
         await persistNutrition({ type: 'nutrition-meal.upsert', date: targetDateStr, meal });
     };
 
-    const handleQuickAdd = async (quickData: any) => {
+    const handleQuickAdd = async (quickData: Pick<LoggedMealItem, 'name' | 'kcal' | 'carbs' | 'pro' | 'fat'>) => {
         const session = captureSession();
         const addedItem: LoggedMealItem = {
             id: Logic.generateId('food'),
@@ -126,7 +101,7 @@ export function useNutritionMeals(dateStr?: string) {
 
     const handleSearch = (query: string) => setSearchQuery(query);
 
-    const addFood = async (food: any, mealType: string) => {
+    const addFood = async (food: Food, mealType: string) => {
         const session = captureSession();
         try {
             const addedItem = createLoggedMealItem(food, mealType, Logic.generateId('meal'), Date.now());
@@ -188,13 +163,7 @@ export function useNutritionMeals(dateStr?: string) {
     };
 
     const saveCustomFood = async (): Promise<boolean> => {
-        const foodData = {
-            ...cfData,
-            baseQty: 100,
-            servingWeight: cfData.unit === 'pezzo' ? cfData.pieceWeight : null
-        };
-
-        const validation = Logic.validateCustomFood(foodData);
+        const validation = Logic.validateCustomFood(customFoodValidationInput(cfData));
         if (!validation.isValid) {
             await showAlert("Attenzione: errori nei dati dell'alimento:\n" + Object.values(validation.errors).join('\n'));
             return false;
@@ -205,11 +174,11 @@ export function useNutritionMeals(dateStr?: string) {
             const currentEditingId = editingFoodId;
             const id = currentEditingId ?? Logic.generateId('food');
             try {
-                await persistNutrition({ type: 'food.upsert', food: { ...validation.cleanData, id } as any });
+                await persistNutrition({ type: 'food.upsert', food: { ...validation.cleanData, id } });
                 if (!isCurrentSession(session)) return false;
                 setShowCustomModal(false);
                 setEditingFoodId(null);
-                setCfData({ name: '', brand: '', unit: 'g', pieceWeight: '', kcal: '', carbs: '', pro: '', fat: '' });
+                setCfData(emptyCustomFoodDraft());
                 return true;
             } catch {
                 if (isCurrentSession(session)) await showAlert("Errore durante il salvataggio dell'alimento.");

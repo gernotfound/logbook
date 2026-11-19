@@ -520,7 +520,7 @@ describe('Challenger 2: Adversarial State Management, Schemas, Guest Merge & UI 
 
         it('5.3 HomeView renders active DOMS card and displays active muscles without error', () => {
             renderWithProviders(
-                <HomeView onNavigateTab={vi.fn()} onStartRoutine={vi.fn()} />,
+                <HomeView onNavigate={vi.fn()} />,
                 { userData: { ...defaultMockUserData, activePains: ['chest', 'back_lats'] } }
             );
 
