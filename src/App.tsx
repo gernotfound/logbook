@@ -1,30 +1,15 @@
-import { useState, useEffect, useEffectEvent, useRef, useSyncExternalStore, Suspense, lazy } from 'react';
+import { useState, useEffect, useRef, useSyncExternalStore, Suspense, lazy } from 'react';
 import { useAuth } from './hooks/useAuth';
 import { useAppStore } from './store/useAppStore';
-import { useLocalStorage } from './hooks/useLocalStorage';
-import { useModalFocusTrap } from './hooks/useModalFocusTrap';
-import { useDialogStore } from './store/useDialogStore';
-import { ownerUiPreferenceKey } from './lib/uiPreferenceKeys';
-import {
-  LOCAL_STORAGE_ACTIVE_TAB,
-  LOCAL_STORAGE_TRAINING_TAB,
-  LOCAL_STORAGE_NUTRITION_TAB,
-  LOCAL_STORAGE_DATA_TAB
-} from './constants';
-import {
-  AppTabSchema,
-  TrainingSubTabSchema,
-  NutritionSubTabSchema,
-  DataSubTabSchema
-} from './lib/schema';
-import type {
-  AppTab,
-  TrainingSubTab,
-  NutritionSubTab,
-  DataSubTab
-} from './types';
+
+
+
+
+
 import { requiredUpdateHardReload } from './lib/sync/safeReload';
 import { scheduleSequentialIdlePreload } from './lib/backgroundPreload';
+import { useAppNavigation } from './hooks/useAppNavigation';
+import { GuestBanner, GuestKindeTransitionGate } from './components/UI/AppGuestAccess';
 
 import ErrorBoundary from './components/UI/ErrorBoundary';
 import BrandLoadingScreen from './components/UI/BrandLoadingScreen';
@@ -87,53 +72,6 @@ function persistGuestLoginOverlayState(visible: boolean): void {
   }
 }
 
-function GuestBanner({ onLogin }: { onLogin: () => void }) {
-  const { logout } = useAuth();
-
-  return (
-    <div className="guest-banner">
-      <AlertTriangle size={20} aria-hidden="true" />
-      <span className="guest-banner-text">Modalità locale · I dati sono solo su questo dispositivo</span>
-      <div className="guest-banner-actions">
-        <button type="button" className="btn btn-small"
-          onClick={event => { event.currentTarget.focus(); onLogin(); }}>
-          Accedi
-        </button>
-        <button
-          type="button"
-          className="btn btn-small"
-          onClick={() => { void logout({ mode: 'normal' }); }}
-        >
-          Esci
-        </button>
-      </div>
-    </div>
-  );
-}
-
-// Until Kinde can transfer guest archives with verified ownership, never
-// invoke the old Firebase login from a guest-owned view.
-function GuestKindeTransitionGate({ onClose }: { onClose: () => void }) {
-  const dialogRef = useRef<HTMLElement>(null);
-  const closeButton = useRef<HTMLButtonElement>(null);
-  const globalDialogOpen = useDialogStore(state => state.isOpen);
-  useModalFocusTrap({
-    containerRef: dialogRef, initialFocusRef: closeButton,
-    active: !globalDialogOpen, onEscape: onClose,
-  });
-  return (
-    <section ref={dialogRef} role="dialog" aria-modal="true" tabIndex={-1}
-      aria-labelledby="guest-kinde-transition-title"
-      className="auth-panel">
-      <h2 id="guest-kinde-transition-title">Passaggio a Kinde non disponibile</h2>
-      <p>Il collegamento dell’archivio locale a un account Kinde non è ancora attivo.
-        I tuoi progressi rimangono sul dispositivo. Puoi continuare a utilizzare
-        la modalità locale senza trasferire o cancellare i dati.</p>
-      <button ref={closeButton} type="button" className="btn btn-primary"
-        onClick={onClose}>Torna alla modalità locale</button>
-    </section>
-  );
-}
 
 // Reset every ephemeral view/hook on an identity boundary, not only persisted tabs.
 function App() {
@@ -192,18 +130,13 @@ function OwnerBoundApp({ startupTab }: { startupTab: string | null }) {
   const submitLegalConsent = useAppStore(state => state.submitLegalConsent);
   const compatibilityStatus = useAppStore(state => state.compatibilityStatus);
   const compatibilityError = useAppStore(state => state.compatibilityError);
-  const parsedStartupTab = AppTabSchema.safeParse(startupTab);
-  const initialTabOverride: AppTab | undefined = startupTab === 'settings'
-    ? 'home'
-    : parsedStartupTab.success ? parsedStartupTab.data : undefined;
-  // Retain navigation across reloads only for the same owner. The unbound
-  // startup scope cannot inherit the previous account's selection.
+  // Navigation preferences cannot cross an owner/session boundary.
   const navigationOwner = isGuest ? 'guest' : currentUser ? `user:${currentUser.uid}` : 'unbound';
-  const [activeTab, setActiveTab] = useLocalStorage<AppTab>(ownerUiPreferenceKey(navigationOwner, LOCAL_STORAGE_ACTIVE_TAB), 'home', AppTabSchema, initialTabOverride);
-  const [trainingSubTab, setTrainingSubTab] = useLocalStorage<TrainingSubTab>(ownerUiPreferenceKey(navigationOwner, LOCAL_STORAGE_TRAINING_TAB), 'session', TrainingSubTabSchema);
-  const [nutritionSubTab, setNutritionSubTab] = useLocalStorage<NutritionSubTab>(ownerUiPreferenceKey(navigationOwner, LOCAL_STORAGE_NUTRITION_TAB), 'meals', NutritionSubTabSchema);
-  const [dataSubTab, setDataSubTab] = useLocalStorage<DataSubTab>(ownerUiPreferenceKey(navigationOwner, LOCAL_STORAGE_DATA_TAB), 'measurements', DataSubTabSchema);
-  const [settingsOpen, setSettingsOpen] = useState(() => startupTab === 'settings');
+  const {
+    activeTab, trainingSubTab, setTrainingSubTab, nutritionSubTab, setNutritionSubTab,
+    dataSubTab, setDataSubTab, settingsOpen, visitedTabs,
+    handleOpenSettings, handleCloseSettings, handleTabChange, handleHomeNavigate,
+  } = useAppNavigation(navigationOwner, startupTab);
   const [requiredUpdateReloading, setRequiredUpdateReloading] = useState(false);
   const [requiredUpdateReloadError, setRequiredUpdateReloadError] = useState<string | null>(null);
 
@@ -255,16 +188,6 @@ function OwnerBoundApp({ startupTab }: { startupTab: string | null }) {
     }
   }, [showGuestLogin, currentUser, isGuest, guestMigrationStatus, syncing]);
 
-  // PWA shortcuts override the saved initial tab during state initialization.
-  // Only the URL cleanup belongs in an effect; no extra render is required.
-  useEffect(() => {
-    if (startupTab === null || typeof window === 'undefined') return;
-    // Consume only our one-shot shortcut, preserving independent query/hash
-    // parameters and router history state for other application entry flows.
-    const url = new URL(window.location.href);
-    url.searchParams.delete('tab');
-    window.history.replaceState(window.history.state, '', url.pathname + url.search + url.hash);
-  }, [startupTab]);
 
   // Transient errors auto-dismiss. A failed sync must remain visible until
   // a subsequent verified recovery; a toast timeout is not cloud evidence.
@@ -327,86 +250,6 @@ function OwnerBoundApp({ startupTab }: { startupTab: string | null }) {
     syncing,
   ]);
 
-  // Track visited tabs for lazy Keep-Alive rendering
-  const [visitedTabs, setVisitedTabs] = useState<Record<string, boolean>>(() => ({ [activeTab]: true }));
-
-  // Preserve and restore scroll position across tabs without mutating React state.
-  const tabScrollPositions = useRef<Record<string, number>>({});
-
-  const handleOpenSettings = () => {
-    tabScrollPositions.current.home = window.scrollY;
-    setSettingsOpen(true);
-    window.scrollTo({ top: 0, behavior: 'instant' });
-  };
-
-  const handleCloseSettings = () => {
-    setSettingsOpen(false);
-    requestAnimationFrame(() => {
-      window.scrollTo({ top: tabScrollPositions.current.home || 0, behavior: 'instant' });
-    });
-  };
-
-  const handleTabChange = (newTab: string) => {
-    const parsed = AppTabSchema.safeParse(newTab);
-    if (!parsed.success) return;
-    const validTab = parsed.data;
-    const wasSettingsOpen = settingsOpen;
-
-    if (wasSettingsOpen) setSettingsOpen(false);
-
-    if (validTab === activeTab) {
-      if (validTab === 'training') setTrainingSubTab('session');
-      if (validTab === 'nutrition') setNutritionSubTab('meals');
-      if (validTab === 'data') setDataSubTab('measurements');
-
-      tabScrollPositions.current[activeTab] = 0;
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-      return;
-    }
-
-    if (!wasSettingsOpen) tabScrollPositions.current[activeTab] = window.scrollY;
-    setVisitedTabs(prev => prev[validTab] ? prev : { ...prev, [validTab]: true });
-    setActiveTab(validTab);
-    requestAnimationFrame(() => {
-      const savedPos = tabScrollPositions.current[validTab] || 0;
-      window.scrollTo({ top: savedPos, behavior: 'instant' });
-    });
-  };
-
-  const handleHomeNavigate = (tab: string) => {
-    if (tab === 'settings') {
-      handleOpenSettings();
-      return;
-    }
-    if (tab === 'training-history') {
-      setTrainingSubTab('history');
-      handleTabChange('training');
-      return;
-    }
-    if (tab === 'training') setTrainingSubTab('session');
-    if (tab === 'nutrition') setNutritionSubTab('meals');
-    handleTabChange(tab);
-  };
-
-  // React's effect event reads the latest navigation state without forcing
-  // the native event subscription to churn on each UI render.
-  const onAppNavigate = useEffectEvent((detail: unknown) => {
-    if (detail === 'settings') {
-      if (activeTab !== 'home') setActiveTab('home');
-      setSettingsOpen(true);
-      return;
-    }
-    const parsed = AppTabSchema.safeParse(detail);
-    if (parsed.success) handleTabChange(parsed.data);
-  });
-
-  useEffect(() => {
-    const handleNavEvent = (e: Event) => {
-      onAppNavigate((e as CustomEvent).detail);
-    };
-    window.addEventListener('app:navigate', handleNavEvent);
-    return () => window.removeEventListener('app:navigate', handleNavEvent);
-  }, []);
 
   // Sync Lock: prevent tab close/navigation if a cloud sync is currently in progress
   useEffect(() => {
