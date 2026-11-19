@@ -92,6 +92,27 @@ describe('Kinde candidate trusted D1 journal bridge (no Firebase or production b
         expect(key.every(byte => byte === 0)).toBe(true);
     });
 
+    it('only reopens a staged delivery for the account and generation observed at startup', async () => {
+        const session = { stillCurrent: () => true, browserCookies: () => cookie() };
+        const observed = { uid: UID, fenceEpoch: 1, healthConsentRevision: 1 };
+        mockLocal([{ seq: 1 }]);
+        for (const recoverStagedFor of [
+            { ...observed, uid: OTHER },
+            { ...observed, fenceEpoch: 2 },
+            { ...observed, healthConsentRevision: 2 },
+        ]) {
+            await expect(deliverKindeCandidateJournal({
+                ...session, send: acceptedSession(), recoverStagedFor,
+            })).rejects.toBeInstanceOf(KindeCandidateBoundaryError);
+        }
+        expect(readLocal).not.toHaveBeenCalled();
+        await expect(deliverKindeCandidateJournal({
+            ...session, send: acceptedSession(), recoverStagedFor: observed,
+        })).resolves.toBe('idle');
+        expect(acquireCloudflareAccountKeyCandidate).not.toHaveBeenCalled();
+        expect(deliverCloudflareJournalCandidate).not.toHaveBeenCalled();
+    });
+
     it('rejects signed-out, unverified and suspended consent before reading any owner archive', async () => {
         for (const send of [
             responses(reply({ error: 'unauthorized' }, 401)),

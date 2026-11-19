@@ -1,5 +1,9 @@
 # TheLogBook — migrazione Cloudflare: runbook corrente
 
+## CF-04/05 — Ripresa del primo salvataggio account
+
+Il bootstrap Kinde recupera la consegna cifrata già preparata prima di installare un nuovo checkpoint. Dopo un commit con risposta persa, la ricevuta del batch esatto conferma solo le operazioni inviate. Le modifiche successive restano nel journal fino alla rispettiva consegna. Se la ricevuta è indisponibile, il vault resta intatto. Il test di integrazione usa il primo consenso esplicito, la KEK sintetica, il gateway e i Worker applicativi con le due basi SQLite e IndexedDB in memoria. Verifica il blocco in assenza di KEK, la replica e il primo salvataggio. Il collaudo è isolato dal sito pubblico.
+
 ## CF-04 — Ripresa della registrazione replica dopo una risposta persa
 
 Il bootstrap candidato Kinde riprende una registrazione replica già salvata nel vault prima di installare un nuovo checkpoint. In precedenza iniziava dalla lettura del checkpoint, che interrompe correttamente l'aggiornamento mentre una richiesta di registrazione è pendente. Il recupero salva la stessa identità replica anche quando D1 ha completato la scrittura e l'app non ha ricevuto la risposta. Se il risultato resta ambiguo, l'archivio cifrato rimane intatto e il bootstrap non pubblica una revisione di checkpoint per quel tentativo.
@@ -703,11 +707,9 @@ e non vengono riparati con un fallback al vecchio provider.
 
 ### CF-08 — operatore per migrazioni del registro indipendente (18/11/2026)
 
-Il D1 applicativo e' gia' a migration 0010, mentre il registro recovery
-indipendente risulta a 0002. Il nuovo workflow Cloudflare recovery D1
-e' manual-only, main-only: applica via Wrangler soltanto 0003
-(pending to blocked) e 0004 (cutoff erasure), senza aprire la modalita'
-sealed, creare account, esporre route o cambiare i dati applicativi.
+Il D1 applicativo è a 0010. Al checkpoint del 18/11 il registro indipendente
+era a 0002. Il workflow Cloudflare recovery D1 è manuale e riservato a
+`main`. Applica lo schema del registro isolato tramite Wrangler.
 
 Prima della scrittura controlla SHA di main e relativo release gate,
 target D1 esatto, ledger continuo, giurisdizione EU, repliche disabilitate,
@@ -717,9 +719,16 @@ Non usa il workflow precedente del D1 app, che legittimamente si ferma
 sulla presenza di identita': lettura live 18/11, 2 principals, 24 sessions,
 zero ADK e zero erasure jobs. Non dichiarare tali record eliminabili.
 
-Questo percorso non e' ancora una migrazione applicata: occorre la
-esecuzione manuale dell'Action e il relativo readback per certificare il
-provider. Non apre il gate di consenso, sync, chiavi o cancellazione.
+**Verifica 19/11/2026.** Le migrazioni `0003` e `0004` sono applicate sul
+registro D1 EU isolato. SQL dallo SHA `d3add65964a4bd668cc9a978fc897539d6b687c1`,
+gate GitHub verificato e un batch D1 Query API per migrazione, ciascuno con
+controllo del ledger e dell'isolamento, seguito dalla registrazione della
+migrazione. È stato verificato un bookmark Time Travel prima della
+scrittura. Il readback conferma ledger fino a `0004`, trigger e coda,
+registro `sealed`, generazione 1, zero proprietari e zero cutoff.
+L'Action manuale rimane disponibile per verificare il ledger. Restore,
+custodia KEK, consenso e sync integrati restano da collaudare sul provider.
+Vedi [issue #1062](https://github.com/gernotfound/logbook/issues/1062#issuecomment-6995742809).
 
 ### CF-03 — owner neutrale per la ripresa del journal (18/11/2026)
 

@@ -6,6 +6,8 @@ La composizione candidata `prepareKindeCandidateOwner()` prima riusa/crea il vau
 
 Se il vault contiene già un claim cifrato, il bootstrap riprende la stessa richiesta prima della hydration. La hydration resta bloccata mentre l'intento attende riconciliazione. In questo caso il bootstrap restituisce `checkpointRevision: null` perché durante quel tentativo non ha installato un nuovo checkpoint. Una richiesta di claim di un'altra epoca Auth resta nel vault e non viene inviata.
 
+Il bootstrap riconcilia anche un batch di consegna già sigillato prima di leggere un nuovo checkpoint. Il bridge di recupero richiede il principal, l'epoca Auth e il consenso attesi e accetta solo la ricevuta esatta del batch. La modalità di recupero lascia al normale sync gli edit successivi, anche se la consegna precedente è già stata risolta da un'altra scheda. Un esito ancora da riconciliare sospende la hydration. La lettura cifrata dello stato workout usata dal commit locale è indipendente dal controllo del consenso Firebase sulle scritture device.
+
 
 ### CF-03 — Osservazione del checkpoint D1 con sessione Kinde (17/11/2026)
 

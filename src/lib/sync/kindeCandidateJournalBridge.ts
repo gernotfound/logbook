@@ -1,5 +1,5 @@
 import { captureKindeCandidateSessionFence, KindeCandidateBoundaryError,
-    readKindeCandidateAccess } from '../auth/kindeCandidateClient';
+    readKindeCandidateAccess, type KindeCandidateAccess } from '../auth/kindeCandidateClient';
 import { isKindeAccountLocalFitnessClear } from './kindeOwnerLocalFitnessFence';
 import { readBrowserValueStrict } from './browserStorage';
 import { readLocal } from './localArchiveBootstrap';
@@ -9,6 +9,7 @@ import { deliverCloudflareJournalCandidate } from './cloudflareJournalCandidate'
 import { createCloudflareReplicaTransport } from './cloudReplicaTransport';
 
 type JournalOutcome = Awaited<ReturnType<typeof deliverCloudflareJournalCandidate>>;
+type ConsentingPrincipal = Extract<KindeCandidateAccess, { kind: 'consent-confirmed' }>['principal'];
 /**
  * Pre-activation Kinde → consent → ADK → durable D1 journal bridge.
  *
@@ -21,11 +22,12 @@ type JournalOutcome = Awaited<ReturnType<typeof deliverCloudflareJournalCandidat
  * It never provisions an account vault, adopts a replica or clears local data.
  */
 export async function deliverKindeCandidateJournal({
-    stillCurrent, send = fetch, browserCookies = () => document.cookie,
+    stillCurrent, send = fetch, browserCookies = () => document.cookie, recoverStagedFor,
 }: {
     stillCurrent: () => boolean;
     send?: typeof fetch;
     browserCookies?: () => string;
+    recoverStagedFor?: Readonly<ConsentingPrincipal>;
 }): Promise<JournalOutcome> {
     const fence = captureKindeCandidateSessionFence({ stillCurrent, browserCookies });
     const current = () => {
@@ -44,6 +46,12 @@ export async function deliverKindeCandidateJournal({
         throw new KindeCandidateBoundaryError();
     }
     const { uid, fenceEpoch, healthConsentRevision } = access.principal;
+    const stagedOnly = recoverStagedFor !== undefined;
+    if (recoverStagedFor && (recoverStagedFor.uid !== uid
+        || recoverStagedFor.fenceEpoch !== fenceEpoch
+        || recoverStagedFor.healthConsentRevision !== healthConsentRevision)) {
+        throw new KindeCandidateBoundaryError();
+    }
     const owner = userOwner(uid);
     if (!isKindeAccountLocalFitnessClear(owner, healthConsentRevision)) throw new KindeCandidateBoundaryError();
     const local = await readLocal(owner);
@@ -53,7 +61,7 @@ export async function deliverKindeCandidateJournal({
     }
     // No key request, storage mutation or fake cloud-success state for an
     // empty local journal. Hydration and replica claim have separate gates.
-    if (!local.cloudflareDelivery && local.pending.length === 0) return 'idle';
+    if (!local.cloudflareDelivery && (stagedOnly || local.pending.length === 0)) return 'idle';
 
     const key = await acquireCloudflareAccountKeyCandidate({
         expected: { uid, fenceEpoch, consentRevision: healthConsentRevision },
@@ -64,7 +72,7 @@ export async function deliverKindeCandidateJournal({
         const result = await deliverCloudflareJournalCandidate(
             owner, key, createCloudflareReplicaTransport(send), fence.csrfToken,
             () => current() && isKindeAccountLocalFitnessClear(owner, healthConsentRevision),
-            { consentRevision: healthConsentRevision, fenceEpoch },
+            { consentRevision: healthConsentRevision, fenceEpoch, ...(stagedOnly ? { stagedOnly } : {}) },
         );
         if (!current() || !isKindeAccountLocalFitnessClear(owner, healthConsentRevision)) throw new KindeCandidateBoundaryError();
         return result;

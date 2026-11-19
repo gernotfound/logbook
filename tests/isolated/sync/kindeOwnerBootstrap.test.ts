@@ -18,8 +18,11 @@ import { routeCandidateFirstPartyApi } from '../../../cloudflare/first-party-api
 import { createCloudKeyHttpFixture, ORIGIN } from '../../cloudflare/cloud-key-http-fixture.mjs';
 import { prepareKindeCandidateOwner } from '../../../src/lib/sync/kindeCandidateOwnerBootstrap';
 import { KindeCandidateBoundaryError } from '../../../src/lib/auth/kindeCandidateClient';
+import { acceptKindeCandidateInitialConsent } from '../../../src/lib/auth/kindeCandidateConsent';
+import { deliverKindeCandidateJournal } from '../../../src/lib/sync/kindeCandidateJournalBridge';
 import type { CloudReplicaClaimRequest } from '../../../src/lib/sync/cloudReplicaTransport';
 import { readLocal } from '../../../src/lib/sync/localArchiveBootstrap';
+import { commitDomainOperations } from '../../../src/lib/sync/localDomainCommit';
 import { lockAllVaults, readVaultControl, vaultControlKey } from '../../../src/lib/sync/secureArchiveSession';
 
 const uid = 'k_' + 'A'.repeat(43);
@@ -66,6 +69,30 @@ function server(mode: 'active' | 'unregistered' | 'withdrawn' | 'unverified' | '
 
 async function start(send: typeof fetch, cookies = cookie, stillCurrent = () => true) {
     return prepareKindeCandidateOwner({ expected: principal, send, browserCookies: cookies, stillCurrent });
+}
+
+type Fixture = Awaited<ReturnType<typeof createCloudKeyHttpFixture>>;
+function firstPartySession(fixture: Fixture, observe: (path: string, init: RequestInit | undefined,
+    response: Response) => Response | Promise<Response>) {
+    const session = fixture.sessions.get(uid);
+    const browserCookies = () => '__Host-logbook_csrf=' + session.csrf;
+    const send: typeof fetch = async (input, init) => {
+        const path = String(input);
+        const env = { ...fixture.env, APP_ORIGIN: ORIGIN };
+        const headers = new Headers(init?.headers);
+        headers.set('origin', ORIGIN);
+        headers.set('sec-fetch-site', 'same-origin');
+        headers.set('cookie', session.cookies);
+        const response = await routeCandidateFirstPartyApi(new Request(ORIGIN + path, {
+            ...init, headers,
+        }), {
+            APP_ORIGIN: ORIGIN,
+            KINDE_HTTP: { fetch: (request: Request) => kinde.fetch(request, env) },
+            D1_API: { fetch: (request: Request) => api.fetch(request, env) },
+        });
+        return observe(path, init, response);
+    };
+    return { send, browserCookies, stillCurrent: () => true };
 }
 
 beforeEach(async () => {
@@ -156,23 +183,9 @@ describe('Kinde-only device vault provisioning and authenticated baseline', () =
         const fixture = await createCloudKeyHttpFixture([uid]);
         try {
             await fixture.consent(uid);
-            const env = { ...fixture.env, APP_ORIGIN: ORIGIN };
-            const session = fixture.sessions.get(uid);
-            const browserCookies = () => '__Host-logbook_csrf=' + session.csrf;
             const requests: CloudReplicaClaimRequest[] = [];
             let scanCount = 0;
-            const send: typeof fetch = async (path, init) => {
-                const headers = new Headers(init?.headers);
-                headers.set('origin', ORIGIN);
-                headers.set('sec-fetch-site', 'same-origin');
-                headers.set('cookie', session.cookies);
-                const response = await routeCandidateFirstPartyApi(new Request(ORIGIN + String(path), {
-                    ...init, headers,
-                }), {
-                    APP_ORIGIN: ORIGIN,
-                    KINDE_HTTP: { fetch: (request: Request) => kinde.fetch(request, env) },
-                    D1_API: { fetch: (request: Request) => api.fetch(request, env) },
-                });
+            const { send, browserCookies } = firstPartySession(fixture, async (path, init, response) => {
                 if (path === '/v1/sync/replica/claim') {
                     expect(response.status).toBe(200);
                     const claimed = JSON.parse(String(init?.body)) as CloudReplicaClaimRequest;
@@ -184,7 +197,7 @@ describe('Kinde-only device vault provisioning and authenticated baseline', () =
                 }
                 if (path === '/v1/sync/scan') scanCount += 1;
                 return response;
-            };
+            });
 
             await expect(start(send, browserCookies)).rejects.toThrow();
             expect(requests).toHaveLength(1);
@@ -214,6 +227,77 @@ describe('Kinde-only device vault provisioning and authenticated baseline', () =
             expect(recovered?.replica?.replicaId).toBe(staged.candidateReplicaId);
             expect(recovered?.pending).toEqual([]);
             expect(recovered?.data.legalConsent?.acceptedAt).toBeTruthy();
+        } finally {
+            fixture.close();
+        }
+    });
+
+    it('recovers the first committed journal after restart and keeps edits recorded after the lost receipt', async () => {
+        const realClaim = await vi.importActual<typeof import('../../../src/lib/sync/kindeCandidateReplicaClaimBridge')>(
+            '../../../src/lib/sync/kindeCandidateReplicaClaimBridge',
+        );
+        claimSource.claim.mockImplementation(realClaim.claimKindeCandidateReplica);
+        const fixture = await createCloudKeyHttpFixture([uid]);
+        try {
+            let receiptUnavailable = false;
+            let commitCount = 0;
+            let scans = 0;
+            const session = firstPartySession(fixture, (path, _init, response) => {
+                if (path === '/v1/sync/scan') scans += 1;
+                if (path === '/v1/sync/commit') {
+                    expect(response.status).toBe(200);
+                    commitCount += 1;
+                    throw new TypeError('HTTP response lost after journal commit');
+                }
+                if (path === '/v1/sync/receipt' && receiptUnavailable && commitCount > 0) {
+                    return Response.json({ error: 'unavailable' }, {
+                        status: 503, headers: { 'Cache-Control': 'no-store' },
+                    });
+                }
+                return response;
+            });
+            await expect(acceptKindeCandidateInitialConsent({
+                ...session, expectedOwner: principal,
+                decision: { acceptedHealthData: true, acceptedTerms: true, confirmsOver18: true },
+            })).resolves.toMatchObject({ kind: 'consent-confirmed', principal });
+            const wrappingKey = fixture.env.CLOUD_ACCOUNT_KEK_V1;
+            fixture.env.CLOUD_ACCOUNT_KEK_V1 = '';
+            await expect(prepareKindeCandidateOwner({ ...session, expected: principal })).rejects.toThrow();
+            expect(fixture.count('cloud_account_keys', uid)).toBe(0);
+            expect(fixture.count('sync_replicas', uid)).toBe(0);
+            fixture.env.CLOUD_ACCOUNT_KEK_V1 = wrappingKey;
+            await expect(prepareKindeCandidateOwner({ ...session, expected: principal }))
+                .resolves.toMatchObject({ replicaOutcome: 'adopted' });
+            const baseline = (await readLocal(owner))!.data;
+            await commitDomainOperations(owner, { type: 'profile.patch', patch: { height: '181' } }, baseline);
+            receiptUnavailable = true;
+            await expect(deliverKindeCandidateJournal(session)).rejects.toThrow();
+            expect(commitCount).toBe(1);
+            expect(fixture.count('sync_documents', uid)).toBe(1);
+            expect(fixture.count('sync_receipts', uid)).toBe(1);
+            const originalIntent = (await readLocal(owner))?.cloudflareDelivery;
+            expect(originalIntent).toBeDefined();
+            const later = await commitDomainOperations(owner, { type: 'profile.patch', patch: { height: '182' } }, baseline);
+            const ciphertext = await get('logbook:v2:' + owner);
+            const scansBeforeRestart = scans;
+
+            lockAllVaults();
+            await expect(prepareKindeCandidateOwner({ ...session, expected: principal })).rejects.toThrow();
+            expect(scans).toBe(scansBeforeRestart);
+            expect(await get('logbook:v2:' + owner)).toBe(ciphertext);
+            expect((await readLocal(owner))?.cloudflareDelivery).toEqual(originalIntent);
+            receiptUnavailable = false;
+
+            await expect(prepareKindeCandidateOwner({ ...session, expected: principal })).resolves.toEqual({
+                kind: 'candidate-observed', checkpointRevision: 2, replicaOutcome: 'already-active',
+            });
+            expect(commitCount).toBe(1);
+            expect(fixture.count('sync_receipts', uid)).toBe(1);
+            const restored = await readLocal(owner);
+            expect(restored?.cloudflareDelivery).toBeUndefined();
+            expect(restored?.baseline.profile?.height).toBe('181');
+            expect(restored?.data.profile?.height).toBe('182');
+            expect(restored?.pending).toEqual(later.operations);
         } finally {
             fixture.close();
         }

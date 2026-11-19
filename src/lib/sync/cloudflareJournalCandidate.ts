@@ -11,7 +11,7 @@ type CandidateTransport = Pick<
     'control' | 'read' | 'commit' | 'receipt' | 'commitOutcome' | 'scanAll'
 >;
 type SessionGuard = () => boolean;
-type JournalAccessScope = Readonly<{ consentRevision: number; fenceEpoch: number }>;
+type JournalAccessScope = Readonly<{ consentRevision: number; fenceEpoch: number; stagedOnly?: boolean }>;
 
 async function resumeOrRestage(
     owner: string,
@@ -73,7 +73,7 @@ export async function deliverCloudflareJournalCandidate(
     if (local.cloudflareDelivery) {
         return resumeOrRestage(owner, accountKey, transport, csrfToken, guard);
     }
-    if (!local.pending.length) return 'idle';
+    if (expected?.stagedOnly || !local.pending.length) return 'idle';
     if (!local.replica || local.actorId !== local.replica.slot
         || local.replica.leaseUntilMs <= Date.now()
         || !local.consentRevision || local.pending.some(op => op.actorId !== local.replica?.slot)) {
