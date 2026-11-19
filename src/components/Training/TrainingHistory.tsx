@@ -1,8 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useLocalToday } from '../../hooks/useLocalToday';
 import {
     BarChart2,
-    CalendarRange,
-    ChevronLeft,
     ChevronRight,
     Dumbbell,
     Pencil,
@@ -14,6 +13,8 @@ import { Logic } from '../../lib/logic';
 import { getWorkoutDurationSeconds } from '../../lib/calc/workoutDuration';
 import type { WorkoutSession } from '../../types';
 import WorkoutReportModal from './WorkoutReportModal';
+import { dayLabel } from '../../lib/utils/historyCalendar';
+import { HistoryMonthCalendar, HistoryPeriodButton, HistoryPeriodPicker } from '../UI/HistoryCalendar';
 
 interface TrainingHistoryProps {
     onEditWorkout?: (workout: WorkoutSession) => void;
@@ -24,17 +25,6 @@ interface DatedWorkout {
     date: string;
 }
 
-const MONTH_NAMES = ['Gen', 'Feb', 'Mar', 'Apr', 'Mag', 'Giu', 'Lug', 'Ago', 'Set', 'Ott', 'Nov', 'Dic'];
-const MONTH_FORMATTER = new Intl.DateTimeFormat('it-IT', { month: 'long', year: 'numeric' });
-const DAY_FORMATTER = new Intl.DateTimeFormat('it-IT', {
-    weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
-});
-
-
-function pad(value: number): string {
-    return String(value).padStart(2, '0');
-}
-
 function workoutDateKey(workout: WorkoutSession): string | null {
     const explicitDate = workout.date ? Logic.parseDateInput(workout.date) : null;
     if (explicitDate && explicitDate === workout.date) return explicitDate;
@@ -43,22 +33,6 @@ function workoutDateKey(workout: WorkoutSession): string | null {
         if (Number.isFinite(startedAt.getTime())) return Logic.getLocalDateString(startedAt);
     }
     return null;
-}
-
-function dateFromKey(key: string): Date {
-    const [year, month, day] = key.split('-').map(Number);
-    return new Date(year, month - 1, day, 12, 0, 0);
-}
-
-function monthLabel(key: string): string {
-    const [year, month] = key.split('-').map(Number);
-    const label = MONTH_FORMATTER.format(new Date(year, month - 1, 1, 12, 0, 0));
-    return label.charAt(0).toUpperCase() + label.slice(1);
-}
-
-function dayLabel(key: string): string {
-    const label = DAY_FORMATTER.format(dateFromKey(key));
-    return label.charAt(0).toUpperCase() + label.slice(1);
 }
 
 function formatCompactDuration(seconds: number): string {
@@ -90,7 +64,7 @@ const TrainingHistory = ({ onEditWorkout }: TrainingHistoryProps) => {
         : undefined;
 
     const library = useMemo(() => userData?.library || [], [userData?.library]);
-    const today = Logic.getLocalDateString();
+    const today = useLocalToday();
     const datedHistory = useMemo<DatedWorkout[]>(() => history
         .map(workout => ({ workout, date: workoutDateKey(workout) }))
         .filter((entry): entry is DatedWorkout => Boolean(entry.date))
@@ -140,7 +114,6 @@ const TrainingHistory = ({ onEditWorkout }: TrainingHistoryProps) => {
     const [viewYear, viewMonthNumber] = viewMonth.split('-').map(Number);
     const daysInMonth = new Date(viewYear, viewMonthNumber, 0, 12, 0, 0).getDate();
     const weeklyAverage = monthWorkouts.length / (daysInMonth / 7);
-    const calendarDays = Logic.getCalendarMonthGrid(viewYear, viewMonthNumber - 1);
 
     const selectMonth = (month: string) => {
         setViewMonth(month);
@@ -189,132 +162,40 @@ const TrainingHistory = ({ onEditWorkout }: TrainingHistoryProps) => {
                     <h2>Storico allenamenti</h2>
                     <p>{datedHistory.length} {datedHistory.length === 1 ? 'sessione registrata' : 'sessioni registrate'}</p>
                 </div>
-                <button
-                    className="history-period-button"
-                    type="button"
-                    aria-expanded={periodOpen}
-                    aria-controls="history-period-picker"
+                <HistoryPeriodButton
+                    pickerId="history-period-picker"
+                    open={periodOpen}
                     onClick={togglePeriodPicker}
-                >
-                    <CalendarRange size={18} aria-hidden="true" />
-                    <span>Mese e anno</span>
-                </button>
+                />
             </header>
 
             {periodOpen && (
-                <section
-                    className="history-year-picker"
-                    id="history-period-picker"
-                    aria-label="Scegli mese e anno"
-                >
-                    <div className="history-year-picker-head">
-                        <button
-                            className="history-icon-button"
-                            type="button"
-                            aria-label="Anno precedente"
-                            onClick={() => setPickerYear(year => year - 1)}
-                        >
-                            <ChevronLeft size={20} aria-hidden="true" />
-                        </button>
-                        <strong>{pickerYear}</strong>
-                        <button
-                            className="history-icon-button"
-                            type="button"
-                            aria-label="Anno successivo"
-                            onClick={() => setPickerYear(year => year + 1)}
-                        >
-                            <ChevronRight size={20} aria-hidden="true" />
-                        </button>
-                    </div>
-                    <div className="history-year-picker-grid">
-                        {MONTH_NAMES.map((name, index) => {
-                            const key = `${pickerYear}-${pad(index + 1)}`;
-                            const hasWorkout = workoutsByMonth.has(key);
-                            const selected = key === viewMonth;
-                            return (
-                                <button
-                                    key={key}
-                                    className={[
-                                        'history-month-button',
-                                        hasWorkout ? 'has-workout' : '',
-                                        selected ? 'selected' : '',
-                                    ].filter(Boolean).join(' ')}
-                                    type="button"
-                                    aria-pressed={selected}
-                                    aria-label={`${name} ${pickerYear}${hasWorkout ? ', contiene allenamenti' : ''}`}
-                                    onClick={() => selectMonth(key)}
-                                >
-                                    {name}
-                                </button>
-                            );
-                        })}
-                    </div>
-                </section>
+                <HistoryPeriodPicker
+                    pickerId="history-period-picker"
+                    year={pickerYear}
+                    selectedMonth={viewMonth}
+                    entriesByMonth={workoutsByMonth}
+                    populatedClass="has-workout"
+                    populatedDescription="allenamenti"
+                    onChangeYear={delta => setPickerYear(year => year + delta)}
+                    onSelectMonth={selectMonth}
+                />
             )}
-
-            <section className="history-calendar-panel" aria-label={`Calendario ${monthLabel(viewMonth)}`}>
-                <div className="history-month-nav">
-                    <button
-                        className="history-icon-button"
-                        type="button"
-                        aria-label="Mese precedente"
-                        onClick={() => changeMonth(-1)}
-                    >
-                        <ChevronLeft size={20} aria-hidden="true" />
-                    </button>
-                    <strong className="history-month-name">{monthLabel(viewMonth)}</strong>
-                    <button
-                        className="history-today-button"
-                        type="button"
-                        onClick={selectToday}
-                    >
-                        Oggi
-                    </button>
-                    <button
-                        className="history-icon-button"
-                        type="button"
-                        aria-label="Mese successivo"
-                        onClick={() => changeMonth(1)}
-                    >
-                        <ChevronRight size={20} aria-hidden="true" />
-                    </button>
-                </div>
-
-                <div className="history-weekdays" aria-hidden="true">
-                    <span>L</span><span>M</span><span>M</span><span>G</span><span>V</span><span>S</span><span>D</span>
-                </div>
-
-                <div className="history-calendar-grid">
-                    {calendarDays.map(day => {
-                        const count = workoutsByDate.get(day.dateStr)?.length || 0;
-                        const selected = day.dateStr === selectedDate;
-                        const isToday = day.dateStr === today;
-                        return (
-                            <button
-                                key={day.dateStr}
-                                className={[
-                                    'history-day',
-                                    day.isCurrentMonth ? '' : 'outside',
-                                    isToday ? 'today' : '',
-                                    selected ? 'selected' : '',
-                                    count ? 'has-workout' : '',
-                                    count > 1 ? 'has-multiple' : '',
-                                ].filter(Boolean).join(' ')}
-                                type="button"
-                                aria-pressed={selected}
-                                aria-label={`${dayLabel(day.dateStr)}${count ? `, ${count} ${count === 1 ? 'allenamento' : 'allenamenti'}` : ''}`}
-                                onClick={() => {
-                                    setSelectedDate(day.dateStr);
-                                    if (!day.isCurrentMonth) setViewMonth(day.dateStr.slice(0, 7));
-                                }}
-                            >
-                                <span>{day.dayNum}</span>
-                                {count > 1 && <span className="history-day-count" aria-hidden="true">{count}</span>}
-                            </button>
-                        );
-                    })}
-                </div>
-            </section>
+            <HistoryMonthCalendar
+                month={viewMonth}
+                selectedDate={selectedDate}
+                today={today}
+                entriesByDate={workoutsByDate}
+                populatedClass="has-workout"
+                itemSingular="allenamento"
+                itemPlural="allenamenti"
+                onChangeMonth={changeMonth}
+                onSelectToday={selectToday}
+                onSelectDate={(date, isCurrentMonth) => {
+                    setSelectedDate(date);
+                    if (!isCurrentMonth) setViewMonth(date.slice(0, 7));
+                }}
+            />
 
             <section className="history-month-summary" aria-label="Riepilogo del mese">
                 <div>
