@@ -486,6 +486,82 @@ void test('fitness key is withheld when independent withdrawal is armed during i
   } finally { f.close(); }
 });
 
+
+void test('rights-only scan reads the withdrawn subject without granting active sync', async () => {
+  const f = await fixture();
+  const body = { after: null, expectedRevision: null };
+  try {
+    await f.consent('owner-a');
+    const active = await f.call('owner-a', '/v1/rights/scan', { body });
+    assert.notEqual(active.response.status, 200);
+    await f.call('owner-a', SYNC);
+    await f.withdraw('owner-a');
+    const rights = await f.call('owner-a', '/v1/rights/scan', { body });
+    assert.equal(rights.response.status, 200);
+    assert.equal(rights.body.consentRevision, 1);
+    assert.equal(rights.body.fenceEpoch, 1);
+    assert.equal(rights.body.revision, 0);
+    assert.deepEqual(rights.body.documents, []);
+    assert.equal(rights.body.complete, true);
+    assert.equal(rights.body.nextAfter, null);
+    assert.equal(rights.response.headers.get('cache-control'), 'no-store');
+    assert.notEqual((await f.call('owner-a', '/v1/sync/scan', { body })).response.status, 200);
+    assert.notEqual((await f.call('owner-b', '/v1/rights/scan', { body })).response.status, 200);
+    assert.equal(f.count('health_erasure_jobs', 'owner-a'), 1);
+  } finally { f.close(); }
+});
+
+void test('rights scan accepts an unverified renewed session but rejects stale credentials and invalid pages', async () => {
+  const f = await fixture();
+  const body = { after: null, expectedRevision: null };
+  try {
+    await f.consent('owner-a');
+    await f.call('owner-a', SYNC);
+    await f.withdraw('owner-a');
+    const previous = await renewSessionWithoutEmail(f, 'owner-a');
+    const rights = await f.call('owner-a', '/v1/rights/scan', { body });
+    assert.equal(rights.response.status, 200);
+    assert.equal(rights.body.fenceEpoch, 1);
+    assert.notEqual((await f.call('owner-a', '/v1/rights/scan', {
+      body, cookie: previous.cookies, csrf: previous.csrf,
+    })).response.status, 200);
+    for (const opts of [
+      { body, csrf: '' },
+      { body: { after: 'history_months/2026-01', expectedRevision: null } },
+      { body: { after: null, expectedRevision: 1 } },
+      { body: { after: null, expectedRevision: null, uid: 'owner-b' } },
+      { body: { after: null, expectedRevision: null }, method: 'GET' },
+      { body, origin: 'https://foreign.invalid' },
+      { body, env: { ...f.env, RECOVERY_DB: undefined } },
+      { body, env: { ...f.env, RECOVERY_DB: f.db } },
+    ]) {
+      const result = await f.call('owner-a', '/v1/rights/scan', opts);
+      assert.notEqual(result.response.status, 200);
+      assert.equal(result.response.headers.get('cache-control'), 'no-store');
+    }
+    assert.equal((await f.call('owner-a', '/v1/rights/scan', {
+      body: { after: null, expectedRevision: 0 },
+    })).response.status, 400);
+  } finally { f.close(); }
+});
+
+void test('independent cutoff blocks rights ciphertext even while restored application D1 still says withdrawn', async () => {
+  const f = await fixture();
+  const body = { after: null, expectedRevision: null };
+  try {
+    await f.consent('owner-a');
+    await f.call('owner-a', SYNC);
+    await f.withdraw('owner-a');
+    assert.equal((await f.call('owner-a', '/v1/rights/scan', { body })).response.status, 200);
+    f.registry.exec("UPDATE recovery_control SET mode='sealed', generation=3 WHERE singleton=1");
+    assert.notEqual((await f.call('owner-a', '/v1/rights/scan', { body })).response.status, 200);
+    f.registry.exec("UPDATE recovery_control SET mode='open', generation=4 WHERE singleton=1");
+    f.registry.exec("UPDATE recovery_owner_fences SET status='blocked', change_seq=change_seq+1 WHERE uid='owner-a'");
+    assert.notEqual((await f.call('owner-a', '/v1/rights/scan', { body })).response.status, 200);
+    assert.equal(f.count('health_erasure_jobs', 'owner-a'), 1);
+  } finally { f.close(); }
+});
+
 void test('candidate route is private in the published frontend configuration', () => {
   const config = JSON.parse(readFileSync(new URL('../../cloudflare/wrangler.jsonc', import.meta.url), 'utf8'));
   assert.equal(config.main, './auth-proxy.mjs');
