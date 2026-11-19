@@ -266,17 +266,17 @@ void test('current independent registry enforces pending withdrawal and erasure 
   // Migration 0003 permits withdrawing an initial consent before activation.
   sqlite.prepare(`UPDATE recovery_owner_fences
     SET status='blocked',consent_revision=1,change_seq=2 WHERE uid=?`).run(pendingUid);
-  assert.deepEqual(sqlite.prepare(
+  assert.deepEqual({ ...sqlite.prepare(
     'SELECT status,consent_revision,fence_epoch,change_seq FROM recovery_owner_fences WHERE uid=?',
-  ).get(pendingUid), { status: 'blocked', consent_revision: 1, fence_epoch: 5, change_seq: 2 });
+  ).get(pendingUid) }, { status: 'blocked', consent_revision: 1, fence_epoch: 5, change_seq: 2 });
 
   // Migration 0004 guards a persistent queue item against deletion.
   sqlite.prepare(
     'INSERT INTO recovery_erasure_cutoffs (uid,consent_revision,fence_epoch) VALUES (?,?,?)',
   ).run(pendingUid, 1, 5);
-  assert.deepEqual(sqlite.prepare(
+  assert.deepEqual({ ...sqlite.prepare(
     'SELECT next_check_ms,finalized FROM recovery_erasure_cutoffs WHERE uid=? AND consent_revision=1 AND fence_epoch=5',
-  ).get(pendingUid), { next_check_ms: 0, finalized: 0 });
+  ).get(pendingUid) }, { next_check_ms: 0, finalized: 0 });
   assert.throws(() => sqlite.prepare('DELETE FROM recovery_erasure_cutoffs WHERE uid=?').run(pendingUid),
     /recovery-erasure-cutoff-immutable/);
   assert.equal(sqlite.prepare('SELECT COUNT(*) AS n FROM recovery_erasure_cutoffs WHERE uid=?').get(pendingUid).n, 1);
