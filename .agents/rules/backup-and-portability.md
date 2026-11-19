@@ -136,3 +136,21 @@ Solo dopo quel commit è ammesso ripristinare un timer mancante, convertendo lo 
 Gli export backup/share/emergency usano la factory e le versioni correnti di `src/lib/schemaEvolution.ts`. Il recovery raw cloud può conservare gli originali con `_schemaVersion`/`_sync`, ma lo snapshot business usa soltanto dati autenticati e normalizzati ed esclude tali metadati dal modello `UserData`.
 
 I consensi importati non autorizzano il cloud o il trattamento account; leggere [Consenso salute](health-consent.md). Provenienza e witness device restano disciplinati da [Bozze e stato device](device-drafts.md); chiavi e ciphertext da [Archivio e cifratura](secure-storage.md). La verifica canonica è in [Verifica CI](ci-verification.md).
+
+## CF-05 — JSON diritti Kinde candidato, non backup di ripristino (19/11/2026)
+
+`src/lib/auth/kindeCandidateRightsExport.ts` compone la scansione rights-only
+Kinde/D1 con AEAD e controlli sessione prima di costruire un JSON esplicito
+(`thelogbook-cloud-rights-export`, versione 1). Il file conserva business e
+metadati causali dei soli documenti cloud **ancora leggibili**; la copertura
+`not-proven-after-withdrawal` non attesta l'archivio originale: il job di
+cancellazione può già essere in corso. Sono esclusi dati locali, bozze e
+journal non consegnati. Non è un `logbook-backup` Schema 3 e non può essere
+importato come copia completa. La preparazione fallisce senza file su errori
+di autenticazione, CSRF, rete, AEAD, revisione, formato o limite JSON di
+64 MiB. La richiesta di download non certifica il salvataggio del browser.
+
+Il percorso resta **candidato non montato nel frontend pubblico**: prima di
+offrirlo in Impostazioni bisogna comporre i dati locali e la UX di consenso,
+proporre un backup facoltativo prima della revoca e verificare con browser
+e provider isolati. Non modificare `D1_API` pubblico per questo incremento.

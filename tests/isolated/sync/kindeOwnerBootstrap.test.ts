@@ -22,6 +22,7 @@ import { KindeCandidateBoundaryError } from '../../../src/lib/auth/kindeCandidat
 import { acceptKindeCandidateInitialConsent } from '../../../src/lib/auth/kindeCandidateConsent';
 import { deliverKindeCandidateJournal } from '../../../src/lib/sync/kindeCandidateJournalBridge';
 import { withKindeCandidateRightsCheckpoint } from '../../../src/lib/auth/kindeCandidateRightsCheckpoint';
+import { prepareKindeCandidateRightsJson, requestKindeCandidateRightsJsonDownload } from '../../../src/lib/auth/kindeCandidateRightsExport';
 import type { CloudReplicaClaimRequest } from '../../../src/lib/sync/cloudReplicaTransport';
 import { readLocal } from '../../../src/lib/sync/localArchiveBootstrap';
 import { commitDomainOperations } from '../../../src/lib/sync/localDomainCommit';
@@ -504,8 +505,73 @@ describe('Kinde-only device vault provisioning and authenticated baseline', () =
                 },
             });
             expect(retrieved).toMatchObject({ profile: { height: '194' } });
+            const exported = await prepareKindeCandidateRightsJson({
+                ...session, expected: { ...principal, healthConsentRevision: 1 as const },
+            });
+            const payload = JSON.parse(exported.json) as unknown;
+            expect(exported.filename).toMatch(/^thelogbook_diritti_cloud_\d{4}-\d{2}-\d{2}\.json$/);
+            expect(exported.documentCount).toBe(1);
+            expect(payload).toMatchObject({
+                format: 'thelogbook-cloud-rights-export',
+                version: 1, type: 'rights-only', owner,
+                cloud: { consentRevision: 1, fenceEpoch: 1 },
+                coverage: {
+                    scope: 'cloud-documents-still-readable',
+                    completeness: 'not-proven-after-withdrawal',
+                    includesDeviceData: false,
+                    includesPendingJournal: false,
+                    includesDeviceDrafts: false,
+                    restorableBackup: false,
+                },
+                documents: [{ path: '', dataSchemaVersion: 1,
+                    business: { profile: { height: '194' } } }],
+            });
+            const clicked = vi.fn();
+            const removed = vi.fn();
+            const appended = vi.fn();
+            const link = { href: '', download: '', style: { visibility: '' },
+                click: clicked, remove: removed };
+            vi.stubGlobal('document', {
+                createElement: vi.fn(() => link),
+                body: { appendChild: appended },
+            });
+            const objectUrl = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:rights-synthetic');
+            vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
+            await requestKindeCandidateRightsJsonDownload({
+                ...session, expected: { ...principal, healthConsentRevision: 1 as const },
+            });
+            expect(objectUrl).toHaveBeenCalledTimes(1);
+            expect(appended).toHaveBeenCalledWith(link);
+            expect(clicked).toHaveBeenCalledTimes(1);
+            expect(removed).toHaveBeenCalledTimes(1);
+            expect(link.download).toMatch(/^thelogbook_diritti_cloud_\d{4}-\d{2}-\d{2}\.json$/);
+            const corrupted = firstPartySession(fixture, async (path, _init, response) => {
+                if (path !== '/v1/rights/scan') return response;
+                const page = await response.json() as {
+                    documents: Array<{ document: { _sealed: { ciphertext: string } } }>;
+                };
+                const sealed = page.documents[0]?.document._sealed;
+                if (!sealed) throw Error('Synthetic rights document is missing');
+                sealed.ciphertext = (sealed.ciphertext[0] === 'A' ? 'B' : 'A')
+                    + sealed.ciphertext.slice(1);
+                return Response.json(page, { headers: { 'Cache-Control': 'no-store' } });
+            });
+            await expect(requestKindeCandidateRightsJsonDownload({
+                ...corrupted, expected: { ...principal, healthConsentRevision: 1 as const },
+            })).rejects.toThrow();
+            expect(objectUrl).toHaveBeenCalledTimes(1);
+            expect(clicked).toHaveBeenCalledTimes(1);
+            let current = true;
+            const replaced = firstPartySession(fixture, (path, _init, response) => {
+                if (path === '/v1/rights/scan') current = false;
+                return response;
+            });
+            await expect(prepareKindeCandidateRightsJson({
+                ...replaced, expected: { ...principal, healthConsentRevision: 1 as const },
+                stillCurrent: () => current,
+            })).rejects.toThrow();
             expect(isVaultUnlocked(owner)).toBe(false);
-            expect(observed.slice(before).filter(path => path === '/v1/rights/scan')).toHaveLength(1);
+            expect(observed.slice(before).filter(path => path === '/v1/rights/scan')).toHaveLength(3);
             expect(observed.slice(before)).not.toContain('/v1/sync/scan');
             expect(observed.slice(before)).not.toContain('/v1/cloud-key/sync');
             expect(observed.slice(before)).not.toContain('/v1/sync/commit');
