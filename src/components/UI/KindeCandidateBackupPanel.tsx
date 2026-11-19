@@ -4,15 +4,13 @@ import { KindeCandidateJsonPanel } from './KindeCandidateJsonPanel';
 type Session = ReturnType<typeof useKindeAccountSession>;
 
 /** Voluntary, importable Schema 3 backup before health-data withdrawal. */
-export function KindeCandidateBackupPanel({
-    session, active = true,
-}: { session: Session; active?: boolean }) {
+export function KindeCandidateBackupPanel({ session }: { session: Session }) {
     return (
         <KindeCandidateJsonPanel label="Backup account prima della revoca"
             prepareLabel="Prepara backup JSON"
             downloadLabel="Scarica backup JSON"
             errorMessage="Backup non disponibile o sessione cambiata. Nessun dato è stato modificato. Verifica l’archivio e riprova."
-            sessionBusy={session.busy} active={active}
+            sessionBusy={session.busy}
             prepareFile={session.prepareCandidateBackup}>
             <p>Prima di revocare il consenso, puoi preparare una copia JSON dei dati
                 verificabili del cloud e di questo dispositivo. Il file contiene
