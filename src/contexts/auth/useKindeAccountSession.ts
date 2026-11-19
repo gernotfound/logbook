@@ -6,6 +6,9 @@ import {
 import { readKindeCandidateIdentity } from '../../lib/auth/kindeCandidateIdentity';
 import { acceptKindeCandidateInitialConsent } from '../../lib/auth/kindeCandidateConsent';
 import type { prepareKindeCandidateOwner } from '../../lib/sync/kindeCandidateOwnerBootstrap';
+import type {
+    withdrawKindeCandidateHealthConsent, reconcileKindeCandidateWithdrawal,
+} from '../../lib/auth/kindeCandidateWithdrawal';
 
 type Status = 'checking' | 'signed-out' | 'guest-blocked';
 type AccountStatus = 'email-unverified' | 'identity-verified' | 'consent-required'
@@ -25,7 +28,11 @@ const COOKIE_CHECK_MS = 1000;
 
 export function useKindeAccountSession({
     guestArchivePresent, identityOnly, candidatePreparationEnabled = false,
-}: { guestArchivePresent: boolean; identityOnly: boolean; candidatePreparationEnabled?: boolean }) {
+    candidateLifecycleEnabled = false,
+}: {
+    guestArchivePresent: boolean; identityOnly: boolean;
+    candidatePreparationEnabled?: boolean; candidateLifecycleEnabled?: boolean;
+} {
     const [view, setView] = useState<View>({
         phase: guestArchivePresent ? 'guest-blocked' : 'checking', generation: 0,
     });
@@ -294,22 +301,122 @@ export function useKindeAccountSession({
                 grant.release();
             }
             if (!allowed()) throw new KindeCandidateBoundaryError();
-            const url = URL.createObjectURL(new Blob([json], {
-                type: 'application/json;charset=utf-8',
-            }));
-            if (!allowed()) {
-                URL.revokeObjectURL(url);
-                throw new KindeCandidateBoundaryError();
-            }
-            let disposed = false;
-            return {
-                url, filename, isCurrent: allowed,
-                dispose: () => {
-                    if (disposed) return;
-                    disposed = true;
-                    URL.revokeObjectURL(url);
-                },
-            };
+            const { createKindeCandidatePreparedJson } =
+                await import('../../lib/auth/kindeCandidatePreparedJson');
+            return createKindeCandidatePreparedJson({ json, filename }, allowed);
+        } finally {
+            busyRef.current = false;
+            if (mounted.current) setBusy(false);
+        }
+    };
+
+    /**
+     * Destructive Kinde consent withdrawal remains behind a second,
+     * explicit candidate lifecycle flag. The caller must have shown the
+     * optional pre-withdrawal export before requesting confirmation.
+     * A lost response leaves the durable local marker pending; no retry
+     * of the POST occurs from either this action or the reconciler.
+     */
+    const withdrawCandidateConsent = async (confirmsErasure: boolean):
+        Promise<Awaited<ReturnType<typeof withdrawKindeCandidateHealthConsent>>> => {
+        if (!confirmsErasure || identityOnly || !candidatePreparationEnabled
+            || !candidateLifecycleEnabled || !canAct()
+            || view.phase !== 'consent-confirmed'
+            || view.principal.emailVerified !== true
+            || view.principal.healthConsentRevision !== 1) {
+            throw new KindeCandidateBoundaryError();
+        }
+        const session = observed.current;
+        if (!session?.csrfToken || !session.stillCurrent()) throw new KindeCandidateBoundaryError();
+        const current = () => viewIsCurrent() && session.stillCurrent();
+        const expected = {
+            uid: view.principal.uid, fenceEpoch: view.principal.fenceEpoch,
+            healthConsentRevision: 1 as const,
+        };
+        busyRef.current = true;
+        setBusy(true);
+        try {
+            const { withdrawKindeCandidateHealthConsent: withdraw } =
+                await import('../../lib/auth/kindeCandidateWithdrawal');
+            if (!current()) throw new KindeCandidateBoundaryError();
+            const proof = await withdraw({
+                confirmsErasure: true, expected, stillCurrent: current,
+            });
+            if (!current()) throw new KindeCandidateBoundaryError();
+            // A verified withdrawal receipt does not prove that the erasure
+            // job is complete. Refresh only the identity/consent UI.
+            await refresh();
+            return proof;
+        } finally {
+            busyRef.current = false;
+            if (mounted.current) setBusy(false);
+        }
+    };
+
+    const reconcileCandidateWithdrawal = async ():
+        Promise<Awaited<ReturnType<typeof reconcileKindeCandidateWithdrawal>>> => {
+        if (identityOnly || !candidatePreparationEnabled || !candidateLifecycleEnabled
+            || !canAct() || !('principal' in view)
+            || !['consent-confirmed', 'consent-suspended', 'email-unverified'].includes(view.phase)
+            || view.principal.healthConsentRevision !== 1) {
+            throw new KindeCandidateBoundaryError();
+        }
+        const session = observed.current;
+        if (!session?.csrfToken || !session.stillCurrent()) throw new KindeCandidateBoundaryError();
+        const current = () => viewIsCurrent() && session.stillCurrent();
+        const expected = {
+            uid: view.principal.uid, fenceEpoch: view.principal.fenceEpoch,
+            healthConsentRevision: 1 as const,
+        };
+        busyRef.current = true;
+        setBusy(true);
+        try {
+            const { reconcileKindeCandidateWithdrawal: reconcile } =
+                await import('../../lib/auth/kindeCandidateWithdrawal');
+            if (!current()) throw new KindeCandidateBoundaryError();
+            const result = await reconcile({ expected, stillCurrent: current });
+            if (!current()) throw new KindeCandidateBoundaryError();
+            if (result.kind === 'withdrawal-proven') await refresh();
+            return result;
+        } finally {
+            busyRef.current = false;
+            if (mounted.current) setBusy(false);
+        }
+    };
+
+    /**
+     * Rights-only export does not use a device vault or a fitness grant. It
+     * remains available with a previously accepted but unverified email only
+     * after the Worker proves that withdrawal and erasure allow the read.
+     */
+    const prepareCandidateRightsJson = async () => {
+        if (identityOnly || !candidatePreparationEnabled || !candidateLifecycleEnabled
+            || !canAct() || !('principal' in view)
+            || (view.phase !== 'consent-suspended' && view.phase !== 'email-unverified')
+            || view.principal.healthConsentRevision !== 1) {
+            throw new KindeCandidateBoundaryError();
+        }
+        const session = observed.current;
+        if (!session?.csrfToken || !session.stillCurrent()) throw new KindeCandidateBoundaryError();
+        const current = () => viewIsCurrent() && session.stillCurrent();
+        const expected = {
+            uid: view.principal.uid, fenceEpoch: view.principal.fenceEpoch,
+            healthConsentRevision: 1 as const,
+        };
+        busyRef.current = true;
+        setBusy(true);
+        try {
+            const [{ prepareKindeCandidateRightsJson }, { createKindeCandidatePreparedJson }] =
+                await Promise.all([
+                    import('../../lib/auth/kindeCandidateRightsExport'),
+                    import('../../lib/auth/kindeCandidatePreparedJson'),
+                ]);
+            if (!current()) throw new KindeCandidateBoundaryError();
+            const file = await prepareKindeCandidateRightsJson({
+                expected, stillCurrent: current,
+            });
+            if (!current()) throw new KindeCandidateBoundaryError();
+            return createKindeCandidatePreparedJson(file, current);
         } finally {
             busyRef.current = false;
             if (mounted.current) setBusy(false);
@@ -330,6 +437,7 @@ export function useKindeAccountSession({
 
     return {
         view, busy, signIn, enterGuest, acceptConsent, logout, prepareCandidateArchive, prepareCandidateBackup,
+        withdrawCandidateConsent, reconcileCandidateWithdrawal, prepareCandidateRightsJson,
         retry: async () => { if (canAct()) await refresh(); },
     };
 }
