@@ -1,0 +1,194 @@
+import 'fake-indexeddb/auto';
+import { clear, get } from 'idb-keyval';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+vi.mock('../../../src/lib/firebase', () => {
+    throw Error('Kinde restore must not initialize Firebase');
+});
+const catalogSource = vi.hoisted(() => ({ read: vi.fn() }));
+vi.mock('../../../src/lib/catalog/catalogService', () => ({ getCachedCatalog: catalogSource.read }));
+
+import api from '../../../cloudflare/api/worker.mjs';
+import kinde from '../../../cloudflare/auth/kinde-http-worker.mjs';
+import { routeCandidateFirstPartyApi } from '../../../cloudflare/first-party-api-candidate.mjs';
+import { createCloudKeyHttpFixture, ORIGIN } from '../../cloudflare/cloud-key-http-fixture.mjs';
+import { createBackup } from '../../../src/lib/backup';
+import { restoreKindeCandidateBackup } from '../../../src/lib/auth/kindeCandidateRestore';
+import { prepareKindeCandidateOwner } from '../../../src/lib/sync/kindeCandidateOwnerBootstrap';
+import { UserDataSchema } from '../../../src/lib/schema';
+import { readLocal } from '../../../src/lib/sync/localArchiveBootstrap';
+import {
+    lockAllVaults, readVaultControl, unlockVaultForOwner,
+} from '../../../src/lib/sync/secureArchiveSession';
+
+const uid = 'k_' + 'R'.repeat(43);
+const otherUid = 'k_' + 'S'.repeat(43);
+const owner = 'user:' + uid;
+const principal = { uid, fenceEpoch: 1, healthConsentRevision: 1 };
+const catalog = {
+    manifest: { version: 'restore-synthetic', updatedAt: '2026-11-19T00:00:00.000Z',
+        schemaVersion: 1, docRefs: { exercises: 'fixture/e', foods: 'fixture/f' },
+        itemCounts: { exercises: 0, foods: 0 } },
+    exercises: [], foods: [], cachedAt: 0,
+};
+const parse = (raw: unknown) => UserDataSchema.parse(raw);
+const backup = (height = '188') => createBackup(parse({
+    profile: { height },
+    legalConsent: {
+        hasAcceptedTerms: true, hasAcceptedHealthData: true,
+        acceptedAt: '2026-11-01T00:00:00.000Z',
+        termsVersion: 'previous', privacyVersion: 'previous',
+    },
+}), owner, { scope: 'cloud-and-device', months: [] });
+
+type Fixture = Awaited<ReturnType<typeof createCloudKeyHttpFixture>>;
+function session(fixture: Fixture, observe: (path: string, response: Response) => Response | Promise<Response> =
+    (_path, response) => response) {
+    const current = fixture.sessions.get(uid);
+    const browserCookies = () => '__Host-logbook_csrf=' + current.csrf;
+    const send: typeof fetch = async (input, init) => {
+        const path = String(input);
+        const env = { ...fixture.env, APP_ORIGIN: ORIGIN };
+        const headers = new Headers(init?.headers);
+        headers.set('origin', ORIGIN);
+        headers.set('sec-fetch-site', 'same-origin');
+        headers.set('cookie', current.cookies);
+        const response = await routeCandidateFirstPartyApi(new Request(ORIGIN + path, {
+            ...init, headers,
+        }), {
+            APP_ORIGIN: ORIGIN,
+            KINDE_HTTP: { fetch: (request: Request) => kinde.fetch(request, env) },
+            D1_API: { fetch: (request: Request) => api.fetch(request, env) },
+        });
+        return observe(path, response);
+    };
+    return { send, stillCurrent: () => true, browserCookies };
+}
+
+beforeEach(async () => {
+    await clear();
+    lockAllVaults();
+    localStorage.clear();
+    catalogSource.read.mockReset().mockResolvedValue(catalog);
+    vi.stubGlobal('navigator', { locks: {
+        request: async (_name: string, _options: unknown, task: () => Promise<unknown>) => task(),
+    } });
+});
+afterEach(() => {
+    lockAllVaults();
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+});
+
+describe('CF-05 Kinde Schema 3 restore to encrypted IndexedDB and D1', () => {
+    it('durably writes real business + journal before D1, accepts only a verified remote receipt and preserves current consent', async () => {
+        const fixture = await createCloudKeyHttpFixture([uid]);
+        try {
+            await fixture.consent(uid);
+            const observed: string[] = [];
+            const request = session(fixture, (path, response) => {
+                observed.push(path);
+                return response;
+            });
+            const result = await restoreKindeCandidateBackup({
+                ...request, expected: principal, backup: backup(),
+            });
+            expect(result).toEqual({ kind: 'cloud-acknowledged' });
+            expect(observed).toContain('/v1/sync/commit');
+            expect(observed).toContain('/v1/sync/receipt');
+            expect(fixture.count('sync_receipts', uid)).toBe(1);
+            expect(fixture.count('sync_documents', uid)).toBe(1);
+
+            await unlockVaultForOwner(owner);
+            const local = await readLocal(owner);
+            expect(local?.pending).toEqual([]);
+            expect(local?.cloudflareDelivery).toBeUndefined();
+            expect(local?.data.profile?.height).toBe('188');
+            expect(local?.baseline).toEqual(local?.data);
+            expect(local?.data.legalConsent?.acceptedAt).not.toBe('2026-11-01T00:00:00.000Z');
+            expect(local?.data.legalConsent?.hasAcceptedHealthData).toBe(true);
+            expect(await get<string>('logbook:v2:' + owner)).toMatch(/^tlb-sealed:v1:/);
+
+            lockAllVaults();
+            const repeated = await restoreKindeCandidateBackup({
+                ...request, expected: principal, backup: backup(),
+            });
+            expect(repeated).toEqual({ kind: 'already-current' });
+            expect(fixture.count('sync_receipts', uid)).toBe(1);
+        } finally { fixture.close(); }
+    });
+
+    it('preserves the immutable encrypted journal after a committed D1 response is lost, then resumes without a second commit', async () => {
+        const fixture = await createCloudKeyHttpFixture([uid]);
+        try {
+            await fixture.consent(uid);
+            let commits = 0;
+            let withholdReceipt = false;
+            const dropped = session(fixture, (path, response) => {
+                if (path === '/v1/sync/commit') {
+                    expect(response.status).toBe(200);
+                    commits++;
+                    withholdReceipt = true;
+                    throw new TypeError('synthetic committed D1 response lost');
+                }
+                if (path === '/v1/sync/receipt' && withholdReceipt) {
+                    return Response.json({ error: 'unavailable' }, {
+                        status: 503, headers: { 'Cache-Control': 'no-store' },
+                    });
+                }
+                return response;
+            });
+            await expect(restoreKindeCandidateBackup({
+                ...dropped, expected: principal, backup: backup('191'),
+            })).rejects.toThrow();
+            expect(commits).toBe(1);
+            expect(fixture.count('sync_receipts', uid)).toBe(1);
+            expect(await get<string>('logbook:v2:' + owner)).toMatch(/^tlb-sealed:v1:/);
+            expect(readVaultControl(owner)?.phase).toBe('active');
+            await unlockVaultForOwner(owner);
+            const pending = await readLocal(owner);
+            expect(pending?.pending.length).toBeGreaterThan(0);
+            expect(pending?.cloudflareDelivery).toBeDefined();
+            expect(pending?.data.profile?.height).toBe('191');
+            const staged = pending?.cloudflareDelivery?.batch;
+            lockAllVaults();
+
+            const recovered = await prepareKindeCandidateOwner({
+                ...session(fixture), expected: principal,
+                drainPendingJournal: true, retainDeviceVault: false,
+            });
+            expect(recovered).toMatchObject({
+                kind: 'candidate-observed', replicaOutcome: 'already-active',
+                journalDrained: true,
+            });
+            expect(commits).toBe(1);
+            expect(fixture.count('sync_receipts', uid)).toBe(1);
+            await unlockVaultForOwner(owner);
+            const complete = await readLocal(owner);
+            expect(complete?.cloudflareDelivery).toBeUndefined();
+            expect(complete?.pending).toEqual([]);
+            expect(complete?.baseline.profile?.height).toBe('191');
+            expect(staged?.batchId).toBeDefined();
+        } finally { fixture.close(); }
+    });
+
+    it('rejects foreign and incomplete JSON before provisioning keys, contacting D1 or modifying local data', async () => {
+        const send = vi.fn<typeof fetch>();
+        const opts = {
+            expected: principal, stillCurrent: () => true,
+            browserCookies: () => '__Host-logbook_csrf=' + 'A'.repeat(43),
+            send,
+        };
+        for (const invalid of [
+            { ...backup(), owner: 'user:' + otherUid },
+            { ...backup(), coverage: { scope: 'device', months: [] } },
+            { ...backup(), type: 'share' },
+            { ...backup(), version: 999 },
+        ]) {
+            await expect(restoreKindeCandidateBackup({ ...opts, backup: invalid })).rejects.toThrow();
+        }
+        expect(send).not.toHaveBeenCalled();
+        expect(await get('logbook:v2:' + owner)).toBeUndefined();
+        expect(readVaultControl(owner)).toBeNull();
+    });
+});
