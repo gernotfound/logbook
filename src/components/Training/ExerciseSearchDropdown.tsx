@@ -265,7 +265,7 @@ export const ExerciseSearchDropdown: React.FC<ExerciseSearchDropdownProps> = ({
                                 onSelect={() => handleSelect(ex.id)}
                                 onHover={() => setHighlightedIndex(idx)}
                             />
-                        })
+                        ))
                     )}
                 </div>
             )}
