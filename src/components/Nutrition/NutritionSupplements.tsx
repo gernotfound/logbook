@@ -174,7 +174,7 @@ export default function NutritionSupplements({ selectedDate, setSelectedDate }: 
                     editing={editingSuppId !== null}
                     form={suppForm}
                     disabled={savingSupplement}
-                    setForm={setSuppForm}
+                    onChange={(field, value) => setSuppForm(previous => ({ ...previous, [field]: value }))}
                     onCancel={() => {
                         setShowSuppModal(false);
                         setEditingSuppId(null);
