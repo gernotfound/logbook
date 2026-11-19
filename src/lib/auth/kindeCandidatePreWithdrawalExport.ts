@@ -78,6 +78,23 @@ export async function captureKindeCandidatePreWithdrawalSources({
         readStartedAt, readCompletedAt };
 }
 
+/**
+ * A catalog load or another asynchronous export step may outlive the initial
+ * source scan. Re-check both local stores before publishing an importable file.
+ * This detects observable races without claiming cross-tab atomicity.
+ */
+export async function assertKindeCandidatePreWithdrawalSourcesStable(
+    sources: Awaited<ReturnType<typeof captureKindeCandidatePreWithdrawalSources>>,
+): Promise<void> {
+    if (!sources.isCurrent()) throw new KindeCandidateBoundaryError();
+    const envelope = await readLocal(sources.owner);
+    if (!sources.isCurrent() || !equal(sources.envelope, envelope)
+        || !equal(sources.witnesses, readStableDeviceRecovery(sources.owner))
+        || !sources.isCurrent()) {
+        throw new KindeCandidateBoundaryError();
+    }
+}
+
 /** Existing evidence-only export retains cloud and device provenance unchanged. */
 export async function prepareKindeCandidatePreWithdrawalJson(options: Options): Promise<{
     filename: string; json: string; cloudDocumentCount: number;
