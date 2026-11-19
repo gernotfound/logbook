@@ -7,7 +7,6 @@ type Props = {
     downloadLabel: string;
     errorMessage: string;
     sessionBusy: boolean;
-    active?: boolean;
     prepareFile: () => Promise<KindeCandidatePreparedJson>;
     children: ReactNode;
 };
@@ -19,14 +18,13 @@ type Props = {
  */
 export function KindeCandidateJsonPanel({
     label, prepareLabel, downloadLabel, errorMessage, sessionBusy,
-    active = true, prepareFile, children,
+    prepareFile, children,
 }: Props) {
     const [phase, setPhase] = useState<'idle' | 'working' | 'ready' | 'error'>('idle');
     const [prepared, setPrepared] = useState<KindeCandidatePreparedJson | null>(null);
     const currentFile = useRef<KindeCandidatePreparedJson | null>(null);
     const running = useRef(false);
     const mounted = useRef(false);
-    const activeRef = useRef(active);
 
     const discard = () => {
         currentFile.current?.dispose();
@@ -43,36 +41,28 @@ export function KindeCandidateJsonPanel({
         };
     }, []);
 
-    useEffect(() => {
-        activeRef.current = active;
-        if (!active) {
-            discard();
-            setPhase('idle');
-        }
-    }, [active]);
-
     const prepare = () => {
-        if (running.current || sessionBusy || !activeRef.current) return;
+        if (running.current || sessionBusy) return;
         running.current = true;
         discard();
         setPhase('working');
         void prepareFile().then(file => {
-            if (!mounted.current || !activeRef.current || !file.isCurrent()) {
+            if (!mounted.current || !file.isCurrent()) {
                 file.dispose();
-                if (mounted.current && activeRef.current) setPhase('error');
+                if (mounted.current) setPhase('error');
                 return;
             }
             currentFile.current = file;
             setPrepared(file);
             setPhase('ready');
         }).catch(() => {
-            if (mounted.current && activeRef.current) setPhase('error');
+            if (mounted.current) setPhase('error');
         }).finally(() => { running.current = false; });
     };
 
     const download = (event: MouseEvent<HTMLAnchorElement>) => {
         if (!prepared || currentFile.current !== prepared
-            || !activeRef.current || !prepared.isCurrent() || sessionBusy) {
+            || !prepared.isCurrent() || sessionBusy) {
             event.preventDefault();
             discard();
             setPhase('error');
@@ -85,11 +75,11 @@ export function KindeCandidateJsonPanel({
         <section aria-label={label}>
             {children}
             <button type="button" className="btn"
-                disabled={!active || sessionBusy || phase === 'working'}
+                disabled={sessionBusy || phase === 'working'}
                 onClick={prepare}>
                 {phase === 'working' ? 'Verifica dei dati in corso…' : prepareLabel}
             </button>
-            {active && phase === 'ready' && prepared && (
+            {phase === 'ready' && prepared && (
                 <div>
                     <p role="status">File preparato. Il salvataggio sul dispositivo deve
                         essere avviato dal pulsante seguente.</p>
@@ -101,7 +91,7 @@ export function KindeCandidateJsonPanel({
                     </button>
                 </div>
             )}
-            {active && phase === 'error' && <p role="alert">{errorMessage}</p>}
+            {phase === 'error' && <p role="alert">{errorMessage}</p>}
         </section>
     );
 }
