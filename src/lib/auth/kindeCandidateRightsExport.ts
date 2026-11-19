@@ -1,4 +1,3 @@
-import equal from 'fast-deep-equal';
 import { CURRENT_DATA_SCHEMA } from '../schemaEvolution';
 import { captureKindeCandidateSessionFence, KindeCandidateBoundaryError } from './kindeCandidateClient';
 import { withKindeCandidateRightsCheckpoint } from './kindeCandidateRightsCheckpoint';
@@ -64,7 +63,6 @@ export async function prepareKindeCandidateRightsJson({
             const json = JSON.stringify(payload, null, 2);
             if (typeof json !== 'string'
                 || new TextEncoder().encode(json).byteLength > MAX_JSON_BYTES
-                || !equal(JSON.parse(json).documents, documents)
                 || !current()) {
                 throw new KindeCandidateBoundaryError();
             }
