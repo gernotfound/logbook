@@ -930,3 +930,23 @@ nessuna schermata di revoca Kinde attiva e nessuna mutazione
 provider. Prima dell'attivazione completare UI accessibile
 di esportazione volontaria e revoca, test Safari/WebKit/browser
 reale e collaudo KEK/diritti/cancellazione/restore su provider isolato.
+
+### CF-05 — controllo export candidato React prima della revoca (19/11/2026)
+
+Il percorso candidato Kinde include ora un pannello esplicito
+`KindeCandidateBackupPanel` che prepara un JSON Schema 3 tramite
+`prepareCandidateBackup`: verifica identità/sessione/consenso,
+riapre soltanto un vault già esistente e rilascia sempre la relativa
+chiave device. L'utente ottiene un vero link per il gesto di
+download successivo, non un click automatico dopo le richieste HTTP;
+il file contiene informazioni sanitarie in chiaro e non si assume
+mai che il sistema operativo lo abbia salvato. Rimuovere il link,
+cambiare sessione o smontare la vista revoca il Blob URL; il click
+deve avere ancora il cookie Kinde e il consenso locale corrente.
+
+**Non pubblico:** `main.tsx` continua a imporre
+`identityOnly:true` e `candidatePreparationEnabled:false`.
+Il pannello non esegue revoca, non importa dati né attiva fitness,
+non aggiunge binding `D1_API`, Worker API o deploy sanitario.
+Servono collaudi browser/provider reali e integrazione esplicita
+della revoca con offerta facoltativa di backup prima di un GO.
