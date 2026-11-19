@@ -9,6 +9,25 @@ import { userOwner } from '../sync/owner';
 type Principal = { uid: string; fenceEpoch: number; healthConsentRevision: 1 };
 type WithdrawalProof = { kind: 'withdrawal-recorded'; deletionStatus: 'pending' | 'processing' };
 
+export type KindeCandidateWithdrawalMarker = 'none' | 'pending' | 'withdrawn' | 'invalid';
+
+/**
+ * Owner-scoped local negative evidence. An unknown or unreadable value must
+ * never become "no revocation" merely because the UI cannot parse it.
+ * Only the trusted status reconciler can promote pending to withdrawn.
+ */
+export function readKindeCandidateWithdrawalMarker(uid: string): KindeCandidateWithdrawalMarker {
+    if (typeof uid !== 'string' || !/^k_[A-Za-z0-9_-]{43}$/.test(uid)) return 'invalid';
+    try {
+        const marker = readBrowserValueStrict(`logbook:v2:${userOwner(uid)}:health-consent-withdrawal`);
+        if (marker === null) return 'none';
+        if (marker === 'pending:1') return 'pending';
+        if (marker === 'withdrawn') return 'withdrawn';
+    } catch { /* An unreadable local marker still blocks the destructive action. */ }
+    return 'invalid';
+}
+
+
 function validReceipt(value: unknown, expected: Principal): value is {
     status: 'withdrawn'; revision: 1; fenceEpoch: number; deletionStatus: 'pending' | 'processing';
 } {
