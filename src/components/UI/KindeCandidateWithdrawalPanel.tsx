@@ -13,8 +13,10 @@ type Phase = 'idle' | 'working' | 'pending' | 'confirmed' | 'error';
  * Once the owner-scoped marker appears, an ambiguous HTTP result can ONLY
  * be reconciled by read-only server evidence; this UI never retries withdraw.
  */
-export function KindeCandidateWithdrawalPanel({ session, allowBackup = true }: {
-    session: Session; allowBackup?: boolean;
+export function KindeCandidateWithdrawalPanel({
+    session, allowBackup = true, allowWithdrawal = true,
+}: {
+    session: Session; allowBackup?: boolean; allowWithdrawal?: boolean;
 }) {
     const uid = 'principal' in session.view ? session.view.principal.uid : '';
     const [marker, setMarker] = useState<KindeCandidateWithdrawalMarker>(
@@ -39,7 +41,7 @@ export function KindeCandidateWithdrawalPanel({ session, allowBackup = true }: {
     }, [uid]);
 
     const tryWithdraw = () => {
-        if (busy.current || session.busy || marker !== 'none' || !confirmedErasure) return;
+        if (!allowWithdrawal || busy.current || session.busy || marker !== 'none' || !confirmedErasure) return;
         busy.current = true;
         setPhase('working');
         void session.withdrawCandidateConsent(true).then(() => {
@@ -70,13 +72,14 @@ export function KindeCandidateWithdrawalPanel({ session, allowBackup = true }: {
         }).finally(() => { busy.current = false; });
     };
 
-    const canOfferBackup = allowBackup && marker === 'none' && phase !== 'working'
+    const canOfferBackup = allowWithdrawal && allowBackup && marker === 'none' && phase !== 'working'
         && phase !== 'pending' && phase !== 'confirmed';
     const inFlight = phase === 'working' || session.busy;
+    if (!allowWithdrawal && marker === 'none') return null;
     return (
         <section aria-label="Gestione del consenso sanitario">
             {canOfferBackup && <KindeCandidateBackupPanel session={session} />}
-            {!allowBackup && marker === 'none' && (
+            {allowWithdrawal && !allowBackup && marker === 'none' && (
                 <p role="status">Non è possibile preparare il backup completo
                     senza una email verificata. Puoi comunque revocare il
                     consenso; non è necessario verificare nuovamente l’email.</p>
@@ -90,7 +93,7 @@ export function KindeCandidateWithdrawalPanel({ session, allowBackup = true }: {
                 <p>Il clic sul download non dimostra che il file sia stato
                     conservato: verifica personalmente la copia, se la desideri,
                     prima di avviare la cancellazione.</p>
-                {marker === 'none' && phase !== 'confirmed' && (
+                {allowWithdrawal && marker === 'none' && phase !== 'confirmed' && (
                     <>
                         <label>
                             <input type="checkbox" checked={confirmedErasure}
