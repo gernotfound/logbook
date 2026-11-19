@@ -1,5 +1,9 @@
 # TheLogBook — migrazione Cloudflare: runbook corrente
 
+## CF-05 — Guardrail deploy KEK del Worker privato (candidato v2.540.0, 19/11/2026)
+
+Il workflow `.github/workflows/cloudflare-api-isolated.yml` ora prevede un **preflight read-only Cloudflare** prima di qualunque deploy Worker, dopo la verifica del gate exact-main. `scripts/verify-cloudflare-api-provider.mjs` richiede esattamente un binding `CLOUD_ACCOUNT_KEK_V1` di tipo `secret_text`, oltre a D1, `RECOVERY_DB`, AuthGate e isolamento URL già richiesti. Dopo i deploy ripete la medesima verifica: una KEK accidentalmente persa, cancellata o trasformata in variabile plaintext non può produrre un deploy classificato come riuscito. Le regressioni simulate rifiutano KEK assente, duplicata, non secret e risposte provider errate. **Il preflight non blocca i cambi manuali esterni e non garantisce il valore/backup della KEK**: il restore della stessa chiave resta obbligatorio prima del GO. Nessuna API sanitaria pubblicata, nessun dato o secret modificato da questo incremento.
+
 ## CF-05 — KEK Worker installata, restore ancora da attestare (19/11/2026)
 
 **Classificazione CRITICAL; evidenza Cloudflare diretta in sola lettura.** Sul Worker privato `thelogbook-api-isolated` il binding `CLOUD_ACCOUNT_KEK_V1` risulta presente come `secret_text`, anche nella lista separata dei secret. Il Worker conserva `AUTH_GATE`, `DB` e `RECOVERY_DB`. Il frontend `thelogbook-frontend` espone `ASSETS` e `KINDE_HTTP`, **non** `D1_API`: il collegamento del fitness cloud pubblico resta disabilitato.
