@@ -172,3 +172,27 @@ void test('version-only releases skip private redeploy, but dependency or import
   assert.equal(mustDeployPrivateWorker({ ...base, previousLock: null }), true);
   assert.equal(mustDeployPrivateWorker({ ...base, changed: [] }), true);
 });
+
+void test('private Workers wait boundedly for the actual exact-main gate and stop on terminal failure', () => {
+  for (const file of [
+    '.github/workflows/cloudflare-api-isolated.yml',
+    '.github/workflows/cloudflare-kinde-private.yml',
+  ]) {
+    const workflow = readFileSync(file, 'utf8');
+    assert.match(workflow, /for attempt in \$\(seq 1 40\); do/);
+    assert.match(workflow, /head_sha=\$\{EXPECTED_SHA\}/);
+    assert.match(workflow, /case "\$\{gate\}" in/);
+    assert.match(workflow, /failure\|cancelled\|timed_out\|action_required\) .*exit 1/);
+    assert.match(workflow, /test "\$\{verified\}" = true/);
+    assert.match(workflow, /if \[ "\$\{attempt\}" != 40 \]; then sleep 15; fi/);
+    assert.doesNotMatch(workflow, /for attempt in 1 2 3 4 5 6 7 8 9 10 11 12;/);
+  }
+});
+
+void test('explicit manual Kinde deploy cannot be suppressed by a version-only change', () => {
+  const workflow = readFileSync('.github/workflows/cloudflare-kinde-private.yml', 'utf8');
+  assert.match(workflow, /^  workflow_dispatch:\s*$/m);
+  assert.match(workflow, /if \[ "\$\{TRIGGER_EVENT\}" = "workflow_dispatch" \]; then/);
+  assert.match(workflow, /echo "required=true" >> "\$GITHUB_OUTPUT"/);
+  assert.match(workflow, /else\n\s+echo "required=\$\(node scripts\/cloudflare-private-deploy-plan\.mjs/);
+});

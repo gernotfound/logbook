@@ -178,3 +178,25 @@ void test('CSP permits only the Kinde hosted form redirect, never a wildcard des
   assert.ok(csp.includes("base-uri 'self';"));
   assert.doesNotMatch(csp, /form-action [^;]*\*/);
 });
+
+void test('Static Assets deploy follows verified main push, not legacy Firestore completion', () => {
+  const workflow = readFileSync(
+    new URL('../../.github/workflows/cloudflare-candidate.yml', import.meta.url), 'utf8',
+  );
+  assert.match(workflow, /workflows:\n      - Milestone Verification/);
+  assert.doesNotMatch(workflow, /Firebase Firestore Production|firebase-firestore-production\.yml\/runs/);
+  for (const proof of [
+    "github.event.workflow_run.conclusion == 'success'",
+    "github.event.workflow_run.event == 'push'",
+    "github.event.workflow_run.head_branch == 'main'",
+    'github.event.workflow_run.head_repository.full_name == github.repository',
+    'verification.yml/runs?event=push&head_sha=',
+    '(.name == "Main Release Gate" or .name == "Security / CodeQL")',
+    'length == 2 and all(.conclusion == "success")',
+    'git ls-remote --exit-code origin refs/heads/main',
+  ]) assert.ok(workflow.includes(proof), proof);
+  const gate = workflow.indexOf('Exact-main Main Release Gate or CodeQL missing');
+  const deploy = workflow.indexOf('command: deploy --config cloudflare/wrangler.jsonc');
+  assert.ok(gate >= 0 && deploy > gate);
+  assert.match(workflow, /workflow_dispatch:\n    inputs:\n      expected_sha:/);
+});
