@@ -1,19 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useLocalToday } from '../../hooks/useLocalToday';
-import {
-    BarChart2,
-    ChevronRight,
-    Dumbbell,
-    Pencil,
-    Trash2,
-} from 'lucide-react';
-import { ContextMenu } from '../UI/ContextMenu';
 import { useTrainingHistory } from '../../hooks/useTrainingHistory';
 import { Logic } from '../../lib/logic';
 import { getWorkoutDurationSeconds } from '../../lib/calc/workoutDuration';
 import type { WorkoutSession } from '../../types';
 import WorkoutReportModal from './WorkoutReportModal';
 import { dayLabel } from '../../lib/utils/historyCalendar';
+import { formatCompactDuration, workoutDateKey } from './history/historyWorkoutPresentation';
+import { HistoryWorkoutCard } from './history/HistoryWorkoutCard';
 import { HistoryMonthCalendar, HistoryPeriodButton, HistoryPeriodPicker } from '../UI/HistoryCalendar';
 
 interface TrainingHistoryProps {
@@ -23,35 +17,6 @@ interface TrainingHistoryProps {
 interface DatedWorkout {
     workout: WorkoutSession;
     date: string;
-}
-
-function workoutDateKey(workout: WorkoutSession): string | null {
-    const explicitDate = workout.date ? Logic.parseDateInput(workout.date) : null;
-    if (explicitDate && explicitDate === workout.date) return explicitDate;
-    if (typeof workout.globalStartTime === 'number' && Number.isFinite(workout.globalStartTime)) {
-        const startedAt = new Date(workout.globalStartTime);
-        if (Number.isFinite(startedAt.getTime())) return Logic.getLocalDateString(startedAt);
-    }
-    return null;
-}
-
-function formatCompactDuration(seconds: number): string {
-    const totalMinutes = Math.max(0, Math.round(seconds / 60));
-    const hours = Math.floor(totalMinutes / 60);
-    const minutes = totalMinutes % 60;
-    if (hours > 0) return `${hours} h${minutes ? ` ${minutes} min` : ''}`;
-    return `${totalMinutes} min`;
-}
-
-const TIME_FORMATTER = new Intl.DateTimeFormat('it-IT', { hour: '2-digit', minute: '2-digit' });
-
-function workoutStartTime(workout: WorkoutSession): string {
-    if (typeof workout.globalStartTime !== 'number' || !Number.isFinite(workout.globalStartTime)) {
-        return 'Orario n.d.';
-    }
-    const startedAt = new Date(workout.globalStartTime);
-    if (!Number.isFinite(startedAt.getTime())) return 'Orario n.d.';
-    return TIME_FORMATTER.format(startedAt);
 }
 
 const TrainingHistory = ({ onEditWorkout }: TrainingHistoryProps) => {
@@ -225,57 +190,15 @@ const TrainingHistory = ({ onEditWorkout }: TrainingHistoryProps) => {
                     <div className="history-empty-day">Nessun allenamento in questo giorno.</div>
                 ) : (
                     <div className="history-workout-list">
-                        {selectedWorkouts.map((workout, index) => {
-                            const name = workout.routineName || 'Sessione personalizzata';
-                            const exerciseCount = workout.exercises?.length || 0;
-                            const info = `${workoutStartTime(workout)} · ${formatCompactDuration(getWorkoutDurationSeconds(workout) ?? 0)} · ${exerciseCount} ${exerciseCount === 1 ? 'esercizio' : 'esercizi'}`;
-                            return (
-                                <article
-                                    className="history-workout-card"
-                                    key={workout.id || `${selectedDate}-${index}`}
-                                >
-                                    <button
-                                        className="history-workout-open"
-                                        type="button"
-                                        aria-label={`Apri il dettaglio di ${name}`}
-                                        onClick={() => setSelectedReportWorkout(workout)}
-                                    >
-                                        <span className="history-workout-icon">
-                                            <Dumbbell size={20} aria-hidden="true" />
-                                        </span>
-                                        <span className="history-workout-copy">
-                                            <span className="history-workout-name" title={name}>{name}</span>
-                                            <span className="history-workout-info">{info}</span>
-                                        </span>
-                                        <ChevronRight className="history-workout-chevron" size={18} aria-hidden="true" />
-                                    </button>
-                                    <div className="history-workout-menu">
-                                        <ContextMenu
-                                            items={[
-                                                {
-                                                    label: 'Vedi report',
-                                                    icon: <BarChart2 size={16} />,
-                                                    onClick: () => setSelectedReportWorkout(workout)
-                                                },
-                                                {
-                                                    label: 'Modifica allenamento',
-                                                    icon: <Pencil size={16} />,
-                                                    hidden: !onEditWorkout,
-                                                    onClick: () => onEditWorkout?.(workout)
-                                                },
-                                                {
-                                                    label: 'Elimina allenamento',
-                                                    icon: <Trash2 size={16} />,
-                                                    variant: 'danger',
-                                                    hidden: !workout.id,
-                                                    onClick: () => workout.id && deleteWorkout(workout.id)
-                                                }
-                                            ]}
-                                        />
-                                    </div>
-                                </article>
-                            );
-                        })}
+                        {selectedWorkouts.map((workout, index) => (
+                            <HistoryWorkoutCard
+                                key={workout.id || `${selectedDate}-${index}`}
+                                workout={workout}
+                                onOpen={setSelectedReportWorkout}
+                                onEditWorkout={onEditWorkout}
+                                onDeleteWorkout={deleteWorkout}
+                            />
+                        ))}
                     </div>
                 )}
             </section>
