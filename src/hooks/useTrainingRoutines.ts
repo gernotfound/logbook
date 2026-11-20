@@ -120,7 +120,7 @@ export function useTrainingRoutines() {
         return true;
     };
 
-    const handleSave = async (e?: any) => {
+    const handleSave = async (e?: { preventDefault: () => void }) => {
         if (e) e.preventDefault();
         if (!routineName.trim()) {
             await showAlert("Inserisci il nome della scheda");
@@ -213,7 +213,7 @@ export function useTrainingRoutines() {
         }
     };
 
-    const handleDelete = async (id: string, e: any) => {
+    const handleDelete = async (id: string, e: { stopPropagation: () => void }) => {
         e.stopPropagation();
         if (!isCurrentSession(draftSession)) return;
         if (!(await showConfirm("Sei sicuro di voler eliminare questa scheda?"))) return;
