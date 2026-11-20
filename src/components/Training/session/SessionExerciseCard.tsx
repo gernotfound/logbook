@@ -21,7 +21,6 @@ interface SessionExerciseCardProps {
     isHistoryOpen: boolean;
     isSetupOpen: boolean;
     openSpecialMenuId: string | null;
-    onMoveExercise?: (index: number, direction: 'up' | 'down') => void;
     onMoveToPosition?: (fromIndex: number, toIndex: number) => void;
     onToggleHistory: (exIndex: number) => void;
     onToggleSetup: (exIndex: number) => void;
@@ -49,7 +48,6 @@ const SessionExerciseCardInner: React.FC<SessionExerciseCardProps> = ({
     isHistoryOpen,
     isSetupOpen,
     openSpecialMenuId,
-    onMoveExercise: _onMoveExercise,
     onMoveToPosition,
     onToggleHistory,
     onToggleSetup,

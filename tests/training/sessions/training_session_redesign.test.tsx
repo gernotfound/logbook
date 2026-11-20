@@ -33,7 +33,6 @@ const baseExerciseProps = {
     isHistoryOpen: false,
     isSetupOpen: false,
     openSpecialMenuId: null,
-    onMoveExercise: vi.fn(),
     onMoveToPosition: vi.fn(),
     onToggleHistory: vi.fn(),
     onToggleSetup: vi.fn(),
