@@ -237,13 +237,14 @@ describe('cardio set identity and buffered draft recovery', () => {
         const view = render(card('set-old', '8'));
         const input = (id: string) => view.container.querySelector<HTMLInputElement>(`#cardio-time-${exInstanceId}-${id}`);
         fireEvent.change(input('set-old')!, { target: { value: '30' } });
-        expect(onUpdateSet).toHaveBeenCalledWith(0, 'set-old', 'time', '30');
-        expect(onUpdateSet).toHaveBeenCalledWith(0, 'set-old', 'speed', '');
+        expect(onUpdateSet).not.toHaveBeenCalled();
         const oldImage = readBufferedDraftSnapshot(keyFor('set-old'), owner).raw;
         expect(oldImage).toContain('30');
         expect(localStorage.getItem(protectedDeviceKey(keyFor('set-old'), owner))).toMatch(/^tlb-sealed:v1:/);
 
         view.rerender(card('set-new', '5'));
+        expect(onUpdateSet).toHaveBeenCalledWith(0, 'set-old', 'time', '30');
+        expect(onUpdateSet).toHaveBeenCalledWith(0, 'set-old', 'speed', '');
         expect(input('set-old')).toBeNull();
         expect(input('set-new')?.value).toBe('5');
         expect(readBufferedDraftSnapshot(keyFor('set-old'), owner).raw).toBe(oldImage);
