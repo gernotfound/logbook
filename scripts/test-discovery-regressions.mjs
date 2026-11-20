@@ -99,6 +99,11 @@ await test('critical coverage selection is invariant under functional test folde
   for (const name of [
     'auth_checkpoint_drain.test.ts',
     'account_deletion_reauth_ui.test.tsx',
+    'account_deletion_device_registration_registration.test.ts',
+    'account_deletion_device_registration_remote.test.ts',
+    'account_deletion_device_registration_timeouts.test.ts',
+    'account_deletion_device_registration_integrity.test.ts',
+    'account_deletion_device_registration_concurrency.test.ts',
     'm7_account_deletion_api.test.ts',
     'guest_bootstrap_lifecycle.test.tsx',
     'guest_account_migration_v3.test.tsx',
