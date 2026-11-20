@@ -10,13 +10,16 @@ import {
   Title,
   Tooltip,
   Legend,
-  Filler
+  Filler,
+  type ChartData,
+  type ChartOptions,
 } from 'chart.js';
 import { ChartNoAxesCombined } from 'lucide-react';
 import { useChartAppearance } from '../../hooks/useChartAppearance';
 import { useAnalyticsWorker } from '../../hooks/useAnalyticsWorker';
-import { formatWeeklyVolumeTooltip, formatWeekIntervalTooltip, formatVolumeAxisTick } from './analyticsChartPresentation';
+import { ANALYTICS_WEEK_PERIOD_OPTIONS, formatWeeklyVolumeTooltip, formatWeekIntervalTooltip, formatVolumeAxisTick } from './analyticsChartPresentation';
 import type { WorkoutSession, NutritionDay, Exercise } from '../../types';
+import type { VolumeCaloriesPoint, VolumeCaloriesCorrelationStats } from '../../lib/calc/analytics';
 
 ChartJS.register(
   CategoryScale,
@@ -43,12 +46,7 @@ const EMPTY_HISTORY: WorkoutSession[] = [];
 const EMPTY_LIBRARY: Exercise[] = [];
 const EMPTY_NUTRITION: Record<string, NutritionDay> = {};
 
-const PERIOD_OPTIONS = [
-  { id: 4, label: '4 sett' },
-  { id: 8, label: '8 sett' },
-  { id: 12, label: '12 sett' },
-  { id: 24, label: '24 sett' },
-];
+
 
 export default function VolumeCaloriesCorrelationChart({
   isActive = true,
@@ -64,9 +62,12 @@ export default function VolumeCaloriesCorrelationChart({
   const [calcError, setCalcError] = useState(false);
   const { calculateCorrelationStats } = useAnalyticsWorker(isActive, true);
 
-  const [calcResult, setCalcResult] = useState<{points: any[], stats: any}>({
+  const [calcResult, setCalcResult] = useState<{ points: VolumeCaloriesPoint[]; stats: VolumeCaloriesCorrelationStats }>({
     points: [],
-    stats: { hasData: false, correlationCoefficient: null, correlationInsight: '', avgWeeklyVolumeKg: 0, avgDailyKcal: 0, validDataPointsCount: 0 }
+    stats: {
+      hasData: false, correlationCoefficient: null, correlationInsight: '',
+      avgWeeklyVolumeKg: 0, avgDailyKcal: 0, validDataPointsCount: 0,
+    },
   });
 
   const [prevParams, setPrevParams] = useState({ history, nutrition, library, userWeight, selectedWeeks, isActive });
@@ -80,14 +81,14 @@ export default function VolumeCaloriesCorrelationChart({
     let isMounted = true;
 
     calculateCorrelationStats(history, nutrition, library, userWeight, selectedWeeks)
-      .then((res: any) => {
+      .then(res => {
         if (isMounted) {
           setCalcResult(res);
           setCalcError(false);
           setIsCalculating(false);
         }
       })
-      .catch((err: any) => {
+      .catch((err: unknown) => {
         if (!isMounted) return;
         console.error("Errore calcolo grafico correlazione:", err);
         setCalcError(true);
@@ -99,7 +100,7 @@ export default function VolumeCaloriesCorrelationChart({
 
   const { points, stats } = calcResult;
 
-  const chartData = useMemo(() => {
+  const chartData = useMemo<ChartData<'bar' | 'line', (number | null)[]>>(() => {
     return {
       labels: points.map(p => p.label),
       datasets: [
@@ -141,7 +142,7 @@ export default function VolumeCaloriesCorrelationChart({
     };
   }, [points, colors]);
 
-  const chartOptions = useMemo(() => {
+  const chartOptions = useMemo<ChartOptions<'bar' | 'line'>>(() => {
     return {
       responsive: true,
       maintainAspectRatio: false,
@@ -177,11 +178,11 @@ export default function VolumeCaloriesCorrelationChart({
           cornerRadius: 8,
           boxPadding: 4,
           callbacks: {
-            title: (items: any[]) => {
+            title: items => {
               if (!items || items.length === 0) return '';
               return formatWeekIntervalTooltip(points[items[0].dataIndex], items[0].label);
             },
-            label: (ctx: any) => {
+            label: ctx => {
               const idx = ctx.dataIndex;
               const p = points[idx];
               if (ctx.dataset.yAxisID === 'yVolume') {
@@ -206,7 +207,7 @@ export default function VolumeCaloriesCorrelationChart({
           ticks: {
             color: colors.primary,
             font: { size: 11 },
-            callback: (val: any) => {
+            callback: val => {
               return formatVolumeAxisTick(val);
             }
           }
@@ -219,7 +220,7 @@ export default function VolumeCaloriesCorrelationChart({
           ticks: {
             color: colors.warning,
             font: { size: 11 },
-            callback: (val: any) => `${Number(val)} kcal`
+            callback: val => `${Number(val)} kcal`
           }
         },
         x: {
@@ -244,12 +245,12 @@ export default function VolumeCaloriesCorrelationChart({
           {!isCalculating && !calcError && <p className="analytics-insight">{stats.correlationInsight}</p>}
         </div>
         <div className="chart-period-control" role="group" aria-label="Periodo della correlazione volume e calorie">
-          {PERIOD_OPTIONS.map(p => <button key={p.id} type="button" aria-pressed={selectedWeeks === p.id} onClick={() => setSelectedWeeks(p.id)}>{p.label}</button>)}
+          {ANALYTICS_WEEK_PERIOD_OPTIONS.map(p => <button key={p.id} type="button" aria-pressed={selectedWeeks === p.id} onClick={() => setSelectedWeeks(p.id)}>{p.label}</button>)}
         </div>
       </div>
       {isCalculating && <div className="analytics-loading" role="status"><div className="spinner" />Aggiornamento grafico...</div>}
       <div className="home-chart-canvas">
-        {isCalculating ? null : calcError ? <div role="alert" className="home-chart-empty"><p>Impossibile aggiornare la correlazione volume e calorie. Riprova.</p></div> : stats.hasData ? <Chart type="bar" data={chartData as any} options={chartOptions as any} role="img" aria-label={`Volume e calorie nelle ultime ${selectedWeeks} settimane. ${stats.correlationInsight}`} /> : (
+        {isCalculating ? null : calcError ? <div role="alert" className="home-chart-empty"><p>Impossibile aggiornare la correlazione volume e calorie. Riprova.</p></div> : stats.hasData ? <Chart type="bar" data={chartData} options={chartOptions} role="img" aria-label={`Volume e calorie nelle ultime ${selectedWeeks} settimane. ${stats.correlationInsight}`} /> : (
           <div className="home-chart-empty"><ChartNoAxesCombined size={32} aria-hidden="true" /><p>Dati insufficienti per calcolare la correlazione.</p><p className="text-sm">Registra allenamenti e pasti per visualizzare la relazione tra apporto energetico e carichi.</p></div>
         )}
       </div>

@@ -1,3 +1,10 @@
+export const ANALYTICS_WEEK_PERIOD_OPTIONS = [
+  { id: 4, label: '4 sett' },
+  { id: 8, label: '8 sett' },
+  { id: 12, label: '12 sett' },
+  { id: 24, label: '24 sett' },
+] as const;
+
 interface WeekRangeLabel {
   weekStart: string;
   weekEnd: string;
