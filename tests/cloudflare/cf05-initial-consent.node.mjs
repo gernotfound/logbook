@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
+import consent from '../../cloudflare/api/consent-worker.mjs';
 import apiWorker from '../../cloudflare/api/worker.mjs';
 import sessionGate from '../../cloudflare/auth/session-gate.mjs';
 import { issueVerifiedSession } from '../../cloudflare/auth/session-issuer.mjs';
