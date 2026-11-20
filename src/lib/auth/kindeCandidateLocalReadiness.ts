@@ -4,6 +4,7 @@ import {
     readKindeCandidateAccess, type KindeCandidateAccess,
 } from './kindeCandidateClient';
 import { isKindeAccountLocalFitnessClear } from '../sync/kindeOwnerLocalFitnessFence';
+import { authenticatedIdentitySource } from '../sync/authenticatedIdentitySource';
 import { prepareKindeCandidateOwner } from '../sync/kindeCandidateOwnerBootstrap';
 import { readLocal } from '../sync/localArchiveBootstrap';
 import { userOwner } from '../sync/owner';
@@ -36,6 +37,7 @@ export async function withKindeCandidateLocalReadiness<T>(
     const current = () => {
         try {
             return fence.stillCurrent()
+                && !authenticatedIdentitySource.hasReader()
                 && isKindeAccountLocalFitnessClear(owner, principal.healthConsentRevision);
         } catch { return false; }
     };
