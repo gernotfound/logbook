@@ -188,3 +188,11 @@ void test('private Workers wait boundedly for the actual exact-main gate and sto
     assert.doesNotMatch(workflow, /for attempt in 1 2 3 4 5 6 7 8 9 10 11 12;/);
   }
 });
+
+void test('explicit manual Kinde deploy cannot be suppressed by a version-only change', () => {
+  const workflow = readFileSync('.github/workflows/cloudflare-kinde-private.yml', 'utf8');
+  assert.match(workflow, /^  workflow_dispatch:\s*$/m);
+  assert.match(workflow, /if \[ "\$\{TRIGGER_EVENT\}" = "workflow_dispatch" \]; then/);
+  assert.match(workflow, /echo "required=true" >> "\$GITHUB_OUTPUT"/);
+  assert.match(workflow, /else\n\s+echo "required=\$\(node scripts\/cloudflare-private-deploy-plan\.mjs/);
+});

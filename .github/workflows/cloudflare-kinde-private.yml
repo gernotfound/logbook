@@ -48,7 +48,14 @@ jobs:
           package-manager-cache: false
       - name: Decide private Kinde deployment relevance
         id: relevance
-        run: echo "required=$(node scripts/cloudflare-private-deploy-plan.mjs .github/workflows/cloudflare-kinde-private.yml)" >> "$GITHUB_OUTPUT"
+        env:
+          TRIGGER_EVENT: ${{ github.event_name }}
+        run: |
+          if [ "${TRIGGER_EVENT}" = "workflow_dispatch" ]; then
+            echo "required=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "required=$(node scripts/cloudflare-private-deploy-plan.mjs .github/workflows/cloudflare-kinde-private.yml)" >> "$GITHUB_OUTPUT"
+          fi
       - name: Verify current main and its complete trusted release gate
         if: steps.relevance.outputs.required == 'true'
         shell: bash
