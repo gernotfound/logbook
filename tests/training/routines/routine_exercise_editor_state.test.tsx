@@ -83,6 +83,36 @@ describe('routine exercise editor state', () => {
         expect(result.current.routineExercises.map(ex => ex.exId)).toEqual(['bench', 'row']);
     });
 
+    it('removes the originally confirmed item after a reorder, not its former neighbor', () => {
+        const { result } = renderHook(() => useRoutineExerciseEditor(structuredClone(original)));
+        const selected = result.current.routineExercises[0];
+        act(() => result.current.moveExercise(0, 1));
+        expect(result.current.routineExercises.map(item => item.exId)).toEqual(['row', 'bench']);
+
+        act(() => result.current.handleRemoveExerciseFromRoutine(0, selected));
+        expect(result.current.routineExercises.map(item => item.exId)).toEqual(['row']);
+    });
+
+    it('preserves an edited item when an old delete confirmation resolves afterward', () => {
+        const { result } = renderHook(() => useRoutineExerciseEditor(structuredClone(original)));
+        const selected = result.current.routineExercises[0];
+        act(() => result.current.handleUpdateSetPlan(0, 0, 'cluster'));
+        const edited = result.current.routineExercises;
+        expect(edited[0]).not.toBe(selected);
+
+        act(() => result.current.handleRemoveExerciseFromRoutine(0, selected));
+        expect(result.current.routineExercises).toBe(edited);
+        expect(result.current.routineExercises.map(item => item.exId)).toEqual(['bench', 'row']);
+    });
+
+    it('fails closed when a recovery payload unexpectedly reuses the same item object twice', () => {
+        const selected = structuredClone(original[0]);
+        const { result } = renderHook(() => useRoutineExerciseEditor([selected, selected]));
+        const before = result.current.routineExercises;
+        act(() => result.current.handleRemoveExerciseFromRoutine(1, selected));
+        expect(result.current.routineExercises).toBe(before);
+    });
+
     it('ignores an invalid set index without replacing a valid exercise snapshot', () => {
         const { result } = renderHook(() => useRoutineExerciseEditor(structuredClone(original)));
         const before = result.current.routineExercises;
