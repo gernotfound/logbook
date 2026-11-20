@@ -1,6 +1,6 @@
 import { Timestamp } from 'firebase-admin/firestore';
 
-export type Entry = Record<string, unknown>;
+type Entry = Record<string, unknown>;
 export type HealthErasureMockFixture = {
   records: Map<string, Entry>;
   failQueryOnce: string;
