@@ -244,7 +244,6 @@ const TrainingSession = ({ onNavigateToHistory, onNavigateToPlanning, isActive =
                 }}
             />
         );
-
     }
 
     // The device snapshot becomes optimistic before the IndexedDB/cloud outcome

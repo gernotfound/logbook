@@ -25,36 +25,36 @@ export default function PostSessionReview({
         0,
     );
 
-        return (
-            <section className="pre-session-checkin post-session-checkin" aria-labelledby="post-session-title">
-                <header className="pre-session-header">
-                    <p className="pre-session-eyebrow">Fine sessione</p>
-                    <h2 id="post-session-title">Com’è andato l’allenamento?</h2>
-                    <p>Registra le sensazioni finali prima di salvare la sessione.</p>
-                </header>
-                <div className="post-session-summary">
+    return (
+        <section className="pre-session-checkin post-session-checkin" aria-labelledby="post-session-title">
+            <header className="pre-session-header">
+                <p className="pre-session-eyebrow">Fine sessione</p>
+                <h2 id="post-session-title">Com’è andato l’allenamento?</h2>
+                <p>Registra le sensazioni finali prima di salvare la sessione.</p>
+            </header>
+            <div className="post-session-summary">
+                <div>
+                    <h3>Riepilogo rapido</h3>
+                    <p>{workout.routineName || 'Allenamento libero'}</p>
+                </div>
+                <div className="post-session-summary-grid">
                     <div>
-                        <h3>Riepilogo rapido</h3>
-                        <p>{workout.routineName || 'Allenamento libero'}</p>
+                        <strong>{Logic.formatDuration(durationSeconds)}</strong>
+                        <span>Durata</span>
                     </div>
-                    <div className="post-session-summary-grid">
-                        <div>
-                            <strong>{Logic.formatDuration(durationSeconds)}</strong>
-                            <span>Durata</span>
-                        </div>
-                        <div>
-                            <strong>{workout.exercises.length}</strong>
-                            <span>Esercizi</span>
-                        </div>
-                        <div>
-                            <strong>{totalSets}</strong>
-                            <span>Serie</span>
-                        </div>
+                    <div>
+                        <strong>{workout.exercises.length}</strong>
+                        <span>Esercizi</span>
+                    </div>
+                    <div>
+                        <strong>{totalSets}</strong>
+                        <span>Serie</span>
                     </div>
                 </div>
-                {draft && (
-                    <BufferedWorkoutScope.Provider key={String(workout.id)} value={String(workout.id)}>
-                        <SessionRatings
+            </div>
+            {draft && (
+                <BufferedWorkoutScope.Provider key={String(workout.id)} value={String(workout.id)}>
+                    <SessionRatings
                         water={draft.water}
                         setWater={water => onDraftChange({ water })}
                         mood={draft.mood}
@@ -66,19 +66,19 @@ export default function PostSessionReview({
                         pains={draft.pains}
                         onTogglePain={onTogglePain}
                         onSetPains={pains => onDraftChange({ pains })}
-                        />
-                    </BufferedWorkoutScope.Provider>
-                )}
-                <div className="pre-session-actions">
-                    <button type="button" className="btn btn-success" onClick={() => void onFinish()}>Salva e termina</button>
-                    <button
-                        type="button"
-                        className="btn btn-secondary"
-                        onClick={onReturn}
-                    >
-                        Torna all’allenamento
-                    </button>
-                </div>
-            </section>
-        );
+                    />
+                </BufferedWorkoutScope.Provider>
+            )}
+            <div className="pre-session-actions">
+                <button type="button" className="btn btn-success" onClick={() => void onFinish()}>Salva e termina</button>
+                <button
+                    type="button"
+                    className="btn btn-secondary"
+                    onClick={onReturn}
+                >
+                    Torna all’allenamento
+                </button>
+            </div>
+        </section>
+    );
 }
