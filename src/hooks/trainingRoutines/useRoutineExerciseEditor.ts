@@ -2,6 +2,10 @@ import { useState } from 'react';
 import { parseRoutineSetCount, previewRoutineSets } from '../../lib/routineSessionLimits';
 import type { PlannedSetTechnique, ProgressionContract, RoutineExercise, SetTechnique } from '../../types';
 
+function validIndex(index: number, length: number): boolean {
+    return Number.isSafeInteger(index) && index >= 0 && index < length;
+}
+
 export function useRoutineExerciseEditor(initialExercises?: RoutineExercise[]) {
     const [routineExercises, setRoutineExercises] = useState<RoutineExercise[]>(() =>
         Array.isArray(initialExercises) ? initialExercises : []
@@ -14,6 +18,7 @@ export function useRoutineExerciseEditor(initialExercises?: RoutineExercise[]) {
 
     const handleUpdateSetsCount = (index: number, count: string | number) => {
         setRoutineExercises(prev => {
+            if (!validIndex(index, prev.length)) return prev;
             const newExs = [...prev];
             const currentExercise = newExs[index];
 
@@ -47,6 +52,7 @@ export function useRoutineExerciseEditor(initialExercises?: RoutineExercise[]) {
 
     const handleUpdateReps = (index: number, field: 'minReps' | 'maxReps', value: string) => {
         setRoutineExercises(prev => {
+            if (!validIndex(index, prev.length)) return prev;
             const newExs = [...prev];
             const parsed = parseInt(value);
             if (isNaN(parsed)) {
@@ -66,6 +72,7 @@ export function useRoutineExerciseEditor(initialExercises?: RoutineExercise[]) {
         technique: SetTechnique,
     ) => {
         setRoutineExercises(prev => {
+            if (!validIndex(exerciseIndex, prev.length)) return prev;
             const exercises = [...prev];
             const exercise = { ...exercises[exerciseIndex] };
             const count = previewRoutineSets(exercise.setsCount, exercise.setPlans ?? []);
@@ -87,6 +94,7 @@ export function useRoutineExerciseEditor(initialExercises?: RoutineExercise[]) {
         value: string,
     ) => {
         setRoutineExercises(prev => {
+            if (!validIndex(exerciseIndex, prev.length)) return prev;
             const exercises = [...prev];
             const exercise = { ...exercises[exerciseIndex] };
             const count = previewRoutineSets(exercise.setsCount, exercise.setPlans ?? []);
@@ -119,6 +127,7 @@ export function useRoutineExerciseEditor(initialExercises?: RoutineExercise[]) {
         value: string,
     ) => {
         setRoutineExercises(prev => {
+            if (!validIndex(index, prev.length)) return prev;
             const exercises = [...prev];
             const exercise = { ...exercises[index] };
             if (field === 'technicalStandard') {
@@ -138,11 +147,14 @@ export function useRoutineExerciseEditor(initialExercises?: RoutineExercise[]) {
     };
 
     const handleRemoveExerciseFromRoutine = (indexToRemove: number) => {
-        setRoutineExercises(prev => prev.filter((_, idx) => idx !== indexToRemove));
+        setRoutineExercises(prev => validIndex(indexToRemove, prev.length)
+            ? prev.filter((_, idx) => idx !== indexToRemove) : prev);
     };
 
     const moveExercise = (index: number, direction: number) => {
         setRoutineExercises(prev => {
+            if (!validIndex(index, prev.length) || !validIndex(index + direction, prev.length)
+                || (direction !== -1 && direction !== 1)) return prev;
             const newExs = [...prev];
             if (direction === -1 && index > 0) {
                 [newExs[index], newExs[index - 1]] = [newExs[index - 1], newExs[index]];
