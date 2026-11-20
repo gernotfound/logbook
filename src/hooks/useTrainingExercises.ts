@@ -6,11 +6,9 @@ import { useDialogStore } from '../store/useDialogStore';
 import { Logic } from '../lib/logic';
 import { captureSession, isCurrentSession } from '../lib/sync/session';
 import { getCachedCatalog } from '../lib/catalog/catalogService';
-import {
-    filterMuscles,
-    getExpandedMuscleIds,
-    toggleSmartMuscleSelection
-} from './trainingExercises/muscleSelection';
+import { filterMuscles } from './trainingExercises/muscleSelection';
+import { toggleExerciseMuscle, removeExerciseMuscle, resolveExerciseMuscles } from './trainingExercises/exerciseMuscleEditor';
+import { hasDuplicateExerciseName, buildExerciseSavePayload } from './trainingExercises/exerciseEditorModel';
 import {
     clearExerciseDraft,
     persistExerciseDraft,
@@ -102,27 +100,9 @@ export function useTrainingExercises() {
 
     const toggleMuscle = (muscle: MuscleDef) => {
         if (!muscle || !muscle.id) return;
-        if (selectionMode === 'primary') {
-            const newSelection = toggleSmartMuscleSelection(selectedMuscles, muscle);
-            setSelectedMuscles(newSelection);
-
-            // Remove toggled muscle from secondary if present
-            const toggledIds = getExpandedMuscleIds([muscle]);
-            const secExpanded = getExpandedMuscleIds(secondaryMuscles);
-            toggledIds.forEach(id => secExpanded.delete(id));
-            const remainingSecList = Array.from(secExpanded).map(id => ({ id }));
-            setSecondaryMuscles(toggleSmartMuscleSelection(remainingSecList));
-        } else {
-            const newSelection = toggleSmartMuscleSelection(secondaryMuscles, muscle);
-            setSecondaryMuscles(newSelection);
-
-            // Remove toggled muscle from primary if present
-            const toggledIds = getExpandedMuscleIds([muscle]);
-            const primExpanded = getExpandedMuscleIds(selectedMuscles);
-            toggledIds.forEach(id => primExpanded.delete(id));
-            const remainingPrimList = Array.from(primExpanded).map(id => ({ id }));
-            setSelectedMuscles(toggleSmartMuscleSelection(remainingPrimList));
-        }
+        const next = toggleExerciseMuscle(selectedMuscles, secondaryMuscles, selectionMode, muscle);
+        setSelectedMuscles(next.selectedMuscles);
+        setSecondaryMuscles(next.secondaryMuscles);
     };
 
     const handleToggleMuscleById = (muscleId: string) => {
@@ -135,16 +115,8 @@ export function useTrainingExercises() {
     const removeMuscleById = (muscleId: string) => {
         const muscle = Logic.MUSCLES.find(candidate => candidate.id === muscleId);
         if (!muscle) return;
-
-        const idsToRemove = getExpandedMuscleIds([muscle]);
-        const removeFromSelection = (selection: MuscleDef[]) => {
-            const expanded = getExpandedMuscleIds(selection);
-            idsToRemove.forEach(id => expanded.delete(id));
-            return toggleSmartMuscleSelection(Array.from(expanded).map(id => ({ id })));
-        };
-
-        setSelectedMuscles(current => removeFromSelection(current));
-        setSecondaryMuscles(current => removeFromSelection(current));
+        setSelectedMuscles(current => removeExerciseMuscle(current, muscle));
+        setSecondaryMuscles(current => removeExerciseMuscle(current, muscle));
     };
 
     const handleDuplicate = async (ex: Exercise) => {
@@ -170,21 +142,8 @@ export function useTrainingExercises() {
         setExName(ex.name || '');
         setExNotes(ex.notes || '');
 
-        // Populate selected muscles
-        const exMuscles: MuscleDef[] = [];
-        (ex.muscles || []).forEach((mId: string) => {
-            const m = Logic.MUSCLES.find(mu => mu.id === mId);
-            if (m) exMuscles.push(m);
-        });
-        setSelectedMuscles(exMuscles);
-
-        // Populate secondary muscles
-        const exSecMuscles: MuscleDef[] = [];
-        (ex.secondaryMuscles || []).forEach((mId: string) => {
-            const m = Logic.MUSCLES.find(mu => mu.id === mId);
-            if (m) exSecMuscles.push(m);
-        });
-        setSecondaryMuscles(exSecMuscles);
+        setSelectedMuscles(resolveExerciseMuscles(ex.muscles));
+        setSecondaryMuscles(resolveExerciseMuscles(ex.secondaryMuscles));
 
         setTrackingType(ex.trackingType || 'weight_reps');
         setIsBodyweight(Boolean(ex.isBodyweight));
@@ -220,11 +179,10 @@ export function useTrainingExercises() {
         return true;
     };
 
-    const isDuplicateName = useMemo(() => {
-        const trimmed = exName.trim().toLowerCase();
-        if (!trimmed) return false;
-        return library.some(ex => ex.id !== editingExId && ex.name.trim().toLowerCase() === trimmed);
-    }, [exName, library, editingExId]);
+    const isDuplicateName = useMemo(
+        () => hasDuplicateExerciseName(library, editingExId, exName),
+        [library, editingExId, exName],
+    );
 
     const handleSaveExercise = async () => {
         const trimmedName = exName.trim();
@@ -233,61 +191,22 @@ export function useTrainingExercises() {
             return false;
         }
 
-        const isDuplicate = library.some(ex =>
-            ex.id !== editingExId &&
-            ex.name.trim().toLowerCase() === trimmedName.toLowerCase()
-        );
+        const isDuplicate = hasDuplicateExerciseName(library, editingExId, trimmedName);
 
         if (isDuplicate) {
             await showAlert("Esiste già un esercizio con questo nome nell'archivio.");
             return false;
         }
 
-        const parsedEqWeight = equipmentWeight
-            ? parseFloat(String(equipmentWeight).replace(',', '.'))
-            : undefined;
-        const validEqWeight = (
-            parsedEqWeight !== undefined &&
-            !isNaN(parsedEqWeight) &&
-            parsedEqWeight > 0
-        ) ? parsedEqWeight : undefined;
-
-        let updatedLibrary;
-
-        if (editingExId) {
-            // Update existing
-            updatedLibrary = library.map(ex => {
-                if (ex.id === editingExId) {
-                    return {
-                        ...ex,
-                        name: trimmedName,
-                        notes: exNotes.trim(),
-                        muscles: selectedMuscles.map(m => m.id),
-                        secondaryMuscles: secondaryMuscles.map(m => m.id),
-                        trackingType,
-                        isBodyweight: isBodyweight || undefined,
-                        equipmentWeight: validEqWeight
-                    };
-                }
-                return ex;
-            });
-            updatedLibrary.sort((a, b) => a.name.localeCompare(b.name));
-        } else {
-            // Create new
-            const newEx = {
-                id: Logic.generateId('ex'),
-                name: trimmedName,
-                notes: exNotes.trim(),
-                muscles: selectedMuscles.map(m => m.id),
-                secondaryMuscles: secondaryMuscles.map(m => m.id),
-                trackingType,
-                setsCount: 3,
-                sets: [],
-                isBodyweight: isBodyweight || undefined,
-                equipmentWeight: validEqWeight
-            };
-            updatedLibrary = [...library, newEx].sort((a, b) => a.name.localeCompare(b.name));
-        }
+        const savedExercise = buildExerciseSavePayload(library, editingExId, {
+            name: exName,
+            notes: exNotes,
+            trackingType,
+            selectedMuscles,
+            secondaryMuscles,
+            isBodyweight,
+            equipmentWeight,
+        }, () => Logic.generateId('ex'));
 
         try {
             assertCurrentDraft();
@@ -300,9 +219,7 @@ export function useTrainingExercises() {
         // A later edit in this same form must outlive an earlier business commit.
         const submittedDraftRaw = draftRaw.current;
         try {
-            const savedExercise = editingExId
-                ? updatedLibrary.find(ex => ex.id === editingExId)
-                : updatedLibrary.find(ex => !library.some(current => current.id === ex.id));
+
             if (!savedExercise) throw new Error('Esercizio non trovato dopo la modifica');
             await persistExercise({ type: 'exercise.upsert', exercise: savedExercise });
             if (!isCurrentSession(draftSession)) return false;
@@ -322,7 +239,7 @@ export function useTrainingExercises() {
         }
     };
 
-    const handleDelete = async (id: string, e: any) => {
+    const handleDelete = async (id: string, e: { stopPropagation: () => void }) => {
         e.stopPropagation();
         if (!isCurrentSession(draftSession)) return false;
 
