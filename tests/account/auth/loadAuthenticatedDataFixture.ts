@@ -2,15 +2,15 @@ import { afterEach, beforeEach, vi } from 'vitest';
 import { emptyUserData } from '../../setup';
 import type { UserData } from '../../../src/types';
 
-export const authState = vi.hoisted(() => ({
+const authState = vi.hoisted(() => ({
     currentUser: { uid: 'user-a' } as { uid: string } | null,
 }));
 
-export const dbState = vi.hoisted(() => ({
+const dbState = vi.hoisted(() => ({
     loadCloudPayload: vi.fn(),
 }));
 
-export const storeState = vi.hoisted(() => ({
+const storeState = vi.hoisted(() => ({
     current: { userData: { profile: { height: '170' } } as UserData | null, localWorkout: null as any, localPersistenceBlocked: false },
 }));
 
@@ -41,6 +41,9 @@ vi.mock('../../../src/store/useAppStore', () => ({
         },
     },
 }));
+
+// Vitest hoists these mock declarations; expose their instances via a non-hoisted facade.
+export const mockControls = { authState, dbState, storeState };
 
 export function data(height: string): UserData {
     return {

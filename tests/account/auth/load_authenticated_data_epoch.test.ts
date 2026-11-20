@@ -1,8 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
 import { clear, get } from 'idb-keyval';
 import {
-    dbState, storeState, data, payload, loadModules, installAuthenticatedHydrationFixture,
+    mockControls, data, payload, loadModules, installAuthenticatedHydrationFixture,
 } from './loadAuthenticatedDataFixture';
+
+const { dbState, storeState } = mockControls;
 
 describe('authenticated hydration session fencing', () => {
     installAuthenticatedHydrationFixture();

@@ -3,8 +3,10 @@ import { clear, get, update } from 'idb-keyval';
 import type { User } from 'firebase/auth';
 import type { ReplicaCheckpoint } from '../../../src/lib/sync/replicaProtocol';
 import {
-    dbState, storeState, data, deferred, loadModules, installAuthenticatedHydrationFixture,
+    mockControls, data, deferred, loadModules, installAuthenticatedHydrationFixture,
 } from './loadAuthenticatedDataFixture';
+
+const { dbState, storeState } = mockControls;
 
 describe('authenticated hydration session fencing', () => {
     installAuthenticatedHydrationFixture();
