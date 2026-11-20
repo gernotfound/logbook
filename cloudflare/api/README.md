@@ -17,10 +17,14 @@ The client `withKindeCandidateRightsCheckpoint` obtains an operation-scoped
 existing ADK with purpose `rights-export`, reads every revision-pinned page,
 authenticates every document with owner/path-bound AEAD, and delivers only a
 complete checkpoint to an explicit consumer before zeroing ADK bytes. It does
-not authorize sync, mutate IndexedDB, create or adopt an owner, install a
-fitness vault or implement a downloadable rights JSON yet. Missing device-only
-edits and drafts cannot be recovered from the cloud. Public `D1_API` remains
-unbound; E2E/provider/browser release gates still apply.
+not authorize sync, mutate IndexedDB, create or adopt an owner, or install a
+fitness vault. A **separate candidate-only** `prepareKindeCandidateRightsJson`
+formats the authenticated checkpoint as a downloadable rights JSON;
+`KindeCandidateRightsPanel` requires an explicit browser gesture to request
+the download. This JSON is not a restorable backup; the candidate panel
+remains unmounted in the public identity-only app. Device-only edits and
+drafts cannot be recovered from the cloud. Public `D1_API` remains unbound;
+E2E/provider/browser release gates still apply.
 
 ## Candidate CF-03/04: cloud-key precondition and Kinde read boundary
 
