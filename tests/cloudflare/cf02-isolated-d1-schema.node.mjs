@@ -46,6 +46,38 @@ function syntheticProvider({
   return { request, calls };
 }
 
+function assertReadOnlyRequests(calls) {
+  const root = '/client/v4/accounts/' + ACCOUNT + '/d1/database/' + ID;
+  assert.ok(calls.length > 0, 'the provider must have been queried');
+  for (const { path, method, sql } of calls) {
+    if (method === 'GET') {
+      assert.ok(path === root || path === root + '/time_travel/bookmark',
+        'unexpected metadata endpoint: ' + path);
+      assert.equal(sql, null, 'metadata read must have no SQL body');
+    } else {
+      assert.equal(method, 'POST', 'only read-only SQL queries may be submitted');
+      assert.equal(path, root + '/query', 'unexpected provider POST endpoint');
+      assert.equal(typeof sql, 'string', 'missing SQL query');
+      assert.match(sql, /^\s*SELECT\b/i, 'provider query must be read-only');
+      assert.doesNotMatch(sql, /;|--|\/\*/, 'reject additional SQL statements or comments');
+    }
+  }
+}
+
+void test('read-only request oracle rejects destructive SQL and unexpected endpoints', () => {
+  const root = '/client/v4/accounts/' + ACCOUNT + '/d1/database/' + ID;
+  assert.throws(() => assertReadOnlyRequests([]), /must have been queried/);
+  assert.throws(() => assertReadOnlyRequests([
+    { path: root + '/query', method: 'POST', sql: 'DELETE FROM auth_sessions' },
+  ]), /read-only/);
+  assert.throws(() => assertReadOnlyRequests([
+    { path: root + '/query', method: 'POST', sql: 'SELECT 1; DELETE FROM auth_sessions' },
+  ]), /additional SQL statements/);
+  assert.throws(() => assertReadOnlyRequests([
+    { path: root, method: 'POST', sql: 'SELECT 1' },
+  ]), /unexpected provider POST endpoint/);
+});
+
 void test('only approved isolated D1 with exactly reviewed SQL files is eligible', () => {
   assert.doesNotThrow(() => verifyLocalMigrationTarget(config, names));
   assert.throws(() => verifyLocalMigrationTarget({ ...config, routes: ['thelogbook.me'] }, names));
@@ -75,14 +107,14 @@ void test('checks account, EU D1, Time Travel, ledger, empty principals and sche
     phase: 'before', account: ACCOUNT, token: 'test', request: before.request,
   }), { phase: 'before', applied: 8, expected: 10, jurisdiction: 'eu',
     timeTravelBookmarkVerified: true });
-  assert.ok(before.calls.every(c => c.method === 'GET'
-    || (c.method === 'POST' && c.sql?.startsWith('SELECT'))));
+  assertReadOnlyRequests(before.calls);
 
   const after = syntheticProvider({ migrationCount: 10 });
   assert.equal((await verifyRemoteIsolatedD1({
     phase: 'after', account: ACCOUNT, token: 'test', request: after.request,
   })).applied, 10);
   assert.ok(after.calls.some(c => c.sql?.includes('sqlite_master')));
+  assertReadOnlyRequests(after.calls);
 });
 
 void test('fails closed on provider, migration and isolation drift without writes', async () => {
@@ -96,7 +128,7 @@ void test('fails closed on provider, migration and isolation drift without write
     await assert.rejects(verifyRemoteIsolatedD1({
       phase: 'after', account: ACCOUNT, token: 'test', request: provider.request,
     }));
-    assert.ok(provider.calls.every(c => c.method === 'GET' || c.method === 'POST'));
+    assertReadOnlyRequests(provider.calls);
   }
 });
 

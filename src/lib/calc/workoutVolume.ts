@@ -1,7 +1,7 @@
 import { getSetSegments } from '../advancedSets';
 import { parseDateInput } from '../utils/date';
 
-export interface VolumeExerciseRef {
+interface VolumeExerciseRef {
     isBodyweight?: boolean;
     equipmentWeight?: number;
     trackingType?: 'weight_reps' | 'time' | 'cardio';

@@ -7,5 +7,4 @@ export {
     calculateSetVolume,
     calculateWorkoutVolume,
 } from './workoutVolume';
-export type { VolumeExerciseRef } from './workoutVolume';
 export { validateWorkoutRatings, mergeActivePains } from './workoutSession';
