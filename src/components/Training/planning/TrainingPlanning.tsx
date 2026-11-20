@@ -226,7 +226,7 @@ export default function TrainingPlanning({ onOpenSession }: TrainingPlanningProp
 
             {activeCycle ? (
                 <ActiveCycleCard
-                    key={activeCycle.id}
+                    key={`active-cycle:${activeCycle.id}`}
                     activeCycle={activeCycle}
                     routines={routines}
                     library={library}
