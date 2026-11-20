@@ -8,19 +8,25 @@ void test('origin, CSRF, method, query and request body are denied before any ke
   const f = await fixture();
   try {
     await f.consent('owner-a');
-    for (const options of [
-      { csrf: 'forged-csrf' },
-      { csrf: '' , cookie: 'bad' },
-      { origin: 'https://attacker.invalid' },
-      { fetchSite: 'cross-site' },
-      { url: ORIGIN + SYNC + '?uid=owner-b' },
-      { body: { uid: 'owner-a' } },
-      { method: 'GET' },
+    for (const { options, status, error } of [
+      { options: { csrf: 'forged-csrf' }, status: 403, error: 'unauthorized-or-unavailable' },
+      { options: { csrf: '', cookie: 'bad' }, status: 401, error: 'unauthorized-or-unavailable' },
+      { options: { origin: 'https://attacker.invalid' }, status: 403, error: 'origin-or-input-rejected' },
+      { options: { fetchSite: 'cross-site' }, status: 403, error: 'origin-or-input-rejected' },
+      { options: { url: ORIGIN + SYNC + '?uid=owner-b' }, status: 403, error: 'origin-or-input-rejected' },
+      { options: { body: { uid: 'owner-a' } }, status: 403, error: 'origin-or-input-rejected' },
+      { options: { method: 'GET' }, status: 405, error: 'method-not-allowed' },
     ]) {
       const result = await f.call('owner-a', SYNC, options);
-      assert.notEqual(result.response.status, 200);
+      assert.equal(result.response.status, status);
+      assert.deepEqual(result.body, { error });
+      assert.equal(result.response.headers.get('Cache-Control'), 'no-store');
+      assert.equal(f.count('cloud_account_keys', 'owner-a'), 0);
+      assert.equal(f.count('cloud_key_issuance', 'owner-a'), 0);
     }
-    assert.equal((await f.call('owner-a', '/v1/cloud-key/unknown')).response.status, 404);
+    const missing = await f.call('owner-a', '/v1/cloud-key/unknown');
+    assert.equal(missing.response.status, 404);
+    assert.deepEqual(missing.body, { error: 'not-found' });
     assert.equal(f.count('cloud_account_keys', 'owner-a'), 0);
     assert.equal(f.count('cloud_key_issuance', 'owner-a'), 0);
   } finally { f.close(); }
