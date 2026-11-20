@@ -4,10 +4,10 @@ import { useDialogStore } from '../../../store/useDialogStore';
 import SessionSetRow from './SessionSetRow';
 import { SessionExerciseHistory, SessionExerciseSetup } from './SessionExercisePanels';
 import type { SessionExerciseHistoryEntry } from './SessionExercisePanels';
-import { BufferedInput, BufferedTextarea } from '../../UI/BufferedInput';
+import { BufferedTextarea } from '../../UI/BufferedInput';
+import SessionCardioFields from './SessionCardioFields';
 import { BufferedWorkoutScope } from '../../UI/bufferedWorkoutScope';
 import { sessionSetHasMeaningfulData } from '../../../lib/workoutSetData';
-import { deriveCardioSpeed } from './deriveCardioSpeed';
 import { captureSession, isCurrentSession } from '../../../lib/sync/session';
 import type { Exercise, SessionExercise, SessionExerciseSet } from '../../../types';
 
@@ -117,16 +117,6 @@ const SessionExerciseCardInner: React.FC<SessionExerciseCardProps> = ({
         onRemoveSet(exIndex, lastIndex, lastSet.id, exItem.id, workoutId, lastSet);
     }, [exItem.sets, exItem.id, onRemoveSet, onRemoveLastSet, exIndex, workoutId]);
 
-    const handleCardioChange = (field: 'time' | 'distance', value: string) => {
-        const setId = exItem.sets[0]?.id;
-        if (!setId) return;
-        
-        onUpdateSet(exIndex, setId, field, value);
-
-        const speed = deriveCardioSpeed(exItem.sets[0], field, value);
-        if (speed !== undefined) onUpdateSet(exIndex, setId, 'speed', speed);
-    };
-
     return (
         <div className="section-divider session-exercise-card-content">
             <div style={{ marginBottom: '10px' }}>
@@ -209,75 +199,13 @@ const SessionExerciseCardInner: React.FC<SessionExerciseCardProps> = ({
             )}
 
             {libDef?.trackingType === 'cardio' ? (
-                exItem.sets?.[0]?.id ? <div key={exItem.sets[0].id} style={{ background: 'var(--surface-light)', padding: '15px', borderRadius: '12px', border: '1px solid var(--glass-border)', marginTop: '10px' }}>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '10px' }}>
-                        <div>
-                            <label className="text-muted text-xs mb-4 block" htmlFor={`cardio-time-${exerciseInstanceId}-${exItem.sets[0].id}`}>Durata (min)</label>
-                            <BufferedInput 
-                                id={`cardio-time-${exerciseInstanceId}-${exItem.sets[0].id}`}
-                                type="text" 
-                                inputMode="decimal"
-                                value={exItem.sets[0]?.time || ''} 
-                                onChange={val => handleCardioChange('time', val)}
-                                placeholder="es. 30"
-                                className="w-full bg-black-20 border-glass text-white p-8 rounded-8"
-                                style={{ fontSize: '16px', boxSizing: 'border-box' }}
-                            />
-                        </div>
-                        <div>
-                            <label className="text-muted text-xs mb-4 block" htmlFor={`cardio-distance-${exerciseInstanceId}-${exItem.sets[0].id}`}>Distanza (km)</label>
-                            <BufferedInput 
-                                id={`cardio-distance-${exerciseInstanceId}-${exItem.sets[0].id}`}
-                                type="text" 
-                                inputMode="decimal"
-                                value={exItem.sets[0]?.distance || ''} 
-                                onChange={val => handleCardioChange('distance', val)}
-                                placeholder="es. 5.2"
-                                className="w-full bg-black-20 border-glass text-white p-8 rounded-8"
-                                style={{ fontSize: '16px', boxSizing: 'border-box' }}
-                            />
-                        </div>
-                        <div>
-                            <label className="text-muted text-xs mb-4 block" htmlFor={`cardio-speed-${exerciseInstanceId}-${exItem.sets[0].id}`}>Velocità media</label>
-                            <BufferedInput 
-                                id={`cardio-speed-${exerciseInstanceId}-${exItem.sets[0].id}`}
-                                type="text" 
-                                inputMode="decimal"
-                                value={exItem.sets[0]?.speed || ''} 
-                                onChange={val => { const id = exItem.sets[0]?.id; if (id) onUpdateSet(exIndex, id, 'speed', val); }}
-                                placeholder="es. 10.5"
-                                className="w-full bg-black-20 border-glass text-white p-8 rounded-8"
-                                style={{ fontSize: '16px', boxSizing: 'border-box' }}
-                            />
-                        </div>
-                        <div>
-                            <label className="text-muted text-xs mb-4 block" htmlFor={`cardio-incline-${exerciseInstanceId}-${exItem.sets[0].id}`}>Inclinazione (%)</label>
-                            <BufferedInput 
-                                id={`cardio-incline-${exerciseInstanceId}-${exItem.sets[0].id}`}
-                                type="text" 
-                                inputMode="decimal"
-                                value={exItem.sets[0]?.incline || ''} 
-                                onChange={val => { const id = exItem.sets[0]?.id; if (id) onUpdateSet(exIndex, id, 'incline', val); }}
-                                placeholder="es. 2.0"
-                                className="w-full bg-black-20 border-glass text-white p-8 rounded-8"
-                                style={{ fontSize: '16px', boxSizing: 'border-box' }}
-                            />
-                        </div>
-                    </div>
-                    <div>
-                        <label className="text-muted text-xs mb-4 block" htmlFor={`cardio-kcal-${exerciseInstanceId}-${exItem.sets[0].id}`}>Kcal stimate</label>
-                        <BufferedInput 
-                            id={`cardio-kcal-${exerciseInstanceId}-${exItem.sets[0].id}`}
-                            type="text" 
-                            inputMode="decimal"
-                            value={exItem.sets[0]?.kcal || ''} 
-                            onChange={val => { const id = exItem.sets[0]?.id; if (id) onUpdateSet(exIndex, id, 'kcal', val); }}
-                            placeholder="es. 350"
-                            className="w-full bg-black-20 border-glass text-white p-8 rounded-8"
-                            style={{ fontSize: '16px', boxSizing: 'border-box' }}
-                        />
-                    </div>
-                </div> : <p role="alert">Serie cardio senza identificativo: dati di recupero non modificabili.</p>
+                exItem.sets?.[0]?.id ? <SessionCardioFields
+                    key={exItem.sets[0].id}
+                    set={exItem.sets[0]}
+                    exerciseInstanceId={exerciseInstanceId}
+                    exIndex={exIndex}
+                    onUpdateSet={onUpdateSet}
+                /> : <p role="alert">Serie cardio senza identificativo: dati di recupero non modificabili.</p>
             ) : (
                 <>
                     {(exItem.sets || []).map((s, sIndex: number) => (
