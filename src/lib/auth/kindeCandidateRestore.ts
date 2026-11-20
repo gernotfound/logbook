@@ -122,13 +122,15 @@ export async function restoreKindeCandidateBackup({
         throw new Error('Ripristino sospeso: replica o precedente journal non riconciliati.');
     }
     const grant = await unlockVaultForOwner(owner, current);
-    const deviceKey = requireUnlockedLocalKey(owner);
-    const scoped = () => {
-        try { return current() && grant.isCurrent() && requireUnlockedLocalKey(owner) === deviceKey; }
-        catch { return false; }
-    };
-
     try {
+        // A concurrent tab can invalidate the just-unwrapped key before the
+        // first inspection. That inspection must already be under this grant's
+        // finally, otherwise the tab retains a decrypted DEK on failure.
+        const deviceKey = requireUnlockedLocalKey(owner);
+        const scoped = () => {
+            try { return current() && grant.isCurrent() && requireUnlockedLocalKey(owner) === deviceKey; }
+            catch { return false; }
+        };
         requireCurrent(scoped);
         // Refresh against a complete authenticated cloud scan. A concurrent
         // remote edit after this point will still be rejected by the D1 revision
