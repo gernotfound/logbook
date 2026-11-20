@@ -53,4 +53,26 @@ describe('workout report presentation', () => {
         expect(screen.queryByRole('region', { name: 'Prima della sessione' })).toBeNull();
         expect(screen.queryByRole('region', { name: 'Dopo la sessione' })).toBeNull();
     });
+    it('hides an empty after-session section for null ratings and shows recorded muscle pain names', () => {
+        const ratingsOnlyNull: WorkoutSession = {
+            ...workout,
+            readiness: undefined,
+            moodRating: null,
+            pumpRating: null,
+            fatigueRating: null,
+            waterLiters: undefined,
+            pains: [],
+        };
+        const { rerender } = render(<WorkoutReportContent workout={ratingsOnlyNull} report={baseReport} titleId="report" />);
+        expect(screen.queryByRole('region', { name: 'Dopo la sessione' })).toBeNull();
+
+        rerender(<WorkoutReportContent
+            workout={{ ...ratingsOnlyNull, pains: ['chest', 'quads_right'] }}
+            report={baseReport}
+            titleId="report"
+        />);
+        const after = screen.getByRole('region', { name: 'Dopo la sessione' });
+        expect(within(after).getByText('Petto, Quadricipite destro')).toBeTruthy();
+    });
+
 });

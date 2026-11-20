@@ -1,6 +1,7 @@
 import { Trophy } from 'lucide-react';
 import type { WorkoutReport } from '../../../lib/calc/workoutReport';
 import { formatProgressionReference } from '../../../lib/calc/progression';
+import { Logic } from '../../../lib/logic';
 import { getCycleStrategyLabel } from '../../../lib/trainingCycleStrategy';
 import type { WorkoutSession } from '../../../types';
 import { WorkoutExerciseComparisons } from './WorkoutExerciseComparisons';
@@ -17,6 +18,12 @@ const formatKg = (val: number) => {
 };
 
 export function WorkoutReportContent({ workout, report, titleId }: WorkoutReportContentProps) {
+    const hasAfterSessionData = workout.moodRating != null
+        || workout.pumpRating != null
+        || workout.fatigueRating != null
+        || workout.waterLiters !== undefined
+        || (workout.pains?.length ?? 0) > 0;
+
     return (
         <div className="workout-report-content">
             {workout.readiness && (
@@ -80,7 +87,7 @@ export function WorkoutReportContent({ workout, report, titleId }: WorkoutReport
             )}
 
             {report.exerciseComparisons.length > 0 && <WorkoutExerciseComparisons comparisons={report.exerciseComparisons} formatKg={formatKg} />}
-            {(workout.moodRating !== undefined || workout.pumpRating !== undefined || workout.fatigueRating !== undefined || workout.waterLiters !== undefined || (workout.pains?.length ?? 0) > 0) && (
+            {hasAfterSessionData && (
                 <section className="workout-report-phase" aria-labelledby={`${titleId}-after`}>
                     <h2 id={`${titleId}-after`}>Dopo la sessione</h2>
                     <div className="workout-report-metrics">
@@ -88,6 +95,7 @@ export function WorkoutReportContent({ workout, report, titleId }: WorkoutReport
                         {workout.pumpRating !== undefined && workout.pumpRating !== null && <span>Pump <strong>{workout.pumpRating}/5</strong></span>}
                         {workout.fatigueRating !== undefined && workout.fatigueRating !== null && <span>Fatica <strong>{workout.fatigueRating}/5</strong></span>}
                         {workout.waterLiters !== undefined && <span>Acqua <strong>{workout.waterLiters} L</strong></span>}
+                        {(workout.pains?.length ?? 0) > 0 && <span>Dolori muscolari <strong>{workout.pains!.map(Logic.getMuscleName).join(', ')}</strong></span>}
                     </div>
                 </section>
             )}
