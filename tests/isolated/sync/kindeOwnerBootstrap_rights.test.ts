@@ -1,6 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
 import { claimSource, uid, owner, principal, firstPartySession } from './kindeOwnerBootstrapFixture';
-import { get } from 'idb-keyval';
 import { createCloudKeyHttpFixture } from '../../cloudflare/cloud-key-http-fixture.mjs';
 import { prepareKindeCandidateOwner } from '../../../src/lib/sync/kindeCandidateOwnerBootstrap';
 import { deliverKindeCandidateJournal } from '../../../src/lib/sync/kindeCandidateJournalBridge';
