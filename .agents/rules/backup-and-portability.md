@@ -284,3 +284,16 @@ parziali, consenso non corrente, vault/replica incoerenti e sessioni stale.
 La UI distingue ACK cloud verificato, sola variazione locale e journal pending.
 Un errore dopo commit locale non autorizza a dichiarare i dati immutati.
 La PWA pubblica non monta questa vista e non espone D1_API.
+
+
+### CF-05 — rilascio obbligatorio della DEK durante il ripristino (20/11/2026)
+
+Nel restore JSON candidato Kinde, `unlockVaultForOwner()` restituisce una
+capacità segreta anche se una verifica immediatamente successiva
+(`requireUnlockedLocalKey()`) fallisce perché un'altra scheda ha cambiato
+il controllo della chiave o è intervenuto un purge. **Ogni verifica successiva
+all'unlock deve rimanere dentro il relativo `try/finally`**: conservare
+ciphertext e journal, non confermare import/ACK e rilasciare sempre la capacità
+esatta, senza bloccare un grant nuovo appartenente a un'altra sessione.
+La regressione provoca il fallimento immediatamente dopo un bootstrap Kinde
+reale con Worker/D1 sintetici, prima di qualsiasi commit business.
