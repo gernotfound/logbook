@@ -5,6 +5,7 @@ import { UserDataSchema } from '../../src/lib/schema';
 import { initializeLocal, readLocal } from '../../src/lib/sync/localRepository';
 import { createAndMigrateVault } from '../../src/lib/sync/secureArchiveMigration';
 import { lockAllVaults } from '../../src/lib/sync/secureArchiveSession';
+import { activateGuestSession, GUEST_REVOCATION_KEY, GUEST_SESSION_KEY } from '../../src/lib/sync/session';
 import { user, key, accepted, trustedConsentResponse } from './healthConsentClientFixture';
 
 // Exercise the actual consent policy while isolating only external Firebase/App Check adapters.
@@ -237,6 +238,23 @@ describe('withdrawal acknowledgement racing with a newer consent', () => {
 });
 
 describe('local-only guest consent lifecycle', () => {
+  it('requires a live guest generation even when no withdrawal marker exists', () => {
+    expect(getGuestHealthConsentStatus()).toBe('active');
+    expect(isHealthConsentWritable('guest')).toBe(false);
+    expect(() => requireHealthConsentWritable('guest')).toThrow('Accesso fitness sospeso');
+
+    localStorage.setItem('logbook_is_guest', 'true');
+    expect(isHealthConsentWritable('guest')).toBe(false);
+    localStorage.setItem(GUEST_SESSION_KEY, 'guest-consent-session-a');
+    activateGuestSession('guest-consent-session-a');
+    expect(isHealthConsentWritable('guest')).toBe(true);
+
+    localStorage.setItem(GUEST_SESSION_KEY, 'guest-consent-session-b');
+    expect(isHealthConsentWritable('guest')).toBe(false);
+    localStorage.setItem(GUEST_REVOCATION_KEY, 'revoked-in-another-tab');
+    expect(isHealthConsentWritable('guest')).toBe(false);
+  });
+
   it('revocation is durable, immediately suspends local writes, and never calls a backend', () => {
     const mock = vi.fn();
     vi.stubGlobal('fetch', mock);
