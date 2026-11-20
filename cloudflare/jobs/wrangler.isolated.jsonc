@@ -1,0 +1,21 @@
+{
+  "name": "thelogbook-cf06-health-erasure-isolated",
+  "main": "./health-erasure-worker.mjs",
+  "compatibility_date": "2026-11-12",
+  "workers_dev": false,
+  "preview_urls": false,
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "thelogbook-cf02-eu-isolated-20261113",
+      "database_id": "9aa51833-8adc-495f-bdfc-93b5542e8023",
+      "migrations_dir": "../api/migrations"
+    },
+    {
+      "binding": "RECOVERY_DB",
+      "database_name": "thelogbook-cf08-fence-eu-isolated-20261116",
+      "database_id": "19dad53f-0dda-4503-b161-758ac8cb7b21",
+      "migrations_dir": "../recovery/migrations"
+    }
+  ]
+}
