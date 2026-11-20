@@ -10,12 +10,15 @@ import {
   Title,
   Tooltip,
   Legend,
-  Filler
+  Filler,
+  type ChartData,
+  type ChartOptions,
 } from 'chart.js';
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend, Filler);
 
-function makeOptions(colors: ReturnType<typeof useChartAppearance>['colors'], reducedMotion: boolean) { return {
+function makeOptions(colors: ReturnType<typeof useChartAppearance>['colors'], reducedMotion: boolean): ChartOptions<'line'> {
+  return {
     responsive: true,
     maintainAspectRatio: false,
     animation: {
@@ -38,11 +41,11 @@ function makeOptions(colors: ReturnType<typeof useChartAppearance>['colors'], re
             cornerRadius: 8,
             displayColors: false,
             callbacks: {
-                title: (items: any) => {
+                title: items => {
                     if (!items || !items.length) return '';
                     return `Data: ${items[0].label}`;
                 },
-                label: (ctx: any) => `Peso: ${ctx.parsed.y} kg`
+                label: ctx => `Peso: ${ctx.parsed.y} kg`
             }
         }
     },
@@ -52,7 +55,7 @@ function makeOptions(colors: ReturnType<typeof useChartAppearance>['colors'], re
             grid: { color: colors.grid },
             ticks: {
                 color: colors.muted,
-                callback: (val: any) => `${val} kg`,
+                callback: val => `${val} kg`,
                 font: { size: 12 }
             }
         },
@@ -67,16 +70,17 @@ function makeOptions(colors: ReturnType<typeof useChartAppearance>['colors'], re
             }
         }
     }
-}; }
+  };
+}
 
-export default function WeightChart({ chartData }: { chartData: any }) {
+export default function WeightChart({ chartData }: { chartData: ChartData<'line'> }) {
     const { colors, reducedMotion } = useChartAppearance();
     const options = useMemo(() => makeOptions(colors, reducedMotion), [colors, reducedMotion]);
-    const data = useMemo(() => ({ ...chartData, datasets: (chartData?.datasets || []).map((dataset: any) => ({
+    const data = useMemo<ChartData<'line'>>(() => ({ ...chartData, datasets: chartData.datasets.map(dataset => ({
         ...dataset, borderColor: colors.primary, backgroundColor: colors.primary,
         pointBackgroundColor: colors.primary, pointBorderColor: colors.surface,
         pointHoverBackgroundColor: colors.surface, pointHoverBorderColor: colors.primary,
         fill: false,
     })) }), [chartData, colors]);
-    return <Line data={data} options={options as any} role="img" aria-label="Andamento del peso corporeo in chilogrammi" />;
+    return <Line data={data} options={options} role="img" aria-label="Andamento del peso corporeo in chilogrammi" />;
 }

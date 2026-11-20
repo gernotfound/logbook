@@ -15,6 +15,7 @@ import {
 import { ChartNoAxesCombined } from 'lucide-react';
 import { useChartAppearance } from '../../hooks/useChartAppearance';
 import { useAnalyticsWorker } from '../../hooks/useAnalyticsWorker';
+import { formatWeeklyVolumeTooltip, formatWeekIntervalTooltip, formatVolumeAxisTick } from './analyticsChartPresentation';
 import type { WorkoutSession, NutritionDay, Exercise } from '../../types';
 
 ChartJS.register(
@@ -178,19 +179,13 @@ export default function VolumeCaloriesCorrelationChart({
           callbacks: {
             title: (items: any[]) => {
               if (!items || items.length === 0) return '';
-              const idx = items[0].dataIndex;
-              const p = points[idx];
-              return p ? `Settimana ${p.weekStart} - ${p.weekEnd}` : items[0].label;
+              return formatWeekIntervalTooltip(points[items[0].dataIndex], items[0].label);
             },
             label: (ctx: any) => {
               const idx = ctx.dataIndex;
               const p = points[idx];
               if (ctx.dataset.yAxisID === 'yVolume') {
-                const volKg = ctx.parsed.y || 0;
-                const ton = (volKg / 1000).toLocaleString('it-IT', { minimumFractionDigits: 1, maximumFractionDigits: 2 });
-                const formattedKg = volKg.toLocaleString('it-IT');
-                const workouts = p ? ` (${p.workoutCount} ${p.workoutCount === 1 ? 'sessione' : 'sessioni'})` : '';
-                return `Volume: ${formattedKg} kg (${ton} t)${workouts}`;
+                return formatWeeklyVolumeTooltip(ctx.parsed.y || 0, p?.workoutCount);
               }
               if (ctx.dataset.yAxisID === 'yCalories') {
                 const kcal = ctx.parsed.y || 0;
@@ -212,11 +207,7 @@ export default function VolumeCaloriesCorrelationChart({
             color: colors.primary,
             font: { size: 11 },
             callback: (val: any) => {
-              const num = Number(val);
-              if (num >= 1000) {
-                return `${(num / 1000).toFixed(1)} t`;
-              }
-              return `${num} kg`;
+              return formatVolumeAxisTick(val);
             }
           }
         },
