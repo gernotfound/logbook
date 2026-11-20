@@ -1,5 +1,18 @@
 # Ciclo account, Auth e guest — TheLogBook
 
+### CF-05 — ambito di preparazione locale Kinde, senza grant globale (20/11/2026)
+
+Il percorso candidato `withKindeCandidateLocalReadiness()` compone
+bootstrap con consenso verificato, hydration AEAD, claim replica e journal
+interamente riconciliato con un nuovo controllo del consenso trusted D1.
+Riapre un vault device soltanto durante una callback isolata e lo richiude
+nel `finally`, anche per cambio cookie CSRF, sessione obsoleta, revoca
+locale, errore del chiamante o dati incoerenti. Non installa
+`authenticatedIdentitySource`, non crea un `currentUser` Firebase e non
+equivale a un grant fitness: ogni futura richiesta cloud deve continuare a
+verificare sessione, consenso, owner e recovery nel Worker.
+**Il provider pubblico rimane identity-only; questa API non è montata.**
+
 ## CF-05 — Revoca Kinde candidata e stato UI (19/11/2026)
 
 `KindeAccountEntry` richiede un **secondo** opt-in

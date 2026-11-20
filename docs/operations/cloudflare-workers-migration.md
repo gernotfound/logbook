@@ -1069,3 +1069,17 @@ Kinde esterno. Il secondo dispositivo è una simulazione con nuovo profilo
 IndexedDB/localStorage, non Safari/iPhone fisico. La suite NON prova
 deployment runtime, quote o recovery della KEK indipendente e NON autorizza
 l'attivazione pubblica fitness; il frontend conserva il boundary identity-only.
+
+
+### CF-05 — ambito readiness locale Kinde isolato (20/11/2026)
+
+`src/lib/auth/kindeCandidateLocalReadiness.ts` è un adapter candidato
+non montato nella PWA pubblica. Usa le route e i controlli D1 già presenti,
+`prepareKindeCandidateOwner({drainPendingJournal:true, retainDeviceVault:false})`,
+riapertura temporanea della DEK, verifica della replica e rilettura
+del consenso autorevole. La callback riceve soltanto una vista owner +
+session fence, senza installare identity reader o concedere permessi fitness.
+La DEK viene chiusa in `finally` anche se la callback fallisce o la sessione
+cambia; gli I/O cloud futuri devono autenticarsi indipendentemente a ogni
+operazione. Test isolati usano Worker/AuthGate reali e D1 sintetico in memoria.
+Non sono state create nuove D1 Cloudflare, attivate route o cambiate chiavi.
