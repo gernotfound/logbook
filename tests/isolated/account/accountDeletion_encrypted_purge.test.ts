@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { deletionMocks, context, disk } from './accountDeletionFixture';
+import { deletionMocks, context, disk, replaceDisk } from './accountDeletionFixture';
 import { get, set } from 'idb-keyval';
 import { purgeCompletedAccountLocalData, resumeAccountDeletion } from '../../../src/lib/db/db_account';
 import { createLocalKeyVault, deviceVaultKeyId } from '../../../src/lib/sync/secureArchiveKeys';
@@ -102,7 +102,7 @@ it('never destroys the device wrapping key if a changing localStorage index hide
             // Simulate another realm inserting a non-owner key before each
             // enumeration. Removing it at index 0 shifts the ciphertext to
             // the already-visited position without deleting the ciphertext.
-            if (concurrentShift && !disk.has(decoy)) disk = new Map([[decoy, 'not-owner-data'], ...disk]);
+            if (concurrentShift && !disk.has(decoy)) replaceDisk(new Map([[decoy, 'not-owner-data'], ...disk]));
             return disk.size;
         },
         key: (index: number) => {

@@ -27,10 +27,14 @@ import { purgeCompletedAccountLocalData } from '../../../src/lib/db/db_account';
 import { invalidateSession } from '../../../src/lib/sync/session';
 import { readAccountDeletionMarker } from '../../../src/lib/sync/accountGate';
 
-export export const deletionMocks = { boundary };
+export const deletionMocks = { boundary };
 
-const context = { purgeAllLocalUserData: purgeCompletedAccountLocalData, cancelPendingSyncs: boundary.cancel, resetStore: boundary.reset };
+export const context = { purgeAllLocalUserData: purgeCompletedAccountLocalData, cancelPendingSyncs: boundary.cancel, resetStore: boundary.reset };
 export let disk: Map<string, string>;
+
+export function replaceDisk(next: Map<string, string>): void {
+    disk = next;
+}
 
 export function response(status: number, body: Record<string, unknown>): Response {
     return new Response(JSON.stringify(body), {
