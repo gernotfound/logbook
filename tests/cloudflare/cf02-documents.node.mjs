@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { origin, owner, replica, withFixture, attempt, makeEnv, call, claim, retire } from './cf02-documents-fixture.mjs';
+import { owner, replica, withFixture, attempt, makeEnv, call, claim, retire } from './cf02-documents-fixture.mjs';
 
 void test('replica control snapshot is owner-scoped and revision-bound', () => withFixture(async db => {
   const initial = await call(db, 'control', {});
