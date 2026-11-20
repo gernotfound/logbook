@@ -4,13 +4,12 @@ import { shiftDateString } from '../../lib/utils/date';
 import { useAppStore } from '../../store/useAppStore';
 import { useSupplements } from '../../hooks/useSupplements';
 import { Logic } from '../../lib/logic';
-import { ContextMenu } from '../UI/ContextMenu';
-import { Pencil, Copy, Trash2 } from 'lucide-react';
 import { useDialogStore } from '../../store/useDialogStore';
 import { captureSession, isCurrentSession } from '../../lib/sync/session';
 import { NutritionDateNavigator } from './meals/NutritionDateNavigator';
 import type { Supplement } from '../../types';
 import { SupplementEditorForm, type SupplementEditorFormValues } from './SupplementEditorForm';
+import { SupplementCard } from './SupplementCard';
 
 interface NutritionSupplementsProps {
     selectedDate?: string;
@@ -145,6 +144,34 @@ export default function NutritionSupplements({ selectedDate, setSelectedDate }: 
     };
 
 
+    const handleAddIntake = async (supp: Supplement) => {
+        if (pendingIntakes.current.has(supp.id)) return;
+        let entered = quickInputs[supp.id];
+        if (entered === undefined) entered = supp.portion ? String(supp.portion) : '';
+        const amount = Number(entered.trim().replace(',', '.'));
+        if (!entered.trim() || !Number.isFinite(amount) || amount <= 0) {
+            await showAlert('Inserisci una quantità valida da assumere.');
+            return;
+        }
+
+        const session = captureSession();
+        pendingIntakes.current.add(supp.id);
+        try {
+            await addIntake(supp.id, amount);
+            if (isCurrentSession(session)) {
+                setQuickInputs(previous => {
+                    if (previous[supp.id] !== undefined && previous[supp.id] !== entered) return previous;
+                    const next = { ...previous };
+                    delete next[supp.id];
+                    return next;
+                });
+            }
+        } catch {
+            if (isCurrentSession(session)) await showAlert("Errore durante l'aggiunta dell'assunzione.");
+        } finally {
+            pendingIntakes.current.delete(supp.id);
+        }
+    };
 
     return (
         <div>
@@ -186,124 +213,20 @@ export default function NutritionSupplements({ selectedDate, setSelectedDate }: 
             {supplementsLibrary.length === 0 ? (
                 <p className="text-muted text-center my-20">Non hai ancora aggiunto alcun integratore. Creane uno per iniziare a tracciarlo.</p>
             ) : (
-                sortedSupplements.map((supp) => {
-                    const suppIntakes = intakesBySupplement.get(supp.id) || [];
-                    const totalAssunto = suppIntakes.reduce((acc, curr) => acc + curr.amount, 0);
-                    const hasTarget = typeof supp.target === 'number' && Number.isFinite(supp.target) && supp.target > 0;
-                    const progressPercent = hasTarget ? Math.min(Math.max((totalAssunto / supp.target!) * 100, 0), 100) : 0;
-                    
-                    return (
-                        <div key={supp.id} className="card mb-15">
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-                                <div>
-                                    <div style={{ fontWeight: 'bold', fontSize: 'var(--font-size-control)', color: 'var(--text-main)' }}>{supp.name}</div>
-                                    <div style={{ fontSize: 'var(--font-size-meta)', color: 'var(--text-muted)' }}>
-                                        Assunto: <strong style={{ color: 'var(--text-main)' }}>{Math.round(totalAssunto * 10) / 10}</strong> {supp.unit} 
-                                        {hasTarget ? ` / ${supp.target} ${supp.unit}` : ''}
-                                    </div>
-                                </div>
-                                <div style={{ display: 'flex', gap: '5px' }}>
-                                    <ContextMenu
-                                        items={[
-                                            {
-                                                label: 'Modifica',
-                                                icon: <Pencil size={16} />,
-                                                onClick: () => handleEditSupplement(supp)
-                                            },
-                                            {
-                                                label: 'Duplica',
-                                                icon: <Copy size={16} />,
-                                                onClick: () => handleDuplicateSupplement(supp)
-                                            },
-                                            {
-                                                label: 'Elimina',
-                                                icon: <Trash2 size={16} />,
-                                                variant: 'danger',
-                                                onClick: () => handleDeleteSupplement(supp.id, supp.name)
-                                            }
-                                        ]}
-                                    />
-                                </div>
-                            </div>
-
-                            {hasTarget && (
-                                <div className="progress-bg" style={{ height: '6px', marginBottom: '15px' }}>
-                                    <div 
-                                        className="progress-fill" 
-                                        style={{ 
-                                            width: `${progressPercent}%`, 
-                                            background: progressPercent >= 100 ? 'var(--success-color)' : 'var(--primary-color)' 
-                                        }}
-                                    />
-                                </div>
-                            )}
-
-                            <div style={{ display: 'flex', gap: '10px', alignItems: 'center', marginBottom: '15px' }}>
-                                <input 
-                                    type="number" 
-                                    inputMode="decimal"
-                                    placeholder={`Quantità (${supp.unit})`}
-                                    aria-label={`Quantità assunzione ${supp.name}`}
-                                    value={quickInputs[supp.id] !== undefined ? quickInputs[supp.id] : (supp.portion ? String(supp.portion) : '')}
-                                    onChange={e => setQuickInputs({ ...quickInputs, [supp.id]: e.target.value })}
-                                    onFocus={e => e.target.select()}
-                                    style={{ margin: 0, flex: 1, appearance: 'none', WebkitAppearance: 'none' }}
-                                />
-                                <button 
-                                    className="btn btn-primary" 
-                                    style={{ margin: 0, whiteSpace: 'nowrap', flex: 1 }}
-                                    onClick={async () => {
-                                        if (pendingIntakes.current.has(supp.id)) return;
-                                        let valStr = quickInputs[supp.id];
-                                        if (valStr === undefined) valStr = supp.portion ? String(supp.portion) : '';
-                                        const amount = Number(valStr.trim().replace(',', '.'));
-                                        if (!valStr.trim() || !Number.isFinite(amount) || amount <= 0) {
-                                            await showAlert('Inserisci una quantità valida da assumere.');
-                                            return;
-                                        }
-                                        const session = captureSession();
-                                        pendingIntakes.current.add(supp.id);
-                                        try {
-                                            await addIntake(supp.id, amount);
-                                            if (isCurrentSession(session)) {
-                                                setQuickInputs(prev => {
-                                                    if (prev[supp.id] !== undefined && prev[supp.id] !== valStr) return prev;
-                                                    const next = { ...prev };
-                                                    delete next[supp.id];
-                                                    return next;
-                                                });
-                                            }
-                                        } catch {
-                                            if (isCurrentSession(session)) await showAlert("Errore durante l'aggiunta dell'assunzione.");
-                                        } finally {
-                                            pendingIntakes.current.delete(supp.id);
-                                        }
-                                    }}
-                                >
-                                    + Aggiungi
-                                </button>
-                            </div>
-
-                            {suppIntakes.length > 0 && (
-                                <div style={{ background: 'var(--surface-light)', borderRadius: '8px', padding: '10px' }}>
-                                    <div style={{ fontSize: 'var(--font-size-meta)', color: 'var(--text-muted)', marginBottom: '8px' }}>Storico odierno:</div>
-                                    {suppIntakes.map(intake => {
-                                        const timeStr = new Date(intake.time).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
-                                        return (
-                                            <div key={intake.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '4px 0', borderBottom: '1px dashed var(--glass-border)' }}>
-                                                <div style={{ fontSize: 'var(--font-size-body)' }}>
-                                                    <span style={{ color: 'var(--text-muted)', marginRight: '8px' }}>{timeStr}</span>
-                                                    <strong>{intake.amount}</strong> {supp.unit}
-                                                </div>
-                                                <button className="btn-icon text-danger" onClick={() => removeIntake(intake.id)}>✕</button>
-                                            </div>
-                                        );
-                                    })}
-                                </div>
-                            )}
-                        </div>
-                    );
-                })
+                sortedSupplements.map(supp => (
+                    <SupplementCard
+                        key={supp.id}
+                        supplement={supp}
+                        intakes={intakesBySupplement.get(supp.id) ?? []}
+                        quickInput={quickInputs[supp.id]}
+                        onQuickInputChange={value => setQuickInputs(previous => ({ ...previous, [supp.id]: value }))}
+                        onEdit={() => handleEditSupplement(supp)}
+                        onDuplicate={() => handleDuplicateSupplement(supp)}
+                        onDelete={() => handleDeleteSupplement(supp.id, supp.name)}
+                        onAddIntake={() => handleAddIntake(supp)}
+                        onRemoveIntake={removeIntake}
+                    />
+                ))
             )}
         </div>
     );
