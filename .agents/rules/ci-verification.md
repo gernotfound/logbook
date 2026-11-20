@@ -152,6 +152,19 @@ ${{ matrix.command }} 2>&1 | tee "verification-${{ matrix.id }}.log"
 - MUST: nessun documento può affermare che “qualsiasi stderr” è automaticamente bloccante finché tale controllo non viene implementato.
 - SHOULD: warning inattesi, React `act(...)`, unhandled rejection e framework warning nelle suite candidate vanno corretti o spiegati; non sopprimerli indiscriminatamente per ottenere silenzio.
 
+## Protezione del branch `main` — snapshot GitHub del 20/11/2026
+
+**Fonte e limiti:** export JSON `protect main branch (1).json` fornito dal product owner il 20/11/2026. È una fotografia della configurazione esterna, **non** un ruleset applicato dal repository né una verifica live permanente; rileggere i ruleset GitHub prima di integrare, modificare gate o attribuire garanzie attuali. Non dedurre dall'export l'assenza di altre regole a livello di repository/organizzazione.
+
+- Ruleset repository `protect main branch` (ID `21862355`), `target: branch`, `enforcement: active`, selettore `~DEFAULT_BRANCH` (attualmente `main`).
+- `deletion` e `non_fast_forward`: impediscono rispettivamente l'eliminazione e il force-push sul branch protetto.
+- `pull_request`: modifiche via PR; **0** approvazioni obbligatorie, nessun code-owner reviewer imposto dal ruleset, **tutti i thread di review risolti** (`required_review_thread_resolution: true`); unico metodo di merge consentito: `squash`.
+- `required_status_checks`: controllo `Canonical Verification` associato all'integrazione GitHub App ID `15368`; `strict_required_status_checks_policy: true` (branch aggiornato rispetto alla base), `do_not_enforce_on_create: false`.
+- `required_linear_history`: cronologia lineare obbligatoria.
+- `bypass_actors: []`: nessuna eccezione esplicita nel ruleset esportato. Chi possiede i permessi per amministrare le regole può comunque modificarle: l'export non è una garanzia immutabile contro ogni scrittura.
+
+**Condotta operativa:** lavorare su branch e PR, mai fare push diretto o forzato su `main`; verificare l'HEAD di `main`, il candidato exact-SHA e il `Canonical Verification` richiesto, risolvere le conversazioni, usare solo squash merge quando autorizzato. Il ruleset GitHub e la CI versionata sono controlli distinti: né una descrizione in questo file né un test verde attestano da soli lo stato live delle protezioni.
+
 ## External checks
 
 - MUST: la copertura SAST bloccante non dipende da quote o disponibilità di un servizio terzo: CodeQL è parte del gate aggregato `Canonical Verification`.
