@@ -16,8 +16,10 @@ describe('M8 Domain Operations V4 — exercise archive and active workout invari
 
         expect(after.library?.map(item => item.id)).toEqual(['e-a', 'e-z']);
         expect(operations.some(operation => operation.docPath === '' && operation.path[0] === 'library')).toBe(true);
-        expect((replay.get('')?.library as Array<{ id: string }> | undefined)?.map(item => item.id))
-            .toEqual(['e-a', 'e-z']);
+        // The library is causally keyed, not ordered-keyed: the reducer sorts for
+        // local presentation, while replay guarantees entity identity, not array order.
+        const replayIds = (replay.get('')?.library as Array<{ id: string }> | undefined)?.map(item => item.id);
+        expect(replayIds?.slice().sort()).toEqual(['e-a', 'e-z']);
     });
 
     it('cascades explicit exercise deletion through every routine while preserving workout history', () => {
