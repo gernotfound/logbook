@@ -4,10 +4,8 @@ import { TrainingSessionSetup } from './TrainingSessionSetup';
 import { ActiveWorkoutSession } from './ActiveWorkoutSession';
 import PreSessionCheckIn from './PreSessionCheckIn';
 import WorkoutReportModal from './WorkoutReportModal';
-import SessionRatings from './session/SessionRatings';
-import { BufferedWorkoutScope } from '../UI/bufferedWorkoutScope';
+import PostSessionReview from './session/PostSessionReview';
 import type { WorkoutSession } from '../../types';
-import { Logic } from '../../lib/logic';
 import { draftRegistry } from '../../lib/utils/draftRegistry';
 import { captureSession, isCurrentSession } from '../../lib/sync/session';
 import { readWorkoutRecoveryDraftImage, writeWorkoutRecoveryDraft } from '../../lib/sync/workoutRecoveryDraft';
@@ -239,15 +237,7 @@ const TrainingSession = ({ onNavigateToHistory, onNavigateToPlanning, isActive =
 
     // Il report appartiene al contenitore della sessione: deve sopravvivere alla
     // cancellazione del workout locale che segue un salvataggio riuscito.
-    if (isPostSession && activeWorkout && !activeWorkout.isEditingHistory) {
-        const durationSeconds = activeWorkout.globalStartTime
-            ? Math.max(0, Math.floor((pendingEndTime - activeWorkout.globalStartTime) / 1000))
-            : 0;
-        const totalSets = activeWorkout.exercises.reduce(
-            (sum, exercise) => sum + (exercise.sets?.length ?? 0),
-            0,
-        );
-
+    if (isPostSession && pendingEndTime !== null && activeWorkout && !activeWorkout.isEditingHistory) {
         const finish = async () => {
             try {
                 draftRegistry.flushAll({ strict: true });
@@ -281,69 +271,25 @@ const TrainingSession = ({ onNavigateToHistory, onNavigateToPlanning, isActive =
             }
         };
         return (
-            <section className="pre-session-checkin post-session-checkin" aria-labelledby="post-session-title">
-                <header className="pre-session-header">
-                    <p className="pre-session-eyebrow">Fine sessione</p>
-                    <h2 id="post-session-title">Com’è andato l’allenamento?</h2>
-                    <p>Registra le sensazioni finali prima di salvare la sessione.</p>
-                </header>
-                <div className="post-session-summary">
-                    <div>
-                        <h3>Riepilogo rapido</h3>
-                        <p>{activeWorkout.routineName || 'Allenamento libero'}</p>
-                    </div>
-                    <div className="post-session-summary-grid">
-                        <div>
-                            <strong>{Logic.formatDuration(durationSeconds)}</strong>
-                            <span>Durata</span>
-                        </div>
-                        <div>
-                            <strong>{activeWorkout.exercises.length}</strong>
-                            <span>Esercizi</span>
-                        </div>
-                        <div>
-                            <strong>{totalSets}</strong>
-                            <span>Serie</span>
-                        </div>
-                    </div>
-                </div>
-                {postSessionDraft && (
-                    <BufferedWorkoutScope.Provider key={String(activeWorkout.id)} value={String(activeWorkout.id)}>
-                        <SessionRatings
-                        water={postSessionDraft.water}
-                        setWater={water => updatePostSessionDraft({ water })}
-                        mood={postSessionDraft.mood}
-                        setMood={mood => updatePostSessionDraft({ mood })}
-                        pump={postSessionDraft.pump}
-                        setPump={pump => updatePostSessionDraft({ pump })}
-                        fatigue={postSessionDraft.fatigue}
-                        setFatigue={fatigue => updatePostSessionDraft({ fatigue })}
-                        pains={postSessionDraft.pains}
-                        onTogglePain={togglePostSessionPain}
-                        onSetPains={pains => updatePostSessionDraft({ pains })}
-                        />
-                    </BufferedWorkoutScope.Provider>
-                )}
-                <div className="pre-session-actions">
-                    <button type="button" className="btn btn-success" onClick={() => void finish()}>Salva e termina</button>
-                    <button
-                        type="button"
-                        className="btn btn-secondary"
-                        onClick={() => {
-                            try {
-                                persistPostSessionSnapshot(postSessionDraftRef.current, null);
-                            } catch {
-                                return;
-                            }
-                            pendingEndTimeRef.current = null;
-                            setPendingEndTime(null);
-                        }}
-                    >
-                        Torna all’allenamento
-                    </button>
-                </div>
-            </section>
+            <PostSessionReview
+                workout={activeWorkout}
+                endTime={pendingEndTime}
+                draft={postSessionDraft}
+                onDraftChange={updatePostSessionDraft}
+                onTogglePain={togglePostSessionPain}
+                onFinish={finish}
+                onReturn={() => {
+                    try {
+                        persistPostSessionSnapshot(postSessionDraftRef.current, null);
+                    } catch {
+                        return;
+                    }
+                    pendingEndTimeRef.current = null;
+                    setPendingEndTime(null);
+                }}
+            />
         );
+
     }
 
     // The device snapshot becomes optimistic before the IndexedDB/cloud outcome
