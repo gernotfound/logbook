@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { UserDataSchema } from '../../src/lib/schema';
 import type { WorkoutSession } from '../../src/types';
 import { applyDomainOperations, type DomainOperation } from '../../src/lib/sync/domainOperations';
 import { projectDocuments } from '../../src/lib/sync/documentProjection';
