@@ -19,6 +19,7 @@ const adaptiveSurfaceFiles = [
   'src/components/Data/DataSleep.tsx',
   'src/components/ExportSelector.tsx',
   'src/components/Nutrition/NutritionSupplements.tsx',
+  'src/components/Nutrition/SupplementCard.tsx',
   'src/components/Nutrition/SupplementEditorForm.tsx',
   'src/components/Training/ActiveWorkoutSession.tsx',
   'src/components/Training/ExerciseSearchDropdown.tsx',
@@ -34,6 +35,7 @@ const adaptiveSurfaceFiles = [
   'src/components/Training/session/SessionRatings.tsx',
   'src/components/Training/session/SessionPainPicker.tsx',
   'src/components/Training/WorkoutReportModal.tsx',
+  'src/components/Training/report/WorkoutReportContent.tsx',
 ];
 
 describe('post-redesign UI hardening', () => {
