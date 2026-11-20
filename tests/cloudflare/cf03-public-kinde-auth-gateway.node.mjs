@@ -200,3 +200,17 @@ void test('Static Assets deploy follows verified main push, not legacy Firestore
   assert.ok(gate >= 0 && deploy > gate);
   assert.match(workflow, /workflow_dispatch:\n    inputs:\n      expected_sha:/);
 });
+
+void test('Cloudflare main release waits for eventual GitHub job visibility without bypassing exact-SHA safety', () => {
+  const workflow = readFileSync(
+    new URL('../../.github/workflows/cloudflare-candidate.yml', import.meta.url), 'utf8',
+  );
+  assert.match(workflow, /for attempt in \$\(seq 1 15\); do/);
+  assert.match(workflow, /--jq '\[\.jobs\[\] \| select\(\.name == "Main Release Gate" or \.name == "Security \/ CodeQL"\)\] \| \(length == 2 and all\(\.conclusion == "success"\)\)'/);
+  assert.match(workflow, /if \[ "\$\{proof\}" = true \]; then verified=true; break; fi/);
+  assert.match(workflow, /test "\$\{verified\}" = true \|\| \{ echo 'Exact-main Main Release Gate or CodeQL missing'; exit 1; \}/);
+  const lease = workflow.indexOf('git ls-remote --exit-code origin refs/heads/main');
+  const verification = workflow.indexOf('test "${verified}" = true');
+  const build = workflow.indexOf('node scripts/build-cloudflare-assets.mjs');
+  assert.ok(lease >= 0 && verification > lease && build > verification);
+});
