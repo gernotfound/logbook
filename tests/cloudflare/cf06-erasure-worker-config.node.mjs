@@ -1,0 +1,50 @@
+import assert from 'node:assert/strict';
+import test from 'node:test';
+import { readFileSync } from 'node:fs';
+import erasureWorker from '../../cloudflare/jobs/health-erasure-worker.mjs';
+import { validateErasureCandidate } from '../../scripts/check-cloudflare-erasure-candidate.mjs';
+
+const candidate = JSON.parse(readFileSync('cloudflare/jobs/wrangler.isolated.jsonc', 'utf8'));
+const api = JSON.parse(readFileSync('cloudflare/api/wrangler.isolated.jsonc', 'utf8'));
+
+void test('CF-06 scheduled-only candidate is unscheduled, unexposed and has distinct primary D1 authorities', () => {
+  assert.deepEqual(validateErasureCandidate(candidate, api), []);
+  assert.equal(typeof erasureWorker.scheduled, 'function');
+  assert.equal(Object.hasOwn(erasureWorker, 'fetch'), false);
+  assert.equal(Object.hasOwn(candidate, 'triggers'), false);
+  assert.equal(Object.hasOwn(candidate, 'routes'), false);
+  assert.equal(Object.hasOwn(candidate, 'vars'), false);
+});
+
+void test('CF-06 candidate rejects accidental cron activation, new routes, secrets or incorrect database bindings', () => {
+  for (const change of [
+    { workers_dev: true },
+    { preview_urls: true },
+    { triggers: { crons: ['*/5 * * * *'] } },
+    { route: 'thelogbook.me/erase' },
+    { routes: [{ pattern: 'thelogbook.me/api/*' }] },
+    { assets: { directory: '../dist' } },
+    { services: [{ binding: 'KINDE_HTTP', service: 'thelogbook-cf03-kinde-http-isolated' }] },
+    { vars: { CLOUD_ACCOUNT_KEK_V1: 'forbidden' } },
+    { unsafe: { bindings: [] } },
+    { d1_databases: [candidate.d1_databases[0]] },
+    { d1_databases: [
+      candidate.d1_databases[0], { ...candidate.d1_databases[1], database_id: candidate.d1_databases[0].database_id },
+    ] },
+    { d1_databases: [
+      candidate.d1_databases[0], { ...candidate.d1_databases[1], binding: 'DB' },
+    ] },
+    { d1_databases: [
+      { ...candidate.d1_databases[0], database_id: 'other' }, candidate.d1_databases[1],
+    ] },
+  ]) {
+    assert.notDeepEqual(validateErasureCandidate({ ...candidate, ...change }, api), [], JSON.stringify(change));
+  }
+});
+
+void test('CF-06 must not silently follow an unverified alternate API target', () => {
+  const different = { ...api, d1_databases: [
+    { ...api.d1_databases[0], database_id: 'untrusted' }, api.d1_databases[1],
+  ] };
+  assert.notDeepEqual(validateErasureCandidate(candidate, different), []);
+});

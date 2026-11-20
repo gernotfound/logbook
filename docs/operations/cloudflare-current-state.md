@@ -10,7 +10,7 @@
 | OAuth Kinde | Callback, sessione, Worker e componenti React | Quattro route Auth; GuestOnlyAuthProvider, ingresso Kinde identity-only | Google, verifica/reset email, cookie, logout, sessioni e ownership |
 | Replica Workers/D1 | Worker API/Auth Gate, schema SQL, checkpoint, claim e journal cifrato | Worker privati; frontend senza binding D1_API | Write→ricevuta/ACK→read su secondo device, lost ACK e quota |
 | Consenso e chiavi | DEK device e ADK per owner, binding KEK e rights/withdrawal candidati | Nessun grant fitness per account | Recovery indipendente della stessa KEK, consenso e revoca reali |
-| Erasure/inattività | Registro D1 indipendente, runner candidato | Nessun Cron Trigger nei quattro Worker verificati | Erasure terminale, delete Kinde per ultima, inattività e anti-resurrection |
+| Erasure/inattività | Registro D1 indipendente, runner e [manifest CF-06 candidato](../../cloudflare/jobs/README.md) | Nessun Cron Trigger; candidato non schedulato | Erasure terminale, delete Kinde per ultima, inattività e anti-resurrection |
 | Free/abuso/privacy | Test sintetici, controlli CI, rate-limit binding | NO-GO account fitness e utenti esterni | Quote, email, protezioni antiabuso, dati sintetici e revisione legale |
 
 **Readback Cloudflare 20 novembre 2026:** quattro Worker TheLogBook (frontend, API, Auth Gate, Kinde HTTP) con workers.dev e preview URL disabilitati; API privata con DB, RECOVERY_DB, AUTH_GATE e CLOUD_ACCOUNT_KEK_V1 di tipo secret_text, senza leggere il valore. Due D1 isolate con jurisdiction=eu. Questo prova solo attributi di configurazione, non recuperabilità KEK, API sanitarie funzionanti, residenza di tutti i trattamenti o GDPR.
