@@ -152,7 +152,7 @@ import { mockLibrary } from './exerciseSearchTestFixture';
 
             const durable = await readLocal(owner);
             expect(durable?.data.history).toHaveLength(1);
-            expect(durable?.data.history[0]?.exercises.map(exercise => exercise.exId))
+            expect(durable?.data.history?.[0]?.exercises.map(exercise => exercise.exId))
                 .toEqual(['ex_bench', 'ex_treadmill']);
         });
     })
