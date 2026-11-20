@@ -3,24 +3,24 @@ import { Logic } from '../../../lib/logic';
 interface RecoveryPainBadgesProps {
     activePains: string[];
     expanded: boolean;
+    id: string;
     onTogglePain: (muscleId: string) => void;
 }
 
-export function RecoveryPainBadges({ activePains, expanded, onTogglePain }: RecoveryPainBadgesProps) {
-    const isExpanded = expanded;
+export function RecoveryPainBadges({ activePains, expanded, id, onTogglePain }: RecoveryPainBadgesProps) {
     return (
-        {/* Active Pain Badges */}
-        <div 
+        <div
+            id={id}
             style={{
                 overflow: 'hidden',
                 transition: 'max-height 0.3s ease, opacity 0.3s ease, margin 0.3s ease',
-                maxHeight: isExpanded && activePains.length > 0 ? '500px' : '0',
-                opacity: isExpanded && activePains.length > 0 ? 1 : 0,
-                visibility: isExpanded && activePains.length > 0 ? 'visible' : 'hidden',
-                marginTop: isExpanded && activePains.length > 0 ? '5px' : '0',
-                marginBottom: isExpanded && activePains.length > 0 ? '5px' : '0'
+                maxHeight: expanded && activePains.length > 0 ? '500px' : '0',
+                opacity: expanded && activePains.length > 0 ? 1 : 0,
+                visibility: expanded && activePains.length > 0 ? 'visible' : 'hidden',
+                marginTop: expanded && activePains.length > 0 ? '5px' : '0',
+                marginBottom: expanded && activePains.length > 0 ? '5px' : '0'
             }}
-            aria-hidden={!isExpanded}
+            aria-hidden={!expanded}
         >
             {activePains.length > 0 && (
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>

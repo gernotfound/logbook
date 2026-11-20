@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useId, useState } from 'react';
 import MuscleModel from '../../Training/MuscleModel';
 import { Activity, ChevronDown } from 'lucide-react';
 import { RecoveryPainSearch } from './RecoveryPainSearch';
@@ -14,6 +14,7 @@ interface RecoveryBentoCardProps {
 const RecoveryBentoCardContent: React.FC<RecoveryBentoCardProps> = ({ activePains = [], painColors, muscleColors = {}, onTogglePain }) => {
     const combinedColors = { ...muscleColors, ...painColors };
     const [isExpanded, setIsExpanded] = useState(false);
+    const painsPanelId = useId();
 
     return (
         <div className="home-recovery">
@@ -27,6 +28,7 @@ const RecoveryBentoCardContent: React.FC<RecoveryBentoCardProps> = ({ activePain
                     onClick={() => activePains.length > 0 && setIsExpanded(v => !v)}
                     disabled={activePains.length === 0}
                     aria-expanded={isExpanded}
+                    aria-controls={painsPanelId}
                     style={{
                         display: 'flex',
                         alignItems: 'center',
@@ -56,7 +58,7 @@ const RecoveryBentoCardContent: React.FC<RecoveryBentoCardProps> = ({ activePain
             </div>
 
             <RecoveryPainSearch activePains={activePains} onTogglePain={onTogglePain} />
-            <RecoveryPainBadges activePains={activePains} expanded={isExpanded} onTogglePain={onTogglePain} />
+            <RecoveryPainBadges activePains={activePains} expanded={isExpanded} id={painsPanelId} onTogglePain={onTogglePain} />
 
             <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', background: 'var(--surface-light)', padding: '12px', borderRadius: '12px' }}>
                 <div style={{ width: '100%', display: 'flex', justifyContent: 'center' }}>
