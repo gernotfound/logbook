@@ -22,8 +22,8 @@ void test('synthetic D1 batch returns SELECT rows and rolls back a failed mixed 
       f.db.prepare('INSERT INTO synthetic_batch_probe (value) VALUES (?)').bind(7),
       f.db.prepare('INSERT INTO synthetic_batch_probe (value) VALUES (?)').bind(-1),
     ]));
-    assert.deepEqual(f.sqlite.prepare('SELECT value FROM synthetic_batch_probe ORDER BY value').all(),
-      [{ value: 3 }]);
+    assert.deepEqual(f.sqlite.prepare('SELECT value FROM synthetic_batch_probe ORDER BY value').all().map(row => row.value),
+      [3]);
   } finally { f.close(); }
 });
 

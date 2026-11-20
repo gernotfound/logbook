@@ -22,7 +22,7 @@ class Statement {
     return { success: true, meta: { changes: result.changes } };
   }
   async all() {
-    return { success: true, results: this.sqlite.prepare(this.sql).all(...this.args) };
+    return { success: true, results: this.sqlite.prepare(this.sql).all(...this.args).map(row => ({ ...row })) };
   }
 }
 class D1SqliteAdapter {
