@@ -15,6 +15,8 @@
 
 **Readback Cloudflare 20 novembre 2026:** quattro Worker TheLogBook (frontend, API, Auth Gate, Kinde HTTP) con workers.dev e preview URL disabilitati; API privata con DB, RECOVERY_DB, AUTH_GATE e CLOUD_ACCOUNT_KEK_V1 di tipo secret_text, senza leggere il valore. Due D1 isolate con jurisdiction=eu. Questo prova solo attributi di configurazione, non recuperabilità KEK, API sanitarie funzionanti, residenza di tutti i trattamenti o GDPR.
 
+**Rilascio Static Assets:** il workflow segue il Main Release Gate e CodeQL dello SHA di main; la riconciliazione Firestore è indipendente. Un deploy verde non attesta fitness, consenso o sync.
+
 ## Ordine consigliato
 
 1. Chiudere identità Kinde → owner → consenso → vault in fixture isolate, senza abilitare account fitness pubblico.

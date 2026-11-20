@@ -28,10 +28,16 @@ if (wrangler.workers_dev !== false || wrangler.preview_urls !== false ||
   failures.push('Frontend must use only thelogbook.me custom domain, with workers.dev and preview URLs disabled');
 }
 // The public development origin is also the only production route. A release
-// cannot skip the upstream verified main/Firestore fence or publish dev URLs.
+// must honor the verified exact-main release gate without requiring the
+// independent Firestore reconciliation to finish before an identity-only PWA.
 if (!productionWorkflow.includes('name: Cloudflare Workers Static Assets Production') ||
     !productionWorkflow.includes('CLOUDFLARE_APP_ORIGIN: https://thelogbook.me') ||
-    !productionWorkflow.includes('workflows:\n      - Firebase Firestore Production') ||
+    !productionWorkflow.includes('workflows:\n      - Milestone Verification') ||
+    !productionWorkflow.includes("github.event.workflow_run.event == 'push'") ||
+    !productionWorkflow.includes('verification.yml/runs?event=push&head_sha=') ||
+    !productionWorkflow.includes('Main Release Gate') ||
+    !productionWorkflow.includes('Security / CodeQL') ||
+    productionWorkflow.includes('firebase-firestore-production.yml/runs?') ||
     !productionWorkflow.includes("github.event.workflow_run.conclusion == 'success'") ||
     !productionWorkflow.includes("github.event.workflow_run.head_repository.full_name == github.repository") ||
     !productionWorkflow.includes('git ls-remote --exit-code origin refs/heads/main') ||

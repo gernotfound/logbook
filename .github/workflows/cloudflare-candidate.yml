@@ -1,9 +1,9 @@
 name: Cloudflare Workers Static Assets Production
 
 on:
-  workflow_run: # zizmor: ignore[dangerous-triggers] Deploy only gated, exact current main SHA after trusted Firestore reconciliation.
+  workflow_run: # zizmor: ignore[dangerous-triggers] Deploy only gated, exact current main SHA after exact verified Main Release Gate and CodeQL.
     workflows:
-      - Firebase Firestore Production
+      - Milestone Verification
     types:
       - completed
     branches:
@@ -32,7 +32,7 @@ jobs:
        github.event.workflow_run.conclusion == 'success' &&
        github.event.workflow_run.head_branch == 'main' &&
        github.event.workflow_run.head_repository.full_name == github.repository &&
-       github.event.workflow_run.event == 'workflow_run')
+       github.event.workflow_run.event == 'push')
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     permissions:
@@ -57,7 +57,7 @@ jobs:
           ref: ${{ env.EXPECTED_SHA }}
           fetch-depth: 0
           persist-credentials: false
-      - name: Validate main identity and verified Firestore reconciliation
+      - name: Validate main identity and successful main release gate
         shell: bash
         run: |
           set -euo pipefail
@@ -67,9 +67,12 @@ jobs:
           if [ "${actual}" != "${EXPECTED_SHA}" ] || [ "${remote}" != "${EXPECTED_SHA}" ]; then
             echo 'Refusing non-main or stale commit'; exit 1
           fi
-          gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/firebase-firestore-production.yml/runs?head_sha=${EXPECTED_SHA}&per_page=50" \
-            --jq '[.workflow_runs[] | select(.head_sha == "'"${EXPECTED_SHA}"'" and .conclusion == "success" and .event == "workflow_run")] | length > 0' \
-            | grep -Fx true || { echo 'Exact-main Firestore release gate missing'; exit 1; }
+          gate_run_id="$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/verification.yml/runs?event=push&head_sha=${EXPECTED_SHA}&per_page=50" \
+            --jq "[.workflow_runs[] | select(.head_sha == \"${EXPECTED_SHA}\" and .event == \"push\" and .conclusion == \"success\") | .id] | first // empty")"
+          [[ "${gate_run_id}" =~ ^[0-9]+$ ]] || { echo 'Missing successful exact-main verification run'; exit 1; }
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${gate_run_id}/jobs?per_page=100" \
+            --jq '[.jobs[] | select(.name == "Main Release Gate" or .name == "Security / CodeQL")] | (length == 2 and all(.conclusion == "success"))' \
+            | grep -Fx true || { echo 'Exact-main Main Release Gate or CodeQL missing'; exit 1; }
           for key in CLOUDFLARE_APP_ORIGIN VITE_FIREBASE_API_KEY VITE_FIREBASE_PROJECT_ID VITE_FIREBASE_APP_ID VITE_ACCOUNT_DELETION_API_ORIGIN VITE_RECAPTCHA_ENTERPRISE_SITE_KEY; do
             if [ -z "${!key:-}" ]; then echo "Missing public build variable: ${key}"; exit 1; fi
           done
@@ -109,7 +112,7 @@ jobs:
        github.event.workflow_run.conclusion == 'success' &&
        github.event.workflow_run.head_branch == 'main' &&
        github.event.workflow_run.head_repository.full_name == github.repository &&
-       github.event.workflow_run.event == 'workflow_run')
+       github.event.workflow_run.event == 'push')
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     permissions:
