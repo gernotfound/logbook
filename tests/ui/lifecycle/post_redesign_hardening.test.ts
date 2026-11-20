@@ -24,6 +24,7 @@ const adaptiveSurfaceFiles = [
   'src/components/Training/ExerciseSearchDropdown.tsx',
   'src/components/Training/ExerciseSearchOption.tsx',
   'src/components/Training/exercises/ExerciseEditorForm.tsx',
+  'src/components/Training/planning/ActiveCycleCard.tsx',
   'src/components/Training/planning/CycleEditor.tsx',
   'src/components/Training/planning/TrainingPlanning.tsx',
   'src/components/Training/routines/RoutineExerciseItem.tsx',
