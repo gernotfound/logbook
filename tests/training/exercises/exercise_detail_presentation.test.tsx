@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { ExerciseDetail } from '../../../src/components/Training/exercises/ExerciseDetail';
 import type { Exercise } from '../../../src/types';
 
@@ -28,7 +28,7 @@ function showDetail(exercise: Exercise, routineCount = 1) {
 }
 
 describe('exercise detail presentation', () => {
-    it('keeps the active exercise metadata and action payloads after extracting the detail', () => {
+    it('keeps the active exercise metadata and action payloads after extracting the detail', async () => {
         const { onBack, onEditItem, onDuplicate } = showDetail(baseExercise);
         const detail = screen.getByRole('region', { name: 'Dettaglio esercizio' });
         expect(within(detail).getByText('1 scheda')).toBeDefined();
@@ -39,6 +39,7 @@ describe('exercise detail presentation', () => {
         expect(onEditItem).toHaveBeenCalledExactlyOnceWith(baseExercise);
         fireEvent.click(within(detail).getByRole('button', { name: 'Duplica' }));
         expect(onDuplicate).toHaveBeenCalledExactlyOnceWith(baseExercise);
+        await waitFor(() => expect(within(detail).getByRole('button', { name: 'Torna all’elenco' })).toHaveProperty('disabled', false));
         fireEvent.click(within(detail).getByRole('button', { name: 'Torna all’elenco' }));
         expect(onBack).toHaveBeenCalledOnce();
     });
