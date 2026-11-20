@@ -38,7 +38,7 @@ export const ActiveWorkoutSession = ({ onNavigateToHistory, onRequestEnd, isActi
         pains, setPains, togglePain,
         deleteWorkout,
         saveHistoryEdit, cancelHistoryEdit,
-
+        addExtraExercise, reorderExercises, removeActiveExercise,
         addSet, removeSet, removeLastSet, updateSet,
         addSpecialSet, updateSpecialSet, removeSpecialSet, updateSetTarget,
         updateSetupNote, updateSessionNote, updateTechnicalStandard
