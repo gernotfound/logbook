@@ -3,7 +3,7 @@ import { clear, set } from 'idb-keyval';
 import { afterEach, beforeEach, expect, vi } from 'vitest';
 import { authenticatedIdentitySource } from '../../../src/lib/sync/authenticatedIdentitySource';
 
-export const boundary = vi.hoisted(() => ({
+const boundary = vi.hoisted(() => ({
     auth: { currentUser: null as any, signOut: vi.fn() },
     token: vi.fn(),
     appCheck: vi.fn(),
@@ -27,7 +27,9 @@ import { purgeCompletedAccountLocalData } from '../../../src/lib/db/db_account';
 import { invalidateSession } from '../../../src/lib/sync/session';
 import { readAccountDeletionMarker } from '../../../src/lib/sync/accountGate';
 
-export const context = { purgeAllLocalUserData: purgeCompletedAccountLocalData, cancelPendingSyncs: boundary.cancel, resetStore: boundary.reset };
+export export const deletionMocks = { boundary };
+
+const context = { purgeAllLocalUserData: purgeCompletedAccountLocalData, cancelPendingSyncs: boundary.cancel, resetStore: boundary.reset };
 export let disk: Map<string, string>;
 
 export function response(status: number, body: Record<string, unknown>): Response {

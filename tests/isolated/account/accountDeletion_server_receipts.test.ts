@@ -1,8 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
-import { boundary, context, response, headerValue, installSuccessfulServerFlow } from './accountDeletionFixture';
+import { deletionMocks, context, response, headerValue, installSuccessfulServerFlow } from './accountDeletionFixture';
 import { get } from 'idb-keyval';
 import { deleteAccount, resumeAccountDeletion } from '../../../src/lib/db/db_account';
 import { isAccountDeletionPending, markAccountDeletion, readAccountDeletionMarker } from '../../../src/lib/sync/accountGate';
+
+const boundary = deletionMocks.boundary;
 
 describe('Deletion: trusted server receipts, authentication and retry', () => {
 it('persists a recovery receipt before POST and purges only after server completion', async () => {

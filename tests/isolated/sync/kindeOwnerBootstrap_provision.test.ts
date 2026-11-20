@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { claimSource, uid, owner, principal, cookie, legal, server, start, firstPartySession } from './kindeOwnerBootstrapFixture';
+import { bootstrapMocks, uid, owner, principal, cookie, legal, server, start, firstPartySession } from './kindeOwnerBootstrapFixture';
 import { get } from 'idb-keyval';
 import { createCloudKeyHttpFixture } from '../../cloudflare/cloud-key-http-fixture.mjs';
 import { prepareKindeCandidateOwner } from '../../../src/lib/sync/kindeCandidateOwnerBootstrap';
@@ -7,6 +7,8 @@ import { KindeCandidateBoundaryError } from '../../../src/lib/auth/kindeCandidat
 import type { CloudReplicaClaimRequest } from '../../../src/lib/sync/cloudReplicaTransport';
 import { readLocal } from '../../../src/lib/sync/localArchiveBootstrap';
 import { isVaultUnlocked, lockAllVaults, readVaultControl, unlockVaultForOwner, vaultControlKey } from '../../../src/lib/sync/secureArchiveSession';
+
+const claimSource = bootstrapMocks.claimSource;
 
 describe('Kinde synthetic owner: trusted provisioning and claim reconciliation', () => {
     it('creates only owner-scoped ciphertext after trusted consent, then invokes the durable claim bridge', async () => {

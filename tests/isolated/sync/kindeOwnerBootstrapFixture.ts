@@ -2,14 +2,16 @@ import 'fake-indexeddb/auto';
 import { clear } from 'idb-keyval';
 import { afterEach, beforeEach, vi } from 'vitest';
 
-export const catalogSource = vi.hoisted(() => ({ read: vi.fn() }));
-export const claimSource = vi.hoisted(() => ({ claim: vi.fn() }));
+const catalogSource = vi.hoisted(() => ({ read: vi.fn() }));
+const claimSource = vi.hoisted(() => ({ claim: vi.fn() }));
 vi.mock('../../../src/lib/firebase', () => {
     throw Error('Kinde device bootstrap must not import Firebase');
 });
 vi.mock('../../../src/lib/catalog/catalogService', () => ({ getCachedCatalog: catalogSource.read }));
 vi.mock('../../../src/lib/sync/kindeCandidateReplicaClaimBridge',
     () => ({ claimKindeCandidateReplica: claimSource.claim }));
+
+export const bootstrapMocks = { catalogSource, claimSource };
 
 import { LEGAL_VERSIONS } from '../../../src/lib/legalVersions';
 import api from '../../../cloudflare/api/worker.mjs';

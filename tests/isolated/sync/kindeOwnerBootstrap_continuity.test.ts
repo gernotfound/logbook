@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { claimSource, uid, owner, principal, cookie, server, start, firstPartySession } from './kindeOwnerBootstrapFixture';
+import { bootstrapMocks, uid, owner, principal, cookie, server, start, firstPartySession } from './kindeOwnerBootstrapFixture';
 import { clear, get } from 'idb-keyval';
 import { issueVerifiedSession } from '../../../cloudflare/auth/session-issuer.mjs';
 import { createCloudKeyHttpFixture } from '../../cloudflare/cloud-key-http-fixture.mjs';
@@ -8,6 +8,8 @@ import { deliverKindeCandidateJournal } from '../../../src/lib/sync/kindeCandida
 import { readLocal } from '../../../src/lib/sync/localArchiveBootstrap';
 import { commitDomainOperations } from '../../../src/lib/sync/localDomainCommit';
 import { isVaultUnlocked, lockAllVaults, readVaultControl, unlockVaultForOwner } from '../../../src/lib/sync/secureArchiveSession';
+
+const claimSource = bootstrapMocks.claimSource;
 
 describe('Kinde synthetic owner: second device and concurrent session recovery', () => {
     it('does not claim complete journal delivery when a second edit arrives after remote commit', async () => {

@@ -1,8 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
-import { boundary, disk, response, completeHealthProof } from './accountDeletionFixture';
+import { deletionMocks, disk, response, completeHealthProof } from './accountDeletionFixture';
 import { get } from 'idb-keyval';
 import { purgeAllLocalUserData, purgeCompletedAccountLocalData, purgeCompletedHealthDataLocal, resumeInterruptedLocalPurge } from '../../../src/lib/db/db_account';
 import { beginLocalPurge, isLocalPurgePending } from '../../../src/lib/sync/localPurgeFence';
+
+const boundary = deletionMocks.boundary;
 
 describe('Deletion: health erasure and cross-owner local fences', () => {
 it('revalidates health-erasure completion only after acquiring the owner lock', async () => {

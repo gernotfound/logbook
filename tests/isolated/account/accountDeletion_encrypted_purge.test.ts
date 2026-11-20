@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { boundary, context, disk } from './accountDeletionFixture';
+import { deletionMocks, context, disk } from './accountDeletionFixture';
 import { get, set } from 'idb-keyval';
 import { purgeCompletedAccountLocalData, resumeAccountDeletion } from '../../../src/lib/db/db_account';
 import { createLocalKeyVault, deviceVaultKeyId } from '../../../src/lib/sync/secureArchiveKeys';
@@ -7,6 +7,8 @@ import { isVaultUnlocked } from '../../../src/lib/sync/secureArchiveSession';
 import { assertNoLocalPurge, isLocalPurgePending } from '../../../src/lib/sync/localPurgeFence';
 import { sealLocalText } from '../../../src/lib/sync/secureArchiveCipher';
 import { markAccountDeletion, readAccountDeletionMarker } from '../../../src/lib/sync/accountGate';
+
+const boundary = deletionMocks.boundary;
 
 describe('Deletion: encrypted owner purge and interrupted recovery', () => {
 it('does not sign out a replacement account while a stale logout preflight is pending', async () => {

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { claimSource, uid, owner, principal, cookie, firstPartySession, server, start } from './kindeOwnerBootstrapFixture';
+import { bootstrapMocks, uid, owner, principal, cookie, firstPartySession, server, start } from './kindeOwnerBootstrapFixture';
 import { get } from 'idb-keyval';
 import { createCloudKeyHttpFixture } from '../../cloudflare/cloud-key-http-fixture.mjs';
 import { prepareKindeCandidateOwner } from '../../../src/lib/sync/kindeCandidateOwnerBootstrap';
@@ -9,6 +9,8 @@ import { deliverKindeCandidateJournal } from '../../../src/lib/sync/kindeCandida
 import { readLocal } from '../../../src/lib/sync/localArchiveBootstrap';
 import { commitDomainOperations } from '../../../src/lib/sync/localDomainCommit';
 import { isVaultUnlocked, lockAllVaults, unlockVaultForOwner } from '../../../src/lib/sync/secureArchiveSession';
+
+const claimSource = bootstrapMocks.claimSource;
 
 describe('Kinde synthetic owner: journal durability and lost-ACK recovery', () => {
     it('recovers the first committed journal after restart and keeps edits recorded after the lost receipt', async () => {

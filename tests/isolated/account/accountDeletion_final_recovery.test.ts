@@ -1,9 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
-import { boundary, context, disk, response, headerValue, installSuccessfulServerFlow } from './accountDeletionFixture';
+import { deletionMocks, context, disk, response, headerValue, installSuccessfulServerFlow } from './accountDeletionFixture';
 import { get } from 'idb-keyval';
 import { deleteAccount, purgeAllLocalUserData, purgeCompletedAccountLocalData, resumeAccountDeletion } from '../../../src/lib/db/db_account';
 import { invalidateSession } from '../../../src/lib/sync/session';
 import { isAccountDeletionPending, markAccountDeletion, readAccountDeletionMarker } from '../../../src/lib/sync/accountGate';
+
+const boundary = deletionMocks.boundary;
 
 describe('Deletion: final recovery, provider failure and parallel owners', () => {
 it('waits for earlier writers and rejects an intervening identity change before POST', async () => {

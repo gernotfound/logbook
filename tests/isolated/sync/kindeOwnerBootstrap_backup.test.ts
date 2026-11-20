@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { catalogSource, catalog, claimSource, uid, owner, principal, firstPartySession } from './kindeOwnerBootstrapFixture';
+import { bootstrapMocks, catalog, uid, owner, principal, firstPartySession } from './kindeOwnerBootstrapFixture';
 import { createCloudKeyHttpFixture } from '../../cloudflare/cloud-key-http-fixture.mjs';
 import { prepareKindeCandidateOwner } from '../../../src/lib/sync/kindeCandidateOwnerBootstrap';
 import { deliverKindeCandidateJournal } from '../../../src/lib/sync/kindeCandidateJournalBridge';
@@ -13,6 +13,9 @@ import { sealLocalText } from '../../../src/lib/sync/secureArchiveCipher';
 import { readLocal } from '../../../src/lib/sync/localArchiveBootstrap';
 import { commitDomainOperations } from '../../../src/lib/sync/localDomainCommit';
 import { requireUnlockedLocalKey } from '../../../src/lib/sync/secureArchiveSession';
+
+const catalogSource = bootstrapMocks.catalogSource;
+const claimSource = bootstrapMocks.claimSource;
 
 describe('Kinde synthetic owner: restorable portable backup evidence', () => {
     it('prepares importable Schema 3 with real D1 data, an unsent local edit and device drafts', async () => {

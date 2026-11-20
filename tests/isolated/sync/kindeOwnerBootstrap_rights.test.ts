@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { claimSource, uid, owner, principal, firstPartySession } from './kindeOwnerBootstrapFixture';
+import { bootstrapMocks, uid, owner, principal, firstPartySession } from './kindeOwnerBootstrapFixture';
 import { createCloudKeyHttpFixture } from '../../cloudflare/cloud-key-http-fixture.mjs';
 import { prepareKindeCandidateOwner } from '../../../src/lib/sync/kindeCandidateOwnerBootstrap';
 import { deliverKindeCandidateJournal } from '../../../src/lib/sync/kindeCandidateJournalBridge';
@@ -11,6 +11,8 @@ import { sealLocalText } from '../../../src/lib/sync/secureArchiveCipher';
 import { readLocal } from '../../../src/lib/sync/localArchiveBootstrap';
 import { commitDomainOperations } from '../../../src/lib/sync/localDomainCommit';
 import { isVaultUnlocked, lockAllVaults, requireUnlockedLocalKey, unlockVaultForOwner } from '../../../src/lib/sync/secureArchiveSession';
+
+const claimSource = bootstrapMocks.claimSource;
 
 describe('Kinde synthetic owner: verified rights, withdrawal and privacy export', () => {
     it('reads and AEAD-authenticates revoked ciphertext without reopening the fitness vault or replaying sync', async () => {
