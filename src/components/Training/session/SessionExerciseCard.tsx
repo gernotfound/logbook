@@ -1,11 +1,12 @@
-import React, { useCallback, useEffect, useRef } from 'react';
-import { Trash2, Settings, MessageSquareText, History } from 'lucide-react';
+import React, { useCallback } from 'react';
+import { MessageSquareText } from 'lucide-react';
 import { useDialogStore } from '../../../store/useDialogStore';
 import SessionSetRow from './SessionSetRow';
 import { SessionExerciseHistory, SessionExerciseSetup } from './SessionExercisePanels';
 import type { SessionExerciseHistoryEntry } from './SessionExercisePanels';
 import { BufferedTextarea } from '../../UI/BufferedInput';
 import SessionCardioFields from './SessionCardioFields';
+import SessionExerciseToolbar from './SessionExerciseToolbar';
 import { BufferedWorkoutScope } from '../../UI/bufferedWorkoutScope';
 import { sessionSetHasMeaningfulData } from '../../../lib/workoutSetData';
 import { captureSession, isCurrentSession } from '../../../lib/sync/session';
@@ -75,22 +76,7 @@ const SessionExerciseCardInner: React.FC<SessionExerciseCardProps> = ({
     const workoutId = React.useContext(BufferedWorkoutScope);
     const lastNote = pastWorkouts[0]?.note?.trim() || '';
 
-    const [showPositionMenu, setShowPositionMenu] = React.useState(false);
     const [isNextNoteOpen, setIsNextNoteOpen] = React.useState(Boolean(exItem.sessionNote?.trim()));
-    const positionMenuRef = useRef<HTMLDivElement>(null);
-
-    useEffect(() => {
-        if (!showPositionMenu) return;
-        const handleClickOutside = (e: MouseEvent) => {
-            if (positionMenuRef.current && !positionMenuRef.current.contains(e.target as Node)) {
-                setShowPositionMenu(false);
-            }
-        };
-        document.addEventListener('mousedown', handleClickOutside);
-        return () => document.removeEventListener('mousedown', handleClickOutside);
-    }, [showPositionMenu]);
-
-
 
     const handleRemoveLastSet = useCallback(async () => {
         if (onRemoveLastSet) {
@@ -122,69 +108,16 @@ const SessionExerciseCardInner: React.FC<SessionExerciseCardProps> = ({
             <div style={{ marginBottom: '10px' }}>
                 <h2 style={{color: 'var(--primary-color)', margin: 0}}>{exName}</h2>
             </div>
-            <div className="session-exercise-toolbar">
-                {/* Position dropdown */}
-                <div style={{ position: 'relative' }} ref={positionMenuRef}>
-                    <button
-                        type="button"
-                        className="btn-small"
-                        style={{ borderRadius: '8px', minWidth: '44px', minHeight: '44px', fontWeight: 'bold', fontSize: 'var(--font-size-meta)', letterSpacing: '0.03em', color: 'var(--text-main)' }}
-                        onClick={() => setShowPositionMenu(v => !v)}
-                        disabled={totalExercises !== undefined && totalExercises <= 1}
-                        aria-label="Cambia posizione esercizio"
-                        title={totalExercises !== undefined && totalExercises <= 1 ? 'Unico esercizio nella sessione' : 'Cambia posizione esercizio'}
-                    >#{exIndex + 1}</button>
-                    {showPositionMenu && totalExercises !== undefined && totalExercises > 1 && (
-                        <div style={{ position: 'absolute', top: '100%', left: 0, zIndex: 50, background: 'var(--surface-color)', border: '1px solid var(--glass-border)', borderRadius: '8px', padding: '4px', minWidth: '140px', boxShadow: '0 8px 24px rgba(0,0,0,0.5)', marginTop: '4px' }}>
-                            {Array.from({ length: totalExercises }, (_, i) => i).map(targetIdx => (
-                                <button
-                                    key={targetIdx}
-                                    type="button"
-                                    onClick={() => { setShowPositionMenu(false); if (targetIdx !== exIndex) onMoveToPosition?.(exIndex, targetIdx); }}
-                                    disabled={targetIdx === exIndex}
-                                    aria-current={targetIdx === exIndex ? 'true' : undefined}
-                                    style={{
-                                        display: 'block', width: '100%', minHeight: '44px', padding: '8px 12px', textAlign: 'left',
-                                        background: targetIdx === exIndex ? 'var(--primary-soft)' : 'transparent',
-                                        border: 'none', color: targetIdx === exIndex ? 'var(--primary-color)' : 'var(--text-main)',
-                                        cursor: targetIdx === exIndex ? 'default' : 'pointer', fontSize: 'var(--font-size-meta)', borderRadius: '6px'
-                                    }}
-                                >{targetIdx === exIndex ? `✓ ${targetIdx + 1}ª posizione` : `${targetIdx + 1}ª posizione`}</button>
-                            ))}
-                        </div>
-                    )}
-                </div>
-                <button
-                    type="button"
-                    className="btn-small"
-                    style={{ background: 'var(--danger-soft)', border: '1px solid var(--danger-color)', color: 'var(--danger-color)', borderRadius: '8px' }}
-                    onClick={() => onRemoveExercise(exIndex)}
-                    aria-label="Rimuovi esercizio dalla sessione"
-                >
-                    <Trash2 size={16} aria-hidden="true" />
-
-                </button>
-                <button
-                    type="button"
-                    className={`btn-small toggle-btn ${isHistoryOpen ? 'active-highlight' : ''}`}
-                    style={isHistoryOpen ? { background: 'var(--primary-color)', color: 'var(--on-primary)' } : {}}
-                    onClick={() => onToggleHistory(exIndex)}
-                    aria-expanded={isHistoryOpen}
-                    aria-controls={`session-history-${exIndex}`}
-                >
-                    <History size={16} aria-hidden="true" style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: '4px' }} /> Storico
-                </button>
-                <button
-                    type="button"
-                    className={`btn-small toggle-btn ${isSetupOpen ? 'active-highlight' : ''}`}
-                    style={isSetupOpen ? { background: 'var(--primary-color)', color: 'var(--on-primary)' } : {}}
-                    onClick={() => onToggleSetup(exIndex)}
-                    aria-expanded={isSetupOpen}
-                    aria-controls={`session-setup-${exIndex}`}
-                >
-                    <Settings size={16} aria-hidden="true" style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: '4px' }} /> Setup
-                </button>
-            </div>
+            <SessionExerciseToolbar
+                exIndex={exIndex}
+                totalExercises={totalExercises}
+                isHistoryOpen={isHistoryOpen}
+                isSetupOpen={isSetupOpen}
+                onMoveToPosition={onMoveToPosition}
+                onRemoveExercise={onRemoveExercise}
+                onToggleHistory={onToggleHistory}
+                onToggleSetup={onToggleSetup}
+            />
 
             {isHistoryOpen && <SessionExerciseHistory exIndex={exIndex} pastWorkouts={pastWorkouts} trackingType={libDef?.trackingType} />}
 
