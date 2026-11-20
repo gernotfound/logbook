@@ -3,6 +3,7 @@ import { test } from 'node:test';
 import { readFileSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
 import worker from '../../cloudflare/api/worker.mjs';
+import { BODY_LIMIT_BYTES, BadInput, claimInput, readInput, pageInput, commitInput } from '../../cloudflare/api/replica-contracts.mjs';
 import { origin, withFixture, attempt, makeEnv, call, claim, retire } from './cf02-documents-fixture.mjs';
 
 const migration = readFileSync(new URL('../../cloudflare/api/migrations/0001_encrypted_replica.sql', import.meta.url), 'utf8');
@@ -124,3 +125,19 @@ void test('isolated migration rollback only targets its original disposable sche
   }
 });
 
+
+void test('isolated replica contract remains bounded, strict and rejects malformed causal inputs', () => {
+  assert.equal(BODY_LIMIT_BYTES.get('/v1/sync/commit'), 8 * 950000 + 8192);
+  assert.equal(BODY_LIMIT_BYTES.get('/v1/sync/control'), 128);
+  assert.equal(BODY_LIMIT_BYTES.has('/api/auth/session'), false);
+  assert.equal(readInput.safeParse({ paths: ['history_months/2026-11'] }).success, true);
+  assert.equal(readInput.safeParse({ paths: ['history_months/2026-13'] }).success, false);
+  assert.equal(readInput.safeParse({ paths: [''], unexpected: true }).success, false);
+  assert.equal(pageInput.safeParse({ after: null, expectedRevision: null }).success, true);
+  assert.equal(pageInput.safeParse({ after: null, expectedRevision: 1 }).success, false);
+  assert.equal(claimInput.safeParse({}).success, false);
+  assert.equal(commitInput.safeParse({ documents: [] }).success, false);
+  const rejected = new BadInput('invalid-input', 400);
+  assert.equal(rejected.message, 'invalid-input');
+  assert.equal(rejected.status, 400);
+});
