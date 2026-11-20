@@ -1,33 +1,6 @@
 import { formatSleepTime } from '../../lib/utils/date';
 import type { MeasurementHistoryDay } from '../../types';
 
-export const MONTH_NAMES = ['Gen', 'Feb', 'Mar', 'Apr', 'Mag', 'Giu', 'Lug', 'Ago', 'Set', 'Ott', 'Nov', 'Dic'];
-const MONTH_FORMATTER = new Intl.DateTimeFormat('it-IT', { month: 'long', year: 'numeric' });
-const DAY_FORMATTER = new Intl.DateTimeFormat('it-IT', {
-    weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
-});
-
-
-export function pad(value: number): string {
-    return String(value).padStart(2, '0');
-}
-
-function dateFromKey(key: string): Date {
-    const [year, month, day] = key.split('-').map(Number);
-    return new Date(year, month - 1, day, 12, 0, 0);
-}
-
-export function monthLabel(key: string): string {
-    const [year, month] = key.split('-').map(Number);
-    const label = MONTH_FORMATTER.format(new Date(year, month - 1, 1, 12, 0, 0));
-    return label.charAt(0).toUpperCase() + label.slice(1);
-}
-
-export function dayLabel(key: string): string {
-    const label = DAY_FORMATTER.format(dateFromKey(key));
-    return label.charAt(0).toUpperCase() + label.slice(1);
-}
-
 const MEASUREMENT_FIELDS = ['weight', 'bf', 'waist', 'neck', 'hip', 'chest', 'shoulders', 'biceps', 'thighs', 'calves'] as const satisfies readonly (keyof MeasurementHistoryDay)[];
 
 export function hasMeasurementData(day: MeasurementHistoryDay): boolean {

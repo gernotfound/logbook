@@ -1,25 +1,10 @@
 import React, { useState, useMemo, useCallback, useId } from 'react';
 import MuscleModelPaths from './MuscleModelPaths';
 import { Logic } from '../../lib/logic';
+import { expandMusclePaths, getMuscleForPath, getMusclePathStyle } from '../../lib/calc/muscleMapPresentation';
 
 const MUSCLE_NAMES_MAP = new Map<string, string>(Logic.MUSCLES.map(m => [m.id, m.name]));
 const EMPTY_MUSCLES: string[] = [];
-
-const REVERSE_GROUP_MAP: Record<string, string> = (() => {
-    const map: Record<string, string> = {};
-    const keys = Object.keys(Logic.GROUP_MAP).sort((a, b) => 
-        (Logic.GROUP_MAP as any)[a].length - (Logic.GROUP_MAP as any)[b].length
-    );
-    for (const key of keys) {
-        const paths = (Logic.GROUP_MAP as any)[key];
-        for (const p of paths) {
-            if (!map[p]) {
-                map[p] = key;
-            }
-        }
-    }
-    return map;
-})();
 
 interface MuscleModelProps {
     selectedMuscles?: string[];
@@ -47,81 +32,18 @@ export default function MuscleModel({
     const instanceId = useId().replace(/:/g, '');
     const getPathId = useCallback((pathId: string) => `${instanceId}-${pathId}`, [instanceId]);
 
-    const primaryIds = useMemo(() => {
-        const set = new Set<string>();
-        selectedMuscles.forEach(muscle => {
-            if (!muscle || typeof muscle !== 'string') return;
-            const mapped = (Logic.GROUP_MAP as any)[muscle];
-            if (mapped) {
-                mapped.forEach((id: string) => set.add(id));
-            } else {
-                set.add(muscle);
-            }
-        });
-        return set;
-    }, [selectedMuscles]);
-
-    const secondaryIds = useMemo(() => {
-        const set = new Set<string>();
-        secondaryMuscles.forEach(muscle => {
-            if (!muscle || typeof muscle !== 'string') return;
-            const mapped = (Logic.GROUP_MAP as any)[muscle];
-            if (mapped) {
-                mapped.forEach((id: string) => set.add(id));
-            } else {
-                set.add(muscle);
-            }
-        });
-        return set;
-    }, [secondaryMuscles]);
-
-    const getPathStyle = useCallback((id: string) => {
-        const logicId = REVERSE_GROUP_MAP[id];
-        
-        if (muscleColors) {
-            let customColor = muscleColors[id] || (logicId ? muscleColors[logicId] : undefined);
-            if (!customColor) {
-                for (const [groupKey, color] of Object.entries(muscleColors)) {
-                    const paths = (Logic.GROUP_MAP as any)[groupKey];
-                    if (paths && Array.isArray(paths) && paths.includes(id)) {
-                        customColor = color;
-                        break;
-                    }
-                }
-            }
-            if (customColor) {
-                return {
-                    fill: customColor,
-                    transition: 'fill 0.3s ease',
-                    stroke: 'var(--bg-card)',
-                    strokeWidth: '0.5'
-                };
-            }
-        }
-
-        const isPrimary = primaryIds.has(id);
-        const isSecondary = secondaryIds.has(id);
-        
-        let fill = 'var(--surface-light)';
-        if (isPrimary) {
-            fill = 'var(--primary-color)';
-        } else if (isSecondary) {
-            fill = 'var(--accent-color)';
-        }
-
-        return {
-            fill,
-            stroke: 'var(--text-muted)',
-            strokeWidth: '0.3',
-            cursor: interactive ? 'pointer' : 'default',
-        };
-    }, [muscleColors, primaryIds, secondaryIds, interactive]);
+    const primaryIds = useMemo(() => expandMusclePaths(selectedMuscles), [selectedMuscles]);
+    const secondaryIds = useMemo(() => expandMusclePaths(secondaryMuscles), [secondaryMuscles]);
+    const getPathStyle = useCallback(
+        (id: string) => getMusclePathStyle(id, primaryIds, secondaryIds, muscleColors, interactive),
+        [primaryIds, secondaryIds, muscleColors, interactive],
+    );
 
     const handleMouseMove = useCallback((e: React.MouseEvent) => {
         const target = e.target as SVGElement;
         if (target.tagName === 'path') {
             const pathId = target.dataset.musclePath;
-            const logicId = pathId ? REVERSE_GROUP_MAP[pathId] : undefined;
+            const logicId = pathId ? getMuscleForPath(pathId) : undefined;
             if (logicId) {
                 const name = MUSCLE_NAMES_MAP.get(logicId) || logicId;
                 const isTouch = typeof window !== 'undefined' && ('ontouchstart' in window || navigator.maxTouchPoints > 0);
@@ -150,7 +72,7 @@ export default function MuscleModel({
         const target = e.target as SVGElement;
         if (target.tagName === 'path') {
             const pathId = target.dataset.musclePath;
-            const logicId = pathId ? REVERSE_GROUP_MAP[pathId] : undefined;
+            const logicId = pathId ? getMuscleForPath(pathId) : undefined;
             if (logicId) {
                 onToggleMuscle(logicId);
             }

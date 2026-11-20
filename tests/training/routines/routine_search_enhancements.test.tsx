@@ -331,7 +331,7 @@ describe('Routine exercise search', () => {
                     fireEvent.click(deleteBtn!);
                     await Promise.resolve();
                 });
-                expect(onRemoveExercise).toHaveBeenCalledWith(0);
+                expect(onRemoveExercise).toHaveBeenCalledWith(0, routineExercises[0]);
             });
         });
     });

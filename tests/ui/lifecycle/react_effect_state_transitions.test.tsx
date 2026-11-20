@@ -63,6 +63,14 @@ describe('React effect replacement with derived state', () => {
         fireEvent.click(details);
         expect(details.getAttribute('aria-expanded')).toBe('true');
 
+        const renamedCycles = data.trainingCycles.map(cycle => cycle.id === 'cycle-a'
+            ? { ...cycle, name: 'Ciclo A aggiornato' } : cycle);
+        act(() => useAppStore.setState({
+            userData: { ...data, trainingCycles: renamedCycles } as any,
+        }));
+        expect(screen.getByRole('heading', { name: 'Ciclo A aggiornato' })).toBeDefined();
+        expect(screen.getByRole('button', { name: 'Dettagli ciclo' }).getAttribute('aria-expanded')).toBe('true');
+
         act(() => useAppStore.setState({ userData: { ...data, activeCycleId: 'cycle-b' } as any }));
         expect(screen.getByRole('button', { name: 'Dettagli ciclo' }).getAttribute('aria-expanded')).toBe('false');
         act(() => useAppStore.setState({ userData: { ...data, activeCycleId: 'cycle-a' } as any }));

@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useLocalToday } from '../../hooks/useLocalToday';
-import { CalendarRange, ChevronLeft, ChevronRight, Pencil, Ruler, Trash2 } from 'lucide-react';
+import { ChevronRight, Pencil, Ruler, Trash2 } from 'lucide-react';
 import { Logic } from '../../lib/logic';
 import { ContextMenu } from '../UI/ContextMenu';
 import type { MeasurementHistoryDay } from '../../types';
 import DataHistoryDetail from './DataHistoryDetail';
-import { MONTH_NAMES, pad, monthLabel, dayLabel, hasMeasurementData, finiteAverage, formatDecimal, recordSummary } from './dataHistoryFormatting';
+import { hasMeasurementData, finiteAverage, formatDecimal, recordSummary } from './dataHistoryFormatting';
+import { dayLabel } from '../../lib/utils/historyCalendar';
+import { HistoryMonthCalendar, HistoryPeriodButton, HistoryPeriodPicker } from '../UI/HistoryCalendar';
 
 interface DataHistoryProps {
     measurementsHistory: MeasurementHistoryDay[];
@@ -67,10 +69,6 @@ const DataHistory: React.FC<DataHistoryProps> = ({
 
     const monthDays = daysByMonth.get(viewMonth) || [];
     const selectedDays = daysByDate.get(selectedDate) || [];
-    const calendarDays = Logic.getCalendarMonthGrid(
-        Number(viewMonth.slice(0, 4)),
-        Number(viewMonth.slice(5, 7)) - 1,
-    );
     const averageWeight = finiteAverage(monthDays, 'weight');
     const averageBf = finiteAverage(monthDays, 'bf');
 
@@ -103,119 +101,43 @@ const DataHistory: React.FC<DataHistoryProps> = ({
                     <h2>Storico Dati</h2>
                     <p>{datedHistory.length} {datedHistory.length === 1 ? 'giorno registrato' : 'giorni registrati'}</p>
                 </div>
-                <button
-                    className="history-period-button"
-                    type="button"
-                    aria-expanded={periodOpen}
-                    aria-controls="data-history-period-picker"
+                <HistoryPeriodButton
+                    pickerId="data-history-period-picker"
+                    open={periodOpen}
                     onClick={() => {
                         setPeriodOpen(open => !open);
                         setPickerYear(Number(viewMonth.slice(0, 4)));
                     }}
-                >
-                    <CalendarRange size={18} aria-hidden="true" />
-                    <span>Mese e anno</span>
-                </button>
+                />
             </header>
 
             {periodOpen && (
-                <section
-                    className="history-year-picker"
-                    id="data-history-period-picker"
-                    aria-label="Scegli mese e anno"
-                >
-                    <div className="history-year-picker-head">
-                        <button
-                            className="history-icon-button"
-                            type="button"
-                            aria-label="Anno precedente"
-                            onClick={() => setPickerYear(year => year - 1)}
-                        >
-                            <ChevronLeft size={20} aria-hidden="true" />
-                        </button>
-                        <strong>{pickerYear}</strong>
-                        <button
-                            className="history-icon-button"
-                            type="button"
-                            aria-label="Anno successivo"
-                            onClick={() => setPickerYear(year => year + 1)}
-                        >
-                            <ChevronRight size={20} aria-hidden="true" />
-                        </button>
-                    </div>
-                    <div className="history-year-picker-grid">
-                        {MONTH_NAMES.map((name, index) => {
-                            const key = `${pickerYear}-${pad(index + 1)}`;
-                            const hasData = daysByMonth.has(key);
-                            const selected = key === viewMonth;
-                            return (
-                                <button
-                                    key={key}
-                                    className={[
-                                        'history-month-button',
-                                        hasData ? 'has-data' : '',
-                                        selected ? 'selected' : '',
-                                    ].filter(Boolean).join(' ')}
-                                    type="button"
-                                    aria-pressed={selected}
-                                    aria-label={`${name} ${pickerYear}${hasData ? ', contiene dati' : ''}`}
-                                    onClick={() => selectMonth(key)}
-                                >
-                                    {name}
-                                </button>
-                            );
-                        })}
-                    </div>
-                </section>
+                <HistoryPeriodPicker
+                    pickerId="data-history-period-picker"
+                    year={pickerYear}
+                    selectedMonth={viewMonth}
+                    entriesByMonth={daysByMonth}
+                    populatedClass="has-data"
+                    populatedDescription="dati"
+                    onChangeYear={delta => setPickerYear(year => year + delta)}
+                    onSelectMonth={selectMonth}
+                />
             )}
-
-            <section className="history-calendar-panel" aria-label={`Calendario ${monthLabel(viewMonth)}`}>
-                <div className="history-month-nav">
-                    <button className="history-icon-button" type="button" aria-label="Mese precedente" onClick={() => changeMonth(-1)}>
-                        <ChevronLeft size={20} aria-hidden="true" />
-                    </button>
-                    <strong className="history-month-name">{monthLabel(viewMonth)}</strong>
-                    <button className="history-today-button" type="button" onClick={selectToday}>Oggi</button>
-                    <button className="history-icon-button" type="button" aria-label="Mese successivo" onClick={() => changeMonth(1)}>
-                        <ChevronRight size={20} aria-hidden="true" />
-                    </button>
-                </div>
-
-                <div className="history-weekdays" aria-hidden="true">
-                    <span>L</span><span>M</span><span>M</span><span>G</span><span>V</span><span>S</span><span>D</span>
-                </div>
-
-                <div className="history-calendar-grid">
-                    {calendarDays.map(day => {
-                        const count = daysByDate.get(day.dateStr)?.length || 0;
-                        const selected = day.dateStr === selectedDate;
-                        const isToday = day.dateStr === today;
-                        return (
-                            <button
-                                key={day.dateStr}
-                                className={[
-                                    'history-day',
-                                    day.isCurrentMonth ? '' : 'outside',
-                                    isToday ? 'today' : '',
-                                    selected ? 'selected' : '',
-                                    count ? 'has-data' : '',
-                                    count > 1 ? 'has-multiple' : '',
-                                ].filter(Boolean).join(' ')}
-                                type="button"
-                                aria-pressed={selected}
-                                aria-label={`${dayLabel(day.dateStr)}${count ? `, ${count} ${count === 1 ? 'rilevazione' : 'rilevazioni'}` : ''}`}
-                                onClick={() => {
-                                    setSelectedDate(day.dateStr);
-                                    if (!day.isCurrentMonth) setViewMonth(day.dateStr.slice(0, 7));
-                                }}
-                            >
-                                <span>{day.dayNum}</span>
-                                {count > 1 && <span className="history-day-count" aria-hidden="true">{count}</span>}
-                            </button>
-                        );
-                    })}
-                </div>
-            </section>
+            <HistoryMonthCalendar
+                month={viewMonth}
+                selectedDate={selectedDate}
+                today={today}
+                entriesByDate={daysByDate}
+                populatedClass="has-data"
+                itemSingular="rilevazione"
+                itemPlural="rilevazioni"
+                onChangeMonth={changeMonth}
+                onSelectToday={selectToday}
+                onSelectDate={(date, isCurrentMonth) => {
+                    setSelectedDate(date);
+                    if (!isCurrentMonth) setViewMonth(date.slice(0, 7));
+                }}
+            />
 
             <section className="history-month-summary" aria-label="Riepilogo del mese">
                 <div>

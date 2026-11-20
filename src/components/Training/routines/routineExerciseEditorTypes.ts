@@ -6,7 +6,7 @@ export interface RoutineExerciseItemProps {
     totalExercises: number;
     libDef?: ExerciseLibraryItem;
     onMove: (index: number, direction: number) => void;
-    onRemove: (index: number) => void;
+    onRemove: (index: number, expected?: RoutineExercise) => void;
     onUpdateSetsCount: (index: number, value: string) => void;
     onUpdateReps: (index: number, field: 'minReps' | 'maxReps', value: string) => void;
     onUpdateSetPlan: (exerciseIndex: number, setIndex: number, tech: SetTechnique) => void;

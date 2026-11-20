@@ -16,7 +16,7 @@ interface RoutineEditorProps {
     editSecMuscles: string[];
     onAddExercise: (exId: string) => void;
     onMoveExercise: (index: number, direction: number) => void;
-    onRemoveExercise: (index: number) => void;
+    onRemoveExercise: (index: number, expected?: RoutineExercise) => void;
     onUpdateSetsCount: (index: number, value: string) => void;
     onUpdateReps: (index: number, field: 'minReps' | 'maxReps', value: string) => void;
     onUpdateSetPlan: (exerciseIndex: number, setIndex: number, tech: SetTechnique) => void;

@@ -27,7 +27,7 @@ export const RoutineExerciseItem: React.FC<RoutineExerciseItemProps> = ({
             `Vuoi rimuovere “${exerciseName}” da questa scheda? L’esercizio resterà disponibile nella libreria.`,
             'Rimuovi esercizio',
         );
-        if (confirmed) onRemove(index);
+        if (confirmed) onRemove(index, exercise);
     };
 
     return (

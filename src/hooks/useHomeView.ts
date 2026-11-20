@@ -2,7 +2,7 @@ import { useState, useMemo, useCallback, useEffect } from 'react';
 import type { Exercise, NutritionDay, WorkoutSession } from '../types';
 import { calculateHomeWeightSeries, selectLatestHomeMeasurements, summarizeHomeNutrition, type HomeWeightPeriod, type HomeWeightStats } from '../lib/calc/homeHealthMetrics';
 import { useAppStore } from '../store/useAppStore';
-import { GROUP_MAP } from '../lib/constants/muscles';
+import { getPainMuscleColors } from '../lib/calc/muscleMapPresentation';
 import { getLocalDateString } from '../lib/utils/date';
 import { buildHomeMuscleExposureIndex, calculateHomeWorkoutStreak, getHomeWorkoutDate, getRecentHomeMuscles } from '../lib/calc/homeTrainingMetrics';
 
@@ -119,21 +119,7 @@ export function useHomeView(isActive = true): HomeViewState {
         };
     }, [isActive]);
 
-    const painColors = useMemo(() => {
-        const colors: Record<string, string> = {};
-        const DANGER_COLOR = 'var(--muscle-pain)';
-        (activePains || []).forEach(mId => {
-            if (!mId || typeof mId !== 'string') return;
-            colors[mId] = DANGER_COLOR;
-            const atomicPaths = GROUP_MAP[mId];
-            if (Array.isArray(atomicPaths)) {
-                atomicPaths.forEach((path: string) => {
-                    colors[path] = DANGER_COLOR;
-                });
-            }
-        });
-        return colors;
-    }, [activePains]);
+    const painColors = useMemo(() => getPainMuscleColors(activePains), [activePains]);
 
     const toggleActivePain = useCallback((muscleId: string) => {
         if (!muscleId || typeof muscleId !== 'string') return;

@@ -10,6 +10,7 @@ import { useDialogStore } from '../../store/useDialogStore';
 import { captureSession, isCurrentSession } from '../../lib/sync/session';
 import { NutritionDateNavigator } from './meals/NutritionDateNavigator';
 import type { Supplement } from '../../types';
+import { SupplementEditorForm, type SupplementEditorFormValues } from './SupplementEditorForm';
 
 interface NutritionSupplementsProps {
     selectedDate?: string;
@@ -30,7 +31,7 @@ export default function NutritionSupplements({ selectedDate, setSelectedDate }: 
     // Stato per la modale di creazione/modifica integratore
     const [showSuppModal, setShowSuppModal] = useState(false);
     const [editingSuppId, setEditingSuppId] = useState<string | null>(null);
-    const [suppForm, setSuppForm] = useState({ name: '', unit: 'g', target: '', portion: '' });
+    const [suppForm, setSuppForm] = useState<SupplementEditorFormValues>({ name: '', unit: 'g', target: '', portion: '' });
     const [savingSupplement, setSavingSupplement] = useState(false);
     const savingSupplementRef = useRef(false);
     const pendingIntakes = useRef(new Set<string>());
@@ -169,73 +170,17 @@ export default function NutritionSupplements({ selectedDate, setSelectedDate }: 
                     + Nuovo integratore
                 </button>
             ) : (
-                <div className="card mb-15" style={{ background: 'var(--surface-light)', border: '1px solid var(--primary-color)' }}>
-                    <h2 className="mb-15" style={{color: 'var(--text-main)'}}>
-                        {editingSuppId ? 'Modifica integratore' : 'Crea nuovo integratore'}
-                    </h2>
-                    
-                    <div className="form-group">
-                        <label htmlFor="supp-name">Nome integratore</label>
-                        <input 
-                            type="text" 
-                            id="supp-name"
-                                placeholder="es. Creatina, EAA, Caffeina" 
-                            value={suppForm.name}
-                                disabled={savingSupplement} 
-                            onChange={e => setSuppForm({...suppForm, name: e.target.value})}
-                            style={{ width: '100%', boxSizing: 'border-box' }}
-                        />
-                    </div>
-                    
-                    <div style={{ display: 'flex', gap: '15px' }}>
-                        <div className="form-group" style={{ flex: 1, minWidth: 0 }}>
-                            <label htmlFor="supp-target">Dose target giornaliera</label>
-                            <input 
-                                type="number" 
-                                inputMode="decimal"
-                                id="supp-target"
-                                placeholder="Opzionale (es. 5)" 
-                                value={suppForm.target}
-                                disabled={savingSupplement} 
-                                onChange={e => setSuppForm({...suppForm, target: e.target.value})}
-                                style={{ width: '100%', boxSizing: 'border-box', appearance: 'none' }}
-                            />
-                        </div>
-                        <div className="form-group" style={{ flex: 1, minWidth: 0 }}>
-                            <label htmlFor="supp-portion">Dose singola (opzionale)</label>
-                            <input 
-                                type="number" 
-                                inputMode="decimal"
-                                id="supp-portion"
-                                placeholder="es. 20" 
-                                value={suppForm.portion}
-                                disabled={savingSupplement} 
-                                onChange={e => setSuppForm({...suppForm, portion: e.target.value})}
-                                style={{ width: '100%', boxSizing: 'border-box', appearance: 'none' }}
-                            />
-                        </div>
-                        <div className="form-group" style={{ flex: 1, minWidth: 0 }}>
-                            <label htmlFor="supp-unit">Unità di misura</label>
-                            <input 
-                                type="text" 
-                                id="supp-unit"
-                                placeholder="es. g, mg, cp" 
-                                value={suppForm.unit}
-                                disabled={savingSupplement} 
-                                onChange={e => setSuppForm({...suppForm, unit: e.target.value})}
-                                style={{ width: '100%', boxSizing: 'border-box' }}
-                            />
-                        </div>
-                    </div>
-
-                    <div className="flex-between mt-20">
-                        <button className="btn" onClick={() => {
-                            setShowSuppModal(false);
-                            setEditingSuppId(null);
-                        }} disabled={savingSupplement}>Annulla</button>
-                        <button className="btn btn-primary" onClick={() => { void handleSaveSupplement(); }} disabled={savingSupplement}>Salva</button>
-                    </div>
-                </div>
+                <SupplementEditorForm
+                    editing={editingSuppId !== null}
+                    form={suppForm}
+                    disabled={savingSupplement}
+                    onChange={(field, value) => setSuppForm(previous => ({ ...previous, [field]: value }))}
+                    onCancel={() => {
+                        setShowSuppModal(false);
+                        setEditingSuppId(null);
+                    }}
+                    onSave={() => { void handleSaveSupplement(); }}
+                />
             )}
 
             {supplementsLibrary.length === 0 ? (
