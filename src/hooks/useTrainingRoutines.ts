@@ -5,7 +5,7 @@ import { useAppStore } from '../store/useAppStore';
 import { useDialogStore } from '../store/useDialogStore';
 import { Logic } from '../lib/logic';
 import { normalizeBusinessId } from '../lib/businessIdentity';
-import { z } from '../lib/zod';
+import { parseRoutineRecovery } from './trainingRoutines/routineRecoverySchema';
 import { readWorkoutRecoveryDraftImage, writeWorkoutRecoveryDraft } from '../lib/sync/workoutRecoveryDraft';
 import { captureSession, isCurrentSession } from '../lib/sync/session';
 import type { Exercise, PlannedSetTechnique, ProgressionContract, RoutineExercise, SetTechnique, WorkoutRoutine } from '../types';
@@ -13,42 +13,6 @@ import type { Exercise, PlannedSetTechnique, ProgressionContract, RoutineExercis
 const EMPTY_ROUTINES: WorkoutRoutine[] = [];
 const EMPTY_LIBRARY: Exercise[] = [];
 const ROUTINE_DRAFT_KEY = 'draft_routine';
-
-const recoveredRoutineExerciseSchema = z.object({
-    exId: z.string().refine(id => id.trim().length > 0),
-    setsCount: z.union([z.string(), z.number().finite()]),
-    minReps: z.union([z.string(), z.number().finite()]).optional(),
-    maxReps: z.union([z.string(), z.number().finite()]).optional(),
-    setPlans: z.array(z.object({
-        technique: z.enum(['straight', 'dropset', 'rest_pause', 'cluster', 'rep_match', 'diminishing']),
-        target: z.object({ type: z.literal('reps'), reps: z.number().int().nonnegative(),
-            sourceSetId: z.string().optional() }).optional(),
-        restSeconds: z.number().int().nonnegative().optional(),
-        segmentCount: z.number().int().positive().optional(),
-    }).passthrough()).optional(),
-    technicalStandard: z.string().optional(),
-    defaultTechnique: z.enum([
-        'none', 'dropset', 'isometrics', 'rest_pause', 'cluster', 'rep_match', 'diminishing',
-    ]).optional(),
-    progressionContract: z.object({
-        role: z.enum(['primary', 'secondary', 'support']).optional(),
-        metric: z.enum(['performance', 'volume', 'density', 'execution']).optional(),
-    }).passthrough().optional(),
-}).passthrough();
-
-const recoveredRoutineDraftSchema = z.object({
-    name: z.string().optional(),
-    exercises: z.array(recoveredRoutineExerciseSchema).optional(),
-}).passthrough();
-
-function parseRoutineRecovery(value: unknown | null): { name?: string; exercises?: RoutineExercise[] } | null {
-    if (value === null) return null;
-    const parsed = recoveredRoutineDraftSchema.safeParse(value);
-    if (!parsed.success) {
-        throw new Error('Bozza scheda non valida: originale cifrato conservato.');
-    }
-    return parsed.data;
-}
 
 function blockRoutineDraft(error: unknown, session: ReturnType<typeof captureSession>): void {
     if (!isCurrentSession(session)) return;
