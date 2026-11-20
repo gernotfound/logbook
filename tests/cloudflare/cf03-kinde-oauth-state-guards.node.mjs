@@ -78,14 +78,15 @@ void test('OAuth state expiry pruning removes at most 16 per start and preserves
   const f = await fixture();
   try {
     const live = await f.start();
+    const expiredHashes = [];
     for (let index = 0; index < 20; index += 1) {
-      const expired = await f.start(live.cookie);
-      const hash = createHash('sha256').update(expired.state).digest('hex');
-      const changed = f.sqlite.prepare(
-        'UPDATE auth_oauth_attempts SET issued_at_ms=1, expires_at_ms=2 WHERE state_hash=?'
-      ).run(hash);
-      assert.equal(changed.changes, 1);
+      const attempt = await f.start(live.cookie);
+      expiredHashes.push(createHash('sha256').update(attempt.state).digest('hex'));
     }
+    const expire = f.sqlite.prepare(
+      'UPDATE auth_oauth_attempts SET issued_at_ms=1, expires_at_ms=2 WHERE state_hash=?'
+    );
+    for (const hash of expiredHashes) assert.equal(expire.run(hash).changes, 1);
     assert.equal(f.sqlite.prepare('SELECT COUNT(*) AS n FROM auth_oauth_attempts WHERE expires_at_ms=2').get().n, 20);
     const firstSweep = await f.start(live.cookie);
     assert.equal(f.sqlite.prepare('SELECT COUNT(*) AS n FROM auth_oauth_attempts WHERE expires_at_ms=2').get().n, 4);
