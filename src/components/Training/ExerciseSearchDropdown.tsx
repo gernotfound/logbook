@@ -16,9 +16,10 @@ export interface ExerciseSearchDropdownProps {
 }
 
 const EXERCISE_PAGE_SIZE = 40;
+const EMPTY_LIBRARY: ExerciseLibraryItem[] = [];
 
 export const ExerciseSearchDropdown: React.FC<ExerciseSearchDropdownProps> = ({
-    library = [],
+    library = EMPTY_LIBRARY,
     onSelectExercise,
     inputId,
     placeholder = '🔍 Cerca esercizio da aggiungere...',
@@ -47,6 +48,13 @@ export const ExerciseSearchDropdown: React.FC<ExerciseSearchDropdownProps> = ({
         return createExerciseLibrarySearcher(list);
     }, [library, exclusionKey]);
     const filteredExercises = useMemo(() => isOpen ? searcher(searchTerm) : [], [isOpen, searcher, searchTerm]);
+
+    // A refreshed library or exclusion list can reorder existing results.
+    // Do not let a stale keyboard index select a different exercise.
+    useEffect(() => {
+        setHighlightedIndex(-1);
+        setVisibleCount(EXERCISE_PAGE_SIZE);
+    }, [searcher]);
     const visibleExercises = filteredExercises.slice(0, visibleCount);
 
     // Handle outside clicks/touches
@@ -71,8 +79,9 @@ export const ExerciseSearchDropdown: React.FC<ExerciseSearchDropdownProps> = ({
     useEffect(() => {
         if (isOpen && highlightedIndex >= 0 && dropdownRef.current) {
             const items = dropdownRef.current.querySelectorAll('.exercise-dropdown-item');
-            if (items[highlightedIndex] && typeof (items[highlightedIndex] as any).scrollIntoView === 'function') {
-                (items[highlightedIndex] as HTMLElement).scrollIntoView({
+            const activeItem = items[highlightedIndex];
+            if (activeItem && typeof activeItem.scrollIntoView === 'function') {
+                activeItem.scrollIntoView({
                     block: 'nearest',
                     behavior: 'smooth'
                 });
