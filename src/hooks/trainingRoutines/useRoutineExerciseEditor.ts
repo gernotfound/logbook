@@ -146,9 +146,18 @@ export function useRoutineExerciseEditor(initialExercises?: RoutineExercise[]) {
         });
     };
 
-    const handleRemoveExerciseFromRoutine = (indexToRemove: number) => {
-        setRoutineExercises(prev => validIndex(indexToRemove, prev.length)
-            ? prev.filter((_, idx) => idx !== indexToRemove) : prev);
+    const handleRemoveExerciseFromRoutine = (indexToRemove: number, expected?: RoutineExercise) => {
+        setRoutineExercises(prev => {
+            let resolvedIndex = indexToRemove;
+            if (expected) {
+                // A dialog can settle after reorder or edit: identify the exact
+                // draft snapshot shown when it was opened, not the old index.
+                resolvedIndex = prev.indexOf(expected);
+                if (resolvedIndex === -1 || prev.lastIndexOf(expected) !== resolvedIndex) return prev;
+            }
+            if (!validIndex(resolvedIndex, prev.length)) return prev;
+            return prev.filter((_, idx) => idx !== resolvedIndex);
+        });
     };
 
     const moveExercise = (index: number, direction: number) => {
