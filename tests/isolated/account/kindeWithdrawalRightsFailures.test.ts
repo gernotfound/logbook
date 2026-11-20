@@ -9,7 +9,7 @@ import { createCloudKeyHttpFixture } from '../../cloudflare/cloud-key-http-fixtu
 import { KindeCandidateBoundaryError, readKindeCandidateAccess } from '../../../src/lib/auth/kindeCandidateClient';
 import { reconcileKindeCandidateWithdrawal, withdrawKindeCandidateHealthConsent } from '../../../src/lib/auth/kindeCandidateWithdrawal';
 import { withKindeCandidateRightsKey } from '../../../src/lib/auth/kindeCandidateRightsKey';
-import { uid, owner, expected, marker, browser, provisionKey } from './kindeWithdrawalRightsFixture';
+import { uid, expected, marker, browser, provisionKey } from './kindeWithdrawalRightsFixture';
 
 afterEach(() => {
     vi.restoreAllMocks();
