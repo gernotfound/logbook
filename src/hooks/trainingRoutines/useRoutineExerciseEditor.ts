@@ -76,7 +76,7 @@ export function useRoutineExerciseEditor(initialExercises?: RoutineExercise[]) {
             const exercises = [...prev];
             const exercise = { ...exercises[exerciseIndex] };
             const count = previewRoutineSets(exercise.setsCount, exercise.setPlans ?? []);
-            if (setIndex < 0 || setIndex >= count) return prev;
+            if (!validIndex(setIndex, count)) return prev;
             const plans: PlannedSetTechnique[] = Array.from({ length: count }, (_, index) => ({
                 ...(exercise.setPlans?.[index] || { technique: 'straight' as const }),
             }));
@@ -98,7 +98,7 @@ export function useRoutineExerciseEditor(initialExercises?: RoutineExercise[]) {
             const exercises = [...prev];
             const exercise = { ...exercises[exerciseIndex] };
             const count = previewRoutineSets(exercise.setsCount, exercise.setPlans ?? []);
-            if (setIndex < 0 || setIndex >= count) return prev;
+            if (!validIndex(setIndex, count)) return prev;
             const plans: PlannedSetTechnique[] = Array.from({ length: count }, (_, index) => ({
                 ...(exercise.setPlans?.[index] || { technique: 'straight' as const }),
             }));

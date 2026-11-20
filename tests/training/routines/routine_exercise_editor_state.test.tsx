@@ -113,6 +113,19 @@ describe('routine exercise editor state', () => {
         expect(result.current.routineExercises).toBe(before);
     });
 
+    it('rejects fractional and non-finite set indices without dirtying the draft', () => {
+        const { result } = renderHook(() => useRoutineExerciseEditor(structuredClone(original)));
+        const before = result.current.routineExercises;
+        act(() => {
+            result.current.handleUpdateSetPlan(0, Number.NaN, 'cluster');
+            result.current.handleUpdateSetPlan(0, 0.5, 'cluster');
+            result.current.handleUpdateSetPlanField(0, Number.POSITIVE_INFINITY, 'restSeconds', '90');
+            result.current.handleUpdateSetPlanField(0, 0.5, 'targetReps', '8');
+        });
+        expect(result.current.routineExercises).toBe(before);
+        expect(result.current.routineExercises).toEqual(original);
+    });
+
     it('ignores an invalid set index without replacing a valid exercise snapshot', () => {
         const { result } = renderHook(() => useRoutineExerciseEditor(structuredClone(original)));
         const before = result.current.routineExercises;
