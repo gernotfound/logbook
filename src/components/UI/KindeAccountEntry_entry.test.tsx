@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { A, principal, verified, required, confirmed } from './KindeAccountEntryTestFixture';
+import { A, principal, verified, confirmed } from './KindeAccountEntryTestFixture';
 import { KindeAccountEntry } from './KindeAccountEntry';
 import { readKindeCandidateIdentity } from '../../lib/auth/kindeCandidateIdentity';
 import { readKindeCandidateAccess, revokeKindeCandidateSession, submitKindeHostedSignIn } from '../../lib/auth/kindeCandidateClient';

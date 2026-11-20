@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { A, REPLACEMENT_CSRF, browserWitness, principal, verified, confirmed } from './KindeAccountEntryTestFixture';
+import { A, REPLACEMENT_CSRF, browserWitness, principal, confirmed } from './KindeAccountEntryTestFixture';
 import { KindeAccountEntry } from './KindeAccountEntry';
 import { readKindeCandidateIdentity } from '../../lib/auth/kindeCandidateIdentity';
 import { readKindeCandidateAccess } from '../../lib/auth/kindeCandidateClient';

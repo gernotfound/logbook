@@ -143,4 +143,3 @@ describe('Kinde candidate entry: owner, cookie and consent fences', () => {
         }
     });
 });
-});
