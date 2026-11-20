@@ -166,6 +166,25 @@ describe('CF-05 Kinde candidate local readiness is only a short-lived scope', ()
         }
     });
 
+    it('refuses a concurrent authenticated provider before touching any cloud or vault state', async () => {
+        const fixture = await createCloudKeyHttpFixture([uid]);
+        const dispose = authenticatedIdentitySource.install(() => ({ uid: otherUid }));
+        try {
+            const client = browser(fixture);
+            const visit = vi.fn();
+            await expect(withKindeCandidateLocalReadiness({
+                ...client, expected,
+            }, visit)).rejects.toBeInstanceOf(KindeCandidateBoundaryError);
+            expect(client.paths).toEqual([]);
+            expect(visit).not.toHaveBeenCalled();
+            expect(readVaultControl(owner)).toBeNull();
+        } finally {
+            dispose();
+            fixture.close();
+        }
+        expect(authenticatedIdentitySource.hasReader()).toBe(false);
+    });
+
     it('rejects an authenticated different UID before publishing local readiness', async () => {
         const fixture = await createCloudKeyHttpFixture([uid, otherUid]);
         try {
