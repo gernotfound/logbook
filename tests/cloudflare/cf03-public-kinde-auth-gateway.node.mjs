@@ -210,7 +210,7 @@ void test('Cloudflare main release waits for eventual GitHub job visibility with
   assert.match(workflow, /if \[ "\$\{proof\}" = true \]; then verified=true; break; fi/);
   assert.match(workflow, /test "\$\{verified\}" = true \|\| \{ echo 'Exact-main Main Release Gate or CodeQL missing'; exit 1; \}/);
   const lease = workflow.indexOf('git ls-remote --exit-code origin refs/heads/main');
-  const verification = workflow.indexOf('test "\${verified}" = true');
+  const verification = workflow.indexOf('test "${verified}" = true');
   const build = workflow.indexOf('node scripts/build-cloudflare-assets.mjs');
   assert.ok(lease >= 0 && verification > lease && build > verification);
 });
