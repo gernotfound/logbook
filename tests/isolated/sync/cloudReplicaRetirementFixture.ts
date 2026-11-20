@@ -11,7 +11,7 @@ import { lockAllVaults } from '../../../src/lib/sync/secureArchiveSession';
 export const uid = 'a';
 export const owner = 'user:' + uid;
 export const storage = 'logbook:v2:' + owner;
-export const catalog: CachedGlobalCatalog = {
+const catalog: CachedGlobalCatalog = {
     manifest: { version: 'retirement-fixture', updatedAt: '2026-11-13T00:00:00.000Z',
         schemaVersion: 1, docRefs: { exercises: 'fixture/e', foods: 'fixture/f' },
         itemCounts: { exercises: 0, foods: 0 } },

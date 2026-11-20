@@ -10,9 +10,7 @@ import { stageCloudflareReplicaClaim } from '../../../src/lib/sync/cloudReplicaC
 import { stageCloudflareReplicaRetirement, resumeCloudflareReplicaRetirement } from '../../../src/lib/sync/cloudReplicaRetirementRecovery';
 import { adoptReplicaCheckpoint, readLocal } from '../../../src/lib/sync/localRepository';
 import { updateArchiveRecord } from '../../../src/lib/sync/secureArchiveRepository';
-import { uid, owner, storage, stagedRetirement, remoteRetirement } from './cloudReplicaRetirementFixture';
-
-import { resetRetirementFixture, cleanupRetirementFixture } from './cloudReplicaRetirementFixture';
+import { uid, owner, storage, stagedRetirement, remoteRetirement, resetRetirementFixture, cleanupRetirementFixture } from './cloudReplicaRetirementFixture';
 
 beforeEach(() => resetRetirementFixture(catalogSource.read));
 afterEach(cleanupRetirementFixture);

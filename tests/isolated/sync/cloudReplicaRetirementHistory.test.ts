@@ -8,9 +8,7 @@ import { get } from 'idb-keyval';
 import { CloudReplicaMutationReconciliationRequiredError } from '../../../src/lib/sync/cloudReplicaTransport';
 import { resumeCloudflareReplicaRetirement } from '../../../src/lib/sync/cloudReplicaRetirementRecovery';
 import { commitLocal, readLocal } from '../../../src/lib/sync/localRepository';
-import { data, owner, storage, stagedRetirement, remoteRetirement } from './cloudReplicaRetirementFixture';
-
-import { resetRetirementFixture, cleanupRetirementFixture } from './cloudReplicaRetirementFixture';
+import { data, owner, storage, stagedRetirement, remoteRetirement, resetRetirementFixture, cleanupRetirementFixture } from './cloudReplicaRetirementFixture';
 
 beforeEach(() => resetRetirementFixture(catalogSource.read));
 afterEach(cleanupRetirementFixture);
