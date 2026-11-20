@@ -100,7 +100,7 @@ describe('CF-05 Kinde candidate local readiness is only a short-lived scope', ()
             expect(authenticatedIdentitySource.readUid()).toBeNull();
             expect(fixture.count('sync_replicas', uid)).toBe(1);
             expect(client.paths).toContain('/v1/consent/status');
-            expect(client.paths).toContain('/v1/sync/claim');
+            expect(client.paths).toContain('/v1/sync/replica/claim');
         } finally {
             fixture.close();
         }
