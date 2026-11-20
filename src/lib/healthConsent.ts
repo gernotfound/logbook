@@ -5,7 +5,7 @@ import { LEGAL_VERSIONS } from './legalVersions';
 import { auth, ensureAppCheck } from './firebase';
 import { getLimitedUseAppCheckToken } from './appCheck';
 import { readBrowserValueStrict, removeBrowserValue, writeBrowserValue } from './sync/browserStorage';
-import { captureSessionForOwner, userOwner } from './sync/session';
+import { captureSessionForOwner, isActiveGuestSession, userOwner } from './sync/session';
 
 export type HealthConsentStatus = 'unregistered' | 'checking' | 'active' | 'withdrawn' | 'pending' | 'reaccepting' | 'recovery-required' | 'erasure-required' | 'stale-request' | 'error';
 type ServerStatus = { status: 'unregistered' | 'active' | 'withdrawn'; revision: number; acceptedAt?: string; privacyVersion?: string; termsVersion?: string; erasedBeforeRevision?: number };
@@ -140,8 +140,9 @@ export function withdrawGuestHealthConsent(): void {
 
 export function isHealthConsentWritable(owner: string): boolean {
   if (owner === 'guest') {
-    const status = getGuestHealthConsentStatus();
-    return status === 'active';
+    // Consent is not a session credential: a missing/revoked guest generation
+    // must never authorize an edit even when its withdrawal marker is absent.
+    return isActiveGuestSession() && getGuestHealthConsentStatus() === 'active';
   }
   if (!owner.startsWith('user:')) return true;
   const uid = owner.slice(5);
