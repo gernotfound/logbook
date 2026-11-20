@@ -1,7 +1,8 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState } from 'react';
 import MuscleModel from '../../Training/MuscleModel';
 import { Activity, ChevronDown } from 'lucide-react';
-import { Logic } from '../../../lib/logic';
+import { RecoveryPainSearch } from './RecoveryPainSearch';
+import { RecoveryPainBadges } from './RecoveryPainBadges';
 
 interface RecoveryBentoCardProps {
     activePains: string[];
@@ -12,15 +13,7 @@ interface RecoveryBentoCardProps {
 
 const RecoveryBentoCardContent: React.FC<RecoveryBentoCardProps> = ({ activePains = [], painColors, muscleColors = {}, onTogglePain }) => {
     const combinedColors = { ...muscleColors, ...painColors };
-    const [searchQuery, setSearchQuery] = useState('');
     const [isExpanded, setIsExpanded] = useState(false);
-
-    const searchResults = useMemo(() => {
-        if (!searchQuery.trim()) return [];
-        return Logic.searchMuscles(searchQuery, 8);
-    }, [searchQuery]);
-
-    const activePainsSet = useMemo(() => new Set(activePains), [activePains]);
 
     return (
         <div className="home-recovery">
@@ -62,164 +55,8 @@ const RecoveryBentoCardContent: React.FC<RecoveryBentoCardProps> = ({ activePain
                 </button>
             </div>
 
-            {/* Muscle Search Input */}
-            <div style={{ position: 'relative' }}>
-                <input
-                    type="text"
-                    placeholder="🔍 Cerca muscolo dolorante..."
-                    aria-label="Cerca muscolo dolorante"
-                    value={searchQuery}
-                    onChange={e => setSearchQuery(e.target.value)}
-                    style={{
-                        width: '100%',
-                        margin: 0,
-                        paddingRight: searchQuery ? '52px' : '14px',
-                        fontSize: '16px',
-                        boxSizing: 'border-box'
-                    }}
-                />
-                {searchQuery && (
-                    <button
-                        type="button"
-                        onClick={() => setSearchQuery('')}
-                        style={{
-                            position: 'absolute',
-                            right: '8px',
-                            top: '50%',
-                            transform: 'translateY(-50%)',
-                            background: 'transparent',
-                            border: 'none',
-                            color: 'var(--text-muted)',
-                            fontSize: 'var(--font-size-control)',
-                            cursor: 'pointer',
-                            padding: '6px',
-                            minWidth: '44px',
-                            minHeight: '44px',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center'
-                        }}
-                        aria-label="Cancella ricerca"
-                    >
-                        ✕
-                    </button>
-                )}
-            </div>
-
-            {/* Search Results Dropdown */}
-            {searchQuery.trim() && (
-                <div 
-                    style={{ 
-                        background: 'var(--surface-light)',
-                        border: '1px solid var(--glass-border)',
-                        borderRadius: '8px',
-                        padding: '6px',
-                        maxHeight: '200px',
-                        overflowY: 'auto',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        gap: '6px'
-                    }}
-                >
-                    {searchResults.length === 0 ? (
-                        <div style={{ color: 'var(--text-muted)', fontSize: 'var(--font-size-meta)', padding: '10px', textAlign: 'center' }}>
-                            Nessun muscolo trovato
-                        </div>
-                    ) : (
-                        searchResults.map(m => {
-                            const isPain = activePainsSet.has(m.id);
-                            return (
-                                <button
-                                    key={m.id}
-                                    type="button"
-                                    onClick={() => onTogglePain(m.id)}
-                                    aria-pressed={isPain}
-                                    style={{
-                                        display: 'flex',
-                                        justifyContent: 'space-between',
-                                        alignItems: 'center',
-                                        width: '100%',
-                                        padding: '8px 12px',
-                                        minHeight: '44px',
-                                        borderRadius: '6px',
-                                        fontSize: 'var(--font-size-meta)',
-                                        cursor: 'pointer',
-                                        textAlign: 'left',
-                                        background: isPain ? 'var(--danger-soft)' : 'var(--surface-light)',
-                                        color: isPain ? 'var(--danger-color)' : 'var(--text-main)',
-                                        border: isPain ? '1px solid var(--danger-color)' : '1px solid var(--border-color)',
-                                        transition: 'all 0.2s ease'
-                                    }}
-                                >
-                                    <span style={{ fontWeight: 600 }}>{m.name}</span>
-                                    <span style={{ fontSize: 'var(--font-size-micro)', fontWeight: 600, color: isPain ? 'var(--danger-color)' : 'var(--text-muted)' }}>
-                                        {isPain ? '✓ Dolorante' : '+ Aggiungi'}
-                                    </span>
-                                </button>
-                            );
-                        })
-                    )}
-                </div>
-            )}
-
-            {/* Active Pain Badges */}
-            <div 
-                style={{
-                    overflow: 'hidden',
-                    transition: 'max-height 0.3s ease, opacity 0.3s ease, margin 0.3s ease',
-                    maxHeight: isExpanded && activePains.length > 0 ? '500px' : '0',
-                    opacity: isExpanded && activePains.length > 0 ? 1 : 0,
-                    visibility: isExpanded && activePains.length > 0 ? 'visible' : 'hidden',
-                    marginTop: isExpanded && activePains.length > 0 ? '5px' : '0',
-                    marginBottom: isExpanded && activePains.length > 0 ? '5px' : '0'
-                }}
-                aria-hidden={!isExpanded}
-            >
-                {activePains.length > 0 && (
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-                        {activePains.map(mId => (
-                            <span 
-                                key={mId} 
-                                style={{
-                                    display: 'inline-flex',
-                                    alignItems: 'center',
-                                    gap: '6px',
-                                    background: 'var(--danger-soft)',
-                                    border: '1px solid var(--danger-color)',
-                                    color: 'var(--danger-color)',
-                                    padding: '4px 10px',
-                                    borderRadius: '8px',
-                                    fontSize: 'var(--font-size-meta)',
-                                    fontWeight: 600
-                                }}
-                            >
-                                {Logic.getMuscleName(mId)}
-                                <button
-                                    type="button"
-                                    onClick={() => onTogglePain(mId)}
-                                    style={{
-                                        background: 'transparent',
-                                        border: 'none',
-                                        color: 'var(--danger-color)',
-                                        fontWeight: 'bold',
-                                        fontSize: 'var(--font-size-meta)',
-                                        cursor: 'pointer',
-                                        padding: '0 2px',
-                                        minWidth: '44px',
-                                        minHeight: '44px',
-                                        display: 'inline-flex',
-                                        alignItems: 'center',
-                                        lineHeight: 1
-                                    }}
-                                    aria-label={`Rimuovi dolore ${Logic.getMuscleName(mId)}`}
-                                >
-                                    ✕
-                                </button>
-                            </span>
-                        ))}
-                    </div>
-                )}
-            </div>
+            <RecoveryPainSearch activePains={activePains} onTogglePain={onTogglePain} />
+            <RecoveryPainBadges activePains={activePains} expanded={isExpanded} onTogglePain={onTogglePain} />
 
             <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', background: 'var(--surface-light)', padding: '12px', borderRadius: '12px' }}>
                 <div style={{ width: '100%', display: 'flex', justifyContent: 'center' }}>
