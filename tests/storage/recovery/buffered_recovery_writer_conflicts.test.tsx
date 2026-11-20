@@ -10,7 +10,7 @@ import { captureSession } from '../../../src/lib/sync/session';
 import { requiredUpdateRecoveryRegistry } from '../../../src/lib/sync/requiredUpdateRecovery';
 import { useAppStore } from '../../../src/store/useAppStore';
 import { localStorageMock } from '../../setup';
-import { field, editor, initialGetItem, initialSetItem } from './bufferedRecoveryFixtures';
+import { field, initialGetItem, initialSetItem } from './bufferedRecoveryFixtures';
 
 describe.each(['input', 'textarea'] as const)('concurrent same-workout %s drafts', kind => {
     const workoutId = 'same-workout';
