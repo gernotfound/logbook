@@ -26,7 +26,7 @@ export const cookie = () => '__Host-logbook_csrf=' + 'A'.repeat(43);
 export const legal = { hasAcceptedTerms: true, hasAcceptedHealthData: true,
     acceptedAt: '2026-11-16T00:00:00.000Z',
     privacyVersion: LEGAL_VERSIONS.privacy, termsVersion: LEGAL_VERSIONS.terms };
-export const cloudKey = new Uint8Array(32).fill(49);
+const cloudKey = new Uint8Array(32).fill(49);
 export const catalog = {
     manifest: { version: 'bootstrap-synthetic', updatedAt: '2026-11-18T00:00:00.000Z',
         schemaVersion: 1, docRefs: { exercises: 'fixture/e', foods: 'fixture/f' },
