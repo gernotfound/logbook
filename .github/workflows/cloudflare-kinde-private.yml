@@ -8,6 +8,7 @@ on:
       - .github/workflows/cloudflare-kinde-private.yml
       - 'cloudflare/auth/**'
       - cloudflare/api/logout-worker.mjs
+      - 'cloudflare/http/**'
   workflow_dispatch:
 
 permissions:

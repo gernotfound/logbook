@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { dirname, isAbsolute, relative, resolve } from 'node:path';
 import { validateIsolatedWorkers, validateIsolatedKindeCandidate } from '../../scripts/check-cloudflare-api-isolation.mjs';
 
 const api = JSON.parse(readFileSync('cloudflare/api/wrangler.isolated.jsonc', 'utf8'));
@@ -75,4 +76,64 @@ void test('OAuth-only frontend rejects extra D1 routes and unapproved service or
   ]) {
     assert.notDeepEqual(validateIsolatedKindeCandidate(kinde, gate, wrong), []);
   }
+});
+
+
+function watchedPrivatePushPaths(workflow) {
+  const text = readFileSync(workflow, 'utf8');
+  assert.match(text, /^on:\r?\n  push:\r?\n/m);
+  const block = text.match(/^    paths:\r?\n((?:      - [^\r\n]+\r?\n)+)/m);
+  assert.ok(block, workflow + ': missing push.paths');
+  return [...block[1].matchAll(/^      - (.+)$/gm)]
+    .map(([, value]) => value.trim().replace(/^(['"])(.*)\1$/, '$2'));
+}
+
+function importedPrivateSources(entry) {
+  const pending = [resolve(entry)];
+  const visited = new Set();
+  while (pending.length) {
+    const absolute = pending.pop();
+    const path = relative('.', absolute).replaceAll('\\', '/');
+    assert.ok(path && !path.startsWith('../') && !isAbsolute(path), 'external import: ' + path);
+    if (visited.has(path)) continue;
+    visited.add(path);
+    const source = readFileSync(absolute, 'utf8');
+    for (const match of source.matchAll(/\b(?:from|import)\s*(?:\(\s*)?['"](\.{1,2}\/[^'"]+\.mjs)['"]/g)) {
+      pending.push(resolve(dirname(absolute), match[1]));
+    }
+  }
+  return [...visited].sort();
+}
+
+function missingPrivateSources(paths, sources) {
+  return sources.filter(file => !paths.some(pattern =>
+    pattern.endsWith('/**') ? file.startsWith(pattern.slice(0, -3) + '/') : file === pattern));
+}
+
+void test('private main-only deployments cover every local module in their static import closure', () => {
+  const apiPaths = watchedPrivatePushPaths('.github/workflows/cloudflare-api-isolated.yml');
+  const kindePaths = watchedPrivatePushPaths('.github/workflows/cloudflare-kinde-private.yml');
+  const apiSources = [...new Set([
+    ...importedPrivateSources('cloudflare/api/worker.mjs'),
+    ...importedPrivateSources('cloudflare/auth/session-gate.mjs'),
+    ...importedPrivateSources('cloudflare/auth/kinde-http-worker.mjs'),
+  ])].sort();
+  const kindeSources = importedPrivateSources('cloudflare/auth/kinde-http-worker.mjs');
+  assert.deepEqual(missingPrivateSources(apiPaths, apiSources), []);
+  assert.deepEqual(missingPrivateSources(kindePaths, kindeSources), []);
+
+  // A missing trigger for a transitive dependency must fail this test even
+  // when the entrypoint itself remains covered by its own workflow path.
+  for (const [pattern, source] of [
+    ['cloudflare/recovery/**', 'cloudflare/recovery/runtime-sync-fence.mjs'],
+    ['cloudflare/sql/**', 'cloudflare/sql/d1-time.mjs'],
+    ['cloudflare/http/**', 'cloudflare/http/strict-empty-post.mjs'],
+  ]) {
+    assert.ok(apiSources.includes(source), source + ': no longer reached by private API');
+    assert.ok(missingPrivateSources(apiPaths.filter(path => path !== pattern), apiSources).includes(source));
+  }
+  assert.ok(kindeSources.includes('cloudflare/http/strict-empty-post.mjs'));
+  assert.ok(missingPrivateSources(
+    kindePaths.filter(path => path !== 'cloudflare/http/**'), kindeSources,
+  ).includes('cloudflare/http/strict-empty-post.mjs'));
 });
