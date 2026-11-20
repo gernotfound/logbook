@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { backupSnapshotMocks, parse, initializeSealedLocal, copyDeviceStorage, stubConcurrentStorage } from './backupSnapshotFixture';
+import { parse, initializeSealedLocal, copyDeviceStorage, stubConcurrentStorage } from './backupSnapshotFixture';
 import { get } from 'idb-keyval';
 import { collectBackupSnapshot, hasDeviceRecoveryBackupSource } from '../../../src/lib/db/backupSnapshot';
 import { createBackup, decodeImport } from '../../../src/lib/backup';

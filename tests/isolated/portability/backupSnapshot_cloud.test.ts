@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { backupSnapshotMocks, sdk, issuedCloudKeys, parse, emptySync, testKey, currentCloudDoc, initializeSealedLocal } from './backupSnapshotFixture';
+import { backupSnapshotMocks, parse, emptySync, testKey, currentCloudDoc, initializeSealedLocal } from './backupSnapshotFixture';
 import { collectBackupSnapshot } from '../../../src/lib/db/backupSnapshot';
 import { acknowledgeThrough, adoptReplicaCheckpoint, commitLocal, readLocal } from '../../../src/lib/sync/localRepository';
 import { CURRENT_DATA_SCHEMA, CURRENT_SYNC_PROTOCOL } from '../../../src/lib/schemaEvolution';

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { backupSnapshotMocks, sdk, parse, emptySync, currentCloudDoc, initializeSealedLocal } from './backupSnapshotFixture';
+import { backupSnapshotMocks, parse, emptySync, currentCloudDoc, initializeSealedLocal } from './backupSnapshotFixture';
 import { collectBackupSnapshot } from '../../../src/lib/db/backupSnapshot';
 import { CURRENT_DATA_SCHEMA, CURRENT_SYNC_PROTOCOL } from '../../../src/lib/schemaEvolution';
 import { CloudCiphertextError } from '../../../src/lib/sync/cloudDocumentCipher';

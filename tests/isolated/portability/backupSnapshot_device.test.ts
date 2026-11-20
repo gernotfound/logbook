@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { backupSnapshotMocks, sdk, issuedCloudKeys, parse, initializeSealedLocal } from './backupSnapshotFixture';
+import { backupSnapshotMocks, parse, initializeSealedLocal } from './backupSnapshotFixture';
 import { get } from 'idb-keyval';
 import { collectBackupSnapshot } from '../../../src/lib/db/backupSnapshot';
 import { createBackup, decodeImport } from '../../../src/lib/backup';

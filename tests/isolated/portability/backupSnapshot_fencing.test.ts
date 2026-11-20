@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { backupSnapshotMocks, sdk, parse, initializeSealedLocal } from './backupSnapshotFixture';
+import { backupSnapshotMocks, parse, initializeSealedLocal } from './backupSnapshotFixture';
 import { collectBackupSnapshot } from '../../../src/lib/db/backupSnapshot';
 import { hydrateLocal, readLocal } from '../../../src/lib/sync/localRepository';
 import { CURRENT_SYNC_PROTOCOL } from '../../../src/lib/schemaEvolution';
