@@ -319,11 +319,40 @@ import type { ExerciseLibraryItem } from '../../../src/types';
 
             rerender(<ExerciseSearchDropdown
                 library={mockLibrary}
-                excludeIds={['ex_bench']}
+                excludeIds={['ex_treadmill']}
                 onSelectExercise={onSelect}
             />);
             expect(input.getAttribute('aria-activedescendant')).toBeNull();
             fireEvent.keyDown(input, { key: 'Enter' });
             expect(onSelect).not.toHaveBeenCalled();
         });
+        it('2.16: retains a highlighted exercise identity when catalog results reorder', () => {
+            const original: ExerciseLibraryItem[] = [
+                { id: 'item-a', name: 'Alzate', muscles: [], setsCount: 3, sets: [] },
+                { id: 'item-b', name: 'Panca', muscles: [], setsCount: 3, sets: [] },
+                { id: 'item-c', name: 'Squat', muscles: [], setsCount: 3, sets: [] },
+            ];
+            const reordered: ExerciseLibraryItem[] = [
+                { id: 'item-a', name: 'Zercher squat', muscles: [], setsCount: 3, sets: [] },
+                { id: 'item-b', name: 'Affondi', muscles: [], setsCount: 3, sets: [] },
+                { id: 'item-c', name: 'Plank', muscles: [], setsCount: 3, sets: [] },
+            ];
+            const onSelect = vi.fn();
+            const { rerender } = render(<ExerciseSearchDropdown library={original} onSelectExercise={onSelect} />);
+            const input = screen.getByRole('combobox', { name: 'Cerca esercizio' });
+            fireEvent.focus(input);
+            fireEvent.keyDown(input, { key: 'ArrowDown' });
+            fireEvent.keyDown(input, { key: 'ArrowDown' });
+            const firstId = input.getAttribute('aria-activedescendant');
+            expect(firstId).toBeTruthy();
+            expect(document.getElementById(firstId!)?.textContent).toContain('Panca');
+
+            rerender(<ExerciseSearchDropdown library={reordered} onSelectExercise={onSelect} />);
+            const newId = input.getAttribute('aria-activedescendant');
+            expect(newId).not.toBe(firstId);
+            expect(document.getElementById(newId!)?.textContent).toContain('Affondi');
+            fireEvent.keyDown(input, { key: 'Enter' });
+            expect(onSelect).toHaveBeenCalledExactlyOnceWith('item-b');
+        });
+
     })
