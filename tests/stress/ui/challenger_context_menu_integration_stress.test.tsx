@@ -1,7 +1,6 @@
 import React from 'react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
-import { ContextMenu } from '../../../src/components/UI/ContextMenu';
 import { RoutineCard } from '../../../src/components/Training/routines/RoutineCard';
 import { CycleCard } from '../../../src/components/Training/planning/CycleCard';
 import { FoodItemRow } from '../../../src/components/Nutrition/archive/FoodItemRow';
