@@ -1,4 +1,4 @@
-import { MAX_ROUTINE_SEGMENTS, parseRoutineSetCount, previewRoutineSets } from '../lib/routineSessionLimits';
+import { MAX_ROUTINE_SEGMENTS, parseRoutineSetCount } from '../lib/routineSessionLimits';
 import { dispatchDurableOperation } from '../lib/sync/dispatchDurableOperation';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useAppStore } from '../store/useAppStore';
@@ -8,7 +8,8 @@ import { normalizeBusinessId } from '../lib/businessIdentity';
 import { parseRoutineRecovery } from './trainingRoutines/routineRecoverySchema';
 import { readWorkoutRecoveryDraftImage, writeWorkoutRecoveryDraft } from '../lib/sync/workoutRecoveryDraft';
 import { captureSession, isCurrentSession } from '../lib/sync/session';
-import type { Exercise, PlannedSetTechnique, ProgressionContract, RoutineExercise, SetTechnique, WorkoutRoutine } from '../types';
+import type { Exercise, RoutineExercise, WorkoutRoutine } from '../types';
+import { useRoutineExerciseEditor } from './trainingRoutines/useRoutineExerciseEditor';
 
 const EMPTY_ROUTINES: WorkoutRoutine[] = [];
 const EMPTY_LIBRARY: Exercise[] = [];
@@ -57,7 +58,12 @@ export function useTrainingRoutines() {
     }, [initialRecovery.error, draftSession]);
     const [routineName, setRoutineName] = useState(() => initialDraft?.name || '');
     const [editingRoutineId, setEditingRoutineId] = useState<string | null>(null);
-    const [routineExercises, setRoutineExercises] = useState<RoutineExercise[]>(() => Array.isArray(initialDraft?.exercises) ? initialDraft.exercises : []);
+    const {
+        routineExercises, setRoutineExercises,
+        handleAddExerciseToRoutine, handleUpdateSetsCount, handleUpdateReps,
+        handleUpdateSetPlan, handleUpdateSetPlanField,
+        handleUpdateExerciseMetadata, handleRemoveExerciseFromRoutine, moveExercise,
+    } = useRoutineExerciseEditor(initialDraft?.exercises);
     const [expandedRoutineId, setExpandedRoutineId] = useState<string | null>(null);
 
     useEffect(() => {
@@ -226,152 +232,6 @@ export function useTrainingRoutines() {
         } catch {
             if (isCurrentSession(draftSession)) await showAlert("Errore durante l'eliminazione della scheda.");
         }
-    };
-
-    const handleAddExerciseToRoutine = (exId: string) => {
-        if (!exId) return;
-        setRoutineExercises(prev => [...prev, { exId, setsCount: 3 }]);
-    };
-
-    const handleUpdateSetsCount = (index: number, count: string | number) => {
-        setRoutineExercises(prev => {
-            const newExs = [...prev];
-            const currentExercise = newExs[index];
-
-            if (count === '' || count === undefined || count === null) {
-                newExs[index] = { ...currentExercise, setsCount: '' };
-                return newExs;
-            }
-
-            const parsed = parseRoutineSetCount(count);
-            if (parsed === null) {
-                // Keep the uncommitted input and set plans intact until the user
-                // corrects it; truncating it would silently change the workout.
-                newExs[index] = { ...currentExercise, setsCount: String(count) };
-                return newExs;
-            }
-
-            const normalizedCount = parsed;
-            const currentPlans = Array.isArray(currentExercise.setPlans) ? currentExercise.setPlans : [];
-            const setPlans: PlannedSetTechnique[] = Array.from({ length: normalizedCount }, (_, setIndex) => ({
-                ...(currentPlans[setIndex] || { technique: 'straight' as const }),
-            }));
-
-            newExs[index] = {
-                ...currentExercise,
-                setsCount: normalizedCount,
-                setPlans,
-            };
-            return newExs;
-        });
-    };
-
-    const handleUpdateReps = (index: number, field: 'minReps' | 'maxReps', value: string) => {
-        setRoutineExercises(prev => {
-            const newExs = [...prev];
-            const parsed = parseInt(value);
-            if (isNaN(parsed)) {
-                const ex = { ...newExs[index] };
-                delete ex[field];
-                newExs[index] = ex;
-            } else {
-                newExs[index] = { ...newExs[index], [field]: parsed };
-            }
-            return newExs;
-        });
-    };
-
-    const handleUpdateSetPlan = (
-        exerciseIndex: number,
-        setIndex: number,
-        technique: SetTechnique,
-    ) => {
-        setRoutineExercises(prev => {
-            const exercises = [...prev];
-            const exercise = { ...exercises[exerciseIndex] };
-            const count = previewRoutineSets(exercise.setsCount, exercise.setPlans ?? []);
-            if (setIndex < 0 || setIndex >= count) return prev;
-            const plans: PlannedSetTechnique[] = Array.from({ length: count }, (_, index) => ({
-                ...(exercise.setPlans?.[index] || { technique: 'straight' as const }),
-            }));
-            plans[setIndex] = { technique };
-            exercise.setPlans = plans;
-            exercises[exerciseIndex] = exercise;
-            return exercises;
-        });
-    };
-
-    const handleUpdateSetPlanField = (
-        exerciseIndex: number,
-        setIndex: number,
-        field: 'restSeconds' | 'segmentCount' | 'targetReps',
-        value: string,
-    ) => {
-        setRoutineExercises(prev => {
-            const exercises = [...prev];
-            const exercise = { ...exercises[exerciseIndex] };
-            const count = previewRoutineSets(exercise.setsCount, exercise.setPlans ?? []);
-            if (setIndex < 0 || setIndex >= count) return prev;
-            const plans: PlannedSetTechnique[] = Array.from({ length: count }, (_, index) => ({
-                ...(exercise.setPlans?.[index] || { technique: 'straight' as const }),
-            }));
-            const plan = { ...plans[setIndex] };
-            const parsed = value.trim() === '' ? undefined
-                : field === 'segmentCount' ? Number(value) : Number.parseInt(value, 10);
-
-            if (field === 'targetReps') {
-                if (parsed === undefined || !Number.isFinite(parsed) || parsed < 1) delete plan.target;
-                else plan.target = { type: 'reps', reps: parsed };
-            } else if (parsed === undefined || !Number.isFinite(parsed) || parsed < (field === 'restSeconds' ? 0 : 2)) {
-                delete plan[field];
-            } else {
-                plan[field] = parsed;
-            }
-            plans[setIndex] = plan;
-            exercise.setPlans = plans;
-            exercises[exerciseIndex] = exercise;
-            return exercises;
-        });
-    };
-
-    const handleUpdateExerciseMetadata = (
-        index: number,
-        field: 'technicalStandard' | keyof ProgressionContract,
-        value: string,
-    ) => {
-        setRoutineExercises(prev => {
-            const exercises = [...prev];
-            const exercise = { ...exercises[index] };
-            if (field === 'technicalStandard') {
-                const normalized = value.trim();
-                if (normalized) exercise.technicalStandard = value;
-                else delete exercise.technicalStandard;
-            } else {
-                const contract: ProgressionContract = { ...(exercise.progressionContract || {}) };
-                const normalized = value.trim();
-                if (normalized) (contract as Record<string, unknown>)[field] = value;
-                else delete (contract as Record<string, unknown>)[field];
-                exercise.progressionContract = Object.keys(contract).length ? contract : undefined;
-            }
-            exercises[index] = exercise;
-            return exercises;
-        });
-    };
-
-    const handleRemoveExerciseFromRoutine = (indexToRemove: number) => {
-        setRoutineExercises(prev => prev.filter((_, idx) => idx !== indexToRemove));
-    };
-
-    const moveExercise = (index: number, direction: number) => {
-        setRoutineExercises(prev => {
-            const newExs = [...prev];
-            if (direction === -1 && index > 0) {
-                [newExs[index], newExs[index - 1]] = [newExs[index - 1], newExs[index]];
-            } else if (direction === 1 && index < newExs.length - 1) {
-                [newExs[index], newExs[index + 1]] = [newExs[index + 1], newExs[index]];
-            }
-            return newExs;
-        });
     };
 
     return {
