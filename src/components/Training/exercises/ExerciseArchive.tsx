@@ -1,19 +1,15 @@
-import { useEffect, useMemo, useRef, useState, type MouseEvent } from 'react';
+import { useEffect, useMemo, useState, type MouseEvent } from 'react';
 import {
     Activity,
-    ChevronLeft,
     ChevronRight,
-    Copy,
     Dumbbell,
-    Pencil,
     Search,
     Timer,
-    Trash2,
     X,
 } from 'lucide-react';
 import type { useTrainingExercises } from '../../../hooks/useTrainingExercises';
-import { Logic } from '../../../lib/logic';
-import MuscleModel from '../MuscleModel';
+import { ExerciseDetail } from './ExerciseDetail';
+import { muscleName, normalizeSearch, trackingLabel } from './exerciseArchivePresentation';
 
 type TrainingExercisesHook = ReturnType<typeof useTrainingExercises>;
 type ExerciseItem = TrainingExercisesHook['library'][number];
@@ -29,33 +25,10 @@ interface ExerciseArchiveProps {
     onDelete: (id: string, event: MouseEvent) => void | Promise<void>;
 }
 
-function normalizeSearch(value: string): string {
-    return value
-        .toLocaleLowerCase('it')
-        .normalize('NFD')
-        .replace(/[\u0300-\u036f]/g, '')
-        .trim();
-}
-
-function trackingLabel(exercise: ExerciseItem): string {
-    if (exercise.trackingType === 'time') return 'Tempo';
-    if (exercise.trackingType === 'cardio') return 'Cardio';
-    return 'Peso e ripetizioni';
-}
-
 function TrackingIcon({ exercise }: { exercise: ExerciseItem }) {
     if (exercise.trackingType === 'cardio') return <Activity size={18} aria-hidden="true" />;
     if (exercise.trackingType === 'time') return <Timer size={18} aria-hidden="true" />;
     return <Dumbbell size={18} aria-hidden="true" />;
-}
-
-function muscleName(id: string): string {
-    return Logic.getMuscleName(id) || id;
-}
-
-function muscleList(ids?: string[]): string {
-    if (!ids?.length) return 'Nessuno';
-    return ids.map(muscleName).join(', ');
 }
 
 export function ExerciseArchive({
@@ -73,24 +46,6 @@ export function ExerciseArchive({
         setQuery(value);
         setPage({ query: value, source: library, count: ARCHIVE_PAGE_SIZE });
     };
-    const [detailActionPending, setDetailActionPending] = useState(false);
-    const detailActionPendingRef = useRef(false);
-
-    const runDetailAction = async (action: () => void | Promise<void>) => {
-        // The ref closes the repeat-click window before React commits disabled controls.
-        if (detailActionPendingRef.current) return;
-        detailActionPendingRef.current = true;
-        setDetailActionPending(true);
-        try {
-            await action();
-        } catch (error) {
-            console.error('Azione sulla libreria esercizi non completata:', error);
-        } finally {
-            detailActionPendingRef.current = false;
-            setDetailActionPending(false);
-        }
-    };
-
     const routineCounts = useMemo(() => {
         const counts = new Map<string, number>();
         routines.forEach(routine => {
@@ -141,105 +96,15 @@ export function ExerciseArchive({
     }, [selectedExId, selectedExercise, onSelectedExIdChange]);
 
     if (selectedExercise) {
-        const routineCount = routineCounts.get(selectedExercise.id) || 0;
         return (
-            <section className="exercise-detail-page" aria-label="Dettaglio esercizio">
-                <div className="exercise-detail-top">
-                    <button
-                        className="exercise-icon-button"
-                        type="button"
-                        aria-label="Torna all’elenco"
-                        disabled={detailActionPending}
-                        onClick={() => onSelectedExIdChange(null)}
-                    >
-                        <ChevronLeft size={20} aria-hidden="true" />
-                    </button>
-                    <h3>{selectedExercise.name}</h3>
-                </div>
-
-                <section className="exercise-detail-muscle-section" aria-label="Muscoli coinvolti">
-                    <strong className="exercise-detail-muscle-title">Muscoli coinvolti</strong>
-                    <div className="exercise-detail-muscle-map">
-                        <MuscleModel
-                            selectedMuscles={selectedExercise.muscles || []}
-                            secondaryMuscles={selectedExercise.secondaryMuscles || []}
-                            showLegend={false}
-                            showTextSelection={false}
-                        />
-                    </div>
-                    <div className="exercise-detail-muscle-legend">
-                        <span>
-                            <i className="primary" aria-hidden="true" />
-                            Primari: {muscleList(selectedExercise.muscles)}
-                        </span>
-                        <span>
-                            <i className="secondary" aria-hidden="true" />
-                            Secondari: {muscleList(selectedExercise.secondaryMuscles)}
-                        </span>
-                    </div>
-                </section>
-
-                <div className="exercise-detail-facts">
-                    <div className="exercise-detail-fact">
-                        <span>Tracciamento</span>
-                        <strong>{trackingLabel(selectedExercise)}</strong>
-                    </div>
-                    <div className="exercise-detail-fact">
-                        <span>Muscoli</span>
-                        <strong>
-                            {muscleList(selectedExercise.muscles)}
-                            {selectedExercise.secondaryMuscles?.length
-                                ? ` + ${muscleList(selectedExercise.secondaryMuscles)}`
-                                : ''}
-                        </strong>
-                    </div>
-                    <div className="exercise-detail-fact">
-                        <span>Utilizzo</span>
-                        <strong>{routineCount} {routineCount === 1 ? 'scheda' : 'schede'}</strong>
-                    </div>
-                    <div className="exercise-detail-fact">
-                        <span>Origine</span>
-                        <strong>{selectedExercise.isDefault ? 'Catalogo' : 'Personale'}</strong>
-                    </div>
-                </div>
-
-                <div className="exercise-detail-notes">
-                    <span>Note</span>
-                    <p>{selectedExercise.notes?.trim() || 'Nessuna nota.'}</p>
-                </div>
-
-                <div className="exercise-detail-actions">
-                    <button
-                        className="btn exercise-action-button"
-                        type="button"
-                        disabled={detailActionPending}
-                        onClick={() => onEditItem(selectedExercise)}
-                    >
-                        <Pencil size={17} aria-hidden="true" />
-                        Modifica
-                    </button>
-                    <button
-                        className="btn exercise-action-button"
-                        type="button"
-                        disabled={detailActionPending}
-                        onClick={() => { void runDetailAction(() => onDuplicate(selectedExercise)); }}
-                    >
-                        <Copy size={17} aria-hidden="true" />
-                        Duplica
-                    </button>
-                    {!selectedExercise.isDefault && (
-                        <button
-                            className="btn exercise-action-button exercise-action-danger"
-                            type="button"
-                            disabled={detailActionPending}
-                            onClick={event => { void runDetailAction(() => onDelete(selectedExercise.id, event)); }}
-                        >
-                            <Trash2 size={17} aria-hidden="true" />
-                            Elimina
-                        </button>
-                    )}
-                </div>
-            </section>
+            <ExerciseDetail
+                exercise={selectedExercise}
+                routineCount={routineCounts.get(selectedExercise.id) || 0}
+                onBack={() => onSelectedExIdChange(null)}
+                onEditItem={onEditItem}
+                onDuplicate={onDuplicate}
+                onDelete={onDelete}
+            />
         );
     }
 

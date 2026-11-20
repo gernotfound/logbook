@@ -1,11 +1,12 @@
 import { useMemo, useState } from 'react';
-import { CalendarRange, ChevronRight, Dumbbell, Search } from 'lucide-react';
+import { CalendarRange, Dumbbell } from 'lucide-react';
 import { useAppStore } from '../../store/useAppStore';
 import { useWorkoutSession } from '../../hooks/useWorkoutSession';
 import { Logic } from '../../lib/logic';
 import { useLocalToday } from '../../hooks/useLocalToday';
 import type { TrainingCycle, WorkoutRoutine } from '../../types';
 import { getRoutineDurationEstimates } from './session/sessionDurationEstimate';
+import { SessionRoutineArchive } from './session/SessionRoutineArchive';
 import { getCycleRotationItems } from '../../lib/calc/cycleRotationLabels';
 
 const EMPTY_CYCLES: TrainingCycle[] = [];
@@ -20,18 +21,12 @@ export interface TrainingSessionSetupProps {
     onNavigateToPlanning?: () => void;
 }
 
-function routineExerciseLabel(routine: WorkoutRoutine): string {
-    const count = routine.exercises?.length ?? 0;
-    return `${count} ${count === 1 ? 'esercizio' : 'esercizi'}`;
-}
-
 export const TrainingSessionSetup = ({ onNavigateToPlanning }: TrainingSessionSetupProps) => {
     const trainingCycles = useAppStore(state => state.userData?.trainingCycles || EMPTY_CYCLES);
     const activeCycleId = useAppStore(state => state.userData?.activeCycleId ?? null);
     const activeCycle = activeCycleId ? trainingCycles.find(cycle => cycle.id === activeCycleId) : null;
     const { routines, history, startWorkout, startFreeWorkout } = useWorkoutSession();
 
-    const [searchQuery, setSearchQuery] = useState('');
     const [selectedPlannedRoutine, setSelectedPlannedRoutine] = useState<{ cycleId: string; routineId: string } | null>(null);
 
     const plannedRoutines: PlannedRoutineItem[] = useMemo(
@@ -64,46 +59,9 @@ export const TrainingSessionSetup = ({ onNavigateToPlanning }: TrainingSessionSe
         [routines, history],
     );
 
-    const normalizedQuery = searchQuery.trim().toLocaleLowerCase('it');
-    const filteredRoutines = useMemo(() => (
-        normalizedQuery
-            ? routines.filter(routine => routine.name.toLocaleLowerCase('it').includes(normalizedQuery))
-            : routines
-    ), [normalizedQuery, routines]);
-
     const startPlannedRoutine = (routineId: string) => {
         if (!activeCycle) return;
         void startWorkout(routineId, { cycleId: activeCycle.id, cycleName: activeCycle.name });
-    };
-
-    const renderRoutineRow = (
-        routine: WorkoutRoutine,
-        options?: { letter?: string; planned?: boolean },
-    ) => {
-        const estimate = durationEstimates.get(routine.id);
-        return (
-            <button
-                key={routine.id}
-                type="button"
-                className="session-routine-row"
-                onClick={() => options?.planned ? startPlannedRoutine(routine.id) : void startWorkout(routine.id)}
-            >
-                <span className="session-routine-mark" aria-hidden="true">
-                    {options?.letter || routine.name.slice(0, 1).toUpperCase()}
-                </span>
-                <span className="session-routine-copy">
-                    <strong>{routine.name}</strong>
-                    <span>
-                        {routineExerciseLabel(routine)}
-                        {estimate ? ` · ≈ ${estimate.minutes} min` : ''}
-                    </span>
-                    {estimate && (
-                        <small>Stima: mediana ultime {estimate.sampleSize} sessioni</small>
-                    )}
-                </span>
-                <ChevronRight size={20} aria-hidden="true" />
-            </button>
-        );
     };
 
     // Reaching the indicative session target ends automatic suggestions, not the ability to train.
@@ -270,33 +228,11 @@ export const TrainingSessionSetup = ({ onNavigateToPlanning }: TrainingSessionSe
                 </section>
             )}
 
-            <section className="session-archive-section" aria-labelledby="session-archive-title">
-                <div className="session-section-heading">
-                    <div>
-                        <h2 id="session-archive-title">Scegli dall’archivio</h2>
-                        <p>{routines.length} {routines.length === 1 ? 'scheda' : 'schede'}</p>
-                    </div>
-                </div>
-
-                <label className="session-search-field">
-                    <Search size={20} aria-hidden="true" />
-                    <span className="sr-only">Cerca scheda per nome</span>
-                    <input
-                        type="search"
-                        value={searchQuery}
-                        onChange={event => setSearchQuery(event.target.value)}
-                        placeholder="Cerca scheda per nome"
-                    />
-                </label>
-
-                {filteredRoutines.length > 0 ? (
-                    <div className="session-routine-list">
-                        {filteredRoutines.map(routine => renderRoutineRow(routine))}
-                    </div>
-                ) : (
-                    <div className="session-setup-message">Nessuna scheda trovata.</div>
-                )}
-            </section>
+            <SessionRoutineArchive
+                routines={routines}
+                durationEstimates={durationEstimates}
+                onStartRoutine={routineId => { void startWorkout(routineId); }}
+            />
 
             <div className="session-free-row">
                 <button

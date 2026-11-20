@@ -7,6 +7,9 @@ on:
     paths:
       - cloudflare/api/**
       - cloudflare/auth/**
+      - 'cloudflare/recovery/**'
+      - 'cloudflare/sql/**'
+      - 'cloudflare/http/**'
       - scripts/check-cloudflare-api-isolation.mjs
       - scripts/verify-cloudflare-api-provider.mjs
       - .github/workflows/cloudflare-api-isolated.yml
