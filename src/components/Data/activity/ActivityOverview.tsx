@@ -16,7 +16,8 @@ export function ActivityOverview({ currentWeek: week, trainingActivityContext }:
                         <p>Dati registrati, senza stime di consumo o prescrizioni.</p>
                     </div>
                     <HeartPulse size={22} aria-hidden="true" />
-                </div>                <div className="activity-stat-grid">
+                </div>
+                <div className="activity-stat-grid">
                     <div className="activity-stat"><span>Passi medi</span><strong>{week.averageSteps === null ? '—' : integerFormatter.format(week.averageSteps)}</strong></div>
                     <div className="activity-stat"><span>Dati passi</span><strong>{week.stepDaysCount}/{week.daysConsidered} giorni</strong></div>
                     <div className="activity-stat"><span>Passi registrati</span><strong>{week.stepDaysCount ? integerFormatter.format(week.totalSteps) : '—'}</strong></div>
