@@ -6,6 +6,27 @@ import sessionGate from '../../cloudflare/auth/session-gate.mjs';
 import { issueVerifiedSession } from '../../cloudflare/auth/session-issuer.mjs';
 import { ORIGIN, acceptance, withdrawal, fixture, request, call, count } from './cf05-consent-fixture.mjs';
 
+void test('synthetic D1 batch returns SELECT rows and rolls back a failed mixed batch', async () => {
+  const f = await fixture();
+  try {
+    f.sqlite.exec('CREATE TABLE synthetic_batch_probe (value INTEGER NOT NULL CHECK(value >= 0))');
+    const successful = await f.db.batch([
+      f.db.prepare('INSERT INTO synthetic_batch_probe (value) VALUES (?)').bind(3),
+      f.db.prepare('SELECT value FROM synthetic_batch_probe WHERE value = ?').bind(3),
+    ]);
+    assert.equal(successful[0].success, true);
+    assert.equal(successful[0].meta.changes, 1);
+    assert.deepEqual(successful[1].results, [{ value: 3 }]);
+
+    await assert.rejects(f.db.batch([
+      f.db.prepare('INSERT INTO synthetic_batch_probe (value) VALUES (?)').bind(7),
+      f.db.prepare('INSERT INTO synthetic_batch_probe (value) VALUES (?)').bind(-1),
+    ]));
+    assert.deepEqual(f.sqlite.prepare('SELECT value FROM synthetic_batch_probe ORDER BY value').all(),
+      [{ value: 3 }]);
+  } finally { f.close(); }
+});
+
 void test('consent status accepts a gateway-forwarded empty stream, never forged Content-Length', async () => {
   const f = await fixture();
   const oldGate = f.env.AUTH_GATE;
