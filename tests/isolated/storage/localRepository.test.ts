@@ -1,5 +1,5 @@
 import 'fake-indexeddb/auto';
-import { get, set } from 'idb-keyval';
+import { get } from 'idb-keyval';
 import { describe, expect, it } from 'vitest';
 import { UserDataSchema } from '../../../src/lib/schema';
 import type { UserData } from '../../../src/types';
