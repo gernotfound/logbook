@@ -137,3 +137,38 @@ void test('private main-only deployments cover every local module in their stati
     kindePaths.filter(path => path !== 'cloudflare/http/**'), kindeSources,
   ).includes('cloudflare/http/strict-empty-post.mjs'));
 });
+
+void test('private Worker deployments also observe package metadata and their provider preflight scripts', () => {
+  const apiPaths = watchedPrivatePushPaths('.github/workflows/cloudflare-api-isolated.yml');
+  const kindePaths = watchedPrivatePushPaths('.github/workflows/cloudflare-kinde-private.yml');
+  for (const paths of [apiPaths, kindePaths]) {
+    for (const file of ['package.json', 'package-lock.json', 'scripts/cloudflare-private-deploy-plan.mjs',
+      'scripts/check-cloudflare-api-isolation.mjs', 'scripts/check-install-scripts.mjs']) {
+      assert.ok(paths.includes(file), file);
+    }
+  }
+  assert.ok(apiPaths.includes('scripts/verify-cloudflare-api-provider.mjs'));
+  assert.ok(kindePaths.includes('scripts/verify-cloudflare-kinde-private-provider.mjs'));
+});
+
+void test('version-only releases skip private redeploy, but dependency or imported-code changes do not', async () => {
+  const { mustDeployPrivateWorker, readPrivatePushPaths } = await import('../../scripts/cloudflare-private-deploy-plan.mjs');
+  const paths = readPrivatePushPaths(readFileSync('.github/workflows/cloudflare-api-isolated.yml', 'utf8'));
+  const previousPackage = { version: '1.0.0', dependencies: { jose: '5.0.0' } };
+  const currentPackage = { ...previousPackage, version: '1.1.0' };
+  const previousLock = { version: '1.0.0', packages: { '': { version: '1.0.0' }, 'node_modules/jose': { version: '5.0.0' } } };
+  const currentLock = { ...previousLock, version: '1.1.0', packages: { ...previousLock.packages, '': { version: '1.1.0' } } };
+  const base = { changed: ['package.json', 'package-lock.json', 'src/components/Home/Unrelated.tsx'], paths,
+    previousPackage, currentPackage, previousLock, currentLock };
+  assert.equal(mustDeployPrivateWorker(base), false);
+  for (const file of ['cloudflare/api/worker.mjs', 'cloudflare/recovery/runtime-sync-fence.mjs',
+    'scripts/verify-cloudflare-api-provider.mjs']) {
+    assert.equal(mustDeployPrivateWorker({ ...base, changed: [...base.changed, file] }), true);
+  }
+  assert.equal(mustDeployPrivateWorker({ ...base, currentPackage: {
+    ...currentPackage, dependencies: { jose: '6.0.0' } } }), true);
+  assert.equal(mustDeployPrivateWorker({ ...base, currentLock: {
+    ...currentLock, packages: { ...currentLock.packages, 'node_modules/jose': { version: '6.0.0' } } } }), true);
+  assert.equal(mustDeployPrivateWorker({ ...base, previousLock: null }), true);
+  assert.equal(mustDeployPrivateWorker({ ...base, changed: [] }), true);
+});

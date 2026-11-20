@@ -10,6 +10,11 @@ on:
       - 'cloudflare/recovery/**'
       - 'cloudflare/sql/**'
       - 'cloudflare/http/**'
+      - package.json
+      - package-lock.json
+      - scripts/cloudflare-private-deploy-plan.mjs
+      - scripts/check-cloudflare-api-isolation.mjs
+      - scripts/check-install-scripts.mjs
       - scripts/check-cloudflare-api-isolation.mjs
       - scripts/verify-cloudflare-api-provider.mjs
       - .github/workflows/cloudflare-api-isolated.yml
@@ -45,7 +50,16 @@ jobs:
           [[ "${EXPECTED_SHA}" =~ ^[a-f0-9]{40}$ ]] || exit 1
           test "$(git rev-parse HEAD)" = "${EXPECTED_SHA}"
           test "$(git ls-remote --exit-code origin refs/heads/main | awk '{print $1}')" = "${EXPECTED_SHA}"
+      - name: Setup Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: '24'
+          package-manager-cache: false
+      - name: Decide private API deployment relevance
+        id: relevance
+        run: echo "required=$(node scripts/cloudflare-private-deploy-plan.mjs .github/workflows/cloudflare-api-isolated.yml)" >> "$GITHUB_OUTPUT"
       - name: Wait for verified release gate of this exact main SHA
+        if: steps.relevance.outputs.required == 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -58,12 +72,8 @@ jobs:
           done
           test "${verified}" = true
           test "$(git ls-remote --exit-code origin refs/heads/main | awk '{print $1}')" = "${EXPECTED_SHA}"
-      - name: Setup Node
-        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
-        with:
-          node-version: '24'
-          package-manager-cache: false
       - name: Audit dependency install and verify private config
+        if: steps.relevance.outputs.required == 'true'
         run: |
           set -euo pipefail
           node scripts/check-install-scripts.mjs
@@ -71,6 +81,7 @@ jobs:
           node --test tests/cloudflare/cf02-api-isolation.node.mjs
           npm ci
       - name: Verify Worker bundling without provider side effects
+        if: steps.relevance.outputs.required == 'true'
         run: |
           set -euo pipefail
           npx --yes wrangler@4.159.0 deploy --dry-run --config cloudflare/auth/wrangler.isolated.jsonc
@@ -78,16 +89,19 @@ jobs:
           # Candidate Kinde HTTP is compile-only: never deploy or publish it at this gate.
           npx --yes wrangler@4.159.0 deploy --dry-run --config cloudflare/auth/wrangler.kinde.isolated.jsonc
       - name: Preflight private API KEK and existing Worker isolation before any provider write
+        if: steps.relevance.outputs.required == 'true'
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
         run: node scripts/verify-cloudflare-api-provider.mjs
       - name: Verify main lease again immediately before provider writes
+        if: steps.relevance.outputs.required == 'true'
         shell: bash
         run: |
           set -euo pipefail
           test "$(git ls-remote --exit-code origin refs/heads/main | awk '{print $1}')" = "${EXPECTED_SHA}"
       - name: Deploy private auth gate (no route, workers.dev or preview)
+        if: steps.relevance.outputs.required == 'true'
         uses: cloudflare/wrangler-action@953926a2e2182532811c01a25e53647d93bf07c0 # v4
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -95,6 +109,7 @@ jobs:
           wranglerVersion: '4.159.0'
           command: deploy --config cloudflare/auth/wrangler.isolated.jsonc
       - name: Deploy private API service binding (no public route)
+        if: steps.relevance.outputs.required == 'true'
         uses: cloudflare/wrangler-action@953926a2e2182532811c01a25e53647d93bf07c0 # v4
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -102,6 +117,7 @@ jobs:
           wranglerVersion: '4.159.0'
           command: deploy --config cloudflare/api/wrangler.isolated.jsonc
       - name: Verify live private Worker bindings and URL isolation (D1 audited separately)
+        if: steps.relevance.outputs.required == 'true'
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
