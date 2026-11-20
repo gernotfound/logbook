@@ -172,6 +172,7 @@ describe('post-redesign UI hardening', () => {
       'src/components/Settings/AccountSettingsTab.tsx',
       'src/components/Nutrition/InlineEditMealItem.tsx',
       'src/components/Training/TrainingSessionSetup.tsx',
+      'src/components/Training/session/SessionRoutineArchive.tsx',
       'src/components/Training/planning/CycleCard.tsx',
       'src/components/Training/planning/CycleEditor.tsx',
       'src/components/Training/planning/CycleRoutinesList.tsx',
