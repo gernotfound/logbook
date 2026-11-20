@@ -183,7 +183,7 @@ describe('Empirical Challenger: removeUndefinedValuesForFirestore & Firestore Se
                 }
             };
 
-            // 1. Simulate db.ts userDocData payload
+            // Synthetic root-like fixture: verifies cleanup, not the DB projection boundary.
             const userDocData = {
                 profile: mockFullState.profile || {},
                 library: mockFullState.library || [],
@@ -198,8 +198,25 @@ describe('Empirical Challenger: removeUndefinedValuesForFirestore & Firestore Se
 
             const cleanUserDocData = removeUndefinedValuesForFirestore(userDocData);
             expect(() => assertNoUndefined(cleanUserDocData, 'cleanUserDocData')).not.toThrow();
+            // Absence of undefined does not prove that the sanitizer preserved valid data.
+            expect(cleanUserDocData.profile).toEqual({
+                displayName: 'Challenger Athlete',
+                gender: 'male',
+                weight: 82.5,
+                height: 183,
+                activityLevel: 'heavy',
+                tdee: 2800,
+            });
+            expect(cleanUserDocData.library.map(item => item.id)).toEqual(['ex_1', 'ex_2']);
+            expect(cleanUserDocData.routines[0].exercises[0]).toMatchObject({
+                exerciseId: 'ex_1', sets: 4, targetReps: 6, restTime: 180,
+            });
+            expect(cleanUserDocData.activeWorkout.exercises[0].sets).toHaveLength(2);
+            expect(cleanUserDocData.activeWorkout).not.toHaveProperty('globalEndTime');
+            expect(mockFullState.profile).toHaveProperty('bodyFat');
+            expect(mockFullState.activeWorkout).toHaveProperty('globalEndTime');
 
-            // 2. Simulate db.ts history_months payload
+            // Synthetic month maps verify nested cleanup; real projection is tested below.
             const histMonths: Record<string, any> = {};
             mockFullState.history.forEach(h => {
                 const month = h.date.substring(0, 7);
@@ -210,9 +227,16 @@ describe('Empirical Challenger: removeUndefinedValuesForFirestore & Firestore Se
             for (const month of Object.keys(histMonths)) {
                 const cleanHistDoc = removeUndefinedValuesForFirestore(histMonths[month]);
                 expect(() => assertNoUndefined(cleanHistDoc, `history_months/${month}`)).not.toThrow();
+                expect(Object.keys(cleanHistDoc)).toEqual(['hist_sess_1']);
+                expect(cleanHistDoc.hist_sess_1).toMatchObject({
+                    id: 'hist_sess_1', date: '2026-08-10',
+                    exercises: [{ sets: [{ weight: 135, reps: 6 }] }],
+                });
+                expect(cleanHistDoc.hist_sess_1).not.toHaveProperty('notes');
+                expect(mockFullState.history[0]).toHaveProperty('notes');
             }
 
-            // 3. Simulate db.ts nutrition_months payload
+            // Synthetic nutrition fields deliberately include values outside the current schema.
             const nutMonths: Record<string, any> = {};
             const nutritionByDate: Record<string, unknown> = mockFullState.nutrition;
             Object.keys(nutritionByDate).forEach(date => {
@@ -224,6 +248,14 @@ describe('Empirical Challenger: removeUndefinedValuesForFirestore & Firestore Se
             for (const month of Object.keys(nutMonths)) {
                 const cleanNutDoc = removeUndefinedValuesForFirestore(nutMonths[month]);
                 expect(() => assertNoUndefined(cleanNutDoc, `nutrition_months/${month}`)).not.toThrow();
+                expect(Object.keys(cleanNutDoc)).toEqual(['2026-08-17']);
+                expect(cleanNutDoc['2026-08-17']).toMatchObject({
+                    date: '2026-08-17', weight: 82.5,
+                    measurements: { waist: 84, neck: 40 },
+                    meals: [{ id: 'm_1', foods: [{ id: 'cf_1', calories: 114 }] }],
+                });
+                expect(cleanNutDoc['2026-08-17'].measurements).not.toHaveProperty('hips');
+                expect(mockFullState.nutrition['2026-08-17'].measurements).toHaveProperty('hips');
             }
         });
     });
