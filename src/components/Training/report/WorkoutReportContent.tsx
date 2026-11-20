@@ -95,7 +95,7 @@ export function WorkoutReportContent({ workout, report, titleId }: WorkoutReport
                         {workout.pumpRating !== undefined && workout.pumpRating !== null && <span>Pump <strong>{workout.pumpRating}/5</strong></span>}
                         {workout.fatigueRating !== undefined && workout.fatigueRating !== null && <span>Fatica <strong>{workout.fatigueRating}/5</strong></span>}
                         {workout.waterLiters !== undefined && <span>Acqua <strong>{workout.waterLiters} L</strong></span>}
-                        {(workout.pains?.length ?? 0) > 0 && <span>Dolori muscolari <strong>{workout.pains!.map(Logic.getMuscleName).join(', ')}</strong></span>}
+                        {workout.pains && workout.pains.length > 0 && <span>Dolori muscolari <strong>{workout.pains.map(Logic.getMuscleName).join(', ')}</strong></span>}
                     </div>
                 </section>
             )}
