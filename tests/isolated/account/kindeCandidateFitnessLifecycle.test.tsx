@@ -53,8 +53,9 @@ describe('React candidate lifecycle: explicit owner access without promoting Kin
     it('opens only after explicit verified consent and never installs a global owner reader', async () => {
         const fake = mockRealm();
         vi.mocked(openKindeCandidateFitnessRealm).mockResolvedValue(fake as KindeCandidateFitnessRealm);
+        const session = confirmed();
         const { result } = renderHook(() => useKindeCandidateFitnessLifecycle({
-            session: confirmed(), enabled: true,
+            session, enabled: true,
         }));
         expect(result.current.state.phase).toBe('closed');
         expect(openKindeCandidateFitnessRealm).not.toHaveBeenCalled();
@@ -72,8 +73,9 @@ describe('React candidate lifecycle: explicit owner access without promoting Kin
     it('keeps public identity-only callers disabled even with a verified identity', async () => {
         const fake = mockRealm();
         vi.mocked(openKindeCandidateFitnessRealm).mockResolvedValue(fake as KindeCandidateFitnessRealm);
+        const session = confirmed();
         const { result } = renderHook(() => useKindeCandidateFitnessLifecycle({
-            session: confirmed(), enabled: false,
+            session, enabled: false,
         }));
         await act(async () => {
             await expect(result.current.open()).rejects.toBeInstanceOf(KindeCandidateBoundaryError);
@@ -131,8 +133,9 @@ describe('React candidate lifecycle: explicit owner access without promoting Kin
         fake.submit.mockResolvedValueOnce({ kind: 'local-pending', pendingCount: 1 } as never);
         fake.snapshot.mockReturnValueOnce(snapshot).mockReturnValueOnce(null as never);
         vi.mocked(openKindeCandidateFitnessRealm).mockResolvedValue(fake as KindeCandidateFitnessRealm);
+        const session = confirmed();
         const { result } = renderHook(() => useKindeCandidateFitnessLifecycle({
-            session: confirmed(), enabled: true,
+            session, enabled: true,
         }));
         await act(async () => { await result.current.open(); });
         await act(async () => {
@@ -149,8 +152,9 @@ describe('React candidate lifecycle: explicit owner access without promoting Kin
         const fake = mockRealm();
         fake.submit.mockRejectedValueOnce(new Error('D1 terminal refusal'));
         vi.mocked(openKindeCandidateFitnessRealm).mockResolvedValue(fake as KindeCandidateFitnessRealm);
+        const session = confirmed();
         const { result } = renderHook(() => useKindeCandidateFitnessLifecycle({
-            session: confirmed(), enabled: true,
+            session, enabled: true,
         }));
         await act(async () => { await result.current.open(); });
         await act(async () => {
