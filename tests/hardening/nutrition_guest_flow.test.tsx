@@ -33,6 +33,12 @@ function fixture(): UserData {
     });
 }
 
+function requiredFixtureFood(data: UserData, id: string) {
+    const food = data.customFoods?.find(item => item.id === id);
+    if (!food) throw new Error(`Missing expected fixture food: ${id}`);
+    return food;
+}
+
 async function runMutation(action: () => Promise<unknown>) {
     let operation!: Promise<unknown>;
     act(() => {
@@ -83,7 +89,7 @@ describe('M5 nutrition account flow through useNutritionMeals', () => {
             expect(captureSession().owner).toBe('guest');
 
             const { result } = renderHook(() => useNutritionMeals(DATE));
-            await runMutation(() => result.current.addFood(guestData.customFoods[1], 'Pranzo'));
+            await runMutation(() => result.current.addFood(requiredFixtureFood(guestData, 'food-rice'), 'Pranzo'));
             const guestArchive = await readLocal('guest');
             expect(guestArchive?.data.nutrition?.[DATE]?.meals?.[0]).toMatchObject({
                 name: 'Riso Basmati', foodId: 'food-rice', meal: 'Pranzo',
@@ -222,7 +228,7 @@ describe('M5 nutrition account flow through useNutritionMeals', () => {
         try {
             const { result } = renderHook(() => useNutritionMeals(DATE));
             await act(async () => {
-                await result.current.addFood(fixture().customFoods[0], 'Pranzo');
+                await result.current.addFood(requiredFixtureFood(fixture(), 'food-chicken'), 'Pranzo');
             });
             expect(showAlert).toHaveBeenCalledWith("Errore durante il salvataggio dell'alimento.");
             expect(dispatchDomainOperation).toHaveBeenCalledTimes(1);
@@ -236,7 +242,7 @@ describe('M5 nutrition account flow through useNutritionMeals', () => {
         const showAlert = vi.mocked(useDialogStore.getState().showAlert);
         const { result } = renderHook(() => useNutritionMeals(DATE));
 
-        await runMutation(() => result.current.addFood(fixture().customFoods[0], 'Pranzo'));
+        await runMutation(() => result.current.addFood(requiredFixtureFood(fixture(), 'food-chicken'), 'Pranzo'));
 
         expect(showAlert).toHaveBeenCalledWith("Errore durante il salvataggio dell'alimento.");
         expect(useAppStore.getState().syncHealth).toBe('failed');
