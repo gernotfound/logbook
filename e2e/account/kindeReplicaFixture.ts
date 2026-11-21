@@ -17,21 +17,29 @@ import { createCloudKeyHttpFixture, ORIGIN } from '../../tests/cloudflare/cloud-
 const uid = 'k_' + 'T'.repeat(43);
 const expected = { uid, fenceEpoch: 1, healthConsentRevision: 1 };
 const modulePath = '/kinde-replica-fixture.mjs';
+const planningModulePath = '/kinde-planning-fixture.mjs';
 
 declare global {
     interface Window { kindeReplicaFixture?: KindeCandidateFitnessRealm }
 }
 
-async function buildClient(): Promise<string> {
+async function buildClient(planningUi: boolean): Promise<string> {
+    const entry = planningUi
+        ? new URL('./kindePlanningBrowserEntry.ts', import.meta.url)
+        : new URL('../../src/lib/auth/kindeCandidateFitnessRealm.ts', import.meta.url);
     const output = await build({
         configFile: false, envDir: false, publicDir: false, logLevel: 'error',
-        define: { __APP_VERSION__: JSON.stringify('kinde-e2e-fixture') },
+        define: {
+            __APP_VERSION__: JSON.stringify('kinde-e2e-fixture'),
+            'process.env.NODE_ENV': JSON.stringify('production'),
+        },
         build: {
             write: false,
             lib: {
-                entry: fileURLToPath(new URL('../../src/lib/auth/kindeCandidateFitnessRealm.ts', import.meta.url)),
+                entry: fileURLToPath(entry),
                 formats: ['es'],
             },
+            ...(planningUi ? { rolldownOptions: { output: { codeSplitting: false } } } : {}),
         },
     });
     const builds = Array.isArray(output) ? output : [output];
@@ -49,6 +57,12 @@ export async function loadKindeReplica(page: Page) {
             expected: principal, stillCurrent: () => true,
         });
     }, { absoluteModule: new URL(modulePath, page.url()).href, principal: expected });
+}
+
+export async function mountKindePlanning(page: Page) {
+    await page.evaluate(async absoluteModule => {
+        await import(absoluteModule);
+    }, new URL(planningModulePath, page.url()).href);
 }
 
 async function startHttpsFixture(serve: (request: IncomingMessage, response: ServerResponse) => Promise<void>) {
@@ -88,8 +102,10 @@ export async function withKindeReplicaDevices<T>(
         firstCommitStatuses: number[]; allowFirstCommit: () => void;
         beforeFirstDocumentRead: (action: () => Promise<void>) => void;
     }) => Promise<T>,
+    { planningUi = false }: { planningUi?: boolean } = {},
 ): Promise<T> {
-    const client = await buildClient();
+    const client = await buildClient(false);
+    const planningClient = planningUi ? await buildClient(true) : null;
     const fixture = await createCloudKeyHttpFixture([uid]);
     const contexts: Awaited<ReturnType<Browser['newContext']>>[] = [];
     let server: Awaited<ReturnType<typeof startHttpsFixture>> | undefined;
@@ -125,6 +141,8 @@ export async function withKindeReplicaDevices<T>(
                     outgoing.writeHead(200, { 'Content-Type': 'text/html' }).end('<!doctype html><title>Kinde replica fixture</title>');
                 } else if (url.pathname === modulePath) {
                     outgoing.writeHead(200, { 'Content-Type': 'text/javascript' }).end(client);
+                } else if (url.pathname === planningModulePath && planningClient !== null) {
+                    outgoing.writeHead(200, { 'Content-Type': 'text/javascript' }).end(planningClient);
                 } else { outgoing.writeHead(404).end(); }
                 return;
             }
@@ -175,7 +193,7 @@ export async function withKindeReplicaDevices<T>(
         const first = await createDevice('first');
         const second = await createDevice('second');
         await loadKindeReplica(second);
-        await loadKindeReplica(first);
+        if (!planningUi) await loadKindeReplica(first);
         return await run({
             first, second, receipts, firstCommitStatuses,
             allowFirstCommit: () => { refuseFirstCommit = false; },

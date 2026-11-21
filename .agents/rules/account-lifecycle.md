@@ -40,9 +40,9 @@ il profilo e la nutrizione esclusivamente dallo snapshot autorizzato del
 realm e invia `nutrition-planning.replace` tramite `realm.submit()`.
 La bozza e lo stato di salvataggio sono legati al testimone revocabile:
 cambio owner o generazione nasconde i valori precedenti anche quando l'UID
-coincide. Una modifica con journal locale attende conferma cloud. La
-riconciliazione del realm riprende il journal senza reinviare il salvataggio
-dal form. La vista candidata non è montata nella PWA pubblica.
+coincide. Il realm è l'autorità sul journal in attesa: la riconciliazione
+verificata ritira l'avviso senza reinviare il salvataggio dal form.
+La vista candidata non è montata nella PWA pubblica.
 
 ### CF-03/04 — Recheck del journal Kinde dopo esito ambiguo (21/11/2026)
 

@@ -13,7 +13,7 @@ type ObserverView = Session['view'];
 type State =
     | { phase: 'closed' }
     | { phase: 'opening' | 'unavailable' | 'recheck-required'; view: ObserverView }
-    | { phase: 'ready'; view: ObserverView; snapshot: KindeCandidateFitnessSnapshot };
+    | { phase: 'ready'; view: ObserverView; snapshot: KindeCandidateFitnessSnapshot; hasPendingJournal: boolean };
 
 const CLOSED: State = { phase: 'closed' };
 
@@ -126,7 +126,7 @@ export function useKindeCandidateFitnessLifecycle({
                 throw new KindeCandidateBoundaryError();
             }
             realm.current = opened;
-            setState({ phase: 'ready', view, snapshot });
+            setState({ phase: 'ready', view, snapshot, hasPendingJournal: false });
         } catch (error) {
             if (current()) setState({ phase: 'unavailable', view });
             throw error;
@@ -153,7 +153,7 @@ export function useKindeCandidateFitnessLifecycle({
                 || latestView.current !== view) throw new KindeCandidateBoundaryError();
             const snapshot = active.snapshot();
             if (!snapshot) throw new KindeCandidateBoundaryError();
-            setState({ phase: 'ready', view, snapshot });
+            setState({ phase: 'ready', view, snapshot, hasPendingJournal: false });
         } catch (error) {
             if (realm.current === active) {
                 active.close();
@@ -179,7 +179,9 @@ export function useKindeCandidateFitnessLifecycle({
             const outcome = await active.submit(operation);
             if (realm.current !== active || !active.isCurrent()) throw new KindeCandidateBoundaryError();
             const snapshot = active.snapshot();
-            setState(snapshot ? { phase: 'ready', view, snapshot } : { phase: 'recheck-required', view });
+            setState(snapshot
+                ? { phase: 'ready', view, snapshot, hasPendingJournal: outcome.kind === 'local-pending' }
+                : { phase: 'recheck-required', view });
             return outcome;
         } catch (error) {
             if (realm.current === active) {
