@@ -9,6 +9,19 @@ cron, account deletion o inattività.
   il registro recovery indipendente, ciascuno con il proprio ID verificato.
 - Niente route, `fetch`, `workers.dev`, URL di preview, secret aggiuntivi
   o `triggers.crons`. Non inserire automaticamente uno schedule.
+- L'ingresso `scheduled` è inoltre **in pausa per default**, anche qualora
+  venisse aggiunto per errore un trigger. Esegue la riconciliazione e il passo
+  D1 solo quando `CF06_ERASURE_RUN_ENABLED` vale esattamente `enabled`;
+  il manifesto candidato non espone questa variabile. Valori mancanti,
+  diversi o malformati non leggono neppure i binding D1. Il risultato
+  `paused` non è una prova di cancellazione o di avanzamento dei job.
+  Rimuovere l'abilitazione ferma le **nuove invocazioni**, non interrompe
+  un tick già avviato; i job e i lease restano persistiti per il recupero.
+  Questo è un arresto del **processore**, non ancora il kill-switch
+  indipendente dell'accodamento per inattività/account deletion. La futura
+  abilitazione richiede revisione e autorizzazione specifica, senza
+  modificare implicitamente il manifesto isolato. I test sintetici che
+  chiamano `runOneHealthErasureStep` non eludono questo gate di runtime.
 - Un tick del codice applicativo prova al massimo una riconciliazione del
   cutoff e un passo con lease D1, prima della fase finale atomica. Il Worker
   deve fallire senza dichiarare una cancellazione riuscita se il registro
