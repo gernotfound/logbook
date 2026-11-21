@@ -105,5 +105,5 @@ await test('scans extracted case registration modules without treating them as s
       ['skip'],
     );
   }
-  assert.equal(isTestDeclarationSourceFile('businessCaseModel.ts'), false);
+  assert.equal(isTestDeclarationSourceFile('businessCaseModel.ts'), false);\n  assert.equal(isTestDeclarationSourceFile('check-version-bump-regressions.mjs'), true);
 });
