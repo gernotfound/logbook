@@ -81,13 +81,19 @@ export function useKindeCandidateFitnessLifecycle({
         window.addEventListener('storage', onSuspend);
         window.addEventListener('online', onSuspend);
         document.addEventListener('visibilitychange', onVisibility);
+        // The server-observed session deadline must also revoke a retained
+        // React snapshot when no foreground, cookie or storage event occurs.
+        const expiryCheck = enabled ? window.setInterval(() => {
+            if (!busy.current && realm.current && !realm.current.isCurrent()) suspend();
+        }, 1000) : null;
         return () => {
+            if (expiryCheck !== null) window.clearInterval(expiryCheck);
             window.removeEventListener('focus', onSuspend);
             window.removeEventListener('storage', onSuspend);
             window.removeEventListener('online', onSuspend);
             document.removeEventListener('visibilitychange', onVisibility);
         };
-    }, [suspend]);
+    }, [suspend, enabled]);
 
     const open = async (): Promise<void> => {
         const view = session.view;

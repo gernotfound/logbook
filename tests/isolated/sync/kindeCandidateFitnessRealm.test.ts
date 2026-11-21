@@ -140,6 +140,66 @@ describe('isolated Kinde fitness realm with trusted owner, no Firebase/global gr
         } finally { fixture.close(); }
     });
 
+    it('expires an observed account realm without a browser event, blocking plaintext and writes', async () => {
+        const fixture = await createCloudKeyHttpFixture([uid]);
+        try {
+            await fixture.consent(uid);
+            const expiry = Date.now() + 30_000;
+            fixture.sqlite.prepare('UPDATE auth_sessions SET idle_expires_at_ms=? WHERE uid=?').run(expiry, uid);
+            const client = browser(fixture);
+            const realm = await openKindeCandidateFitnessRealm({ ...client, expected });
+            const sealed = await get('logbook:v2:' + owner);
+            const requests = client.paths.length;
+            expect(realm.snapshot()).not.toBeNull();
+            vi.spyOn(Date, 'now').mockReturnValue(expiry);
+            expect(realm.isCurrent()).toBe(false);
+            expect(realm.snapshot()).toBeNull();
+            await expect(realm.submit({ type: 'profile.patch', patch: { height: '199' } }))
+                .rejects.toBeInstanceOf(KindeCandidateBoundaryError);
+            expect(client.paths).toHaveLength(requests);
+            expect(await get('logbook:v2:' + owner)).toBe(sealed);
+            expect(fixture.count('sync_receipts', uid)).toBe(0);
+            realm.close();
+        } finally { fixture.close(); }
+    });
+
+    it('does not extend a Kinde realm when monotonic time passes but the wall clock is rolled back', async () => {
+        const fixture = await createCloudKeyHttpFixture([uid]);
+        try {
+            await fixture.consent(uid);
+            const expiry = Date.now() + 30_000;
+            fixture.sqlite.prepare('UPDATE auth_sessions SET idle_expires_at_ms=? WHERE uid=?').run(expiry, uid);
+            const client = browser(fixture);
+            const realm = await openKindeCandidateFitnessRealm({ ...client, expected });
+            expect(realm.snapshot()).not.toBeNull();
+            const oldPerformance = performance.now();
+            vi.spyOn(performance, 'now').mockReturnValue(oldPerformance + 60_000);
+            expect(realm.snapshot()).toBeNull();
+            await expect(realm.submit({ type: 'profile.patch', patch: { height: '199' } }))
+                .rejects.toBeInstanceOf(KindeCandidateBoundaryError);
+            realm.close();
+        } finally { fixture.close(); }
+    });
+
+    it('rejects an account realm when its trusted session expiry is missing', async () => {
+        const fixture = await createCloudKeyHttpFixture([uid]);
+        try {
+            await fixture.consent(uid);
+            const client = browser(fixture);
+            const send: typeof fetch = async (input, init) => {
+                const response = await client.send(input, init);
+                if (String(input) !== '/v1/consent/status') return response;
+                const headers = new Headers(response.headers);
+                headers.delete('X-Logbook-Session-Expires-At-Ms');
+                return new Response(await response.text(), { status: response.status, headers });
+            };
+            await expect(openKindeCandidateFitnessRealm({ ...client, expected, send }))
+                .rejects.toBeInstanceOf(KindeCandidateBoundaryError);
+            expect(authenticatedIdentitySource.hasReader()).toBe(false);
+            expect(isVaultUnlocked(owner)).toBe(false);
+        } finally { fixture.close(); }
+    });
+
     it('preserves the encrypted edit when consent was revoked on another device before reconnect', async () => {
         const fixture = await createCloudKeyHttpFixture([uid]);
         try {
