@@ -196,10 +196,14 @@ export function registerLegacyCloudKeyCustodyCases({
   });
 
   it('zeroizes temporary unwrapped key bytes after successfully forming the authenticated response', async () => {
+    const originalUnwrap = harness.unwrap.getMockImplementation();
     let unwrapped: Buffer | undefined;
-    harness.unwrap.mockImplementationOnce(async (_uid, envelope) => {
-      unwrapped = Buffer.from(envelope.ciphertext, 'base64');
-      return unwrapped;
+    harness.unwrap.mockImplementationOnce(async (uid, envelope) => {
+      // Retain the mock's production-compatible Buffer type while observing
+      // the exact bytes later zeroized by the response finalizer.
+      const bytes = await originalUnwrap!(uid, envelope);
+      unwrapped = bytes;
+      return bytes;
     });
 
     const response = await POST(request());
