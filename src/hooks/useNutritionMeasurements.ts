@@ -7,6 +7,7 @@ import { useAppStore } from '../store/useAppStore';
 import { useDialogStore } from '../store/useDialogStore';
 import { Logic } from '../lib/logic';
 import { hasMeasurementData } from '../lib/nutrition/measurementPresence';
+import { parseMeasurementNumber, prepareBodyMeasurements } from '../lib/nutrition/measurementInput';
 import type { BodyFatProvenance, NutritionDay, UserProfile } from '../types';
 
 const EMPTY_NUTRITION: Record<string, NutritionDay> = {};
@@ -101,17 +102,15 @@ export function useNutritionMeasurements(selectedDate?: string, includeHistory =
         const session = captureSession();
         const submitted = { ...draft.values };
         try {
-            if (!weight.trim() || !Number.isFinite(Number(weight)) || Number(weight) <= 0) {
-                await showAlert("Inserisci un valore valido per il peso.");
-                return;
-            }
-
-            const optional = [waist, neck, hip, chest, shoulders, biceps, thighs, calves];
-            if (optional.some(value => value !== '' && (!Number.isFinite(Number(value)) || Number(value) <= 0))) {
-                await showAlert('Inserisci misure numeriche valide.');
+            const prepared = prepareBodyMeasurements(submitted);
+            if (!prepared.ok) {
+                await showAlert(prepared.reason === 'weight'
+                    ? 'Inserisci un valore valido per il peso.'
+                    : 'Inserisci misure numeriche valide.');
                 return false;
             }
-            const height = Number(profile.height);
+            const measurements = prepared.values;
+            const height = parseMeasurementNumber(profile.height);
             let bf: number | null = null;
             let bfProvenance: BodyFatProvenance | undefined;
 
@@ -127,17 +126,17 @@ export function useNutritionMeasurements(selectedDate?: string, includeHistory =
                         : 'Per il calcolo US Navy inserisci vita e collo.');
                     return false;
                 }
-                if (!Number.isFinite(height) || height <= 0) {
+                if (height === null || height <= 0) {
                     await showAlert('Imposta la tua altezza nella sezione Biometria per calcolare la massa grassa.');
                     return false;
                 }
 
                 const calculatedBf = Logic.calculateBodyFatByMethod(female ? 'navy_female' : 'navy_male', {
                     gender: profile.gender || 'M',
-                    height: profile.height,
-                    waist,
-                    neck,
-                    hip: hip || undefined
+                    height,
+                    waist: measurements.waist,
+                    neck: measurements.neck,
+                    hip: female ? measurements.hip : undefined
                 });
                 if (calculatedBf === null || !Number.isFinite(calculatedBf)) {
                     await showAlert(female
@@ -149,9 +148,9 @@ export function useNutritionMeasurements(selectedDate?: string, includeHistory =
                     method: 'us_navy',
                     inputs: {
                         heightCm: height,
-                        waistCm: Number(waist),
-                        neckCm: Number(neck),
-                        ...(hip && female ? { hipCm: Number(hip) } : {}),
+                        waistCm: measurements.waist,
+                        neckCm: measurements.neck,
+                        ...(hip && female ? { hipCm: measurements.hip } : {}),
                         gender: profile.gender || 'M',
                     },
                 };
@@ -172,15 +171,15 @@ export function useNutritionMeasurements(selectedDate?: string, includeHistory =
                     type: 'nutrition-day.patch',
                     date: targetDate,
                     patch: {
-                        weight: Number(weight),
-                        waist: waist ? Number(waist) : undefined,
-                        neck: neck ? Number(neck) : undefined,
-                        hip: hip && profile.gender === 'F' ? Number(hip) : undefined,
-                        chest: chest ? Number(chest) : undefined,
-                        shoulders: shoulders ? Number(shoulders) : undefined,
-                        biceps: biceps ? Number(biceps) : undefined,
-                        thighs: thighs ? Number(thighs) : undefined,
-                        calves: calves ? Number(calves) : undefined,
+                        weight: measurements.weight,
+                        waist: measurements.waist,
+                        neck: measurements.neck,
+                        hip: profile.gender === 'F' ? measurements.hip : undefined,
+                        chest: measurements.chest,
+                        shoulders: measurements.shoulders,
+                        biceps: measurements.biceps,
+                        thighs: measurements.thighs,
+                        calves: measurements.calves,
                         bf: bf !== null && !isNaN(bf) ? Math.round(bf * 10) / 10 : undefined,
                         bfProvenance,
                         measurementTime: measureTime,

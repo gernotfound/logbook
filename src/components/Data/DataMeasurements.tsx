@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Activity, ChevronDown, Pencil, Plus, Ruler, Save, Trash2, UserRound, X } from 'lucide-react';
 import { Logic } from '../../lib/logic';
-import { parseBodyFatMeasurement } from '../../lib/calc/bodyFat';
+import { parseMeasurementNumber } from '../../lib/nutrition/measurementInput';
 import { shiftDateString } from '../../lib/utils/date';
 import type { BodyFatProvenance, UserProfile } from '../../types';
 import DataDateNavigator from './DataDateNavigator';
@@ -111,7 +111,7 @@ const DataMeasurements: React.FC<DataMeasurementsProps> = ({
     const calculateBf = selection.key === selectionKey ? selection.enabled : savedCalculation;
 
     const isFemale = profile?.gender === 'F';
-    const profileHeight = parseBodyFatMeasurement(profile?.height);
+    const profileHeight = parseMeasurementNumber(profile?.height);
     const profileComplete = Boolean(
         (profile?.gender === 'M' || profile?.gender === 'F')
         && profileHeight !== null && profileHeight >= 50 && profileHeight <= 250
