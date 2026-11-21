@@ -269,6 +269,31 @@ describe('React candidate lifecycle: explicit owner access without promoting Kin
         expect(authenticatedIdentitySource.hasReader()).toBe(false);
     });
 
+    it('keeps a locally durable Kinde edit distinct from cloud ACK until trusted reconciliation', async () => {
+        const fake = mockRealm();
+        fake.submit.mockResolvedValueOnce({ kind: 'local-pending', pendingCount: 1 } as never);
+        const edited = { ...snapshot, data: { ...snapshot.data, profile: { height: '192' } } };
+        fake.snapshot.mockReturnValueOnce(snapshot).mockReturnValueOnce(null as never)
+            .mockReturnValueOnce(edited);
+        vi.mocked(openKindeCandidateFitnessRealm).mockResolvedValue(fake as KindeCandidateFitnessRealm);
+        const session = confirmed();
+        const { result } = renderHook(() => {
+            const lifecycle = useKindeCandidateFitnessLifecycle({ session, enabled: true });
+            const profile = useKindeCandidateProfile(lifecycle);
+            return { lifecycle, profile };
+        });
+        await act(async () => { await result.current.lifecycle.open(); });
+        act(() => { result.current.profile.setHeight('192'); });
+        await act(async () => { await result.current.profile.handleSaveProfile(); });
+        expect(fake.submit).toHaveBeenCalledTimes(1);
+        expect(result.current.lifecycle.state.phase).toBe('recheck-required');
+        expect(result.current.profile.height).toBe('');
+        await act(async () => { await result.current.lifecycle.recheck(); });
+        expect(fake.refresh).toHaveBeenCalledTimes(1);
+        expect(fake.submit).toHaveBeenCalledTimes(1);
+        expect(result.current.profile.height).toBe('192');
+    });
+
     it('does not send a biometric draft from an obsolete account observer', async () => {
         const fake = mockRealm();
         vi.mocked(openKindeCandidateFitnessRealm).mockResolvedValue(fake as KindeCandidateFitnessRealm);
