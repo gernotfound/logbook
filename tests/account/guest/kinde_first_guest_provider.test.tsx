@@ -168,14 +168,70 @@ describe('Kinde-first guest provider: no legacy account activation', () => {
     it('revokes before purging a confirmed local guest and never signs out Firebase', async () => {
         restoreGuest('guest-kinde-first-logout');
         const purge = vi.mocked(purgeGuestLocalData);
+        const purgeObservations: Array<{ revoked: string | null; active: boolean; guestFlag: string | null }> = [];
+        purge.mockImplementationOnce(async () => {
+            purgeObservations.push({
+                revoked: localStorage.getItem(GUEST_REVOCATION_KEY),
+                active: isActiveGuestSession(),
+                guestFlag: localStorage.getItem('logbook_is_guest'),
+            });
+        });
         const { result } = renderHook(() => useAuth(), { wrapper });
         expect(result.current.isGuest).toBe(true);
         await act(async () => { await result.current.logout({ mode: 'normal', skipConfirm: true }); });
+        expect(purgeObservations).toEqual([{
+            revoked: expect.any(String),
+            active: false,
+            guestFlag: 'true',
+        }]);
         expect(result.current.isGuest).toBe(false);
         expect(localStorage.getItem(GUEST_REVOCATION_KEY)).not.toBeNull();
         expect(localStorage.getItem('logbook_is_guest')).toBeNull();
         expect(purge).toHaveBeenCalledOnce();
         expect(purge).toHaveBeenCalledWith();
+        expect(onAuthStateChanged).not.toHaveBeenCalled();
+    });
+
+    it('keeps the durable revocation fence and reports an incomplete physical purge', async () => {
+        restoreGuest('guest-purge-failure');
+        const purge = vi.mocked(purgeGuestLocalData);
+        purge.mockRejectedValueOnce(new Error('simulated persistent storage failure'));
+        const showAlert = vi.mocked(useDialogStore.getState().showAlert);
+        const { result } = renderHook(() => useAuth(), { wrapper });
+
+        await act(async () => { await result.current.logout({ mode: 'normal', skipConfirm: true }); });
+
+        expect(purge).toHaveBeenCalledOnce();
+        expect(showAlert).toHaveBeenCalledWith(expect.stringContaining('pulizia del dispositivo incompleta'));
+        expect(result.current.isGuest).toBe(false);
+        expect(isActiveGuestSession()).toBe(false);
+        expect(localStorage.getItem(GUEST_REVOCATION_KEY)).not.toBeNull();
+        expect(localStorage.getItem(GUEST_SESSION_KEY)).toBe('guest-purge-failure');
+        expect(localStorage.getItem('logbook_is_guest')).toBe('true');
+        expect(useAppStore.getState().userData).toBeNull();
+        expect(onAuthStateChanged).not.toHaveBeenCalled();
+    });
+
+    it('refuses guest deletion without cross-tab Web Locks instead of purging unsafely', async () => {
+        restoreGuest('guest-locks-unavailable');
+        const purge = vi.mocked(purgeGuestLocalData);
+        const showAlert = vi.mocked(useDialogStore.getState().showAlert);
+        const { result } = renderHook(() => useAuth(), { wrapper });
+
+        vi.stubGlobal('navigator', { locks: undefined });
+        try {
+            await act(async () => { await result.current.logout({ mode: 'normal', skipConfirm: true }); });
+        } finally {
+            vi.unstubAllGlobals();
+        }
+
+        expect(purge).not.toHaveBeenCalled();
+        expect(showAlert).toHaveBeenCalledWith(expect.stringContaining('Impossibile coordinare'));
+        expect(result.current.isGuest).toBe(true);
+        expect(isActiveGuestSession()).toBe(true);
+        expect(localStorage.getItem(GUEST_REVOCATION_KEY)).toBeNull();
+        expect(localStorage.getItem(GUEST_SESSION_KEY)).toBe('guest-locks-unavailable');
+        expect(localStorage.getItem('logbook_is_guest')).toBe('true');
         expect(onAuthStateChanged).not.toHaveBeenCalled();
     });
 

@@ -1,6 +1,9 @@
-import { act, fireEvent, render, renderHook, screen, waitFor, cleanup } from '@testing-library/react';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { cleanup } from '@testing-library/react';
+import { afterEach, beforeEach, describe, vi } from 'vitest';
 import type { ReactNode } from 'react';
+import { registerKindeSessionEntryCases } from './kindeSessionEntryCases';
+import { registerKindeSessionPreparationCases } from './kindeSessionPreparationCases';
+import { registerKindeSessionEpochCases } from './kindeSessionEpochCases';
 
 vi.mock('../../../src/hooks/usePWAInstall', () => ({
     usePWAInstall: vi.fn(() => ({
@@ -82,224 +85,23 @@ afterEach(() => {
     vi.resetAllMocks();
 });
 
+function createKindeSessionContext() {
+    return {
+        uid, readyPrincipal, verified, host, Observer,
+        readKindeCandidateIdentity, readKindeCandidateAccess,
+        revokeKindeCandidateSession, submitKindeHostedSignIn,
+        authenticatedIdentitySource, usePWAInstall, KindeAccountEntry,
+        KindeCandidateBoundaryError, prepareKindeCandidateOwner,
+        useKindeAccountSession, useSharedKindeAccountSession,
+        activateGuestSession, GUEST_SESSION_KEY,
+        setCsrf: (value: string) => { csrf = value; },
+    };
+}
+export type KindeSessionContext = ReturnType<typeof createKindeSessionContext>;
+
 describe('React Kinde session boundary never promotes identity into fitness', () => {
-    it('offers a deferred PWA install gesture on the signed-out entry without granting fitness', async () => {
-        const promptInstall = vi.fn(async () => {});
-        vi.mocked(usePWAInstall).mockReturnValue({
-            isInstallable: true, isIOSInstallable: false, isStandalone: false, promptInstall,
-        });
-        render(<KindeAccountEntry identityOnly />, { wrapper: host });
-        fireEvent.click(await screen.findByRole('button', { name: 'Installa TheLogBook' }));
-        expect(promptInstall).toHaveBeenCalledTimes(1);
-        expect(readKindeCandidateIdentity).toHaveBeenCalledTimes(1);
-        expect(authenticatedIdentitySource.readUid()).toBeNull();
-    });
-
-    it('shows the iOS installation instruction without a fake browser prompt', async () => {
-        vi.mocked(usePWAInstall).mockReturnValue({
-            isInstallable: false, isIOSInstallable: true, isStandalone: false,
-            promptInstall: vi.fn(async () => {}),
-        });
-        render(<KindeAccountEntry identityOnly />, { wrapper: host });
-        expect(await screen.findByText(/Aggiungi alla schermata Home/)).toBeTruthy();
-        expect(screen.queryByRole('button', { name: 'Installa TheLogBook' })).toBeNull();
-    });
-
-    it('does not start candidate preparation from the mounted public provider', async () => {
-        vi.mocked(readKindeCandidateIdentity).mockResolvedValue({
-            kind: 'email-verified', principal: readyPrincipal,
-        });
-        const { result } = renderHook(() => useSharedKindeAccountSession(), { wrapper: host });
-        await waitFor(() => expect(result.current?.view.phase).toBe('identity-verified'));
-        await act(async () => {
-            await expect(result.current!.prepareCandidateArchive())
-                .rejects.toBeInstanceOf(KindeCandidateBoundaryError);
-        });
-        expect(prepareKindeCandidateOwner).not.toHaveBeenCalled();
-        expect(readKindeCandidateAccess).not.toHaveBeenCalled();
-        expect(authenticatedIdentitySource.hasReader()).toBe(false);
-    });
-
-    it('hands an explicitly enabled candidate the observed session, without promoting fitness', async () => {
-        vi.mocked(readKindeCandidateIdentity).mockResolvedValue({
-            kind: 'email-verified', principal: readyPrincipal,
-        });
-        const { result } = renderHook(() => useKindeAccountSession({
-            guestArchivePresent: false, identityOnly: true, candidatePreparationEnabled: true,
-        }));
-        await waitFor(() => expect(result.current.view.phase).toBe('identity-verified'));
-        await act(async () => {
-            await expect(result.current.prepareCandidateArchive({
-                drainPendingJournal: true,
-            })).resolves.toMatchObject({
-                kind: 'candidate-observed', replicaOutcome: 'already-active',
-            });
-        });
-        expect(prepareKindeCandidateOwner).toHaveBeenCalledTimes(1);
-        const args = vi.mocked(prepareKindeCandidateOwner).mock.calls[0][0];
-        expect(args).toMatchObject({
-            expected: { uid, fenceEpoch: 1, healthConsentRevision: 1 },
-            drainPendingJournal: true, retainDeviceVault: false,
-        });
-        expect(args.stillCurrent()).toBe(true);
-        expect(args).not.toHaveProperty('send');
-        expect(args).not.toHaveProperty('browserCookies');
-        expect(readKindeCandidateAccess).not.toHaveBeenCalled();
-        expect(authenticatedIdentitySource.hasReader()).toBe(false);
-    });
-
-    it('refuses to start before verified consent or for an unverified email', async () => {
-        for (const identity of [
-            verified,
-            { kind: 'email-unverified' as const,
-                principal: { ...readyPrincipal, emailVerified: false } },
-        ]) {
-            vi.mocked(readKindeCandidateIdentity).mockResolvedValue(identity);
-            const { result, unmount } = renderHook(() => useKindeAccountSession({
-                guestArchivePresent: false, identityOnly: true, candidatePreparationEnabled: true,
-            }));
-            await waitFor(() => expect(result.current.view.phase).toBe(
-                identity.kind === 'email-unverified' ? 'email-unverified' : 'identity-verified',
-            ));
-            await act(async () => {
-                await expect(result.current.prepareCandidateArchive())
-                    .rejects.toBeInstanceOf(KindeCandidateBoundaryError);
-            });
-            unmount();
-        }
-        expect(prepareKindeCandidateOwner).not.toHaveBeenCalled();
-    });
-
-    it('does not attempt candidate preparation while a local guest is active', async () => {
-        localStorage.setItem('logbook_is_guest', 'true');
-        localStorage.setItem(GUEST_SESSION_KEY, 'guest-candidate-blocked');
-        activateGuestSession('guest-candidate-blocked');
-        const { result } = renderHook(() => useKindeAccountSession({
-            guestArchivePresent: true, identityOnly: true, candidatePreparationEnabled: true,
-        }));
-        await waitFor(() => expect(result.current.view.phase).toBe('guest-blocked'));
-        await act(async () => {
-            await expect(result.current.prepareCandidateArchive())
-                .rejects.toBeInstanceOf(KindeCandidateBoundaryError);
-        });
-        expect(readKindeCandidateIdentity).not.toHaveBeenCalled();
-        expect(prepareKindeCandidateOwner).not.toHaveBeenCalled();
-    });
-
-    it('rejects a superseded candidate result when its CSRF witness changes mid-flight', async () => {
-        vi.mocked(readKindeCandidateIdentity).mockResolvedValue({
-            kind: 'email-verified', principal: readyPrincipal,
-        });
-        let release!: () => void;
-        const delayed = new Promise<void>(resolve => { release = resolve; });
-        vi.mocked(prepareKindeCandidateOwner).mockImplementation(async ({ stillCurrent }) => {
-            expect(stillCurrent()).toBe(true);
-            await delayed;
-            return { kind: 'candidate-observed', checkpointRevision: 1,
-                replicaOutcome: 'already-active' };
-        });
-        const { result } = renderHook(() => useKindeAccountSession({
-            guestArchivePresent: false, identityOnly: true, candidatePreparationEnabled: true,
-        }));
-        await waitFor(() => expect(result.current.view.phase).toBe('identity-verified'));
-        let attempt!: ReturnType<typeof result.current.prepareCandidateArchive>;
-        act(() => { attempt = result.current.prepareCandidateArchive(); });
-        const rejected = expect(attempt).rejects.toBeInstanceOf(KindeCandidateBoundaryError);
-        try {
-            await waitFor(() => expect(prepareKindeCandidateOwner).toHaveBeenCalledTimes(1));
-            csrf = 'B'.repeat(42) + 'A';
-            await act(async () => { release(); await rejected; });
-            expect(authenticatedIdentitySource.readUid()).toBeNull();
-        } finally {
-            release();
-            await attempt.catch(() => {});
-        }
-    });
-
-    it('serializes candidate starts and rejects a result after unmount', async () => {
-        vi.mocked(readKindeCandidateIdentity).mockResolvedValue({
-            kind: 'email-verified', principal: readyPrincipal,
-        });
-        let release!: () => void;
-        const delayed = new Promise<void>(resolve => { release = resolve; });
-        vi.mocked(prepareKindeCandidateOwner).mockImplementation(async () => {
-            await delayed;
-            return { kind: 'candidate-observed', checkpointRevision: 1,
-                replicaOutcome: 'already-active' };
-        });
-        const { result, unmount } = renderHook(() => useKindeAccountSession({
-            guestArchivePresent: false, identityOnly: true, candidatePreparationEnabled: true,
-        }));
-        await waitFor(() => expect(result.current.view.phase).toBe('identity-verified'));
-        let first!: ReturnType<typeof result.current.prepareCandidateArchive>;
-        act(() => { first = result.current.prepareCandidateArchive(); });
-        const failed = expect(first).rejects.toBeInstanceOf(KindeCandidateBoundaryError);
-        try {
-            await waitFor(() => expect(prepareKindeCandidateOwner).toHaveBeenCalledTimes(1));
-            await act(async () => {
-                await expect(result.current.prepareCandidateArchive())
-                    .rejects.toBeInstanceOf(KindeCandidateBoundaryError);
-            });
-            expect(prepareKindeCandidateOwner).toHaveBeenCalledTimes(1);
-            unmount();
-            release();
-            await failed;
-            expect(authenticatedIdentitySource.readUid()).toBeNull();
-        } finally {
-            release();
-            await first.catch(() => {});
-        }
-    });
-
-    it('reuses one live session observation between the runtime and the account entry', async () => {
-        vi.mocked(readKindeCandidateIdentity).mockResolvedValue(verified);
-        render(<><Observer /><KindeAccountEntry identityOnly /></>, { wrapper: host });
-        await screen.findByText(/Sessione Kinde verificata/);
-        expect(screen.getByTestId('kinde-presence').textContent)
-            .toBe('identity-verified|fitness-blocked|not-guest');
-        expect(readKindeCandidateIdentity).toHaveBeenCalledTimes(1);
-        expect(readKindeCandidateAccess).not.toHaveBeenCalled();
-        expect(authenticatedIdentitySource.hasReader()).toBe(false);
-        expect(authenticatedIdentitySource.readUid()).toBeNull();
-        expect(submitKindeHostedSignIn).not.toHaveBeenCalled();
-    });
-
-    it('invalidates the shared identity on a replacement cookie without installing an account owner', async () => {
-        vi.mocked(readKindeCandidateIdentity).mockResolvedValueOnce(verified)
-            .mockResolvedValue({ kind: 'signed-out' });
-        render(<><Observer /><KindeAccountEntry identityOnly /></>, { wrapper: host });
-        await screen.findByText(/Sessione Kinde verificata/);
-        csrf = 'B'.repeat(42) + 'A';
-        await act(async () => { window.dispatchEvent(new Event('focus')); });
-        await screen.findByRole('button', { name: 'Accedi o registrati' });
-        expect(screen.getByTestId('kinde-presence').textContent)
-            .toBe('signed-out|fitness-blocked|not-guest');
-        expect(readKindeCandidateIdentity).toHaveBeenCalledTimes(2);
-        expect(authenticatedIdentitySource.readUid()).toBeNull();
-    });
-
-    it('keeps the guest archive local and performs no Kinde request while the guest is active', async () => {
-        localStorage.setItem('logbook_is_guest', 'true');
-        localStorage.setItem(GUEST_SESSION_KEY, 'guest-runtime-session');
-        activateGuestSession('guest-runtime-session');
-        render(<Observer />, { wrapper: host });
-        await waitFor(() => expect(screen.getByTestId('kinde-presence').textContent)
-            .toBe('guest-blocked|fitness-blocked|local-guest'));
-        expect(readKindeCandidateIdentity).not.toHaveBeenCalled();
-        expect(readKindeCandidateAccess).not.toHaveBeenCalled();
-        expect(authenticatedIdentitySource.readUid()).toBeNull();
-    });
-
-    it('uses one session revocation and then publishes only signed-out, never a fitness user', async () => {
-        vi.mocked(readKindeCandidateIdentity).mockResolvedValueOnce(verified)
-            .mockResolvedValue({ kind: 'signed-out' });
-        render(<><Observer /><KindeAccountEntry identityOnly /></>, { wrapper: host });
-        await screen.findByText(/Sessione Kinde verificata/);
-        fireEvent.click(screen.getByRole('button', { name: 'Termina sessione TheLogBook' }));
-        await screen.findByRole('button', { name: 'Accedi o registrati' });
-        expect(revokeKindeCandidateSession).toHaveBeenCalledTimes(1);
-        expect(readKindeCandidateIdentity).toHaveBeenCalledTimes(2);
-        expect(screen.getByTestId('kinde-presence').textContent)
-            .toBe('signed-out|fitness-blocked|not-guest');
-    });
+    const context = createKindeSessionContext();
+    registerKindeSessionEntryCases(context);
+    registerKindeSessionPreparationCases(context);
+    registerKindeSessionEpochCases(context);
 });

@@ -258,7 +258,7 @@ describe('CF-05 synthetic Kinde consent, ciphertext, second device and portable 
         }
     });
 
-    it('keeps the exact encrypted intent after a lost D1 commit response and reconciles without a second edit', async () => {
+    it('keeps the encrypted intent after an outage before D1 commit and replays it once', async () => {
         const fixture = await createCloudKeyHttpFixture([uid]);
         try {
             await fixture.consent(uid);
@@ -302,6 +302,71 @@ describe('CF-05 synthetic Kinde consent, ciphertext, second device and portable 
                 recoveredGrant.release();
             }
             expect(fixture.count('sync_receipts', uid)).toBe(1);
+        } finally {
+            fixture.close();
+        }
+    });
+
+    it('reconciles a D1 commit whose HTTP response was lost without resubmitting the business edit', async () => {
+        const fixture = await createCloudKeyHttpFixture([uid]);
+        try {
+            await fixture.consent(uid);
+            const client = browser(fixture, uid);
+            let lostAfterCommit = false;
+            const send: typeof fetch = async (input, init) => {
+                const response = await client.send(input, init);
+                if (String(input) === '/v1/sync/commit' && !lostAfterCommit) {
+                    expect(response.ok).toBe(true);
+                    lostAfterCommit = true;
+                    throw new TypeError('synthetic HTTP response lost after the D1 commit');
+                }
+                return response;
+            };
+
+            const outcome = await submitKindeCandidateDomainIntent({
+                ...client, send, expected,
+                operation: { type: 'profile.patch', patch: { height: '184' } },
+            });
+            expect(lostAfterCommit).toBe(true);
+            // The transport replays the immutable batch and validates the
+            // persisted SQL receipt before returning success, despite the
+            // first HTTP response disappearing after the remote commit.
+            expect(outcome).toEqual({ kind: 'cloud-acknowledged', operations: 1 });
+            expect(fixture.count('sync_receipts', uid)).toBe(1);
+            expect(fixture.count('sync_documents', uid)).toBe(1);
+
+            const sealedBefore = await get<string>('logbook:v2:' + owner);
+            expect(sealedBefore).toMatch(/^tlb-sealed:v1:/);
+            const grant = await unlockVaultForOwner(owner);
+            try {
+                const acknowledged = await readLocal(owner);
+                expect(acknowledged?.data.profile?.height).toBe('184');
+                expect(acknowledged?.baseline.profile?.height).toBe('184');
+                expect(acknowledged?.pending).toEqual([]);
+                expect(acknowledged?.cloudflareDelivery).toBeUndefined();
+            } finally {
+                grant.release();
+            }
+
+            await expect(prepareKindeCandidateOwner({
+                ...client, expected, drainPendingJournal: true, retainDeviceVault: false,
+            })).resolves.toMatchObject({
+                kind: 'candidate-observed', journalDrained: true,
+            });
+
+            const reconciledGrant = await unlockVaultForOwner(owner);
+            try {
+                const recovered = await readLocal(owner);
+                expect(recovered?.data.profile?.height).toBe('184');
+                expect(recovered?.baseline.profile?.height).toBe('184');
+                expect(recovered?.pending).toEqual([]);
+                expect(recovered?.cloudflareDelivery).toBeUndefined();
+            } finally {
+                reconciledGrant.release();
+            }
+            expect(fixture.count('sync_receipts', uid)).toBe(1);
+            expect(fixture.count('sync_documents', uid)).toBe(1);
+            expect(await get<string>('logbook:v2:' + owner)).toMatch(/^tlb-sealed:v1:/);
         } finally {
             fixture.close();
         }
