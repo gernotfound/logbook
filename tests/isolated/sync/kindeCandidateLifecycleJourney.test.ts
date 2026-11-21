@@ -255,7 +255,7 @@ describe('CF-05 synthetic Kinde consent, ciphertext, second device and portable 
         const fixture = await createCloudKeyHttpFixture([uid]);
         try {
             await fixture.consent(uid);
-            const client = browser(fixture);
+            const client = browser(fixture, uid);
             let lost = false;
             const send: typeof fetch = async (input, init) => {
                 if (String(input) === '/v1/sync/commit' && !lost) {
@@ -304,7 +304,7 @@ describe('CF-05 synthetic Kinde consent, ciphertext, second device and portable 
         const fixture = await createCloudKeyHttpFixture([uid]);
         try {
             await fixture.consent(uid);
-            const client = browser(fixture);
+            const client = browser(fixture, uid);
             let rejected = 0;
             const send: typeof fetch = async (input, init) => {
                 if (String(input) === '/v1/sync/commit') {
