@@ -1,5 +1,11 @@
 # Storage e sincronizzazione — TheLogBook
 
+### CF-04 — Ripresa di un invio D1 dopo una scrittura da un altro dispositivo (21/11/2026)
+
+Il bootstrap Kinde candidato riconcilia l'intento cifrato già in IndexedDB prima della hydration. Se D1 prova che il batch originale non è stato committato e il journal viene ristadiato sul nuovo checkpoint autenticato, uno svuotamento esplicito può tentare il batch sostitutivo una sola volta nella stessa richiesta. Conserva le operazioni causali e richiede la ricevuta esatta del batch consegnato. Un nuovo conflitto o errore lascia intatto il journal per una verifica successiva. Il collaudo sintetico conserva due vault e due sessioni distinti e verifica la convergenza dopo un HTTP 429 e una scrittura concorrente. Il percorso rimane candidato.
+
+`e2e/account/kinde-replica-recovery.spec.ts` esercita il riavvio del documento con due contesti Playwright reali. Verifica che il nuovo runtime recuperi il journal da IndexedDB, converga con la scrittura concorrente e lasci soltanto due ricevute. Il gateway candidato e i Worker eseguono su SQL sintetico, con sessioni di prova emesse dalla stessa funzione usata da Kinde.
+
 ### CF-03/04 — Bootstrap device Kinde e fence contro revoca locale (18/11/2026)
 
 La composizione candidata `prepareKindeCandidateOwner()` prima riusa/crea il vault device owner-scoped solo dopo consent trusted attivo, poi verifica due volte la sessione, esegue hydration AEAD e infine la replica claim con intento cifrato. `isKindeAccountLocalFitnessClear()` è un gate fitness locale aggiuntivo, distinto dal controllo D1: i marker owner-scoped di revoca/cancellazione e una generazione consenso divergente bloccano letture/scritture anche se una risposta remota ancora riporta active. Hydration, claim e journal lo ricontrollano nei guard asincroni/IndexedDB; revoca non è un diritto all'ACK o all'azzeramento del journal. I test usano IndexedDB effettivo in memoria con controllo dell'envelope cifrato; niente grant runtime su `main` senza API/D1 e lifecycle Kinde verificati.
