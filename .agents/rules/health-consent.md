@@ -71,7 +71,7 @@ La revoca sospende tutte le funzioni fitness; prima della conferma l'utente può
 
 Guest: consenso e revoca sono locali alla generazione del dispositivo; nessun consenso server account viene ereditato dal guest. Account: lo stato autorevole è `health_consent_withdrawals/{uid}`, server-only; `legalConsent` business non lo sostituisce.
 
-Fonti: `src/lib/healthConsent.ts`, `healthConsentRecovery.ts`, `src/contexts/auth/consentLifecycle.ts`, `src/lib/sync/localConsentReconciliation.ts`, `localConsentJournalRecovery.ts`, `server/healthConsent/`, endpoint `api/health-consent*`/`api/health-data-erasure.ts` e `firestore.rules`.
+Fonti: `src/lib/healthConsent.ts` (decisioni e stato locale), `src/lib/healthConsentFirebaseTransport.ts` (trasporto legacy Firebase/App Check, con verifiche di sessione e risposta), `healthConsentRecovery.ts`, `src/contexts/auth/consentLifecycle.ts`, `src/lib/sync/localConsentReconciliation.ts`, `localConsentJournalRecovery.ts`, `server/healthConsent/`, endpoint `api/health-consent*`/`api/health-data-erasure.ts` e `firestore.rules`. Il trasporto isolato non attiva l'accesso fitness Kinde/D1.
 
 ## Lettura dello stato dopo erasure terminale D1 (16/11/2026)
 
