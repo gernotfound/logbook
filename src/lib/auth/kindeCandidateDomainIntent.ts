@@ -5,6 +5,7 @@ import { commitDomainOperations } from '../sync/localDomainCommit';
 import { readLocal } from '../sync/localArchiveBootstrap';
 import { coversVectorClock, type SemanticOperation } from '../sync/semanticProjection';
 import { deliverKindeCandidateJournal } from '../sync/kindeCandidateJournalBridge';
+import { CloudReplicaTransportError } from '../sync/cloudReplicaTransport';
 import { KindeCandidateBoundaryError, type KindeCandidateAccess } from './kindeCandidateClient';
 import { withKindeCandidateLocalReadiness } from './kindeCandidateLocalReadiness';
 
@@ -81,6 +82,12 @@ export async function submitKindeCandidateDomainIntent({
                 });
             } catch (error) {
                 assertCurrent();
+                // A terminal auth/consent refusal or invalid local state is NOT
+                // a retryable transport outage, even if the journal survives.
+                if (!(error instanceof CloudReplicaTransportError)
+                    || (error.status !== 0 && ![408, 429, 500, 502, 503, 504].includes(error.status))) {
+                    throw error;
+                }
                 // A lost HTTP response could mean D1 committed. Classify as
                 // local-pending ONLY when the exact semantic journal still
                 // exists; otherwise preserve the error for a fresh readback.
