@@ -48,6 +48,18 @@ describe('CF-05 candidate-only restore entry', () => {
         expect(screen.queryByText(/Ripristino confermato dal server/)).toBeNull();
     });
 
+    it('reports the verified restore separately from concurrent edits', async () => {
+        const restore = vi.fn<Session['restoreCandidateBackup']>()
+            .mockResolvedValue({ kind: 'cloud-acknowledged-with-other-edits' });
+        const ui = mount(restore);
+        fireEvent.change(ui.file, { target: { files: [selected('{}')] } });
+        fireEvent.click(ui.confirm);
+        fireEvent.click(ui.start);
+        const status = await screen.findByRole('status');
+        expect(status.textContent).toContain('altre modifiche');
+        expect(status.textContent).not.toContain('conferma cloud ancora in attesa');
+    });
+
     it('never calls restore for unreadable JSON or unmounted pending file read', async () => {
         const restore = vi.fn<Session['restoreCandidateBackup']>()
             .mockResolvedValue({ kind: 'cloud-acknowledged' });

@@ -15,7 +15,7 @@ import { readLocal } from '../sync/localArchiveBootstrap';
 import { commitLocal } from '../sync/localSnapshotCommit';
 import { projectDocuments, applyRemoteDocuments } from '../sync/documentProjection';
 import { enforceMonthlyEntityTombstones } from '../sync/monthlyEntityTombstones';
-import { diffDocuments, applySemanticOperations } from '../sync/semanticProjection';
+import { diffDocuments, applySemanticOperations, coversVectorClock, type SemanticOperation } from '../sync/semanticProjection';
 import { sequenceOperationsForBoundedTransactions } from '../sync/syncBatching';
 import { userOwner } from '../sync/owner';
 import { unlockVaultForOwner, requireUnlockedLocalKey } from '../sync/secureArchiveSession';
@@ -25,7 +25,8 @@ type RestoreOutcome =
     | { kind: 'already-current' }
     | { kind: 'local-metadata-restored' }
     | { kind: 'local-pending'; pendingCount: number }
-    | { kind: 'cloud-acknowledged' };
+    | { kind: 'cloud-acknowledged' }
+    | { kind: 'cloud-acknowledged-with-other-edits' };
 type RestoreOptions = {
     backup: unknown;
     expected: Readonly<Principal>;
@@ -42,6 +43,8 @@ const parse = (value: unknown) => UserDataSchema.parse(value) as unknown as User
 // IndexedDB seals the JSON form: undefined object properties do not survive encryption.
 const canonicalBusiness = (value: UserData) => removeUndefinedValuesForFirestore(parse(value));
 const sameBusiness = (left: UserData, right: UserData) => equal(canonicalBusiness(left), canonicalBusiness(right));
+const includesOperation = (pending: readonly SemanticOperation[], operation: SemanticOperation) =>
+    pending.some(candidate => equal(candidate, operation));
 
 /**
  * A bulk restore must be representable by the SAME semantic journal as the
@@ -158,7 +161,7 @@ export async function restoreKindeCandidateBackup({
         requireCurrent(scoped);
         const committed = await readLocal(owner);
         if (!scoped() || !committed || !sameBusiness(committed.data, restored)
-            || (operations.length > 0 && committed.pending.length === 0)) {
+            || !operations.every(op => includesOperation(committed.pending, op))) {
             throw new Error('Ripristino locale non verificato: conservare il backup e il journal.');
         }
         if (!operations.length) {
@@ -175,16 +178,31 @@ export async function restoreKindeCandidateBackup({
         requireCurrent(scoped);
         const after = await readLocal(owner);
         requireCurrent(scoped);
-        if (!after || !sameBusiness(after.data, restored)) {
-            // A newer edit is not part of this import's receipt. The original
-            // backup remains available for an explicit subsequent decision.
-            return { kind: 'local-pending', pendingCount: after?.pending.length ?? 0 };
+        if (!after || after.owner !== owner || after.consentRevision !== before.consentRevision
+            || !equal(after.data.legalConsent, before.data.legalConsent)
+            || after.replica?.replicaId !== before.replica.replicaId
+            || after.replica.generation !== before.replica.generation || after.replica.slot !== before.replica.slot
+            || after.cloudIntegrityFence || after.cloudflareReplicaClaim || after.cloudflareReplicaRetirement) {
+            throw new KindeCandidateBoundaryError();
         }
-        if (delivery === 'acknowledged' && !after.pending.length
-            && !after.cloudflareDelivery && sameBusiness(after.baseline, restored)) {
-            return { kind: 'cloud-acknowledged' };
+        // Another edit can land after the restore's D1 commit, before its
+        // receipt is applied locally. Attribute the result to the restore's
+        // exact operations, never to the total journal or the latest UI data.
+        const waiting = new Set(operations.filter(op => includesOperation(after.pending, op)));
+        const covered = (op: SemanticOperation) => {
+            const meta = after.syncMetaByDocument[op.docPath];
+            return Boolean(meta && coversVectorClock(meta.clock, op.clock));
+        };
+        if (delivery === 'acknowledged' && waiting.size === 0 && operations.every(covered)) {
+            return !after.pending.length && !after.cloudflareDelivery
+                && sameBusiness(after.data, restored) && sameBusiness(after.baseline, restored)
+                ? { kind: 'cloud-acknowledged' }
+                : { kind: 'cloud-acknowledged-with-other-edits' };
         }
-        return { kind: 'local-pending', pendingCount: after.pending.length };
+        if (waiting.size > 0 && operations.every(op => waiting.has(op) || covered(op))) {
+            return { kind: 'local-pending', pendingCount: waiting.size };
+        }
+        throw new KindeCandidateBoundaryError();
     } finally {
         grant.release();
     }

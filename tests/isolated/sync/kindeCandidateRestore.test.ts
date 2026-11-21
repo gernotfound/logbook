@@ -186,6 +186,80 @@ describe('CF-05 Kinde Schema 3 restore to encrypted IndexedDB and D1', () => {
         } finally { fixture.close(); }
     });
 
+    it('does not report an unrelated edit as a pending restore after the D1 receipt', async () => {
+        const fixture = await createCloudKeyHttpFixture([uid]);
+        try {
+            await fixture.consent(uid);
+            let commitObserved = false;
+            let concurrentEditWritten = false;
+            const request = session(fixture, async (path, response) => {
+                if (path === '/v1/sync/commit') {
+                    expect(response.status).toBe(200);
+                    commitObserved = true;
+                }
+                if (path === '/v1/sync/receipt' && commitObserved && !concurrentEditWritten) {
+                    expect(response.status).toBe(200);
+                    const staged = await readLocal(owner);
+                    expect(staged?.data.profile?.height).toBe('188');
+                    expect(staged?.cloudflareDelivery).toBeDefined();
+                    await commitDomainOperations(owner, {
+                        type: 'profile.patch', patch: { height: '192' },
+                    }, staged!.data);
+                    concurrentEditWritten = true;
+                }
+                return response;
+            });
+
+            const outcome = await restoreKindeCandidateBackup({
+                ...request, expected: principal, backup: backup(),
+            });
+            expect(concurrentEditWritten).toBe(true);
+            expect(fixture.count('sync_receipts', uid)).toBe(1);
+            await unlockVaultForOwner(owner);
+            const after = await readLocal(owner);
+            expect(after?.baseline.profile?.height).toBe('188');
+            expect(after?.data.profile?.height).toBe('192');
+            expect(after?.pending).toHaveLength(1);
+            expect(after?.cloudflareDelivery).toBeUndefined();
+            expect(outcome).toEqual({ kind: 'cloud-acknowledged-with-other-edits' });
+        } finally { fixture.close(); }
+    });
+
+    it('reports a partially delivered restore from the operations still in its own journal', async () => {
+        const fixture = await createCloudKeyHttpFixture([uid]);
+        try {
+            await fixture.consent(uid);
+            const months = Array.from({ length: 9 }, (_, index) => `2025-0${index + 1}`);
+            const nutrition = Object.fromEntries(months.map((month, index) => {
+                const date = month + '-01';
+                return [date, { date, weight: 70 + index }];
+            }));
+            const file = createBackup(parse({ nutrition }), owner, { scope: 'cloud-and-device', months });
+
+            const outcome = await restoreKindeCandidateBackup({
+                ...session(fixture), expected: principal, backup: JSON.parse(JSON.stringify(file)),
+            });
+            expect(fixture.count('sync_receipts', uid)).toBe(1);
+            expect(fixture.count('sync_documents', uid)).toBe(8);
+            const grant = await unlockVaultForOwner(owner);
+            const after = await readLocal(owner);
+            expect(after?.data.nutrition?.['2025-09-01']?.weight).toBe(78);
+            expect(after?.baseline.nutrition?.['2025-09-01']).toBeUndefined();
+            // The final day is represented by two field-level operations.
+            expect(after?.pending.map(op => op.docPath)).toEqual([
+                'nutrition_months/2025-09', 'nutrition_months/2025-09',
+            ]);
+            expect(outcome).toEqual({ kind: 'local-pending', pendingCount: 2 });
+            grant.release();
+
+            await expect(prepareKindeCandidateOwner({
+                ...session(fixture), expected: principal, drainPendingJournal: true, retainDeviceVault: false,
+            })).resolves.toMatchObject({ journalDrained: true });
+            expect(fixture.count('sync_receipts', uid)).toBe(2);
+            expect(fixture.count('sync_documents', uid)).toBe(9);
+        } finally { fixture.close(); }
+    });
+
     it('preserves the immutable encrypted journal after a committed D1 response is lost, then resumes without a second commit', async () => {
         const fixture = await createCloudKeyHttpFixture([uid]);
         try {
