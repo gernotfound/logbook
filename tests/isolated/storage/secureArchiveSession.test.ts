@@ -179,6 +179,7 @@ describe('resident owner and guest capabilities', () => {
         const resident = requireUnlockedLocalKey(owner);
         expect(first.isCurrent()).toBe(false);
         expect(replacement.isCurrent()).toBe(true);
+        expect(isVaultUnlocked(owner)).toBe(true);
         expectZeroed(superseded);
 
         first.release();
