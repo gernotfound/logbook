@@ -8,6 +8,7 @@ import {
 const UID = /^k_[A-Za-z0-9_-]{43}$/;
 const VERSION = /^[A-Za-z0-9._-]{1,32}$/;
 const MAX_RESPONSE_BYTES = 2048;
+const SESSION_EXPIRY_HEADER = 'X-Logbook-Session-Expires-At-Ms';
 
 export class KindeCandidateBoundaryError extends Error {
     constructor(readonly status: number = 0) {
@@ -26,7 +27,7 @@ export type KindeCandidateAccess =
     | { kind: 'signed-out' }
     | { kind: 'consent-required'; principal: CandidatePrincipal }
     | { kind: 'legal-update-required'; principal: CandidatePrincipal }
-    | { kind: 'consent-confirmed'; principal: CandidatePrincipal; legalConsent: LegalConsent }
+    | { kind: 'consent-confirmed'; principal: CandidatePrincipal; legalConsent: LegalConsent; sessionExpiresAtMs?: number }
     | { kind: 'consent-suspended'; principal: CandidatePrincipal; status: 'withdrawn' | 'deleting' | 'deleted' };
 
 function record(value: unknown): value is Record<string, unknown> {
@@ -105,7 +106,7 @@ async function post(
     send: typeof fetch,
     stillCurrent: () => boolean,
     csrfToken?: string,
-): Promise<{ unauthorized: true } | { unauthorized: false; body: unknown }> {
+): Promise<{ unauthorized: true } | { unauthorized: false; body: unknown; headers: Headers }> {
     assertCurrent(stillCurrent);
     let response: Response;
     try {
@@ -133,7 +134,7 @@ async function post(
     if (response.status !== 200) throw new KindeCandidateBoundaryError(response.status);
     const body = await readKindeCandidateJson(response);
     assertCurrent(stillCurrent);
-    return { unauthorized: false, body };
+    return { unauthorized: false, body, headers: response.headers };
 }
 
 function principal(value: unknown): CandidatePrincipal {
@@ -242,6 +243,15 @@ export async function readKindeCandidateAccess({
     }
     const status = consentState(consent.body, verified);
     assertCurrent(fence.stillCurrent);
+    if (status.kind === 'consent-confirmed') {
+        const expires = consent.headers.get(SESSION_EXPIRY_HEADER);
+        const deadline = expires !== null && /^[1-9]\d{0,15}$/.test(expires) ? Number(expires) : 0;
+        // A missing bound still permits the existing online checks. It
+        // provides no evidence on which a local offline grant can be based.
+        if (Number.isSafeInteger(deadline) && deadline > Date.now()) {
+            return { ...status, sessionExpiresAtMs: deadline };
+        }
+    }
     return status;
 }
 

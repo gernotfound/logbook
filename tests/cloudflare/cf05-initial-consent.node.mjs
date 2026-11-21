@@ -85,6 +85,49 @@ void test('a verified session without consent may read status but cannot use syn
   } finally { f.close(); }
 });
 
+void test('active consent exposes the earlier D1 session expiry only for a current verified request', async () => {
+  const f = await fixture();
+  try {
+    const header = 'X-Logbook-Session-Expires-At-Ms';
+    const status = (csrf = f.csrf) => apiWorker.fetch(new Request(ORIGIN + '/v1/consent/status', {
+      method: 'POST', headers: { origin: ORIGIN, cookie: f.cookie, 'x-csrf-token': csrf },
+    }), f.env);
+    assert.equal((await status()).headers.get(header), null);
+    assert.equal((await call(f, '/v1/consent/initial', { body: acceptance })).status, 200);
+
+    const shorter = Date.now() + 60_000;
+    const longer = shorter + 60_000;
+    const setExpiry = f.sqlite.prepare(
+      'UPDATE auth_sessions SET idle_expires_at_ms=?, absolute_expires_at_ms=? WHERE uid=?',
+    );
+    for (const absolute of [longer, shorter]) {
+      setExpiry.run(shorter, absolute, f.uid);
+      const active = await status();
+      assert.equal(active.status, 200);
+      assert.equal(active.headers.get('Cache-Control'), 'no-store');
+      assert.equal(active.headers.get(header), String(shorter));
+      assert.equal('sessionExpiresAtMs' in await active.json(), false);
+    }
+    assert.equal((await status('')).headers.get(header), null);
+    const expired = Date.now() - 1000;
+    f.sqlite.prepare('UPDATE auth_sessions SET issued_at_ms=? WHERE uid=?').run(expired - 1000, f.uid);
+    setExpiry.run(expired, longer, f.uid);
+    const denied = await status();
+    assert.equal(denied.status, 401);
+    assert.equal(denied.headers.get(header), null);
+    setExpiry.run(shorter, longer, f.uid);
+    f.env.CONSENT_PRIVACY_VERSION = 'new-policy';
+    const outdated = await status();
+    assert.equal(outdated.status, 200);
+    assert.equal(outdated.headers.get(header), null);
+    f.env.CONSENT_PRIVACY_VERSION = acceptance.acceptance.privacyVersion;
+    assert.equal((await call(f, '/v1/consent/withdraw', { body: withdrawal })).status, 200);
+    const withdrawn = await status();
+    assert.equal(withdrawn.status, 200);
+    assert.equal(withdrawn.headers.get(header), null);
+  } finally { f.close(); }
+});
+
 
 void test('consent status returns the exact trusted SQL owner for all five states', async () => {
   const f = await fixture();
