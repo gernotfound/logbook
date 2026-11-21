@@ -7,6 +7,17 @@ export function normalizeOnDaysCount(value: unknown): number {
     return Number.isInteger(count) ? Math.min(7, Math.max(0, count)) : 4;
 }
 
+/** Keep editor values distinct from the fallback/clamping policy for stored plans. */
+export function parseOnDaysCount(value: unknown): number | null {
+    if (typeof value === 'number') {
+        return Number.isInteger(value) && value >= 0 && value <= 7 ? value : null;
+    }
+    if (typeof value === 'string' && /^[0-7]$/.test(value.trim())) {
+        return Number(value.trim());
+    }
+    return null;
+}
+
 export function createDefaultNutritionPlanning(): NutritionPlanning {
     return {
         weight: 80,

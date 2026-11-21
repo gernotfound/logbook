@@ -1,9 +1,15 @@
 import React, { useState } from 'react';
 import { Utensils } from 'lucide-react';
 import { Logic } from '../../lib/logic';
+import type { NutritionDay } from '../../types';
+
+type NutritionHistoryEntry = Pick<NutritionDay, 'date' | 'kcal' | 'carbs' | 'pro' | 'fat' | 'isDayOn'> & {
+    meals?: readonly unknown[];
+    supplementsIntake?: readonly unknown[];
+};
 
 interface NutritionHistoryProps {
-    nutritionHistory: any[];
+    nutritionHistory: ReadonlyArray<NutritionHistoryEntry>;
     onDayClick?: (dateStr: string) => void;
     visibleCount?: number;
     onShowMore?: () => void;
@@ -32,9 +38,9 @@ const NutritionHistory: React.FC<NutritionHistoryProps> = ({ nutritionHistory, o
                 </div>
             ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                    {visibleDays.map((day: any, idx: number) => (
+                    {visibleDays.map(day => (
                         <div 
-                            key={`hist-nutr-${day.date}-${idx}`} 
+                            key={`hist-nutr-${day.date}`} 
                             className="card clickable-card"
                             role={onDayClick ? 'button' : undefined}
                             tabIndex={onDayClick ? 0 : undefined}
@@ -58,7 +64,7 @@ const NutritionHistory: React.FC<NutritionHistoryProps> = ({ nutritionHistory, o
                         >
                             <div style={{ width: '100%' }}>
                                 <div style={{ fontWeight: 'bold', fontSize: 'var(--font-size-control)', color: 'var(--text-main)', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                    📅 {Logic.formatItalianDate ? Logic.formatItalianDate(day.date) : day.date}
+                                    📅 {Logic.formatItalianDate(day.date)}
                                     <span style={{ fontSize: 'var(--font-size-meta)', opacity: 0.8 }}>
                                         {day.isDayOn === true ? '🔥 ON' : day.isDayOn === false ? '🛋️ OFF' : '— Non specificato'}
                                     </span>

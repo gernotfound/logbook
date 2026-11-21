@@ -45,9 +45,58 @@ describe('nutrition planning edits and session ownership', () => {
             result.current.handleUpdateOnBoost('fatPercent', '25');
             result.current.handleUpdate('weight', '81');
         });
-        expect(result.current.planning.avgMacros?.carbsPerKg).toBe(4.5);
-        expect(result.current.planning.onBoost?.fatPercent).toBe(25);
+        expect(result.current.planning.avgMacros?.carbsPerKg).toBe('4.5');
+        expect(result.current.planning.onBoost?.fatPercent).toBe('25');
         expect(result.current.planning.weight).toBe('81');
+    });
+
+    it('rejects non-decimal or incomplete draft inputs and converts only validated values on save', async () => {
+        const dispatch = vi.fn(async () => ({ ok: true as const, status: 'synced' as const }));
+        useAppStore.setState({ dispatchDomainOperation: dispatch });
+        const { result } = renderHook(() => useNutritionPlanning());
+        act(() => {
+            result.current.handleUpdateAvgMacros('carbsPerKg', '0x10');
+            result.current.handleUpdateOnBoost('fatPercent', '1e');
+        });
+        expect(result.current.planning.avgMacros?.carbsPerKg).toBe('0x10');
+        expect(result.current.planning.onBoost?.fatPercent).toBe('1e');
+        await act(async () => { await result.current.handleSave(); });
+        expect(dispatch).not.toHaveBeenCalled();
+        expect(result.current.saveStatus).toBe('unsaved');
+
+        act(() => {
+            result.current.handleUpdateAvgMacros('carbsPerKg', '4.5');
+            result.current.handleUpdateOnBoost('fatPercent', '25');
+        });
+        await act(async () => { await result.current.handleSave(); });
+        expect(dispatch).toHaveBeenCalledOnce();
+        expect(dispatch).toHaveBeenCalledWith(expect.objectContaining({
+            type: 'nutrition-planning.replace',
+            value: expect.objectContaining({
+                avgMacros: expect.objectContaining({ carbsPerKg: 4.5 }),
+                onBoost: expect.objectContaining({ fatPercent: 25 }),
+            }),
+        }));
+    });
+
+    it('does not silently clamp an invalid days-ON draft before the durable commit', async () => {
+        const dispatch = vi.fn(async () => ({ ok: true as const, status: 'synced' as const }));
+        useAppStore.setState({ dispatchDomainOperation: dispatch });
+        const { result } = renderHook(() => useNutritionPlanning());
+        for (const invalid of ['9', '5.5', '0x5', '']) {
+            act(() => result.current.handleUpdate('onDaysCount', invalid));
+            expect(result.current.planning.onDaysCount).toBe(invalid);
+            await act(async () => { await result.current.handleSave(); });
+            expect(dispatch).not.toHaveBeenCalled();
+        }
+
+        act(() => result.current.handleUpdate('onDaysCount', '5'));
+        await act(async () => { await result.current.handleSave(); });
+        expect(dispatch).toHaveBeenCalledOnce();
+        expect(dispatch).toHaveBeenCalledWith(expect.objectContaining({
+            type: 'nutrition-planning.replace',
+            value: expect.objectContaining({ onDaysCount: 5 }),
+        }));
     });
 
     it('ignores an old account epoch during a pending save without clearing newer edits', async () => {

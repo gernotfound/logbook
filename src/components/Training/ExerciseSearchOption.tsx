@@ -79,6 +79,8 @@ export function ExerciseSearchOption({
             onMouseEnter={onHover}
             style={{
                 padding: '10px 14px',
+                minHeight: '44px',
+                boxSizing: 'border-box',
                 borderBottom: '1px solid var(--glass-border)',
                 cursor: 'pointer',
                 display: 'flex',

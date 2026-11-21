@@ -208,7 +208,7 @@ export default function NutritionFoodArchive({ onEditFood }: NutritionFoodArchiv
                     <>
                     {visibleFoods.map((f, idx) => (
                         <FoodItemRow
-                            key={f.id || idx}
+                            key={f.id == null ? `unidentified:${idx}` : `${typeof f.id}:${f.id}`}
                             food={f}
                             isLast={idx === visibleFoods.length - 1}
                             mealTypes={MEAL_TYPES}
