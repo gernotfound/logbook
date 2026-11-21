@@ -3,7 +3,7 @@ import { get } from 'idb-keyval';
 import type { CrashSuiteContext } from './journalCrashConsistency.test';
 
 export function registerCrashLocalCases(ctx: CrashSuiteContext): void {
-    const { owner, data, remote, commitLocal, commitDomainOperations, hydrateLocal, readLocal, installReplaySafeRemote, replicateJournal, currentCloudData, cloudDocumentsWithSync } = ctx;
+    const { owner, data, remote, commitLocal, commitDomainOperations, hydrateLocal, readLocal, installReplaySafeRemote, replicateJournal, currentCloudData, cloudDocumentsWithSync, invalidateSession } = ctx;
 
     it.each([
         { key: '%70rofile/height', deleteClock: { s01: 2 } },
