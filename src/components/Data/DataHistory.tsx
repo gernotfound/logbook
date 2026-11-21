@@ -63,6 +63,7 @@ const DataHistory: React.FC<DataHistoryProps> = ({
         // multiple records without stable IDs, never silently switch the dialog
         // to a different record after a concurrent refresh.
         if (records.includes(detailDay)) return detailDay;
+        if (records.length === 1) return records[0];
         const matches = records.filter(day => day.measurementTime === detailDay.measurementTime);
         return matches.length === 1 ? matches[0] : null;
     }, [daysByDate, detailDay]);

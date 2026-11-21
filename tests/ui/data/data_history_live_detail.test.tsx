@@ -26,6 +26,21 @@ describe('DataHistory detail follows current source records', () => {
         expect(onSelectEdit).toHaveBeenCalledWith(updated);
     });
 
+    it('keeps a single day open when its measurement time changes', () => {
+        const original = { date, measurementTime: '07:30', weight: 81 };
+        const updated = { date, measurementTime: '08:00', weight: 80 };
+        const { rerender } = render(
+            <DataHistory measurementsHistory={[original]} editingDate={null} onSelectEdit={vi.fn()} />,
+        );
+        fireEvent.click(screen.getByRole('button', { name: /Apri dettaglio/i }));
+
+        rerender(<DataHistory measurementsHistory={[updated]} editingDate={null} onSelectEdit={vi.fn()} />);
+        const dialog = screen.getByRole('dialog');
+        expect(within(dialog).getByText('80 kg')).toBeDefined();
+        expect(within(dialog).getByText(/08:00/)).toBeDefined();
+        expect(within(dialog).queryByText('81 kg')).toBeNull();
+    });
+
     it('closes an open detail when the recorded day disappears', () => {
         const { rerender } = render(
             <DataHistory measurementsHistory={[{ date, weight: 81.4 }]}
