@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import NutritionFoodArchive from '../../src/components/Nutrition/NutritionFoodArchive';
@@ -63,6 +63,39 @@ describe('identità e focus degli alimenti nelle liste', () => {
         const moved = screen.getAllByRole('button', { name: 'Opzioni' })[0];
         expect(moved).toBe(target);
         expect(document.activeElement).toBe(target);
+    });
+
+    it('restituisce il focus al campo dopo Cancella ricerca nei pasti', () => {
+        function SearchWithClear() {
+            const [query, setQuery] = useState('pollo');
+            return <NutritionFoodSearch
+                mealTypes={['Pranzo']}
+                searchQuery={query}
+                handleSearch={setQuery}
+                searchResults={[]}
+                clearSearch={() => setQuery('')}
+                showCustomModal={false}
+                setShowCustomModal={vi.fn()}
+                editingFoodId={null}
+                cancelCustomFood={vi.fn()}
+                cfData={emptyCustomFoodDraft()}
+                setCfData={vi.fn()}
+                saveCustomFood={vi.fn(async () => false)}
+                addFood={vi.fn(async () => {})}
+            />;
+        }
+
+        render(<SearchWithClear />);
+        const input = screen.getByRole('searchbox', { name: 'Cerca alimento' }) as HTMLInputElement;
+        const clear = screen.getByRole('button', { name: 'Cancella ricerca' });
+        clear.focus();
+        expect(document.activeElement).toBe(clear);
+
+        fireEvent.click(clear);
+
+        expect(input.value).toBe('');
+        expect(screen.queryByRole('button', { name: 'Cancella ricerca' })).toBeNull();
+        expect(document.activeElement).toBe(input);
     });
 
     it('offre un pulsante Cancella ricerca di 44×44 px e restituisce il focus al campo', () => {

@@ -1,3 +1,4 @@
+import { useRef } from 'react';
 import { Pencil, Plus, X } from 'lucide-react';
 import type { useNutritionMeals } from '../../../hooks/useNutritionMeals';
 import CustomFoodForm from '../CustomFoodForm';
@@ -35,11 +36,14 @@ export function NutritionFoodSearch({
     saveCustomFood,
     addFood,
 }: NutritionFoodSearchProps) {
+    const searchInputRef = useRef<HTMLInputElement>(null);
+
     return (
         <section className="tracking-panel">
             <h2 className="tracking-heading">Cerca alimento</h2>
             <div className="tracking-search">
                 <input
+                    ref={searchInputRef}
                     type="search"
                     aria-label="Cerca alimento"
                     placeholder="Cerca alimento (es. Pollo, Riso, Avena...)"
@@ -50,7 +54,10 @@ export function NutritionFoodSearch({
                 {searchQuery && (
                     <button
                         type="button"
-                        onClick={clearSearch}
+                        onClick={() => {
+                            clearSearch();
+                            searchInputRef.current?.focus();
+                        }}
                         className="btn-icon"
                         aria-label="Cancella ricerca"
                     >
