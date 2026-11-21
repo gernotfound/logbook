@@ -2,6 +2,7 @@ import { useState, useMemo, useRef } from 'react';
 import { useAppStore } from '../store/useAppStore';
 import { useDialogStore } from '../store/useDialogStore';
 import { Logic } from '../lib/logic';
+import { parseFiniteNumericInput } from '../lib/calc/nutrition';
 import type { NutritionPlanning } from '../types';
 import { createDefaultNutritionPlanning, normalizeOnDaysCount } from '../lib/nutritionDefaults';
 import { captureSession, isCurrentSession, type SessionSnapshot } from '../lib/sync/session';
@@ -19,8 +20,7 @@ type NutritionPlanningDraft = Omit<NutritionPlanning, 'weight' | 'onDaysCount' |
 
 function numericInput(value: unknown, fallback = 0): number {
     if (value === null || value === undefined || (typeof value === 'string' && value.trim() === '')) return fallback;
-    const parsed = Number(value);
-    return Number.isFinite(parsed) ? parsed : Number.NaN;
+    return parseFiniteNumericInput(value) ?? Number.NaN;
 }
 
 function deriveMacroSplit(avgValue: unknown, boostPercentValue: unknown, onDaysCount: unknown) {
@@ -133,14 +133,14 @@ export function useNutritionPlanning() {
     const handleUpdateAvgMacros = (field: keyof NonNullable<NutritionPlanningDraft['avgMacros']>, value: string) => {
         updateDraft(previous => ({
             ...previous,
-            avgMacros: { ...previous.avgMacros!, [field]: value === '' ? '' : Number(value) },
+            avgMacros: { ...previous.avgMacros!, [field]: value },
         }));
     };
 
     const handleUpdateOnBoost = (field: keyof NonNullable<NutritionPlanningDraft['onBoost']>, value: string) => {
         updateDraft(previous => ({
             ...previous,
-            onBoost: { ...previous.onBoost!, [field]: value === '' ? '' : Number(value) },
+            onBoost: { ...previous.onBoost!, [field]: value },
         }));
     };
 

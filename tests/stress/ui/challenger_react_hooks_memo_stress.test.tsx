@@ -172,19 +172,19 @@ describe('Empirical Challenger: React Hooks, Memoization & Re-render Loop Stress
             act(() => {
                 result.current.handleUpdateAvgMacros('carbsPerKg', '4');
             });
-            expect(result.current.planning.avgMacros?.carbsPerKg).toBe(4);
+            expect(result.current.planning.avgMacros?.carbsPerKg).toBe('4');
 
             // User types "4.5"
             act(() => {
                 result.current.handleUpdateAvgMacros('carbsPerKg', '4.5');
             });
-            expect(result.current.planning.avgMacros?.carbsPerKg).toBe(4.5);
+            expect(result.current.planning.avgMacros?.carbsPerKg).toBe('4.5');
 
             // User updates onBoost carbsPercent
             act(() => {
                 result.current.handleUpdateOnBoost('carbsPercent', '25');
             });
-            expect(result.current.planning.onBoost?.carbsPercent).toBe(25);
+            expect(result.current.planning.onBoost?.carbsPercent).toBe('25');
 
             // Recalculated macros react to updated values
             // w = 78.5, avgC = 4.5, bC = 0.25, N = 4, F = 3

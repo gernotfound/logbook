@@ -142,6 +142,16 @@ describe('Nutrition numeric and hostile search inputs', () => {
       expect(withUnsupportedAliases).toEqual(withoutTargets);
     });
 
+    test('derived summaries do not use malformed or nonpositive planning weights', () => {
+      const reference = Logic.calculateTDEEAndMacros({ nutritionPlanning: { weight: 80 } });
+      for (const raw of [-70, 0, '0x64', Number.POSITIVE_INFINITY] as unknown[]) {
+        const summary = Logic.calculateTDEEAndMacros({
+          nutritionPlanning: { weight: raw as number },
+        });
+        expect(summary).toEqual(reference);
+      }
+    });
+
     test('custom-food numeric validation rejects partial, non-finite and empty required values', () => {
       const food = { name: 'Test', baseQty: 100, unit: 'g', kcal: '120', carbs: '15', pro: '5', fat: '4' };
       expect(Logic.validateCustomFood(food).isValid).toBe(true);
