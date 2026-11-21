@@ -1,5 +1,40 @@
 # Ciclo account, Auth e guest — TheLogBook
 
+### CF-03 — Lifecycle React Kinde isolato, senza grant legacy (21/11/2026)
+
+`openKindeCandidateFitnessRealm()` verifica il percorso Kinde/consenso/owner,
+idrata e riconcilia il checkpoint cifrato attraverso
+`withKindeCandidateLocalReadiness()`, quindi restituisce soltanto un
+**ambito esplicito** con snapshot copiato, `refresh()`, `submit()` e
+`close()`. Ogni operazione rientra nel boundary trusted, senza un
+lettore Auth globale, senza un secondo writer o chiavi persistenti in RAM.
+`submit()` usa `submitKindeCandidateDomainIntent()`: se un commit o
+trasporto è incerto, la vista precedente è invalidata; un esito
+`local-pending` conserva il journal ma non è un cloud ACK.
+
+`useKindeCandidateFitnessLifecycle()` orchestra la stessa risorsa in
+React soltanto con **abilitazione esplicita** e fase `consent-confirmed`
+(email verificata, epoch e revisione positivi). Un cambio generazione
+React, sessione/cookie, marker revoca, cambio scheda, foreground o
+unmount invalida il tentativo e nasconde la vista; una risposta asincrona
+obsoleta non la può riaprire. Nessun mount pubblico, nessuna chiamata
+automatica di bootstrap, nessuna installazione
+`authenticatedIdentitySource` o `AuthContext.currentUser`.
+Il vault è chiuso al termine di ogni scope, anche quando React continua
+a conservare temporaneamente uno snapshot consentito.
+
+**Limite progettuale CRITICAL:** il Worker `/api/auth/session` non
+espone ancora al browser una scadenza verificabile dell'autorizzazione
+offline; il cookie CSRF non costituisce un grant offline né prova di
+sessione valida. Perciò questo lifecycle candidato richiede rete e
+consenso trusted in ogni riapertura/scrittura, non consente mutazioni
+account offline e non sostituisce i gate Firebase dello store ordinario.
+Prima del GO: introdurre un contratto backend/client verificato per la
+finestra offline, un solo writer Domain Operations utilizzato dalla UI,
+cancellazione/revoca/logout/sessione multitab e recovery con CI,
+WebKit/device e prove provider pertinenti. **Non accendere D1_API
+pubblico né dedurre GO dal successo di questa suite isolata.**
+
 ### CF-03/04 — Intento fitness Kinde con journal cifrato e ricevuta D1 (21/11/2026)
 
 `src/lib/auth/kindeCandidateDomainIntent.ts` compone, **solo nel percorso
