@@ -10,6 +10,7 @@ import { useAppStore } from '../../../src/store/useAppStore';
 import { useWorkoutSetMutations } from '../../../src/hooks/workout/useWorkoutSetMutations';
 import { useWorkoutSession } from '../../../src/hooks/useWorkoutSession';
 import { SessionExerciseCard } from '../../../src/components/Training/session/SessionExerciseCard';
+import SessionExerciseAccordion from '../../../src/components/Training/session/SessionExerciseAccordion';
 import TrainingSession from '../../../src/components/Training/TrainingSession';
 import { SessionExerciseSchema, UserDataSchema } from '../../../src/lib/schema';
 import { initializeLocal, readLocal } from '../../../src/lib/sync/localRepository';
@@ -444,39 +445,45 @@ describe('Workout Reorder (R2) and Live Sync & Badges (R3) Suite', () => {
         });
 
 
-        it('3.3: Gracefully handles missing libDef without crashing', () => {
-            const exItem = { id: 'se_deleted', exId: 'ex_deleted_id', sets: [], sessionNote: '' };
+        it('3.3: Accordion omits unknown muscles and restores the real summary when the catalog definition arrives', () => {
+            const cardProps = {
+                exItem: { id: 'se_deleted', exId: 'ex_deleted_id', sets: [], sessionNote: '' },
+                exIndex: 0,
+                totalExercises: 1,
+                libDef: undefined,
+                pastWorkouts: [],
+                isHistoryOpen: false,
+                isSetupOpen: false,
+                openSpecialMenuId: null,
+                onToggleHistory: vi.fn(),
+                onToggleSetup: vi.fn(),
+                onRemoveExercise: vi.fn(),
+                onUpdateSetupNote: vi.fn(),
+                onUpdateSessionNote: vi.fn(),
+                onAddSet: vi.fn(),
+                onRemoveSet: vi.fn(),
+                onUpdateSet: vi.fn(),
+                onAddSpecialSet: vi.fn(),
+                onUpdateSpecialSet: vi.fn(),
+                onRemoveSpecialSet: vi.fn(),
+                onToggleSpecialMenu: vi.fn(),
+                onUpdateSetTarget: vi.fn(),
+                onUpdateTechnicalStandard: vi.fn(),
+            };
 
-            const { container } = render(
-                <SessionExerciseCard
-                    exItem={exItem}
-                    exIndex={0}
-                    totalExercises={1}
-                    libDef={undefined}
-                    pastWorkouts={[]}
-                    isHistoryOpen={false}
-                    isSetupOpen={false}
-                    openSpecialMenuId={null}
-                    onToggleHistory={vi.fn()}
-                    onToggleSetup={vi.fn()}
-                    onRemoveExercise={vi.fn()}
-                    onUpdateSetupNote={vi.fn()}
-                    onUpdateSessionNote={vi.fn()}
-                    onAddSet={vi.fn()}
-                    onRemoveSet={vi.fn()}
-                    onUpdateSet={vi.fn()}
-                    onAddSpecialSet={vi.fn()}
-                    onUpdateSpecialSet={vi.fn()}
-                    onRemoveSpecialSet={vi.fn()}
-                    onToggleSpecialMenu={vi.fn()}
-                onUpdateSetTarget={vi.fn()}
-                onUpdateTechnicalStandard={vi.fn()}
-                />
+            const { container, rerender } = render(
+                <SessionExerciseAccordion {...cardProps} isCurrent={false} initiallyExpanded />,
             );
-
             expect(container.textContent).toContain('Esercizio rimosso');
-            const badges = container.querySelectorAll('.badge');
-            expect(badges.length).toBe(0);
+            expect(container.querySelector('.session-exercise-meta')?.textContent).toBe('0 serie');
+
+            rerender(
+                <SessionExerciseAccordion {...cardProps} libDef={mockLibrary[0]} isCurrent={false} initiallyExpanded />,
+            );
+            expect(container.querySelector('.session-exercise-meta')?.textContent).toBe(
+                '0 serie · Primari: Fascio clavicolare (petto alto) · Fascio addominale (petto basso)',
+            );
+            expect(container.textContent).not.toContain('Esercizio rimosso');
         });
 
         it('3.4: memoized exercise card updates position controls and callbacks when props change', () => {
