@@ -362,7 +362,27 @@ describe('trusted health consent boundary', () => {
     });
   });
 
-  it('atomically queues health erasure with the withdrawal and keeps Auth/business data until the worker completes', async () => {
+  it('atomically queues health erasure with the withdrawal and preserves ciphertext until the worker runs', async () => {
+    const document = {
+      _schemaVersion: 1,
+      _sync: { protocolVersion: 3, clock: { s00: 1 },
+        writer: { slot: 's00', replicaId: 'fixture-replica', generation: 1, seq: 1, consentRevision: 1 },
+        fields: {} },
+      _sealed: { format: 'thelogbook-cloud-document', version: 1,
+        nonce: 'a'.repeat(32), ciphertext: 'b'.repeat(32) },
+    };
+    const month = structuredClone(document);
+    const wrappedKey = {
+      uid: 'account-1', format: 'thelogbook-wrapped-account-key',
+      version: 1, ciphertext: 'synthetic-wrapped-key',
+    };
+    const expectedDocument = structuredClone(document);
+    const expectedMonth = structuredClone(month);
+    const expectedWrappedKey = structuredClone(wrappedKey);
+    storage.documents.set('users/account-1', document);
+    storage.documents.set('users/account-1/history_months/2026-11', month);
+    storage.documents.set('user_data_keys/account-1', wrappedKey);
+
     const first = await POST(req('POST', { action: 'withdraw', expectedRevision: 0 }));
     expect(first.status).toBe(200);
     expect(await first.json()).toEqual({ status: 'withdrawn', revision: 1 });
@@ -372,7 +392,10 @@ describe('trusted health consent boundary', () => {
     expect(storage.documents.get('health_data_erasures/account-1')).toMatchObject({
       uid: 'account-1', status: 'requested', consentRevision: 1,
     });
-    expect(storage.documents.size).toBe(2);
+    expect(storage.documents.get('users/account-1')).toEqual(expectedDocument);
+    expect(storage.documents.get('users/account-1/history_months/2026-11')).toEqual(expectedMonth);
+    expect(storage.documents.get('user_data_keys/account-1')).toEqual(expectedWrappedKey);
+    expect(storage.documents.size).toBe(5);
     expect(erasureWorker.process).toHaveBeenCalledWith('account-1', expect.any(Number));
   });
 
