@@ -170,6 +170,40 @@ describe('resident owner and guest capabilities', () => {
         expect(localStorage.getItem(vaultControlKey(owner))).toBe(JSON.stringify(control));
     });
 
+    it('lets only the current grant clear its own resident key', async () => {
+        const first = await unlockVaultForOwner(owner);
+        const superseded = requireUnlockedLocalKey(owner);
+        expect(first.isCurrent()).toBe(true);
+
+        const replacement = await unlockVaultForOwner(owner);
+        const resident = requireUnlockedLocalKey(owner);
+        expect(first.isCurrent()).toBe(false);
+        expect(replacement.isCurrent()).toBe(true);
+        expect(isVaultUnlocked(owner)).toBe(true);
+        expectZeroed(superseded);
+
+        first.release();
+        expect(requireUnlockedLocalKey(owner)).toBe(resident);
+        expect(resident).toEqual(originalKey);
+        replacement.release();
+        replacement.release();
+        expect(replacement.isCurrent()).toBe(false);
+        expect(() => requireUnlockedLocalKey(owner)).toThrow(LocalVaultLockedError);
+        expectZeroed(resident);
+        expect(readVaultControl(owner)).toEqual(control);
+    });
+
+    it('reports a grant as unusable once a cross-tab purge is fenced', async () => {
+        const grant = await unlockVaultForOwner(owner);
+        const resident = requireUnlockedLocalKey(owner);
+        beginLocalPurge(owner);
+        expect(grant.isCurrent()).toBe(false);
+        expect(() => requireUnlockedLocalKey(owner)).toThrow(LocalPurgePendingError);
+        grant.release();
+        expectZeroed(resident);
+        expect(readVaultControl(owner)).toEqual(control);
+    });
+
     it('zeroes a locked owner key, preserves other owners, and zeroes all remaining keys on lockAll', async () => {
         const other = await install('user:other-session');
         await unlockVaultForOwner(owner);
