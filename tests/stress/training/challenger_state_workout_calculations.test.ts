@@ -63,7 +63,7 @@ describe('3. Pure Calculation & DOMS Persistence Logic Stress (R1, R5, R6)', () 
             ]
         };
 
-        const totalVol = calculateWorkoutVolume(session as any, library, userWeight);
+        const totalVol = calculateWorkoutVolume(session as WorkoutSession, library, userWeight);
         // Expected: 1000 + 1200 + 800 + 500 + 1450 = 4950
         expect(totalVol).toBe(4950);
     });

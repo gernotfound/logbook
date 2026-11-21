@@ -9,9 +9,24 @@ import { prepareUnlockedTestArchive } from '../../secureVaultFixture';
 import { draftRegistry } from '../../../src/lib/utils/draftRegistry';
 import { renderWithProviders, defaultMockUserData } from '../../setup';
 import CustomFoodForm from '../../../src/components/Nutrition/CustomFoodForm';
+import { emptyCustomFoodDraft, type CustomFoodDraft } from '../../../src/lib/nutrition/customFoodDraft';
 import { SessionRatings } from '../../../src/components/Training/session/SessionRatings';
 import HomeView from '../../../src/components/Home/HomeView';
 import type { UserData } from '../../../src/types';
+
+function CustomFoodHarness({ name = '' }: { name?: string }) {
+    const [cfData, setCfData] = useState<CustomFoodDraft>(() => ({ ...emptyCustomFoodDraft(), name }));
+    const [showCustomModal, setShowCustomModal] = useState(true);
+    return (
+        <CustomFoodForm
+            cfData={cfData}
+            setCfData={setCfData}
+            saveCustomFood={vi.fn().mockResolvedValue(undefined)}
+            showCustomModal={showCustomModal}
+            setShowCustomModal={setShowCustomModal}
+        />
+    );
+}
 
 describe('Challenger 2: State Persistence and UI Resilience', () => {
 
@@ -94,23 +109,7 @@ describe('Challenger 2: State Persistence and UI Resilience', () => {
 
     describe('5. UI Rendering & Real-Time Interaction Resilience (R2, R3, R4, R5)', () => {
         it('5.1 CustomFoodForm calculates kcal in real time (4*C + 4*P + 9*F) on macro inputs', () => {
-            const saveCustomFood = vi.fn().mockResolvedValue(undefined);
-
-            const TestWrapper = () => {
-                const [cfData, setCfData] = useState<any>({ name: '', carbs: '', pro: '', fat: '', kcal: '' });
-                const [showCustomModal, setShowCustomModal] = useState(true);
-                return (
-                    <CustomFoodForm
-                        cfData={cfData}
-                        setCfData={setCfData}
-                        saveCustomFood={saveCustomFood}
-                        showCustomModal={showCustomModal}
-                        setShowCustomModal={setShowCustomModal}
-                    />
-                );
-            };
-
-            renderWithProviders(<TestWrapper />);
+            renderWithProviders(<CustomFoodHarness />);
 
             const nameInput = screen.getByPlaceholderText(/es\. petto di pollo/i);
             const carbsInput = screen.getByLabelText(/carbo/i);
@@ -141,23 +140,7 @@ describe('Challenger 2: State Persistence and UI Resilience', () => {
         });
 
         it('5.2 CustomFoodForm handles decimal macro inputs and updates kcal accurately', () => {
-            const saveCustomFood = vi.fn().mockResolvedValue(undefined);
-
-            const DecimalWrapper = () => {
-                const [cfData, setCfData] = useState<any>({ name: 'Integratore', carbs: '', pro: '', fat: '', kcal: '' });
-                const [showCustomModal, setShowCustomModal] = useState(true);
-                return (
-                    <CustomFoodForm
-                        cfData={cfData}
-                        setCfData={setCfData}
-                        saveCustomFood={saveCustomFood}
-                        showCustomModal={showCustomModal}
-                        setShowCustomModal={setShowCustomModal}
-                    />
-                );
-            };
-
-            renderWithProviders(<DecimalWrapper />);
+            renderWithProviders(<CustomFoodHarness name="Integratore" />);
 
             const carbsInput = screen.getByLabelText(/carbo/i);
             const proInput = screen.getByLabelText(/pro \(g\)/i);
@@ -229,6 +212,9 @@ describe('Challenger 2: State Persistence and UI Resilience', () => {
             expect(document.getElementById('post-session-doms-panel')).not.toBeNull();
             // Verify search input is displayed after expanding
             expect(screen.getByPlaceholderText(/cerca muscolo/i)).toBeDefined();
+            fireEvent.click(screen.getByRole('button', { name: 'Rimuovi dolore Petto' }));
+            expect(onTogglePain).toHaveBeenCalledTimes(1);
+            expect(onTogglePain).toHaveBeenCalledWith('chest');
         });
     });
 });
