@@ -48,13 +48,7 @@ export default function DataHistoryRecordCard({
                             {
                                 label: 'Vedi dettaglio',
                                 icon: <Ruler size={16} />,
-                                onClick: event => {
-                                    // Keep a surviving trigger when the menu closes.
-                                    event.currentTarget.closest('.history-record-card')
-                                        ?.querySelector<HTMLButtonElement>('button[aria-haspopup="menu"]')
-                                        ?.focus({ preventScroll: true });
-                                    setDetailOpen(true);
-                                },
+                                onClick: () => setDetailOpen(true),
                             },
                             {
                                 label: 'Modifica misurazione',

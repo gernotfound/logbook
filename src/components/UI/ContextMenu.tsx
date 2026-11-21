@@ -75,6 +75,7 @@ const RenderedContextMenu: React.FC<RenderedContextMenuProps> = ({
   const triggerRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const requestedFocus = useRef<'first' | 'last' | null>(null);
+  const focusedMenuItemRef = useRef<HTMLButtonElement | null>(null);
 
   const toggleOpen = useCallback((openState?: boolean) => {
     const next = openState ?? !isOpen;
@@ -93,6 +94,19 @@ const RenderedContextMenu: React.FC<RenderedContextMenuProps> = ({
     requestedFocus.current = null;
     target?.focus();
   }, [isOpen]);
+
+  useEffect(() => {
+    if (!isOpen || !focusedMenuItemRef.current) return;
+    const focusedItem = focusedMenuItemRef.current;
+    if (menuRef.current?.contains(focusedItem) && !focusedItem.disabled) return;
+    // A focused action can disappear when its availability changes. Restore
+    // focus only if the browser lost it, never over an intentional external focus.
+    if (document.activeElement !== document.body && document.activeElement !== focusedItem) return;
+    const firstEnabledItem = menuRef.current?.querySelector<HTMLButtonElement>(
+      'button[role="menuitem"]:not(:disabled)',
+    );
+    (firstEnabledItem ?? triggerRef.current)?.focus();
+  }, [isOpen, visibleItems]);
 
   // Pointer outside clicks do not arbitrate keyboard-only openings across cards.
   // Notify peer menus before a new one opens, keeping focus in the new menu.
@@ -182,6 +196,7 @@ const RenderedContextMenu: React.FC<RenderedContextMenuProps> = ({
     e.preventDefault();
     if (!isOpen) {
       requestedFocus.current = null;
+      focusedMenuItemRef.current = null;
       notifyPeers();
     }
     toggleOpen();
@@ -193,6 +208,7 @@ const RenderedContextMenu: React.FC<RenderedContextMenuProps> = ({
         e.preventDefault();
         e.stopPropagation();
         requestedFocus.current = 'first';
+        focusedMenuItemRef.current = null;
         notifyPeers();
         toggleOpen(true);
       }
@@ -201,6 +217,7 @@ const RenderedContextMenu: React.FC<RenderedContextMenuProps> = ({
         e.preventDefault();
         e.stopPropagation();
         requestedFocus.current = 'last';
+        focusedMenuItemRef.current = null;
         notifyPeers();
         toggleOpen(true);
       }
@@ -239,6 +256,8 @@ const RenderedContextMenu: React.FC<RenderedContextMenuProps> = ({
     e.stopPropagation();
     e.preventDefault();
     if (item.disabled) return;
+    // Restore the trigger before the action potentially changes the screen or unmounts the card.
+    triggerRef.current?.focus({ preventScroll: true });
     toggleOpen(false);
     item.onClick(e);
   };
@@ -301,6 +320,7 @@ const RenderedContextMenu: React.FC<RenderedContextMenuProps> = ({
                 title={item.title || item.label}
                 aria-label={item['aria-label'] || item.title || item.label}
                 className={itemClassNames}
+                onFocus={(e) => { focusedMenuItemRef.current = e.currentTarget; }}
                 onClick={(e) => handleItemClick(e, item)}
               >
                 {item.icon && (
