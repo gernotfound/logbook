@@ -11,6 +11,7 @@ import { userOwner } from '../sync/owner';
 import { unlockVaultForOwner } from '../sync/secureArchiveSession';
 
 type Principal = Extract<KindeCandidateAccess, { kind: 'consent-confirmed' }>['principal'];
+type ActiveAccess = Extract<KindeCandidateAccess, { kind: 'consent-confirmed' }>;
 type Options = {
     expected: Readonly<Principal>;
     stillCurrent: () => boolean;
@@ -29,7 +30,7 @@ type Options = {
  */
 export async function withKindeCandidateLocalReadiness<T>(
     { expected, stillCurrent, send = fetch, browserCookies = () => document.cookie }: Options,
-    visit: (ready: { owner: string; principal: Readonly<Principal>; isCurrent: () => boolean }) => Promise<T>,
+    visit: (ready: { owner: string; access: ActiveAccess; isCurrent: () => boolean }) => Promise<T>,
 ): Promise<T> {
     const principal = { ...expected };
     const owner = userOwner(principal.uid);
@@ -80,7 +81,7 @@ export async function withKindeCandidateLocalReadiness<T>(
             || !equal(access.legalConsent, local.data.legalConsent)) {
             throw new KindeCandidateBoundaryError();
         }
-        const value = await visit({ owner, principal, isCurrent: scoped });
+        const value = await visit({ owner, access, isCurrent: scoped });
         if (!scoped()) throw new KindeCandidateBoundaryError();
         return value;
     } finally {

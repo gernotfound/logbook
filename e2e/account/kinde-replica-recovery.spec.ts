@@ -1,6 +1,36 @@
 import { expect, test } from '../fixtures';
 import { loadKindeReplica, withKindeReplicaDevices } from './kindeReplicaFixture';
 
+test('recovers a Kinde edit made offline after a competing browser save', async ({ browser }) => {
+    await withKindeReplicaDevices(browser, async ({ first, second, receipts, firstCommitStatuses, allowFirstCommit }) => {
+        allowFirstCommit();
+        await first.context().setOffline(true);
+        await expect.poll(() => first.evaluate(() => navigator.onLine)).toBe(false);
+        await expect(first.evaluate(() => window.kindeReplicaFixture!.submit({
+            type: 'profile.patch', patch: { height: '184' },
+        }))).resolves.toEqual({ kind: 'local-pending', pendingCount: 1 });
+        expect(await first.evaluate(() => window.kindeReplicaFixture!.snapshot()?.data.profile?.height)).toBe('184');
+        expect(firstCommitStatuses).toEqual([]);
+        expect(receipts()).toBe(0);
+
+        expect(await second.evaluate(() => window.kindeReplicaFixture!.submit({
+            type: 'profile.patch', patch: { neck: '37' },
+        }))).toEqual({ kind: 'cloud-acknowledged', operations: 1 });
+        expect(await second.evaluate(() => window.kindeReplicaFixture!.snapshot()?.data.profile?.height)).toBeUndefined();
+        expect(receipts()).toBe(1);
+
+        await first.context().setOffline(false);
+        await first.reload();
+        expect(await first.evaluate(() => window.kindeReplicaFixture)).toBeUndefined();
+        await loadKindeReplica(first);
+        const merged = { height: '184', neck: '37' };
+        expect(await first.evaluate(() => window.kindeReplicaFixture!.snapshot()?.data.profile)).toMatchObject(merged);
+        expect(await second.evaluate(async () => (await window.kindeReplicaFixture!.refresh()).data.profile)).toMatchObject(merged);
+        expect(firstCommitStatuses).toEqual([200]);
+        expect(receipts()).toBe(2);
+    });
+});
+
 test('resumes a sealed Kinde edit after reload and another browser commit', async ({ browser }) => {
     await withKindeReplicaDevices(browser, async ({ first, second, receipts, firstCommitStatuses, allowFirstCommit }) => {
         expect(await first.evaluate(() => window.kindeReplicaFixture!.submit({

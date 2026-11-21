@@ -86,7 +86,7 @@ describe('CF-05 Kinde candidate local readiness is only a short-lived scope', ()
                 ...client, expected,
             }, async ready => {
                 expect(ready.owner).toBe(owner);
-                expect(ready.principal).toEqual(expected);
+                expect(ready.access.principal).toEqual(expected);
                 expect(ready.isCurrent()).toBe(true);
                 expect(isVaultUnlocked(owner)).toBe(true);
                 expect(authenticatedIdentitySource.hasReader()).toBe(false);
