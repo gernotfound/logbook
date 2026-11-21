@@ -300,4 +300,38 @@ describe('CF-05 synthetic Kinde consent, ciphertext, second device and portable 
         }
     });
 
+    it('does not misreport a terminal D1 refusal as retryable pending', async () => {
+        const fixture = await createCloudKeyHttpFixture([uid]);
+        try {
+            await fixture.consent(uid);
+            const client = browser(fixture);
+            let rejected = 0;
+            const send: typeof fetch = async (input, init) => {
+                if (String(input) === '/v1/sync/commit') {
+                    rejected++;
+                    return Response.json({ error: 'forbidden' }, { status: 403 });
+                }
+                return client.send(input, init);
+            };
+            await expect(submitKindeCandidateDomainIntent({
+                ...client, send, expected,
+                operation: { type: 'profile.patch', patch: { height: '182' } },
+            })).rejects.toThrow('Trasporto replica cloud non confermato');
+            expect(rejected).toBe(1);
+            expect(await get<string>('logbook:v2:' + owner)).toMatch(/^tlb-sealed:v1:/);
+            const grant = await unlockVaultForOwner(owner);
+            try {
+                const saved = await readLocal(owner);
+                expect(saved?.data.profile?.height).toBe('182');
+                expect(saved?.pending).toHaveLength(1);
+                expect(saved?.cloudflareDelivery).toBeDefined();
+            } finally {
+                grant.release();
+            }
+            expect(fixture.count('sync_receipts', uid)).toBe(0);
+        } finally {
+            fixture.close();
+        }
+    });
+
 });
