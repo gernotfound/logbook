@@ -54,12 +54,10 @@ export async function resetLogoutFixture(): Promise<void> {
     localStorage.clear();
     await prepareUnlockedTestArchive('user:test-user-id');
     vi.clearAllMocks();
-});
 }
 
 export function restoreLogoutFixture(): void {
     localStorageMock.key.mockImplementation(originalStorageKey);
     localStorageMock.removeItem.mockImplementation(originalStorageRemove);
     localStorage.removeItem = localStorageMock.removeItem;
-});
 }
