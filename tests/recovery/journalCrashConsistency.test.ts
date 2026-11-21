@@ -1,7 +1,7 @@
 import { LEGAL_VERSIONS } from '../../src/lib/legalVersions';
 import 'fake-indexeddb/auto';
 import { clear, get } from 'idb-keyval';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 import { authenticatedIdentitySource } from '../../src/lib/sync/authenticatedIdentitySource';
 import { registerCrashLocalCases } from './journalCrashLocalCases';
 import { registerCrashAcknowledgementCases } from './journalCrashAcknowledgementCases';
