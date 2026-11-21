@@ -12,12 +12,16 @@ test('reconciles nutrition planning from the Kinde form and replicates it to a s
         await first.bringToFront();
         await mountKindePlanning(first);
         const save = first.getByRole('button', { name: 'Salva pianificazione' });
+        const restore = first.getByRole('heading', { name: 'Ripristina backup account' });
         await expect(save).toHaveCount(0);
+        await expect(restore).toBeVisible();
         await first.getByRole('button', { name: 'Apri archivio account' }).click();
         await first.getByLabel(/Giorni ON/).fill('3');
+        await expect(restore).toHaveCount(0);
         await first.getByRole('textbox', { name: /Note/ }).fill('Pianificazione sintetica');
         await save.click();
-        await expect(first.getByRole('status')).toContainText('Conferma cloud in attesa');
+        const pending = first.getByText('Conferma cloud in attesa', { exact: false });
+        await expect(pending).toBeVisible();
         await expect(save).toHaveCount(0);
         expect(firstCommitStatuses).toEqual([429]);
         expect(receipts()).toBe(1);
@@ -25,7 +29,7 @@ test('reconciles nutrition planning from the Kinde form and replicates it to a s
         allowFirstCommit();
         await first.getByRole('button', { name: 'Verifica salvataggio' }).click();
         await expect(first.getByRole('textbox', { name: /Note/ })).toHaveValue('Pianificazione sintetica');
-        await expect(first.getByRole('status')).toHaveCount(0);
+        await expect(pending).toHaveCount(0);
         expect(firstCommitStatuses).toEqual([429, 200]);
         expect(receipts()).toBe(2);
 
@@ -34,6 +38,10 @@ test('reconciles nutrition planning from the Kinde form and replicates it to a s
             onDaysCount: 3, weight: 78, notes: 'Pianificazione sintetica',
         });
         expect(observed.nutritionPlanningOrigin).toBe('user-edited');
+
+        await first.getByRole('button', { name: 'Torna alla gestione account' }).click();
+        await expect(save).toHaveCount(0);
+        await expect(restore).toBeVisible();
     }, { planningUi: true });
 });
 

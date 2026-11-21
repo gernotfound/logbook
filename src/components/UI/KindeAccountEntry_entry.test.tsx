@@ -71,7 +71,7 @@ describe('Kinde candidate entry: identity and verified consent', () => {
 
     it('connects accepted Kinde consent to an explicit, fenced candidate vault preparation without granting fitness', async () => {
         vi.mocked(readKindeCandidateIdentity).mockResolvedValue(verified);
-        render(<KindeAccountEntry candidatePreparationEnabled />);
+        render(<KindeAccountEntry candidateMode="preparation" />);
         expect(screen.queryByRole('button', { name: 'Continua' })).toBeNull();
         const consent = await screen.findByRole('button', { name: 'Conferma consenso' });
         for (const box of screen.getAllByRole('checkbox')) fireEvent.click(box);
@@ -100,7 +100,7 @@ describe('Kinde candidate entry: identity and verified consent', () => {
             replicaOutcome: 'already-active', journalOutcome: 'acknowledged',
             journalDrained: true,
         });
-        render(<KindeAccountEntry candidatePreparationEnabled />);
+        render(<KindeAccountEntry candidateMode="preparation" />);
         const continueButton = await screen.findByRole('button', { name: 'Continua' });
         fireEvent.click(continueButton);
         await screen.findByText(/Preparazione non ancora confermata/);
@@ -122,7 +122,7 @@ describe('Kinde candidate entry: identity and verified consent', () => {
             kind: 'journal-pending', checkpointRevision: 2, replicaOutcome: 'already-active',
             journalOutcome: 'acknowledged', pendingCount: 1,
         });
-        render(<KindeAccountEntry candidatePreparationEnabled />);
+        render(<KindeAccountEntry candidateMode="preparation" />);
         fireEvent.click(await screen.findByRole('button', { name: 'Continua' }));
         await screen.findByText(/Preparazione non ancora confermata/);
         expect(screen.queryByText(/Archivio cifrato verificato nel percorso candidato/)).toBeNull();
@@ -138,7 +138,7 @@ describe('Kinde candidate entry: identity and verified consent', () => {
             kind: 'candidate-observed', checkpointRevision: 1,
             replicaOutcome: 'reconciliation-required',
         });
-        render(<KindeAccountEntry candidatePreparationEnabled />);
+        render(<KindeAccountEntry candidateMode="preparation" />);
         fireEvent.click(await screen.findByRole('button', { name: 'Continua' }));
         await screen.findByText(/Preparazione non ancora confermata/);
         expect(screen.queryByText(/Archivio cifrato verificato nel percorso candidato/)).toBeNull();
