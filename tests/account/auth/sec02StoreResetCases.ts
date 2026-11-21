@@ -1,14 +1,11 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import {
-  useAppStore, storageOwner, initializeLocal, UserDataSchema, idb, idbStore,
-  resetLogoutFixture, restoreLogoutFixture,
-} from './sec02LogoutHarness';
+import { describe, it, expect, vi } from 'vitest';
+import type { Sec02TestContext } from './sec02_logout_cleanup.test';
 import type { UserData } from '../../../src/types';
 
-describe('SEC-02: volatile store cleanup without archive destruction', () => {
-  beforeEach(resetLogoutFixture);
-  afterEach(restoreLogoutFixture);
-
+export function registerSec02StoreResetCases({
+  useAppStore, storageOwner, initializeLocal, UserDataSchema, idb, idbStore,
+}: Sec02TestContext): void {
+  describe('volatile state without deleting durable archives', () => {
     it('cancelPendingSyncs stops debouncer and sets syncing to false to prevent race conditions during logout', () => {
         const store = useAppStore.getState();
         // Manually start a "sync"
@@ -79,4 +76,5 @@ describe('SEC-02: volatile store cleanup without archive destruction', () => {
         expect(vi.mocked(idb.del).mock.calls).toHaveLength(deletionsBeforeReset);
         expect(idbStore[key]).toBe(ciphertext);
     });
-});
+  });
+}

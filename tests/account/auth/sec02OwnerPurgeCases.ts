@@ -1,14 +1,12 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import {
+import { describe, it, expect, vi } from 'vitest';
+import type { Sec02TestContext } from './sec02_logout_cleanup.test';
+
+export function registerSec02OwnerPurgeCases({
   DB, idb, storageOwner, isLocalPurgeIncomplete, isLocalPurgePending,
   localStorageMock, mockFirebaseAuth, originalIdbGet, originalIdbDel,
-  beginGuestMigrationIntent, resetLogoutFixture, restoreLogoutFixture,
-} from './sec02LogoutHarness';
-
-describe('SEC-02: owner-scoped local purge and cross-session isolation', () => {
-  beforeEach(resetLogoutFixture);
-  afterEach(restoreLogoutFixture);
-
+  beginGuestMigrationIntent,
+}: Sec02TestContext): void {
+  describe('owner-scoped purge and cross-session isolation', () => {
     it('purges the current owner draft through production without deleting another owner', async () => {
         const ownerKey = 'logbook:v2:user:test-user-id:draft:baseline';
         const foreignKey = 'logbook:v2:user:another-user:draft:private';
@@ -338,5 +336,5 @@ describe('SEC-02: owner-scoped local purge and cross-session isolation', () => {
         expect(consoleWarnSpy).not.toHaveBeenCalled();
         consoleWarnSpy.mockRestore();
     });
-
-});
+  });
+}
