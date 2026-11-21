@@ -134,11 +134,10 @@ export function useNutritionMeasurements(selectedDate?: string, includeHistory =
 
                 const calculatedBf = Logic.calculateBodyFatByMethod(female ? 'navy_female' : 'navy_male', {
                     gender: profile.gender || 'M',
-                    height,
-                    weight: Number(weight),
-                    waist: Number(waist),
-                    neck: Number(neck),
-                    hip: hip ? Number(hip) : undefined
+                    height: profile.height,
+                    waist,
+                    neck,
+                    hip: hip || undefined
                 });
                 if (calculatedBf === null || !Number.isFinite(calculatedBf)) {
                     await showAlert(female

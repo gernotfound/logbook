@@ -58,6 +58,30 @@ describe('Data UI redesign', () => {
         expect((container.querySelector('#measure-neck') as HTMLInputElement).value).toBe('38');
     });
 
+    it('never estimates body fat from non-decimal measurements coerced by Number()', () => {
+        const profile = { gender: 'M', height: '180' };
+        const input = measurementProps({ profile, waist: '0x55', neck: '38' });
+        const { rerender } = render(<DataMeasurements {...input} />);
+        fireEvent.click(screen.getByRole('checkbox', { name: /Calcola la massa grassa/i }));
+        expect(screen.getByText('Controlla le misure')).toBeDefined();
+        expect(screen.queryByText(/Metodo US Navy · valore indicativo/)).toBeNull();
+
+        rerender(<DataMeasurements {...measurementProps({
+            profile, waist: '8.5e1', neck: '38',
+        })} />);
+        expect(screen.getByText('Controlla le misure')).toBeDefined();
+
+        rerender(<DataMeasurements {...measurementProps({
+            profile, waist: '85', neck: '38',
+        })} />);
+        expect(screen.getByText('Metodo US Navy · valore indicativo.')).toBeDefined();
+
+        rerender(<DataMeasurements {...measurementProps({
+            profile: { gender: 'M', height: '0xB4' }, waist: '85', neck: '38',
+        })} />);
+        expect(screen.getByText('Profilo incompleto')).toBeDefined();
+    });
+
     it('resets optional BF calculation on date or saved provenance change', () => {
         const { rerender } = render(<DataMeasurements {...measurementProps()} />);
         const estimate = screen.getByRole('checkbox', { name: /Calcola la massa grassa/i }) as HTMLInputElement;

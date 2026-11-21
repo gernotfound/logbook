@@ -7,7 +7,7 @@ interface NavyMeasurements {
 }
 
 /** A measurement must be a complete, finite decimal value, not a numeric prefix. */
-function parseMeasurement(value: unknown): number | null {
+export function parseBodyFatMeasurement(value: unknown): number | null {
     if (typeof value === 'number') return Number.isFinite(value) ? value : null;
     if (typeof value !== 'string') return null;
     const normalized = value.trim();
@@ -34,12 +34,12 @@ function calculateUsNavyBodyFat({ gender, height, waist, neck, hip }: NavyMeasur
 }
 
 function calculateFromMeasurements(gender: 'M' | 'F', inputs: Record<string, unknown>): number | null {
-    const height = parseMeasurement(inputs.height);
-    const waist = parseMeasurement(inputs.waist);
-    const neck = parseMeasurement(inputs.neck);
+    const height = parseBodyFatMeasurement(inputs.height);
+    const waist = parseBodyFatMeasurement(inputs.waist);
+    const neck = parseBodyFatMeasurement(inputs.neck);
     if (height === null || waist === null || neck === null) return null;
     if (gender === 'F') {
-        const hip = parseMeasurement(inputs.hip);
+        const hip = parseBodyFatMeasurement(inputs.hip);
         return hip === null ? null : calculateUsNavyBodyFat({ gender, height, waist, neck, hip });
     }
     return calculateUsNavyBodyFat({ gender, height, waist, neck });
@@ -53,7 +53,7 @@ export function calculateBodyFatByMethod(method: unknown, params: unknown): numb
 }
 
 export function calculateBodyFat(weight: unknown, profile: unknown): number | null {
-    const parsedWeight = parseMeasurement(weight);
+    const parsedWeight = parseBodyFatMeasurement(weight);
     if (parsedWeight === null || parsedWeight <= 0 || !profile || typeof profile !== 'object' || Array.isArray(profile)) {
         return null;
     }

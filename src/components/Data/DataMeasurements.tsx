@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Activity, ChevronDown, Pencil, Plus, Ruler, Save, Trash2, UserRound, X } from 'lucide-react';
 import { Logic } from '../../lib/logic';
+import { parseBodyFatMeasurement } from '../../lib/calc/bodyFat';
 import { shiftDateString } from '../../lib/utils/date';
 import type { BodyFatProvenance, UserProfile } from '../../types';
 import DataDateNavigator from './DataDateNavigator';
@@ -110,7 +111,11 @@ const DataMeasurements: React.FC<DataMeasurementsProps> = ({
     const calculateBf = selection.key === selectionKey ? selection.enabled : savedCalculation;
 
     const isFemale = profile?.gender === 'F';
-    const profileComplete = Boolean((profile?.gender === 'M' || profile?.gender === 'F') && Number(profile?.height) > 0);
+    const profileHeight = parseBodyFatMeasurement(profile?.height);
+    const profileComplete = Boolean(
+        (profile?.gender === 'M' || profile?.gender === 'F')
+        && profileHeight !== null && profileHeight >= 50 && profileHeight <= 250
+    );
     const estimate = (() => {
         if (!profileComplete) {
             return {
@@ -126,11 +131,10 @@ const DataMeasurements: React.FC<DataMeasurementsProps> = ({
         }
         const value = Logic.calculateBodyFatByMethod(isFemale ? 'navy_female' : 'navy_male', {
             gender: profile.gender,
-            height: Number(profile.height),
-            weight: Number(weight),
-            waist: Number(waist),
-            neck: Number(neck),
-            hip: hip ? Number(hip) : undefined,
+            height: profile.height,
+            waist,
+            neck,
+            hip: hip || undefined,
         });
         return value === null
             ? { value: 'Controlla le misure', detail: 'I valori non permettono una stima attendibile.' }
@@ -231,7 +235,7 @@ const DataMeasurements: React.FC<DataMeasurementsProps> = ({
                                 <strong>
                                     {profile?.gender === 'F' ? 'Donna' : profile?.gender === 'M' ? 'Uomo' : 'Sesso non specificato'}
                                     {' · '}
-                                    {Number(profile?.height) > 0 ? `${profile.height} cm` : 'altezza mancante'}
+                                    {profileHeight !== null && profileHeight >= 50 && profileHeight <= 250 ? `${profile.height} cm` : 'altezza mancante'}
                                 </strong>
                             </span>
                             {onOpenBiometry && (
