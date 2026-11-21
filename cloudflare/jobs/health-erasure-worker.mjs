@@ -352,6 +352,10 @@ export function runOneHealthErasureStep(db) {
 
 export default {
   async scheduled(_event, env) {
+    // A future cron must not start irreversible erasure merely because the
+    // Worker was deployed. The candidate manifest does not bind this flag.
+    // Pausing leaves all queued jobs and their leases intact for recovery.
+    if (env?.CF06_ERASURE_RUN_ENABLED !== 'enabled') return { outcome: 'paused' };
     const { DB, RECOVERY_DB } = env;
     await reconcileNextIndependentErasure(DB, RECOVERY_DB);
     return await runApplicationHealthErasureStep(DB, RECOVERY_DB);
