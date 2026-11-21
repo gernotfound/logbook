@@ -351,6 +351,58 @@ describe('ContextMenu Component (Milestone M1)', () => {
     unmount4();
   });
 
+  it('returns keyboard focus to the trigger before invoking a menu action', () => {
+    const onClick = vi.fn();
+    render(<ContextMenu items={[{ id: 'details', label: 'Apri dettagli', onClick }]} />);
+    const trigger = screen.getByRole('button', { name: 'Opzioni' });
+    trigger.focus();
+    fireEvent.keyDown(trigger, { key: 'ArrowDown' });
+    const action = screen.getByRole('menuitem', { name: 'Apri dettagli' });
+    expect(document.activeElement).toBe(action);
+
+    fireEvent.click(action);
+
+    expect(onClick).toHaveBeenCalledOnce();
+    expect(screen.queryByRole('menu')).toBeNull();
+    expect(document.activeElement).toBe(trigger);
+  });
+
+  it('recovers focus when an active menu action disappears or becomes disabled', () => {
+    const first = { id: 'first', label: 'Prima azione', onClick: vi.fn() };
+    const second = { id: 'second', label: 'Seconda azione', onClick: vi.fn() };
+    const { rerender } = render(<ContextMenu items={[first, second]} />);
+    const trigger = screen.getByRole('button', { name: 'Opzioni' });
+    trigger.focus();
+    fireEvent.keyDown(trigger, { key: 'ArrowDown' });
+    expect(document.activeElement).toBe(screen.getByRole('menuitem', { name: first.label }));
+
+    rerender(<ContextMenu items={[second]} />);
+    expect(document.activeElement).toBe(screen.getByRole('menuitem', { name: second.label }));
+
+    rerender(<ContextMenu items={[{ ...second, disabled: true }]} />);
+    expect(document.activeElement).toBe(trigger);
+    expect(screen.getByRole('menu')).not.toBeNull();
+  });
+
+  it('does not steal deliberate external focus after menu actions update', () => {
+    const first = { id: 'first', label: 'Prima azione', onClick: vi.fn() };
+    const second = { id: 'second', label: 'Seconda azione', onClick: vi.fn() };
+    const { rerender } = render(<ContextMenu items={[first, second]} />);
+    const trigger = screen.getByRole('button', { name: 'Opzioni' });
+    trigger.focus();
+    fireEvent.keyDown(trigger, { key: 'ArrowDown' });
+
+    const external = document.createElement('button');
+    document.body.appendChild(external);
+    try {
+      external.focus();
+      rerender(<ContextMenu items={[second]} />);
+      expect(document.activeElement).toBe(external);
+    } finally {
+      external.remove();
+    }
+  });
+
   it('closes menu on Tab keydown inside menu', () => {
     render(<ContextMenu items={sampleItems} />);
 
