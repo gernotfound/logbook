@@ -328,7 +328,10 @@ describe('CF-05 synthetic Kinde consent, ciphertext, second device and portable 
                 operation: { type: 'profile.patch', patch: { height: '184' } },
             });
             expect(lostAfterCommit).toBe(true);
-            expect(outcome).toMatchObject({ kind: 'local-pending', pendingCount: 1 });
+            // The transport replays the immutable batch and validates the
+            // persisted SQL receipt before returning success, despite the
+            // first HTTP response disappearing after the remote commit.
+            expect(outcome).toEqual({ kind: 'cloud-acknowledged', operations: 1 });
             expect(fixture.count('sync_receipts', uid)).toBe(1);
             expect(fixture.count('sync_documents', uid)).toBe(1);
 
@@ -336,10 +339,11 @@ describe('CF-05 synthetic Kinde consent, ciphertext, second device and portable 
             expect(sealedBefore).toMatch(/^tlb-sealed:v1:/);
             const grant = await unlockVaultForOwner(owner);
             try {
-                const pending = await readLocal(owner);
-                expect(pending?.data.profile?.height).toBe('184');
-                expect(pending?.pending).toHaveLength(1);
-                expect(pending?.cloudflareDelivery).toBeDefined();
+                const acknowledged = await readLocal(owner);
+                expect(acknowledged?.data.profile?.height).toBe('184');
+                expect(acknowledged?.baseline.profile?.height).toBe('184');
+                expect(acknowledged?.pending).toEqual([]);
+                expect(acknowledged?.cloudflareDelivery).toBeUndefined();
             } finally {
                 grant.release();
             }
