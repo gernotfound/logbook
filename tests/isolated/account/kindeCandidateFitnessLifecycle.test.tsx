@@ -128,6 +128,26 @@ describe('React candidate lifecycle: explicit owner access without promoting Kin
         expect(authenticatedIdentitySource.readUid()).toBeNull();
     });
 
+    it('closes a late successful owner scope after React unmount instead of publishing plaintext', async () => {
+        const fake = mockRealm();
+        let release!: (value: KindeCandidateFitnessRealm) => void;
+        vi.mocked(openKindeCandidateFitnessRealm).mockImplementation(() =>
+            new Promise(resolve => { release = resolve; }));
+        const session = confirmed();
+        const { result, unmount } = renderHook(() => useKindeCandidateFitnessLifecycle({
+            session, enabled: true,
+        }));
+        let pending!: Promise<void>;
+        act(() => { pending = result.current.open(); });
+        unmount();
+        await act(async () => {
+            release(fake as KindeCandidateFitnessRealm);
+            await expect(pending).rejects.toBeInstanceOf(KindeCandidateBoundaryError);
+        });
+        expect(fake.close).toHaveBeenCalledTimes(1);
+        expect(authenticatedIdentitySource.hasReader()).toBe(false);
+    });
+
     it('clears the snapshot on focus/background and reports a pending write without presenting old data', async () => {
         const fake = mockRealm();
         fake.submit.mockResolvedValueOnce({ kind: 'local-pending', pendingCount: 1 } as never);
