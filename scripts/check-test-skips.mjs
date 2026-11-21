@@ -7,7 +7,7 @@ const regression = spawnSync(process.execPath, ['--test', 'scripts/test-declarat
 if (regression.error) throw regression.error;
 if (regression.status !== 0) process.exit(regression.status ?? 1);
 
-const roots = ['src', 'tests', 'e2e'];
+const roots = ['src', 'tests', 'e2e', 'scripts'];
 const mockFileExtensions = ['', '.ts', '.tsx', '.js', '.jsx', '.mjs', '.mts', '.cjs', '.cts', '.json', '.css', '.scss', '.svg'];
 
 function hasRealMockTarget(filePath, specifier) {

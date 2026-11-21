@@ -22,25 +22,41 @@ class FakeQuery {
     private cutoff = Number.POSITIVE_INFINITY,
     private limitCount = 100,
     private cursor: { uid: string; lastSeenAt: Timestamp } | null = null,
+    private ordering: readonly string[] = [],
   ) {}
   where(field: string, comparison: string, value: Timestamp) {
     expect(field).toBe('lastSeenAt');
     expect(comparison).toBe('<=');
-    return new FakeQuery(this.name, value.toMillis(), this.limitCount, this.cursor);
+    return new FakeQuery(this.name, value.toMillis(), this.limitCount, this.cursor, this.ordering);
   }
   orderBy(field: string | FieldPath, direction: string) {
-    if (typeof field === 'string') expect(field).toBe('lastSeenAt');
-    else expect(field).toEqual(FieldPath.documentId());
-    expect(direction).toBe('asc');
-    return this;
+    const key = typeof field === 'string' ? field : '__name__';
+    if (typeof field !== 'string') expect(field).toEqual(FieldPath.documentId());
+    const expected = this.ordering.length === 0 ? 'lastSeenAt' : '__name__';
+    if (key !== expected || direction !== 'asc' || this.ordering.length >= 2) {
+      throw new Error('Scan pagination requires lastSeenAt then document ID ascending');
+    }
+    return new FakeQuery(this.name, this.cutoff, this.limitCount, this.cursor, [...this.ordering, key]);
   }
   limit(count: number) {
-    return new FakeQuery(this.name, this.cutoff, count, this.cursor);
+    return new FakeQuery(this.name, this.cutoff, count, this.cursor, this.ordering);
   }
   startAfter(lastSeenAt: Timestamp, uid: string) {
-    return new FakeQuery(this.name, this.cutoff, this.limitCount, { lastSeenAt, uid });
+    this.assertStableOrdering();
+    if (!(lastSeenAt instanceof Timestamp) || typeof uid !== 'string') {
+      throw new Error('Scan cursor must match the ordered timestamp and document ID');
+    }
+    return new FakeQuery(this.name, this.cutoff, this.limitCount, { lastSeenAt, uid }, this.ordering);
+  }
+  private assertStableOrdering() {
+    // A timestamp-only fake would hide skipped owners sharing a timestamp when
+    // production loses its document-ID tie-breaker.
+    if (this.ordering.join(',') !== 'lastSeenAt,__name__') {
+      throw new Error('Scan pagination requires lastSeenAt then document ID ascending');
+    }
   }
   async get() {
+    this.assertStableOrdering();
     const docs = [...state.docs.entries()]
       .filter(([path, value]) => path.startsWith(this.name + '/') && path.split('/').length === 2
         && value.lastSeenAt instanceof Timestamp && value.lastSeenAt.toMillis() <= this.cutoff)
@@ -114,6 +130,18 @@ describe('authenticated inactivity retention boundary', () => {
     state.docs.clear();
     state.writes.length = 0;
     state.onQuery = null;
+  });
+
+  it('fails the test double if a scan drops or reorders its document-ID tie-breaker', async () => {
+    const timestampOnly = new FakeQuery('account_activity')
+      .where('lastSeenAt', '<=', old)
+      .orderBy('lastSeenAt', 'asc')
+      .limit(12);
+    await expect(timestampOnly.get()).rejects.toThrow('Scan pagination requires');
+    expect(() => timestampOnly.startAfter(old, 'owner')).toThrow('Scan pagination requires');
+    expect(() => new FakeQuery('account_activity')
+      .where('lastSeenAt', '<=', old)
+      .orderBy(FieldPath.documentId(), 'asc')).toThrow('Scan pagination requires');
   });
 
   it('uses twelve calendar months, with leap-day clamping and exact UTC time', () => {

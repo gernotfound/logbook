@@ -25,6 +25,10 @@ for (const [source, reason] of [
   ["import testCase from 'node:test'; testCase.skip('x', () => {})", 'skip'],
   ["import * as suite from 'vitest'; suite.test.skipIf(true)('x', () => {})", 'skipIf'],
   ["import * as checks from '@jest/globals'; checks.describe.only('x', () => {})", 'only'],
+  ["import test from 'node:test'; test('x', { skip: true }, () => {})", 'skip'],
+  ["import { it as check } from 'node:test'; check('x', { todo: 'pending' }, () => {})", 'todo'],
+  ["import { describe as group } from 'node:test'; group('x', { only: true }, () => {})", 'only'],
+  ["test('x', { ['skip']: process.env.SKIP_TESTS }, () => {})", 'skip'],
 ]) {
   await test('detects disabled declaration: ' + source, () => {
     const findings = findDisabledTests(source);
@@ -42,6 +46,8 @@ for (const source of [
   "import * as helper from './helpers'; helper.it.skip('x', () => {})",
   "import type { test as scenario } from 'vitest'; scenario.skip('x', () => {})",
   "describe('suite', () => { it('works', () => {}) })",
+  "test('x', { skip: false, only: false, todo: false }, () => {})",
+  "unrelated('x', { skip: true }, () => {})",
 ]) {
   await test('allows ordinary source: ' + source, () => {
     assert.deepEqual(findDisabledTests(source), []);
@@ -100,4 +106,5 @@ await test('scans extracted case registration modules without treating them as s
     );
   }
   assert.equal(isTestDeclarationSourceFile('businessCaseModel.ts'), false);
+  assert.equal(isTestDeclarationSourceFile('check-version-bump-regressions.mjs'), true);
 });
