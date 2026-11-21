@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { findDisabledTests, isExecutableTestFile } from './test-declaration-check.mjs';
+import { findDisabledTests, isExecutableTestFile, isTestDeclarationSourceFile } from './test-declaration-check.mjs';
 
 for (const [source, reason] of [
   ["it.skip('x', () => {})", 'skip'],
@@ -87,4 +87,17 @@ await test('native Node suites are scanned while non-test modules remain exclude
   assert.equal(isExecutableTestFile('tests/cloudflare/cf03-session-logout.mjs'), false);
   assert.equal(isExecutableTestFile('tests/tooling/runner.test.mjs'), true);
   assert.deepEqual(findDisabledTests("import { test } from 'node:test'; void test.skip('disabled', () => {});", 'tests/cloudflare/disabled.node.mjs').map(f => f.label), ['skip']);
+});
+
+await test('scans extracted case registration modules without treating them as standalone suites', () => {
+  for (const file of ['healthConsentHttpCases.ts', 'sec02OwnerPurgeCases.ts']) {
+    assert.equal(isExecutableTestFile(file), false);
+    assert.equal(isTestDeclarationSourceFile(file), true);
+    assert.deepEqual(
+      findDisabledTests("import { it } from 'vitest'; export function register() { it.skip('disabled', () => {}); }", file)
+        .map(finding => finding.label),
+      ['skip'],
+    );
+  }
+  assert.equal(isTestDeclarationSourceFile('businessCaseModel.ts'), false);
 });
