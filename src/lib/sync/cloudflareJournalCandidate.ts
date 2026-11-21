@@ -1,4 +1,5 @@
 import { resumeCloudflareDelivery, stageCloudflareDelivery } from './cloudReplicaDurableDelivery';
+import { CloudReplicaStaleSnapshotError } from './cloudReplicaCommit';
 import { CloudReplicaTransportError, type createCloudflareReplicaTransport } from './cloudReplicaTransport';
 import { restageUncommittedCloudflareDelivery } from './cloudReplicaDeliveryRecovery';
 import { ensureBoundedPendingSequences } from './localPendingSequences';
@@ -104,24 +105,41 @@ export async function deliverCloudflareJournalCandidate(
     const operations = boundedPendingTransactionBatch(prepared.pending);
     if (!operations.length) throw new Error('Prefisso causale D1 assente: journal preservato.');
     const paths = [...new Set(operations.map(op => op.docPath))];
-    const control = await transport.control();
-    requireCurrent(guard);
-    if (control.consentRevision !== prepared.consentRevision) {
-        throw new Error('Consenso cloud D1 differente: journal preservato.');
-    }
-    if (expected && control.fenceEpoch !== expected.fenceEpoch) {
-        throw new Error('Epoca cloud D1 differente: journal preservato.');
-    }
-    const snapshot = await transport.read(paths);
-    requireCurrent(guard);
+    let minimumRevision = 0;
+    let fenceEpoch = expected?.fenceEpoch;
+    for (let attempt = 0; attempt < 2; attempt++) {
+        const control = await transport.control();
+        requireCurrent(guard);
+        if (control.consentRevision !== prepared.consentRevision) {
+            throw new Error('Consenso cloud D1 differente: journal preservato.');
+        }
+        fenceEpoch ??= control.fenceEpoch;
+        if (control.fenceEpoch !== fenceEpoch) {
+            throw new Error('Epoca cloud D1 differente: journal preservato.');
+        }
+        if (!Number.isSafeInteger(control.revision) || control.revision < minimumRevision) {
+            throw new CloudReplicaStaleSnapshotError();
+        }
+        const snapshot = await transport.read(paths);
+        requireCurrent(guard);
+        if (snapshot.fenceEpoch !== fenceEpoch || snapshot.consentRevision !== prepared.consentRevision
+            || !Number.isSafeInteger(snapshot.revision) || snapshot.revision < control.revision) {
+            throw new CloudReplicaStaleSnapshotError();
+        }
+        if (snapshot.revision > control.revision) {
+            // Another device can commit between the two reads. Retry the pair
+            // before any immutable ciphertext exists, under the same scope.
+            minimumRevision = snapshot.revision;
+            continue;
+        }
 
-    // The stage verifies that control and document revisions match and that
-    // the causal prefix still equals the one committed in IndexedDB.
-    const batchId = Array.from(crypto.getRandomValues(new Uint8Array(16)),
-        byte => byte.toString(16).padStart(2, '0')).join('');
-    await stageCloudflareDelivery(
-        owner, operations, snapshot, control, prepared.replica, batchId, accountKey, guard,
-    );
-    requireCurrent(guard);
-    return resumeOrRestage(owner, accountKey, transport, csrfToken, guard, expected?.trustedLegalConsent);
+        const batchId = Array.from(crypto.getRandomValues(new Uint8Array(16)),
+            byte => byte.toString(16).padStart(2, '0')).join('');
+        await stageCloudflareDelivery(
+            owner, operations, snapshot, control, prepared.replica, batchId, accountKey, guard,
+        );
+        requireCurrent(guard);
+        return resumeOrRestage(owner, accountKey, transport, csrfToken, guard, expected?.trustedLegalConsent);
+    }
+    return 'reconciliation-required';
 }
