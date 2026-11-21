@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { LegacyGuestRestartTestContext } from './guest_migration_restart_recovery.test';
 
 export function registerLegacyGuestOwnerSwitchCases({
-    GUEST_KEY, SYNC_RECOVERY_KEY, user, parse, App, AuthProvider, DB,
+    GUEST_KEY, SYNC_RECOVERY_KEY, parse, App, AuthProvider, DB,
     auth, onAuthStateChanged, localRepository, useAppStore,
     beginGuestMigrationIntent, activateGuestSession, GUEST_SESSION_KEY,
 }: LegacyGuestRestartTestContext): void {

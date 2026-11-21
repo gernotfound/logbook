@@ -1,6 +1,5 @@
 import { LEGAL_VERSIONS } from '../../../src/lib/legalVersions';
 import React from 'react';
-import { waitFor } from '@testing-library/react';
 import { registerLegacyGuestHandoffCases } from './legacyGuestHandoffCases';
 import { registerLegacyGuestRestartCases } from './legacyGuestRestartCases';
 import { registerLegacyGuestOwnerSwitchCases } from './legacyGuestOwnerSwitchCases';

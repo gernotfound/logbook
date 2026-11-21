@@ -1,5 +1,5 @@
 import React from 'react';
-import { act, render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import type { UserData } from '../../../src/types';
 import type { LegacyGuestRestartTestContext } from './guest_migration_restart_recovery.test';
