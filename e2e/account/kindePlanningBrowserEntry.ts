@@ -4,8 +4,6 @@ import { KindeCandidateNutritionPlanning } from '../../src/components/Nutrition/
 import { useKindeAccountSession } from '../../src/contexts/auth/useKindeAccountSession';
 import { useKindeCandidateFitnessLifecycle } from '../../src/contexts/auth/useKindeCandidateFitnessLifecycle';
 
-export { openKindeCandidateFitnessRealm } from '../../src/lib/auth/kindeCandidateFitnessRealm';
-
 function CandidatePlanning() {
     const session = useKindeAccountSession({ guestArchivePresent: false, identityOnly: false });
     const realm = useKindeCandidateFitnessLifecycle({ session, enabled: true });
@@ -31,8 +29,6 @@ function CandidatePlanning() {
     );
 }
 
-export function mountKindePlanning(): void {
-    const root = document.createElement('div');
-    document.body.append(root);
-    createRoot(root).render(createElement(CandidatePlanning));
-}
+const root = document.createElement('div');
+document.body.append(root);
+createRoot(root).render(createElement(CandidatePlanning));

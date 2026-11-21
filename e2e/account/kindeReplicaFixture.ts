@@ -17,13 +17,16 @@ import { createCloudKeyHttpFixture, ORIGIN } from '../../tests/cloudflare/cloud-
 const uid = 'k_' + 'T'.repeat(43);
 const expected = { uid, fenceEpoch: 1, healthConsentRevision: 1 };
 const modulePath = '/kinde-replica-fixture.mjs';
+const planningModulePath = '/kinde-planning-fixture.mjs';
 
 declare global {
     interface Window { kindeReplicaFixture?: KindeCandidateFitnessRealm }
 }
 
 async function buildClient(planningUi: boolean): Promise<string> {
-    const entry = planningUi ? './kindePlanningBrowserEntry.ts' : '../../src/lib/auth/kindeCandidateFitnessRealm.ts';
+    const entry = planningUi
+        ? new URL('./kindePlanningBrowserEntry.ts', import.meta.url)
+        : new URL('../../src/lib/auth/kindeCandidateFitnessRealm.ts', import.meta.url);
     const output = await build({
         configFile: false, envDir: false, publicDir: false, logLevel: 'error',
         define: {
@@ -33,7 +36,7 @@ async function buildClient(planningUi: boolean): Promise<string> {
         build: {
             write: false,
             lib: {
-                entry: fileURLToPath(new URL(entry, import.meta.url)),
+                entry: fileURLToPath(entry),
                 formats: ['es'],
             },
             ...(planningUi ? { rolldownOptions: { output: { codeSplitting: false } } } : {}),
@@ -58,9 +61,8 @@ export async function loadKindeReplica(page: Page) {
 
 export async function mountKindePlanning(page: Page) {
     await page.evaluate(async absoluteModule => {
-        const { mountKindePlanning: mount } = await import(absoluteModule) as typeof import('./kindePlanningBrowserEntry');
-        mount();
-    }, new URL(modulePath, page.url()).href);
+        await import(absoluteModule);
+    }, new URL(planningModulePath, page.url()).href);
 }
 
 async function startHttpsFixture(serve: (request: IncomingMessage, response: ServerResponse) => Promise<void>) {
@@ -102,7 +104,8 @@ export async function withKindeReplicaDevices<T>(
     }) => Promise<T>,
     { planningUi = false }: { planningUi?: boolean } = {},
 ): Promise<T> {
-    const client = await buildClient(planningUi);
+    const client = await buildClient(false);
+    const planningClient = planningUi ? await buildClient(true) : null;
     const fixture = await createCloudKeyHttpFixture([uid]);
     const contexts: Awaited<ReturnType<Browser['newContext']>>[] = [];
     let server: Awaited<ReturnType<typeof startHttpsFixture>> | undefined;
@@ -138,6 +141,8 @@ export async function withKindeReplicaDevices<T>(
                     outgoing.writeHead(200, { 'Content-Type': 'text/html' }).end('<!doctype html><title>Kinde replica fixture</title>');
                 } else if (url.pathname === modulePath) {
                     outgoing.writeHead(200, { 'Content-Type': 'text/javascript' }).end(client);
+                } else if (url.pathname === planningModulePath && planningClient !== null) {
+                    outgoing.writeHead(200, { 'Content-Type': 'text/javascript' }).end(planningClient);
                 } else { outgoing.writeHead(404).end(); }
                 return;
             }
