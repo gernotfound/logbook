@@ -92,7 +92,7 @@ describe('isolated Kinde fitness realm with trusted owner, no Firebase/global gr
             // Returned data is a copy, not a mutable reference to the
             // realm's authorized snapshot.
             const loose = realm.snapshot()!;
-            loose.data.profile!.height = '999';
+            loose.data.profile = { ...(loose.data.profile ?? {}), height: '999' };
             expect(realm.snapshot()?.data.profile?.height).not.toBe('999');
 
             await expect(realm.submit({
