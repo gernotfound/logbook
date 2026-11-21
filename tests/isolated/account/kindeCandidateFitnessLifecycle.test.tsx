@@ -1,7 +1,8 @@
-import { act, cleanup, renderHook } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, renderHook, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { KindeCandidateBoundaryError } from '../../../src/lib/auth/kindeCandidateClient';
 import { authenticatedIdentitySource } from '../../../src/lib/sync/authenticatedIdentitySource';
+import { createDefaultNutritionPlanning } from '../../../src/lib/nutritionDefaults';
 import type { KindeCandidateFitnessRealm, KindeCandidateFitnessSnapshot } from '../../../src/lib/auth/kindeCandidateFitnessRealm';
 import type { useKindeAccountSession } from '../../../src/contexts/auth/useKindeAccountSession';
 
@@ -12,6 +13,7 @@ vi.mock('../../../src/lib/auth/kindeCandidateFitnessRealm', () => ({
 import { openKindeCandidateFitnessRealm } from '../../../src/lib/auth/kindeCandidateFitnessRealm';
 import { useKindeCandidateFitnessLifecycle } from '../../../src/contexts/auth/useKindeCandidateFitnessLifecycle';
 import { useKindeCandidateProfile } from '../../../src/hooks/profile/useKindeCandidateProfile';
+import { KindeCandidateNutritionPlanning } from '../../../src/components/Nutrition/KindeCandidateNutritionPlanning';
 import { releaseLegacyTestIdentityReader } from '../../setup';
 
 const uid = 'k_' + 'U'.repeat(43);
@@ -353,6 +355,52 @@ describe('React candidate lifecycle: explicit owner access without promoting Kin
         expect(fake.submit).not.toHaveBeenCalled();
         expect(fake.close).toHaveBeenCalledTimes(1);
         expect(authenticatedIdentitySource.readUid()).toBeNull();
+    });
+
+    it('edits and reconciles nutrition planning through the Kinde realm without a legacy writer', async () => {
+        const fake = mockRealm();
+        const withWeight = { ...snapshot, data: {
+            ...snapshot.data,
+            nutrition: { '2026-11-20': { date: '2026-11-20', weight: 78, kcal: 0, carbs: 0, pro: 0, fat: 0 } },
+        } };
+        const saved = { ...withWeight, data: { ...withWeight.data, nutritionPlanning: {
+            ...createDefaultNutritionPlanning(), onDaysCount: 3, weight: 78, notes: 'Prova',
+        } } };
+        fake.snapshot.mockReturnValueOnce(withWeight).mockReturnValueOnce(null as never).mockReturnValueOnce(saved);
+        fake.submit.mockResolvedValueOnce({ kind: 'local-pending', pendingCount: 1 } as never);
+        vi.mocked(openKindeCandidateFitnessRealm).mockResolvedValue(fake as KindeCandidateFitnessRealm);
+        function Candidate({ session }: { session: ReturnType<typeof useKindeAccountSession> }) {
+            const realm = useKindeCandidateFitnessLifecycle({ session, enabled: true });
+            return <>
+                <button type="button" onClick={realm.open}>Apri account</button>
+                {realm.state.phase === 'recheck-required' && (
+                    <button type="button" onClick={realm.recheck}>Verifica salvataggio</button>
+                )}
+                <KindeCandidateNutritionPlanning realm={realm} />
+            </>;
+        }
+        const { rerender } = render(<Candidate session={confirmed(1)} />);
+        expect(screen.queryByRole('button', { name: 'Salva pianificazione' })).toBeNull();
+        fireEvent.click(screen.getByRole('button', { name: 'Apri account' }));
+        fireEvent.change(await screen.findByLabelText(/Giorni ON/), { target: { value: '3' } });
+        fireEvent.change(screen.getByRole('textbox', { name: /Note/ }), { target: { value: 'Prova' } });
+        fireEvent.click(screen.getByRole('button', { name: 'Salva pianificazione' }));
+
+        await waitFor(() => expect(screen.getByRole('status').textContent).toContain('Conferma cloud in attesa'));
+        expect(fake.submit).toHaveBeenCalledExactlyOnceWith({
+            type: 'nutrition-planning.replace',
+            value: expect.objectContaining({ onDaysCount: 3, weight: 78, notes: 'Prova' }),
+            origin: 'user-edited',
+        });
+        expect(screen.queryByRole('button', { name: 'Salva pianificazione' })).toBeNull();
+        fireEvent.click(screen.getByRole('button', { name: 'Verifica salvataggio' }));
+        expect(await screen.findByDisplayValue('Prova')).toBeDefined();
+        expect(fake.refresh).toHaveBeenCalledTimes(1);
+        expect(fake.submit).toHaveBeenCalledTimes(1);
+        rerender(<Candidate session={confirmed(2)} />);
+        expect(screen.queryByRole('status')).toBeNull();
+        expect(screen.queryByRole('textbox', { name: /Note/ })).toBeNull();
+        expect(authenticatedIdentitySource.hasReader()).toBe(false);
     });
 
     it('never publishes a stale view after a terminal D1 failure', async () => {

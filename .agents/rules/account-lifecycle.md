@@ -32,6 +32,18 @@ dopo gli await prima di liberare la bozza. Questa integrazione è
 UID, stato Zustand Kinde o autorizzazione offline. Gli altri editor e
 writer legacy richiedono migrazione progressiva prima del GO.
 
+### CF-03 — Pianificazione nutrizionale con un solo writer per owner
+
+La pianificazione usa un editor e un form condivisi. L'adapter guest/legacy
+legge lo store soltanto per l'owner corrente. La vista candidata Kinde riceve
+il profilo e la nutrizione esclusivamente dallo snapshot autorizzato del
+realm e invia `nutrition-planning.replace` tramite `realm.submit()`.
+La bozza e lo stato di salvataggio sono legati al testimone revocabile:
+cambio owner o generazione nasconde i valori precedenti anche quando l'UID
+coincide. Una modifica con journal locale attende conferma cloud. La
+riconciliazione del realm riprende il journal senza reinviare il salvataggio
+dal form. La vista candidata non è montata nella PWA pubblica.
+
 ### CF-03/04 — Recheck del journal Kinde dopo esito ambiguo (21/11/2026)
 
 Se `useKindeCandidateFitnessLifecycle.submit()` riceve

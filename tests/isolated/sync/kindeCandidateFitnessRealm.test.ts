@@ -20,6 +20,7 @@ import { authenticatedIdentitySource } from '../../../src/lib/sync/authenticated
 import { isVaultUnlocked, lockAllVaults, unlockVaultForOwner } from '../../../src/lib/sync/secureArchiveSession';
 import { readLocal } from '../../../src/lib/sync/localArchiveBootstrap';
 import { beginLocalPurge } from '../../../src/lib/sync/localPurgeFence';
+import { createDefaultNutritionPlanning } from '../../../src/lib/nutritionDefaults';
 
 const uid = 'k_' + 'P'.repeat(43);
 const otherUid = 'k_' + 'Q'.repeat(43);
@@ -81,6 +82,27 @@ afterEach(() => {
 });
 
 describe('isolated Kinde fitness realm with trusted owner, no Firebase/global grant', () => {
+    it('confirms a nutrition planning edit through encrypted local storage and a verified D1 receipt', async () => {
+        const fixture = await createCloudKeyHttpFixture([uid]);
+        try {
+            await fixture.consent(uid);
+            const client = browser(fixture);
+            const realm = await openKindeCandidateFitnessRealm({ ...client, expected });
+            const plan = { ...createDefaultNutritionPlanning(), weight: 78, onDaysCount: 3, notes: 'Prova' };
+            await expect(realm.submit({
+                type: 'nutrition-planning.replace', value: plan, origin: 'user-edited',
+            })).resolves.toMatchObject({ kind: 'cloud-acknowledged' });
+            expect(realm.snapshot()?.data).toMatchObject({
+                nutritionPlanning: plan, nutritionPlanningOrigin: 'user-edited',
+            });
+            expect(await get('logbook:v2:' + owner)).toMatch(/^tlb-sealed:v1:/);
+            expect(client.paths).toContain('/v1/sync/receipt');
+            expect(fixture.count('sync_receipts', uid)).toBe(1);
+            expect(isVaultUnlocked(owner)).toBe(false);
+            realm.close();
+        } finally { fixture.close(); }
+    });
+
     it('journals two edits offline with no HTTP, then reconciles exactly once on reconnect', async () => {
         const fixture = await createCloudKeyHttpFixture([uid]);
         try {

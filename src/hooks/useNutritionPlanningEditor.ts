@@ -1,0 +1,235 @@
+import { useState, useMemo, useRef } from 'react';
+import { Logic } from '../lib/logic';
+import { parseFiniteNumericInput } from '../lib/calc/nutrition';
+import type { NutritionPlanning, UserData } from '../types';
+import { createDefaultNutritionPlanning, normalizeOnDaysCount, parseOnDaysCount } from '../lib/nutritionDefaults';
+import type { DomainOperation } from '../lib/sync/domainOperations';
+
+type EditWitness = Readonly<{ owner: string; isCurrent: () => boolean }>;
+type Source = Readonly<{
+    owner: string | null;
+    data?: Pick<UserData, 'nutritionPlanning' | 'nutrition' | 'profile'>;
+    capture: () => EditWitness | null;
+    dispatch: (operation: Extract<DomainOperation, { type: 'nutrition-planning.replace' }>)
+        => Promise<'durable' | 'local-pending'>;
+}>;
+type SaveStatus = 'idle' | 'saving' | 'unsaved' | 'local-pending';
+
+// Form inputs have intermediate strings (including an empty field), while only
+// normalized numeric values may enter the persisted NutritionPlanning schema.
+type EditableNumber = number | string;
+type NutritionPlanningDraft = Omit<NutritionPlanning, 'weight' | 'onDaysCount' | 'avgMacros' | 'onBoost' | 'normocalorica'> & {
+    weight?: EditableNumber;
+    onDaysCount?: EditableNumber;
+    avgMacros?: { carbsPerKg: EditableNumber; proPerKg: EditableNumber; fatPerKg: EditableNumber };
+    onBoost?: { carbsPercent: EditableNumber; proPercent: EditableNumber; fatPercent: EditableNumber };
+    normocalorica?: Partial<Record<'kcal' | 'carbs' | 'pro' | 'fat', EditableNumber>>;
+};
+
+function numericInput(value: unknown, fallback = 0): number {
+    if (value === null || value === undefined || (typeof value === 'string' && value.trim() === '')) return fallback;
+    return parseFiniteNumericInput(value) ?? Number.NaN;
+}
+
+function deriveMacroSplit(avgValue: unknown, boostPercentValue: unknown, onDaysCount: unknown) {
+    const avg = numericInput(avgValue);
+    const boostPercent = numericInput(boostPercentValue);
+    const onDays = parseOnDaysCount(onDaysCount);
+    if (onDays === null || !Number.isFinite(avg) || avg < 0 || !Number.isFinite(boostPercent) || boostPercent < -100) {
+        return { on: 0, off: 0, valid: false };
+    }
+
+    if (onDays === 0 || onDays === 7) {
+        return { on: avg, off: avg, valid: true };
+    }
+
+    const offDays = 7 - onDays;
+    const multiplier = 1 + (boostPercent / 100);
+    const denominator = (onDays * multiplier) + offDays;
+    if (!Number.isFinite(multiplier) || multiplier < 0 || !Number.isFinite(denominator) || denominator <= 0) {
+        return { on: 0, off: 0, valid: false };
+    }
+
+    const off = (7 * avg) / denominator;
+    const on = off * multiplier;
+    if (!Number.isFinite(on) || on < 0 || !Number.isFinite(off) || off < 0) {
+        return { on: 0, off: 0, valid: false };
+    }
+    return { on, off, valid: true };
+}
+
+/** The editor builds one domain intent. Its adapter owns the session and the writer. */
+export function useNutritionPlanningEditor(source: Source, showAlert: (message: string) => Promise<unknown>) {
+    const { nutritionPlanning: storePlanning, nutrition: nutritionMap, profile } = source.data ?? {};
+    const [localPlanning, setLocalPlanning] = useState<{ witness: EditWitness; values: NutritionPlanningDraft } | null>(null);
+    const [save, setSave] = useState<{ witness: EditWitness; status: SaveStatus } | null>(null);
+    const draftRevision = useRef(0);
+    const isCurrent = (witness: EditWitness) => source.owner === witness.owner && witness.isCurrent();
+
+    // Use the shared parser to handle decimal commas and invalid measurements.
+    const latestWeight = useMemo(() => Logic.getLatestUserWeight(nutritionMap), [nutritionMap]);
+
+    const defaultPlanning: NutritionPlanningDraft = { ...createDefaultNutritionPlanning(), weight: latestWeight };
+
+    const activeDraft = localPlanning && isCurrent(localPlanning.witness) ? localPlanning.values : null;
+    const basePlanning = activeDraft ?? storePlanning ?? defaultPlanning;
+    const planning: NutritionPlanningDraft = {
+        ...basePlanning,
+        avgMacros: basePlanning.avgMacros ? { ...defaultPlanning.avgMacros, ...basePlanning.avgMacros } : defaultPlanning.avgMacros,
+        onBoost: basePlanning.onBoost ? { ...defaultPlanning.onBoost, ...basePlanning.onBoost } : defaultPlanning.onBoost,
+        onDaysCount: activeDraft ? basePlanning.onDaysCount : normalizeOnDaysCount(basePlanning.onDaysCount),
+        weight: basePlanning.weight ?? latestWeight,
+        normocalorica: basePlanning.normocalorica ? { ...defaultPlanning.normocalorica, ...basePlanning.normocalorica } : defaultPlanning.normocalorica,
+    };
+
+    const avgC = numericInput(planning.avgMacros!.carbsPerKg);
+    const avgP = numericInput(planning.avgMacros!.proPerKg);
+    const avgF = numericInput(planning.avgMacros!.fatPerKg);
+    const carbsSplit = deriveMacroSplit(avgC, planning.onBoost!.carbsPercent, planning.onDaysCount);
+    const proteinSplit = deriveMacroSplit(avgP, planning.onBoost!.proPercent, planning.onDaysCount);
+    const fatSplit = deriveMacroSplit(avgF, planning.onBoost!.fatPercent, planning.onDaysCount);
+
+    const currentOnMacros = {
+        carbsPerKg: carbsSplit.on,
+        proPerKg: proteinSplit.on,
+        fatPerKg: fatSplit.on,
+    };
+    const currentOffMacros = {
+        carbsPerKg: carbsSplit.off,
+        proPerKg: proteinSplit.off,
+        fatPerKg: fatSplit.off,
+    };
+
+    const w = numericInput(planning.weight, latestWeight);
+    const onMacrosCalc = Logic.calculateMacrosFromKg(w, currentOnMacros.carbsPerKg, currentOnMacros.proPerKg, currentOnMacros.fatPerKg);
+    const offMacrosCalc = Logic.calculateMacrosFromKg(w, currentOffMacros.carbsPerKg, currentOffMacros.proPerKg, currentOffMacros.fatPerKg);
+    const avgMacrosCalc = Logic.calculateMacrosFromKg(w, avgC, avgP, avgF);
+
+    const tdeeUserData = useMemo(() => ({
+        nutritionPlanning: storePlanning,
+        nutrition: nutritionMap,
+        profile: profile
+    }), [storePlanning, nutritionMap, profile]);
+    const tdeeCalc = useMemo(() => Logic.calculateTDEEAndMacros(tdeeUserData), [tdeeUserData]);
+
+    const updateDraft = (update: (value: NutritionPlanningDraft) => NutritionPlanningDraft) => {
+        const witness = source.capture();
+        if (!witness || !isCurrent(witness)) return;
+        draftRevision.current++;
+        setSave({ witness, status: 'unsaved' });
+        // Functional updates compose edits without reviving a previous realm.
+        setLocalPlanning(previous => ({
+            witness,
+            values: update(previous && isCurrent(previous.witness) ? previous.values : planning),
+        }));
+    };
+    const handleUpdate = (field: keyof NutritionPlanningDraft, value: NutritionPlanningDraft[keyof NutritionPlanningDraft]) => {
+        updateDraft(previous => ({ ...previous, [field]: value }));
+    };
+
+    const handleUpdateAvgMacros = (field: keyof NonNullable<NutritionPlanningDraft['avgMacros']>, value: string) => {
+        updateDraft(previous => ({
+            ...previous,
+            avgMacros: { ...previous.avgMacros!, [field]: value },
+        }));
+    };
+
+    const handleUpdateOnBoost = (field: keyof NonNullable<NutritionPlanningDraft['onBoost']>, value: string) => {
+        updateDraft(previous => ({
+            ...previous,
+            onBoost: { ...previous.onBoost!, [field]: value },
+        }));
+    };
+
+    const handleSave = async (e?: { preventDefault(): void }) => {
+        if (e) e.preventDefault();
+
+        const weight = numericInput(planning.weight, latestWeight);
+        const onDaysCount = parseOnDaysCount(planning.onDaysCount);
+        const avgMacros = {
+            carbsPerKg: numericInput(planning.avgMacros!.carbsPerKg),
+            proPerKg: numericInput(planning.avgMacros!.proPerKg),
+            fatPerKg: numericInput(planning.avgMacros!.fatPerKg),
+        };
+        const onBoost = {
+            carbsPercent: numericInput(planning.onBoost!.carbsPercent),
+            proPercent: numericInput(planning.onBoost!.proPercent),
+            fatPercent: numericInput(planning.onBoost!.fatPercent),
+        };
+        const sanitizedNormo = {
+            kcal: numericInput(planning.normocalorica?.kcal),
+            carbs: numericInput(planning.normocalorica?.carbs),
+            pro: numericInput(planning.normocalorica?.pro),
+            fat: numericInput(planning.normocalorica?.fat),
+        };
+
+        const nonNegativeValues = [
+            ...Object.values(avgMacros),
+            ...Object.values(sanitizedNormo),
+        ];
+        const boostValues = Object.values(onBoost);
+        const splitValues = [
+            ...Object.values(currentOnMacros),
+            ...Object.values(currentOffMacros),
+        ];
+        const invalid = !Number.isFinite(weight)
+            || weight <= 0
+            || nonNegativeValues.some(value => !Number.isFinite(value) || value < 0)
+            || boostValues.some(value => !Number.isFinite(value) || value < -100)
+            || !carbsSplit.valid
+            || !proteinSplit.valid
+            || !fatSplit.valid
+            || splitValues.some(value => !Number.isFinite(value) || value < 0);
+
+        if (onDaysCount === null || invalid) {
+            await showAlert('Controlla i valori della pianificazione: giorni ON da 0 a 7, numeri validi, macro non negativi e variazioni ON non inferiori a -100%.');
+            return;
+        }
+
+        const updatedPlanning: NutritionPlanning = {
+            ...planning,
+            weight,
+            onDaysCount,
+            normocalorica: sanitizedNormo,
+            avgMacros,
+            onBoost,
+            onMacros: currentOnMacros,
+            offMacros: currentOffMacros
+        };
+
+        const witness = source.capture();
+        if (!witness || !isCurrent(witness)) {
+            await showAlert('Pianificazione non disponibile per la sessione corrente.');
+            return;
+        }
+        const revisionAtSubmit = draftRevision.current;
+        setSave({ witness, status: 'saving' });
+        try {
+            const result = await source.dispatch({
+                type: 'nutrition-planning.replace',
+                value: updatedPlanning,
+                origin: 'user-edited',
+            });
+            // A superseded Auth epoch must not clear the next session's edits or status.
+            if (!isCurrent(witness)) return;
+            if (draftRevision.current === revisionAtSubmit) {
+                setLocalPlanning(null);
+                setSave({ witness, status: result === 'local-pending' ? result : 'idle' });
+            } else {
+                setSave({ witness, status: 'unsaved' });
+            }
+        } catch {
+            if (!isCurrent(witness)) return;
+            setSave({ witness, status: 'unsaved' });
+            // The draft remains editable, but must not be confused with a saved plan.
+            await showAlert("Errore durante il salvataggio della pianificazione.");
+        }
+    };
+
+    return {
+        planning, saveStatus: save && isCurrent(save.witness) ? save.status : 'idle',
+        onMacrosCalc, offMacrosCalc, avgMacrosCalc, tdeeCalc,
+        currentOnMacros, currentOffMacros,
+        handleUpdate, handleUpdateAvgMacros, handleUpdateOnBoost, handleSave
+    };
+}
