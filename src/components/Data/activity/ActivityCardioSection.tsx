@@ -2,7 +2,7 @@ import { Pencil, Plus, Save, Trash2, X } from 'lucide-react';
 import type { useActivityTracking } from '../../../hooks/useActivityTracking';
 import {
     CARDIO_INTENSITIES, CARDIO_MODALITIES, CARDIO_STRUCTURES,
-    cardioIntensityLabel, cardioModalityLabel,
+    cardioIntensityLabel, cardioModalityLabel, timestampToLocalTime,
 } from '../../../lib/activity';
 
 type ActivityCardioProps = Pick<ReturnType<typeof useActivityTracking>,
@@ -31,7 +31,7 @@ export function ActivityCardioSection({ activity }: { activity: ActivityCardioPr
                 <div className="activity-cardio-list">
                     {activity.cardioSessions.map(session => {
                         const intensity = cardioIntensityLabel(session.intensity);
-                        const start = session.startedAt ? new Date(session.startedAt).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' }) : null;
+                        const start = timestampToLocalTime(session.startedAt);
                         return (
                             <article className="activity-cardio-item" key={session.id}>
                                 <div className="activity-cardio-copy">
