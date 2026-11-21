@@ -262,6 +262,28 @@ describe('React candidate lifecycle: explicit owner access without promoting Kin
         } finally { vi.useRealTimers(); }
     });
 
+    it('checks the view permit immediately when the browser goes offline', async () => {
+        const fake = mockRealm();
+        vi.mocked(openKindeCandidateFitnessRealm).mockResolvedValue(fake as KindeCandidateFitnessRealm);
+        const session = confirmed();
+        const { result } = renderHook(() => useKindeCandidateFitnessLifecycle({ session, enabled: true }));
+        await act(async () => { await result.current.open(); });
+        expect(result.current.state.phase).toBe('ready');
+        act(() => { window.dispatchEvent(new Event('offline')); });
+        expect(result.current.state.phase).toBe('ready');
+        expect(fake.close).not.toHaveBeenCalled();
+        const witness = result.current.captureEditWitness();
+        expect(witness?.isCurrent()).toBe(true);
+
+        fake.isCurrent.mockReturnValue(false);
+        act(() => { window.dispatchEvent(new Event('offline')); });
+
+        expect(result.current.state.phase).toBe('closed');
+        expect(result.current.captureEditWitness()).toBeNull();
+        expect(witness?.isCurrent()).toBe(false);
+        expect(fake.close).toHaveBeenCalledTimes(1);
+    });
+
     it('routes the same biometric editor through the Kinde realm writer, never the legacy store', async () => {
         const fake = mockRealm();
         const edited = { ...snapshot, data: { ...snapshot.data, profile: { height: '191' } } };

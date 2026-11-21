@@ -82,7 +82,10 @@ journal cifrato quando il browser segnala assenza di rete. Il permesso
 vive nel documento, è vincolato a sessione, consenso, vault e replica,
 e scade al primo limite fra sessione e replica. Si controlla anche il
 tempo monotono del documento per impedire che un arretramento dell'orologio
-estenda il permesso. La transazione IndexedDB verifica di nuovo envelope,
+estenda il permesso. La vista e il testimone di modifica condividono questo
+controllo offline. React lo verifica al passaggio offline e durante il
+controllo periodico, chiudendo la vista se il permesso non vale più.
+La transazione IndexedDB verifica di nuovo envelope,
 revoca, purge e scadenza. La scrittura resta locale fino alla rilettura
 trusted al rientro online, quando `refresh()` riconcilia il journal
 senza ripetere l'intento. Dopo un reload offline il realm candidato
