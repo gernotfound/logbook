@@ -39,11 +39,11 @@ describe('biometric profile dependency boundary', () => {
     it('renders and edits through the owner-fenced profile adapter only', () => {
         render(<DataBiometry />);
         expect((screen.getByLabelText('Data di nascita') as HTMLInputElement).value).toBe('2000-01-01');
-        expect((screen.getByLabelText('Altezza') as HTMLInputElement).value).toBe('180');
-        expect((screen.getByLabelText('Sesso') as HTMLSelectElement).value).toBe('M');
+        expect((screen.getByLabelText(/^Altezza/) as HTMLInputElement).value).toBe('180');
+        expect((screen.getByLabelText(/^Sesso/) as HTMLSelectElement).value).toBe('M');
         fireEvent.change(screen.getByLabelText('Data di nascita'), { target: { value: '2002-03-04' } });
-        fireEvent.change(screen.getByLabelText('Altezza'), { target: { value: '182' } });
-        fireEvent.change(screen.getByLabelText('Sesso'), { target: { value: 'F' } });
+        fireEvent.change(screen.getByLabelText(/^Altezza/), { target: { value: '182' } });
+        fireEvent.change(screen.getByLabelText(/^Sesso/), { target: { value: 'F' } });
         expect(profile.setDob).toHaveBeenCalledWith('2002-03-04');
         expect(profile.setHeight).toHaveBeenCalledWith('182');
         expect(profile.setGender).toHaveBeenCalledWith('F');
