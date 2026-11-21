@@ -1,5 +1,41 @@
 import { expect, test } from '../fixtures';
-import { loadKindeReplica, withKindeReplicaDevices } from './kindeReplicaFixture';
+import { loadKindeReplica, mountKindePlanning, withKindeReplicaDevices } from './kindeReplicaFixture';
+
+test('reconciles nutrition planning from the Kinde form and replicates it to a second profile', async ({ browser }) => {
+    await withKindeReplicaDevices(browser, async ({ first, second, receipts, firstCommitStatuses, allowFirstCommit }) => {
+        const seed = await second.evaluate(() => window.kindeReplicaFixture!.submit({
+            type: 'nutrition-day.patch', date: '2026-11-20', patch: { weight: 78 },
+        }));
+        expect(seed).toMatchObject({ kind: 'cloud-acknowledged' });
+        expect(receipts()).toBe(1);
+
+        await first.bringToFront();
+        await mountKindePlanning(first);
+        const save = first.getByRole('button', { name: 'Salva pianificazione' });
+        await expect(save).toHaveCount(0);
+        await first.getByRole('button', { name: 'Apri archivio account' }).click();
+        await first.getByLabel(/Giorni ON/).fill('3');
+        await first.getByRole('textbox', { name: /Note/ }).fill('Pianificazione sintetica');
+        await save.click();
+        await expect(first.getByRole('status')).toContainText('Conferma cloud in attesa');
+        await expect(save).toHaveCount(0);
+        expect(firstCommitStatuses).toEqual([429]);
+        expect(receipts()).toBe(1);
+
+        allowFirstCommit();
+        await first.getByRole('button', { name: 'Verifica salvataggio' }).click();
+        await expect(first.getByRole('textbox', { name: /Note/ })).toHaveValue('Pianificazione sintetica');
+        await expect(first.getByRole('status')).toHaveCount(0);
+        expect(firstCommitStatuses).toEqual([429, 200]);
+        expect(receipts()).toBe(2);
+
+        const observed = await second.evaluate(async () => (await window.kindeReplicaFixture!.refresh()).data);
+        expect(observed.nutritionPlanning).toMatchObject({
+            onDaysCount: 3, weight: 78, notes: 'Pianificazione sintetica',
+        });
+        expect(observed.nutritionPlanningOrigin).toBe('user-edited');
+    }, { planningUi: true });
+});
 
 test('recovers a Kinde edit made offline after a competing browser save', async ({ browser }) => {
     await withKindeReplicaDevices(browser, async ({ first, second, receipts, firstCommitStatuses, allowFirstCommit }) => {

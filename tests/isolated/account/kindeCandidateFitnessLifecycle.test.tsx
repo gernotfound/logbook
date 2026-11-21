@@ -193,6 +193,20 @@ describe('React candidate lifecycle: explicit owner access without promoting Kin
         expect(authenticatedIdentitySource.hasReader()).toBe(false);
     });
 
+    it('keeps the ready offline view distinct from a fully reconciled journal', async () => {
+        const fake = mockRealm();
+        fake.submit.mockResolvedValueOnce({ kind: 'local-pending', pendingCount: 1 } as never);
+        vi.mocked(openKindeCandidateFitnessRealm).mockResolvedValue(fake as KindeCandidateFitnessRealm);
+        const session = confirmed();
+        const { result } = renderHook(() => useKindeCandidateFitnessLifecycle({ session, enabled: true }));
+        await act(async () => { await result.current.open(); });
+        expect(result.current.state).toMatchObject({ phase: 'ready', hasPendingJournal: false });
+        await act(async () => {
+            await result.current.submit({ type: 'profile.patch', patch: { height: '181' } });
+        });
+        expect(result.current.state).toMatchObject({ phase: 'ready', hasPendingJournal: true });
+    });
+
     it('closes a failed reconciliation and permits a fresh trusted realm opening', async () => {
         const fake = mockRealm();
         fake.submit.mockResolvedValueOnce({ kind: 'local-pending', pendingCount: 1 } as never);
@@ -395,6 +409,7 @@ describe('React candidate lifecycle: explicit owner access without promoting Kin
         expect(screen.queryByRole('button', { name: 'Salva pianificazione' })).toBeNull();
         fireEvent.click(screen.getByRole('button', { name: 'Verifica salvataggio' }));
         expect(await screen.findByDisplayValue('Prova')).toBeDefined();
+        expect(screen.queryByRole('status')).toBeNull();
         expect(fake.refresh).toHaveBeenCalledTimes(1);
         expect(fake.submit).toHaveBeenCalledTimes(1);
         rerender(<Candidate session={confirmed(2)} />);
