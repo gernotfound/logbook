@@ -512,11 +512,11 @@ void test('scheduler has no public fetch endpoint and handles only one bounded s
       await recordVerifiedInitialConsent(f.db, recovery, 'owner-a'));
     withdraw(f, 'owner-a');
     for (const RECOVERY_DB of [undefined, f.db]) {
-      await assert.rejects(erasureWorker.scheduled({}, { DB: f.db, RECOVERY_DB }),
+      await assert.rejects(erasureWorker.scheduled({}, { DB: f.db, RECOVERY_DB, CF06_ERASURE_RUN_ENABLED: 'enabled' }),
         /independent-recovery-fence-unavailable/);
       assert.equal(count(f, 'sync_documents', 'owner-a'), 6);
     }
-    await erasureWorker.scheduled({}, { DB: f.db, RECOVERY_DB: recovery });
+    await erasureWorker.scheduled({}, { DB: f.db, RECOVERY_DB: recovery, CF06_ERASURE_RUN_ENABLED: 'enabled' });
     assert.equal(count(f, 'sync_documents', 'owner-a'), 2);
     assert.equal(job(f, 'owner-a').phase, 'data');
   } finally { registry.close(); f.sqlite.close(); }
