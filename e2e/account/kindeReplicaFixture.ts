@@ -86,6 +86,7 @@ export async function withKindeReplicaDevices<T>(
     run: (devices: {
         first: Page; second: Page; receipts: () => number;
         firstCommitStatuses: number[]; allowFirstCommit: () => void;
+        beforeFirstDocumentRead: (action: () => Promise<void>) => void;
     }) => Promise<T>,
 ): Promise<T> {
     const client = await buildClient();
@@ -94,6 +95,7 @@ export async function withKindeReplicaDevices<T>(
     let server: Awaited<ReturnType<typeof startHttpsFixture>> | undefined;
     let refuseFirstCommit = true;
     const firstCommitStatuses: number[] = [];
+    const beforeFirstReads: Array<() => Promise<void>> = [];
     const receipts = () => {
         const count = fixture.count('sync_receipts', uid);
         if (typeof count !== 'number') throw new Error('Receipt count unavailable');
@@ -138,8 +140,13 @@ export async function withKindeReplicaDevices<T>(
             let body = '';
             incoming.setEncoding('utf8');
             for await (const chunk of incoming) body += chunk;
-            const commit = url.pathname === '/v1/sync/commit'
-                && (headers.get('cookie') ?? '').split('; ').includes(firstSession);
+            const isFirst = (headers.get('cookie') ?? '').split('; ').includes(firstSession);
+            if (isFirst && url.pathname === '/v1/sync/read') {
+                // Interleave only the first profile's reads. The callback can
+                // complete a real commit from the second profile meanwhile.
+                await beforeFirstReads.shift()?.();
+            }
+            const commit = isFirst && url.pathname === '/v1/sync/commit';
             const response = commit && refuseFirstCommit
                 ? Response.json({ error: 'unavailable' }, { status: 429 })
                 : await routeCandidateFirstPartyApi(new Request(ORIGIN + url.pathname + url.search, {
@@ -172,6 +179,7 @@ export async function withKindeReplicaDevices<T>(
         return await run({
             first, second, receipts, firstCommitStatuses,
             allowFirstCommit: () => { refuseFirstCommit = false; },
+            beforeFirstDocumentRead: action => { beforeFirstReads.push(action); },
         });
     } finally {
         try { await Promise.all(contexts.map(context => context.close())); }
