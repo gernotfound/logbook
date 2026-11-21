@@ -79,26 +79,6 @@ export function useNutritionMeals(dateStr?: string) {
         await persistNutrition({ type: 'nutrition-meal.upsert', date: targetDateStr, meal });
     };
 
-    const handleQuickAdd = async (quickData: Pick<LoggedMealItem, 'name' | 'kcal' | 'carbs' | 'pro' | 'fat'>) => {
-        const session = captureSession();
-        const addedItem: LoggedMealItem = {
-            id: Logic.generateId('food'),
-            name: quickData.name,
-            meal: 'quick',
-            quantity: 1,
-            baseQty: 1,
-            unit: 'porzione',
-            kcal: quickData.kcal || 0,
-            carbs: quickData.carbs || 0,
-            pro: quickData.pro || 0,
-            fat: quickData.fat || 0,
-            time: new Date().getTime()
-        };
-
-        try { await saveMeal(addedItem); }
-        catch { if (isCurrentSession(session)) void showAlert("Errore durante il salvataggio dell'alimento."); }
-    };
-
     const handleSearch = (query: string) => setSearchQuery(query);
 
     const addFood = async (food: Food, mealType: string) => {
@@ -192,7 +172,6 @@ export function useNutritionMeals(dateStr?: string) {
         todayNutrition, dailyTarget, isDayOn, toggleDayType, setDayType,
         searchQuery, setSearchQuery, handleSearch, searchResults, handleDeleteItem, clearSearch,
         clearDay,
-        handleQuickAdd,
         showCustomModal, setShowCustomModal,
         editingFoodId, setEditingFoodId, startEditCustomFood, cancelCustomFood,
         cfData, setCfData, saveCustomFood,

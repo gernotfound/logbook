@@ -82,7 +82,7 @@ describe('owner-scoped food search', () => {
         }
     });
 
-    it.each(['day-type', 'quick-add', 'clear-day', 'meal-add'] as const)(
+    it.each(['day-type', 'clear-day', 'meal-add'] as const)(
         'does not show obsolete %s error after an Auth epoch replacement', async operation => {
             const previousDispatch = useAppStore.getState().dispatchDomainOperation;
             const previousAlert = useDialogStore.getState().showAlert;
@@ -100,7 +100,6 @@ describe('owner-scoped food search', () => {
                 let saving!: Promise<unknown>;
                 act(() => {
                     saving = operation === 'day-type' ? result.current.setDayType(true)
-                        : operation === 'quick-add' ? result.current.handleQuickAdd({ name: 'Riso', kcal: 200, carbs: 40, pro: 5, fat: 2 })
                         : operation === 'clear-day' ? result.current.clearDay()
                         : result.current.addFood(ownerWithFood('old-food', 'Pollo').customFoods[0], 'Pranzo');
                 });

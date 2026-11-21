@@ -83,11 +83,11 @@ describe('M5 nutrition account flow through useNutritionMeals', () => {
             expect(captureSession().owner).toBe('guest');
 
             const { result } = renderHook(() => useNutritionMeals(DATE));
-            await runMutation(() => result.current.handleQuickAdd({
-                name: 'Guest rice', kcal: 200, carbs: 40, pro: 10, fat: 2,
-            }));
+            await runMutation(() => result.current.addFood(guestData.customFoods[1], 'Pranzo'));
             const guestArchive = await readLocal('guest');
-            expect(guestArchive?.data.nutrition?.[DATE]?.meals?.[0]?.name).toBe('Guest rice');
+            expect(guestArchive?.data.nutrition?.[DATE]?.meals?.[0]).toMatchObject({
+                name: 'Riso Basmati', foodId: 'food-rice', meal: 'Pranzo',
+            });
             // The guest session cannot unlock the former account. Compare
             // authenticated storage bytes instead of reading without authorization.
             expect(await get('logbook:v2:user:nutrition-hardening-user')).toBe(previousArchiveBytes);
@@ -192,21 +192,25 @@ describe('M5 nutrition account flow through useNutritionMeals', () => {
         expect(day?.isDayOn).toBeUndefined();
     });
 
-    it('persists quick-add nutrition with per-serving semantics', async () => {
+    it('persists a food-by-piece meal with one-piece quantity and proportional nutrients', async () => {
         const { result } = renderHook(() => useNutritionMeals(DATE));
+        const food = {
+            id: 'piece-50g', name: 'Biscotto a pezzo', unit: 'pezzo',
+            baseQty: 100, servingWeight: 50, kcal: 420, carbs: 55, pro: 30, fat: 9,
+        };
 
-        await runMutation(() => result.current.handleQuickAdd({
-            name: 'Pasto rapido',
-            kcal: 420,
-            carbs: 55,
-            pro: 30,
-            fat: 9,
-        }));
+        await runMutation(() => result.current.addFood(food, 'Spuntini'));
 
         const day = useAppStore.getState().userData?.nutrition?.[DATE];
         expect(day?.meals).toHaveLength(1);
-        expect(day?.meals?.[0]).toMatchObject({ meal: 'quick', quantity: 1, baseQty: 1, unit: 'porzione' });
-        expect({ kcal: day?.kcal, carbs: day?.carbs, pro: day?.pro, fat: day?.fat }).toEqual({ kcal: 420, carbs: 55, pro: 30, fat: 9 });
+        expect(day?.meals?.[0]).toMatchObject({
+            foodId: 'piece-50g', meal: 'Spuntini',
+            quantity: 1, baseQty: 1, unit: 'pezzo',
+            kcal: 210, carbs: 27.5, pro: 15, fat: 4.5,
+        });
+        expect({ kcal: day?.kcal, carbs: day?.carbs, pro: day?.pro, fat: day?.fat }).toEqual({
+            kcal: 210, carbs: 27.5, pro: 15, fat: 4.5,
+        });
         expect({ kcal: day?.kcal, carbs: day?.carbs, pro: day?.pro, fat: day?.fat }).toEqual(calculateLoggedMealTotals(day?.meals ?? []));
     });
 
@@ -218,7 +222,7 @@ describe('M5 nutrition account flow through useNutritionMeals', () => {
         try {
             const { result } = renderHook(() => useNutritionMeals(DATE));
             await act(async () => {
-                await result.current.handleQuickAdd({ name: 'Rejected', kcal: 50, carbs: 5, pro: 5, fat: 1 });
+                await result.current.addFood(fixture().customFoods[0], 'Pranzo');
             });
             expect(showAlert).toHaveBeenCalledWith("Errore durante il salvataggio dell'alimento.");
             expect(dispatchDomainOperation).toHaveBeenCalledTimes(1);
@@ -232,13 +236,7 @@ describe('M5 nutrition account flow through useNutritionMeals', () => {
         const showAlert = vi.mocked(useDialogStore.getState().showAlert);
         const { result } = renderHook(() => useNutritionMeals(DATE));
 
-        await runMutation(() => result.current.handleQuickAdd({
-            name: 'Failure fixture',
-            kcal: 100,
-            carbs: 10,
-            pro: 5,
-            fat: 3,
-        }));
+        await runMutation(() => result.current.addFood(fixture().customFoods[0], 'Pranzo'));
 
         expect(showAlert).toHaveBeenCalledWith("Errore durante il salvataggio dell'alimento.");
         expect(useAppStore.getState().syncHealth).toBe('failed');
