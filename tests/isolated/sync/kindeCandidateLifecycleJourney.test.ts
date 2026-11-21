@@ -21,6 +21,7 @@ import { restoreKindeCandidateBackup } from '../../../src/lib/auth/kindeCandidat
 import { prepareKindeCandidateOwner } from '../../../src/lib/sync/kindeCandidateOwnerBootstrap';
 import { deliverKindeCandidateJournal } from '../../../src/lib/sync/kindeCandidateJournalBridge';
 import { commitDomainOperations } from '../../../src/lib/sync/localDomainCommit';
+import { submitKindeCandidateDomainIntent } from '../../../src/lib/auth/kindeCandidateDomainIntent';
 import { readLocal } from '../../../src/lib/sync/localArchiveBootstrap';
 import { lockAllVaults, readVaultControl, unlockVaultForOwner } from '../../../src/lib/sync/secureArchiveSession';
 
@@ -121,14 +122,16 @@ describe('CF-05 synthetic Kinde consent, ciphertext, second device and portable 
 
             // Business and semantic journal must be sealed before the first
             // D1 commit. A receipt may clear only the already stored batch.
-            await commitDomainOperations(owner, {
-                type: 'profile.patch', patch: { height: '180' },
-            }, initial!.data);
-            expect((await readLocal(owner))?.pending.length).toBeGreaterThan(0);
+            const mutation = await submitKindeCandidateDomainIntent({
+                ...first, expected,
+                operation: { type: 'profile.patch', patch: { height: '180' } },
+            });
+            expect(mutation).toMatchObject({ kind: 'cloud-acknowledged', operations: 1 });
             expect(await get<string>('logbook:v2:' + owner)).toMatch(/^tlb-sealed:v1:/);
-            expect(await deliverKindeCandidateJournal(first)).toBe('acknowledged');
+            await unlockVaultForOwner(owner);
             expect((await readLocal(owner))?.pending).toEqual([]);
             expect(fixture.count('sync_receipts', uid)).toBe(1);
+            expect(await deliverKindeCandidateJournal(first)).toBe('idle');
 
             // This later edit exists ONLY on device A, not in D1.
             const delivered = (await readLocal(owner))!;
