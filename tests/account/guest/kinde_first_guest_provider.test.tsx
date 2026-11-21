@@ -164,13 +164,18 @@ describe('Kinde-first guest provider: no legacy account activation', () => {
         restoreGuest('guest-before-confirmation');
         const purge = vi.mocked(purgeGuestLocalData);
         const { result } = renderHook(() => useAuth(), { wrapper });
+        let completeConfirmation!: (accepted: boolean) => void;
+        const confirmation = new Promise<boolean>(resolve => { completeConfirmation = resolve; });
+        const showConfirm = vi.mocked(useDialogStore.getState().showConfirm);
+        showConfirm.mockImplementationOnce(() => confirmation);
+
         let logout!: Promise<void>;
         act(() => { logout = result.current.logout({ mode: 'normal' }); });
-        expect(useDialogStore.getState().type).toBe('confirm');
-        expect(useDialogStore.getState().isOpen).toBe(true);
+        expect(showConfirm).toHaveBeenCalledTimes(1);
+        expect(showConfirm).toHaveBeenCalledWith(expect.stringContaining('modalità locale'));
 
         localStorage.setItem(GUEST_SESSION_KEY, 'guest-activated-in-another-tab');
-        act(() => { useDialogStore.getState().onConfirm(); });
+        act(() => { completeConfirmation(true); });
         await act(async () => { await logout; });
 
         expect(purge).not.toHaveBeenCalled();
