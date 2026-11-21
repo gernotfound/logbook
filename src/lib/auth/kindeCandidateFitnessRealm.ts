@@ -87,6 +87,10 @@ export async function openKindeCandidateFitnessRealm({
     const requirePermit = () => {
         if (!permitted()) throw new KindeCandidateBoundaryError();
     };
+    // The journal checks the base session permit during its transaction.
+    // Retained views and edit witnesses also need its offline replica/vault
+    // fence; using the view check inside the journal would make it recursive.
+    const viewPermitted = () => permitted() && (!offline() || offlineJournal?.isCurrent() === true);
     const request = { expected: principal, stillCurrent: current, send, browserCookies };
 
     const load = async (): Promise<KindeCandidateFitnessSnapshot> => {
@@ -130,9 +134,9 @@ export async function openKindeCandidateFitnessRealm({
     }
 
     return {
-        isCurrent: permitted,
-        snapshot: () => permitted() && visible
-            && (offline() ? offlineJournal?.isCurrent() : !needsReconciliation) ? structuredClone(visible) : null,
+        isCurrent: viewPermitted,
+        snapshot: () => viewPermitted() && visible && (offline() || !needsReconciliation)
+            ? structuredClone(visible) : null,
         close: () => {
             closed = true;
             visible = null;

@@ -77,20 +77,22 @@ export function useKindeCandidateFitnessLifecycle({
         const onVisibility = () => {
             if (document.visibilityState === 'hidden') onSuspend();
         };
+        const checkRetainedView = () => {
+            if (!busy.current && realm.current && !realm.current.isCurrent()) suspend();
+        };
         window.addEventListener('focus', onSuspend);
         window.addEventListener('storage', onSuspend);
         window.addEventListener('online', onSuspend);
+        window.addEventListener('offline', checkRetainedView);
         document.addEventListener('visibilitychange', onVisibility);
-        // The server-observed session deadline must also revoke a retained
-        // React snapshot when no foreground, cookie or storage event occurs.
-        const expiryCheck = enabled ? window.setInterval(() => {
-            if (!busy.current && realm.current && !realm.current.isCurrent()) suspend();
-        }, 1000) : null;
+        // Deadlines and local vault fences can change without a browser event.
+        const expiryCheck = enabled ? window.setInterval(checkRetainedView, 1000) : null;
         return () => {
             if (expiryCheck !== null) window.clearInterval(expiryCheck);
             window.removeEventListener('focus', onSuspend);
             window.removeEventListener('storage', onSuspend);
             window.removeEventListener('online', onSuspend);
+            window.removeEventListener('offline', checkRetainedView);
             document.removeEventListener('visibilitychange', onVisibility);
         };
     }, [suspend, enabled]);

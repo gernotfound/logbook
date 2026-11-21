@@ -19,6 +19,7 @@ import { KindeCandidateBoundaryError } from '../../../src/lib/auth/kindeCandidat
 import { authenticatedIdentitySource } from '../../../src/lib/sync/authenticatedIdentitySource';
 import { isVaultUnlocked, lockAllVaults, unlockVaultForOwner } from '../../../src/lib/sync/secureArchiveSession';
 import { readLocal } from '../../../src/lib/sync/localArchiveBootstrap';
+import { beginLocalPurge } from '../../../src/lib/sync/localPurgeFence';
 
 const uid = 'k_' + 'P'.repeat(43);
 const otherUid = 'k_' + 'Q'.repeat(43);
@@ -137,6 +138,31 @@ describe('isolated Kinde fitness realm with trusted owner, no Firebase/global gr
             expect(await get('logbook:v2:' + owner)).toBe(before);
             expect(client.paths).toHaveLength(requests);
             expect(isVaultUnlocked(owner)).toBe(false);
+        } finally { fixture.close(); }
+    });
+
+    it('withdraws the offline view and edit witness when local purge starts', async () => {
+        const fixture = await createCloudKeyHttpFixture([uid]);
+        try {
+            await fixture.consent(uid);
+            const client = browser(fixture);
+            const realm = await openKindeCandidateFitnessRealm({ ...client, expected });
+            online = false;
+            expect(realm.isCurrent()).toBe(true);
+            expect(realm.snapshot()).toMatchObject({ owner });
+            const sealed = await get('logbook:v2:' + owner);
+            const requests = client.paths.length;
+
+            beginLocalPurge(owner);
+
+            expect(realm.snapshot()).toBeNull();
+            expect(realm.isCurrent()).toBe(false);
+            await expect(realm.submit({ type: 'profile.patch', patch: { height: '199' } }))
+                .rejects.toBeInstanceOf(KindeCandidateBoundaryError);
+            expect(await get('logbook:v2:' + owner)).toBe(sealed);
+            expect(client.paths).toHaveLength(requests);
+            expect(fixture.count('sync_receipts', uid)).toBe(0);
+            realm.close();
         } finally { fixture.close(); }
     });
 
