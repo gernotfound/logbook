@@ -22,7 +22,8 @@ describe('DataHistory detail follows current source records', () => {
         expect(within(dialog).queryByText('81,4 kg')).toBeNull();
 
         fireEvent.click(within(dialog).getByRole('button', { name: 'Modifica' }));
-        expect(onSelectEdit).toHaveBeenCalledExactlyOnceWith(updated);
+        expect(onSelectEdit).toHaveBeenCalledTimes(1);
+        expect(onSelectEdit).toHaveBeenCalledWith(updated);
     });
 
     it('closes an open detail when the recorded day disappears', () => {
@@ -37,6 +38,11 @@ describe('DataHistory detail follows current source records', () => {
         rerender(<DataHistory measurementsHistory={[]} editingDate={null} onSelectEdit={vi.fn()} />);
         expect(screen.queryByRole('dialog')).toBeNull();
         expect(document.body.style.overflow).toBe('');
+
+        // A new sync result for the same calendar day is not a new user intent.
+        rerender(<DataHistory measurementsHistory={[{ date, weight: 79.2 }]}
+            editingDate={null} onSelectEdit={vi.fn()} />);
+        expect(screen.queryByRole('dialog')).toBeNull();
     });
 
     it('keeps the correct same-day record when multiple distinct times are reordered', () => {

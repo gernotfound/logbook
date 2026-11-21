@@ -67,6 +67,12 @@ const DataHistory: React.FC<DataHistoryProps> = ({
         return matches.length === 1 ? matches[0] : null;
     }, [daysByDate, detailDay]);
 
+    useEffect(() => {
+        // A dismissed source record must not reopen its old dialog if a later
+        // hydration or sync introduces a matching date again.
+        if (detailDay && !currentDetailDay) setDetailDay(null);
+    }, [detailDay, currentDetailDay]);
+
     const daysByMonth = useMemo(() => {
         const map = new Map<string, MeasurementHistoryDay[]>();
         datedHistory.forEach(day => {
