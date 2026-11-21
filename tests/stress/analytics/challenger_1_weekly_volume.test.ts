@@ -1,28 +1,17 @@
 import { describe, it, expect } from 'vitest';
 import {
     computeWeeklyVolumeSeries,
-
     computeVolumeCaloriesCorrelation,
-    calculatePearsonCorrelation,
     generateWeekIntervals,
-    getWorkoutDateString
+    getWorkoutDateString,
 } from '../../../src/lib/calc/analytics';
 import { calculateSetVolume } from '../../../src/lib/calc/workout';
 import { getLocalDateString } from '../../../src/lib/utils/date';
-import type { WorkoutSession, Exercise, NutritionDay } from '../../../src/types';
+import type { WorkoutSession, NutritionDay } from '../../../src/types';
+import { testLibrary } from './analyticsStressFixture';
 
-describe('Challenger 1: Algorithmic & Mathematical Stress Test Suite', () => {
-
-    const testLibrary: Exercise[] = [
-        { id: 'ex_bench', name: 'Panca piana', muscles: ['petto'], trackingType: 'weight_reps', setsCount: 3, sets: [] },
-        { id: 'ex_squat', name: 'Squat con bilanciere', muscles: ['quadricipiti'], trackingType: 'weight_reps', equipmentWeight: 20, setsCount: 3, sets: [] },
-        { id: 'ex_pullup', name: 'Trazioni alla sbarra', muscles: ['dorso'], trackingType: 'weight_reps', isBodyweight: true, setsCount: 3, sets: [] },
-        { id: 'ex_dip', name: 'Dip alle parallele', muscles: ['petto', 'tricipiti'], trackingType: 'weight_reps', isBodyweight: true, equipmentWeight: 5, setsCount: 3, sets: [] },
-        { id: 'ex_plank', name: 'Plank', muscles: ['addome'], trackingType: 'time', setsCount: 3, sets: [] },
-        { id: 'ex_run', name: 'Corsa', muscles: ['gambe'], trackingType: 'cardio', setsCount: 1, sets: [] }
-    ];
-
-    describe('1. Extreme Data Loads & Performance Scaling', () => {
+describe('Analytics stress: weekly volume, date boundaries and malformed inputs', () => {
+    describe('1. High-volume weekly aggregation correctness', () => {
         it('aggregates 1,000 workouts and 20,000 sets into 52 weekly buckets', () => {
             const history: WorkoutSession[] = [];
             const baseTime = new Date(2024, 0, 1, 12).getTime();
@@ -108,8 +97,17 @@ describe('Challenger 1: Algorithmic & Mathematical Stress Test Suite', () => {
             ];
             const { points, stats } = computeWeeklyVolumeSeries(history, testLibrary, 80, 36, '2026-08-22');
             expect(points).toHaveLength(36);
-            expect(stats.activeWeeksCount).toBeGreaterThanOrEqual(1);
-            expect(stats.avgWeeklyVolumeKg).toBe(Math.round(stats.totalVolumeKg / 36));
+            expect(stats.totalWorkouts).toBe(3);
+            expect(stats.totalVolumeKg).toBe(3000);
+            expect(stats.activeWeeksCount).toBe(3);
+            expect(stats.avgWeeklyVolumeKg).toBe(83);
+            expect(points.filter(point => point.workoutCount > 0).map(point => [
+                point.weekStart, point.workoutCount, point.volumeKg,
+            ])).toEqual([
+                ['2026-01-12', 1, 1000],
+                ['2026-04-20', 1, 1000],
+                ['2026-08-10', 1, 1000],
+            ]);
         });
     });
 
@@ -218,208 +216,6 @@ describe('Challenger 1: Algorithmic & Mathematical Stress Test Suite', () => {
             expect(w52).toHaveLength(52);
             expect(w52[0].weekIndex).toBe(0);
             expect(w52[51].weekIndex).toBe(51);
-        });
-    });
-
-    describe('4. Dropset Volume Calculation & Mechanical Invariants', () => {
-        it('satisfies Volume Invariant: SetVolume = MainSetVolume + sum(DropsetVolumes)', () => {
-            const mainKg = 100;
-            const mainReps = 8;
-            const drop1Kg = 80;
-            const drop1Reps = 8;
-            const drop2Kg = 60;
-            const drop2Reps = 10;
-            const drop3Kg = 40;
-            const drop3Reps = 12;
-
-            const set = {
-                kg: mainKg,
-                reps: mainReps,
-                segments: [
-                    { technique: 'dropset' as const, id: 'seg-fixture-1', kg: drop1Kg, reps: drop1Reps },
-                    { technique: 'dropset' as const, id: 'seg-fixture-2', kg: drop2Kg, reps: drop2Reps },
-                    { technique: 'dropset' as const, id: 'seg-fixture-3', kg: drop3Kg, reps: drop3Reps }
-                ]
-            };
-
-            const expectedMain = mainKg * mainReps;
-            const expectedDrop1 = drop1Kg * drop1Reps;
-            const expectedDrop2 = drop2Kg * drop2Reps;
-            const expectedDrop3 = drop3Kg * drop3Reps;
-            const expectedTotal = expectedMain + expectedDrop1 + expectedDrop2 + expectedDrop3;
-
-            const actualTotal = calculateSetVolume(set, null, 80);
-            expect(actualTotal).toBe(expectedTotal);
-            expect(actualTotal).toBe(2520);
-        });
-
-        it('calculates dropsets on Bodyweight exercises factoring user weight in each drop stage', () => {
-            const userWeight = 75;
-            const bwEx: Exercise = {
-                id: 'ex_pullup',
-                name: 'Trazioni',
-                isBodyweight: true,
-                trackingType: 'weight_reps',
-                setsCount: 1,
-                sets: []
-            };
-
-            const set = {
-                kg: '20',
-                reps: '6',
-                segments: [
-                    { technique: 'dropset' as const, id: 'seg-fixture-4', kg: '10', reps: '6' },
-                    { technique: 'dropset' as const, id: 'seg-fixture-5', kg: '0', reps: '6' }
-                ]
-            };
-
-            const total = calculateSetVolume(set, bwEx, userWeight);
-            expect(total).toBe(570 + 510 + 450);
-        });
-
-        it('calculates dropsets on Equipment Tare exercises factoring equipment tare in each drop stage', () => {
-            const eqEx: Exercise = {
-                id: 'ex_squat',
-                name: 'Squat',
-                equipmentWeight: 20,
-                trackingType: 'weight_reps',
-                setsCount: 1,
-                sets: []
-            };
-
-            const set = {
-                kg: '100',
-                reps: '5',
-                segments: [{ technique: 'dropset' as const, id: 'seg-fixture-6', kg: '60', reps: '8' }]
-            };
-
-            const total = calculateSetVolume(set, eqEx, 80);
-            expect(total).toBe(600 + 640);
-        });
-
-        it('combines Bodyweight AND Equipment Tare on dropsets safely', () => {
-            const comboEx: Exercise = {
-                id: 'ex_dip',
-                name: 'Dip',
-                isBodyweight: true,
-                equipmentWeight: 5,
-                trackingType: 'weight_reps',
-                setsCount: 1,
-                sets: []
-            };
-            const userWeight = 80;
-
-            const set = {
-                kg: '15',
-                reps: '10',
-                segments: [{ technique: 'dropset' as const, id: 'seg-fixture-7', kg: '0', reps: '10' }]
-            };
-
-            const total = calculateSetVolume(set, comboEx, userWeight);
-            expect(total).toBe(1850);
-        });
-
-        it('defends against malformed dropset objects with string decimals and missing fields', () => {
-            const setWithFormats = {
-                kg: '100',
-                reps: '10',
-                segments: [
-                    { technique: 'dropset' as const, id: 'seg-fixture-8', kg: '50,5', reps: '8' },
-                    { technique: 'dropset' as const, id: 'seg-fixture-9', kg: 'invalid', reps: 'invalid' },
-                    { technique: 'dropset' as const, id: 'seg-fixture-10', kg: '', reps: '' }
-                ]
-            };
-
-            const total = calculateSetVolume(setWithFormats, null, 80);
-            expect(total).toBe(1404);
-            expect(Number.isNaN(total)).toBe(false);
-        });
-    });
-
-    describe('5. Pearson Correlation Mathematical Edge Cases & Numerical Stability', () => {
-        it('returns 0 for zero variance in x (all volume points identical) without NaN', () => {
-            const x = [5000, 5000, 5000, 5000];
-            const y = [2000, 2500, 3000, 3500];
-            const r = calculatePearsonCorrelation(x, y);
-            expect(r).toBe(0);
-            expect(Number.isNaN(r)).toBe(false);
-        });
-
-        it('returns 0 for zero variance in y (all kcal points identical) without NaN', () => {
-            const x = [1000, 2000, 3000, 4000];
-            const y = [2500, 2500, 2500, 2500];
-            const r = calculatePearsonCorrelation(x, y);
-            expect(r).toBe(0);
-            expect(Number.isNaN(r)).toBe(false);
-        });
-
-        it('returns 0 for zero variance in both x and y without NaN', () => {
-            const x = [3000, 3000, 3000];
-            const y = [2500, 2500, 2500];
-            const r = calculatePearsonCorrelation(x, y);
-            expect(r).toBe(0);
-            expect(Number.isNaN(r)).toBe(false);
-        });
-
-        it('returns exact +1.0 for perfect positive linear correlation and -1.0 for perfect inverse correlation', () => {
-            const x1 = [100, 200, 300, 400, 500];
-            const y1 = [1000, 2000, 3000, 4000, 5000];
-            expect(calculatePearsonCorrelation(x1, y1)).toBe(1.0);
-
-            const x2 = [100, 200, 300, 400, 500];
-            const y2 = [5000, 4000, 3000, 2000, 1000];
-            expect(calculatePearsonCorrelation(x2, y2)).toBe(-1.0);
-        });
-
-        it('retains a perfect positive correlation with micro-variance (1e-9 differences)', () => {
-            const x = [1000.000000001, 1000.000000002, 1000.000000003];
-            const y = [2000, 2500, 3000];
-            expect(calculatePearsonCorrelation(x, y)).toBe(1);
-        });
-
-        it('handles massive numbers (1e9) without precision loss or overflow', () => {
-            const x = [1e9, 2e9, 3e9, 4e9];
-            const y = [1e6, 2e6, 3e6, 4e6];
-            const r = calculatePearsonCorrelation(x, y);
-            expect(r).toBe(1.0);
-        });
-
-        it('returns null for insufficient data points (< 3 pairs)', () => {
-            expect(calculatePearsonCorrelation([], [])).toBeNull();
-            expect(calculatePearsonCorrelation([100], [200])).toBeNull();
-            expect(calculatePearsonCorrelation([100, 200], [1000, 2000])).toBeNull();
-        });
-
-        it('returns null for mismatched array lengths or invalid array inputs', () => {
-            expect(calculatePearsonCorrelation([1, 2, 3], [1, 2])).toBeNull();
-            expect(calculatePearsonCorrelation(null as any, [1, 2, 3])).toBeNull();
-            expect(calculatePearsonCorrelation([1, 2, 3], undefined as any)).toBeNull();
-            expect(calculatePearsonCorrelation('abc' as any, [1, 2, 3] as any)).toBeNull();
-        });
-
-        it('produces proper sentence case insight strings across positive, neutral, and inverse r intervals', () => {
-            const history: WorkoutSession[] = [
-                { id: 'w1', date: '2026-08-04', exercises: [{ exId: 'ex_bench', sessionNote: '', sets: [{ id: 's1', kg: '100', reps: '10' }] }] },
-                { id: 'w2', date: '2026-08-11', exercises: [{ exId: 'ex_bench', sessionNote: '', sets: [{ id: 's2', kg: '200', reps: '10' }] }] },
-                { id: 'w3', date: '2026-08-18', exercises: [{ exId: 'ex_bench', sessionNote: '', sets: [{ id: 's3', kg: '300', reps: '10' }] }] }
-            ];
-            const nutritionPos: Record<string, NutritionDay> = {
-                '2026-08-04': { date: '2026-08-04', kcal: 2000, carbs: 0, pro: 0, fat: 0 },
-                '2026-08-11': { date: '2026-08-11', kcal: 2500, carbs: 0, pro: 0, fat: 0 },
-                '2026-08-18': { date: '2026-08-18', kcal: 3000, carbs: 0, pro: 0, fat: 0 }
-            };
-            const resPos = computeVolumeCaloriesCorrelation(history, nutritionPos, testLibrary, 80, 4, '2026-08-22');
-            expect(resPos.stats.correlationCoefficient).toBe(1.0);
-            expect(resPos.stats.correlationInsight).toContain('Associazione positiva forte');
-
-            const nutritionInv: Record<string, NutritionDay> = {
-                '2026-08-04': { date: '2026-08-04', kcal: 3000, carbs: 0, pro: 0, fat: 0 },
-                '2026-08-11': { date: '2026-08-11', kcal: 2500, carbs: 0, pro: 0, fat: 0 },
-                '2026-08-18': { date: '2026-08-18', kcal: 2000, carbs: 0, pro: 0, fat: 0 }
-            };
-            const resInv = computeVolumeCaloriesCorrelation(history, nutritionInv, testLibrary, 80, 4, '2026-08-22');
-            expect(resInv.stats.correlationCoefficient).toBe(-1.0);
-            expect(resInv.stats.correlationInsight).toContain('Associazione inversa forte');
         });
     });
 });
