@@ -87,7 +87,7 @@ describe('Analytics stress: Pearson stability and correlation insights', () => {
             };
             const resNeutral = computeVolumeCaloriesCorrelation(history, nutritionNeutral, testLibrary, 80, 4, '2026-08-22');
             expect(resNeutral.stats.validDataPointsCount).toBe(3);
-            expect(resNeutral.stats.correlationCoefficient).toBe(0);
+            expect(resNeutral.stats.correlationCoefficient).toBeCloseTo(0, 12);
             expect(resNeutral.stats.correlationInsight).toBe('Nessuna associazione lineare evidente nelle settimane disponibili.');
 
             const nutritionInv: Record<string, NutritionDay> = {
