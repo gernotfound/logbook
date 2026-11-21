@@ -183,10 +183,13 @@ export function useCycleForm({ initialCycle, routines, onSave, showAlert }: UseC
         }
     };
 
-    const handleMoveRoutine = (index: number, direction: -1 | 1) => {
-        const targetIndex = index + direction;
-        if (targetIndex < 0 || targetIndex >= cycleRoutines.length) return;
+    const handleMoveRoutine = (routineId: string, direction: -1 | 1) => {
         setCycleRoutines(prev => {
+            // A queued remove/reorder can change positions before this updater
+            // runs; resolve the stable business identity against current state.
+            const index = prev.findIndex(item => item.routineId === routineId);
+            const targetIndex = index + direction;
+            if (index < 0 || targetIndex < 0 || targetIndex >= prev.length) return prev;
             const next = [...prev];
             const [moved] = next.splice(index, 1);
             next.splice(targetIndex, 0, moved);
@@ -194,8 +197,8 @@ export function useCycleForm({ initialCycle, routines, onSave, showAlert }: UseC
         });
     };
 
-    const handleRemoveRoutine = (index: number) => {
-        setCycleRoutines(prev => prev.filter((_, i) => i !== index));
+    const handleRemoveRoutine = (routineId: string) => {
+        setCycleRoutines(prev => prev.filter(item => item.routineId !== routineId));
     };
 
     const handleStrategyIntentChange = (intent: TrainingCycleIntent | '') => {
