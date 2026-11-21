@@ -9,9 +9,11 @@ import type { DomainOperationBatch } from '../../lib/sync/domainOperations';
 import type { useKindeAccountSession } from './useKindeAccountSession';
 
 type Session = ReturnType<typeof useKindeAccountSession>;
+type ObserverView = Session['view'];
 type State =
-    | { phase: 'closed' | 'opening' | 'unavailable' | 'recheck-required' }
-    | { phase: 'ready'; snapshot: KindeCandidateFitnessSnapshot };
+    | { phase: 'closed' }
+    | { phase: 'opening' | 'unavailable' | 'recheck-required'; view: ObserverView }
+    | { phase: 'ready'; view: ObserverView; snapshot: KindeCandidateFitnessSnapshot };
 
 const CLOSED: State = { phase: 'closed' };
 
@@ -28,8 +30,7 @@ export function useKindeCandidateFitnessLifecycle({
     session, enabled = false,
 }: { session: Session; enabled?: boolean }) {
     const [state, setState] = useState<State>(CLOSED);
-    const viewRef = useRef(session.view);
-    viewRef.current = session.view;
+    const latestView = useRef(session.view);
     const mounted = useRef(false);
     const generation = useRef(0);
     const busy = useRef(false);
@@ -53,10 +54,18 @@ export function useKindeCandidateFitnessLifecycle({
     }, []);
 
     useEffect(() => {
-        // Even the same UID/consent revision with a replacement React view
-        // must not reuse plaintext or an old session's CSRF witness.
-        suspend();
-    }, [session.view, enabled, suspend]);
+        // Keep imperative generation/cookie callbacks synchronized with the
+        // committed React view. Render itself never reads mutable refs.
+        latestView.current = session.view;
+        const token = ++generation.current;
+        realm.current?.close();
+        realm.current = null;
+        // The old view is already hidden synchronously by the returned
+        // immutable view identity; clear its retained plaintext after commit.
+        queueMicrotask(() => {
+            if (mounted.current && generation.current === token) setState(CLOSED);
+        });
+    }, [session.view, enabled]);
 
     useEffect(() => {
         const onSuspend = () => {
@@ -78,15 +87,15 @@ export function useKindeCandidateFitnessLifecycle({
     }, [suspend]);
 
     const open = async (): Promise<void> => {
-        const view = viewRef.current;
+        const view = session.view;
         if (!enabled || !mounted.current || busy.current || realm.current
             || view.phase !== 'consent-confirmed' || view.principal.emailVerified !== true
             || view.principal.healthConsentRevision < 1) throw new KindeCandidateBoundaryError();
         const token = generation.current;
         const current = () => mounted.current && token === generation.current
-            && viewRef.current === view && enabled;
+            && latestView.current === view && enabled;
         busy.current = true;
-        setState({ phase: 'opening' });
+        setState({ phase: 'opening', view });
         try {
             const opened = await openKindeCandidateFitnessRealm({
                 expected: {
@@ -106,9 +115,9 @@ export function useKindeCandidateFitnessLifecycle({
                 throw new KindeCandidateBoundaryError();
             }
             realm.current = opened;
-            setState({ phase: 'ready', snapshot });
+            setState({ phase: 'ready', view, snapshot });
         } catch (error) {
-            if (current()) setState({ phase: 'unavailable' });
+            if (current()) setState({ phase: 'unavailable', view });
             throw error;
         } finally {
             busy.current = false;
@@ -117,19 +126,21 @@ export function useKindeCandidateFitnessLifecycle({
 
     const submit = async (operation: DomainOperationBatch) => {
         const active = realm.current;
-        if (!enabled || busy.current || !active?.isCurrent() || state.phase !== 'ready') {
+        if (!enabled || busy.current || !active?.isCurrent()
+            || state.phase !== 'ready' || state.view !== session.view) {
             throw new KindeCandidateBoundaryError();
         }
+        const view = state.view;
         busy.current = true;
-        setState({ phase: 'opening' });
+        setState({ phase: 'opening', view });
         try {
             const outcome = await active.submit(operation);
             if (realm.current !== active || !active.isCurrent()) throw new KindeCandidateBoundaryError();
             const snapshot = active.snapshot();
-            setState(snapshot ? { phase: 'ready', snapshot } : { phase: 'recheck-required' });
+            setState(snapshot ? { phase: 'ready', view, snapshot } : { phase: 'recheck-required', view });
             return outcome;
         } catch (error) {
-            if (realm.current === active) setState({ phase: 'unavailable' });
+            if (realm.current === active) setState({ phase: 'unavailable', view });
             throw error;
         } finally {
             busy.current = false;
@@ -137,10 +148,10 @@ export function useKindeCandidateFitnessLifecycle({
     };
 
     return {
-        // Synchronously suppress a view after a cookie/withdrawal fence change,
-        // even before the parent Kinde observer has published its next state.
-        state: state.phase === 'ready' && !realm.current?.isCurrent()
-            ? { phase: 'unavailable' } as State : state,
+        // The immutable view identity suppresses stale plaintext on the very
+        // render that changes identity, before passive effects can dispose.
+        state: state.phase !== 'closed' && (!enabled || state.view !== session.view)
+            ? CLOSED : state,
         open, submit, suspend,
     };
 }
