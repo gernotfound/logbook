@@ -3,7 +3,7 @@ import type { Exercise, NutritionDay, WorkoutSession } from '../types';
 import { calculateHomeWeightSeries, selectLatestHomeMeasurements, summarizeHomeNutrition, type HomeWeightPeriod, type HomeWeightStats } from '../lib/calc/homeHealthMetrics';
 import { useAppStore } from '../store/useAppStore';
 import { getPainMuscleColors } from '../lib/calc/muscleMapPresentation';
-import { getLocalDateString } from '../lib/utils/date';
+import { useLocalToday } from './useLocalToday';
 import { buildHomeMuscleExposureIndex, calculateHomeWorkoutStreak, getHomeWorkoutDate, getRecentHomeMuscles } from '../lib/calc/homeTrainingMetrics';
 
 const HOME_CLOCK_REFRESH_MS = 60 * 1000;
@@ -77,7 +77,7 @@ export function useHomeView(isActive = true): HomeViewState {
     const dispatchDomainOperation = useAppStore(state => state.dispatchDomainOperation);
     const nutritionPlanning = useAppStore(state => state.userData?.nutritionPlanning);
     const [homeClockNow, setHomeClockNow] = useState(() => Date.now());
-    const homeDay = getLocalDateString(homeClockNow);
+    const homeDay = useLocalToday();
 
     useEffect(() => {
         if (!isActive) return;

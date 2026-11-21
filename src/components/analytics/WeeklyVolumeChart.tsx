@@ -7,12 +7,16 @@ import {
   BarElement,
   Title,
   Tooltip,
-  Legend
+  Legend,
+  type ChartData,
+  type ChartOptions,
 } from 'chart.js';
 import { Dumbbell } from 'lucide-react';
 import { useChartAppearance } from '../../hooks/useChartAppearance';
 import { useAnalyticsWorker } from '../../hooks/useAnalyticsWorker';
+import { ANALYTICS_WEEK_PERIOD_OPTIONS, formatWeeklyVolumeTooltip, formatWeekIntervalTooltip, formatVolumeAxisTick } from './analyticsChartPresentation';
 import type { WorkoutSession, Exercise } from '../../types';
+import type { WeeklyVolumePoint, WeeklyVolumeStats } from '../../lib/calc/analytics';
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend);
 
@@ -28,12 +32,7 @@ export interface WeeklyVolumeChartProps {
 const EMPTY_HISTORY: WorkoutSession[] = [];
 const EMPTY_LIBRARY: Exercise[] = [];
 
-const PERIOD_OPTIONS = [
-  { id: 4, label: '4 sett' },
-  { id: 8, label: '8 sett' },
-  { id: 12, label: '12 sett' },
-  { id: 24, label: '24 sett' },
-];
+
 
 export default function WeeklyVolumeChart({
   isActive = true,
@@ -49,9 +48,14 @@ export default function WeeklyVolumeChart({
   const [calcError, setCalcError] = useState(false);
   const { calculateVolumeStats } = useAnalyticsWorker(isActive, true);
 
-  const [calcResult, setCalcResult] = useState<{points: any[], stats: any}>({
+  const [calcResult, setCalcResult] = useState<{ points: WeeklyVolumePoint[]; stats: WeeklyVolumeStats }>({
     points: [],
-    stats: { hasData: false, currentWeekVolumeKg: 0, avgWeeklyVolumeKg: 0, percentageChange: null }
+    stats: {
+      hasData: false, totalVolumeKg: 0, avgWeeklyVolumeKg: 0,
+      currentWeekVolumeKg: 0, previousWeekVolumeKg: 0,
+      percentageChange: null, peakWeekVolumeKg: 0,
+      activeWeeksCount: 0, totalWorkouts: 0,
+    },
   });
 
   const [prevParams, setPrevParams] = useState({ history, library, userWeight, selectedWeeks, isActive });
@@ -65,14 +69,14 @@ export default function WeeklyVolumeChart({
     let isMounted = true;
 
     calculateVolumeStats(history, library, userWeight, selectedWeeks)
-      .then((res: any) => {
+      .then(res => {
         if (isMounted) {
           setCalcResult(res);
           setCalcError(false);
           setIsCalculating(false);
         }
       })
-      .catch((err: any) => {
+      .catch((err: unknown) => {
         if (!isMounted) return;
         console.error("Errore calcolo grafico volume:", err);
         setCalcError(true);
@@ -84,7 +88,7 @@ export default function WeeklyVolumeChart({
 
   const { points, stats } = calcResult;
 
-  const chartData = useMemo(() => {
+  const chartData = useMemo<ChartData<'bar'>>(() => {
     return {
       labels: points.map(p => p.label),
       datasets: [
@@ -102,7 +106,7 @@ export default function WeeklyVolumeChart({
     };
   }, [points, colors]);
 
-  const chartOptions = useMemo(() => {
+  const chartOptions = useMemo<ChartOptions<'bar'>>(() => {
     return {
       responsive: true,
       maintainAspectRatio: false,
@@ -110,7 +114,7 @@ export default function WeeklyVolumeChart({
         duration: reducedMotion ? 0 : 350,
         easing: 'easeOutQuart' as const
       },
-      onClick: (_event: any, elements: any[]) => {
+      onClick: (_event, elements) => {
         if (elements && elements.length > 0 && onSelectWeek) {
           const index = elements[0].index;
           if (points[index]) {
@@ -130,20 +134,14 @@ export default function WeeklyVolumeChart({
           cornerRadius: 8,
           boxPadding: 4,
           callbacks: {
-            title: (items: any[]) => {
+            title: items => {
               if (!items || items.length === 0) return '';
-              const idx = items[0].dataIndex;
-              const p = points[idx];
-              return p ? `Settimana ${p.weekStart} - ${p.weekEnd}` : items[0].label;
+              return formatWeekIntervalTooltip(points[items[0].dataIndex], items[0].label);
             },
-            label: (ctx: any) => {
+            label: ctx => {
               const idx = ctx.dataIndex;
               const p = points[idx];
-              const volKg = ctx.parsed.y || 0;
-              const ton = (volKg / 1000).toLocaleString('it-IT', { minimumFractionDigits: 1, maximumFractionDigits: 2 });
-              const formattedKg = volKg.toLocaleString('it-IT');
-              const workouts = p ? ` (${p.workoutCount} ${p.workoutCount === 1 ? 'sessione' : 'sessioni'})` : '';
-              return `Volume: ${formattedKg} kg (${ton} t)${workouts}`;
+              return formatWeeklyVolumeTooltip(ctx.parsed.y || 0, p?.workoutCount);
             }
           }
         }
@@ -155,12 +153,8 @@ export default function WeeklyVolumeChart({
           ticks: {
             color: colors.muted,
             font: { size: 11 },
-            callback: (val: any) => {
-              const num = Number(val);
-              if (num >= 1000) {
-                return `${(num / 1000).toFixed(1)} t`;
-              }
-              return `${num} kg`;
+            callback: val => {
+              return formatVolumeAxisTick(val);
             }
           }
         },
@@ -184,12 +178,12 @@ export default function WeeklyVolumeChart({
           </div>}
         </div>
         <div className="chart-period-control" role="group" aria-label="Periodo del volume di allenamento">
-          {PERIOD_OPTIONS.map(p => <button key={p.id} type="button" aria-pressed={selectedWeeks === p.id} onClick={() => setSelectedWeeks(p.id)}>{p.label}</button>)}
+          {ANALYTICS_WEEK_PERIOD_OPTIONS.map(p => <button key={p.id} type="button" aria-pressed={selectedWeeks === p.id} onClick={() => setSelectedWeeks(p.id)}>{p.label}</button>)}
         </div>
       </div>
       {isCalculating && <div className="analytics-loading" role="status"><div className="spinner" />Aggiornamento grafico...</div>}
       <div className="home-chart-canvas">
-        {isCalculating ? null : calcError ? <div role="alert" className="home-chart-empty"><p>Impossibile aggiornare il grafico del volume. Riprova.</p></div> : stats.hasData ? <Bar data={chartData} options={chartOptions as any} role="img" aria-label={`Volume settimanale. Attuale: ${stats.currentWeekVolumeKg} kg; media: ${stats.avgWeeklyVolumeKg} kg.`} /> : (
+        {isCalculating ? null : calcError ? <div role="alert" className="home-chart-empty"><p>Impossibile aggiornare il grafico del volume. Riprova.</p></div> : stats.hasData ? <Bar data={chartData} options={chartOptions} role="img" aria-label={`Volume settimanale. Attuale: ${stats.currentWeekVolumeKg} kg; media: ${stats.avgWeeklyVolumeKg} kg.`} /> : (
           <div className="home-chart-empty"><Dumbbell size={32} aria-hidden="true" /><p>Nessun dato di allenamento nelle settimane selezionate.</p><p className="text-sm">Completa una sessione per visualizzare il volume di allenamento.</p></div>
         )}
       </div>

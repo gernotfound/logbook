@@ -1,13 +1,14 @@
-import React, { useCallback, useEffect, useRef } from 'react';
-import { Trash2, Settings, MessageSquareText, History } from 'lucide-react';
+import React, { useCallback } from 'react';
+import { MessageSquareText } from 'lucide-react';
 import { useDialogStore } from '../../../store/useDialogStore';
 import SessionSetRow from './SessionSetRow';
 import { SessionExerciseHistory, SessionExerciseSetup } from './SessionExercisePanels';
 import type { SessionExerciseHistoryEntry } from './SessionExercisePanels';
-import { BufferedInput, BufferedTextarea } from '../../UI/BufferedInput';
+import { BufferedTextarea } from '../../UI/BufferedInput';
+import SessionCardioFields from './SessionCardioFields';
+import SessionExerciseToolbar from './SessionExerciseToolbar';
 import { BufferedWorkoutScope } from '../../UI/bufferedWorkoutScope';
 import { sessionSetHasMeaningfulData } from '../../../lib/workoutSetData';
-import { deriveCardioSpeed } from './deriveCardioSpeed';
 import { captureSession, isCurrentSession } from '../../../lib/sync/session';
 import type { Exercise, SessionExercise, SessionExerciseSet } from '../../../types';
 
@@ -20,7 +21,6 @@ interface SessionExerciseCardProps {
     isHistoryOpen: boolean;
     isSetupOpen: boolean;
     openSpecialMenuId: string | null;
-    onMoveExercise?: (index: number, direction: 'up' | 'down') => void;
     onMoveToPosition?: (fromIndex: number, toIndex: number) => void;
     onToggleHistory: (exIndex: number) => void;
     onToggleSetup: (exIndex: number) => void;
@@ -48,7 +48,6 @@ const SessionExerciseCardInner: React.FC<SessionExerciseCardProps> = ({
     isHistoryOpen,
     isSetupOpen,
     openSpecialMenuId,
-    onMoveExercise: _onMoveExercise,
     onMoveToPosition,
     onToggleHistory,
     onToggleSetup,
@@ -75,22 +74,7 @@ const SessionExerciseCardInner: React.FC<SessionExerciseCardProps> = ({
     const workoutId = React.useContext(BufferedWorkoutScope);
     const lastNote = pastWorkouts[0]?.note?.trim() || '';
 
-    const [showPositionMenu, setShowPositionMenu] = React.useState(false);
     const [isNextNoteOpen, setIsNextNoteOpen] = React.useState(Boolean(exItem.sessionNote?.trim()));
-    const positionMenuRef = useRef<HTMLDivElement>(null);
-
-    useEffect(() => {
-        if (!showPositionMenu) return;
-        const handleClickOutside = (e: MouseEvent) => {
-            if (positionMenuRef.current && !positionMenuRef.current.contains(e.target as Node)) {
-                setShowPositionMenu(false);
-            }
-        };
-        document.addEventListener('mousedown', handleClickOutside);
-        return () => document.removeEventListener('mousedown', handleClickOutside);
-    }, [showPositionMenu]);
-
-
 
     const handleRemoveLastSet = useCallback(async () => {
         if (onRemoveLastSet) {
@@ -117,84 +101,21 @@ const SessionExerciseCardInner: React.FC<SessionExerciseCardProps> = ({
         onRemoveSet(exIndex, lastIndex, lastSet.id, exItem.id, workoutId, lastSet);
     }, [exItem.sets, exItem.id, onRemoveSet, onRemoveLastSet, exIndex, workoutId]);
 
-    const handleCardioChange = (field: 'time' | 'distance', value: string) => {
-        const setId = exItem.sets[0]?.id;
-        if (!setId) return;
-        
-        onUpdateSet(exIndex, setId, field, value);
-
-        const speed = deriveCardioSpeed(exItem.sets[0], field, value);
-        if (speed !== undefined) onUpdateSet(exIndex, setId, 'speed', speed);
-    };
-
     return (
         <div className="section-divider session-exercise-card-content">
             <div style={{ marginBottom: '10px' }}>
                 <h2 style={{color: 'var(--primary-color)', margin: 0}}>{exName}</h2>
             </div>
-            <div className="session-exercise-toolbar">
-                {/* Position dropdown */}
-                <div style={{ position: 'relative' }} ref={positionMenuRef}>
-                    <button
-                        type="button"
-                        className="btn-small"
-                        style={{ borderRadius: '8px', minWidth: '44px', minHeight: '44px', fontWeight: 'bold', fontSize: 'var(--font-size-meta)', letterSpacing: '0.03em', color: 'var(--text-main)' }}
-                        onClick={() => setShowPositionMenu(v => !v)}
-                        disabled={totalExercises !== undefined && totalExercises <= 1}
-                        aria-label="Cambia posizione esercizio"
-                        title={totalExercises !== undefined && totalExercises <= 1 ? 'Unico esercizio nella sessione' : 'Cambia posizione esercizio'}
-                    >#{exIndex + 1}</button>
-                    {showPositionMenu && totalExercises !== undefined && totalExercises > 1 && (
-                        <div style={{ position: 'absolute', top: '100%', left: 0, zIndex: 50, background: 'var(--surface-color)', border: '1px solid var(--glass-border)', borderRadius: '8px', padding: '4px', minWidth: '140px', boxShadow: '0 8px 24px rgba(0,0,0,0.5)', marginTop: '4px' }}>
-                            {Array.from({ length: totalExercises }, (_, i) => i).map(targetIdx => (
-                                <button
-                                    key={targetIdx}
-                                    type="button"
-                                    onClick={() => { setShowPositionMenu(false); if (targetIdx !== exIndex) onMoveToPosition?.(exIndex, targetIdx); }}
-                                    disabled={targetIdx === exIndex}
-                                    aria-current={targetIdx === exIndex ? 'true' : undefined}
-                                    style={{
-                                        display: 'block', width: '100%', minHeight: '44px', padding: '8px 12px', textAlign: 'left',
-                                        background: targetIdx === exIndex ? 'var(--primary-soft)' : 'transparent',
-                                        border: 'none', color: targetIdx === exIndex ? 'var(--primary-color)' : 'var(--text-main)',
-                                        cursor: targetIdx === exIndex ? 'default' : 'pointer', fontSize: 'var(--font-size-meta)', borderRadius: '6px'
-                                    }}
-                                >{targetIdx === exIndex ? `✓ ${targetIdx + 1}ª posizione` : `${targetIdx + 1}ª posizione`}</button>
-                            ))}
-                        </div>
-                    )}
-                </div>
-                <button
-                    type="button"
-                    className="btn-small"
-                    style={{ background: 'var(--danger-soft)', border: '1px solid var(--danger-color)', color: 'var(--danger-color)', borderRadius: '8px' }}
-                    onClick={() => onRemoveExercise(exIndex)}
-                    aria-label="Rimuovi esercizio dalla sessione"
-                >
-                    <Trash2 size={16} aria-hidden="true" />
-
-                </button>
-                <button
-                    type="button"
-                    className={`btn-small toggle-btn ${isHistoryOpen ? 'active-highlight' : ''}`}
-                    style={isHistoryOpen ? { background: 'var(--primary-color)', color: 'var(--on-primary)' } : {}}
-                    onClick={() => onToggleHistory(exIndex)}
-                    aria-expanded={isHistoryOpen}
-                    aria-controls={`session-history-${exIndex}`}
-                >
-                    <History size={16} aria-hidden="true" style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: '4px' }} /> Storico
-                </button>
-                <button
-                    type="button"
-                    className={`btn-small toggle-btn ${isSetupOpen ? 'active-highlight' : ''}`}
-                    style={isSetupOpen ? { background: 'var(--primary-color)', color: 'var(--on-primary)' } : {}}
-                    onClick={() => onToggleSetup(exIndex)}
-                    aria-expanded={isSetupOpen}
-                    aria-controls={`session-setup-${exIndex}`}
-                >
-                    <Settings size={16} aria-hidden="true" style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: '4px' }} /> Setup
-                </button>
-            </div>
+            <SessionExerciseToolbar
+                exIndex={exIndex}
+                totalExercises={totalExercises}
+                isHistoryOpen={isHistoryOpen}
+                isSetupOpen={isSetupOpen}
+                onMoveToPosition={onMoveToPosition}
+                onRemoveExercise={onRemoveExercise}
+                onToggleHistory={onToggleHistory}
+                onToggleSetup={onToggleSetup}
+            />
 
             {isHistoryOpen && <SessionExerciseHistory exIndex={exIndex} pastWorkouts={pastWorkouts} trackingType={libDef?.trackingType} />}
 
@@ -209,75 +130,13 @@ const SessionExerciseCardInner: React.FC<SessionExerciseCardProps> = ({
             )}
 
             {libDef?.trackingType === 'cardio' ? (
-                exItem.sets?.[0]?.id ? <div key={exItem.sets[0].id} style={{ background: 'var(--surface-light)', padding: '15px', borderRadius: '12px', border: '1px solid var(--glass-border)', marginTop: '10px' }}>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '10px' }}>
-                        <div>
-                            <label className="text-muted text-xs mb-4 block" htmlFor={`cardio-time-${exerciseInstanceId}-${exItem.sets[0].id}`}>Durata (min)</label>
-                            <BufferedInput 
-                                id={`cardio-time-${exerciseInstanceId}-${exItem.sets[0].id}`}
-                                type="text" 
-                                inputMode="decimal"
-                                value={exItem.sets[0]?.time || ''} 
-                                onChange={val => handleCardioChange('time', val)}
-                                placeholder="es. 30"
-                                className="w-full bg-black-20 border-glass text-white p-8 rounded-8"
-                                style={{ fontSize: '16px', boxSizing: 'border-box' }}
-                            />
-                        </div>
-                        <div>
-                            <label className="text-muted text-xs mb-4 block" htmlFor={`cardio-distance-${exerciseInstanceId}-${exItem.sets[0].id}`}>Distanza (km)</label>
-                            <BufferedInput 
-                                id={`cardio-distance-${exerciseInstanceId}-${exItem.sets[0].id}`}
-                                type="text" 
-                                inputMode="decimal"
-                                value={exItem.sets[0]?.distance || ''} 
-                                onChange={val => handleCardioChange('distance', val)}
-                                placeholder="es. 5.2"
-                                className="w-full bg-black-20 border-glass text-white p-8 rounded-8"
-                                style={{ fontSize: '16px', boxSizing: 'border-box' }}
-                            />
-                        </div>
-                        <div>
-                            <label className="text-muted text-xs mb-4 block" htmlFor={`cardio-speed-${exerciseInstanceId}-${exItem.sets[0].id}`}>Velocità media</label>
-                            <BufferedInput 
-                                id={`cardio-speed-${exerciseInstanceId}-${exItem.sets[0].id}`}
-                                type="text" 
-                                inputMode="decimal"
-                                value={exItem.sets[0]?.speed || ''} 
-                                onChange={val => { const id = exItem.sets[0]?.id; if (id) onUpdateSet(exIndex, id, 'speed', val); }}
-                                placeholder="es. 10.5"
-                                className="w-full bg-black-20 border-glass text-white p-8 rounded-8"
-                                style={{ fontSize: '16px', boxSizing: 'border-box' }}
-                            />
-                        </div>
-                        <div>
-                            <label className="text-muted text-xs mb-4 block" htmlFor={`cardio-incline-${exerciseInstanceId}-${exItem.sets[0].id}`}>Inclinazione (%)</label>
-                            <BufferedInput 
-                                id={`cardio-incline-${exerciseInstanceId}-${exItem.sets[0].id}`}
-                                type="text" 
-                                inputMode="decimal"
-                                value={exItem.sets[0]?.incline || ''} 
-                                onChange={val => { const id = exItem.sets[0]?.id; if (id) onUpdateSet(exIndex, id, 'incline', val); }}
-                                placeholder="es. 2.0"
-                                className="w-full bg-black-20 border-glass text-white p-8 rounded-8"
-                                style={{ fontSize: '16px', boxSizing: 'border-box' }}
-                            />
-                        </div>
-                    </div>
-                    <div>
-                        <label className="text-muted text-xs mb-4 block" htmlFor={`cardio-kcal-${exerciseInstanceId}-${exItem.sets[0].id}`}>Kcal stimate</label>
-                        <BufferedInput 
-                            id={`cardio-kcal-${exerciseInstanceId}-${exItem.sets[0].id}`}
-                            type="text" 
-                            inputMode="decimal"
-                            value={exItem.sets[0]?.kcal || ''} 
-                            onChange={val => { const id = exItem.sets[0]?.id; if (id) onUpdateSet(exIndex, id, 'kcal', val); }}
-                            placeholder="es. 350"
-                            className="w-full bg-black-20 border-glass text-white p-8 rounded-8"
-                            style={{ fontSize: '16px', boxSizing: 'border-box' }}
-                        />
-                    </div>
-                </div> : <p role="alert">Serie cardio senza identificativo: dati di recupero non modificabili.</p>
+                exItem.sets?.[0]?.id ? <SessionCardioFields
+                    key={exItem.sets[0].id}
+                    set={exItem.sets[0]}
+                    exerciseInstanceId={exerciseInstanceId}
+                    exIndex={exIndex}
+                    onUpdateSet={onUpdateSet}
+                /> : <p role="alert">Serie cardio senza identificativo: dati di recupero non modificabili.</p>
             ) : (
                 <>
                     {(exItem.sets || []).map((s, sIndex: number) => (
