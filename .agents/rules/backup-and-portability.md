@@ -45,7 +45,8 @@ riproducono un rollback sintetico con schema corrente e AuthGate reale.
 Il censimento operatore `cloudflare/recovery/restore-census.mjs` legge
 direttamente entrambe le tabelle complete dalle rispettive D1 primarie,
 esclusivamente con controllo indipendente `sealed`. Limita il numero
-di owner, confronta doppie letture e contatori, e rifiuta omissioni e
+di owner, confronta doppie letture e contatori (incluso `change_seq` per
+distinguere cronologie indipendenti con gli stessi campi), e rifiuta omissioni e
 cambiamenti rilevati durante il controllo; **non** crea uno snapshot atomico
 cross-D1, non verifica l'isolamento IAM e non autorizza restore o riapertura
 degli accessi. Il risultato positivo resta soltanto diagnostico.
