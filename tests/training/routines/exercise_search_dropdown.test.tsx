@@ -122,6 +122,27 @@ import type { ExerciseLibraryItem } from '../../../src/types';
             expect(input.value).toBe('');
         });
 
+        it('2.6a: clear and option targets remain accessible on touch without hiding text', () => {
+            const onSelect = vi.fn();
+            const { container } = render(
+                <ExerciseSearchDropdown library={mockLibrary} onSelectExercise={onSelect} />
+            );
+            const input = screen.getByRole('combobox', { name: 'Cerca esercizio' }) as HTMLInputElement;
+            fireEvent.change(input, { target: { value: 'panca' } });
+
+            const clearButton = screen.getByRole('button', { name: 'Cancella ricerca' }) as HTMLButtonElement;
+            expect(clearButton.style.width).toBe('44px');
+            expect(clearButton.style.height).toBe('44px');
+            expect(input.style.paddingRight).toBe('48px');
+            const option = container.querySelector<HTMLElement>('[role="option"]');
+            expect(option?.style.minHeight).toBe('44px');
+
+            fireEvent.click(clearButton);
+            expect(input.value).toBe('');
+            expect(document.activeElement).toBe(input);
+            expect(onSelect).not.toHaveBeenCalled();
+        });
+
         it('2.7: Keyboard navigation: ArrowDown, ArrowUp, Enter to select', () => {
             const onSelect = vi.fn();
             const { container } = render(

@@ -171,7 +171,7 @@ export const ExerciseSearchDropdown: React.FC<ExerciseSearchDropdownProps> = ({
                     onKeyDown={handleKeyDown}
                     style={{
                         width: '100%',
-                        padding: '10px 38px 10px 14px',
+                        padding: '10px 48px 10px 14px',
                         fontSize: '16px',
                         borderRadius: '8px',
                         background: 'var(--surface-color)',
@@ -188,14 +188,16 @@ export const ExerciseSearchDropdown: React.FC<ExerciseSearchDropdownProps> = ({
                         onClick={handleClear}
                         style={{
                             position: 'absolute',
-                            right: '10px',
+                            right: '0',
                             top: '50%',
                             transform: 'translateY(-50%)',
                             background: 'transparent',
                             border: 'none',
                             color: 'var(--text-muted)',
                             cursor: 'pointer',
-                            padding: '4px',
+                            padding: 0,
+                            width: '44px',
+                            height: '44px',
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',

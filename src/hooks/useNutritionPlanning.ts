@@ -2,8 +2,9 @@ import { useState, useMemo, useRef } from 'react';
 import { useAppStore } from '../store/useAppStore';
 import { useDialogStore } from '../store/useDialogStore';
 import { Logic } from '../lib/logic';
+import { parseFiniteNumericInput } from '../lib/calc/nutrition';
 import type { NutritionPlanning } from '../types';
-import { createDefaultNutritionPlanning, normalizeOnDaysCount } from '../lib/nutritionDefaults';
+import { createDefaultNutritionPlanning, normalizeOnDaysCount, parseOnDaysCount } from '../lib/nutritionDefaults';
 import { captureSession, isCurrentSession, type SessionSnapshot } from '../lib/sync/session';
 
 // Form inputs have intermediate strings (including an empty field), while only
@@ -19,15 +20,14 @@ type NutritionPlanningDraft = Omit<NutritionPlanning, 'weight' | 'onDaysCount' |
 
 function numericInput(value: unknown, fallback = 0): number {
     if (value === null || value === undefined || (typeof value === 'string' && value.trim() === '')) return fallback;
-    const parsed = Number(value);
-    return Number.isFinite(parsed) ? parsed : Number.NaN;
+    return parseFiniteNumericInput(value) ?? Number.NaN;
 }
 
 function deriveMacroSplit(avgValue: unknown, boostPercentValue: unknown, onDaysCount: unknown) {
     const avg = numericInput(avgValue);
     const boostPercent = numericInput(boostPercentValue);
-    const onDays = normalizeOnDaysCount(onDaysCount);
-    if (!Number.isFinite(avg) || avg < 0 || !Number.isFinite(boostPercent) || boostPercent < -100) {
+    const onDays = parseOnDaysCount(onDaysCount);
+    if (onDays === null || !Number.isFinite(avg) || avg < 0 || !Number.isFinite(boostPercent) || boostPercent < -100) {
         return { on: 0, off: 0, valid: false };
     }
 
@@ -80,7 +80,7 @@ export function useNutritionPlanning() {
         ...basePlanning,
         avgMacros: basePlanning.avgMacros ? { ...defaultPlanning.avgMacros, ...basePlanning.avgMacros } : defaultPlanning.avgMacros,
         onBoost: basePlanning.onBoost ? { ...defaultPlanning.onBoost, ...basePlanning.onBoost } : defaultPlanning.onBoost,
-        onDaysCount: normalizeOnDaysCount(basePlanning.onDaysCount),
+        onDaysCount: activeDraft ? basePlanning.onDaysCount : normalizeOnDaysCount(basePlanning.onDaysCount),
         weight: basePlanning.weight ?? latestWeight,
         normocalorica: basePlanning.normocalorica ? { ...defaultPlanning.normocalorica, ...basePlanning.normocalorica } : defaultPlanning.normocalorica,
     };
@@ -133,14 +133,14 @@ export function useNutritionPlanning() {
     const handleUpdateAvgMacros = (field: keyof NonNullable<NutritionPlanningDraft['avgMacros']>, value: string) => {
         updateDraft(previous => ({
             ...previous,
-            avgMacros: { ...previous.avgMacros!, [field]: value === '' ? '' : Number(value) },
+            avgMacros: { ...previous.avgMacros!, [field]: value },
         }));
     };
 
     const handleUpdateOnBoost = (field: keyof NonNullable<NutritionPlanningDraft['onBoost']>, value: string) => {
         updateDraft(previous => ({
             ...previous,
-            onBoost: { ...previous.onBoost!, [field]: value === '' ? '' : Number(value) },
+            onBoost: { ...previous.onBoost!, [field]: value },
         }));
     };
 
@@ -148,6 +148,7 @@ export function useNutritionPlanning() {
         if (e) e.preventDefault();
 
         const weight = numericInput(planning.weight, latestWeight);
+        const onDaysCount = parseOnDaysCount(planning.onDaysCount);
         const avgMacros = {
             carbsPerKg: numericInput(planning.avgMacros!.carbsPerKg),
             proPerKg: numericInput(planning.avgMacros!.proPerKg),
@@ -183,15 +184,15 @@ export function useNutritionPlanning() {
             || !fatSplit.valid
             || splitValues.some(value => !Number.isFinite(value) || value < 0);
 
-        if (invalid) {
-            await showAlert('Controlla i valori della pianificazione: usa numeri validi, macro non negativi e variazioni ON non inferiori a -100%.');
+        if (onDaysCount === null || invalid) {
+            await showAlert('Controlla i valori della pianificazione: giorni ON da 0 a 7, numeri validi, macro non negativi e variazioni ON non inferiori a -100%.');
             return;
         }
 
         const updatedPlanning: NutritionPlanning = {
             ...planning,
             weight,
-            onDaysCount: normalizeOnDaysCount(planning.onDaysCount),
+            onDaysCount,
             normocalorica: sanitizedNormo,
             avgMacros,
             onBoost,

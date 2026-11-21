@@ -5,7 +5,7 @@ import { parseDateInput } from '../utils/date';
 
 // Require complete numeric input: parseFloat incorrectly accepts strings with
 // units or suffixes. Callers independently enforce positivity and optionality.
-function parseFiniteNumericInput(value: unknown): number | null {
+export function parseFiniteNumericInput(value: unknown): number | null {
     if (typeof value !== 'number' && typeof value !== 'string') return null;
     const normalized = String(value).trim().replace(',', '.');
     if (!/^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$/.test(normalized)) return null;
@@ -154,7 +154,7 @@ export function calculateTDEEAndMacros(state: Partial<UserData> | null) {
         }
     }
     const planning = state.nutritionPlanning;
-    const weight = Number(planning?.weight) || 80;
+    const weight = parsePositiveWeight(planning?.weight) ?? 80;
     let bfVal = null;
     if (state.profile) {
         const bfStr = calculateBodyFat(weight, state.profile);

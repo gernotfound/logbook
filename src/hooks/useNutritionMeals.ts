@@ -48,18 +48,12 @@ export function useNutritionMeals(dateStr?: string) {
 
     const dailyTarget = calculateDailyMacroTarget(planning, isDayOn, latestWeight) ?? EMPTY_DAILY_TARGET;
 
-    const persistDayType = async (value: boolean | undefined) => {
-        await persistNutrition({ type: 'nutrition-day.patch', date: targetDateStr, patch: { isDayOn: value } });
-    };
-
     const setDayType = async (isOn: boolean | undefined) => {
         if (isDayOn === isOn) return;
         const session = captureSession();
-        try { await persistDayType(isOn); }
+        try { await persistNutrition({ type: 'nutrition-day.patch', date: targetDateStr, patch: { isDayOn: isOn } }); }
         catch { if (isCurrentSession(session)) await showAlert("Errore durante il salvataggio."); }
     };
-
-    const toggleDayType = async () => setDayType(isDayOn === true ? false : true);
 
     const meals: LoggedMealItem[] = todayNutrition.meals || [];
 
@@ -75,37 +69,13 @@ export function useNutritionMeals(dateStr?: string) {
         setCfData(emptyCustomFoodDraft());
     };
 
-    const saveMeal = async (meal: LoggedMealItem) => {
-        await persistNutrition({ type: 'nutrition-meal.upsert', date: targetDateStr, meal });
-    };
-
-    const handleQuickAdd = async (quickData: Pick<LoggedMealItem, 'name' | 'kcal' | 'carbs' | 'pro' | 'fat'>) => {
-        const session = captureSession();
-        const addedItem: LoggedMealItem = {
-            id: Logic.generateId('food'),
-            name: quickData.name,
-            meal: 'quick',
-            quantity: 1,
-            baseQty: 1,
-            unit: 'porzione',
-            kcal: quickData.kcal || 0,
-            carbs: quickData.carbs || 0,
-            pro: quickData.pro || 0,
-            fat: quickData.fat || 0,
-            time: new Date().getTime()
-        };
-
-        try { await saveMeal(addedItem); }
-        catch { if (isCurrentSession(session)) void showAlert("Errore durante il salvataggio dell'alimento."); }
-    };
-
     const handleSearch = (query: string) => setSearchQuery(query);
 
     const addFood = async (food: Food, mealType: string) => {
         const session = captureSession();
         try {
             const addedItem = createLoggedMealItem(food, mealType, Logic.generateId('meal'), Date.now());
-            await saveMeal(addedItem);
+            await persistNutrition({ type: 'nutrition-meal.upsert', date: targetDateStr, meal: addedItem });
             // The form may survive Auth A→B→A while this device commit awaits an ACK.
             if (isCurrentSession(session)) setSearchQuery('');
         } catch {
@@ -151,8 +121,6 @@ export function useNutritionMeals(dateStr?: string) {
         }
     };
 
-    const handleDeleteItem = async (mealId: string): Promise<boolean> => removeFood(mealId);
-
     const clearDay = async () => {
         const session = captureSession();
         try {
@@ -189,10 +157,9 @@ export function useNutritionMeals(dateStr?: string) {
 
     return {
         targetDateStr,
-        todayNutrition, dailyTarget, isDayOn, toggleDayType, setDayType,
-        searchQuery, setSearchQuery, handleSearch, searchResults, handleDeleteItem, clearSearch,
+        todayNutrition, dailyTarget, isDayOn, setDayType,
+        searchQuery, setSearchQuery, handleSearch, searchResults, clearSearch,
         clearDay,
-        handleQuickAdd,
         showCustomModal, setShowCustomModal,
         editingFoodId, setEditingFoodId, startEditCustomFood, cancelCustomFood,
         cfData, setCfData, saveCustomFood,

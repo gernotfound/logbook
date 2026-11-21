@@ -1,5 +1,7 @@
 // Keep the existing workout calculation API stable for UI, hooks and analytics callers.
-export { normalizeStem, createExerciseLibrarySearcher, getMuscleName, searchMuscles } from './workoutSearch';
+export { normalizeStem } from './searchNormalization';
+export { createExerciseLibrarySearcher } from './workoutSearch';
+export { getMuscleName, searchMuscles } from './workoutMuscleSearch';
 export {
     parsePositiveWeight,
     getLatestUserWeight,
