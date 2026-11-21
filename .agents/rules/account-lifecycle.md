@@ -1,5 +1,30 @@
 # Ciclo account, Auth e guest — TheLogBook
 
+### CF-03/04 — Intento fitness Kinde con journal cifrato e ricevuta D1 (21/11/2026)
+
+`src/lib/auth/kindeCandidateDomainIntent.ts` compone, **solo nel percorso
+candidato**, la readiness Kinde con consenso server trusted, vault device
+temporaneo, replica verificata e journal completamente riconciliato, quindi
+`commitDomainOperations()` con guard owner/sessione dentro la transazione
+IndexedDB. La mutazione business e il journal semantico sono durevoli **prima**
+della consegna cifrata a D1 tramite `deliverKindeCandidateJournal()`.
+`legal-consent.set` è rifiutata: il registro trusted D1 è autorità per il
+consenso e nessuna operazione fitness può creare una nuova prova legale.
+
+La risposta distingue `local-only`, `local-pending` e
+`cloud-acknowledged`: un errore di rete non diventa `local-pending` senza
+rilettura della sequenza semantica originale ancora durevole, e un ACK cloud
+richiede ricevuta verificata dal bridge e frontiera causale locale che copra
+esattamente le operazioni committate. Una ricevuta di batch **non** garantisce
+che tutte le future modifiche siano state drenate. Nessun retry reinventa
+l'intento, l'UID non costituisce prova Auth e il vault viene rilasciato.
+
+Questo componente non è un runtime account offline o multi-tab già montato:
+il provider pubblico resta **identity-only**, senza `D1_API` o grant fitness.
+La sua integrazione effettiva richiede lifecycle owner/sessione React, guard
+delle normali mutazioni e recovery offline verificati; non usare una flag per
+aggirare questi gate.
+
 ### CF-05 — ambito di preparazione locale Kinde, senza grant globale (20/11/2026)
 
 Il percorso candidato `withKindeCandidateLocalReadiness()` compone

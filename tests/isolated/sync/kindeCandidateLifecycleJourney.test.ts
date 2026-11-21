@@ -21,6 +21,7 @@ import { restoreKindeCandidateBackup } from '../../../src/lib/auth/kindeCandidat
 import { prepareKindeCandidateOwner } from '../../../src/lib/sync/kindeCandidateOwnerBootstrap';
 import { deliverKindeCandidateJournal } from '../../../src/lib/sync/kindeCandidateJournalBridge';
 import { commitDomainOperations } from '../../../src/lib/sync/localDomainCommit';
+import { submitKindeCandidateDomainIntent } from '../../../src/lib/auth/kindeCandidateDomainIntent';
 import { readLocal } from '../../../src/lib/sync/localArchiveBootstrap';
 import { lockAllVaults, readVaultControl, unlockVaultForOwner } from '../../../src/lib/sync/secureArchiveSession';
 
@@ -121,14 +122,16 @@ describe('CF-05 synthetic Kinde consent, ciphertext, second device and portable 
 
             // Business and semantic journal must be sealed before the first
             // D1 commit. A receipt may clear only the already stored batch.
-            await commitDomainOperations(owner, {
-                type: 'profile.patch', patch: { height: '180' },
-            }, initial!.data);
-            expect((await readLocal(owner))?.pending.length).toBeGreaterThan(0);
+            const mutation = await submitKindeCandidateDomainIntent({
+                ...first, expected,
+                operation: { type: 'profile.patch', patch: { height: '180' } },
+            });
+            expect(mutation).toMatchObject({ kind: 'cloud-acknowledged', operations: 1 });
             expect(await get<string>('logbook:v2:' + owner)).toMatch(/^tlb-sealed:v1:/);
-            expect(await deliverKindeCandidateJournal(first)).toBe('acknowledged');
+            await unlockVaultForOwner(owner);
             expect((await readLocal(owner))?.pending).toEqual([]);
             expect(fixture.count('sync_receipts', uid)).toBe(1);
+            expect(await deliverKindeCandidateJournal(first)).toBe('idle');
 
             // This later edit exists ONLY on device A, not in D1.
             const delivered = (await readLocal(owner))!;
@@ -223,4 +226,112 @@ describe('CF-05 synthetic Kinde consent, ciphertext, second device and portable 
             fixture.close();
         }
     });
+    it('rejects legal-consent mutation before HTTP or vault creation', async () => {
+        const fixture = await createCloudKeyHttpFixture([uid]);
+        try {
+            const paths: string[] = [];
+            const client = browser(fixture, uid, paths);
+            await expect(submitKindeCandidateDomainIntent({
+                ...client, expected,
+                operation: {
+                    type: 'legal-consent.set',
+                    consent: {
+                        hasAcceptedTerms: true, hasAcceptedHealthData: true,
+                        acceptedAt: '2026-11-20T00:00:00.000Z',
+                        privacyVersion: 'not-a-server-proof',
+                        termsVersion: 'not-a-server-proof',
+                    },
+                },
+            })).rejects.toThrow();
+            expect(paths).toEqual([]);
+            expect(readVaultControl(owner)).toBeNull();
+            expect(await get('logbook:v2:' + owner)).toBeUndefined();
+        } finally {
+            fixture.close();
+        }
+    });
+
+    it('keeps the exact encrypted intent after a lost D1 commit response and reconciles without a second edit', async () => {
+        const fixture = await createCloudKeyHttpFixture([uid]);
+        try {
+            await fixture.consent(uid);
+            const client = browser(fixture, uid);
+            let lost = false;
+            const send: typeof fetch = async (input, init) => {
+                if (String(input) === '/v1/sync/commit' && !lost) {
+                    lost = true;
+                    throw new TypeError('synthetic network outage before remote commit');
+                }
+                return client.send(input, init);
+            };
+            const result = await submitKindeCandidateDomainIntent({
+                ...client, send, expected,
+                operation: { type: 'profile.patch', patch: { height: '181' } },
+            });
+            expect(lost).toBe(true);
+            expect(result).toMatchObject({ kind: 'local-pending', pendingCount: 1 });
+            expect(await get<string>('logbook:v2:' + owner)).toMatch(/^tlb-sealed:v1:/);
+            const grant = await unlockVaultForOwner(owner);
+            try {
+                const pending = await readLocal(owner);
+                expect(pending?.data.profile?.height).toBe('181');
+                expect(pending?.pending).toHaveLength(1);
+                expect(pending?.cloudflareDelivery).toBeDefined();
+            } finally {
+                grant.release();
+            }
+            expect(fixture.count('sync_receipts', uid)).toBe(0);
+            await expect(prepareKindeCandidateOwner({
+                ...client, expected, drainPendingJournal: true, retainDeviceVault: false,
+            })).resolves.toMatchObject({
+                kind: 'candidate-observed', journalDrained: true,
+            });
+            const recoveredGrant = await unlockVaultForOwner(owner);
+            try {
+                const recovered = await readLocal(owner);
+                expect(recovered?.pending).toEqual([]);
+                expect(recovered?.data.profile?.height).toBe('181');
+            } finally {
+                recoveredGrant.release();
+            }
+            expect(fixture.count('sync_receipts', uid)).toBe(1);
+        } finally {
+            fixture.close();
+        }
+    });
+
+    it('does not misreport a terminal D1 refusal as retryable pending', async () => {
+        const fixture = await createCloudKeyHttpFixture([uid]);
+        try {
+            await fixture.consent(uid);
+            const client = browser(fixture, uid);
+            let rejected = 0;
+            const send: typeof fetch = async (input, init) => {
+                if (String(input) === '/v1/sync/commit') {
+                    rejected++;
+                    return Response.json({ error: 'forbidden' }, { status: 403 });
+                }
+                return client.send(input, init);
+            };
+            await expect(submitKindeCandidateDomainIntent({
+                ...client, send, expected,
+                operation: { type: 'profile.patch', patch: { height: '182' } },
+            })).rejects.toThrow('Trasporto replica cloud non confermato');
+            expect(rejected).toBe(1);
+            expect(await get<string>('logbook:v2:' + owner)).toMatch(/^tlb-sealed:v1:/);
+            const grant = await unlockVaultForOwner(owner);
+            try {
+                const saved = await readLocal(owner);
+                expect(saved?.data.profile?.height).toBe('182');
+                expect(saved?.pending).toHaveLength(1);
+                expect(saved?.cloudflareDelivery).toBeDefined();
+            } finally {
+                grant.release();
+            }
+            expect(fixture.count('sync_receipts', uid)).toBe(0);
+        } finally {
+            fixture.close();
+        }
+    });
+
 });
