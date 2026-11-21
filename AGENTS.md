@@ -85,7 +85,7 @@ Sono CRITICAL almeno: dati utente, IndexedDB/persistenza, sync, Firestore/Rules,
 
 ## Qualità architetturale e modularità
 
-**Obiettivo trasversale:** costruire e mantenere TheLogBook come **monolite modulare con contratti verificabili**, non come una somma di funzioni che dipendono da stati impliciti o dall'ordine fortuito delle chiamate. «Qualità enterprise» indica confini comprensibili, affidabilità e capacità di evolvere: non richiede microservizi, classi per ogni funzione, livelli artificiali o astrazioni preventive. La lunghezza di un file e il numero di moduli sono indizi per l'analisi, **non** soglie automatiche di qualità.
+**Obiettivo trasversale:** costruire e mantenere TheLogBook come **architettura applicativa modulare con contratti verificabili**, non come una somma di funzioni che dipendono da stati impliciti o dall'ordine fortuito delle chiamate. La separazione già prevista fra frontend Static Assets, Worker API/Auth e D1 non impone un unico artefatto distribuibile, né giustifica ulteriori servizi senza necessità dimostrata. «Qualità enterprise» indica confini comprensibili, affidabilità e capacità di evolvere: non richiede microservizi aggiuntivi, classi per ogni funzione, livelli artificiali o astrazioni preventive. La lunghezza di un file e il numero di moduli sono indizi per l'analisi, **non** soglie automatiche di qualità.
 
 Per codice nuovo, modifiche e refactoring, applicare questi criteri insieme ai contratti specialistici. L'esistenza di codice transitorio non autorizza a dichiararlo conforme né a riscriverlo senza prove; un intervento deve migliorare i confini pertinenti senza mettere a rischio dati e funzioni approvate.
 
