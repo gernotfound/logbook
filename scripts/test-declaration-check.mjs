@@ -104,13 +104,34 @@ export function findDisabledTests(source, name = 'fixture.test.ts') {
     if (!node || typeof node !== 'object') return;
     if (node.type === 'CallExpression' || node.type === 'OptionalCallExpression') {
       const modifiers = declarationModifiers(node.callee, references);
-      const label = modifiers?.find(modifier => forbidden.has(modifier));
-      if (label) {
-        findings.push({
-          line: node.loc.start.line,
-          label,
-          expression: source.slice(node.callee.start, node.callee.end),
-        });
+      if (modifiers !== null) {
+        const label = modifiers.find(modifier => forbidden.has(modifier));
+        if (label) {
+          findings.push({
+            line: node.loc.start.line,
+            label,
+            expression: source.slice(node.callee.start, node.callee.end),
+          });
+        }
+        // node:test (and compatible runners) also accept skip/todo/only in
+        // the options object. A modifier-only scan silently misses these tests.
+        const options = node.arguments[1];
+        if (options?.type === 'ObjectExpression') {
+          for (const property of options.properties) {
+            if (property.type !== 'ObjectProperty') continue;
+            const key = property.key.type === 'Identifier' && !property.computed
+              ? property.key.name
+              : property.key.type === 'StringLiteral' ? property.key.value : null;
+            if (key && ['skip', 'todo', 'only'].includes(key)
+              && !(property.value.type === 'BooleanLiteral' && property.value.value === false)) {
+              findings.push({
+                line: property.loc.start.line,
+                label: key,
+                expression: source.slice(property.start, property.end),
+              });
+            }
+          }
+        }
       }
     }
     for (const [key, child] of Object.entries(node)) {
