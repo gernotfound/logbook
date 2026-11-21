@@ -18,7 +18,7 @@ describe('Firebase consent HTTP adapter contract', () => {
   it('sends trusted credentials but refuses an incomplete active GET proof', async () => {
     const user = actor('transport-active');
     session().currentUser = user;
-    const fetchMock = vi.fn(async () => Response.json({ status: 'active', revision: 1 }));
+    const fetchMock = vi.fn(async (_url: RequestInfo | URL, _init?: RequestInit) => Response.json({ status: 'active', revision: 1 }));
     vi.stubGlobal('fetch', fetchMock);
 
     await expect(requestFirebaseHealthConsent(user, 'GET')).rejects.toThrow('Prova del consenso server incompleta.');
