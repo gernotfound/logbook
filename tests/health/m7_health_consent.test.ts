@@ -1,128 +1,12 @@
-import { LEGAL_VERSIONS } from '../../src/lib/legalVersions';
-import { adminDb } from '../../server/accountDeletion/firebaseAdmin';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-
-type Stored = Record<string, unknown>;
-const storage = vi.hoisted(() => ({ documents: new Map<string, Stored>() }));
-const auth = vi.hoisted(() => ({
-  verifyHealthConsentRequester: vi.fn(async () => ({ uid: 'account-1', emailVerified: true })),
-  requireVerifiedHealthConsentWrite: vi.fn((identity: { emailVerified: boolean }) => {
-    if (!identity.emailVerified) throw new auth.RequestAuthError('Indirizzo email non verificato.', 403);
-  }),
-  RequestAuthError: class RequestAuthError extends Error {
-    constructor(message: string, public readonly status: 401 | 403 = 401) {
-      super(message);
-    }
-  },
-}));
-
-const erasureWorker = vi.hoisted(() => ({ process: vi.fn(async () => 'pending' as const) }));
-vi.mock('../../server/healthConsent/erasure', async importOriginal => ({
-  ...(await importOriginal<typeof import('../../server/healthConsent/erasure')>()),
-  processHealthDataErasure: erasureWorker.process,
-}));
-
-vi.mock('../../server/accountDeletion/httpAuth', () => auth);
-const transactionFixture = vi.hoisted(() => ({
-  failErasureSetOnce: false,
-  retries: 0,
-  overlap: null as null | { arrivals: number; gate: Promise<void>; release: () => void },
-}));
-vi.mock('../../server/accountDeletion/firebaseAdmin', () => ({
-  adminDb: () => ({
-    collection: (name: string) => ({
-      doc: (uid: string) => ({
-        key: name + '/' + uid,
-        async get() {
-          const item = storage.documents.get(name + '/' + uid);
-          return { exists: !!item, data: () => item };
-        },
-        async delete() { storage.documents.delete(name + '/' + uid); },
-      }),
-    }),
-    // Optimistic retries model Firestore's read-version validation: overlapping
-    // requests must not both commit changes computed from the same snapshot.
-    runTransaction: async (fn: (tx: any) => Promise<unknown>) => {
-      for (let attempt = 0; attempt < 5; attempt += 1) {
-        const reads = new Map<string, Stored | undefined>();
-        const writes = new Map<string, Stored | null>();
-        const result = await fn({
-          get: (ref: { key: string }) => {
-            const item = storage.documents.get(ref.key);
-            reads.set(ref.key, item);
-            return Promise.resolve({ exists: !!item, data: () => item });
-          },
-          create: (ref: { key: string }, data: Stored) => {
-            if (storage.documents.has(ref.key)) throw new Error('Already exists');
-            writes.set(ref.key, data);
-          },
-          set: (ref: { key: string }, data: Stored) => writes.set(ref.key, data),
-          update: (ref: { key: string }, data: Stored) => {
-            const old = storage.documents.get(ref.key);
-            if (!old) throw new Error('Not found');
-            writes.set(ref.key, { ...old, ...data });
-          },
-          delete: (ref: { key: string }) => writes.set(ref.key, null),
-        });
-        if (attempt === 0 && transactionFixture.overlap) {
-          const overlap = transactionFixture.overlap;
-          overlap.arrivals += 1;
-          if (overlap.arrivals === 2) overlap.release();
-          await overlap.gate;
-        }
-        if ([...reads].some(([key, value]) => storage.documents.get(key) !== value)) {
-          transactionFixture.retries += 1;
-          continue;
-        }
-        if (transactionFixture.failErasureSetOnce && writes.has('health_data_erasures/account-1')) {
-          transactionFixture.failErasureSetOnce = false;
-          throw new Error('Injected transactional erasure job write failure');
-        }
-        for (const [key, value] of writes) {
-          if (value === null) storage.documents.delete(key);
-          else storage.documents.set(key, value);
-        }
-        return result;
-      }
-      throw new Error('Firestore transaction conflict retries exhausted');
-    },
-  }),
-}));
-
-import { GET, OPTIONS, POST } from '../../api/health-consent';
 import {
-  HealthConsentRevisionConflictError, readHealthConsentState, recordHealthConsentWithdrawal,
-  recordInitialHealthConsentAcceptance,
-  recordHealthConsentReacceptance, removeHealthConsentStateForDeletedAccount,
-} from '../../server/healthConsent/withdrawal';
+  GET, OPTIONS, POST, auth, acceptance, erasureWorker, req, storage,
+  readHealthConsentState, recordInitialHealthConsentAcceptance,
+  recordHealthConsentWithdrawal, resetConsentTestState,
+} from './healthConsentApiHarness';
 
-function req(method: 'GET' | 'POST' | 'OPTIONS', body?: unknown, origin = 'https://thelogbook.web.app'): Request {
-  return new Request('https://backend.test/api/health-consent', {
-    method, headers: { origin, 'content-type': 'application/json' },
-    ...(body === undefined ? {} : { body: JSON.stringify(body) }),
-  });
-}
-
-function finishErasure(revision: number): void {
-  const consent = storage.documents.get('health_consent_withdrawals/account-1');
-  if (!consent) throw new Error('Consent must exist before finishing erasure');
-  storage.documents.set('health_consent_withdrawals/account-1', {
-    ...consent, status: 'withdrawn', revision: revision + 1, erasedBeforeRevision: revision,
-  });
-  storage.documents.set('health_data_erasures/account-1', {
-    uid: 'account-1', status: 'complete', consentRevision: revision, completedRevision: revision + 1,
-  });
-  storage.documents.delete('users/account-1');
-  storage.documents.delete('user_data_keys/account-1');
-}
-
-const acceptance = {
-  acceptedTerms: true as const, acceptedHealthData: true as const,
-  privacyVersion: LEGAL_VERSIONS.privacy, termsVersion: LEGAL_VERSIONS.terms,
-};
-
-describe('trusted health consent boundary', () => {
-  beforeEach(() => { storage.documents.clear(); vi.clearAllMocks(); transactionFixture.failErasureSetOnce = false; transactionFixture.overlap = null; transactionFixture.retries = 0; });
+describe('trusted health consent HTTP and registration boundary', () => {
+  beforeEach(resetConsentTestState);
 
   it('treats an absent trusted consent record as unregistered for every API request', async () => {
     expect(await readHealthConsentState('account-1')).toEqual({ status: 'unregistered', revision: 0 });
@@ -196,40 +80,6 @@ describe('trusted health consent boundary', () => {
     expect(initial.status).toBe(403);
     expect(storage.documents.size).toBe(0);
     expect(auth.requireVerifiedHealthConsentWrite).toHaveBeenCalledTimes(2);
-  });
-
-  it('maps a terminal erasure job conflict to 409 without retrying the worker', async () => {
-    await recordHealthConsentWithdrawal('account-1', 0);
-    const jobPath = 'health_data_erasures/account-1';
-    const job = storage.documents.get(jobPath)!;
-    storage.documents.set(jobPath, { ...job, status: 'failed', retryable: false });
-
-    const response = await POST(req('POST', { action: 'withdraw', expectedRevision: 0 }));
-
-    expect(response.status).toBe(409);
-    expect(response.headers.get('cache-control')).toBe('no-store');
-    expect(await response.json()).toHaveProperty('error', expect.stringContaining('controllo'));
-    expect(erasureWorker.process).not.toHaveBeenCalled();
-    expect(storage.documents.get('health_consent_withdrawals/account-1')).toMatchObject({
-      uid: 'account-1', status: 'withdrawn', revision: 1,
-    });
-    expect(storage.documents.get(jobPath)).toMatchObject({ status: 'failed', retryable: false });
-  });
-
-  it('confirms a durably queued withdrawal even if immediate erasure processing fails', async () => {
-    erasureWorker.process.mockRejectedValueOnce(new Error('injected worker failure'));
-    const errorLog = vi.spyOn(console, 'error').mockImplementation(() => {});
-    try {
-      const response = await POST(req('POST', { action: 'withdraw', expectedRevision: 0 }));
-      expect(response.status).toBe(200);
-      expect(await response.json()).toEqual({ status: 'withdrawn', revision: 1 });
-      expect(storage.documents.get('health_data_erasures/account-1')).toMatchObject({
-        uid: 'account-1', status: 'requested', consentRevision: 1,
-      });
-      expect(errorLog).toHaveBeenCalledWith('[health-consent] erasure handoff failed', { kind: 'Error' });
-    } finally {
-      errorLog.mockRestore();
-    }
   });
 
   it.each([
@@ -362,268 +212,13 @@ describe('trusted health consent boundary', () => {
     });
   });
 
-  it('atomically queues health erasure with the withdrawal and preserves ciphertext until the worker runs', async () => {
-    const document = {
-      _schemaVersion: 1,
-      _sync: { protocolVersion: 3, clock: { s00: 1 },
-        writer: { slot: 's00', replicaId: 'fixture-replica', generation: 1, seq: 1, consentRevision: 1 },
-        fields: {} },
-      _sealed: { format: 'thelogbook-cloud-document', version: 1,
-        nonce: 'a'.repeat(32), ciphertext: 'b'.repeat(32) },
-    };
-    const month = structuredClone(document);
-    const wrappedKey = {
-      uid: 'account-1', format: 'thelogbook-wrapped-account-key',
-      version: 1, ciphertext: 'synthetic-wrapped-key',
-    };
-    const expectedDocument = structuredClone(document);
-    const expectedMonth = structuredClone(month);
-    const expectedWrappedKey = structuredClone(wrappedKey);
-    storage.documents.set('users/account-1', document);
-    storage.documents.set('users/account-1/history_months/2026-11', month);
-    storage.documents.set('user_data_keys/account-1', wrappedKey);
-
-    const first = await POST(req('POST', { action: 'withdraw', expectedRevision: 0 }));
-    expect(first.status).toBe(200);
-    expect(await first.json()).toEqual({ status: 'withdrawn', revision: 1 });
-    expect(await recordHealthConsentWithdrawal('account-1', 0)).toEqual({ status: 'withdrawn', revision: 1 });
-    const state = storage.documents.get('health_consent_withdrawals/account-1');
-    expect(state).toMatchObject({ uid: 'account-1', revision: 1, status: 'withdrawn' });
-    expect(storage.documents.get('health_data_erasures/account-1')).toMatchObject({
-      uid: 'account-1', status: 'requested', consentRevision: 1,
-    });
-    expect(storage.documents.get('users/account-1')).toEqual(expectedDocument);
-    expect(storage.documents.get('users/account-1/history_months/2026-11')).toEqual(expectedMonth);
-    expect(storage.documents.get('user_data_keys/account-1')).toEqual(expectedWrappedKey);
-    expect(storage.documents.size).toBe(5);
-    expect(erasureWorker.process).toHaveBeenCalledWith('account-1', expect.any(Number));
-  });
-
-  it('rolls back consent withdrawal if erasure enqueue fails in the transaction', async () => {
-    await recordInitialHealthConsentAcceptance('account-1', acceptance);
-    transactionFixture.failErasureSetOnce = true;
-    await expect(recordHealthConsentWithdrawal('account-1', 1))
-      .rejects.toThrow('transactional erasure job');
-    expect(storage.documents.get('health_consent_withdrawals/account-1')).toMatchObject({
-      status: 'active', revision: 1,
-    });
-    expect(storage.documents.has('health_data_erasures/account-1')).toBe(false);
-    expect(await recordHealthConsentWithdrawal('account-1', 1)).toMatchObject({
-      status: 'withdrawn', revision: 2,
-    });
-    expect(storage.documents.get('health_data_erasures/account-1')).toMatchObject({
-      status: 'requested', consentRevision: 2,
-    });
-  });
-
-  it('rejects invalid and stale version acceptances while withdrawn', async () => {
-    await recordHealthConsentWithdrawal('account-1', 0);
-    for (const invalid of [null, {}, { ...acceptance, acceptedHealthData: false }, { ...acceptance, privacyVersion: 'old' }]) {
-      const response = await POST(req('POST', { action: 'reaccept', acceptance: invalid, expectedRevision: 1 }));
-      expect(response.status).toBe(400);
-      expect(await response.json()).toHaveProperty('error');
-      expect((await readHealthConsentState('account-1')).status).toBe('withdrawn');
-    }
-  });
-
-  it('reenables only after explicit acceptance; retry is idempotent and later revocation advances revision', async () => {
-    await recordHealthConsentWithdrawal('account-1', 0);
-    storage.documents.set('users/account-1', { _schemaVersion: 1, _sync: { writer: { seq: 5 } }, legalConsent: { acceptedAt: 'old' } });
-    expect(storage.documents.has('users/account-1')).toBe(true);
-    await expect(recordHealthConsentReacceptance('account-1', acceptance, 1)).rejects.toThrow('revoca');
-    finishErasure(1);
-    const accepted = await recordHealthConsentReacceptance('account-1', acceptance, 2);
-    expect(storage.documents.has('users/account-1')).toBe(false);
-    expect(accepted).toMatchObject({ status: 'active', revision: 3, acceptedAt: expect.any(String) });
-    expect(await recordHealthConsentReacceptance('account-1', acceptance, 2)).toEqual(accepted);
-    const retry = await POST(req('POST', { action: 'reaccept', expectedRevision: 2, acceptance }));
-    expect(retry.status).toBe(200);
-    expect(await retry.json()).toEqual(accepted);
-    expect(await recordHealthConsentWithdrawal('account-1', 3)).toEqual({ status: 'withdrawn', revision: 4 });
-    const staleSecondCycle = await POST(req('POST', { action: 'withdraw', expectedRevision: 0 }));
-    expect(staleSecondCycle.status).toBe(409);
-    expect(await readHealthConsentState('account-1')).toMatchObject({ status: 'withdrawn', revision: 4 });
-    expect(await recordHealthConsentWithdrawal('account-1', 3)).toEqual({ status: 'withdrawn', revision: 4 });
-  });
-
-  it('will not resume or withdraw when account deletion has started', async () => {
-    await recordHealthConsentWithdrawal('account-1', 0);
-    storage.documents.set('account_deletions/account-1', { status: 'requested' });
-    await expect(recordHealthConsentReacceptance('account-1', acceptance, 1)).rejects.toThrow('Cancellazione');
-    await expect(recordHealthConsentWithdrawal('account-1', 0)).rejects.toThrow('Cancellazione');
-  });
-
-  it('does not reaccept while a data-only erasure job is incomplete', async () => {
-    await recordHealthConsentWithdrawal('account-1', 0);
-    storage.documents.set('health_data_erasures/account-1', { uid: 'account-1', status: 'deleting', consentRevision: 1 });
-    await expect(recordHealthConsentReacceptance('account-1', acceptance, 1))
-      .rejects.toThrow('revoca');
-    expect((await readHealthConsentState('account-1')).status).toBe('withdrawn');
-
-    finishErasure(1);
-    expect(await recordHealthConsentReacceptance('account-1', acceptance, 2))
-      .toMatchObject({ status: 'active', revision: 3 });
-  });
-
-  it('refuses reacceptance without a durable erasure generation even if the receipt is missing or marked complete', async () => {
-    await recordHealthConsentWithdrawal('account-1', 0);
-    storage.documents.delete('health_data_erasures/account-1');
-    await expect(recordHealthConsentReacceptance('account-1', acceptance, 1))
-      .rejects.toBeInstanceOf(HealthConsentRevisionConflictError);
-
-    storage.documents.set('health_data_erasures/account-1', {
-      uid: 'account-1', status: 'complete', consentRevision: 1, completedRevision: 2,
-    });
-    await expect(recordHealthConsentReacceptance('account-1', acceptance, 1))
-      .rejects.toBeInstanceOf(HealthConsentRevisionConflictError);
-    expect((await readHealthConsentState('account-1')).status).toBe('withdrawn');
-  });
-
-  it('rejects a mismatched completed erasure receipt even with a valid consent floor', async () => {
-    await recordHealthConsentWithdrawal('account-1', 0);
-    finishErasure(1);
-    const path = 'health_data_erasures/account-1';
-    const valid = storage.documents.get(path)!;
-    for (const patch of [
-      { uid: 'other-account' },
-      { consentRevision: 0 },
-      { completedRevision: 3 },
-    ]) {
-      storage.documents.set(path, { ...valid, ...patch });
-      await expect(recordHealthConsentReacceptance('account-1', acceptance, 2))
-        .rejects.toBeInstanceOf(HealthConsentRevisionConflictError);
-      expect((await readHealthConsentState('account-1')).status).toBe('withdrawn');
-    }
-  });
-
-  it('refuses re-consent if the old wrapped cloud key remains after a completed erasure', async () => {
-    storage.documents.clear();
-    await recordHealthConsentWithdrawal('account-1', 0);
-    finishErasure(1);
-    storage.documents.set('user_data_keys/account-1', { uid: 'account-1', ciphertext: 'orphaned-key' });
-
-    const blocked = await POST(req('POST', { action: 'reaccept', expectedRevision: 2, acceptance }));
-    expect(blocked.status).toBe(409);
-    expect(storage.documents.get('health_consent_withdrawals/account-1')).toMatchObject({
-      uid: 'account-1', status: 'withdrawn', revision: 2, erasedBeforeRevision: 1,
-    });
-    expect(storage.documents.get('user_data_keys/account-1')).toMatchObject({ ciphertext: 'orphaned-key' });
-
-    storage.documents.delete('user_data_keys/account-1');
-    const accepted = await POST(req('POST', { action: 'reaccept', expectedRevision: 2, acceptance }));
-    expect(accepted.status).toBe(200);
-    // A legitimate key provisioned under the new active consent must not
-    // invalidate an idempotent retry of that already-confirmed acceptance.
-    storage.documents.set('user_data_keys/account-1', { uid: 'account-1', ciphertext: 'new-key' });
-    const retry = await POST(req('POST', { action: 'reaccept', expectedRevision: 2, acceptance }));
-    expect(retry.status).toBe(200);
-    expect(await retry.json()).toEqual(await accepted.json());
-  });
-
-  it('accepts re-consent after completed receipt retention only with matching consent erasure proof', async () => {
-    await recordHealthConsentWithdrawal('account-1', 0);
-    finishErasure(1);
-    storage.documents.delete('health_data_erasures/account-1');
-    expect(await recordHealthConsentReacceptance('account-1', acceptance, 2))
-      .toMatchObject({ status: 'active', revision: 3 });
-  });
-
-  it('cleanup erases only the specific account consent marker', async () => {
-    await recordHealthConsentWithdrawal('account-1', 0);
-    await recordHealthConsentWithdrawal('account-2', 0);
-    await adminDb().runTransaction(async tx => {
-      removeHealthConsentStateForDeletedAccount('account-1', tx);
-    });
-    expect(storage.documents.has('health_consent_withdrawals/account-1')).toBe(false);
-    expect(storage.documents.has('health_consent_withdrawals/account-2')).toBe(true);
-  });
-
   it('enforces allowed origin before authenticated work', async () => {
     expect((await OPTIONS(req('OPTIONS', undefined, 'https://evil.example'))).status).toBe(403);
     expect((await POST(req('POST', { action: 'withdraw', expectedRevision: 0 }, 'https://evil.example'))).status).toBe(403);
     expect(auth.verifyHealthConsentRequester).not.toHaveBeenCalled();
   });
-});
 
-describe('withdrawal revision concurrency', () => {
-  beforeEach(() => { transactionFixture.retries = 0; transactionFixture.overlap = null; });
-  it('retries overlapping withdrawals against the committed revision, not stale snapshots', async () => {
-    storage.documents.clear();
-    let release!: () => void;
-    const gate = new Promise<void>(resolve => { release = resolve; });
-    transactionFixture.overlap = { arrivals: 0, release, gate };
-    const [first, second] = await Promise.all([
-      recordHealthConsentWithdrawal('account-1', 0),
-      recordHealthConsentWithdrawal('account-1', 0),
-    ]);
-    expect(transactionFixture.overlap.arrivals).toBe(2);
-    expect(transactionFixture.retries).toBe(1);
-    expect(first).toEqual({ status: 'withdrawn', revision: 1 });
-    expect(second).toEqual(first);
-    expect(storage.documents.get('health_consent_withdrawals/account-1')).toMatchObject({
-      uid: 'account-1', status: 'withdrawn', revision: 1,
-    });
-    expect(storage.documents.get('health_data_erasures/account-1')).toMatchObject({
-      uid: 'account-1', status: 'requested', consentRevision: 1,
-    });
-    transactionFixture.overlap = null;
-  });
-
-  it('retries overlapping reacceptance against the winning consent revision', async () => {
-    storage.documents.clear();
-    await recordHealthConsentWithdrawal('account-1', 0);
-    finishErasure(1);
-    let release!: () => void;
-    const gate = new Promise<void>(resolve => { release = resolve; });
-    transactionFixture.overlap = { arrivals: 0, release, gate };
-    const [first, second] = await Promise.all([
-      recordHealthConsentReacceptance('account-1', acceptance, 2),
-      recordHealthConsentReacceptance('account-1', acceptance, 2),
-    ]);
-    expect(transactionFixture.overlap.arrivals).toBe(2);
-    expect(transactionFixture.retries).toBe(1);
-    expect(first).toMatchObject({ status: 'active', revision: 3 });
-    expect(second).toEqual(first);
-    expect(storage.documents.get('health_consent_withdrawals/account-1')).toMatchObject({
-      uid: 'account-1', status: 'active', revision: 3,
-    });
-    transactionFixture.overlap = null;
-  });
-
-  it('refuses a delayed revocation request after another device reaccepted', async () => {
-    storage.documents.clear();
-    await recordHealthConsentWithdrawal('account-1', 0);
-    finishErasure(1);
-    await recordHealthConsentReacceptance('account-1', acceptance, 2);
-    const stale = await POST(req('POST', { action: 'withdraw', expectedRevision: 0 }));
-    expect(stale.status).toBe(409);
-    expect((await readHealthConsentState('account-1')).status).toBe('active');
-    expect(await recordHealthConsentWithdrawal('account-1', 3)).toEqual({ status: 'withdrawn', revision: 4 });
-  });
-});
-
-describe('reacceptance compare-and-set', () => {
-  it('refuses an old delayed acceptance after a later withdrawal', async () => {
-    storage.documents.clear();
-    await recordHealthConsentWithdrawal('account-1', 0);
-    finishErasure(1);
-    await recordHealthConsentReacceptance('account-1', acceptance, 2);
-    await recordHealthConsentWithdrawal('account-1', 3);
-    const response = await POST(req('POST', { action: 'reaccept', acceptance, expectedRevision: 1 }));
-    expect(response.status).toBe(409);
-    expect((await readHealthConsentState('account-1')).status).toBe('withdrawn');
-    await expect(recordHealthConsentReacceptance('account-1', acceptance, 4)).rejects.toThrow('revoca');
-    finishErasure(4);
-    expect(await recordHealthConsentReacceptance('account-1', acceptance, 5)).toMatchObject({ status: 'active', revision: 6 });
-  });
-});
-
-
-// New clients use the explicit server registration contract; legacy GET is
-// retained only during the staged rollout before Rules enforce a record.
-describe('trusted initial account health consent registration', () => {
-  beforeEach(() => { storage.documents.clear(); vi.clearAllMocks(); });
-
+  describe('trusted initial account health consent registration', () => {
   it('distinguishes unregistered users without disclosing anyone else\'s state', async () => {
     const request = new Request('https://backend.test/api/health-consent', {
       method: 'GET',
@@ -672,6 +267,12 @@ describe('trusted initial account health consent registration', () => {
     const response = await POST(req('POST', { action: 'accept-initial', uid: 'other', expectedRevision: 0, acceptance }));
     expect(response.status).toBe(200);
     expect(storage.documents.has('health_consent_withdrawals/other')).toBe(false);
-    expect(storage.documents.has('health_consent_withdrawals/account-1')).toBe(true);
+    expect(storage.documents.get('health_consent_withdrawals/account-1')).toMatchObject({
+      uid: 'account-1', status: 'active', revision: 1,
+      privacyVersion: acceptance.privacyVersion,
+      termsVersion: acceptance.termsVersion,
+    });
+    expect(auth.verifyHealthConsentRequester).toHaveBeenCalledTimes(1);
+  });
   });
 });
