@@ -69,6 +69,7 @@ function normalizedRows(rows, independent) {
       uid: row.uid, status: row.status,
       consentRevision: row.consent_revision, fenceEpoch: row.fence_epoch,
       erasedBeforeRevision: row.erased_before_revision,
+      ...(independent ? { changeSeq: row.change_seq } : {}),
     };
   });
 }
