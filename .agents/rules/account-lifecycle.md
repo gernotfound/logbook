@@ -1,5 +1,23 @@
 # Ciclo account, Auth e guest — TheLogBook
 
+### CF-03 — Editor biometrico indipendente dal writer (21/11/2026)
+
+`useProfileEditor()` mantiene soltanto bozza, revisione e intento
+`profile.patch`: riceve esplicitamente owner, profilo e un testimone
+revocabile della sessione insieme a un singolo writer Domain Operations.
+`useSettingsProfile()` conserva l'adapter Zustand/guest o Firebase legacy
+sul proprio owner; `useKindeCandidateProfile()` usa **solo** il realm
+Kinde confermato e `realm.submit()` verso journal cifrato/D1. Lo stesso
+form non può ripiegare sullo store legacy quando l'account è sospeso,
+revocato o è cambiata la generazione, nemmeno A→B→A dello stesso UID.
+`cloud-acknowledged` è successo verificato; `local-pending` è solo
+durabilità locale comprovata, la UI del realm resta bloccata fino al
+`recheck()` fidato senza ripetere l'intento. Il testimone è ricontrollato
+dopo gli await prima di liberare la bozza. Questa integrazione è
+**candidata non montata nel runtime pubblico**: non installa lettore
+UID, stato Zustand Kinde o autorizzazione offline. Gli altri editor e
+writer legacy richiedono migrazione progressiva prima del GO.
+
 ### CF-03/04 — Recheck del journal Kinde dopo esito ambiguo (21/11/2026)
 
 Se `useKindeCandidateFitnessLifecycle.submit()` riceve
