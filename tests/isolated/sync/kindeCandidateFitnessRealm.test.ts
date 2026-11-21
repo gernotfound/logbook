@@ -168,7 +168,7 @@ describe('isolated Kinde fitness realm with trusted owner, no Firebase/global gr
         }
     });
 
-    it('reconciles a response lost AFTER D1 commit through the same trusted scope without a second business edit', async () => {
+    it('recovers a response lost AFTER D1 commit immediately and keeps subsequent refresh idempotent', async () => {
         const fixture = await createCloudKeyHttpFixture([uid]);
         try {
             await fixture.consent(uid);
@@ -187,8 +187,11 @@ describe('isolated Kinde fitness realm with trusted owner, no Firebase/global gr
             const outcome = await realm.submit({
                 type: 'profile.patch', patch: { height: '193' },
             });
-            expect(outcome).toMatchObject({ kind: 'local-pending', pendingCount: 1 });
-            expect(realm.snapshot()).toBeNull();
+            // The existing receipt bridge may immediately reconcile this
+            // already-committed batch. That verified ACK is stronger than
+            // artificially forcing a pending state for the UI.
+            expect(outcome).toMatchObject({ kind: 'cloud-acknowledged', operations: 1 });
+            expect(realm.snapshot()?.data.profile?.height).toBe('193');
             expect(fixture.count('sync_receipts', uid)).toBe(1);
             expect(isVaultUnlocked(owner)).toBe(false);
             const reconciled = await realm.refresh();
@@ -232,7 +235,6 @@ describe('isolated Kinde fitness realm with trusted owner, no Firebase/global gr
             expect(realm.snapshot()).toBeNull();
             expect(isVaultUnlocked(owner)).toBe(false);
             expect(await get<string>('logbook:v2:' + owner)).toMatch(/^tlb-sealed:v1:/);
-            realm.close();
 
             const grant = await unlockVaultForOwner(owner);
             try {
@@ -244,6 +246,12 @@ describe('isolated Kinde fitness realm with trusted owner, no Firebase/global gr
                 grant.release();
             }
             expect(fixture.count('sync_receipts', uid)).toBe(0);
+            const reconciled = await realm.refresh();
+            expect(reconciled.data.profile?.height).toBe('192');
+            expect(realm.snapshot()?.data.profile?.height).toBe('192');
+            expect(fixture.count('sync_receipts', uid)).toBe(1);
+            expect(isVaultUnlocked(owner)).toBe(false);
+            realm.close();
 
             const resumed = await openKindeCandidateFitnessRealm({ ...client, expected });
             expect(resumed.snapshot()?.data.profile?.height).toBe('192');
