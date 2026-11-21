@@ -56,6 +56,17 @@ const DataHistory: React.FC<DataHistoryProps> = ({
         return map;
     }, [datedHistory]);
 
+    const currentDetailDay = useMemo(() => {
+        if (!detailDay) return null;
+        const records = daysByDate.get(detailDay.date) ?? [];
+        // The supported store has one day record per date. If a caller supplies
+        // multiple records without stable IDs, never silently switch the dialog
+        // to a different record after a concurrent refresh.
+        if (records.includes(detailDay)) return detailDay;
+        const matches = records.filter(day => day.measurementTime === detailDay.measurementTime);
+        return matches.length === 1 ? matches[0] : null;
+    }, [daysByDate, detailDay]);
+
     const daysByMonth = useMemo(() => {
         const map = new Map<string, MeasurementHistoryDay[]>();
         datedHistory.forEach(day => {
@@ -227,8 +238,8 @@ const DataHistory: React.FC<DataHistoryProps> = ({
                 )}
             </section>
 
-            {detailDay && (
-                <DataHistoryDetail day={detailDay} onClose={() => setDetailDay(null)} onSelectEdit={onSelectEdit} />
+            {currentDetailDay && (
+                <DataHistoryDetail day={currentDetailDay} onClose={() => setDetailDay(null)} onSelectEdit={onSelectEdit} />
             )}
         </div>
     );
