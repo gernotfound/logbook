@@ -3,7 +3,7 @@ import { expect, it, vi } from 'vitest';
 import type { KindeSessionContext } from './kinde_session_runtime_boundary.test';
 
 export function registerKindeSessionEpochCases(ctx: KindeSessionContext): void {
-    const { readyPrincipal, verified, readKindeCandidateIdentity, authenticatedIdentitySource, KindeCandidateBoundaryError, prepareKindeCandidateOwner, useKindeAccountSession } = ctx;
+    const { readyPrincipal, readKindeCandidateIdentity, authenticatedIdentitySource, KindeCandidateBoundaryError, prepareKindeCandidateOwner, useKindeAccountSession } = ctx;
 
     it('rejects a superseded candidate result when its CSRF witness changes mid-flight', async () => {
         vi.mocked(readKindeCandidateIdentity).mockResolvedValue({

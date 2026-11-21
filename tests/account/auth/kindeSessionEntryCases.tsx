@@ -93,7 +93,7 @@ export function registerKindeSessionEntryCases(ctx: KindeSessionContext): void {
         fireEvent.click(button);
         try {
             await waitFor(() => expect(revokeKindeCandidateSession).toHaveBeenCalledTimes(1));
-            expect(button).toBeDisabled();
+            expect((button as HTMLButtonElement).disabled).toBe(true);
             fireEvent.click(button);
             expect(revokeKindeCandidateSession).toHaveBeenCalledTimes(1);
             expect(screen.getByTestId('kinde-presence').textContent)
