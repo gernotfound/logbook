@@ -187,11 +187,23 @@ export function useKindeCandidateFitnessLifecycle({
         }
     };
 
+    const captureEditWitness = () => {
+        const active = realm.current;
+        if (!enabled || state.phase !== 'ready' || state.view !== session.view
+            || !active?.isCurrent()) return null;
+        const view = state.view;
+        return {
+            owner: state.snapshot.owner,
+            isCurrent: () => latestView.current === view
+                && realm.current === active && active.isCurrent(),
+        };
+    };
+
     return {
         // The immutable view identity suppresses stale plaintext on the very
         // render that changes identity, before passive effects can dispose.
         state: state.phase !== 'closed' && (!enabled || state.view !== session.view)
             ? CLOSED : state,
-        open, submit, recheck, suspend,
+        open, submit, recheck, suspend, captureEditWitness,
     };
 }
