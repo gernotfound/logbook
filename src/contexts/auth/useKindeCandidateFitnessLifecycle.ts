@@ -63,7 +63,10 @@ export function useKindeCandidateFitnessLifecycle({
         // The old view is already hidden synchronously by the returned
         // immutable view identity; clear its retained plaintext after commit.
         queueMicrotask(() => {
-            if (mounted.current && generation.current === token) setState(CLOSED);
+            if (mounted.current && generation.current === token) {
+                setState(previous => previous.phase !== 'closed'
+                    && (!enabled || previous.view !== session.view) ? CLOSED : previous);
+            }
         });
     }, [session.view, enabled]);
 
