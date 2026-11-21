@@ -255,6 +255,11 @@ non rappresentabile nel journal rifiuta il commit. Il commit reale usa
 IndexedDB atomico per business e journal. L'eventuale consegna usa
 `deliverKindeCandidateJournal`: solo una ricevuta D1 verificata e la
 successiva lettura del journal vuoto consentono `cloud-acknowledged`.
+Se la ricevuta copre le operazioni del ripristino ma l'archivio contiene
+anche altre modifiche, l'esito è `cloud-acknowledged-with-other-edits`.
+`local-pending` conta soltanto le operazioni di quel ripristino ancora
+presenti nel journal con il payload originale. Ogni operazione restante
+deve risultare coperta dalla frontiera cloud verificata.
 Un errore o ACK perso **non** elimina l'intento cifrato e non è successo
 cloud. Il riavvio recupera prima il batch originario.
 

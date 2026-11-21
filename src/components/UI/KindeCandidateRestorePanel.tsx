@@ -99,6 +99,10 @@ export function KindeCandidateRestorePanel({ session }: { session: Session }) {
             {phase === 'cloud-acknowledged' && (
                 <p role="status">Ripristino confermato dal server e journal locale senza operazioni in attesa.</p>
             )}
+            {phase === 'cloud-acknowledged-with-other-edits' && (
+                <p role="status">Il server ha confermato il ripristino. Ci sono anche altre modifiche
+                    nell’archivio: controlla i dati attuali prima di ripristinare di nuovo il backup.</p>
+            )}
             {phase === 'already-current' && (
                 <p role="status">Il backup corrisponde già ai dati verificati: nessuna modifica necessaria.</p>
             )}
