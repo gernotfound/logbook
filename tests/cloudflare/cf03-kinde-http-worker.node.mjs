@@ -1,8 +1,68 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import frontend from '../../cloudflare/auth-proxy.mjs';
 import { issueVerifiedSession } from '../../cloudflare/auth/session-issuer.mjs';
 import { routeCandidateFirstPartyApi } from '../../cloudflare/first-party-api-candidate.mjs';
 import { fixture, ORIGIN, SESSION, START, CALLBACK, LOGOUT, cloudCall, acceptance } from './kinde-http-worker-fixture.mjs';
+
+void test('edge OAuth rate limiting separates clients, groups IPv6 and ignores supplied bucket headers', async () => {
+  const f = await fixture();
+  try {
+    const keys = [];
+    const forwarded = [];
+    f.env.AUTH_RATE_LIMITER.limit = async ({ key }) => {
+      const first = !keys.includes(key);
+      keys.push(key);
+      return { success: first };
+    };
+    const env = {
+      APP_ORIGIN: ORIGIN,
+      KINDE_HTTP: { fetch(request) {
+        forwarded.push(request);
+        return f.handler(request, f.env);
+      } },
+    };
+    function send(path, ip, { edge = true, upstream, cookie } = {}) {
+      const headers = new Headers({
+        'CF-Connecting-IP': ip, 'X-Logbook-OAuth-Bucket': 'f'.repeat(64),
+        'X-Forwarded-For': '198.51.100.254', Origin: ORIGIN,
+      });
+      if (upstream) headers.set('CF-Worker', upstream);
+      if (cookie) headers.set('Cookie', cookie);
+      const request = new Request(ORIGIN + path, {
+        method: path.startsWith(CALLBACK) ? 'GET' : 'POST', headers,
+      });
+      if (edge) Object.defineProperty(request, 'cf', { value: { colo: 'SYN' } });
+      return frontend.fetch(request, env);
+    }
+
+    const first = await send(START, '192.0.2.10');
+    assert.equal(first.status, 303);
+    assert.equal((await send(START, '192.0.2.10')).status, 429);
+    assert.equal((await send(START, '::ffff:192.0.2.10')).status, 429);
+    assert.equal((await send(START, '192.0.2.11')).status, 303);
+    assert.equal((await send(START, '2001:db8::10')).status, 303);
+    assert.equal((await send(START, '2001:0DB8:0:0:8:0:0:11')).status, 429);
+    assert.equal((await send(START, '2001:db8:0:1::10')).status, 303);
+    assert.equal((await send(START, '192.0.2.12', { edge: false })).status, 303);
+    assert.equal((await send(START, '192.0.2.13', { upstream: 'other.invalid' })).status, 429);
+    assert.equal((await send(START, '192.0.2.14, 192.0.2.15')).status, 429);
+    const callback = CALLBACK + '?error=access_denied&state='
+      + new URL(first.headers.get('location')).searchParams.get('state');
+    const cookie = first.headers.getSetCookie()[0].split(';')[0];
+    assert.equal((await send(callback, '192.0.2.10', { cookie })).status, 401);
+    assert.equal((await send(callback, '192.0.2.10', { cookie })).status, 429);
+    assert.equal((await send(SESSION, '192.0.2.10')).status, 401);
+    assert.equal(forwarded.at(-1).headers.has('x-logbook-oauth-bucket'), false);
+    assert.equal(keys[0], keys[10].replace('callback', 'start'));
+    assert.equal(keys[10], keys[11]);
+    assert.ok(keys.every(key => !key.includes('192.0.2') && !key.includes('f'.repeat(64))));
+    assert.ok(forwarded.every(request => !request.headers.has('cf-connecting-ip')
+      && !request.headers.has('x-forwarded-for')));
+    assert.equal(f.sqlite.prepare('SELECT COUNT(*) AS n FROM auth_oauth_attempts').get().n, 4);
+    assert.equal(f.calls(), 0);
+  } finally { f.close(); }
+});
 
 void test('same-origin HTTP start and callback issue only a signed, verified session', async () => {
   const f = await fixture();
