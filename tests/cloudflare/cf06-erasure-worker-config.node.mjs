@@ -16,6 +16,24 @@ void test('CF-06 scheduled-only candidate is unscheduled, unexposed and has dist
   assert.equal(Object.hasOwn(candidate, 'vars'), false);
 });
 
+void test('CF-06 scheduler stays inert without an exact, deliberate processing opt-in', async () => {
+  for (const flag of [undefined, null, '', false, true, '1', 'true', 'enabled ']) {
+    const env = {
+      CF06_ERASURE_RUN_ENABLED: flag,
+      get DB() { throw new Error('unexpected-primary-read'); },
+      get RECOVERY_DB() { throw new Error('unexpected-recovery-read'); },
+    };
+    assert.deepEqual(await erasureWorker.scheduled({}, env), { outcome: 'paused' });
+  }
+  assert.deepEqual(await erasureWorker.scheduled({}, undefined), { outcome: 'paused' });
+  let requestedPrimary = false;
+  await assert.rejects(erasureWorker.scheduled({}, {
+    CF06_ERASURE_RUN_ENABLED: 'enabled',
+    get DB() { requestedPrimary = true; throw new Error('synthetic-primary-binding'); },
+  }), /synthetic-primary-binding/);
+  assert.equal(requestedPrimary, true);
+});
+
 void test('CF-06 candidate rejects accidental cron activation, new routes, secrets or incorrect database bindings', () => {
   for (const change of [
     { workers_dev: true },
