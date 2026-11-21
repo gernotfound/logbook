@@ -92,5 +92,8 @@ describe('DataHistory detail follows current source records', () => {
             editingDate={null} onSelectEdit={vi.fn()}
         />);
         expect(screen.queryByRole('dialog')).toBeNull();
+        const unavailable = screen.getAllByRole('button', { name: /Apri dettaglio/i });
+        expect(unavailable).toHaveLength(2);
+        unavailable.forEach(button => expect((button as HTMLButtonElement).disabled).toBe(true));
     });
 });

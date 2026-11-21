@@ -1,11 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useLocalToday } from '../../hooks/useLocalToday';
-import { ChevronRight, Pencil, Ruler, Trash2 } from 'lucide-react';
 import { Logic } from '../../lib/logic';
-import { ContextMenu } from '../UI/ContextMenu';
 import type { MeasurementHistoryDay } from '../../types';
-import DataHistoryDetail from './DataHistoryDetail';
-import { hasMeasurementData, finiteAverage, formatDecimal, recordSummary } from './dataHistoryFormatting';
+import DataHistoryRecordCard from './DataHistoryRecordCard';
+import { finiteAverage, formatDecimal } from './dataHistoryFormatting';
 import { dayLabel } from '../../lib/utils/historyCalendar';
 import { HistoryMonthCalendar, HistoryPeriodButton, HistoryPeriodPicker } from '../UI/HistoryCalendar';
 
@@ -34,7 +32,6 @@ const DataHistory: React.FC<DataHistoryProps> = ({
     const [selectedDate, setSelectedDate] = useState(() => initialDate);
     const [periodOpen, setPeriodOpen] = useState(false);
     const [pickerYear, setPickerYear] = useState(() => Number(initialDate.slice(0, 4)));
-    const [detailDay, setDetailDay] = useState<MeasurementHistoryDay | null>(null);
     const adoptedInitialHistory = useRef(datedHistory.length > 0);
 
     useEffect(() => {
@@ -55,24 +52,6 @@ const DataHistory: React.FC<DataHistoryProps> = ({
         });
         return map;
     }, [datedHistory]);
-
-    const currentDetailDay = useMemo(() => {
-        if (!detailDay) return null;
-        const records = daysByDate.get(detailDay.date) ?? [];
-        // The supported store has one day record per date. If a caller supplies
-        // multiple records without stable IDs, never silently switch the dialog
-        // to a different record after a concurrent refresh.
-        if (records.includes(detailDay)) return detailDay;
-        if (records.length === 1) return records[0];
-        const matches = records.filter(day => day.measurementTime === detailDay.measurementTime);
-        return matches.length === 1 ? matches[0] : null;
-    }, [daysByDate, detailDay]);
-
-    useEffect(() => {
-        // A dismissed source record must not reopen its old dialog if a later
-        // hydration or sync introduces a matching date again.
-        if (detailDay && !currentDetailDay) setDetailDay(null);
-    }, [detailDay, currentDetailDay]);
 
     const daysByMonth = useMemo(() => {
         const map = new Map<string, MeasurementHistoryDay[]>();
@@ -186,68 +165,28 @@ const DataHistory: React.FC<DataHistoryProps> = ({
                 ) : (
                     <div className="history-record-list">
                         {selectedDays.map((day, index) => {
-                            const measurement = hasMeasurementData(day);
-                            const title = measurement
-                                ? `Misurazione${day.measurementTime ? ` · ${day.measurementTime}` : ''}`
-                                : 'Dati giornalieri';
+                            const uniqueTime = selectedDays.length === 1
+                                || selectedDays.filter(item => item.measurementTime === day.measurementTime).length === 1;
+                            // In the authoritative NutritionDay map the date is unique.
+                            // Only synthetic/malformed duplicates require an additional time key.
+                            const recordKey = selectedDays.length === 1
+                                ? day.date
+                                : `${day.date}:${day.measurementTime ?? 'unspecified'}${uniqueTime ? '' : ':' + index}`;
                             return (
-                                <article
-                                    className={`history-record-card${editingDate === day.date ? ' editing' : ''}`}
-                                    key={`${day.date}-${day.measurementTime || index}`}
-                                >
-                                    <button
-                                        className="history-record-open"
-                                        type="button"
-                                        aria-label={`Apri dettaglio del ${Logic.formatItalianDate(day.date)}`}
-                                        onClick={() => setDetailDay(day)}
-                                    >
-                                        <span className="history-record-icon" aria-hidden="true"><Ruler size={20} /></span>
-                                        <span className="history-record-copy">
-                                            <span className="history-record-name">{title}</span>
-                                            <span className="history-record-info">{recordSummary(day)}</span>
-                                        </span>
-                                        <ChevronRight size={18} aria-hidden="true" />
-                                    </button>
-                                    <div className="history-record-menu">
-                                        <ContextMenu
-                                            items={[
-                                                {
-                                                    label: 'Vedi dettaglio',
-                                                    icon: <Ruler size={16} />,
-                                                    onClick: event => {
-                                                        // The menu item unmounts; retain its surviving trigger for modal focus restoration.
-                                                        event.currentTarget.closest('.history-record-card')
-                                                            ?.querySelector<HTMLButtonElement>('button[aria-haspopup="menu"]')
-                                                            ?.focus({ preventScroll: true });
-                                                        setDetailDay(day);
-                                                    },
-                                                },
-                                                {
-                                                    label: 'Modifica misurazione',
-                                                    icon: <Pencil size={16} />,
-                                                    hidden: !measurement,
-                                                    onClick: () => onSelectEdit(day),
-                                                },
-                                                {
-                                                    label: 'Elimina misurazione',
-                                                    icon: <Trash2 size={16} />,
-                                                    variant: 'danger',
-                                                    hidden: !measurement || !onDeleteMeasurement,
-                                                    onClick: () => onDeleteMeasurement?.(day.date),
-                                                },
-                                            ]}
-                                        />
-                                    </div>
-                                </article>
+                                <DataHistoryRecordCard
+                                    key={recordKey}
+                                    day={day}
+                                    editingDate={editingDate}
+                                    canOpenDetail={uniqueTime}
+                                    onSelectEdit={onSelectEdit}
+                                    onDeleteMeasurement={onDeleteMeasurement}
+                                />
                             );
                         })}
                     </div>
                 )}
             </section>
 
-            {currentDetailDay && (
-                <DataHistoryDetail day={currentDetailDay} onClose={() => setDetailDay(null)} onSelectEdit={onSelectEdit} />
-            )}
         </div>
     );
 };
