@@ -46,13 +46,14 @@ type PreparedCardioSession =
     | { ok: true; fields: Omit<CardioSession, 'id'> }
     | { ok: false; message: string };
 
-// Number() accepts hex, binary and other non-decimal inputs that the UI's
-// kilometre field does not describe. Preserve decimal/exponent input semantics.
+// Number() accepts hex and binary, while the UI accepts decimal values.
+// HTML number inputs use dot syntax; only the kilometre text input permits comma.
 const DECIMAL_LITERAL = /^[+-]?(?:\d+(?:[.,]\d*)?|[.,]\d+)(?:[eE][+-]?\d+)?$/;
 
-function decimalInput(value: string): number {
+function decimalInput(value: string, allowComma = false): number {
     const trimmed = value.trim();
-    return DECIMAL_LITERAL.test(trimmed) ? Number(trimmed.replace(',', '.')) : Number.NaN;
+    if (!DECIMAL_LITERAL.test(trimmed) || (!allowComma && trimmed.includes(','))) return Number.NaN;
+    return Number(trimmed.replace(',', '.'));
 }
 
 /**
@@ -81,7 +82,7 @@ export function prepareCardioSessionFields(
     }
 
     const distanceKm = form.distanceKm.trim()
-        ? decimalInput(form.distanceKm) : undefined;
+        ? decimalInput(form.distanceKm, true) : undefined;
     if (distanceKm !== undefined && (!Number.isFinite(distanceKm) || distanceKm < 0)) {
         return { ok: false, message: 'Inserisci una distanza valida.' };
     }
