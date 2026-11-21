@@ -105,7 +105,16 @@ export const trialCases = {
   },
   "replica-checkpoint": {
     "mutate": ["src/lib/sync/localReplicaCheckpoint.ts"],
-    "testFiles": ["tests/isolated/sync/localReplicaCheckpoint.test.ts"],
+    // Check the encrypted D1 claim and its recovery through the callers that
+    // pass expectedCloudflareClaimId, in addition to direct checkpoint adoption.
+    "testFiles": [
+      "tests/isolated/sync/localReplicaCheckpoint.test.ts",
+      "tests/isolated/sync/cloudReplicaClaimRecovery_clock.test.ts",
+      "tests/isolated/sync/cloudReplicaClaimRecovery_fences.test.ts",
+      "tests/isolated/sync/cloudReplicaClaimRecovery_historical.test.ts",
+      "tests/isolated/sync/cloudReplicaClaimRecovery_rebase.test.ts",
+      "tests/isolated/sync/cloudReplicaClaimRecovery_staging.test.ts",
+    ],
     "runner": "isolated"
   },
   "cloud-integrity": {
