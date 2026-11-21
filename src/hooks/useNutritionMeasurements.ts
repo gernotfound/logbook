@@ -6,6 +6,7 @@ import { captureSession, isCurrentSession } from '../lib/sync/session';
 import { useAppStore } from '../store/useAppStore';
 import { useDialogStore } from '../store/useDialogStore';
 import { Logic } from '../lib/logic';
+import { hasMeasurementData } from '../lib/nutrition/measurementPresence';
 import type { BodyFatProvenance, NutritionDay, UserProfile } from '../types';
 
 const EMPTY_NUTRITION: Record<string, NutritionDay> = {};
@@ -31,20 +32,7 @@ export function useNutritionMeasurements(selectedDate?: string, includeHistory =
         thighs: field('thighs'), calves: field('calves'), measureTime: field('measurementTime') || defaultMeasureTime
     });
     const { weight, waist, neck, hip, chest, shoulders, biceps, thighs, calves, measureTime } = draft.values;
-    const hasExistingData = Boolean(
-        targetDayData && (
-            (targetDayData.weight !== undefined && targetDayData.weight !== null && targetDayData.weight !== '') ||
-            (targetDayData.bf !== undefined && targetDayData.bf !== null && targetDayData.bf !== '') ||
-            (targetDayData.waist !== undefined && targetDayData.waist !== null && targetDayData.waist !== '') ||
-            (targetDayData.neck !== undefined && targetDayData.neck !== null && targetDayData.neck !== '') ||
-            (targetDayData.hip !== undefined && targetDayData.hip !== null && targetDayData.hip !== '') ||
-            (targetDayData.chest !== undefined && targetDayData.chest !== null && targetDayData.chest !== '') ||
-            (targetDayData.shoulders !== undefined && targetDayData.shoulders !== null && targetDayData.shoulders !== '') ||
-            (targetDayData.biceps !== undefined && targetDayData.biceps !== null && targetDayData.biceps !== '') ||
-            (targetDayData.thighs !== undefined && targetDayData.thighs !== null && targetDayData.thighs !== '') ||
-            (targetDayData.calves !== undefined && targetDayData.calves !== null && targetDayData.calves !== '')
-        )
-    );
+    const hasExistingData = hasMeasurementData(targetDayData);
 
     const measurementsHistory = useMemo(() => {
         if (!includeHistory) return EMPTY_MEASUREMENTS_HISTORY;

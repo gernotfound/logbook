@@ -3,42 +3,18 @@
 // Effetti: non salva sul DB, chiama onSave passando l'oggetto ciclo completato.
 
 import { useState, useRef, useMemo } from 'react';
-import { addDays, differenceInCalendarDays, parseISO, format, isValid, startOfDay } from 'date-fns';
 import { Logic } from '../../../lib/logic';
 import { MAX_EDITABLE_CYCLE_WEEKS, MAX_CYCLE_SESSIONS_PER_WEEK, previewCycleCount } from '../../../lib/calc/cycleLimits';
+import { computeEndDate, computeWeeksFromDates, prepareCycleSubmission } from './cycleFormModel';
 import type {
     TrainingCycle,
     TrainingCycleIntent,
     TrainingCycleProgressionFocus,
     TrainingCycleRoutineItem,
-    TrainingCycleStrategy,
     WorkoutRoutine,
 } from '../../../types';
 
-export function computeEndDate(startIso: string, weeks: number): string {
-    try {
-        const parsed = typeof startIso === 'string' && !startIso.includes('T') ? parseISO(startIso) : new Date(startIso);
-        if (!isValid(parsed)) return startIso;
-        const totalWeeks = Math.min(MAX_EDITABLE_CYCLE_WEEKS, Math.max(1, weeks));
-        const end = addDays(startOfDay(parsed), totalWeeks * 7 - 1);
-        return format(end, 'yyyy-MM-dd');
-    } catch {
-        return startIso;
-    }
-}
-
-export function computeWeeksFromDates(startIso: string, endIso: string): number {
-    try {
-        const start = typeof startIso === 'string' && !startIso.includes('T') ? parseISO(startIso) : new Date(startIso);
-        const end = typeof endIso === 'string' && !endIso.includes('T') ? parseISO(endIso) : new Date(endIso);
-        if (!isValid(start) || !isValid(end)) return 1;
-        const diffDays = differenceInCalendarDays(startOfDay(end), startOfDay(start));
-        if (diffDays < 0) return 1;
-        return Math.max(1, Math.ceil((diffDays + 1) / 7));
-    } catch {
-        return 1;
-    }
-}
+export { computeEndDate, computeWeeksFromDates } from './cycleFormModel';
 
 export interface UseCycleFormProps {
     initialCycle?: TrainingCycle | null;
@@ -207,10 +183,13 @@ export function useCycleForm({ initialCycle, routines, onSave, showAlert }: UseC
         }
     };
 
-    const handleMoveRoutine = (index: number, direction: -1 | 1) => {
-        const targetIndex = index + direction;
-        if (targetIndex < 0 || targetIndex >= cycleRoutines.length) return;
+    const handleMoveRoutine = (routineId: string, direction: -1 | 1) => {
         setCycleRoutines(prev => {
+            // A queued remove/reorder can change positions before this updater
+            // runs; resolve the stable business identity against current state.
+            const index = prev.findIndex(item => item.routineId === routineId);
+            const targetIndex = index + direction;
+            if (index < 0 || targetIndex < 0 || targetIndex >= prev.length) return prev;
             const next = [...prev];
             const [moved] = next.splice(index, 1);
             next.splice(targetIndex, 0, moved);
@@ -218,8 +197,8 @@ export function useCycleForm({ initialCycle, routines, onSave, showAlert }: UseC
         });
     };
 
-    const handleRemoveRoutine = (index: number) => {
-        setCycleRoutines(prev => prev.filter((_, i) => i !== index));
+    const handleRemoveRoutine = (routineId: string) => {
+        setCycleRoutines(prev => prev.filter(item => item.routineId !== routineId));
     };
 
     const handleStrategyIntentChange = (intent: TrainingCycleIntent | '') => {
@@ -249,71 +228,37 @@ export function useCycleForm({ initialCycle, routines, onSave, showAlert }: UseC
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (saveInFlightRef.current) return;
-        const trimmedName = name.trim();
-        if (!trimmedName) {
-            await showAlert("Inserisci un nome per il ciclo di allenamento.");
+        const prepared = prepareCycleSubmission({
+            name,
+            cycleRoutines,
+            strategyIntent,
+            progressionFocus,
+            durationWeeks,
+            sessionsPerWeek,
+            dateTextInput,
+            endDateTextInput,
+            notes,
+            primaryMuscles,
+            secondaryMuscles,
+        });
+        if (!prepared.ok) {
+            await showAlert(prepared.message);
             return;
         }
-
-        if (cycleRoutines.length === 0) {
-            await showAlert("Aggiungi almeno una scheda al ciclo di allenamento.");
-            return;
-        }
-        if (strategyIntent === 'development' && !progressionFocus) {
-            await showAlert("Seleziona cosa vuoi far progredire principalmente.");
-            return;
-        }
-
-        // Keep the existing editor behavior: nonpositive integers snap to the
-        // minimum. Out-of-range positive values and fractions cannot be saved.
-        const rawWeeks = durationWeeks.trim() === '' ? 4 : Number(durationWeeks);
-        const rawFreq = sessionsPerWeek.trim() === '' ? cycleRoutines.length : Number(sessionsPerWeek);
-        const weeks = Math.max(1, rawWeeks);
-        const freqPerWeek = Math.max(1, rawFreq);
-        if (!Number.isSafeInteger(weeks) || weeks > MAX_EDITABLE_CYCLE_WEEKS
-            || !Number.isSafeInteger(freqPerWeek) || freqPerWeek > MAX_CYCLE_SESSIONS_PER_WEEK) {
-            await showAlert('Il ciclo deve durare da 1 a 52 settimane e prevedere da 1 a 14 sedute intere a settimana.');
-            return;
-        }
-        // Never fall back to an old date when an edited text field is invalid.
-        // Persisting an inverted interval would make the timeline silently
-        // ignore the user's chosen endDate on subsequent reads.
-        const validStartDate = Logic.parseDateInput(dateTextInput);
-        const validEndDate = Logic.parseDateInput(endDateTextInput);
-        if (!validStartDate || !validEndDate || validEndDate < validStartDate) {
-            await showAlert('Inserisci date di inizio e fine valide, con la fine non precedente all’inizio.');
-            return;
-        }
-        // A blank/nonpositive duration is normalized on save. Its preview may
-        // retain the old end date while editing; never persist that stale end.
-        // Explicit date edits already update durationWeeks and stay untouched.
-        const savedEndDate = durationWeeks.trim() === '' || rawWeeks < 1
-            ? computeEndDate(validStartDate, weeks)
-            : validEndDate;
-        const hasStrategyDetails = Boolean(strategyIntent || primaryMuscles.length || secondaryMuscles.length);
-        const editableStrategy: TrainingCycleStrategy | undefined = hasStrategyDetails
-            ? {
-                ...(strategyIntent ? { intent: strategyIntent } : {}),
-                ...(strategyIntent === 'development' && progressionFocus ? { progressionFocus } : {}),
-                ...(primaryMuscles.length ? { primaryMuscles: [...primaryMuscles] } : {}),
-                ...(secondaryMuscles.length ? { secondaryMuscles: [...secondaryMuscles] } : {}),
-            }
-            : undefined;
-        const strategy = editableStrategy;
-
+        const fields = prepared.fields;
         const cycle: TrainingCycle = {
             id: initialCycle?.id || Logic.generateId('cycle'),
-            name: trimmedName,
-            durationWeeks: weeks,
-            sessionsPerWeek: freqPerWeek,
+            name: fields.name,
+            durationWeeks: fields.durationWeeks,
+            sessionsPerWeek: fields.sessionsPerWeek,
             progressionMode: initialCycle?.progressionMode ?? 'sequential',
-            startDate: validStartDate,
-            endDate: savedEndDate,
-            notes: notes.trim(),
-            ...(strategy ? { strategy } : {}),
-            routines: cycleRoutines,
+            startDate: fields.startDate,
+            endDate: fields.endDate,
+            notes: fields.notes,
+            ...(fields.strategy ? { strategy: fields.strategy } : {}),
+            routines: fields.routines,
             createdAt: initialCycle?.createdAt || Date.now(),
-            isActive: initialCycle?.isActive ?? false
+            isActive: initialCycle?.isActive ?? false,
         };
 
         // A rapid second submit must not enqueue another upsert (or generate
