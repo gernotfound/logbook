@@ -7,8 +7,8 @@ interface CycleRoutinesListProps {
     routines: WorkoutRoutine[];
     library?: Exercise[];
     onAdd: (routineId: string) => void;
-    onMove: (index: number, direction: -1 | 1) => void;
-    onRemove: (index: number) => void;
+    onMove: (routineId: string, direction: -1 | 1) => void;
+    onRemove: (routineId: string) => void;
 }
 
 const EMPTY_LIBRARY: Exercise[] = [];
@@ -171,7 +171,7 @@ export const CycleRoutinesList = memo(function CycleRoutinesList({
                                 <div className="planning-sequence-actions">
                                     <button
                                         type="button"
-                                        onClick={() => onMove(index, -1)}
+                                        onClick={() => onMove(item.routineId, -1)}
                                         disabled={index === 0}
                                         aria-label={`Sposta ${name} verso l'alto`}
                                         title="Sposta su nella sequenza"
@@ -180,7 +180,7 @@ export const CycleRoutinesList = memo(function CycleRoutinesList({
                                     </button>
                                     <button
                                         type="button"
-                                        onClick={() => onMove(index, 1)}
+                                        onClick={() => onMove(item.routineId, 1)}
                                         disabled={index === cycleRoutines.length - 1}
                                         aria-label={`Sposta ${name} verso il basso`}
                                         title="Sposta giù nella sequenza"
@@ -190,7 +190,7 @@ export const CycleRoutinesList = memo(function CycleRoutinesList({
                                     <button
                                         type="button"
                                         className="danger"
-                                        onClick={() => onRemove(index)}
+                                        onClick={() => onRemove(item.routineId)}
                                         aria-label={`Rimuovi ${name} dalla sequenza`}
                                         title="Rimuovi scheda dalla sequenza"
                                     >

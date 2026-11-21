@@ -2,7 +2,7 @@ import { useState, useMemo, useCallback } from 'react';
 import { CheckCircle2, Trash2, Save, Search } from 'lucide-react';
 import { useWorkoutSession } from '../../hooks/useWorkoutSession';
 import { useWakeLock } from '../../hooks/useWakeLock';
-import { parseManualDuration } from '../../lib/utils/date';
+import { parseManualDuration } from '../../lib/utils/duration';
 import SessionHeader from './SessionHeader';
 import SessionExerciseAccordion from './session/SessionExerciseAccordion';
 import { isCurrentExerciseMutationTarget } from './session/exerciseMutationTarget';

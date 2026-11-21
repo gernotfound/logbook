@@ -1,3 +1,5 @@
+import { parseMeasurementNumber } from '../nutrition/measurementInput';
+
 interface NavyMeasurements {
     gender: 'M' | 'F';
     height: number;
@@ -6,15 +8,6 @@ interface NavyMeasurements {
     hip?: number;
 }
 
-/** A measurement must be a complete, finite decimal value, not a numeric prefix. */
-function parseMeasurement(value: unknown): number | null {
-    if (typeof value === 'number') return Number.isFinite(value) ? value : null;
-    if (typeof value !== 'string') return null;
-    const normalized = value.trim();
-    if (!/^\d+(?:[.,]\d+)?$/.test(normalized)) return null;
-    const parsed = Number(normalized.replace(',', '.'));
-    return Number.isFinite(parsed) ? parsed : null;
-}
 
 function calculateUsNavyBodyFat({ gender, height, waist, neck, hip }: NavyMeasurements): number | null {
     if (![height, waist, neck].every(Number.isFinite) || height < 50 || height > 250 || waist <= 0 || neck <= 0) {
@@ -34,12 +27,12 @@ function calculateUsNavyBodyFat({ gender, height, waist, neck, hip }: NavyMeasur
 }
 
 function calculateFromMeasurements(gender: 'M' | 'F', inputs: Record<string, unknown>): number | null {
-    const height = parseMeasurement(inputs.height);
-    const waist = parseMeasurement(inputs.waist);
-    const neck = parseMeasurement(inputs.neck);
+    const height = parseMeasurementNumber(inputs.height);
+    const waist = parseMeasurementNumber(inputs.waist);
+    const neck = parseMeasurementNumber(inputs.neck);
     if (height === null || waist === null || neck === null) return null;
     if (gender === 'F') {
-        const hip = parseMeasurement(inputs.hip);
+        const hip = parseMeasurementNumber(inputs.hip);
         return hip === null ? null : calculateUsNavyBodyFat({ gender, height, waist, neck, hip });
     }
     return calculateUsNavyBodyFat({ gender, height, waist, neck });
@@ -53,7 +46,7 @@ export function calculateBodyFatByMethod(method: unknown, params: unknown): numb
 }
 
 export function calculateBodyFat(weight: unknown, profile: unknown): number | null {
-    const parsedWeight = parseMeasurement(weight);
+    const parsedWeight = parseMeasurementNumber(weight);
     if (parsedWeight === null || parsedWeight <= 0 || !profile || typeof profile !== 'object' || Array.isArray(profile)) {
         return null;
     }
