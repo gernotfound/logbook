@@ -24,7 +24,7 @@ export interface BodyMeasurementDraft {
     calves: string;
 }
 
-export type BodyMeasurementValues = {
+type BodyMeasurementValues = {
     weight: number;
 } & {
     [K in Exclude<keyof BodyMeasurementDraft, 'weight'>]: number | undefined;
