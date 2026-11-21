@@ -24,6 +24,7 @@ const uid = 'k_' + 'P'.repeat(43);
 const otherUid = 'k_' + 'Q'.repeat(43);
 const owner = 'user:' + uid;
 const expected = { uid, fenceEpoch: 1, healthConsentRevision: 1 };
+let online: boolean;
 const catalog = {
     manifest: { version: 'cf03-realm', updatedAt: '2026-11-21T00:00:00.000Z',
         schemaVersion: 1, docRefs: { exercises: 'fixture/e', foods: 'fixture/f' },
@@ -63,11 +64,12 @@ function browser(fixture: Fixture, account = uid) {
 }
 
 beforeEach(async () => {
+    online = true;
     lockAllVaults();
     await clear();
     localStorage.clear();
     catalogSource.read.mockReset().mockResolvedValue(catalog);
-    vi.stubGlobal('navigator', { locks: {
+    vi.stubGlobal('navigator', { get onLine() { return online; }, locks: {
         request: async (_name: string, _opts: unknown, work: () => Promise<unknown>) => work(),
     } });
 });
@@ -78,6 +80,87 @@ afterEach(() => {
 });
 
 describe('isolated Kinde fitness realm with trusted owner, no Firebase/global grant', () => {
+    it('journals two edits offline with no HTTP, then reconciles exactly once on reconnect', async () => {
+        const fixture = await createCloudKeyHttpFixture([uid]);
+        try {
+            await fixture.consent(uid);
+            const client = browser(fixture);
+            const realm = await openKindeCandidateFitnessRealm({ ...client, expected });
+            const before = client.paths.length;
+            online = false;
+            for (const [index, height] of ['181', '184'].entries()) {
+                await expect(realm.submit({ type: 'profile.patch', patch: { height } }))
+                    .resolves.toEqual({ kind: 'local-pending', pendingCount: index + 1 });
+                expect(realm.snapshot()?.data.profile?.height).toBe(height);
+                expect(isVaultUnlocked(owner)).toBe(false);
+            }
+            expect(client.paths).toHaveLength(before);
+            expect(fixture.count('sync_receipts', uid)).toBe(0);
+            const sealed = await get('logbook:v2:' + owner);
+            expect(sealed).toMatch(/^tlb-sealed:v1:/);
+            await expect(openKindeCandidateFitnessRealm({ ...client, expected }))
+                .rejects.toBeInstanceOf(KindeCandidateBoundaryError);
+            expect(await get('logbook:v2:' + owner)).toBe(sealed);
+            expect(client.paths).toHaveLength(before);
+
+            online = true;
+            expect(realm.snapshot()).toBeNull();
+            await expect(realm.submit({ type: 'profile.patch', patch: { height: '190' } }))
+                .rejects.toBeInstanceOf(KindeCandidateBoundaryError);
+            expect(client.paths).toHaveLength(before);
+            await expect(realm.refresh()).resolves.toMatchObject({ data: { profile: { height: '184' } } });
+            const receipts = fixture.count('sync_receipts', uid);
+            expect(receipts).toBe(1);
+            await realm.refresh();
+            expect(fixture.count('sync_receipts', uid)).toBe(receipts);
+            expect(isVaultUnlocked(owner)).toBe(false);
+        } finally { fixture.close(); }
+    });
+
+    it('applies the deadline again inside IndexedDB after a local writer yields', async () => {
+        const fixture = await createCloudKeyHttpFixture([uid]);
+        try {
+            await fixture.consent(uid);
+            const deadline = Date.now() + 60_000;
+            fixture.sqlite.prepare('UPDATE auth_sessions SET idle_expires_at_ms=? WHERE uid=?').run(deadline, uid);
+            const client = browser(fixture);
+            const realm = await openKindeCandidateFitnessRealm({ ...client, expected });
+            const before = await get('logbook:v2:' + owner);
+            const requests = client.paths.length;
+            online = false;
+            catalogSource.read.mockImplementationOnce(async () => {
+                vi.spyOn(Date, 'now').mockReturnValue(deadline);
+                return catalog;
+            });
+            await expect(realm.submit({ type: 'profile.patch', patch: { height: '181' } })).rejects.toThrow();
+            expect(realm.snapshot()).toBeNull();
+            expect(await get('logbook:v2:' + owner)).toBe(before);
+            expect(client.paths).toHaveLength(requests);
+            expect(isVaultUnlocked(owner)).toBe(false);
+        } finally { fixture.close(); }
+    });
+
+    it('preserves the encrypted edit when consent was revoked on another device before reconnect', async () => {
+        const fixture = await createCloudKeyHttpFixture([uid]);
+        try {
+            await fixture.consent(uid);
+            const client = browser(fixture);
+            const realm = await openKindeCandidateFitnessRealm({ ...client, expected });
+            online = false;
+            await expect(realm.submit({ type: 'profile.patch', patch: { height: '181' } }))
+                .resolves.toMatchObject({ kind: 'local-pending' });
+            const sealed = await get('logbook:v2:' + owner);
+            await fixture.withdraw(uid);
+            online = true;
+            await expect(realm.refresh()).rejects.toThrow();
+            expect(realm.snapshot()).toBeNull();
+            expect(await get('logbook:v2:' + owner)).toBe(sealed);
+            expect(client.paths).not.toContain('/v1/sync/commit');
+            expect(fixture.count('sync_receipts', uid)).toBe(0);
+            expect(isVaultUnlocked(owner)).toBe(false);
+        } finally { fixture.close(); }
+    });
+
     it('opens a read-only snapshot, commits a domain intent with one verified D1 receipt, and closes without leaking a DEK', async () => {
         const fixture = await createCloudKeyHttpFixture([uid]);
         try {

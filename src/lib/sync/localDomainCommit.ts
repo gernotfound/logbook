@@ -22,9 +22,9 @@ import {
     CURRENT_SYNC_PROTOCOL,
 } from '../schemaEvolution';
 import { sequenceOperationsForBoundedTransactions } from './syncBatching';
-import { validateLocalEnvelope } from './localEnvelopeValidation';
+import { validateLocalEnvelope, type LocalEnvelope } from './localEnvelopeValidation';
 
-type LocalWriteGuard = () => boolean;
+type LocalWriteGuard = (current: LocalEnvelope | undefined) => boolean;
 
 export class WorkoutIntentConflictError extends Error {
     readonly code = 'workout-intent-conflict';
@@ -92,8 +92,8 @@ export async function commitDomainOperations(owner: string, batch: DomainOperati
     let operations: SemanticOperation[] = [];
     let savedData = initialBase;
     await updateArchiveRecord<any>(owner, raw => {
-        if (guard && !guard()) throw new Error('Commit locale invalidato dal cambio sessione');
         const current = validateLocalEnvelope(raw, owner);
+        if (guard && !guard(current)) throw new Error('Commit locale invalidato dal cambio sessione');
         if (workoutIntent) {
             // Revalidate the source epoch IN the same IndexedDB commit which
             // would make this unacknowledged device snapshot a new cloud journal.
