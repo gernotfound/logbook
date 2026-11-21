@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 
 const projectConfigs = ['tsconfig.m5-tests.json', 'tsconfig.m7-server.json', 'tsconfig.cloudflare.json'];
 const root = process.cwd();
-const compiler = fileURLToPath(new URL('../node_modules/.bin/tsc', import.meta.url));
+const compiler = fileURLToPath(new URL('../node_modules/typescript/bin/tsc', import.meta.url));
 const trackedFiles = execFileSync('git', ['ls-files', '-z'], { cwd: root })
   .toString('utf8').split('\0').filter(Boolean);
 const trackedTypeScriptFiles = trackedFiles.filter(path => /\.(?:ts|tsx|mts|cts)$/.test(path)).sort();
@@ -24,9 +24,9 @@ try {
 
 for (const configName of projectConfigs) {
   try {
-    // TypeScript 7 exposes the authoritative compiler file list through its CLI,
-    // not through the pre-7 JavaScript compiler API.
-    const output = execFileSync(compiler, ['--listFilesOnly', '--project', resolve(root, configName)], {
+    // Use the installed CLI entry with this Node executable. The npm .bin
+    // shim is a shell script on Windows and cannot be invoked with execFile.
+    const output = execFileSync(process.execPath, [compiler, '--listFilesOnly', '--project', resolve(root, configName)], {
       cwd: root,
       encoding: 'utf8',
       maxBuffer: 16 * 1024 * 1024,
