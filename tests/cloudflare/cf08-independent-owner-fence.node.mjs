@@ -271,6 +271,59 @@ void test('operator census scans both full D1 tables while sealed, not caller-se
   }
 });
 
+void test('operator census rejects switching between registry histories with matching withdrawal fields', async () => {
+  const app = new DatabaseSync(':memory:');
+  const first = new DatabaseSync(':memory:');
+  const second = new DatabaseSync(':memory:');
+  try {
+    app.exec('PRAGMA foreign_keys=ON');
+    applyCurrentD1Schema(app);
+    addOwner(app, 'owner-a');
+    const appDb = new D1Sqlite(app);
+    for (const ledger of [first, second]) {
+      applyCurrentD1RecoverySchema(ledger);
+      const db = new D1Sqlite(ledger);
+      await enrollIndependentOwner(db, 'owner-a');
+      if (ledger === second) await recordVerifiedInitialConsent(appDb, db, 'owner-a');
+      await armIndependentHealthWithdrawal(db, subject(app, 'owner-a'));
+    }
+    app.prepare(`INSERT INTO health_erasure_jobs
+      (uid,consent_revision,fence_epoch,requested_at_ms) VALUES (?,1,1,?)`)
+      .run('owner-a', Date.now());
+    for (const ledger of [first, second]) {
+      const db = new D1Sqlite(ledger);
+      await recordVerifiedHealthWithdrawal(appDb, db, 'owner-a');
+      assert.deepEqual(await inspectRestoredD1Census(appDb, db), {
+        outcome: 'consistent-for-diagnostics-only',
+      });
+    }
+    assert.equal(fence(first, 'owner-a').change_seq, 3);
+    assert.equal(fence(second, 'owner-a').change_seq, 4);
+
+    // Simulate the authority changing snapshot between the two full reads.
+    let scans = 0;
+    const changingAuthority = {
+      withSession(mode) {
+        assert.equal(mode, 'first-primary');
+        return {
+          prepare(sql) {
+            if (sql.includes('ORDER BY uid')) scans += 1;
+            return new Statement(scans < 2 ? first : second, sql);
+          },
+        };
+      },
+    };
+    assert.deepEqual(await inspectRestoredD1Census(appDb, changingAuthority), {
+      outcome: 'blocked', reason: 'coverage-changed-during-scan',
+    });
+    assert.equal(scans, 2);
+  } finally {
+    app.close();
+    first.close();
+    second.close();
+  }
+});
+
 void test('operator census detects a registry write racing two primary reads', async () => {
   const app = new DatabaseSync(':memory:');
   const ledger = new DatabaseSync(':memory:');
