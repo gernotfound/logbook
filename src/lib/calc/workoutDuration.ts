@@ -1,5 +1,5 @@
 import type { WorkoutSession } from '../../types';
-import { parseManualDuration } from '../utils/date';
+import { parseManualDuration } from '../utils/duration';
 
 /** The explicitly edited duration takes precedence over stale session timestamps. */
 export function getWorkoutDurationSeconds(

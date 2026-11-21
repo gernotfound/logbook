@@ -18,6 +18,7 @@ export default function DataHistoryDetail({ day, onClose, onSelectEdit }: DataHi
     const titleId = useId();
     const dialogRef = useRef<HTMLElement>(null);
     const closeButtonRef = useRef<HTMLButtonElement>(null);
+    const formattedSleep = formatSleepTime(day.sleepHours);
     useScrollLock();
     useModalFocusTrap({ containerRef: dialogRef, initialFocusRef: closeButtonRef, onEscape: onClose });
 
@@ -55,7 +56,7 @@ export default function DataHistoryDetail({ day, onClose, onSelectEdit }: DataHi
                     {hasFiniteValue(day.biceps) && <div><strong>{formatDecimal(Number(day.biceps))} cm</strong><span>Braccia</span></div>}
                     {hasFiniteValue(day.thighs) && <div><strong>{formatDecimal(Number(day.thighs))} cm</strong><span>Cosce</span></div>}
                     {hasFiniteValue(day.calves) && <div><strong>{formatDecimal(Number(day.calves))} cm</strong><span>Polpacci</span></div>}
-                    {day.sleepHours && <div><strong>{formatSleepTime(day.sleepHours)}</strong><span>Sonno</span></div>}
+                    {formattedSleep && <div><strong>{formattedSleep}</strong><span>Sonno</span></div>}
                     </div>
                 </div>
                 <div className="data-action-row">

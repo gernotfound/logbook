@@ -6,7 +6,8 @@ import { useAppStore } from '../store/useAppStore';
 import { useDialogStore } from '../store/useDialogStore';
 import { captureSession, isCurrentSession } from '../lib/sync/session';
 import { Logic } from '../lib/logic';
-import { cardioDraftKind, localDateTimeToTimestamp, timestampToLocalTime } from '../lib/activity';
+import { cardioDraftKind } from '../lib/activity';
+import { EMPTY_CARDIO_DRAFT, cardioDraftFromSession, prepareCardioSessionFields } from '../lib/activityCardioForm';
 import { computeWeeklyActivitySeries, computeWeeklyTrainingActivityContext } from '../lib/calc/analytics';
 import type { CardioSession, NutritionDay, WorkoutSession, Exercise } from '../types';
 
@@ -14,17 +15,6 @@ const EMPTY_NUTRITION: Record<string, NutritionDay> = {};
 const EMPTY_HISTORY: WorkoutSession[] = [];
 const EMPTY_LIBRARY: Exercise[] = [];
 const NEW_CARDIO_ID = '/new';
-
-const EMPTY_CARDIO_DRAFT = {
-    modality: '',
-    durationMinutes: '',
-    intensity: '',
-    structure: '',
-    averageHeartRate: '',
-    distanceKm: '',
-    notes: '',
-    startTime: '',
-};
 
 export function useActivityTracking() {
     const nutrition = useAppStore(state => state.userData?.nutrition || EMPTY_NUTRITION);
@@ -46,16 +36,7 @@ export function useActivityTracking() {
     const editingCardio = editingCardioId && !isCreatingCardio
         ? (day?.cardioSessions ?? []).find((item: CardioSession) => item.id === editingCardioId)
         : undefined;
-    const cardioSource = editingCardio ? {
-        modality: editingCardio.modality,
-        durationMinutes: String(editingCardio.durationMinutes),
-        intensity: editingCardio.intensity ?? '',
-        structure: editingCardio.structure ?? '',
-        averageHeartRate: editingCardio.averageHeartRate !== undefined ? String(editingCardio.averageHeartRate) : '',
-        distanceKm: editingCardio.distanceKm !== undefined ? String(editingCardio.distanceKm) : '',
-        notes: editingCardio.notes ?? '',
-        startTime: timestampToLocalTime(editingCardio.startedAt),
-    } : EMPTY_CARDIO_DRAFT;
+    const cardioSource = editingCardio ? cardioDraftFromSession(editingCardio) : EMPTY_CARDIO_DRAFT;
     const cardioDraft = useDatedDraft(cardioDraftKind(editingCardioId, isCreatingCardio), selectedDate, cardioSource);
     const savingSteps = useRef(false);
     const savingCardio = useRef(false);
@@ -137,28 +118,9 @@ export function useActivityTracking() {
     const saveCardio = async () => {
         if (savingCardio.current) return false;
         const form = cardioDraft.values;
-        const durationMinutes = Number(form.durationMinutes);
-        const averageHeartRate = form.averageHeartRate.trim() === '' ? undefined : Number(form.averageHeartRate);
-        const distanceKm = form.distanceKm.trim() === '' ? undefined : Number(form.distanceKm.replace(',', '.'));
-        if (!form.modality || !form.intensity) {
-            await showAlert('Seleziona modalità e intensità del cardio.');
-            return false;
-        }
-        if (!Number.isFinite(durationMinutes) || !Number.isInteger(durationMinutes) || durationMinutes <= 0 || durationMinutes > 1440) {
-            await showAlert('Inserisci una durata valida in minuti.');
-            return false;
-        }
-        if (averageHeartRate !== undefined && (!Number.isFinite(averageHeartRate) || !Number.isInteger(averageHeartRate) || averageHeartRate <= 0 || averageHeartRate > 300)) {
-            await showAlert('Inserisci una frequenza cardiaca media valida.');
-            return false;
-        }
-        if (distanceKm !== undefined && (!Number.isFinite(distanceKm) || distanceKm < 0)) {
-            await showAlert('Inserisci una distanza valida.');
-            return false;
-        }
-        const startedAt = form.startTime ? localDateTimeToTimestamp(selectedDate, form.startTime) : undefined;
-        if (form.startTime && startedAt === undefined) {
-            await showAlert('Inserisci un orario di inizio valido.');
+        const prepared = prepareCardioSessionFields(form, selectedDate, editingCardio);
+        if (!prepared.ok) {
+            await showAlert(prepared.message);
             return false;
         }
         const existing = editingCardio;
@@ -166,19 +128,11 @@ export function useActivityTracking() {
             await showAlert('La sessione cardio da modificare non è più disponibile per questo giorno.');
             return false;
         }
+        // Identity belongs to the operation boundary, never to validation.
         const cardioSession: CardioSession = {
             id: existing?.id ?? Logic.generateId('cardio'),
-            modality: form.modality as CardioSession['modality'],
-            durationMinutes,
-            intensity: form.intensity as NonNullable<CardioSession['intensity']>,
-            source: existing?.source ?? 'manual',
+            ...prepared.fields,
         };
-        if (form.structure) cardioSession.structure = form.structure as NonNullable<CardioSession['structure']>;
-        if (averageHeartRate !== undefined) cardioSession.averageHeartRate = averageHeartRate;
-        if (distanceKm !== undefined) cardioSession.distanceKm = distanceKm;
-        if (form.notes.trim()) cardioSession.notes = form.notes.trim();
-        if (startedAt !== undefined) cardioSession.startedAt = startedAt;
-        if (existing?.externalId) cardioSession.externalId = existing.externalId;
 
         savingCardio.current = true;
         const session = captureSession();
