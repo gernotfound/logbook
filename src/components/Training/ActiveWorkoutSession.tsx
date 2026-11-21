@@ -38,7 +38,7 @@ export const ActiveWorkoutSession = ({ onNavigateToHistory, onRequestEnd, isActi
         pains, setPains, togglePain,
         deleteWorkout,
         saveHistoryEdit, cancelHistoryEdit,
-        addExtraExercise, moveExercise, reorderExercises, removeActiveExercise,
+        addExtraExercise, reorderExercises, removeActiveExercise,
         addSet, removeSet, removeLastSet, updateSet,
         addSpecialSet, updateSpecialSet, removeSpecialSet, updateSetTarget,
         updateSetupNote, updateSessionNote, updateTechnicalStandard
@@ -55,14 +55,6 @@ export const ActiveWorkoutSession = ({ onNavigateToHistory, onRequestEnd, isActi
     const safeCurrentExerciseIndex = totalExercises === 0
         ? 0
         : Math.min(currentExerciseIndex, totalExercises - 1);
-
-    const handleMoveExercise = useCallback((fromIndex: number, direction: 'up' | 'down') => {
-        const toIndex = direction === 'up' ? fromIndex - 1 : fromIndex + 1;
-        moveExercise(fromIndex, direction);
-        setOpenHistoryExIndex(prev => remapIndexAfterMove(prev, fromIndex, toIndex));
-        setOpenSetupExIndex(prev => remapIndexAfterMove(prev, fromIndex, toIndex));
-        setCurrentExerciseIndex(prev => remapIndexAfterMove(prev, fromIndex, toIndex) ?? 0);
-    }, [moveExercise]);
 
     const handleMoveToPosition = useCallback((fromIndex: number, toIndex: number) => {
         reorderExercises(fromIndex, toIndex);
@@ -221,7 +213,6 @@ export const ActiveWorkoutSession = ({ onNavigateToHistory, onRequestEnd, isActi
                                 isHistoryOpen={openHistoryExIndex === exIndex}
                                 isSetupOpen={openSetupExIndex === exIndex}
                                 openSpecialMenuId={openSpecialMenuId}
-                                onMoveExercise={(index, direction) => applyToOriginalExercise(index, () => handleMoveExercise(index, direction))}
                                 onMoveToPosition={(index, target) => applyToOriginalExercise(index, () => handleMoveToPosition(index, target))}
                                 onToggleHistory={index => applyToOriginalExercise(index, () => handleToggleHistory(index))}
                                 onToggleSetup={index => applyToOriginalExercise(index, () => handleToggleSetup(index))}

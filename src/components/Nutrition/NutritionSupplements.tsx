@@ -1,6 +1,5 @@
 import { dispatchDurableOperation } from '../../lib/sync/dispatchDurableOperation';
 import { useMemo, useRef, useState } from 'react';
-import { shiftDateString } from '../../lib/utils/date';
 import { useAppStore } from '../../store/useAppStore';
 import { useSupplements } from '../../hooks/useSupplements';
 import { Logic } from '../../lib/logic';
@@ -50,22 +49,6 @@ export default function NutritionSupplements({ selectedDate, setSelectedDate }: 
         }
         return grouped;
     }, [supplementsIntake]);
-
-    const handlePrevDay = () => {
-        if (!setSelectedDate || !targetDateStr) return;
-        setSelectedDate(shiftDateString(targetDateStr, -1));
-    };
-
-    const handleNextDay = () => {
-        if (!setSelectedDate || !targetDateStr) return;
-        const today = Logic.getLocalDateString();
-        if (targetDateStr === today) return;
-        setSelectedDate(shiftDateString(targetDateStr, 1));
-    };
-
-    const handleToday = () => {
-        if (setSelectedDate) setSelectedDate(Logic.getLocalDateString());
-    };
 
     const parseOptionalDose = (raw: string): number | null | undefined => {
         if (!raw.trim()) return undefined;
@@ -178,9 +161,7 @@ export default function NutritionSupplements({ selectedDate, setSelectedDate }: 
             {setSelectedDate && (
                 <NutritionDateNavigator
                     targetDateStr={targetDateStr}
-                    onPrevious={handlePrevDay}
-                    onNext={handleNextDay}
-                    onToday={handleToday}
+                    setSelectedDate={setSelectedDate}
                 />
             )}
 

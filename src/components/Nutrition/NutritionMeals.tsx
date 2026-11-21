@@ -1,10 +1,8 @@
 import { useState } from 'react';
-import { shiftDateString } from '../../lib/utils/date';
 import { useNutritionMeals } from '../../hooks/useNutritionMeals';
 import { useDialogStore } from '../../store/useDialogStore';
 import { useAppStore } from '../../store/useAppStore';
 import { useSupplements } from '../../hooks/useSupplements';
-import { Logic } from '../../lib/logic';
 import { captureSession, isCurrentSession } from '../../lib/sync/session';
 import type { LoggedMealItem } from '../../types';
 import { NutritionDateNavigator } from './meals/NutritionDateNavigator';
@@ -64,30 +62,12 @@ function NutritionMealsContent({
         return visible;
     };
 
-    const handlePrevDay = () => {
-        if (!setSelectedDate || !targetDateStr) return;
-        setSelectedDate(shiftDateString(targetDateStr, -1));
-    };
-
-    const handleNextDay = () => {
-        if (!setSelectedDate || !targetDateStr) return;
-        const today = Logic.getLocalDateString();
-        if (targetDateStr === today) return;
-        setSelectedDate(shiftDateString(targetDateStr, 1));
-    };
-
-    const handleToday = () => {
-        if (setSelectedDate) setSelectedDate(Logic.getLocalDateString());
-    };
-
     return (
         <div className="tracking-stack">
             {setSelectedDate && (
                 <NutritionDateNavigator
                     targetDateStr={targetDateStr}
-                    onPrevious={handlePrevDay}
-                    onNext={handleNextDay}
-                    onToday={handleToday}
+                    setSelectedDate={setSelectedDate}
                 />
             )}
 

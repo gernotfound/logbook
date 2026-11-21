@@ -390,7 +390,6 @@ describe('Workout Reorder (R2) and Live Sync & Badges (R3) Suite', () => {
         const dummyPast = [{ date: '2026-08-15', sets: [{ kg: '90', reps: '6' }], note: 'Buone sensazioni' }];
 
         it('3.1: Position dropdown renders #N label, opens on click, and calls onMoveToPosition when a target is selected', () => {
-            const onMove = vi.fn();
             const onMoveToPosition = vi.fn();
             const exItem = { id: 'se_1', exId: 'ex_bench', sets: [{ id: 's1', kg: '80', reps: '8' }], sessionNote: '' };
             const libDef = mockLibrary[0];
@@ -406,7 +405,6 @@ describe('Workout Reorder (R2) and Live Sync & Badges (R3) Suite', () => {
                     isHistoryOpen={false}
                     isSetupOpen={false}
                     openSpecialMenuId={null}
-                    onMoveExercise={onMove}
                     onMoveToPosition={onMoveToPosition}
                     onToggleHistory={vi.fn()}
                     onToggleSetup={vi.fn()}

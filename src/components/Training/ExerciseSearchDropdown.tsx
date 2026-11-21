@@ -16,9 +16,10 @@ export interface ExerciseSearchDropdownProps {
 }
 
 const EXERCISE_PAGE_SIZE = 40;
+const EMPTY_LIBRARY: ExerciseLibraryItem[] = [];
 
 export const ExerciseSearchDropdown: React.FC<ExerciseSearchDropdownProps> = ({
-    library = [],
+    library = EMPTY_LIBRARY,
     onSelectExercise,
     inputId,
     placeholder = '🔍 Cerca esercizio da aggiungere...',
@@ -29,7 +30,7 @@ export const ExerciseSearchDropdown: React.FC<ExerciseSearchDropdownProps> = ({
 }) => {
     const [searchTerm, setSearchTerm] = useState('');
     const [isOpen, setIsOpen] = useState(false);
-    const [highlightedIndex, setHighlightedIndex] = useState(-1);
+    const [highlightedExerciseId, setHighlightedExerciseId] = useState<string | null>(null);
     const [visibleCount, setVisibleCount] = useState(EXERCISE_PAGE_SIZE);
     const listboxId = useId();
 
@@ -47,14 +48,23 @@ export const ExerciseSearchDropdown: React.FC<ExerciseSearchDropdownProps> = ({
         return createExerciseLibrarySearcher(list);
     }, [library, exclusionKey]);
     const filteredExercises = useMemo(() => isOpen ? searcher(searchTerm) : [], [isOpen, searcher, searchTerm]);
-    const visibleExercises = filteredExercises.slice(0, visibleCount);
+
+    // Track the actual exercise across catalog refreshes rather than its
+    // former position; a removed exercise must not select its replacement.
+    const highlightedIndex = highlightedExerciseId === null
+        ? -1
+        : filteredExercises.findIndex(item => item.id === highlightedExerciseId);
+    const renderedCount = highlightedIndex < 0
+        ? visibleCount
+        : Math.max(visibleCount, Math.ceil((highlightedIndex + 1) / EXERCISE_PAGE_SIZE) * EXERCISE_PAGE_SIZE);
+    const visibleExercises = filteredExercises.slice(0, renderedCount);
 
     // Handle outside clicks/touches
     useEffect(() => {
         const handleOutsideClick = (e: MouseEvent | TouchEvent) => {
             if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
                 setIsOpen(false);
-                setHighlightedIndex(-1);
+                setHighlightedExerciseId(null);
                 setVisibleCount(EXERCISE_PAGE_SIZE);
             }
         };
@@ -71,8 +81,9 @@ export const ExerciseSearchDropdown: React.FC<ExerciseSearchDropdownProps> = ({
     useEffect(() => {
         if (isOpen && highlightedIndex >= 0 && dropdownRef.current) {
             const items = dropdownRef.current.querySelectorAll('.exercise-dropdown-item');
-            if (items[highlightedIndex] && typeof (items[highlightedIndex] as any).scrollIntoView === 'function') {
-                (items[highlightedIndex] as HTMLElement).scrollIntoView({
+            const activeItem = items[highlightedIndex];
+            if (activeItem && typeof activeItem.scrollIntoView === 'function') {
+                activeItem.scrollIntoView({
                     block: 'nearest',
                     behavior: 'smooth'
                 });
@@ -85,7 +96,7 @@ export const ExerciseSearchDropdown: React.FC<ExerciseSearchDropdownProps> = ({
         onSelectExercise(id);
         setSearchTerm('');
         setIsOpen(false);
-        setHighlightedIndex(-1);
+        setHighlightedExerciseId(null);
         setVisibleCount(EXERCISE_PAGE_SIZE);
     }, [onSelectExercise]);
 
@@ -104,7 +115,7 @@ export const ExerciseSearchDropdown: React.FC<ExerciseSearchDropdownProps> = ({
                 ? (highlightedIndex < filteredExercises.length - 1 ? highlightedIndex + 1 : 0)
                 : (highlightedIndex > 0 ? highlightedIndex - 1 : filteredExercises.length - 1);
             setVisibleCount(count => Math.max(count, Math.ceil((next + 1) / EXERCISE_PAGE_SIZE) * EXERCISE_PAGE_SIZE));
-            setHighlightedIndex(next);
+            setHighlightedExerciseId(filteredExercises[next].id);
         } else if (e.key === 'Enter') {
             e.preventDefault();
             if (highlightedIndex >= 0 && highlightedIndex < filteredExercises.length) {
@@ -115,7 +126,7 @@ export const ExerciseSearchDropdown: React.FC<ExerciseSearchDropdownProps> = ({
         } else if (e.key === 'Escape') {
             e.preventDefault();
             setIsOpen(false);
-            setHighlightedIndex(-1);
+            setHighlightedExerciseId(null);
             setVisibleCount(EXERCISE_PAGE_SIZE);
             inputRef.current?.blur();
         }
@@ -124,7 +135,7 @@ export const ExerciseSearchDropdown: React.FC<ExerciseSearchDropdownProps> = ({
     const handleClear = (e: React.MouseEvent) => {
         e.stopPropagation();
         setSearchTerm('');
-        setHighlightedIndex(-1);
+        setHighlightedExerciseId(null);
         setVisibleCount(EXERCISE_PAGE_SIZE);
         inputRef.current?.focus();
     };
@@ -152,7 +163,7 @@ export const ExerciseSearchDropdown: React.FC<ExerciseSearchDropdownProps> = ({
                     onChange={e => {
                         setSearchTerm(e.target.value);
                         if (!isOpen) setIsOpen(true);
-                        setHighlightedIndex(-1);
+                        setHighlightedExerciseId(null);
                         setVisibleCount(EXERCISE_PAGE_SIZE);
                     }}
                     onFocus={() => setIsOpen(true)}
@@ -218,7 +229,7 @@ export const ExerciseSearchDropdown: React.FC<ExerciseSearchDropdownProps> = ({
                     role="listbox"
                     onScroll={event => {
                         const list = event.currentTarget;
-                        if (filteredExercises.length > visibleCount
+                        if (filteredExercises.length > renderedCount
                             && list.scrollTop + list.clientHeight >= list.scrollHeight - 40) {
                             setVisibleCount(count => Math.min(filteredExercises.length, count + EXERCISE_PAGE_SIZE));
                         }
@@ -263,7 +274,7 @@ export const ExerciseSearchDropdown: React.FC<ExerciseSearchDropdownProps> = ({
                                 resultCount={filteredExercises.length}
                                 highlighted={highlightedIndex === idx}
                                 onSelect={() => handleSelect(ex.id)}
-                                onHover={() => setHighlightedIndex(idx)}
+                                onHover={() => setHighlightedExerciseId(ex.id)}
                             />
                         ))
                     )}
