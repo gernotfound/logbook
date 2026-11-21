@@ -11,10 +11,10 @@ const MAX_BODY_BYTES = 2048;
 const HASH = /^[a-f0-9]{64}$/;
 const VERSION = /^[A-Za-z0-9._-]{1,32}$/;
 
-function json(payload, status = 200) {
+function json(payload, status = 200, headers = {}) {
   return Response.json(payload, {
     status,
-    headers: { 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' },
+    headers: { 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff', ...headers },
   });
 }
 
@@ -41,7 +41,7 @@ async function trustedClaims(request, env, route) {
   return claims;
 }
 
-async function readConsent(db, claims, { forWithdrawal = false } = {}) {
+async function readConsent(db, claims, { forWithdrawal = false, includeSessionExpiry = false } = {}) {
   if (typeof db.withSession !== 'function') throw new Error('missing-primary-session');
   // The identity read must also be session-current after the private gate:
   // revocation can happen between the two Workers' D1 reads.
@@ -49,6 +49,7 @@ async function readConsent(db, claims, { forWithdrawal = false } = {}) {
   const row = await db.withSession('first-primary').prepare(`
     SELECT p.uid AS uid, s.status, s.consent_revision, s.fence_epoch, state.revision AS sync_revision,
       a.privacy_version, a.terms_version, a.accepted_at_ms, a.over_18_confirmed,
+      t.idle_expires_at_ms AS session_expires_at_ms,
       s.erased_before_revision,
       EXISTS (
         SELECT 1 FROM health_erasure_finalizations f
@@ -115,6 +116,7 @@ async function readConsent(db, claims, { forWithdrawal = false } = {}) {
       acceptedAt: new Date(row.accepted_at_ms).toISOString(),
       privacyVersion: row.privacy_version,
       termsVersion: row.terms_version,
+      ...(includeSessionExpiry ? { sessionExpiresAtMs: row.session_expires_at_ms } : {}),
     } : {}),
   };
 }
@@ -139,7 +141,7 @@ function activeSubject(result) {
   };
 }
 
-async function confirmActiveConsent(env, claims, result) {
+async function confirmActiveConsent(env, claims, result, includeSessionExpiry = false) {
   const recovery = independentDb(env);
   const subject = activeSubject(result);
   try {
@@ -150,7 +152,7 @@ async function confirmActiveConsent(env, claims, result) {
     if (!claims.emailVerified || !claims.csrfVerified || !sameLegalVersions(result, env)) throw error;
     await recordVerifiedInitialConsent(env.DB, recovery, result.uid, { requireOpen: true });
   }
-  const readback = await readConsent(env.DB, claims);
+  const readback = await readConsent(env.DB, claims, { includeSessionExpiry });
   if (readback.status !== 'active' || readback.revision !== result.revision
     || readback.fenceEpoch !== result.fenceEpoch || readback.acceptedAt !== result.acceptedAt
     || readback.privacyVersion !== result.privacyVersion || readback.termsVersion !== result.termsVersion) {
@@ -381,7 +383,17 @@ export default {
           if (current.status !== result.status || current.revision !== result.revision
             || current.fenceEpoch !== result.fenceEpoch) throw new Error('unproven-terminal-status');
         }
-        return json(result.status === 'active' ? await confirmActiveConsent(env, claims, result) : result);
+        if (result.status !== 'active') return json(result);
+        const includeSessionExpiry = claims.emailVerified && claims.csrfVerified
+          && claims.healthConsentRevision === result.revision && sameLegalVersions(result, env);
+        const { sessionExpiresAtMs, ...active } = await confirmActiveConsent(
+          env, claims, result, includeSessionExpiry,
+        );
+        // D1 constrains idle expiry to be at or before absolute expiry.
+        // This deadline comes from the same primary read as the consent proof.
+        const headers = Number.isSafeInteger(sessionExpiresAtMs) && sessionExpiresAtMs > Date.now()
+          ? { 'X-Logbook-Session-Expires-At-Ms': String(sessionExpiresAtMs) } : {};
+        return json(active, 200, headers);
       }
       if (!withdrawRoute && !claims.emailVerified) return json({ error: 'unauthorized' }, 403);
       if (!claims.csrfVerified) return json({ error: 'csrf-required' }, 403);
