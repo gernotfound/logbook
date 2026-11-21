@@ -5,7 +5,7 @@ import type { LegacyGuestRestartTestContext } from './guest_migration_restart_re
 
 export function registerLegacyGuestRestartCases({
     GUEST_KEY, GUEST_ARCHIVE_KEY, OVERLAY_SESSION_KEY, SYNC_RECOVERY_KEY,
-    user, fixtures, App, AuthProvider, DB, localRepository, useAppStore, get,
+    user, fixtures, parse, App, AuthProvider, DB, localRepository, useAppStore, get,
     markPersistedGuestHandoff, runTransaction, saveWorkoutDeviceIntent,
     markGuestMigrationSyncRecovery, activateGuestSession, GUEST_SESSION_KEY,
     resumePersistedGuestMigration, getOnlineSpy,

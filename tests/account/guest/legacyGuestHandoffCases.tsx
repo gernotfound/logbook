@@ -6,7 +6,7 @@ import type { LegacyGuestRestartTestContext } from './guest_migration_restart_re
 
 export function registerLegacyGuestHandoffCases({
     GUEST_KEY, GUEST_ARCHIVE_KEY, OVERLAY_SESSION_KEY, SYNC_RECOVERY_KEY,
-    user, fixtures, App, AuthProvider, DB, localRepository, useAppStore, get,
+    user, fixtures, parse, App, AuthProvider, DB, localRepository, useAppStore, get,
     beginGuestMigrationIntent, bootstrapAuthenticatedSession,
     markGuestMigrationSyncRecovery, activateGuestSession, GUEST_SESSION_KEY, draftRegistry,
 }: LegacyGuestRestartTestContext): void {
