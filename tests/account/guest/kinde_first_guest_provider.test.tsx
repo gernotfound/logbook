@@ -122,6 +122,41 @@ describe('Kinde-first guest provider: no legacy account activation', () => {
         expect(onAuthStateChanged).not.toHaveBeenCalled();
     });
 
+    it('rechecks a replaced guest generation on focus without deleting the new session', () => {
+        restoreGuest('old-focus-generation');
+        const purge = vi.mocked(purgeGuestLocalData);
+        const { result } = renderHook(() => useAuth(), { wrapper });
+        expect(result.current.isGuest).toBe(true);
+
+        localStorage.setItem(GUEST_SESSION_KEY, 'fresh-remote-generation');
+        act(() => { window.dispatchEvent(new Event('focus')); });
+
+        expect(result.current.isGuest).toBe(false);
+        expect(result.current.currentUser).toBeNull();
+        expect(purge).not.toHaveBeenCalled();
+        expect(localStorage.getItem(GUEST_SESSION_KEY)).toBe('fresh-remote-generation');
+        expect(localStorage.getItem('logbook_is_guest')).toBe('true');
+        expect(localStorage.getItem(GUEST_REVOCATION_KEY)).toBeNull();
+        expect(onAuthStateChanged).not.toHaveBeenCalled();
+    });
+
+    it('preserves a guest session when the logout confirmation is declined', async () => {
+        restoreGuest('declined-logout-generation');
+        const showConfirm = vi.mocked(useDialogStore.getState().showConfirm);
+        showConfirm.mockResolvedValueOnce(false);
+        const purge = vi.mocked(purgeGuestLocalData);
+        const { result } = renderHook(() => useAuth(), { wrapper });
+
+        await act(async () => { await result.current.logout({ mode: 'normal' }); });
+        expect(showConfirm).toHaveBeenCalledOnce();
+        expect(result.current.isGuest).toBe(true);
+        expect(isActiveGuestSession()).toBe(true);
+        expect(purge).not.toHaveBeenCalled();
+        expect(localStorage.getItem('logbook_is_guest')).toBe('true');
+        expect(localStorage.getItem(GUEST_SESSION_KEY)).toBe('declined-logout-generation');
+        expect(localStorage.getItem(GUEST_REVOCATION_KEY)).toBeNull();
+    });
+
     it('does not activate a canceled Kinde-scoped guest action', async () => {
         const { result } = renderHook(() => useAuth(), { wrapper });
         await act(async () => { await result.current.loginAsGuest(() => false); });

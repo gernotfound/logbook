@@ -1,9 +1,10 @@
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const state = vi.hoisted(() => ({
   active: [] as Array<{ id: string; updated: number; status?: string; retryable?: boolean }>,
   failed: [] as Array<{ id: string; updated: number; status?: string; retryable?: boolean }>,
   healthBusy: new Set<string>(),
+  queryLimits: [] as number[],
 }));
 
 function query(filters: Array<[string, string, unknown]> = [], sorted = false): any {
@@ -13,7 +14,7 @@ function query(filters: Array<[string, string, unknown]> = [], sorted = false): 
       if (field !== 'updatedAt' || direction !== 'asc') throw new Error('Recovery must sort on the server');
       return query(filters, true);
     },
-    limit(count: number) { return { async get() {
+    limit(count: number) { state.queryLimits.push(count); return { async get() {
       if (!sorted) throw new Error('limit-before-orderBy would starve old jobs');
       // Apply the actual Firestore predicates supplied by production. A
       // missing or broadened where() must change the rows returned here.
@@ -74,6 +75,12 @@ vi.mock('../../../server/accountDeletion/firebaseAdmin', () => ({
 import { acquireDeletionLease, listRecoverableDeletionJobs } from '../../../server/accountDeletion/jobStore';
 
 describe('account deletion recovery fairness', () => {
+  beforeEach(() => {
+    state.active = [];
+    state.failed = [];
+    state.healthBusy = new Set<string>();
+    state.queryLimits = [];
+  });
   it('processes the next eligible candidate after 25 health-blocked jobs are deferred', async () => {
     state.active = Array.from({ length: 25 }, (_, i) => ({ id: 'busy-' + i, updated: 100 + i }));
     state.active.push({ id: 'eligible', updated: 200 });
@@ -126,5 +133,38 @@ describe('account deletion recovery fairness', () => {
     ];
     const jobs = await listRecoverableDeletionJobs(25);
     expect(jobs.map(job => job.uid)).toEqual(['retry', 'active']);
+  });
+  it('clamps recovery query windows and globally sorts the selected candidates', async () => {
+    state.active = Array.from({ length: 120 }, (_, i) => ({
+      id: 'active-' + i, updated: i * 2 + 1,
+    }));
+    state.failed = Array.from({ length: 120 }, (_, i) => ({
+      id: 'retry-' + i, updated: i * 2,
+    }));
+
+    expect((await listRecoverableDeletionJobs(0)).map(job => job.uid)).toEqual(['retry-0']);
+    expect((await listRecoverableDeletionJobs(2.9)).map(job => job.uid)).toEqual(['retry-0', 'active-0']);
+    const bounded = await listRecoverableDeletionJobs(250);
+    expect(bounded).toHaveLength(100);
+    expect(bounded.slice(0, 4).map(job => job.uid))
+      .toEqual(['retry-0', 'active-0', 'retry-1', 'active-1']);
+    expect(bounded.at(-1)?.uid).toBe('active-49');
+    expect(state.queryLimits).toEqual([1, 1, 2, 2, 100, 100]);
+  });
+
+  it('selects every recoverable phase but excludes failed jobs without retry permission', async () => {
+    state.active = [
+      { id: 'complete', updated: 1, status: 'complete' },
+      { id: 'verifying', updated: 3, status: 'verifying' },
+      { id: 'deleting', updated: 4, status: 'deleting' },
+      { id: 'requested', updated: 6, status: 'requested' },
+    ];
+    state.failed = [
+      { id: 'permanent', updated: 2, status: 'failed', retryable: false },
+      { id: 'retryable', updated: 5, status: 'failed', retryable: true },
+    ];
+    expect((await listRecoverableDeletionJobs(10)).map(job => job.uid))
+      .toEqual(['verifying', 'deleting', 'retryable', 'requested']);
+    expect(state.queryLimits).toEqual([10, 10]);
   });
 });
