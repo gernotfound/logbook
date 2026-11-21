@@ -106,6 +106,13 @@ describe('CF-05 synthetic Kinde consent, ciphertext, second device and portable 
             });
             if (consent.kind !== 'consent-confirmed') throw Error('Consent not verified');
             expect(consent.principal).toEqual(expected);
+            const session = fixture.sqlite.prepare(
+                'SELECT idle_expires_at_ms FROM auth_sessions WHERE uid=?',
+            ).get(uid);
+            expect(session?.idle_expires_at_ms).toEqual(expect.any(Number));
+            await expect(readKindeCandidateAccess(first)).resolves.toMatchObject({
+                kind: 'consent-confirmed', sessionExpiresAtMs: session?.idle_expires_at_ms,
+            });
             const legal = consent.legalConsent;
             const firstReady = await prepareKindeCandidateOwner({
                 ...first, expected, drainPendingJournal: true,

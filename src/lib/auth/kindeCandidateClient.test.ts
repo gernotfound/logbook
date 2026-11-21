@@ -77,6 +77,25 @@ describe('candidate first-party Kinde client boundary', () => {
         await expect(read(oldLegal)).resolves.toMatchObject({ kind: 'legal-update-required' });
     });
 
+    it('reads a future session deadline only after matching consent and session readback', async () => {
+        const deadline = Date.now() + 60_000;
+        const header = 'X-Logbook-Session-Expires-At-Ms';
+        const active = (value: string) => {
+            const response = reply(status('active', 1));
+            response.headers.set(header, value);
+            return response;
+        };
+        await expect(read(responses(reply(session(A, 1, 1)), active(String(deadline)),
+            reply(session(A, 1, 1))))).resolves.toMatchObject({ sessionExpiresAtMs: deadline });
+        for (const invalid of [String(Date.now() - 1), '9007199254740992', `0${deadline}`, `${deadline}, ${deadline}`]) {
+            const result = await read(responses(reply(session(A, 1, 1)), active(invalid), reply(session(A, 1, 1))));
+            expect(result).toMatchObject({ kind: 'consent-confirmed' });
+            expect(result).not.toHaveProperty('sessionExpiresAtMs');
+        }
+        await expect(read(responses(reply(session(A, 1, 1)), active(String(deadline)),
+            reply(session(B, 1, 1))))).rejects.toBeInstanceOf(KindeCandidateBoundaryError);
+    });
+
     it('distinguishes absent session from transport failure, logout races and consent suspension', async () => {
         await expect(read(responses(reply({ error: 'unauthorized' }, 401)))).resolves.toEqual({ kind: 'signed-out' });
         await expect(read(responses(reply({ error: 'unknown' }, 401)))).rejects.toBeInstanceOf(KindeCandidateBoundaryError);

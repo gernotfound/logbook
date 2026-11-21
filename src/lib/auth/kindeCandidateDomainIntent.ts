@@ -18,6 +18,15 @@ type CandidateMutationOutcome =
 
 const sameOperation = (a: SemanticOperation, b: SemanticOperation) => equal(a, b);
 
+export function normalizeKindeFitnessIntents(operation: DomainOperationBatch) {
+    // Legal consent is trusted D1 state and cannot enter the fitness journal.
+    const intents = normalizeDomainOperationBatch(operation);
+    if (!intents.length || intents.some(intent => intent.type === 'legal-consent.set')) {
+        throw new KindeCandidateBoundaryError();
+    }
+    return intents;
+}
+
 /**
  * An ordinary Kinde fitness intent is first committed with its semantic
  * journal in one encrypted IndexedDB transaction, then delivered through the
@@ -37,12 +46,7 @@ export async function submitKindeCandidateDomainIntent({
     send?: typeof fetch;
     browserCookies?: () => string;
 }): Promise<CandidateMutationOutcome> {
-    // The legal record is trusted D1 state, not a business mutation. Reject
-    // this before any provider request, key opening or local write.
-    const intents = normalizeDomainOperationBatch(operation);
-    if (!intents.length || intents.some(intent => intent.type === 'legal-consent.set')) {
-        throw new KindeCandidateBoundaryError();
-    }
+    const intents = normalizeKindeFitnessIntents(operation);
 
     return withKindeCandidateLocalReadiness(
         { expected, stillCurrent, send, browserCookies },

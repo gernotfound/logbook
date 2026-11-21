@@ -34,17 +34,16 @@ Un errore terminale durante il submit rilascia lo stesso scope
 senza eliminare ciphertext o journal. Le regressioni coprono React e
 Worker/AuthGate/D1/IndexedDB sintetici con risposta persa **dopo**
 il commit D1, accertando una sola modifica e un solo receipt.
-Questa API resta candidata, **non montata nel pubblico**, senza
-supporto offline account né GO delle API sanitarie Cloudflare.
+Questa API resta candidata e **non montata nel pubblico**.
 
 ### CF-03 — Lifecycle React Kinde isolato, senza grant legacy (21/11/2026)
 
 `openKindeCandidateFitnessRealm()` verifica il percorso Kinde/consenso/owner,
 idrata e riconcilia il checkpoint cifrato attraverso
-`withKindeCandidateLocalReadiness()`, quindi restituisce soltanto un
-**ambito esplicito** con snapshot copiato, `refresh()`, `submit()` e
-`close()`. Ogni operazione rientra nel boundary trusted, senza un
-lettore Auth globale, senza un secondo writer o chiavi persistenti in RAM.
+`withKindeCandidateLocalReadiness()`, quindi restituisce un
+ambito esplicito con snapshot copiato, `refresh()`, `submit()` e
+`close()`. Il realm usa il writer Domain Operations senza installare
+un lettore Auth globale o conservare le chiavi in RAM tra operazioni.
 `submit()` usa `submitKindeCandidateDomainIntent()`: se un commit o
 trasporto è incerto, la vista precedente è invalidata; un esito
 `local-pending` conserva il journal ma non è un cloud ACK.
@@ -60,17 +59,22 @@ automatica di bootstrap, nessuna installazione
 Il vault è chiuso al termine di ogni scope, anche quando React continua
 a conservare temporaneamente uno snapshot consentito.
 
-**Limite progettuale CRITICAL:** il Worker `/api/auth/session` non
-espone ancora al browser una scadenza verificabile dell'autorizzazione
-offline; il cookie CSRF non costituisce un grant offline né prova di
-sessione valida. Perciò questo lifecycle candidato richiede rete e
-consenso trusted in ogni riapertura/scrittura, non consente mutazioni
-account offline e non sostituisce i gate Firebase dello store ordinario.
-Prima del GO: introdurre un contratto backend/client verificato per la
-finestra offline, un solo writer Domain Operations utilizzato dalla UI,
-cancellazione/revoca/logout/sessione multitab e recovery con CI,
-WebKit/device e prove provider pertinenti. **Non accendere D1_API
-pubblico né dedurre GO dal successo di questa suite isolata.**
+**Salvataggio offline candidato:** lo stato consenso del Worker
+può riportare `X-Logbook-Session-Expires-At-Ms` dopo il readback
+primario e il controllo del registro indipendente, per una sessione
+verificata con CSRF e consenso attivo alle versioni legali correnti.
+Un realm già aperto online può usare questo limite per salvare nel
+journal cifrato quando il browser segnala assenza di rete. Il permesso
+vive nel documento, è vincolato a sessione, consenso, vault e replica,
+e scade al primo limite fra sessione e replica. Si controlla anche il
+tempo monotono del documento per impedire che un arretramento dell'orologio
+estenda il permesso. La transazione IndexedDB verifica di nuovo envelope,
+revoca, purge e scadenza. La scrittura resta locale fino alla rilettura
+trusted al rientro online, quando `refresh()` riconcilia il journal
+senza ripetere l'intento. Dopo un reload offline il realm candidato
+non può ancora riaprire l'account. Prima del GO restano il lifecycle
+completo di UI, reload, multitab e logout, WebKit su dispositivo e
+prove sul provider isolato. **Il frontend pubblico resta identity-only.**
 
 ### CF-03/04 — Intento fitness Kinde con journal cifrato e ricevuta D1 (21/11/2026)
 

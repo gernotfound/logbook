@@ -1,6 +1,7 @@
 import { captureKindeCandidateSessionFence, KindeCandidateBoundaryError, type KindeCandidateAccess } from './kindeCandidateClient';
 import { withKindeCandidateLocalReadiness } from './kindeCandidateLocalReadiness';
 import { submitKindeCandidateDomainIntent } from './kindeCandidateDomainIntent';
+import { createKindeCandidateOfflineJournal } from './kindeCandidateOfflineJournal';
 import { authenticatedIdentitySource } from '../sync/authenticatedIdentitySource';
 import { isKindeAccountLocalFitnessClear } from '../sync/kindeOwnerLocalFitnessFence';
 import { readLocal } from '../sync/localArchiveBootstrap';
@@ -39,9 +40,8 @@ export type KindeCandidateFitnessRealm = {
  * alone cannot install an application owner while the legacy store still uses
  * Firebase consent and writer gates.
  *
- * Every read/write re-enters the verified Kinde/consent/D1 readiness scope,
- * which releases the device DEK on return. No online result is cached as an
- * offline grant; pending ciphertext survives a failed or cancelled operation.
+ * Only an online readiness check can open a realm. A document which later
+ * loses connectivity can journal locally while its bounded permit is current.
  */
 export async function openKindeCandidateFitnessRealm({
     expected, stillCurrent, send = fetch, browserCookies = () => document.cookie,
@@ -52,6 +52,9 @@ export async function openKindeCandidateFitnessRealm({
     let closed = false;
     let busy = false;
     let visible: KindeCandidateFitnessSnapshot | null = null;
+    let offlineJournal: ReturnType<typeof createKindeCandidateOfflineJournal> = null;
+    let needsReconciliation = false;
+    const offline = () => navigator.onLine === false;
     const current = () => {
         try {
             return !closed && fence.stillCurrent()
@@ -66,19 +69,21 @@ export async function openKindeCandidateFitnessRealm({
 
     const load = async (): Promise<KindeCandidateFitnessSnapshot> => {
         requireCurrent();
-        const snapshot = await withKindeCandidateLocalReadiness(request, async ready => {
+        if (offline()) throw new KindeCandidateBoundaryError();
+        const { snapshot, journal } = await withKindeCandidateLocalReadiness(request, async ready => {
             if (!ready.isCurrent() || ready.owner !== owner) throw new KindeCandidateBoundaryError();
             const local = await readLocal(owner);
             if (!ready.isCurrent() || !local || local.owner !== owner
                 || local.consentRevision !== principal.healthConsentRevision
                 || !local.data.legalConsent) throw new KindeCandidateBoundaryError();
             return {
-                owner,
-                principal: { ...principal },
-                data: structuredClone(local.data),
+                snapshot: { owner, principal: { ...principal }, data: structuredClone(local.data) },
+                journal: createKindeCandidateOfflineJournal(ready.access, local, current),
             };
         });
         requireCurrent();
+        offlineJournal = journal;
+        needsReconciliation = false;
         visible = snapshot;
         return structuredClone(snapshot);
     };
@@ -93,16 +98,19 @@ export async function openKindeCandidateFitnessRealm({
 
     return {
         isCurrent: current,
-        snapshot: () => current() && visible ? structuredClone(visible) : null,
+        snapshot: () => current() && visible
+            && (offline() ? offlineJournal?.isCurrent() : !needsReconciliation) ? structuredClone(visible) : null,
         close: () => {
             closed = true;
             visible = null;
+            offlineJournal = null;
         },
         refresh: async () => {
-            if (busy) throw new KindeCandidateBoundaryError();
+            if (busy || offline()) throw new KindeCandidateBoundaryError();
             requireCurrent();
             busy = true;
             visible = null;
+            offlineJournal = null;
             try { return await load(); }
             finally { busy = false; }
         },
@@ -114,6 +122,23 @@ export async function openKindeCandidateFitnessRealm({
             // operation starts, including when the remote response is lost.
             visible = null;
             try {
+                if (offline()) {
+                    const journal = offlineJournal;
+                    if (!journal) throw new KindeCandidateBoundaryError();
+                    // Reconnect via refresh even if the tab loses the result
+                    // of a local commit, so the original intent is never retried.
+                    needsReconciliation = true;
+                    offlineJournal = null;
+                    const { data, outcome } = await journal.submit(operation);
+                    requireCurrent();
+                    if (journal.isCurrent()) {
+                        offlineJournal = journal;
+                        visible = { owner, principal, data };
+                    }
+                    return outcome;
+                }
+                if (needsReconciliation) throw new KindeCandidateBoundaryError();
+                offlineJournal = null;
                 const result = await submitKindeCandidateDomainIntent({ ...request, operation });
                 requireCurrent();
                 // A pending journal is not a cloud checkpoint. Recover only
