@@ -8,7 +8,8 @@ export function isExecutableTestFile(name) {
 // Focus/skip checks also cover modules that register cases inside a discovered
 // test entrypoint, even though these modules must not be discovered as suites.
 export function isTestDeclarationSourceFile(name) {
-  return isExecutableTestFile(name) || /(?:Cases|Scenarios)\.[cm]?[jt]sx?$/.test(name)\n    || /-regressions\.mjs$/.test(name);
+  return isExecutableTestFile(name) || /(?:Cases|Scenarios)\.[cm]?[jt]sx?$/.test(name)
+    || /-regressions\.mjs$/.test(name);
 }
 
 const testNames = new Set(['test', 'it', 'describe']);
