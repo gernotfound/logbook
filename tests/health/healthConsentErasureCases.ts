@@ -1,15 +1,14 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
-import {
+import { describe, expect, it, vi } from 'vitest';
+import type { HealthConsentTestContext } from './m7_health_consent.test';
+
+export function registerConsentErasureCases({
   POST, acceptance, adminDb, erasureWorker, finishErasure, req,
   storage, transactionFixture, HealthConsentRevisionConflictError,
   readHealthConsentState, recordHealthConsentWithdrawal,
   recordHealthConsentReacceptance, recordInitialHealthConsentAcceptance,
-  removeHealthConsentStateForDeletedAccount, resetConsentTestState,
-} from './healthConsentApiHarness';
-
-describe('trusted health withdrawal and data erasure atomicity', () => {
-  beforeEach(resetConsentTestState);
-
+  removeHealthConsentStateForDeletedAccount,
+}: HealthConsentTestContext): void {
+  describe('withdrawal, erasure queue and receipt validation', () => {
   it('maps a terminal erasure job conflict to 409 without retrying the worker', async () => {
     await recordHealthConsentWithdrawal('account-1', 0);
     const jobPath = 'health_data_erasures/account-1';
@@ -219,4 +218,5 @@ describe('trusted health withdrawal and data erasure atomicity', () => {
     expect(storage.documents.has('health_consent_withdrawals/account-1')).toBe(false);
     expect(storage.documents.has('health_consent_withdrawals/account-2')).toBe(true);
   });
-});
+  });
+}

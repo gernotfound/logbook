@@ -1,10 +1,16 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import {
+import type { HealthConsentTestContext } from './m7_health_consent.test';
+
+export function registerConsentConcurrencyCases({
   POST, acceptance, finishErasure, req, storage, transactionFixture,
   readHealthConsentState, recordHealthConsentWithdrawal,
-  recordHealthConsentReacceptance, resetConsentTestState,
-} from './healthConsentApiHarness';
-
+  recordHealthConsentReacceptance,
+}: HealthConsentTestContext): void {
+  const resetConsentTestState = () => {
+    storage.documents.clear();
+    transactionFixture.retries = 0;
+    transactionFixture.overlap = null;
+  };
 describe('withdrawal revision concurrency', () => {
   beforeEach(resetConsentTestState);
 
@@ -80,3 +86,4 @@ describe('reacceptance compare-and-set', () => {
     expect(await recordHealthConsentReacceptance('account-1', acceptance, 5)).toMatchObject({ status: 'active', revision: 6 });
   });
 });
+}
