@@ -36,6 +36,8 @@ export function registerCronAccessCases({
   });
 
   it('fails closed when CRON_SECRET is not configured', async () => {
+    process.env.ACCOUNT_INACTIVITY_TRACKING_ENABLED = 'true';
+    process.env.ACCOUNT_INACTIVITY_DELETION_ENABLED = 'true';
     const response = await GET(request());
     expect(response.status).toBe(503);
     expect(store.listRecoverableDeletionJobs).not.toHaveBeenCalled();
@@ -48,6 +50,8 @@ export function registerCronAccessCases({
   });
 
   it('rejects callers that do not present the configured bearer secret', async () => {
+    process.env.ACCOUNT_INACTIVITY_TRACKING_ENABLED = 'true';
+    process.env.ACCOUNT_INACTIVITY_DELETION_ENABLED = 'true';
     process.env.CRON_SECRET = 'expected-secret';
     const response = await GET(request('wrong-secret'));
     expect(response.status).toBe(401);

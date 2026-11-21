@@ -118,7 +118,8 @@ export function registerCronHealthCases({
       const response = await GET(request('test-secret'));
       expect(response.status).toBe(200);
       expect(healthErasure.listRecoverableHealthErasures).toHaveBeenCalledWith(8);
-      expect(healthErasure.processHealthDataErasure).toHaveBeenCalledExactlyOnceWith('health-one', 1_010_000);
+      expect(healthErasure.processHealthDataErasure).toHaveBeenCalledOnce();
+      expect(healthErasure.processHealthDataErasure).toHaveBeenCalledWith('health-one', 1_010_000);
       expect(store.listRecoverableDeletionJobs).toHaveBeenCalledWith(25);
       expect(runner.processAccountDeletion).not.toHaveBeenCalled();
       expect(inactivity.queueInactiveAccountDeletions).not.toHaveBeenCalled();
