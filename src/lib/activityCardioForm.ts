@@ -7,7 +7,7 @@ import {
     timestampToLocalTime,
 } from './activity';
 
-export interface CardioDraftValues {
+export interface CardioDraftValues extends Record<string, string> {
     modality: string;
     durationMinutes: string;
     intensity: string;
