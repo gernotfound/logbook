@@ -149,6 +149,25 @@ describe('isolated Kinde fitness realm with trusted owner, no Firebase/global gr
         }
     });
 
+    it('never associates another authenticated Kinde session with the requested owner', async () => {
+        const fixture = await createCloudKeyHttpFixture([uid, otherUid]);
+        try {
+            await fixture.consent(uid);
+            const foreign = browser(fixture, otherUid);
+            await expect(openKindeCandidateFitnessRealm({
+                ...foreign, expected,
+            })).rejects.toBeInstanceOf(KindeCandidateBoundaryError);
+            expect(foreign.paths).toContain('/api/auth/session');
+            expect(await get('logbook:v2:' + owner)).toBeUndefined();
+            expect(fixture.count('sync_documents', uid)).toBe(0);
+            expect(fixture.count('sync_documents', otherUid)).toBe(0);
+            expect(authenticatedIdentitySource.readUid()).toBeNull();
+            expect(isVaultUnlocked(owner)).toBe(false);
+        } finally {
+            fixture.close();
+        }
+    });
+
     it('blocks stale plaintext after a lost response and recovers exactly the pending ciphertext on fresh trusted scope', async () => {
         const fixture = await createCloudKeyHttpFixture([uid]);
         try {
