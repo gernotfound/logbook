@@ -1,5 +1,19 @@
 # Ciclo account, Auth e guest — TheLogBook
 
+### CF-03/04 — Scadenza della vista Kinde candidata (21/11/2026)
+
+Il realm fitness candidato richiede, oltre al consenso trusted, la scadenza
+applicativa verificata `X-Logbook-Session-Expires-At-Ms` letta dal Worker.
+Senza questa prova non espone un nuovo snapshot. Il suo permesso resta legato
+alla sessione, al vault e al consenso e scade al primo limite fra tempo UTC
+osservato e tempo monotono trascorso: un orologio riportato indietro non
+estende letture o mutazioni, neppure durante un commit asincrono. Un nuovo
+`refresh()` online può acquisire una prova successiva, ma non ripubblica
+plaintext senza completare nuovamente i controlli trusted. Il lifecycle React
+chiude la vista candidata quando il permesso scade senza eventi di focus,
+cookie o storage; il controllo periodico locale non effettua richieste di rete.
+Il percorso pubblico resta `identityOnly`, privo di grant fitness.
+
 ### CF-03 — Editor biometrico indipendente dal writer (21/11/2026)
 
 `useProfileEditor()` mantiene soltanto bozza, revisione e intento

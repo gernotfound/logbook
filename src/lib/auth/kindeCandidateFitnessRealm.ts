@@ -26,6 +26,23 @@ export type KindeCandidateFitnessSnapshot = Readonly<{
 
 type MutationOutcome = Awaited<ReturnType<typeof submitKindeCandidateDomainIntent>>;
 
+type SessionPermit = Readonly<{
+    verifiedAtMs: number;
+    verifiedAtMonotonicMs: number;
+    expiresAtMs: number;
+}>;
+
+function sessionPermitCurrent(permit: SessionPermit | null): boolean {
+    if (!permit) return false;
+    const wallNow = Date.now();
+    const elapsed = performance.now() - permit.verifiedAtMonotonicMs;
+    // A wall-clock rollback cannot extend the session, and elapsed time
+    // must advance monotonically even if the device clock changes.
+    return wallNow >= permit.verifiedAtMs && wallNow < permit.expiresAtMs
+        && Number.isFinite(elapsed) && elapsed >= 0
+        && elapsed < permit.expiresAtMs - permit.verifiedAtMs;
+}
+
 export type KindeCandidateFitnessRealm = {
     isCurrent: () => boolean;
     snapshot: () => KindeCandidateFitnessSnapshot | null;
@@ -54,6 +71,7 @@ export async function openKindeCandidateFitnessRealm({
     let visible: KindeCandidateFitnessSnapshot | null = null;
     let offlineJournal: ReturnType<typeof createKindeCandidateOfflineJournal> = null;
     let needsReconciliation = false;
+    let sessionPermit: SessionPermit | null = null;
     const offline = () => navigator.onLine === false;
     const current = () => {
         try {
@@ -65,23 +83,37 @@ export async function openKindeCandidateFitnessRealm({
     const requireCurrent = () => {
         if (!current()) throw new KindeCandidateBoundaryError();
     };
+    const permitted = () => current() && sessionPermitCurrent(sessionPermit);
+    const requirePermit = () => {
+        if (!permitted()) throw new KindeCandidateBoundaryError();
+    };
     const request = { expected: principal, stillCurrent: current, send, browserCookies };
 
     const load = async (): Promise<KindeCandidateFitnessSnapshot> => {
         requireCurrent();
         if (offline()) throw new KindeCandidateBoundaryError();
-        const { snapshot, journal } = await withKindeCandidateLocalReadiness(request, async ready => {
+        const { snapshot, journal, permit } = await withKindeCandidateLocalReadiness(request, async ready => {
             if (!ready.isCurrent() || ready.owner !== owner) throw new KindeCandidateBoundaryError();
             const local = await readLocal(owner);
             if (!ready.isCurrent() || !local || local.owner !== owner
                 || local.consentRevision !== principal.healthConsentRevision
                 || !local.data.legalConsent) throw new KindeCandidateBoundaryError();
+            const verifiedAtMs = Date.now();
+            const verifiedAtMonotonicMs = performance.now();
+            const expiresAtMs = ready.access.sessionExpiresAtMs;
+            if (!Number.isSafeInteger(expiresAtMs) || expiresAtMs === undefined
+                || expiresAtMs <= verifiedAtMs || !Number.isFinite(verifiedAtMonotonicMs)) {
+                throw new KindeCandidateBoundaryError();
+            }
             return {
                 snapshot: { owner, principal: { ...principal }, data: structuredClone(local.data) },
-                journal: createKindeCandidateOfflineJournal(ready.access, local, current),
+                journal: createKindeCandidateOfflineJournal(ready.access, local, permitted),
+                permit: { verifiedAtMs, verifiedAtMonotonicMs, expiresAtMs },
             };
         });
         requireCurrent();
+        if (!sessionPermitCurrent(permit)) throw new KindeCandidateBoundaryError();
+        sessionPermit = permit;
         offlineJournal = journal;
         needsReconciliation = false;
         visible = snapshot;
@@ -93,17 +125,19 @@ export async function openKindeCandidateFitnessRealm({
     } catch (error) {
         closed = true;
         visible = null;
+        sessionPermit = null;
         throw error;
     }
 
     return {
-        isCurrent: current,
-        snapshot: () => current() && visible
+        isCurrent: permitted,
+        snapshot: () => permitted() && visible
             && (offline() ? offlineJournal?.isCurrent() : !needsReconciliation) ? structuredClone(visible) : null,
         close: () => {
             closed = true;
             visible = null;
             offlineJournal = null;
+            sessionPermit = null;
         },
         refresh: async () => {
             if (busy || offline()) throw new KindeCandidateBoundaryError();
@@ -111,12 +145,13 @@ export async function openKindeCandidateFitnessRealm({
             busy = true;
             visible = null;
             offlineJournal = null;
+            sessionPermit = null;
             try { return await load(); }
             finally { busy = false; }
         },
         submit: async operation => {
             if (busy) throw new KindeCandidateBoundaryError();
-            requireCurrent();
+            requirePermit();
             busy = true;
             // The previous plaintext snapshot becomes stale as soon as this
             // operation starts, including when the remote response is lost.
@@ -130,7 +165,7 @@ export async function openKindeCandidateFitnessRealm({
                     needsReconciliation = true;
                     offlineJournal = null;
                     const { data, outcome } = await journal.submit(operation);
-                    requireCurrent();
+                    requirePermit();
                     if (journal.isCurrent()) {
                         offlineJournal = journal;
                         visible = { owner, principal, data };
@@ -139,14 +174,19 @@ export async function openKindeCandidateFitnessRealm({
                 }
                 if (needsReconciliation) throw new KindeCandidateBoundaryError();
                 offlineJournal = null;
-                const result = await submitKindeCandidateDomainIntent({ ...request, operation });
-                requireCurrent();
+                const result = await submitKindeCandidateDomainIntent({
+                    ...request, stillCurrent: permitted, operation,
+                });
+                requirePermit();
                 // A pending journal is not a cloud checkpoint. Recover only
                 // through a later explicit trusted refresh, never fake success.
                 if (result.kind !== 'local-pending') {
-                    try { await load(); } catch { visible = null; }
+                    try { await load(); } catch {
+                        visible = null;
+                        sessionPermit = null;
+                    }
                 }
-                requireCurrent();
+                requirePermit();
                 return result;
             } finally {
                 busy = false;

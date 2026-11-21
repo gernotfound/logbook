@@ -245,6 +245,23 @@ describe('React candidate lifecycle: explicit owner access without promoting Kin
         expect(authenticatedIdentitySource.readUid()).toBeNull();
     });
 
+    it('hides a stale snapshot when the realm deadline expires without any browser event', async () => {
+        vi.useFakeTimers();
+        try {
+            const fake = mockRealm();
+            vi.mocked(openKindeCandidateFitnessRealm).mockResolvedValue(fake as KindeCandidateFitnessRealm);
+            const session = confirmed();
+            const { result } = renderHook(() => useKindeCandidateFitnessLifecycle({ session, enabled: true }));
+            await act(async () => { await result.current.open(); });
+            expect(result.current.state.phase).toBe('ready');
+            fake.isCurrent.mockReturnValue(false);
+            act(() => { vi.advanceTimersByTime(1000); });
+            expect(result.current.state.phase).toBe('closed');
+            expect(fake.close).toHaveBeenCalledTimes(1);
+            expect(authenticatedIdentitySource.hasReader()).toBe(false);
+        } finally { vi.useRealTimers(); }
+    });
+
     it('routes the same biometric editor through the Kinde realm writer, never the legacy store', async () => {
         const fake = mockRealm();
         const edited = { ...snapshot, data: { ...snapshot.data, profile: { height: '191' } } };
