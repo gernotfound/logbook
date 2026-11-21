@@ -1,5 +1,5 @@
 import { Save, UserRound } from 'lucide-react';
-import { useSettings } from '../../hooks/useSettings';
+import { useSettingsProfile } from '../../hooks/useSettingsProfile';
 
 const DataBiometry = () => {
     const {
@@ -7,7 +7,7 @@ const DataBiometry = () => {
         height, setHeight,
         gender, setGender,
         handleSaveProfile
-    } = useSettings();
+    } = useSettingsProfile();
 
     return (
         <div className="data-page-grid">
