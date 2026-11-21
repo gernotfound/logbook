@@ -79,6 +79,26 @@ describe('nutrition planning edits and session ownership', () => {
         }));
     });
 
+    it('does not silently clamp an invalid days-ON draft before the durable commit', async () => {
+        const dispatch = vi.fn(async () => ({ ok: true as const, status: 'synced' as const }));
+        useAppStore.setState({ dispatchDomainOperation: dispatch });
+        const { result } = renderHook(() => useNutritionPlanning());
+        for (const invalid of ['9', '5.5', '0x5', '']) {
+            act(() => result.current.handleUpdate('onDaysCount', invalid));
+            expect(result.current.planning.onDaysCount).toBe(invalid);
+            await act(async () => { await result.current.handleSave(); });
+            expect(dispatch).not.toHaveBeenCalled();
+        }
+
+        act(() => result.current.handleUpdate('onDaysCount', '5'));
+        await act(async () => { await result.current.handleSave(); });
+        expect(dispatch).toHaveBeenCalledOnce();
+        expect(dispatch).toHaveBeenCalledWith(expect.objectContaining({
+            type: 'nutrition-planning.replace',
+            value: expect.objectContaining({ onDaysCount: 5 }),
+        }));
+    });
+
     it('ignores an old account epoch during a pending save without clearing newer edits', async () => {
         let resolve!: (result: { ok: true; status: 'synced' }) => void;
         const pendingCommit = new Promise<{ ok: true; status: 'synced' }>(done => { resolve = done; });
