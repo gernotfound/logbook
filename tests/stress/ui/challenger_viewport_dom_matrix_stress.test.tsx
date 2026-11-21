@@ -7,7 +7,7 @@ import * as path from 'path';
 import { SessionRatings } from '../../../src/components/Training/session/SessionRatings';
 import { FoodItemRow } from '../../../src/components/Nutrition/archive/FoodItemRow';
 import { CycleEditor } from '../../../src/components/Training/planning/CycleEditor';
-import DataBiometry from '../../../src/components/Data/DataBiometry';
+import DataBiometryView from '../../../src/components/Data/DataBiometryView';
 import { seedViewportStressStore } from './viewportStressStore';
 
 describe('Viewport DOM matrix and planning-grid structure (jsdom)', () => {
@@ -91,7 +91,7 @@ describe('Viewport DOM matrix and planning-grid structure (jsdom)', () => {
                     onDuplicate={vi.fn()}
                             onQuickAddToMeal={vi.fn()}
                         />
-                        <DataBiometry />
+                        <DataBiometryView />
                     </div>,
                     { container: wrapper }
                 );

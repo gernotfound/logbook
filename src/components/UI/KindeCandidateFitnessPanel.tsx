@@ -1,7 +1,9 @@
 import { useState, type ReactNode } from 'react';
 import type { useKindeAccountSession } from '../../contexts/auth/useKindeAccountSession';
 import { useKindeCandidateFitnessLifecycle } from '../../contexts/auth/useKindeCandidateFitnessLifecycle';
+import { KindeCandidateBiometry } from '../Data/KindeCandidateBiometry';
 import { KindeCandidateNutritionPlanning } from '../Nutrition/KindeCandidateNutritionPlanning';
+import { KindeCandidateJournalStatus } from './KindeCandidateJournalStatus';
 
 type Session = ReturnType<typeof useKindeAccountSession>;
 
@@ -37,6 +39,8 @@ export function KindeCandidateFitnessPanel({ session, management }: { session: S
                             realm.suspend();
                         }}>Torna alla gestione account</button>
                     )}
+                    <KindeCandidateJournalStatus state={realm.state} />
+                    <KindeCandidateBiometry realm={realm} />
                     <KindeCandidateNutritionPlanning realm={realm} />
                 </>
             )}

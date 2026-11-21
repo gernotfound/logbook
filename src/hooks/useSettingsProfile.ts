@@ -1,6 +1,7 @@
 import { useAppStore } from '../store/useAppStore';
 import { useDialogStore } from '../store/useDialogStore';
 import { captureSession, isCurrentSession } from '../lib/sync/session';
+import { dispatchDurableOperation } from '../lib/sync/dispatchDurableOperation';
 import { useProfileEditor } from './profile/useProfileEditor';
 
 /** Legacy guest/Firebase adapter. Domain edits are committed only by the
@@ -24,6 +25,6 @@ export function useSettingsProfile() {
             if (useAppStore.getState().dataOwner !== session.owner) return null;
             return { owner: session.owner, isCurrent: () => isCurrentSession(session) };
         },
-        dispatch: dispatchDomainOperation,
+        dispatch: operation => dispatchDurableOperation(dispatchDomainOperation, operation),
     }, showAlert);
 }

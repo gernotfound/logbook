@@ -1,13 +1,13 @@
 import { Save, UserRound } from 'lucide-react';
-import { useSettingsProfile } from '../../hooks/useSettingsProfile';
+import type { useProfileEditor } from '../../hooks/profile/useProfileEditor';
 
-const DataBiometry = () => {
+const DataBiometry = ({ editor }: { editor: ReturnType<typeof useProfileEditor> }) => {
     const {
         dob, setDob,
         height, setHeight,
         gender, setGender,
         handleSaveProfile
-    } = useSettingsProfile();
+    } = editor;
 
     return (
         <div className="data-page-grid">

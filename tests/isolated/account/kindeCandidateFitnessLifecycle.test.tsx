@@ -14,6 +14,7 @@ import { openKindeCandidateFitnessRealm } from '../../../src/lib/auth/kindeCandi
 import { useKindeCandidateFitnessLifecycle } from '../../../src/contexts/auth/useKindeCandidateFitnessLifecycle';
 import { useKindeCandidateProfile } from '../../../src/hooks/profile/useKindeCandidateProfile';
 import { KindeCandidateNutritionPlanning } from '../../../src/components/Nutrition/KindeCandidateNutritionPlanning';
+import { KindeCandidateJournalStatus } from '../../../src/components/UI/KindeCandidateJournalStatus';
 import { releaseLegacyTestIdentityReader } from '../../setup';
 
 const uid = 'k_' + 'U'.repeat(43);
@@ -318,7 +319,7 @@ describe('React candidate lifecycle: explicit owner access without promoting Kin
         await act(async () => { await result.current.profile.handleSaveProfile(); });
         expect(fake.submit).toHaveBeenCalledExactlyOnceWith({
             type: 'profile.patch',
-            patch: { dob: '', gender: '', height: '191' },
+            patch: { height: '191' },
         });
         expect(result.current.profile.height).toBe('191');
         expect(authenticatedIdentitySource.hasReader()).toBe(false);
@@ -390,6 +391,7 @@ describe('React candidate lifecycle: explicit owner access without promoting Kin
                 {realm.state.phase === 'recheck-required' && (
                     <button type="button" onClick={realm.recheck}>Verifica salvataggio</button>
                 )}
+                <KindeCandidateJournalStatus state={realm.state} />
                 <KindeCandidateNutritionPlanning realm={realm} />
             </>;
         }

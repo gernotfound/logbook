@@ -2,7 +2,7 @@ import { lazy, Suspense, useState } from 'react';
 import { useNutritionMeasurements } from '../../hooks/useNutritionMeasurements';
 import { useSleepMeasurements } from '../../hooks/useSleepMeasurements';
 import DataMeasurements from './DataMeasurements';
-import DataBiometry from './DataBiometry';
+import DataBiometryView from './DataBiometryView';
 import DataSleep from './DataSleep';
 
 import type { DataSubTab, MeasurementHistoryDay } from '../../types';
@@ -117,7 +117,7 @@ const DataView: React.FC<DataViewProps> = ({
 
             {currentSubTab === 'biometry' && (
                 <div id="data-panel-biometry" role="tabpanel" aria-labelledby="data-tab-biometry" className="data-sub-view active">
-                    <DataBiometry />
+                    <DataBiometryView />
                 </div>
             )}
 
