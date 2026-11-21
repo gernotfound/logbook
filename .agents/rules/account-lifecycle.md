@@ -60,10 +60,14 @@ automatica di bootstrap, nessuna installazione
 Il vault è chiuso al termine di ogni scope, anche quando React continua
 a conservare temporaneamente uno snapshot consentito.
 
-**Limite progettuale CRITICAL:** il Worker `/api/auth/session` non
-espone ancora al browser una scadenza verificabile dell'autorizzazione
-offline; il cookie CSRF non costituisce un grant offline né prova di
-sessione valida. Perciò questo lifecycle candidato richiede rete e
+**Limite progettuale CRITICAL:** lo stato consenso del Worker candidato
+può riportare `X-Logbook-Session-Expires-At-Ms` dopo il readback
+primario e il controllo del registro indipendente, per una sessione
+verificata con CSRF e consenso attivo alle versioni legali correnti.
+È il limite superiore della sessione D1. Serve ancora un'autorizzazione
+locale vincolata a sessione, consenso e vault, con scadenza verificata
+dal browser. Il cookie CSRF da solo non prova una sessione valida.
+Questo lifecycle candidato richiede rete e
 consenso trusted in ogni riapertura/scrittura, non consente mutazioni
 account offline e non sostituisce i gate Firebase dello store ordinario.
 Prima del GO: introdurre un contratto backend/client verificato per la

@@ -30,6 +30,29 @@ describe('meal history incremental rendering', () => {
         expect(onDayClick).toHaveBeenCalledWith(days[65].date);
     });
 
+    it('keeps the focused date mounted when a newer day is inserted ahead of it', () => {
+        const onDayClick = vi.fn();
+        const original = days.slice(0, 3);
+        const { container, rerender } = render(
+            <NutritionHistory nutritionHistory={original} onDayClick={onDayClick} />
+        );
+
+        const focusedDay = container.querySelectorAll<HTMLElement>('.clickable-card')[1];
+        focusedDay.focus();
+        expect(document.activeElement).toBe(focusedDay);
+
+        const newerDay = { ...days[0], date: '2026-06-01' };
+        rerender(
+            <NutritionHistory nutritionHistory={[newerDay, ...original]} onDayClick={onDayClick} />
+        );
+
+        const movedDay = container.querySelectorAll<HTMLElement>('.clickable-card')[2];
+        expect(movedDay).toBe(focusedDay);
+        expect(document.activeElement).toBe(focusedDay);
+        fireEvent.keyDown(focusedDay, { key: 'Enter' });
+        expect(onDayClick).toHaveBeenCalledExactlyOnceWith(original[1].date);
+    });
+
     it('opens selectable days by keyboard and leaves read-only cards out of the tab order', () => {
         const onDayClick = vi.fn();
         const { container, rerender } = render(
