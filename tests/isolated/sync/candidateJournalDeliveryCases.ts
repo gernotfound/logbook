@@ -131,15 +131,72 @@ export function registerCandidateJournalDeliveryCases({
         expect((await readLocal(owner))!.pending).toEqual([]);
     });
 
-    it('never stages a stale or conflicting D1 control/document revision', async () => {
+    it('takes one fresh control and document read when a second replica advances D1 before staging', async () => {
+        const setup = await seed();
+        const { control, scan } = changedRemote(setup);
+        const remote = transport(control, scan);
+        remote.control.mockResolvedValueOnce(setup.control);
+        const commit = remote.commit.getMockImplementation()!;
+        remote.commit.mockImplementation(async (batch, csrf) => {
+            const staged = (await readLocal(owner))?.cloudflareDelivery;
+            expect(staged?.batch).toEqual(batch);
+            expect(staged?.operations).toEqual(setup.local.pending);
+            return commit(batch, csrf);
+        });
+
+        await expect(deliverCloudflareJournalCandidate(owner, adk, remote, 'csrf-session', () => true))
+            .resolves.toBe('acknowledged');
+        expect(remote.control).toHaveBeenCalledTimes(2);
+        expect(remote.read.mock.calls).toEqual([[['']], [['']]]);
+        expect(remote.commit).toHaveBeenCalledOnce();
+        expect(remote.commit.mock.calls[0][0]).toMatchObject({ expectedRevision: control.revision });
+        expect(remote.receipt).toHaveBeenCalledTimes(2);
+        expect(await readLocal(owner)).toMatchObject({ pending: [], syncMetaByDocument: { '': { clock: { s00: 1, s01: 1 } } } });
+    });
+
+    it('preserves the exact journal when another D1 revision arrives during the bounded retry', async () => {
         const { control, snapshot } = await seed();
         const before = await get(storeKey);
         const remote = transport(control, { ...snapshot, revision: 1 });
+        remote.control.mockResolvedValueOnce(control).mockResolvedValueOnce({ ...control, revision: 1 });
+        remote.read.mockResolvedValueOnce({ ...snapshot, revision: 1 }).mockResolvedValueOnce({ ...snapshot, revision: 2 });
         await expect(deliverCloudflareJournalCandidate(owner, adk, remote, 'csrf-session', () => true))
-            .rejects.toThrow();
+            .resolves.toBe('reconciliation-required');
+        expect(remote.control).toHaveBeenCalledTimes(2);
+        expect(remote.read).toHaveBeenCalledTimes(2);
+        expect(remote.receipt).not.toHaveBeenCalled();
         expect(remote.commit).not.toHaveBeenCalled();
         expect(await get(storeKey)).toBe(before);
         expect((await readLocal(owner))!.pending).toHaveLength(1);
+    });
+
+    it('refuses a retry control older than the document revision already observed', async () => {
+        const { control, snapshot } = await seed();
+        const before = await get(storeKey);
+        const remote = transport(control, { ...snapshot, revision: 2 });
+        remote.control.mockResolvedValueOnce(control).mockResolvedValueOnce({ ...control, revision: 1 });
+        await expect(deliverCloudflareJournalCandidate(owner, adk, remote, 'csrf-session', () => true))
+            .rejects.toThrow('Snapshot remoto non coerente');
+        expect(remote.control).toHaveBeenCalledTimes(2);
+        expect(remote.read).toHaveBeenCalledOnce();
+        expect(remote.receipt).not.toHaveBeenCalled();
+        expect(remote.commit).not.toHaveBeenCalled();
+        expect(await get(storeKey)).toBe(before);
+    });
+
+    it.each([
+        { revision: 0 }, { revision: 2, fenceEpoch: 6 }, { revision: 2, consentRevision: 2 },
+    ])('rejects incompatible D1 evidence %j without retrying or staging', async changed => {
+        const { control, snapshot } = await seed();
+        const before = await get(storeKey);
+        const remote = transport({ ...control, revision: 1 }, { ...snapshot, ...changed });
+        await expect(deliverCloudflareJournalCandidate(owner, adk, remote, 'csrf-session', () => true))
+            .rejects.toThrow('Snapshot remoto non coerente');
+        expect(remote.control).toHaveBeenCalledOnce();
+        expect(remote.read).toHaveBeenCalledOnce();
+        expect(remote.receipt).not.toHaveBeenCalled();
+        expect(remote.commit).not.toHaveBeenCalled();
+        expect(await get(storeKey)).toBe(before);
     });
 
     it('aborts after a changed session during a remote read, before any IndexedDB staging', async () => {
