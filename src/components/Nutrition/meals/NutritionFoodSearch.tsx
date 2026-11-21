@@ -62,7 +62,7 @@ export function NutritionFoodSearch({
             {searchResults.length > 0 && (
                 <div className="tracking-search-results" aria-label="Alimenti trovati">
                     {searchResults.map((food, idx) => (
-                        <div key={food.id || idx} className="tracking-food-result">
+                        <div key={food.id == null ? `unidentified:${idx}` : `${typeof food.id}:${food.id}`} className="tracking-food-result">
                             <div className="tracking-row tracking-row--wrap">
                                 <div>
                                     <div className="font-bold flex items-center gap-6">

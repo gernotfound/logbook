@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useRef } from 'react';
 import { X } from 'lucide-react';
 
 interface FoodArchiveSearchProps {
@@ -10,9 +10,12 @@ export const FoodArchiveSearch: React.FC<FoodArchiveSearchProps> = ({
     searchQuery,
     setSearchQuery
 }) => {
+    const inputRef = useRef<HTMLInputElement>(null);
+
     return (
         <div style={{ position: 'relative', display: 'flex', alignItems: 'center', marginTop: '10px' }}>
             <input 
+                ref={inputRef}
                 type="text" 
                 placeholder="Cerca per nome o marca..." 
                 aria-label="Cerca alimenti per nome o marca"
@@ -32,13 +35,18 @@ export const FoodArchiveSearch: React.FC<FoodArchiveSearchProps> = ({
             {searchQuery && (
                 <button
                     type="button"
-                    onClick={() => setSearchQuery('')}
+                    onClick={() => {
+                        setSearchQuery('');
+                        inputRef.current?.focus();
+                    }}
                     className="btn-link"
                     style={{
                         position: 'absolute',
-                        right: '8px',
+                        right: 0,
+                        width: '44px',
+                        height: '44px',
                         color: 'var(--text-muted)',
-                        padding: '4px',
+                        padding: 0,
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center'
