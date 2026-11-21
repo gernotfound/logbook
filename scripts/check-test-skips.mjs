@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { findDisabledTests, isExecutableTestFile } from './test-declaration-check.mjs';
+import { findDisabledTests, isTestDeclarationSourceFile } from './test-declaration-check.mjs';
 
 const regression = spawnSync(process.execPath, ['--test', 'scripts/test-declaration-check-regressions.mjs'], { stdio: 'inherit' });
 if (regression.error) throw regression.error;
@@ -42,7 +42,7 @@ function walk(directory) {
             walk(fullPath);
             continue;
         }
-        if (!isExecutableTestFile(entry.name)) continue;
+        if (!isTestDeclarationSourceFile(entry.name)) continue;
 
         const content = fs.readFileSync(fullPath, 'utf8');
         checkMockTargets(fullPath, content);

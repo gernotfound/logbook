@@ -5,6 +5,12 @@ export function isExecutableTestFile(name) {
   return /\.(?:test|spec)\.[cm]?[jt]sx?$|\.node\.mjs$/.test(name);
 }
 
+// Focus/skip checks also cover modules that register cases inside a discovered
+// test entrypoint, even though these modules must not be discovered as suites.
+export function isTestDeclarationSourceFile(name) {
+  return isExecutableTestFile(name) || /(?:Cases|Scenarios)\.[cm]?[jt]sx?$/.test(name);
+}
+
 const testNames = new Set(['test', 'it', 'describe']);
 const aliases = new Map([['fit', 'only'], ['fdescribe', 'only'], ['xit', 'skip'], ['xtest', 'skip'], ['xdescribe', 'skip']]);
 // Conditional Vitest helpers can silently omit tests from the canonical suite.

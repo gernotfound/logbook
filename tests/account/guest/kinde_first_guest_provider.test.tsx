@@ -1,16 +1,18 @@
 import React from 'react';
-import { act, renderHook } from '@testing-library/react';
+import { act, renderHook, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { GuestOnlyAuthProvider } from '../../../src/contexts/GuestOnlyAuthProvider';
 import { useAuth } from '../../../src/hooks/useAuth';
 import { useAppStore } from '../../../src/store/useAppStore';
+import { useDialogStore } from '../../../src/store/useDialogStore';
+import { isVaultUnlocked, readVaultControl } from '../../../src/lib/sync/secureArchiveSession';
 import { purgeGuestLocalData } from '../../../src/lib/db/guestLocalPurge';
 import { auth, onAuthStateChanged } from '../../../src/lib/firebase';
 
 vi.mock('../../../src/lib/db/guestLocalPurge', () => ({ purgeGuestLocalData: vi.fn(async () => {}) }));
 import { releaseLegacyTestIdentityReader } from '../../setup';
 import { authenticatedIdentitySource } from '../../../src/lib/sync/authenticatedIdentitySource';
-import { activateGuestSession, captureSession, GUEST_REVOCATION_KEY, GUEST_SESSION_KEY, storageOwner } from '../../../src/lib/sync/session';
+import { activateGuestSession, captureSession, GUEST_REVOCATION_KEY, GUEST_SESSION_KEY, isActiveGuestSession, storageOwner } from '../../../src/lib/sync/session';
 
 function restoreGuest(id: string) {
     localStorage.setItem('logbook_is_guest', 'true');
@@ -30,6 +32,31 @@ describe('Kinde-first guest provider: no legacy account activation', () => {
         vi.clearAllMocks();
     });
     afterEach(() => vi.restoreAllMocks());
+
+    it('rejects a persisted guest flag without a matching active generation', () => {
+        localStorage.setItem('logbook_is_guest', 'true');
+        const { result } = renderHook(() => useAuth(), { wrapper });
+        expect(result.current.isGuest).toBe(false);
+        expect(isActiveGuestSession()).toBe(false);
+        expect(result.current.currentUser).toBeNull();
+        expect(onAuthStateChanged).not.toHaveBeenCalled();
+    });
+
+    it('activates an actual guest vault under the public provider without installing an account owner', async () => {
+        const { result } = renderHook(() => useAuth(), { wrapper });
+        await act(async () => { await result.current.loginAsGuest(); });
+        await waitFor(() => expect(result.current.isGuest).toBe(true));
+
+        expect(isActiveGuestSession()).toBe(true);
+        expect(storageOwner()).toBe('guest');
+        expect(isVaultUnlocked('guest')).toBe(true);
+        expect(readVaultControl('guest')).not.toBeNull();
+        expect(useAppStore.getState().dataOwner).toBe('guest');
+        expect(useAppStore.getState().userData).not.toBeNull();
+        expect(result.current.currentUser).toBeNull();
+        expect(authenticatedIdentitySource.hasReader()).toBe(false);
+        expect(onAuthStateChanged).not.toHaveBeenCalled();
+    });
 
     it('shows no authenticated fitness user and never subscribes to Firebase Auth', () => {
         const { result } = renderHook(() => useAuth(), { wrapper });
@@ -71,6 +98,11 @@ describe('Kinde-first guest provider: no legacy account activation', () => {
         await expect(result.current.registerWithEmail('tester@example.invalid', 'not-a-password'))
             .rejects.toThrow('Kinde');
         await expect(result.current.retryGuestMigration()).rejects.toThrow('Kinde');
+        await expect(result.current.login()).rejects.toThrow('Kinde');
+        await expect(result.current.linkGoogleAccount()).rejects.toThrow('Kinde');
+        await expect(result.current.resendEmailVerification()).rejects.toThrow('Kinde');
+        await expect(result.current.refreshEmailVerification()).rejects.toThrow('Kinde');
+        await expect(result.current.continueUnverifiedLocally()).rejects.toThrow('Kinde');
         expect(result.current.currentUser).toBeNull();
         expect(result.current.isGuest).toBe(false);
         expect(onAuthStateChanged).not.toHaveBeenCalled();
@@ -110,5 +142,71 @@ describe('Kinde-first guest provider: no legacy account activation', () => {
         expect(purge).toHaveBeenCalledOnce();
         expect(purge).toHaveBeenCalledWith();
         expect(onAuthStateChanged).not.toHaveBeenCalled();
+    });
+
+    it('clears stale guest memory without purging an archive replaced by another tab', async () => {
+        restoreGuest('local-generation-old');
+        const purge = vi.mocked(purgeGuestLocalData);
+        const { result } = renderHook(() => useAuth(), { wrapper });
+        expect(result.current.isGuest).toBe(true);
+
+        localStorage.setItem(GUEST_SESSION_KEY, 'remote-generation-new');
+        await act(async () => { await result.current.logout({ mode: 'normal', skipConfirm: true }); });
+
+        expect(result.current.isGuest).toBe(false);
+        expect(purge).not.toHaveBeenCalled();
+        expect(localStorage.getItem(GUEST_SESSION_KEY)).toBe('remote-generation-new');
+        expect(localStorage.getItem('logbook_is_guest')).toBe('true');
+        expect(localStorage.getItem(GUEST_REVOCATION_KEY)).toBeNull();
+    });
+
+    it('does not delete a replacement guest after a stale logout confirmation', async () => {
+        restoreGuest('guest-before-confirmation');
+        const purge = vi.mocked(purgeGuestLocalData);
+        const { result } = renderHook(() => useAuth(), { wrapper });
+        let completeConfirmation!: (accepted: boolean) => void;
+        const confirmation = new Promise<boolean>(resolve => { completeConfirmation = resolve; });
+        const showConfirm = vi.mocked(useDialogStore.getState().showConfirm);
+        showConfirm.mockImplementationOnce(() => confirmation);
+
+        let logout!: Promise<void>;
+        act(() => { logout = result.current.logout({ mode: 'normal' }); });
+        expect(showConfirm).toHaveBeenCalledTimes(1);
+        expect(showConfirm).toHaveBeenCalledWith(expect.stringContaining('modalità locale'));
+
+        localStorage.setItem(GUEST_SESSION_KEY, 'guest-activated-in-another-tab');
+        act(() => { completeConfirmation(true); });
+        await act(async () => { await logout; });
+
+        expect(purge).not.toHaveBeenCalled();
+        expect(localStorage.getItem(GUEST_SESSION_KEY)).toBe('guest-activated-in-another-tab');
+        expect(localStorage.getItem(GUEST_REVOCATION_KEY)).toBeNull();
+        act(() => {
+            window.dispatchEvent(new StorageEvent('storage', { key: GUEST_SESSION_KEY }));
+        });
+        expect(result.current.isGuest).toBe(false);
+    });
+
+    it('runs at most one physical purge when logout is requested twice concurrently', async () => {
+        restoreGuest('guest-double-logout');
+        const purge = vi.mocked(purgeGuestLocalData);
+        let entered!: () => void;
+        let release!: () => void;
+        const inPurge = new Promise<void>(resolve => { entered = resolve; });
+        const blocked = new Promise<void>(resolve => { release = resolve; });
+        purge.mockImplementationOnce(async () => { entered(); await blocked; });
+        const { result } = renderHook(() => useAuth(), { wrapper });
+
+        let first!: Promise<void>;
+        act(() => { first = result.current.logout({ mode: 'normal', skipConfirm: true }); });
+        await inPurge;
+        await act(async () => { await result.current.logout({ mode: 'normal', skipConfirm: true }); });
+        expect(purge).toHaveBeenCalledTimes(1);
+
+        release();
+        await act(async () => { await first; });
+        expect(result.current.isGuest).toBe(false);
+        expect(localStorage.getItem(GUEST_REVOCATION_KEY)).not.toBeNull();
+        expect(localStorage.getItem('logbook_is_guest')).toBeNull();
     });
 });
