@@ -1,5 +1,24 @@
 # Ciclo account, Auth e guest — TheLogBook
 
+### CF-03/04 — Recheck del journal Kinde dopo esito ambiguo (21/11/2026)
+
+Se `useKindeCandidateFitnessLifecycle.submit()` riceve
+`local-pending`, la vista rimane nascosta e la fase diventa
+`recheck-required`. L'azione esplicita `recheck()` richiama **solo**
+`KindeCandidateFitnessRealm.refresh()`: verifica di nuovo identità,
+epoch, cookie, consenso trusted e vault, quindi riconcilia il journal
+e la ricevuta D1 originale. **Non ripete** `DomainOperation` e non
+converte un timeout in ACK. Una risposta arrivata dopo logout, nuovo
+owner/generazione o chiusura dello scope è respinta senza pubblicare
+plaintext. Se il recheck fallisce, il vecchio scope viene chiuso;
+una nuova apertura richiede una nuova readiness completa.
+Un errore terminale durante il submit rilascia lo stesso scope
+senza eliminare ciphertext o journal. Le regressioni coprono React e
+Worker/AuthGate/D1/IndexedDB sintetici con risposta persa **dopo**
+il commit D1, accertando una sola modifica e un solo receipt.
+Questa API resta candidata, **non montata nel pubblico**, senza
+supporto offline account né GO delle API sanitarie Cloudflare.
+
 ### CF-03 — Lifecycle React Kinde isolato, senza grant legacy (21/11/2026)
 
 `openKindeCandidateFitnessRealm()` verifica il percorso Kinde/consenso/owner,
