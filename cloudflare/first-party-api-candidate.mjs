@@ -1,6 +1,8 @@
 // Unmounted first-party boundary for the future Kinde/D1 cutover. Its callers
 // must be deliberately enabled in the frontend Worker configuration after GO.
 // Never fall back to Static Assets for recognized API paths.
+import { edgeOAuthRateBucket, OAUTH_RATE_BUCKET_HEADER } from './auth/oauth-rate-bucket.mjs';
+
 const KINDE_ROUTES = new Map([
   ['/api/auth/kinde/start', 'POST'],
   ['/api/auth/kinde/callback', 'GET'],
@@ -93,6 +95,12 @@ export async function routeCandidateFirstPartyApi(request, env) {
   }
   let response;
   try {
+    if (callback || url.pathname === '/api/auth/kinde/start') {
+      // Only this gateway may set the private rate bucket. The allowlist
+      // above already dropped any client version of that header.
+      const bucket = await edgeOAuthRateBucket(request);
+      if (bucket) headers.set(OAUTH_RATE_BUCKET_HEADER, bucket);
+    }
     response = await service.fetch(new Request(request, {
       headers, redirect: 'manual',
     }));

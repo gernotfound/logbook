@@ -2,6 +2,7 @@
 // frontend's OAuth/session-only service binding. Health APIs are not exposed;
 // full application Auth/consent/sync still require a separate functional GO.
 import { createKindeOAuthFlow } from './kinde-oauth-flow.mjs';
+import { privateOAuthRateKey } from './oauth-rate-bucket.mjs';
 import logoutWorker from '../api/logout-worker.mjs';
 import { strictlyEmptyPost } from '../http/strict-empty-post.mjs';
 
@@ -153,10 +154,10 @@ export function createKindeHttpHandler({ fetchImpl = fetch, keySet } = {}) {
       }, {
         fetchImpl, keySet,
         rateLimit: async candidate => {
-          // Stable location-scoped cap without trusting a client-supplied IP.
-          // This alone is not a globally enforced abuse quota or WAF policy.
+          // The private binding accepts only gateway-derived attribution.
+          // An old gateway or a request without attribution uses its own cap.
           const limiter = await env.AUTH_RATE_LIMITER.limit({
-            key: candidate.method === 'GET' ? 'oauth:callback' : 'oauth:start',
+            key: privateOAuthRateKey(candidate),
           });
           return limiter?.success === true;
         },
