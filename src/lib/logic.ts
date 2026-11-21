@@ -5,14 +5,13 @@ import {
     formatItalianDate, 
     parseDateInput, 
 
-    formatDuration, 
-    normalizeDuration, 
     getCalendarMonthGrid, 
     formatSleepTime,
     parseSleepInput,
     isSleepTimeValid
 } from './utils/date';
 import { generateUniqueName } from './utils/string';
+import { formatDuration, normalizeDuration } from './utils/duration';
 import { calculateBodyFatByMethod, calculateBodyFat } from './calc/bodyFat';
 import {
     calculateTDEE,
