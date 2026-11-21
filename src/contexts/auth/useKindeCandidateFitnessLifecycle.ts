@@ -127,6 +127,37 @@ export function useKindeCandidateFitnessLifecycle({
         }
     };
 
+    const recheck = async (): Promise<void> => {
+        const active = realm.current;
+        if (!enabled || busy.current || !active?.isCurrent()
+            || state.phase !== 'recheck-required' || state.view !== session.view) {
+            throw new KindeCandidateBoundaryError();
+        }
+        const view = state.view;
+        busy.current = true;
+        setState({ phase: 'opening', view });
+        try {
+            // The original encrypted journal is already durable. Re-enter the
+            // trusted readiness/receipt path, never dispatch the user's intent
+            // again: replaying it here would create a second semantic operation.
+            await active.refresh();
+            if (realm.current !== active || !active.isCurrent()
+                || latestView.current !== view) throw new KindeCandidateBoundaryError();
+            const snapshot = active.snapshot();
+            if (!snapshot) throw new KindeCandidateBoundaryError();
+            setState({ phase: 'ready', view, snapshot });
+        } catch (error) {
+            if (realm.current === active) {
+                active.close();
+                realm.current = null;
+                setState({ phase: 'unavailable', view });
+            }
+            throw error;
+        } finally {
+            busy.current = false;
+        }
+    };
+
     const submit = async (operation: DomainOperationBatch) => {
         const active = realm.current;
         if (!enabled || busy.current || !active?.isCurrent()
@@ -143,7 +174,13 @@ export function useKindeCandidateFitnessLifecycle({
             setState(snapshot ? { phase: 'ready', view, snapshot } : { phase: 'recheck-required', view });
             return outcome;
         } catch (error) {
-            if (realm.current === active) setState({ phase: 'unavailable', view });
+            if (realm.current === active) {
+                // Terminal failures must release this scope so a fresh
+                // identity/consent bootstrap can be explicitly requested.
+                active.close();
+                realm.current = null;
+                setState({ phase: 'unavailable', view });
+            }
             throw error;
         } finally {
             busy.current = false;
@@ -155,6 +192,6 @@ export function useKindeCandidateFitnessLifecycle({
         // render that changes identity, before passive effects can dispose.
         state: state.phase !== 'closed' && (!enabled || state.view !== session.view)
             ? CLOSED : state,
-        open, submit, suspend,
+        open, submit, recheck, suspend,
     };
 }

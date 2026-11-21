@@ -168,6 +168,82 @@ describe('React candidate lifecycle: explicit owner access without promoting Kin
         expect(result.current.state.phase).toBe('closed');
     });
 
+    it('rechecks a pending ciphertext journal without dispatching the same intent twice', async () => {
+        const fake = mockRealm();
+        fake.submit.mockResolvedValueOnce({ kind: 'local-pending', pendingCount: 1 } as never);
+        fake.snapshot.mockReturnValueOnce(snapshot).mockReturnValueOnce(null as never);
+        vi.mocked(openKindeCandidateFitnessRealm).mockResolvedValue(fake as KindeCandidateFitnessRealm);
+        const session = confirmed();
+        const { result } = renderHook(() => useKindeCandidateFitnessLifecycle({ session, enabled: true }));
+        await act(async () => { await result.current.open(); });
+        await act(async () => {
+            await expect(result.current.submit({ type: 'profile.patch', patch: { height: '181' } }))
+                .resolves.toMatchObject({ kind: 'local-pending' });
+        });
+        expect(result.current.state.phase).toBe('recheck-required');
+        expect(fake.submit).toHaveBeenCalledTimes(1);
+        await act(async () => { await result.current.recheck(); });
+        expect(result.current.state.phase).toBe('ready');
+        expect(fake.refresh).toHaveBeenCalledTimes(1);
+        expect(fake.submit).toHaveBeenCalledTimes(1);
+        expect(openKindeCandidateFitnessRealm).toHaveBeenCalledTimes(1);
+        expect(authenticatedIdentitySource.hasReader()).toBe(false);
+    });
+
+    it('closes a failed reconciliation and permits a fresh trusted realm opening', async () => {
+        const fake = mockRealm();
+        fake.submit.mockResolvedValueOnce({ kind: 'local-pending', pendingCount: 1 } as never);
+        fake.snapshot.mockReturnValueOnce(snapshot).mockReturnValueOnce(null as never);
+        fake.refresh.mockRejectedValueOnce(new Error('consent no longer trusted'));
+        vi.mocked(openKindeCandidateFitnessRealm).mockResolvedValue(fake as KindeCandidateFitnessRealm);
+        const session = confirmed();
+        const { result } = renderHook(() => useKindeCandidateFitnessLifecycle({ session, enabled: true }));
+        await act(async () => { await result.current.open(); });
+        await act(async () => {
+            await result.current.submit({ type: 'profile.patch', patch: { height: '185' } });
+        });
+        await act(async () => {
+            await expect(result.current.recheck()).rejects.toThrow('consent no longer trusted');
+        });
+        expect(result.current.state.phase).toBe('unavailable');
+        expect(fake.close).toHaveBeenCalledTimes(1);
+        expect(fake.submit).toHaveBeenCalledTimes(1);
+        await act(async () => { await result.current.open(); });
+        expect(result.current.state.phase).toBe('ready');
+        expect(openKindeCandidateFitnessRealm).toHaveBeenCalledTimes(2);
+    });
+
+    it('rejects a late journal recovery after the account session changes', async () => {
+        const fake = mockRealm();
+        fake.submit.mockResolvedValueOnce({ kind: 'local-pending', pendingCount: 1 } as never);
+        fake.snapshot.mockReturnValueOnce(snapshot).mockReturnValueOnce(null as never);
+        let finish!: () => void;
+        fake.refresh.mockImplementationOnce(async () => {
+            await new Promise<void>(resolve => { finish = resolve; });
+            return snapshot;
+        });
+        vi.mocked(openKindeCandidateFitnessRealm).mockResolvedValue(fake as KindeCandidateFitnessRealm);
+        const { result, rerender } = renderHook(
+            ({ session }) => useKindeCandidateFitnessLifecycle({ session, enabled: true }),
+            { initialProps: { session: confirmed(1) } },
+        );
+        await act(async () => { await result.current.open(); });
+        await act(async () => {
+            await result.current.submit({ type: 'profile.patch', patch: { height: '185' } });
+        });
+        let pending!: Promise<void>;
+        act(() => { pending = result.current.recheck(); });
+        rerender({ session: confirmed(2) });
+        await act(async () => {
+            finish();
+            await expect(pending).rejects.toBeInstanceOf(KindeCandidateBoundaryError);
+        });
+        expect(result.current.state.phase).toBe('closed');
+        expect(fake.submit).toHaveBeenCalledTimes(1);
+        expect(fake.close).toHaveBeenCalledTimes(1);
+        expect(authenticatedIdentitySource.readUid()).toBeNull();
+    });
+
     it('never publishes a stale view after a terminal D1 failure', async () => {
         const fake = mockRealm();
         fake.submit.mockRejectedValueOnce(new Error('D1 terminal refusal'));
@@ -182,6 +258,11 @@ describe('React candidate lifecycle: explicit owner access without promoting Kin
                 .rejects.toThrow('D1 terminal refusal');
         });
         expect(result.current.state.phase).toBe('unavailable');
+        expect(fake.close).toHaveBeenCalledTimes(1);
+        await act(async () => { await result.current.open(); });
+        expect(result.current.state.phase).toBe('ready');
+        expect(openKindeCandidateFitnessRealm).toHaveBeenCalledTimes(2);
+        expect(fake.submit).toHaveBeenCalledTimes(1);
         expect(authenticatedIdentitySource.hasReader()).toBe(false);
     });
 });

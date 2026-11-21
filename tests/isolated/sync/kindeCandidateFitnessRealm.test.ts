@@ -168,6 +168,52 @@ describe('isolated Kinde fitness realm with trusted owner, no Firebase/global gr
         }
     });
 
+    it('recovers a response lost AFTER D1 commit immediately and keeps subsequent refresh idempotent', async () => {
+        const fixture = await createCloudKeyHttpFixture([uid]);
+        try {
+            await fixture.consent(uid);
+            const client = browser(fixture);
+            let lost = false;
+            const send: typeof fetch = async (input, init) => {
+                if (String(input) === '/v1/sync/commit' && !lost) {
+                    lost = true;
+                    const committed = await client.send(input, init);
+                    expect(committed.ok).toBe(true);
+                    throw new TypeError('synthetic response lost after commit');
+                }
+                return client.send(input, init);
+            };
+            const realm = await openKindeCandidateFitnessRealm({ ...client, send, expected });
+            const outcome = await realm.submit({
+                type: 'profile.patch', patch: { height: '193' },
+            });
+            // The existing receipt bridge may immediately reconcile this
+            // already-committed batch. That verified ACK is stronger than
+            // artificially forcing a pending state for the UI.
+            expect(outcome).toMatchObject({ kind: 'cloud-acknowledged', operations: 1 });
+            expect(realm.snapshot()?.data.profile?.height).toBe('193');
+            expect(fixture.count('sync_receipts', uid)).toBe(1);
+            expect(isVaultUnlocked(owner)).toBe(false);
+            const reconciled = await realm.refresh();
+            expect(reconciled.data.profile?.height).toBe('193');
+            expect(realm.snapshot()?.data.profile?.height).toBe('193');
+            expect(fixture.count('sync_receipts', uid)).toBe(1);
+            const grant = await unlockVaultForOwner(owner);
+            try {
+                const local = await readLocal(owner);
+                expect(local?.pending).toHaveLength(0);
+                expect(local?.data.profile?.height).toBe('193');
+                expect(local?.cloudflareDelivery).toBeUndefined();
+            } finally {
+                grant.release();
+            }
+            expect(isVaultUnlocked(owner)).toBe(false);
+            realm.close();
+        } finally {
+            fixture.close();
+        }
+    });
+
     it('blocks stale plaintext after a lost response and recovers exactly the pending ciphertext on fresh trusted scope', async () => {
         const fixture = await createCloudKeyHttpFixture([uid]);
         try {
@@ -189,7 +235,6 @@ describe('isolated Kinde fitness realm with trusted owner, no Firebase/global gr
             expect(realm.snapshot()).toBeNull();
             expect(isVaultUnlocked(owner)).toBe(false);
             expect(await get<string>('logbook:v2:' + owner)).toMatch(/^tlb-sealed:v1:/);
-            realm.close();
 
             const grant = await unlockVaultForOwner(owner);
             try {
@@ -201,6 +246,12 @@ describe('isolated Kinde fitness realm with trusted owner, no Firebase/global gr
                 grant.release();
             }
             expect(fixture.count('sync_receipts', uid)).toBe(0);
+            const reconciled = await realm.refresh();
+            expect(reconciled.data.profile?.height).toBe('192');
+            expect(realm.snapshot()?.data.profile?.height).toBe('192');
+            expect(fixture.count('sync_receipts', uid)).toBe(1);
+            expect(isVaultUnlocked(owner)).toBe(false);
+            realm.close();
 
             const resumed = await openKindeCandidateFitnessRealm({ ...client, expected });
             expect(resumed.snapshot()?.data.profile?.height).toBe('192');
