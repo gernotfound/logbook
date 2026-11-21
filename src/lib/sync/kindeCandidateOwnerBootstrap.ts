@@ -83,8 +83,15 @@ export async function prepareKindeCandidateOwner({
             // The checkpoint cannot replace a baseline while a delivery might
             // already have committed. Reconcile its receipt before scanning and
             // leave any later journal entries for the normal sync path.
-            const deliveryOutcome = await deliverKindeCandidateJournal({ ...pinnedRequest, recoverStagedFor: principal });
+            const recoveryRequest = { ...pinnedRequest, recoverStagedFor: principal };
+            let deliveryOutcome = await deliverKindeCandidateJournal(recoveryRequest);
             if (!scoped()) throw new KindeCandidateBoundaryError();
+            // Only a verified non-commit permits restaging. An explicit drain
+            // may try that replacement once without creating a new user intent.
+            if (drainPendingJournal && deliveryOutcome === 'retry-staged') {
+                deliveryOutcome = await deliverKindeCandidateJournal(recoveryRequest);
+                if (!scoped()) throw new KindeCandidateBoundaryError();
+            }
             if (deliveryOutcome === 'retry-staged' || deliveryOutcome === 'reconciliation-required') {
                 return { kind: 'delivery-pending', deliveryOutcome };
             }
