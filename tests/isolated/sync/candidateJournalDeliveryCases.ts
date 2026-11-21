@@ -5,7 +5,7 @@ import type { LocalEnvelope } from '../../../src/lib/sync/localEnvelopeValidatio
 import type { CandidateJournalTestContext } from './cloudflareJournalCandidate.test';
 
 export function registerCandidateJournalDeliveryCases({
-    owner, storeKey, adk, profile, seed, transport, savedDelivery,
+    owner, storeKey, adk, profile, seed, transport, savedDelivery, changedRemote,
     deliverCloudflareJournalCandidate, stageCloudflareDelivery,
     CloudReplicaTransportError, updateArchiveRecord, readLocal, initializeLocal,
 }: CandidateJournalTestContext): void {
