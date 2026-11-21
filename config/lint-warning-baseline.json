@@ -9,6 +9,14 @@
   },
   {
     "suite": "default",
+    "file": "src/components/Data/DataHistory.tsx",
+    "code": "react(set-state-in-effect)",
+    "message": "Calling setState synchronously within an effect can trigger cascading renders",
+    "source": "if (detailDay && !currentDetailDay) setDetailDay(null);",
+    "count": 1
+  },
+  {
+    "suite": "default",
     "file": "src/components/Training/TrainingSession.tsx",
     "code": "react(set-state-in-effect)",
     "message": "Calling setState synchronously within an effect can trigger cascading renders",
