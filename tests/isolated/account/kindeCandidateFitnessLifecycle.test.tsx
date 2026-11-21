@@ -11,6 +11,7 @@ vi.mock('../../../src/lib/auth/kindeCandidateFitnessRealm', () => ({
 
 import { openKindeCandidateFitnessRealm } from '../../../src/lib/auth/kindeCandidateFitnessRealm';
 import { useKindeCandidateFitnessLifecycle } from '../../../src/contexts/auth/useKindeCandidateFitnessLifecycle';
+import { releaseLegacyTestIdentityReader } from '../../setup';
 
 const uid = 'k_' + 'U'.repeat(43);
 const owner = 'user:' + uid;
@@ -39,6 +40,7 @@ function mockRealm() {
 }
 
 beforeEach(() => {
+    releaseLegacyTestIdentityReader();
     localStorage.clear();
     vi.mocked(openKindeCandidateFitnessRealm).mockReset();
 });
