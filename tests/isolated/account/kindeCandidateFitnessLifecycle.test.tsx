@@ -11,6 +11,7 @@ vi.mock('../../../src/lib/auth/kindeCandidateFitnessRealm', () => ({
 
 import { openKindeCandidateFitnessRealm } from '../../../src/lib/auth/kindeCandidateFitnessRealm';
 import { useKindeCandidateFitnessLifecycle } from '../../../src/contexts/auth/useKindeCandidateFitnessLifecycle';
+import { useKindeCandidateProfile } from '../../../src/hooks/profile/useKindeCandidateProfile';
 import { releaseLegacyTestIdentityReader } from '../../setup';
 
 const uid = 'k_' + 'U'.repeat(43);
@@ -240,6 +241,52 @@ describe('React candidate lifecycle: explicit owner access without promoting Kin
         });
         expect(result.current.state.phase).toBe('closed');
         expect(fake.submit).toHaveBeenCalledTimes(1);
+        expect(fake.close).toHaveBeenCalledTimes(1);
+        expect(authenticatedIdentitySource.readUid()).toBeNull();
+    });
+
+    it('routes the same biometric editor through the Kinde realm writer, never the legacy store', async () => {
+        const fake = mockRealm();
+        const edited = { ...snapshot, data: { ...snapshot.data, profile: { height: '191' } } };
+        fake.snapshot.mockReturnValueOnce(snapshot).mockReturnValueOnce(edited);
+        vi.mocked(openKindeCandidateFitnessRealm).mockResolvedValue(fake as KindeCandidateFitnessRealm);
+        const session = confirmed();
+        const { result } = renderHook(() => {
+            const lifecycle = useKindeCandidateFitnessLifecycle({ session, enabled: true });
+            const profile = useKindeCandidateProfile(lifecycle);
+            return { lifecycle, profile };
+        });
+        expect(result.current.profile.height).toBe('');
+        await act(async () => { await result.current.lifecycle.open(); });
+        expect(result.current.profile.height).toBe('180');
+        act(() => { result.current.profile.setHeight('191'); });
+        await act(async () => { await result.current.profile.handleSaveProfile(); });
+        expect(fake.submit).toHaveBeenCalledExactlyOnceWith({
+            type: 'profile.patch',
+            patch: { dob: '', gender: '', height: '191' },
+        });
+        expect(result.current.profile.height).toBe('191');
+        expect(authenticatedIdentitySource.hasReader()).toBe(false);
+    });
+
+    it('does not send a biometric draft from an obsolete account observer', async () => {
+        const fake = mockRealm();
+        vi.mocked(openKindeCandidateFitnessRealm).mockResolvedValue(fake as KindeCandidateFitnessRealm);
+        const { result, rerender } = renderHook(
+            ({ session }) => {
+                const lifecycle = useKindeCandidateFitnessLifecycle({ session, enabled: true });
+                const profile = useKindeCandidateProfile(lifecycle);
+                return { lifecycle, profile };
+            },
+            { initialProps: { session: confirmed(1) } },
+        );
+        await act(async () => { await result.current.lifecycle.open(); });
+        act(() => { result.current.profile.setHeight('193'); });
+        expect(result.current.profile.height).toBe('193');
+        rerender({ session: confirmed(2) });
+        expect(result.current.profile.height).toBe('');
+        await act(async () => { await result.current.profile.handleSaveProfile(); });
+        expect(fake.submit).not.toHaveBeenCalled();
         expect(fake.close).toHaveBeenCalledTimes(1);
         expect(authenticatedIdentitySource.readUid()).toBeNull();
     });
