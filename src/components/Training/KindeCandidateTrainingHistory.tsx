@@ -2,6 +2,7 @@ import type { useKindeCandidateFitnessLifecycle } from '../../contexts/auth/useK
 import { TrainingHistoryView } from './TrainingHistory';
 import { WorkoutReportView } from './report/WorkoutReportView';
 import './training-history.css';
+import './training-overview.css';
 
 type Realm = ReturnType<typeof useKindeCandidateFitnessLifecycle>;
 
