@@ -413,7 +413,7 @@ describe('React candidate lifecycle: explicit owner access without promoting Kin
                     <button type="button" onClick={realm.recheck}>Verifica salvataggio</button>
                 )}
                 <KindeCandidateJournalStatus state={realm.state} />
-                <KindeCandidateNutritionPlanning realm={realm} />
+                {realm.state.phase === 'ready' && <KindeCandidateNutritionPlanning realm={realm} />}
             </>;
         }
         const { rerender } = render(<Candidate session={confirmed(1)} />);
