@@ -85,6 +85,43 @@ test('duplicates a Kinde routine from the verified archive and replicates it onc
     }, { planningUi: true });
 });
 
+test('keeps a duplicated Kinde routine in the original encrypted journal after a lost receipt', async ({ browser }) => {
+    await withKindeReplicaDevices(browser, async ({ first, second, receipts, firstCommitStatuses, allowFirstCommit }) => {
+        expect(await second.evaluate(() => window.kindeReplicaFixture!.submit({
+            type: 'routine.upsert', routine: {
+                id: 'retry-original', name: 'Scheda da recuperare',
+                exercises: [],
+            },
+        }))).toMatchObject({ kind: 'cloud-acknowledged' });
+        const before = receipts();
+
+        await first.bringToFront();
+        await mountKindePlanning(first);
+        await first.getByRole('button', { name: 'Apri archivio account' }).click();
+        const library = first.getByRole('region', { name: 'Schede allenamento account' });
+        await library.getByRole('button', { name: 'Opzioni' }).click();
+        await library.getByRole('menuitem', { name: 'Duplica' }).click();
+
+        await expect(first.getByRole('button', { name: 'Verifica salvataggio' })).toBeVisible();
+        await expect(library).toHaveCount(0);
+        expect(firstCommitStatuses).toEqual([429]);
+        expect(receipts()).toBe(before);
+        const prior = await second.evaluate(async () =>
+            (await window.kindeReplicaFixture!.refresh()).data.routines?.map(item => item.name));
+        expect(prior).toEqual(['Scheda da recuperare']);
+
+        allowFirstCommit();
+        await first.getByRole('button', { name: 'Verifica salvataggio' }).click();
+        await expect(library.getByText('Scheda da recuperare - 1')).toBeVisible();
+        expect(firstCommitStatuses).toEqual([429, 200]);
+        expect(receipts()).toBe(before + 1);
+        const final = await second.evaluate(async () =>
+            (await window.kindeReplicaFixture!.refresh()).data.routines?.map(item => item.name));
+        expect(final).toEqual(expect.arrayContaining(['Scheda da recuperare', 'Scheda da recuperare - 1']));
+        expect(final).toHaveLength(2);
+    }, { planningUi: true });
+});
+
 test('reads Kinde training history and report without writing another owner\'s data', async ({ browser }) => {
     await withKindeReplicaDevices(browser, async ({ first, second, receipts, firstCommitStatuses }) => {
         const saved = await second.evaluate(() => window.kindeReplicaFixture!.submit([
