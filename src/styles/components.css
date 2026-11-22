@@ -189,20 +189,6 @@ details[open] > .technique-summary::after {
     box-sizing: border-box;
 }
 
-#top-timer-bar {
-    display: none;
-    position: sticky;
-    top: var(--sticky-top);
-    left: 0;
-    width: 100%;
-    background: var(--bg-color);
-    z-index: 50;
-    padding: 0.75rem 1rem;
-    border-bottom: 1px solid var(--glass-border);
-    flex-direction: row;
-    align-items: center;
-    justify-content: space-between;
-}
 
 .timer-display {
     font-size: var(--font-size-timer);
@@ -234,14 +220,6 @@ details[open] > .technique-summary::after {
 .timer-btn.stop { background: var(--danger-soft); color: var(--danger-color); border-color: var(--danger-color); }
 .timer-btn.reset { background: var(--primary-soft); color: var(--primary-color); border-color: var(--primary-color); }
 
-#global-timer-bar {
-    background: var(--surface-color);
-    padding: 1.25rem;
-    border-radius: 1rem;
-    text-align: center;
-    margin-top: 1.5rem;
-    border: 1px solid var(--glass-border);
-}
 
 .bottom-nav {
     position: fixed !important;
@@ -428,7 +406,6 @@ details[open] > .technique-summary::after {
 #weightChart { max-height: 12.5rem; }
 
 .badge { display: inline-flex; align-items: center; padding: 0.375rem 0.75rem; border-radius: 0.5rem; font-size: var(--font-size-secondary); font-weight: 600; border: 1px solid var(--glass-border); }
-.badge-primary { background: var(--primary-soft); color: var(--primary-color); border-color: var(--primary-color); }
 
 .cycle-intent-grid {
     display: grid;
@@ -522,8 +499,3 @@ details[open] > .technique-summary::after {
 
 .muscle-map-container svg { max-height: none; max-width: 100%; width: 100%; height: auto; }
 
-.tracking-type-group { display: flex; gap: 0.625rem; width: 100%; }
-.tracking-card-option { flex: 1; display: flex; align-items: center; justify-content: center; gap: 0.625rem; padding: 0.75rem 0.875rem; border-radius: 0.75rem; background: var(--surface-color); border: 1px solid var(--glass-border); color: var(--text-muted); font-size: var(--font-size-secondary); font-weight: 500; user-select: none; }
-.tracking-card-option:hover { background: var(--surface-light); color: var(--text-main); }
-.tracking-card-option.active { background: var(--primary-soft); border-color: var(--primary-color); color: var(--primary-color); font-weight: 700; }
-.tracking-card-option .icon { display: flex; align-items: center; justify-content: center; }
