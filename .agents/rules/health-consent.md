@@ -3,8 +3,8 @@
 ## CF-05 — Ingresso React candidato: revoca e diritti senza GO fitness (19/11/2026)
 
 Il solo ingresso Kinde **candidato** può esporre revoca e diritti quando
-entrambi i flag espliciti `candidatePreparationEnabled:true` e
-`candidateLifecycleEnabled:true` sono attivi e `identityOnly:false`.
+una modalità esplicita `candidateMode` è selezionata,
+`candidateLifecycleEnabled:true` è attivo e `identityOnly:false`.
 Il pubblico continua `identityOnly:true`,
 `candidatePreparationEnabled:false`; la nuova impostazione non è un
 permesso per pubblicare la D1 API o attivare account fitness.

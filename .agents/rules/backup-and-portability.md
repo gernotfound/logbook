@@ -281,7 +281,7 @@ un campo definito diverso continua a essere una violazione.
 ### CF-05 — UI candidata di ripristino Kinde (19/11/2026)
 
 La vista `KindeCandidateRestorePanel` è disponibile soltanto nel percorso
-esplicitamente abilitato `candidatePreparationEnabled` e `identityOnly:false`,
+esplicitamente abilitato con `candidateMode` e `identityOnly:false`,
 dopo consenso Kinde verificato. La selezione del file e la conferma informata
 sono azioni separate. Il file JSON resta nel browser, con parser incrementale
 sopra 64 MiB; il backend riceve soltanto i documenti cifrati attraverso il

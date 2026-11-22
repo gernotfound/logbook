@@ -20,7 +20,7 @@ describe('Kinde candidate entry: backup, revocation and rights', () => {
         vi.mocked(unlockVaultForOwner).mockResolvedValue({
             isCurrent: () => true, release,
         });
-        render(<KindeAccountEntry candidatePreparationEnabled />);
+        render(<KindeAccountEntry candidateMode="preparation" />);
         const prepare = await screen.findByRole('button', { name: 'Prepara backup JSON' });
         expect(prepareKindeCandidatePortableBackupJson).not.toHaveBeenCalled();
         fireEvent.click(prepare);
@@ -46,7 +46,7 @@ describe('Kinde candidate entry: backup, revocation and rights', () => {
             kind: 'email-verified', principal: { ...principal, healthConsentRevision: 1 },
         });
         vi.mocked(readKindeCandidateAccess).mockResolvedValue(confirmed);
-        render(<KindeAccountEntry candidatePreparationEnabled />);
+        render(<KindeAccountEntry candidateMode="preparation" />);
         fireEvent.click(await screen.findByRole('button', { name: 'Prepara backup JSON' }));
         const download = await screen.findByRole('link', { name: 'Scarica backup JSON' });
         browserWitness.csrf = REPLACEMENT_CSRF;
@@ -63,7 +63,7 @@ describe('Kinde candidate entry: backup, revocation and rights', () => {
         });
         vi.mocked(readKindeCandidateAccess).mockResolvedValue(confirmed);
         vi.mocked(unlockVaultForOwner).mockRejectedValueOnce(new Error('vault locked'));
-        render(<KindeAccountEntry candidatePreparationEnabled />);
+        render(<KindeAccountEntry candidateMode="preparation" />);
         const button = await screen.findByRole('button', { name: 'Prepara backup JSON' });
         fireEvent.click(button);
         await screen.findByRole('alert');
@@ -80,7 +80,7 @@ describe('Kinde candidate entry: backup, revocation and rights', () => {
             kind: 'email-verified', principal: { ...principal, healthConsentRevision: 1 },
         });
         vi.mocked(readKindeCandidateAccess).mockResolvedValue(confirmed);
-        render(<KindeAccountEntry candidatePreparationEnabled candidateLifecycleEnabled />);
+        render(<KindeAccountEntry candidateMode="preparation" candidateLifecycleEnabled />);
         const backup = await screen.findByRole('button', { name: 'Prepara backup JSON' });
         expect(backup).toBeDefined();
         const revoke = screen.getByRole('button', { name: 'Revoca consenso e avvia cancellazione' });
@@ -120,7 +120,7 @@ describe('Kinde candidate entry: backup, revocation and rights', () => {
             localStorage.setItem('logbook:v2:user:' + A + ':health-consent-withdrawal', 'pending:1');
             throw new Error('response lost after D1 commit');
         });
-        const screenA = render(<KindeAccountEntry candidatePreparationEnabled candidateLifecycleEnabled />);
+        const screenA = render(<KindeAccountEntry candidateMode="preparation" candidateLifecycleEnabled />);
         const checkbox = await screen.findByRole('checkbox', { name: /Confermo di voler revocare/ });
         fireEvent.click(checkbox);
         fireEvent.click(screen.getByRole('button', { name: 'Revoca consenso e avvia cancellazione' }));
@@ -131,7 +131,7 @@ describe('Kinde candidate entry: backup, revocation and rights', () => {
         expect(withdrawKindeCandidateHealthConsent).toHaveBeenCalledTimes(1);
         screenA.unmount();
 
-        render(<KindeAccountEntry candidatePreparationEnabled candidateLifecycleEnabled />);
+        render(<KindeAccountEntry candidateMode="preparation" candidateLifecycleEnabled />);
         expect(await screen.findByRole('button', { name: 'Verifica stato della revoca' })).toBeDefined();
         expect(screen.queryByRole('button', { name: 'Revoca consenso e avvia cancellazione' })).toBeNull();
         vi.mocked(reconcileKindeCandidateWithdrawal).mockImplementationOnce(async () => {
@@ -148,12 +148,12 @@ describe('Kinde candidate entry: backup, revocation and rights', () => {
             kind: 'email-verified', principal: { ...principal, healthConsentRevision: 1 },
         });
         vi.mocked(readKindeCandidateAccess).mockResolvedValue(confirmed);
-        const publicEntry = render(<KindeAccountEntry identityOnly candidatePreparationEnabled candidateLifecycleEnabled />);
+        const publicEntry = render(<KindeAccountEntry identityOnly candidateMode="preparation" candidateLifecycleEnabled />);
         await screen.findByText(/Sessione Kinde verificata/);
         expect(screen.queryByRole('button', { name: 'Revoca consenso e avvia cancellazione' })).toBeNull();
         publicEntry.unmount();
         localStorage.setItem('logbook:v2:user:' + A + ':health-consent-withdrawal', 'unexpected');
-        render(<KindeAccountEntry candidatePreparationEnabled candidateLifecycleEnabled />);
+        render(<KindeAccountEntry candidateMode="preparation" candidateLifecycleEnabled />);
         await screen.findByText(/Stato locale della revoca non verificabile/);
         expect(screen.queryByRole('button', { name: 'Revoca consenso e avvia cancellazione' })).toBeNull();
         expect(withdrawKindeCandidateHealthConsent).not.toHaveBeenCalled();
@@ -166,7 +166,7 @@ describe('Kinde candidate entry: backup, revocation and rights', () => {
         vi.mocked(readKindeCandidateAccess).mockResolvedValue({
             kind: 'consent-suspended', principal: confirmed.principal, status: 'withdrawn',
         });
-        render(<KindeAccountEntry candidatePreparationEnabled candidateLifecycleEnabled />);
+        render(<KindeAccountEntry candidateMode="preparation" candidateLifecycleEnabled />);
         const button = await screen.findByRole('button', { name: 'Verifica dati cloud ancora disponibili' });
         expect(screen.queryByRole('button', { name: 'Prepara backup JSON' })).toBeNull();
         expect(unlockVaultForOwner).not.toHaveBeenCalled();
@@ -196,7 +196,7 @@ describe('Kinde candidate entry: backup, revocation and rights', () => {
             localStorage.setItem('logbook:v2:user:' + A + ':health-consent-withdrawal', 'withdrawn');
             return { kind: 'withdrawal-proven' };
         });
-        render(<KindeAccountEntry candidatePreparationEnabled candidateLifecycleEnabled />);
+        render(<KindeAccountEntry candidateMode="preparation" candidateLifecycleEnabled />);
         const readback = await screen.findByRole('button', { name: 'Verifica stato della revoca' });
         expect(screen.getByRole('button', { name: 'Verifica dati cloud ancora disponibili' })).toBeDefined();
         expect(screen.queryByRole('button', { name: 'Revoca consenso e avvia cancellazione' })).toBeNull();
@@ -216,7 +216,7 @@ describe('Kinde candidate entry: backup, revocation and rights', () => {
             localStorage.setItem('logbook:v2:user:' + A + ':health-consent-withdrawal', 'withdrawn');
             return { kind: 'withdrawal-recorded', deletionStatus: 'processing' };
         });
-        render(<KindeAccountEntry candidatePreparationEnabled candidateLifecycleEnabled />);
+        render(<KindeAccountEntry candidateMode="preparation" candidateLifecycleEnabled />);
         expect(await screen.findByRole('button', {
             name: 'Revoca consenso e avvia cancellazione',
         })).toHaveProperty('disabled', true);
@@ -237,7 +237,7 @@ describe('Kinde candidate entry: backup, revocation and rights', () => {
         vi.mocked(readKindeCandidateIdentity).mockResolvedValue({
             kind: 'email-unverified', principal: { ...principal, healthConsentRevision: 1, emailVerified: false },
         });
-        render(<KindeAccountEntry candidatePreparationEnabled candidateLifecycleEnabled />);
+        render(<KindeAccountEntry candidateMode="preparation" candidateLifecycleEnabled />);
         fireEvent.click(await screen.findByRole('button', { name: 'Verifica dati cloud ancora disponibili' }));
         await screen.findByRole('link', { name: 'Scarica documenti cloud disponibili' });
         expect(readKindeCandidateAccess).not.toHaveBeenCalled();
