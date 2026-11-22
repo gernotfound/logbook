@@ -129,14 +129,19 @@ export function useKindeAccountSession({
         const timer = window.setInterval(() => {
             if (canRefresh() && observed.current && !observed.current.stillCurrent()) scheduleRecheck();
         }, COOKIE_CHECK_MS);
+        const onPageShow = (event: PageTransitionEvent) => {
+            if (event.persisted) scheduleRecheck();
+        };
         window.addEventListener('focus', scheduleRecheck);
         window.addEventListener('online', scheduleRecheck);
+        window.addEventListener('pageshow', onPageShow);
         document.addEventListener('visibilitychange', scheduleRecheck);
         return () => {
             active = false;
             window.clearInterval(timer);
             window.removeEventListener('focus', scheduleRecheck);
             window.removeEventListener('online', scheduleRecheck);
+            window.removeEventListener('pageshow', onPageShow);
             document.removeEventListener('visibilitychange', scheduleRecheck);
         };
     }, [guestArchivePresent, refresh]);

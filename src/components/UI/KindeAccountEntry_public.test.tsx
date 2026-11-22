@@ -105,6 +105,23 @@ describe('public Kinde identity-only entry boundary', () => {
         expect(acceptKindeCandidateInitialConsent).not.toHaveBeenCalled();
     });
 
+    it('rechecks identity on back-forward cache restore without duplicating the first load', async () => {
+        vi.mocked(readKindeCandidateIdentity).mockResolvedValueOnce(verified)
+            .mockResolvedValue({ kind: 'signed-out' });
+        render(<KindeAccountEntry identityOnly />);
+        await screen.findByText(/Sessione Kinde verificata/);
+        await act(async () => { window.dispatchEvent(new PageTransitionEvent('pageshow')); });
+        expect(readKindeCandidateIdentity).toHaveBeenCalledTimes(1);
+
+        await act(async () => {
+            window.dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true }));
+        });
+
+        await screen.findByRole('button', { name: 'Accedi o registrati' });
+        expect(readKindeCandidateIdentity).toHaveBeenCalledTimes(2);
+        expect(readKindeCandidateAccess).not.toHaveBeenCalled();
+    });
+
     it('fences a slow old identity response when the session changes again on reconnect', async () => {
         let releaseOld!: (value: typeof verified) => void;
         vi.mocked(readKindeCandidateIdentity).mockResolvedValueOnce(verified)
