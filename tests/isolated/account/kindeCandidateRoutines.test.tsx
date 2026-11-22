@@ -149,7 +149,7 @@ describe('Kinde routine library: read-only owner boundary', () => {
     });
 
     it('keeps pending receipt status under realm ownership and does not re-submit intent', async () => {
-        let finish!: (outcome: { kind: 'local-pending' }) => void;
+        let finish!: (outcome: { kind: 'local-pending'; pendingCount: number }) => void;
         const realm = candidate('ready');
         vi.mocked(realm.submit).mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
         render(<KindeCandidateRoutines realm={realm} />);
@@ -158,7 +158,7 @@ describe('Kinde routine library: read-only owner boundary', () => {
         fireEvent.click(screen.getByRole('button', { name: 'Opzioni' }));
         fireEvent.click(screen.getByRole('menuitem', { name: 'Duplica' }));
         expect(realm.submit).toHaveBeenCalledTimes(1);
-        await act(async () => finish({ kind: 'local-pending' }));
+        await act(async () => finish({ kind: 'local-pending', pendingCount: 1 }));
         expect(realm.submit).toHaveBeenCalledTimes(1);
     });
 
