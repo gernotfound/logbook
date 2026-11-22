@@ -1,5 +1,26 @@
 # Ciclo account, Auth e guest — TheLogBook
 
+### CF-03/04 — Duplicazione ed eliminazione delle schede Kinde (22/11/2026)
+
+L'archivio candidato puo ora duplicare ed eliminare schede senza bozza:
+`KindeCandidateRoutines` cattura un witness di modifica dal realm `ready`,
+richiama esclusivamente `realm.submit()` con `routine.upsert` e
+`routine.delete`, e non usa `useTrainingRoutines`, Zustand o Auth Firebase.
+La duplicazione crea un identificativo casuale nuovo prima del commit;
+il lock locale impedisce due submit contemporanei dallo stesso pannello.
+L'eliminazione richiede `GlobalDialog` e riverifica il witness
+**dopo** l'attesa della conferma, prima del commit. Quando fase/epoch,
+consenso, owner o permit cambiano, il submit è respinto; un journal pending
+non viene dichiarato cloud ACK e il pulsante di recheck non reinvia
+l'intento. Non si cancellano automaticamente dati device in caso di errore.
+
+La creazione e modifica di schede dall'editor restano disabilitate:
+`draft_routine` usa ancora il writer device e i marker di consenso del
+legacy, incompatibili col perimetro Kinde finché non esiste un adapter
+di bozza cifrata owner/consenso/fence/recovery dedicato e provato.
+Il frontend pubblico resta `identityOnly`. Test sintetici e CodeQL non
+costituiscono un collaudo account/D1 Production.
+
 ### CF-03 — Schede Kinde isolate in sola lettura (22/11/2026)
 
 `KindeCandidateRoutines` monta la libreria condivisa `RoutineLibraryList`
@@ -7,16 +28,15 @@ soltanto con snapshot `ready` del realm owner-scoped, separata da
 `useTrainingRoutines`, da Zustand e dalle preferenze/draft del guest.
 `RoutineCard` rende le azioni di menu solo quando il chiamante
 fornisce i rispettivi handler: il wrapper guest conserva modifica,
-duplica ed elimina; l'account candidato non offre ancora creazione,
-modifica, duplicazione o eliminazione di schede. Ricerca, espansione,
+duplica ed elimina; il candidato Kinde offre duplicazione ed eliminazione
+attraverso il realm, ma non la creazione o modifica mediante editor. Ricerca, espansione,
 riepilogo serie e mappa muscolare usano soltanto la libreria dello
 stesso owner Kinde e sono smontati alla perdita del permesso.
 
 Le bozze delle schede, `draft_routine`, il controllo dei testimoni
-fra schede, l'editor e il writer `routine.upsert` non sono ancora
-migrati nel nuovo lifecycle. L'assenza di un writer nel candidato è
-deliberata: un'azione account non può usare l'owner o il recupero
-del guest. I test React contrappongono dati guest con gli stessi
+fra schede e l'editor non sono ancora migrati. Il writer delle azioni
+immediate è soltanto `realm.submit()` con journal cifrato: un'azione
+account non può usare l'owner o il recupero del guest. I test React contrappongono dati guest con gli stessi
 identificativi; un E2E sintetico a due profili browser verifica la
 lettura dopo una ricevuta D1 senza nuove scritture/ACK. Non è un
 collaudo funzionale Production né abilita fitness pubblico.
