@@ -1,9 +1,10 @@
 import { computeWeeklyVolumeSeries, computeVolumeCaloriesCorrelation, computeVolumeCaloriesCorrelationFromVolume } from '../lib/calc/analytics';
 
 self.onmessage = (e: MessageEvent) => {
-    const { id, type, payload } = e.data;
+    const id = e.data?.id;
 
     try {
+        const { type, payload } = e.data;
         if (type === 'CALCULATE_VOLUME_STATS') {
             const { history, library, userWeight, numWeeks, referenceDate } = payload;
             const result = computeWeeklyVolumeSeries(history, library, userWeight, numWeeks, referenceDate);
