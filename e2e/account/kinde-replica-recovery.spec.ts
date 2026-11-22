@@ -46,7 +46,7 @@ test('reads owner-scoped Kinde routines without legacy actions or a new D1 recei
 });
 
 test('duplicates a Kinde routine from the verified archive and replicates it once to a second device', async ({ browser }) => {
-    await withKindeReplicaDevices(browser, async ({ first, second, receipts, firstCommitStatuses }) => {
+    await withKindeReplicaDevices(browser, async ({ first, second, receipts, firstCommitStatuses, allowFirstCommit }) => {
         expect(await second.evaluate(() => window.kindeReplicaFixture!.submit([
             { type: 'exercise.upsert', exercise: {
                 id: 'clone-ex', name: 'Squat da duplicare', setsCount: 1,
@@ -64,6 +64,9 @@ test('duplicates a Kinde routine from the verified archive and replicates it onc
         const library = first.getByRole('region', { name: 'Schede allenamento account' });
         await expect(library.getByText('Programma Kinde')).toBeVisible();
 
+        // This fixture intentionally rejects the first write with HTTP 429 unless
+        // explicitly enabled. Here the test proves a successful verified receipt.
+        allowFirstCommit();
         await library.getByRole('button', { name: 'Opzioni' }).click();
         await library.getByRole('menuitem', { name: 'Duplica' }).click();
         await expect(library.getByText('Programma Kinde - 1')).toBeVisible();
