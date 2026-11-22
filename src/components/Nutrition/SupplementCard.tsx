@@ -26,7 +26,7 @@ export function SupplementCard({
         : 0;
 
     return (
-        <div className="card mb-15">
+        <article className="card mb-15" aria-label={supplement.name}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
                 <div>
                     <div style={{ fontWeight: 'bold', fontSize: 'var(--font-size-control)', color: 'var(--text-main)' }}>{supplement.name}</div>
@@ -87,6 +87,6 @@ export function SupplementCard({
                     })}
                 </div>
             )}
-        </div>
+        </article>
     );
 }

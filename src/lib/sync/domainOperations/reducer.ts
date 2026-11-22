@@ -178,12 +178,16 @@ function applyOne(data: UserData, operation: DomainOperation): UserData {
             data.nutrition = { ...(data.nutrition ?? {}), [date]: withMealTotals({ ...day, date, meals }) };
             break;
         }
-        case 'supplement-intake.upsert': {
+        case 'supplement-intake.upsert':
+        case 'supplement-intake.add': {
             const date = requireDate(operation.date);
             const intakeId = requireId(operation.intake.id, 'Assunzione integratore');
-            requireId(operation.intake.supplementId, 'Integratore');
+            const supplementId = requireId(operation.intake.supplementId, 'Integratore');
             if (!Number.isFinite(operation.intake.amount) || operation.intake.amount <= 0) {
                 throw new Error('La quantità assunta deve essere positiva.');
+            }
+            if (operation.type === 'supplement-intake.add' && !data.supplements?.some(item => item.id === supplementId)) {
+                throw new Error('Integratore non più presente nella libreria.');
             }
             const day = ensureNutritionDay(data, date);
             const supplementsIntake = upsertById(
@@ -208,8 +212,12 @@ function applyOne(data: UserData, operation: DomainOperation): UserData {
             data.nutrition = { ...(data.nutrition ?? {}), [date]: { ...day, date, supplementsIntake } };
             break;
         }
-        case 'supplement.upsert': {
+        case 'supplement.upsert':
+        case 'supplement.edit': {
             const supplement = { ...operation.supplement, id: requireId(operation.supplement.id, 'Integratore') };
+            if (operation.type === 'supplement.edit' && !data.supplements?.some(item => item.id === supplement.id)) {
+                throw new Error('Integratore non più presente nella libreria.');
+            }
             if (!supplement.name.trim() || !supplement.unit.trim()) throw new Error('Nome e unità integratore obbligatori.');
             if ([supplement.target, supplement.portion].some(value => value !== undefined && (!Number.isFinite(value) || value <= 0))) {
                 throw new Error('Le dosi dell’integratore devono essere positive.');

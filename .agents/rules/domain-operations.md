@@ -113,6 +113,11 @@ il commit. Un editor obsoleto non crea un pasto eliminato e non riscrive
 nome, nutrienti o altri valori catturati all'apertura. L'aggiunta di un
 pasto usa `nutrition-meal.upsert` con un nuovo ID.
 
+`supplement.edit` e `supplement-intake.add` richiedono che l'integratore sia
+ancora in libreria al commit. La rimozione della voce lascia intatte le
+assunzioni già registrate. Un editor obsoleto non può ricreare la voce o
+registrare una nuova assunzione per quell'ID.
+
 ## Patch
 
 Per operazioni `*.patch`:

@@ -41,9 +41,11 @@ export function KindeCandidateFitnessPanel({ session, management }: { session: S
                         }}>Torna alla gestione account</button>
                     )}
                     <KindeCandidateJournalStatus state={realm.state} />
-                    <KindeCandidateBiometry realm={realm} />
-                    <KindeCandidateNutritionPlanning realm={realm} />
-                    <KindeCandidateNutritionMeals realm={realm} />
+                    {phase !== 'unavailable' && <>
+                        <KindeCandidateBiometry realm={realm} />
+                        <KindeCandidateNutritionPlanning realm={realm} />
+                        <KindeCandidateNutritionMeals realm={realm} />
+                    </>}
                 </>
             )}
             {(failed || phase === 'unavailable') && (

@@ -173,6 +173,74 @@ test('reads Kinde meal history and opens the selected day without a write', asyn
     }, { planningUi: true });
 });
 
+test('manages supplements and dated intakes through the Kinde archive', async ({ browser }) => {
+    await withKindeReplicaDevices(browser, async ({ first, second, receipts, firstCommitStatuses, allowFirstCommit }) => {
+        expect(await second.evaluate(() => window.kindeReplicaFixture!.submit({
+            type: 'supplement.upsert', supplement: { id: 'magnesium', name: 'Magnesio fixture', unit: 'mg' },
+        }))).toMatchObject({ kind: 'cloud-acknowledged' });
+        const yesterday = await first.evaluate(() => {
+            const date = new Date();
+            date.setDate(date.getDate() - 1);
+            const pad = (value: number) => String(value).padStart(2, '0');
+            return [date.getFullYear(), pad(date.getMonth() + 1), pad(date.getDate())].join('-');
+        });
+        await first.bringToFront();
+        await mountKindePlanning(first);
+        const diary = first.getByRole('region', { name: 'Diario pasti' });
+        await expect(diary).toHaveCount(0);
+        await first.getByRole('button', { name: 'Apri archivio account' }).click();
+        await diary.getByRole('tab', { name: 'Integratori' }).click();
+        const panel = diary.getByRole('tabpanel', { name: 'Integratori' });
+        await panel.getByRole('button', { name: /Giorno precedente/ }).click();
+        const magnesiumInput = panel.getByRole('spinbutton', { name: 'Quantità assunzione Magnesio fixture' });
+        await magnesiumInput.fill('200');
+        await panel.getByRole('button', { name: /Nuovo integratore/ }).click();
+        await panel.getByLabel('Nome integratore').fill('Creatina fixture');
+        await panel.getByLabel('Dose singola (opzionale)').fill('3');
+        await panel.getByRole('button', { name: 'Salva', exact: true }).click();
+        const pending = first.getByText('Conferma cloud in attesa', { exact: false });
+        await expect(pending).toBeVisible();
+        await expect(diary).toHaveCount(0);
+        expect(firstCommitStatuses).toEqual([429]);
+        expect(receipts()).toBe(1);
+
+        allowFirstCommit();
+        await first.getByRole('button', { name: 'Verifica salvataggio' }).click();
+        const creatine = panel.getByRole('article', { name: 'Creatina fixture', exact: true });
+        await expect(creatine).toBeVisible();
+        await expect(magnesiumInput).toHaveValue('200');
+        await expect(panel.getByRole('heading', { name: 'Crea nuovo integratore' })).toHaveCount(0);
+        await expect(pending).toHaveCount(0);
+        expect(receipts()).toBe(2);
+
+        await creatine.getByRole('button', { name: 'Opzioni' }).click();
+        await first.getByRole('menuitem', { name: 'Modifica' }).click();
+        await panel.getByLabel('Dose target giornaliera').fill('5');
+        await panel.getByRole('button', { name: 'Salva', exact: true }).click();
+        await expect(creatine.getByText('/ 5 g')).toBeVisible();
+        expect(receipts()).toBe(3);
+
+        await creatine.getByRole('button', { name: 'Opzioni' }).click();
+        await first.getByRole('menuitem', { name: 'Duplica' }).click();
+        await expect(panel.getByRole('article', { name: 'Creatina fixture - 1', exact: true })).toBeVisible();
+        expect(receipts()).toBe(4);
+
+        await creatine.getByRole('button', { name: '+ Aggiungi', exact: true }).click();
+        const removeIntake = creatine.getByRole('button', { name: /Rimuovi assunzione di 3 g/ });
+        await expect(removeIntake).toBeVisible();
+        const readIntakes = () => second.evaluate(async date =>
+            (await window.kindeReplicaFixture!.refresh()).data.nutrition?.[date]?.supplementsIntake ?? [], yesterday);
+        expect(await readIntakes()).toMatchObject([{ amount: 3 }]);
+        expect(receipts()).toBe(5);
+        await removeIntake.click();
+        await expect(creatine).toBeVisible();
+        await expect(removeIntake).toHaveCount(0);
+        expect(await readIntakes()).toEqual([]);
+        expect(firstCommitStatuses).toEqual([429, 200, 200, 200, 200, 200]);
+        expect(receipts()).toBe(6);
+    }, { planningUi: true });
+});
+
 test('recovers a Kinde edit made offline after a competing browser save', async ({ browser }) => {
     await withKindeReplicaDevices(browser, async ({ first, second, receipts, firstCommitStatuses, allowFirstCommit }) => {
         allowFirstCommit();

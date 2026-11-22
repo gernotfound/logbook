@@ -36,8 +36,10 @@ export type DomainOperation =
     | { type: 'nutrition-meal.edit'; date: string; mealId: string; quantity?: number; meal?: string }
     | { type: 'nutrition-meal.delete'; date: string; mealId: string }
     | { type: 'supplement-intake.upsert'; date: string; intake: SupplementIntake }
+    | { type: 'supplement-intake.add'; date: string; intake: SupplementIntake }
     | { type: 'supplement-intake.delete'; date: string; intakeId: string }
     | { type: 'supplement.upsert'; supplement: Supplement }
+    | { type: 'supplement.edit'; supplement: Supplement }
     | { type: 'supplement.delete'; id: string }
     | { type: 'supplement.reorder'; ids: string[] }
     | { type: 'routine.upsert'; routine: WorkoutRoutine }

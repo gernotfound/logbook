@@ -160,6 +160,37 @@ describe('supplement intake catalogue lookups', () => {
         }
     });
 
+    it('rejects a stale edit and a new intake after removal while preserving recorded intakes', async () => {
+        const date = '2026-09-14';
+        const supplement = { id: 'removed-supplement', name: 'Creatina', unit: 'g' };
+        const intake = { id: 'recorded', supplementId: supplement.id, amount: 5, time: 1 };
+        const previous = useAppStore.getState();
+        const initial = applyDomainOperations(emptyUserData, [
+            { type: 'supplement.upsert', supplement },
+            { type: 'supplement-intake.upsert', date, intake },
+        ]);
+        let durable = initial;
+        const dispatch: typeof previous.dispatchDomainOperation = async operation => {
+            durable = applyDomainOperations(durable, operation);
+            return { ok: true, status: 'synced' };
+        };
+        useAppStore.setState({ userData: initial, dataOwner: storageOwner(), dispatchDomainOperation: dispatch });
+        try {
+            const { result } = renderHook(() => useSupplements(date));
+            durable = applyDomainOperations(durable, { type: 'supplement.delete', id: supplement.id });
+            await act(async () => {
+                await expect(result.current.saveSupplementToLibrary({ name: 'Creatina nuova', unit: 'g' }, supplement.id))
+                    .rejects.toThrow(/non più presente/i);
+                await expect(result.current.addIntake(supplement.id, 3)).rejects.toThrow(/non più presente/i);
+            });
+            expect(durable.supplements).toEqual([]);
+            expect(durable.nutrition?.[date]?.supplementsIntake).toEqual([intake]);
+        } finally {
+            act(() => useAppStore.setState({ userData: previous.userData, dataOwner: previous.dataOwner,
+                dispatchDomainOperation: previous.dispatchDomainOperation }));
+        }
+    });
+
     it('keeps the supplement form open on a rejected device commit', async () => {
         const previous = useAppStore.getState();
         const dispatch = vi.fn().mockResolvedValue({ ok: false, status: 'failed', error: new Error('storage unavailable') });
