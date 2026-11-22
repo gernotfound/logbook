@@ -1,14 +1,13 @@
-import { MAX_ROUTINE_SEGMENTS, parseRoutineSetCount } from '../lib/routineSessionLimits';
+import { buildRoutineDuplicateOperation, buildRoutineSaveOperations, routineDraftValidationError } from '../lib/routineSaveIntent';
 import { dispatchDurableOperation } from '../lib/sync/dispatchDurableOperation';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useAppStore } from '../store/useAppStore';
 import { useDialogStore } from '../store/useDialogStore';
 import { Logic } from '../lib/logic';
-import { normalizeBusinessId } from '../lib/businessIdentity';
 import { parseRoutineRecovery } from './trainingRoutines/routineRecoverySchema';
 import { readWorkoutRecoveryDraftImage, writeWorkoutRecoveryDraft } from '../lib/sync/workoutRecoveryDraft';
 import { captureSession, isCurrentSession } from '../lib/sync/session';
-import type { Exercise, RoutineExercise, WorkoutRoutine } from '../types';
+import type { Exercise, WorkoutRoutine } from '../types';
 import { useRoutineExerciseEditor } from './trainingRoutines/useRoutineExerciseEditor';
 
 const EMPTY_ROUTINES: WorkoutRoutine[] = [];
@@ -97,14 +96,9 @@ export function useTrainingRoutines() {
 
     const handleDuplicate = async (rtn: WorkoutRoutine) => {
         if (!isCurrentSession(draftSession)) return;
-        const newName = Logic.generateUniqueName(rtn.name, routines.map(r => r.name));
-        const duplicated: WorkoutRoutine = {
-            ...rtn,
-            id: Logic.generateId('rtn'),
-            name: newName
-        };
         try {
-            await dispatchDurableOperation(dispatchDomainOperation, { type: 'routine.upsert', routine: duplicated });
+            const operation = buildRoutineDuplicateOperation(rtn, routines, Logic.generateId('rtn'));
+            await dispatchDurableOperation(dispatchDomainOperation, operation);
         } catch (err) {
             console.error(err);
             if (isCurrentSession(draftSession)) await showAlert('Errore durante la duplicazione della scheda.');
@@ -128,34 +122,9 @@ export function useTrainingRoutines() {
 
     const handleSave = async (e?: { preventDefault: () => void }) => {
         if (e) e.preventDefault();
-        if (!routineName.trim()) {
-            await showAlert("Inserisci il nome della scheda");
-            return false;
-        }
-
-        const seenExerciseIds = new Set<string>();
-        for (const exercise of routineExercises) {
-            const id = normalizeBusinessId(exercise.exId);
-            if (!id) {
-                await showAlert('La scheda contiene un esercizio con identificativo non valido.');
-                return false;
-            }
-            if (seenExerciseIds.has(id)) {
-                // Persistence identifies a routine exercise by exId. A duplicate
-                // would be rejected by the reducer, not saved as a second instance.
-                await showAlert('Lo stesso esercizio è presente due volte nella scheda. Rimuovi una voce prima di salvare.');
-                return false;
-            }
-            seenExerciseIds.add(id);
-        }
-
-        if (routineExercises.some(ex => parseRoutineSetCount(ex.setsCount) === null)) {
-            await showAlert('Ogni esercizio può contenere da 1 a 20 serie. Correggi il valore prima di salvare la scheda.');
-            return false;
-        }
-        if (routineExercises.some(ex => ex.setPlans?.some(plan => plan.segmentCount !== undefined
-            && (!Number.isSafeInteger(plan.segmentCount) || plan.segmentCount < 2 || plan.segmentCount > MAX_ROUTINE_SEGMENTS)))) {
-            await showAlert('Ogni serie avanzata può avere da 2 a 20 segmenti. Correggi il valore prima di salvare la scheda.');
+        const validationError = routineDraftValidationError(routineName, routineExercises);
+        if (validationError) {
+            await showAlert(validationError);
             return false;
         }
 
@@ -170,32 +139,14 @@ export function useTrainingRoutines() {
         // Its cleanup may only consume the exact draft submitted with this save.
         const submittedDraftRaw = draftRaw.current;
         try {
-            const sanitizedExercises: RoutineExercise[] = routineExercises.map(ex => ({
-                ...ex,
-                setsCount: Number(ex.setsCount),
-            }));
-
-            if (editingRoutineId) {
-                const existing = routines.find(r => r.id === editingRoutineId);
-                if (!existing) throw new Error('Routine non trovata');
-                await dispatchDurableOperation(dispatchDomainOperation, {
-                    type: 'routine.upsert',
-                    routine: { ...existing, name: routineName.trim(), exercises: sanitizedExercises },
-                });
-            } else {
-                const newRoutine: WorkoutRoutine = {
-                    id: Logic.generateId('rtn'),
-                    name: routineName.trim(),
-                    exercises: sanitizedExercises
-                };
-                const orderIds = [...routines, newRoutine]
-                    .sort((a, b) => a.name.localeCompare(b.name))
-                    .map(routine => routine.id);
-                await dispatchDurableOperation(dispatchDomainOperation, [
-                    { type: 'routine.upsert', routine: newRoutine },
-                    { type: 'routine.reorder', ids: orderIds },
-                ]);
-            }
+            const operations = buildRoutineSaveOperations({
+                name: routineName,
+                exercises: routineExercises,
+                routines,
+                editingRoutineId,
+                createId: editingRoutineId ? undefined : Logic.generateId('rtn'),
+            });
+            await dispatchDurableOperation(dispatchDomainOperation, operations);
 
             if (!isCurrentSession(draftSession)) return false;
             if (draftRaw.current !== submittedDraftRaw) {
