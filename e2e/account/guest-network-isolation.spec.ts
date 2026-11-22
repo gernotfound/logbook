@@ -14,11 +14,9 @@ function forbiddenAccountRequest(rawUrl: string): boolean {
 
 test('guest fitness persists across an online reload and an offline restart without Auth or health API traffic', async ({ page, context }) => {
   await page.goto('/');
-  await page.getByRole('button', { name: 'Continua senza account' }).click();
-  await expect(page.getByText('Aggiornamento Termini e Privacy')).toBeVisible();
-  for (const box of await page.locator('input[type="checkbox"]').all()) await box.check();
-  await page.getByRole('button', { name: 'Accetta e Continua' }).click();
-  await expect(page.locator('.guest-banner')).toBeVisible();
+  // The signed-out Kinde entry may check its session before guest activation.
+  // Observe from the user's guest choice onward, including consent/provisioning.
+  await expect(page.getByRole('button', { name: 'Continua senza account' })).toBeVisible();
 
   const forbidden: string[] = [];
   const onRequest = (request: { url(): string }) => {
@@ -30,11 +28,22 @@ test('guest fitness persists across an online reload and an offline restart with
   // would return a synthetic 401/503. External requests are already blocked
   // by the shared isolated E2E fixture.
   await context.route('**/*', route => {
-    if (forbiddenAccountRequest(route.request().url())) return route.abort('blockedbyclient');
+    const url = route.request().url();
+    if (forbiddenAccountRequest(url)) {
+      // A routed request must fail the test even if no request event is emitted.
+      forbidden.push(new URL(url).pathname);
+      return route.abort('blockedbyclient');
+    }
     return route.fallback();
   });
 
   try {
+    await page.getByRole('button', { name: 'Continua senza account' }).click();
+    await expect(page.getByText('Aggiornamento Termini e Privacy')).toBeVisible();
+    for (const box of await page.locator('input[type="checkbox"]').all()) await box.check();
+    await page.getByRole('button', { name: 'Accetta e Continua' }).click();
+    await expect(page.locator('.guest-banner')).toBeVisible();
+
     await page.getByRole('button', { name: 'Dati e statistiche', exact: true }).click();
     await page.getByRole('tab', { name: 'Biometria', exact: true }).click();
     await page.locator('#biometry-height').fill('181');
@@ -59,6 +68,13 @@ test('guest fitness persists across an online reload and an offline restart with
         db.close();
       }
     })).toBe(true);
+
+    // Reopen the saved vault in the same tab, not just a newly created tab.
+    await page.reload();
+    await expect(page.locator('.guest-banner')).toBeVisible();
+    await page.getByRole('button', { name: 'Dati e statistiche', exact: true }).click();
+    await page.getByRole('tab', { name: 'Biometria', exact: true }).click();
+    await expect(page.locator('#biometry-height')).toHaveValue('181');
 
     // A second tab starts with a persisted guest owner. It must not probe
     // the Kinde session even if the identity service is unavailable.
