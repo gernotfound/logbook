@@ -71,7 +71,7 @@ function traverseAndDiff(
         ops.push({
             docPath,
             path: currentPath,
-            value: dVal === undefined ? null : dVal,
+            ...(dVal === undefined ? {} : { value: dVal }),
             isDelete: dVal === undefined,
             actorId,
             seq,
@@ -96,7 +96,7 @@ function traverseAndDiff(
             ops.push({
                 docPath,
                 path: currentPath,
-                value: dVal === undefined ? null : dVal,
+                ...(dVal === undefined ? {} : { value: dVal }),
                 isDelete: dVal === undefined,
                 actorId,
                 seq,
@@ -156,7 +156,7 @@ function traverseAndDiff(
             ops.push({
                 docPath,
                 path: currentPath,
-                value: dVal === undefined ? null : dVal,
+                ...(dVal === undefined ? {} : { value: dVal }),
                 isDelete: dVal === undefined,
                 actorId,
                 seq,
