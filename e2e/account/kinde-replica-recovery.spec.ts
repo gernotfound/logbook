@@ -137,6 +137,42 @@ test('adds, edits and removes a meal through the Kinde diary on the selected day
     }, { planningUi: true });
 });
 
+test('reads Kinde meal history and opens the selected day without a write', async ({ browser }) => {
+    await withKindeReplicaDevices(browser, async ({ first, second, receipts, firstCommitStatuses }) => {
+        expect(await second.evaluate(() => {
+            const meal = { meal: 'Pranzo', quantity: 100, kcal: 90, carbs: 3, pro: 2, fat: 1 };
+            return window.kindeReplicaFixture!.submit([
+                { type: 'nutrition-meal.upsert', date: '2026-09-13', meal: { ...meal, id: 'older', name: 'Pasto precedente' } },
+                { type: 'nutrition-meal.upsert', date: '2026-09-15', meal: { ...meal, id: 'latest', name: 'Pasto recente' } },
+                { type: 'nutrition-day.patch', date: '2026-09-16', patch: { weight: 78 } },
+            ]);
+        })).toMatchObject({ kind: 'cloud-acknowledged' });
+        const initialReceipts = receipts();
+
+        await first.bringToFront();
+        await mountKindePlanning(first);
+        const diary = first.getByRole('region', { name: 'Diario pasti' });
+        await expect(diary).toHaveCount(0);
+        await first.getByRole('button', { name: 'Apri archivio account' }).click();
+        await diary.getByRole('tab', { name: 'Storico' }).click();
+        const days = diary.getByRole('button', { name: /^Apri il diario del/ });
+        await expect(days).toHaveCount(2);
+        await days.first().press('Enter');
+        await expect(diary.getByRole('tab', { name: 'Pasti' })).toBeFocused();
+        await expect(diary.getByRole('button', { name: 'Modifica porzione di Pasto recente' })).toBeVisible();
+        await expect(diary.getByRole('button', { name: 'Modifica porzione di Pasto precedente' })).toHaveCount(0);
+
+        await diary.getByRole('tab', { name: 'Storico' }).click();
+        await days.last().click();
+        await expect(diary.getByRole('button', { name: 'Modifica porzione di Pasto precedente' })).toBeVisible();
+        expect(receipts()).toBe(initialReceipts);
+        expect(firstCommitStatuses).toEqual([]);
+
+        await first.getByRole('button', { name: 'Torna alla gestione account' }).click();
+        await expect(diary).toHaveCount(0);
+    }, { planningUi: true });
+});
+
 test('recovers a Kinde edit made offline after a competing browser save', async ({ browser }) => {
     await withKindeReplicaDevices(browser, async ({ first, second, receipts, firstCommitStatuses, allowFirstCommit }) => {
         allowFirstCommit();

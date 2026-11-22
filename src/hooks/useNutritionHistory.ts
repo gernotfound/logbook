@@ -1,17 +1,10 @@
 import { useMemo } from 'react';
-import type { NutritionDay } from '../types';
 import { useAppStore } from '../store/useAppStore';
-
-const EMPTY_NUTRITION: Record<string, NutritionDay> = {};
+import { selectNutritionHistory } from '../lib/nutrition/nutritionHistory';
 
 export function useNutritionHistory() {
-    const nutrition = useAppStore(state => state.userData?.nutrition ?? EMPTY_NUTRITION);
-
-    const nutritionHistory = useMemo(() => {
-        return Object.values(nutrition)
-            .filter((day): day is NutritionDay => Boolean(day?.meals?.length))
-            .sort((a, b) => b.date.localeCompare(a.date));
-    }, [nutrition]);
+    const nutrition = useAppStore(state => state.userData?.nutrition);
+    const nutritionHistory = useMemo(() => selectNutritionHistory(nutrition), [nutrition]);
 
     return { nutritionHistory };
 }

@@ -60,7 +60,9 @@ alimenti, pasti e assunzioni provengono dallo snapshot dell'archivio aperto.
 Le mutazioni usano `realm.submit()` e le conferme ricontrollano la sessione
 catturata. Un journal in attesa viene mostrato dal pannello dell'archivio.
 Dopo la verifica resta selezionata la stessa data, senza ripetere l'intento.
-La chiusura dell'archivio rimuove il diario.
+Lo storico mostra soltanto i giorni con pasti nello stesso snapshot e ne
+apre il diario in sola navigazione. La chiusura dell'archivio rimuove
+entrambe le viste.
 
 ### CF-03/04 — Recheck del journal Kinde dopo esito ambiguo (21/11/2026)
 
