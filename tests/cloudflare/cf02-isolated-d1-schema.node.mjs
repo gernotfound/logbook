@@ -20,8 +20,8 @@ function response(result, status = 200) {
   return new Response(JSON.stringify({ success: status === 200, result }), { status });
 }
 function syntheticProvider({
-  migrationCount = 8, principals = 0, sessions = 0, keys = 0,
-  erasureJobs = 0, objects = schema, jurisdiction = 'eu', replication = 'disabled',
+  migrationCount = 8, tableRows = {}, objects = schema,
+  jurisdiction = 'eu', replication = 'disabled',
   failedStatus = null,
 } = {}) {
   const calls = [];
@@ -35,9 +35,13 @@ function syntheticProvider({
     }
     if (parsed.pathname.endsWith('/query')) {
       const sql = JSON.parse(options.body).sql;
+      const columns = [...sql.matchAll(/\(SELECT COUNT\(\*\) FROM ([a-z][a-z0-9_]*)\) AS ([a-z][a-z0-9_]*)/g)]
+        .map(([, table, alias]) => [alias, tableRows[table] ?? 0]);
+      if (!sql.includes('FROM d1_migrations') && !sql.includes('FROM sqlite_master')
+        && columns.length === 0) throw new Error('Unexpected synthetic D1 query');
       const rows = sql.includes('FROM d1_migrations') ? ledger(migrationCount)
         : sql.includes('FROM sqlite_master') ? objects
-        : [{ principals, sessions, keys, erasure_jobs: erasureJobs }];
+        : [Object.fromEntries(columns)];
       return response([{ success: true, results: rows }]);
     }
     return response({ uuid: ID, name: 'thelogbook-cf02-eu-isolated-20261113',
@@ -119,8 +123,11 @@ void test('checks account, EU D1, Time Travel, ledger, empty principals and sche
 
 void test('fails closed on provider, migration and isolation drift without writes', async () => {
   for (const options of [
-    { migrationCount: 7 }, { migrationCount: 9 }, { principals: 1 },
-    { sessions: 1 }, { keys: 1 }, { erasureJobs: 1 },
+    { migrationCount: 7 }, { migrationCount: 9 },
+    { tableRows: { auth_principals: 1 } },
+    { tableRows: { auth_sessions: 1 } },
+    { tableRows: { cloud_account_keys: 1 } },
+    { tableRows: { health_erasure_jobs: 1 } },
     { jurisdiction: 'us' }, { replication: 'auto' },
     { objects: [] }, { failedStatus: 403 },
   ]) {
@@ -129,6 +136,36 @@ void test('fails closed on provider, migration and isolation drift without write
       phase: 'after', account: ACCOUNT, token: 'test', request: provider.request,
     }));
     assertReadOnlyRequests(provider.calls);
+  }
+});
+
+void test('preflight rejects data in every SQL-declared application table', async () => {
+  // Source SQL, not the verifier's inventory, is the independent table oracle.
+  for (const migrationCount of [8, 9, 10]) {
+    const phase = migrationCount === 10 ? 'after' : 'before';
+    const provider = syntheticProvider({ migrationCount });
+    await verifyRemoteIsolatedD1({ phase, account: ACCOUNT, token: 'test', request: provider.request });
+    const sql = provider.calls.filter(call => call.sql?.includes('SELECT COUNT(*) FROM'));
+    assert.equal(sql.length, 1, 'one aggregate census query required');
+    const columns = [...sql[0].sql.matchAll(/\(SELECT COUNT\(\*\) FROM ([a-z][a-z0-9_]*)\) AS ([a-z][a-z0-9_]*)/g)];
+    const covered = columns.map(([, table, alias]) => {
+      assert.equal(table, alias);
+      return table;
+    });
+    assert.equal(covered.length, new Set(covered).size, 'duplicate table census');
+    const expected = MIGRATIONS.slice(0, migrationCount).flatMap(name => {
+      const source = readFileSync(new URL('../../cloudflare/api/migrations/' + name, import.meta.url), 'utf8');
+      return [...source.matchAll(/CREATE TABLE\s+([a-z][a-z0-9_]*)\b/gi)].map(match => match[1]);
+    });
+    assert.deepEqual([...covered].sort(), [...expected].sort());
+    assertReadOnlyRequests(provider.calls);
+    for (const table of expected) {
+      const populated = syntheticProvider({ migrationCount, tableRows: { [table]: 1 } });
+      await assert.rejects(verifyRemoteIsolatedD1({
+        phase, account: ACCOUNT, token: 'test', request: populated.request,
+      }), new RegExp('non-empty isolated D1 ' + table));
+      assertReadOnlyRequests(populated.calls);
+    }
   }
 });
 

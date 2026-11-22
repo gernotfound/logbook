@@ -112,20 +112,24 @@ export async function verifyRemoteIsolatedD1({
     'SELECT id, name FROM d1_migrations ORDER BY id'));
   const applied = verifyMigrationLedger(ledger, phase);
 
-  // No principal/session/key/erasure job may exist in this isolated sandbox.
-  // Read only aggregates; never request identities or ciphertext from D1.
-  const counts = unpackQuery(await call('/query', [
-    'SELECT',
-    '(SELECT COUNT(*) FROM auth_principals) AS principals,',
-    '(SELECT COUNT(*) FROM auth_sessions) AS sessions,',
-    '(SELECT COUNT(*) FROM cloud_account_keys) AS keys,',
-    '(SELECT COUNT(*) FROM health_erasure_jobs) AS erasure_jobs',
-  ].join(' ')));
+  // Identity rows alone do not prove emptiness: sync_subjects, ciphertext,
+  // receipts and revocation evidence can survive without an auth_principal.
+  // Review this inventory against every CREATE TABLE in the approved SQL.
+  const applicationTables = [
+    'sync_subjects', 'sync_state', 'sync_replicas', 'sync_documents',
+    'sync_receipts', 'sync_replica_mutations', 'auth_principals',
+    'auth_sessions', 'health_consent_acceptances', 'health_erasure_jobs',
+    'cloud_key_issuance', 'cloud_account_keys', 'auth_oauth_attempts',
+  ];
+  // 0010 adds this proof table; 0008 and 0009 do not contain it.
+  if (applied === MIGRATIONS.length) applicationTables.push('health_erasure_finalizations');
+  const counts = unpackQuery(await call('/query',
+    'SELECT ' + applicationTables.map(table =>
+      '(SELECT COUNT(*) FROM ' + table + ') AS ' + table).join(', ')));
   assert.equal(counts.length, 1, 'invalid isolation count response');
-  for (const key of ['principals', 'sessions', 'keys', 'erasure_jobs']) {
-    assert.equal(counts[0]?.[key], 0, 'non-empty isolated D1 ' + key);
+  for (const table of applicationTables) {
+    assert.equal(counts[0]?.[table], 0, 'non-empty isolated D1 ' + table);
   }
-
   if (phase === 'after') {
     const schema = unpackQuery(await call('/query', [
       "SELECT name, type FROM sqlite_master WHERE name IN (",
