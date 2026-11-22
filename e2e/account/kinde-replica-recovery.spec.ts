@@ -23,7 +23,11 @@ test('reads owner-scoped Kinde routines without legacy actions or a new D1 recei
         await first.getByRole('button', { name: 'Apri archivio account' }).click();
         await expect(library).toBeVisible();
         await expect(library.getByText('Scheda Kinde')).toBeVisible();
-        await expect(library.getByRole('button', { name: 'Opzioni' })).toHaveCount(0);
+        await library.getByRole('button', { name: 'Opzioni' }).click();
+        await expect(library.getByRole('menuitem', { name: 'Modifica' })).toHaveCount(0);
+        await expect(library.getByRole('menuitem', { name: 'Duplica' })).toBeVisible();
+        await expect(library.getByRole('menuitem', { name: 'Elimina' })).toBeVisible();
+        await library.getByRole('button', { name: 'Opzioni' }).click();
 
         await library.getByRole('button', { name: /Apri scheda/ }).click();
         await expect(library.getByText('Squat Kinde')).toBeVisible();
@@ -38,6 +42,43 @@ test('reads owner-scoped Kinde routines without legacy actions or a new D1 recei
 
         await first.getByRole('button', { name: 'Torna alla gestione account' }).click();
         await expect(library).toHaveCount(0);
+    }, { planningUi: true });
+});
+
+test('duplicates a Kinde routine from the verified archive and replicates it once to a second device', async ({ browser }) => {
+    await withKindeReplicaDevices(browser, async ({ first, second, receipts, firstCommitStatuses }) => {
+        expect(await second.evaluate(() => window.kindeReplicaFixture!.submit([
+            { type: 'exercise.upsert', exercise: {
+                id: 'clone-ex', name: 'Squat da duplicare', setsCount: 1,
+                muscles: [], secondaryMuscles: [], sets: [],
+            } },
+            { type: 'routine.upsert', routine: {
+                id: 'clone-original', name: 'Programma Kinde',
+                exercises: [{ exId: 'clone-ex', setsCount: 3, minReps: 8, maxReps: 12 }],
+            } },
+        ]))).toMatchObject({ kind: 'cloud-acknowledged' });
+        const before = receipts();
+        await first.bringToFront();
+        await mountKindePlanning(first);
+        await first.getByRole('button', { name: 'Apri archivio account' }).click();
+        const library = first.getByRole('region', { name: 'Schede allenamento account' });
+        await expect(library.getByText('Programma Kinde')).toBeVisible();
+
+        await library.getByRole('button', { name: 'Opzioni' }).click();
+        await library.getByRole('menuitem', { name: 'Duplica' }).click();
+        await expect(library.getByText('Programma Kinde - 1')).toBeVisible();
+        expect(firstCommitStatuses).toEqual([200]);
+        expect(receipts()).toBe(before + 1);
+
+        const observed = await second.evaluate(async () =>
+            (await window.kindeReplicaFixture!.refresh()).data.routines);
+        expect(observed).toEqual(expect.arrayContaining([
+            expect.objectContaining({ id: 'clone-original', name: 'Programma Kinde' }),
+            expect.objectContaining({ name: 'Programma Kinde - 1',
+                exercises: [{ exId: 'clone-ex', setsCount: 3, minReps: 8, maxReps: 12 }] }),
+        ]));
+        expect(observed?.map(r => r.id)).toHaveLength(2);
+        expect(observed?.[0].id).not.toBe(observed?.[1].id);
     }, { planningUi: true });
 });
 

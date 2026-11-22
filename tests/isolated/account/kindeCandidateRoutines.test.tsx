@@ -1,10 +1,11 @@
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { useKindeCandidateFitnessLifecycle } from '../../../src/contexts/auth/useKindeCandidateFitnessLifecycle';
 import type { KindeCandidateFitnessSnapshot } from '../../../src/lib/auth/kindeCandidateFitnessRealm';
 import { KindeCandidateRoutines } from '../../../src/components/Training/KindeCandidateRoutines';
 import { RoutineLibraryList } from '../../../src/components/Training/routines/RoutineLibraryList';
 import { useAppStore } from '../../../src/store/useAppStore';
+import { useDialogStore } from '../../../src/store/useDialogStore';
 
 const uid = 'k_' + 'U'.repeat(43);
 const account: KindeCandidateFitnessSnapshot = {
@@ -26,7 +27,10 @@ function candidate(phase: 'ready' | 'closed') {
         state: phase === 'ready'
             ? { phase, snapshot: account, view: {}, hasPendingJournal: false }
             : { phase },
-        submit: vi.fn(),
+        submit: vi.fn().mockResolvedValue({ kind: 'cloud-acknowledged' }),
+        captureEditWitness: () => phase === 'ready'
+            ? { owner: account.owner, isCurrent: () => true }
+            : null,
     } as unknown as ReturnType<typeof useKindeCandidateFitnessLifecycle>;
 }
 
@@ -50,7 +54,11 @@ describe('Kinde routine library: read-only owner boundary', () => {
             expect(screen.getByText('Scheda account')).toBeDefined();
             expect(screen.queryByText('Scheda guest estranea')).toBeNull();
             expect(screen.queryByRole('button', { name: 'Crea scheda' })).toBeNull();
-            expect(screen.queryByRole('button', { name: 'Opzioni' })).toBeNull();
+            fireEvent.click(screen.getByRole('button', { name: 'Opzioni' }));
+            expect(screen.queryByRole('menuitem', { name: 'Modifica' })).toBeNull();
+            expect(screen.getByRole('menuitem', { name: 'Duplica' })).toBeDefined();
+            expect(screen.getByRole('menuitem', { name: 'Elimina' })).toBeDefined();
+            fireEvent.click(screen.getByRole('button', { name: 'Opzioni' }));
 
             fireEvent.click(screen.getByRole('button', { name: /Apri scheda/ }));
             expect(screen.getByText('Squat Kinde')).toBeDefined();
@@ -83,6 +91,72 @@ describe('Kinde routine library: read-only owner boundary', () => {
         render(<KindeCandidateRoutines realm={realm} />);
         expect(screen.getByText('Nessuna scheda creata.')).toBeDefined();
         expect(screen.queryByRole('button', { name: 'Opzioni' })).toBeNull();
+    });
+
+    it('duplicates only the account routine through one Kinde journal intent', async () => {
+        const realm = candidate('ready');
+        render(<KindeCandidateRoutines realm={realm} />);
+        fireEvent.click(screen.getByRole('button', { name: 'Opzioni' }));
+        fireEvent.click(screen.getByRole('menuitem', { name: 'Duplica' }));
+
+        await waitFor(() => expect(realm.submit).toHaveBeenCalledTimes(1));
+        expect(realm.submit).toHaveBeenCalledWith({
+            type: 'routine.upsert',
+            routine: expect.objectContaining({
+                id: expect.stringMatching(/^rtn_/),
+                name: 'Scheda account - 1',
+                exercises: account.data.routines![0].exercises,
+            }),
+        });
+        const operation = vi.mocked(realm.submit).mock.calls[0][0] as { routine: { id: string } };
+        expect(operation.routine.id).not.toBe(account.data.routines![0].id);
+    });
+
+    it('rejects a confirmation resolved after the account witness was revoked', async () => {
+        let approve!: (value: boolean) => void;
+        const confirm = vi.mocked(useDialogStore.getState().showConfirm);
+        confirm.mockImplementationOnce(() => new Promise<boolean>(resolve => { approve = resolve; }));
+        const realm = candidate('ready');
+        let valid = true;
+        realm.captureEditWitness = () => ({ owner: account.owner, isCurrent: () => valid });
+        render(<KindeCandidateRoutines realm={realm} />);
+        fireEvent.click(screen.getByRole('button', { name: 'Opzioni' }));
+        fireEvent.click(screen.getByRole('menuitem', { name: 'Elimina' }));
+        expect(confirm).toHaveBeenCalledTimes(1);
+        expect(realm.submit).not.toHaveBeenCalled();
+        valid = false;
+        await act(async () => { approve(true); });
+        expect(realm.submit).not.toHaveBeenCalled();
+    });
+
+    it('requires explicit confirmation and submits deletion only for the current owner', async () => {
+        const confirm = vi.mocked(useDialogStore.getState().showConfirm);
+        confirm.mockResolvedValueOnce(false).mockResolvedValueOnce(true);
+        const realm = candidate('ready');
+        render(<KindeCandidateRoutines realm={realm} />);
+        fireEvent.click(screen.getByRole('button', { name: 'Opzioni' }));
+        fireEvent.click(screen.getByRole('menuitem', { name: 'Elimina' }));
+        await waitFor(() => expect(confirm).toHaveBeenCalledTimes(1));
+        expect(realm.submit).not.toHaveBeenCalled();
+
+        fireEvent.click(screen.getByRole('button', { name: 'Opzioni' }));
+        fireEvent.click(screen.getByRole('menuitem', { name: 'Elimina' }));
+        await waitFor(() => expect(realm.submit).toHaveBeenCalledTimes(1));
+        expect(realm.submit).toHaveBeenCalledWith({ type: 'routine.delete', id: 'same-id' });
+    });
+
+    it('keeps pending receipt status under realm ownership and does not re-submit intent', async () => {
+        let finish!: (outcome: { kind: 'local-pending' }) => void;
+        const realm = candidate('ready');
+        vi.mocked(realm.submit).mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+        render(<KindeCandidateRoutines realm={realm} />);
+        fireEvent.click(screen.getByRole('button', { name: 'Opzioni' }));
+        fireEvent.click(screen.getByRole('menuitem', { name: 'Duplica' }));
+        fireEvent.click(screen.getByRole('button', { name: 'Opzioni' }));
+        fireEvent.click(screen.getByRole('menuitem', { name: 'Duplica' }));
+        expect(realm.submit).toHaveBeenCalledTimes(1);
+        await act(async () => finish({ kind: 'local-pending' }));
+        expect(realm.submit).toHaveBeenCalledTimes(1);
     });
 
     it('preserves the existing guest edit/duplicate/delete callbacks in the shared list', () => {
