@@ -1,6 +1,50 @@
 import { expect, test } from '../fixtures';
 import { loadKindeReplica, mountKindePlanning, withKindeReplicaDevices } from './kindeReplicaFixture';
 
+test('reads Kinde training history and report without writing another owner\'s data', async ({ browser }) => {
+    await withKindeReplicaDevices(browser, async ({ first, second, receipts, firstCommitStatuses }) => {
+        const saved = await second.evaluate(() => window.kindeReplicaFixture!.submit([
+            { type: 'exercise.upsert', exercise: {
+                id: 'history-ex', name: 'Squat Kinde', setsCount: 1, muscles: [], secondaryMuscles: [], sets: [],
+            } },
+            { type: 'history.upsert', workout: {
+                id: 'history-2026', date: '2026-11-20', routineName: 'Sessione Kinde',
+                globalStartTime: Date.UTC(2026, 10, 20, 11),
+                globalEndTime: Date.UTC(2026, 10, 20, 11, 45),
+                exercises: [{ id: 'history-ex-instance', exId: 'history-ex', sessionNote: '',
+                    sets: [{ id: 'history-set', kg: '40', reps: '10', done: true }] }],
+            } },
+        ]));
+        expect(saved).toMatchObject({ kind: 'cloud-acknowledged' });
+        const initialReceipts = receipts();
+
+        await first.bringToFront();
+        await mountKindePlanning(first);
+        const history = first.getByRole('heading', { name: 'Storico allenamenti' });
+        await expect(history).toHaveCount(0);
+        await first.getByRole('button', { name: 'Apri archivio account' }).click();
+        await expect(history).toBeVisible();
+        const card = first.getByRole('button', { name: 'Apri il dettaglio di Sessione Kinde' });
+        await expect(card).toBeVisible();
+
+        await first.getByRole('button', { name: 'Opzioni' }).click();
+        await expect(first.getByRole('menuitem', { name: 'Vedi report' })).toBeVisible();
+        await expect(first.getByRole('menuitem', { name: 'Elimina allenamento' })).toHaveCount(0);
+        await expect(first.getByRole('menuitem', { name: 'Modifica allenamento' })).toHaveCount(0);
+        await card.click();
+        const report = first.getByRole('dialog', { name: 'Sessione Kinde' });
+        await expect(report).toBeVisible();
+        await expect(report.getByText('Squat Kinde')).toBeVisible();
+        await report.getByRole('button', { name: 'Chiudi', exact: true }).click();
+        await expect(report).toHaveCount(0);
+
+        expect(receipts()).toBe(initialReceipts);
+        expect(firstCommitStatuses).toEqual([]);
+        await first.getByRole('button', { name: 'Torna alla gestione account' }).click();
+        await expect(history).toHaveCount(0);
+    }, { planningUi: true });
+});
+
 test('keeps a biometric edit pending until the Kinde journal is verified', async ({ browser }) => {
     await withKindeReplicaDevices(browser, async ({ first, second, receipts, firstCommitStatuses, allowFirstCommit }) => {
         await first.bringToFront();

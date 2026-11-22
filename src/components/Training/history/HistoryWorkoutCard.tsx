@@ -8,7 +8,7 @@ interface HistoryWorkoutCardProps {
     workout: WorkoutSession;
     onOpen: (workout: WorkoutSession) => void;
     onEditWorkout?: (workout: WorkoutSession) => void;
-    onDeleteWorkout: (id: string) => Promise<void> | void;
+    onDeleteWorkout?: (id: string) => Promise<void> | void;
 }
 
 export function HistoryWorkoutCard({ workout, onOpen, onEditWorkout, onDeleteWorkout }: HistoryWorkoutCardProps) {
@@ -51,8 +51,8 @@ export function HistoryWorkoutCard({ workout, onOpen, onEditWorkout, onDeleteWor
                             label: 'Elimina allenamento',
                             icon: <Trash2 size={16} />,
                             variant: 'danger',
-                            hidden: !workout.id,
-                            onClick: () => workout.id && onDeleteWorkout(workout.id)
+                            hidden: !workout.id || !onDeleteWorkout,
+                            onClick: () => workout.id && onDeleteWorkout?.(workout.id)
                         }
                     ]}
                 />
