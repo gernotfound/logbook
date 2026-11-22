@@ -24,12 +24,18 @@ sul proprio owner; `useKindeCandidateProfile()` usa **solo** il realm
 Kinde confermato e `realm.submit()` verso journal cifrato/D1. Lo stesso
 form non può ripiegare sullo store legacy quando l'account è sospeso,
 revocato o è cambiata la generazione, nemmeno A→B→A dello stesso UID.
-`cloud-acknowledged` è successo verificato; `local-pending` è solo
-durabilità locale comprovata, la UI del realm resta bloccata fino al
-`recheck()` fidato senza ripetere l'intento. Il testimone è ricontrollato
-dopo gli await prima di liberare la bozza. Questa integrazione è
-**candidata non montata nel runtime pubblico**: non installa lettore
-UID, stato Zustand Kinde o autorizzazione offline. Gli altri editor e
+Il form condiviso riusa lo stesso intento nelle due viste. La Promise
+dell'editor attesta l'accettazione durevole dell'intento sul dispositivo
+o l'assenza di modifiche da salvare. Il realm possiede lo stato della
+conferma cloud per tutti gli editor: `local-pending` indica durabilità
+locale comprovata e l'esito ambiguo richiede `recheck()` senza ripetere
+l'intento. La patch contiene soltanto i campi modificati, così un valore
+letto prima di un aggiornamento da un altro dispositivo non diventa una
+nuova scrittura. Dopo gli await si ricontrolla il testimone e si ritirano
+soltanto le revisioni dei campi incluse nel salvataggio. Il pannello fitness
+isolato monta il form dopo l'apertura esplicita dell'archivio verificato.
+Alla chiusura dell'archivio il form viene smontato e torna disponibile la
+gestione account. La PWA pubblica resta `identityOnly`. Gli altri editor e
 writer legacy richiedono migrazione progressiva prima del GO.
 
 ### CF-03 — Pianificazione nutrizionale con un solo writer per owner

@@ -1,6 +1,45 @@
 import { expect, test } from '../fixtures';
 import { loadKindeReplica, mountKindePlanning, withKindeReplicaDevices } from './kindeReplicaFixture';
 
+test('keeps a biometric edit pending until the Kinde journal is verified', async ({ browser }) => {
+    await withKindeReplicaDevices(browser, async ({ first, second, receipts, firstCommitStatuses, allowFirstCommit }) => {
+        await first.bringToFront();
+        await mountKindePlanning(first);
+        const height = first.getByLabel(/^Altezza/);
+        const pending = first.getByText('Conferma cloud in attesa', { exact: false });
+        const restore = first.getByRole('heading', { name: 'Ripristina backup account' });
+        await expect(height).toHaveCount(0);
+        await expect(restore).toBeVisible();
+        await first.getByRole('button', { name: 'Apri archivio account' }).click();
+        await height.fill('184');
+        await expect(restore).toHaveCount(0);
+        // The other device changes a different biometric field after the first
+        // device captured its snapshot. Saving height must preserve that edit.
+        expect(await second.evaluate(() => window.kindeReplicaFixture!.submit({
+            type: 'profile.patch', patch: { gender: 'F' },
+        }))).toMatchObject({ kind: 'cloud-acknowledged' });
+        await first.getByRole('button', { name: 'Salva profilo biometrico' }).click();
+
+        await expect(pending).toBeVisible();
+        await expect(height).toHaveCount(0);
+        expect(firstCommitStatuses).toEqual([429]);
+        expect(receipts()).toBe(1);
+
+        allowFirstCommit();
+        await first.getByRole('button', { name: 'Verifica salvataggio' }).click();
+        await expect(height).toHaveValue('184');
+        await expect(pending).toHaveCount(0);
+        expect(firstCommitStatuses).toEqual([429, 200]);
+        expect(receipts()).toBe(2);
+        expect(await second.evaluate(async () =>
+            (await window.kindeReplicaFixture!.refresh()).data.profile)).toMatchObject({ height: '184', gender: 'F' });
+
+        await first.getByRole('button', { name: 'Torna alla gestione account' }).click();
+        await expect(height).toHaveCount(0);
+        await expect(restore).toBeVisible();
+    }, { planningUi: true });
+});
+
 test('reconciles nutrition planning from the Kinde form and replicates it to a second profile', async ({ browser }) => {
     await withKindeReplicaDevices(browser, async ({ first, second, receipts, firstCommitStatuses, allowFirstCommit }) => {
         const seed = await second.evaluate(() => window.kindeReplicaFixture!.submit({

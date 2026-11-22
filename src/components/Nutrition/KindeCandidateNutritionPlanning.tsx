@@ -20,13 +20,6 @@ export function KindeCandidateNutritionPlanning({ realm }: { realm: Realm }) {
         },
     }, showAlert);
 
-    if (state.phase === 'recheck-required') {
-        return <p role="status">Modifiche salvate sul dispositivo. Conferma cloud in attesa.</p>;
-    }
     if (state.phase !== 'ready') return null;
-    // The realm owns the pending state. A local save result cached by the
-    // editor would otherwise survive a verified recheck in the same session.
-    const saveStatus = state.hasPendingJournal && editor.saveStatus === 'idle'
-        ? 'local-pending' : editor.saveStatus;
-    return <NutritionPlanningForm editor={{ ...editor, saveStatus }} />;
+    return <NutritionPlanningForm editor={editor} />;
 }

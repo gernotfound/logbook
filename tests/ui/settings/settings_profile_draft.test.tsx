@@ -48,6 +48,18 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('biometric profile draft persistence', () => {
+    it('does not write untouched fields and preserves an explicit clear', async () => {
+        const { result } = renderHook(() => useSettingsProfile());
+        await act(async () => { await result.current.handleSaveProfile(); });
+        expect(state.dispatch).not.toHaveBeenCalled();
+
+        act(() => result.current.setGender(''));
+        await act(async () => { await result.current.handleSaveProfile(); });
+        expect(state.dispatch).toHaveBeenCalledExactlyOnceWith({
+            type: 'profile.patch', patch: { gender: '' },
+        });
+    });
+
     it('keeps fields edited during an unresolved durable save and persists them on the next submit', async () => {
         let complete!: (value: { ok: boolean; status: string }) => void;
         state.dispatch.mockImplementationOnce(() => new Promise(resolve => { complete = resolve; }));
@@ -59,7 +71,7 @@ describe('biometric profile draft persistence', () => {
         act(() => { firstSave = result.current.handleSaveProfile(); });
         expect(state.dispatch).toHaveBeenCalledWith({
             type: 'profile.patch',
-            patch: { dob: '2000-01-01', height: '180', gender: 'M' },
+            patch: { height: '180' },
         });
 
         act(() => result.current.setHeight('181'));
@@ -72,8 +84,25 @@ describe('biometric profile draft persistence', () => {
         await act(async () => { await result.current.handleSaveProfile(); });
         expect(state.dispatch).toHaveBeenLastCalledWith({
             type: 'profile.patch',
-            patch: { dob: '2000-01-01', height: '181', gender: 'M' },
+            patch: { height: '181' },
         });
+    });
+
+    it('does not carry a field from a completed save into a later edit of a different field', async () => {
+        let complete!: (value: { ok: boolean; status: string }) => void;
+        state.dispatch.mockImplementationOnce(() => new Promise(resolve => { complete = resolve; }));
+        const { result } = renderHook(() => useSettingsProfile());
+        act(() => result.current.setHeight('180'));
+        let firstSave!: Promise<void>;
+        act(() => { firstSave = result.current.handleSaveProfile(); });
+        act(() => result.current.setGender('F'));
+        await act(async () => {
+            complete({ ok: true, status: 'synced' });
+            await firstSave;
+        });
+        await act(async () => { await result.current.handleSaveProfile(); });
+        expect(state.dispatch).toHaveBeenNthCalledWith(1, { type: 'profile.patch', patch: { height: '180' } });
+        expect(state.dispatch).toHaveBeenNthCalledWith(2, { type: 'profile.patch', patch: { gender: 'F' } });
     });
 
     it('composes multiple field changes made in the same render cycle', () => {

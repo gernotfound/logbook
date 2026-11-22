@@ -26,7 +26,7 @@ vi.mock('../../../src/hooks/useSettingsProfile', () => ({
     }),
 }));
 
-import DataBiometry from '../../../src/components/Data/DataBiometry';
+import DataBiometryView from '../../../src/components/Data/DataBiometryView';
 
 describe('biometric profile dependency boundary', () => {
     beforeEach(() => {
@@ -37,7 +37,7 @@ describe('biometric profile dependency boundary', () => {
     });
 
     it('renders and edits through the owner-fenced profile adapter only', () => {
-        render(<DataBiometry />);
+        render(<DataBiometryView />);
         expect((screen.getByLabelText('Data di nascita') as HTMLInputElement).value).toBe('2000-01-01');
         expect((screen.getByLabelText(/^Altezza/) as HTMLInputElement).value).toBe('180');
         expect((screen.getByLabelText(/^Sesso/) as HTMLSelectElement).value).toBe('M');
