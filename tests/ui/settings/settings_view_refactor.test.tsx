@@ -22,6 +22,8 @@ describe('SettingsView hierarchical navigation', () => {
         expect(screen.queryByRole('checkbox', { name: 'Statistiche di utilizzo' })).toBeNull();
 
         fireEvent.click(screen.getByRole('button', { name: 'Torna alle impostazioni' }));
+        expect(onClose).not.toHaveBeenCalled();
+        expect(screen.getByRole('heading', { name: 'Impostazioni' })).toBeDefined();
         fireEvent.click(screen.getByRole('button', { name: /Dati e backup/i }));
         expect(screen.getByRole('heading', { name: 'Dati e backup' })).toBeDefined();
         expect(screen.getByRole('button', { name: /Esporta JSON/i })).toBeDefined();
@@ -36,10 +38,31 @@ describe('SettingsView hierarchical navigation', () => {
         const section = screen.getByRole('region', { name: 'Conferma revoca del consenso' });
         expect(section.textContent).toMatch(/cancellazione definitiva/i);
         expect(section.textContent).toMatch(/account di accesso rimane esistente/i);
+        expect(section.textContent).toMatch(/esportazione è facoltativa/i);
+        expect(section.textContent).toMatch(/informazioni sulla salute in chiaro/i);
         expect(screen.getByRole('button', { name: 'Esporta prima i miei dati' })).toBeDefined();
         expect(screen.getByRole('button', { name: 'Revoca il consenso e cancella i dati' })).toBeDefined();
         fireEvent.click(screen.getByRole('button', { name: 'Annulla' }));
         expect(screen.queryByRole('region', { name: 'Conferma revoca del consenso' })).toBeNull();
+    });
+
+    it.each([
+        ['Informativa sulla privacy', 'Chiudi informativa'],
+        ['Termini e condizioni', 'Chiudi termini'],
+    ])('opens and dismisses the %s dialog without leaving settings', (label, closeLabel) => {
+        const onClose = vi.fn();
+        renderWithProviders(<SettingsView onClose={onClose} />);
+        fireEvent.click(screen.getByRole('button', { name: /^Privacy/i }));
+
+        fireEvent.click(screen.getByRole('button', { name: label }));
+        const dialog = screen.getByRole('dialog', { name: label });
+        expect(dialog.getAttribute('aria-modal')).toBe('true');
+        expect(screen.getByRole('button', { name: closeLabel })).toBeDefined();
+        fireEvent.click(screen.getByRole('button', { name: closeLabel }));
+
+        expect(screen.queryByRole('dialog', { name: label })).toBeNull();
+        expect(screen.getByRole('heading', { name: 'Privacy' })).toBeDefined();
+        expect(onClose).not.toHaveBeenCalled();
     });
 
     it('groups theme, updates and storage diagnostics under Aspetto e applicazione', () => {
