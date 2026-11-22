@@ -164,6 +164,50 @@ describe('Semantic Merge V3 regressions', () => {
         expect(ba.syncMetas).toEqual(ab.syncMetas);
     });
 
+    it.each([
+        {
+            label: 'monthly property',
+            before: new Map<string, DocumentData>([['history_months/2026-09', {
+                w1: { id: 'w1', date: '2026-09-15', exercises: [] },
+            }]]),
+            after: new Map<string, DocumentData>([['history_months/2026-09', {}]]),
+            expectedPath: ['w1'],
+        },
+        {
+            label: 'atomic field',
+            before: new Map<string, DocumentData>([['', { activePains: ['knee'] }]]),
+            after: new Map<string, DocumentData>([['', {}]]),
+            expectedPath: ['activePains'],
+        },
+        {
+            label: 'keyed array',
+            before: new Map<string, DocumentData>([['', { library: [{ id: 'lib-1' }] }]]),
+            after: new Map<string, DocumentData>([['', { library: [] }]]),
+            expectedPath: ['library', 'lib-1'],
+        },
+        {
+            label: 'invalid keyed fallback',
+            before: new Map<string, DocumentData>([['', { library: [{ id: 'lib-1' }, { id: 'lib-1' }] }]]),
+            after: new Map<string, DocumentData>([['', {}]]),
+            expectedPath: ['library'],
+        },
+    ])('emits a parser-stable tombstone without an extraneous value for $label', ({ before, after, expectedPath }) => {
+        const operations = diffDocuments(before, after, 's00', 1, { s00: 1 });
+        expect(operations).toHaveLength(1);
+        expect(operations[0]).toMatchObject({ path: expectedPath, isDelete: true });
+        expect(Object.hasOwn(operations[0], 'value')).toBe(false);
+        expect(operations.map(parseSemanticOperation)).toEqual(operations);
+    });
+
+    it('preserves explicit null writes as values, not tombstones', () => {
+        const before = new Map<string, DocumentData>([['', { activePains: ['knee'] }]]);
+        const after = new Map<string, DocumentData>([['', { activePains: null }]]);
+        const operations = diffDocuments(before, after, 's00', 1, { s00: 1 });
+        expect(operations).toHaveLength(1);
+        expect(operations[0]).toMatchObject({ path: ['activePains'], isDelete: false, value: null });
+        expect(operations.map(parseSemanticOperation)).toEqual(operations);
+    });
+
     it('represents deletion of a monthly entity with a parent tombstone', () => {
         const base = nutritionDocs({ date, weight: 80, meals: [] });
         const desired = nutritionDocs();
