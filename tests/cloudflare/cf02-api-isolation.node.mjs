@@ -182,7 +182,7 @@ void test('private Workers wait boundedly for the actual exact-main gate and sto
     '.github/workflows/cloudflare-kinde-private.yml',
   ]) {
     const workflow = readFileSync(file, 'utf8');
-    assert.match(workflow, /PUSH_BEFORE_SHA: \\$\\{\\{ github\\.event\\.before \\}\\}/);
+    assert.match(workflow, /PUSH_BEFORE_SHA: \$\{\{ github\.event\.before \}\}/);
     assert.match(workflow, /for attempt in \$\(seq 1 40\); do/);
     assert.match(workflow, /head_sha=\$\{EXPECTED_SHA\}/);
     assert.match(workflow, /case "\$\{gate\}" in/);
