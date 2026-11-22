@@ -33,6 +33,7 @@ export type DomainOperation =
     | { type: 'cardio-session.upsert'; date: string; session: CardioSession }
     | { type: 'cardio-session.delete'; date: string; sessionId: string }
     | { type: 'nutrition-meal.upsert'; date: string; meal: LoggedMealItem }
+    | { type: 'nutrition-meal.edit'; date: string; mealId: string; quantity?: number; meal?: string }
     | { type: 'nutrition-meal.delete'; date: string; mealId: string }
     | { type: 'supplement-intake.upsert'; date: string; intake: SupplementIntake }
     | { type: 'supplement-intake.delete'; date: string; intakeId: string }

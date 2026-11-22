@@ -85,7 +85,8 @@ export function useNutritionMeals(dateStr?: string) {
 
     const clearSearch = () => setSearchQuery('');
 
-    const updateMealItem = async (updatedItem: Pick<LoggedMealItem, 'id' | 'quantity' | 'meal'>): Promise<boolean> => {
+    const updateMealItem = async (updatedItem: Pick<LoggedMealItem, 'id'>
+        & Partial<Pick<LoggedMealItem, 'quantity' | 'meal'>>): Promise<boolean> => {
         const current = meals.find(meal => meal.id === updatedItem.id);
         if (!current) {
             await showAlert("Alimento non trovato o privo di identificativo.");
@@ -94,9 +95,11 @@ export function useNutritionMeals(dateStr?: string) {
         const session = captureSession();
         try {
             await persistNutrition({
-                type: 'nutrition-meal.upsert',
+                type: 'nutrition-meal.edit',
                 date: targetDateStr,
-                meal: { ...current, ...updatedItem, id: current.id },
+                mealId: current.id,
+                quantity: updatedItem.quantity,
+                meal: updatedItem.meal,
             });
             return isCurrentSession(session);
         } catch {

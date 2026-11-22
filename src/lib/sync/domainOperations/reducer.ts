@@ -148,6 +148,28 @@ function applyOne(data: UserData, operation: DomainOperation): UserData {
             data.nutrition = { ...(data.nutrition ?? {}), [date]: withMealTotals({ ...day, date, meals }) };
             break;
         }
+        case 'nutrition-meal.edit': {
+            const date = requireDate(operation.date);
+            const mealId = requireId(operation.mealId, 'Pasto');
+            const day = data.nutrition?.[date];
+            const meals = [...(day?.meals ?? [])];
+            assertUnique(meals, meal => requireId(meal.id, 'Pasto'), 'Pasti');
+            const index = meals.findIndex(meal => meal.id === mealId);
+            // A stale editor may not recreate a meal that the durable data no longer contains.
+            if (!day || index < 0) throw new Error('Alimento non più presente nella giornata.');
+            const { quantity, meal } = operation;
+            if (quantity !== undefined && (!Number.isFinite(quantity) || quantity < 0)) {
+                throw new Error('Quantità alimento non valida.');
+            }
+            if (meal !== undefined && (typeof meal !== 'string' || !meal.trim())) {
+                throw new Error('Tipo di pasto non valido.');
+            }
+            if (quantity === undefined && meal === undefined) break;
+            const current = meals[index];
+            meals[index] = { ...current, quantity: quantity ?? current.quantity, meal: meal ?? current.meal };
+            data.nutrition = { ...data.nutrition, [date]: withMealTotals({ ...day, meals }) };
+            break;
+        }
         case 'nutrition-meal.delete': {
             const date = requireDate(operation.date);
             const mealId = requireId(operation.mealId, 'Pasto');

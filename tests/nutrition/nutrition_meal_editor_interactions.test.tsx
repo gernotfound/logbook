@@ -31,7 +31,7 @@ describe('Nutrition meal editor identity and pending mutations', () => {
         expect(screen.getAllByRole('heading', { name: 'Modifica porzione' })).toHaveLength(1);
         fireEvent.change(screen.getByRole('spinbutton'), { target: { value: '50' } });
         fireEvent.click(screen.getByRole('button', { name: 'Salva' }));
-        await waitFor(() => expect(onUpdate).toHaveBeenCalledWith(expect.objectContaining({ id: 'meal-d', quantity: 50 })));
+        await waitFor(() => expect(onUpdate).toHaveBeenCalledWith({ id: 'meal-d', quantity: 50 }));
         expect(onRemove).not.toHaveBeenCalledWith('meal-a');
         expect(onRemove).not.toHaveBeenCalledWith('meal-c');
     });

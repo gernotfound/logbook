@@ -347,13 +347,14 @@ describe('M5 nutrition account flow through useNutritionMeals', () => {
             type: 'nutrition-meal.upsert', date: DATE, meal: original,
         }));
         const { result } = renderHook(() => useNutritionMeals(DATE));
+        const updateFromOldView = result.current.updateMealItem;
         await runMutation(() => useAppStore.getState().dispatchDomainOperation({
             type: 'nutrition-meal.upsert', date: DATE,
             meal: { ...original, name: 'Riso aggiornato', kcal: 300, pro: 14 },
         }));
         let acknowledged = false;
         await runMutation(async () => {
-            acknowledged = await result.current.updateMealItem({
+            acknowledged = await updateFromOldView({
                 id: original.id, quantity: 60, meal: 'Pranzo',
             });
         });
@@ -367,6 +368,32 @@ describe('M5 nutrition account flow through useNutritionMeals', () => {
         expect(disk?.data.nutrition?.[DATE]?.meals?.[0]).toMatchObject({
             name: 'Riso aggiornato', kcal: 300, pro: 14, quantity: 60, meal: 'Pranzo',
         });
+    });
+
+    it('does not recreate a meal deleted after the editor captured its snapshot', async () => {
+        const owner = captureSession().owner;
+        await prepareUnlockedTestArchive(owner);
+        await initializeLocal(owner, useAppStore.getState().userData!);
+        const meal = { id: 'removed-meal', name: 'Riso', meal: 'Pranzo', quantity: 100,
+            kcal: 100, carbs: 10, pro: 5, fat: 2 };
+        await runMutation(() => useAppStore.getState().dispatchDomainOperation({
+            type: 'nutrition-meal.upsert', date: DATE, meal,
+        }));
+        const { result } = renderHook(() => useNutritionMeals(DATE));
+        const staleUpdate = result.current.updateMealItem;
+        await runMutation(() => useAppStore.getState().dispatchDomainOperation({
+            type: 'nutrition-meal.delete', date: DATE, mealId: meal.id,
+        }));
+        const beforeEdit = await readLocal(owner);
+
+        let acknowledged = true;
+        await runMutation(async () => {
+            acknowledged = await staleUpdate({ id: meal.id, quantity: 60, meal: 'Pranzo' });
+        });
+
+        expect(acknowledged).toBe(false);
+        expect((await readLocal(owner))?.data.nutrition?.[DATE]?.meals).toEqual([]);
+        expect((await readLocal(owner))?.pending).toEqual(beforeEdit?.pending);
     });
 
 });
