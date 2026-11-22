@@ -1,5 +1,5 @@
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { useKindeCandidateFitnessLifecycle } from '../../../src/contexts/auth/useKindeCandidateFitnessLifecycle';
 import type { KindeCandidateFitnessSnapshot } from '../../../src/lib/auth/kindeCandidateFitnessRealm';
 import { KindeCandidateRoutines } from '../../../src/components/Training/KindeCandidateRoutines';
@@ -34,6 +34,9 @@ function candidate(phase: 'ready' | 'closed') {
     } as unknown as ReturnType<typeof useKindeCandidateFitnessLifecycle>;
 }
 
+beforeEach(() => {
+    vi.mocked(useDialogStore.getState().showConfirm).mockClear();
+});
 afterEach(() => { cleanup(); });
 
 describe('Kinde routine library: read-only owner boundary', () => {
