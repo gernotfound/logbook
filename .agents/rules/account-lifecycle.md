@@ -46,8 +46,10 @@ il profilo e la nutrizione esclusivamente dallo snapshot autorizzato del
 realm e invia `nutrition-planning.replace` tramite `realm.submit()`.
 La bozza e lo stato di salvataggio sono legati al testimone revocabile:
 cambio owner o generazione nasconde i valori precedenti anche quando l'UID
-coincide. Il realm è l'autorità sul journal in attesa: la riconciliazione
-verificata ritira l'avviso senza reinviare il salvataggio dal form.
+coincide. Il realm è l'autorità sul journal in attesa: l'adapter della pianificazione
+restituisce `local-pending` all'editor quando la ricevuta D1 non è ancora
+verificata, senza convertire la durabilità locale in conferma cloud. La
+riconciliazione verificata ritira l'avviso senza reinviare il salvataggio dal form.
 L'ingresso account isolato monta la vista solo dopo consenso verificato
 e apertura esplicita dell'archivio. Ripristino e azioni di gestione restano
 fuori dalla vista mentre il realm è aperto e tornano disponibili quando

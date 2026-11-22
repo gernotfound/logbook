@@ -1,36 +1,37 @@
 # Cloudflare — quadro operativo per lo sviluppo
 
-**Stato:** ricognizione del 20 novembre 2026; non è una certificazione Production. Per il codice e la CI leggere il vero HEAD di [main](https://github.com/gernotfound/logbook/tree/main); per risorse e segreti leggere il provider; per gli esiti funzionali consultare le [issue CF](https://github.com/gernotfound/logbook/issues/1053). Questo documento non autorizza GO, billing, cancellazioni o modifiche a risorse reali.
+**Stato:** ricognizione del 22 novembre 2026. Questa mappa distingue codice su [`main`](https://github.com/gernotfound/logbook/tree/main), runtime pubblico, letture Cloudflare e prove funzionali. Non è una certificazione Production e non autorizza GO, billing, cancellazioni, DNS, OAuth Production o modifiche irreversibili. Le versioni e i commit dei singoli interventi sono nelle [issue CF](https://github.com/gernotfound/logbook/issues/1053); rileggere sempre l'HEAD reale.
 
 ## Implementato, montato e verificato sono cose differenti
 
-| Percorso | Codice disponibile | Runtime pubblico | Prova mancante |
+| Percorso | Codice presente | Montaggio e prove osservati | Gate ancora aperto |
 | --- | --- | --- | --- |
-| PWA React e Static Assets | UI, guest, vault locale | Frontend sul dominio thelogbook.me; guest locale | Install/update su browser reali Chrome e Safari/iOS |
-| OAuth Kinde | Callback, sessione, Worker e componenti React | Quattro route Auth; GuestOnlyAuthProvider, ingresso Kinde identity-only | Google, verifica/reset email, cookie, logout, sessioni e ownership |
-| Replica Workers/D1 | Worker API/Auth Gate, schema SQL, checkpoint, claim e journal cifrato | Worker privati; frontend senza binding D1_API | Write→ricevuta/ACK→read su secondo device, lost ACK e quota |
-| Consenso e chiavi | DEK device e ADK per owner, binding KEK e rights/withdrawal candidati | Nessun grant fitness per account | Recovery indipendente della stessa KEK, consenso e revoca reali |
-| Erasure/inattività | Registro D1 indipendente, runner e [manifest CF-06 candidato](../../cloudflare/jobs/README.md) | Nessun Cron Trigger; candidato non schedulato | Erasure terminale, delete Kinde per ultima, inattività e anti-resurrection |
-| Free/abuso/privacy | Test sintetici, controlli CI, rate-limit binding | NO-GO account fitness e utenti esterni | Quote, email, protezioni antiabuso, dati sintetici e revisione legale |
+| PWA React e Static Assets | Guest locale, storage cifrato, app fitness legacy | Frontend Worker su `thelogbook.me`; `GuestOnlyAuthProvider` ancora montato | Installazione, aggiornamento, recovery e Safari/iOS su dispositivi reali |
+| Identità Kinde | Gateway OAuth/sessione, observer React condiviso, login/logout | Il pubblico usa `KindeAccountSessionProvider` e `KindeAccountEntry identityOnly`. Il proprietario ha osservato accesso Google, logout applicativo e rientro esplicito il 21/11 ([CF-03](https://github.com/gernotfound/logbook/issues/1057)) | Verifica/reset email, policy provider, account linking, sessioni, browser e UX complete |
+| Fitness account Kinde **isolato** | `KindeCandidateFitnessPanel`, realm con owner/fence, profilo biometrico, pianificazione macro, diario/storico pasti e integratori ([PR #1314](https://github.com/gernotfound/logbook/pull/1314)–[#1320](https://github.com/gernotfound/logbook/pull/1320)) | Disponibile come percorso candidato `candidateMode='fitness'`, non montato nel pubblico `identityOnly`; editor separati dal writer Firebase | Allenamenti e altre funzioni approvate, lifecycle account completo, equivalenza del nuovo runtime e prove browser reali |
+| Replica Workers/D1 | Worker API/Auth Gate, schema SQL, journal cifrato e ricevute D1; percorso candidato con commit prima della rete | Worker API privato e frontend **senza** binding `D1_API`; prove isolate sintetiche del realm | Roundtrip reale multi-device, lost ACK, concorrenza, offline, quote e fail-safe |
+| Consenso, cifratura e diritti | Consenso iniziale, ADK/vault, export/restore, revoca e rights-only candidati | `CLOUD_ACCOUNT_KEK_V1` presente come `secret_text` nel Worker API privato; nessun grant fitness nel provider pubblico | Recuperabilità indipendente della KEK, consenso/revoca/restore/erasure reali, privacy e protezione anti-resurrection |
+| Erasure e inattività | Registro D1, finalizzatore, runner e [manifest CF-06 candidato](../../cloudflare/jobs/README.md) | Nessuna schedulazione attestata da questa ricognizione; verifica Cron Trigger del 20/11 da rivalidare | Esecuzione isolata, terminazione atomica, eliminazione Kinde per ultima, inattività 12 mesi |
+| Free, abuso e privacy | Rate-limit binding, verifiche statiche, smoke e test con dati sintetici | Nessun GO utenti esterni o account fitness | Quote/abuso, mail, custodia segreti e collaudo indipendente delle condizioni GDPR |
 
-**Readback Cloudflare 20 novembre 2026:** quattro Worker TheLogBook (frontend, API, Auth Gate, Kinde HTTP) con workers.dev e preview URL disabilitati; API privata con DB, RECOVERY_DB, AUTH_GATE e CLOUD_ACCOUNT_KEK_V1 di tipo secret_text, senza leggere il valore. Due D1 isolate con jurisdiction=eu. Questo prova solo attributi di configurazione, non recuperabilità KEK, API sanitarie funzionanti, residenza di tutti i trattamenti o GDPR.
+## Lettura del provider — 22 novembre 2026
 
-**Rilascio Static Assets:** il workflow segue il Main Release Gate e CodeQL dello SHA di main; la riconciliazione Firestore è indipendente. Un deploy verde non attesta fitness, consenso o sync.
+Il connettore Cloudflare ha restituito quattro Worker TheLogBook: `thelogbook-frontend`, `thelogbook-api-isolated`, `thelogbook-cf03-auth-gate-isolated` e `thelogbook-cf03-kinde-http-isolated`. Il frontend ha `APP_ORIGIN`, `ASSETS`, `KINDE_HTTP` e **non** `D1_API`; l'API privata ha `DB`, `RECOVERY_DB`, `AUTH_GATE` e `CLOUD_ACCOUNT_KEK_V1` come `secret_text`. Entrambi i database D1 isolati riportano `jurisdiction=eu`. Il Worker frontend riporta modifica del 22/11; gli altri tre del 21/11. Questa lettura **non** certifica commit distribuito, valori di segreti, restore, rotte, Cron Trigger, sicurezza effettiva delle API, collocazione di ogni trattamento o GDPR.
 
-## Ordine consigliato
+La disponibilità del codice candidato non implica accessibilità pubblica. Il provider Kinde conferma l'identità; solo il boundary trusted e un consenso verificato possono autorizzare le operazioni salute. I normali editor ospite continuano a usare il loro writer fino alla sostituzione completa e collaudata.
 
-1. Chiudere identità Kinde → owner → consenso → vault in fixture isolate, senza abilitare account fitness pubblico.
-2. Dimostrare write D1/AEAD → receipt/ACK → secondo device; coprire crash, concorrenza, offline, quote e recovery.
-3. Provare custodia e recupero KEK indipendenti, restore selettivo e fence contro reintroduzione di dati cancellati.
-4. Completare cron, account deletion e inattività in sandbox, prima di qualunque attivazione reale.
-5. Dopo parità verificata, eliminare chiamanti e dipendenze Firebase/Vercel; nessuna migrazione di account pre-lancio.
-6. Completare CF-00…09, privacy e prove Safari/iOS prima di un GO esplicito.
+## Prossimi passaggi, senza sovrapposizioni
 
-## Fonti per gli agenti
+1. Completare progressivamente gli editor e il lifecycle fitness nel realm Kinde isolato, preservando owner/session fence, bozza e journal cifrato durevole; regressioni su `local-pending` e ACK effettivo.
+2. Provare su dispositivi e provider isolati Auth, consenso, sessioni, D1/ADK, recovery offline, perdita di ricevuta, più schede e più device; non abilitare anticipatamente il pubblico.
+3. Dimostrare recupero esterno della KEK indipendente, backup/restore, revoca, cancellazione terminale e anti-resurrection.
+4. Validare trigger erasure/inattività, quote Free, antiabuso, protezioni legali e browser Safari/iOS.
+5. Rimuovere i chiamanti Firebase/Vercel solo a parità funzionale verificata. CF-09 e GO del proprietario restano separati dalla CI verde.
 
-- [AGENTS.md](../../AGENTS.md) e [regole specialistiche](../../.agents/rules/) disciplinano i contratti.
-- [CF-EPIC #1053](https://github.com/gernotfound/logbook/issues/1053) organizza i blocchi.
-- [CF-03 #1057](https://github.com/gernotfound/logbook/issues/1057), [CF-04 #1058](https://github.com/gernotfound/logbook/issues/1058), [CF-05 #1059](https://github.com/gernotfound/logbook/issues/1059), [CF-06 #1060](https://github.com/gernotfound/logbook/issues/1060), [CF-08 #1062](https://github.com/gernotfound/logbook/issues/1062) contengono gate e prove.
-- [Runbook Cloudflare](cloudflare-workers-migration.md), [setup Kinde](kinde-auth-setup.md) e [registro servizi](external-services-register.md) contengono **checkpoint storici**; i loro paragrafi datati non provano il main o il provider correnti.
+## Fonti per agenti e coordinamento
 
-**Manutenzione:** aggiornare questa mappa quando cambia un confine montato o un gate; non replicare ogni commit qui. Conservare SHA, CI, date e readback puntuali in issue e PR.
+- [AGENTS.md](../../AGENTS.md) e [contratti specialistici](../../.agents/rules/) governano sicurezza, processo e verifica exact-SHA.
+- [CF-EPIC #1053](https://github.com/gernotfound/logbook/issues/1053) coordina le fasi; [CF-03 #1057](https://github.com/gernotfound/logbook/issues/1057), [CF-04 #1058](https://github.com/gernotfound/logbook/issues/1058), [CF-05 #1059](https://github.com/gernotfound/logbook/issues/1059) e [CF-06 #1060](https://github.com/gernotfound/logbook/issues/1060) registrano prove puntuali e gate.
+- [Runbook](cloudflare-workers-migration.md), [setup Kinde](kinde-auth-setup.md) e [registro servizi](external-services-register.md) contengono anche checkpoint storici: non dimostrano il provider live senza rilettura.
+
+**Manutenzione:** aggiornare questa mappa soltanto quando cambia un confine o una prova materiale. Evitare copia di ogni commit, token, dati personali e risultati CI non osservati.

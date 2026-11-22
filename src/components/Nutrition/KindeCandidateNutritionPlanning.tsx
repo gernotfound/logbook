@@ -15,8 +15,8 @@ export function KindeCandidateNutritionPlanning({ realm }: { realm: Realm }) {
         data: snapshot?.data,
         capture: realm.captureEditWitness,
         dispatch: async operation => {
-            await realm.submit(operation);
-            return 'durable';
+            const outcome = await realm.submit(operation);
+            return outcome.kind === 'local-pending' ? 'local-pending' : 'durable';
         },
     }, showAlert);
 

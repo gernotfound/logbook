@@ -441,6 +441,39 @@ describe('React candidate lifecycle: explicit owner access without promoting Kin
         expect(authenticatedIdentitySource.hasReader()).toBe(false);
     });
 
+    it('keeps planning locally pending when D1 has not acknowledged its journal', async () => {
+        const pendingSubmit = vi.fn(async () => ({ kind: 'local-pending' as const, pendingCount: 1 }));
+        const localSnapshot: KindeCandidateFitnessSnapshot = {
+            ...snapshot,
+            data: {
+                ...snapshot.data,
+                nutrition: { '2026-11-20': {
+                    date: '2026-11-20', weight: 78, kcal: 0, carbs: 0, pro: 0, fat: 0,
+                } },
+            },
+        };
+        // Hold the verified realm open to inspect the editor's own receipt status.
+        // The parent lifecycle independently covers its unmount/recheck transition.
+        const realm = {
+            state: { phase: 'ready', view: confirmed().view, snapshot: localSnapshot, hasPendingJournal: false },
+            submit: pendingSubmit,
+            captureEditWitness: () => ({ owner, isCurrent: () => true }),
+        } as unknown as ReturnType<typeof useKindeCandidateFitnessLifecycle>;
+
+        render(<KindeCandidateNutritionPlanning realm={realm} />);
+        fireEvent.change(screen.getByRole('textbox', { name: /Note/ }), {
+            target: { value: 'Solo sul dispositivo' },
+        });
+        fireEvent.click(screen.getByRole('button', { name: 'Salva pianificazione' }));
+
+        expect(await screen.findByText('Pianificazione salvata sul dispositivo. Conferma cloud in attesa.')).toBeDefined();
+        expect(pendingSubmit).toHaveBeenCalledExactlyOnceWith({
+            type: 'nutrition-planning.replace',
+            value: expect.objectContaining({ weight: 78, notes: 'Solo sul dispositivo' }),
+            origin: 'user-edited',
+        });
+    });
+
     it('never publishes a stale view after a terminal D1 failure', async () => {
         const fake = mockRealm();
         fake.submit.mockRejectedValueOnce(new Error('D1 terminal refusal'));
