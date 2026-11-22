@@ -154,6 +154,13 @@ function readRecoverySlots(owner: string): Array<{ name: string; intent: Workout
             throw new Error('Copia workout modificata durante la verifica: dati preservati.');
         }
     }
+    // A competing tab can add an independent slot during the authenticated
+    // byte rereads. Recheck membership before using the scan to publish a journal.
+    const finalInventory = stableStorageKeyInventory('Copie workout cambiate durante il recupero: dati preservati.');
+    const finalKeys = [...finalInventory].filter(key => prefixes.some(prefix => key.startsWith(prefix)));
+    if (finalKeys.length !== keys.length || keys.some(({ key }) => !finalInventory.has(key))) {
+        throw new Error('Copie workout cambiate durante il recupero: dati preservati.');
+    }
     return scanned.map(({ name, intent }) => ({ name, intent }));
 }
 

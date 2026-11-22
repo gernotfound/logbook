@@ -118,6 +118,50 @@ describe('authenticated device-intent replay into semantic journal', () => {
         expect(await readLocal(scopedOwner)).toEqual(before);
     });
 
+    it('blocks an independent witness inserted during the final authenticated read inside the journal guard', async () => {
+        const scopedOwner = 'user:last-slot-read-' + crypto.randomUUID();
+        const initial = data(workout('50'));
+        await prepareAccountWorkoutArchive(scopedOwner);
+        await initializeLocal(scopedOwner, initial);
+        const first = saveWorkoutDeviceIntent(scopedOwner, initial.activeWorkout ?? null,
+            workout('55'), initial.activeWorkout ?? null);
+        const competitor = { ...first, intentId: 'e'.repeat(32), workout: workout('60') };
+        const before = await readLocal(scopedOwner);
+        const firstRaw = readDeviceValueStrict('workout-intent:' + first.intentId, scopedOwner);
+
+        const originalGet = localStorageMock.getItem.getMockImplementation();
+        if (!originalGet) throw new Error('Missing browser storage mock implementation');
+        let slotReads = 0;
+        let injected = false;
+        localStorageMock.getItem.mockImplementation((key: string) => {
+            const value = originalGet(key);
+            if (key === deviceKey('workout-intent:' + first.intentId, scopedOwner)
+                && ++slotReads === 6) {
+                // Each of the three recovery scans reads the slot twice; this
+                // insertion occurs after the final membership check of the
+                // synchronous IndexedDB preflight, during its last byte read.
+                injected = true;
+                writeDeviceValue('workout-intent:' + competitor.intentId,
+                    JSON.stringify(competitor), scopedOwner);
+            }
+            return value;
+        });
+        try {
+            await expect(recoverWorkoutDeviceIntent(scopedOwner, () => true))
+                .rejects.toThrow('Copie workout cambiate durante il recupero');
+        } finally {
+            localStorageMock.getItem.mockImplementation(originalGet);
+        }
+        expect(injected).toBe(true);
+        expect(await readLocal(scopedOwner)).toEqual(before);
+        expect(readDeviceValueStrict('workout-intent:' + first.intentId, scopedOwner)).toBe(firstRaw);
+        expect(readDeviceValueStrict('workout-intent:' + competitor.intentId, scopedOwner))
+            .toBe(JSON.stringify(competitor));
+        await expect(recoverWorkoutDeviceIntent(scopedOwner, () => true))
+            .rejects.toThrow('Più schede');
+        expect(await readLocal(scopedOwner)).toEqual(before);
+    });
+
     it('refuses a new sibling inserted after the last scan but inside the IndexedDB commit guard', async () => {
         const scopedOwner = 'user:commit-time-sibling-' + crypto.randomUUID();
         const initial = data(workout('50'));
