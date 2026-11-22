@@ -13,6 +13,7 @@ import './routines/routines.css';
 const TrainingRoutines: React.FC = () => {
     const [isCreating, setIsCreating] = useLocalStorage<boolean>(ownerUiPreferenceKey(storageOwner(), 'creating-routine'), false, z.boolean());
     const [isSaving, setIsSaving] = React.useState(false);
+    const [searchQuery, setSearchQuery] = React.useState('');
     const {
         routineName, setRoutineName,
         editingRoutineId,
@@ -110,6 +111,8 @@ const TrainingRoutines: React.FC = () => {
                         libraryById={libraryById}
                         expandedRoutineId={expandedRoutineId}
                         onToggleExpand={handleRoutineClick}
+                        searchQuery={searchQuery}
+                        onSearchQueryChange={setSearchQuery}
                         onEdit={handleEditItem}
                         onDuplicate={handleDuplicate}
                         onDelete={handleDelete}

@@ -1,4 +1,4 @@
-import { useMemo, useState, type MouseEvent } from 'react';
+import { useMemo, type MouseEvent } from 'react';
 import { Search, X } from 'lucide-react';
 import type { Exercise, WorkoutRoutine } from '../../../types';
 import { RoutineCard } from './RoutineCard';
@@ -9,6 +9,8 @@ interface RoutineLibraryListProps {
     libraryById?: ReadonlyMap<string, Exercise>;
     expandedRoutineId: string | null;
     onToggleExpand: (id: string) => void;
+    searchQuery: string;
+    onSearchQueryChange: (value: string) => void;
     onEdit?: (routine: WorkoutRoutine) => void;
     onDuplicate?: (routine: WorkoutRoutine, event: MouseEvent) => void;
     onDelete?: (id: string, event: MouseEvent) => void;
@@ -16,9 +18,9 @@ interface RoutineLibraryListProps {
 
 export function RoutineLibraryList({
     routines, library, libraryById, expandedRoutineId,
-    onToggleExpand, onEdit, onDuplicate, onDelete,
+    onToggleExpand, searchQuery, onSearchQueryChange,
+    onEdit, onDuplicate, onDelete,
 }: RoutineLibraryListProps) {
-    const [searchQuery, setSearchQuery] = useState('');
     const normalizedQuery = searchQuery.trim().toLocaleLowerCase('it');
     const filteredRoutines = useMemo(
         () => routines.filter(routine => (
@@ -38,7 +40,7 @@ export function RoutineLibraryList({
                 <input
                     type="search"
                     value={searchQuery}
-                    onChange={event => setSearchQuery(event.target.value)}
+                    onChange={event => onSearchQueryChange(event.target.value)}
                     placeholder="Cerca scheda per nome"
                     aria-label="Cerca scheda per nome"
                 />
@@ -46,7 +48,7 @@ export function RoutineLibraryList({
                     <button
                         type="button"
                         className="routine-search-clear"
-                        onClick={() => setSearchQuery('')}
+                        onClick={() => onSearchQueryChange('')}
                         aria-label="Cancella ricerca"
                     >
                         <X size={18} aria-hidden="true" />

@@ -91,6 +91,7 @@ describe('Kinde routine library: read-only owner boundary', () => {
         render(<RoutineLibraryList
             routines={[routine]} library={account.data.library!}
             expandedRoutineId={null} onToggleExpand={vi.fn()}
+            searchQuery="" onSearchQueryChange={vi.fn()}
             onEdit={edit} onDuplicate={duplicate} onDelete={remove}
         />);
         fireEvent.click(screen.getByRole('button', { name: 'Opzioni' }));

@@ -8,6 +8,7 @@ type Realm = ReturnType<typeof useKindeCandidateFitnessLifecycle>;
 /** The Kinde archive reads only this owner's verified snapshot, never the guest store. */
 export function KindeCandidateRoutines({ realm }: { realm: Realm }) {
     const [expandedRoutineId, setExpandedRoutineId] = useState<string | null>(null);
+    const [searchQuery, setSearchQuery] = useState('');
     if (realm.state.phase !== 'ready') return null;
 
     const { routines = [], library = [] } = realm.state.snapshot.data;
@@ -21,6 +22,8 @@ export function KindeCandidateRoutines({ realm }: { realm: Realm }) {
                 library={library}
                 expandedRoutineId={expandedRoutineId}
                 onToggleExpand={id => setExpandedRoutineId(current => current === id ? null : id)}
+                searchQuery={searchQuery}
+                onSearchQueryChange={setSearchQuery}
             />
         </section>
     );
