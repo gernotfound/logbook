@@ -1,7 +1,8 @@
 import React from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, screen } from '@testing-library/react';
-import { renderWithProviders, emptyUserData } from '../../setup';
+import { renderWithProviders, renderWithAuthenticatedTestOwner, emptyUserData } from '../../setup';
+import { prepareUnlockedTestArchive } from '../../secureVaultFixture';
 import TrainingRoutines from '../../../src/components/Training/TrainingRoutines';
 import type { Exercise, WorkoutRoutine } from '../../../src/types';
 
@@ -73,6 +74,29 @@ describe('Schede redesign', () => {
 
         fireEvent.click(screen.getByRole('button', { name: /^Chiudi scheda Lower body A 1 esercizi/ }));
         expect(container.querySelectorAll('.routine-library-card.is-expanded')).toHaveLength(0);
+    });
+
+    it('retains the guest routine search when the editor is opened and closed', async () => {
+        // The editor may clear a draft only inside a genuinely unlocked vault.
+        await prepareUnlockedTestArchive('user:test-user-id');
+        localStorage.setItem('logbook:v2:user:test-user-id:health-consent-generation', '1');
+        renderWithAuthenticatedTestOwner(<TrainingRoutines />, {
+            userData: { ...emptyUserData, routines, library },
+        });
+
+        const search = screen.getByRole('searchbox', { name: 'Cerca scheda per nome' });
+        fireEvent.change(search, { target: { value: 'upper' } });
+        expect(screen.getByText('Upper body A')).toBeTruthy();
+        expect(screen.queryByText('Lower body A')).toBeNull();
+
+        fireEvent.click(screen.getByRole('button', { name: 'Crea scheda' }));
+        expect(screen.queryByRole('searchbox', { name: 'Cerca scheda per nome' })).toBeNull();
+        fireEvent.click(screen.getByRole('button', { name: 'Chiudi' }));
+
+        const resumedSearch = screen.getByRole('searchbox', { name: 'Cerca scheda per nome' }) as HTMLInputElement;
+        expect(resumedSearch.value).toBe('upper');
+        expect(screen.getByText('Upper body A')).toBeTruthy();
+        expect(screen.queryByText('Lower body A')).toBeNull();
     });
 
     it('resolves routine details through the shared index without scanning the library', () => {

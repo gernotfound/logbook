@@ -12,9 +12,9 @@ interface RoutineCardProps {
     library: ExerciseLibraryItem[];
     libraryById?: ReadonlyMap<string, ExerciseLibraryItem>;
     onToggleExpand: (id: string) => void;
-    onEdit: (routine: Routine) => void;
-    onDelete: (id: string, e: React.MouseEvent) => void;
-    onDuplicate: (routine: Routine, e: React.MouseEvent) => void;
+    onEdit?: (routine: Routine) => void;
+    onDelete?: (id: string, e: React.MouseEvent) => void;
+    onDuplicate?: (routine: Routine, e: React.MouseEvent) => void;
     isCreating?: boolean;
 }
 
@@ -69,33 +69,30 @@ export const RoutineCard: React.FC<RoutineCardProps> = ({
     const exerciseCount = (routine.exercises || []).length;
     const routineDescription = `${exerciseCount} esercizi${focusSummary ? ` · ${focusSummary}` : ''}`;
 
-    const menuItems: ContextMenuItem[] = [
-        {
-            id: 'edit-routine',
-            label: 'Modifica',
-            icon: <Pencil size={16} />,
-            disabled: isCreating,
-            onClick: () => onEdit(routine)
-        },
-        {
-            id: 'duplicate-routine',
-            label: 'Duplica',
-            icon: <Copy size={16} />,
-            onClick: (event) => onDuplicate(routine, event)
-        },
-        {
-            id: 'delete-routine',
-            label: 'Elimina',
-            icon: <Trash2 size={16} />,
-            variant: 'danger',
-            onClick: (event) => onDelete(routine.id, event)
-        }
-    ];
+    const menuItems: ContextMenuItem[] = [];
+    if (onEdit) {
+        menuItems.push({
+            id: 'edit-routine', label: 'Modifica', icon: <Pencil size={16} />,
+            disabled: isCreating, onClick: () => onEdit(routine),
+        });
+    }
+    if (onDuplicate) {
+        menuItems.push({
+            id: 'duplicate-routine', label: 'Duplica', icon: <Copy size={16} />,
+            onClick: event => onDuplicate(routine, event),
+        });
+    }
+    if (onDelete) {
+        menuItems.push({
+            id: 'delete-routine', label: 'Elimina', icon: <Trash2 size={16} />,
+            variant: 'danger', onClick: event => onDelete(routine.id, event),
+        });
+    }
 
     const detailsId = `routine-details-${routine.id}`;
 
     return (
-        <article className={`routine-library-card${isExpanded ? ' is-expanded' : ''}`}>
+        <article className={`routine-library-card${isExpanded ? ' is-expanded' : ''}${menuItems.length === 0 ? ' is-readonly' : ''}`}>
             <div className="routine-card-head">
                 <button
                     type="button"
@@ -116,10 +113,12 @@ export const RoutineCard: React.FC<RoutineCardProps> = ({
                     </span>
                     <ChevronDown className="routine-card-chevron" size={20} aria-hidden="true" />
                 </button>
-                <ContextMenu
-                    items={menuItems}
-                    className="routine-card-menu"
-                />
+                {menuItems.length > 0 && (
+                    <ContextMenu
+                        items={menuItems}
+                        className="routine-card-menu"
+                    />
+                )}
             </div>
 
             {isExpanded && (

@@ -1,5 +1,26 @@
 # Ciclo account, Auth e guest — TheLogBook
 
+### CF-03 — Schede Kinde isolate in sola lettura (22/11/2026)
+
+`KindeCandidateRoutines` monta la libreria condivisa `RoutineLibraryList`
+soltanto con snapshot `ready` del realm owner-scoped, separata da
+`useTrainingRoutines`, da Zustand e dalle preferenze/draft del guest.
+`RoutineCard` rende le azioni di menu solo quando il chiamante
+fornisce i rispettivi handler: il wrapper guest conserva modifica,
+duplica ed elimina; l'account candidato non offre ancora creazione,
+modifica, duplicazione o eliminazione di schede. Ricerca, espansione,
+riepilogo serie e mappa muscolare usano soltanto la libreria dello
+stesso owner Kinde e sono smontati alla perdita del permesso.
+
+Le bozze delle schede, `draft_routine`, il controllo dei testimoni
+fra schede, l'editor e il writer `routine.upsert` non sono ancora
+migrati nel nuovo lifecycle. L'assenza di un writer nel candidato è
+deliberata: un'azione account non può usare l'owner o il recupero
+del guest. I test React contrappongono dati guest con gli stessi
+identificativi; un E2E sintetico a due profili browser verifica la
+lettura dopo una ricevuta D1 senza nuove scritture/ACK. Non è un
+collaudo funzionale Production né abilita fitness pubblico.
+
 ### CF-03/04 — Storico allenamenti Kinde isolato, sola lettura (22/11/2026)
 
 `KindeCandidateTrainingHistory` usa il calendario condiviso

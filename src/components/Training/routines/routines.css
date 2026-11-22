@@ -185,6 +185,10 @@
   text-align: left;
 }
 
+.routine-library-card.is-readonly .routine-card-toggle {
+  border-radius: 1.125rem;
+}
+
 .routine-card-toggle:hover,
 .routine-card-toggle:focus-visible {
   background: var(--surface-light);

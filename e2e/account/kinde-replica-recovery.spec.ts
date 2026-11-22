@@ -1,6 +1,46 @@
 import { expect, test } from '../fixtures';
 import { loadKindeReplica, mountKindePlanning, withKindeReplicaDevices } from './kindeReplicaFixture';
 
+test('reads owner-scoped Kinde routines without legacy actions or a new D1 receipt', async ({ browser }) => {
+    await withKindeReplicaDevices(browser, async ({ first, second, receipts, firstCommitStatuses }) => {
+        const seed = await second.evaluate(() => window.kindeReplicaFixture!.submit([
+            { type: 'exercise.upsert', exercise: {
+                id: 'routine-ex', name: 'Squat Kinde', setsCount: 1,
+                muscles: [], secondaryMuscles: [], sets: [],
+            } },
+            { type: 'routine.upsert', routine: {
+                id: 'rtn-kinde', name: 'Scheda Kinde',
+                exercises: [{ exId: 'routine-ex', setsCount: 3, minReps: 6, maxReps: 10 }],
+            } },
+        ]));
+        expect(seed).toMatchObject({ kind: 'cloud-acknowledged' });
+        const initialReceipts = receipts();
+
+        await first.bringToFront();
+        await mountKindePlanning(first);
+        const library = first.getByRole('region', { name: 'Schede allenamento account' });
+        await expect(library).toHaveCount(0);
+        await first.getByRole('button', { name: 'Apri archivio account' }).click();
+        await expect(library).toBeVisible();
+        await expect(library.getByText('Scheda Kinde')).toBeVisible();
+        await expect(library.getByRole('button', { name: 'Opzioni' })).toHaveCount(0);
+
+        await library.getByRole('button', { name: /Apri scheda/ }).click();
+        await expect(library.getByText('Squat Kinde')).toBeVisible();
+        await expect(library.getByText('3 × 6–10')).toBeVisible();
+
+        await library.getByRole('searchbox', { name: 'Cerca scheda per nome' }).fill('non presente');
+        await expect(library.getByText('Nessuna scheda trovata.')).toBeVisible();
+        await library.getByRole('button', { name: 'Cancella ricerca' }).click();
+        await expect(library.getByText('Scheda Kinde')).toBeVisible();
+        expect(firstCommitStatuses).toEqual([]);
+        expect(receipts()).toBe(initialReceipts);
+
+        await first.getByRole('button', { name: 'Torna alla gestione account' }).click();
+        await expect(library).toHaveCount(0);
+    }, { planningUi: true });
+});
+
 test('reads Kinde training history and report without writing another owner\'s data', async ({ browser }) => {
     await withKindeReplicaDevices(browser, async ({ first, second, receipts, firstCommitStatuses }) => {
         const saved = await second.evaluate(() => window.kindeReplicaFixture!.submit([
