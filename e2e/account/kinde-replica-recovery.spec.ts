@@ -11,7 +11,7 @@ test('reads Kinde training history and report without writing another owner\'s d
                 id: 'history-2026', date: '2026-11-20', routineName: 'Sessione Kinde',
                 globalStartTime: Date.UTC(2026, 10, 20, 11),
                 globalEndTime: Date.UTC(2026, 10, 20, 11, 45),
-                exercises: [{ exId: 'history-ex', sessionNote: '',
+                exercises: [{ id: 'history-ex-instance', exId: 'history-ex', sessionNote: '',
                     sets: [{ id: 'history-set', kg: '40', reps: '10', done: true }] }],
             } },
         ]));

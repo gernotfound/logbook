@@ -9,7 +9,7 @@ import type { WorkoutSession } from '../../../src/types';
 const accountWorkout: WorkoutSession = {
     id: 'account-workout', date: '2026-11-20', routineName: 'Sessione account',
     globalStartTime: Date.UTC(2026, 10, 20, 11), globalEndTime: Date.UTC(2026, 10, 20, 11, 45),
-    exercises: [{ exId: 'account-ex', sessionNote: '', sets: [
+    exercises: [{ id: 'account-ex-instance', exId: 'account-ex', sessionNote: '', sets: [
         { id: 'account-set', kg: '40', reps: '10', done: true },
     ] }],
 };
