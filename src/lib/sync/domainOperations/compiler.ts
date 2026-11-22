@@ -53,6 +53,7 @@ function collectScope(before: UserData, after: UserData, operations: readonly Do
             case 'profile.patch': root('profile'); break;
             case 'nutrition-planning.replace': root('nutritionPlanning', 'nutritionPlanningOrigin'); break;
             case 'supplement.upsert':
+            case 'supplement.edit':
             case 'supplement.delete':
             case 'supplement.reorder': root('supplements'); break;
             case 'routine.upsert':
@@ -89,6 +90,7 @@ function collectScope(before: UserData, after: UserData, operations: readonly Do
             case 'nutrition-meal.edit':
             case 'nutrition-meal.delete':
             case 'supplement-intake.upsert':
+            case 'supplement-intake.add':
             case 'supplement-intake.delete': {
                 const date = requireDate(operation.date);
                 addMonthly(scope, `nutrition_months/${date.slice(0, 7)}`, date);

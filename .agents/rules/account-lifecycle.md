@@ -64,6 +64,14 @@ Lo storico mostra soltanto i giorni con pasti nello stesso snapshot e ne
 apre il diario in sola navigazione. La chiusura dell'archivio rimuove
 entrambe le viste.
 
+La scheda Integratori nello stesso archivio legge libreria e assunzioni
+dallo snapshot Kinde. Crea, modifica, duplica e rimuove voci o registra e
+rimuove assunzioni attraverso lo stesso writer degli altri editor. La
+conferma di rimozione resta vincolata alla sessione che l'ha aperta. Durante
+un commit il diario è nascosto. Dopo un salvataggio locale la bozza inviata
+viene ritirata e le altre quantità già digitate restano nello stesso
+archivio fino alla sua chiusura o invalidazione.
+
 ### CF-03/04 — Recheck del journal Kinde dopo esito ambiguo (21/11/2026)
 
 Se `useKindeCandidateFitnessLifecycle.submit()` riceve
