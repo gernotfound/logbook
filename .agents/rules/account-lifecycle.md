@@ -1,5 +1,26 @@
 # Ciclo account, Auth e guest — TheLogBook
 
+### CF-03/04 — Storico allenamenti Kinde isolato, sola lettura (22/11/2026)
+
+`KindeCandidateTrainingHistory` usa il calendario condiviso
+`TrainingHistoryView` soltanto con lo snapshot di un realm `ready`.
+La vista non monta `useTrainingHistory`, non legge `useAppStore` e
+non espone azioni modifica/elimina, che dipendono dal workout device
+e dal suo recovery non ancora migrati. Il report condiviso riceve
+storico, libreria e nutrizione dallo stesso snapshot owner-scoped
+e non può inviare `routine.upsert`. L'adapter legacy
+`WorkoutReportModal` mantiene separato il writer del guest;
+la presentazione `WorkoutReportView` non legge alcun owner o
+storage globale. Su recheck, perdita della sessione, cambio epoch
+o chiusura dell'archivio la vista Kinde viene smontata con
+report e selezione locali; non si eredita mai il report guest.
+Le regressioni React coprono guest estraneo, azioni assenti
+e unmount; il browser E2E usa SQL/Worker sintetici e due profili
+isolati per verificare sola lettura dopo receipt D1, senza
+nuova operazione o ACK. Rimangono candidati non pubblici:
+sessione attiva, salvataggio/modifica storico, routine, cicli
+e il percorso completo allenamenti richiedono ancora migrazione.
+
 ### CF-03/04 — Scadenza della vista Kinde candidata (21/11/2026)
 
 Il realm fitness candidato richiede, oltre al consenso trusted, la scadenza
