@@ -158,12 +158,6 @@ describe('training session redesign', () => {
         expect(sessionSetHasMeaningfulData({ id: 'zero', kg: '0,0', reps: '0.00' })).toBe(false);
         expect(sessionSetHasMeaningfulData({ id: 'rir-zero', kg: '', reps: '', rir: 0 })).toBe(true);
         expect(sessionSetHasMeaningfulData({ id: 'advanced', kg: '', reps: '', technique: 'dropset' })).toBe(true);
-        expect(sessionSetHasMeaningfulData({ id: 'isometric-continuation', kg: '', reps: '', segments: [
-            { id: 'segment-1', kg: '', reps: '', time: '', technique: 'isometry' },
-        ] })).toBe(true);
-        expect(sessionSetHasMeaningfulData({ id: 'straight-continuation', kg: '', reps: '', segments: [
-            { id: 'segment-1', kg: '', reps: '', technique: 'straight' },
-        ] })).toBe(false);
         expect(sessionSetHasMeaningfulData({ id: 'weight', kg: '80', reps: '' })).toBe(true);
         expect(sessionSetHasMeaningfulData({ id: 'time', kg: '', reps: '', time: '60' })).toBe(true);
         const retiredFields = { id: 'pre-launch', kg: '', reps: '', weight: 80, timeInSeconds: 60 };
@@ -209,38 +203,6 @@ describe('training session redesign', () => {
         expect(confirm).toHaveBeenCalledTimes(1);
         expect(onRemoveSet).not.toHaveBeenCalled();
         confirm.mockRestore();
-    });
-
-    it('requests confirmation before removing an isometric continuation without entered numeric values', async () => {
-        const onRemoveSet = vi.fn();
-        const confirm = vi.spyOn(useDialogStore.getState(), 'showConfirm').mockResolvedValue(false);
-        try {
-            render(
-                <SessionSetRow
-                    set={{ id: 'set-isometry', kg: '', reps: '', segments: [
-                        { id: 'segment-isometry', kg: '', reps: '', time: '', technique: 'isometry' },
-                    ] }}
-                    sIndex={0}
-                    exIndex={0}
-                    trackingType="weight_reps"
-                    isOpenMenu={false}
-                    onToggleMenu={vi.fn()}
-                    onRemoveSet={onRemoveSet}
-                    onUpdateSet={vi.fn()}
-                    onAddSpecialSet={vi.fn()}
-                    onUpdateSpecialSet={vi.fn()}
-                    onRemoveSpecialSet={vi.fn()}
-                    onUpdateSetTarget={vi.fn()}
-                />,
-            );
-            await act(async () => {
-                fireEvent.click(screen.getByRole('button', { name: 'Rimuovi serie 1' }));
-            });
-            expect(confirm).toHaveBeenCalledTimes(1);
-            expect(onRemoveSet).not.toHaveBeenCalled();
-        } finally {
-            confirm.mockRestore();
-        }
     });
 
     it('uses the median of the latest five matching completed sessions', () => {

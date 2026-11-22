@@ -30,7 +30,6 @@ export function sessionSetHasMeaningfulData(set: Partial<SessionExerciseSet>): b
         || hasEnteredValue(segment.time)
         || segment.restBeforeSeconds !== undefined
         || segment.target !== undefined
-        || (segment.technique !== undefined && segment.technique !== 'straight')
     ))) {
         return true;
     }
