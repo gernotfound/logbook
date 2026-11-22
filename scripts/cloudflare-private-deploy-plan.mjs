@@ -49,13 +49,19 @@ function gitJson(ref, path) {
 export function planFromGit(workflowPath) {
   const paths = readPrivatePushPaths(readFileSync(workflowPath, 'utf8'));
   if (!paths.includes('package.json') || !paths.includes('package-lock.json')) throw new Error('Missing dependency triggers');
-  const changed = execFileSync('git', ['diff', '--name-only', '-z', 'HEAD^', 'HEAD'], { encoding: 'utf8' })
+  // A push can contain several commits: checking HEAD^ can skip a code deploy
+  // when the last commit only bumps the version. Compare the entire push range.
+  const before = process.env.PUSH_BEFORE_SHA;
+  if (!/^[a-f0-9]{40}$/.test(before ?? '') || /^0+$/.test(before)) {
+    throw new Error('Push base SHA unavailable; private deployment required');
+  }
+  const changed = execFileSync('git', ['diff', '--name-only', '-z', before, 'HEAD'], { encoding: 'utf8' })
     .split('\0').filter(Boolean);
   return mustDeployPrivateWorker({
     changed, paths,
-    previousPackage: gitJson('HEAD^', 'package.json'),
+    previousPackage: gitJson(before, 'package.json'),
     currentPackage: JSON.parse(readFileSync('package.json', 'utf8')),
-    previousLock: gitJson('HEAD^', 'package-lock.json'),
+    previousLock: gitJson(before, 'package-lock.json'),
     currentLock: JSON.parse(readFileSync('package-lock.json', 'utf8')),
   });
 }

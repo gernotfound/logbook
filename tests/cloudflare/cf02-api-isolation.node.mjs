@@ -1,7 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
-import { dirname, isAbsolute, relative, resolve } from 'node:path';
+import { readFileSync, mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
+import { execFileSync, spawnSync } from 'node:child_process';
+import { tmpdir } from 'node:os';
+import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { validateIsolatedWorkers, validateIsolatedKindeCandidate } from '../../scripts/check-cloudflare-api-isolation.mjs';
 
 const api = JSON.parse(readFileSync('cloudflare/api/wrangler.isolated.jsonc', 'utf8'));
@@ -179,6 +182,7 @@ void test('private Workers wait boundedly for the actual exact-main gate and sto
     '.github/workflows/cloudflare-kinde-private.yml',
   ]) {
     const workflow = readFileSync(file, 'utf8');
+    assert.match(workflow, /PUSH_BEFORE_SHA: \\$\\{\\{ github\\.event\\.before \\}\\}/);
     assert.match(workflow, /for attempt in \$\(seq 1 40\); do/);
     assert.match(workflow, /head_sha=\$\{EXPECTED_SHA\}/);
     assert.match(workflow, /case "\$\{gate\}" in/);
@@ -186,6 +190,55 @@ void test('private Workers wait boundedly for the actual exact-main gate and sto
     assert.match(workflow, /test "\$\{verified\}" = true/);
     assert.match(workflow, /if \[ "\$\{attempt\}" != 40 \]; then sleep 15; fi/);
     assert.doesNotMatch(workflow, /for attempt in 1 2 3 4 5 6 7 8 9 10 11 12;/);
+  }
+});
+
+
+void test('deployment planner inspects the entire multi-commit push, not only HEAD^', () => {
+  const sandbox = mkdtempSync(join(tmpdir(), 'logbook-private-push-range-'));
+  const planner = fileURLToPath(new URL('../../scripts/cloudflare-private-deploy-plan.mjs', import.meta.url));
+  const workflows = [
+    '.github/workflows/cloudflare-api-isolated.yml',
+    '.github/workflows/cloudflare-kinde-private.yml',
+  ];
+  const git = (...args) => execFileSync('git', args, { cwd: sandbox, encoding: 'utf8' }).trim();
+  const write = (path, value) => {
+    const full = join(sandbox, path);
+    mkdirSync(dirname(full), { recursive: true });
+    writeFileSync(full, value);
+  };
+  const runPlanner = (workflow, before) => spawnSync(process.execPath, [planner, workflow], {
+    cwd: sandbox, encoding: 'utf8',
+    env: { ...process.env, PUSH_BEFORE_SHA: before },
+  });
+  try {
+    git('init', '-q');
+    git('config', 'user.name', 'Synthetic Test');
+    git('config', 'user.email', 'synthetic@example.invalid');
+    for (const workflow of workflows) write(workflow, readFileSync(workflow, 'utf8'));
+    write('cloudflare/auth/kinde-http-worker.mjs', 'export const release = 1;\\n');
+    write('package.json', JSON.stringify({ name: 'synthetic', version: '1.0.0', dependencies: { jose: '5' } }));
+    write('package-lock.json', JSON.stringify({ version: '1.0.0', packages: { '': { version: '1.0.0' } } }));
+    git('add', '.'); git('commit', '-qm', 'initial');
+    const initial = git('rev-parse', 'HEAD');
+    write('cloudflare/auth/kinde-http-worker.mjs', 'export const release = 2;\\n');
+    git('add', '.'); git('commit', '-qm', 'worker change');
+    const second = git('rev-parse', 'HEAD');
+    write('package.json', JSON.stringify({ name: 'synthetic', version: '1.1.0', dependencies: { jose: '5' } }));
+    write('package-lock.json', JSON.stringify({ version: '1.1.0', packages: { '': { version: '1.1.0' } } }));
+    git('add', '.'); git('commit', '-qm', 'version only');
+    for (const workflow of workflows) {
+      for (const [before, expected] of [
+        [initial, 'true'], [second, 'false'], ['', 'true'],
+        ['0'.repeat(40), 'true'], ['a'.repeat(40), 'true'],
+      ]) {
+        const result = runPlanner(workflow, before);
+        assert.equal(result.status, 0, result.stderr);
+        assert.equal(result.stdout.trim(), expected, workflow + ' push base ' + (before || '(missing)'));
+      }
+    }
+  } finally {
+    rmSync(sandbox, { recursive: true, force: true });
   }
 });
 
