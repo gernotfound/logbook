@@ -1,7 +1,7 @@
 import { useRef, useState, type MouseEvent } from 'react';
 import type { useKindeCandidateFitnessLifecycle } from '../../contexts/auth/useKindeCandidateFitnessLifecycle';
 import { generateId } from '../../lib/utils/date';
-import { generateUniqueName } from '../../lib/utils/string';
+import { buildRoutineDuplicateOperation } from '../../lib/routineSaveIntent';
 import { useDialogStore } from '../../store/useDialogStore';
 import type { WorkoutRoutine } from '../../types';
 import { RoutineLibraryList } from './routines/RoutineLibraryList';
@@ -26,13 +26,9 @@ export function KindeCandidateRoutines({ realm }: { realm: Realm }) {
         if (!witness?.isCurrent()) return;
         operationInFlight.current = true;
         try {
-            const copy: WorkoutRoutine = {
-                ...structuredClone(routine),
-                id: generateId('rtn'),
-                name: generateUniqueName(routine.name, routines.map(item => item.name)),
-            };
+            const operation = buildRoutineDuplicateOperation(routine, routines, generateId('rtn'));
             if (!witness.isCurrent()) return;
-            await realm.submit({ type: 'routine.upsert', routine: copy });
+            await realm.submit(operation);
             // Receipt/pending status belongs to the realm, never this callback.
         } catch {
             if (witness.isCurrent()) await showAlert('Impossibile duplicare la scheda.');
