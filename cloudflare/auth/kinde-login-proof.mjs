@@ -59,7 +59,7 @@ async function sha256AtHash(accessToken) {
  * This helper does not create D1 sessions.
  *
  * @param {{issuer: string, apiAudience: string, clientId: string}} configuration
- * @param {(header: import('jose').JWSHeaderParameters, token: import('jose').FlattenedJWSInput) => Promise<import('jose').KeyLike | Uint8Array>} [keySet]
+ * @param {(header: import('jose').JWSHeaderParameters, token: import('jose').FlattenedJWSInput) => Promise<CryptoKey | Uint8Array>} [keySet]
  */
 export function createKindeIdentityProofVerifier(configuration, keySet) {
   const { issuer, apiAudience, clientId } = configuration ?? {};

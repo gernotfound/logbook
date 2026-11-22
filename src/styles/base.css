@@ -189,6 +189,8 @@ input[type="radio"] {
 
 label:has(> input[type="checkbox"]),
 label:has(> input[type="radio"]) {
+    /* Non-replaced inline labels ignore min-height; keep the full label tappable. */
+    display: inline-block;
     min-height: 2.75rem;
 }
 

@@ -112,3 +112,41 @@ test('keyboard-opened routine menu retains focus and fits a narrow real viewport
   expect(await collectBlockingAccessibilityViolations(page, 'keyboard-routine-menu'),
     'axe found critical/serious WCAG violations in the open routine menu').toEqual([]);
 });
+
+test('bare checkbox and radio labels have a 44px tap target at 320px', async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 640 });
+  await page.goto('/');
+  await expect(page.getByRole('heading', { name: 'TheLogBook' })).toBeVisible();
+
+  // Test the real stylesheet against unstyled labels used by consent/restore
+  // forms; jsdom cannot measure inline element geometry.
+  const hitAreas = await page.evaluate(() => {
+    const host = document.createElement('div');
+    host.style.position = 'fixed';
+    host.style.top = '0';
+    host.style.left = '0';
+    document.body.appendChild(host);
+    try {
+      return (['checkbox', 'radio'] as const).map(type => {
+        const label = document.createElement('label');
+        const input = document.createElement('input');
+        input.type = type;
+        label.append(input, document.createTextNode(' Confermo'));
+        host.appendChild(label);
+        const measurement = {
+          type,
+          display: getComputedStyle(label).display,
+          height: label.getBoundingClientRect().height,
+        };
+        label.remove();
+        return measurement;
+      });
+    } finally {
+      host.remove();
+    }
+  });
+  for (const { type, display, height } of hitAreas) {
+    expect(display, type + ' label layout').not.toBe('inline');
+    expect(height, type + ' label tap height').toBeGreaterThanOrEqual(44);
+  }
+});
