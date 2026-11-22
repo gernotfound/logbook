@@ -1,5 +1,5 @@
-// Unmounted first-party boundary for the future Kinde/D1 cutover. Its callers
-// must be deliberately enabled in the frontend Worker configuration after GO.
+// Kinde OAuth/session routes are mounted on the public frontend. D1 fitness
+// routes remain private candidates without a public binding until explicit GO.
 // Never fall back to Static Assets for recognized API paths.
 import { edgeOAuthRateBucket, OAUTH_RATE_BUCKET_HEADER } from './auth/oauth-rate-bucket.mjs';
 
