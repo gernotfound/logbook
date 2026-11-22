@@ -189,12 +189,24 @@ test.describe('Offline scenarios & Background suspension', () => {
     await expect(page.getByText('Nuova versione disponibile')).toBeVisible();
 
     // A 320px browser viewport verifies actual geometry, not CSS regex matches.
+    const desktopLayout = await page.locator('.reload-prompt-toast').evaluate(toast => ({
+      direction: getComputedStyle(toast).flexDirection,
+      alignment: getComputedStyle(toast).alignItems,
+    }));
+    expect(desktopLayout).toEqual({ direction: 'column', alignment: 'center' });
     await page.setViewportSize({ width: 320, height: 640 });
     const positions = await page.evaluate(() => {
-      const toast = document.querySelector('.reload-prompt-toast')!.getBoundingClientRect();
+      const prompt = document.querySelector('.reload-prompt-toast')!;
+      const toast = prompt.getBoundingClientRect();
       const nav = document.querySelector('.bottom-nav')!.getBoundingClientRect();
-      return { toastBottom: toast.bottom, navTop: nav.top, toastLeft: toast.left, toastRight: toast.right };
+      const layout = getComputedStyle(prompt);
+      return {
+        toastBottom: toast.bottom, navTop: nav.top, toastLeft: toast.left, toastRight: toast.right,
+        direction: layout.flexDirection, alignment: layout.alignItems,
+      };
     });
+    expect(positions.direction).toBe('column');
+    expect(positions.alignment).toBe('stretch');
     expect(positions.toastBottom).toBeLessThanOrEqual(positions.navTop);
     expect(positions.toastLeft).toBeGreaterThanOrEqual(0);
     expect(positions.toastRight).toBeLessThanOrEqual(320);

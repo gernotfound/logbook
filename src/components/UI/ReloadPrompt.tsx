@@ -186,7 +186,6 @@ const ReloadPrompt: React.FC = () => {
       aria-live="polite"
       aria-atomic="true"
       className="reload-prompt-toast"
-      style={{ display: "flex", flexDirection: "column", gap: "0.75rem", alignItems: "center", textAlign: "center" }}
     >
       <div
         className="ui-reload-prompt-1" style={{ fontWeight: 700 }}
