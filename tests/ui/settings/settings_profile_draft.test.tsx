@@ -105,9 +105,11 @@ describe('biometric profile draft persistence', () => {
         expect(state.dispatch).toHaveBeenNthCalledWith(2, { type: 'profile.patch', patch: { gender: 'F' } });
     });
 
-    it('keeps a rejected profile patch available for a retry and clears it only after an accepted save', async () => {
+    it.each(['rejected', 'failed'] as const)(
+        'keeps a %s profile patch available for retry until a durable save succeeds',
+        async status => {
         state.dispatch.mockResolvedValueOnce({
-            ok: false, status: 'rejected', error: new Error('write denied'),
+            ok: false, status, error: new Error('write not durable'),
         });
         const { result } = renderHook(() => useSettingsProfile());
         act(() => result.current.setHeight('180'));
@@ -127,7 +129,8 @@ describe('biometric profile draft persistence', () => {
         await act(async () => { await result.current.handleSaveProfile(); });
         expect(state.dispatch).toHaveBeenCalledTimes(2);
         expect(state.showAlert).toHaveBeenCalledTimes(1);
-    });
+        },
+    );
 
     it('accepts the dispatch boundary local-pending result without resubmitting an unchanged patch', async () => {
         state.dispatch.mockResolvedValueOnce({
@@ -179,7 +182,7 @@ describe('biometric profile draft persistence', () => {
         });
     });
 
-    it('composes multiple field changes made in the same render cycle', () => {
+    it('composes multiple edits in one render cycle into the actual submitted patch', async () => {
         const { result } = renderHook(() => useSettingsProfile());
         act(() => {
             result.current.setDob('2001-02-03');
@@ -188,6 +191,11 @@ describe('biometric profile draft persistence', () => {
         });
         expect([result.current.dob, result.current.height, result.current.gender])
             .toEqual(['2001-02-03', '182', 'F']);
+        await act(async () => { await result.current.handleSaveProfile(); });
+        expect(state.dispatch).toHaveBeenCalledExactlyOnceWith({
+            type: 'profile.patch',
+            patch: { dob: '2001-02-03', height: '182', gender: 'F' },
+        });
     });
 
     it('does not surface or reuse another Auth epoch\'s unsaved biometric fields', () => {
@@ -227,16 +235,24 @@ describe('biometric profile draft persistence', () => {
         expect(state.showAlert).toHaveBeenCalledWith('Errore durante il salvataggio del profilo.');
     });
 
-    it('does not clear the draft or show an old-session error after the session changes', async () => {
+    it('ignores a stale save rejection without revealing the previous owner draft', async () => {
         let reject!: (error: Error) => void;
         state.dispatch.mockImplementationOnce(() => new Promise((_resolve, rejectPromise) => { reject = rejectPromise; }));
-        const { result } = renderHook(() => useSettingsProfile());
+        const { result, rerender } = renderHook(() => useSettingsProfile());
         act(() => result.current.setHeight('185'));
         let pending!: Promise<void>;
         act(() => { pending = result.current.handleSaveProfile(); });
-        state.currentSession = false;
+
+        state.owner = 'user:second';
+        state.dataOwner = 'user:second';
+        state.epoch++;
+        state.profile = { dob: '2002-02-02', height: '164', gender: 'F' };
+        rerender();
         await act(async () => { reject(new Error('obsolete request')); await pending; });
-        expect(result.current.height).toBe('185');
+
+        expect(result.current.height).toBe('164');
         expect(state.showAlert).not.toHaveBeenCalled();
+        await act(async () => { await result.current.handleSaveProfile(); });
+        expect(state.dispatch).toHaveBeenCalledTimes(1);
     });
 });
