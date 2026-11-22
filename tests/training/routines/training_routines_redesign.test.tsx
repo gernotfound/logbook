@@ -75,6 +75,26 @@ describe('Schede redesign', () => {
         expect(container.querySelectorAll('.routine-library-card.is-expanded')).toHaveLength(0);
     });
 
+    it('retains the guest routine search when the editor is opened and closed', () => {
+        renderWithProviders(<TrainingRoutines />, {
+            userData: { ...emptyUserData, routines, library },
+        });
+
+        const search = screen.getByRole('searchbox', { name: 'Cerca scheda per nome' });
+        fireEvent.change(search, { target: { value: 'upper' } });
+        expect(screen.getByText('Upper body A')).toBeTruthy();
+        expect(screen.queryByText('Lower body A')).toBeNull();
+
+        fireEvent.click(screen.getByRole('button', { name: 'Crea scheda' }));
+        expect(screen.queryByRole('searchbox', { name: 'Cerca scheda per nome' })).toBeNull();
+        fireEvent.click(screen.getByRole('button', { name: 'Chiudi' }));
+
+        const resumedSearch = screen.getByRole('searchbox', { name: 'Cerca scheda per nome' }) as HTMLInputElement;
+        expect(resumedSearch.value).toBe('upper');
+        expect(screen.getByText('Upper body A')).toBeTruthy();
+        expect(screen.queryByText('Lower body A')).toBeNull();
+    });
+
     it('resolves routine details through the shared index without scanning the library', () => {
         const indexedLibrary = [...library];
         const linearLookup = vi.spyOn(indexedLibrary, 'find').mockImplementation(() => {
