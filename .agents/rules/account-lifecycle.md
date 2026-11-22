@@ -3,7 +3,7 @@
 ### CF-03/04 — Storico allenamenti Kinde isolato, sola lettura (22/11/2026)
 
 `KindeCandidateTrainingHistory` usa il calendario condiviso
-`TrainingHistoryView` soltanto con lo snapshot di un realm `ready`.
+`history/TrainingHistoryView.tsx` senza importare il wrapper legacy soltanto con lo snapshot di un realm `ready`.
 La vista non monta `useTrainingHistory`, non legge `useAppStore` e
 non espone azioni modifica/elimina, che dipendono dal workout device
 e dal suo recovery non ancora migrati. Il report condiviso riceve

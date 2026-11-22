@@ -1,5 +1,5 @@
 import type { useKindeCandidateFitnessLifecycle } from '../../contexts/auth/useKindeCandidateFitnessLifecycle';
-import { TrainingHistoryView } from './TrainingHistory';
+import { TrainingHistoryView } from './history/TrainingHistoryView';
 import { WorkoutReportView } from './report/WorkoutReportView';
 import './training-history.css';
 import './training-overview.css';
