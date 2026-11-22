@@ -108,7 +108,7 @@ async function logout(request, env) {
 /**
  * @param {{
  *  fetchImpl?: typeof fetch,
- *  keySet?: (header: import('jose').JWSHeaderParameters, token: import('jose').FlattenedJWSInput) => Promise<import('jose').KeyLike | Uint8Array>,
+ *  keySet?: (header: import('jose').JWSHeaderParameters, token: import('jose').FlattenedJWSInput) => Promise<CryptoKey | Uint8Array>,
  * }} [dependencies]
  */
 export function createKindeHttpHandler({ fetchImpl = fetch, keySet } = {}) {

@@ -187,7 +187,7 @@ async function tokenResponse(response) {
 /**
  * @param {{ issuer: string, clientId: string, clientSecret: string, apiAudience: string, appOrigin: string }} configuration
  * @param {{ rateLimit?: (request: Request) => Promise<boolean>, fetchImpl?: typeof fetch,
- * keySet?: (header: import('jose').JWSHeaderParameters, token: import('jose').FlattenedJWSInput) => Promise<import('jose').KeyLike | Uint8Array> }} [dependencies]
+ * keySet?: (header: import('jose').JWSHeaderParameters, token: import('jose').FlattenedJWSInput) => Promise<CryptoKey | Uint8Array> }} [dependencies]
  */
 export function createKindeOAuthFlow(configuration, { rateLimit, fetchImpl = fetch, keySet } = {}) {
   const config = requireConfiguration(configuration);

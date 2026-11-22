@@ -232,7 +232,7 @@ const actualShaAssignments = workflow.match(/^\s*actual_sha=/gm) ?? [];
 if (actualShaAssignments.length !== 3) failures.push(`runtime SHA guard: expected matrix + E2E + CodeQL assignments, found ${actualShaAssignments.length}`);
 requirePattern('release exact checkout', workflow, /^          test "\$\(git rev-parse HEAD\)" = "\$EXPECTED_SHA"\s*$/m);
 requirePattern('conditional Java setup', workflow, /^        if: matrix\.java == true\s*$/m);
-requirePattern('Java setup action pin', workflow, /^        uses: actions\/setup-java@77dd5b2ce225ea11469928ac317850245a74ae78 # v6.2.0\s*$/m);
+requirePattern('Java setup action pin', workflow, /^        uses: actions\/setup-java@d1374f8ac74474200d16ef8ecee22c7ae7a51880 # v6.3.0\s*$/m);
 requirePattern('Temurin distribution', workflow, /^          distribution: temurin\s*$/m);
 requirePattern('Java 21 runtime', workflow, /^          java-version: ['"]?21['"]?\s*$/m);
 requirePattern('dedicated Playwright E2E job', workflow, /^  e2e:\s*$/m);
