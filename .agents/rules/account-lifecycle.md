@@ -2,10 +2,11 @@
 
 ### CF-03/04 — Duplicazione ed eliminazione delle schede Kinde (22/11/2026)
 
-L'archivio candidato puo ora duplicare ed eliminare schede senza bozza:
+L'archivio candidato può ora duplicare ed eliminare schede senza bozza:
 `KindeCandidateRoutines` cattura un witness di modifica dal realm `ready`,
 richiama esclusivamente `realm.submit()` con `routine.upsert` e
-`routine.delete`, e non usa `useTrainingRoutines`, Zustand o Auth Firebase.
+`routine.delete`, senza usare `useTrainingRoutines`, lo store fitness guest
+`useAppStore` o l'Auth Firebase. La conferma usa solo `useDialogStore` UI.
 La duplicazione crea un identificativo casuale nuovo prima del commit;
 il lock locale impedisce due submit contemporanei dallo stesso pannello.
 L'eliminazione richiede `GlobalDialog` e riverifica il witness
@@ -21,7 +22,7 @@ di bozza cifrata owner/consenso/fence/recovery dedicato e provato.
 Il frontend pubblico resta `identityOnly`. Test sintetici e CodeQL non
 costituiscono un collaudo account/D1 Production.
 
-### CF-03 — Schede Kinde isolate in sola lettura (22/11/2026)
+### CF-03 — Presentazione isolata delle schede Kinde (22/11/2026)
 
 `KindeCandidateRoutines` monta la libreria condivisa `RoutineLibraryList`
 soltanto con snapshot `ready` del realm owner-scoped, separata da
@@ -29,14 +30,16 @@ soltanto con snapshot `ready` del realm owner-scoped, separata da
 `RoutineCard` rende le azioni di menu solo quando il chiamante
 fornisce i rispettivi handler: il wrapper guest conserva modifica,
 duplica ed elimina; il candidato Kinde offre duplicazione ed eliminazione
-attraverso il realm, ma non la creazione o modifica mediante editor. Ricerca, espansione,
+attraverso il realm, ma non la creazione o modifica mediante editor.
+Ricerca, espansione,
 riepilogo serie e mappa muscolare usano soltanto la libreria dello
 stesso owner Kinde e sono smontati alla perdita del permesso.
 
 Le bozze delle schede, `draft_routine`, il controllo dei testimoni
 fra schede e l'editor non sono ancora migrati. Il writer delle azioni
 immediate è soltanto `realm.submit()` con journal cifrato: un'azione
-account non può usare l'owner o il recupero del guest. I test React contrappongono dati guest con gli stessi
+account non può usare l'owner o il recupero del guest.
+I test React contrappongono dati guest con gli stessi
 identificativi; un E2E sintetico a due profili browser verifica la
 lettura dopo una ricevuta D1 senza nuove scritture/ACK. Non è un
 collaudo funzionale Production né abilita fitness pubblico.
