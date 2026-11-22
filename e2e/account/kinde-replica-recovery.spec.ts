@@ -84,6 +84,59 @@ test('reconciles nutrition planning from the Kinde form and replicates it to a s
     }, { planningUi: true });
 });
 
+test('adds, edits and removes a meal through the Kinde diary on the selected day', async ({ browser }) => {
+    await withKindeReplicaDevices(browser, async ({ first, second, receipts, firstCommitStatuses, allowFirstCommit }) => {
+        const foodName = 'Riso della fixture';
+        expect(await second.evaluate(name => window.kindeReplicaFixture!.submit({
+            type: 'food.upsert',
+            food: { id: 'rice-fixture', name, baseQty: 100, unit: 'g', kcal: 350, carbs: 75, pro: 7, fat: 1 },
+        }), foodName)).toMatchObject({ kind: 'cloud-acknowledged' });
+        const yesterday = await first.evaluate(() => {
+            const date = new Date();
+            date.setDate(date.getDate() - 1);
+            const twoDigits = (value: number) => String(value).padStart(2, '0');
+            return [date.getFullYear(), twoDigits(date.getMonth() + 1), twoDigits(date.getDate())].join('-');
+        });
+        await first.bringToFront();
+        await mountKindePlanning(first);
+        const diary = first.getByRole('region', { name: 'Diario pasti' });
+        await expect(diary).toHaveCount(0);
+        await first.getByRole('button', { name: 'Apri archivio account' }).click();
+        await diary.getByRole('button', { name: /Giorno precedente/ }).click();
+        await diary.getByRole('searchbox', { name: 'Cerca alimento' }).fill(foodName);
+        await diary.getByRole('button', { name: `Aggiungi ${foodName} a Pranzo` }).click();
+
+        const pending = first.getByText('Conferma cloud in attesa', { exact: false });
+        await expect(pending).toBeVisible();
+        await expect(diary).toHaveCount(0);
+        expect(firstCommitStatuses).toEqual([429]);
+        expect(receipts()).toBe(1);
+
+        allowFirstCommit();
+        await first.getByRole('button', { name: 'Verifica salvataggio' }).click();
+        const edit = diary.getByRole('button', { name: `Modifica porzione di ${foodName}` });
+        await expect(edit).toBeVisible();
+        await expect(pending).toHaveCount(0);
+        expect(receipts()).toBe(2);
+        await edit.click();
+        await diary.getByRole('spinbutton', { name: /Quantità/ }).fill('60');
+        await diary.getByRole('button', { name: 'Salva', exact: true }).click();
+        await expect(edit).toContainText('60g');
+
+        const readMeals = () => second.evaluate(async date =>
+            (await window.kindeReplicaFixture!.refresh()).data.nutrition?.[date]?.meals ?? [], yesterday);
+        expect(await readMeals()).toMatchObject([{ name: foodName, meal: 'Pranzo', quantity: 60 }]);
+        expect(receipts()).toBe(3);
+
+        await diary.getByRole('button', { name: `Rimuovi ${foodName}` }).click();
+        await expect(diary).toBeVisible();
+        await expect(edit).toHaveCount(0);
+        expect(await readMeals()).toEqual([]);
+        expect(firstCommitStatuses).toEqual([429, 200, 200, 200]);
+        expect(receipts()).toBe(4);
+    }, { planningUi: true });
+});
+
 test('recovers a Kinde edit made offline after a competing browser save', async ({ browser }) => {
     await withKindeReplicaDevices(browser, async ({ first, second, receipts, firstCommitStatuses, allowFirstCommit }) => {
         allowFirstCommit();

@@ -1,10 +1,10 @@
 import { Pencil } from 'lucide-react';
 import type { LoggedMealItem } from '../../../types';
-import type { useNutritionMeals } from '../../../hooks/useNutritionMeals';
+import type { useNutritionMealEditor } from '../../../hooks/useNutritionMealEditor';
 import InlineEditMealItem from '../InlineEditMealItem';
 import { calculateRawLoggedMealTotals, getLoggedMealPortion } from '../../../lib/nutrition/calculateLoggedMealTotals';
 
-type NutritionMealsHook = ReturnType<typeof useNutritionMeals>;
+type NutritionMealsHook = ReturnType<typeof useNutritionMealEditor>;
 
 interface NutritionMealSectionProps {
     mealType: string;

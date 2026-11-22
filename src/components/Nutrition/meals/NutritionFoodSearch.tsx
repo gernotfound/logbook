@@ -1,9 +1,9 @@
 import { useRef } from 'react';
 import { Pencil, Plus, X } from 'lucide-react';
-import type { useNutritionMeals } from '../../../hooks/useNutritionMeals';
+import type { useNutritionMealEditor } from '../../../hooks/useNutritionMealEditor';
 import CustomFoodForm from '../CustomFoodForm';
 
-type NutritionMealsHook = ReturnType<typeof useNutritionMeals>;
+type NutritionMealsHook = ReturnType<typeof useNutritionMealEditor>;
 
 interface NutritionFoodSearchProps {
     mealTypes: readonly string[];

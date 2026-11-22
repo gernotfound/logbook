@@ -2,6 +2,7 @@ import { useState, type ReactNode } from 'react';
 import type { useKindeAccountSession } from '../../contexts/auth/useKindeAccountSession';
 import { useKindeCandidateFitnessLifecycle } from '../../contexts/auth/useKindeCandidateFitnessLifecycle';
 import { KindeCandidateBiometry } from '../Data/KindeCandidateBiometry';
+import { KindeCandidateNutritionMeals } from '../Nutrition/KindeCandidateNutritionMeals';
 import { KindeCandidateNutritionPlanning } from '../Nutrition/KindeCandidateNutritionPlanning';
 import { KindeCandidateJournalStatus } from './KindeCandidateJournalStatus';
 
@@ -42,6 +43,7 @@ export function KindeCandidateFitnessPanel({ session, management }: { session: S
                     <KindeCandidateJournalStatus state={realm.state} />
                     <KindeCandidateBiometry realm={realm} />
                     <KindeCandidateNutritionPlanning realm={realm} />
+                    <KindeCandidateNutritionMeals realm={realm} />
                 </>
             )}
             {(failed || phase === 'unavailable') && (
