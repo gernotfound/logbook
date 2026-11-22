@@ -1,8 +1,9 @@
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { useKindeCandidateFitnessLifecycle } from '../../../src/contexts/auth/useKindeCandidateFitnessLifecycle';
 import { KindeCandidateTrainingHistory } from '../../../src/components/Training/KindeCandidateTrainingHistory';
 import { useAppStore } from '../../../src/store/useAppStore';
+import { useDialogStore } from '../../../src/store/useDialogStore';
 import type { KindeCandidateFitnessSnapshot } from '../../../src/lib/auth/kindeCandidateFitnessRealm';
 import type { WorkoutSession } from '../../../src/types';
 
@@ -31,14 +32,18 @@ function candidate(phase: 'ready' | 'closed') {
         state: phase === 'ready'
             ? { phase, snapshot: account, view: {}, hasPendingJournal: false }
             : { phase },
-        submit: vi.fn(),
+        submit: vi.fn().mockResolvedValue({ kind: 'cloud-acknowledged', operations: 1 }),
+        captureEditWitness: () => phase === 'ready'
+            ? { owner: account.owner, isCurrent: () => true }
+            : null,
     } as unknown as ReturnType<typeof useKindeCandidateFitnessLifecycle>;
 }
 
+beforeEach(() => { vi.mocked(useDialogStore.getState().showConfirm).mockReset(); });
 afterEach(() => { cleanup(); });
 
-describe('Kinde training history: owner-scoped read-only presentation', () => {
-    it('does not adopt legacy owner data or expose legacy edit/delete actions', () => {
+describe('Kinde training history: owner-scoped presentation and deletion', () => {
+    it('does not adopt legacy owner data or expose the guest editing action', () => {
         const oldData = useAppStore.getState().userData;
         const oldOwner = useAppStore.getState().dataOwner;
         const oldDispatch = useAppStore.getState().dispatchDomainOperation;
@@ -57,7 +62,7 @@ describe('Kinde training history: owner-scoped read-only presentation', () => {
             fireEvent.click(screen.getByRole('button', { name: 'Opzioni' }));
             expect(screen.getByRole('menuitem', { name: 'Vedi report' })).toBeDefined();
             expect(screen.queryByRole('menuitem', { name: 'Modifica allenamento' })).toBeNull();
-            expect(screen.queryByRole('menuitem', { name: 'Elimina allenamento' })).toBeNull();
+            expect(screen.getByRole('menuitem', { name: 'Elimina allenamento' })).toBeDefined();
             fireEvent.click(screen.getByRole('menuitem', { name: 'Vedi report' }));
             expect(screen.getByRole('dialog', { name: 'Sessione account' })).toBeDefined();
             expect(screen.getByText('Squat autorizzato')).toBeDefined();
@@ -80,4 +85,68 @@ describe('Kinde training history: owner-scoped read-only presentation', () => {
         expect(screen.getByText('Nessun allenamento in questo giorno.')).toBeDefined();
         expect(screen.queryByRole('button', { name: 'Opzioni' })).toBeNull();
     });
+    it('requires confirmation and submits exactly one owner-scoped history deletion', async () => {
+        const confirm = vi.mocked(useDialogStore.getState().showConfirm);
+        confirm.mockResolvedValueOnce(false).mockResolvedValueOnce(true);
+        const realm = candidate('ready');
+        render(<KindeCandidateTrainingHistory realm={realm} />);
+        fireEvent.click(screen.getByRole('button', { name: 'Opzioni' }));
+        fireEvent.click(screen.getByRole('menuitem', { name: 'Elimina allenamento' }));
+        await waitFor(() => expect(confirm).toHaveBeenCalledTimes(1));
+        expect(realm.submit).not.toHaveBeenCalled();
+
+        fireEvent.click(screen.getByRole('button', { name: 'Opzioni' }));
+        fireEvent.click(screen.getByRole('menuitem', { name: 'Elimina allenamento' }));
+        await waitFor(() => expect(realm.submit).toHaveBeenCalledTimes(1));
+        expect(realm.submit).toHaveBeenCalledWith({ type: 'history.delete', id: accountWorkout.id });
+    });
+
+    it('rejects a confirmation from a revoked owner or session fence', async () => {
+        let confirmDeletion!: (value: boolean) => void;
+        vi.mocked(useDialogStore.getState().showConfirm)
+            .mockImplementationOnce(() => new Promise<boolean>(resolve => { confirmDeletion = resolve; }));
+        let current = true;
+        const realm = candidate('ready');
+        realm.captureEditWitness = () => ({ owner: account.owner, isCurrent: () => current });
+        render(<KindeCandidateTrainingHistory realm={realm} />);
+        fireEvent.click(screen.getByRole('button', { name: 'Opzioni' }));
+        fireEvent.click(screen.getByRole('menuitem', { name: 'Elimina allenamento' }));
+        expect(realm.submit).not.toHaveBeenCalled();
+
+        current = false;
+        await act(async () => { confirmDeletion(true); });
+        expect(realm.submit).not.toHaveBeenCalled();
+    });
+
+    it('does not repeat an intent while a pending cloud receipt is unresolved', async () => {
+        let finish!: (value: { kind: 'local-pending'; pendingCount: number }) => void;
+        const realm = candidate('ready');
+        vi.mocked(realm.submit).mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+        vi.mocked(useDialogStore.getState().showConfirm).mockResolvedValue(true);
+        render(<KindeCandidateTrainingHistory realm={realm} />);
+        fireEvent.click(screen.getByRole('button', { name: 'Opzioni' }));
+        fireEvent.click(screen.getByRole('menuitem', { name: 'Elimina allenamento' }));
+        await waitFor(() => expect(realm.submit).toHaveBeenCalledTimes(1));
+        fireEvent.click(screen.getByRole('button', { name: 'Opzioni' }));
+        fireEvent.click(screen.getByRole('menuitem', { name: 'Elimina allenamento' }));
+        expect(realm.submit).toHaveBeenCalledTimes(1);
+
+        await act(async () => { finish({ kind: 'local-pending', pendingCount: 1 }); });
+        expect(realm.submit).toHaveBeenCalledTimes(1);
+        expect(useDialogStore.getState().showAlert).not.toHaveBeenCalled();
+    });
+
+    it('reports a failed deletion only while the same owner fence is current', async () => {
+        const realm = candidate('ready');
+        vi.mocked(realm.submit).mockRejectedValueOnce(new Error('synthetic failure'));
+        vi.mocked(useDialogStore.getState().showConfirm).mockResolvedValueOnce(true);
+        render(<KindeCandidateTrainingHistory realm={realm} />);
+        fireEvent.click(screen.getByRole('button', { name: 'Opzioni' }));
+        fireEvent.click(screen.getByRole('menuitem', { name: 'Elimina allenamento' }));
+        await waitFor(() => expect(useDialogStore.getState().showAlert).toHaveBeenCalledWith(
+            "Errore durante l'eliminazione dell'allenamento.",
+        ));
+        expect(realm.submit).toHaveBeenCalledTimes(1);
+    });
+
 });

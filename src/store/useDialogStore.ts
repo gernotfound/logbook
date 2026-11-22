@@ -38,6 +38,12 @@ export const useDialogStore = create<DialogState>((set) => {
 
   const enqueue = <T,>(display: (finish: (value: T) => void, cancel: () => void) => void, cancelled: T): Promise<T> =>
     new Promise<T>(resolve => {
+      // A synchronous listener can request another dialog while an owner's
+      // prompts are being cancelled. Such a request must not leak into a later owner.
+      if (cancellingOwner) {
+        resolve(cancelled);
+        return;
+      }
       let settled = false;
       const cancel = () => finish(cancelled);
       const finish = (value: T) => {

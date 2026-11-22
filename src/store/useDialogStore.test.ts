@@ -93,6 +93,34 @@ describe('dialog identity boundaries', () => {
     await expect(next).resolves.toBe(true);
   });
 
+
+  it('cancels reentrant dialog requests raised by synchronous subscribers at an owner boundary', async () => {
+    const { useDialogStore } = await vi.importActual<typeof import('./useDialogStore')>('./useDialogStore');
+    const dialog = useDialogStore.getState();
+    dialog.cancelAll();
+    let reentrant: Promise<boolean> | undefined;
+    const unsubscribe = useDialogStore.subscribe((state, previous) => {
+      if (previous.isOpen && !state.isOpen && !reentrant) {
+        reentrant = dialog.showConfirm('Stale reentrant request');
+      }
+    });
+    try {
+      const oldOwner = dialog.showConfirm('Old owner');
+      dialog.cancelAll();
+      await expect(oldOwner).resolves.toBe(false);
+      expect(reentrant).toBeDefined();
+      await expect(reentrant).resolves.toBe(false);
+      expect(useDialogStore.getState().isOpen).toBe(false);
+    } finally {
+      unsubscribe();
+    }
+
+    const newOwner = dialog.showConfirm('New owner');
+    expect(useDialogStore.getState().message).toBe('New owner');
+    useDialogStore.getState().onConfirm();
+    await expect(newOwner).resolves.toBe(true);
+  });
+
   it('cancels queued unsynced logout actions as cancel, not as safe exit', async () => {
     const { useDialogStore } = await vi.importActual<typeof import('./useDialogStore')>('./useDialogStore');
     const dialog = useDialogStore.getState();
