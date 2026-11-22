@@ -30,7 +30,10 @@ vercel-backend-static
 /public/social-share.jpg
 
 # Environment variables
-/cloudflare/cf00/.dev.vars*
+# Any Wrangler Worker can load credentials from local .dev.vars variants.
+# Never track those secrets or generated Wrangler state, including nested Workers.
+.dev.vars*
+.wrangler/
 /cloudflare/cf00/wrangler.temporary.generated.jsonc
 .env
 .env.*
