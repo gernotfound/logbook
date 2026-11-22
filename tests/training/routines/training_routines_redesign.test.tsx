@@ -1,7 +1,8 @@
 import React from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, screen } from '@testing-library/react';
-import { renderWithProviders, emptyUserData } from '../../setup';
+import { renderWithProviders, renderWithAuthenticatedTestOwner, emptyUserData } from '../../setup';
+import { prepareUnlockedTestArchive } from '../../secureVaultFixture';
 import TrainingRoutines from '../../../src/components/Training/TrainingRoutines';
 import type { Exercise, WorkoutRoutine } from '../../../src/types';
 
@@ -75,8 +76,11 @@ describe('Schede redesign', () => {
         expect(container.querySelectorAll('.routine-library-card.is-expanded')).toHaveLength(0);
     });
 
-    it('retains the guest routine search when the editor is opened and closed', () => {
-        renderWithProviders(<TrainingRoutines />, {
+    it('retains the guest routine search when the editor is opened and closed', async () => {
+        // The editor may clear a draft only inside a genuinely unlocked vault.
+        await prepareUnlockedTestArchive('user:test-user-id');
+        localStorage.setItem('logbook:v2:user:test-user-id:health-consent-generation', '1');
+        renderWithAuthenticatedTestOwner(<TrainingRoutines />, {
             userData: { ...emptyUserData, routines, library },
         });
 
