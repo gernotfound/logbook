@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useLocalToday } from '../../hooks/useLocalToday';
 import { useTrainingHistory } from '../../hooks/useTrainingHistory';
 import { Logic } from '../../lib/logic';
@@ -14,13 +14,21 @@ interface TrainingHistoryProps {
     onEditWorkout?: (workout: WorkoutSession) => void;
 }
 
+interface TrainingHistoryViewProps {
+    history: WorkoutSession[];
+    onEditWorkout?: (workout: WorkoutSession) => void;
+    onDeleteWorkout?: (id: string) => Promise<void> | void;
+    renderReport: (workout: WorkoutSession, onClose: () => void) => ReactNode;
+}
+
 interface DatedWorkout {
     workout: WorkoutSession;
     date: string;
 }
 
-const TrainingHistory = ({ onEditWorkout }: TrainingHistoryProps) => {
-    const { userData, history, deleteWorkout } = useTrainingHistory();
+export function TrainingHistoryView({
+    history, onEditWorkout, onDeleteWorkout, renderReport,
+}: TrainingHistoryViewProps) {
     const [selectedReportWorkout, setSelectedReportWorkout] = useState<WorkoutSession | null>(null);
     const currentReportWorkout = selectedReportWorkout
         ? history.find(workout => selectedReportWorkout.id
@@ -28,7 +36,6 @@ const TrainingHistory = ({ onEditWorkout }: TrainingHistoryProps) => {
             : workout === selectedReportWorkout)
         : undefined;
 
-    const library = useMemo(() => userData?.library || [], [userData?.library]);
     const today = useLocalToday();
     const datedHistory = useMemo<DatedWorkout[]>(() => history
         .map(workout => ({ workout, date: workoutDateKey(workout) }))
@@ -112,15 +119,7 @@ const TrainingHistory = ({ onEditWorkout }: TrainingHistoryProps) => {
 
     return (
         <div className="training-sub-view active training-history">
-            {currentReportWorkout && (
-                <WorkoutReportModal
-                    workout={currentReportWorkout}
-                    history={history}
-                    library={library}
-                    onClose={() => setSelectedReportWorkout(null)}
-                    fromEndWorkout={false}
-                />
-            )}
+            {currentReportWorkout && renderReport(currentReportWorkout, () => setSelectedReportWorkout(null))}
 
             <header className="history-header">
                 <div className="history-heading">
@@ -196,13 +195,33 @@ const TrainingHistory = ({ onEditWorkout }: TrainingHistoryProps) => {
                                 workout={workout}
                                 onOpen={setSelectedReportWorkout}
                                 onEditWorkout={onEditWorkout}
-                                onDeleteWorkout={deleteWorkout}
+                                onDeleteWorkout={onDeleteWorkout}
                             />
                         ))}
                     </div>
                 )}
             </section>
         </div>
+    );
+}
+
+const TrainingHistory = ({ onEditWorkout }: TrainingHistoryProps) => {
+    const { history, library, deleteWorkout } = useTrainingHistory();
+    return (
+        <TrainingHistoryView
+            history={history}
+            onEditWorkout={onEditWorkout}
+            onDeleteWorkout={deleteWorkout}
+            renderReport={(workout, onClose) => (
+                <WorkoutReportModal
+                    workout={workout}
+                    history={history}
+                    library={library}
+                    onClose={onClose}
+                    fromEndWorkout={false}
+                />
+            )}
+        />
     );
 };
 
