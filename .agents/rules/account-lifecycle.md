@@ -61,26 +61,34 @@ identificativi; un E2E sintetico a due profili browser verifica la
 lettura dopo una ricevuta D1 senza nuove scritture/ACK. Non è un
 collaudo funzionale Production né abilita fitness pubblico.
 
-### CF-03/04 — Storico allenamenti Kinde isolato, sola lettura (22/11/2026)
+### CF-03/04 — Storico allenamenti Kinde isolato, consultazione ed eliminazione (22/11/2026)
 
-`KindeCandidateTrainingHistory` usa il calendario condiviso
-`history/TrainingHistoryView.tsx` senza importare il wrapper legacy soltanto con lo snapshot di un realm `ready`.
-La vista non monta `useTrainingHistory`, non legge `useAppStore` e
-non espone azioni modifica/elimina, che dipendono dal workout device
-e dal suo recovery non ancora migrati. Il report condiviso riceve
-storico, libreria e nutrizione dallo stesso snapshot owner-scoped
-e non può inviare `routine.upsert`. L'adapter legacy
-`WorkoutReportModal` mantiene separato il writer del guest;
-la presentazione `WorkoutReportView` non legge alcun owner o
-storage globale. Su recheck, perdita della sessione, cambio epoch
-o chiusura dell'archivio la vista Kinde viene smontata con
-report e selezione locali; non si eredita mai il report guest.
-Le regressioni React coprono guest estraneo, azioni assenti
-e unmount; il browser E2E usa SQL/Worker sintetici e due profili
-isolati per verificare sola lettura dopo receipt D1, senza
-nuova operazione o ACK. Rimangono candidati non pubblici:
-sessione attiva, salvataggio/modifica storico, routine, cicli
-e il percorso completo allenamenti richiedono ancora migrazione.
+`KindeCandidateTrainingHistory` monta il calendario condiviso
+`history/TrainingHistoryView.tsx` soltanto con lo snapshot di un realm
+`ready`. Non monta `useTrainingHistory`, non legge `useAppStore`
+e non eredita il writer Firebase. Il report riceve storico, libreria
+e nutrizione dallo stesso snapshot owner-scoped, attraverso
+`WorkoutReportView` senza stato globale.
+
+La cancellazione di una sessione esistente richiede conferma esplicita,
+un witness corrente di owner/sessione/consenso catturato prima della
+conferma e una sola `realm.submit({ type: 'history.delete', id })`.
+Un guard impedisce richieste simultanee dallo stesso pannello.
+Un journal `local-pending` non equivale a un ACK D1 e non autorizza
+a reiterare l'intento; recheck e recupero sono responsabilità del realm.
+Una conferma tardiva dopo revoca/logout o una risposta di errore
+di una sessione precedente non possono autorizzare una nuova
+cancellazione né mostrare un alert obsoleto.
+
+Restano disabilitate la creazione/modifica dello storico e la modifica
+di allenamenti attivi, dipendenti da un writer e da bozze device Kinde
+ancora da realizzare. `WorkoutReportModal` e il suo writer guest
+rimangono separati. Alla perdita di sessione, epoch, consenso o
+chiusura dell'archivio la vista e i report vengono smontati.
+Le regressioni UI controllano owner guest estraneo, operazione esatta,
+conferma rifiutata, witness revocato, intenti concorrenti e fallimento.
+L'archivio rimane candidato non pubblico: suite sintetiche e CodeQL
+non certificano il comportamento fitness su provider Production.
 
 ### CF-03/04 — Scadenza della vista Kinde candidata (21/11/2026)
 
