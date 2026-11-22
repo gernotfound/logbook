@@ -1,8 +1,8 @@
 import React from 'react';
-import { Plus, Search, X } from 'lucide-react';
+import { Plus } from 'lucide-react';
 import { useTrainingRoutines } from '../../hooks/useTrainingRoutines';
 import { RoutineEditor } from './routines/RoutineEditor';
-import { RoutineCard } from './routines/RoutineCard';
+import { RoutineLibraryList } from './routines/RoutineLibraryList';
 import { useLocalStorage } from '../../hooks/useLocalStorage';
 import { ownerUiPreferenceKey } from '../../lib/uiPreferenceKeys';
 import { storageOwner } from '../../lib/sync/session';
@@ -13,7 +13,6 @@ import './routines/routines.css';
 const TrainingRoutines: React.FC = () => {
     const [isCreating, setIsCreating] = useLocalStorage<boolean>(ownerUiPreferenceKey(storageOwner(), 'creating-routine'), false, z.boolean());
     const [isSaving, setIsSaving] = React.useState(false);
-    const [searchQuery, setSearchQuery] = React.useState('');
     const {
         routineName, setRoutineName,
         editingRoutineId,
@@ -44,14 +43,6 @@ const TrainingRoutines: React.FC = () => {
         }
         return { editMuscles, editSecMuscles };
     }, [editorOpen, routineExercises, libraryById]);
-
-    const normalizedQuery = searchQuery.trim().toLocaleLowerCase('it');
-    const filteredRoutines = React.useMemo(
-        () => routines.filter(routine => (
-            !normalizedQuery || routine.name.toLocaleLowerCase('it').includes(normalizedQuery)
-        )),
-        [normalizedQuery, routines],
-    );
 
     const handleEditItem = (rtn: WorkoutRoutine) => {
         setIsCreating(false);
@@ -113,54 +104,16 @@ const TrainingRoutines: React.FC = () => {
                 </section>
             ) : (
                 <>
-                    <div className="routine-library-search">
-                        <Search size={18} aria-hidden="true" />
-                        <input
-                            type="search"
-                            value={searchQuery}
-                            onChange={event => setSearchQuery(event.target.value)}
-                            placeholder="Cerca scheda per nome"
-                            aria-label="Cerca scheda per nome"
-                        />
-                        {searchQuery && (
-                            <button
-                                type="button"
-                                className="routine-search-clear"
-                                onClick={() => setSearchQuery('')}
-                                aria-label="Cancella ricerca"
-                            >
-                                <X size={18} aria-hidden="true" />
-                            </button>
-                        )}
-                    </div>
-
-                    <div className="routine-section-head">
-                        <h3>Libreria schede</h3>
-                        <span>{filteredRoutines.length} {filteredRoutines.length === 1 ? 'scheda' : 'schede'}</span>
-                    </div>
-
-                    {routines.length === 0 ? (
-                        <div className="routine-empty-state">Nessuna scheda creata.</div>
-                    ) : filteredRoutines.length === 0 ? (
-                        <div className="routine-empty-state">Nessuna scheda trovata.</div>
-                    ) : (
-                        <div className="routine-library-list" aria-live="polite">
-                            {filteredRoutines.map(rtn => (
-                                <RoutineCard
-                                    key={rtn.id}
-                                    routine={rtn}
-                                    isExpanded={expandedRoutineId === rtn.id}
-                                    library={library}
-                                    libraryById={libraryById}
-                                    isCreating={isCreating}
-                                    onToggleExpand={handleRoutineClick}
-                                    onEdit={handleEditItem}
-                                    onDuplicate={handleDuplicate}
-                                    onDelete={handleDelete}
-                                />
-                            ))}
-                        </div>
-                    )}
+                    <RoutineLibraryList
+                        routines={routines}
+                        library={library}
+                        libraryById={libraryById}
+                        expandedRoutineId={expandedRoutineId}
+                        onToggleExpand={handleRoutineClick}
+                        onEdit={handleEditItem}
+                        onDuplicate={handleDuplicate}
+                        onDelete={handleDelete}
+                    />
                 </>
             )}
         </div>
