@@ -11,12 +11,25 @@ const TOKEN_NAMES = [
   '--font-size-control',
   '--font-size-section',
   '--font-size-page',
+  '--font-size-brand-title',
   '--font-size-display-sm',
   '--font-size-display-md',
   '--font-size-display-xl',
   '--font-size-display-2xl',
   '--font-size-timer',
 ] as const;
+
+function defaultRootFontTokens(css: string): Record<string, string> {
+  const root = css.match(/:root\s*\{([^}]*)\}/)?.[1];
+  if (!root) throw new Error('Missing default :root scope for typography tokens');
+
+  const pairs = [...root.matchAll(/(--font-size-[a-z0-9-]+)\s*:\s*([^;]+);/g)]
+    .map(([, name, value]) => [name, value.trim()] as const);
+  if (new Set(pairs.map(([name]) => name)).size !== pairs.length) {
+    throw new Error('Duplicate typography token in :root');
+  }
+  return Object.fromEntries(pairs);
+}
 
 function walk(dir: string): string[] {
   return fs.readdirSync(dir, { withFileTypes: true }).flatMap(entry => {
@@ -28,19 +41,24 @@ function walk(dir: string): string[] {
 describe('scala tipografica canonica', () => {
   it('definisce i token normativi e il corpo a 15px', () => {
     const tokens = fs.readFileSync(path.join(ROOT, 'src/styles/tokens.css'), 'utf8');
-    for (const token of TOKEN_NAMES) expect(tokens).toContain(token);
-    expect(tokens).toMatch(/--font-size-body:\s*0\.9375rem/);
-    expect(tokens).toMatch(/--font-size-control:\s*1rem/);
-    expect(tokens).toMatch(/--font-size-page:\s*1\.375rem/);
-    expect(tokens).toMatch(/--font-size-brand-title:\s*2\.25rem/);
-    const prepaintTokens = fs.readFileSync(path.join(ROOT, 'public/appearance.css'), 'utf8');
-    expect(prepaintTokens).toMatch(/--font-size-brand-title:\s*2\.25rem/);
+    const definitions = defaultRootFontTokens(tokens);
+    expect(Object.keys(definitions).sort()).toEqual([...TOKEN_NAMES].sort());
+    expect(definitions['--font-size-body']).toBe('0.9375rem');
+    expect(definitions['--font-size-control']).toBe('1rem');
+    expect(definitions['--font-size-page']).toBe('1.375rem');
+    expect(definitions['--font-size-brand-title']).toBe('2.25rem');
     const uiSurfaces = fs.readFileSync(path.join(ROOT, 'src/styles/ui-surfaces.css'), 'utf8');
     expect(uiSurfaces).toMatch(/\.auth-entry-title\s*\{[^}]*font-size:\s*var\(--font-size-brand-title\);\s*font-weight:\s*800/);
     const app = fs.readFileSync(path.join(ROOT, 'src/App.tsx'), 'utf8');
     const kindeEntry = fs.readFileSync(path.join(ROOT, 'src/components/UI/KindeAccountEntry.tsx'), 'utf8');
     expect(app).toContain('className="auth-entry-title">TheLogBook</h1>');
     expect(kindeEntry).toContain('className="auth-login-card ui-login-box-1"');
+  });
+
+  it('mantiene identica la scala tipografica tra il CSS di bootstrap e quello React', () => {
+    const runtimeCss = fs.readFileSync(path.join(ROOT, 'src/styles/tokens.css'), 'utf8');
+    const bootstrapCss = fs.readFileSync(path.join(ROOT, 'public/appearance.css'), 'utf8');
+    expect(defaultRootFontTokens(bootstrapCss)).toEqual(defaultRootFontTokens(runtimeCss));
   });
 
   it('non introduce dimensioni CSS arbitrarie nel codice applicativo', () => {
