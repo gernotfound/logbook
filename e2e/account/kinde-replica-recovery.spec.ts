@@ -35,7 +35,7 @@ test('reads Kinde training history and report without writing another owner\'s d
         const report = first.getByRole('dialog', { name: 'Sessione Kinde' });
         await expect(report).toBeVisible();
         await expect(report.getByText('Squat Kinde')).toBeVisible();
-        await report.getByRole('button', { name: 'Chiudi' }).click();
+        await report.getByRole('button', { name: 'Chiudi', exact: true }).click();
         await expect(report).toHaveCount(0);
 
         expect(receipts()).toBe(initialReceipts);
