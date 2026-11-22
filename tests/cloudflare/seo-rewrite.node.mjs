@@ -1,4 +1,5 @@
 import test from 'node:test';
+import { readFileSync } from 'node:fs';
 import assert from 'node:assert/strict';
 import { rewriteCloudflareSeo, assertCloudflareHtmlOrigin } from '../../scripts/cloudflare-seo.mjs';
 
@@ -33,4 +34,14 @@ void test('validate parsed HTML canonical and reject remaining old-origin attrib
   assert.throws(() => assertCloudflareHtmlOrigin(valid.replace('thelogbook.example/', 'thelogbook.web.app/'), target));
   assert.throws(() => assertCloudflareHtmlOrigin(valid + '<meta content="https://thelogbook.web.app/icon.png">', target));
   assert.doesNotThrow(() => assertCloudflareHtmlOrigin(valid + '<meta content="https://other.example/?next=https://thelogbook.web.app/">', target));
+});
+
+void test('raw app-shell SEO tags use the live public origin even without a build override', () => {
+  const html = readFileSync(new URL('../../index.html', import.meta.url), 'utf8');
+  assert.match(html, /<link rel="canonical" href="https:\/\/thelogbook\.me\/">/);
+  assert.match(html, /<meta property="og:url" content="https:\/\/thelogbook\.me\/">/);
+  assert.match(html, /<meta property="og:image" content="https:\/\/thelogbook\.me\/social-share\.png/);
+  assert.match(html, /<meta property="og:image:secure_url" content="https:\/\/thelogbook\.me\/social-share\.png/);
+  assert.match(html, /<meta name="twitter:image" content="https:\/\/thelogbook\.me\/social-share\.png/);
+  assert.doesNotMatch(html, /https:\/\/thelogbook\.web\.app\//);
 });

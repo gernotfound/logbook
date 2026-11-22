@@ -1,4 +1,5 @@
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
+import { assertCloudflareHtmlOrigin } from './cloudflare-seo.mjs';
 
 const failures = [];
 const packageJson = JSON.parse(readFileSync('package.json', 'utf8'));
@@ -303,7 +304,25 @@ if (existsSync('dist/index.html')) {
   }
   if (!builtHtml.includes('<h1>CARICAMENT<span class="brand-loading-screen__spinner" aria-hidden="true"></span></h1>')) failures.push('built HTML must render the approved monochrome loading wordmark');
   if (!builtHtml.includes('loading-wait.svg?v=20261007-waiting-mascot')) failures.push('built HTML must preload and render the approved waiting mascot');
-  if (!builtHtml.includes('https://thelogbook.web.app/social-share.png?v=20261006-vector-master')) failures.push('built HTML must expose the revisioned social share card URL');
+  const socialOrigin = process.env.CLOUDFLARE_APP_ORIGIN || 'https://thelogbook.me';
+  // Compare complete, parsed metadata URLs: a matching URL elsewhere in the HTML
+  // must not mask a wrong social card or a retired canonical origin.
+  try {
+    assertCloudflareHtmlOrigin(builtHtml, socialOrigin);
+  } catch {
+    failures.push('built HTML must use the intended canonical origin and no retired Hosting URLs');
+  }
+  const expectedSocialCard = new URL('/social-share.png?v=20261006-vector-master', socialOrigin).href;
+  for (const [label, tag] of [
+    ['Open Graph image', /<meta\s+property="og:image"\s+content="([^"]+)"/i],
+    ['Open Graph secure image', /<meta\s+property="og:image:secure_url"\s+content="([^"]+)"/i],
+    ['Twitter image', /<meta\s+name="twitter:image"\s+content="([^"]+)"/i],
+  ]) {
+    const rawUrl = builtHtml.match(tag)?.[1];
+    if (!rawUrl || !URL.canParse(rawUrl) || new URL(rawUrl).href !== expectedSocialCard) {
+      failures.push(`built HTML must expose the revisioned ${label} URL on the build origin`);
+    }
+  }
   if (!builtHtml.includes('property="og:image:type" content="image/png"')) failures.push('built HTML must declare the lossless PNG social card type');
   if (!builtHtml.includes('name="twitter:card" content="summary_large_image"')) failures.push('built HTML must request a large Twitter/social preview card');
   if (!builtHtml.includes('apple-touch-icon.png?v=20261006-vector-master')) failures.push('built HTML must revision the Apple touch icon URL');

@@ -51,7 +51,7 @@ export default defineConfig({
     cloudflareOrigin ? {
       name: 'thelogbook-cloudflare-canonical-origin',
       transformIndexHtml(html) {
-        return html.replaceAll('https://thelogbook.web.app/', cloudflareOrigin + '/');
+        return html.replaceAll('https://thelogbook.me/', cloudflareOrigin + '/');
       },
     } : false,
     {
