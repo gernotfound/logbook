@@ -1,5 +1,22 @@
 # Ciclo account, Auth e guest — TheLogBook
 
+### CF-03 — Pianificazione condivisa delle mutazioni schede (22/11/2026)
+
+`src/lib/routineSaveIntent.ts` valida il nome, le identità `exId`,
+il numero di serie e i segmenti, e produce soltanto
+`DomainOperation` tipizzate per creazione, modifica o duplicazione.
+Non legge React, il vault, Auth o Zustand e non attribuisce receipt cloud.
+Il guest continua a usare i propri witness e `dispatchDurableOperation`,
+mentre la duplicazione Kinde usa lo stesso compilatore attraverso
+`realm.submit()`. Il reducer Domain Operations resta l'autorità sulla
+validità finale dello stato, sulle identità e sull'ordinamento.
+
+La disponibilità del compilatore **non** abilita il form Kinde:
+apertura, mutazioni bufferizzate e recupero di `draft_routine` richiedono
+un adapter owner/epoch/consenso cifrato indipendente dal guest e prove
+di errore, ripresa, multitab, logout e PWA update. Non inferire una bozza
+salvata da una `DomainOperation` non ancora committata.
+
 ### CF-03/04 — Duplicazione ed eliminazione delle schede Kinde (22/11/2026)
 
 L'archivio candidato può ora duplicare ed eliminare schede senza bozza:
