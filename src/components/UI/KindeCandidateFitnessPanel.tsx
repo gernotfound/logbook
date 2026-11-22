@@ -46,7 +46,7 @@ export function KindeCandidateFitnessPanel({ session, management }: { session: S
                         <KindeCandidateBiometry realm={realm} />
                         {phase === 'ready' && <KindeCandidateNutritionPlanning realm={realm} />}
                         <KindeCandidateNutritionMeals realm={realm} />
-                        {phase === 'ready' && <KindeCandidateTrainingHistory realm={realm} />
+                        {phase === 'ready' && <KindeCandidateTrainingHistory realm={realm} />}
                     </>}
                 </>
             )}
