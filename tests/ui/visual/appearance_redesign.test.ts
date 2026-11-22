@@ -178,7 +178,7 @@ describe('prepaint and runtime theme-token contract', () => {
   });
 
   it('rejects a duplicated theme rule that could override the first matching token block', () => {
-    expect(() => extractThemeTokens(':root { --test: 1; }\\n:root { --test: 2; }', ':root'))
+    expect(() => extractThemeTokens(':root { --test: 1; }\n:root { --test: 2; }', ':root'))
       .toThrow('Expected exactly one theme selector');
   });
 
