@@ -131,3 +131,46 @@ describe('scala tipografica canonica', () => {
     expect(routines).toMatch(/\.routine-card-meta\s*\{[\s\S]*?font-size:\s*var\(--font-size-meta\)/);
   });
 });
+
+function themeDeclarations(css: string, scope: 'dark' | 'light' | 'system'): Record<string, string> {
+  const selectors = {
+    dark: /:root\s*\{([^}]*)\}/,
+    light: /:root\[data-theme="light"\]\s*\{([^}]*)\}/,
+    system: /@media\s*\(prefers-color-scheme:\s*light\)\s*\{\s*:root:not\(\[data-theme\]\)\s*\{([^}]*)\}/,
+  };
+  const rule = css.match(selectors[scope])?.[1];
+  if (!rule) throw new Error('Missing theme scope: ' + scope);
+  const values = [...rule.matchAll(/(--[a-z0-9-]+|color-scheme)\s*:\s*([^;]+);/g)]
+    .map(([, name, value]) => [name, value.trim()] as const);
+  if (new Set(values.map(([name]) => name)).size !== values.length) {
+    throw new Error('Duplicate theme declaration: ' + scope);
+  }
+  return Object.fromEntries(values);
+}
+
+describe('continuità dei temi tra bootstrap e runtime', () => {
+  it('preserva la parità dei token cromatici critici in dark, light e system', () => {
+    const runtime = fs.readFileSync(path.join(ROOT, 'src/styles/tokens.css'), 'utf8');
+    const bootstrap = fs.readFileSync(path.join(ROOT, 'public/appearance.css'), 'utf8');
+    const critical = [
+      'color-scheme', '--bg-color', '--surface-color', '--surface-light',
+      '--text-main', '--text-muted', '--primary-color', '--primary-dark',
+      '--on-primary', '--primary-soft', '--accent-color', '--on-accent',
+      '--danger-color', '--danger-soft', '--warning-color', '--warning-soft',
+      '--success-color', '--success-soft', '--on-success', '--on-warning',
+      '--on-danger', '--glass-border', '--border-strong', '--chart-grid',
+      '--shadow-color', '--muscle-base', '--muscle-outline', '--muscle-active',
+      '--muscle-recent', '--muscle-pain',
+    ] as const;
+    for (const scope of ['dark', 'light', 'system'] as const) {
+      const runtimeValues = themeDeclarations(runtime, scope);
+      const bootstrapValues = themeDeclarations(bootstrap, scope);
+      for (const token of critical) {
+        expect(runtimeValues[token], 'runtime ' + scope + ': ' + token).toBeDefined();
+        expect(bootstrapValues[token], 'bootstrap ' + scope + ': ' + token).toBe(runtimeValues[token]);
+      }
+    }
+    expect(themeDeclarations(runtime, 'system')).toEqual(themeDeclarations(runtime, 'light'));
+    expect(themeDeclarations(bootstrap, 'system')).toEqual(themeDeclarations(bootstrap, 'light'));
+  });
+});
