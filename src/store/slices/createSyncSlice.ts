@@ -266,6 +266,16 @@ export const createSyncSlice: StateCreator<AppState, [], [], SyncSlice> = (set, 
 
     const enqueue = (session: ReturnType<typeof captureSession>, generation: number, cache: Promise<CacheResult>) =>
         new Promise<SyncResult>((resolve, reject) => {
+            // Zustand notifies subscribers synchronously. An auth/update boundary
+            // can invalidate the optimistic write before it reaches this queue.
+            if (get().compatibilityStatus === 'update-required') {
+                resolve(updateRequiredResult(get().compatibilityError ?? 'Aggiornamento richiesto.'));
+                return;
+            }
+            if (!isCurrentSession(session)) {
+                reject(new Error('Sincronizzazione annullata per cambio sessione'));
+                return;
+            }
             pending.push({ session, generation, cache, resolve, reject });
             if (timer) clearTimeout(timer);
             timer = setTimeout(() => { timer = null; void run(); }, DEBOUNCE_DELAY_GLOBAL);

@@ -29,6 +29,7 @@ import { createSyncSlice } from '../../../src/store/slices/createSyncSlice';
 import type { AppState } from '../../../src/store/useAppStore';
 import { readLocal, initializeLocal, acknowledgeThrough, adoptReplicaCheckpoint, commitDomainOperations, advanceLocalConsentRevisionIfClean } from '../../../src/lib/sync/localRepository';
 import { UserDataSchema } from '../../../src/lib/schema';
+import { FutureVersionError } from '../../../src/lib/schemaEvolution';
 import type { UserData } from '../../../src/types';
 import { getNutritionConflictFingerprint } from '../../../src/lib/utils/object';
 import { createAndMigrateVault } from '../../../src/lib/sync/secureArchiveMigration';
@@ -74,6 +75,47 @@ beforeEach(async () => {
 });
 afterEach(() => { store.getState().cancelPendingSyncs(); lockAllVaults(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 describe('store with real IndexedDB commits', () => {
+    it('rejects a write invalidated by a synchronous session reset before enqueue', async () => {
+        let reset = false;
+        const unsubscribe = store.subscribe((state, previous) => {
+            if (!reset && previous.syncHealth !== 'saving' && state.syncHealth === 'saving') {
+                reset = true;
+                state.resetStore();
+            }
+        });
+        try {
+            await expect(store.getState().dispatchDomainOperation({
+                type: 'profile.patch', patch: { height: '171' },
+            })).rejects.toThrow('cambio sessione');
+            expect(reset).toBe(true);
+            expect(store.getState().userData).toBeNull();
+            expect(sdk.save).not.toHaveBeenCalled();
+        } finally {
+            unsubscribe();
+        }
+    });
+
+    it('settles an optimistic write when a subscriber requires an update before enqueue', async () => {
+        let boundaryRaised = false;
+        const unsubscribe = store.subscribe((state, previous) => {
+            if (!boundaryRaised && previous.syncHealth !== 'saving' && state.syncHealth === 'saving') {
+                boundaryRaised = true;
+                state.setUpdateRequired(new FutureVersionError('IndexedDB schema', 2, 1));
+            }
+        });
+        try {
+            const result = await store.getState().dispatchDomainOperation({
+                type: 'profile.patch', patch: { height: '171' },
+            });
+            expect(boundaryRaised).toBe(true);
+            expect(result).toMatchObject({ ok: false, status: 'failed' });
+            expect(store.getState().compatibilityStatus).toBe('update-required');
+            expect(sdk.save).not.toHaveBeenCalled();
+        } finally {
+            unsubscribe();
+        }
+    });
+
     it('preserves the nutrition alternative in memory and IndexedDB when resolution is rejected', async () => {
         const conflicted = UserDataSchema.parse({ ...data(170), nutritionPlanning: { onDaysCount: 3 }, pendingConflicts: { nutritionPlanning: { onDaysCount: 0 } } }) as unknown as UserData;
         store.setState({ userData: conflicted });
