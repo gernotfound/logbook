@@ -50,6 +50,9 @@ test('guest logout revokes another tab and removes its durable archive without r
     localStorage.getItem('logbook:v2:guest:secure-vault-control') !== null
   )).toBe(true);
 
+  const firstGeneration = await page.evaluate(() => localStorage.getItem('logbook_guest_session_id_v1'));
+  expect(firstGeneration).toMatch(/^[a-f0-9]{32}$/);
+
   const background = await context.newPage();
   await background.goto('/');
   await expect(background.locator('.guest-banner')).toBeVisible();
@@ -64,6 +67,9 @@ test('guest logout revokes another tab and removes its durable archive without r
   await expect(background.locator('.guest-banner')).toHaveCount(0);
   await expect(background.getByRole('button', { name: 'Continua senza account' })).toBeVisible();
   await expect.poll(() => background.evaluate(() => localStorage.getItem('logbook_is_guest'))).toBeNull();
+  await expect.poll(() => background.evaluate(() => localStorage.getItem('logbook_guest_session_id_v1'))).toBeNull();
+  await expect.poll(() => background.evaluate(() => localStorage.getItem('logbook_guest_revoked_v1')))
+    .toMatch(/^[a-f0-9]{32}$/);
   await expect.poll(() => background.evaluate(() =>
     localStorage.getItem('logbook:v2:guest:secure-vault-control')
   )).toBeNull();
@@ -78,14 +84,31 @@ test('guest logout revokes another tab and removes its durable archive without r
     Object.keys(localStorage).filter(key => key.startsWith('logbook:v2:guest:')).length
   )).toBe(0);
 
+  // A cold boot must not rehydrate a revoked generation or its encrypted archive.
+  await background.reload();
+  await expect(background.getByRole('button', { name: 'Continua senza account' })).toBeVisible();
+  await expect(background.locator('.guest-banner')).toHaveCount(0);
+  await expect.poll(() => guestArchiveState(background)).toEqual({ envelope: false, mirror: false, key: false });
+
   // A fresh guest generation must not inherit business data from the revoked one.
   await page.getByRole('button', { name: 'Continua senza account' }).click();
   await expect(page.locator('.guest-banner')).toBeVisible();
   await expect(background.locator('.guest-banner')).toHaveCount(0);
+  const nextGeneration = await page.evaluate(() => localStorage.getItem('logbook_guest_session_id_v1'));
+  expect(nextGeneration).toMatch(/^[a-f0-9]{32}$/);
+  expect(nextGeneration).not.toBe(firstGeneration);
+  expect(await background.evaluate(() => localStorage.getItem('logbook_guest_revoked_v1'))).toBeNull();
   // A new guest generation requires fresh consent before the data views are interactive.
   await page.waitForSelector('text=Aggiornamento Termini e Privacy');
   for (const checkbox of await page.locator('input[type="checkbox"]').all()) await checkbox.check();
   await page.getByRole('button', { name: 'Accetta e Continua' }).click();
+  await page.getByRole('button', { name: 'Allenamento', exact: true }).click();
+  await page.locator('button.sub-nav-btn:has-text("Schede")').click();
+  await expect(page.getByText(routineName, { exact: true })).toHaveCount(0);
+
+  // The replacement session must still exclude the revoked routine after bootstrap.
+  await page.reload();
+  await expect(page.locator('.guest-banner')).toBeVisible();
   await page.getByRole('button', { name: 'Allenamento', exact: true }).click();
   await page.locator('button.sub-nav-btn:has-text("Schede")').click();
   await expect(page.getByText(routineName, { exact: true })).toHaveCount(0);
