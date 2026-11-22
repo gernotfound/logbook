@@ -4,7 +4,6 @@ import { renderWithProviders, emptyUserData } from '../../setup';
 import TrainingHistory from '../../../src/components/Training/TrainingHistory';
 import TrainingExercises from '../../../src/components/Training/TrainingExercises';
 import { FoodItemRow } from '../../../src/components/Nutrition/archive/FoodItemRow';
-import SettingsView from '../../../src/components/SettingsView';
 import type { WorkoutSession, Exercise, Food } from '../../../src/types';
 
 describe('Settings and contextual UI actions', () => {
