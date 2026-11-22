@@ -44,8 +44,9 @@ async function buildClient(planningUi: boolean): Promise<string> {
     });
     const builds = Array.isArray(output) ? output : [output];
     const files = builds.flatMap(item => 'output' in item ? item.output : []);
-    const [file] = files;
-    if (files.length !== 1 || file?.type !== 'chunk') throw new Error('Expected one isolated Kinde browser bundle');
+    const chunks = files.filter(file => file.type === 'chunk');
+    const [file] = chunks;
+    if (chunks.length !== 1 || !file) throw new Error('Expected one isolated Kinde browser bundle');
     return file.code;
 }
 
