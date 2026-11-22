@@ -123,6 +123,12 @@ export const createDataSlice: StateCreator<AppState, [], [], DataSlice> = (set, 
             return;
         }
         const aligned = alignActiveWorkout(rawNextData.activeWorkout, state.localWorkout);
+        // Reject an invalid bulk snapshot before it can rewrite the independent
+        // device workout witness without a corresponding durable journal entry.
+        const nextData = UserDataSchema.parse({
+            ...rawNextData,
+            activeWorkout: aligned.persisted,
+        }) as unknown as UserData;
         if (aligned.local !== state.localWorkout) {
             try {
                 persistPlainWorkoutSnapshot(aligned.local, session.owner);
@@ -137,11 +143,6 @@ export const createDataSlice: StateCreator<AppState, [], [], DataSlice> = (set, 
                 return;
             }
         }
-
-        const nextData = UserDataSchema.parse({
-            ...rawNextData,
-            activeWorkout: aligned.persisted,
-        }) as unknown as UserData;
         if (state.userData) markTabSnapshotDirty(session, state.userData);
         set({ userData: nextData, dataOwner: session.owner, localWorkout: aligned.local });
 

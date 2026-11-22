@@ -3,6 +3,9 @@ import { update as idbUpdate } from 'idb-keyval';
 import { DB } from '../../../src/lib/db';
 import { initializeLocal, readLocal } from '../../../src/lib/sync/localRepository';
 import { captureSession } from '../../../src/lib/sync/session';
+import { readDeviceValueStrict } from '../../../src/lib/sync/deviceStorage';
+import { persistPlainWorkoutSnapshot } from '../../../src/lib/sync/workoutDeviceIntent';
+import { UserDataSchema } from '../../../src/lib/schema';
 import { useAppStore } from '../../../src/store/useAppStore';
 import type { UserData } from '../../../src/types';
 import { emptyUserData, idbStore } from '../../setup';
@@ -45,6 +48,40 @@ describe('optimistic Zustand state vs local IndexedDB durability', () => {
         useAppStore.getState().resetStore({ force: true });
         lockAllVaults();
         vi.useRealTimers();
+    });
+
+    it('validates bulk business data before altering a durable workout witness', async () => {
+        const data = baseData();
+        const owner = await seedDurableState(data);
+        if (owner.startsWith('user:')) {
+            localStorage.setItem(`logbook:v2:${owner}:health-consent-generation`, '1');
+        }
+        const valid = UserDataSchema.parse({
+            ...data,
+            activeWorkout: {
+                id: 'workout-bulk-validation', date: '2026-10-13',
+                routineName: 'Test', exercises: [],
+            },
+        }) as unknown as UserData;
+        expect(valid.activeWorkout?.id).toBe('workout-bulk-validation');
+
+        // Prove this fixture can really persist a workout, so a failed schema
+        // validation cannot pass the test merely because the archive is locked.
+        persistPlainWorkoutSnapshot(valid.activeWorkout ?? null, owner);
+        expect(readDeviceValueStrict('workout', owner)).not.toBeNull();
+        persistPlainWorkoutSnapshot(null, owner);
+        expect(readDeviceValueStrict('workout', owner)).toBeNull();
+
+        const before = useAppStore.getState().userData;
+        const malformed = {
+            ...valid,
+            profile: { ...valid.profile, height: { invalid: true } },
+        } as unknown as UserData;
+        expect(() => useAppStore.getState().setUserData(malformed)).toThrow();
+        expect(readDeviceValueStrict('workout', owner)).toBeNull();
+        expect(useAppStore.getState().localWorkout).toBeNull();
+        expect(useAppStore.getState().userData).toBe(before);
+        expect((await readLocal(owner))?.pending).toHaveLength(0);
     });
 
     it('reconciles optimistic business state back to the durable envelope when the local commit fails', async () => {
