@@ -110,7 +110,7 @@
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "@unplugin-pwa/core": "0.0.6",
-    "@unplugin-pwa/vite": "0.0.6",
+    "@unplugin-pwa/vite": "0.0.7",
     "@vite-pwa/workbox-swkit": "8.0.15",
     "@vitejs/plugin-react": "^6.2.1",
     "@vitest/coverage-v8": "^5.1.0",
