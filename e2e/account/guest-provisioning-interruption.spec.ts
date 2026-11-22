@@ -162,6 +162,8 @@ test('two guest tabs cannot start Firebase signup or create a migration intent w
   const observer = await context.newPage();
   await openObserver(observer, page.url());
   const before = await readVaultState(observer);
+  const initialControl = await observer.evaluate(key => localStorage.getItem(key), controlKey);
+  expect(JSON.parse(initialControl!)).toMatchObject({ owner: 'guest', phase: 'active' });
   expect(before.envelope).toMatch(/^tlb-sealed:v1:/);
   expect(String(before.envelope)).not.toContain('"height":"183"');
   const generation = await observer.evaluate(() => localStorage.getItem('logbook_guest_session_id_v1'));
@@ -172,7 +174,19 @@ test('two guest tabs cannot start Firebase signup or create a migration intent w
   const pageErrors: string[] = [];
   let popups = 0;
   const authRequests: string[] = [];
+  // Entering the settings/account section is part of the guest isolation
+  // contract. Observe before navigation, including service-worker requests.
+  context.on('request', request => {
+    const url = new URL(request.url());
+    if (/^\/(?:api\/auth(?:\/|$)|api\/account(?:\/|$)|api\/health-consent(?:\/|$)|v1\/|__\/auth\/)/.test(url.pathname)
+      || /(?:^|\.)(?:kinde\.com|firebaseapp\.com|firebaseio\.com|firebasedatabase\.app)$/.test(url.hostname)
+      || /^(?:identitytoolkit|securetoken|firestore|firebaseinstallations|firebaseappcheck)\.googleapis\.com$/.test(url.hostname)) {
+      authRequests.push(url.pathname);
+    }
+  });
   for (const tab of [page, next]) {
+    tab.on('popup', () => { popups++; });
+    tab.on('pageerror', error => { pageErrors.push(error.message); });
     await tab.goto('/?tab=settings');
     await expect(tab.getByRole('heading', { name: 'Impostazioni', exact: true })).toBeVisible();
     await tab.locator('.settings-menu').getByRole('button', { name: /Account e accesso/ }).click();
@@ -181,16 +195,6 @@ test('two guest tabs cannot start Firebase signup or create a migration intent w
     await expect(tab.getByRole('button', { name: 'Crea account con Google' })).toHaveCount(0);
     await expect(tab.getByRole('button', { name: 'Crea account con Email e Password' })).toHaveCount(0);
     await expect(tab.getByRole('button', { name: 'Esci dalla modalità locale' })).toBeVisible();
-    tab.on('popup', () => { popups++; });
-    tab.on('pageerror', error => { pageErrors.push(error.message); });
-    tab.on('request', request => {
-      const url = new URL(request.url());
-      if (url.pathname === '/api/auth/kinde/start'
-        || url.pathname.startsWith('/__/auth/')
-        || url.hostname === 'identitytoolkit.googleapis.com') {
-        authRequests.push(url.pathname);
-      }
-    });
   }
 
   // Both public guest entry points are now inert with respect to Auth.
@@ -208,6 +212,7 @@ test('two guest tabs cannot start Firebase signup or create a migration intent w
     expect(await observer.evaluate(key => localStorage.getItem(key), intentKey)).toBeNull();
     expect(await observer.evaluate(() => localStorage.getItem('logbook_guest_session_id_v1'))).toBe(generation);
     expect(await readVaultState(observer)).toEqual(before);
+    expect(await observer.evaluate(key => localStorage.getItem(key), controlKey)).toBe(initialControl);
   }
 
   expect(popups).toBe(0);
@@ -219,6 +224,7 @@ test('two guest tabs cannot start Firebase signup or create a migration intent w
   await fresh.getByRole('tab', { name: 'Biometria', exact: true }).click();
   await expect(fresh.locator('#biometry-height')).toHaveValue('183');
   expect(await readVaultState(fresh)).toEqual(before);
+  expect(await fresh.evaluate(key => localStorage.getItem(key), controlKey)).toBe(initialControl);
   expect(await fresh.evaluate(() => localStorage.getItem('logbook_guest_session_id_v1'))).toBe(generation);
   await expect.poll(() => observer.evaluate(async () => {
     const { held = [], pending = [] } = await navigator.locks.query();
