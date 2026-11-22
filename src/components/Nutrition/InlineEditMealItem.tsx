@@ -6,7 +6,7 @@ import type { LoggedMealItem } from '../../types';
 interface EditMealItemModalProps {
     item: LoggedMealItem;
     onClose: () => void;
-    onSave: (changes: Pick<LoggedMealItem, 'id' | 'quantity' | 'meal'>) => Promise<boolean>;
+    onSave: (changes: Pick<LoggedMealItem, 'id'> & Partial<Pick<LoggedMealItem, 'quantity' | 'meal'>>) => Promise<boolean>;
     onDelete: (itemId: string) => Promise<boolean>;
 }
 
@@ -46,8 +46,8 @@ export default function EditMealItemModal({ item, onClose, onSave, onDelete }: E
 
     const handleSave = () => submit(() => onSave({
         id: item.id,
-        quantity: numQty,
-        meal
+        ...(numQty !== getLoggedMealPortion(item).quantity ? { quantity: numQty } : {}),
+        ...(meal !== (item.meal || 'Colazione') ? { meal } : {}),
     }));
 
     const handleDelete = () => submit(() => onDelete(item.id));

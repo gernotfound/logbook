@@ -86,6 +86,7 @@ function collectScope(before: UserData, after: UserData, operations: readonly Do
             case 'cardio-session.upsert':
             case 'cardio-session.delete':
             case 'nutrition-meal.upsert':
+            case 'nutrition-meal.edit':
             case 'nutrition-meal.delete':
             case 'supplement-intake.upsert':
             case 'supplement-intake.delete': {

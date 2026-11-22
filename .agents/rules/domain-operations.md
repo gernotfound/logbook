@@ -107,6 +107,12 @@ Per nutrition/history, la DomainOperation individua esplicitamente data/ID e qui
 
 `meals`, `supplementsIntake` e `cardioSessions` restano collezioni mensili identificate da ID stabile; edit concorrenti su entità diverse non devono collassare l'intero array.
 
+`nutrition-meal.edit` applica soltanto quantità e gruppo richiesti al pasto
+presente nel dato corrente. Il pasto deve esistere quando il reducer esegue
+il commit. Un editor obsoleto non crea un pasto eliminato e non riscrive
+nome, nutrienti o altri valori catturati all'apertura. L'aggiunta di un
+pasto usa `nutrition-meal.upsert` con un nuovo ID.
+
 ## Patch
 
 Per operazioni `*.patch`:

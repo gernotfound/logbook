@@ -114,6 +114,32 @@ test('recovers a Kinde edit made offline after a competing browser save', async 
     });
 });
 
+test('does not recreate a meal deleted on another Kinde device before an edit', async ({ browser }) => {
+    await withKindeReplicaDevices(browser, async ({ first, second, receipts, firstCommitStatuses, allowFirstCommit }) => {
+        allowFirstCommit();
+        const date = '2026-11-20';
+        const meal = { id: 'removed-meal', name: 'Riso', meal: 'Pranzo', quantity: 100,
+            kcal: 100, carbs: 10, pro: 5, fat: 2 };
+        expect(await second.evaluate(({ date, meal }) => window.kindeReplicaFixture!.submit({
+            type: 'nutrition-meal.upsert', date, meal,
+        }), { date, meal })).toMatchObject({ kind: 'cloud-acknowledged' });
+        expect(await first.evaluate(async date =>
+            (await window.kindeReplicaFixture!.refresh()).data.nutrition?.[date]?.meals, date)).toHaveLength(1);
+        expect(await second.evaluate(({ date, mealId }) => window.kindeReplicaFixture!.submit({
+            type: 'nutrition-meal.delete', date, mealId,
+        }), { date, mealId: meal.id })).toMatchObject({ kind: 'cloud-acknowledged' });
+
+        await expect(first.evaluate(({ date, mealId }) => window.kindeReplicaFixture!.submit({
+            type: 'nutrition-meal.edit', date, mealId, quantity: 60,
+        }), { date, mealId: meal.id })).rejects.toThrow('Alimento non più presente nella giornata');
+
+        expect(await first.evaluate(async date =>
+            (await window.kindeReplicaFixture!.refresh()).data.nutrition?.[date]?.meals ?? [], date)).toEqual([]);
+        expect(firstCommitStatuses).toEqual([]);
+        expect(receipts()).toBe(2);
+    });
+});
+
 test('resumes a sealed Kinde edit after reload and another browser commit', async ({ browser }) => {
     await withKindeReplicaDevices(browser, async ({ first, second, receipts, firstCommitStatuses, allowFirstCommit }) => {
         expect(await first.evaluate(() => window.kindeReplicaFixture!.submit({
