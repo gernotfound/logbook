@@ -92,7 +92,7 @@ export const RoutineCard: React.FC<RoutineCardProps> = ({
     const detailsId = `routine-details-${routine.id}`;
 
     return (
-        <article className={`routine-library-card${isExpanded ? ' is-expanded' : ''}`}>
+        <article className={`routine-library-card${isExpanded ? ' is-expanded' : ''}${menuItems.length === 0 ? ' is-readonly' : ''}`}>
             <div className="routine-card-head">
                 <button
                     type="button"
@@ -113,10 +113,12 @@ export const RoutineCard: React.FC<RoutineCardProps> = ({
                     </span>
                     <ChevronDown className="routine-card-chevron" size={20} aria-hidden="true" />
                 </button>
-                <ContextMenu
-                    items={menuItems}
-                    className="routine-card-menu"
-                />
+                {menuItems.length > 0 && (
+                    <ContextMenu
+                        items={menuItems}
+                        className="routine-card-menu"
+                    />
+                )}
             </div>
 
             {isExpanded && (
