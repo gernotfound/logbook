@@ -9,9 +9,15 @@ let stop: (() => void) | undefined;
 let dark = false;
 let listeners: Set<() => void>;
 let originalHeadHTML: string;
+let originalTheme: string | null;
+let originalPreference: string | null;
+let originalColorScheme: string;
 
 beforeEach(() => {
   originalHeadHTML = document.head.innerHTML;
+  originalTheme = document.documentElement.getAttribute('data-theme');
+  originalPreference = document.documentElement.getAttribute('data-theme-preference');
+  originalColorScheme = document.documentElement.style.colorScheme;
   vi.resetModules();
   const values = new Map<string, string>();
   vi.stubGlobal('localStorage', {
@@ -37,6 +43,12 @@ afterEach(() => {
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
   document.head.innerHTML = originalHeadHTML;
+  const root = document.documentElement;
+  if (originalTheme === null) root.removeAttribute('data-theme');
+  else root.setAttribute('data-theme', originalTheme);
+  if (originalPreference === null) root.removeAttribute('data-theme-preference');
+  else root.setAttribute('data-theme-preference', originalPreference);
+  root.style.colorScheme = originalColorScheme;
 });
 
 function runBootstrap() {
@@ -83,6 +95,8 @@ describe('local appearance preference', () => {
     expect(listeners.size).toBe(0);
     systemChangesTo(false);
     expect(document.documentElement.dataset.theme).toBe('dark');
+    window.dispatchEvent(new StorageEvent('storage', { key, newValue: 'light' }));
+    expect(useAppearanceStore.getState().preference).toBe('system');
   });
 
   it('applies a choice while reporting that unavailable storage cannot persist it', async () => {
@@ -105,11 +119,18 @@ describe('local appearance preference', () => {
     write.mockClear();
     expect(useAppearanceStore.getState().setPreference('dark')).toBe(true);
     expect(write.mock.calls).toEqual([[key, 'dark']]);
+    const foreignEvent = new StorageEvent('storage', { key, newValue: 'light' });
+    Object.defineProperty(foreignEvent, 'storageArea', { value: sessionStorage });
+    window.dispatchEvent(foreignEvent);
+    expect(useAppearanceStore.getState().preference).toBe('dark');
     window.dispatchEvent(new StorageEvent('storage', { key: 'logbook:other', newValue: 'light' }));
     expect(useAppearanceStore.getState().preference).toBe('dark');
     window.dispatchEvent(new StorageEvent('storage', { key, newValue: 'light' }));
     expect(useAppearanceStore.getState()).toMatchObject({ preference: 'light', resolvedTheme: 'light' });
     window.dispatchEvent(new StorageEvent('storage', { key, newValue: null }));
+    expect(useAppearanceStore.getState().preference).toBe('system');
+    useAppearanceStore.getState().setPreference('dark');
+    window.dispatchEvent(new StorageEvent('storage', { key: null, newValue: null }));
     expect(useAppearanceStore.getState().preference).toBe('system');
   });
 
@@ -128,12 +149,12 @@ describe('local appearance preference', () => {
  * A mismatch causes an observable layout/color jump during hydration.
  */
 function extractThemeTokens(css: string, selector: string): Record<string, string> {
-  const location = css.indexOf(`${selector} {`);
-  if (location < 0) throw new Error(`Missing theme selector ${selector}`);
-  const start = css.indexOf('{', location) + 1;
-  const end = css.indexOf('}', start);
-  if (end < 0) throw new Error(`Unclosed theme selector ${selector}`);
-  const block = css.slice(start, end);
+  const escaped = selector.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&');
+  const rules = [...css.matchAll(new RegExp('(?:^|\\n)\\s*' + escaped + '\\s*\\{([^}]*)\\}', 'g'))];
+  if (rules.length !== 1) {
+    throw new Error('Expected exactly one theme selector ' + selector + '; found ' + rules.length);
+  }
+  const block = rules[0][1];
   const entries = Array.from(block.matchAll(/(--[\w-]+|color-scheme)\s*:\s*([^;]+);/g), match => [match[1], match[2].trim()] as const);
   if (new Set(entries.map(([name]) => name)).size !== entries.length) {
     throw new Error(`Duplicate theme declaration in ${selector}`);
@@ -154,6 +175,11 @@ describe('prepaint and runtime theme-token contract', () => {
     const runtimeTokens = extractThemeTokens(runtimeCss, selector);
     expect(Object.keys(bootstrapTokens).length).toBeGreaterThan(10);
     expect(bootstrapTokens).toEqual(runtimeTokens);
+  });
+
+  it('rejects a duplicated theme rule that could override the first matching token block', () => {
+    expect(() => extractThemeTokens(':root { --test: 1; }\\n:root { --test: 2; }', ':root'))
+      .toThrow('Expected exactly one theme selector');
   });
 
   it('uses the same navigation clearance before and after React loads', () => {
