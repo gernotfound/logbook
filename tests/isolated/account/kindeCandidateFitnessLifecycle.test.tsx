@@ -301,6 +301,27 @@ describe('React candidate lifecycle: explicit owner access without promoting Kin
         expect(fake.close).toHaveBeenCalledTimes(1);
     });
 
+    it('removes plaintext before the document enters the back-forward cache', async () => {
+        const fake = mockRealm();
+        vi.mocked(openKindeCandidateFitnessRealm).mockResolvedValue(fake as KindeCandidateFitnessRealm);
+        const session = confirmed();
+        const { result } = renderHook(() => useKindeCandidateFitnessLifecycle({ session, enabled: true }));
+        await act(async () => { await result.current.open(); });
+        expect(result.current.state.phase).toBe('ready');
+        const witness = result.current.captureEditWitness();
+        expect(witness?.isCurrent()).toBe(true);
+
+        act(() => {
+            window.dispatchEvent(new PageTransitionEvent('pagehide', { persisted: true }));
+            // The browser may freeze the document before a deferred render.
+            expect(result.current.state.phase).toBe('closed');
+            expect(witness?.isCurrent()).toBe(false);
+        });
+
+        expect(fake.close).toHaveBeenCalledTimes(1);
+        expect(openKindeCandidateFitnessRealm).toHaveBeenCalledTimes(1);
+    });
+
     it('routes the same biometric editor through the Kinde realm writer, never the legacy store', async () => {
         const fake = mockRealm();
         const edited = { ...snapshot, data: { ...snapshot.data, profile: { height: '191' } } };

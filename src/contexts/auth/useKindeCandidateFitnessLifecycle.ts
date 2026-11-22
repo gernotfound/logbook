@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { flushSync } from 'react-dom';
 import { KindeCandidateBoundaryError } from '../../lib/auth/kindeCandidateClient';
 import {
     openKindeCandidateFitnessRealm,
@@ -20,7 +21,7 @@ const CLOSED: State = { phase: 'closed' };
 /**
  * Candidate-only React lifecycle. A verified Kinde observer can request an
  * explicit, bounded fitness realm; changes in its view generation, cookie,
- * visibility or cross-tab lifecycle invalidate the entire plaintext view.
+ * visibility, page cache or cross-tab lifecycle invalidate the plaintext view.
  *
  * This hook is intentionally not mounted in the public GuestOnlyAuthProvider:
  * the legacy Zustand writer and consent gate still belong to Firebase. No
@@ -77,6 +78,11 @@ export function useKindeCandidateFitnessLifecycle({
         const onVisibility = () => {
             if (document.visibilityState === 'hidden') onSuspend();
         };
+        const onPageHide = (event: PageTransitionEvent) => {
+            // Commit removal of the fitness UI before the document is frozen,
+            // even if visibilitychange already queued a deferred suspend.
+            if (enabled && event.persisted) flushSync(suspend);
+        };
         const checkRetainedView = () => {
             if (!busy.current && realm.current && !realm.current.isCurrent()) suspend();
         };
@@ -84,6 +90,7 @@ export function useKindeCandidateFitnessLifecycle({
         window.addEventListener('storage', onSuspend);
         window.addEventListener('online', onSuspend);
         window.addEventListener('offline', checkRetainedView);
+        window.addEventListener('pagehide', onPageHide);
         document.addEventListener('visibilitychange', onVisibility);
         // Deadlines and local vault fences can change without a browser event.
         const expiryCheck = enabled ? window.setInterval(checkRetainedView, 1000) : null;
@@ -93,6 +100,7 @@ export function useKindeCandidateFitnessLifecycle({
             window.removeEventListener('storage', onSuspend);
             window.removeEventListener('online', onSuspend);
             window.removeEventListener('offline', checkRetainedView);
+            window.removeEventListener('pagehide', onPageHide);
             document.removeEventListener('visibilitychange', onVisibility);
         };
     }, [suspend, enabled]);

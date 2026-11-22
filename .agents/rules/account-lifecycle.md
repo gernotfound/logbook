@@ -88,7 +88,11 @@ React soltanto con **abilitazione esplicita** e fase `consent-confirmed`
 (email verificata, epoch e revisione positivi). Un cambio generazione
 React, sessione/cookie, marker revoca, cambio scheda, foreground o
 unmount invalida il tentativo e nasconde la vista; una risposta asincrona
-obsoleta non la può riaprire. Nessun mount pubblico, nessuna chiamata
+obsoleta non la può riaprire. Prima che la pagina venga congelata nella
+cache Indietro/Avanti, `pagehide` chiude il realm e rimuove subito la vista
+fitness. Al ritorno dalla cache, `pageshow` richiede una nuova verifica della
+sessione attraverso lo stesso controllo di foreground. L'apertura
+dell'archivio resta esplicita. Nessun mount pubblico, nessuna chiamata
 automatica di bootstrap, nessuna installazione
 `authenticatedIdentitySource` o `AuthContext.currentUser`.
 Il vault è chiuso al termine di ogni scope, anche quando React continua
