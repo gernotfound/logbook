@@ -87,6 +87,13 @@ rimangono separati. Alla perdita di sessione, epoch, consenso o
 chiusura dell'archivio la vista e i report vengono smontati.
 Le regressioni UI controllano owner guest estraneo, operazione esatta,
 conferma rifiutata, witness revocato, intenti concorrenti e fallimento.
+Il compilatore emette tombstone privi di `value`, coerenti con il parser del journal cifrato; il controllo esatto degli intenti persistiti rimane obbligatorio prima dell'invio.
+
+Il test browser isolato `kinde-history-delete.spec.ts` monta il dialogo di conferma
+reale e verifica in due profili TLS distinti sia il rifiuto della richiesta,
+sia una sola ricevuta D1 osservata prima della replica, sia il retry dello
+stesso journal dopo HTTP 429 senza attestare un ACK non acquisito.
+
 L'archivio rimane candidato non pubblico: suite sintetiche e CodeQL
 non certificano il comportamento fitness su provider Production.
 

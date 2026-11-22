@@ -24,6 +24,9 @@ M8 non ha introdotto nuove versioni persistite. La fonte eseguibile attuale è `
 
 “Domain Operations V4” è il nome storico del layer di intenti, non una relazione numerica con l'envelope né una quinta versione persistita. Le DomainOperation vengono compilate in `SemanticOperation` prima della persistenza del journal.
 
+**Invariante dei tombstone:** `diffDocuments()` emette le cancellazioni senza proprietà `value` (non `value: null`), in forma identica a `parseSemanticOperation()` nel readback dell'envelope cifrato. Un `null` non-delete resta invece un valore esplicito. Il confronto esatto tra l'intento appena committato e il journal persistito non va indebolito, poiché protegge l'identità dell'intento prima del trasporto cloud. Testare le policy e il roundtrip IndexedDB.
+
+
 ## Boundary normativo
 
 ### Mutazioni ordinarie

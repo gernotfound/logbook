@@ -64,6 +64,27 @@ describe('M8 domain commit durability', () => {
         expect(facade.clearNutritionConflict).toBe(extracted.clearNutritionConflict);
     });
 
+    it('persists history deletion as an identical canonical encrypted tombstone', async () => {
+        const { initializeLocal, commitDomainOperations, readLocal } = await import('../../../src/lib/sync/localRepository');
+        const initial: UserData = {
+            ...base(),
+            history: [{ id: 'history-delete', date: '2026-09-15', routineName: 'Da cancellare', exercises: [] }],
+        };
+        await initializeLocal('user:a', initial);
+        const result = await commitDomainOperations(
+            'user:a', { type: 'history.delete', id: 'history-delete' }, initial,
+        );
+        const stored = await readLocal('user:a');
+        expect(result.operations).toHaveLength(1);
+        expect(result.operations[0]).toMatchObject({
+            docPath: 'history_months/2026-09', path: ['history-delete'], isDelete: true,
+        });
+        expect(Object.hasOwn(result.operations[0], 'value')).toBe(false);
+        expect(stored?.pending).toEqual(result.operations);
+        expect(stored?.data.history).toEqual([]);
+        expect(await get('logbook:v2:user:a')).toMatch(/^tlb-sealed:v1:/);
+    });
+
     it('persists business state and semantic journal under the same envelope revision', async () => {
         const { initializeLocal, commitDomainOperations, readLocal } = await import('../../../src/lib/sync/localRepository');
         await initializeLocal('user:a', base());
