@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, renderHook, act } from '@testing-library/react';
 import React from 'react';
 import DataMeasurements from '../../../src/components/Data/DataMeasurements';
@@ -11,9 +11,43 @@ import { Logic } from '../../../src/lib/logic';
 import { storageOwner } from '../../../src/lib/sync/session';
 import { prepareUnlockedTestArchive } from '../../secureVaultFixture';
 
+function renderMeasurements(overrides: Partial<React.ComponentProps<typeof DataMeasurements>>) {
+    return render(
+        <DataMeasurements
+            profile={{ gender: 'M' }}
+            selectedDate="2026-08-10"
+            targetDateStr="2026-08-10"
+            measureTime="08:00"
+            setMeasureTime={vi.fn()}
+            weight=""
+            setWeight={vi.fn()}
+            waist=""
+            setWaist={vi.fn()}
+            neck=""
+            setNeck={vi.fn()}
+            hip=""
+            setHip={vi.fn()}
+            chest=""
+            setChest={vi.fn()}
+            shoulders=""
+            setShoulders={vi.fn()}
+            biceps=""
+            setBiceps={vi.fn()}
+            thighs=""
+            setThighs={vi.fn()}
+            calves=""
+            setCalves={vi.fn()}
+            handleCancelEdit={vi.fn()}
+            calculateAndSave={vi.fn().mockResolvedValue(undefined)}
+            {...overrides}
+        />
+    );
+}
+
 describe('UI Alignments - R3 & R4', () => {
     beforeEach(async () => {
         localStorage.clear();
+        useAppStore.getState().resetStore();
         localStorage.setItem(`logbook:v2:${storageOwner()}:health-consent-generation`, '1');
         await prepareUnlockedTestArchive(storageOwner());
         useAppStore.setState({
@@ -50,41 +84,21 @@ describe('UI Alignments - R3 & R4', () => {
         });
     });
 
+    afterEach(() => {
+        vi.restoreAllMocks();
+        useAppStore.getState().resetStore();
+    });
+
     describe('R3: DataMeasurements Date Navigator', () => {
         it('renders Date Navigator with Prec, Succ, and Italian date when setSelectedDate is provided', () => {
             const mockSetSelectedDate = vi.fn();
             const todayStr = Logic.getLocalDateString();
 
-            render(
-                <DataMeasurements 
-                    profile={{ gender: 'M' }}
-                    selectedDate={todayStr}
-                    setSelectedDate={mockSetSelectedDate}
-                    targetDateStr={todayStr}
-                    measureTime="08:00"
-                    setMeasureTime={vi.fn()}
-                    weight=""
-                    setWeight={vi.fn()}
-                    waist=""
-                    setWaist={vi.fn()}
-                    neck=""
-                    setNeck={vi.fn()}
-                    hip=""
-                    setHip={vi.fn()}
-                    chest=""
-                    setChest={vi.fn()}
-                    shoulders=""
-                    setShoulders={vi.fn()}
-                    biceps=""
-                    setBiceps={vi.fn()}
-                    thighs=""
-                    setThighs={vi.fn()}
-                    calves=""
-                    setCalves={vi.fn()}
-                    handleCancelEdit={vi.fn()}
-                    calculateAndSave={vi.fn().mockResolvedValue(undefined)}
-                />
-            );
+            renderMeasurements({
+                selectedDate: todayStr,
+                targetDateStr: todayStr,
+                setSelectedDate: mockSetSelectedDate,
+            });
 
             expect(screen.getByRole('button', { name: 'Giorno precedente' })).toBeDefined();
             expect(screen.getByRole('button', { name: 'Giorno successivo' })).toBeDefined();
@@ -97,7 +111,10 @@ describe('UI Alignments - R3 & R4', () => {
             // Click previous button
             const prevBtn = screen.getByRole('button', { name: 'Giorno precedente' });
             fireEvent.click(prevBtn);
-            expect(mockSetSelectedDate).toHaveBeenCalled();
+            expect(mockSetSelectedDate).toHaveBeenCalledWith(
+                new Date(new Date(`${todayStr}T12:00:00`).getTime() - 24 * 60 * 60 * 1000)
+                    .toLocaleDateString('sv-SE'),
+            );
         });
 
         it('allows navigating forward on a past date and offers deletion instead of a meaningless cancel action', () => {
@@ -105,38 +122,16 @@ describe('UI Alignments - R3 & R4', () => {
             const onDeleteMeasurement = vi.fn();
             const pastDate = '2026-08-10';
 
-            render(
-                <DataMeasurements 
-                    profile={{ gender: 'M' }}
-                    selectedDate={pastDate}
-                    setSelectedDate={mockSetSelectedDate}
-                    targetDateStr={pastDate}
-                    hasExistingData={true}
-                    measureTime="08:00"
-                    setMeasureTime={vi.fn()}
-                    weight="80.5"
-                    setWeight={vi.fn()}
-                    waist="85"
-                    setWaist={vi.fn()}
-                    neck="38"
-                    setNeck={vi.fn()}
-                    hip=""
-                    setHip={vi.fn()}
-                    chest=""
-                    setChest={vi.fn()}
-                    shoulders=""
-                    setShoulders={vi.fn()}
-                    biceps=""
-                    setBiceps={vi.fn()}
-                    thighs=""
-                    setThighs={vi.fn()}
-                    calves=""
-                    setCalves={vi.fn()}
-                    handleCancelEdit={vi.fn()}
-                    onDeleteMeasurement={onDeleteMeasurement}
-                    calculateAndSave={vi.fn().mockResolvedValue(undefined)}
-                />
-            );
+            renderMeasurements({
+                selectedDate: pastDate,
+                targetDateStr: pastDate,
+                setSelectedDate: mockSetSelectedDate,
+                hasExistingData: true,
+                weight: '80.5',
+                waist: '85',
+                neck: '38',
+                onDeleteMeasurement,
+            });
 
             expect(screen.getByText(/Modifica misurazione/i)).toBeDefined();
             expect(screen.getByText(/Salva modifiche/i)).toBeDefined();
@@ -148,13 +143,13 @@ describe('UI Alignments - R3 & R4', () => {
             expect(nextBtn.disabled).toBe(false);
 
             fireEvent.click(nextBtn);
-            expect(mockSetSelectedDate).toHaveBeenCalled();
+            expect(mockSetSelectedDate).toHaveBeenLastCalledWith('2026-08-11');
 
             // Click today center text
             const centerDateBlock = screen.getByRole('button', { name: /Torna a oggi/ });
             expect(centerDateBlock.getAttribute('aria-label')).toContain(centerDateBlock.querySelector('strong')?.textContent);
             fireEvent.click(centerDateBlock);
-            expect(mockSetSelectedDate).toHaveBeenCalledWith(Logic.getLocalDateString());
+            expect(mockSetSelectedDate).toHaveBeenLastCalledWith(Logic.getLocalDateString());
         });
 
         it('DataView integrates selectedDate and renders DataMeasurements properly', () => {
@@ -289,6 +284,36 @@ describe('UI Alignments - R3 & R4', () => {
             }
         });
 
+
+        it('does not report a failed durable commit as saved or discard edited measurements', async () => {
+            const originalDispatch = useAppStore.getState().dispatchDomainOperation;
+            const rejectedDispatch = vi.fn().mockResolvedValue({
+                ok: false,
+                status: 'rejected',
+                error: new Error('Local commit rejected'),
+            });
+            useAppStore.setState({ dispatchDomainOperation: rejectedDispatch });
+            try {
+                const showAlertSpy = vi.spyOn(useDialogStore.getState(), 'showAlert');
+                const { result } = renderHook(() => useNutritionMeasurements('2026-08-10'));
+                act(() => result.current.setWeight('81'));
+
+                await act(async () => {
+                    expect(await result.current.calculateAndSave()).toBe(false);
+                });
+
+                expect(rejectedDispatch).toHaveBeenCalledWith(expect.objectContaining({
+                    type: 'nutrition-day.patch',
+                    date: '2026-08-10',
+                    patch: expect.objectContaining({ weight: 81 }),
+                }));
+                expect(useAppStore.getState().userData?.nutrition?.['2026-08-10']?.weight).toBe(80.5);
+                expect(result.current.weight).toBe('81');
+                expect(showAlertSpy).toHaveBeenCalledWith('Errore durante il salvataggio della misurazione.');
+            } finally {
+                useAppStore.setState({ dispatchDomainOperation: originalDispatch });
+            }
+        });
     });
 
     describe('R4: SessionSetRow Vertical Centering', () => {
@@ -303,13 +328,14 @@ describe('UI Alignments - R3 & R4', () => {
                 ],
             };
 
+            const onToggleMenu = vi.fn();
             render(
                 <SessionSetRow 
                     set={mockSet}
                     sIndex={0}
                     exIndex={0}
                     isOpenMenu={false}
-                    onToggleMenu={vi.fn()}
+                    onToggleMenu={onToggleMenu}
                     onRemoveSet={vi.fn()}
                     onUpdateSet={vi.fn()}
                     onAddSpecialSet={vi.fn()}
@@ -326,6 +352,11 @@ describe('UI Alignments - R3 & R4', () => {
             expect(optionsButton.style.justifyContent).toBe('center');
             expect(optionsButton.style.alignSelf).toBe('center');
             expect(optionsButton.style.borderRadius).toBe('12px');
+            expect(optionsButton.style.width).toBe('44px');
+            expect(optionsButton.style.height).toBe('44px');
+            fireEvent.click(optionsButton);
+            expect(onToggleMenu).toHaveBeenCalledTimes(1);
+            expect(onToggleMenu).toHaveBeenCalledWith('set_1');
 
             // Find input container
             const inputContainer = optionsButton.parentElement;
