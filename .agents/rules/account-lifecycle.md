@@ -42,7 +42,10 @@ La bozza e lo stato di salvataggio sono legati al testimone revocabile:
 cambio owner o generazione nasconde i valori precedenti anche quando l'UID
 coincide. Il realm è l'autorità sul journal in attesa: la riconciliazione
 verificata ritira l'avviso senza reinviare il salvataggio dal form.
-La vista candidata non è montata nella PWA pubblica.
+L'ingresso account isolato monta la vista solo dopo consenso verificato
+e apertura esplicita dell'archivio. Ripristino e azioni di gestione restano
+fuori dalla vista mentre il realm è aperto e tornano disponibili quando
+viene sospeso. La PWA pubblica resta `identityOnly`.
 
 ### CF-03/04 — Recheck del journal Kinde dopo esito ambiguo (21/11/2026)
 
@@ -187,7 +190,7 @@ Il `KindeAccountSessionProvider` pubblico mantiene `identityOnly: true`, `candid
 
 ### Continuità consenso Kinde → preparazione vault in React (candidato 19/11/2026)
 
-L'ingresso `KindeAccountEntry` può collegare, **solo con prop esplicita** `candidatePreparationEnabled`, la conferma autorevole del primo consenso a un pulsante ordinario `Continua` che richiama `useKindeAccountSession.prepareCandidateArchive()`. Non genera/mostra chiavi, non installa un owner fitness, non chiama direttamente D1 ed è disponibile soltanto dopo `consent-confirmed`; l'azione non parte automaticamente al mount o al login. Un risultato con checkpoint e replica verificati rimane soltanto una osservazione candidata; la consegna ambigua o fallita è mostrata come in attesa/errore e non diventa successo. Lo stato del componente è scoped alla generazione UID/epoch/revisione, quindi la sessione sostituita non può pubblicare il risultato precedente.
+L'ingresso `KindeAccountEntry` può collegare, nella modalità esplicita `candidateMode="preparation"`, la conferma autorevole del primo consenso a un pulsante ordinario `Continua` che richiama `useKindeAccountSession.prepareCandidateArchive()`. Non genera/mostra chiavi, non installa un owner fitness, non chiama direttamente D1 ed è disponibile soltanto dopo `consent-confirmed`; l'azione non parte automaticamente al mount o al login. Un risultato con checkpoint e replica verificati rimane soltanto una osservazione candidata; la consegna ambigua o fallita è mostrata come in attesa/errore e non diventa successo. Lo stato del componente è scoped alla generazione UID/epoch/revisione, quindi la sessione sostituita non può pubblicare il risultato precedente.
 
 **MUST (confine pubblico):** `src/main.tsx` monta `KindeAccountSessionProvider` con `identityOnly: true`, `candidatePreparationEnabled: false`; `App.tsx` monta `KindeAccountEntry identityOnly`. Il pulsante candidato non è visibile né eseguibile nella PWA pubblica. Restano obbligatori consenso/revoca/diritti, owner install, Vault lifecycle, integrazione gateway D1 e prove provider/browser prima di attivare un account fitness.
 
@@ -571,7 +574,7 @@ Il gate non cambia l'ordine ciphertext → device key.
 `KindeCandidateBackupPanel` e
 `useKindeAccountSession.prepareCandidateBackup()` sono disponibili
 soltanto nell'entrypoint Kinde **candidato esplicitamente abilitato**
-(`identityOnly:false`, `candidatePreparationEnabled:true`), dopo
+(`identityOnly:false`, modalità `candidateMode` esplicita), dopo
 identità email verificata e consenso `consent-confirmed`. Il provider
 montato da `main.tsx` mantiene `identityOnly:true` e
 `candidatePreparationEnabled:false`: la UI non viene esposta agli

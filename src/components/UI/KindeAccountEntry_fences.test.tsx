@@ -10,15 +10,20 @@ import { prepareKindeCandidateOwner } from '../../lib/sync/kindeCandidateOwnerBo
 describe('Kinde candidate entry: owner, cookie and consent fences', () => {
     it('never starts vault preparation for public identity-only, missing consent or guest sessions', async () => {
         vi.mocked(readKindeCandidateIdentity).mockResolvedValue(verified);
-        const publicEntry = render(<KindeAccountEntry identityOnly candidatePreparationEnabled />);
+        const publicEntry = render(<KindeAccountEntry identityOnly candidateMode="preparation" />);
         await screen.findByText(/Sessione Kinde verificata/);
         expect(screen.queryByRole('button', { name: 'Continua' })).toBeNull();
         publicEntry.unmount();
-        const candidate = render(<KindeAccountEntry />);
+        const publicFitness = render(<KindeAccountEntry identityOnly candidateMode="fitness" />);
+        await screen.findByText(/Sessione Kinde verificata/);
+        expect(screen.queryByRole('button', { name: 'Apri archivio account' })).toBeNull();
+        expect(readKindeCandidateAccess).not.toHaveBeenCalled();
+        publicFitness.unmount();
+        const candidate = render(<KindeAccountEntry candidateMode="fitness" />);
         await screen.findByRole('button', { name: 'Conferma consenso' });
-        expect(screen.queryByRole('button', { name: 'Continua' })).toBeNull();
+        expect(screen.queryByRole('button', { name: 'Apri archivio account' })).toBeNull();
         candidate.unmount();
-        render(<KindeAccountEntry guestArchivePresent candidatePreparationEnabled />);
+        render(<KindeAccountEntry guestArchivePresent candidateMode="preparation" />);
         await screen.findByText(/archivio ospite/);
         expect(prepareKindeCandidateOwner).not.toHaveBeenCalled();
     });
@@ -32,7 +37,7 @@ describe('Kinde candidate entry: owner, cookie and consent fences', () => {
         vi.mocked(prepareKindeCandidateOwner).mockResolvedValueOnce({
             kind: 'delivery-pending', deliveryOutcome: 'reconciliation-required',
         }).mockRejectedValueOnce(new Error('D1 unavailable'));
-        render(<KindeAccountEntry candidatePreparationEnabled />);
+        render(<KindeAccountEntry candidateMode="preparation" />);
         const continueButton = await screen.findByRole('button', { name: 'Continua' });
         fireEvent.click(continueButton);
         await screen.findByText(/Preparazione non ancora confermata/);
@@ -55,7 +60,7 @@ describe('Kinde candidate entry: owner, cookie and consent fences', () => {
         }) => void;
         vi.mocked(prepareKindeCandidateOwner).mockImplementationOnce(() =>
             new Promise(resolve => { finish = resolve; }));
-        render(<KindeAccountEntry candidatePreparationEnabled />);
+        render(<KindeAccountEntry candidateMode="preparation" />);
         const next = await screen.findByRole('button', { name: 'Continua' });
         fireEvent.click(next);
         await waitFor(() => expect(prepareKindeCandidateOwner).toHaveBeenCalledTimes(1));
