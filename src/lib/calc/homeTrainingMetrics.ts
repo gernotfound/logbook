@@ -66,12 +66,14 @@ export function buildHomeMuscleExposureIndex(
         for (const exercise of workout.exercises || []) {
             const libraryExercise = library.get(exercise.exId);
             if (!libraryExercise) continue;
-            const hasWorkSet = (exercise.sets || []).some(set => {
-                const hasValues = (set.kg !== undefined && set.kg !== '')
-                    || (set.reps !== undefined && set.reps !== '')
-                    || (set.time !== undefined && set.time !== '');
-                return set.done === true || hasValues || set.done === undefined;
-            });
+            const hasRecordedValues = (part: { kg?: string | number; reps?: string | number; time?: string | number }) =>
+                (part.kg !== undefined && part.kg !== '')
+                    || (part.reps !== undefined && part.reps !== '')
+                    || (part.time !== undefined && part.time !== '');
+            const hasWorkSet = (exercise.sets || []).some(set =>
+                set.done === true || hasRecordedValues(set)
+                    || (set.segments ?? []).some(hasRecordedValues),
+            );
             if (!hasWorkSet) continue;
             for (const id of [...(libraryExercise.muscles || []), ...(libraryExercise.secondaryMuscles || [])]) {
                 if (!id || typeof id !== 'string') continue;
