@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
-import { readFileSync, readdirSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { D1_NOW_MS } from '../cloudflare/sql/d1-time.mjs';
@@ -22,6 +23,24 @@ export const MIGRATIONS = Object.freeze(`
 const DATABASE = 'thelogbook-cf02-eu-isolated-20261113';
 const DATABASE_ID = '9aa51833-8adc-495f-bdfc-93b5542e8023';
 const BASE = 'https://api.cloudflare.com/client/v4';
+const CLOCK_MIGRATION = '0011_integer_cloud_key_clock.sql';
+const CLOCK_MIGRATION_SHA256 = 'fe5e73f36b0387a816bdc535b6ca9eaf475fc9320a6e22e7cc3a939a6d421809';
+const MIGRATION_DIR = new URL('../cloudflare/api/migrations/', import.meta.url);
+const EXISTING_TEST_TABLES = Object.freeze({
+  subjects: 'sync_subjects',
+  states: 'sync_state',
+  documents: 'sync_documents',
+  replicas: 'sync_replicas',
+  receipts: 'sync_receipts',
+  replica_mutations: 'sync_replica_mutations',
+});
+
+export function verifyExistingTestUpgradeSql(sql) {
+  // This exception is only for replacing two schema definitions. Any edit
+  // to the SQL or additional pending migration requires another review.
+  assert.equal(createHash('sha256').update(sql.replaceAll('\r\n', '\n')).digest('hex'),
+    CLOCK_MIGRATION_SHA256, 'unreviewed SQL for populated test D1');
+}
 
 export function verifyLocalMigrationTarget(config, names) {
   assert.deepEqual(names, MIGRATIONS, 'unexpected local migration set or ordering');
@@ -70,7 +89,12 @@ function unpackQuery(body) {
 }
 
 export async function verifyRemoteIsolatedD1({
-  phase, account, token, request = fetch,
+  phase,
+  account,
+  existingTestDb0011 = false,
+  priorInventory,
+  request = fetch,
+  token,
 }) {
   assert.ok(phase === 'before' || phase === 'after', 'invalid verification phase');
   assert.match(account ?? '', /^[a-f0-9]{32}$/, 'invalid Cloudflare account');
@@ -78,9 +102,13 @@ export async function verifyRemoteIsolatedD1({
 
   const config = JSON.parse(readFileSync(
     new URL('../cloudflare/api/wrangler.isolated.jsonc', import.meta.url), 'utf8'));
-  const names = readdirSync(new URL('../cloudflare/api/migrations/', import.meta.url))
+  const names = readdirSync(MIGRATION_DIR)
     .filter(name => name.endsWith('.sql')).sort();
   verifyLocalMigrationTarget(config, names);
+  if (existingTestDb0011) {
+    assert.equal(names.length, 11, 'populated test D1 mode permits only 0011');
+    verifyExistingTestUpgradeSql(readFileSync(new URL(CLOCK_MIGRATION, MIGRATION_DIR), 'utf8'));
+  }
 
   const root = BASE + '/accounts/' + account + '/d1/database/' + DATABASE_ID;
   async function call(path, sql) {
@@ -113,19 +141,34 @@ export async function verifyRemoteIsolatedD1({
   const ledger = unpackQuery(await call('/query',
     'SELECT id, name FROM d1_migrations ORDER BY id'));
   const applied = verifyMigrationLedger(ledger, phase);
+  if (existingTestDb0011 && phase === 'before') {
+    assert.equal(applied, 10, 'populated test D1 must be at 0010');
+  }
 
-  // No principal/session/key/erasure job may exist in this isolated sandbox.
-  // Read only aggregates; never request identities or ciphertext from D1.
-  const counts = unpackQuery(await call('/query', [
-    'SELECT',
-    '(SELECT COUNT(*) FROM auth_principals) AS principals,',
-    '(SELECT COUNT(*) FROM auth_sessions) AS sessions,',
-    '(SELECT COUNT(*) FROM cloud_account_keys) AS keys,',
-    '(SELECT COUNT(*) FROM health_erasure_jobs) AS erasure_jobs',
-  ].join(' ')));
+  // Read only aggregates. The application DB already holds identity sessions
+  // and older replica test records from before consent/ADK became required.
+  const tables = {
+    principals: 'auth_principals',
+    sessions: 'auth_sessions',
+    keys: 'cloud_account_keys',
+    erasure_jobs: 'health_erasure_jobs',
+    ...(existingTestDb0011 ? { consents: 'health_consent_acceptances', ...EXISTING_TEST_TABLES } : {}),
+  };
+  const countSql = Object.entries(tables).map(([key, table]) => `(SELECT COUNT(*) FROM ${table}) AS ${key}`).join(', ');
+  const counts = unpackQuery(await call('/query', 'SELECT ' + countSql));
   assert.equal(counts.length, 1, 'invalid isolation count response');
-  for (const key of ['principals', 'sessions', 'keys', 'erasure_jobs']) {
+  const emptyTables = existingTestDb0011 ? ['keys', 'erasure_jobs', 'consents'] : ['principals', 'sessions', 'keys', 'erasure_jobs'];
+  for (const key of emptyTables) {
     assert.equal(counts[0]?.[key], 0, 'non-empty isolated D1 ' + key);
+  }
+  let inventory;
+  if (existingTestDb0011) {
+    inventory = Object.fromEntries(['principals', 'sessions', ...Object.keys(EXISTING_TEST_TABLES)]
+      .map(key => [key, counts[0]?.[key]]));
+    assert.ok(Object.values(inventory).every(count => Number.isSafeInteger(count) && count >= 0),
+      'invalid existing test inventory');
+    assert.ok(inventory.principals > 0, 'existing test identities missing');
+    if (phase === 'after') assert.deepEqual(inventory, priorInventory, 'existing test inventory changed');
   }
 
   if (phase === 'after') {
@@ -149,15 +192,30 @@ export async function verifyRemoteIsolatedD1({
   }
 
   return { phase, applied, expected: MIGRATIONS.length,
-    jurisdiction: 'eu', timeTravelBookmarkVerified: true };
+    jurisdiction: 'eu', timeTravelBookmarkVerified: true,
+    ...(inventory ? { inventory } : {}) };
+}
+
+async function verifyFromCli() {
+  const [, , phase, flag = 'false', inventoryPath] = process.argv;
+  assert.ok(flag === 'true' || flag === 'false', 'invalid populated test DB mode');
+  const existingTestDb0011 = flag === 'true';
+  if (existingTestDb0011) assert.ok(inventoryPath, 'missing private run inventory path');
+  const priorInventory = existingTestDb0011 && phase === 'after'
+    ? JSON.parse(readFileSync(inventoryPath, 'utf8')) : undefined;
+  const { inventory, ...result } = await verifyRemoteIsolatedD1({
+    phase, existingTestDb0011, priorInventory,
+    account: process.env.CLOUDFLARE_ACCOUNT_ID,
+    token: process.env.CLOUDFLARE_API_TOKEN,
+  });
+  if (existingTestDb0011 && phase === 'before') {
+    writeFileSync(inventoryPath, JSON.stringify(inventory), { flag: 'wx', mode: 0o600 });
+  }
+  return result;
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
-  verifyRemoteIsolatedD1({
-    phase: process.argv[2],
-    account: process.env.CLOUDFLARE_ACCOUNT_ID,
-    token: process.env.CLOUDFLARE_API_TOKEN,
-  }).then(result => console.log(JSON.stringify(result)),
+  verifyFromCli().then(result => console.log(JSON.stringify(result)),
     () => {
       console.error('Isolated D1 verification failed (no secrets or data printed)');
       process.exitCode = 1;
