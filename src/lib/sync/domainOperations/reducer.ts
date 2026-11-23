@@ -1,4 +1,5 @@
 import type {
+    Exercise,
     NutritionDay,
     TrainingCycle,
     UserData,
@@ -10,6 +11,7 @@ import { TrainingCycleWriteSchema } from '../../schemas/schema_training';
 import { hasValidCycleWriteFrequencies, isBoundedCycleCount, MAX_EDITABLE_CYCLE_WEEKS, MAX_CYCLE_SESSIONS_PER_WEEK } from '../../calc/cycleLimits';
 import { calculateLoggedMealTotals } from '../../nutrition/calculateLoggedMealTotals';
 import { getLocalDateString } from '../../utils/date';
+import { exerciseRoutineReferences } from '../../exerciseRoutineReferences';
 import type { DomainOperation, DomainOperationBatch } from './contracts';
 import {
     applyPatch,
@@ -22,6 +24,8 @@ import {
     upsertById,
     assertNeverDomainOperation,
 } from './validation';
+
+const EXERCISE_EDITOR_FIELDS = ['name', 'notes', 'muscles', 'secondaryMuscles', 'trackingType', 'isBodyweight', 'equipmentWeight'] as const;
 
 function assertNewCycleRoutineFrequencies(routines: ReadonlyArray<{ frequencyPerWeek?: unknown }>, sessionsPerWeek: unknown): void {
     if (!hasValidCycleWriteFrequencies(routines, sessionsPerWeek)) {
@@ -379,8 +383,30 @@ function applyOne(data: UserData, operation: DomainOperation): UserData {
                 .sort((a, b) => a.name.localeCompare(b.name, 'it'));
             break;
         }
+        case 'exercise.edit': {
+            const id = requireId(operation.id, 'Esercizio');
+            const existing = data.library?.find(item => item.id === id);
+            if (!existing || existing.isDefault) throw new Error('Esercizio personale non più disponibile.');
+            const patch: Partial<Exercise> = {};
+            for (const field of EXERCISE_EDITOR_FIELDS) {
+                if (Object.hasOwn(operation.fields, field)) Reflect.set(patch, field, operation.fields[field]);
+            }
+            const exercise = applyPatch(existing, patch);
+            data.library = upsertById(data.library, exercise, item => requireId(item.id, 'Esercizio'), 'Archivio esercizi')
+                .sort((a, b) => a.name.localeCompare(b.name, 'it'));
+            break;
+        }
         case 'exercise.delete': {
             const id = requireId(operation.id, 'Esercizio');
+            if (operation.expectedRoutineIds !== undefined) {
+                const existing = data.library?.find(item => item.id === id);
+                const currentIds = exerciseRoutineReferences(data.routines ?? [], id);
+                const confirmedIds = [...operation.expectedRoutineIds].sort();
+                if (!existing || existing.isDefault || currentIds.length !== confirmedIds.length
+                    || currentIds.some((routineId, index) => routineId !== confirmedIds[index])) {
+                    throw new Error('Esercizio o schede collegate cambiati dopo la conferma.');
+                }
+            }
             data.library = deleteById(data.library, id, item => requireId(item.id, 'Esercizio'), 'Archivio esercizi');
             data.routines = (data.routines ?? []).map(routine => ({
                 ...routine,

@@ -90,6 +90,59 @@ afterEach(() => {
 });
 
 describe('isolated Kinde fitness realm with trusted owner, no Firebase/global grant', () => {
+    it('saves an exercise without consuming the routine draft and opens both with separate device locks', async () => {
+        const fixture = await createCloudKeyHttpFixture([uid]);
+        try {
+            await fixture.consent(uid);
+            const client = browser(fixture);
+            const realm = await openKindeCandidateFitnessRealm({ ...client, expected });
+            const routine = await realm.openRoutineDraft();
+            const exercise = await realm.openExerciseDraft();
+            routine.write({ name: 'Scheda ancora in bozza', exercises: [] });
+            exercise.write({ ...exercise.initial.values, name: 'Esercizio salvato', notes: 'Setup cifrato' });
+            const routineSlot = protectedDeviceKey('draft_routine', owner);
+            const exerciseSlot = protectedDeviceKey('draft_exercise', owner);
+            const before = localStorage.getItem(routineSlot);
+            expect(before).toMatch(/^tlb-sealed:v1:/);
+            expect(localStorage.getItem(exerciseSlot)).toMatch(/^tlb-sealed:v1:/);
+            expect(isVaultUnlocked(owner)).toBe(false);
+            await expect(realm.saveExerciseDraft(exercise))
+                .resolves.toMatchObject({ outcome: { kind: 'cloud-acknowledged' }, draftCleared: true });
+            expect(localStorage.getItem(exerciseSlot)).toBeNull();
+            expect(localStorage.getItem(routineSlot)).toBe(before);
+            expect(() => routine.write({ name: 'Editor precedente', exercises: [] })).toThrow();
+            const recovered = await realm.openRoutineDraft();
+            expect(recovered.initial.name).toBe('Scheda ancora in bozza');
+            expect(realm.snapshot()?.data.library).toMatchObject([{ name: 'Esercizio salvato', notes: 'Setup cifrato' }]);
+            expect(fixture.count('sync_receipts', uid)).toBe(1);
+            realm.close();
+        } finally { fixture.close(); }
+    });
+
+    it('rejects deletion when another realm adds a routine reference after the confirmation snapshot', async () => {
+        const fixture = await createCloudKeyHttpFixture([uid]);
+        try {
+            await fixture.consent(uid);
+            const client = browser(fixture);
+            const first = await openKindeCandidateFitnessRealm({ ...client, expected });
+            const id = 'exercise-confirmed-earlier';
+            await first.submit({ type: 'exercise.upsert', exercise: { id, name: 'Esercizio da conservare', setsCount: 3, sets: [] } });
+            const second = await openKindeCandidateFitnessRealm({ ...client, expected });
+            expect(first.snapshot()?.data.routines ?? []).toEqual([]);
+            await second.submit({
+                type: 'routine.create', routine: { id: 'new-reference', name: 'Nuova scheda', exercises: [{ exId: id, setsCount: 4 }] },
+            });
+            await expect(first.submit({ type: 'exercise.delete', id, expectedRoutineIds: [] }))
+                .rejects.toThrow('schede collegate cambiati');
+            expect(fixture.count('sync_receipts', uid)).toBe(2);
+            const { data } = await second.refresh();
+            expect(data.library?.map(exercise => exercise.id)).toEqual([id]);
+            expect(data.routines?.[0]?.exercises).toMatchObject([{ exId: id, setsCount: 4 }]);
+            first.close();
+            second.close();
+        } finally { fixture.close(); }
+    });
+
     it('recovers a sealed routine draft after close and submits it once without a global vault grant', async () => {
         const fixture = await createCloudKeyHttpFixture([uid]);
         try {

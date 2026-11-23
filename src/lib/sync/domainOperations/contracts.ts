@@ -23,6 +23,10 @@ type NutritionDayPatch = Partial<Omit<
     'date' | 'kcal' | 'carbs' | 'pro' | 'fat' | 'meals' | 'supplementsIntake' | 'steps' | 'stepsSource' | 'stepsCapturedAt' | 'cardioSessions'
 >>;
 
+export type ExerciseEditableFields = Pick<Exercise,
+    'name' | 'notes' | 'muscles' | 'secondaryMuscles' | 'trackingType' | 'isBodyweight' | 'equipmentWeight'
+>;
+
 export type DomainOperation =
     | { type: 'profile.patch'; patch: Partial<UserProfile> }
     | { type: 'nutrition-planning.replace'; value: NutritionPlanning; origin?: 'generated-default' | 'user-edited' }
@@ -62,7 +66,8 @@ export type DomainOperation =
     | { type: 'workout.complete'; workout: WorkoutSession; expectedActiveWorkoutId: string; activePains: string[] }
     | { type: 'active-pains.set'; pains: string[] }
     | { type: 'exercise.upsert'; exercise: Exercise }
-    | { type: 'exercise.delete'; id: string }
+    | { type: 'exercise.edit'; id: string; fields: ExerciseEditableFields }
+    | { type: 'exercise.delete'; id: string; expectedRoutineIds?: readonly string[] }
     | { type: 'food.upsert'; food: Food & { id: string | number } }
     | { type: 'food.edit'; food: Food & { id: string | number } }
     | { type: 'food.delete'; id: string | number }

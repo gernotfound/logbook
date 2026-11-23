@@ -135,6 +135,12 @@ preparato prima della cancellazione fallisce senza ricreare la scheda.
 nome a partire dai dati correnti della transazione. Due creazioni che
 partono da copie diverse dell'elenco non sostituiscono l'elenco intero.
 
+`exercise.edit` conserva identità e dati estranei al form, richiede un
+esercizio personale presente e applica solo i campi dichiarati dall'editor.
+La cancellazione dal candidato Kinde porta gli ID delle schede viste alla
+conferma. Una differenza al commit blocca la cancellazione e i relativi
+tombstone, così l'utente può confermare sullo stato aggiornato.
+
 ## Patch
 
 Per operazioni `*.patch`:

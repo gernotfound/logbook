@@ -4,6 +4,46 @@ import { applyDomainOperations } from '../../src/lib/sync/domainOperations';
 import { base, compile } from './m8DomainFixture';
 
 describe('M8 Domain Operations V4 — mutations, reordering and patch semantics', () => {
+    it('edits only authorable fields of an existing personal exercise', () => {
+        const before = base({
+            library: [
+                { id: 'custom', name: 'Rematore', setsCount: 5, sets: [] },
+                { id: 'catalog', name: 'Pressa', setsCount: 3, sets: [], isDefault: true },
+            ],
+        });
+        const edit = { type: 'exercise.edit', id: 'custom', fields: { name: 'Rematore con manubri', notes: 'Presa neutra' } } as const;
+        const { after, operations } = compile(before, edit);
+        expect(after.library?.find(item => item.id === 'custom')).toMatchObject({
+            id: 'custom', setsCount: 5, sets: [], name: 'Rematore con manubri', notes: 'Presa neutra',
+        });
+        expect(operations.length).toBeGreaterThan(0);
+        expect(operations.every(item => item.docPath === '' && item.path.includes('custom'))).toBe(true);
+        expect(() => applyDomainOperations(before, { ...edit, id: 'missing' })).toThrow('Esercizio personale');
+        expect(() => applyDomainOperations(before, { ...edit, id: 'catalog' })).toThrow('Esercizio personale');
+    });
+
+    it('rejects a stale delete confirmation and removes only the observed routine references when retried', () => {
+        const before = base({
+            library: [
+                { id: 'custom', name: 'Rematore', setsCount: 3, sets: [] },
+                { id: 'another', name: 'Panca', setsCount: 3, sets: [] },
+            ],
+            routines: [
+                { id: 'r1', name: 'Prima', exercises: [{ exId: 'custom', setsCount: 5 }] },
+                { id: 'r2', name: 'Seconda', exercises: [{ exId: 'custom', setsCount: 2 }, { exId: 'another', setsCount: 4 }] },
+            ],
+            history: [{ id: 'sample', date: '2026-10-12', exercises: [] }],
+        });
+        const remove = { type: 'exercise.delete', id: 'custom', expectedRoutineIds: ['r1'] } as const;
+        expect(() => applyDomainOperations(before, remove)).toThrow('schede collegate cambiati');
+        expect(before.routines?.map(routine => routine.exercises.length)).toEqual([1, 2]);
+        const { after, operations } = compile(before, { ...remove, expectedRoutineIds: ['r2', 'r1'] });
+        expect(after.library?.map(item => item.id)).toEqual(['another']);
+        expect(after.routines?.map(routine => routine.exercises)).toEqual([[], [{ exId: 'another', setsCount: 4 }]]);
+        expect(after.history).toEqual(before.history);
+        expect(operations.every(operation => operation.docPath === '')).toBe(true);
+    });
+
     it('compiles a profile patch only inside the profile root scope', () => {
         const before = base({ profile: { height: '170', gender: 'M' }, activePains: ['shoulder'] });
         const { after, operations, replay } = compile(before, { type: 'profile.patch', patch: { height: '171' } });
