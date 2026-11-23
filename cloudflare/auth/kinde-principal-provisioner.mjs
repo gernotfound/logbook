@@ -1,4 +1,5 @@
 import { createKindeLoginProofVerifier, KindeLoginProofError } from './kinde-login-proof.mjs';
+import { D1_NOW_MS } from '../sql/d1-time.mjs';
 
 const UID_CONTEXT = 'thelogbook:kinde-owner:v1\0';
 
@@ -50,28 +51,26 @@ export function createKindePrincipalProvisioner(configuration, keySet) {
       const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', bytes));
       const uid = 'k_' + btoa(String.fromCharCode(...digest))
         .replaceAll('+', '-').replaceAll('/', '_').replace(/=+$/, '');
-      const nowMs = Date.now();
-      if (!Number.isSafeInteger(nowMs) || nowMs <= 0) throw new Error('clock-unavailable');
-
       // The read follows the insert on one primary-started D1 session.
       // An ambiguous/failed write never returns a UID or an auth success.
       const session = db.withSession('first-primary');
       const inserted = await session.prepare(`
         INSERT INTO auth_principals(uid, status, verified_at_ms, auth_epoch)
-        VALUES (?, 'active', ?, 1)
+        VALUES (?, 'active', ${D1_NOW_MS}, 1)
         ON CONFLICT(uid) DO NOTHING
-      `).bind(uid, nowMs).run();
+      `).bind(uid).run();
       if (inserted?.success !== true
         || ![0, 1].includes(inserted.meta?.changes)) {
         throw new Error('unproven-insert');
       }
       const principal = await session.prepare(`
-        SELECT uid, status, verified_at_ms, auth_epoch
+        SELECT uid, status, verified_at_ms, auth_epoch, ${D1_NOW_MS} AS observed_at_ms
         FROM auth_principals WHERE uid = ?
       `).bind(uid).first();
       if (principal?.uid !== uid || principal.status !== 'active'
         || !Number.isSafeInteger(principal.verified_at_ms)
-        || principal.verified_at_ms <= 0 || principal.verified_at_ms > nowMs
+        || !Number.isSafeInteger(principal.observed_at_ms)
+        || principal.verified_at_ms <= 0 || principal.verified_at_ms > principal.observed_at_ms
         || !Number.isSafeInteger(principal.auth_epoch)
         || principal.auth_epoch < 1) {
         throw new Error('principal-not-active');

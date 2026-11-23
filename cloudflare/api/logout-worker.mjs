@@ -1,5 +1,6 @@
 // Server-side logout of one current session; never erase device data or journal.
 import { strictlyEmptyPost } from '../http/strict-empty-post.mjs';
+import { D1_NOW_MS } from '../sql/d1-time.mjs';
 
 const INTERNAL = 'https://auth-gate.internal/__internal/authorize';
 const HASH = /^[a-f0-9]{64}$/;
@@ -77,22 +78,21 @@ export default {
 
       const claims = await trustedClaims(request, env);
       if (claims.errorStatus) return json({ error: 'unauthorized-or-unavailable' }, claims.errorStatus);
-      const now = Date.now();
       let revoked = false;
       try {
         // The update is scoped to the session's hash, owner and current
         // principal epoch: a raced account fence cannot become a logout ACK.
         const result = await env.DB.prepare(`
-          UPDATE auth_sessions SET revoked_at_ms = ?
+          UPDATE auth_sessions SET revoked_at_ms = ${D1_NOW_MS}
           WHERE token_hash = ? AND uid = ? AND auth_epoch = ?
-            AND revoked_at_ms IS NULL AND issued_at_ms <= ?
-            AND idle_expires_at_ms > ? AND absolute_expires_at_ms > ?
+            AND revoked_at_ms IS NULL AND issued_at_ms <= ${D1_NOW_MS}
+            AND idle_expires_at_ms > ${D1_NOW_MS} AND absolute_expires_at_ms > ${D1_NOW_MS}
             AND EXISTS (
               SELECT 1 FROM auth_principals p
               WHERE p.uid = auth_sessions.uid AND p.status = 'active'
                 AND p.auth_epoch = auth_sessions.auth_epoch
             )
-        `).bind(now, claims.sessionHash, claims.uid, claims.fenceEpoch, now, now, now).run();
+        `).bind(claims.sessionHash, claims.uid, claims.fenceEpoch).run();
         revoked = result?.success === true && result.meta?.changes === 1;
       } catch {
         // The database may have committed before the response disappeared.

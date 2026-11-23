@@ -4,6 +4,7 @@ import { test } from 'node:test';
 import { DatabaseSync } from 'node:sqlite';
 import { issueVerifiedSession, SessionIssuanceError } from '../../cloudflare/auth/session-issuer.mjs';
 import gate, { hashSessionSecret } from '../../cloudflare/auth/session-gate.mjs';
+import { D1_NOW_MS } from '../../cloudflare/sql/d1-time.mjs';
 
 const ORIGIN = 'https://candidate.example.invalid';
 
@@ -50,10 +51,11 @@ function tokens(issued) {
 void test('issuer creates 32-byte random session and host-only CSRF cookies after verified principal', async () => {
   const { db, sqlite } = fixture();
   try {
-    const before = Date.now();
+    const readClock = sqlite.prepare(`SELECT ${D1_NOW_MS} AS ms`);
+    const before = readClock.get().ms;
     const first = await issueVerifiedSession(db, 'verified-a');
     const second = await issueVerifiedSession(db, 'verified-a');
-    const after = Date.now();
+    const after = readClock.get().ms;
     const a = tokens(first);
     const b = tokens(second);
     assert.notEqual(a.session, b.session);
@@ -107,15 +109,15 @@ void test('unverified, disabled, deleted, future-verified and invalid principal 
   } finally { sqlite.close(); }
 });
 
-void test('a provider error or missing affected-row proof never produces a cookie', async () => {
+void test('a provider error or missing issuance row never produces a cookie', async () => {
   const { sqlite } = fixture();
   try {
     const broken = {
-      prepare: () => ({ bind: () => ({ run: async () => ({ success: true, meta: { changes: 0 } }) }) }),
+      prepare: () => ({ bind: () => ({ first: async () => null }) }),
     };
     await assert.rejects(issueVerifiedSession(broken, 'verified-a'), SessionIssuanceError);
     const failed = {
-      prepare: () => ({ bind: () => ({ run: async () => { throw Error('synthetic D1 outage'); } }) }),
+      prepare: () => ({ bind: () => ({ first: async () => { throw Error('synthetic D1 outage'); } }) }),
     };
     await assert.rejects(issueVerifiedSession(failed, 'verified-a'), SessionIssuanceError);
     assert.equal(sqlite.prepare('SELECT COUNT(*) AS count FROM auth_sessions').get().count, 0);

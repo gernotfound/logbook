@@ -1,6 +1,7 @@
 // Candidate trusted consent endpoint. No public deployment until real Auth,
 // rights-only export and the durable erasure-job executor are integrated.
 import { strictlyEmptyPost } from '../http/strict-empty-post.mjs';
+import { D1_NOW_MS } from '../sql/d1-time.mjs';
 import {
   armIndependentHealthWithdrawal, enrollIndependentOwner,
   recordVerifiedHealthWithdrawal, recordVerifiedInitialConsent, requireIndependentOwnerFence,
@@ -45,12 +46,11 @@ async function readConsent(db, claims, { forWithdrawal = false, includeSessionEx
   if (typeof db.withSession !== 'function') throw new Error('missing-primary-session');
   // The identity read must also be session-current after the private gate:
   // revocation can happen between the two Workers' D1 reads.
-  const now = Date.now();
   const row = await db.withSession('first-primary').prepare(`
     SELECT p.uid AS uid, s.status, s.consent_revision, s.fence_epoch, state.revision AS sync_revision,
       a.privacy_version, a.terms_version, a.accepted_at_ms, a.over_18_confirmed,
       t.idle_expires_at_ms AS session_expires_at_ms,
-      s.erased_before_revision,
+      s.erased_before_revision, ${D1_NOW_MS} AS observed_at_ms,
       EXISTS (
         SELECT 1 FROM health_erasure_finalizations f
         JOIN health_erasure_jobs j
@@ -72,10 +72,11 @@ async function readConsent(db, claims, { forWithdrawal = false, includeSessionEx
     WHERE p.uid = ? AND p.status = 'active' AND p.auth_epoch = ?
       AND t.token_hash = ? AND t.auth_epoch = p.auth_epoch
       AND t.revoked_at_ms IS NULL
-      AND t.issued_at_ms <= ? AND t.idle_expires_at_ms > ?
-      AND t.absolute_expires_at_ms > ?
-  `).bind(claims.uid, claims.fenceEpoch, claims.sessionHash, now, now, now).first();
-  if (!row || row.uid !== claims.uid) throw new Error('identity-changed');
+      AND t.issued_at_ms <= ${D1_NOW_MS} AND t.idle_expires_at_ms > ${D1_NOW_MS}
+      AND t.absolute_expires_at_ms > ${D1_NOW_MS}
+  `).bind(claims.uid, claims.fenceEpoch, claims.sessionHash).first();
+  if (!row || row.uid !== claims.uid || !Number.isSafeInteger(row.observed_at_ms)
+    || row.observed_at_ms <= 0) throw new Error('identity-changed');
   if (row.status === null) {
     if (row.privacy_version !== null || row.consent_revision !== null || row.fence_epoch !== null) {
       throw new Error('invalid-consent-state');
@@ -105,7 +106,7 @@ async function readConsent(db, claims, { forWithdrawal = false, includeSessionEx
     || !VERSION.test(row.privacy_version) || !VERSION.test(row.terms_version)
     || !Number.isSafeInteger(row.accepted_at_ms) || row.accepted_at_ms < 1
     || !Number.isFinite(new Date(row.accepted_at_ms).getTime())
-    || row.accepted_at_ms > now
+    || row.accepted_at_ms > row.observed_at_ms
     || row.over_18_confirmed !== 1)) {
     // An active account missing an authenticated acceptance is not writable.
     throw new Error('missing-consent-proof');
@@ -208,7 +209,6 @@ function validWithdrawal(body) {
 }
 
 async function pendingWithdrawal(db, claims) {
-  const now = Date.now();
   // A lost write response is not proof of a withdrawal. The primary must
   // attest this owner's still-current session, withdrawn generation AND job.
   const row = await db.withSession('first-primary').prepare(`
@@ -219,24 +219,22 @@ async function pendingWithdrawal(db, claims) {
     JOIN auth_sessions t ON t.uid = p.uid
     WHERE j.uid = ? AND j.consent_revision = ?
       AND j.fence_epoch <= ? AND j.status IN ('pending', 'processing')
-      AND j.requested_at_ms > 0 AND j.requested_at_ms <= ?
+      AND j.requested_at_ms > 0 AND j.requested_at_ms <= ${D1_NOW_MS}
       AND s.status = 'withdrawn'
       AND s.consent_revision = j.consent_revision
       AND s.fence_epoch = j.fence_epoch
       AND p.status = 'active' AND p.auth_epoch = ?
       AND t.token_hash = ? AND t.auth_epoch = p.auth_epoch
       AND t.revoked_at_ms IS NULL
-      AND t.issued_at_ms <= ? AND t.idle_expires_at_ms > ?
-      AND t.absolute_expires_at_ms > ?
+      AND t.issued_at_ms <= ${D1_NOW_MS} AND t.idle_expires_at_ms > ${D1_NOW_MS}
+      AND t.absolute_expires_at_ms > ${D1_NOW_MS}
   `).bind(
-    claims.uid, claims.healthConsentRevision, claims.fenceEpoch, now,
-    claims.fenceEpoch, claims.sessionHash, now, now, now,
+    claims.uid, claims.healthConsentRevision, claims.fenceEpoch, claims.fenceEpoch, claims.sessionHash,
   ).first();
   return row?.status === 'pending' || row?.status === 'processing' ? row.status : null;
 }
 
 async function withdrawConsent(db, claims, subjectFenceEpoch) {
-  const now = Date.now();
   try {
     // The trusted session, principal, age/consent proof and active generation
     // are rechecked inside the INSERT. Its AFTER trigger atomically changes
@@ -246,7 +244,7 @@ async function withdrawConsent(db, claims, subjectFenceEpoch) {
       INSERT INTO health_erasure_jobs (
         uid, consent_revision, fence_epoch, requested_at_ms, status
       )
-      SELECT s.uid, s.consent_revision, s.fence_epoch, ?, 'pending'
+      SELECT s.uid, s.consent_revision, s.fence_epoch, ${D1_NOW_MS}, 'pending'
       FROM sync_subjects s
       JOIN auth_principals p ON p.uid = s.uid
       JOIN auth_sessions t ON t.uid = p.uid
@@ -255,15 +253,14 @@ async function withdrawConsent(db, claims, subjectFenceEpoch) {
         AND s.consent_revision = ? AND s.fence_epoch = ? AND s.erased_before_revision = 0
         AND c.consent_revision = s.consent_revision
         AND c.over_18_confirmed = 1
-        AND c.accepted_at_ms > 0 AND c.accepted_at_ms <= ?
+        AND c.accepted_at_ms > 0 AND c.accepted_at_ms <= ${D1_NOW_MS}
         AND p.status = 'active' AND p.auth_epoch = ?
         AND t.token_hash = ? AND t.auth_epoch = p.auth_epoch
         AND t.revoked_at_ms IS NULL
-        AND t.issued_at_ms <= ? AND t.idle_expires_at_ms > ?
-        AND t.absolute_expires_at_ms > ?
+        AND t.issued_at_ms <= ${D1_NOW_MS} AND t.idle_expires_at_ms > ${D1_NOW_MS}
+        AND t.absolute_expires_at_ms > ${D1_NOW_MS}
     `).bind(
-      now, claims.uid, claims.healthConsentRevision, subjectFenceEpoch,
-      now, claims.fenceEpoch, claims.sessionHash, now, now, now,
+      claims.uid, claims.healthConsentRevision, subjectFenceEpoch, claims.fenceEpoch, claims.sessionHash,
     ).run();
   } catch {
     // A timeout can occur AFTER the atomic insert/trigger committed. Only
@@ -290,7 +287,6 @@ function validAcceptance(body, env) {
 }
 
 async function acceptInitial(db, claims, env) {
-  const now = Date.now();
   // The first INSERT is conditional on the still-active hashed session and
   // principal epoch, so a revocation between AuthGate and SQL cannot grant
   // first consent. Later statements fail if this INSERT inserted zero rows:
@@ -302,18 +298,18 @@ async function acceptInitial(db, claims, env) {
         SELECT p.uid,'active',1,p.auth_epoch
         FROM auth_principals p JOIN auth_sessions t ON t.uid = p.uid
         WHERE p.uid = ? AND p.status = 'active'
-          AND p.verified_at_ms > 0 AND p.verified_at_ms <= ?
+          AND p.verified_at_ms > 0 AND p.verified_at_ms <= ${D1_NOW_MS}
           AND p.auth_epoch = ? AND t.auth_epoch = p.auth_epoch
           AND t.token_hash = ? AND t.revoked_at_ms IS NULL
-          AND t.issued_at_ms <= ? AND t.idle_expires_at_ms > ?
-          AND t.absolute_expires_at_ms > ?
-      `).bind(claims.uid, now, claims.fenceEpoch, claims.sessionHash, now, now, now),
+          AND t.issued_at_ms <= ${D1_NOW_MS} AND t.idle_expires_at_ms > ${D1_NOW_MS}
+          AND t.absolute_expires_at_ms > ${D1_NOW_MS}
+      `).bind(claims.uid, claims.fenceEpoch, claims.sessionHash),
       db.prepare('INSERT INTO sync_state (uid,revision) VALUES (?,0)').bind(claims.uid),
       db.prepare(`
         INSERT INTO health_consent_acceptances
           (uid,consent_revision,privacy_version,terms_version,accepted_at_ms,over_18_confirmed)
-        VALUES (?,1,?,?,?,1)
-      `).bind(claims.uid, env.CONSENT_PRIVACY_VERSION, env.CONSENT_TERMS_VERSION, now),
+        VALUES (?,1,?,?,${D1_NOW_MS},1)
+      `).bind(claims.uid, env.CONSENT_PRIVACY_VERSION, env.CONSENT_TERMS_VERSION),
     ]);
   } catch {
     // A transaction with a lost write response may already be committed.
