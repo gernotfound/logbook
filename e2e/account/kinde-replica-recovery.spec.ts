@@ -21,8 +21,10 @@ test('reads and deletes only the confirmed Kinde measurement, keeping meals and 
         await expect(history).toHaveCount(0);
         await first.getByRole('button', { name: 'Apri archivio account' }).click();
         await expect(history.getByRole('heading', { name: 'Storico Dati' })).toBeVisible();
+        await expect(history.locator('.history-calendar-grid')).toHaveCSS('display', 'grid');
         await history.getByRole('button', { name: 'Apri dettaglio del 17/10/2026' }).click();
         const detail = history.getByRole('dialog', { name: 'Dettaglio dati' });
+        await expect(history.locator('.data-detail-layer')).toHaveCSS('position', 'fixed');
         await expect(detail.getByText('77,5 kg', { exact: true })).toBeVisible();
         await expect(detail.getByText('07:20', { exact: true })).toBeVisible();
         await expect(detail.getByRole('button', { name: 'Modifica' })).toHaveCount(0);

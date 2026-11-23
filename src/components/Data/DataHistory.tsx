@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useLocalToday } from '../../hooks/useLocalToday';
 import { Logic } from '../../lib/logic';
 import type { MeasurementHistoryDay } from '../../types';
@@ -21,6 +21,8 @@ const DataHistory: React.FC<DataHistoryProps> = ({
     onDeleteMeasurement,
 }) => {
     const today = useLocalToday();
+    const periodPickerId = useId();
+    const selectedDateHeadingId = useId();
     const datedHistory = useMemo(
         () => measurementsHistory
             .filter(day => typeof day?.date === 'string' && Logic.parseDateInput(day.date) === day.date)
@@ -99,7 +101,7 @@ const DataHistory: React.FC<DataHistoryProps> = ({
                     <p>{datedHistory.length} {datedHistory.length === 1 ? 'giorno registrato' : 'giorni registrati'}</p>
                 </div>
                 <HistoryPeriodButton
-                    pickerId="data-history-period-picker"
+                    pickerId={periodPickerId}
                     open={periodOpen}
                     onClick={() => {
                         setPeriodOpen(open => !open);
@@ -110,7 +112,7 @@ const DataHistory: React.FC<DataHistoryProps> = ({
 
             {periodOpen && (
                 <HistoryPeriodPicker
-                    pickerId="data-history-period-picker"
+                    pickerId={periodPickerId}
                     year={pickerYear}
                     selectedMonth={viewMonth}
                     entriesByMonth={daysByMonth}
@@ -151,11 +153,11 @@ const DataHistory: React.FC<DataHistoryProps> = ({
                 </div>
             </section>
 
-            <section className="history-selected-day" aria-labelledby="data-history-selected-date">
+            <section className="history-selected-day" aria-labelledby={selectedDateHeadingId}>
                 <div className="history-selected-day-heading">
                     <div>
                         <p>Giorno selezionato</p>
-                        <h3 id="data-history-selected-date">{dayLabel(selectedDate)}</h3>
+                        <h3 id={selectedDateHeadingId}>{dayLabel(selectedDate)}</h3>
                     </div>
                     <span>{selectedDays.length} {selectedDays.length === 1 ? 'rilevazione' : 'rilevazioni'}</span>
                 </div>

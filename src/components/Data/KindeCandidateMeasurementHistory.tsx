@@ -5,7 +5,7 @@ import { hasMeasurementData } from '../../lib/nutrition/measurementPresence';
 import { useDialogStore } from '../../store/useDialogStore';
 import type { NutritionDay } from '../../types';
 import DataHistory from './DataHistory';
-import './data-history.css';
+import './data.css';
 
 const EMPTY_NUTRITION: Record<string, NutritionDay> = {};
 
@@ -36,7 +36,7 @@ export function KindeCandidateMeasurementHistory({ realm }: { realm: ReturnType<
     };
 
     return (
-        <section aria-label="Storico rilevazioni account">
+        <section className="kinde-measurement-history" aria-label="Storico rilevazioni account">
             <DataHistory measurementsHistory={history} editingDate={null} onDeleteMeasurement={date => { void remove(date); }} />
         </section>
     );
