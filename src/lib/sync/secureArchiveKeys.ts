@@ -1,11 +1,11 @@
 import { get, update } from 'idb-keyval';
 
-// Keys are anchored to an owner-scoped, non-extractable Web Crypto key stored
-// in this device's IndexedDB. Firebase Auth gates the account owner before
-// application bootstrap; Firebase tokens, API keys and UIDs are NOT KDF secrets.
-// This protects ciphertext without the local device-key store; copying the
-// complete browser profile or compromising same-origin JavaScript can still
-// provide decryption access. It is NOT end-to-end encryption.
+// The owner-scoped, non-extractable Web Crypto key remains in this device's
+// IndexedDB. Callers must verify the current owner session before unlocking;
+// Kinde identity-only does not grant access to an account fitness archive.
+// Identity tokens, API keys and UIDs are NOT KDF secrets. Copying the complete
+// browser profile or compromising same-origin JavaScript may still decrypt
+// local records: device-at-rest encryption is NOT end-to-end encryption.
 const VERSION = 2 as const;
 const KEY_BYTES = 32;
 const NONCE_BYTES = 12;
